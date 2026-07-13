@@ -15,6 +15,10 @@ DATASET_PATH = Path(
     "outputs/research/tech_bottleneck_review_universe_frontend_dataset_v1/"
     "tech_bottleneck_review_universe_frontend_dataset.csv"
 )
+OMISSION_RESCUE_DATASET_PATH = Path(
+    "outputs/research/tech_bottleneck_omission_rescue_evidence_completion_reassessment_v1/"
+    "omission_rescue_quality_reassessment.csv"
+)
 LEDGER_PATH_NAME = "manual_decision_ledger.jsonl"
 CURRENT_OVERLAY_NAME = "manual_decision_current_overlay.json"
 SUMMARY_JSON_NAME = "manual_decision_summary.json"
@@ -106,10 +110,13 @@ def validate_manual_decision_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
 @lru_cache(maxsize=1)
 def review_universe_stock_codes() -> set[str]:
-    if not DATASET_PATH.exists():
-        return set()
-    frame = pd.read_csv(DATASET_PATH, dtype=str, usecols=["stock_code"]).fillna("")
-    return {normalize_stock_code(value) for value in frame["stock_code"].tolist()}
+    codes: set[str] = set()
+    for path in [DATASET_PATH, OMISSION_RESCUE_DATASET_PATH]:
+        if not path.exists():
+            continue
+        frame = pd.read_csv(path, dtype=str, usecols=["stock_code"]).fillna("")
+        codes.update(normalize_stock_code(value) for value in frame["stock_code"].tolist())
+    return codes
 
 
 @lru_cache(maxsize=1)

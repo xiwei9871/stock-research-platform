@@ -30,11 +30,12 @@ def test_operator_smoke_dry_run_does_not_write_ledger(monkeypatch, tmp_path):
     _setup_tmp_overlay(monkeypatch, tmp_path)
 
     result = run_smoke(dry_run=True, output_dir=tmp_path / "smoke")
+    expected_total = len(decisions.review_universe_stock_codes())
 
     assert result["write_performed"] is False
-    assert result["frontend_dataset_count"] == 378
+    assert result["frontend_dataset_count"] == expected_total
     assert result["summary_after"]["reviewed_count"] == 0
-    assert result["summary_after"]["pending_count"] == 378
+    assert result["summary_after"]["pending_count"] == expected_total
     assert result["frontend_dataset_hash_before"] == result["frontend_dataset_hash_after"]
     assert result["frozen_v7_generated"] is False
     assert result["used_for_signal_count"] == 0
@@ -101,13 +102,14 @@ def test_operator_smoke_write_test_updates_overlay_without_mutating_frontend_dat
         write_token="secret",
         output_dir=tmp_path / "write_test",
     )
+    expected_total = len(decisions.review_universe_stock_codes())
 
     assert result["write_performed"] is True
     assert result["written_stock_code"] == "000777"
     assert result["written_decision"] == "need_more_evidence"
     assert result["summary_before"]["reviewed_count"] == 0
     assert result["summary_after"]["reviewed_count"] == 1
-    assert result["summary_after"]["pending_count"] == 377
+    assert result["summary_after"]["pending_count"] == expected_total - 1
     assert result["frontend_dataset_hash_before"] == result["frontend_dataset_hash_after"]
     assert result["frozen_v7_generated"] is False
     assert result["used_for_signal_count"] == 0
@@ -121,8 +123,9 @@ def test_decision_audit_counts_corrections_and_guardrails(monkeypatch, tmp_path)
     decisions.record_manual_decision(_payload(decision="reject", comment="改判为证据不支持"))
 
     audit = run_audit(output_dir=tmp_path / "audit")
+    expected_total = len(decisions.review_universe_stock_codes())
 
-    assert audit["total_review_universe_count"] == 378
+    assert audit["total_review_universe_count"] == expected_total
     assert audit["ledger_entry_count"] == 2
     assert audit["unique_reviewed_stock_count"] == 1
     assert audit["current_overlay_count"] == 1

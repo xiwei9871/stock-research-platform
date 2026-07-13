@@ -3,7 +3,7 @@ export type TechBottleneckReviewFilters = {
   industry: string;
   concept_tag: string;
   evidence_strength: string;
-  bottleneck_relevance: string;
+  quality_reassessment_tier: string;
   concept_pollution_risk: string;
   route_around_or_substitution_risk: string;
   value_capture_risk: string;
@@ -15,7 +15,7 @@ export type TechBottleneckReadableFilterOptions = {
   industry: string[];
   concept_tag: string[];
   evidence_strength: string[];
-  bottleneck_relevance: string[];
+  quality_reassessment_tier: string[];
   concept_pollution_risk: string[];
   route_around_or_substitution_risk: string[];
   value_capture_risk: string[];
@@ -36,7 +36,7 @@ const SELECT_FIELDS: Array<{
   { key: 'industry', label: '行业' },
   { key: 'concept_tag', label: '概念板块' },
   { key: 'evidence_strength', label: '证据强度' },
-  { key: 'bottleneck_relevance', label: '瓶颈相关性' },
+  { key: 'quality_reassessment_tier', label: '质量评级' },
   { key: 'concept_pollution_risk', label: '污染风险' },
   { key: 'route_around_or_substitution_risk', label: '替代风险' },
   { key: 'value_capture_risk', label: '价值捕获风险' },
@@ -131,6 +131,10 @@ const OPTION_LABELS: Record<string, string> = {
   strong: '强',
   sufficient: '充分',
   supported: '有支撑',
+  tier_1_core_review_priority: '一级：核心复盘优先',
+  tier_2_strong_review_candidate: '二级：强复盘候选',
+  tier_3_quality_or_value_capture_gap: '三级：质量/价值捕获缺口',
+  tier_4_downgrade_or_reject_review: '四级：降级/剔除复核',
   'Tier A': 'Tier A 原层级',
   'Tier B': 'Tier B 原层级',
   uncertain: '不确定',
@@ -161,7 +165,7 @@ export const EMPTY_TECH_BOTTLENECK_REVIEW_FILTERS: TechBottleneckReviewFilters =
   industry: '',
   concept_tag: '',
   evidence_strength: '',
-  bottleneck_relevance: '',
+  quality_reassessment_tier: '',
   concept_pollution_risk: '',
   route_around_or_substitution_risk: '',
   value_capture_risk: '',
