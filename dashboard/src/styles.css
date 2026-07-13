@@ -6649,12 +6649,12 @@ table.data-table td {
     grid-column: 2;
   }
 
-  .theme-research-workspace[aria-label='科技产业链详情'] > [aria-label='产业链定义'] .theme-research-table {
+  .theme-research-workspace[aria-label='科技产业链详情'] > .theme-research-section[aria-label='产业链定义'] .theme-research-table {
     min-width: 0;
     table-layout: auto;
   }
 
-  .theme-research-workspace[aria-label='科技产业链详情'] > [aria-label='产业链定义'] .theme-research-table th {
+  .theme-research-workspace[aria-label='科技产业链详情'] > .theme-research-section[aria-label='产业链定义'] .theme-research-table th {
     width: 96px;
   }
 }
