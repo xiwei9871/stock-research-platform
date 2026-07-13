@@ -1,6 +1,6 @@
 # Theme To Tech Bottleneck Crosswalk v1
 
-Updated: 2026-07-10
+Updated: 2026-07-13
 
 ## Purpose
 
@@ -16,11 +16,13 @@ The crosswalk adds research context only. It does not change admission, manual r
 
 ## Inputs
 
-The loader reads the existing 378-company dataset and its evidence/source indexes from:
+The loader reads the current authoritative review-universe snapshot and its evidence/source indexes from:
 
 ```text
 outputs/research/tech_bottleneck_review_universe_frontend_dataset_v1/
 ```
+
+The artifact currently pins a 371-row frontend crosswalk input snapshot. This count describes this input artifact, not the platform's full company universe.
 
 It reads Phase 4 mappings from:
 
@@ -87,8 +89,8 @@ Explicit coverage gaps:
 
 | Company | Theme node | Reason |
 |---|---|---|
-| 欧陆通 `300870.SZ` | `server_power_supply` | Not present in the existing 378-company universe |
-| 中恒电气 `002364.SZ` | `hvdc_power` | Not present in the existing 378-company universe |
+| 欧陆通 `300870.SZ` | `server_power_supply` | Not present in the current authoritative review-universe snapshot |
+| 中恒电气 `002364.SZ` | `hvdc_power` | Not present in the current authoritative review-universe snapshot |
 
 A coverage gap is not a rejection and does not add the company to the universe.
 
@@ -98,7 +100,7 @@ The loader rejects:
 
 - any input path other than the three authoritative review-universe CSV paths;
 - missing or changed input snapshots;
-- missing required CSV columns or evidence/source stock coverage outside the 378-company universe;
+- missing required CSV columns or evidence/source stock coverage outside the current authoritative review-universe snapshot;
 - universe-count or duplicate-code drift;
 - missing Phase 4 mappings or incomplete mapping coverage;
 - cross-theme, cross-node, or cross-company references;

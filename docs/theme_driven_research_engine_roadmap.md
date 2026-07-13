@@ -301,7 +301,7 @@ Implementation result:
 
 ## Phase 5: Tech Bottleneck Universe Integration
 
-Purpose: enrich the existing 378-company review universe with industry-chain context without replacing its evidence or review history.
+Purpose: enrich the current authoritative review-universe snapshot with industry-chain context without replacing its evidence or review history.
 
 Crosswalk fields:
 
@@ -325,9 +325,9 @@ Exit condition: the crosswalk is read-only, reversible, and does not change exis
 
 Implementation result:
 
-- a versioned `theme_tech_bottleneck_crosswalk_v1` artifact remains separate from the 378-company dataset and Phase 4 mapping artifacts;
+- a versioned `theme_tech_bottleneck_crosswalk_v1` artifact remains separate from the current authoritative review-universe dataset and Phase 4 mapping artifacts;
 - checkout-independent deterministic IDs make existing universe, evidence, and source CSV rows addressable without modifying them;
-- authoritative path and CSV-schema gates prevent an artifact from substituting a different 378-row dataset;
+- authoritative path and CSV-schema gates prevent an artifact from substituting a different review-universe input dataset;
 - SHA-256 snapshot checks reject silent upstream drift;
 - Envicool and Kehua Data are linked to their existing pending-review rows with evidence from both systems;
 - Oulutong and Zhongheng Electric are explicit coverage gaps because they are absent from the existing universe; no admission is inferred;

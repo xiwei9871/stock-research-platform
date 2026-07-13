@@ -50,7 +50,7 @@ def test_ai_power_crosswalk_package_loads_and_summarizes_without_writes():
         "new_theme_evidence_count": 4,
         "p4_mapping_count": 4,
         "theme_count": 1,
-        "universe_count": 378,
+        "universe_count": 371,
     }
     assert len(package["indexes"]["existing_evidence_by_id"]) == len(
         package["existing_evidence_rows"]
@@ -244,7 +244,7 @@ def test_expected_universe_count_is_enforced(tmp_path: Path):
     artifact_dir = _copy_crosswalk_artifacts(tmp_path)
     path = _only_artifact(artifact_dir)
     payload = _read_json(path)
-    payload["universe_snapshot"]["expected_universe_count"] = 379
+    payload["universe_snapshot"]["expected_universe_count"] += 1
     _write_json(path, payload)
 
     error = _load_invalid_package(artifact_dir)
@@ -269,9 +269,14 @@ def test_snapshot_paths_must_be_authoritative(tmp_path: Path):
 def test_authoritative_csv_schema_is_required(tmp_path: Path):
     repository_root = _copy_universe_inputs(tmp_path)
     artifact_dir = _copy_crosswalk_artifacts(tmp_path)
+    artifact_path = _only_artifact(artifact_dir)
+    payload = _read_json(artifact_path)
+    expected_count = payload["universe_snapshot"]["expected_universe_count"]
     dataset_path = repository_root / UNIVERSE_DIR / INPUT_FILES[0]
     dataset_path.write_text(
-        "stock_code\n" + "\n".join(f"{value:06d}" for value in range(378)) + "\n",
+        "stock_code\n"
+        + "\n".join(f"{value:06d}" for value in range(expected_count))
+        + "\n",
         encoding="utf-8",
     )
     for name in INPUT_FILES[1:]:
@@ -279,8 +284,6 @@ def test_authoritative_csv_schema_is_required(tmp_path: Path):
             "junk\ninvalid\n",
             encoding="utf-8",
         )
-    artifact_path = _only_artifact(artifact_dir)
-    payload = _read_json(artifact_path)
     _refresh_snapshot_digests(payload, repository_root)
     _write_json(artifact_path, payload)
 
