@@ -22,6 +22,10 @@ def _no_db(monkeypatch):
     monkeypatch.setattr(dcp, "connect", _fake_connect)
     monkeypatch.setattr(dcp, "execute", lambda *args, **kwargs: None)
     monkeypatch.setattr(dcp, "execute_many", lambda *args, **kwargs: None)
+    if hasattr(dcp, "baostock_login_or_raise"):
+        monkeypatch.setattr(dcp, "baostock_login_or_raise", lambda **_kwargs: None)
+    if hasattr(dcp, "baostock_logout_safely"):
+        monkeypatch.setattr(dcp, "baostock_logout_safely", lambda: None)
     if hasattr(dcp, "derive_qfq_minute5_from_daily_factor"):
         monkeypatch.setattr(
             dcp,
@@ -33,6 +37,69 @@ def _no_db(monkeypatch):
 def test_daily_close_schema_migrates_market_monitor_status_column():
     assert "market_monitor_status text NOT NULL DEFAULT 'skipped'" in dcp.DAILY_CLOSE_PIPELINE_SQL
     assert "ALTER TABLE ops.daily_pipeline_status" in dcp.DAILY_CLOSE_PIPELINE_SQL
+
+
+def test_mark_stale_running_jobs_interrupted_updates_only_owned_stage(monkeypatch):
+    captured = {}
+
+    class FakeConnection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    monkeypatch.setattr(dcp, "connect", lambda _service: FakeConnection())
+    monkeypatch.setattr(
+        dcp,
+        "execute",
+        lambda _conn, sql, payload: captured.update(sql=sql, payload=payload),
+    )
+
+    dcp.mark_stale_running_jobs_interrupted(
+        service="test",
+        trade_date=date(2026, 7, 10),
+        stage="minute5",
+        job_name="minute5_bar",
+    )
+
+    assert "status = 'running'" in captured["sql"]
+    assert captured["payload"] == {
+        "trade_date": date(2026, 7, 10),
+        "stage": "minute5",
+        "job_name": "minute5_bar",
+        "error_summary": "interrupted: stale running attempt superseded",
+    }
+
+
+def test_upsert_job_resets_started_at_for_new_running_attempt(monkeypatch):
+    captured = {}
+
+    class FakeConnection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    monkeypatch.setattr(dcp, "connect", lambda _service: FakeConnection())
+    monkeypatch.setattr(
+        dcp,
+        "execute",
+        lambda _conn, sql, payload: captured.update(sql=sql, payload=payload),
+    )
+
+    dcp.upsert_job(
+        service="test",
+        trade_date=date(2026, 7, 10),
+        job_name="minute5_bar",
+        stage="minute5",
+        source="baostock_sh",
+        status="running",
+        started_at=datetime(2026, 7, 10, 17, 54),
+    )
+
+    assert "WHEN EXCLUDED.status = 'running' THEN EXCLUDED.started_at" in captured["sql"]
 
 
 def test_load_data_status_for_dashboard_includes_market_monitor_status(monkeypatch):
@@ -425,6 +492,55 @@ def test_daily_quality_requires_raw_qfq_and_hfq_for_each_symbol():
     assert quality["missing_symbols"] == ["000001.SZ:hfq"]
 
 
+def test_daily_quality_exempts_symbols_with_no_rows_on_trade_date():
+    trade_date = date(2026, 7, 9)
+
+    quality = dcp.inspect_daily_quality(
+        [
+            {
+                "ts_code": "000001.SZ",
+                "trade_date": trade_date,
+                "adjust_type": "raw",
+                "open": 10,
+                "high": 11,
+                "low": 9,
+                "close": 10,
+            },
+            {
+                "ts_code": "000001.SZ",
+                "trade_date": trade_date,
+                "adjust_type": "qfq",
+                "open": 10,
+                "high": 11,
+                "low": 9,
+                "close": 10,
+            },
+            {
+                "ts_code": "000001.SZ",
+                "trade_date": trade_date,
+                "adjust_type": "hfq",
+                "open": 10,
+                "high": 11,
+                "low": 9,
+                "close": 10,
+            },
+        ],
+        ["000001.SZ", "600421.SH"],
+        trade_date,
+    )
+
+    assert quality["status"] == "pass"
+    assert quality["expected_count"] == 3
+    assert quality["actual_count"] == 3
+    assert quality["missing_symbols"] == []
+    assert quality["exempt_symbols"] == [
+        "600421.SH:hfq",
+        "600421.SH:qfq",
+        "600421.SH:raw",
+    ]
+    assert "exempt=3" in quality["check_summary"]
+
+
 def test_tushare_daily_rows_filter_to_expected_universe(monkeypatch):
     class Frame:
         empty = False
@@ -544,7 +660,7 @@ def test_tushare_adjusted_daily_rows_use_batch_adj_factor(monkeypatch):
 def test_minute5_stage_records_single_symbol_failure_without_failing_batch(monkeypatch):
     _no_db(monkeypatch)
     monkeypatch.setattr(dcp.time, "sleep", lambda _seconds: None)
-    monkeypatch.setattr(dcp, "baostock_login_or_raise", lambda: None)
+    monkeypatch.setattr(dcp, "baostock_login_or_raise", lambda **_kwargs: None)
     failed_symbols = []
     config = dcp.PipelineConfig(
         service="test",
@@ -640,7 +756,63 @@ def test_load_minute5_expected_ts_codes_uses_daily_raw_traded_universe(monkeypat
     assert result == ["600000.SH", "000001.SZ"]
 
 
-def test_fetch_baostock_minute5_rows_uses_call_with_timeout(monkeypatch):
+def test_load_latest_minute5_missing_symbols_includes_abnormal_symbols(monkeypatch):
+    _no_db(monkeypatch)
+    monkeypatch.setattr(
+        dcp,
+        "fetch_all",
+        lambda _conn, _sql, _params=None: [
+            {
+                "missing_symbols": ["600000.SH", "000001.SZ"],
+                "abnormal_symbols": ["000001.SZ", "600001.SH"],
+            }
+        ],
+    )
+
+    result = dcp.load_latest_minute5_missing_symbols("test", date(2026, 7, 10))
+
+    assert result == ["000001.SZ", "600000.SH", "600001.SH"]
+
+
+def test_inspect_minute5_quality_from_db_filters_requested_adjust_type(monkeypatch):
+    captured = {}
+
+    class FakeConnection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    monkeypatch.setattr(dcp, "connect", lambda _service: FakeConnection())
+
+    def fake_fetch_all(_conn, sql, params):
+        captured["sql"] = sql
+        captured["params"] = params
+        return [
+            {
+                "ts_code": "600000.SH",
+                "bar_count": 48,
+                "has_morning": True,
+                "has_afternoon": True,
+            }
+        ]
+
+    monkeypatch.setattr(dcp, "fetch_all", fake_fetch_all)
+
+    result = dcp.inspect_minute5_quality_from_db(
+        "test",
+        ["600000.SH"],
+        date(2026, 7, 10),
+        adjust_type="qfq",
+    )
+
+    assert "adjust_type = %s" in captured["sql"]
+    assert captured["params"] == [date(2026, 7, 10), "qfq", ["600000.SH"]]
+    assert result["status"] == "pass"
+
+
+def test_fetch_baostock_minute5_rows_calls_query_synchronously(monkeypatch):
     calls = {}
 
     def fake_query(code, start_date, end_date, freq, adjust_type, timeout_seconds=None):
@@ -653,10 +825,6 @@ def test_fetch_baostock_minute5_rows_uses_call_with_timeout(monkeypatch):
             "timeout_seconds": timeout_seconds,
         }
         return [{"ts_code": "600000.SH"}]
-
-    def fake_timeout(func, timeout_value, *args, **kwargs):
-        calls["timeout_seconds"] = timeout_value
-        return func(*args, **kwargs)
 
     monkeypatch.setattr(dcp, "query_baostock_minute_rows", fake_query)
     monkeypatch.setattr(
@@ -678,7 +846,13 @@ def test_fetch_baostock_minute5_rows_uses_call_with_timeout(monkeypatch):
             "source": "baostock",
         },
     )
-    monkeypatch.setattr(dcp, "call_with_timeout", fake_timeout)
+    monkeypatch.setattr(
+        dcp,
+        "call_with_timeout",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("outer thread timeout must not be used")
+        ),
+    )
 
     rows = dcp.fetch_baostock_minute5_rows(
         "600000.SH",
@@ -687,7 +861,6 @@ def test_fetch_baostock_minute5_rows_uses_call_with_timeout(monkeypatch):
         timeout_seconds=7,
     )
 
-    assert calls["timeout_seconds"] == 7
     assert calls["query"]["code"] == "sh.600000"
     assert calls["query"]["timeout_seconds"] == 7
     assert rows[0]["source"] == "baostock"
@@ -859,7 +1032,7 @@ def test_retry_failed_stage_runs_baostock_exchange_rescue_inline(monkeypatch):
 def test_minute5_stage_runs_exchange_split_sources(monkeypatch):
     _no_db(monkeypatch)
     monkeypatch.setattr(dcp.time, "sleep", lambda _seconds: None)
-    monkeypatch.setattr(dcp, "baostock_login_or_raise", lambda: None)
+    monkeypatch.setattr(dcp, "baostock_login_or_raise", lambda **_kwargs: None)
     recorded_jobs = []
     monkeypatch.setattr(dcp, "upsert_job", lambda **kwargs: recorded_jobs.append(kwargs))
     monkeypatch.setattr(dcp, "record_failed_symbol", lambda **_kwargs: None)
@@ -909,6 +1082,342 @@ def test_minute5_stage_runs_exchange_split_sources(monkeypatch):
     assert result["status"] == "success"
     assert result["source_symbols"] == {"baostock_sh": 1, "baostock_sz": 1}
     assert {job["source"] for job in finished} == {"baostock_sh", "baostock_sz"}
+
+
+def test_minute5_stage_owns_one_session_and_fetches_only_target_date(monkeypatch):
+    _no_db(monkeypatch)
+    monkeypatch.setattr(dcp.time, "sleep", lambda _seconds: None)
+    events = []
+    fetch_dates = []
+    monkeypatch.setattr(
+        dcp,
+        "baostock_login_or_raise",
+        lambda **_kwargs: events.append("login"),
+    )
+    monkeypatch.setattr(
+        dcp,
+        "baostock_logout_safely",
+        lambda: events.append("logout"),
+        raising=False,
+    )
+    target = date(2026, 7, 10)
+
+    def fake_fetcher(ts_code, start_date, end_date, timeout_seconds):
+        fetch_dates.append((ts_code, start_date, end_date))
+        return [
+            {
+                "asset_id": f"asset:{ts_code}",
+                "ts_code": ts_code,
+                "trade_time": datetime(2026, 7, 10, hour, minute),
+                "trade_date": target,
+                "freq": "5min",
+                "adjust_type": "raw",
+                "open": 1,
+                "high": 1,
+                "low": 1,
+                "close": 1,
+                "volume": 1,
+                "amount": 1,
+                "source": "baostock",
+            }
+            for hour in [9, 10, 11, 13, 14]
+            for minute in [0, 5, 10, 15, 20, 25, 30, 35, 40]
+        ]
+
+    dcp.run_minute5_stage(
+        target,
+        config=dcp.PipelineConfig(
+            service="test",
+            max_retries=1,
+            minute5_symbol_sleep_seconds=0,
+            force_non_trading_day=True,
+        ),
+        ts_codes=["600000.SH", "000001.SZ"],
+        baostock_fetcher=fake_fetcher,
+        upserter=lambda _service, rows: len(rows),
+    )
+
+    assert events == ["login", "logout"]
+    assert fetch_dates == [
+        ("600000.SH", target, target),
+        ("000001.SZ", target, target),
+    ]
+
+
+def test_minute5_stage_resumes_from_persisted_missing_and_abnormal_symbols(monkeypatch):
+    _no_db(monkeypatch)
+    monkeypatch.setattr(dcp.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(dcp, "baostock_login_or_raise", lambda **_kwargs: None)
+    monkeypatch.setattr(dcp, "baostock_logout_safely", lambda: None)
+    monkeypatch.setattr(
+        dcp,
+        "load_minute5_expected_ts_codes",
+        lambda _service, _trade_date: ["600000.SH", "600001.SH", "000001.SZ"],
+    )
+    target = date(2026, 7, 10)
+    raw_results = iter(
+        [
+            {
+                "status": "warning",
+                "expected_count": 3,
+                "actual_count": 2,
+                "missing_symbols": ["600001.SH"],
+                "abnormal_symbols": ["000001.SZ"],
+                "check_summary": "raw pending=2",
+            },
+            {
+                "status": "pass",
+                "expected_count": 3,
+                "actual_count": 3,
+                "missing_symbols": [],
+                "abnormal_symbols": [],
+                "check_summary": "raw pass",
+            },
+        ]
+    )
+
+    def fake_inspect(_service, _codes, _trade_date, *, adjust_type="raw"):
+        if adjust_type == "raw":
+            return next(raw_results)
+        return {
+            "status": "pass",
+            "expected_count": 3,
+            "actual_count": 3,
+            "missing_symbols": [],
+            "abnormal_symbols": [],
+            "check_summary": "qfq pass",
+        }
+
+    monkeypatch.setattr(dcp, "inspect_minute5_quality_from_db", fake_inspect)
+    quality_datasets = []
+    monkeypatch.setattr(
+        dcp,
+        "upsert_quality",
+        lambda **kwargs: quality_datasets.append(kwargs["dataset_name"]),
+    )
+    fetched = []
+
+    def fake_fetcher(ts_code, start_date, end_date, timeout_seconds):
+        fetched.append(ts_code)
+        return [
+            {
+                "asset_id": f"asset:{ts_code}",
+                "ts_code": ts_code,
+                "trade_time": datetime(2026, 7, 10, hour, minute),
+                "trade_date": target,
+                "freq": "5min",
+                "adjust_type": "raw",
+                "open": 1,
+                "high": 1,
+                "low": 1,
+                "close": 1,
+                "volume": 1,
+                "amount": 1,
+                "source": "baostock",
+            }
+            for hour in [9, 10, 11, 13, 14]
+            for minute in [0, 5, 10, 15, 20, 25, 30, 35, 40]
+        ]
+
+    qfq_calls = []
+    result = dcp.run_minute5_stage(
+        target,
+        config=dcp.PipelineConfig(
+            service="test",
+            max_retries=1,
+            minute5_symbol_sleep_seconds=0,
+            force_non_trading_day=True,
+        ),
+        baostock_fetcher=fake_fetcher,
+        upserter=lambda _service, rows: len(rows),
+        qfq_deriver=lambda service, trade_date: qfq_calls.append(
+            (service, trade_date)
+        )
+        or {"raw_rows": 144, "inserted_rows": 144},
+    )
+
+    assert fetched == ["600001.SH", "000001.SZ"]
+    assert qfq_calls == [("test", target)]
+    assert quality_datasets[-2:] == ["minute5_bar", "minute5_qfq_bar"]
+    assert result["status"] == "success"
+    assert result["quality"]["status"] == "pass"
+    assert result["qfq_quality"]["status"] == "pass"
+
+
+def test_minute5_stage_rederives_qfq_without_remote_fetch_when_raw_is_complete(monkeypatch):
+    _no_db(monkeypatch)
+    monkeypatch.setattr(
+        dcp,
+        "load_minute5_expected_ts_codes",
+        lambda _service, _trade_date: ["600000.SH"],
+    )
+    target = date(2026, 7, 10)
+
+    def fake_inspect(_service, _codes, _trade_date, *, adjust_type="raw"):
+        return {
+            "status": "pass",
+            "expected_count": 1,
+            "actual_count": 1,
+            "missing_symbols": [],
+            "abnormal_symbols": [],
+            "check_summary": f"{adjust_type} pass",
+        }
+
+    monkeypatch.setattr(dcp, "inspect_minute5_quality_from_db", fake_inspect)
+    monkeypatch.setattr(
+        dcp,
+        "baostock_login_or_raise",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            AssertionError("complete raw coverage must skip BaoStock login")
+        ),
+    )
+    qfq_calls = []
+
+    result = dcp.run_minute5_stage(
+        target,
+        config=dcp.PipelineConfig(service="test", force_non_trading_day=True),
+        baostock_fetcher=lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("complete raw coverage must skip remote fetch")
+        ),
+        qfq_deriver=lambda service, trade_date: qfq_calls.append(
+            (service, trade_date)
+        )
+        or {"raw_rows": 48, "inserted_rows": 48},
+    )
+
+    assert qfq_calls == [("test", target)]
+    assert result["status"] == "success"
+    assert result["rows"] == 0
+    assert result["qfq_rows"] == 48
+
+
+def test_minute5_stage_closes_source_jobs_when_interrupted(monkeypatch):
+    _no_db(monkeypatch)
+    monkeypatch.setattr(dcp.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(
+        dcp,
+        "load_minute5_expected_ts_codes",
+        lambda _service, _trade_date: ["600000.SH", "600001.SH"],
+    )
+    monkeypatch.setattr(
+        dcp,
+        "inspect_minute5_quality_from_db",
+        lambda _service, codes, _trade_date, *, adjust_type="raw": {
+            "status": "warning",
+            "expected_count": len(codes),
+            "actual_count": 0,
+            "missing_symbols": list(codes),
+            "abnormal_symbols": [],
+            "check_summary": f"{adjust_type} interrupted",
+        },
+    )
+    jobs = []
+    quality_datasets = []
+    monkeypatch.setattr(dcp, "upsert_job", lambda **kwargs: jobs.append(kwargs))
+    monkeypatch.setattr(
+        dcp,
+        "upsert_quality",
+        lambda **kwargs: quality_datasets.append(kwargs["dataset_name"]),
+    )
+    events = []
+    monkeypatch.setattr(
+        dcp,
+        "baostock_login_or_raise",
+        lambda **_kwargs: events.append("login"),
+    )
+    monkeypatch.setattr(
+        dcp,
+        "baostock_logout_safely",
+        lambda: events.append("logout"),
+    )
+    fetch_count = 0
+
+    def fake_fetcher(ts_code, start_date, end_date, timeout_seconds):
+        nonlocal fetch_count
+        fetch_count += 1
+        if fetch_count == 2:
+            raise KeyboardInterrupt("SIGTERM")
+        return [
+            {
+                "asset_id": f"asset:{ts_code}",
+                "ts_code": ts_code,
+                "trade_time": datetime(2026, 7, 10, 9, 35),
+                "trade_date": date(2026, 7, 10),
+                "freq": "5min",
+                "adjust_type": "raw",
+                "open": 1,
+                "high": 1,
+                "low": 1,
+                "close": 1,
+                "volume": 1,
+                "amount": 1,
+                "source": "baostock",
+            }
+        ]
+
+    with pytest.raises(KeyboardInterrupt, match="SIGTERM"):
+        dcp.run_minute5_stage(
+            date(2026, 7, 10),
+            config=dcp.PipelineConfig(
+                service="test",
+                max_retries=1,
+                minute5_symbol_sleep_seconds=0,
+                force_non_trading_day=True,
+            ),
+            baostock_fetcher=fake_fetcher,
+            upserter=lambda _service, rows: len(rows),
+        )
+
+    terminal = [job for job in jobs if job["status"] == "failed"]
+    assert events == ["login", "logout"]
+    assert {job["source"] for job in terminal} == {"baostock_sh", "baostock_sz"}
+    assert all(job["finished_at"] is not None for job in terminal)
+    assert all(job["error_summary"].startswith("interrupted: KeyboardInterrupt") for job in terminal)
+    assert "minute5_bar" in quality_datasets
+
+
+def test_minute5_stage_closes_source_jobs_when_qfq_derivation_fails(monkeypatch):
+    _no_db(monkeypatch)
+    monkeypatch.setattr(
+        dcp,
+        "load_minute5_expected_ts_codes",
+        lambda _service, _trade_date: ["600000.SH"],
+    )
+    monkeypatch.setattr(
+        dcp,
+        "inspect_minute5_quality_from_db",
+        lambda _service, _codes, _trade_date, *, adjust_type="raw": {
+            "status": "pass",
+            "expected_count": 1,
+            "actual_count": 1,
+            "missing_symbols": [],
+            "abnormal_symbols": [],
+            "check_summary": f"{adjust_type} pass",
+        },
+    )
+    jobs = []
+    quality_rows = []
+    monkeypatch.setattr(dcp, "upsert_job", lambda **kwargs: jobs.append(kwargs))
+    monkeypatch.setattr(dcp, "upsert_quality", lambda **kwargs: quality_rows.append(kwargs))
+
+    with pytest.raises(RuntimeError, match="qfq derive failed"):
+        dcp.run_minute5_stage(
+            date(2026, 7, 10),
+            config=dcp.PipelineConfig(service="test", force_non_trading_day=True),
+            qfq_deriver=lambda *_args: (_ for _ in ()).throw(
+                RuntimeError("qfq derive failed")
+            ),
+        )
+
+    terminal = [job for job in jobs if job["status"] == "failed"]
+    assert {job["source"] for job in terminal} == {"baostock_sh", "baostock_sz"}
+    assert all(job["error_summary"].startswith("failed: RuntimeError") for job in terminal)
+    assert all("qfq derive failed" in job["error_summary"] for job in terminal)
+    qfq_quality = next(
+        row for row in quality_rows if row["dataset_name"] == "minute5_qfq_bar"
+    )
+    assert qfq_quality["status"] == "fail"
+    assert qfq_quality["missing_symbols"] == ["600000.SH"]
 
 
 def test_minute5_stage_prints_progress_every_50_completed_symbols(monkeypatch, capsys):
@@ -1034,6 +1543,41 @@ def test_daily_pipeline_module_main_wires_minute5_progress_renderer(monkeypatch,
     assert "progress|minute5_bar|event|minute5_progress|completed|50|total|100" in output.err
 
 
+def test_daily_pipeline_main_wraps_minute5_with_interrupt_signal_handler(monkeypatch, capsys):
+    events = []
+
+    @contextmanager
+    def fake_interrupt_handler():
+        events.append("enter")
+        try:
+            yield
+        finally:
+            events.append("exit")
+
+    monkeypatch.setattr(
+        dcp,
+        "interrupt_signals_as_keyboard_interrupt",
+        fake_interrupt_handler,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        dcp.PipelineConfig,
+        "from_env",
+        classmethod(lambda cls: dcp.PipelineConfig(service="test")),
+    )
+    monkeypatch.setattr(dcp, "apply_daily_close_pipeline_schema", lambda _service: None)
+    monkeypatch.setattr(
+        dcp,
+        "run_minute5_stage",
+        lambda *_args, **_kwargs: {"stage": "minute5", "status": "success"},
+    )
+
+    dcp.main(["--date", "2026-07-10", "--stage", "minute5", "--force"])
+
+    assert events == ["enter", "exit"]
+    assert '"status": "success"' in capsys.readouterr().out
+
+
 def test_minute5_stage_sleeps_between_baostock_symbols(monkeypatch):
     _no_db(monkeypatch)
     sleeps = []
@@ -1142,10 +1686,107 @@ def test_minute5_stage_derives_qfq_after_raw_upsert(monkeypatch):
     assert calls == [("test", date(2026, 6, 5))]
 
 
+def test_minute5_stage_persists_each_successful_symbol_before_later_interrupt(monkeypatch):
+    _no_db(monkeypatch)
+    monkeypatch.setattr(dcp.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(dcp, "upsert_job", lambda **_kwargs: None)
+    monkeypatch.setattr(dcp, "record_failed_symbol", lambda **_kwargs: None)
+    upserted_batches = []
+
+    def fake_baostock(ts_code, start_date, end_date, timeout_seconds):
+        if ts_code == "000001.SZ":
+            raise KeyboardInterrupt("external scheduler interrupted run")
+        return [
+            {
+                "asset_id": f"asset:{ts_code}",
+                "ts_code": ts_code,
+                "trade_time": datetime(2026, 6, 5, 9, 35),
+                "trade_date": date(2026, 6, 5),
+                "freq": "5min",
+                "adjust_type": "raw",
+                "open": 1,
+                "high": 1,
+                "low": 1,
+                "close": 1,
+                "volume": 1,
+                "amount": 1,
+                "source": "baostock",
+            }
+        ]
+
+    def fake_upsert(_service, rows):
+        upserted_batches.append(list(rows))
+        return len(rows)
+
+    with pytest.raises(KeyboardInterrupt):
+        dcp.run_minute5_stage(
+            date(2026, 6, 5),
+            config=dcp.PipelineConfig(service="test", max_retries=1, force_non_trading_day=True),
+            ts_codes=["600000.SH", "000001.SZ"],
+            baostock_fetcher=fake_baostock,
+            upserter=fake_upsert,
+        )
+
+    assert [[row["ts_code"] for row in batch] for batch in upserted_batches] == [["600000.SH"]]
+
+
+def test_minute5_stage_refreshes_persisted_quality_at_progress_checkpoint(monkeypatch):
+    _no_db(monkeypatch)
+    monkeypatch.setattr(dcp.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(dcp, "upsert_job", lambda **_kwargs: None)
+    monkeypatch.setattr(dcp, "record_failed_symbol", lambda **_kwargs: None)
+    quality_refreshes = []
+
+    def fake_baostock(ts_code, start_date, end_date, timeout_seconds):
+        return [
+            {
+                "asset_id": f"asset:{ts_code}",
+                "ts_code": ts_code,
+                "trade_time": datetime(2026, 6, 5, 9, 35),
+                "trade_date": date(2026, 6, 5),
+                "freq": "5min",
+                "adjust_type": "raw",
+                "open": 1,
+                "high": 1,
+                "low": 1,
+                "close": 1,
+                "volume": 1,
+                "amount": 1,
+                "source": "baostock",
+            }
+        ]
+
+    def fake_inspect_from_db(service, expected_ts_codes, trade_date, *, adjust_type="raw"):
+        quality_refreshes.append((service, len(expected_ts_codes), trade_date))
+        return {
+            "status": "warning",
+            "expected_count": len(expected_ts_codes),
+            "actual_count": 50,
+            "missing_symbols": [],
+            "abnormal_symbols": [],
+            "check_summary": "minute5 covered=50 missing=0 abnormal=0",
+        }
+
+    monkeypatch.setattr(dcp, "inspect_minute5_quality_from_db", fake_inspect_from_db)
+    monkeypatch.setattr(dcp, "upsert_quality", lambda **_kwargs: None)
+
+    ts_codes = [f"60{i:04d}.SH" for i in range(50)]
+    result = dcp.run_minute5_stage(
+        date(2026, 6, 5),
+        config=dcp.PipelineConfig(service="test", max_retries=1, force_non_trading_day=True),
+        ts_codes=ts_codes,
+        baostock_fetcher=fake_baostock,
+        upserter=lambda _service, rows: len(rows),
+    )
+
+    assert result["status"] == "success"
+    assert quality_refreshes == [("test", 50, date(2026, 6, 5))]
+
+
 def test_minute5_stage_runs_baostock_globally_serial_without_parallel_source_executors(monkeypatch):
     _no_db(monkeypatch)
     monkeypatch.setattr(dcp.time, "sleep", lambda _seconds: None)
-    monkeypatch.setattr(dcp, "baostock_login_or_raise", lambda: None)
+    monkeypatch.setattr(dcp, "baostock_login_or_raise", lambda **_kwargs: None)
     monkeypatch.setattr(dcp, "upsert_job", lambda **_kwargs: None)
     monkeypatch.setattr(dcp, "record_failed_symbol", lambda **_kwargs: None)
 
@@ -1271,6 +1912,13 @@ def test_finalize_pipeline_status_uses_quality_threshold_over_old_failed_jobs(mo
             "missing_count": 21,
             "abnormal_count": 0,
         },
+        {
+            "dataset_name": "minute5_qfq_bar",
+            "expected_count": 5209,
+            "actual_count": 5188,
+            "missing_count": 21,
+            "abnormal_count": 0,
+        },
     ]
 
     def fake_fetch_all(_conn, sql, _params=None):
@@ -1290,6 +1938,69 @@ def test_finalize_pipeline_status_uses_quality_threshold_over_old_failed_jobs(mo
     assert result["daily_status"] == "partial_success"
     assert result["minute5_status"] == "partial_success"
     assert result["latest_ready_trade_date"] == date(2026, 6, 18)
+
+
+def test_finalize_pipeline_status_ignores_superseded_partial_daily_job_when_quality_passes(monkeypatch):
+    _no_db(monkeypatch)
+    jobs = [
+        {
+            "stage": "daily",
+            "job_name": "daily_bar",
+            "source": "tushare",
+            "status": "partial_success",
+            "error_summary": None,
+        },
+        {
+            "stage": "minute5",
+            "job_name": "minute5_bar",
+            "source": "fallback",
+            "status": "success",
+            "error_summary": None,
+        },
+        {"stage": "market_monitor", "job_name": "market_monitor_eod", "source": "internal", "status": "success"},
+        {"stage": "deps", "job_name": "daily_factor_pipeline", "source": "internal", "status": "success"},
+    ]
+    quality = [
+        {
+            "dataset_name": "daily_bar",
+            "expected_count": 15573,
+            "actual_count": 15573,
+            "missing_count": 0,
+            "abnormal_count": 0,
+        },
+        {
+            "dataset_name": "minute5_bar",
+            "expected_count": 5191,
+            "actual_count": 5191,
+            "missing_count": 0,
+            "abnormal_count": 0,
+        },
+        {
+            "dataset_name": "minute5_qfq_bar",
+            "expected_count": 5191,
+            "actual_count": 5191,
+            "missing_count": 0,
+            "abnormal_count": 0,
+        },
+    ]
+
+    def fake_fetch_all(_conn, sql, _params=None):
+        if "FROM ops.daily_pipeline_quality" in sql:
+            return quality
+        return jobs
+
+    monkeypatch.setattr(dcp, "fetch_all", fake_fetch_all)
+    monkeypatch.setattr(dcp, "latest_ready_trade_date", lambda _service: date(2026, 7, 8))
+
+    result = dcp.finalize_pipeline_status(
+        date(2026, 7, 9),
+        config=dcp.PipelineConfig(service="test", external_data_max_quality_gap_ratio=0.01),
+    )
+
+    assert result["pipeline_status"] == "READY"
+    assert result["daily_status"] == "success"
+    assert result["minute5_status"] == "success"
+    assert result["warnings"] == []
 
 
 def test_finalize_pipeline_status_hides_superseded_minute5_failures_when_quality_passes(monkeypatch):
@@ -1333,6 +2044,13 @@ def test_finalize_pipeline_status_hides_superseded_minute5_failures_when_quality
             "missing_count": 0,
             "abnormal_count": 0,
         },
+        {
+            "dataset_name": "minute5_qfq_bar",
+            "expected_count": 5187,
+            "actual_count": 5187,
+            "missing_count": 0,
+            "abnormal_count": 0,
+        },
     ]
 
     def fake_fetch_all(_conn, sql, _params=None):
@@ -1347,6 +2065,55 @@ def test_finalize_pipeline_status_hides_superseded_minute5_failures_when_quality
 
     assert result["minute5_status"] == "success"
     assert all(job["stage"] != "minute5" for job in result["failed_jobs"])
+
+
+def test_finalize_pipeline_status_requires_qfq_quality_pass(monkeypatch):
+    _no_db(monkeypatch)
+    jobs = [
+        {"stage": "daily", "job_name": "daily_bar", "source": "tushare", "status": "success"},
+        {"stage": "minute5", "job_name": "minute5_bar", "source": "baostock_sh", "status": "success"},
+        {"stage": "minute5", "job_name": "minute5_bar", "source": "baostock_sz", "status": "success"},
+        {"stage": "deps", "job_name": "daily_factor_pipeline", "source": "internal", "status": "success"},
+    ]
+    quality = [
+        {
+            "dataset_name": "daily_bar",
+            "expected_count": 3,
+            "actual_count": 3,
+            "missing_count": 0,
+            "abnormal_count": 0,
+        },
+        {
+            "dataset_name": "minute5_bar",
+            "expected_count": 3,
+            "actual_count": 3,
+            "missing_count": 0,
+            "abnormal_count": 0,
+        },
+        {
+            "dataset_name": "minute5_qfq_bar",
+            "expected_count": 3,
+            "actual_count": 2,
+            "missing_count": 1,
+            "abnormal_count": 0,
+        },
+    ]
+
+    def fake_fetch_all(_conn, sql, _params=None):
+        if "FROM ops.daily_pipeline_quality" in sql:
+            return quality
+        return jobs
+
+    monkeypatch.setattr(dcp, "fetch_all", fake_fetch_all)
+    monkeypatch.setattr(dcp, "latest_ready_trade_date", lambda _service: date(2026, 7, 9))
+
+    result = dcp.finalize_pipeline_status(
+        date(2026, 7, 10),
+        config=dcp.PipelineConfig(service="test", external_data_max_quality_gap_ratio=0.01),
+    )
+
+    assert result["minute5_status"] == "failed"
+    assert result["pipeline_status"] == "NOT_READY"
 
 
 def test_finalize_pipeline_status_blocks_ready_when_market_monitor_failed(monkeypatch):

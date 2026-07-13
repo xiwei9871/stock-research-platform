@@ -133,6 +133,22 @@ def test_repair_minute5_raw_bars_reports_failed_noop_when_no_missing_symbols():
     assert result.metrics["attempted"] == 0
 
 
+def test_repair_minute5_raw_bars_fails_when_quality_refresh_is_empty_after_fetch():
+    result = repair_minute5_raw_bars(
+        "2026-07-06",
+        service="test",
+        missing_symbols_loader=lambda _trade_date: ["600000.SH"],
+        raw_fetcher=lambda ts_code, **_kwargs: [
+            {"ts_code": ts_code, "trade_date": date(2026, 7, 6), "adjust_type": "raw"}
+        ],
+        upserter=lambda _service, rows: len(rows),
+        qfq_deriver=lambda _service, _trade_date: {"inserted_rows": 1},
+        quality_refresher=lambda _service, _trade_date: {},
+    )
+
+    assert result.status == RepairStatus.FAILED
+
+
 def test_repair_minute5_raw_bars_sleeps_between_baostock_symbols(monkeypatch):
     import stock_research.eod_auto_repair_actions as eod_auto_repair_actions
 
@@ -149,7 +165,12 @@ def test_repair_minute5_raw_bars_sleeps_between_baostock_symbols(monkeypatch):
         ],
         upserter=lambda _service, rows: len(rows),
         qfq_deriver=lambda _service, _trade_date: {"inserted_rows": 2},
-        quality_refresher=lambda _service, _trade_date: {"missing_symbols": [], "abnormal_symbols": []},
+        quality_refresher=lambda _service, _trade_date: {
+            "expected_count": 2,
+            "actual_count": 2,
+            "missing_symbols": [],
+            "abnormal_symbols": [],
+        },
         symbol_sleep_seconds=0.75,
     )
 
