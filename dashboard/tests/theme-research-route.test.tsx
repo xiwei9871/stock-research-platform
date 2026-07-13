@@ -27,6 +27,19 @@ vi.mock('../src/components/ThemeResearchWorkspace', () => ({
   )
 }));
 
+vi.mock('../src/components/IndustryCatalogWorkspace', () => ({
+  IndustryCatalogWorkspace: ({ pathname, onNavigate }: {
+    pathname: string;
+    onNavigate: (path: string) => void;
+  }) => (
+    <section>
+      <h1>Industry Catalog Mock</h1>
+      <span>{pathname}</span>
+      <button type="button" onClick={() => onNavigate('/theme-research/catalog/grid%20storage')}>Open catalog detail</button>
+    </section>
+  )
+}));
+
 vi.mock('../src/pages/TechBottleneckReviewPage', () => ({ TechBottleneckReviewPage: () => <div>Tech Bottleneck</div> }));
 vi.mock('../src/components/FactorLabWorkspace', () => ({ FactorLabWorkspace: () => <div>Factor Lab</div> }));
 vi.mock('../src/components/DailyReviewLiteWorkspace', () => ({ DailyReviewLiteWorkspace: () => <div>Daily Review</div> }));
@@ -60,13 +73,48 @@ describe('Theme research AppShell routing', () => {
     cleanup();
   });
 
-  it('opens theme research from an independent primary navigation item', () => {
+  it('opens the combined workspace from the renamed primary navigation item', () => {
     render(<AppShell />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open Theme Research workspace' }));
+    const navigationButton = screen.getByRole('button', { name: 'Open Theme Research and Industry Catalog workspace' });
+    expect(navigationButton).toHaveTextContent('主题研究与产业目录');
+    fireEvent.click(navigationButton);
 
     expect(screen.getByRole('heading', { name: 'Theme Research Mock' })).toBeInTheDocument();
     expect(window.location.pathname).toBe('/theme-research');
+  });
+
+  it('restores the catalog index directly and switches top-level tabs by browser path', () => {
+    window.history.replaceState({}, '', '/theme-research/catalog');
+    render(<AppShell />);
+
+    expect(screen.getByRole('tab', { name: '产业目录' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('heading', { name: 'Industry Catalog Mock' })).toBeInTheDocument();
+    expect(screen.getByText('/theme-research/catalog')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: '主题研究' }));
+
+    expect(window.location.pathname).toBe('/theme-research');
+    expect(screen.getByRole('heading', { name: 'Theme Research Mock' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: '产业目录' }));
+
+    expect(window.location.pathname).toBe('/theme-research/catalog');
+    expect(screen.getByRole('heading', { name: 'Industry Catalog Mock' })).toBeInTheDocument();
+  });
+
+  it('restores and updates catalog detail routes without handing catalog to theme research', () => {
+    window.history.replaceState({}, '', '/theme-research/catalog/ai_data_center_power');
+    render(<AppShell />);
+
+    expect(screen.getByRole('heading', { name: 'Industry Catalog Mock' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Theme Research Mock' })).not.toBeInTheDocument();
+    expect(screen.getByText('/theme-research/catalog/ai_data_center_power')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open catalog detail' }));
+
+    expect(window.location.pathname).toBe('/theme-research/catalog/grid%20storage');
+    expect(screen.getByText('/theme-research/catalog/grid%20storage')).toBeInTheDocument();
   });
 
   it('restores a direct child route and updates route-backed tabs', () => {
@@ -97,7 +145,7 @@ describe('Theme research AppShell routing', () => {
     window.history.replaceState({}, '', '/theme-research/ai_power_value_capture_v1/sources');
     render(<AppShell />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open Theme Research workspace' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Theme Research and Industry Catalog workspace' }));
 
     expect(window.location.pathname).toBe('/theme-research');
     expect(screen.getByText('/theme-research')).toBeInTheDocument();

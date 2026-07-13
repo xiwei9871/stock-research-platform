@@ -11,7 +11,7 @@ import { ResearchReportsWorkspace } from './ResearchReportsWorkspace';
 import { ReviewQueueWorkspace } from './ReviewQueueWorkspace';
 import { StockWorkspace, type StockEntryContext } from './StockWorkspace';
 import { StrategyLabWorkspace } from './StrategyLabWorkspace';
-import { ThemeResearchWorkspace } from './ThemeResearchWorkspace';
+import { ThemeResearchAndIndustryCatalogWorkspace } from './ThemeResearchAndIndustryCatalogWorkspace';
 import { UserManagementView } from './UserManagementView';
 import { WatchlistWorkspace } from './WatchlistWorkspace';
 import type { SectorType } from './market-monitor/mockData';
@@ -86,7 +86,11 @@ const NAV_ITEMS: Array<{ mode: WorkspaceMode; label: string; ariaLabel: string }
   { mode: 'researchReports', label: '研报', ariaLabel: 'Open Research Reports workspace' },
   { mode: 'stock', label: '个股工作台', ariaLabel: 'Open Stock Workspace workspace' },
   { mode: 'watchlist', label: '观察池', ariaLabel: 'Open Watchlist workspace' },
-  { mode: 'themeResearch', label: '主题研究', ariaLabel: 'Open Theme Research workspace' },
+  {
+    mode: 'themeResearch',
+    label: '主题研究与产业目录',
+    ariaLabel: 'Open Theme Research and Industry Catalog workspace'
+  },
   {
     mode: 'dataToBriefDocling90',
     label: 'Docling报告审计',
@@ -606,7 +610,7 @@ export function AppShell({ currentUser: _currentUser }: AppShellProps = {}) {
             />
           ) : null}
           {workspaceMode === 'themeResearch' ? (
-            <ThemeResearchWorkspace
+            <ThemeResearchAndIndustryCatalogWorkspace
               pathname={themeResearchPathname}
               onNavigate={navigateThemeResearch}
               onOpenStock={openStockWorkspaceFromThemeResearch}
