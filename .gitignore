@@ -28,6 +28,7 @@ env/
 /reports/
 /output/
 /outputs/
+/artifacts/theme_decomposition/ingestion_runs/
 /.worktrees/
 /.superpowers/
 /.codex/
