@@ -1,7 +1,10 @@
 import datetime as dt
 import hashlib
 import json
+import os
+import socket
 import time
+from contextlib import contextmanager
 from typing import Any
 
 import baostock as bs
@@ -9,6 +12,7 @@ import baostock as bs
 from stock_research.assets import asset_id_from_baostock_code
 from stock_research.config import SETTINGS
 from stock_research.db import connect, execute_many, fetch_all
+from stock_research.eastmoney_http import curl_eastmoney_json
 
 
 MINUTE_FIELDS = ["date", "time", "code", "open", "high", "low", "close", "volume", "amount"]
@@ -25,11 +29,91 @@ ADJUST_TO_BAOSTOCK = {
     "qfq": "2",
     "hfq": "1",
 }
+FREQ_TO_EASTMONEY_KLT = {
+    "1min": "1",
+    "5min": "5",
+    "15min": "15",
+    "30min": "30",
+    "60min": "60",
+}
+ADJUST_TO_EASTMONEY_FQT = {
+    "raw": "0",
+    "qfq": "1",
+    "hfq": "2",
+}
+EASTMONEY_KLINE_URLS = [
+    "https://33.push2his.eastmoney.com/api/qt/stock/kline/get",
+    "https://63.push2his.eastmoney.com/api/qt/stock/kline/get",
+    "https://82.push2his.eastmoney.com/api/qt/stock/kline/get",
+    "https://push2his.eastmoney.com/api/qt/stock/kline/get",
+]
+EASTMONEY_KLINE_FIELDS1 = "f1,f2,f3,f4,f5,f6"
+EASTMONEY_KLINE_FIELDS2 = "f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61"
 BAOSTOCK_MAX_ATTEMPTS = 3
 BAOSTOCK_RETRYABLE_ERROR_CODES = {"10001001", "10002007"}
+BAOSTOCK_RETRYABLE_ERROR_MESSAGES = {
+    "Broken pipe",
+    "接收数据异常",
+    "网络接收错误",
+    "timed out",
+    "Connection reset",
+    "Connection aborted",
+}
 BAOSTOCK_RETRY_SLEEP_SECONDS = 1.0
 BAOSTOCK_LOGIN_MAX_ATTEMPTS = 5
 BAOSTOCK_LOGIN_RETRY_ERROR_CODES = {"10002007"}
+
+
+def _load_socks_module():
+    import socks
+
+    return socks
+
+
+def _load_baostock_socket_module():
+    import baostock.util.socketutil as socketutil
+
+    return socketutil
+
+
+def baostock_proxy_config() -> tuple[str, int] | None:
+    host = (os.getenv("BAOSTOCK_PROXY_HOST") or "").strip()
+    port = (os.getenv("BAOSTOCK_PROXY_PORT") or "").strip()
+    if not host or not port:
+        return None
+    return host, int(port)
+
+
+@contextmanager
+def temporary_baostock_proxy():
+    proxy = baostock_proxy_config()
+    if proxy is None:
+        yield
+        return
+    host, port = proxy
+    socks = _load_socks_module()
+    socketutil = _load_baostock_socket_module()
+    original_socket = socketutil.socket.socket
+    socks.setdefaultproxy(socks.SOCKS5, host, port, rdns=True)
+    socketutil.socket.socket = socks.socksocket
+    try:
+        yield
+    finally:
+        socketutil.socket.socket = original_socket
+        socks.setdefaultproxy()
+
+
+@contextmanager
+def temporary_socket_timeout(timeout_seconds: float | None):
+    if timeout_seconds is None:
+        yield
+        return
+    previous_timeout = socket.getdefaulttimeout()
+    socket.setdefaulttimeout(timeout_seconds)
+    try:
+        yield
+    finally:
+        socket.setdefaulttimeout(previous_timeout)
 
 
 def parse_float(value: Any) -> float | None:
@@ -67,9 +151,40 @@ def adjustflag_for_adjust_type(adjust_type: str) -> str:
         raise ValueError(f"Unsupported adjust_type: {adjust_type}") from exc
 
 
+def eastmoney_kline_frequency(freq: str) -> str:
+    try:
+        return FREQ_TO_EASTMONEY_KLT[freq]
+    except KeyError as exc:
+        raise ValueError(f"Unsupported minute frequency: {freq}") from exc
+
+
+def eastmoney_adjust_flag(adjust_type: str) -> str:
+    try:
+        return ADJUST_TO_EASTMONEY_FQT[adjust_type]
+    except KeyError as exc:
+        raise ValueError(f"Unsupported adjust_type: {adjust_type}") from exc
+
+
 def ts_code_from_baostock_code(code: str) -> str:
     exchange, symbol = code.split(".", 1)
     return f"{symbol}.{exchange.upper()}"
+
+
+def baostock_code_from_ts_code(ts_code: str) -> str:
+    symbol, exchange = ts_code.split(".", 1)
+    return f"{exchange.lower()}.{symbol}"
+
+
+def eastmoney_secid_from_ts_code(ts_code: str) -> str:
+    symbol, exchange = ts_code.split(".", 1)
+    exchange_id = {
+        "SH": "1",
+        "SZ": "0",
+        "BJ": "0",
+    }.get(exchange.upper())
+    if exchange_id is None:
+        raise ValueError(f"Unsupported Eastmoney exchange: {exchange}")
+    return f"{exchange_id}.{symbol}"
 
 
 def request_params(
@@ -143,16 +258,18 @@ def query_baostock_minute_rows(
     end_date: dt.date,
     freq: str,
     adjust_type: str,
+    timeout_seconds: float | None = None,
 ) -> list[dict[str, str]]:
     def operation() -> list[dict[str, str]]:
-        rs = bs.query_history_k_data_plus(
-            code,
-            ",".join(MINUTE_FIELDS),
-            start_date=start_date.isoformat(),
-            end_date=end_date.isoformat(),
-            frequency=baostock_frequency(freq),
-            adjustflag=adjustflag_for_adjust_type(adjust_type),
-        )
+        with temporary_baostock_proxy(), temporary_socket_timeout(timeout_seconds):
+            rs = bs.query_history_k_data_plus(
+                code,
+                ",".join(MINUTE_FIELDS),
+                start_date=start_date.isoformat(),
+                end_date=end_date.isoformat(),
+                frequency=baostock_frequency(freq),
+                adjustflag=adjustflag_for_adjust_type(adjust_type),
+            )
         if rs.error_code != "0":
             raise RuntimeError(
                 f"baostock minute query failed for {code}: {rs.error_code} {rs.error_msg}"
@@ -163,31 +280,84 @@ def query_baostock_minute_rows(
             rows.append(dict(zip(rs.fields, rs.get_row_data(), strict=True)))
         return rows
 
-    return run_with_baostock_retry(operation)
+    return run_with_baostock_retry(operation, timeout_seconds=timeout_seconds)
+
+
+def query_eastmoney_kline_minute_rows(
+    ts_code: str,
+    start_date: dt.date,
+    end_date: dt.date,
+    *,
+    freq: str,
+    adjust_type: str,
+    retries: int = 3,
+    retry_sleep_seconds: float = 1.0,
+) -> list[dict[str, str]]:
+    params = {
+        "secid": eastmoney_secid_from_ts_code(ts_code),
+        "ut": "7eea3edcaed734bea9cbfc24409ed989",
+        "fields1": EASTMONEY_KLINE_FIELDS1,
+        "fields2": EASTMONEY_KLINE_FIELDS2,
+        "klt": eastmoney_kline_frequency(freq),
+        "fqt": eastmoney_adjust_flag(adjust_type),
+        "beg": start_date.strftime("%Y%m%d"),
+        "end": end_date.strftime("%Y%m%d"),
+    }
+    payload = curl_eastmoney_json(
+        EASTMONEY_KLINE_URLS,
+        params,
+        retries=retries,
+        retry_sleep_seconds=retry_sleep_seconds,
+    )
+    data = payload.get("data") or {}
+    return [
+        _eastmoney_kline_row_to_minute_row(kline, ts_code=ts_code)
+        for kline in data.get("klines") or []
+    ]
+
+
+def _eastmoney_kline_row_to_minute_row(kline: str, *, ts_code: str) -> dict[str, str]:
+    parts = kline.split(",")
+    if len(parts) < 7:
+        raise ValueError(f"Eastmoney kline row has too few fields: {kline}")
+    trade_time = dt.datetime.strptime(parts[0], "%Y-%m-%d %H:%M")
+    return {
+        "date": trade_time.date().isoformat(),
+        "time": trade_time.strftime("%Y%m%d%H%M%S") + "000",
+        "code": baostock_code_from_ts_code(ts_code),
+        "open": parts[1],
+        "close": parts[2],
+        "high": parts[3],
+        "low": parts[4],
+        "volume": parts[5],
+        "amount": parts[6],
+    }
 
 
 def is_retryable_baostock_error(message: str) -> bool:
-    return any(error_code in message for error_code in BAOSTOCK_RETRYABLE_ERROR_CODES)
+    return any(error_code in message for error_code in BAOSTOCK_RETRYABLE_ERROR_CODES) or any(
+        marker in message for marker in BAOSTOCK_RETRYABLE_ERROR_MESSAGES
+    )
 
 
-def relogin_or_raise() -> None:
+def relogin_or_raise(timeout_seconds: float | None = None) -> None:
     try:
         bs.logout()
     except Exception:
         pass
-    login_or_raise()
+    login_or_raise(timeout_seconds=timeout_seconds)
 
 
-def run_with_baostock_retry(operation):
-    last_error: RuntimeError | None = None
+def run_with_baostock_retry(operation, timeout_seconds: float | None = None):
+    last_error: Exception | None = None
     for attempt in range(1, BAOSTOCK_MAX_ATTEMPTS + 1):
         try:
             return operation()
-        except RuntimeError as exc:
+        except Exception as exc:
             last_error = exc
             if attempt >= BAOSTOCK_MAX_ATTEMPTS or not is_retryable_baostock_error(str(exc)):
                 raise
-            relogin_or_raise()
+            relogin_or_raise(timeout_seconds=timeout_seconds)
             time.sleep(BAOSTOCK_RETRY_SLEEP_SECONDS)
     assert last_error is not None
     raise last_error
@@ -294,10 +464,11 @@ def upsert_stock_minute_bars(
     return len(market_rows)
 
 
-def login_or_raise() -> None:
+def login_or_raise(timeout_seconds: float | None = None) -> None:
     last_error = ""
     for attempt in range(BAOSTOCK_LOGIN_MAX_ATTEMPTS):
-        login = bs.login()
+        with temporary_baostock_proxy(), temporary_socket_timeout(timeout_seconds):
+            login = bs.login()
         if login.error_code == "0":
             return
         last_error = f"{login.error_code} {login.error_msg}"

@@ -2,11 +2,15 @@ import atexit
 import csv
 import datetime as dt
 import hashlib
+import multiprocessing as mp
+import queue
+import signal
+import threading
 import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from stock_research.config import SETTINGS
 from stock_research.db import connect, execute, execute_many, fetch_all
@@ -21,6 +25,12 @@ from stock_research.minute_data import (
 
 TRADING_MINUTE_BARS_PER_DAY = {"5min": 48, "1min": 240, "15min": 16, "30min": 8, "60min": 4}
 _WORKER_BAOSTOCK_READY = False
+BACKFILL_JOB_REQUEST_TIMEOUT_SECONDS = 30.0
+BACKFILL_JOB_MAX_ATTEMPTS = 2
+
+
+class BackfillJobTimeoutError(TimeoutError):
+    pass
 
 
 @dataclass(frozen=True)
@@ -349,6 +359,175 @@ def mark_job_failed(
         execute(conn, sql, [error[:4000], job_id])
 
 
+def mark_job_skipped(
+    job_id: str,
+    error: str,
+    research_service: str = SETTINGS.research_service,
+) -> None:
+    sql = """
+    UPDATE market.minute_bar_backfill_job
+    SET status = 'skipped',
+        last_error = %s,
+        finished_at = now(),
+        updated_at = now()
+    WHERE job_id = %s
+    """
+    with connect(research_service) as conn:
+        execute(conn, sql, [error[:4000], job_id])
+
+
+def derive_qfq_minute_bars_from_raw_job(conn, job: dict[str, Any]) -> int:
+    sql = """
+    WITH raw_rows AS (
+        SELECT
+            raw.asset_id,
+            raw.ts_code,
+            raw.trade_time,
+            raw.trade_date,
+            raw.freq,
+            raw.open,
+            raw.high,
+            raw.low,
+            raw.close,
+            raw.volume,
+            raw.amount,
+            raw.source
+        FROM market.stock_minute_bar raw
+        WHERE raw.asset_id = %s
+          AND raw.ts_code = %s
+          AND raw.trade_date BETWEEN %s AND %s
+          AND raw.freq = %s
+          AND raw.adjust_type = 'raw'
+          AND raw.source = %s
+    ),
+    upserted AS (
+        INSERT INTO market.stock_minute_bar (
+            asset_id, ts_code, trade_time, trade_date, freq, adjust_type,
+            open, high, low, close, volume, amount, source
+        )
+        SELECT
+            raw.asset_id,
+            raw.ts_code,
+            raw.trade_time,
+            raw.trade_date,
+            raw.freq,
+            'qfq' AS adjust_type,
+            raw.open * af.qfq_factor AS open,
+            raw.high * af.qfq_factor AS high,
+            raw.low * af.qfq_factor AS low,
+            raw.close * af.qfq_factor AS close,
+            raw.volume,
+            raw.amount,
+            raw.source
+        FROM raw_rows raw
+        JOIN LATERAL (
+            SELECT af.qfq_factor
+            FROM market.adjustment_factor af
+            WHERE af.asset_id = raw.asset_id
+              AND af.trade_date = raw.trade_date
+              AND af.qfq_factor IS NOT NULL
+            ORDER BY
+                CASE WHEN af.source_version = 'derived_market_daily_bar_v1' THEN 0 ELSE 1 END,
+                af.updated_at DESC
+            LIMIT 1
+        ) af ON true
+        ON CONFLICT (trade_date, asset_id, trade_time, freq, adjust_type, source)
+        DO UPDATE SET
+            ts_code = EXCLUDED.ts_code,
+            trade_date = EXCLUDED.trade_date,
+            open = EXCLUDED.open,
+            high = EXCLUDED.high,
+            low = EXCLUDED.low,
+            close = EXCLUDED.close,
+            volume = EXCLUDED.volume,
+            amount = EXCLUDED.amount,
+            updated_at = now()
+        RETURNING 1
+    )
+    SELECT
+        (SELECT count(*) FROM raw_rows) AS raw_rows,
+        (SELECT count(*) FROM upserted) AS inserted_rows
+    """
+    params = [
+        job["asset_id"],
+        job["ts_code"],
+        job["start_date"],
+        job["end_date"],
+        job["freq"],
+        job.get("source", "baostock"),
+    ]
+    row = fetch_all(conn, sql, params)[0]
+    raw_rows = int(row.get("raw_rows") or 0)
+    inserted_rows = int(row.get("inserted_rows") or 0)
+    if inserted_rows != raw_rows:
+        error = (
+            "derived qfq minute rows do not match raw rows; "
+            f"raw_rows={raw_rows}, inserted_rows={inserted_rows}"
+        )
+        _mark_derived_qfq_job_failed(conn, job, error)
+        raise RuntimeError(error)
+    _mark_derived_qfq_job_success(conn, job, inserted_rows)
+    return inserted_rows
+
+
+def _mark_derived_qfq_job_success(conn, job: dict[str, Any], row_count_market: int) -> None:
+    sql = """
+    UPDATE market.minute_bar_backfill_job
+    SET status = 'success',
+        row_count_market = %s,
+        row_count_staging = 0,
+        finished_at = now(),
+        updated_at = now(),
+        last_error = NULL
+    WHERE asset_id = %s
+      AND start_date = %s
+      AND end_date = %s
+      AND freq = %s
+      AND adjust_type = 'qfq'
+      AND source = %s
+    """
+    execute(
+        conn,
+        sql,
+        [
+            row_count_market,
+            job["asset_id"],
+            job["start_date"],
+            job["end_date"],
+            job["freq"],
+            job.get("source", "baostock"),
+        ],
+    )
+
+
+def _mark_derived_qfq_job_failed(conn, job: dict[str, Any], error: str) -> None:
+    sql = """
+    UPDATE market.minute_bar_backfill_job
+    SET status = 'failed',
+        last_error = %s,
+        finished_at = now(),
+        updated_at = now()
+    WHERE asset_id = %s
+      AND start_date = %s
+      AND end_date = %s
+      AND freq = %s
+      AND adjust_type = 'qfq'
+      AND source = %s
+    """
+    execute(
+        conn,
+        sql,
+        [
+            error[:4000],
+            job["asset_id"],
+            job["start_date"],
+            job["end_date"],
+            job["freq"],
+            job.get("source", "baostock"),
+        ],
+    )
+
+
 def reset_stale_running_jobs(
     stale_after_minutes: int = 15,
     research_service: str = SETTINGS.research_service,
@@ -380,6 +559,58 @@ def reset_stale_running_jobs(
     return int(before or 0)
 
 
+def reset_running_jobs_in_scope(
+    *,
+    started_at_or_after: dt.datetime,
+    start_date: dt.date | None = None,
+    end_date: dt.date | None = None,
+    freq: str | None = None,
+    adjust_types: list[str] | None = None,
+    research_service: str = SETTINGS.research_service,
+) -> int:
+    filters = ["status = 'running'", "started_at >= %s"]
+    params: list[Any] = [started_at_or_after]
+    if start_date:
+        filters.append("end_date >= %s")
+        params.append(start_date)
+    if end_date:
+        filters.append("start_date <= %s")
+        params.append(end_date)
+    if freq:
+        filters.append("freq = %s")
+        params.append(freq)
+    if adjust_types:
+        filters.append("adjust_type = ANY(%s)")
+        params.append(adjust_types)
+
+    where_sql = " AND ".join(filters)
+    note = "auto-reset running job after watchdog timeout"
+    sql = f"""
+    UPDATE market.minute_bar_backfill_job
+    SET status = 'pending',
+        started_at = NULL,
+        finished_at = NULL,
+        last_error = CASE
+            WHEN last_error IS NULL OR last_error = '' THEN %s
+            ELSE left(last_error || ' | ' || %s, 4000)
+        END,
+        updated_at = now()
+    WHERE {where_sql}
+    """
+    with connect(research_service) as conn:
+        before = fetch_all(
+            conn,
+            f"""
+            SELECT count(*) AS count
+            FROM market.minute_bar_backfill_job
+            WHERE {where_sql}
+            """,
+            params,
+        )[0]["count"]
+        execute(conn, sql, [note, note, *params])
+    return int(before or 0)
+
+
 def shutdown_backfill_worker() -> None:
     global _WORKER_BAOSTOCK_READY
     if not _WORKER_BAOSTOCK_READY:
@@ -400,7 +631,127 @@ def initialize_backfill_worker() -> None:
     _WORKER_BAOSTOCK_READY = True
 
 
-def run_backfill_job_worker(job: dict[str, Any], sleep_seconds: float) -> dict[str, Any]:
+class _baostock_job_timeout:
+    def __init__(self, timeout_seconds: float | None):
+        self.timeout_seconds = timeout_seconds
+        self.previous_handler = None
+        self.previous_timer = None
+
+    def __enter__(self):
+        if self.timeout_seconds is None:
+            return self
+        if threading.current_thread() is not threading.main_thread():
+            return self
+        self.previous_handler = signal.getsignal(signal.SIGALRM)
+        self.previous_timer = signal.setitimer(signal.ITIMER_REAL, 0)
+
+        def _raise_timeout(_signum, _frame):
+            raise BackfillJobTimeoutError(
+                f"baostock minute job timed out after {self.timeout_seconds:g} seconds"
+            )
+
+        signal.signal(signal.SIGALRM, _raise_timeout)
+        signal.setitimer(signal.ITIMER_REAL, float(self.timeout_seconds))
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        if self.timeout_seconds is None:
+            return False
+        if threading.current_thread() is not threading.main_thread():
+            return False
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        if self.previous_handler is not None:
+            signal.signal(signal.SIGALRM, self.previous_handler)
+        if self.previous_timer and self.previous_timer[0] > 0:
+            signal.setitimer(signal.ITIMER_REAL, self.previous_timer[0], self.previous_timer[1])
+        return False
+
+
+def run_backfill_job_worker(
+    job: dict[str, Any],
+    sleep_seconds: float,
+    request_timeout_seconds: float | None = BACKFILL_JOB_REQUEST_TIMEOUT_SECONDS,
+) -> dict[str, Any]:
+    last_error = ""
+    for attempt in range(1, BACKFILL_JOB_MAX_ATTEMPTS + 1):
+        result = _run_backfill_job_worker_attempt_with_process(
+            job,
+            sleep_seconds=sleep_seconds,
+            request_timeout_seconds=request_timeout_seconds,
+        )
+        if result["error"] is None:
+            return result
+        last_error = str(result["error"])
+        if attempt < BACKFILL_JOB_MAX_ATTEMPTS:
+            continue
+    return {
+        "job_id": job["job_id"],
+        "row_count_market": 0,
+        "row_count_staging": 0,
+        "error": last_error,
+    }
+
+
+def _run_backfill_job_worker_attempt_with_process(
+    job: dict[str, Any],
+    *,
+    sleep_seconds: float,
+    request_timeout_seconds: float | None,
+) -> dict[str, Any]:
+    if request_timeout_seconds is None:
+        return _run_backfill_job_worker_attempt(job, sleep_seconds, request_timeout_seconds)
+    context = _backfill_job_process_context()
+    result_queue = context.Queue(maxsize=1)
+    process = context.Process(
+        target=_run_backfill_job_worker_attempt_target,
+        args=(result_queue, job, sleep_seconds, request_timeout_seconds),
+    )
+    process.start()
+    process.join(timeout=float(request_timeout_seconds))
+    if process.is_alive():
+        process.terminate()
+        process.join(timeout=1)
+        if process.is_alive() and hasattr(process, "kill"):
+            process.kill()
+            process.join(timeout=1)
+        result_queue.close()
+        return {
+            "job_id": job["job_id"],
+            "row_count_market": 0,
+            "row_count_staging": 0,
+            "error": (
+                f"BackfillJobTimeoutError: baostock minute job timed out after "
+                f"{request_timeout_seconds:g} seconds"
+            ),
+        }
+    try:
+        result = result_queue.get_nowait()
+    except queue.Empty:
+        result = {
+            "job_id": job["job_id"],
+            "row_count_market": 0,
+            "row_count_staging": 0,
+            "error": f"RuntimeError: baostock minute job exited with code {process.exitcode}",
+        }
+    finally:
+        result_queue.close()
+    return result
+
+
+def _run_backfill_job_worker_attempt_target(
+    result_queue: Any,
+    job: dict[str, Any],
+    sleep_seconds: float,
+    request_timeout_seconds: float | None,
+) -> None:
+    result_queue.put(_run_backfill_job_worker_attempt(job, sleep_seconds, request_timeout_seconds))
+
+
+def _run_backfill_job_worker_attempt(
+    job: dict[str, Any],
+    sleep_seconds: float,
+    request_timeout_seconds: float | None,
+) -> dict[str, Any]:
     try:
         initialize_backfill_worker()
         params = request_params(
@@ -410,13 +761,15 @@ def run_backfill_job_worker(job: dict[str, Any], sleep_seconds: float) -> dict[s
             job["freq"],
             job["adjust_type"],
         )
-        rows = query_baostock_minute_rows(
-            job["baostock_code"],
-            job["start_date"],
-            job["end_date"],
-            freq=job["freq"],
-            adjust_type=job["adjust_type"],
-        )
+        with _baostock_job_timeout(request_timeout_seconds):
+            rows = query_baostock_minute_rows(
+                job["baostock_code"],
+                job["start_date"],
+                job["end_date"],
+                freq=job["freq"],
+                adjust_type=job["adjust_type"],
+                timeout_seconds=request_timeout_seconds,
+            )
         row_count = upsert_stock_minute_bars(
             rows,
             freq=job["freq"],
@@ -436,8 +789,19 @@ def run_backfill_job_worker(job: dict[str, Any], sleep_seconds: float) -> dict[s
             "job_id": job["job_id"],
             "row_count_market": 0,
             "row_count_staging": 0,
-            "error": str(exc),
+            "error": f"{exc.__class__.__name__}: {exc}",
         }
+    finally:
+        shutdown_backfill_worker()
+
+
+def _backfill_job_process_context() -> Any:
+    for method in ("fork", "spawn"):
+        try:
+            return mp.get_context(method)
+        except ValueError:
+            continue
+    return mp.get_context()
 
 
 def run_baostock_minute_backfill(
@@ -451,6 +815,10 @@ def run_baostock_minute_backfill(
     sleep_seconds: float = 0.5,
     workers: int = 1,
     reset_stale_before_run: bool = True,
+    progress: Callable[[dict[str, Any]], None] | None = None,
+    progress_interval: int = 100,
+    progress_heartbeat_seconds: float = 60.0,
+    derive_qfq_from_raw: bool | None = None,
 ) -> dict[str, int]:
     if batch_by != "month":
         raise ValueError("minute backfill v1 supports batch_by=month")
@@ -467,15 +835,87 @@ def run_baostock_minute_backfill(
             adjust_types=adjust_types,
         )
     result = {"attempted": 0, "success": 0, "failed": 0, "rows": 0}
+    should_derive_qfq = bool(
+        derive_qfq_from_raw
+        if derive_qfq_from_raw is not None
+        else (adjust_types is not None and "qfq" in adjust_types)
+    )
     if workers <= 0:
         raise ValueError("workers must be positive")
+    total_jobs = len(jobs)
+    interval = max(1, int(progress_interval or 1))
 
-    if workers == 1:
-        initialize_backfill_worker()
-        try:
-            for job in jobs:
+    def emit_progress(event: str, worker_result: dict[str, Any] | None = None) -> None:
+        if progress is None:
+            return
+        payload: dict[str, Any] = {
+            "event": event,
+            "completed_jobs": int(result["attempted"]),
+            "total_jobs": total_jobs,
+            "success_jobs": int(result["success"]),
+            "failed_jobs": int(result["failed"]),
+            "rows": int(result["rows"]),
+        }
+        if worker_result:
+            payload["last_job_id"] = worker_result.get("job_id")
+            payload["last_error"] = worker_result.get("error")
+        progress(payload)
+
+    emit_progress("minute_backfill_started")
+    heartbeat_stop = threading.Event()
+    heartbeat_thread: threading.Thread | None = None
+    heartbeat_seconds = float(progress_heartbeat_seconds or 0)
+    if progress is not None and heartbeat_seconds > 0 and total_jobs > 0:
+        def heartbeat_loop() -> None:
+            while not heartbeat_stop.wait(heartbeat_seconds):
+                emit_progress("minute_backfill_heartbeat")
+
+        heartbeat_thread = threading.Thread(target=heartbeat_loop, daemon=True)
+        heartbeat_thread.start()
+
+    try:
+        if workers == 1:
+            initialize_backfill_worker()
+            try:
+                for job in jobs:
+                    worker_result = run_backfill_job_worker(job, sleep_seconds)
+                    result["attempted"] += 1
+                    if worker_result["error"] is None:
+                        mark_job_success(
+                            worker_result["job_id"],
+                            worker_result["row_count_market"],
+                            worker_result["row_count_staging"],
+                        )
+                        result["success"] += 1
+                        result["rows"] += int(worker_result["row_count_market"])
+                        qfq_rows, qfq_error = _derive_qfq_after_raw_success(
+                            job,
+                            should_derive_qfq=should_derive_qfq,
+                        )
+                        if qfq_error is None:
+                            if qfq_rows is not None:
+                                result["success"] += 1
+                                result["rows"] += qfq_rows
+                        else:
+                            result["failed"] += 1
+                    else:
+                        mark_job_skipped(worker_result["job_id"], worker_result["error"])
+                        result["failed"] += 1
+                    if result["attempted"] % interval == 0:
+                        emit_progress("minute_backfill_progress", worker_result)
+            finally:
+                shutdown_backfill_worker()
+            emit_progress("minute_backfill_completed")
+            return result
+
+        with ProcessPoolExecutor(max_workers=workers, initializer=initialize_backfill_worker) as executor:
+            futures = [
+                executor.submit(run_backfill_job_worker, job, sleep_seconds)
+                for job in jobs
+            ]
+            for future in as_completed(futures):
                 result["attempted"] += 1
-                worker_result = run_backfill_job_worker(job, sleep_seconds)
+                worker_result = future.result()
                 if worker_result["error"] is None:
                     mark_job_success(
                         worker_result["job_id"],
@@ -484,33 +924,102 @@ def run_baostock_minute_backfill(
                     )
                     result["success"] += 1
                     result["rows"] += int(worker_result["row_count_market"])
+                    job = next((candidate for candidate in jobs if candidate["job_id"] == worker_result["job_id"]), None)
+                    qfq_rows, qfq_error = _derive_qfq_after_raw_success(
+                        job or {},
+                        should_derive_qfq=should_derive_qfq,
+                    )
+                    if qfq_error is None:
+                        if qfq_rows is not None:
+                            result["success"] += 1
+                            result["rows"] += qfq_rows
+                    else:
+                        result["failed"] += 1
                 else:
-                    mark_job_failed(worker_result["job_id"], worker_result["error"])
+                    mark_job_skipped(worker_result["job_id"], worker_result["error"])
                     result["failed"] += 1
-        finally:
-            shutdown_backfill_worker()
+                if result["attempted"] % interval == 0:
+                    emit_progress("minute_backfill_progress", worker_result)
+        emit_progress("minute_backfill_completed")
         return result
+    finally:
+        heartbeat_stop.set()
+        if heartbeat_thread is not None:
+            heartbeat_thread.join(timeout=1)
 
-    with ProcessPoolExecutor(max_workers=workers, initializer=initialize_backfill_worker) as executor:
-        futures = [
-            executor.submit(run_backfill_job_worker, job, sleep_seconds)
-            for job in jobs
-        ]
-        for future in as_completed(futures):
-            result["attempted"] += 1
-            worker_result = future.result()
-            if worker_result["error"] is None:
-                mark_job_success(
-                    worker_result["job_id"],
-                    worker_result["row_count_market"],
-                    worker_result["row_count_staging"],
-                )
-                result["success"] += 1
-                result["rows"] += int(worker_result["row_count_market"])
-            else:
-                mark_job_failed(worker_result["job_id"], worker_result["error"])
-                result["failed"] += 1
-    return result
+
+def _derive_qfq_after_raw_success(
+    job: dict[str, Any],
+    *,
+    should_derive_qfq: bool,
+) -> tuple[int | None, str | None]:
+    if not should_derive_qfq or job.get("adjust_type") != "raw":
+        return None, None
+    try:
+        with connect(SETTINGS.research_service) as conn:
+            return derive_qfq_minute_bars_from_raw_job(conn, job), None
+    except Exception as exc:
+        return None, str(exc)
+
+
+def benchmark_baostock_minute_backfill_workers(
+    *,
+    worker_counts: list[int],
+    start_date: str | None = None,
+    end_date: str | None = None,
+    freq: str | None = None,
+    adjust_types: list[str] | None = None,
+    batch_by: str = "month",
+    max_jobs: int = 50,
+    retry_failed: bool = False,
+    sleep_seconds: float = 0.5,
+    reset_stale_before_run: bool = True,
+) -> dict[str, Any]:
+    if not worker_counts:
+        raise ValueError("worker_counts must not be empty")
+    rows: list[dict[str, Any]] = []
+    for workers in worker_counts:
+        if workers <= 0:
+            raise ValueError("worker_counts must be positive")
+        started_at = time.monotonic()
+        result = run_baostock_minute_backfill(
+            start_date=start_date,
+            end_date=end_date,
+            freq=freq,
+            adjust_types=adjust_types,
+            batch_by=batch_by,
+            max_jobs=max_jobs,
+            retry_failed=retry_failed,
+            sleep_seconds=sleep_seconds,
+            workers=workers,
+            reset_stale_before_run=reset_stale_before_run,
+        )
+        elapsed_seconds = round(time.monotonic() - started_at, 6)
+        attempted = int(result["attempted"])
+        row_count = int(result["rows"])
+        rows.append(
+            {
+                "workers": workers,
+                "attempted": attempted,
+                "success": int(result["success"]),
+                "failed": int(result["failed"]),
+                "rows": row_count,
+                "elapsed_seconds": elapsed_seconds,
+                "jobs_per_second": round(attempted / elapsed_seconds, 6) if elapsed_seconds else 0.0,
+                "rows_per_second": round(row_count / elapsed_seconds, 6) if elapsed_seconds else 0.0,
+                "failed_rate": round(int(result["failed"]) / attempted, 6) if attempted else 0.0,
+            }
+        )
+    best = max(rows, key=lambda row: row["rows_per_second"]) if rows else None
+    return {
+        "summary": {
+            "worker_counts": worker_counts,
+            "best_workers_by_rows_per_second": best["workers"] if best else None,
+            "total_attempted": sum(int(row["attempted"]) for row in rows),
+            "total_failed": sum(int(row["failed"]) for row in rows),
+        },
+        "rows": rows,
+    }
 
 
 def load_backfill_status_rows(

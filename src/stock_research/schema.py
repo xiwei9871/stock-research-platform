@@ -1,7 +1,9 @@
 import datetime as dt
 
 from stock_research.config import SETTINGS
+from stock_research.dashboard.auth_schema import DASHBOARD_AUTH_SCHEMA_SQL
 from stock_research.db import connect, execute
+from stock_research.research_objects import RESEARCH_OBJECTS_SQL
 
 
 STOCK_MINUTE_BAR_PARTITIONED_TABLE_SQL = """
@@ -18,7 +20,7 @@ CREATE TABLE IF NOT EXISTS market.stock_minute_bar (
     close numeric,
     volume numeric,
     amount numeric,
-    source text NOT NULL CHECK (source IN ('baostock', 'tushare', 'akshare')),
+    source text NOT NULL CHECK (source IN ('baostock', 'tushare', 'akshare', 'eastmoney')),
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (trade_date, asset_id, trade_time, freq, adjust_type, source)
@@ -481,6 +483,28 @@ CREATE TABLE IF NOT EXISTS core.industry_membership (
     PRIMARY KEY (asset_id, industry_system, industry_code, level, start_date)
 );
 
+CREATE TABLE IF NOT EXISTS core.concept_board (
+    concept_system text NOT NULL,
+    concept_code text NOT NULL,
+    concept_name text NOT NULL,
+    source text NOT NULL,
+    is_active boolean NOT NULL DEFAULT true,
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (concept_system, concept_code)
+);
+
+CREATE TABLE IF NOT EXISTS core.concept_membership (
+    asset_id text NOT NULL,
+    concept_system text NOT NULL,
+    concept_code text NOT NULL,
+    concept_name text NOT NULL,
+    start_date date NOT NULL,
+    end_date date,
+    source text NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (asset_id, concept_system, concept_code, start_date)
+);
+
 CREATE TABLE IF NOT EXISTS market.index_daily_bar (
     index_id text NOT NULL,
     trade_date date NOT NULL,
@@ -561,6 +585,26 @@ CREATE TABLE IF NOT EXISTS market.industry_daily_bar (
     PRIMARY KEY (industry_system, industry_code, trade_date)
 );
 
+CREATE TABLE IF NOT EXISTS market.concept_daily_bar (
+    concept_system text NOT NULL,
+    concept_code text NOT NULL,
+    concept_name text NOT NULL,
+    trade_date date NOT NULL,
+    open numeric,
+    high numeric,
+    low numeric,
+    close numeric,
+    preclose numeric,
+    volume numeric,
+    amount numeric,
+    stock_count integer,
+    up_count integer,
+    down_count integer,
+    source text NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (concept_system, concept_code, trade_date)
+);
+
 CREATE TABLE IF NOT EXISTS staging.baostock_stock_minute_bar (
     source_endpoint text NOT NULL,
     request_params jsonb NOT NULL,
@@ -596,7 +640,7 @@ CREATE TABLE IF NOT EXISTS market.stock_minute_bar (
     close numeric,
     volume numeric,
     amount numeric,
-    source text NOT NULL CHECK (source IN ('baostock', 'tushare', 'akshare')),
+    source text NOT NULL CHECK (source IN ('baostock', 'tushare', 'akshare', 'eastmoney')),
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (trade_date, asset_id, trade_time, freq, adjust_type, source)
@@ -611,7 +655,7 @@ CREATE TABLE IF NOT EXISTS market.minute_bar_backfill_job (
     end_date date NOT NULL,
     freq text NOT NULL CHECK (freq IN ('1min', '5min', '15min', '30min', '60min')),
     adjust_type text NOT NULL CHECK (adjust_type IN ('raw', 'qfq', 'hfq')),
-    source text NOT NULL CHECK (source IN ('baostock', 'tushare', 'akshare')),
+    source text NOT NULL CHECK (source IN ('baostock', 'tushare', 'akshare', 'eastmoney')),
     status text NOT NULL CHECK (status IN ('pending', 'running', 'success', 'failed', 'skipped')) DEFAULT 'pending',
     attempt_count integer NOT NULL DEFAULT 0,
     row_count_market integer NOT NULL DEFAULT 0,
@@ -622,6 +666,175 @@ CREATE TABLE IF NOT EXISTS market.minute_bar_backfill_job (
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
     UNIQUE (ts_code, start_date, end_date, freq, adjust_type, source)
+);
+
+CREATE TABLE IF NOT EXISTS staging.tushare_stock_auction_bar (
+    source_endpoint text NOT NULL,
+    request_params jsonb NOT NULL,
+    ts_code text NOT NULL,
+    raw_trade_date text NOT NULL,
+    trade_date date NOT NULL,
+    auction_phase text NOT NULL CHECK (auction_phase IN ('open_call', 'close_call')),
+    open numeric,
+    high numeric,
+    low numeric,
+    close numeric,
+    volume numeric,
+    amount numeric,
+    vwap numeric,
+    payload jsonb NOT NULL,
+    payload_hash text NOT NULL,
+    fetched_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (source_endpoint, ts_code, trade_date, auction_phase)
+);
+
+CREATE TABLE IF NOT EXISTS market.stock_auction_bar (
+    asset_id text NOT NULL,
+    ts_code text NOT NULL,
+    trade_date date NOT NULL,
+    auction_phase text NOT NULL CHECK (auction_phase IN ('open_call', 'close_call')),
+    open numeric,
+    high numeric,
+    low numeric,
+    close numeric,
+    volume numeric,
+    amount numeric,
+    vwap numeric,
+    source text NOT NULL CHECK (source IN ('tushare')),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (trade_date, asset_id, auction_phase, source)
+);
+
+CREATE TABLE IF NOT EXISTS staging.eastmoney_stock_auction_minute_bar (
+    source_endpoint text NOT NULL,
+    request_params jsonb NOT NULL,
+    ts_code text NOT NULL,
+    raw_trade_time text NOT NULL,
+    trade_date date NOT NULL,
+    trade_time timestamp NOT NULL,
+    auction_phase text NOT NULL CHECK (auction_phase IN ('open_call')),
+    freq text NOT NULL CHECK (freq IN ('1min')),
+    open numeric,
+    high numeric,
+    low numeric,
+    close numeric,
+    latest numeric,
+    volume numeric,
+    amount numeric,
+    payload jsonb NOT NULL,
+    payload_hash text NOT NULL,
+    fetched_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (source_endpoint, ts_code, trade_time, auction_phase, freq)
+);
+
+CREATE TABLE IF NOT EXISTS market.stock_auction_minute_bar (
+    asset_id text NOT NULL,
+    ts_code text NOT NULL,
+    trade_date date NOT NULL,
+    trade_time timestamp NOT NULL,
+    auction_phase text NOT NULL CHECK (auction_phase IN ('open_call')),
+    freq text NOT NULL CHECK (freq IN ('1min')),
+    open numeric,
+    high numeric,
+    low numeric,
+    close numeric,
+    latest numeric,
+    volume numeric,
+    amount numeric,
+    source text NOT NULL CHECK (source IN ('eastmoney_pre_min')),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (trade_time, asset_id, auction_phase, freq, source)
+);
+
+CREATE TABLE IF NOT EXISTS staging.eastmoney_stock_spot_snapshot (
+    source_endpoint text NOT NULL,
+    request_params jsonb NOT NULL,
+    raw_symbol text NOT NULL,
+    ts_code text NOT NULL,
+    trade_date date NOT NULL,
+    snapshot_time timestamp NOT NULL,
+    target_time time NOT NULL,
+    latest numeric,
+    open numeric,
+    prev_close numeric,
+    high numeric,
+    low numeric,
+    volume numeric,
+    amount numeric,
+    volume_ratio numeric,
+    turnover_rate numeric,
+    payload jsonb NOT NULL,
+    payload_hash text NOT NULL,
+    fetched_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (source_endpoint, ts_code, trade_date, target_time)
+);
+
+CREATE TABLE IF NOT EXISTS market.stock_open_auction_snapshot (
+    asset_id text NOT NULL,
+    ts_code text NOT NULL,
+    trade_date date NOT NULL,
+    snapshot_time timestamp NOT NULL,
+    target_time time NOT NULL,
+    auction_phase text NOT NULL CHECK (auction_phase IN ('open_call')),
+    latest numeric,
+    open numeric,
+    prev_close numeric,
+    high numeric,
+    low numeric,
+    volume numeric,
+    amount numeric,
+    volume_ratio numeric,
+    turnover_rate numeric,
+    source text NOT NULL CHECK (source IN ('eastmoney_spot_snapshot')),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (trade_date, asset_id, target_time, source)
+);
+
+CREATE TABLE IF NOT EXISTS staging.xtick_stock_auction_detail (
+    source_endpoint text NOT NULL,
+    request_params jsonb NOT NULL,
+    code text NOT NULL,
+    raw_time bigint NOT NULL,
+    trade_date date NOT NULL,
+    trade_time timestamp NOT NULL,
+    auction_phase text NOT NULL CHECK (auction_phase IN ('open_call')),
+    price numeric,
+    close numeric,
+    jjzf numeric,
+    jjl numeric,
+    jje numeric,
+    nol numeric,
+    noe numeric,
+    trend integer,
+    payload jsonb NOT NULL,
+    payload_hash text NOT NULL,
+    fetched_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (source_endpoint, code, raw_time)
+);
+
+CREATE TABLE IF NOT EXISTS market.stock_auction_detail (
+    asset_id text NOT NULL,
+    ts_code text NOT NULL,
+    code text NOT NULL,
+    raw_time bigint NOT NULL,
+    trade_date date NOT NULL,
+    trade_time timestamp NOT NULL,
+    auction_phase text NOT NULL CHECK (auction_phase IN ('open_call')),
+    price numeric,
+    close numeric,
+    jjzf numeric,
+    jjl numeric,
+    jje numeric,
+    nol numeric,
+    noe numeric,
+    trend integer,
+    source text NOT NULL CHECK (source IN ('xtick_biddetail', 'xtick_dayupdate_bid')),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (trade_time, asset_id, source)
 );
 
 CREATE TABLE IF NOT EXISTS finance.income_statement (
@@ -1918,9 +2131,6 @@ CREATE INDEX IF NOT EXISTS idx_core_industry_membership_window
 CREATE INDEX IF NOT EXISTS idx_core_asset_lifecycle_event_asset_date
     ON core.asset_lifecycle_event (asset_id, event_date, event_type);
 
-CREATE INDEX IF NOT EXISTS idx_core_asset_status_daily_lookup
-    ON core.asset_status_daily (trade_date, asset_id);
-
 CREATE INDEX IF NOT EXISTS idx_market_index_daily_bar_date
     ON market.index_daily_bar (trade_date, index_id);
 
@@ -1942,6 +2152,18 @@ CREATE INDEX IF NOT EXISTS idx_market_industry_daily_bar_date
 CREATE INDEX IF NOT EXISTS idx_market_industry_daily_bar_system_date_desc
     ON market.industry_daily_bar (industry_system, trade_date DESC);
 
+CREATE INDEX IF NOT EXISTS idx_core_concept_membership_asset_date
+    ON core.concept_membership (asset_id, concept_system, start_date, end_date);
+
+CREATE INDEX IF NOT EXISTS idx_core_concept_membership_concept_date
+    ON core.concept_membership (concept_system, concept_code, start_date, end_date);
+
+CREATE INDEX IF NOT EXISTS idx_market_concept_daily_bar_date
+    ON market.concept_daily_bar (trade_date, concept_system, concept_code);
+
+CREATE INDEX IF NOT EXISTS idx_market_concept_daily_bar_system_date_desc
+    ON market.concept_daily_bar (concept_system, trade_date DESC);
+
 CREATE INDEX IF NOT EXISTS idx_staging_baostock_stock_minute_bar_date
     ON staging.baostock_stock_minute_bar (trade_date, freq, adjust_type);
 
@@ -1959,6 +2181,42 @@ CREATE INDEX IF NOT EXISTS idx_market_minute_bar_backfill_job_status
 
 CREATE INDEX IF NOT EXISTS idx_market_minute_bar_backfill_job_period
     ON market.minute_bar_backfill_job (start_date, end_date, freq, adjust_type, source);
+
+CREATE INDEX IF NOT EXISTS idx_staging_tushare_stock_auction_bar_date_phase
+    ON staging.tushare_stock_auction_bar (trade_date, auction_phase);
+
+CREATE INDEX IF NOT EXISTS idx_market_stock_auction_bar_date_phase
+    ON market.stock_auction_bar (trade_date, auction_phase);
+
+CREATE INDEX IF NOT EXISTS idx_market_stock_auction_bar_asset_date
+    ON market.stock_auction_bar (asset_id, trade_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_staging_eastmoney_stock_auction_minute_bar_date
+    ON staging.eastmoney_stock_auction_minute_bar (trade_date, auction_phase, freq);
+
+CREATE INDEX IF NOT EXISTS idx_market_stock_auction_minute_bar_date_phase
+    ON market.stock_auction_minute_bar (trade_date, auction_phase, freq);
+
+CREATE INDEX IF NOT EXISTS idx_market_stock_auction_minute_bar_asset_time
+    ON market.stock_auction_minute_bar (asset_id, trade_time DESC);
+
+CREATE INDEX IF NOT EXISTS idx_staging_eastmoney_stock_spot_snapshot_date_target
+    ON staging.eastmoney_stock_spot_snapshot (trade_date, target_time);
+
+CREATE INDEX IF NOT EXISTS idx_market_stock_open_auction_snapshot_date_target
+    ON market.stock_open_auction_snapshot (trade_date, target_time);
+
+CREATE INDEX IF NOT EXISTS idx_market_stock_open_auction_snapshot_asset_time
+    ON market.stock_open_auction_snapshot (asset_id, snapshot_time DESC);
+
+CREATE INDEX IF NOT EXISTS idx_staging_xtick_stock_auction_detail_date
+    ON staging.xtick_stock_auction_detail (trade_date, code);
+
+CREATE INDEX IF NOT EXISTS idx_market_stock_auction_detail_date_time
+    ON market.stock_auction_detail (trade_date, trade_time, source);
+
+CREATE INDEX IF NOT EXISTS idx_market_stock_auction_detail_asset_time
+    ON market.stock_auction_detail (asset_id, trade_time DESC);
 
 CREATE INDEX IF NOT EXISTS idx_ingest_batch_job_status
     ON ingest.batch_job (dataset, status, year, quarter, offset_value);
@@ -2165,8 +2423,10 @@ def apply_schema(service: str = SETTINGS.research_service) -> None:
     with connect(service) as conn:
         execute(conn, CREATE_TABLES_SQL)
         execute(conn, CREATE_RESEARCH_SCHEMAS_SQL)
+        execute(conn, DASHBOARD_AUTH_SCHEMA_SQL)
         migrate_stock_minute_bar_to_partitioned(conn)
         execute(conn, CREATE_RESEARCH_EXTENSION_SQL)
+        execute(conn, RESEARCH_OBJECTS_SQL)
         ensure_research_schema_compatibility(conn)
         ensure_stock_minute_bar_partitions(conn)
 

@@ -1,0 +1,271 @@
+{
+  "trade_date": "2026-06-20",
+  "run_id": "daily_review_v1_20260620_2200",
+  "report_type": "daily_review_v1",
+  "schema_version": "daily_review_v1",
+  "status": "partial",
+  "data_readiness": {
+    "daily_bars": {
+      "status": "ready",
+      "required": true,
+      "summary": "market_daily_bar ready for 2026-06-20",
+      "freshness": {
+        "latest_available_date": "2026-06-20",
+        "expected_date": "2026-06-20",
+        "is_fresh": true,
+        "max_allowed_lag_days": 0
+      },
+      "confidence_impact": "none",
+      "blocking_modules": [],
+      "source_refs": [
+        "ops.daily_pipeline_status"
+      ]
+    },
+    "lhb_feed": {
+      "status": "missing",
+      "required": false,
+      "summary": "lhb payload missing for trade date",
+      "freshness": {
+        "latest_available_date": "2026-06-19",
+        "expected_date": "2026-06-20",
+        "is_fresh": false,
+        "max_allowed_lag_days": 0
+      },
+      "confidence_impact": "LHB conclusion confidence reduced",
+      "blocking_modules": [
+        "lhb_review"
+      ],
+      "source_refs": [
+        "raw_lhb_payload"
+      ]
+    }
+  },
+  "market_review": {
+    "market_regime_score": 0.28,
+    "emotion_state": "cold",
+    "risk_state": "defensive",
+    "trend_environment": "retreat",
+    "liquidity_state": "mixed",
+    "style_bias": "large_cap_defensive",
+    "target_exposure": "defensive",
+    "market_comment": "Breadth narrowed and follow-through was weak; stay defensive."
+  },
+  "lhb_review": {
+    "short_allowed": true,
+    "short_market_state": "trial",
+    "emotion_phase": "cold_rebound_probe",
+    "lhb_watchlist": [
+      {
+        "asset_id": "CN:SH:600000",
+        "ts_code": "600000.SH",
+        "stock_name": "浦发银行",
+        "bucket": "trial_list",
+        "state": "watch",
+        "action": "manual_review",
+        "review_priority": "P0",
+        "reason": {
+          "setup": "bank rotation leader"
+        },
+        "source_refs": [
+          "raw_lhb_payload"
+        ]
+      }
+    ],
+    "yesterday_lhb_feedback": [
+      {
+        "asset_id": "CN:SH:600000",
+        "outcome": "follow_through_weak"
+      }
+    ],
+    "auction_focus_list": [
+      {
+        "asset_id": "CN:SH:600000",
+        "focus": "opening strength confirmation"
+      }
+    ],
+    "allowed_list": [],
+    "trial_list": [
+      {
+        "asset_id": "CN:SH:600000",
+        "ts_code": "600000.SH",
+        "stock_name": "浦发银行",
+        "state": "watch",
+        "action": "manual_review",
+        "review_priority": "P0"
+      }
+    ],
+    "defense_list": [],
+    "no_trade_list": [
+      {
+        "rule": "stale_lhb_chase",
+        "action": "forbidden",
+        "summary": "chase stale LHB names"
+      }
+    ],
+    "forbidden_actions": [
+      "chase stale LHB names"
+    ]
+  },
+  "mid_trend_review": {
+    "portfolio_health": "stable",
+    "holding_health_list": [
+      {
+        "asset_id": "CN:SH:600000",
+        "state": "healthy",
+        "action": "hold"
+      }
+    ],
+    "topn_relation": "core names remain valid",
+    "top50_relation": "no broad replacement needed",
+    "protection_events": [],
+    "candidate_adds": [],
+    "candidate_reduces": [],
+    "candidate_exits": [],
+    "rebalance_suggestion": "hold core names"
+  },
+  "technical_bottleneck_review": {
+    "new_observations": [],
+    "upgraded_items": [
+      {
+        "asset_id": "CN:SH:600000",
+        "from_layer": "S2_prepare",
+        "to_layer": "S3_trading_candidate",
+        "action": "watch"
+      }
+    ],
+    "downgraded_items": [],
+    "near_breakout_items": [],
+    "failed_breakout_items": [],
+    "research_required_items": [],
+    "migration_summary": "monitor upgrades only"
+  },
+  "strategy_summaries": {
+    "lhb": {
+      "conclusion": "trial",
+      "short_allowed": true,
+      "watch_count": 1,
+      "forbidden_actions": [
+        "chase stale LHB names"
+      ]
+    },
+    "mid_trend": {
+      "conclusion": "hold core names",
+      "portfolio_health": "stable",
+      "holding_count": 1
+    },
+    "technical_bottleneck": {
+      "conclusion": "monitor upgrades only",
+      "upgraded_count": 1,
+      "research_required_count": 0
+    }
+  },
+  "strategy_items": [
+    {
+      "trade_date": "2026-06-20",
+      "strategy_id": "lhb",
+      "asset_id": "CN:SH:600000",
+      "ts_code": "600000.SH",
+      "stock_name": "浦发银行",
+      "item_type": "candidate",
+      "bucket": "trial_list",
+      "state": "watch",
+      "action": "manual_review",
+      "review_priority": "P0",
+      "confidence": "medium",
+      "reason": {
+        "setup": "bank rotation leader"
+      },
+      "evidence": {},
+      "source_refs": [
+        "raw_lhb_payload"
+      ]
+    },
+    {
+      "trade_date": "2026-06-20",
+      "strategy_id": "technical_bottleneck",
+      "asset_id": "CN:SH:600000",
+      "ts_code": "",
+      "stock_name": "",
+      "item_type": "upgrade",
+      "bucket": "",
+      "state": "watch",
+      "action": "watch",
+      "review_priority": "P2",
+      "confidence": "medium",
+      "reason": {},
+      "evidence": {},
+      "source_refs": []
+    }
+  ],
+  "holding_reviews": [
+    {
+      "trade_date": "2026-06-20",
+      "strategy_id": "lhb",
+      "asset_id": "CN:SH:600000",
+      "entry_reason": "lhb_follow",
+      "holding_logic": "shortline_event",
+      "current_state": "watch",
+      "risk_status": "elevated",
+      "action": "manual_review",
+      "exit_condition": "break_open_low",
+      "evidence": {
+        "bucket": "trial_list"
+      }
+    },
+    {
+      "trade_date": "2026-06-20",
+      "strategy_id": "mid_trend",
+      "asset_id": "CN:SH:600000",
+      "entry_reason": "trend_hold",
+      "holding_logic": "ma20_intact",
+      "current_state": "healthy",
+      "risk_status": "normal",
+      "action": "hold",
+      "exit_condition": "break_ma20",
+      "evidence": {
+        "bucket": "healthy"
+      }
+    }
+  ],
+  "operator_plan": {
+    "mode": "manual_review_only",
+    "overall_position_bias": "defensive",
+    "must_check_before_open": [
+      "CN:SH:600000"
+    ],
+    "forbidden_actions": [
+      "chase stale LHB names"
+    ],
+    "manual_decisions": []
+  },
+  "next_day_plan": {
+    "must_review_items": [
+      {
+        "asset_id": "CN:SH:600000",
+        "ts_code": "600000.SH",
+        "stock_name": "浦发银行",
+        "strategy_ids": [
+          "lhb"
+        ],
+        "reasons": [
+          {
+            "strategy_id": "lhb",
+            "reason": {
+              "setup": "bank rotation leader"
+            }
+          }
+        ]
+      }
+    ],
+    "forbidden_actions": [
+      "chase stale LHB names"
+    ],
+    "data_warnings": [
+      "source_missing:lhb_feed"
+    ]
+  },
+  "report_paths": {},
+  "warnings": [
+    "source_missing:lhb_feed"
+  ]
+}

@@ -151,7 +151,7 @@ def _build_industry_bars_step(context: dict[str, Any]) -> dict[str, Any]:
         start_date=context["trade_date"],
         end_date=context["trade_date"],
         industry_system=context["industry_system"],
-        adjust_type=context["adjust_type"],
+        adjust_type="qfq",
     )
     return {"status": "built"}
 

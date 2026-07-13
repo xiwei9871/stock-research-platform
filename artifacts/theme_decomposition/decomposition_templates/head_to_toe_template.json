@@ -1,0 +1,208 @@
+{
+  "artifact_version": "decomposition_template_v1",
+  "template": {
+    "template_id": "head_to_toe_v1",
+    "template_name": "Head-to-Toe System Decomposition",
+    "template_family": "head_to_toe",
+    "description": "Decompose a complex machine from whole-system structure into regions, functions, components, technical routes, BOM value, bottlenecks, import dependence, and localization evidence.",
+    "compatible_theme_types": [
+      "humanoid_robotics",
+      "other"
+    ],
+    "steps": [
+      {
+        "step_id": "define_whole_system",
+        "order": 1,
+        "title": "Define whole-system structure",
+        "purpose": "Set the machine boundary, operating objective, and major physical regions.",
+        "required_inputs": ["system definition", "operating scenario", "physical structure"],
+        "output_dimensions": ["system boundary", "body regions", "operating requirements"],
+        "quality_gates": ["The physical decomposition must cover the full system without overlapping regions."]
+      },
+      {
+        "step_id": "map_functional_systems",
+        "order": 2,
+        "title": "Map functional systems",
+        "purpose": "Map perception, compute, control, actuation, sensing, power, communication, and structural functions to physical regions.",
+        "required_inputs": ["body regions", "system functions"],
+        "output_dimensions": ["functional systems", "region-function links"],
+        "quality_gates": ["Every major operating requirement must map to at least one functional system."]
+      },
+      {
+        "step_id": "decompose_components",
+        "order": 3,
+        "title": "Decompose core components",
+        "purpose": "Break each functional system into components, subsystems, materials, software, and integration layers.",
+        "required_inputs": ["functional systems", "architecture references"],
+        "output_dimensions": ["node hierarchy", "component role", "parent-child links"],
+        "quality_gates": ["Every non-root node must have a valid parent and supported node type."]
+      },
+      {
+        "step_id": "compare_technical_routes",
+        "order": 4,
+        "title": "Compare technical routes",
+        "purpose": "Separate competing component and subsystem routes by performance, maturity, cost, reliability, and integration impact.",
+        "required_inputs": ["component specifications", "route alternatives"],
+        "output_dimensions": ["technical route", "route trade-offs", "deployment maturity"],
+        "quality_gates": ["A preferred route requires evidence beyond company marketing material."]
+      },
+      {
+        "step_id": "assess_bom_value",
+        "order": 5,
+        "title": "Assess BOM and value capture",
+        "purpose": "Separate BOM share, ASP, margin, scarcity, certification, technology barrier, and integration control.",
+        "required_inputs": ["BOM", "ASP", "margin", "supplier role"],
+        "output_dimensions": ["value_capture_score", "value_basis", "uncertainty"],
+        "quality_gates": ["BOM share cannot be used as a substitute for margin or business materiality."]
+      },
+      {
+        "step_id": "assess_bottlenecks",
+        "order": 6,
+        "title": "Assess bottlenecks",
+        "purpose": "Identify performance, reliability, manufacturing, supply, software, and customer-verification constraints.",
+        "required_inputs": ["performance gap", "yield", "capacity", "verification cycle"],
+        "output_dimensions": ["bottleneck_score", "supply_tightness_score", "constraint metric"],
+        "quality_gates": ["A high bottleneck score requires a measurable gap or remains needs_evidence."]
+      },
+      {
+        "step_id": "assess_localization",
+        "order": 7,
+        "title": "Assess import dependence and localization",
+        "purpose": "Compare overseas leaders, domestic capability, product qualification, scale production, and customer adoption.",
+        "required_inputs": ["supplier geography", "product capability", "customer qualification"],
+        "output_dimensions": ["localization_gap_score", "domestic capability", "verification status"],
+        "quality_gates": ["Localization requires product-level capability and customer evidence, not company-name mentions."]
+      },
+      {
+        "step_id": "prepare_company_mapping",
+        "order": 8,
+        "title": "Prepare company mapping queue",
+        "purpose": "Prepare later company-to-node mapping with explicit role, revenue relevance, and evidence requirements.",
+        "required_inputs": ["reviewed nodes", "product evidence", "revenue relevance"],
+        "output_dimensions": ["mapping type", "mapping confidence", "evidence requirements"],
+        "quality_gates": ["Company mapping stays optional and blocked until node relationship and evidence are explicit."]
+      }
+    ],
+    "required_dimensions": [
+      "source reliability",
+      "whole-system boundary",
+      "physical region",
+      "functional system",
+      "node hierarchy",
+      "technical route",
+      "value_capture_score",
+      "bottleneck_score",
+      "localization_gap_score",
+      "evidence_strength",
+      "value_basis"
+    ],
+    "optional_dimensions": [
+      "company mapping",
+      "revenue relevance",
+      "BOM share",
+      "manufacturing yield",
+      "customer certification"
+    ],
+    "node_archetypes": [
+      {
+        "archetype_id": "whole_system",
+        "parent_archetype_id": "",
+        "label": "Whole System",
+        "purpose": "The complete machine and its operating objective.",
+        "allowed_node_types": ["subsystem", "downstream_application"],
+        "required_metrics": ["system performance", "target cost"]
+      },
+      {
+        "archetype_id": "physical_region",
+        "parent_archetype_id": "whole_system",
+        "label": "Physical Region",
+        "purpose": "A structural region such as head, torso, arm, hand, hip, knee, or ankle.",
+        "allowed_node_types": ["subsystem"],
+        "required_metrics": ["mass", "space envelope"]
+      },
+      {
+        "archetype_id": "functional_system",
+        "parent_archetype_id": "physical_region",
+        "label": "Functional System",
+        "purpose": "A perception, compute, control, actuation, sensing, power, or communication function.",
+        "allowed_node_types": ["subsystem", "software"],
+        "required_metrics": ["performance requirement", "integration interface"]
+      },
+      {
+        "archetype_id": "core_component",
+        "parent_archetype_id": "functional_system",
+        "label": "Core Component",
+        "purpose": "A physical component or equipment unit delivering the function.",
+        "allowed_node_types": ["core_component", "equipment"],
+        "required_metrics": ["ASP", "performance", "reliability"]
+      },
+      {
+        "archetype_id": "technical_route",
+        "parent_archetype_id": "core_component",
+        "label": "Technical Route",
+        "purpose": "A competing implementation route for a component or subsystem.",
+        "allowed_node_types": ["core_component", "software", "subsystem"],
+        "required_metrics": ["maturity", "performance trade-off"]
+      },
+      {
+        "archetype_id": "control_and_sensing",
+        "parent_archetype_id": "whole_system",
+        "label": "Control And Sensing Layer",
+        "purpose": "Cross-region sensing, control, compute, and communication components.",
+        "allowed_node_types": ["core_component", "software", "subsystem"],
+        "required_metrics": ["latency", "accuracy", "reliability"]
+      },
+      {
+        "archetype_id": "power_and_material",
+        "parent_archetype_id": "whole_system",
+        "label": "Power And Material Layer",
+        "purpose": "Cross-system batteries, wiring, bearings, and structural materials.",
+        "allowed_node_types": ["upstream_material", "core_component", "subsystem"],
+        "required_metrics": ["energy density", "weight", "durability"]
+      }
+    ],
+    "claim_types": [
+      "tech_route",
+      "cost_structure",
+      "bottleneck",
+      "supply_constraint",
+      "value_capture",
+      "localization"
+    ],
+    "value_bases": [
+      "BOM_share",
+      "ASP",
+      "gross_margin",
+      "scarcity",
+      "integration_control",
+      "customer_certification",
+      "capacity_constraint",
+      "technology_barrier"
+    ],
+    "source_requirements": [
+      {
+        "use_case": "reviewed architecture or technical-route claim",
+        "minimum_reliability_level": "S1",
+        "allowed_review_statuses": ["accepted"]
+      },
+      {
+        "use_case": "reviewed BOM, bottleneck, or localization claim",
+        "minimum_reliability_level": "S1",
+        "allowed_review_statuses": ["accepted"]
+      },
+      {
+        "use_case": "research lead discovery",
+        "minimum_reliability_level": "S4",
+        "allowed_review_statuses": ["needs_full_text", "lead_only"]
+      }
+    ],
+    "initialization_defaults": {
+      "status": "draft",
+      "created_from": "manual"
+    },
+    "output_schema": "theme_decomposition_v1_5",
+    "example_theme_ids": [
+      "humanoid_robotics_head_to_toe_v1"
+    ]
+  }
+}

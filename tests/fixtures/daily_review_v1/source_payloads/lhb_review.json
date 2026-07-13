@@ -1,0 +1,56 @@
+{
+  "short_allowed": true,
+  "short_market_state": "trial",
+  "emotion_phase": "cold_rebound_probe",
+  "lhb_watchlist": [
+    {
+      "asset_id": "CN:SH:600000",
+      "ts_code": "600000.SH",
+      "stock_name": "浦发银行",
+      "bucket": "trial_list",
+      "state": "watch",
+      "action": "manual_review",
+      "review_priority": "P0",
+      "reason": {
+        "setup": "bank rotation leader"
+      },
+      "source_refs": [
+        "raw_lhb_payload"
+      ]
+    }
+  ],
+  "yesterday_lhb_feedback": [
+    {
+      "asset_id": "CN:SH:600000",
+      "outcome": "follow_through_weak"
+    }
+  ],
+  "auction_focus_list": [
+    {
+      "asset_id": "CN:SH:600000",
+      "focus": "opening strength confirmation"
+    }
+  ],
+  "allowed_list": [],
+  "trial_list": [
+    {
+      "asset_id": "CN:SH:600000",
+      "ts_code": "600000.SH",
+      "stock_name": "浦发银行",
+      "state": "watch",
+      "action": "manual_review",
+      "review_priority": "P0"
+    }
+  ],
+  "defense_list": [],
+  "no_trade_list": [
+    {
+      "rule": "stale_lhb_chase",
+      "action": "forbidden",
+      "summary": "chase stale LHB names"
+    }
+  ],
+  "forbidden_actions": [
+    "chase stale LHB names"
+  ]
+}

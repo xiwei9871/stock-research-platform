@@ -1,0 +1,357 @@
+{
+  "artifact_version": "ai_power_source_pack_v1",
+  "theme_id": "ai_power_value_capture_v1",
+  "as_of_date": "2026-07-10",
+  "sources": [
+    {
+      "source_id": "ai_power_doe_data_center_demand_2024",
+      "source_type": "official_article",
+      "title": "DOE Releases New Report Evaluating Increase in Electricity Demand from Data Centers",
+      "publisher": "U.S. Department of Energy",
+      "author": "",
+      "publish_date": "2024-12-20",
+      "url": "https://www.energy.gov/articles/doe-releases-new-report-evaluating-increase-electricity-demand-data-centers",
+      "access_level": "public",
+      "reliability_level": "S1",
+      "review_status": "accepted",
+      "document_status": "official_page_reviewed",
+      "evidence_locator": "Article body paragraphs reporting 2023 electricity share, 2028 range, and DOE power-system response",
+      "evidence_summary": "DOE reports that U.S. data centers used about 4.4% of electricity in 2023 and could reach roughly 6.7%-12% by 2028. It frames the response across generation, storage, transmission expansion, and demand flexibility.",
+      "supported_claim_ids": [
+        "ai_power_claim_demand_growth",
+        "ai_power_claim_grid_bottleneck"
+      ],
+      "supported_node_ids": [
+        "power_generation",
+        "grid_connection"
+      ],
+      "limitations": "This is an official summary of the LBNL report, not the underlying full report; it supports demand and system-level constraints but not node-level value capture or China localization conclusions.",
+      "notes": "Accepted as public official evidence for demand growth and system-level power constraints."
+    },
+    {
+      "source_id": "ai_power_lbnl_data_center_energy_report_2024",
+      "source_type": "official_report",
+      "title": "2024 United States Data Center Energy Usage Report",
+      "publisher": "Lawrence Berkeley National Laboratory",
+      "author": "",
+      "publish_date": "2024-12-20",
+      "url": "https://eta-publications.lbl.gov/sites/default/files/2024-12/lbnl-2024-united-states-data-center-energy-usage-report.pdf",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "needs_full_text",
+      "document_status": "access_blocked",
+      "evidence_locator": "DOE-linked original PDF; local retrieval redirected to an access challenge",
+      "evidence_summary": "The DOE page attributes the public demand figures to this LBNL report, but the report body was not available for excerpt-level review in the current environment.",
+      "supported_claim_ids": [
+        "ai_power_claim_demand_growth"
+      ],
+      "supported_node_ids": [
+        "power_generation",
+        "grid_connection"
+      ],
+      "limitations": "Do not treat as accepted S0 evidence until the PDF body, methodology, and tables are reviewed directly.",
+      "notes": "Preserved as the preferred original source for later full-text acquisition."
+    },
+    {
+      "source_id": "ai_power_jpm_powering_ai_2026",
+      "source_type": "official_article",
+      "title": "Powering the AI Revolution",
+      "publisher": "J.P. Morgan",
+      "author": "",
+      "publish_date": "2026-06-25",
+      "url": "https://www.jpmorgan.com/insights/technology/artificial-intelligence/powering-the-ai-revolution",
+      "access_level": "public",
+      "reliability_level": "S1",
+      "review_status": "accepted",
+      "document_status": "official_page_reviewed",
+      "evidence_locator": "Key takeaways and section 'What infrastructure powers the AI revolution?'",
+      "evidence_summary": "J.P. Morgan states that AI compute depends on data centers and reliable power, that AI is increasing infrastructure demand, and that grid capacity is a key development constraint.",
+      "supported_claim_ids": [
+        "ai_power_claim_demand_growth",
+        "ai_power_claim_grid_bottleneck"
+      ],
+      "supported_node_ids": [
+        "power_generation",
+        "grid_connection",
+        "data_center_epc"
+      ],
+      "limitations": "This is institutional analysis and interview material, not a power-system dataset. It supports the research framing, not precise market sizing or company conclusions.",
+      "notes": "Accepted for the demand-to-grid-capacity causal framing."
+    },
+    {
+      "source_id": "ai_power_jpm_grid_resilience_2026",
+      "source_type": "official_article",
+      "title": "Grid Resilience: Neglected No More",
+      "publisher": "J.P. Morgan",
+      "author": "",
+      "publish_date": "2026-03-26",
+      "url": "https://www.jpmorgan.com/insights/sustainability/climate/grid-resilience-neglected-no-more",
+      "access_level": "public",
+      "reliability_level": "S1",
+      "review_status": "accepted",
+      "document_status": "official_page_reviewed",
+      "evidence_locator": "Key takeaways, grid investment discussion, and permitting/lead-time section",
+      "evidence_summary": "The article links data-center demand with aging grid infrastructure, expects grid buildout and upgrades, and highlights multi-year transmission development constraints.",
+      "supported_claim_ids": [
+        "ai_power_claim_grid_bottleneck"
+      ],
+      "supported_node_ids": [
+        "grid_connection",
+        "transformer",
+        "switchgear"
+      ],
+      "limitations": "Forecasts and investment estimates are J.P. Morgan analysis with cited third-party inputs. They do not prove which equipment category captures superior margins or localized scarcity.",
+      "notes": "Accepted for grid buildout and interconnection bottleneck context."
+    },
+    {
+      "source_id": "ai_power_jpm_data_center_surge_2025",
+      "source_type": "official_article",
+      "title": "The data center surge: Building the backbone of the digital age",
+      "publisher": "J.P. Morgan",
+      "author": "Fahmi Enam and Scott Wilcoxen",
+      "publish_date": "2025-09-23",
+      "url": "https://www.jpmorgan.com/insights/podcast-hub/making-sense/data-center-surge",
+      "access_level": "public",
+      "reliability_level": "S1",
+      "review_status": "accepted",
+      "document_status": "full_text_reviewed",
+      "evidence_locator": "Public transcript paragraphs on data-center power draw, AI workload buildout, and power capacity",
+      "evidence_summary": "The transcript describes data-center capacity in power terms, a shift toward AI workloads, high capital intensity, and power capacity as a constrained input to new builds.",
+      "supported_claim_ids": [
+        "ai_power_claim_demand_growth",
+        "ai_power_claim_grid_bottleneck",
+        "ai_power_claim_rack_power_density"
+      ],
+      "supported_node_ids": [
+        "grid_connection",
+        "ai_server_integration",
+        "data_center_epc"
+      ],
+      "limitations": "The transcript contains expert estimates and commercial-banking observations. It is not engineering validation of a specific rack architecture or proof of equipment profitability.",
+      "notes": "Accepted as attributable institutional commentary with a public transcript."
+    },
+    {
+      "source_id": "ai_power_nvidia_gb200_nvl72_2026",
+      "source_type": "official_article",
+      "title": "NVIDIA GB200 NVL72",
+      "publisher": "NVIDIA",
+      "author": "",
+      "publish_date": "2026-01-15",
+      "url": "https://www.nvidia.com/en-us/data-center/gb200-nvl72/",
+      "access_level": "public",
+      "reliability_level": "S1",
+      "review_status": "accepted",
+      "document_status": "official_page_reviewed",
+      "evidence_locator": "Product overview and energy-efficient infrastructure sections",
+      "evidence_summary": "NVIDIA describes GB200 NVL72 as a rack-scale system with 72 GPUs and liquid cooling, and says liquid cooling enables greater compute density and reduced floor-space use.",
+      "supported_claim_ids": [
+        "ai_power_claim_rack_power_density",
+        "ai_power_claim_liquid_cooling"
+      ],
+      "supported_node_ids": [
+        "ai_server_integration",
+        "liquid_cooling"
+      ],
+      "limitations": "Vendor product material is reliable for the product architecture it describes, but vendor performance comparisons do not establish industry-wide economics or supplier value capture.",
+      "notes": "Accepted for rack-scale and liquid-cooling architecture only."
+    },
+    {
+      "source_id": "ai_power_nvidia_800v_architecture_2026",
+      "source_type": "official_article",
+      "title": "NVIDIA 800 VDC Architecture",
+      "publisher": "NVIDIA",
+      "author": "",
+      "publish_date": "2026-07-08",
+      "url": "https://www.nvidia.com/en-us/data-center/technologies/800-vdc-architecture.md",
+      "access_level": "public",
+      "reliability_level": "S1",
+      "review_status": "accepted",
+      "document_status": "full_text_reviewed",
+      "evidence_locator": "Sections 'Powering AI Factories With 800 VDC', 'Moving to an 800 VDC Architecture', and 'The Advantages of 800 VDC Technology'",
+      "evidence_summary": "NVIDIA presents 800 VDC as a future power-distribution route intended to reduce conversion stages, current, copper use, cable bulk, and distribution losses while supporting denser AI racks.",
+      "supported_claim_ids": [
+        "ai_power_claim_800v_architecture",
+        "ai_power_claim_copper_value_blanket",
+        "ai_power_claim_all_equipment_value_blanket"
+      ],
+      "supported_node_ids": [
+        "hvdc_power",
+        "server_power_supply",
+        "rack_power_distribution",
+        "copper_interconnect",
+        "switchgear",
+        "transformer",
+        "ups"
+      ],
+      "limitations": "This is a vendor roadmap and architecture proposal. It validates the technical direction described by NVIDIA, not adoption timing, market share, margins, or listed-company exposure.",
+      "notes": "Accepted for technical-route review and for challenging blanket copper/equipment beneficiary claims."
+    },
+    {
+      "source_id": "ai_power_nvidia_800v_ecosystem_blog_2025",
+      "source_type": "official_article",
+      "title": "Building the 800 VDC Ecosystem for Efficient, Scalable AI Factories",
+      "publisher": "NVIDIA Technical Blog",
+      "author": "Neeraj Srivastava",
+      "publish_date": "2025-10-13",
+      "url": "https://developer.nvidia.com/blog/building-the-800-vdc-ecosystem-for-efficient-scalable-ai-factories/",
+      "access_level": "public",
+      "reliability_level": "S1",
+      "review_status": "accepted",
+      "document_status": "full_text_reviewed",
+      "evidence_locator": "Rack power-density discussion, 'Advantages of 800 VDC', and '800 VDC power distribution in next-generation AI factories'",
+      "evidence_summary": "The technical article describes rack power density moving beyond 100 kW, workload volatility affecting grid interconnection, and an 800 VDC route that reduces copper and conversion layers. It also describes a future architecture that can remove some AC switchgear, transformer, UPS, and PDU stages from the data hall.",
+      "supported_claim_ids": [
+        "ai_power_claim_grid_bottleneck",
+        "ai_power_claim_rack_power_density",
+        "ai_power_claim_800v_architecture",
+        "ai_power_claim_copper_value_blanket",
+        "ai_power_claim_all_equipment_value_blanket"
+      ],
+      "supported_node_ids": [
+        "grid_connection",
+        "hvdc_power",
+        "server_power_supply",
+        "rack_power_distribution",
+        "copper_interconnect",
+        "switchgear",
+        "transformer",
+        "ups",
+        "ai_server_integration"
+      ],
+      "limitations": "The author represents NVIDIA and discusses a proposed ecosystem. Technical statements are useful for route analysis, while commercial adoption, bill-of-materials allocation, and profit pools require independent evidence.",
+      "notes": "Accepted as vendor-authored technical evidence, with explicit commercial limitations."
+    },
+    {
+      "source_id": "ai_power_iea_energy_and_ai_2025",
+      "source_type": "official_report",
+      "title": "Energy and AI",
+      "publisher": "International Energy Agency",
+      "author": "",
+      "publish_date": "2025-04-10",
+      "url": "https://www.iea.org/reports/energy-and-ai",
+      "access_level": "public",
+      "reliability_level": "S1",
+      "review_status": "needs_full_text",
+      "document_status": "access_blocked",
+      "evidence_locator": "Official report landing page blocked by an access challenge in the current environment",
+      "evidence_summary": "The official report is a priority source for global electricity-demand context, but no report excerpt was admitted into the pack because the page body was not reviewed.",
+      "supported_claim_ids": [
+        "ai_power_claim_demand_growth"
+      ],
+      "supported_node_ids": [
+        "power_generation",
+        "grid_connection"
+      ],
+      "limitations": "Metadata only. It cannot support a reviewed claim until the relevant chapter and tables are obtained and checked.",
+      "notes": "Retained as a high-priority full-text acquisition target."
+    },
+    {
+      "source_id": "ai_power_ocp_power_architecture",
+      "source_type": "official_report",
+      "title": "Open Compute Project power architecture materials",
+      "publisher": "Open Compute Project",
+      "author": "",
+      "publish_date": "",
+      "url": "https://www.opencompute.org/wiki/Power",
+      "access_level": "public",
+      "reliability_level": "S1",
+      "review_status": "needs_full_text",
+      "document_status": "access_blocked",
+      "evidence_locator": "Official Power project URL returned access denied in the current environment",
+      "evidence_summary": "OCP materials remain the preferred standards source for rack power interoperability, but no specific specification was accepted without direct document review.",
+      "supported_claim_ids": [
+        "ai_power_claim_800v_architecture"
+      ],
+      "supported_node_ids": [
+        "server_power_supply",
+        "rack_power_distribution",
+        "hvdc_power"
+      ],
+      "limitations": "The exact specification, revision, and section still need to be acquired. Do not infer compatibility or deployment from this metadata record.",
+      "notes": "Preserved as a standards-evidence gap."
+    },
+    {
+      "source_id": "ai_power_domestic_broker_report_lead",
+      "source_type": "broker_report",
+      "title": "Domestic broker AI data-center power, liquid-cooling, and HVDC report lead",
+      "publisher": "Unconfirmed broker source",
+      "author": "",
+      "publish_date": "",
+      "url": "https://example.invalid/gated-broker-report-lead",
+      "access_level": "gated",
+      "reliability_level": "S2",
+      "review_status": "needs_full_text",
+      "document_status": "metadata_only",
+      "evidence_locator": "Report title and full text not yet verified",
+      "evidence_summary": "A domestic broker source is still required to test BOM allocation, supplier certification, localization gaps, and China company mapping.",
+      "supported_claim_ids": [
+        "ai_power_claim_liquid_cooling",
+        "ai_power_claim_localization"
+      ],
+      "supported_node_ids": [
+        "transformer",
+        "switchgear",
+        "ups",
+        "hvdc_power",
+        "server_power_supply",
+        "rack_power_distribution",
+        "liquid_cooling",
+        "sic_gan_power_semiconductor",
+        "data_center_epc"
+      ],
+      "limitations": "Placeholder for a source class, not a citable report. It cannot support any reviewed claim or score.",
+      "notes": "Must be replaced with an exact report title, publisher, date, URL/reference, and excerpt before use."
+    },
+    {
+      "source_id": "ai_power_media_secondary_lead",
+      "source_type": "media_article",
+      "title": "Secondary reporting on AI power-chain beneficiaries",
+      "publisher": "Unverified media source",
+      "author": "",
+      "publish_date": "",
+      "url": "https://example.invalid/secondary-ai-power-lead",
+      "access_level": "public",
+      "reliability_level": "S3",
+      "review_status": "lead_only",
+      "document_status": "lead_only",
+      "evidence_locator": "No primary-source excerpt attached",
+      "evidence_summary": "Secondary coverage may identify reports or companies to investigate, but it is not used to validate demand, value capture, or localization conclusions.",
+      "supported_claim_ids": [
+        "ai_power_claim_localization"
+      ],
+      "supported_node_ids": [
+        "transformer",
+        "liquid_cooling",
+        "sic_gan_power_semiconductor"
+      ],
+      "limitations": "No traceable original report or filing is attached.",
+      "notes": "Research lead only."
+    },
+    {
+      "source_id": "ai_power_video_claim_lead",
+      "source_type": "video_claim",
+      "title": "Short-video claim: AI power chain value capture",
+      "publisher": "老郑说AI前瞻",
+      "author": "",
+      "publish_date": "",
+      "url": "https://example.invalid/manual-video-reference",
+      "access_level": "private_claimed",
+      "reliability_level": "S4",
+      "review_status": "lead_only",
+      "document_status": "lead_only",
+      "evidence_locator": "Manual topic note; no verified transcript or cited source attached",
+      "evidence_summary": "The video topic is retained only as a research prompt about who captures value across AI power infrastructure.",
+      "supported_claim_ids": [
+        "ai_power_claim_localization"
+      ],
+      "supported_node_ids": [
+        "transformer",
+        "hvdc_power",
+        "liquid_cooling",
+        "sic_gan_power_semiconductor"
+      ],
+      "limitations": "Oral claims without verifiable sources cannot be accepted evidence and cannot support reviewed claims or nodes.",
+      "notes": "Lead only; never promote directly to platform evidence."
+    }
+  ]
+}

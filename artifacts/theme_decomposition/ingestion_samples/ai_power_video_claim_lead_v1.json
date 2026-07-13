@@ -1,0 +1,24 @@
+{
+  "source": {
+    "source_type": "video_claim",
+    "title": "AI power-chain oral claim sample",
+    "publisher": "Manual research intake",
+    "author": "",
+    "publish_date": "",
+    "url_or_ref": "sample:replace-with-original-video-reference",
+    "access_level": "unknown",
+    "reliability_level": "S4",
+    "notes": "Schema sample only. The oral claim remains lead-only until public supporting evidence is attached and reviewed."
+  },
+  "claims": [
+    {
+      "claim_text": "Higher AI rack power density may increase demand for server power supplies.",
+      "claim_type": "demand_shock",
+      "confidence": 0.5,
+      "theme_id": "ai_power_value_capture_v1",
+      "affected_theme_nodes": [
+        "server_power_supply"
+      ]
+    }
+  ]
+}

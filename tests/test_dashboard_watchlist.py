@@ -39,12 +39,92 @@ def test_load_watchlist_signals_maps_json_tags(monkeypatch):
 
     monkeypatch.setattr(watchlist, "connect", fake_connect)
     monkeypatch.setattr(watchlist, "fetch_all", fake_fetch_all)
+    monkeypatch.setattr(
+        watchlist,
+        "enrich_watchlist_rows",
+        lambda rows: [
+            {
+                **row,
+                "theme_research_context": {
+                    "status": "not_mapped",
+                    "research_only": True,
+                    "used_for_signal": False,
+                    "used_for_admission": False,
+                },
+            }
+            for row in rows
+        ],
+    )
 
     result = watchlist.load_watchlist_signals_for_dashboard("default", "2026-05-29")
 
     assert result[0]["asset_id"] == "000001.SZ"
     assert result[0]["signal_tags"] == ["trend_ok"]
     assert result[0]["must_watch"] is True
+    assert result[0]["theme_research_context"]["status"] == "not_mapped"
+
+
+def test_watchlist_theme_context_does_not_change_signal_fields(monkeypatch):
+    original = _signal_row_data(
+        asset_id="CN:SZ:002837",
+        stock_code="002837",
+        stock_name="英维克",
+    )
+    signal_fields = {
+        key: original[key]
+        for key in (
+            "priority",
+            "signal_score",
+            "primary_signal",
+            "signal_tags",
+            "risk_tags",
+            "must_watch",
+            "reason_json",
+        )
+    }
+
+    monkeypatch.setattr(watchlist, "connect", lambda service: FakeConnect())
+    monkeypatch.setattr(watchlist, "fetch_all", lambda conn, sql, params: [original])
+    monkeypatch.setattr(
+        watchlist,
+        "enrich_watchlist_rows",
+        lambda rows: [
+            {
+                **rows[0],
+                "theme_research_context": {
+                    "status": "reviewed_context_available",
+                    "theme_count": 1,
+                    "research_only": True,
+                    "used_for_signal": False,
+                    "used_for_admission": False,
+                },
+            }
+        ],
+    )
+
+    result = watchlist.load_watchlist_signals_for_dashboard("default", "2026-05-29")
+
+    assert [{key: row[key] for key in signal_fields} for row in result] == [signal_fields]
+    assert result[0]["theme_research_context"]["theme_count"] == 1
+
+
+def test_watchlist_loader_can_return_raw_signal_rows_for_invariance_checks(monkeypatch):
+    original = _signal_row_data()
+    monkeypatch.setattr(watchlist, "connect", lambda service: FakeConnect())
+    monkeypatch.setattr(watchlist, "fetch_all", lambda conn, sql, params: [original])
+    monkeypatch.setattr(
+        watchlist,
+        "enrich_watchlist_rows",
+        lambda rows: pytest.fail("raw mode must not enrich theme context"),
+    )
+
+    result = watchlist.load_watchlist_signals_for_dashboard(
+        "default",
+        "2026-05-29",
+        include_theme_research=False,
+    )
+
+    assert result == [watchlist._signal_row(original).to_dict()]
 
 
 def test_signal_row_defaults_nullable_json_fields():

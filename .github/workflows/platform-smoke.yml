@@ -1,0 +1,63 @@
+name: Platform Smoke
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - lhb-shortline-strategy-dev-20260609
+
+jobs:
+  backend-focused:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev,dashboard]"
+
+      - name: Run focused backend smoke
+        run: >-
+          pytest
+          tests/test_dashboard_app.py
+          tests/test_dashboard_ops_snapshot.py
+          tests/test_dashboard_api_guardrails.py
+          tests/test_dashboard_operator_decisions.py
+          tests/test_dashboard_read_models.py
+          tests/test_dashboard_platform.py
+          tests/test_strategy_daily_eod.py
+          tests/test_schema.py
+          -q
+
+  dashboard-focused:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dashboard
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: dashboard/pnpm-lock.yaml
+
+      - name: Install dashboard dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run dashboard unit smoke
+        run: pnpm vitest run tests/client.test.ts tests/operator-decision-panel.test.tsx tests/home-cockpit.test.tsx tests/app-shell.test.tsx
+
+      - name: Build dashboard
+        run: pnpm build

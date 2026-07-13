@@ -1,0 +1,205 @@
+{
+  "artifact_version": "ai_power_claim_review_v1",
+  "theme_id": "ai_power_value_capture_v1",
+  "as_of_date": "2026-07-10",
+  "claim_reviews": [
+    {
+      "claim_id": "ai_power_claim_demand_growth",
+      "claim_text": "AI and data-center expansion are creating a material increase in electricity demand.",
+      "claim_type": "demand_shock",
+      "review_decision": "reviewed",
+      "evidence_status": "verified",
+      "confidence": 0.9,
+      "accepted_source_ids": [
+        "ai_power_doe_data_center_demand_2024",
+        "ai_power_jpm_powering_ai_2026",
+        "ai_power_jpm_data_center_surge_2025"
+      ],
+      "pending_source_ids": [
+        "ai_power_lbnl_data_center_energy_report_2024",
+        "ai_power_iea_energy_and_ai_2025"
+      ],
+      "affected_node_ids": [
+        "power_generation",
+        "grid_connection",
+        "ai_server_integration"
+      ],
+      "rationale": "DOE provides public quantified demand evidence and J.P. Morgan provides an attributable infrastructure framing. The claim is limited to direction and materiality, not a single global forecast.",
+      "uncertainty": "Forecast ranges remain wide and depend on AI deployment, efficiency improvements, utilization, and geography.",
+      "next_evidence_needed": "Review the LBNL report tables and IEA Energy and AI chapters directly to compare methods and regional assumptions."
+    },
+    {
+      "claim_id": "ai_power_claim_grid_bottleneck",
+      "claim_text": "Grid capacity and interconnection are material constraints on AI data-center deployment.",
+      "claim_type": "bottleneck",
+      "review_decision": "reviewed",
+      "evidence_status": "verified",
+      "confidence": 0.86,
+      "accepted_source_ids": [
+        "ai_power_doe_data_center_demand_2024",
+        "ai_power_jpm_powering_ai_2026",
+        "ai_power_jpm_grid_resilience_2026",
+        "ai_power_jpm_data_center_surge_2025",
+        "ai_power_nvidia_800v_ecosystem_blog_2025"
+      ],
+      "pending_source_ids": [
+        "ai_power_lbnl_data_center_energy_report_2024",
+        "ai_power_iea_energy_and_ai_2025"
+      ],
+      "affected_node_ids": [
+        "grid_connection",
+        "transformer",
+        "switchgear"
+      ],
+      "rationale": "Multiple public official and institutional sources converge on grid capacity, transmission buildout, and interconnection as constraints. This supports the bottleneck at system level, not equal scarcity for every equipment category.",
+      "uncertainty": "Constraint severity is location-specific and can be mitigated by onsite generation, storage, demand flexibility, and project design.",
+      "next_evidence_needed": "Add utility interconnection queue data and primary transformer/switchgear lead-time evidence by region."
+    },
+    {
+      "claim_id": "ai_power_claim_rack_power_density",
+      "claim_text": "AI rack-scale systems are increasing power density and forcing changes in power delivery and facility design.",
+      "claim_type": "supply_constraint",
+      "review_decision": "reviewed",
+      "evidence_status": "partially_verified",
+      "confidence": 0.82,
+      "accepted_source_ids": [
+        "ai_power_jpm_data_center_surge_2025",
+        "ai_power_nvidia_gb200_nvl72_2026",
+        "ai_power_nvidia_800v_ecosystem_blog_2025"
+      ],
+      "pending_source_ids": [
+        "ai_power_ocp_power_architecture"
+      ],
+      "affected_node_ids": [
+        "ai_server_integration",
+        "server_power_supply",
+        "rack_power_distribution",
+        "liquid_cooling"
+      ],
+      "rationale": "NVIDIA product and technical materials directly document rack-scale, liquid-cooled designs and a move beyond traditional low-voltage delivery. Independent standards evidence is still pending.",
+      "uncertainty": "Vendor roadmaps do not prove the timing or market-wide prevalence of a given rack power level.",
+      "next_evidence_needed": "Acquire OCP specifications and independent operator deployment data for rack power distributions."
+    },
+    {
+      "claim_id": "ai_power_claim_800v_architecture",
+      "claim_text": "800 VDC is an emerging technical route for reducing conversion stages and supporting denser future AI racks.",
+      "claim_type": "tech_route",
+      "review_decision": "reviewed",
+      "evidence_status": "partially_verified",
+      "confidence": 0.78,
+      "accepted_source_ids": [
+        "ai_power_nvidia_800v_architecture_2026",
+        "ai_power_nvidia_800v_ecosystem_blog_2025"
+      ],
+      "pending_source_ids": [
+        "ai_power_ocp_power_architecture"
+      ],
+      "affected_node_ids": [
+        "hvdc_power",
+        "server_power_supply",
+        "rack_power_distribution",
+        "switchgear",
+        "transformer",
+        "ups"
+      ],
+      "rationale": "NVIDIA publicly documents the architecture and intended benefits. The claim is reviewed only as a declared technical route, not as a proven deployment standard or revenue forecast.",
+      "uncertainty": "Adoption timing, interoperability, safety standards, transition architectures, and supplier allocation remain unsettled.",
+      "next_evidence_needed": "Review exact OCP specifications, operator reference designs, and disclosed deployments."
+    },
+    {
+      "claim_id": "ai_power_claim_liquid_cooling",
+      "claim_text": "High-density rack-scale AI systems can require liquid cooling to manage density and floor-space constraints.",
+      "claim_type": "tech_route",
+      "review_decision": "reviewed",
+      "evidence_status": "partially_verified",
+      "confidence": 0.8,
+      "accepted_source_ids": [
+        "ai_power_nvidia_gb200_nvl72_2026"
+      ],
+      "pending_source_ids": [
+        "ai_power_domestic_broker_report_lead"
+      ],
+      "affected_node_ids": [
+        "liquid_cooling",
+        "ai_server_integration"
+      ],
+      "rationale": "The reviewed NVIDIA product page directly identifies a liquid-cooled rack-scale design and links liquid cooling to compute density. It does not establish universal adoption or supplier economics.",
+      "uncertainty": "Cooling architecture varies by accelerator generation, rack design, climate, facility retrofit constraints, and operator preference.",
+      "next_evidence_needed": "Add independent operator specifications, cooling BOM data, certification requirements, and full-text domestic broker evidence."
+    },
+    {
+      "claim_id": "ai_power_claim_copper_value_blanket",
+      "claim_text": "Higher AI rack power necessarily means copper interconnect captures more value across all architectures.",
+      "claim_type": "value_capture",
+      "review_decision": "blocked",
+      "evidence_status": "contradicted",
+      "confidence": 0.84,
+      "accepted_source_ids": [
+        "ai_power_nvidia_800v_architecture_2026",
+        "ai_power_nvidia_800v_ecosystem_blog_2025"
+      ],
+      "pending_source_ids": [],
+      "affected_node_ids": [
+        "copper_interconnect",
+        "rack_power_distribution",
+        "hvdc_power"
+      ],
+      "rationale": "NVIDIA's 800 VDC materials explicitly target lower current, copper use, and cable bulk. Aggregate data-center buildout may still raise copper demand, but the blanket per-architecture value-capture claim is not valid.",
+      "uncertainty": "Total copper demand depends on data-center capacity growth, voltage architecture, cable length, busway design, and material substitution.",
+      "next_evidence_needed": "Build a scenario model separating total installed capacity from copper intensity per delivered megawatt."
+    },
+    {
+      "claim_id": "ai_power_claim_all_equipment_value_blanket",
+      "claim_text": "All transformers, switchgear, UPS, PDU, and power-conversion suppliers benefit uniformly from the 800 VDC transition.",
+      "claim_type": "value_capture",
+      "review_decision": "blocked",
+      "evidence_status": "contradicted",
+      "confidence": 0.82,
+      "accepted_source_ids": [
+        "ai_power_nvidia_800v_architecture_2026",
+        "ai_power_nvidia_800v_ecosystem_blog_2025"
+      ],
+      "pending_source_ids": [
+        "ai_power_ocp_power_architecture",
+        "ai_power_domestic_broker_report_lead"
+      ],
+      "affected_node_ids": [
+        "transformer",
+        "switchgear",
+        "ups",
+        "rack_power_distribution",
+        "server_power_supply",
+        "hvdc_power"
+      ],
+      "rationale": "The proposed 800 VDC route reduces conversion stages and can remove or relocate some conventional equipment layers. Value transfer must be assessed by architecture and component function, not by a blanket beneficiary list.",
+      "uncertainty": "Transition-period hybrid designs may increase spending in some categories even if mature architectures simplify the power train.",
+      "next_evidence_needed": "Compare current AC, hybrid 800 VDC, and native 800 VDC BOMs and identify which functions expand, shrink, or move."
+    },
+    {
+      "claim_id": "ai_power_claim_localization",
+      "claim_text": "Specific AI power nodes have material China localization gaps that create investable domestic substitution opportunities.",
+      "claim_type": "localization",
+      "review_decision": "research_lead",
+      "evidence_status": "unverified",
+      "confidence": 0.3,
+      "accepted_source_ids": [],
+      "pending_source_ids": [
+        "ai_power_domestic_broker_report_lead",
+        "ai_power_media_secondary_lead",
+        "ai_power_video_claim_lead"
+      ],
+      "affected_node_ids": [
+        "transformer",
+        "switchgear",
+        "ups",
+        "hvdc_power",
+        "server_power_supply",
+        "liquid_cooling",
+        "sic_gan_power_semiconductor"
+      ],
+      "rationale": "No accepted public source in this pack establishes product-level import dependence, domestic qualification status, revenue materiality, or customer adoption for Chinese listed companies.",
+      "uncertainty": "Localization conditions differ by voltage class, component specification, customer certification, and project geography.",
+      "next_evidence_needed": "Acquire exact broker reports, company filings, customer qualification disclosures, customs data, and product-level market-share evidence."
+    }
+  ]
+}

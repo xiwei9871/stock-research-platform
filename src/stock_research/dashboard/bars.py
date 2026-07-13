@@ -1,8 +1,31 @@
+import datetime as dt
 from typing import Any
 
 from stock_research.config import SETTINGS
 from stock_research.dashboard.schemas import BarPoint
 from stock_research.db import connect, fetch_all
+
+RESOLUTION_TRADING_DAYS = {
+    "1D": 90,
+    "1W": 260,
+    "1M": 1250,
+    "60m": 40,
+    "30m": 20,
+    "10m": 8,
+    "5m": 5,
+}
+
+
+def normalize_market_asset_id(asset_id: str) -> str:
+    text = str(asset_id or "").strip().upper()
+    if text.startswith("CN:"):
+        return text
+    if "." not in text:
+        return text
+    code, exchange = text.split(".", 1)
+    if exchange in {"SH", "SZ", "BJ"} and len(code) == 6 and code.isdigit():
+        return f"CN:{exchange}:{code}"
+    return text
 
 
 def load_daily_bars(
@@ -20,16 +43,68 @@ def load_daily_bars(
         low,
         close,
         volume,
-        amount
+        amount,
+        source
     FROM market_daily_bar
     WHERE asset_id = %s
       AND trade_date BETWEEN %s AND %s
       AND adjust_type = %s
     ORDER BY trade_date
     """
+    asset_ids = [asset_id]
+    canonical_asset_id = normalize_market_asset_id(asset_id)
+    if canonical_asset_id not in asset_ids:
+        asset_ids.append(canonical_asset_id)
     with connect(service) as conn:
-        rows = fetch_all(conn, sql, [asset_id, start_date, end_date, adjust_type])
+        rows: list[dict[str, Any]] = []
+        for candidate_asset_id in asset_ids:
+            rows = fetch_all(
+                conn,
+                sql,
+                [candidate_asset_id, start_date, end_date, adjust_type],
+            )
+            if rows:
+                break
     return [_bar_point(row).to_dict() for row in rows]
+
+
+def load_bars(
+    asset_id: str,
+    end_date: str,
+    start_date: str | None = None,
+    resolution: str = "1D",
+    adjust_type: str = "qfq",
+    source: str = "baostock",
+    service: str = SETTINGS.research_service,
+) -> list[dict[str, Any]]:
+    normalized_resolution = normalize_resolution(resolution)
+    if start_date is None and normalized_resolution in {"1D", "1W", "1M"}:
+        start_date = earliest_daily_bar_date(asset_id, adjust_type, service) or "1900-01-01"
+    elif start_date is None:
+        start_date, end_date = recent_trade_date_window(
+            end_date=end_date,
+            trading_days=RESOLUTION_TRADING_DAYS[normalized_resolution],
+            service=service,
+        )
+    if normalized_resolution in {"1D", "1W", "1M"}:
+        daily_rows = load_daily_bars(asset_id, start_date, end_date, adjust_type, service)
+        if normalized_resolution == "1D":
+            return daily_rows
+        aggregated_rows = aggregate_daily_bars(daily_rows, normalized_resolution)
+        return aggregated_rows
+
+    minute_rows = load_minute_bars(
+        asset_id=asset_id,
+        start_time=f"{start_date} 09:30:00",
+        end_time=f"{end_date} 15:00:00",
+        freq="5min",
+        adjust_type=adjust_type,
+        source=source,
+        service=service,
+    )
+    if normalized_resolution == "5m":
+        return minute_rows
+    return aggregate_minute_bars(minute_rows, normalized_resolution)
 
 
 def load_minute_bars(
@@ -62,24 +137,268 @@ def load_minute_bars(
         rows = fetch_all(
             conn,
             sql,
-            [asset_id, start_time, end_time, freq, adjust_type, source],
+            [
+                asset_id,
+                start_time,
+                end_time,
+                freq,
+                adjust_type,
+                source,
+            ],
         )
     return [_bar_point(row).to_dict() for row in rows]
 
 
+def earliest_daily_bar_date(
+    asset_id: str,
+    adjust_type: str = "qfq",
+    service: str = SETTINGS.research_service,
+) -> str | None:
+    sql = """
+    SELECT MIN(trade_date)::text AS start_date
+    FROM market_daily_bar
+    WHERE asset_id = %s
+      AND adjust_type = %s
+    """
+    try:
+        with connect(service) as conn:
+            rows = fetch_all(conn, sql, [asset_id, adjust_type])
+    except Exception:
+        return None
+    if not rows:
+        return None
+    value = rows[0].get("start_date")
+    return str(value)[:10] if value else None
+
+
+def normalize_resolution(resolution: str) -> str:
+    text = str(resolution or "1D").strip()
+    aliases = {
+        "D": "1D",
+        "1d": "1D",
+        "day": "1D",
+        "daily": "1D",
+        "W": "1W",
+        "1w": "1W",
+        "week": "1W",
+        "weekly": "1W",
+        "M": "1M",
+        "month": "1M",
+        "monthly": "1M",
+        "5min": "5m",
+        "10min": "10m",
+        "30min": "30m",
+        "60min": "60m",
+    }
+    normalized = aliases.get(text, aliases.get(text.lower(), text))
+    if normalized not in RESOLUTION_TRADING_DAYS:
+        raise ValueError(f"unsupported bars resolution: {resolution}")
+    return normalized
+
+
+def recent_trade_date_window(
+    *,
+    end_date: str,
+    trading_days: int,
+    service: str = SETTINGS.research_service,
+) -> tuple[str, str]:
+    sql = """
+    SELECT trade_date::text AS trade_date
+    FROM market.trading_calendar
+    WHERE exchange = 'SSE'
+      AND is_open = TRUE
+      AND trade_date <= %s
+    ORDER BY trade_date DESC
+    LIMIT %s
+    """
+    try:
+        with connect(service) as conn:
+            rows = fetch_all(conn, sql, [end_date, max(1, int(trading_days))])
+    except Exception:
+        rows = []
+    dates = [str(row["trade_date"])[:10] for row in rows]
+    if dates:
+        return dates[-1], dates[0]
+    end = dt.date.fromisoformat(str(end_date)[:10])
+    start = end - dt.timedelta(days=max(1, int(trading_days)) * 2)
+    return start.isoformat(), end.isoformat()
+
+
+def aggregate_daily_bars(rows: list[dict[str, Any]], resolution: str) -> list[dict[str, Any]]:
+    normalized_resolution = normalize_resolution(resolution)
+    if normalized_resolution not in {"1W", "1M"}:
+        raise ValueError(f"unsupported daily aggregation resolution: {resolution}")
+
+    buckets: dict[tuple[int, int] | tuple[int, int, int], list[dict[str, Any]]] = {}
+    for row in rows:
+        parsed = _parse_bar_date(str(row.get("time") or ""))
+        if parsed is None:
+            continue
+        if normalized_resolution == "1W":
+            iso_year, iso_week, _ = parsed.isocalendar()
+            key = (iso_year, iso_week)
+        else:
+            key = (parsed.year, parsed.month)
+        buckets.setdefault(key, []).append(row)
+
+    result = []
+    for bucket_rows in buckets.values():
+        ordered = sorted(bucket_rows, key=lambda item: str(item.get("time") or ""))
+        open_value = _first_number(ordered, "open")
+        close_value = _last_number(ordered, "close")
+        highs = [_to_float(item.get("high")) for item in ordered]
+        lows = [_to_float(item.get("low")) for item in ordered]
+        if (
+            open_value is None
+            or close_value is None
+            or all(value is None for value in highs)
+            or all(value is None for value in lows)
+        ):
+            continue
+        result.append(
+            {
+                "time": str(ordered[-1].get("time") or "")[:10],
+                "open": open_value,
+                "high": max(value for value in highs if value is not None),
+                "low": min(value for value in lows if value is not None),
+                "close": close_value,
+                "volume": _sum_optional(ordered, "volume"),
+                "amount": _sum_optional(ordered, "amount"),
+            }
+        )
+    return result
+
+
+def aggregate_minute_bars(rows: list[dict[str, Any]], resolution: str) -> list[dict[str, Any]]:
+    minutes = int(normalize_resolution(resolution).rstrip("m"))
+    buckets: dict[tuple[str, int], list[dict[str, Any]]] = {}
+    for row in rows:
+        parsed = _parse_bar_time(str(row.get("time") or ""))
+        if parsed is None:
+            continue
+        session_start = _session_start_minutes(parsed)
+        if session_start is None:
+            continue
+        minute_of_day = parsed.hour * 60 + parsed.minute
+        offset = minute_of_day - session_start
+        if offset <= 0:
+            continue
+        bucket_index = (offset - 1) // minutes
+        bucket_key = (parsed.date().isoformat(), session_start + (bucket_index + 1) * minutes)
+        buckets.setdefault(bucket_key, []).append(row)
+
+    result = []
+    for (date_text, bucket_end_minutes), bucket_rows in sorted(buckets.items()):
+        ordered = sorted(bucket_rows, key=lambda item: str(item.get("time") or ""))
+        open_value = _first_number(ordered, "open")
+        close_value = _last_number(ordered, "close")
+        highs = [_to_float(item.get("high")) for item in ordered]
+        lows = [_to_float(item.get("low")) for item in ordered]
+        if (
+            open_value is None
+            or close_value is None
+            or all(value is None for value in highs)
+            or all(value is None for value in lows)
+        ):
+            continue
+        result.append(
+            {
+                "time": _format_bucket_time(date_text, bucket_end_minutes),
+                "open": open_value,
+                "high": max(value for value in highs if value is not None),
+                "low": min(value for value in lows if value is not None),
+                "close": close_value,
+                "volume": _sum_optional(ordered, "volume"),
+                "amount": _sum_optional(ordered, "amount"),
+            }
+        )
+    return result
+
+
 def _bar_point(row: dict[str, Any]) -> BarPoint:
+    volume = _float_or_none(row.get("volume"))
+    amount = _float_or_none(row.get("amount"))
+    if _uses_tushare_daily_units(row):
+        volume = volume * 100 if volume is not None else None
+        amount = amount * 1000 if amount is not None else None
     return BarPoint(
         time=str(row["time"]),
         open=_float_or_none(row.get("open")),
         high=_float_or_none(row.get("high")),
         low=_float_or_none(row.get("low")),
         close=_float_or_none(row.get("close")),
-        volume=_float_or_none(row.get("volume")),
-        amount=_float_or_none(row.get("amount")),
+        volume=volume,
+        amount=amount,
     )
+
+
+def _uses_tushare_daily_units(row: dict[str, Any]) -> bool:
+    return str(row.get("source") or "").startswith("derived:tushare")
 
 
 def _float_or_none(value: Any) -> float | None:
     if value is None:
         return None
     return float(value)
+
+
+def _parse_bar_time(value: str) -> dt.datetime | None:
+    text = value.strip().replace("T", " ")
+    try:
+        return dt.datetime.fromisoformat(text)
+    except ValueError:
+        return None
+
+
+def _parse_bar_date(value: str) -> dt.date | None:
+    try:
+        return dt.date.fromisoformat(value.strip()[:10])
+    except ValueError:
+        return None
+
+
+def _session_start_minutes(value: dt.datetime) -> int | None:
+    minute = value.hour * 60 + value.minute
+    if 9 * 60 + 30 < minute <= 11 * 60 + 30:
+        return 9 * 60 + 30
+    if 13 * 60 < minute <= 15 * 60:
+        return 13 * 60
+    return None
+
+
+def _format_bucket_time(date_text: str, minutes: int) -> str:
+    hour, minute = divmod(minutes, 60)
+    return f"{date_text} {hour:02d}:{minute:02d}:00"
+
+
+def _first_number(rows: list[dict[str, Any]], column: str) -> float | None:
+    for row in rows:
+        value = _to_float(row.get(column))
+        if value is not None:
+            return value
+    return None
+
+
+def _last_number(rows: list[dict[str, Any]], column: str) -> float | None:
+    for row in reversed(rows):
+        value = _to_float(row.get(column))
+        if value is not None:
+            return value
+    return None
+
+
+def _sum_optional(rows: list[dict[str, Any]], column: str) -> float | None:
+    values = [_to_float(row.get(column)) for row in rows]
+    numeric = [value for value in values if value is not None]
+    if not numeric:
+        return None
+    return float(sum(numeric))
+
+
+def _to_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None

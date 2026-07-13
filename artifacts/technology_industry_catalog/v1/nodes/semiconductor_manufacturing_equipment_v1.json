@@ -1,0 +1,1495 @@
+{
+  "nodes": [
+    {
+      "node_id": "semiconductor_lithography_patterning",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Lithography and Patterning",
+      "node_kind": "canonical",
+      "node_type": "manufacturing_process_family",
+      "description": "Pattern-definition equipment for resist processing, exposure, direct writing, and photomask preparation.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_lithography_patterning"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "iline_lithography",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_lithography_patterning",
+      "level": "L4",
+      "node_name": "I-Line Lithography Equipment",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "Mercury i-line exposure systems for mature-node wafer patterning.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_lithography_patterning",
+        "iline_lithography"
+      ],
+      "canonical_key": "semiconductor_equipment:iline_lithography",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "krf_lithography",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_lithography_patterning",
+      "level": "L4",
+      "node_name": "KrF Lithography Equipment",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "248 nm krypton-fluoride exposure systems for semiconductor patterning.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_lithography_patterning",
+        "krf_lithography"
+      ],
+      "canonical_key": "semiconductor_equipment:krf_lithography",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "arf_dry_lithography",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_lithography_patterning",
+      "level": "L4",
+      "node_name": "ArF Dry Lithography Equipment",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "193 nm dry argon-fluoride exposure systems for fine patterning.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_lithography_patterning",
+        "arf_dry_lithography"
+      ],
+      "canonical_key": "semiconductor_equipment:arf_dry_lithography",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "arf_immersion_lithography",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_lithography_patterning",
+      "level": "L4",
+      "node_name": "ArF Immersion Lithography Equipment",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "193 nm immersion exposure systems for advanced-node patterning.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_lithography_patterning",
+        "arf_immersion_lithography"
+      ],
+      "canonical_key": "semiconductor_equipment:arf_immersion_lithography",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "euv_lithography",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_lithography_patterning",
+      "level": "L4",
+      "node_name": "EUV Lithography Equipment",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "Extreme-ultraviolet exposure systems for advanced-node patterning.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_lithography_patterning",
+        "euv_lithography"
+      ],
+      "canonical_key": "semiconductor_equipment:euv_lithography",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "coat_develop_track",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_lithography_patterning",
+      "level": "L4",
+      "node_name": "Coat and Develop Tracks",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "Automated wafer tracks for photoresist coating, baking, and development.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_lithography_patterning",
+        "coat_develop_track"
+      ],
+      "canonical_key": "semiconductor_equipment:coat_develop_track",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "electron_beam_direct_write",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_lithography_patterning",
+      "level": "L4",
+      "node_name": "Electron-Beam Direct-Write Systems",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "Maskless electron-beam systems for direct high-resolution pattern writing.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_lithography_patterning",
+        "electron_beam_direct_write"
+      ],
+      "canonical_key": "semiconductor_equipment:electron_beam_direct_write",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "photomask_writer",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_lithography_patterning",
+      "level": "L4",
+      "node_name": "Photomask Writers",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "Electron-beam or laser systems that write circuit patterns onto photomasks.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_lithography_patterning",
+        "photomask_writer"
+      ],
+      "canonical_key": "semiconductor_equipment:photomask_writer",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "photomask_inspection_repair",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_lithography_patterning",
+      "level": "L4",
+      "node_name": "Photomask Repair Equipment",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "Repair systems for correcting defects on semiconductor photomasks; photomask inspection is owned by photomask_inspection under metrology.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_lithography_patterning",
+        "photomask_inspection_repair"
+      ],
+      "canonical_key": "semiconductor_equipment:photomask_inspection_repair",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "semiconductor_etch",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Etch Equipment",
+      "node_kind": "canonical",
+      "node_type": "manufacturing_process_family",
+      "description": "Dry and wet equipment for selective removal of films, conductors, silicon, and process residues.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_etch"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "dielectric_etch",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_etch",
+      "level": "L4",
+      "node_name": "Dielectric Etch Equipment",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "Plasma etch systems for oxide, nitride, and other dielectric films.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_etch",
+        "dielectric_etch"
+      ],
+      "canonical_key": "semiconductor_equipment:dielectric_etch",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "conductor_etch",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_etch",
+      "level": "L4",
+      "node_name": "Conductor Etch Equipment",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "Plasma etch systems for metals and conductive thin films.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_etch",
+        "conductor_etch"
+      ],
+      "canonical_key": "semiconductor_equipment:conductor_etch",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "silicon_etch",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_etch",
+      "level": "L4",
+      "node_name": "Silicon Etch Equipment",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "Selective plasma etch systems for silicon device structures.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_etch",
+        "silicon_etch"
+      ],
+      "canonical_key": "semiconductor_equipment:silicon_etch",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "deep_silicon_etch",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_etch",
+      "level": "L4",
+      "node_name": "Deep Silicon Etch Equipment",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "High-aspect-ratio silicon etch systems for deep features and through-silicon structures.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_etch",
+        "deep_silicon_etch"
+      ],
+      "canonical_key": "semiconductor_equipment:deep_silicon_etch",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "atomic_layer_etch",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_etch",
+      "level": "L4",
+      "node_name": "Atomic Layer Etch Equipment",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "Cyclic etch systems that remove material with near-atomic-scale control.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_etch",
+        "atomic_layer_etch"
+      ],
+      "canonical_key": "semiconductor_equipment:atomic_layer_etch",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "wet_etch",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_etch",
+      "level": "L4",
+      "node_name": "Wet Etch Equipment",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "Chemical immersion or spray systems for selective material removal.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_etch",
+        "wet_etch"
+      ],
+      "canonical_key": "semiconductor_equipment:wet_etch",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "photoresist_strip_residue_removal",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_etch",
+      "level": "L4",
+      "node_name": "Photoresist Strip and Residue Removal Equipment",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "Ashing and cleaning systems that remove photoresist and post-etch residues.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_etch",
+        "photoresist_strip_residue_removal"
+      ],
+      "canonical_key": "semiconductor_equipment:photoresist_strip_residue_removal",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "semiconductor_deposition_epitaxy",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Deposition and Epitaxy",
+      "node_kind": "canonical",
+      "node_type": "manufacturing_process_family",
+      "description": "Equipment for forming conductive, dielectric, barrier, and crystalline semiconductor layers.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_deposition_epitaxy"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "pvd_equipment",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_deposition_epitaxy",
+      "level": "L4",
+      "node_name": "Physical Vapor Deposition Equipment",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "Sputtering and evaporation systems for metal and compound thin films.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_deposition_epitaxy",
+        "pvd_equipment"
+      ],
+      "canonical_key": "semiconductor_equipment:pvd_equipment",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "cvd_equipment",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_deposition_epitaxy",
+      "level": "L4",
+      "node_name": "General Thermal CVD Equipment",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "General thermal CVD systems for routes not represented by PECVD, LPCVD, ALD, or other separately enumerated deposition nodes.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_deposition_epitaxy",
+        "cvd_equipment"
+      ],
+      "canonical_key": "semiconductor_equipment:cvd_equipment",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "pecvd_equipment",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_deposition_epitaxy",
+      "level": "L4",
+      "node_name": "Plasma-Enhanced CVD Equipment",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "Plasma-assisted deposition systems for lower-temperature dielectric and passivation films.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_deposition_epitaxy",
+        "pecvd_equipment"
+      ],
+      "canonical_key": "semiconductor_equipment:pecvd_equipment",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "lpcvd_equipment",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_deposition_epitaxy",
+      "level": "L4",
+      "node_name": "Low-Pressure CVD Equipment",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "Low-pressure furnace systems for uniform polysilicon, nitride, and oxide films.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_deposition_epitaxy",
+        "lpcvd_equipment"
+      ],
+      "canonical_key": "semiconductor_equipment:lpcvd_equipment",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "atomic_layer_deposition",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_deposition_epitaxy",
+      "level": "L4",
+      "node_name": "Atomic Layer Deposition Equipment",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "Cyclic deposition systems for angstrom-scale conformal film control.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_deposition_epitaxy",
+        "atomic_layer_deposition"
+      ],
+      "canonical_key": "semiconductor_equipment:atomic_layer_deposition",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "electrochemical_deposition",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_deposition_epitaxy",
+      "level": "L4",
+      "node_name": "Electrochemical Deposition Equipment",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "Electroplating systems for copper interconnects and other conductive layers.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_deposition_epitaxy",
+        "electrochemical_deposition"
+      ],
+      "canonical_key": "semiconductor_equipment:electrochemical_deposition",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "silicon_epitaxy",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_deposition_epitaxy",
+      "level": "L4",
+      "node_name": "Silicon Epitaxy Equipment",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "Epitaxial reactors for controlled growth of crystalline silicon layers.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_deposition_epitaxy",
+        "silicon_epitaxy"
+      ],
+      "canonical_key": "semiconductor_equipment:silicon_epitaxy",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "compound_semiconductor_epitaxy",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_deposition_epitaxy",
+      "level": "L4",
+      "node_name": "Compound Semiconductor Epitaxy Equipment",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "Epitaxial reactors for III-V, wide-bandgap, and other compound semiconductor layers.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_deposition_epitaxy",
+        "compound_semiconductor_epitaxy"
+      ],
+      "canonical_key": "semiconductor_equipment:compound_semiconductor_epitaxy",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "semiconductor_thermal_doping",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Thermal Processing and Doping",
+      "node_kind": "canonical",
+      "node_type": "manufacturing_process_family",
+      "description": "Equipment for oxidation, diffusion, annealing, implantation, and dopant activation.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_thermal_doping"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "oxidation_furnace",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_thermal_doping",
+      "level": "L4",
+      "node_name": "Oxidation Furnaces",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "Batch furnaces that grow controlled silicon oxide layers on wafers.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_thermal_doping",
+        "oxidation_furnace"
+      ],
+      "canonical_key": "semiconductor_equipment:oxidation_furnace",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "diffusion_furnace",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_thermal_doping",
+      "level": "L4",
+      "node_name": "Diffusion Furnaces",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "Batch thermal systems for dopant diffusion and high-temperature film processing.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_thermal_doping",
+        "diffusion_furnace"
+      ],
+      "canonical_key": "semiconductor_equipment:diffusion_furnace",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "rapid_thermal_processing",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_thermal_doping",
+      "level": "L4",
+      "node_name": "Rapid Thermal Processing Equipment",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "Single-wafer systems for short, tightly controlled thermal cycles.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_thermal_doping",
+        "rapid_thermal_processing"
+      ],
+      "canonical_key": "semiconductor_equipment:rapid_thermal_processing",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "laser_annealing",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_thermal_doping",
+      "level": "L4",
+      "node_name": "Laser Annealing Equipment",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "Laser-based systems for localized annealing and thermal treatment.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_thermal_doping",
+        "laser_annealing"
+      ],
+      "canonical_key": "semiconductor_equipment:laser_annealing",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ion_implantation",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_thermal_doping",
+      "level": "L4",
+      "node_name": "Ion Implantation Equipment",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "Beamline systems that introduce controlled dopant species into semiconductor wafers.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_thermal_doping",
+        "ion_implantation"
+      ],
+      "canonical_key": "semiconductor_equipment:ion_implantation",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "dopant_activation_equipment",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_thermal_doping",
+      "level": "L4",
+      "node_name": "Dopant Activation Equipment",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "Thermal systems that electrically activate implanted dopants while limiting diffusion.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_thermal_doping",
+        "dopant_activation_equipment"
+      ],
+      "canonical_key": "semiconductor_equipment:dopant_activation_equipment",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "semiconductor_clean_wet_process",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Cleaning and Wet Processing",
+      "node_kind": "canonical",
+      "node_type": "manufacturing_process_family",
+      "description": "Equipment for particle, residue, metal, and chemical removal before and after wafer processes.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_clean_wet_process"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "single_wafer_clean",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_clean_wet_process",
+      "level": "L4",
+      "node_name": "Single-Wafer Cleaning Equipment",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "Spin or spray systems that clean wafers individually with controlled chemistries.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_clean_wet_process",
+        "single_wafer_clean"
+      ],
+      "canonical_key": "semiconductor_equipment:single_wafer_clean",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "batch_wet_clean",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_clean_wet_process",
+      "level": "L4",
+      "node_name": "Batch Wet Cleaning Equipment",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "Wet benches that clean multiple wafers through sequenced chemical baths.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_clean_wet_process",
+        "batch_wet_clean"
+      ],
+      "canonical_key": "semiconductor_equipment:batch_wet_clean",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "supercritical_clean_dry",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_clean_wet_process",
+      "level": "L4",
+      "node_name": "Supercritical Cleaning and Drying Equipment",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "Supercritical-fluid systems that clean or dry fragile high-aspect-ratio structures.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_clean_wet_process",
+        "supercritical_clean_dry"
+      ],
+      "canonical_key": "semiconductor_equipment:supercritical_clean_dry",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "wafer_brush_clean",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_clean_wet_process",
+      "level": "L4",
+      "node_name": "Wafer Brush Cleaning Equipment",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "Mechanical brush systems for particle and slurry residue removal.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_clean_wet_process",
+        "wafer_brush_clean"
+      ],
+      "canonical_key": "semiconductor_equipment:wafer_brush_clean",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "wet_chemical_processing",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_clean_wet_process",
+      "level": "L4",
+      "node_name": "Wet Chemical Processing Equipment",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "Chemical process systems for wafer surface preparation, stripping, and treatment.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_clean_wet_process",
+        "wet_chemical_processing"
+      ],
+      "canonical_key": "semiconductor_equipment:wet_chemical_processing",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "semiconductor_cmp_planarization",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "CMP and Planarization",
+      "node_kind": "canonical",
+      "node_type": "manufacturing_process_family",
+      "description": "Equipment for wafer surface planarization, thinning, cleaning, and endpoint control.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_cmp_planarization"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "cmp_equipment",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_cmp_planarization",
+      "level": "L4",
+      "node_name": "Chemical Mechanical Planarization Equipment",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "Polishing systems that combine slurry chemistry and mechanical action to planarize films.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_cmp_planarization",
+        "cmp_equipment"
+      ],
+      "canonical_key": "semiconductor_equipment:cmp_equipment",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "wafer_thinning",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_cmp_planarization",
+      "level": "L4",
+      "node_name": "Wafer Thinning Equipment",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "Grinding and polishing systems that reduce wafer thickness; temporarily owned here as the canonical node and referenced by advanced packaging.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_cmp_planarization",
+        "wafer_thinning"
+      ],
+      "canonical_key": "semiconductor_equipment:wafer_thinning",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "cmp_post_clean",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_cmp_planarization",
+      "level": "L4",
+      "node_name": "Post-CMP Cleaning Equipment",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "Cleaning systems that remove slurry particles, residues, and metals after planarization.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_cmp_planarization",
+        "cmp_post_clean"
+      ],
+      "canonical_key": "semiconductor_equipment:cmp_post_clean",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "cmp_endpoint_control",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_cmp_planarization",
+      "level": "L4",
+      "node_name": "CMP Endpoint Control Systems",
+      "node_kind": "canonical",
+      "node_type": "equipment_subsystem",
+      "description": "Sensors and control subsystems that determine polishing completion and uniformity.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_cmp_planarization",
+        "cmp_endpoint_control"
+      ],
+      "canonical_key": "semiconductor_equipment:cmp_endpoint_control",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "semiconductor_metrology_process_control",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Metrology and Process Control",
+      "node_kind": "canonical",
+      "node_type": "manufacturing_process_family",
+      "description": "Inspection, measurement, analytics, and control systems that monitor wafer quality and process stability.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_metrology_process_control"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "wafer_defect_inspection",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_metrology_process_control",
+      "level": "L4",
+      "node_name": "Bare-Wafer Defect Inspection Equipment",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "Optical inspection systems for particles and defects on unpatterned or bare wafers; patterned-wafer inspection is owned by pattern_defect_inspection.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_metrology_process_control",
+        "wafer_defect_inspection"
+      ],
+      "canonical_key": "semiconductor_equipment:wafer_defect_inspection",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "pattern_defect_inspection",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_metrology_process_control",
+      "level": "L4",
+      "node_name": "Pattern Defect Inspection Equipment",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "High-sensitivity systems that detect patterning defects on processed wafers.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_metrology_process_control",
+        "pattern_defect_inspection"
+      ],
+      "canonical_key": "semiconductor_equipment:pattern_defect_inspection",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "electron_beam_inspection",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_metrology_process_control",
+      "level": "L4",
+      "node_name": "Electron-Beam Inspection Equipment",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "Electron-beam systems for high-resolution wafer defect detection and review.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_metrology_process_control",
+        "electron_beam_inspection"
+      ],
+      "canonical_key": "semiconductor_equipment:electron_beam_inspection",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "critical_dimension_metrology",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_metrology_process_control",
+      "level": "L4",
+      "node_name": "Critical Dimension Metrology Equipment",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "Systems that measure linewidths, profiles, and feature dimensions.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_metrology_process_control",
+        "critical_dimension_metrology"
+      ],
+      "canonical_key": "semiconductor_equipment:critical_dimension_metrology",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "overlay_metrology",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_metrology_process_control",
+      "level": "L4",
+      "node_name": "Overlay Metrology Equipment",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "Systems that measure alignment between successive lithography layers.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_metrology_process_control",
+        "overlay_metrology"
+      ],
+      "canonical_key": "semiconductor_equipment:overlay_metrology",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "film_material_metrology",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_metrology_process_control",
+      "level": "L4",
+      "node_name": "Film and Material Metrology Equipment",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "Systems that measure film thickness, composition, stress, and material properties.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_metrology_process_control",
+        "film_material_metrology"
+      ],
+      "canonical_key": "semiconductor_equipment:film_material_metrology",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "optical_scatterometry",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_metrology_process_control",
+      "level": "L4",
+      "node_name": "Optical Scatterometry Equipment",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "Optical systems that infer nanoscale feature profiles from reflected diffraction signatures.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_metrology_process_control",
+        "optical_scatterometry"
+      ],
+      "canonical_key": "semiconductor_equipment:optical_scatterometry",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "photomask_inspection",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_metrology_process_control",
+      "level": "L4",
+      "node_name": "Photomask Inspection Equipment",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "Inspection systems for defects and pattern fidelity on production photomasks.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_metrology_process_control",
+        "photomask_inspection"
+      ],
+      "canonical_key": "semiconductor_equipment:photomask_inspection",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "yield_process_control_software",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_metrology_process_control",
+      "level": "L4",
+      "node_name": "Yield and Process Control Software",
+      "node_kind": "canonical",
+      "node_type": "process_control_software",
+      "description": "Software that analyzes fab data to monitor yield and control process excursions.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_metrology_process_control",
+        "yield_process_control_software"
+      ],
+      "canonical_key": "semiconductor_equipment:yield_process_control_software",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "semiconductor_wafer_handling_automation",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Wafer Handling and Fab Automation",
+      "node_kind": "canonical",
+      "node_type": "manufacturing_process_family",
+      "description": "Material-handling, tracking, and control systems that automate wafer movement through the fab.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_wafer_handling_automation"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "equipment_front_end_module",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_wafer_handling_automation",
+      "level": "L4",
+      "node_name": "Equipment Front-End Modules",
+      "node_kind": "canonical",
+      "node_type": "equipment_subsystem",
+      "description": "Mini-environment modules that load, align, and transfer wafers into process tools.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_wafer_handling_automation",
+        "equipment_front_end_module"
+      ],
+      "canonical_key": "semiconductor_equipment:equipment_front_end_module",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "wafer_transfer_robot",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_wafer_handling_automation",
+      "level": "L4",
+      "node_name": "Wafer Transfer Robots",
+      "node_kind": "canonical",
+      "node_type": "equipment_subsystem",
+      "description": "Precision robots that move wafers between carriers, chambers, and process stations.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_wafer_handling_automation",
+        "wafer_transfer_robot"
+      ],
+      "canonical_key": "semiconductor_equipment:wafer_transfer_robot",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "foup_wafer_carrier",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_wafer_handling_automation",
+      "level": "L4",
+      "node_name": "FOUP Wafer Carriers",
+      "node_kind": "canonical",
+      "node_type": "equipment_subsystem",
+      "description": "Sealed front-opening carriers for protected transport and storage of 300 mm wafers.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_wafer_handling_automation",
+        "foup_wafer_carrier"
+      ],
+      "canonical_key": "semiconductor_equipment:foup_wafer_carrier",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "amhs_system",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_wafer_handling_automation",
+      "level": "L4",
+      "node_name": "Automated Material Handling Systems",
+      "node_kind": "canonical",
+      "node_type": "factory_system",
+      "description": "Overhead and ground transport systems that route wafer carriers across semiconductor fabs.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_wafer_handling_automation",
+        "amhs_system"
+      ],
+      "canonical_key": "semiconductor_equipment:amhs_system",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "wafer_tracking_mes_interface",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_wafer_handling_automation",
+      "level": "L4",
+      "node_name": "Wafer Tracking and MES Interfaces",
+      "node_kind": "canonical",
+      "node_type": "process_control_software",
+      "description": "Software interfaces that link equipment events, wafer identity, and manufacturing execution records.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_wafer_handling_automation",
+        "wafer_tracking_mes_interface"
+      ],
+      "canonical_key": "semiconductor_equipment:wafer_tracking_mes_interface",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "cleanroom_automation_control",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_wafer_handling_automation",
+      "level": "L4",
+      "node_name": "Cleanroom Automation Control Systems",
+      "node_kind": "canonical",
+      "node_type": "factory_system",
+      "description": "Supervisory systems coordinating fab logistics, tool interfaces, and automated dispatch.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_wafer_handling_automation",
+        "cleanroom_automation_control"
+      ],
+      "canonical_key": "semiconductor_equipment:cleanroom_automation_control",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "semiconductor_vacuum_gas_fluid_control",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Vacuum, Gas, and Fluid Control",
+      "node_kind": "canonical",
+      "node_type": "manufacturing_process_family",
+      "description": "Subsystems that create vacuum and deliver controlled gases, chemicals, plasma, and radio-frequency power.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_vacuum_gas_fluid_control"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "dry_vacuum_pump",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_vacuum_gas_fluid_control",
+      "level": "L4",
+      "node_name": "Dry Vacuum Pumps",
+      "node_kind": "canonical",
+      "node_type": "equipment_subsystem",
+      "description": "Oil-free pumps that provide process vacuum and handle semiconductor exhaust streams.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_vacuum_gas_fluid_control",
+        "dry_vacuum_pump"
+      ],
+      "canonical_key": "semiconductor_equipment:dry_vacuum_pump",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "molecular_high_vacuum_pump",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_vacuum_gas_fluid_control",
+      "level": "L4",
+      "node_name": "Turbomolecular High-Vacuum Pumps",
+      "node_kind": "canonical",
+      "node_type": "equipment_subsystem",
+      "description": "Turbomolecular pumps that generate high and ultra-high vacuum conditions in semiconductor process equipment.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_vacuum_gas_fluid_control",
+        "molecular_high_vacuum_pump"
+      ],
+      "canonical_key": "semiconductor_equipment:molecular_high_vacuum_pump",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "vacuum_valve",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_vacuum_gas_fluid_control",
+      "level": "L4",
+      "node_name": "Vacuum Valves",
+      "node_kind": "canonical",
+      "node_type": "equipment_subsystem",
+      "description": "Precision isolation, throttle, and pressure-control valves for vacuum process tools.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_vacuum_gas_fluid_control",
+        "vacuum_valve"
+      ],
+      "canonical_key": "semiconductor_equipment:vacuum_valve",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "mass_flow_controller",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_vacuum_gas_fluid_control",
+      "level": "L4",
+      "node_name": "Mass Flow Controllers",
+      "node_kind": "canonical",
+      "node_type": "equipment_subsystem",
+      "description": "Precision devices that meter process and carrier gas flow into semiconductor equipment.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_vacuum_gas_fluid_control",
+        "mass_flow_controller"
+      ],
+      "canonical_key": "semiconductor_equipment:mass_flow_controller",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "specialty_gas_delivery",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_vacuum_gas_fluid_control",
+      "level": "L4",
+      "node_name": "Specialty Gas Delivery Systems",
+      "node_kind": "canonical",
+      "node_type": "factory_system",
+      "description": "Gas cabinets, valve manifolds, and distribution systems for hazardous process gases.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_vacuum_gas_fluid_control",
+        "specialty_gas_delivery"
+      ],
+      "canonical_key": "semiconductor_equipment:specialty_gas_delivery",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ultrapure_chemical_delivery",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_vacuum_gas_fluid_control",
+      "level": "L4",
+      "node_name": "Ultrapure Chemical Delivery Systems",
+      "node_kind": "canonical",
+      "node_type": "factory_system",
+      "description": "Bulk and point-of-use systems that distribute high-purity process chemicals.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_vacuum_gas_fluid_control",
+        "ultrapure_chemical_delivery"
+      ],
+      "canonical_key": "semiconductor_equipment:ultrapure_chemical_delivery",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "rf_power_matching",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_vacuum_gas_fluid_control",
+      "level": "L4",
+      "node_name": "RF Power and Matching Systems",
+      "node_kind": "canonical",
+      "node_type": "equipment_subsystem",
+      "description": "Radio-frequency generators and matching networks that sustain stable process plasmas.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_vacuum_gas_fluid_control",
+        "rf_power_matching"
+      ],
+      "canonical_key": "semiconductor_equipment:rf_power_matching",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "plasma_generator",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_vacuum_gas_fluid_control",
+      "level": "L4",
+      "node_name": "Plasma Generators",
+      "node_kind": "canonical",
+      "node_type": "equipment_subsystem",
+      "description": "Remote or in-situ plasma sources for deposition, etch, clean, and abatement processes.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_vacuum_gas_fluid_control",
+        "plasma_generator"
+      ],
+      "canonical_key": "semiconductor_equipment:plasma_generator",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "semiconductor_facility_pollution_control",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Fab Facilities and Pollution Control",
+      "node_kind": "canonical",
+      "node_type": "manufacturing_process_family",
+      "description": "Fab utility, environmental control, cooling, treatment, and monitoring systems supporting production.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_facility_pollution_control"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "exhaust_gas_treatment",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_facility_pollution_control",
+      "level": "L4",
+      "node_name": "Exhaust Gas Treatment Systems",
+      "node_kind": "canonical",
+      "node_type": "factory_system",
+      "description": "Point-of-use and central abatement systems for hazardous semiconductor process exhaust.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_facility_pollution_control",
+        "exhaust_gas_treatment"
+      ],
+      "canonical_key": "semiconductor_equipment:exhaust_gas_treatment",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "waste_liquid_treatment",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_facility_pollution_control",
+      "level": "L4",
+      "node_name": "Waste Liquid Treatment Systems",
+      "node_kind": "canonical",
+      "node_type": "factory_system",
+      "description": "Collection and treatment systems for acidic, alkaline, solvent, and metal-bearing fab effluent.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_facility_pollution_control",
+        "waste_liquid_treatment"
+      ],
+      "canonical_key": "semiconductor_equipment:waste_liquid_treatment",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ultrapure_water_system",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_facility_pollution_control",
+      "level": "L4",
+      "node_name": "Ultrapure Water Systems",
+      "node_kind": "canonical",
+      "node_type": "factory_system",
+      "description": "Generation and distribution systems for semiconductor-grade ultrapure process water.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_facility_pollution_control",
+        "ultrapure_water_system"
+      ],
+      "canonical_key": "semiconductor_equipment:ultrapure_water_system",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "cleanroom_system",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_facility_pollution_control",
+      "level": "L4",
+      "node_name": "Semiconductor Cleanroom Systems",
+      "node_kind": "canonical",
+      "node_type": "factory_system",
+      "description": "Air filtration, pressure, and contamination-control infrastructure for wafer fabrication.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_facility_pollution_control",
+        "cleanroom_system"
+      ],
+      "canonical_key": "semiconductor_equipment:cleanroom_system",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "temperature_humidity_microenvironment",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_facility_pollution_control",
+      "level": "L4",
+      "node_name": "Temperature, Humidity, and Microenvironment Control",
+      "node_kind": "canonical",
+      "node_type": "factory_system",
+      "description": "Systems that stabilize environmental conditions around sensitive wafers and process tools.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_facility_pollution_control",
+        "temperature_humidity_microenvironment"
+      ],
+      "canonical_key": "semiconductor_equipment:temperature_humidity_microenvironment",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "process_cooling_system",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_facility_pollution_control",
+      "level": "L4",
+      "node_name": "Process Cooling Systems",
+      "node_kind": "canonical",
+      "node_type": "factory_system",
+      "description": "Chilled-water and heat-removal systems serving semiconductor process equipment.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_facility_pollution_control",
+        "process_cooling_system"
+      ],
+      "canonical_key": "semiconductor_equipment:process_cooling_system",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "facility_monitoring_control",
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "parent_node_id": "semiconductor_facility_pollution_control",
+      "level": "L4",
+      "node_name": "Facility Monitoring and Control Systems",
+      "node_kind": "canonical",
+      "node_type": "factory_system",
+      "description": "Supervisory platforms that monitor and control fab utilities, safety, and environmental performance.",
+      "status": "draft",
+      "primary_path": [
+        "semiconductor_electronics",
+        "semiconductor_manufacturing_equipment",
+        "semiconductor_facility_pollution_control",
+        "facility_monitoring_control"
+      ],
+      "canonical_key": "semiconductor_equipment:facility_monitoring_control",
+      "canonical_node_refs": []
+    }
+  ]
+}

@@ -41,6 +41,30 @@ def test_classify_risk_watch_row_separates_hard_failure_from_elasticity_shadow()
     assert classify_risk_watch_row(elastic)["risk_split_group"] == "high_elasticity_risk_shadow"
 
 
+def test_classify_risk_watch_row_treats_standalone_lhb_high_pump_as_elasticity():
+    row = pd.Series(
+        {
+            "watch_group": "risk_watch",
+            "event_structure": "",
+            "failure_flag": False,
+            "score_rank": 16,
+            "amount_vs_20d": 2.8,
+            "volatility_5d": 0.06,
+            "high_to_close_drawdown": 0.03,
+            "lhb_negative_net_buy": False,
+            "lhb_institution_selling": False,
+            "lhb_high_pump_risk": True,
+            "dragon_risk_score": 0.25,
+            "lhb_risk_score": 0.45,
+        }
+    )
+
+    result = classify_risk_watch_row(row)
+
+    assert result["risk_split_group"] == "high_elasticity_risk_shadow"
+    assert "lhb_high_pump_risk" in result["split_reason"]
+
+
 def test_build_risk_watch_split_outputs_detail_summary_and_reason_stats():
     detail = pd.DataFrame(
         [

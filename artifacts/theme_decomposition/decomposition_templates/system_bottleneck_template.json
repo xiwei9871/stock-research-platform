@@ -1,0 +1,210 @@
+{
+  "artifact_version": "decomposition_template_v1",
+  "template": {
+    "template_id": "system_bottleneck_v1",
+    "template_name": "System Bottleneck Decomposition",
+    "template_family": "system_bottleneck",
+    "description": "Trace a demand shock through system capacity, physical or technical constraints, value migration, localization gaps, and evidence-backed company-mapping preparation.",
+    "compatible_theme_types": [
+      "ai_power",
+      "ai_compute",
+      "semiconductor_equipment",
+      "industrial_software",
+      "other"
+    ],
+    "steps": [
+      {
+        "step_id": "define_demand_shock",
+        "order": 1,
+        "title": "Define demand shock",
+        "purpose": "State the measurable demand change, its time horizon, and the actor creating it.",
+        "required_inputs": ["public demand data", "theme scope", "time horizon"],
+        "output_dimensions": ["demand driver", "demand metric", "scenario range"],
+        "quality_gates": ["A reviewed demand claim must cite at least one accepted source."]
+      },
+      {
+        "step_id": "set_system_boundary",
+        "order": 2,
+        "title": "Set system boundary",
+        "purpose": "Define where the system starts and ends so that missing links and double counting are visible.",
+        "required_inputs": ["demand driver", "physical flow", "technical flow"],
+        "output_dimensions": ["system inputs", "system outputs", "excluded scope"],
+        "quality_gates": ["Every included node must sit inside the declared system boundary."]
+      },
+      {
+        "step_id": "locate_system_bottleneck",
+        "order": 3,
+        "title": "Locate system bottleneck",
+        "purpose": "Identify the capacity, performance, permitting, integration, or qualification constraint that limits system output.",
+        "required_inputs": ["capacity metrics", "lead times", "performance requirements"],
+        "output_dimensions": ["bottleneck type", "constraint metric", "constraint location"],
+        "quality_gates": ["A bottleneck must have a measurable constraint or remain needs_evidence."]
+      },
+      {
+        "step_id": "map_chain_nodes",
+        "order": 4,
+        "title": "Map chain nodes",
+        "purpose": "Break the system into upstream enablers, core constraints, integration layers, and downstream applications.",
+        "required_inputs": ["system boundary", "bottleneck location"],
+        "output_dimensions": ["node hierarchy", "node type", "parent-child links"],
+        "quality_gates": ["Every non-root node must have a valid parent and a supported node type."]
+      },
+      {
+        "step_id": "assess_supply_constraints",
+        "order": 5,
+        "title": "Assess supply constraints",
+        "purpose": "Separate structural scarcity, capacity limits, certification cycles, and ordinary cyclical tightness.",
+        "required_inputs": ["capacity", "lead time", "qualification", "inventory"],
+        "output_dimensions": ["supply_tightness_score", "constraint duration", "relief path"],
+        "quality_gates": ["Supply tightness cannot be inferred from demand growth alone."]
+      },
+      {
+        "step_id": "assess_value_migration",
+        "order": 6,
+        "title": "Assess value migration",
+        "purpose": "Determine whether value moves through BOM share, ASP, margin, scarcity, integration control, certification, capacity, or technology barriers.",
+        "required_inputs": ["BOM", "ASP", "margin", "capacity", "certification"],
+        "output_dimensions": ["value_capture_score", "value_basis", "uncertainty"],
+        "quality_gates": ["Every value-capture conclusion must name its value basis and evidence IDs."]
+      },
+      {
+        "step_id": "assess_localization",
+        "order": 7,
+        "title": "Assess localization and evidence gaps",
+        "purpose": "Measure import dependence, domestic capability, customer verification, and unresolved evidence gaps at node level.",
+        "required_inputs": ["supplier geography", "product capability", "customer verification"],
+        "output_dimensions": ["localization_gap_score", "bottleneck_score", "evidence gap"],
+        "quality_gates": ["Localization claims require product-level evidence and cannot rely on company-name mentions."]
+      },
+      {
+        "step_id": "prepare_company_mapping",
+        "order": 8,
+        "title": "Prepare company mapping queue",
+        "purpose": "Create a later review queue linking companies to specific nodes without treating theme membership as investment evidence.",
+        "required_inputs": ["reviewed nodes", "company product evidence", "revenue relevance"],
+        "output_dimensions": ["mapping type", "mapping confidence", "evidence requirements"],
+        "quality_gates": ["Company mapping remains optional and blocked until node relationship and evidence are explicit."]
+      }
+    ],
+    "required_dimensions": [
+      "source reliability",
+      "demand driver",
+      "system boundary",
+      "node hierarchy",
+      "value_capture_score",
+      "bottleneck_score",
+      "localization_gap_score",
+      "supply_tightness_score",
+      "evidence_strength",
+      "value_basis"
+    ],
+    "optional_dimensions": [
+      "company mapping",
+      "revenue relevance",
+      "order backlog",
+      "margin trend",
+      "scenario analysis"
+    ],
+    "node_archetypes": [
+      {
+        "archetype_id": "demand_driver",
+        "parent_archetype_id": "",
+        "label": "Demand Driver",
+        "purpose": "The end demand or workload creating pressure on the system.",
+        "allowed_node_types": ["downstream_application", "service"],
+        "required_metrics": ["demand volume", "growth rate"]
+      },
+      {
+        "archetype_id": "system_constraint",
+        "parent_archetype_id": "demand_driver",
+        "label": "System Constraint",
+        "purpose": "The system-level capacity or performance boundary.",
+        "allowed_node_types": ["infrastructure", "subsystem", "software"],
+        "required_metrics": ["capacity", "utilization", "lead time"]
+      },
+      {
+        "archetype_id": "upstream_enabler",
+        "parent_archetype_id": "system_constraint",
+        "label": "Upstream Enabler",
+        "purpose": "Materials, equipment, or infrastructure needed before the bottleneck can expand.",
+        "allowed_node_types": ["upstream_material", "equipment", "infrastructure"],
+        "required_metrics": ["capacity", "delivery lead time"]
+      },
+      {
+        "archetype_id": "core_bottleneck",
+        "parent_archetype_id": "system_constraint",
+        "label": "Core Bottleneck",
+        "purpose": "The component, subsystem, equipment, or software function that directly limits output.",
+        "allowed_node_types": ["core_component", "subsystem", "equipment", "software"],
+        "required_metrics": ["constraint metric", "qualification cycle"]
+      },
+      {
+        "archetype_id": "integration_layer",
+        "parent_archetype_id": "system_constraint",
+        "label": "Integration Layer",
+        "purpose": "The layer coordinating multiple constrained components into a working system.",
+        "allowed_node_types": ["subsystem", "software", "service"],
+        "required_metrics": ["integration responsibility", "customer certification"]
+      },
+      {
+        "archetype_id": "substitution_path",
+        "parent_archetype_id": "core_bottleneck",
+        "label": "Substitution Path",
+        "purpose": "Alternative technology or domestic product route that can relieve the bottleneck.",
+        "allowed_node_types": ["core_component", "equipment", "software"],
+        "required_metrics": ["performance gap", "verification status"]
+      },
+      {
+        "archetype_id": "downstream_application",
+        "parent_archetype_id": "system_constraint",
+        "label": "Downstream Application",
+        "purpose": "The application or customer segment receiving expanded system output.",
+        "allowed_node_types": ["downstream_application", "service"],
+        "required_metrics": ["adoption", "customer concentration"]
+      }
+    ],
+    "claim_types": [
+      "demand_shock",
+      "bottleneck",
+      "supply_constraint",
+      "value_capture",
+      "localization",
+      "tech_route"
+    ],
+    "value_bases": [
+      "BOM_share",
+      "ASP",
+      "gross_margin",
+      "scarcity",
+      "integration_control",
+      "customer_certification",
+      "capacity_constraint",
+      "technology_barrier"
+    ],
+    "source_requirements": [
+      {
+        "use_case": "reviewed demand or bottleneck claim",
+        "minimum_reliability_level": "S1",
+        "allowed_review_statuses": ["accepted"]
+      },
+      {
+        "use_case": "reviewed value-capture or localization claim",
+        "minimum_reliability_level": "S1",
+        "allowed_review_statuses": ["accepted"]
+      },
+      {
+        "use_case": "research lead discovery",
+        "minimum_reliability_level": "S4",
+        "allowed_review_statuses": ["needs_full_text", "lead_only"]
+      }
+    ],
+    "initialization_defaults": {
+      "status": "draft",
+      "created_from": "manual"
+    },
+    "output_schema": "theme_decomposition_v1_5",
+    "example_theme_ids": [
+      "ai_power_value_capture_v1"
+    ]
+  }
+}

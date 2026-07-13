@@ -1,0 +1,2485 @@
+from __future__ import annotations
+
+import argparse
+import concurrent.futures
+import json
+import logging
+import math
+import os
+import time
+from contextlib import contextmanager
+from dataclasses import dataclass
+from datetime import date, datetime, timedelta
+from pathlib import Path
+from typing import Any, Callable, Iterable
+from zoneinfo import ZoneInfo
+
+from stock_research.assets import asset_id_from_baostock_code
+from stock_research.config import SETTINGS
+from stock_research.core_data import (
+    build_asset_status_daily_for_service,
+    build_concept_daily_bars_for_service,
+    build_industry_daily_bars_for_service,
+)
+from stock_research.db import connect, execute, execute_many, fetch_all
+from stock_research.loaders.baostock_ingestion import sync_index_daily_bars
+from stock_research.market_emotion_state_v1 import DAILY_OUTPUT_COLUMNS
+from stock_research.minute_data import (
+    login_or_raise as baostock_login_or_raise,
+    minute_market_row as baostock_minute_market_row,
+    query_baostock_minute_rows,
+)
+
+
+JOB_STATUSES = {"pending", "running", "success", "partial_success", "failed", "skipped"}
+PIPELINE_READY_STATUSES = {"READY", "DEGRADED_READY"}
+PIPELINE_FINAL_STATUSES = {"READY", "DEGRADED_READY", "NOT_READY"}
+DAILY_ADJUST_TYPES = ("raw", "qfq", "hfq")
+DEFAULT_EXTERNAL_DATA_MAX_QUALITY_GAP_RATIO = 0.01
+MARKET_MONITOR_INDEX_IDS = (
+    "SSE_COMPOSITE",
+    "SZSE_COMPONENT",
+    "CHINEXT",
+    "STAR_50",
+    "BSE_50",
+)
+STOCK_PROXY_ENV_KEYS = (
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "ALL_PROXY",
+    "http_proxy",
+    "https_proxy",
+    "all_proxy",
+)
+
+
+DAILY_CLOSE_PIPELINE_SQL = """
+CREATE SCHEMA IF NOT EXISTS ops;
+
+CREATE TABLE IF NOT EXISTS ops.daily_pipeline_job (
+    id text PRIMARY KEY,
+    trade_date date NOT NULL,
+    job_name text NOT NULL,
+    stage text NOT NULL,
+    source text NOT NULL DEFAULT '',
+    status text NOT NULL CHECK (status IN ('pending', 'running', 'success', 'partial_success', 'failed', 'skipped')),
+    started_at timestamptz,
+    finished_at timestamptz,
+    duration_seconds numeric,
+    attempt_count integer NOT NULL DEFAULT 0,
+    rows_inserted integer NOT NULL DEFAULT 0,
+    rows_updated integer NOT NULL DEFAULT 0,
+    rows_failed integer NOT NULL DEFAULT 0,
+    missing_symbols_count integer NOT NULL DEFAULT 0,
+    error_summary text,
+    error_detail_path text,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (trade_date, job_name, stage, source)
+);
+
+CREATE TABLE IF NOT EXISTS ops.daily_pipeline_quality (
+    trade_date date NOT NULL,
+    dataset_name text NOT NULL,
+    status text NOT NULL CHECK (status IN ('pass', 'warning', 'fail')),
+    expected_count integer,
+    actual_count integer,
+    missing_symbols jsonb NOT NULL DEFAULT '[]'::jsonb,
+    abnormal_symbols jsonb NOT NULL DEFAULT '[]'::jsonb,
+    check_summary text,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (trade_date, dataset_name)
+);
+
+CREATE TABLE IF NOT EXISTS ops.daily_pipeline_failed_symbol (
+    trade_date date NOT NULL,
+    stage text NOT NULL,
+    dataset_name text NOT NULL,
+    ts_code text NOT NULL,
+    source text NOT NULL,
+    status text NOT NULL CHECK (status IN ('pending', 'running', 'success', 'failed')) DEFAULT 'pending',
+    attempt_count integer NOT NULL DEFAULT 0,
+    error_type text,
+    error_summary text,
+    last_error_at timestamptz,
+    next_retry_at timestamptz,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (trade_date, stage, dataset_name, ts_code, source)
+);
+
+CREATE TABLE IF NOT EXISTS ops.daily_pipeline_status (
+    trade_date date PRIMARY KEY,
+    pipeline_status text NOT NULL CHECK (pipeline_status IN ('READY', 'DEGRADED_READY', 'NOT_READY')),
+    daily_status text NOT NULL,
+    minute5_status text NOT NULL,
+    market_monitor_status text NOT NULL DEFAULT 'skipped',
+    deps_status text NOT NULL,
+    latest_ready_trade_date date,
+    using_fallback_trade_date boolean NOT NULL DEFAULT false,
+    warnings jsonb NOT NULL DEFAULT '[]'::jsonb,
+    failed_jobs jsonb NOT NULL DEFAULT '[]'::jsonb,
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE ops.daily_pipeline_status
+    ADD COLUMN IF NOT EXISTS market_monitor_status text NOT NULL DEFAULT 'skipped';
+"""
+
+
+@dataclass(frozen=True)
+class PipelineConfig:
+    service: str = SETTINGS.research_service
+    timezone: str = "Asia/Shanghai"
+    tushare_token: str | None = None
+    max_workers_daily: int = 2
+    max_workers_minute5: int = 2
+    max_workers_akshare_minute5: int = 2
+    max_workers_baostock_minute5: int = 1
+    request_timeout_seconds: int = 20
+    max_retries: int = 3
+    daily_adjust_types: tuple[str, ...] = DAILY_ADJUST_TYPES
+    minute5_lookback_days: int = 5
+    minute5_min_coverage_ratio: float = 0.98
+    minute5_symbol_sleep_seconds: float = 0.75
+    external_data_max_quality_gap_ratio: float = DEFAULT_EXTERNAL_DATA_MAX_QUALITY_GAP_RATIO
+    minute5_source_timeout_seconds: int = 2400
+    daily_start_time: str = "17:00"
+    minute5_start_time: str = "17:30"
+    deps_start_time: str = "19:00"
+    finalize_time: str = "19:50"
+    force_non_trading_day: bool = False
+
+    @classmethod
+    def from_env(cls) -> "PipelineConfig":
+        return cls(
+            service=os.getenv("DB_SERVICE", SETTINGS.research_service),
+            timezone=os.getenv("PIPELINE_TIMEZONE", "Asia/Shanghai"),
+            tushare_token=os.getenv("TUSHARE_TOKEN") or load_local_tushare_token(),
+            max_workers_daily=int(os.getenv("MAX_WORKERS_DAILY", "2")),
+            max_workers_minute5=int(os.getenv("MAX_WORKERS_MINUTE5", "2")),
+            max_workers_akshare_minute5=int(
+                os.getenv("MAX_WORKERS_AKSHARE_MINUTE5", os.getenv("MAX_WORKERS_MINUTE5", "2"))
+            ),
+            max_workers_baostock_minute5=int(
+                os.getenv("MAX_WORKERS_BAOSTOCK_MINUTE5", "1")
+            ),
+            request_timeout_seconds=int(os.getenv("REQUEST_TIMEOUT_SECONDS", "20")),
+            max_retries=int(os.getenv("MAX_RETRIES", "3")),
+            daily_adjust_types=parse_adjust_types(
+                os.getenv("DAILY_ADJUST_TYPES", ",".join(DAILY_ADJUST_TYPES))
+            ),
+            minute5_lookback_days=int(os.getenv("MINUTE5_LOOKBACK_DAYS", "5")),
+            minute5_min_coverage_ratio=float(
+                os.getenv("MINUTE5_MIN_COVERAGE_RATIO", "0.98")
+            ),
+            minute5_symbol_sleep_seconds=float(
+                os.getenv("MINUTE5_SYMBOL_SLEEP_SECONDS", "0.75")
+            ),
+            external_data_max_quality_gap_ratio=float(
+                os.getenv("EXTERNAL_DATA_MAX_QUALITY_GAP_RATIO", str(DEFAULT_EXTERNAL_DATA_MAX_QUALITY_GAP_RATIO))
+            ),
+            minute5_source_timeout_seconds=int(
+                os.getenv("MINUTE5_SOURCE_TIMEOUT_SECONDS", "2400")
+            ),
+            daily_start_time=os.getenv("DAILY_START_TIME", "17:00"),
+            minute5_start_time=os.getenv("MINUTE5_START_TIME", "17:30"),
+            deps_start_time=os.getenv("DEPS_START_TIME", "19:00"),
+            finalize_time=os.getenv("FINALIZE_TIME", "19:50"),
+            force_non_trading_day=os.getenv("PIPELINE_FORCE_NON_TRADING_DAY", "").lower()
+            in {"1", "true", "yes"},
+        )
+
+
+def load_local_tushare_token(path: str | Path = "config/local_secrets.json") -> str | None:
+    secrets_path = Path(path)
+    if not secrets_path.exists():
+        return None
+    try:
+        payload = json.loads(secrets_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    token = payload.get("tushare", {}).get("token") if isinstance(payload, dict) else None
+    return str(token) if token else None
+
+
+def parse_trade_date(value: str | date | None, timezone: str = "Asia/Shanghai") -> date:
+    if isinstance(value, date):
+        return value
+    if value:
+        return datetime.strptime(value.replace("-", ""), "%Y%m%d").date()
+    return datetime.now(ZoneInfo(timezone)).date()
+
+
+def format_trade_date(value: date) -> str:
+    return value.strftime("%Y%m%d")
+
+
+def parse_adjust_types(value: str) -> tuple[str, ...]:
+    adjust_types = tuple(part.strip() for part in value.split(",") if part.strip())
+    unsupported = sorted(set(adjust_types) - set(DAILY_ADJUST_TYPES))
+    if unsupported:
+        raise ValueError(f"unsupported daily adjust types: {unsupported}")
+    return adjust_types or DAILY_ADJUST_TYPES
+
+
+def multiply_optional(value: Any, factor: float) -> float | None:
+    if value in (None, ""):
+        return None
+    return float(value) * factor
+
+
+def ts_code_to_asset_id(ts_code: str) -> str:
+    symbol, exchange = ts_code.split(".", 1)
+    return asset_id_from_baostock_code(f"{exchange.lower()}.{symbol}")
+
+
+def ts_code_symbol(ts_code: str) -> str:
+    return ts_code.split(".", 1)[0]
+
+
+def setup_stage_logger(trade_date: date, stage: str) -> tuple[logging.Logger, Path]:
+    log_dir = Path("logs") / "pipeline" / format_trade_date(trade_date)
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_path = log_dir / f"{stage}.log"
+    logger = logging.getLogger(f"daily_close_pipeline.{format_trade_date(trade_date)}.{stage}")
+    logger.setLevel(logging.INFO)
+    logger.handlers = []
+    handler = logging.FileHandler(log_path, encoding="utf-8")
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+    logger.addHandler(handler)
+    logger.propagate = False
+    return logger, log_path
+
+
+def apply_daily_close_pipeline_schema(service: str = SETTINGS.research_service) -> None:
+    with connect(service) as conn:
+        execute(conn, DAILY_CLOSE_PIPELINE_SQL)
+
+
+def trading_calendar_status(
+    service: str,
+    trade_date: date,
+    *,
+    exchanges: tuple[str, ...] = ("SH", "SZ", "BJ"),
+) -> str:
+    sql = """
+    SELECT
+        bool_or(is_open = true) AS calendar_open,
+        bool_or(is_open = false) AS calendar_closed,
+        count(*)::int AS calendar_rows
+    FROM market.trading_calendar
+    WHERE trade_date = %s
+      AND exchange = ANY(%s)
+    """
+    with connect(service) as conn:
+        rows = fetch_all(conn, sql, [trade_date, list(exchanges)])
+    row = rows[0] if rows else {}
+    if bool(row.get("calendar_open")):
+        return "open"
+    if int(row.get("calendar_rows") or 0) > 0 and bool(row.get("calendar_closed")):
+        return "closed"
+    return "unknown"
+
+
+def should_skip_for_holiday(
+    service: str,
+    trade_date: date,
+    *,
+    force: bool = False,
+) -> tuple[bool, str]:
+    if force:
+        return False, "forced"
+    status = trading_calendar_status(service, trade_date)
+    return status == "closed", status
+
+
+def record_skipped_stage(
+    *,
+    service: str,
+    trade_date: date,
+    stage: str,
+    job_name: str,
+    source: str,
+    reason: str,
+) -> dict[str, Any]:
+    now = datetime.now(ZoneInfo(PipelineConfig.from_env().timezone))
+    upsert_job(
+        service=service,
+        trade_date=trade_date,
+        job_name=job_name,
+        stage=stage,
+        source=source,
+        status="skipped",
+        started_at=now,
+        finished_at=now,
+        error_summary=reason,
+    )
+    return {"stage": stage, "status": "skipped", "reason": reason}
+
+
+def upsert_job(
+    *,
+    service: str,
+    trade_date: date,
+    job_name: str,
+    stage: str,
+    source: str = "",
+    status: str,
+    started_at: datetime | None = None,
+    finished_at: datetime | None = None,
+    attempt_count: int = 0,
+    rows_inserted: int = 0,
+    rows_updated: int = 0,
+    rows_failed: int = 0,
+    missing_symbols_count: int = 0,
+    error_summary: str | None = None,
+    error_detail_path: str | None = None,
+) -> None:
+    if status not in JOB_STATUSES:
+        raise ValueError(f"invalid job status: {status}")
+    duration_seconds = None
+    if started_at and finished_at:
+        duration_seconds = (finished_at - started_at).total_seconds()
+    sql = """
+    INSERT INTO ops.daily_pipeline_job (
+        id, trade_date, job_name, stage, source, status, started_at, finished_at,
+        duration_seconds, attempt_count, rows_inserted, rows_updated, rows_failed,
+        missing_symbols_count, error_summary, error_detail_path
+    )
+    VALUES (
+        %(id)s, %(trade_date)s, %(job_name)s, %(stage)s, %(source)s, %(status)s,
+        %(started_at)s, %(finished_at)s, %(duration_seconds)s, %(attempt_count)s,
+        %(rows_inserted)s, %(rows_updated)s, %(rows_failed)s, %(missing_symbols_count)s,
+        %(error_summary)s, %(error_detail_path)s
+    )
+    ON CONFLICT (trade_date, job_name, stage, source) DO UPDATE SET
+        status = EXCLUDED.status,
+        started_at = COALESCE(ops.daily_pipeline_job.started_at, EXCLUDED.started_at),
+        finished_at = EXCLUDED.finished_at,
+        duration_seconds = EXCLUDED.duration_seconds,
+        attempt_count = EXCLUDED.attempt_count,
+        rows_inserted = EXCLUDED.rows_inserted,
+        rows_updated = EXCLUDED.rows_updated,
+        rows_failed = EXCLUDED.rows_failed,
+        missing_symbols_count = EXCLUDED.missing_symbols_count,
+        error_summary = EXCLUDED.error_summary,
+        error_detail_path = EXCLUDED.error_detail_path,
+        updated_at = now()
+    """
+    payload = {
+        "id": f"{trade_date}:{stage}:{job_name}:{source or 'default'}",
+        "trade_date": trade_date,
+        "job_name": job_name,
+        "stage": stage,
+        "source": source,
+        "status": status,
+        "started_at": started_at,
+        "finished_at": finished_at,
+        "duration_seconds": duration_seconds,
+        "attempt_count": attempt_count,
+        "rows_inserted": rows_inserted,
+        "rows_updated": rows_updated,
+        "rows_failed": rows_failed,
+        "missing_symbols_count": missing_symbols_count,
+        "error_summary": error_summary,
+        "error_detail_path": error_detail_path,
+    }
+    with connect(service) as conn:
+        execute(conn, sql, payload)
+
+
+def upsert_quality(
+    *,
+    service: str,
+    trade_date: date,
+    dataset_name: str,
+    status: str,
+    expected_count: int | None = None,
+    actual_count: int | None = None,
+    missing_symbols: list[str] | None = None,
+    abnormal_symbols: list[str] | None = None,
+    check_summary: str | None = None,
+) -> None:
+    sql = """
+    INSERT INTO ops.daily_pipeline_quality (
+        trade_date, dataset_name, status, expected_count, actual_count,
+        missing_symbols, abnormal_symbols, check_summary
+    )
+    VALUES (
+        %(trade_date)s, %(dataset_name)s, %(status)s, %(expected_count)s, %(actual_count)s,
+        %(missing_symbols)s::jsonb, %(abnormal_symbols)s::jsonb, %(check_summary)s
+    )
+    ON CONFLICT (trade_date, dataset_name) DO UPDATE SET
+        status = EXCLUDED.status,
+        expected_count = EXCLUDED.expected_count,
+        actual_count = EXCLUDED.actual_count,
+        missing_symbols = EXCLUDED.missing_symbols,
+        abnormal_symbols = EXCLUDED.abnormal_symbols,
+        check_summary = EXCLUDED.check_summary,
+        updated_at = now()
+    """
+    payload = {
+        "trade_date": trade_date,
+        "dataset_name": dataset_name,
+        "status": status,
+        "expected_count": expected_count,
+        "actual_count": actual_count,
+        "missing_symbols": json.dumps(missing_symbols or [], ensure_ascii=False),
+        "abnormal_symbols": json.dumps(abnormal_symbols or [], ensure_ascii=False),
+        "check_summary": check_summary,
+    }
+    with connect(service) as conn:
+        execute(conn, sql, payload)
+
+
+def record_failed_symbol(
+    *,
+    service: str,
+    trade_date: date,
+    stage: str,
+    dataset_name: str,
+    ts_code: str,
+    source: str,
+    error_type: str,
+    error_summary: str,
+    attempt_count: int,
+) -> None:
+    sql = """
+    INSERT INTO ops.daily_pipeline_failed_symbol (
+        trade_date, stage, dataset_name, ts_code, source, status, attempt_count,
+        error_type, error_summary, last_error_at, next_retry_at
+    )
+    VALUES (
+        %(trade_date)s, %(stage)s, %(dataset_name)s, %(ts_code)s, %(source)s, 'pending',
+        %(attempt_count)s, %(error_type)s, %(error_summary)s, now(), now() + interval '10 minutes'
+    )
+    ON CONFLICT (trade_date, stage, dataset_name, ts_code, source) DO UPDATE SET
+        status = 'pending',
+        attempt_count = EXCLUDED.attempt_count,
+        error_type = EXCLUDED.error_type,
+        error_summary = EXCLUDED.error_summary,
+        last_error_at = now(),
+        next_retry_at = now() + interval '10 minutes',
+        updated_at = now()
+    """
+    with connect(service) as conn:
+        execute(
+            conn,
+            sql,
+            {
+                "trade_date": trade_date,
+                "stage": stage,
+                "dataset_name": dataset_name,
+                "ts_code": ts_code,
+                "source": source,
+                "attempt_count": attempt_count,
+                "error_type": error_type,
+                "error_summary": error_summary[:1000],
+            },
+        )
+
+
+def mark_failed_symbol_success(
+    service: str, trade_date: date, stage: str, dataset_name: str, ts_code: str, source: str
+) -> None:
+    sql = """
+    UPDATE ops.daily_pipeline_failed_symbol
+    SET status = 'success', updated_at = now()
+    WHERE trade_date = %s AND stage = %s AND dataset_name = %s AND ts_code = %s AND source = %s
+    """
+    with connect(service) as conn:
+        execute(conn, sql, [trade_date, stage, dataset_name, ts_code, source])
+
+
+def load_active_ts_codes(service: str, trade_date: date | None = None) -> list[str]:
+    sql = """
+    SELECT symbol, exchange
+    FROM asset_master
+    WHERE status = 'listed'
+      AND exchange IN ('SH', 'SZ')
+    ORDER BY exchange, symbol
+    """
+    with connect(service) as conn:
+        rows = fetch_all(conn, sql)
+    return [f"{row['symbol']}.{row['exchange']}" for row in rows]
+
+
+def load_minute5_expected_ts_codes(service: str, trade_date: date) -> list[str]:
+    sql = """
+    SELECT DISTINCT a.symbol, a.exchange
+    FROM asset_master a
+    JOIN market_daily_bar b
+      ON b.asset_id = a.asset_id
+     AND b.trade_date = %s
+     AND b.adjust_type = 'raw'
+    WHERE a.status = 'listed'
+      AND a.exchange IN ('SH', 'SZ')
+    ORDER BY a.exchange, a.symbol
+    """
+    with connect(service) as conn:
+        rows = fetch_all(conn, sql, [trade_date])
+    if not rows:
+        return load_active_ts_codes(service, trade_date)
+    return [f"{row['symbol']}.{row['exchange']}" for row in rows]
+
+
+MINUTE5_SOURCES = ("baostock_sh", "baostock_sz")
+
+
+def split_minute5_sources(ts_codes: list[str]) -> dict[str, list[str]]:
+    sources = {source: [] for source in MINUTE5_SOURCES}
+    for ts_code in ts_codes:
+        if ts_code.endswith(".SH"):
+            sources["baostock_sh"].append(ts_code)
+        elif ts_code.endswith(".SZ"):
+            sources["baostock_sz"].append(ts_code)
+    return sources
+
+
+def minute5_success_sources(ts_code: str) -> tuple[str, ...]:
+    if ts_code.endswith(".SH"):
+        return ("baostock_sh",)
+    if ts_code.endswith(".SZ"):
+        return ("baostock_sz",)
+    return ()
+
+
+def load_retry_ts_codes(service: str, trade_date: date, stage: str = "minute5") -> list[str]:
+    sql = """
+    SELECT ts_code
+    FROM ops.daily_pipeline_failed_symbol
+    WHERE trade_date = %s AND stage = %s AND dataset_name = 'minute5_bar'
+      AND source = 'akshare' AND status IN ('pending', 'failed')
+    ORDER BY ts_code
+    """
+    with connect(service) as conn:
+        return [str(row["ts_code"]) for row in fetch_all(conn, sql, [trade_date, stage])]
+
+
+def load_retry_failed_symbols(service: str, trade_date: date, stage: str = "minute5") -> list[dict[str, str]]:
+    sql = """
+    SELECT DISTINCT ON (source, ts_code) ts_code, source
+    FROM ops.daily_pipeline_failed_symbol
+    WHERE trade_date = %s AND stage = %s AND dataset_name = 'minute5_bar'
+      AND status IN ('pending', 'failed')
+    ORDER BY source, ts_code, updated_at DESC
+    """
+    with connect(service) as conn:
+        return [
+            {"ts_code": str(row["ts_code"]), "source": str(row["source"])}
+            for row in fetch_all(conn, sql, [trade_date, stage])
+        ]
+
+
+def load_latest_minute5_missing_symbols(service: str, trade_date: date) -> list[str]:
+    sql = """
+    SELECT missing_symbols
+    FROM ops.daily_pipeline_quality
+    WHERE trade_date = %s
+      AND dataset_name = 'minute5_bar'
+    ORDER BY updated_at DESC
+    LIMIT 1
+    """
+    with connect(service) as conn:
+        rows = fetch_all(conn, sql, [trade_date])
+    if not rows:
+        return []
+    return [str(ts_code) for ts_code in rows[0].get("missing_symbols") or []]
+
+
+def inspect_minute5_quality_from_db(
+    service: str, expected_ts_codes: list[str], target_date: date
+) -> dict[str, Any]:
+    sql = """
+    SELECT
+        ts_code,
+        count(*)::int AS bar_count,
+        bool_or(trade_time::time BETWEEN time '09:00' AND time '11:35') AS has_morning,
+        bool_or(trade_time::time BETWEEN time '13:00' AND time '15:05') AS has_afternoon
+    FROM market.stock_minute_bar
+    WHERE trade_date = %s
+      AND freq = '5min'
+      AND adjust_type = 'raw'
+      AND ts_code = ANY(%s)
+    GROUP BY ts_code
+    """
+    with connect(service) as conn:
+        rows = fetch_all(conn, sql, [target_date, expected_ts_codes])
+    by_code = {str(row["ts_code"]): row for row in rows}
+    missing, abnormal = [], []
+    for ts_code in expected_ts_codes:
+        row = by_code.get(ts_code)
+        if not row:
+            missing.append(ts_code)
+            continue
+        bar_count = int(row.get("bar_count") or 0)
+        if bar_count < 40 or not row.get("has_morning") or not row.get("has_afternoon"):
+            abnormal.append(ts_code)
+    status = "pass"
+    if missing or abnormal:
+        status = "warning" if by_code else "fail"
+    return {
+        "status": status,
+        "expected_count": len(expected_ts_codes),
+        "actual_count": len(by_code),
+        "missing_symbols": missing,
+        "abnormal_symbols": sorted(set(abnormal)),
+        "check_summary": f"minute5 covered={len(by_code)} missing={len(missing)} abnormal={len(set(abnormal))}",
+    }
+
+
+def build_retry_failed_source_plan(
+    missing_symbols: list[str], *, config: PipelineConfig
+) -> list[tuple[str, list[str], int]]:
+    if not missing_symbols:
+        return []
+    source_codes = split_minute5_sources(missing_symbols)
+    plan = []
+    for source in MINUTE5_SOURCES:
+        codes = source_codes[source]
+        if codes:
+            plan.append((source, codes, 1))
+    return plan
+
+
+def call_with_timeout(
+    func: Callable[..., Any], timeout_seconds: int, *args: Any, **kwargs: Any
+) -> Any:
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    timed_out = False
+    future = executor.submit(func, *args, **kwargs)
+    try:
+        return future.result(timeout=timeout_seconds)
+    except TimeoutError:
+        timed_out = True
+        future.cancel()
+        raise
+    finally:
+        executor.shutdown(wait=not timed_out, cancel_futures=timed_out)
+
+
+def retry_call(
+    func: Callable[[], list[dict[str, Any]]],
+    *,
+    max_retries: int,
+    backoff_seconds: float = 1.0,
+) -> tuple[list[dict[str, Any]], int, str | None]:
+    last_error = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            rows = func()
+            return rows, attempt, None
+        except Exception as exc:  # noqa: BLE001 - source adapters must record parse/network failures.
+            last_error = f"{type(exc).__name__}: {exc}"
+            if attempt < max_retries:
+                time.sleep(backoff_seconds * attempt)
+    return [], max_retries, last_error
+
+
+def fetch_tushare_daily_rows(
+    trade_date: date,
+    *,
+    token: str | None,
+    timeout_seconds: int,
+    ts_codes: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    if not token:
+        raise RuntimeError("TUSHARE_TOKEN is not configured")
+
+    def _fetch() -> list[dict[str, Any]]:
+        import tushare as ts
+
+        pro = ts.pro_api(token)
+        daily = pro.daily(trade_date=format_trade_date(trade_date))
+        try:
+            basic = pro.daily_basic(trade_date=format_trade_date(trade_date))
+        except Exception:  # noqa: BLE001 - daily_basic is enrichment; daily bars remain critical.
+            basic = None
+        basic_by_code = {
+            str(row["ts_code"]): row for row in basic.to_dict("records")
+        } if basic is not None and not basic.empty else {}
+        rows = []
+        requested = set(ts_codes or [])
+        for row in daily.to_dict("records"):
+            ts_code = str(row["ts_code"])
+            if requested and ts_code not in requested:
+                continue
+            basic_row = basic_by_code.get(ts_code, {})
+            rows.append(
+                {
+                    "ts_code": ts_code,
+                    "asset_id": ts_code_to_asset_id(ts_code),
+                    "trade_date": trade_date,
+                    "open": row.get("open"),
+                    "high": row.get("high"),
+                    "low": row.get("low"),
+                    "close": row.get("close"),
+                    "preclose": row.get("pre_close"),
+                    "volume": row.get("vol"),
+                    "amount": row.get("amount"),
+                    "turnover_rate": basic_row.get("turnover_rate"),
+                    "pct_chg": row.get("pct_chg"),
+                    "trade_status": "1",
+                    "is_st": False,
+                    "adjust_type": "raw",
+                    "source": "tushare",
+                }
+            )
+        return rows
+
+    return call_with_timeout(_fetch, timeout_seconds)
+
+
+def fetch_tushare_adjusted_daily_rows(
+    trade_date: date,
+    *,
+    token: str | None,
+    timeout_seconds: int,
+    ts_codes: list[str],
+    adjust_types: tuple[str, ...],
+    max_workers: int = 8,
+) -> list[dict[str, Any]]:
+    if not token:
+        raise RuntimeError("TUSHARE_TOKEN is not configured")
+
+    wanted_adjust_types = {adjust_type for adjust_type in adjust_types if adjust_type in {"qfq", "hfq"}}
+    if not wanted_adjust_types:
+        return []
+
+    def _fetch() -> list[dict[str, Any]]:
+        import tushare as ts
+
+        pro = ts.pro_api(token)
+        daily = pro.daily(trade_date=format_trade_date(trade_date))
+        adj_factor = pro.adj_factor(trade_date=format_trade_date(trade_date))
+        if daily is None or daily.empty or adj_factor is None or adj_factor.empty:
+            return []
+        requested = set(ts_codes)
+        factors = {
+            str(row["ts_code"]): row.get("adj_factor")
+            for row in adj_factor.to_dict("records")
+            if str(row["ts_code"]) in requested
+        }
+        rows: list[dict[str, Any]] = []
+        for raw in daily.to_dict("records"):
+            ts_code = str(raw["ts_code"])
+            if ts_code not in requested:
+                continue
+            factor = factors.get(ts_code)
+            if factor in (None, ""):
+                continue
+            try:
+                hfq_factor = float(factor)
+            except (TypeError, ValueError):
+                continue
+            for adjust_type in sorted(wanted_adjust_types):
+                price_factor = hfq_factor if adjust_type == "hfq" else 1.0
+                rows.append(
+                    {
+                        "ts_code": ts_code,
+                        "asset_id": ts_code_to_asset_id(ts_code),
+                        "trade_date": trade_date,
+                        "open": multiply_optional(raw.get("open"), price_factor),
+                        "high": multiply_optional(raw.get("high"), price_factor),
+                        "low": multiply_optional(raw.get("low"), price_factor),
+                        "close": multiply_optional(raw.get("close"), price_factor),
+                        "preclose": multiply_optional(raw.get("pre_close"), price_factor),
+                        "volume": raw.get("vol"),
+                        "amount": raw.get("amount"),
+                        "turnover_rate": None,
+                        "pct_chg": raw.get("pct_chg"),
+                        "trade_status": "1",
+                        "is_st": False,
+                        "adjust_type": adjust_type,
+                        "source": "tushare",
+                    }
+                )
+        return rows
+
+    return call_with_timeout(_fetch, timeout_seconds)
+
+
+def load_latest_adjustment_factors(
+    service: str, *, ts_codes: list[str], before_date: date
+) -> dict[str, dict[str, float]]:
+    asset_to_ts = {ts_code_to_asset_id(ts_code): ts_code for ts_code in ts_codes}
+    if not asset_to_ts:
+        return {}
+    sql = """
+    WITH latest_raw AS (
+        SELECT DISTINCT ON (asset_id)
+            asset_id, trade_date, close
+        FROM market_daily_bar
+        WHERE adjust_type = 'raw'
+          AND trade_date < %s
+          AND asset_id = ANY(%s)
+          AND close IS NOT NULL
+          AND close <> 0
+        ORDER BY asset_id, trade_date DESC
+    )
+    SELECT
+        r.asset_id,
+        q.close / NULLIF(r.close, 0) AS qfq_factor,
+        h.close / NULLIF(r.close, 0) AS hfq_factor
+    FROM latest_raw r
+    LEFT JOIN market_daily_bar q
+      ON q.asset_id = r.asset_id
+     AND q.trade_date = r.trade_date
+     AND q.adjust_type = 'qfq'
+    LEFT JOIN market_daily_bar h
+      ON h.asset_id = r.asset_id
+     AND h.trade_date = r.trade_date
+     AND h.adjust_type = 'hfq'
+    """
+    with connect(service) as conn:
+        rows = fetch_all(conn, sql, [before_date, list(asset_to_ts)])
+    factors: dict[str, dict[str, float]] = {}
+    for row in rows:
+        ts_code = asset_to_ts.get(str(row["asset_id"]))
+        if not ts_code:
+            continue
+        values: dict[str, float] = {}
+        for adjust_type, column in {"qfq": "qfq_factor", "hfq": "hfq_factor"}.items():
+            value = row.get(column)
+            if value is None:
+                continue
+            values[adjust_type] = float(value)
+        if values:
+            factors[ts_code] = values
+    return factors
+
+
+def derive_adjusted_daily_rows(
+    service: str,
+    *,
+    trade_date: date,
+    raw_rows: list[dict[str, Any]],
+    ts_codes: list[str],
+    adjust_types: tuple[str, ...],
+) -> list[dict[str, Any]]:
+    wanted_adjust_types = tuple(
+        adjust_type for adjust_type in adjust_types if adjust_type in {"qfq", "hfq"}
+    )
+    if not wanted_adjust_types:
+        return []
+    factors = load_latest_adjustment_factors(
+        service, ts_codes=ts_codes, before_date=trade_date
+    )
+    raw_by_code = {
+        str(row["ts_code"]): row
+        for row in raw_rows
+        if row.get("trade_date") == trade_date and (row.get("adjust_type") or "raw") == "raw"
+    }
+    rows: list[dict[str, Any]] = []
+    for ts_code in ts_codes:
+        raw = raw_by_code.get(ts_code)
+        if not raw:
+            continue
+        code_factors = factors.get(ts_code, {})
+        for adjust_type in wanted_adjust_types:
+            factor = code_factors.get(adjust_type)
+            if factor is None:
+                continue
+            item = dict(raw)
+            item["adjust_type"] = adjust_type
+            item["source"] = "derived:tushare_raw_latest_factor"
+            for column in ("open", "high", "low", "close", "preclose"):
+                item[column] = multiply_optional(raw.get(column), factor)
+            rows.append(item)
+    return rows
+
+
+def fetch_akshare_daily_rows(
+    trade_date: date,
+    *,
+    ts_codes: list[str],
+    timeout_seconds: int,
+    adjust_types: tuple[str, ...] = DAILY_ADJUST_TYPES,
+) -> list[dict[str, Any]]:
+    def _fetch_one(ts_code: str) -> list[dict[str, Any]]:
+        import akshare as ak
+
+        rows = []
+        for adjust_type in adjust_types:
+            frame = ak.stock_zh_a_hist(
+                symbol=ts_code_symbol(ts_code),
+                period="daily",
+                start_date=format_trade_date(trade_date),
+                end_date=format_trade_date(trade_date),
+                adjust="" if adjust_type == "raw" else adjust_type,
+            )
+            if frame is None or frame.empty:
+                continue
+            row = frame.iloc[-1].to_dict()
+            rows.append(
+                {
+                    "ts_code": ts_code,
+                    "asset_id": ts_code_to_asset_id(ts_code),
+                    "trade_date": trade_date,
+                    "open": row.get("开盘"),
+                    "high": row.get("最高"),
+                    "low": row.get("最低"),
+                    "close": row.get("收盘"),
+                    "preclose": None,
+                    "volume": row.get("成交量"),
+                    "amount": row.get("成交额"),
+                    "turnover_rate": row.get("换手率"),
+                    "pct_chg": row.get("涨跌幅"),
+                    "trade_status": "1",
+                    "is_st": False,
+                    "adjust_type": adjust_type,
+                    "source": "akshare",
+                }
+            )
+        return rows
+
+    rows: list[dict[str, Any]] = []
+    for ts_code in ts_codes:
+        rows.extend(call_with_timeout(_fetch_one, timeout_seconds, ts_code))
+    return rows
+
+
+def fetch_akshare_minute5_rows(
+    ts_code: str, *, start_date: date, end_date: date, timeout_seconds: int
+) -> list[dict[str, Any]]:
+    def _fetch() -> list[dict[str, Any]]:
+        import akshare as ak
+
+        with temporary_stock_proxy_env_cleared():
+            frame = ak.stock_zh_a_hist_min_em(
+                symbol=ts_code_symbol(ts_code),
+                period="5",
+                start_date=f"{start_date:%Y-%m-%d} 09:30:00",
+                end_date=f"{end_date:%Y-%m-%d} 15:00:00",
+                adjust="",
+            )
+        if frame is None or frame.empty:
+            return []
+        rows = []
+        for row in frame.to_dict("records"):
+            trade_time = row.get("时间") or row.get("date") or row.get("datetime")
+            if not trade_time:
+                continue
+            trade_time_dt = datetime.fromisoformat(str(trade_time).replace("/", "-"))
+            rows.append(
+                {
+                    "asset_id": ts_code_to_asset_id(ts_code),
+                    "ts_code": ts_code,
+                    "trade_time": trade_time_dt,
+                    "trade_date": trade_time_dt.date(),
+                    "freq": "5min",
+                    "adjust_type": "raw",
+                    "open": row.get("开盘"),
+                    "high": row.get("最高"),
+                    "low": row.get("最低"),
+                    "close": row.get("收盘"),
+                    "volume": row.get("成交量"),
+                    "amount": row.get("成交额"),
+                    "source": "akshare",
+                }
+            )
+        return rows
+
+    return call_with_timeout(_fetch, timeout_seconds)
+
+
+@contextmanager
+def temporary_stock_proxy_env_cleared():
+    previous = {key: os.environ.get(key) for key in (*STOCK_PROXY_ENV_KEYS, "NO_PROXY", "no_proxy")}
+    for key in STOCK_PROXY_ENV_KEYS:
+        os.environ.pop(key, None)
+    os.environ["NO_PROXY"] = "*"
+    os.environ["no_proxy"] = "*"
+    try:
+        yield
+    finally:
+        for key, value in previous.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+
+def ts_code_to_baostock_code(ts_code: str) -> str:
+    symbol, exchange = ts_code.split(".", 1)
+    return f"{exchange.lower()}.{symbol}"
+
+
+def fetch_baostock_minute5_rows(
+    ts_code: str, *, start_date: date, end_date: date, timeout_seconds: int
+) -> list[dict[str, Any]]:
+    raw_rows = call_with_timeout(
+        lambda: query_baostock_minute_rows(
+            ts_code_to_baostock_code(ts_code),
+            start_date,
+            end_date,
+            freq="5min",
+            adjust_type="raw",
+            timeout_seconds=timeout_seconds,
+        ),
+        timeout_seconds,
+    )
+    return [
+        baostock_minute_market_row(row, freq="5min", adjust_type="raw")
+        for row in raw_rows
+    ]
+
+
+def fetch_baostock_minute5_worker(
+    ts_code: str,
+    start_date: date,
+    end_date: date,
+    timeout_seconds: int,
+    max_retries: int,
+) -> tuple[str, list[dict[str, Any]], int, str | None]:
+    rows, attempt_count, error = retry_call(
+        lambda: fetch_baostock_minute5_rows(
+            ts_code,
+            start_date=start_date,
+            end_date=end_date,
+            timeout_seconds=timeout_seconds,
+        ),
+        max_retries=max_retries,
+    )
+    return ts_code, rows, attempt_count, error
+
+
+def normalize_daily_rows(rows: Iterable[dict[str, Any]], source: str) -> list[dict[str, Any]]:
+    normalized = []
+    for row in rows:
+        ts_code = str(row.get("ts_code") or "")
+        if not ts_code:
+            continue
+        item = dict(row)
+        item.setdefault("asset_id", ts_code_to_asset_id(ts_code))
+        item.setdefault("adjust_type", "raw")
+        item.setdefault("trade_status", "1")
+        item.setdefault("is_st", False)
+        item["source"] = source
+        normalized.append(item)
+    return normalized
+
+
+def upsert_daily_bars(service: str, rows: list[dict[str, Any]]) -> int:
+    if not rows:
+        return 0
+    sql = """
+    INSERT INTO market_daily_bar (
+        asset_id, trade_date, open, high, low, close, preclose, volume, amount,
+        turnover_rate, pct_chg, trade_status, is_st, adjust_type, source
+    )
+    VALUES (
+        %(asset_id)s, %(trade_date)s, %(open)s, %(high)s, %(low)s, %(close)s,
+        %(preclose)s, %(volume)s, %(amount)s, %(turnover_rate)s, %(pct_chg)s,
+        %(trade_status)s, %(is_st)s, %(adjust_type)s, %(source)s
+    )
+    ON CONFLICT (asset_id, trade_date, adjust_type) DO UPDATE SET
+        open = EXCLUDED.open,
+        high = EXCLUDED.high,
+        low = EXCLUDED.low,
+        close = EXCLUDED.close,
+        preclose = EXCLUDED.preclose,
+        volume = EXCLUDED.volume,
+        amount = EXCLUDED.amount,
+        turnover_rate = EXCLUDED.turnover_rate,
+        pct_chg = EXCLUDED.pct_chg,
+        trade_status = EXCLUDED.trade_status,
+        is_st = EXCLUDED.is_st,
+        source = EXCLUDED.source,
+        updated_at = now()
+    """
+    with connect(service) as conn:
+        execute_many(conn, sql, rows)
+    return len(rows)
+
+
+def upsert_minute5_bars(service: str, rows: list[dict[str, Any]]) -> int:
+    if not rows:
+        return 0
+    sql = """
+    INSERT INTO market.stock_minute_bar (
+        asset_id, ts_code, trade_time, trade_date, freq, adjust_type,
+        open, high, low, close, volume, amount, source
+    )
+    VALUES (
+        %(asset_id)s, %(ts_code)s, %(trade_time)s, %(trade_date)s, %(freq)s,
+        %(adjust_type)s, %(open)s, %(high)s, %(low)s, %(close)s, %(volume)s,
+        %(amount)s, %(source)s
+    )
+    ON CONFLICT (trade_date, asset_id, trade_time, freq, adjust_type, source) DO UPDATE SET
+        open = EXCLUDED.open,
+        high = EXCLUDED.high,
+        low = EXCLUDED.low,
+        close = EXCLUDED.close,
+        volume = EXCLUDED.volume,
+        amount = EXCLUDED.amount,
+        updated_at = now()
+    """
+    with connect(service) as conn:
+        execute_many(conn, sql, rows)
+    return len(rows)
+
+
+def derive_qfq_minute5_from_daily_factor(service: str, trade_date: date) -> dict[str, int]:
+    sql = """
+    WITH raw_rows AS (
+        SELECT
+            raw.asset_id,
+            raw.ts_code,
+            raw.trade_time,
+            raw.trade_date,
+            raw.freq,
+            raw.open,
+            raw.high,
+            raw.low,
+            raw.close,
+            raw.volume,
+            raw.amount,
+            raw.source,
+            daily_qfq.close / daily_raw.close AS qfq_factor
+        FROM market.stock_minute_bar raw
+        JOIN market_daily_bar daily_raw
+          ON daily_raw.asset_id = raw.asset_id
+         AND daily_raw.trade_date = raw.trade_date
+         AND daily_raw.adjust_type = 'raw'
+         AND daily_raw.close IS NOT NULL
+         AND daily_raw.close <> 0
+        JOIN market_daily_bar daily_qfq
+          ON daily_qfq.asset_id = raw.asset_id
+         AND daily_qfq.trade_date = raw.trade_date
+         AND daily_qfq.adjust_type = 'qfq'
+         AND daily_qfq.close IS NOT NULL
+        WHERE raw.trade_date = %s
+          AND raw.freq = '5min'
+          AND raw.adjust_type = 'raw'
+    ),
+    upserted AS (
+        INSERT INTO market.stock_minute_bar (
+            asset_id, ts_code, trade_time, trade_date, freq, adjust_type,
+            open, high, low, close, volume, amount, source
+        )
+        SELECT
+            asset_id,
+            ts_code,
+            trade_time,
+            trade_date,
+            freq,
+            'qfq' AS adjust_type,
+            open * qfq_factor AS open,
+            high * qfq_factor AS high,
+            low * qfq_factor AS low,
+            close * qfq_factor AS close,
+            volume,
+            amount,
+            source
+        FROM raw_rows
+        ON CONFLICT (trade_date, asset_id, trade_time, freq, adjust_type, source)
+        DO UPDATE SET
+            ts_code = EXCLUDED.ts_code,
+            open = EXCLUDED.open,
+            high = EXCLUDED.high,
+            low = EXCLUDED.low,
+            close = EXCLUDED.close,
+            volume = EXCLUDED.volume,
+            amount = EXCLUDED.amount,
+            updated_at = now()
+        RETURNING 1
+    )
+    SELECT
+        (SELECT count(*) FROM raw_rows) AS raw_rows,
+        (SELECT count(*) FROM upserted) AS inserted_rows
+    """
+    with connect(service) as conn:
+        row = fetch_all(conn, sql, [trade_date])[0]
+    return {
+        "raw_rows": int(row.get("raw_rows") or 0),
+        "inserted_rows": int(row.get("inserted_rows") or 0),
+    }
+
+
+def inspect_daily_quality(
+    rows: list[dict[str, Any]],
+    expected_ts_codes: list[str],
+    trade_date: date,
+    adjust_types: tuple[str, ...] = DAILY_ADJUST_TYPES,
+) -> dict[str, Any]:
+    by_key = {
+        (str(row["ts_code"]), str(row.get("adjust_type") or "raw")): row
+        for row in rows
+        if row.get("trade_date") == trade_date
+    }
+    expected_keys = {(ts_code, adjust_type) for ts_code in expected_ts_codes for adjust_type in adjust_types}
+    missing = [f"{ts_code}:{adjust_type}" for ts_code, adjust_type in sorted(expected_keys - set(by_key))]
+    abnormal = []
+    for (ts_code, adjust_type), row in by_key.items():
+        open_, high, low, close = row.get("open"), row.get("high"), row.get("low"), row.get("close")
+        if any(value in (None, 0) for value in [open_, high, low, close]):
+            abnormal.append(f"{ts_code}:{adjust_type}")
+            continue
+        try:
+            if not (float(low) <= float(close) <= float(high)):
+                abnormal.append(f"{ts_code}:{adjust_type}")
+        except (TypeError, ValueError):
+            abnormal.append(f"{ts_code}:{adjust_type}")
+    status = "pass"
+    if missing or abnormal:
+        status = "warning" if by_key else "fail"
+    return {
+        "status": status,
+        "expected_count": len(expected_keys),
+        "actual_count": len(by_key),
+        "missing_symbols": missing,
+        "abnormal_symbols": sorted(set(abnormal)),
+        "check_summary": f"daily rows={len(by_key)} missing={len(missing)} abnormal={len(set(abnormal))}",
+    }
+
+
+def inspect_minute5_quality(
+    rows_by_symbol: dict[str, list[dict[str, Any]]],
+    expected_ts_codes: list[str],
+    target_date: date,
+) -> dict[str, Any]:
+    missing, abnormal = [], []
+    covered = 0
+    for ts_code in expected_ts_codes:
+        bars = [row for row in rows_by_symbol.get(ts_code, []) if row.get("trade_date") == target_date]
+        if not bars:
+            missing.append(ts_code)
+            continue
+        covered += 1
+        bar_count = len(bars)
+        times = {row["trade_time"].time() for row in bars if row.get("trade_time")}
+        has_morning = any("09:" <= str(value) <= "11:35:00" for value in times)
+        has_afternoon = any("13:" <= str(value) <= "15:05:00" for value in times)
+        if bar_count < 40 or not has_morning or not has_afternoon:
+            abnormal.append(ts_code)
+    status = "pass"
+    if missing or abnormal:
+        status = "warning" if covered else "fail"
+    return {
+        "status": status,
+        "expected_count": len(expected_ts_codes),
+        "actual_count": covered,
+        "missing_symbols": missing,
+        "abnormal_symbols": sorted(set(abnormal)),
+        "check_summary": f"minute5 covered={covered} missing={len(missing)} abnormal={len(set(abnormal))}",
+    }
+
+
+def run_daily_stage(
+    trade_date: date,
+    *,
+    config: PipelineConfig,
+    ts_codes: list[str] | None = None,
+    tushare_fetcher: Callable[..., list[dict[str, Any]]] = fetch_tushare_daily_rows,
+    derived_adjusted_fetcher: Callable[..., list[dict[str, Any]]] = derive_adjusted_daily_rows,
+    tushare_adjusted_fetcher: Callable[..., list[dict[str, Any]]] = fetch_tushare_adjusted_daily_rows,
+    akshare_fetcher: Callable[..., list[dict[str, Any]]] = fetch_akshare_daily_rows,
+    daily_upserter: Callable[[str, list[dict[str, Any]]], int] = upsert_daily_bars,
+    progress: Callable[[dict[str, Any]], None] | None = None,
+) -> dict[str, Any]:
+    skip, calendar_status = should_skip_for_holiday(
+        config.service, trade_date, force=config.force_non_trading_day
+    )
+    if skip:
+        return record_skipped_stage(
+            service=config.service,
+            trade_date=trade_date,
+            stage="daily",
+            job_name="daily_bar",
+            source="calendar",
+            reason=f"non_trading_day:{calendar_status}",
+        )
+    logger, log_path = setup_stage_logger(trade_date, "daily")
+    started = datetime.now(ZoneInfo(config.timezone))
+    upsert_job(
+        service=config.service,
+        trade_date=trade_date,
+        job_name="daily_bar",
+        stage="daily",
+        source="mixed",
+        status="running",
+        started_at=started,
+    )
+    expected_ts_codes = ts_codes or load_active_ts_codes(config.service, trade_date)
+    progress_total = 5
+
+    def emit_progress(event: str, completed: int, *, rows: int = 0, success: int = 0, failed: int = 0) -> None:
+        if progress is None:
+            return
+        progress(
+            {
+                "event": event,
+                "completed": completed,
+                "total": progress_total,
+                "rows": rows,
+                "success": success,
+                "failed": failed,
+            }
+        )
+
+    emit_progress("daily_started", 0)
+    logger.info("daily stage started source=tushare expected=%s", len(expected_ts_codes))
+    tushare_rows, tushare_attempts, tushare_error = retry_call(
+        lambda: tushare_fetcher(
+            trade_date,
+            token=config.tushare_token,
+            timeout_seconds=config.request_timeout_seconds,
+            ts_codes=expected_ts_codes,
+        ),
+        max_retries=config.max_retries,
+    )
+    normalized_tushare = normalize_daily_rows(tushare_rows, "tushare")
+    emit_progress("daily_tushare_raw_completed", 1, rows=len(normalized_tushare))
+    expected_keys = {
+        (ts_code, adjust_type)
+        for ts_code in expected_ts_codes
+        for adjust_type in config.daily_adjust_types
+    }
+    tushare_keys = {
+        (row["ts_code"], row.get("adjust_type") or "raw")
+        for row in normalized_tushare
+    }
+    missing_pairs_after_tushare = expected_keys - tushare_keys
+    missing_derived_codes = sorted(
+        {ts_code for ts_code, adjust_type in missing_pairs_after_tushare if adjust_type in {"qfq", "hfq"}}
+    )
+    missing_derived_types = tuple(
+        sorted({adjust_type for _ts_code, adjust_type in missing_pairs_after_tushare if adjust_type in {"qfq", "hfq"}})
+    )
+    derived_rows: list[dict[str, Any]] = []
+    if missing_derived_codes and missing_derived_types:
+        logger.info(
+            "daily adjusted source=derived_latest_factor missing=%s adjust_types=%s",
+            len(missing_derived_codes),
+            ",".join(missing_derived_types),
+        )
+        derived_rows = derived_adjusted_fetcher(
+            config.service,
+            trade_date=trade_date,
+            raw_rows=normalized_tushare,
+            ts_codes=missing_derived_codes,
+            adjust_types=missing_derived_types,
+        )
+    normalized_derived = normalize_daily_rows(
+        derived_rows, "derived:tushare_raw_latest_factor"
+    )
+    emit_progress(
+        "daily_derived_adjusted_completed",
+        2,
+        rows=len(normalized_tushare) + len(normalized_derived),
+    )
+    tushare_keys = {
+        (row["ts_code"], row.get("adjust_type") or "raw")
+        for row in [*normalized_tushare, *normalized_derived]
+    }
+    missing_pairs_after_tushare = expected_keys - tushare_keys
+    missing_tushare_adjusted_codes = sorted(
+        {ts_code for ts_code, adjust_type in missing_pairs_after_tushare if adjust_type in {"qfq", "hfq"}}
+    )
+    missing_tushare_adjusted_types = tuple(
+        sorted({adjust_type for _ts_code, adjust_type in missing_pairs_after_tushare if adjust_type in {"qfq", "hfq"}})
+    )
+    tushare_adjusted_rows: list[dict[str, Any]] = []
+    tushare_adjusted_attempts = 0
+    tushare_adjusted_error = None
+    if missing_tushare_adjusted_codes and missing_tushare_adjusted_types:
+        logger.info(
+            "daily adjusted source=tushare missing=%s adjust_types=%s",
+            len(missing_tushare_adjusted_codes),
+            ",".join(missing_tushare_adjusted_types),
+        )
+        tushare_adjusted_rows, tushare_adjusted_attempts, tushare_adjusted_error = retry_call(
+            lambda: tushare_adjusted_fetcher(
+                trade_date,
+                token=config.tushare_token,
+                timeout_seconds=config.request_timeout_seconds,
+                ts_codes=missing_tushare_adjusted_codes,
+                adjust_types=missing_tushare_adjusted_types,
+                max_workers=config.max_workers_daily,
+            ),
+            max_retries=config.max_retries,
+        )
+    normalized_tushare_adjusted = normalize_daily_rows(tushare_adjusted_rows, "tushare")
+    emit_progress(
+        "daily_tushare_adjusted_completed",
+        3,
+        rows=len(normalized_tushare) + len(normalized_derived) + len(normalized_tushare_adjusted),
+    )
+    tushare_keys = {
+        (row["ts_code"], row.get("adjust_type") or "raw")
+        for row in [*normalized_tushare, *normalized_derived, *normalized_tushare_adjusted]
+    }
+    missing_pairs_after_tushare = expected_keys - tushare_keys
+    missing_after_tushare = sorted({ts_code for ts_code, _adjust_type in missing_pairs_after_tushare})
+    missing_adjust_types_after_tushare = tuple(
+        sorted({adjust_type for _ts_code, adjust_type in missing_pairs_after_tushare})
+    )
+    final_rows_by_key = {
+        (row["ts_code"], row.get("adjust_type") or "raw"): row
+        for row in [*normalized_tushare, *normalized_derived, *normalized_tushare_adjusted]
+    }
+    final_rows = list(final_rows_by_key.values())
+    rows_upserted = daily_upserter(config.service, final_rows)
+    emit_progress("daily_upsert_completed", 4, rows=rows_upserted)
+    quality = inspect_daily_quality(
+        final_rows, expected_ts_codes, trade_date, config.daily_adjust_types
+    )
+    upsert_quality(service=config.service, trade_date=trade_date, dataset_name="daily_bar", **quality)
+    finished = datetime.now(ZoneInfo(config.timezone))
+    status = "success" if quality["status"] in {"pass", "warning"} and final_rows else "failed"
+    if status == "success" and (quality["missing_symbols"] or quality["abnormal_symbols"]):
+        status = "partial_success"
+    error_summary = tushare_error or tushare_adjusted_error
+    upsert_job(
+        service=config.service,
+        trade_date=trade_date,
+        job_name="daily_bar",
+        stage="daily",
+        source="tushare" if final_rows else "none",
+        status=status,
+        started_at=started,
+        finished_at=finished,
+        attempt_count=max(tushare_attempts, tushare_adjusted_attempts),
+        rows_inserted=rows_upserted,
+        rows_failed=len(quality["missing_symbols"]),
+        missing_symbols_count=len(quality["missing_symbols"]),
+        error_summary=error_summary,
+        error_detail_path=str(log_path) if error_summary else None,
+    )
+    logger.info(
+        "daily stage finished status=%s rows=%s missing=%s abnormal=%s",
+        status,
+        rows_upserted,
+        len(quality["missing_symbols"]),
+        len(quality["abnormal_symbols"]),
+    )
+    emit_progress(
+        "daily_completed",
+        5,
+        rows=rows_upserted,
+        success=quality["actual_count"],
+        failed=len(quality["missing_symbols"]) + len(quality["abnormal_symbols"]),
+    )
+    return {"stage": "daily", "status": status, "rows": rows_upserted, "quality": quality}
+
+
+def run_minute5_stage(
+    trade_date: date,
+    *,
+    config: PipelineConfig,
+    ts_codes: list[str] | None = None,
+    baostock_fetcher: Callable[..., list[dict[str, Any]]] = fetch_baostock_minute5_rows,
+    upserter: Callable[[str, list[dict[str, Any]]], int] = upsert_minute5_bars,
+    qfq_deriver: Callable[[str, date], dict[str, int]] | None = None,
+    progress: Callable[[dict[str, Any]], None] | None = None,
+) -> dict[str, Any]:
+    skip, calendar_status = should_skip_for_holiday(
+        config.service, trade_date, force=config.force_non_trading_day
+    )
+    if skip:
+        return record_skipped_stage(
+            service=config.service,
+            trade_date=trade_date,
+            stage="minute5",
+            job_name="minute5_bar",
+            source="calendar",
+            reason=f"non_trading_day:{calendar_status}",
+        )
+    logger, log_path = setup_stage_logger(trade_date, "minute5")
+    started = datetime.now(ZoneInfo(config.timezone))
+    expected_ts_codes = ts_codes or load_minute5_expected_ts_codes(config.service, trade_date)
+    lookback_start = trade_date - timedelta(days=max(config.minute5_lookback_days - 1, 0))
+    rows_by_symbol: dict[str, list[dict[str, Any]]] = {}
+    source_codes = split_minute5_sources(expected_ts_codes)
+    failures_by_source: dict[str, dict[str, str]] = {source: {} for source in MINUTE5_SOURCES}
+    attempts_by_source: dict[str, dict[str, int]] = {source: {} for source in MINUTE5_SOURCES}
+    source_rows_by_symbol: dict[str, dict[str, list[dict[str, Any]]]] = {
+        source: {} for source in MINUTE5_SOURCES
+    }
+    source_fetchers = {source: baostock_fetcher for source in MINUTE5_SOURCES}
+    total_symbols = sum(len(codes) for codes in source_codes.values())
+
+    def emit_progress(event: str, completed: int, *, rows: int = 0) -> None:
+        if progress is None:
+            return
+        success = sum(len(source_rows_by_symbol[source]) for source in MINUTE5_SOURCES)
+        failed = sum(len(failures_by_source[source]) for source in MINUTE5_SOURCES)
+        progress(
+            {
+                "event": event,
+                "completed": completed,
+                "total": total_symbols,
+                "rows": rows,
+                "success": success,
+                "failed": failed,
+            }
+        )
+
+    emit_progress("minute5_started", 0)
+
+    for source in MINUTE5_SOURCES:
+        upsert_job(
+            service=config.service,
+            trade_date=trade_date,
+            job_name="minute5_bar",
+            stage="minute5",
+            source=source,
+            status="running",
+            started_at=started,
+        )
+
+    def _one(
+        source: str, ts_code: str
+    ) -> tuple[str, str, list[dict[str, Any]], int, str | None]:
+        rows, attempt_count, error = retry_call(
+            lambda: source_fetchers[source](
+                ts_code,
+                start_date=lookback_start,
+                end_date=trade_date,
+                timeout_seconds=config.request_timeout_seconds,
+            ),
+            max_retries=config.max_retries,
+        )
+        return source, ts_code, rows, attempt_count, error
+
+    def _run_source(source: str, codes: list[str]) -> None:
+        if not codes:
+            return
+        logger.info(
+            "minute5 source started source=%s symbols=%s workers=%s",
+            source,
+            len(codes),
+            1,
+        )
+        success_count = 0
+        for ts_code in codes:
+            source_name, ts_code, rows, attempt_count, error = _one(source, ts_code)
+            attempts_by_source[source_name][ts_code] = attempt_count
+            if error:
+                failures_by_source[source_name][ts_code] = error
+                record_failed_symbol(
+                    service=config.service,
+                    trade_date=trade_date,
+                    stage="minute5",
+                    dataset_name="minute5_bar",
+                    ts_code=ts_code,
+                    source=source_name,
+                    error_type=error.split(":", 1)[0],
+                    error_summary=error,
+                    attempt_count=attempt_count,
+                )
+            else:
+                source_rows_by_symbol[source_name][ts_code] = rows
+                rows_by_symbol.setdefault(ts_code, []).extend(rows)
+                success_count += 1
+            if config.minute5_symbol_sleep_seconds > 0:
+                time.sleep(config.minute5_symbol_sleep_seconds)
+            completed_count = len(attempts_by_source[source_name])
+            if completed_count % 50 == 0:
+                progress_line = (
+                    f"minute5|progress|source={source_name}|completed={completed_count}|"
+                    f"total={len(codes)}|success={success_count}|failed={len(failures_by_source[source_name])}"
+                )
+                print(progress_line, flush=True)
+                logger.info(progress_line)
+            completed_total = sum(len(attempts_by_source[item]) for item in MINUTE5_SOURCES)
+            if completed_total and (completed_total % 50 == 0 or completed_total == total_symbols):
+                fetched_rows = sum(len(rows) for rows in rows_by_symbol.values())
+                emit_progress("minute5_progress", completed_total, rows=fetched_rows)
+
+    for source in MINUTE5_SOURCES:
+        _run_source(source, source_codes[source])
+
+    all_rows = [row for rows in rows_by_symbol.values() for row in rows]
+    rows_upserted = upserter(config.service, all_rows)
+    qfq_deriver = qfq_deriver or derive_qfq_minute5_from_daily_factor
+    qfq_result = qfq_deriver(config.service, trade_date) if rows_upserted else {
+        "raw_rows": 0,
+        "inserted_rows": 0,
+    }
+    emit_progress("minute5_completed", total_symbols, rows=rows_upserted)
+    quality = inspect_minute5_quality(rows_by_symbol, expected_ts_codes, trade_date)
+    upsert_quality(service=config.service, trade_date=trade_date, dataset_name="minute5_bar", **quality)
+
+    finished = datetime.now(ZoneInfo(config.timezone))
+
+    def _source_status(source: str) -> tuple[str, dict[str, Any]]:
+        codes = source_codes[source]
+        if not codes:
+            return "skipped", inspect_minute5_quality({}, [], trade_date)
+        source_quality = inspect_minute5_quality(
+            source_rows_by_symbol[source], codes, trade_date
+        )
+        source_coverage = (
+            source_quality["actual_count"] / source_quality["expected_count"]
+            if source_quality["expected_count"]
+            else 1.0
+        )
+        has_rows = any(source_rows_by_symbol[source].values())
+        if not has_rows:
+            return "failed", source_quality
+        if failures_by_source[source] or source_coverage < 1.0:
+            return (
+                "partial_success"
+                if source_coverage >= config.minute5_min_coverage_ratio
+                else "failed"
+            ), source_quality
+        return "success", source_quality
+
+    for source in MINUTE5_SOURCES:
+        source_status, source_quality = _source_status(source)
+        source_rows = sum(
+            len(rows) for rows in source_rows_by_symbol[source].values()
+        )
+        source_failures = failures_by_source[source]
+        source_attempts = attempts_by_source[source]
+        upsert_job(
+            service=config.service,
+            trade_date=trade_date,
+            job_name="minute5_bar",
+            stage="minute5",
+            source=source,
+            status=source_status,
+            started_at=started,
+            finished_at=finished,
+            attempt_count=max(source_attempts.values(), default=0),
+            rows_inserted=source_rows,
+            rows_failed=len(source_failures),
+            missing_symbols_count=len(source_quality["missing_symbols"]),
+            error_summary="; ".join(
+                f"{code}:{err}" for code, err in list(source_failures.items())[:5]
+            )
+            or None,
+            error_detail_path=str(log_path) if source_failures else None,
+        )
+
+    failures = {
+        ts_code: error
+        for source_failures in failures_by_source.values()
+        for ts_code, error in source_failures.items()
+    }
+    coverage = quality["actual_count"] / quality["expected_count"] if quality["expected_count"] else 1.0
+    if not all_rows:
+        status = "failed"
+    elif failures or coverage < 1.0:
+        status = "partial_success" if coverage >= config.minute5_min_coverage_ratio else "failed"
+    else:
+        status = "success"
+    logger.info(
+        "minute5 stage finished status=%s rows=%s failures=%s coverage=%.4f baostock_sh_symbols=%s baostock_sz_symbols=%s",
+        status,
+        rows_upserted,
+        len(failures),
+        coverage,
+        len(source_codes["baostock_sh"]),
+        len(source_codes["baostock_sz"]),
+    )
+    return {
+        "stage": "minute5",
+        "status": status,
+        "rows": rows_upserted,
+        "qfq_rows": qfq_result["inserted_rows"],
+        "failed_symbols": sorted(failures),
+        "source_symbols": {source: len(codes) for source, codes in source_codes.items()},
+        "quality": quality,
+    }
+
+
+def run_retry_failed_stage(
+    trade_date: date,
+    *,
+    config: PipelineConfig,
+    fetcher: Callable[..., list[dict[str, Any]]] = fetch_akshare_minute5_rows,
+    upserter: Callable[[str, list[dict[str, Any]]], int] = upsert_minute5_bars,
+) -> dict[str, Any]:
+    missing_symbols = load_latest_minute5_missing_symbols(config.service, trade_date)
+    if not missing_symbols:
+        return {"stage": "retry_failed", "status": "skipped", "rows": 0, "failed_symbols": []}
+
+    rows_by_symbol: dict[str, list[dict[str, Any]]] = {}
+    failures: dict[str, str] = {}
+    attempts: dict[str, int] = {}
+    lookback_start = trade_date - timedelta(days=max(config.minute5_lookback_days - 1, 0))
+
+    def _fetch_with_source(source: str, ts_code: str) -> tuple[str, str, list[dict[str, Any]], int, str | None]:
+        source_fetcher = fetch_baostock_minute5_rows if source.startswith("baostock_") else fetcher
+        rows, attempt_count, error = retry_call(
+            lambda: source_fetcher(
+                ts_code,
+                start_date=lookback_start,
+                end_date=trade_date,
+                timeout_seconds=config.request_timeout_seconds,
+            ),
+            max_retries=config.max_retries,
+        )
+        return source, ts_code, rows, attempt_count, error
+
+    retry_plan = build_retry_failed_source_plan(missing_symbols, config=config)
+    for source, codes, workers in retry_plan:
+        if not codes:
+            continue
+        for ts_code in codes:
+            _source, ts_code, rows, attempt_count, error = _fetch_with_source(source, ts_code)
+            attempts[ts_code] = attempt_count
+            if error:
+                failures[ts_code] = error
+            else:
+                rows_by_symbol[ts_code] = rows
+
+    rows = [row for symbol_rows in rows_by_symbol.values() for row in symbol_rows]
+    rows_upserted = upserter(config.service, rows)
+    for ts_code in missing_symbols:
+        if ts_code not in failures and ts_code in rows_by_symbol:
+            for source in minute5_success_sources(ts_code):
+                mark_failed_symbol_success(
+                    config.service, trade_date, "minute5", "minute5_bar", ts_code, source
+                )
+    expected_ts_codes = load_minute5_expected_ts_codes(config.service, trade_date)
+    quality = inspect_minute5_quality_from_db(config.service, expected_ts_codes, trade_date)
+    upsert_quality(service=config.service, trade_date=trade_date, dataset_name="minute5_bar", **quality)
+    coverage = quality["actual_count"] / quality["expected_count"] if quality["expected_count"] else 1.0
+    status = (
+        "success"
+        if not quality["missing_symbols"] and not quality["abnormal_symbols"]
+        else "partial_success"
+        if rows_upserted and coverage >= config.minute5_min_coverage_ratio
+        else "failed"
+    )
+    now = datetime.now(ZoneInfo(config.timezone))
+    upsert_job(
+        service=config.service,
+        trade_date=trade_date,
+        job_name="minute5_bar",
+        stage="minute5",
+        source="fallback",
+        status=status,
+        started_at=now,
+        finished_at=now,
+        attempt_count=max(attempts.values(), default=0),
+        rows_inserted=rows_upserted,
+        rows_failed=len(failures),
+        missing_symbols_count=len(quality["missing_symbols"]),
+        error_summary="; ".join(f"{code}:{err}" for code, err in list(failures.items())[:5]) or None,
+    )
+    return {
+        "stage": "retry_failed",
+        "status": status,
+        "rows": rows_upserted,
+        "failed_symbols": sorted(failures),
+        "attempts": max(attempts.values(), default=0),
+    }
+
+
+def _sql_literal_type(column: str) -> str:
+    if column == "trade_date":
+        return "date"
+    if column in {"emotion_state", "risk_state", "style_signal_hint", "position_budget_hint"}:
+        return "text"
+    return "numeric"
+
+
+def _clean_market_emotion_value(value: Any) -> Any:
+    if value is None:
+        return None
+    if isinstance(value, float) and math.isnan(value):
+        return None
+    if hasattr(value, "item"):
+        value = value.item()
+    return value
+
+
+def ensure_market_emotion_state_daily_table(service: str = SETTINGS.research_service) -> None:
+    column_sql = ",\n        ".join(
+        f"{column} {_sql_literal_type(column)}"
+        for column in DAILY_OUTPUT_COLUMNS
+        if column != "trade_date"
+    )
+    sql = f"""
+    CREATE SCHEMA IF NOT EXISTS research;
+    CREATE TABLE IF NOT EXISTS research.market_emotion_state_daily (
+        trade_date date PRIMARY KEY,
+        {column_sql},
+        updated_at timestamptz NOT NULL DEFAULT now()
+    )
+    """
+    alter_sql = "\n".join(
+        f"ALTER TABLE research.market_emotion_state_daily ADD COLUMN IF NOT EXISTS {column} {_sql_literal_type(column)};"
+        for column in DAILY_OUTPUT_COLUMNS
+        if column != "trade_date"
+    )
+    alter_sql += "\nALTER TABLE research.market_emotion_state_daily ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();"
+    with connect(service) as conn:
+        execute(conn, sql)
+        execute(conn, alter_sql)
+
+
+def upsert_market_emotion_state_daily(
+    trade_date: str,
+    service: str = SETTINGS.research_service,
+) -> int:
+    from stock_research.dashboard.market_monitor import compute_market_emotion_row
+
+    ensure_market_emotion_state_daily_table(service)
+    row = compute_market_emotion_row(trade_date, service=service)
+    if not row:
+        return 0
+    payload = {
+        column: _clean_market_emotion_value(row.get(column))
+        for column in DAILY_OUTPUT_COLUMNS
+    }
+    payload["trade_date"] = trade_date
+    columns = list(DAILY_OUTPUT_COLUMNS)
+    placeholders = ", ".join(f"%({column})s" for column in columns)
+    update_sql = ",\n        ".join(
+        f"{column} = EXCLUDED.{column}"
+        for column in columns
+        if column != "trade_date"
+    )
+    sql = f"""
+    INSERT INTO research.market_emotion_state_daily (
+        {", ".join(columns)}
+    )
+    VALUES ({placeholders})
+    ON CONFLICT (trade_date) DO UPDATE SET
+        {update_sql},
+        updated_at = now()
+    """
+    with connect(service) as conn:
+        execute(conn, sql, payload)
+    return 1
+
+
+def check_market_monitor_sources(
+    trade_date: str,
+    service: str = SETTINGS.research_service,
+) -> dict[str, Any]:
+    ensure_market_emotion_state_daily_table(service)
+    sql = """
+    WITH emotion AS (
+        SELECT count(*)::int AS emotion_rows
+        FROM research.market_emotion_state_daily
+        WHERE trade_date = %s
+          AND total_amount IS NOT NULL
+          AND up_count IS NOT NULL
+          AND down_count IS NOT NULL
+          AND limit_up_count IS NOT NULL
+          AND limit_down_count IS NOT NULL
+    ),
+    indices AS (
+        SELECT count(DISTINCT index_id)::int AS index_rows
+        FROM market.index_daily_bar
+        WHERE trade_date = %s
+          AND index_id = ANY(%s)
+    ),
+    industries AS (
+        SELECT count(*)::int AS industry_rows
+        FROM market.industry_daily_bar
+        WHERE trade_date = %s
+          AND industry_system = 'csrc'
+    ),
+    fund_flow AS (
+        SELECT count(*)::int AS fund_flow_rows
+        FROM market.industry_daily_bar
+        WHERE trade_date = %s
+          AND industry_system = 'csrc'
+          AND amount IS NOT NULL
+          AND close IS NOT NULL
+          AND preclose IS NOT NULL
+          AND preclose <> 0
+    )
+    SELECT
+        emotion.emotion_rows,
+        indices.index_rows,
+        industries.industry_rows,
+        fund_flow.fund_flow_rows
+    FROM emotion, indices, industries, fund_flow
+    """
+    with connect(service) as conn:
+        rows = fetch_all(
+            conn,
+            sql,
+            [
+                trade_date,
+                trade_date,
+                list(MARKET_MONITOR_INDEX_IDS),
+                trade_date,
+                trade_date,
+            ],
+        )
+    row = dict(rows[0]) if rows else {}
+    result = {
+        "emotion_rows": int(row.get("emotion_rows") or 0),
+        "index_rows": int(row.get("index_rows") or 0),
+        "industry_rows": int(row.get("industry_rows") or 0),
+        "fund_flow_rows": int(row.get("fund_flow_rows") or 0),
+    }
+    result["status"] = (
+        "success"
+        if result["emotion_rows"] >= 1
+        and result["index_rows"] >= len(MARKET_MONITOR_INDEX_IDS)
+        and result["industry_rows"] > 0
+        and result["fund_flow_rows"] > 0
+        else "failed"
+    )
+    return result
+
+
+def run_market_monitor_stage(
+    trade_date: date,
+    *,
+    config: PipelineConfig,
+) -> dict[str, Any]:
+    skip, reason = should_skip_for_holiday(
+        config.service,
+        trade_date,
+        force=config.force_non_trading_day,
+    )
+    if skip:
+        return record_skipped_stage(
+            service=config.service,
+            trade_date=trade_date,
+            stage="market_monitor",
+            job_name="market_monitor_eod",
+            source="internal",
+            reason=f"trading_calendar={reason}",
+        )
+
+    logger, _log_path = setup_stage_logger(trade_date, "market_monitor")
+    started = datetime.now(ZoneInfo(config.timezone))
+    trade_date_str = trade_date.isoformat()
+    status = "success"
+    error_summary = None
+    rows_inserted = 0
+    rows_failed = 0
+    sources: dict[str, Any] = {}
+
+    try:
+        index_rows = int(sync_index_daily_bars(trade_date_str, trade_date_str, config.service) or 0)
+        build_asset_status_daily_for_service(
+            trade_date_str,
+            trade_date_str,
+            "qfq",
+            config.service,
+        )
+        build_industry_daily_bars_for_service(
+            trade_date_str,
+            trade_date_str,
+            "csrc",
+            "qfq",
+            config.service,
+        )
+        build_concept_daily_bars_for_service(
+            trade_date_str,
+            trade_date_str,
+            "ths",
+            "qfq",
+            config.service,
+        )
+        emotion_rows = int(upsert_market_emotion_state_daily(trade_date_str, config.service) or 0)
+        sources = check_market_monitor_sources(trade_date_str, config.service)
+        rows_inserted = (
+            index_rows
+            + emotion_rows
+            + int(sources.get("industry_rows") or 0)
+            + int(sources.get("fund_flow_rows") or 0)
+        )
+        if sources.get("status") != "success":
+            status = "failed"
+            rows_failed = 1
+            error_summary = (
+                "market_monitor_sources failed: "
+                f"emotion_rows={sources.get('emotion_rows', 0)} "
+                f"index_rows={sources.get('index_rows', 0)} "
+                f"industry_rows={sources.get('industry_rows', 0)} "
+                f"fund_flow_rows={sources.get('fund_flow_rows', 0)}"
+            )
+        logger.info("market monitor sources=%s rows=%s", sources, rows_inserted)
+    except Exception as exc:  # noqa: BLE001 - pipeline jobs must record failures.
+        status = "failed"
+        rows_failed = 1
+        error_summary = f"{type(exc).__name__}: {exc}"
+        logger.exception("market monitor stage failed")
+
+    finished = datetime.now(ZoneInfo(config.timezone))
+    upsert_job(
+        service=config.service,
+        trade_date=trade_date,
+        job_name="market_monitor_eod",
+        stage="market_monitor",
+        source="internal",
+        status=status,
+        started_at=started,
+        finished_at=finished,
+        attempt_count=1,
+        rows_inserted=rows_inserted,
+        rows_failed=rows_failed,
+        error_summary=error_summary,
+    )
+    return {
+        "stage": "market_monitor",
+        "status": status,
+        "rows": rows_inserted,
+        "sources": sources,
+    }
+
+
+@dataclass(frozen=True)
+class DependencyTask:
+    name: str
+    critical: bool
+    runner: Callable[[date], dict[str, Any]]
+
+
+def default_dependency_tasks(config: PipelineConfig) -> list[DependencyTask]:
+    def _factor_task(trade_date: date) -> dict[str, Any]:
+        from stock_research.daily_pipeline import run_daily_factor_pipeline
+
+        result = run_daily_factor_pipeline(
+            trade_date=format_trade_date(trade_date),
+            score_version="approved_v1",
+        )
+        rows = int(result.get("factor_rows", 0)) + int(result.get("score_rows", 0))
+        return {"status": "success", "rows": rows}
+
+    return [DependencyTask(name="daily_factor_pipeline", critical=True, runner=_factor_task)]
+
+
+def run_deps_stage(
+    trade_date: date,
+    *,
+    config: PipelineConfig,
+    tasks: list[DependencyTask] | None = None,
+) -> dict[str, Any]:
+    skip, calendar_status = should_skip_for_holiday(
+        config.service, trade_date, force=config.force_non_trading_day
+    )
+    if skip:
+        return record_skipped_stage(
+            service=config.service,
+            trade_date=trade_date,
+            stage="deps",
+            job_name="deps",
+            source="calendar",
+            reason=f"non_trading_day:{calendar_status}",
+        )
+    logger, _log_path = setup_stage_logger(trade_date, "deps")
+    task_list = tasks if tasks is not None else default_dependency_tasks(config)
+    failures, optional_failures = [], []
+    for task in task_list:
+        started = datetime.now(ZoneInfo(config.timezone))
+        status = "success"
+        error_summary = None
+        rows = 0
+        try:
+            result = task.runner(trade_date)
+            rows = int(result.get("rows", 0))
+            if result.get("status") in {"failed", "error"}:
+                raise RuntimeError(str(result))
+        except Exception as exc:  # noqa: BLE001 - dependency failure must be recorded, not swallowed.
+            status = "failed"
+            error_summary = f"{type(exc).__name__}: {exc}"
+            (failures if task.critical else optional_failures).append(task.name)
+            logger.exception("dependency task failed name=%s critical=%s", task.name, task.critical)
+        finished = datetime.now(ZoneInfo(config.timezone))
+        upsert_job(
+            service=config.service,
+            trade_date=trade_date,
+            job_name=task.name,
+            stage="deps",
+            source="internal",
+            status=status,
+            started_at=started,
+            finished_at=finished,
+            attempt_count=1,
+            rows_inserted=rows,
+            rows_failed=1 if status == "failed" else 0,
+            error_summary=error_summary,
+        )
+    stage_status = "failed" if failures else ("partial_success" if optional_failures else "success")
+    return {
+        "stage": "deps",
+        "status": stage_status,
+        "critical_failures": failures,
+        "optional_failures": optional_failures,
+    }
+
+
+def latest_ready_trade_date(service: str) -> date | None:
+    sql = """
+    SELECT trade_date
+    FROM ops.daily_pipeline_status
+    WHERE pipeline_status IN ('READY', 'DEGRADED_READY')
+    ORDER BY trade_date DESC
+    LIMIT 1
+    """
+    with connect(service) as conn:
+        rows = fetch_all(conn, sql)
+    return rows[0]["trade_date"] if rows else None
+
+
+def _stage_status_from_jobs(rows: list[dict[str, Any]], stage: str) -> str:
+    stage_rows = [row for row in rows if row["stage"] == stage]
+    if not stage_rows:
+        return "skipped"
+    if stage == "minute5":
+        fallback_statuses = {
+            row["status"] for row in stage_rows if row.get("source") == "fallback"
+        }
+        if "success" in fallback_statuses:
+            return "success"
+        if "partial_success" in fallback_statuses:
+            return "partial_success"
+    statuses = {row["status"] for row in stage_rows}
+    if "failed" in statuses:
+        return "failed"
+    if "partial_success" in statuses:
+        return "partial_success"
+    if statuses <= {"success", "skipped"}:
+        return "success"
+    return "running"
+
+
+def _load_latest_external_quality(service: str, trade_date: date) -> dict[str, dict[str, Any]]:
+    sql = """
+    SELECT DISTINCT ON (dataset_name)
+        dataset_name,
+        status,
+        expected_count,
+        actual_count,
+        jsonb_array_length(missing_symbols) AS missing_count,
+        jsonb_array_length(abnormal_symbols) AS abnormal_count
+    FROM ops.daily_pipeline_quality
+    WHERE trade_date = %s
+      AND dataset_name IN ('daily_bar', 'minute5_bar')
+    ORDER BY dataset_name, updated_at DESC
+    """
+    with connect(service) as conn:
+        rows = fetch_all(conn, sql, [trade_date])
+    return {str(row["dataset_name"]): row for row in rows if row.get("dataset_name")}
+
+
+def _quality_status(
+    fallback_status: str,
+    quality_row: dict[str, Any] | None,
+    *,
+    max_gap_ratio: float,
+) -> str:
+    if not quality_row:
+        return fallback_status
+    expected = int(quality_row.get("expected_count") or 0)
+    if expected <= 0:
+        return fallback_status
+    missing = int(quality_row.get("missing_count") or 0)
+    abnormal = int(quality_row.get("abnormal_count") or 0)
+    gap = missing + abnormal
+    if gap / expected > max_gap_ratio:
+        return "failed"
+    return "success" if gap == 0 else "partial_success"
+
+
+def finalize_pipeline_status(trade_date: date, *, config: PipelineConfig) -> dict[str, Any]:
+    calendar_status = trading_calendar_status(config.service, trade_date)
+    sql = """
+    SELECT job_name, stage, source, status, error_summary, missing_symbols_count, updated_at
+    FROM ops.daily_pipeline_job
+    WHERE trade_date = %s
+    ORDER BY stage, job_name, source
+    """
+    with connect(config.service) as conn:
+        rows = fetch_all(conn, sql, [trade_date])
+    quality_by_dataset = _load_latest_external_quality(config.service, trade_date)
+    daily_status = _quality_status(
+        _stage_status_from_jobs(rows, "daily"),
+        quality_by_dataset.get("daily_bar"),
+        max_gap_ratio=config.external_data_max_quality_gap_ratio,
+    )
+    minute5_status = _quality_status(
+        _stage_status_from_jobs(rows, "minute5"),
+        quality_by_dataset.get("minute5_bar"),
+        max_gap_ratio=config.external_data_max_quality_gap_ratio,
+    )
+    market_monitor_status = _stage_status_from_jobs(rows, "market_monitor")
+    deps_status = _stage_status_from_jobs(rows, "deps")
+    quality_success_stages = set()
+    if daily_status == "success" and quality_by_dataset.get("daily_bar"):
+        quality_success_stages.add("daily")
+    if minute5_status == "success" and quality_by_dataset.get("minute5_bar"):
+        quality_success_stages.add("minute5")
+    failed_jobs = [
+        {
+            "stage": row["stage"],
+            "job_name": row["job_name"],
+            "source": row["source"],
+            "status": row["status"],
+            "error_summary": row.get("error_summary"),
+        }
+        for row in rows
+        if row["status"] in {"failed", "partial_success"}
+        and row["stage"] not in quality_success_stages
+    ]
+    non_trading_day = calendar_status == "closed"
+    critical_ok = (
+        daily_status in {"success", "partial_success"}
+        and minute5_status in {"success", "partial_success"}
+        and market_monitor_status in {"success", "partial_success", "skipped"}
+        and deps_status in {"success", "partial_success", "skipped"}
+    )
+    if non_trading_day:
+        pipeline_status = "READY"
+    elif (
+        not critical_ok
+        or daily_status == "failed"
+        or minute5_status == "failed"
+        or market_monitor_status == "failed"
+    ):
+        pipeline_status = "NOT_READY"
+    elif daily_status == "partial_success" or minute5_status == "partial_success" or any(
+        row["status"] == "partial_success" for row in rows
+    ):
+        pipeline_status = "DEGRADED_READY"
+    else:
+        pipeline_status = "READY"
+    current_latest_ready = latest_ready_trade_date(config.service)
+    visible_trade_date = (
+        current_latest_ready
+        if non_trading_day
+        else trade_date
+        if pipeline_status in PIPELINE_READY_STATUSES
+        else current_latest_ready
+    )
+    warnings = []
+    if non_trading_day:
+        warnings.append("non_trading_day_skipped")
+    if pipeline_status == "NOT_READY":
+        warnings.append("using_previous_ready_trade_date" if visible_trade_date else "no_ready_trade_date")
+    if pipeline_status == "DEGRADED_READY":
+        warnings.append("optional_or_partial_data_failed")
+    payload = {
+        "trade_date": trade_date,
+        "pipeline_status": pipeline_status,
+        "daily_status": daily_status,
+        "minute5_status": minute5_status,
+        "market_monitor_status": market_monitor_status,
+        "deps_status": deps_status,
+        "latest_ready_trade_date": visible_trade_date,
+        "using_fallback_trade_date": pipeline_status == "NOT_READY" or non_trading_day,
+        "warnings": warnings,
+        "failed_jobs": failed_jobs,
+    }
+    sql_upsert = """
+    INSERT INTO ops.daily_pipeline_status (
+        trade_date, pipeline_status, daily_status, minute5_status, market_monitor_status, deps_status,
+        latest_ready_trade_date, using_fallback_trade_date, warnings, failed_jobs
+    )
+    VALUES (
+        %(trade_date)s, %(pipeline_status)s, %(daily_status)s, %(minute5_status)s,
+        %(market_monitor_status)s, %(deps_status)s, %(latest_ready_trade_date)s, %(using_fallback_trade_date)s,
+        %(warnings)s::jsonb, %(failed_jobs)s::jsonb
+    )
+    ON CONFLICT (trade_date) DO UPDATE SET
+        pipeline_status = EXCLUDED.pipeline_status,
+        daily_status = EXCLUDED.daily_status,
+        minute5_status = EXCLUDED.minute5_status,
+        market_monitor_status = EXCLUDED.market_monitor_status,
+        deps_status = EXCLUDED.deps_status,
+        latest_ready_trade_date = EXCLUDED.latest_ready_trade_date,
+        using_fallback_trade_date = EXCLUDED.using_fallback_trade_date,
+        warnings = EXCLUDED.warnings,
+        failed_jobs = EXCLUDED.failed_jobs,
+        updated_at = now()
+    """
+    db_payload = dict(payload)
+    db_payload["warnings"] = json.dumps(warnings, ensure_ascii=False)
+    db_payload["failed_jobs"] = json.dumps(failed_jobs, ensure_ascii=False, default=str)
+    with connect(config.service) as conn:
+        execute(conn, sql_upsert, db_payload)
+    return payload
+
+
+def load_data_status_for_dashboard(
+    service: str = SETTINGS.research_service, current_trade_date: date | None = None
+) -> dict[str, Any]:
+    sql = """
+    SELECT trade_date, pipeline_status, daily_status, minute5_status, market_monitor_status, deps_status,
+           latest_ready_trade_date, using_fallback_trade_date, warnings, failed_jobs, updated_at
+    FROM ops.daily_pipeline_status
+    ORDER BY trade_date DESC
+    LIMIT 1
+    """
+    with connect(service) as conn:
+        rows = fetch_all(conn, sql)
+    if not rows:
+        return {
+            "latest_ready_trade_date": None,
+            "current_trade_date": current_trade_date.isoformat() if current_trade_date else None,
+            "pipeline_status": "NOT_READY",
+            "daily_status": "skipped",
+            "minute5_status": "skipped",
+            "market_monitor_status": "skipped",
+            "deps_status": "skipped",
+            "failed_jobs": [],
+            "warnings": ["pipeline_status_not_initialized"],
+            "last_updated_at": None,
+        }
+    row = rows[0]
+    return {
+        "latest_ready_trade_date": row["latest_ready_trade_date"].isoformat()
+        if row["latest_ready_trade_date"]
+        else None,
+        "current_trade_date": current_trade_date.isoformat()
+        if current_trade_date
+        else row["trade_date"].isoformat(),
+        "pipeline_status": row["pipeline_status"],
+        "daily_status": row["daily_status"],
+        "minute5_status": row["minute5_status"],
+        "market_monitor_status": row.get("market_monitor_status") or "skipped",
+        "deps_status": row["deps_status"],
+        "failed_jobs": row["failed_jobs"] or [],
+        "warnings": row["warnings"] or [],
+        "last_updated_at": row["updated_at"].isoformat() if row.get("updated_at") else None,
+    }
+
+
+def resolve_strategy_trade_date(
+    requested_trade_date: str | date | None,
+    *,
+    service: str = SETTINGS.research_service,
+    require_ready: bool = False,
+) -> str:
+    requested = parse_trade_date(requested_trade_date) if requested_trade_date else None
+    if requested:
+        sql = "SELECT pipeline_status FROM ops.daily_pipeline_status WHERE trade_date = %s"
+        try:
+            with connect(service) as conn:
+                rows = fetch_all(conn, sql, [requested])
+        except Exception:  # noqa: BLE001 - keep legacy strategy calls usable before schema bootstrap.
+            return requested.isoformat()
+        if rows and rows[0]["pipeline_status"] in PIPELINE_READY_STATUSES:
+            return requested.isoformat()
+        if require_ready:
+            raise RuntimeError(f"trade_date {requested.isoformat()} is not pipeline ready")
+    latest = latest_ready_trade_date(service)
+    if latest is None:
+        if requested:
+            return requested.isoformat()
+        raise RuntimeError("no pipeline ready trade date is available")
+    return latest.isoformat()
+
+
+def run_pipeline_stage(
+    stage: str,
+    trade_date: date,
+    config: PipelineConfig,
+    *,
+    progress: Callable[[dict[str, Any]], None] | None = None,
+) -> dict[str, Any]:
+    apply_daily_close_pipeline_schema(config.service)
+    if stage == "daily":
+        return run_daily_stage(trade_date, config=config, progress=progress)
+    if stage == "minute5":
+        return run_minute5_stage(trade_date, config=config, progress=progress)
+    if stage == "deps":
+        return run_deps_stage(trade_date, config=config)
+    if stage == "market_monitor":
+        return run_market_monitor_stage(trade_date, config=config)
+    if stage == "retry_failed":
+        return run_retry_failed_stage(trade_date, config=config)
+    if stage in {"health", "finalize"}:
+        return finalize_pipeline_status(trade_date, config=config)
+    if stage == "status":
+        return load_data_status_for_dashboard(config.service, trade_date)
+    if stage == "all":
+        results = {
+            "daily": run_daily_stage(trade_date, config=config, progress=progress),
+            "minute5": run_minute5_stage(trade_date, config=config, progress=progress),
+            "market_monitor": run_market_monitor_stage(trade_date, config=config),
+            "deps": run_deps_stage(trade_date, config=config),
+        }
+        results["health"] = finalize_pipeline_status(trade_date, config=config)
+        return results
+    raise ValueError(f"unsupported stage: {stage}")
+
+
+def compact_cron_result(result: Any) -> Any:
+    if isinstance(result, dict):
+        compact: dict[str, Any] = {}
+        for key, value in result.items():
+            if key == "missing_symbols":
+                compact["missing_count"] = len(value or [])
+                continue
+            if key == "abnormal_symbols":
+                compact["abnormal_count"] = len(value or [])
+                continue
+            if key == "failed_symbols":
+                compact["failed_count"] = len(value or [])
+                continue
+            if key.endswith("_symbols") and isinstance(value, list):
+                compact[f"{key[:-8]}_count"] = len(value)
+                continue
+            compact[key] = compact_cron_result(value)
+        return compact
+    if isinstance(result, list):
+        return [compact_cron_result(item) for item in result]
+    return result
+
+
+def build_arg_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="python -m scripts.daily_pipeline")
+    parser.add_argument("--date", help="Trade date in YYYYMMDD or YYYY-MM-DD")
+    parser.add_argument(
+        "--stage",
+        choices=[
+            "all",
+            "daily",
+            "minute5",
+            "deps",
+            "market_monitor",
+            "health",
+            "retry_failed",
+            "status",
+        ],
+        default="all",
+    )
+    parser.add_argument("--apply-schema", action="store_true", default=True)
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Run even when market.trading_calendar marks the date as closed.",
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> None:
+    from stock_research.cli_progress import ProgressRenderer
+
+    args = build_arg_parser().parse_args(argv)
+    config = PipelineConfig.from_env()
+    if args.force:
+        config = PipelineConfig(**{**config.__dict__, "force_non_trading_day": True})
+    trade_date = parse_trade_date(args.date, config.timezone)
+    result = run_pipeline_stage(
+        args.stage,
+        trade_date,
+        config,
+        progress=_daily_pipeline_progress_renderer(args.stage, ProgressRenderer),
+    )
+    if os.getenv("DAILY_PIPELINE_CRON_OUTPUT") == "compact":
+        result = compact_cron_result(result)
+    print(json.dumps(result, ensure_ascii=False, default=str, indent=2))
+
+
+def _daily_pipeline_progress_renderer(stage: str, renderer_factory: Callable[..., Any]) -> Callable[[dict[str, Any]], None] | None:
+    if stage == "daily":
+        return renderer_factory("daily_bar")
+    if stage == "minute5":
+        return renderer_factory("minute5_bar")
+    if stage == "all":
+        return renderer_factory("daily_close_pipeline")
+    return None
+
+
+if __name__ == "__main__":
+    main()

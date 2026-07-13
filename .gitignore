@@ -15,16 +15,23 @@ htmlcov/
 .venv/
 venv/
 env/
+!deploy/env/
 
 # Local generated artifacts
+*.log
 /build/
 /dist/
 /cache/
+/data/manual/
+/data/*.db
 /logs/
 /reports/
 /output/
 /outputs/
+/artifacts/theme_decomposition/ingestion_runs/
 /.worktrees/
+/.superpowers/
+/.codex/
 /dashboard/node_modules/
 /dashboard/dist/
 /dashboard/test-results/
@@ -33,7 +40,9 @@ env/
 # Local environment and secrets
 .env
 .env.*
+!deploy/env/.env.dashboard.example
 *.local
+config/local_secrets.json
 
 # Editor state
 .idea/

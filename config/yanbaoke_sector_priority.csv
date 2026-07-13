@@ -1,0 +1,15 @@
+sector_name,match_keywords,sector_priority,sector_quota_bucket,pilot_quota
+AI算力,AI算力|算力|服务器|光模块|液冷|数据中心,P0,p0_growth_tech_healthcare,1200
+半导体,半导体|先进封装|芯片|晶圆|国产替代,P0,p0_growth_tech_healthcare,1200
+机器人,机器人|减速器|伺服|人形机器人,P0,p0_growth_tech_healthcare,1200
+低空经济,低空经济|eVTOL|无人机|通航,P0,p0_growth_tech_healthcare,1200
+智能驾驶,智能驾驶|自动驾驶|车路云|激光雷达,P0,p0_growth_tech_healthcare,1200
+创新药,创新药|医疗器械|CXO|医药研发,P0,p0_growth_tech_healthcare,1200
+电力设备新能源,电力设备|新能源|储能|电网|光伏|风电,P1,p1_policy_prosperity_export_consumption,900
+军工卫星,军工|卫星|商业航天|北斗,P1,p1_policy_prosperity_export_consumption,900
+出海链,出海|跨境电商|工程机械|家电|海外收入,P1,p1_policy_prosperity_export_consumption,900
+消费复苏,消费复苏|食品饮料|旅游|酒店|医美,P1,p1_policy_prosperity_export_consumption,900
+银行,银行|保险|券商|地产|房地产,P2,p2_finance_real_estate_cycle_macro,500
+周期资源,煤炭|有色|化工|钢铁|资源品,P2,p2_finance_real_estate_cycle_macro,500
+宏观策略,宏观|策略|固收|海外配置|资产配置,P2,cross_sector_macro_theme,300
+普通长尾,短评|晨会|日报|普通点评,P3,p3_long_tail,0

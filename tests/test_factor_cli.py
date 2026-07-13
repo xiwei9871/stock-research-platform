@@ -890,7 +890,7 @@ def test_cli_accepts_minute_backfill_watchdog_command():
             "--max-jobs",
             "200",
             "--workers",
-            "3",
+            "1",
             "--stale-after-minutes",
             "45",
             "--run-timeout-seconds",
@@ -913,7 +913,7 @@ def test_cli_accepts_minute_backfill_watchdog_command():
     assert args.freq == "5min"
     assert args.adjust_types == ["raw", "qfq"]
     assert args.max_jobs == 200
-    assert args.workers == 3
+    assert args.workers == 1
     assert args.stale_after_minutes == 45
     assert args.run_timeout_seconds == 1200
     assert args.output_dir == "outputs/watchdog"
@@ -940,7 +940,7 @@ def test_cli_accepts_generic_backfill_watchdog_command_for_minute_adapter():
             "--max-jobs",
             "200",
             "--workers",
-            "3",
+            "1",
             "--stale-after-minutes",
             "45",
             "--run-timeout-seconds",
@@ -964,7 +964,7 @@ def test_cli_accepts_generic_backfill_watchdog_command_for_minute_adapter():
     assert args.freq == "5min"
     assert args.adjust_types == ["raw", "qfq"]
     assert args.max_jobs == 200
-    assert args.workers == 3
+    assert args.workers == 1
     assert args.stale_after_minutes == 45
     assert args.run_timeout_seconds == 1200
     assert args.output_dir == "outputs/watchdog"
@@ -1301,6 +1301,26 @@ def test_cli_accepts_daily_research_report_command():
     assert args.index_id == "CSI300"
     assert args.industry_system == "csrc"
     assert args.reports_dir == "/tmp/reports"
+    assert args.apply_report_run_schema is True
+    assert args.record_run is True
+
+
+def test_cli_accepts_run_daily_review_v1_command():
+    args = build_parser().parse_args(
+        [
+            "run-daily-review-v1",
+            "--trade-date",
+            "2026-06-20",
+            "--output-root",
+            "/tmp/daily_review",
+            "--apply-report-run-schema",
+            "--record-run",
+        ]
+    )
+
+    assert args.command == "run-daily-review-v1"
+    assert args.trade_date == "2026-06-20"
+    assert args.output_root == "/tmp/daily_review"
     assert args.apply_report_run_schema is True
     assert args.record_run is True
 
@@ -5308,6 +5328,66 @@ def test_cli_run_stock_daily_data_pipeline_dispatches(monkeypatch, capsys):
     ]
 
 
+def test_cli_daily_pipeline_stage_daily_wires_progress_renderer(monkeypatch, capsys):
+    captured = {}
+
+    def fake_run_daily_close_pipeline_stage(stage, trade_date, config, **kwargs):
+        captured["stage"] = stage
+        captured["trade_date"] = trade_date
+        captured["kwargs"] = kwargs
+        kwargs["progress"](
+            {
+                "event": "daily_tushare_raw_completed",
+                "completed": 1,
+                "total": 5,
+                "rows": 5191,
+                "success": 0,
+                "failed": 0,
+            }
+        )
+        return {"stage": "daily", "status": "success", "rows": 5191}
+
+    monkeypatch.setattr(cli, "run_daily_close_pipeline_stage", fake_run_daily_close_pipeline_stage)
+
+    cli.main_for_args(["daily-pipeline", "--date", "2026-07-06", "--stage", "daily", "--force"])
+
+    output = capsys.readouterr()
+    assert captured["stage"] == "daily"
+    assert callable(captured["kwargs"]["progress"])
+    assert '"stage": "daily"' in output.out
+    assert "progress|daily_bar|event|daily_tushare_raw_completed|completed|1|total|5" in output.err
+
+
+def test_cli_run_stock_daily_data_pipeline_auto_uses_latest_complete_source_trade_date(
+    monkeypatch, capsys
+):
+    calls = []
+
+    def fake_run_stock_daily_data_pipeline(**kwargs):
+        calls.append(kwargs)
+        return {"status": "success"}
+
+    monkeypatch.setattr(cli, "latest_complete_source_trade_date", lambda: "2026-06-15")
+    monkeypatch.setattr(cli, "run_stock_daily_data_pipeline", fake_run_stock_daily_data_pipeline)
+
+    cli.main_for_args(
+        [
+            "run-stock-daily-data-pipeline",
+            "--trade-date",
+            "auto",
+            "--output-dir",
+            "outputs/daily/auto",
+            "--no-feishu",
+        ]
+    )
+
+    assert calls[0]["trade_date"] == "2026-06-15"
+    assert capsys.readouterr().out.splitlines() == [
+        "stock_daily_data_pipeline|status|success",
+        "stock_daily_data_pipeline|summary|outputs/daily/auto/run_summary.json",
+    ]
+
+
 def test_cli_run_stock_daily_data_pipeline_exits_nonzero_on_partial_failed(
     monkeypatch, capsys
 ):
@@ -5741,6 +5821,62 @@ def test_daily_research_report_cli_prints_report_paths(monkeypatch, capsys, tmp_
         f"daily_research_report|sector_strength|{tmp_path / 'sector.md'}",
         f"daily_research_report|risk_alerts|{tmp_path / 'risk.md'}",
         f"daily_research_report|position_review|{tmp_path / 'positions.md'}",
+    ]
+
+
+def test_run_daily_review_v1_main_cli_alias_forwards_args_and_prints_report_paths(
+    monkeypatch, capsys, tmp_path
+):
+    import sys
+
+    import stock_research.cli as cli
+
+    calls = []
+    monkeypatch.setattr(
+        cli,
+        "run_daily_review_report",
+        lambda **kwargs: calls.append(kwargs)
+        or {
+            "report_paths": {
+                "json_path": tmp_path / "daily_review.json",
+                "markdown_path": tmp_path / "daily_review.md",
+                "manifest_path": tmp_path / "manifest.json",
+                "evidence_paths": {
+                    "market_state": tmp_path / "evidence" / "market_state.json",
+                    "lhb_review": tmp_path / "evidence" / "lhb_review.json",
+                },
+            }
+        },
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "stock-research",
+            "run-daily-review-v1",
+            "--trade-date",
+            "2026-06-20",
+            "--apply-report-run-schema",
+            "--record-run",
+        ],
+    )
+
+    cli.main()
+
+    assert calls == [
+        {
+            "trade_date": "2026-06-20",
+            "output_root": "/Users/xiwei/stock_research/reports/daily_review",
+            "apply_report_run_schema_first": True,
+            "record_run": True,
+        }
+    ]
+    assert capsys.readouterr().out.splitlines() == [
+        f"daily_review_v1|json_path|{tmp_path / 'daily_review.json'}",
+        f"daily_review_v1|markdown_path|{tmp_path / 'daily_review.md'}",
+        f"daily_review_v1|manifest_path|{tmp_path / 'manifest.json'}",
+        f"daily_review_v1|evidence_paths.market_state|{tmp_path / 'evidence' / 'market_state.json'}",
+        f"daily_review_v1|evidence_paths.lhb_review|{tmp_path / 'evidence' / 'lhb_review.json'}",
     ]
 
 
@@ -6968,6 +7104,43 @@ def test_seed_trading_calendar_cli_prints_count(monkeypatch, capsys):
     assert capsys.readouterr().out.strip() == "trading_calendar_seeded|rows|44"
 
 
+def test_sync_tushare_trading_calendar_cli_prints_count(monkeypatch, capsys):
+    import sys
+
+    import stock_research.cli as cli
+
+    calls = []
+    monkeypatch.setattr(
+        cli,
+        "sync_trading_calendar_range_from_tushare",
+        lambda **kwargs: calls.append(kwargs) or 180,
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "stock-research",
+            "sync-tushare-trading-calendar",
+            "--start-date",
+            "2026-06-19",
+            "--end-date",
+            "2026-09-17",
+            "--exchanges",
+            "SH,SZ",
+            "--source-version",
+            "tushare_trade_cal_v1",
+            "--service",
+            "test",
+        ],
+    )
+
+    cli.main()
+
+    assert calls[0]["service"] == "test"
+    assert calls[0]["exchanges"] == ("SH", "SZ")
+    assert capsys.readouterr().out.strip() == "tushare_trading_calendar_synced|rows|180"
+
+
 def test_sync_asset_lifecycle_cli_prints_count(monkeypatch, capsys):
     import sys
 
@@ -7104,4 +7277,107 @@ def test_free_enrichment_backfill_cli_dispatches_and_prints_artifacts(monkeypatc
         "free_enrichment_backfill|coverage|outputs/free/dataset_coverage.csv",
         "free_enrichment_backfill|failures|outputs/free/dataset_failures.csv",
         "free_enrichment_backfill|datasets|2",
+    ]
+
+
+def test_cli_accepts_yanbaoke_report_backfill_plan_command():
+    args = build_parser().parse_args(
+        [
+            "yanbaoke-report-backfill-plan",
+            "--candidate-path",
+            "data/candidates.csv",
+            "--existing-coverage-path",
+            "data/existing.csv",
+            "--start-date",
+            "2025-01-01",
+            "--end-date",
+            "2026-06-12",
+            "--output-dir",
+            "outputs/yanbaoke",
+        ]
+    )
+
+    assert args.command == "yanbaoke-report-backfill-plan"
+    assert args.candidate_path == "data/candidates.csv"
+    assert args.existing_coverage_path == "data/existing.csv"
+    assert args.start_date == "2025-01-01"
+    assert args.end_date == "2026-06-12"
+    assert args.output_dir == "outputs/yanbaoke"
+
+
+def test_cli_dispatches_yanbaoke_report_backfill_plan(monkeypatch, tmp_path, capsys):
+    candidate_path = tmp_path / "candidates.csv"
+    existing_coverage_path = tmp_path / "existing.csv"
+    pd.DataFrame(
+        [
+            {"asset_id": "1", "report_date": "2026-01-31"},
+            {"asset_id": "2", "report_date": "2026-02-28"},
+        ]
+    ).to_csv(candidate_path, index=False)
+    pd.DataFrame([{"asset_id": "1", "report_date": "2026-01-31"}]).to_csv(
+        existing_coverage_path,
+        index=False,
+    )
+
+    calls = []
+
+    def fake_build_yanbaoke_inventory_plan(**kwargs):
+        calls.append(kwargs)
+        assert str(kwargs["candidates"]["asset_id"].dtype) == "string"
+        assert str(kwargs["existing_coverage"]["asset_id"].dtype) == "string"
+        return {
+            "paths": {
+                "candidate_reports": "outputs/yanbaoke/candidate_reports.csv",
+                "existing_report_coverage": "outputs/yanbaoke/existing_report_coverage.csv",
+                "gap_matrix": "outputs/yanbaoke/gap_matrix.csv",
+                "sector_gap_matrix": "outputs/yanbaoke/sector_gap_matrix.csv",
+                "asset_gap_matrix": "outputs/yanbaoke/asset_gap_matrix.csv",
+                "priority_queue": "outputs/yanbaoke/priority_queue.csv",
+                "pilot_queue": "outputs/yanbaoke/pilot_queue.csv",
+                "report": "outputs/yanbaoke/report.md",
+            },
+            "candidates": pd.DataFrame([{"asset_id": "1"}, {"asset_id": "2"}]),
+            "pilot_queue": pd.DataFrame([{"asset_id": "1"}]),
+        }
+
+    monkeypatch.setattr(cli, "build_yanbaoke_inventory_plan", fake_build_yanbaoke_inventory_plan)
+
+    cli.main_for_args(
+        [
+            "yanbaoke-report-backfill-plan",
+            "--candidate-path",
+            str(candidate_path),
+            "--existing-coverage-path",
+            str(existing_coverage_path),
+            "--start-date",
+            "2025-01-01",
+            "--end-date",
+            "2026-06-12",
+            "--output-dir",
+            "outputs/yanbaoke",
+        ]
+    )
+
+    assert len(calls) == 1
+    assert calls[0]["start_date"] == "2025-01-01"
+    assert calls[0]["end_date"] == "2026-06-12"
+    assert calls[0]["output_dir"] == "outputs/yanbaoke"
+    assert calls[0]["candidates"].to_dict("records") == [
+        {"asset_id": "1", "report_date": "2026-01-31"},
+        {"asset_id": "2", "report_date": "2026-02-28"},
+    ]
+    assert calls[0]["existing_coverage"].to_dict("records") == [
+        {"asset_id": "1", "report_date": "2026-01-31"}
+    ]
+    assert capsys.readouterr().out.strip().splitlines() == [
+        "yanbaoke_report_backfill_plan|candidate_reports|outputs/yanbaoke/candidate_reports.csv",
+        "yanbaoke_report_backfill_plan|existing_report_coverage|outputs/yanbaoke/existing_report_coverage.csv",
+        "yanbaoke_report_backfill_plan|gap_matrix|outputs/yanbaoke/gap_matrix.csv",
+        "yanbaoke_report_backfill_plan|sector_gap_matrix|outputs/yanbaoke/sector_gap_matrix.csv",
+        "yanbaoke_report_backfill_plan|asset_gap_matrix|outputs/yanbaoke/asset_gap_matrix.csv",
+        "yanbaoke_report_backfill_plan|priority_queue|outputs/yanbaoke/priority_queue.csv",
+        "yanbaoke_report_backfill_plan|pilot_queue|outputs/yanbaoke/pilot_queue.csv",
+        "yanbaoke_report_backfill_plan|report|outputs/yanbaoke/report.md",
+        "yanbaoke_report_backfill_plan|candidate_rows|2",
+        "yanbaoke_report_backfill_plan|pilot_rows|1",
     ]

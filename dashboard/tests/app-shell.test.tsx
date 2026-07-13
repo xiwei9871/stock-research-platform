@@ -2,18 +2,26 @@ import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/App';
+import { AppShell } from '../src/components/AppShell';
 import { ShadowAnalyticsReviewPanel } from '../src/components/ShadowAnalyticsReviewPanel';
 import { ShadowReviewDecisionsPanel } from '../src/components/ShadowReviewDecisionsPanel';
 import { ShadowFollowUpQueuePanel } from '../src/components/ShadowFollowUpQueuePanel';
 import { ShadowFollowUpResolutionPanel } from '../src/components/ShadowFollowUpResolutionPanel';
 import { ShadowOutcomeAnalyticsPanel } from '../src/components/ShadowOutcomeAnalyticsPanel';
+import { ShadowOutcomesPanel } from '../src/components/ShadowOutcomesPanel';
+import type { StockEntryContext } from '../src/components/StockWorkspace';
 import type {
   BarPoint,
+  AssetProfile,
   DashboardOverview,
   DecisionEventRow,
   DecisionOutcomeRow,
   ExperimentProposalRow,
   ExperimentReplayRow,
+  MarketAnomalyContextPayload,
+  MarketMonitorPayload,
+  GlobalSearchResponse,
+  GlobalSearchResult,
   OutcomeAnalyticsRow,
   ScoreRow,
   ShadowAnalyticsReviewRow,
@@ -23,11 +31,21 @@ import type {
   ShadowOutcomeAnalyticsRow,
   ShadowOutcomeRow,
   ShadowWatchlistRow,
+  StockMarketContextHeatmapPayload,
   WatchlistSignalRow
 } from '../src/api/types';
 
 const apiMocks = vi.hoisted(() => ({
+  fetchCurrentUser: vi.fn(),
+  loginDashboardUser: vi.fn(),
+  logoutDashboardUser: vi.fn(),
+  fetchPlatformReadiness: vi.fn(),
+  fetchPlatformSummary: vi.fn(),
+  fetchStrategyScoreAudit: vi.fn(),
+  fetchStrategyCatalog: vi.fn(),
   fetchOverview: vi.fn(),
+  fetchAssetProfile: vi.fn(),
+  fetchAssetNews: vi.fn(),
   fetchDailyBars: vi.fn(),
   fetchAssetScore: vi.fn(),
   fetchAssetSignals: vi.fn(),
@@ -36,13 +54,47 @@ const apiMocks = vi.hoisted(() => ({
   fetchExperimentProposals: vi.fn(),
   fetchExperimentReplay: vi.fn(),
   fetchOutcomeAnalytics: vi.fn(),
+  fetchPublicNews: vi.fn(),
+  fetchPublicNewsStatus: vi.fn(),
+  refreshPublicNews: vi.fn(),
+  fetchGlobalSearch: vi.fn(),
+  searchAssets: vi.fn(),
   fetchShadowAnalyticsReview: vi.fn(),
   fetchShadowFollowUpQueue: vi.fn(),
   fetchShadowFollowUpResolution: vi.fn(),
   fetchShadowReviewDecisions: vi.fn(),
   fetchShadowOutcomeAnalytics: vi.fn(),
   fetchShadowOutcomes: vi.fn(),
-  fetchShadowWatchlist: vi.fn()
+  fetchShadowWatchlist: vi.fn(),
+  fetchWatchlistSignals: vi.fn(),
+  fetchFactorLibrary: vi.fn(),
+  fetchFactorScorePreview: vi.fn(),
+  fetchMarketMonitorEod: vi.fn(),
+  fetchMarketAnomalyContext: vi.fn(),
+  fetchMarketOverview: vi.fn(),
+  fetchSectorHeatmap: vi.fn(),
+  fetchSectorFundFlow: vi.fn(),
+  fetchSectorDetail: vi.fn(),
+  fetchResearchReportSummary: vi.fn(),
+  fetchResearchReports: vi.fn(),
+  fetchResearchReportDocument: vi.fn(),
+  fetchAssetResearchReports: vi.fn(),
+  fetchStockMarketContextHeatmap: vi.fn(),
+  fetchResearchCases: vi.fn(),
+  fetchResearchCaseDetail: vi.fn(),
+  fetchResearchQueueHealth: vi.fn(),
+  fetchResearchPublishGate: vi.fn(),
+  fetchResearchPublicationPreview: vi.fn(),
+  fetchResearchPublicationSnapshots: vi.fn(),
+  fetchResearchExternalDeliveryPlan: vi.fn(),
+  fetchResearchExternalDeliveryAttempts: vi.fn(),
+  fetchResearchEvidence: vi.fn(),
+  fetchEvidenceDigest: vi.fn(),
+  fetchReviewQueue: vi.fn(),
+  fetchStrategyValidationRuns: vi.fn(),
+  fetchStrategyValidationReplay: vi.fn(),
+  fetchBacktestStrategies: vi.fn(),
+  runBacktest: vi.fn()
 }));
 
 vi.mock('../src/api/client', () => apiMocks);
@@ -50,16 +102,6 @@ vi.mock('../src/api/client', () => apiMocks);
 vi.mock('../src/charts/AssetChart', () => ({
   AssetChart: ({ bars }: { bars: unknown[] }) => <div data-testid="asset-chart">{bars.length} bars</div>
 }));
-
-function createDeferred<T>() {
-  let resolve!: (value: T) => void;
-  let reject!: (reason?: unknown) => void;
-  const promise = new Promise<T>((promiseResolve, promiseReject) => {
-    resolve = promiseResolve;
-    reject = promiseReject;
-  });
-  return { promise, resolve, reject };
-}
 
 function makeOverview(overrides: Partial<DashboardOverview> = {}): DashboardOverview {
   return {
@@ -145,6 +187,328 @@ function makeBars(count: number): BarPoint[] {
     volume: 100,
     amount: 1000
   }));
+}
+
+function makeAssetProfile(assetId = 'CN:SH:600519'): AssetProfile {
+  return {
+    asset_id: assetId,
+    canonical_asset_id: assetId,
+    asset: {
+      asset_id: assetId,
+      symbol: '600519',
+      name: '贵州茅台',
+      exchange: 'SH',
+      board: null,
+      is_active: true
+    },
+    bars: makeBars(1),
+    score: makeScore(assetId),
+    signals: [],
+    decisions: [],
+    outcomes: [],
+    factor_values: [],
+    coverage: {}
+  };
+}
+
+function makeGlobalSearchResult(overrides: Partial<GlobalSearchResult> = {}): GlobalSearchResult {
+  return {
+    type: 'asset',
+    id: 'CN:SH:600519',
+    title: '贵州茅台',
+    subtitle: '600519.SH',
+    metadata: {},
+    target: { workspace: 'stock', asset_id: 'CN:SH:600519' },
+    match_reason: 'Exact code match',
+    match_fields: ['symbol'],
+    ...overrides
+  };
+}
+
+function makeGlobalSearchPayload(result: GlobalSearchResult, query = '茅台'): GlobalSearchResponse {
+  return {
+    query,
+    groups: [{ key: 'test', label: 'Results', items: [result] }],
+    warnings: []
+  };
+}
+
+const marketEmotionFixture = {
+  summary: {
+    score: 73.6,
+    state: 'hot',
+    risk_state: 'medium',
+    style_signal_hint: 'growth_favorable',
+    position_budget_hint: 'reduced',
+    status: 'available'
+  },
+  components: [
+    { key: 'breadth', label: '涨跌家数', score: 68.2 },
+    { key: 'limit', label: '涨停表现', score: 75.4 },
+    { key: 'relay', label: '连板接力', score: 71.1 },
+    { key: 'feedback', label: '赚钱效应', score: 66.8 },
+    { key: 'liquidity', label: '市场量能', score: 82.0 }
+  ],
+  breadth: {
+    traded_count: 5207,
+    up_count: 3610,
+    down_count: 1492,
+    strong_up_count: 269,
+    strong_down_count: 55,
+    status: 'available'
+  },
+  liquidity: {
+    total_amount: 1280000000000,
+    amount_ratio_5_20: 1.18,
+    status: 'available'
+  },
+  limit_performance: {
+    limit_up_count: 90,
+    limit_down_count: 10,
+    broken_limit_up_count: 55,
+    broken_limit_up_rate: 0.3793,
+    first_board_count: 58,
+    second_board_count: 21,
+    third_board_plus_count: 11,
+    high_board_height: 6,
+    status: 'available'
+  },
+  profit_effect: {
+    limit_up_success_rate: 0.7361,
+    limit_up_profit_rate: 0.026,
+    limit_up_limit_down_rate: 0.026,
+    relay_profit_rate: 0.018,
+    relay_success_rate: 0.615,
+    relay_continue_rate: 0.312,
+    broken_profit_rate: 0.007,
+    broken_success_rate: 0.564,
+    broken_limit_down_rate: 0.073,
+    status: 'available'
+  },
+  drawdown_pressure: {
+    strong_down_count: 55,
+    limit_down_count: 10,
+    broken_limit_up_rate: 0.3793,
+    yesterday_limit_up_limit_down_rate: 0.026,
+    status: 'available'
+  },
+  weight_performance: { status: 'pending_source' }
+};
+
+function makeMarketOverviewResponse(overrides: Record<string, unknown> = {}) {
+  return {
+    trade_date: '2026-06-10',
+    updated_at: '2026-06-10 15:10',
+    source: 'api',
+    data_status: 'completed',
+    warnings: [],
+    indices: [
+      {
+        code: '000001',
+        name: '上证指数',
+        close: 3168.44,
+        change_pct: 0.0087
+      }
+    ],
+    total_amount: 1526000000000,
+    up_count: 3612,
+    down_count: 1491,
+    limit_up_count: 90,
+    limit_down_count: 10,
+    ...overrides
+  };
+}
+
+function makeSectorHeatmapResponse(sectorType: 'industry' | 'concept', tradeDate = '2026-06-10') {
+  return {
+    trade_date: tradeDate,
+    updated_at: `${tradeDate} 15:10`,
+    source: 'api',
+    data_status: 'completed',
+    warnings: [],
+    items: [
+      {
+        sector_id: sectorType === 'concept' ? 'concept-ai-compute' : 'industry-semiconductor',
+        sector_name: sectorType === 'concept' ? 'AI算力' : '半导体',
+        sector_type: sectorType,
+        change_pct: sectorType === 'concept' ? 0.0432 : 0.0321,
+        amount: sectorType === 'concept' ? 198400000000 : 145800000000,
+        up_count: sectorType === 'concept' ? 128 : 112,
+        down_count: sectorType === 'concept' ? 22 : 18,
+        main_net_inflow: sectorType === 'concept' ? 32200000000 : 24800000000,
+        stock_count: sectorType === 'concept' ? 150 : 130
+      }
+    ]
+  };
+}
+
+function makeSectorFundFlowResponse(sectorType: 'industry' | 'concept', tradeDate = '2026-06-10') {
+  const item = makeSectorHeatmapResponse(sectorType, tradeDate).items[0];
+  return {
+    trade_date: tradeDate,
+    updated_at: `${tradeDate} 15:10`,
+    source: 'api',
+    data_status: 'completed',
+    warnings: [],
+    inflow: [
+      {
+        rank: 1,
+        sector_id: item.sector_id,
+        sector_name: item.sector_name,
+        sector_type: item.sector_type,
+        change_pct: item.change_pct,
+        amount: item.amount,
+        main_net_inflow: item.main_net_inflow,
+        main_net_inflow_ratio: 0.153,
+        leading_stock_name: sectorType === 'concept' ? '中际旭创' : '北方华创'
+      }
+    ],
+    outflow: []
+  };
+}
+
+function makeSectorDetailResponse(overrides: Record<string, unknown> = {}) {
+  return {
+    trade_date: '2026-06-10',
+    updated_at: '2026-06-10 15:10',
+    source: 'api',
+    data_status: 'completed',
+    warnings: [],
+    sector_id: 'industry-semiconductor',
+    sector_name: '半导体',
+    sector_type: 'industry',
+    change_pct: 0.0321,
+    amount: 145800000000,
+    up_count: 112,
+    down_count: 18,
+    main_net_inflow: 24800000000,
+    main_net_inflow_ratio: 0.1701,
+    leading_stocks: [
+      {
+        asset_id: 'CN:SZ:002371',
+        name: '北方华创',
+        change_pct: 0.0642
+      }
+    ],
+    ...overrides
+  };
+}
+
+const emotionStockListsFixture = {
+  auction_status: 'pending_source',
+  auction: [],
+  limit_up: [
+    {
+      name: '金钼股份',
+      asset_id: 'CN:SH:601958',
+      symbol: '601958',
+      amount: 3038000000,
+      pct_chg: 10,
+      board: '金属钼',
+      tab: 'limit_up',
+      limit_up_streak: 1
+    }
+  ],
+  broken_limit_up: [],
+  limit_down: []
+};
+
+function makeMarketMonitorPayload(overrides: Partial<MarketMonitorPayload> = {}): MarketMonitorPayload {
+  return {
+    trade_date: '2026-06-10',
+    freshness: {
+      mode: 'eod',
+      label: 'Last Completed Trading Day',
+      is_realtime: false,
+      latest_market_date: '2026-06-10',
+      latest_factor_date: '2026-06-10',
+      latest_score_date: '2026-06-10'
+    },
+    coverage: { market_assets: 5300, score_assets: 3100, factor_count: 42 },
+    market_breadth: {
+      advancers: null,
+      decliners: null,
+      limit_up: null,
+      limit_down: null,
+      advancing_ratio: null,
+      turnover_change_pct: null,
+      status: 'pending_source'
+    },
+    index_snapshot: [],
+    sector_strength: { strongest: [], weakest: [], status: 'pending_source' },
+    unusual_moves: [],
+    watchlist_alerts: [],
+    strategy_signal_summary: {
+      topn_preview_count: 1,
+      topn_preview: [
+        {
+          trade_date: '2026-06-10',
+          asset_id: '000001.SZ',
+          rank: 1,
+          score_total: 91.2,
+          score_version: 'manual_v1',
+          score_components: {}
+        }
+      ],
+      risk_filter_counts: {}
+    },
+    generated_reports: [
+      {
+        report_type: 'daily_topn_report',
+        title: 'daily_topn.md',
+        path: '/reports/topn.md',
+        format: 'md',
+        trade_date: '2026-06-10'
+      }
+    ],
+    market_emotion: marketEmotionFixture,
+    emotion_stock_lists: emotionStockListsFixture,
+    warnings: ['market breadth source pending'],
+    ...overrides
+  };
+}
+
+function makeMarketAnomalyContextPayload(
+  overrides: Partial<MarketAnomalyContextPayload> = {}
+): MarketAnomalyContextPayload {
+  return {
+    trade_date: '2026-06-10',
+    data_status: 'complete',
+    summary: {
+      hot_industry_count: 0,
+      hot_stock_count: 0,
+      volume_spike_count: 0,
+      strong_move_count: 0
+    },
+    hot_industries: [],
+    hot_stocks: [],
+    warnings: [],
+    ...overrides
+  };
+}
+
+function makeStockMarketContextHeatmapPayload(
+  overrides: Partial<StockMarketContextHeatmapPayload> = {}
+): StockMarketContextHeatmapPayload {
+  return {
+    asset_id: '000001.SZ',
+    canonical_asset_id: '000001.SZ',
+    trade_date: '2026-06-18',
+    industry: null,
+    selected: null,
+    summary: {
+      peer_count: 0,
+      up_count: 0,
+      flat_count: 0,
+      down_count: 0,
+      total_amount: 0,
+      selected_in_peer_set: false
+    },
+    peers: [],
+    data_status: 'missing',
+    warnings: [],
+    ...overrides
+  };
 }
 
 function makeDecisions(assetId = '000001.SZ'): DecisionEventRow[] {
@@ -275,6 +639,101 @@ function makeExperimentReplay(): ExperimentReplayRow[] {
       production_write_enabled: false
     }
   ];
+}
+
+function makeResearchReport() {
+  return {
+    event_key: 'app-shell-r1:000001.SZ',
+    report_id: 'app-shell-r1',
+    asset_id: 'CN:SZ:000001',
+    ts_code: '000001.SZ',
+    stock_name: 'Ping An Bank',
+    industry_name: 'Banking',
+    report_title: 'Ping An Bank Initiation',
+    publish_date: '2026-06-03',
+    report_date: '2026-06-03',
+    broker: 'Example Securities',
+    analyst: 'Analyst A',
+    rating: 'Buy',
+    rating_change: 'Maintain',
+    target_price: 15.5,
+    target_upside: 0.12,
+    source_type: 'public_web_search_result',
+    source_name: 'example_source',
+    source_confidence: 0.8,
+    public_access: true,
+    copyright_note: 'metadata only',
+    source_url: 'https://example.com/report',
+    raw_summary: 'summary',
+    company_view: 'company view',
+    industry_view: 'industry view',
+    risk_summary: 'risk',
+    metadata: {}
+  };
+}
+
+function makeReviewQueue() {
+  return {
+    trade_date: '2026-06-08',
+    score_version: 'strategy_topn',
+    review_mode: 'strategy_topn',
+    generated_at: '2026-06-08T00:00:00+00:00',
+    groups: [
+      {
+        bucket: 'strategy:mid_trend',
+        label: 'Mid Trend Combo',
+        count: 1,
+        items: [
+          {
+            queue_id: '2026-06-08:strategy_topn:000001.SZ',
+            asset_id: '000001.SZ',
+            canonical_asset_id: '000001.SZ',
+            trade_date: '2026-06-10',
+            score_version: 'strategy_topn',
+            display_name: '平安银行',
+            rank: 1,
+            score: 89.9,
+            source_type: 'strategy_topn',
+            source_name: 'Mid Trend Combo',
+            source_rank: 1,
+            strategy_id: 'mid_trend',
+            strategy_name: 'Mid Trend Combo',
+            strategy_run_id: 'mid_trend:run',
+            review_tier: 'top5_focus',
+            digest_title: 'Strong evidence',
+            bucket: 'strong',
+            source_kinds: ['strategy'],
+            risk_count: 0,
+            warning_count: 0,
+            next_action_count: 1,
+            digest: {
+              asset_id: '000001.SZ',
+              canonical_asset_id: '000001.SZ',
+              trade_date: '2026-06-10',
+              title: 'Strong evidence',
+              score: 81,
+              bucket: 'strong',
+              facts: [{ kind: 'strategy', label: 'TopN candidate' }],
+              risk_flags: [],
+              source_refs: {},
+              next_actions: [
+                {
+                  key: 'review_stock',
+                  label: 'Review Stock',
+                  workspace: 'stock',
+                  asset_id: '000001.SZ',
+                  query: '平安银行'
+                }
+              ],
+              warnings: []
+            }
+          }
+        ]
+      },
+      { bucket: 'strategy:tech_bottleneck', label: 'Tech Bottleneck Combo', count: 0, items: [] }
+    ],
+    warnings: []
+  };
 }
 
 function makeShadowWatchlist(): ShadowWatchlistRow[] {
@@ -530,235 +989,2056 @@ function makeShadowFollowUpResolution(): ShadowFollowUpResolutionRow[] {
   ];
 }
 
+const TEST_ADMIN_USER = { user_id: 'user:1', username: 'admin', display_name: 'Admin', role: 'admin' as const, is_active: true };
+
 describe('dashboard app shell', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    apiMocks.fetchCurrentUser.mockResolvedValue({
+      user: { user_id: 'user:1', username: 'admin', display_name: 'Admin', role: 'admin', is_active: true }
+    });
+    apiMocks.fetchPlatformReadiness.mockResolvedValue({
+      mode: 'eod_local',
+      status: 'ready',
+      as_of: '2026-06-15T08:30:00+08:00',
+      latest_market_date: '2026-06-12',
+      checks: [],
+      warnings: []
+    });
+    apiMocks.fetchPlatformSummary.mockResolvedValue({
+      latest_market_date: '2026-06-08',
+      latest_score_date: '2026-06-08',
+      latest_factor_date: '2026-06-08',
+      market_asset_count: 5207,
+      score_asset_count: 5207,
+      factor_count: 43,
+      score_versions: ['manual_v1'],
+      topn_preview: [
+        {
+          trade_date: '2026-06-08',
+          asset_id: 'CN:SZ:300951',
+          rank: 1,
+          score_total: 89.9,
+          score_version: 'manual_v1',
+          score_components: {}
+        }
+      ]
+    });
+    apiMocks.fetchStrategyScoreAudit.mockResolvedValue({
+      trade_date: '2026-06-08',
+      status: 'success',
+      overall_status: 'warning',
+      summary_path: '/tmp/strategy_score_audit_summary.json',
+      detail_path: '/tmp/strategy_score_audit_detail.csv',
+      total_rows: 15,
+      selected_rows: 15,
+      anomaly_row_count: 2,
+      anomaly_counts_by_type: {
+        mapped_score_without_raw_score: 1,
+        display_score_mismatch: 1
+      },
+      strategies: [
+        { strategy_id: 'lhb_shortline', anomaly_count: 1 },
+        { strategy_id: 'mid_trend', anomaly_count: 1 }
+      ],
+      sample_rows: []
+    });
+    apiMocks.fetchStrategyCatalog.mockResolvedValue([
+      {
+        strategy_id: 'manual_v1_topn_rotation',
+        strategy_name: 'Manual V1 TopN Rotation',
+        status: 'runnable',
+        description: 'TopN rotation',
+        factor_groups: ['momentum'],
+        signal_inputs: ['factor.stock_score_daily'],
+        default_parameters: { top_n: 20 },
+        latest_evidence: '',
+        primary_action: 'Run backtest'
+      }
+    ]);
+    apiMocks.fetchBacktestStrategies.mockResolvedValue([
+      {
+        strategy_id: 'lhb_shortline',
+        strategy_name: 'LHB Shortline Combo',
+        status: 'runnable',
+        description: 'LHB combo',
+        factor_groups: ['资金行为'],
+        signal_inputs: ['龙虎榜'],
+        default_parameters: { top_n: 20 },
+        latest_evidence: '',
+        primary_action: 'Run backtest'
+      }
+    ]);
+    apiMocks.runBacktest.mockResolvedValue({
+      strategy_id: 'manual_v1_topn_rotation',
+      strategy_name: 'Manual V1 TopN Rotation',
+      read_only: true,
+      config: {},
+      summary: {},
+      equity_curve: [],
+      positions: [],
+      trades: []
+    });
     apiMocks.fetchOverview.mockResolvedValue(makeOverview());
+    apiMocks.fetchAssetProfile.mockResolvedValue(makeAssetProfile('000001.SZ'));
+    apiMocks.fetchAssetNews.mockResolvedValue({
+      asset_id: '000001.SZ',
+      items: [],
+      summary: { news_count_1d: 0, news_count_3d: 0, news_count_7d: 0, source_count: 0 },
+      warnings: []
+    });
+    apiMocks.searchAssets.mockResolvedValue([]);
     apiMocks.fetchDailyBars.mockResolvedValue(makeBars(1));
     apiMocks.fetchAssetScore.mockResolvedValue(makeScore());
     apiMocks.fetchAssetSignals.mockResolvedValue(makeSignals());
     apiMocks.fetchAssetDecisions.mockResolvedValue(makeDecisions());
     apiMocks.fetchAssetOutcomes.mockResolvedValue(makeOutcomes());
     apiMocks.fetchOutcomeAnalytics.mockResolvedValue(makeOutcomeAnalytics());
+    apiMocks.fetchPublicNews.mockResolvedValue({
+      items: [
+        {
+          news_id: 'news-live-1',
+          source: 'sina_finance',
+          source_channel: '7x24',
+          category: 'live',
+          title: '全球快讯',
+          summary: '全球财经快讯摘要',
+          url: 'https://finance.sina.com.cn/live/1',
+          published_at: '2026-06-11 09:00:00',
+          collected_at: '2026-06-11T09:01:00+00:00',
+          raw_id: '',
+          raw_payload: {},
+          status: 'available'
+        }
+      ],
+      warnings: []
+    });
+    apiMocks.fetchPublicNewsStatus.mockResolvedValue({
+      enabled: true,
+      running: false,
+      interval_seconds: 1800,
+      next_run_at: '2026-06-11T09:30:00+00:00'
+    });
+    apiMocks.refreshPublicNews.mockResolvedValue({
+      received: 1,
+      stored: 1,
+      items_received: 1,
+      counts_by_category: { live: 1 },
+      warnings: []
+    });
+    apiMocks.fetchGlobalSearch.mockResolvedValue({
+      query: '茅台',
+      groups: [],
+      warnings: []
+    });
     apiMocks.fetchExperimentProposals.mockResolvedValue(makeExperimentProposals());
     apiMocks.fetchExperimentReplay.mockResolvedValue(makeExperimentReplay());
     apiMocks.fetchShadowWatchlist.mockResolvedValue(makeShadowWatchlist());
+    apiMocks.fetchWatchlistSignals.mockResolvedValue(makeOverview().watchlist_signals);
     apiMocks.fetchShadowOutcomes.mockResolvedValue(makeShadowOutcomes());
     apiMocks.fetchShadowOutcomeAnalytics.mockResolvedValue(makeShadowOutcomeAnalytics());
     apiMocks.fetchShadowAnalyticsReview.mockResolvedValue(makeShadowAnalyticsReview());
     apiMocks.fetchShadowReviewDecisions.mockResolvedValue(makeShadowReviewDecisions());
     apiMocks.fetchShadowFollowUpQueue.mockResolvedValue(makeShadowFollowUpQueue());
     apiMocks.fetchShadowFollowUpResolution.mockResolvedValue(makeShadowFollowUpResolution());
+    apiMocks.fetchFactorLibrary.mockResolvedValue([]);
+    apiMocks.fetchFactorScorePreview.mockResolvedValue({ trade_date: '2026-06-08', selected_factors: [], items: [] });
+    apiMocks.fetchMarketMonitorEod.mockResolvedValue(makeMarketMonitorPayload());
+    apiMocks.fetchMarketAnomalyContext.mockImplementation((tradeDate: string) =>
+      Promise.resolve(makeMarketAnomalyContextPayload({ trade_date: tradeDate }))
+    );
+    apiMocks.fetchMarketOverview.mockImplementation((tradeDate: string) =>
+      Promise.resolve(makeMarketOverviewResponse({ trade_date: tradeDate, updated_at: `${tradeDate} 15:10` }))
+    );
+    apiMocks.fetchSectorHeatmap.mockImplementation((tradeDate: string, sectorType: 'industry' | 'concept') =>
+      Promise.resolve(makeSectorHeatmapResponse(sectorType, tradeDate))
+    );
+    apiMocks.fetchSectorFundFlow.mockImplementation((tradeDate: string, sectorType: 'industry' | 'concept') =>
+      Promise.resolve(makeSectorFundFlowResponse(sectorType, tradeDate))
+    );
+    apiMocks.fetchSectorDetail.mockResolvedValue(makeSectorDetailResponse());
+    apiMocks.fetchResearchReportSummary.mockResolvedValue({
+      total_reports: 1,
+      covered_stocks: 1,
+      latest_publish_date: '2026-06-03',
+      latest_feature_date: '2026-06-02',
+      source_count: 1,
+      source_counts: [{ source_name: 'example_source', rows: 1 }],
+      rating_counts: [{ rating: 'Buy', rows: 1 }],
+      broker_counts: [{ broker: 'Example Securities', rows: 1 }]
+    });
+    apiMocks.fetchResearchReports.mockResolvedValue({
+      items: [makeResearchReport()],
+      total: 1,
+      limit: 50,
+      offset: 0,
+      warnings: []
+    });
+    apiMocks.fetchResearchReportDocument.mockResolvedValue({
+      report_id: 'report-1',
+      report_title: 'Research Report',
+      has_pdf: false,
+      pdf_url: '',
+      source_url: 'https://example.com/report',
+      file_name: '',
+      public_access: true,
+      copyright_note: 'metadata only',
+      warnings: ['local pdf is unavailable or outside allowed report directories']
+    });
+    apiMocks.fetchAssetResearchReports.mockResolvedValue({
+      asset_id: 'CN:SZ:000001',
+      summary: {
+        report_count_30d: 0,
+        report_count_90d: 0,
+        broker_coverage_count_90d: 0,
+        latest_report_date: null,
+        latest_rating: null,
+        latest_target_price: null
+      },
+      items: [],
+      warnings: []
+    });
+    apiMocks.fetchStockMarketContextHeatmap.mockResolvedValue(makeStockMarketContextHeatmapPayload());
+    apiMocks.fetchResearchCases.mockResolvedValue({ items: [] });
+    apiMocks.fetchResearchEvidence.mockResolvedValue({ items: [] });
+    apiMocks.fetchResearchQueueHealth.mockResolvedValue({
+      trade_date: '2026-06-08',
+      status: 'empty',
+      can_review: false,
+      can_publish_research_queue: false,
+      publish_gate_status: 'empty',
+      research_ready_for_publication: false,
+      actual_publish_enabled: false,
+      internal_snapshot_enabled: false,
+      external_delivery_enabled: false,
+      summary: {
+        case_count: 0,
+        open_case_count: 0,
+        claim_count: 0,
+        evidence_artifact_count: 0,
+        evidence_link_count: 0,
+        evidence_gap_count: 0,
+        unmatched_digest_count: 0,
+        error_count: 0
+      },
+      last_refresh: null,
+      warnings: []
+    });
+    apiMocks.fetchResearchPublishGate.mockResolvedValue({
+      trade_date: '2026-06-08',
+      status: 'empty',
+      research_ready_for_publication: false,
+      actual_publish_enabled: false,
+      internal_snapshot_enabled: false,
+      external_delivery_enabled: false,
+      publication_entrypoint_status: 'scaffolded',
+      summary: {
+        case_count: 0,
+        open_case_count: 0,
+        claim_count: 0,
+        evidence_artifact_count: 0,
+        evidence_link_count: 0,
+        evidence_gap_count: 0,
+        pending_gap_count: 0,
+        reviewed_gap_count: 0,
+        request_more_evidence_count: 0,
+        deferred_gap_count: 0,
+        unmatched_digest_count: 0,
+        error_count: 0
+      },
+      blockers: [],
+      warnings: [],
+      top_blocked_cases: []
+    });
+    apiMocks.fetchResearchPublicationPreview.mockResolvedValue({
+      trade_date: '2026-06-08',
+      package_id: 'research_publication_package:empty',
+      publishable: false,
+      actual_publish_enabled: false,
+      internal_snapshot_enabled: false,
+      external_delivery_enabled: false,
+      gate: {
+        status: 'empty',
+        research_ready_for_publication: false,
+        actual_publish_enabled: false,
+        internal_snapshot_enabled: false,
+        external_delivery_enabled: false
+      },
+      summary: {
+        case_count: 0,
+        claim_count: 0,
+        evidence_count: 0,
+        evidence_link_count: 0,
+        gap_count: 0,
+        reviewed_gap_count: 0,
+        pending_gap_count: 0,
+        request_more_evidence_count: 0,
+        deferred_gap_count: 0,
+        unmatched_digest_count: 0,
+        error_count: 0
+      },
+      sections: [],
+      warnings: [],
+      blockers: []
+    });
+    apiMocks.fetchResearchPublicationSnapshots.mockResolvedValue({ items: [] });
+    apiMocks.fetchResearchExternalDeliveryAttempts.mockResolvedValue({ items: [] });
+    apiMocks.fetchEvidenceDigest.mockResolvedValue({
+      asset_id: 'CN:SZ:300951',
+      canonical_asset_id: 'CN:SZ:300951',
+      trade_date: '2026-06-08',
+      title: 'Strong evidence',
+      score: 81,
+      bucket: 'strong',
+      facts: [],
+      risk_flags: [],
+      source_refs: {},
+      next_actions: [],
+      warnings: []
+    });
+    apiMocks.fetchReviewQueue.mockResolvedValue(makeReviewQueue());
   });
 
   afterEach(() => {
     cleanup();
   });
 
-  it('renders the stock research shell title', async () => {
-    render(<App />);
+  it('renders the stock research cockpit shell title', async () => {
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
 
-    expect(screen.getByText('Stock Research')).toBeVisible();
-    await screen.findByText('TopN');
+    expect(await screen.findByText('A股策略研究')).toBeVisible();
+    expect(await screen.findByRole('heading', { name: '策略指挥中心' })).toBeVisible();
+    expect(screen.getByText('平台日期')).toBeVisible();
+    expect(screen.getByText('启用策略表现')).toBeVisible();
+    expect(screen.getByText('策略持仓状态')).toBeVisible();
+    expect(screen.getByText('市场环境')).toBeVisible();
+    expect(screen.getByText('高质量新闻')).toBeVisible();
+    expect(screen.getAllByText('LHB Shortline Combo')[0]).toBeVisible();
+    expect(screen.queryByText('Manual V1 TopN Rotation')).not.toBeInTheDocument();
   });
 
-  it('loads overview, selected asset review, and chart data', async () => {
-    render(<App />);
+  it('shows user management navigation only for admins', async () => {
+    const admin = { user_id: 'user:1', username: 'admin', display_name: 'Admin', role: 'admin' as const, is_active: true };
+    const regular = { user_id: 'user:2', username: 'analyst', display_name: 'Analyst', role: 'user' as const, is_active: true };
 
-    expect(await screen.findByText('000001.SZ')).toBeVisible();
-    expect(screen.getAllByText('91.2')).toHaveLength(2);
-    expect(screen.getByText('必看')).toBeVisible();
-    expect(screen.getByText('Daily Review')).toBeVisible();
-    expect(screen.getByText('Decision History')).toBeVisible();
-    expect(screen.getAllByText('candidate')).toHaveLength(3);
-    expect(screen.getByText('Outcome History')).toBeVisible();
-    expect(screen.getByText(/5D\s+\+20.0%/)).toBeVisible();
-    expect(screen.getByText('Outcome Analytics')).toBeVisible();
-    expect(screen.getByText(/5D\s+\+15.0%/)).toBeVisible();
-    expect(screen.getByText('Experiment Proposals')).toBeVisible();
-    expect(screen.getByText('Replay dashboard top-N')).toBeVisible();
-    expect(screen.getByText('Experiment Replay')).toBeVisible();
-    expect(screen.getByText('passed_offline_replay')).toBeVisible();
-    expect(screen.getByText('Shadow Watchlist')).toBeVisible();
-    const shadowWatchlistPanel = screen.getByText('Shadow Watchlist').closest('section');
-    expect(shadowWatchlistPanel).not.toBeNull();
-    expect(within(shadowWatchlistPanel as HTMLElement).getByText('shadow_ready')).toBeVisible();
-    expect(screen.getByText('Shadow Outcomes')).toBeVisible();
-    expect(screen.getByText('complete')).toBeVisible();
-    expect(screen.getByText(/5D\s+\+50.0%/)).toBeVisible();
-    expect(screen.getByText('Shadow Outcome Analytics')).toBeVisible();
-    const shadowOutcomeAnalyticsPanel = screen.getByText('Shadow Outcome Analytics').closest('section');
-    expect(shadowOutcomeAnalyticsPanel).not.toBeNull();
-    expect(within(shadowOutcomeAnalyticsPanel as HTMLElement).getByText('trend_shadow')).toBeVisible();
-    expect(screen.getByText(/20D\s+\+12.0%/)).toBeVisible();
-    expect(screen.getByText('Shadow Analytics Review')).toBeVisible();
-    const shadowAnalyticsReviewPanel = screen.getByText('Shadow Analytics Review').closest('section');
-    expect(shadowAnalyticsReviewPanel).not.toBeNull();
-    expect(within(shadowAnalyticsReviewPanel as HTMLElement).getByText('research_follow_up_candidate')).toBeVisible();
-    expect(within(shadowAnalyticsReviewPanel as HTMLElement).getByText('needs_more_evidence')).toBeVisible();
-    expect(screen.getByText('Shadow Review Decisions')).toBeVisible();
-    const shadowReviewDecisionsPanel = screen.getByText('Shadow Review Decisions').closest('section');
-    expect(shadowReviewDecisionsPanel).not.toBeNull();
-    expect(within(shadowReviewDecisionsPanel as HTMLElement).getByText('open_research_follow_up')).toBeVisible();
-    expect(within(shadowReviewDecisionsPanel as HTMLElement).getByText('Create a separately scoped research follow-up.')).toBeVisible();
-    expect(screen.getByText('Shadow Follow-up Queue')).toBeVisible();
-    const shadowFollowUpPanel = screen.getByText('Shadow Follow-up Queue').closest('section');
-    expect(shadowFollowUpPanel).not.toBeNull();
-    expect(within(shadowFollowUpPanel as HTMLElement).getByText('collect_more_evidence')).toBeVisible();
-    expect(within(shadowFollowUpPanel as HTMLElement).getByText('Additional outcome or data-quality evidence')).toBeVisible();
-    expect(screen.getByText('Shadow Follow-up Resolution')).toBeVisible();
-    const shadowFollowUpResolutionPanel = screen.getByText('Shadow Follow-up Resolution').closest('section');
-    expect(shadowFollowUpResolutionPanel).not.toBeNull();
-    expect(within(shadowFollowUpResolutionPanel as HTMLElement).getByText('stale_unresolved')).toBeVisible();
-    expect(
-      within(shadowFollowUpResolutionPanel as HTMLElement).getByText(
-        'Review whether requested evidence has been collected.'
-      )
-    ).toBeVisible();
-    expect(screen.getByText('p12-shadow-watchlist-2026-06-30')).toBeVisible();
-    expect(screen.getAllByText('p11-replay-run-2026-06-30')).toHaveLength(2);
-    expect(screen.queryByRole('button', { name: /promote|trade|write watchlist|scheduler/i })).not.toBeInTheDocument();
-    expect(screen.getByTestId('asset-chart')).toHaveTextContent('1 bars');
-    expect(apiMocks.fetchOverview).toHaveBeenCalledWith({
-      tradeDate: '2026-05-29',
-      scoreVersion: 'manual_v1',
-      watchlistId: 'default',
-      topN: 30
-    });
+    const { rerender } = render(<AppShell currentUser={regular} />);
+
+    expect(screen.queryByRole('button', { name: 'Open User Management workspace' })).not.toBeInTheDocument();
+    rerender(<AppShell currentUser={admin} />);
+    expect(screen.getByRole('button', { name: 'Open User Management workspace' })).toBeVisible();
   });
 
-  it('shows loading states while overview and selected asset data are pending', async () => {
-    const overview = createDeferred<DashboardOverview>();
-    const bars = createDeferred<BarPoint[]>();
-    const score = createDeferred<ScoreRow | null>();
-    const signals = createDeferred<WatchlistSignalRow[]>();
-    const decisions = createDeferred<DecisionEventRow[]>();
-    const outcomes = createDeferred<DecisionOutcomeRow[]>();
-    const analytics = createDeferred<OutcomeAnalyticsRow[]>();
-    const proposals = createDeferred<ExperimentProposalRow[]>();
-    const replay = createDeferred<ExperimentReplayRow[]>();
-    const shadow = createDeferred<ShadowWatchlistRow[]>();
-    const shadowOutcomes = createDeferred<ShadowOutcomeRow[]>();
-    const shadowOutcomeAnalytics = createDeferred<ShadowOutcomeAnalyticsRow[]>();
-    const shadowAnalyticsReview = createDeferred<ShadowAnalyticsReviewRow[]>();
-    const shadowReviewDecisions = createDeferred<ShadowReviewDecisionRow[]>();
-    const shadowFollowUpQueue = createDeferred<ShadowFollowUpRow[]>();
-    const shadowFollowUpResolution = createDeferred<ShadowFollowUpResolutionRow[]>();
-
-    apiMocks.fetchOverview.mockReturnValueOnce(overview.promise);
-    apiMocks.fetchDailyBars.mockReturnValueOnce(bars.promise);
-    apiMocks.fetchAssetScore.mockReturnValueOnce(score.promise);
-    apiMocks.fetchAssetSignals.mockReturnValueOnce(signals.promise);
-    apiMocks.fetchAssetDecisions.mockReturnValueOnce(decisions.promise);
-    apiMocks.fetchAssetOutcomes.mockReturnValueOnce(outcomes.promise);
-    apiMocks.fetchOutcomeAnalytics.mockReturnValueOnce(analytics.promise);
-    apiMocks.fetchExperimentProposals.mockReturnValueOnce(proposals.promise);
-    apiMocks.fetchExperimentReplay.mockReturnValueOnce(replay.promise);
-    apiMocks.fetchShadowWatchlist.mockReturnValueOnce(shadow.promise);
-    apiMocks.fetchShadowOutcomes.mockReturnValueOnce(shadowOutcomes.promise);
-    apiMocks.fetchShadowOutcomeAnalytics.mockReturnValueOnce(shadowOutcomeAnalytics.promise);
-    apiMocks.fetchShadowAnalyticsReview.mockReturnValueOnce(shadowAnalyticsReview.promise);
-    apiMocks.fetchShadowReviewDecisions.mockReturnValueOnce(shadowReviewDecisions.promise);
-    apiMocks.fetchShadowFollowUpQueue.mockReturnValueOnce(shadowFollowUpQueue.promise);
-    apiMocks.fetchShadowFollowUpResolution.mockReturnValueOnce(shadowFollowUpResolution.promise);
-
-    render(<App />);
-
-    expect(screen.getByText('Loading TopN...')).toBeVisible();
-    expect(screen.getByText('Loading watchlist...')).toBeVisible();
-    expect(screen.getByText('Loading reports...')).toBeVisible();
-    expect(screen.getByText('Loading asset review...')).toBeVisible();
-    expect(screen.getByText('Loading experiment replay...')).toBeVisible();
-    expect(screen.getByText('Loading shadow watchlist...')).toBeVisible();
-    expect(screen.getByText('Loading shadow outcomes...')).toBeVisible();
-    expect(screen.getByText('Loading shadow outcome analytics...')).toBeVisible();
-    expect(screen.getByText('Loading shadow analytics review...')).toBeVisible();
-    expect(screen.getByText('Loading shadow review decisions...')).toBeVisible();
-    expect(screen.getByText('Loading shadow follow-up queue...')).toBeVisible();
-    expect(screen.getByText('Loading shadow follow-up resolution...')).toBeVisible();
-
-    await act(async () => {
-      overview.resolve(makeOverview());
-      bars.resolve(makeBars(1));
-      score.resolve(makeScore());
-      signals.resolve(makeSignals());
-      decisions.resolve(makeDecisions());
-      outcomes.resolve(makeOutcomes());
-      analytics.resolve(makeOutcomeAnalytics());
-      proposals.resolve(makeExperimentProposals());
-      replay.resolve(makeExperimentReplay());
-      shadow.resolve(makeShadowWatchlist());
-      shadowOutcomes.resolve(makeShadowOutcomes());
-      shadowOutcomeAnalytics.resolve(makeShadowOutcomeAnalytics());
-      shadowAnalyticsReview.resolve(makeShadowAnalyticsReview());
-      shadowReviewDecisions.resolve(makeShadowReviewDecisions());
-      shadowFollowUpQueue.resolve(makeShadowFollowUpQueue());
-      shadowFollowUpResolution.resolve(makeShadowFollowUpResolution());
+  it('renders the redesigned home cockpit sections', async () => {
+    apiMocks.fetchMarketMonitorEod.mockResolvedValueOnce({
+      trade_date: '2026-06-10',
+      freshness: { mode: 'eod', label: 'Last Completed Trading Day', is_realtime: false },
+      coverage: { market_assets: 5300, score_assets: 3100, factor_count: 42 },
+      market_breadth: {
+        advancers: null,
+        decliners: null,
+        limit_up: null,
+        limit_down: null,
+        advancing_ratio: null,
+        turnover_change_pct: null,
+        status: 'pending_source'
+      },
+      index_snapshot: [],
+      sector_strength: { strongest: [], weakest: [], status: 'pending_source' },
+      unusual_moves: [],
+      watchlist_alerts: [],
+      strategy_signal_summary: {
+        topn_preview_count: 1,
+        topn_preview: [
+          {
+            trade_date: '2026-06-10',
+            asset_id: '000001.SZ',
+            rank: 1,
+            score_total: 91.2,
+            score_version: 'manual_v1',
+            score_components: {}
+          }
+        ],
+        risk_filter_counts: {}
+      },
+      generated_reports: [],
+      warnings: []
+    });
+    apiMocks.fetchPublicNews.mockResolvedValueOnce({
+      items: [
+        {
+          news_id: 'news-home-1',
+          source: 'sina_finance',
+          source_channel: '7x24',
+          category: 'live',
+          title: '首页新闻',
+          summary: '',
+          url: '',
+          published_at: '2026-06-11 10:00:00',
+          collected_at: '2026-06-11T02:00:00Z',
+          raw_id: '',
+          raw_payload: {},
+          status: 'available'
+        }
+      ],
+      warnings: []
     });
 
-    await waitFor(() => {
-      expect(screen.queryByText('Loading TopN...')).not.toBeInTheDocument();
-      expect(screen.queryByText('Loading watchlist...')).not.toBeInTheDocument();
-      expect(screen.queryByText('Loading reports...')).not.toBeInTheDocument();
-      expect(screen.queryByText('Loading asset review...')).not.toBeInTheDocument();
-      expect(screen.queryByText('Loading experiment replay...')).not.toBeInTheDocument();
-      expect(screen.queryByText('Loading shadow watchlist...')).not.toBeInTheDocument();
-      expect(screen.queryByText('Loading shadow outcomes...')).not.toBeInTheDocument();
-      expect(screen.queryByText('Loading shadow outcome analytics...')).not.toBeInTheDocument();
-      expect(screen.queryByText('Loading shadow analytics review...')).not.toBeInTheDocument();
-      expect(screen.queryByText('Loading shadow review decisions...')).not.toBeInTheDocument();
-      expect(screen.queryByText('Loading shadow follow-up queue...')).not.toBeInTheDocument();
-      expect(screen.queryByText('Loading shadow follow-up resolution...')).not.toBeInTheDocument();
-    });
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
+
+    expect(await screen.findByRole('heading', { name: '策略指挥中心' })).toBeInTheDocument();
+    const homeStatus = within(screen.getByRole('region', { name: '首页状态' }));
+    const scoreAuditCell = homeStatus.getByText('策略打分审计').closest('div');
+    expect(scoreAuditCell).not.toBeNull();
+    await waitFor(() => expect(within(scoreAuditCell as HTMLDivElement).getByText('需关注')).toBeInTheDocument());
+    expect(within(scoreAuditCell as HTMLDivElement).getByText('2 条异常')).toBeInTheDocument();
+    expect(screen.getByText('启用策略表现')).toBeInTheDocument();
+    expect(screen.getByText('策略持仓状态')).toBeInTheDocument();
+    expect(screen.getByText('市场环境')).toBeInTheDocument();
+    expect(screen.getByText('高质量新闻')).toBeInTheDocument();
+    expect(screen.getByText('首页新闻')).toBeInTheDocument();
+    expect(apiMocks.fetchStrategyScoreAudit).toHaveBeenCalledWith('2026-06-12');
   });
 
-  it('shows empty states for dashboard lists and reports', async () => {
-    apiMocks.fetchOverview.mockResolvedValueOnce(
-      makeOverview({
-        top_scores: [],
-        watchlist_signals: [],
-        reports: []
+  it('exposes the redesigned research cockpit navigation', async () => {
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
+
+    expect(screen.getByRole('button', { name: 'Open Market Monitor workspace' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Research Reports workspace' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Stock Workspace workspace' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Watchlist workspace' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Strategy Lab workspace' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Generated Reports workspace' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open Reports workspace' })).not.toBeInTheDocument();
+  });
+
+  it('opens redesigned workspaces from navigation', async () => {
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Research Reports workspace' }));
+    expect(await screen.findByRole('heading', { name: 'Research Reports' })).toBeInTheDocument();
+    expect(screen.getByText('Total Reports')).toBeInTheDocument();
+    expect(await screen.findByText('Ping An Bank Initiation')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Stock Workspace workspace' }));
+    expect(await screen.findByRole('heading', { name: /贵州茅台|个股复盘工作台/ })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Watchlist workspace' }));
+    expect(await screen.findByRole('heading', { name: '观察池' })).toBeInTheDocument();
+  });
+
+  it('switches stock workspace chart to intraday bars', async () => {
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Stock Workspace workspace' }));
+    expect(await screen.findByRole('heading', { name: /贵州茅台|Stock Workspace/ })).toBeInTheDocument();
+    expect(await screen.findByTestId('asset-chart')).toHaveTextContent('1 bars');
+
+    apiMocks.fetchDailyBars.mockClear();
+    apiMocks.fetchDailyBars.mockImplementation(
+      (
+        _assetId: string,
+        _startDate: string,
+        _endDate: string,
+        options?: { resolution?: string; adjustType?: string }
+      ) => Promise.resolve(options?.resolution === '30m' ? makeBars(3) : makeBars(1))
+    );
+    fireEvent.click(screen.getByRole('button', { name: '分时' }));
+    fireEvent.click(screen.getByRole('button', { name: '30m' }));
+
+    await waitFor(() =>
+      expect(apiMocks.fetchDailyBars).toHaveBeenCalledWith('000001.SZ', '2025-12-14', '2026-06-12', {
+        resolution: '30m',
+        adjustType: 'raw'
       })
     );
-    apiMocks.fetchDailyBars.mockResolvedValueOnce([]);
-    apiMocks.fetchAssetScore.mockResolvedValueOnce(null);
-    apiMocks.fetchAssetSignals.mockResolvedValueOnce([]);
-    apiMocks.fetchAssetDecisions.mockResolvedValueOnce([]);
-    apiMocks.fetchAssetOutcomes.mockResolvedValueOnce([]);
-    apiMocks.fetchOutcomeAnalytics.mockResolvedValueOnce([]);
-    apiMocks.fetchExperimentProposals.mockResolvedValueOnce([]);
-    apiMocks.fetchExperimentReplay.mockResolvedValueOnce([]);
-    apiMocks.fetchShadowWatchlist.mockResolvedValueOnce([]);
-    apiMocks.fetchShadowOutcomes.mockResolvedValueOnce([]);
-    apiMocks.fetchShadowOutcomeAnalytics.mockResolvedValueOnce([]);
-    apiMocks.fetchShadowAnalyticsReview.mockResolvedValueOnce([]);
-    apiMocks.fetchShadowReviewDecisions.mockResolvedValueOnce([]);
-    apiMocks.fetchShadowFollowUpQueue.mockResolvedValueOnce([]);
-    apiMocks.fetchShadowFollowUpResolution.mockResolvedValueOnce([]);
+    await waitFor(() => expect(screen.getByTestId('asset-chart')).toHaveTextContent('3 bars'));
+    expect(screen.getByRole('button', { name: '30m' })).toHaveAttribute('aria-pressed', 'true');
+  });
 
-    render(<App />);
+  it('opens Review Queue from navigation and follows review stock action', async () => {
+    apiMocks.fetchAssetProfile.mockResolvedValueOnce({
+      ...makeAssetProfile('000001.SZ'),
+      asset: {
+        asset_id: '000001.SZ',
+        symbol: '000001',
+        name: '平安银行',
+        exchange: 'SZ',
+        board: 'main',
+        is_active: true
+      }
+    });
 
-    expect(await screen.findByText('No TopN rows for selected date.')).toBeVisible();
-    expect(screen.getByText('No watchlist signals for selected date.')).toBeVisible();
-    expect(screen.getByText('No reports for selected date.')).toBeVisible();
-    expect(screen.getByText('No score for selected date.')).toBeVisible();
-    expect(screen.getByText('No decision history for selected range.')).toBeVisible();
-    expect(screen.getByText('No outcome history for selected range.')).toBeVisible();
-    expect(screen.getByText('No outcome analytics for selected range.')).toBeVisible();
-    expect(screen.getByText('No experiment proposals for selected range.')).toBeVisible();
-    expect(screen.getByText('No experiment replay results for selected range.')).toBeVisible();
-    expect(screen.getByText('No shadow watchlist candidates for selected range.')).toBeVisible();
-    expect(screen.getByText('No shadow outcomes for selected range.')).toBeVisible();
-    expect(screen.getByText('No shadow outcome analytics for selected range.')).toBeVisible();
-    expect(screen.getByText('No shadow analytics review rows for selected range.')).toBeVisible();
-    expect(screen.getByText('No shadow review decisions for selected range.')).toBeVisible();
-    expect(screen.getByText('No shadow follow-up queue items for selected range.')).toBeVisible();
-    expect(screen.getByText('No shadow follow-up resolution items for selected range.')).toBeVisible();
-    expect(screen.getByText('No chart bars for selected range.')).toBeVisible();
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Open Review Queue workspace' }));
+    expect(await screen.findByRole('heading', { name: '策略复盘队列' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Review Stock' }));
+
+    expect(await screen.findByRole('heading', { name: /平安银行/ })).toBeInTheDocument();
+    expect(screen.getByText((_content, element) => element?.textContent === '来源工作台：Review Queue')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(apiMocks.fetchAssetProfile).toHaveBeenCalledWith(
+        '000001.SZ',
+        '2026-06-10',
+        '2025-12-12',
+        '2026-06-10',
+        'manual_v1',
+        'qfq'
+      )
+    );
+    await waitFor(() =>
+      expect(apiMocks.fetchEvidenceDigest).toHaveBeenCalledWith('000001.SZ', {
+        tradeDate: '2026-06-10',
+        lookbackDays: 90
+      })
+    );
+  });
+
+  it('opens the Stock workspace from a global search stock result', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      apiMocks.fetchGlobalSearch.mockResolvedValueOnce(
+        makeGlobalSearchPayload(makeGlobalSearchResult(), '600519')
+      );
+      apiMocks.fetchAssetProfile.mockResolvedValueOnce(makeAssetProfile('CN:SH:600519'));
+
+      render(<AppShell currentUser={TEST_ADMIN_USER} />);
+
+      fireEvent.change(screen.getByLabelText('Global search'), { target: { value: '600519' } });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(250);
+      });
+      fireEvent.click(await screen.findByRole('option', { name: /贵州茅台 600519.SH/ }));
+
+      expect(await screen.findByRole('heading', { name: /贵州茅台 CN:SH:600519/ })).toBeInTheDocument();
+      expect(apiMocks.fetchAssetProfile).toHaveBeenCalledWith(
+        'CN:SH:600519',
+        '2026-06-12',
+        '2025-12-14',
+        '2026-06-12',
+        'manual_v1',
+        'qfq'
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  type MockWorkspaceRender = {
+    initialAssetId?: string;
+    defaultTradeDate?: string;
+    entryContext?: {
+      assetId?: string;
+      sourceWorkspace?: string;
+      query?: string;
+      matchReason?: string;
+      newsId?: string;
+      eventKey?: string;
+      reportId?: string;
+      tradeDate?: string;
+      monitorTab?: string;
+    };
+    initialQuery?: string;
+    initialTradeDate?: string;
+    initialMonitorTab?: string;
+    initialNewsId?: string;
+    initialEventKey?: string;
+    initialReportId?: string;
+    initialPath?: string;
+    mountId?: number;
+  };
+
+  async function renderMockedAppShellForHandoff() {
+    vi.resetModules();
+
+    const newsResult = makeGlobalSearchResult({
+      type: 'news',
+      id: 'news-1',
+      title: '贵州茅台新闻',
+      subtitle: '7x24',
+      target: {
+        workspace: 'news',
+        q: '茅台',
+        news_id: 'news-1',
+        asset_id: 'CN:SH:600519'
+      } as GlobalSearchResult['target']
+    });
+    const researchResult = makeGlobalSearchResult({
+      type: 'research_report',
+      id: 'report-1',
+      title: '茅台深度',
+      subtitle: 'example broker',
+      target: {
+        workspace: 'researchReports',
+        q: '茅台',
+        event_key: 'evt-1',
+        report_id: 'report-1',
+        asset_id: 'CN:SH:600519'
+      } as GlobalSearchResult['target']
+    });
+    const generatedResult = makeGlobalSearchResult({
+      type: 'generated_report',
+      id: 'generated:/reports/daily-topn.html',
+      title: 'Daily TopN',
+      subtitle: 'daily_topn_report',
+      trade_date: '2026-06-10',
+      target: {
+        workspace: 'generatedReports',
+        q: 'Daily',
+        trade_date: '2026-06-10',
+        path: '/reports/daily-topn.html'
+      } as GlobalSearchResult['target']
+    });
+    const stockResult = makeGlobalSearchResult({
+      type: 'asset',
+      id: 'CN:SH:600519',
+      title: '贵州茅台',
+      subtitle: '600519.SH',
+      target: {
+        workspace: 'stock',
+        q: '600519',
+        asset_id: 'CN:SH:600519'
+      } as GlobalSearchResult['target'],
+      match_reason: 'Exact code match'
+    });
+
+    const newsRenders: MockWorkspaceRender[] = [];
+    const researchRenders: MockWorkspaceRender[] = [];
+    const generatedRenders: MockWorkspaceRender[] = [];
+    const marketRenders: MockWorkspaceRender[] = [];
+    const stockRenders: MockWorkspaceRender[] = [];
+    let newsMountId = 0;
+    let stockMountId = 0;
+
+    vi.doMock('../src/components/GlobalSearchBox', () => ({
+      GlobalSearchBox: ({ onOpenResult }: { onOpenResult: (result: GlobalSearchResult) => void }) => (
+        <div>
+          <button type="button" onClick={() => onOpenResult(stockResult)}>
+            Mock open stock search
+          </button>
+          <button type="button" onClick={() => onOpenResult(newsResult)}>
+            Mock open news
+          </button>
+          <button type="button" onClick={() => onOpenResult(researchResult)}>
+            Mock open research
+          </button>
+          <button type="button" onClick={() => onOpenResult(generatedResult)}>
+            Mock open generated
+          </button>
+        </div>
+      )
+    }));
+    vi.doMock('../src/components/DataExplorerWorkspace', () => ({ DataExplorerWorkspace: () => <div>data workspace</div> }));
+    vi.doMock('../src/components/FactorLabWorkspace', () => ({ FactorLabWorkspace: () => <div>factor workspace</div> }));
+    vi.doMock('../src/components/HomeCockpit', () => ({ HomeCockpit: () => <div>home workspace</div> }));
+    vi.doMock('../src/components/DailyReviewLiteWorkspace', () => ({
+      DailyReviewLiteWorkspace: ({ initialTradeDate }: { initialTradeDate?: string }) => (
+        <div data-testid="mock-daily-review-workspace">daily review:{initialTradeDate ?? 'none'}</div>
+      )
+    }));
+    vi.doMock('../src/components/MarketMonitorWorkspace', () => ({
+      MarketMonitorWorkspace: ({
+        initialTradeDate,
+        initialMonitorTab,
+        initialAssetId,
+        onOpenAsset
+      }: {
+        initialTradeDate?: string;
+        initialMonitorTab?: string;
+        initialAssetId?: string;
+        onOpenAsset?: (assetId: string, context: StockEntryContext) => void;
+      }) => {
+        marketRenders.push({ initialTradeDate, initialMonitorTab, initialAssetId });
+        return (
+          <div data-testid="mock-market-workspace">
+            market workspace:{initialTradeDate ?? 'none'}:{initialMonitorTab ?? 'none'}:{initialAssetId ?? 'none'}
+            <button
+              type="button"
+              onClick={() =>
+                onOpenAsset?.('CN:SH:600519', {
+                  sourceWorkspace: 'market',
+                  assetId: 'CN:SH:600519',
+                  tradeDate: '2026-06-12',
+                  monitorTab: 'stock_heatmap',
+                  query: '贵州茅台',
+                  matchReason: 'stock_heatmap'
+                })
+              }
+            >
+              Mock market open asset
+            </button>
+          </div>
+        );
+      }
+    }));
+    vi.doMock('../src/components/StockWorkspace', async () => {
+      const React = await import('react');
+      return {
+        StockWorkspace: ({
+          initialAssetId,
+          defaultTradeDate,
+          entryContext,
+          onOpenNews,
+          onOpenResearchReports,
+          onOpenMarketMonitor
+        }: {
+          initialAssetId?: string;
+          defaultTradeDate?: string;
+          entryContext?: {
+            assetId?: string;
+            sourceWorkspace?: string;
+            query?: string;
+            matchReason?: string;
+            newsId?: string;
+            eventKey?: string;
+            reportId?: string;
+            tradeDate?: string;
+            monitorTab?: string;
+          };
+          onOpenNews?: (context: NonNullable<MockWorkspaceRender['entryContext']>) => void;
+          onOpenResearchReports?: (context: NonNullable<MockWorkspaceRender['entryContext']>) => void;
+          onOpenMarketMonitor?: (context: NonNullable<MockWorkspaceRender['entryContext']>) => void;
+        }) => {
+          const [mountId] = React.useState(() => {
+            stockMountId += 1;
+            return stockMountId;
+          });
+          stockRenders.push({ initialAssetId, defaultTradeDate, entryContext, mountId });
+          return (
+            <div data-testid="mock-stock-workspace">
+              {initialAssetId}:{entryContext?.sourceWorkspace ?? 'none'}:{entryContext?.query ?? 'none'}:
+              {entryContext?.matchReason ?? 'none'}:{entryContext?.newsId ?? 'none'}:{mountId}
+              <button
+                type="button"
+                onClick={() => onOpenNews?.({ ...entryContext, query: '600519', newsId: 'stock-news-1' })}
+              >
+                Mock stock open news
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  onOpenResearchReports?.({
+                    ...entryContext,
+                    query: '600519',
+                    eventKey: 'stock-event-1',
+                    reportId: 'stock-report-1'
+                  })
+                }
+              >
+                Mock stock open research
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  onOpenMarketMonitor?.({
+                    ...entryContext,
+                    assetId: initialAssetId,
+                    query: '600519',
+                    tradeDate: '2026-06-12',
+                    monitorTab: 'broken_limit_up'
+                  })
+                }
+              >
+                Mock stock open market
+              </button>
+              <button type="button" onClick={() => onOpenNews?.({ ...entryContext })}>
+                Mock stock return current news
+              </button>
+              <button type="button" onClick={() => onOpenResearchReports?.({ ...entryContext })}>
+                Mock stock return current research
+              </button>
+              <button type="button" onClick={() => onOpenMarketMonitor?.({ ...entryContext })}>
+                Mock stock return current market
+              </button>
+            </div>
+          );
+        }
+      };
+    });
+    vi.doMock('../src/components/StrategyLabWorkspace', () => ({ StrategyLabWorkspace: () => <div>strategy workspace</div> }));
+    vi.doMock('../src/components/WatchlistWorkspace', () => ({
+      WatchlistWorkspace: ({ onOpenAsset }: { onOpenAsset?: (assetId: string) => void }) => (
+        <button type="button" onClick={() => onOpenAsset?.('000002.SZ')}>
+          Mock open watchlist asset
+        </button>
+      )
+    }));
+    vi.doMock('../src/components/NewsWorkspace', async () => {
+      const React = await import('react');
+      return {
+        NewsWorkspace: ({
+          initialQuery,
+          initialNewsId,
+          initialTradeDate,
+          onOpenAsset
+        }: {
+          initialQuery?: string;
+          initialNewsId?: string;
+          initialTradeDate?: string;
+          onOpenAsset?: (
+            assetId: string,
+            context: { sourceWorkspace: 'news'; assetId: string; newsId: string; query: string; tradeDate?: string }
+          ) => void;
+        }) => {
+          const [mountId] = React.useState(() => {
+            newsMountId += 1;
+            return newsMountId;
+          });
+          newsRenders.push({ initialQuery, initialNewsId, initialTradeDate, mountId });
+          return (
+            <div data-testid="mock-news-workspace">
+              {initialQuery}:{initialNewsId ?? 'none'}:{mountId}
+              <button
+                type="button"
+                onClick={() =>
+                  onOpenAsset?.('CN:SH:600519', {
+                    sourceWorkspace: 'news',
+                    assetId: 'CN:SH:600519',
+                    newsId: 'news-row-1',
+                    query: '贵州茅台经营快讯',
+                    tradeDate: initialTradeDate ?? '2026-06-10'
+                  })
+                }
+              >
+                Mock open news asset
+              </button>
+            </div>
+          );
+        }
+      };
+    });
+    vi.doMock('../src/components/ResearchReportsWorkspace', () => ({
+      ResearchReportsWorkspace: ({
+        initialQuery,
+        initialEventKey,
+        initialReportId,
+        initialTradeDate,
+        onOpenAsset
+      }: {
+        initialQuery?: string;
+        initialEventKey?: string;
+        initialReportId?: string;
+        initialTradeDate?: string;
+        onOpenAsset?: (assetId: string, context: StockEntryContext) => void;
+      }) => {
+        researchRenders.push({ initialQuery, initialEventKey, initialReportId, initialTradeDate });
+        return (
+          <div data-testid="mock-research-workspace">
+            {initialQuery}:{initialEventKey ?? 'none'}:{initialReportId ?? 'none'}
+            <button
+              type="button"
+              onClick={() =>
+                onOpenAsset?.('CN:SH:600519', {
+                  sourceWorkspace: 'researchReports',
+                  assetId: 'CN:SH:600519',
+                  eventKey: 'r1:600519.SH',
+                  reportId: 'r1',
+                  query: '贵州茅台深度报告',
+                  tradeDate: initialTradeDate ?? '2026-06-11'
+                })
+              }
+            >
+              mocked report stock
+            </button>
+          </div>
+        );
+      }
+    }));
+    vi.doMock('../src/components/GeneratedReportsWorkspace', () => ({
+      GeneratedReportsWorkspace: ({
+        initialQuery,
+        initialTradeDate,
+        initialPath
+      }: {
+        initialQuery?: string;
+        initialTradeDate?: string;
+        initialPath?: string;
+      }) => {
+        generatedRenders.push({ initialQuery, initialTradeDate, initialPath });
+        return (
+          <div data-testid="mock-generated-workspace">
+            {initialQuery}:{initialTradeDate ?? 'none'}:{initialPath ?? 'none'}
+          </div>
+        );
+      }
+    }));
+
+    const { AppShell } = await import('../src/components/AppShell');
+    render(<AppShell />);
+
+    return { generatedRenders, marketRenders, newsRenders, researchRenders, stockRenders };
+  }
+
+  it('preserves stock handoff context from global search and remounts on the same stock', async () => {
+    const { stockRenders } = await renderMockedAppShellForHandoff();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock open stock search' }));
+    expect(await screen.findByTestId('mock-stock-workspace')).toHaveTextContent(
+      'CN:SH:600519:search:600519:Exact code match:none:1'
+    );
+    expect(stockRenders.at(-1)).toMatchObject({
+      initialAssetId: 'CN:SH:600519',
+      entryContext: {
+        sourceWorkspace: 'search',
+        query: '600519',
+        matchReason: 'Exact code match'
+      },
+      mountId: 1
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock open stock search' }));
+    expect(await screen.findByTestId('mock-stock-workspace')).toHaveTextContent(
+      'CN:SH:600519:search:600519:Exact code match:none:2'
+    );
+    expect(stockRenders.at(-1)).toMatchObject({
+      initialAssetId: 'CN:SH:600519',
+      entryContext: {
+        sourceWorkspace: 'search',
+        query: '600519',
+        matchReason: 'Exact code match'
+      },
+      mountId: 2
+    });
+  });
+
+  it('uses the latest market date rather than the gated display date for stock workspace defaults', async () => {
+    apiMocks.fetchPlatformReadiness.mockResolvedValueOnce({
+      mode: 'eod_local',
+      status: 'BLOCKED',
+      as_of: '2026-07-02T16:00:00+08:00',
+      display_trade_date: '2026-06-30',
+      latest_trade_date: '2026-07-02',
+      latest_market_date: '2026-07-02',
+      display_gate: {
+        display_trade_date: '2026-06-30',
+        latest_market_date: '2026-07-02',
+        candidate_trade_date: '2026-07-02',
+        candidate_status: 'before_cutoff',
+        display_status: 'ready'
+      },
+      checks: [],
+      warnings: []
+    });
+    apiMocks.fetchPlatformSummary.mockResolvedValueOnce({
+      latest_market_date: '2026-07-02',
+      latest_score_date: '2026-07-01',
+      latest_factor_date: '2026-07-01',
+      market_asset_count: 5207,
+      score_asset_count: 5207,
+      factor_count: 43,
+      score_versions: ['manual_v1'],
+      topn_preview: []
+    });
+
+    const { stockRenders } = await renderMockedAppShellForHandoff();
+
+    await waitFor(() => expect(apiMocks.fetchPlatformReadiness).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button', { name: 'Open Stock Workspace workspace' }));
+
+    await waitFor(() => expect(stockRenders.at(-1)?.defaultTradeDate).toBe('2026-07-02'));
+  });
+
+  it('resets stale stock source context when opening stock from plain navigation', async () => {
+    const { stockRenders } = await renderMockedAppShellForHandoff();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock open news' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Mock open news asset' }));
+    expect(await screen.findByTestId('mock-stock-workspace')).toHaveTextContent(
+      'CN:SH:600519:news:贵州茅台经营快讯:none:news-row-1:1'
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open News workspace' }));
+    expect(await screen.findByTestId('mock-news-workspace')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Stock Workspace workspace' }));
+    expect(await screen.findByTestId('mock-stock-workspace')).toHaveTextContent(
+      'CN:SH:600519:none:none:none:none:2'
+    );
+    expect(stockRenders.at(-1)).toMatchObject({
+      initialAssetId: 'CN:SH:600519',
+      mountId: 2
+    });
+    expect(stockRenders.at(-1)?.entryContext?.sourceWorkspace).toBeUndefined();
+    expect(stockRenders.at(-1)?.entryContext?.newsId).toBeUndefined();
+  });
+
+  it('opens stock handoffs from news and watchlist with source context', async () => {
+    const { stockRenders } = await renderMockedAppShellForHandoff();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock open news' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Mock open news asset' }));
+    expect(await screen.findByTestId('mock-stock-workspace')).toHaveTextContent(
+      'CN:SH:600519:news:贵州茅台经营快讯:none:news-row-1:1'
+    );
+    expect(stockRenders.at(-1)).toMatchObject({
+      initialAssetId: 'CN:SH:600519',
+      entryContext: {
+        sourceWorkspace: 'news',
+        query: '贵州茅台经营快讯',
+        newsId: 'news-row-1',
+        tradeDate: '2026-06-10'
+      },
+      mountId: 1
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Watchlist workspace' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Mock open watchlist asset' }));
+    expect(await screen.findByTestId('mock-stock-workspace')).toHaveTextContent('000002.SZ:watchlist:none:none:none:2');
+    expect(stockRenders.at(-1)).toMatchObject({
+      initialAssetId: '000002.SZ',
+      entryContext: {
+        sourceWorkspace: 'watchlist'
+      },
+      mountId: 2
+    });
+  });
+
+  it('shows daily review as an independent workspace after review queue', async () => {
+    await renderMockedAppShellForHandoff();
+
+    const reviewQueue = screen.getByRole('button', { name: 'Open Review Queue workspace' });
+    const dailyReview = screen.getByRole('button', { name: 'Open Daily Review workspace' });
+    const marketMonitor = screen.getByRole('button', { name: 'Open Market Monitor workspace' });
+
+    expect(reviewQueue.compareDocumentPosition(dailyReview) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(dailyReview.compareDocumentPosition(marketMonitor) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    fireEvent.click(dailyReview);
+
+    expect(await screen.findByTestId('mock-daily-review-workspace')).toHaveTextContent('daily review:2026-06-12');
+  });
+
+  it('uses news row context when news opens a stock asset', async () => {
+    const { stockRenders } = await renderMockedAppShellForHandoff();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock open news' }));
+    expect(await screen.findByTestId('mock-news-workspace')).toHaveTextContent('茅台:news-1:1');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock open news asset' }));
+    expect(await screen.findByTestId('mock-stock-workspace')).toHaveTextContent(
+      'CN:SH:600519:news:贵州茅台经营快讯:none:news-row-1:1'
+    );
+    expect(stockRenders.at(-1)).toMatchObject({
+      initialAssetId: 'CN:SH:600519',
+      entryContext: {
+        sourceWorkspace: 'news',
+        query: '贵州茅台经营快讯',
+        newsId: 'news-row-1',
+        tradeDate: '2026-06-10'
+      },
+      mountId: 1
+    });
+  });
+
+  it('opens destination workspaces from stock detail context actions', async () => {
+    const { marketRenders, newsRenders, researchRenders } = await renderMockedAppShellForHandoff();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock open stock search' }));
+    expect(await screen.findByTestId('mock-stock-workspace')).toHaveTextContent(
+      'CN:SH:600519:search:600519:Exact code match:none:1'
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock stock open news' }));
+    expect(await screen.findByTestId('mock-news-workspace')).toHaveTextContent('600519:stock-news-1:1');
+    expect(newsRenders.at(-1)).toMatchObject({
+      initialQuery: '600519',
+      initialNewsId: 'stock-news-1',
+      mountId: 1
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Stock Workspace workspace' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Mock stock open research' }));
+    expect(await screen.findByTestId('mock-research-workspace')).toHaveTextContent(
+      '600519:stock-event-1:stock-report-1'
+    );
+    expect(researchRenders.at(-1)).toMatchObject({
+      initialQuery: '600519',
+      initialEventKey: 'stock-event-1',
+      initialReportId: 'stock-report-1'
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Stock Workspace workspace' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Mock stock open market' }));
+    expect(await screen.findByTestId('mock-market-workspace')).toHaveTextContent(
+      'market workspace:2026-06-12:industry:CN:SH:600519'
+    );
+    expect(marketRenders.at(-1)).toMatchObject({
+      initialTradeDate: '2026-06-12',
+      initialMonitorTab: 'industry',
+      initialAssetId: 'CN:SH:600519'
+    });
+  });
+
+  it('returns from stock detail actions with the current source context', async () => {
+    const { marketRenders, newsRenders, researchRenders } = await renderMockedAppShellForHandoff();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock open news' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Mock open news asset' }));
+    expect(await screen.findByTestId('mock-stock-workspace')).toHaveTextContent(
+      'CN:SH:600519:news:贵州茅台经营快讯:none:news-row-1:1'
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock stock return current news' }));
+    expect(await screen.findByTestId('mock-news-workspace')).toHaveTextContent('贵州茅台经营快讯:news-row-1:2');
+    expect(newsRenders.at(-1)).toMatchObject({
+      initialQuery: '贵州茅台经营快讯',
+      initialNewsId: 'news-row-1',
+      initialTradeDate: '2026-06-10'
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock open research' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'mocked report stock' }));
+    expect(await screen.findByTestId('mock-stock-workspace')).toHaveTextContent(
+      'CN:SH:600519:researchReports:贵州茅台深度报告:none:none:2'
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock stock return current research' }));
+    expect(await screen.findByTestId('mock-research-workspace')).toHaveTextContent(
+      '贵州茅台深度报告:r1:600519.SH:r1'
+    );
+    expect(researchRenders.at(-1)).toMatchObject({
+      initialQuery: '贵州茅台深度报告',
+      initialEventKey: 'r1:600519.SH',
+      initialReportId: 'r1',
+      initialTradeDate: '2026-06-11'
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Market Monitor workspace' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Mock market open asset' }));
+    expect(await screen.findByTestId('mock-stock-workspace')).toHaveTextContent(
+      'CN:SH:600519:market:贵州茅台:stock_heatmap:none:3'
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock stock return current market' }));
+    expect(await screen.findByTestId('mock-market-workspace')).toHaveTextContent(
+      'market workspace:2026-06-12:industry:CN:SH:600519'
+    );
+    expect(marketRenders.at(-1)).toMatchObject({
+      initialTradeDate: '2026-06-12',
+      initialMonitorTab: 'industry',
+      initialAssetId: 'CN:SH:600519'
+    });
+  });
+
+  it('opens stock handoff from market monitor with market context', async () => {
+    const { stockRenders } = await renderMockedAppShellForHandoff();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Market Monitor workspace' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Mock market open asset' }));
+
+    expect(await screen.findByTestId('mock-stock-workspace')).toHaveTextContent(
+      'CN:SH:600519:market:贵州茅台:stock_heatmap:none:1'
+    );
+    expect(stockRenders.at(-1)).toMatchObject({
+      initialAssetId: 'CN:SH:600519',
+      entryContext: {
+        sourceWorkspace: 'market',
+        query: '贵州茅台',
+        tradeDate: '2026-06-12',
+        monitorTab: 'stock_heatmap',
+        matchReason: 'stock_heatmap'
+      },
+      mountId: 1
+    });
+  });
+
+  it('preserves news handoff context and remounts on the same result', async () => {
+    const { newsRenders } = await renderMockedAppShellForHandoff();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock open news' }));
+    expect(await screen.findByTestId('mock-news-workspace')).toHaveTextContent('茅台:news-1:1');
+    expect(newsRenders.at(-1)).toMatchObject({
+      initialQuery: '茅台',
+      initialNewsId: 'news-1',
+      mountId: 1
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock open news' }));
+    expect(await screen.findByTestId('mock-news-workspace')).toHaveTextContent('茅台:news-1:2');
+    expect(newsRenders.at(-1)).toMatchObject({
+      initialQuery: '茅台',
+      initialNewsId: 'news-1',
+      mountId: 2
+    });
+  });
+
+  it('preserves research report handoff context', async () => {
+    const { researchRenders } = await renderMockedAppShellForHandoff();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock open research' }));
+    expect(await screen.findByTestId('mock-research-workspace')).toHaveTextContent('茅台:evt-1:report-1');
+    expect(researchRenders.at(-1)).toMatchObject({
+      initialQuery: '茅台',
+      initialEventKey: 'evt-1',
+      initialReportId: 'report-1'
+    });
+  });
+
+  it('opens stock handoff from research reports with report context', async () => {
+    const { stockRenders } = await renderMockedAppShellForHandoff();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock open research' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'mocked report stock' }));
+
+    expect(await screen.findByTestId('mock-stock-workspace')).toHaveTextContent(
+      'CN:SH:600519:researchReports:贵州茅台深度报告:none:none:1'
+    );
+    expect(stockRenders.at(-1)).toMatchObject({
+      initialAssetId: 'CN:SH:600519',
+      entryContext: {
+        sourceWorkspace: 'researchReports',
+        query: '贵州茅台深度报告',
+        eventKey: 'r1:600519.SH',
+        reportId: 'r1',
+        tradeDate: '2026-06-11'
+      },
+      mountId: 1
+    });
+  });
+
+  it('preserves generated report handoff context', async () => {
+    const { generatedRenders } = await renderMockedAppShellForHandoff();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock open generated' }));
+    expect(await screen.findByTestId('mock-generated-workspace')).toHaveTextContent(
+      'Daily:2026-06-10:/reports/daily-topn.html'
+    );
+    expect(generatedRenders.at(-1)).toMatchObject({
+      initialQuery: 'Daily',
+      initialTradeDate: '2026-06-10',
+      initialPath: '/reports/daily-topn.html'
+    });
+  });
+
+  it('opens the News workspace with the global search result query', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      apiMocks.fetchGlobalSearch.mockResolvedValueOnce(
+        makeGlobalSearchPayload(
+          makeGlobalSearchResult({
+            type: 'news',
+            id: 'news-1',
+            title: '贵州茅台新闻',
+            subtitle: '7x24',
+            target: { workspace: 'news', q: '茅台' }
+          })
+        )
+      );
+      apiMocks.fetchPublicNews.mockResolvedValue({
+        items: [
+          {
+            news_id: 'news-1',
+            source: 'sina_finance',
+            source_channel: '7x24',
+            category: 'live',
+            title: '贵州茅台新闻',
+            summary: '茅台公告摘要',
+            url: 'https://finance.sina.com.cn/live/maotai',
+            published_at: '2026-06-11 09:00:00',
+            collected_at: '2026-06-11T09:01:00+00:00',
+            raw_id: '',
+            raw_payload: {},
+            status: 'available'
+          }
+        ],
+        warnings: []
+      });
+
+      render(<AppShell currentUser={TEST_ADMIN_USER} />);
+
+      fireEvent.change(screen.getByLabelText('Global search'), { target: { value: '茅台' } });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(250);
+      });
+      fireEvent.click(await screen.findByRole('option', { name: /贵州茅台新闻 7x24/ }));
+
+      expect(await screen.findByRole('heading', { name: 'News', level: 1 })).toBeVisible();
+      expect(screen.getByLabelText('news search')).toHaveValue('茅台');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('reapplies the News query when selecting the same global search result again', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const newsResult = makeGlobalSearchResult({
+        type: 'news',
+        id: 'news-1',
+        title: '贵州茅台新闻',
+        subtitle: '7x24',
+        target: { workspace: 'news', q: '茅台' }
+      });
+      apiMocks.fetchGlobalSearch
+        .mockResolvedValueOnce(makeGlobalSearchPayload(newsResult))
+        .mockResolvedValueOnce(makeGlobalSearchPayload(newsResult));
+      apiMocks.fetchPublicNews.mockResolvedValue({
+        items: [
+          {
+            news_id: 'news-1',
+            source: 'sina_finance',
+            source_channel: '7x24',
+            category: 'live',
+            title: '贵州茅台新闻',
+            summary: '茅台公告摘要',
+            url: 'https://finance.sina.com.cn/live/maotai',
+            published_at: '2026-06-11 09:00:00',
+            collected_at: '2026-06-11T09:01:00+00:00',
+            raw_id: '',
+            raw_payload: {},
+            status: 'available'
+          }
+        ],
+        warnings: []
+      });
+
+      render(<AppShell currentUser={TEST_ADMIN_USER} />);
+
+      fireEvent.change(screen.getByLabelText('Global search'), { target: { value: '茅台' } });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(250);
+      });
+      fireEvent.click(await screen.findByRole('option', { name: /贵州茅台新闻 7x24/ }));
+
+      const newsSearch = await screen.findByLabelText('news search');
+      expect(newsSearch).toHaveValue('茅台');
+
+      fireEvent.change(newsSearch, { target: { value: '别的' } });
+      expect(newsSearch).toHaveValue('别的');
+
+      fireEvent.change(screen.getByLabelText('Global search'), { target: { value: '茅台' } });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(250);
+      });
+      fireEvent.click(await screen.findByRole('option', { name: /贵州茅台新闻 7x24/ }));
+
+      expect(screen.getByLabelText('news search')).toHaveValue('茅台');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('opens Generated Reports with the global search result trade date', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      apiMocks.fetchGlobalSearch.mockResolvedValueOnce(
+        makeGlobalSearchPayload(
+          makeGlobalSearchResult({
+            type: 'generated_report',
+            id: 'generated:/reports/daily-topn.html',
+            title: 'Daily TopN',
+            subtitle: 'daily_topn_report',
+            target: {
+              workspace: 'generatedReports',
+              q: 'Daily',
+              trade_date: '2026-06-10'
+            } as GlobalSearchResult['target']
+          }),
+          'Daily'
+        )
+      );
+      apiMocks.fetchOverview.mockResolvedValue({
+        ...makeOverview({ trade_date: '2026-06-10' }),
+        reports: [
+          {
+            report_type: 'daily_topn_report',
+            title: 'Daily TopN',
+            path: '/reports/daily-topn.html',
+            format: 'html',
+            trade_date: '2026-06-10'
+          }
+        ]
+      });
+
+      render(<AppShell currentUser={TEST_ADMIN_USER} />);
+
+      fireEvent.change(screen.getByLabelText('Global search'), { target: { value: 'Daily' } });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(250);
+      });
+      fireEvent.click(await screen.findByRole('option', { name: /Daily TopN daily_topn_report/ }));
+
+      expect(await screen.findByRole('heading', { name: 'Generated Reports', level: 1 })).toBeVisible();
+      expect(screen.getByLabelText('generated reports search')).toHaveValue('Daily');
+      await waitFor(() =>
+        expect(apiMocks.fetchOverview).toHaveBeenLastCalledWith({
+          tradeDate: '2026-06-10',
+          scoreVersion: 'manual_v1',
+          watchlistId: 'default',
+          topN: 5
+        })
+      );
+      expect(await screen.findByText('Daily TopN')).toBeVisible();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('explains why Generated Reports can be empty', async () => {
+    apiMocks.fetchOverview.mockResolvedValue({ ...makeOverview(), reports: [] });
+
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
+    const navigation = within(screen.getByRole('complementary', { name: 'Workspace navigation' }));
+
+    fireEvent.click(navigation.getByRole('button', { name: 'Open Generated Reports workspace' }));
+
+    expect(await screen.findByRole('heading', { name: 'Generated Reports', level: 1 })).toBeVisible();
+    expect(await screen.findByText('当前日期没有生成报告。')).toBeVisible();
+    expect(screen.getByText('可能是报告生成任务尚未运行，或报告目录没有命中该日期。')).toBeVisible();
+  });
+
+  it('renders EOD market monitor data without implying realtime data', async () => {
+    apiMocks.fetchMarketMonitorEod.mockResolvedValueOnce(makeMarketMonitorPayload());
+
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open Market Monitor workspace' }));
+
+    expect(await screen.findByRole('heading', { name: 'Market Monitor' })).toBeInTheDocument();
+    expect(screen.getByText('Last Completed Trading Day')).toBeInTheDocument();
+    expect(screen.queryByText('Realtime')).not.toBeInTheDocument();
+    expect(screen.getByText('Data Mode')).toBeInTheDocument();
+    expect(screen.getByText('EOD Snapshot')).toBeInTheDocument();
+    expect(screen.getAllByText('2026-06-10').length).toBeGreaterThan(0);
+    expect(screen.getByText('综合强度')).toBeInTheDocument();
+    expect(screen.getByText('73.6')).toBeInTheDocument();
+    expect(screen.getByText('hot')).toBeInTheDocument();
+    expect(screen.getAllByText('涨跌家数').length).toBeGreaterThan(0);
+    expect(screen.getByText('3,610')).toBeInTheDocument();
+    expect(screen.getAllByText('市场量能').length).toBeGreaterThan(0);
+    expect(screen.getByText('1.18x')).toBeInTheDocument();
+    expect(screen.getAllByText('涨停表现').length).toBeGreaterThan(0);
+    expect(screen.getByText('最高 6 板')).toBeInTheDocument();
+    expect(screen.getAllByText('赚钱效应').length).toBeGreaterThan(0);
+    expect(screen.getByText('73.61%')).toBeInTheDocument();
+    expect(screen.getByText('2.60%')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '竞价 0' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '涨停 1' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '炸板 0' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '跌停 0' })).toBeInTheDocument();
+    screen.getAllByRole('tab').forEach((tab) => {
+      const panelId = tab.getAttribute('aria-controls');
+      expect(panelId).toBeTruthy();
+      expect(document.getElementById(panelId as string)).toBeInTheDocument();
+    });
+    expect(screen.getByText('金钼股份')).toBeInTheDocument();
+    expect(screen.getByText('30.38亿')).toBeInTheDocument();
+    expect(screen.getByText('权重表现待接入')).toBeInTheDocument();
+  });
+
+  it('loads market monitor history for a selected trade date', async () => {
+    apiMocks.fetchMarketMonitorEod
+      .mockResolvedValueOnce(makeMarketMonitorPayload())
+      .mockResolvedValueOnce(makeMarketMonitorPayload())
+      .mockResolvedValueOnce(
+        makeMarketMonitorPayload({
+          trade_date: '2026-06-09',
+          freshness: {
+            mode: 'eod',
+            label: 'Historical EOD',
+            is_realtime: false,
+            latest_market_date: '2026-06-10',
+            latest_factor_date: '2026-06-10',
+            latest_score_date: '2026-06-10'
+          },
+          market_emotion: {
+            ...marketEmotionFixture,
+            summary: { ...marketEmotionFixture.summary, score: 61.2, state: 'warm' }
+          }
+        })
+      );
+
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open Market Monitor workspace' }));
+
+    expect(await screen.findByRole('heading', { name: 'Market Monitor' })).toBeInTheDocument();
+    const tradeDateInput = screen.getByLabelText('Market monitor trade date');
+    await waitFor(() => expect(tradeDateInput).toHaveValue('2026-06-10'));
+
+    fireEvent.change(tradeDateInput, { target: { value: '2026-06-09' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Load Date' }));
+
+    await waitFor(() => expect(apiMocks.fetchMarketMonitorEod).toHaveBeenLastCalledWith({ topN: 5, tradeDate: '2026-06-09' }));
+    expect(await screen.findByText('Historical EOD')).toBeInTheDocument();
+    expect(screen.getByText('61.2')).toBeInTheDocument();
+    expect(tradeDateInput).toHaveValue('2026-06-09');
+  });
+
+  it('shows the selected market monitor date while historical data is loading', async () => {
+    let resolveHistoricalRequest: (payload: MarketMonitorPayload) => void = () => undefined;
+    const historicalRequest = new Promise<MarketMonitorPayload>((resolve) => {
+      resolveHistoricalRequest = resolve;
+    });
+    apiMocks.fetchMarketMonitorEod
+      .mockResolvedValueOnce(makeMarketMonitorPayload())
+      .mockResolvedValueOnce(makeMarketMonitorPayload())
+      .mockReturnValueOnce(historicalRequest);
+
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open Market Monitor workspace' }));
+
+    expect(await screen.findByRole('heading', { name: 'Market Monitor' })).toBeInTheDocument();
+    const tradeDateInput = screen.getByLabelText('Market monitor trade date');
+    await waitFor(() => expect(tradeDateInput).toHaveValue('2026-06-10'));
+
+    fireEvent.change(tradeDateInput, { target: { value: '2026-06-04' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Load Date' }));
+
+    expect(await screen.findByText('Loading 2026-06-04...')).toBeInTheDocument();
+    expect(screen.getAllByText('2026-06-10').length).toBeGreaterThan(0);
+
+    await act(async () => {
+      resolveHistoricalRequest(
+        makeMarketMonitorPayload({
+          trade_date: '2026-06-04',
+          freshness: {
+            mode: 'eod',
+            label: 'Historical EOD',
+            is_realtime: false,
+            latest_market_date: '2026-06-10',
+            latest_factor_date: '2026-06-10',
+            latest_score_date: '2026-06-10'
+          }
+        })
+      );
+      await historicalRequest;
+    });
+
+    expect(screen.queryByText('Loading 2026-06-04...')).not.toBeInTheDocument();
+    expect(tradeDateInput).toHaveValue('2026-06-04');
+  });
+
+  it('renders partial EOD market monitor payloads without crashing', async () => {
+    apiMocks.fetchMarketMonitorEod
+      .mockResolvedValueOnce(makeMarketMonitorPayload())
+      .mockResolvedValueOnce({
+        trade_date: '2026-06-10'
+      } as unknown as MarketMonitorPayload);
+
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open Market Monitor workspace' }));
+
+    expect(await screen.findByRole('heading', { name: 'Market Monitor' })).toBeInTheDocument();
+    expect(screen.getByText('Last Completed Trading Day')).toBeInTheDocument();
+    expect(await screen.findByText('2026-06-10')).toBeInTheDocument();
+    expect(screen.getByText('权重表现待接入')).toBeInTheDocument();
+    expect(screen.getByText('情绪拆解待接入')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '涨停 0' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('股票名单源未接入。')).toBeInTheDocument();
+  });
+
+  it('supports keyboard navigation across market monitor stock tabs', async () => {
+    apiMocks.fetchMarketMonitorEod.mockResolvedValueOnce(makeMarketMonitorPayload());
+
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open Market Monitor workspace' }));
+
+    await screen.findByRole('heading', { name: 'Market Monitor' });
+    const auctionTab = screen.getByRole('tab', { name: '竞价 0' });
+    const limitUpTab = screen.getByRole('tab', { name: '涨停 1' });
+    const brokenTab = screen.getByRole('tab', { name: '炸板 0' });
+    const limitDownTab = screen.getByRole('tab', { name: '跌停 0' });
+
+    expect(limitUpTab).toHaveAttribute('aria-selected', 'true');
+    limitUpTab.focus();
+
+    fireEvent.keyDown(limitUpTab, { key: 'ArrowRight' });
+    expect(brokenTab).toHaveAttribute('aria-selected', 'true');
+    expect(brokenTab).toHaveFocus();
+
+    fireEvent.keyDown(brokenTab, { key: 'Home' });
+    expect(auctionTab).toHaveAttribute('aria-selected', 'true');
+    expect(auctionTab).toHaveFocus();
+
+    fireEvent.keyDown(auctionTab, { key: 'End' });
+    expect(limitDownTab).toHaveAttribute('aria-selected', 'true');
+    expect(limitDownTab).toHaveFocus();
+
+    fireEvent.keyDown(limitDownTab, { key: 'ArrowLeft' });
+    expect(brokenTab).toHaveAttribute('aria-selected', 'true');
+    expect(brokenTab).toHaveFocus();
+  });
+
+  it('ignores deferred market monitor responses after navigating away', async () => {
+    let resolveMarketMonitor: (payload: MarketMonitorPayload) => void = () => undefined;
+    const pendingMarketMonitor = new Promise<MarketMonitorPayload>((resolve) => {
+      resolveMarketMonitor = resolve;
+    });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    apiMocks.fetchMarketMonitorEod.mockResolvedValueOnce(makeMarketMonitorPayload()).mockReturnValueOnce(pendingMarketMonitor);
+
+    try {
+      render(<AppShell currentUser={TEST_ADMIN_USER} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Open Market Monitor workspace' }));
+      expect(await screen.findByRole('heading', { name: 'Market Monitor' })).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Open Home workspace' }));
+      expect(await screen.findByRole('heading', { name: '策略指挥中心' })).toBeInTheDocument();
+
+      await act(async () => {
+        resolveMarketMonitor(
+          makeMarketMonitorPayload({
+            strategy_signal_summary: {
+              topn_preview_count: 1,
+              topn_preview: [
+                {
+                  trade_date: '2026-06-10',
+                  asset_id: 'STALE.MKT',
+                  rank: 1,
+                  score_total: 99.9,
+                  score_version: 'manual_v1',
+                  score_components: {}
+                }
+              ],
+              risk_filter_counts: {}
+            },
+            warnings: ['stale market monitor payload']
+          })
+        );
+        await pendingMarketMonitor;
+      });
+
+      await waitFor(() => expect(screen.queryByText('STALE.MKT')).not.toBeInTheDocument());
+      expect(screen.queryByText('stale market monitor payload')).not.toBeInTheDocument();
+      expect(consoleError).not.toHaveBeenCalled();
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  it('keeps the latest market monitor request when older responses resolve later', async () => {
+    let resolveFirstRequest: (payload: MarketMonitorPayload) => void = () => undefined;
+    let resolveSecondRequest: (payload: MarketMonitorPayload) => void = () => undefined;
+    const firstRequest = new Promise<MarketMonitorPayload>((resolve) => {
+      resolveFirstRequest = resolve;
+    });
+    const secondRequest = new Promise<MarketMonitorPayload>((resolve) => {
+      resolveSecondRequest = resolve;
+    });
+    apiMocks.fetchMarketMonitorEod
+      .mockResolvedValueOnce(makeMarketMonitorPayload())
+      .mockReturnValueOnce(firstRequest)
+      .mockReturnValueOnce(secondRequest);
+
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open Market Monitor workspace' }));
+    expect(await screen.findByRole('heading', { name: 'Market Monitor' })).toBeInTheDocument();
+    expect(apiMocks.fetchMarketMonitorEod).toHaveBeenCalledTimes(2);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Load Latest EOD' }));
+    expect(apiMocks.fetchMarketMonitorEod).toHaveBeenCalledTimes(3);
+
+    await act(async () => {
+      resolveSecondRequest(
+        makeMarketMonitorPayload({
+          trade_date: '2026-06-11',
+          freshness: {
+            mode: 'eod',
+            label: 'Last Completed Trading Day',
+            is_realtime: false,
+            latest_market_date: '2026-06-11',
+            latest_factor_date: '2026-06-11',
+            latest_score_date: '2026-06-11'
+          },
+          strategy_signal_summary: {
+            topn_preview_count: 1,
+            topn_preview: [
+              {
+                trade_date: '2026-06-11',
+                asset_id: '000002.SZ',
+                rank: 1,
+                score_total: 88.8,
+                score_version: 'manual_v1',
+                score_components: {}
+              }
+            ],
+            risk_filter_counts: {}
+          },
+          warnings: []
+        })
+      );
+      await secondRequest;
+    });
+
+    expect(await screen.findByText('000002.SZ')).toBeInTheDocument();
+    expect(screen.getAllByText('2026-06-11').length).toBeGreaterThan(0);
+
+    await act(async () => {
+      resolveFirstRequest(makeMarketMonitorPayload());
+      await firstRequest;
+    });
+
+    expect(screen.getByText('000002.SZ')).toBeInTheDocument();
+    expect(screen.getAllByText('2026-06-11').length).toBeGreaterThan(0);
+    expect(screen.queryByText('000001.SZ')).not.toBeInTheDocument();
+    expect(screen.queryByText('2026-06-10')).not.toBeInTheDocument();
+  });
+
+  it('navigates between planned platform workspaces', async () => {
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
+    await screen.findByRole('heading', { name: '策略指挥中心' });
+    const navigation = within(screen.getByRole('complementary', { name: 'Workspace navigation' }));
+
+    fireEvent.click(navigation.getByRole('button', { name: 'Open Factor Lab workspace' }));
+    expect(await screen.findByRole('heading', { name: 'Factor Lab' })).toBeVisible();
+
+    fireEvent.click(navigation.getByRole('button', { name: 'Open Strategy Lab workspace' }));
+    expect(await screen.findByRole('heading', { name: 'Strategy Lab' })).toBeVisible();
+    const runBacktestTab = screen.getByRole('tab', { name: 'Run Backtest' });
+    expect(runBacktestTab).toBeVisible();
+    expect(runBacktestTab).toHaveClass('active');
+    expect(runBacktestTab).toHaveAttribute('id', 'strategy-lab-tab-backtest');
+    expect(runBacktestTab).toHaveAttribute('aria-controls', 'strategy-lab-panel-backtest');
+    expect(runBacktestTab).toHaveAttribute('tabindex', '0');
+    expect(screen.getByRole('tabpanel', { name: 'Run Backtest' })).toHaveAttribute('id', 'strategy-lab-panel-backtest');
+
+    fireEvent.click(navigation.getByRole('button', { name: 'Open Generated Reports workspace' }));
+    expect(await screen.findByRole('heading', { name: 'Generated Reports', level: 1 })).toBeVisible();
+    expect(screen.getByRole('region', { name: 'Generated Reports workspace' })).toBeVisible();
+
+    fireEvent.click(navigation.getByRole('button', { name: 'Open News workspace' }));
+    expect(await screen.findByRole('heading', { name: 'News', level: 1 })).toBeVisible();
+    expect(await screen.findByText('全球快讯')).toBeVisible();
+  });
+
+  it('auto-refreshes news and preserves visible rows on refresh failure', async () => {
+    vi.useFakeTimers();
+    try {
+      apiMocks.fetchPublicNews
+        .mockResolvedValueOnce({
+          items: [
+            {
+              news_id: 'news-1',
+              source: 'sina_finance',
+              source_channel: '7x24',
+              category: 'live',
+              title: '首条快讯',
+              summary: '',
+              url: '',
+              published_at: '2026-06-11 10:00:00',
+              collected_at: '2026-06-11T02:00:00Z',
+              raw_id: '',
+              raw_payload: {},
+              status: 'available'
+            }
+          ],
+          warnings: []
+        })
+        .mockResolvedValueOnce({
+          items: [
+            {
+              news_id: 'news-1',
+              source: 'sina_finance',
+              source_channel: '7x24',
+              category: 'live',
+              title: '首条快讯',
+              summary: '',
+              url: '',
+              published_at: '2026-06-11 10:00:00',
+              collected_at: '2026-06-11T02:00:00Z',
+              raw_id: '',
+              raw_payload: {},
+              status: 'available'
+            }
+          ],
+          warnings: []
+        });
+      render(<AppShell currentUser={TEST_ADMIN_USER} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Open News workspace' }));
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(screen.getByText('首条快讯')).toBeInTheDocument();
+      apiMocks.fetchPublicNews.mockRejectedValueOnce(new Error('source timeout'));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30 * 60 * 1000);
+      });
+
+      expect(apiMocks.fetchPublicNews).toHaveBeenLastCalledWith({
+        source: 'sina_finance',
+        limit: 100,
+        minQualityScore: 65,
+        startTime: expect.stringContaining('T00:00:00')
+      });
+      expect(apiMocks.refreshPublicNews).not.toHaveBeenCalled();
+      expect(screen.getByText('source timeout')).toBeInTheDocument();
+      expect(screen.getByText('首条快讯')).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('clears news loading when refresh completes before initial load', async () => {
+    let resolveInitialFetch: (payload: Awaited<ReturnType<typeof apiMocks.fetchPublicNews>>) => void = () => undefined;
+    const initialFetch = new Promise<Awaited<ReturnType<typeof apiMocks.fetchPublicNews>>>((resolve) => {
+      resolveInitialFetch = resolve;
+    });
+
+    apiMocks.fetchPublicNews.mockReset();
+    apiMocks.refreshPublicNews.mockReset();
+    apiMocks.fetchPublicNews
+      .mockResolvedValueOnce({ items: [], warnings: [] })
+      .mockReturnValueOnce(initialFetch)
+      .mockResolvedValueOnce({
+        items: [
+          {
+            news_id: 'news-refresh',
+            source: 'sina_finance',
+            source_channel: '7x24',
+            category: 'live',
+            title: '刷新后的快讯',
+            summary: '',
+            url: '',
+            published_at: '2026-06-11 10:03:00',
+            collected_at: '2026-06-11T02:03:00Z',
+            raw_id: '',
+            raw_payload: {},
+            status: 'available'
+          }
+        ],
+        warnings: []
+      });
+    apiMocks.refreshPublicNews.mockResolvedValue({
+      received: 1,
+      stored: 1,
+      items_received: 1,
+      counts_by_category: { live: 1 },
+      warnings: []
+    });
+
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open News workspace' }));
+    expect(await screen.findByText('Loading news...')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByText('Loading news...')).not.toBeInTheDocument();
+    expect(screen.getByText('刷新后的快讯')).toBeInTheDocument();
+
+    await act(async () => {
+      resolveInitialFetch({
+        items: [
+          {
+            news_id: 'news-stale-initial',
+            source: 'sina_finance',
+            source_channel: '7x24',
+            category: 'live',
+            title: '过期初始快讯',
+            summary: '',
+            url: '',
+            published_at: '2026-06-11 10:00:00',
+            collected_at: '2026-06-11T02:00:00Z',
+            raw_id: '',
+            raw_payload: {},
+            status: 'available'
+          }
+        ],
+        warnings: []
+      });
+      await initialFetch;
+    });
+
+    expect(screen.getByText('刷新后的快讯')).toBeInTheDocument();
+    expect(screen.queryByText('过期初始快讯')).not.toBeInTheDocument();
+  });
+
+  it('keeps manual news refresh results when an older interval refresh resolves later', async () => {
+    let resolveIntervalFetch: (payload: Awaited<ReturnType<typeof apiMocks.fetchPublicNews>>) => void = () => undefined;
+    const intervalFetch = new Promise<Awaited<ReturnType<typeof apiMocks.fetchPublicNews>>>((resolve) => {
+      resolveIntervalFetch = resolve;
+    });
+
+    vi.useFakeTimers();
+    try {
+      apiMocks.fetchPublicNews.mockReset();
+      apiMocks.refreshPublicNews.mockReset();
+      apiMocks.fetchPublicNews
+        .mockResolvedValueOnce({ items: [], warnings: [] })
+        .mockResolvedValueOnce({
+          items: [
+            {
+              news_id: 'news-initial',
+              source: 'sina_finance',
+              source_channel: '7x24',
+              category: 'live',
+              title: '初始快讯',
+              summary: '',
+              url: '',
+              published_at: '2026-06-11 10:00:00',
+              collected_at: '2026-06-11T02:00:00Z',
+              raw_id: '',
+              raw_payload: {},
+              status: 'available'
+            }
+          ],
+          warnings: []
+        })
+        .mockReturnValueOnce(intervalFetch)
+        .mockResolvedValueOnce({
+          items: [
+            {
+              news_id: 'news-manual',
+              source: 'sina_finance',
+              source_channel: '7x24',
+              category: 'live',
+              title: '手动刷新快讯',
+              summary: '',
+              url: '',
+              published_at: '2026-06-11 10:02:00',
+              collected_at: '2026-06-11T02:02:00Z',
+              raw_id: '',
+              raw_payload: {},
+              status: 'available'
+            }
+          ],
+          warnings: ['manual warning']
+        });
+      apiMocks.refreshPublicNews.mockResolvedValue({
+        received: 1,
+        stored: 1,
+        items_received: 1,
+        counts_by_category: { live: 1 },
+        warnings: []
+      });
+
+      render(<AppShell currentUser={TEST_ADMIN_USER} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Open News workspace' }));
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(screen.getByText('初始快讯')).toBeInTheDocument();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30 * 60 * 1000);
+      });
+      expect(apiMocks.fetchPublicNews).toHaveBeenCalledTimes(3);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(screen.getByText('手动刷新快讯')).toBeInTheDocument();
+      expect(screen.getByText('manual warning')).toBeInTheDocument();
+
+      await act(async () => {
+        resolveIntervalFetch({
+          items: [
+            {
+              news_id: 'news-interval',
+              source: 'sina_finance',
+              source_channel: '7x24',
+              category: 'live',
+              title: '过期自动刷新快讯',
+              summary: '',
+              url: '',
+              published_at: '2026-06-11 10:01:00',
+              collected_at: '2026-06-11T02:01:00Z',
+              raw_id: '',
+              raw_payload: {},
+              status: 'available'
+            }
+          ],
+          warnings: ['stale interval warning']
+        });
+        await intervalFetch;
+      });
+
+      expect(screen.getByText('手动刷新快讯')).toBeInTheDocument();
+      expect(screen.getByText('manual warning')).toBeInTheDocument();
+      expect(screen.queryByText('过期自动刷新快讯')).not.toBeInTheDocument();
+      expect(screen.queryByText('stale interval warning')).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('switches from cockpit to strategy validation mode', async () => {
+    apiMocks.fetchStrategyValidationRuns.mockResolvedValue([
+      {
+        run_id: 'lhb_shortline:fixture:phase16',
+        strategy_id: 'lhb_shortline',
+        strategy_name: 'LHB Shortline',
+        strategy_version: 'phase16',
+        run_type: 'replay',
+        start_date: '2026-06-01',
+        end_date: '2026-06-08',
+        created_at: '2026-06-08T20:30:00+08:00',
+        benchmark: '000300.SH',
+        universe: 'a_share',
+        data_window: {},
+        cost_config: {},
+        slippage_config: {},
+        risk_config: {},
+        position_config: {},
+        source_artifact_paths: [],
+        summary_metrics: {},
+        warnings: []
+      }
+    ]);
+    apiMocks.fetchStrategyValidationReplay.mockResolvedValue({
+      run: null,
+      asset_id: '000001.SZ',
+      bars: [],
+      signals: [],
+      trades: [],
+      positions: [],
+      metrics: [],
+      artifacts: []
+    });
+
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
+    const navigation = within(screen.getByRole('complementary', { name: 'Workspace navigation' }));
+
+    fireEvent.click(navigation.getByRole('button', { name: 'Open Strategy Lab workspace' }));
+    const validationTab = await screen.findByRole('tab', { name: 'Validation Replay' });
+    fireEvent.click(validationTab);
+
+    expect(validationTab).toHaveClass('active');
+    expect(validationTab).toHaveAttribute('id', 'strategy-lab-tab-validation');
+    expect(validationTab).toHaveAttribute('aria-controls', 'strategy-lab-panel-validation');
+    expect(validationTab).toHaveAttribute('tabindex', '0');
+    expect(screen.getByRole('tabpanel', { name: 'Validation Replay' })).toHaveAttribute('id', 'strategy-lab-panel-validation');
+
+    await waitFor(() => expect(screen.getByText('LHB Shortline')).toBeInTheDocument());
+  });
+
+  it('supports keyboard navigation between Strategy Lab tabs', async () => {
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
+    const navigation = within(screen.getByRole('complementary', { name: 'Workspace navigation' }));
+
+    fireEvent.click(navigation.getByRole('button', { name: 'Open Strategy Lab workspace' }));
+
+    const runBacktestTab = await screen.findByRole('tab', { name: 'Run Backtest' });
+    runBacktestTab.focus();
+    expect(runBacktestTab).toHaveFocus();
+
+    fireEvent.keyDown(runBacktestTab, { key: 'ArrowRight' });
+    const validationTab = screen.getByRole('tab', { name: 'Validation Replay' });
+    expect(validationTab).toHaveClass('active');
+    expect(validationTab).toHaveFocus();
+    expect(screen.getByRole('tabpanel', { name: 'Validation Replay' })).toHaveAttribute('id', 'strategy-lab-panel-validation');
+
+    fireEvent.keyDown(validationTab, { key: 'ArrowLeft' });
+    expect(runBacktestTab).toHaveClass('active');
+    expect(runBacktestTab).toHaveFocus();
+    expect(screen.getByRole('tabpanel', { name: 'Run Backtest' })).toHaveAttribute('id', 'strategy-lab-panel-backtest');
+
+    fireEvent.keyDown(runBacktestTab, { key: 'End' });
+    expect(validationTab).toHaveClass('active');
+    expect(validationTab).toHaveFocus();
+
+    fireEvent.keyDown(validationTab, { key: 'Home' });
+    expect(runBacktestTab).toHaveClass('active');
+    expect(runBacktestTab).toHaveFocus();
   });
 
   it('renders invalid shadow analytics review metrics as n/a instead of NaN%', async () => {
-    apiMocks.fetchShadowAnalyticsReview.mockResolvedValueOnce([
+    render(
+      <ShadowAnalyticsReviewPanel
+        rows={[
       {
         ...makeShadowAnalyticsReview()[0],
         horizon_metrics: {
@@ -768,11 +3048,11 @@ describe('dashboard app shell', () => {
           }
         }
       }
-    ]);
+        ]}
+      />
+    );
 
-    render(<App />);
-
-    expect(await screen.findByText('Shadow Analytics Review')).toBeVisible();
+    expect(screen.getByText('Shadow Analytics Review')).toBeVisible();
     const panel = screen.getByText('Shadow Analytics Review').closest('section');
     expect(panel).not.toBeNull();
     expect(within(panel as HTMLElement).getAllByText(/n\/a/)).toHaveLength(2);
@@ -879,22 +3159,24 @@ describe('dashboard app shell', () => {
   });
 
   it('renders invalid shadow outcome analytics metrics as n/a instead of NaN%', async () => {
-    apiMocks.fetchShadowOutcomeAnalytics.mockResolvedValueOnce([
-      {
-        ...makeShadowOutcomeAnalytics()[0],
-        horizon_metrics: {
-          '20': {
-            forward_return_mean: Number.NaN,
-            forward_win_rate: null,
-            max_low_drawdown_worst: Number.POSITIVE_INFINITY
+    render(
+      <ShadowOutcomeAnalyticsPanel
+        rows={[
+          {
+            ...makeShadowOutcomeAnalytics()[0],
+            horizon_metrics: {
+              '20': {
+                forward_return_mean: Number.NaN,
+                forward_win_rate: null,
+                max_low_drawdown_worst: Number.POSITIVE_INFINITY
+              }
+            }
           }
-        }
-      }
-    ]);
+        ]}
+      />
+    );
 
-    render(<App />);
-
-    expect(await screen.findByText('Shadow Outcome Analytics')).toBeVisible();
+    expect(screen.getByText('Shadow Outcome Analytics')).toBeVisible();
     const panel = screen.getByText('Shadow Outcome Analytics').closest('section');
     expect(panel).not.toBeNull();
     expect(within(panel as HTMLElement).getAllByText(/n\/a/)).toHaveLength(3);
@@ -926,107 +3208,12 @@ describe('dashboard app shell', () => {
   });
 
   it('renders invalid shadow outcome metrics as n/a instead of NaN%', async () => {
-    apiMocks.fetchShadowOutcomes.mockResolvedValueOnce(makeShadowOutcomesWithInvalidMetrics());
+    render(<ShadowOutcomesPanel rows={makeShadowOutcomesWithInvalidMetrics()} />);
 
-    render(<App />);
-
-    expect(await screen.findByText('Shadow Outcomes')).toBeVisible();
+    expect(screen.getByText('Shadow Outcomes')).toBeVisible();
     const shadowOutcomesPanel = screen.getByText('Shadow Outcomes').closest('section');
     expect(shadowOutcomesPanel).not.toBeNull();
     expect(within(shadowOutcomesPanel as HTMLElement).getAllByText(/n\/a/)).toHaveLength(3);
     expect(within(shadowOutcomesPanel as HTMLElement).queryByText(/NaN%/)).not.toBeInTheDocument();
-  });
-
-  it('selects an asset from the watchlist', async () => {
-    render(<App />);
-
-    fireEvent.click(await screen.findByText('Vanke'));
-
-    await waitFor(() => {
-      expect(apiMocks.fetchDailyBars).toHaveBeenLastCalledWith('000002.SZ', expect.any(String), '2026-05-29');
-      expect(apiMocks.fetchAssetDecisions).toHaveBeenLastCalledWith('000002.SZ', expect.any(String), '2026-05-29');
-      expect(apiMocks.fetchAssetOutcomes).toHaveBeenLastCalledWith('000002.SZ', expect.any(String), '2026-05-29');
-    });
-  });
-
-  it('uses timezone-stable calendar math for the chart start date', async () => {
-    render(<App />);
-
-    fireEvent.change(screen.getByLabelText('trade date'), { target: { value: '2026-03-01' } });
-
-    await waitFor(() => {
-      expect(apiMocks.fetchDailyBars).toHaveBeenLastCalledWith('000001.SZ', '2025-09-02', '2026-03-01');
-    });
-  });
-
-  it('ignores stale selected asset responses that resolve after a newer selection', async () => {
-    const firstBars = createDeferred<BarPoint[]>();
-    const firstScore = createDeferred<ScoreRow | null>();
-    const firstSignals = createDeferred<WatchlistSignalRow[]>();
-    const firstDecisions = createDeferred<DecisionEventRow[]>();
-    const firstOutcomes = createDeferred<DecisionOutcomeRow[]>();
-    const secondBars = createDeferred<BarPoint[]>();
-    const secondScore = createDeferred<ScoreRow | null>();
-    const secondSignals = createDeferred<WatchlistSignalRow[]>();
-    const secondDecisions = createDeferred<DecisionEventRow[]>();
-    const secondOutcomes = createDeferred<DecisionOutcomeRow[]>();
-
-    apiMocks.fetchDailyBars.mockReturnValueOnce(firstBars.promise).mockReturnValueOnce(secondBars.promise);
-    apiMocks.fetchAssetScore.mockReturnValueOnce(firstScore.promise).mockReturnValueOnce(secondScore.promise);
-    apiMocks.fetchAssetSignals.mockReturnValueOnce(firstSignals.promise).mockReturnValueOnce(secondSignals.promise);
-    apiMocks.fetchAssetDecisions
-      .mockReturnValueOnce(firstDecisions.promise)
-      .mockReturnValueOnce(secondDecisions.promise);
-    apiMocks.fetchAssetOutcomes
-      .mockReturnValueOnce(firstOutcomes.promise)
-      .mockReturnValueOnce(secondOutcomes.promise);
-
-    render(<App />);
-
-    fireEvent.click(await screen.findByText('Vanke'));
-
-    await act(async () => {
-      secondBars.resolve(makeBars(2));
-      secondScore.resolve(makeScore('000002.SZ'));
-      secondSignals.resolve(makeSignals('000002.SZ'));
-      secondDecisions.resolve(makeDecisions('000002.SZ'));
-      secondOutcomes.resolve(makeOutcomes('000002.SZ'));
-    });
-    await waitFor(() => expect(screen.getByTestId('asset-chart')).toHaveTextContent('2 bars'));
-
-    await act(async () => {
-      firstBars.resolve(makeBars(1));
-      firstScore.resolve(makeScore('000001.SZ'));
-      firstSignals.resolve(makeSignals('000001.SZ'));
-      firstDecisions.resolve(makeDecisions('000001.SZ'));
-      firstOutcomes.resolve(makeOutcomes('000001.SZ'));
-    });
-
-    expect(screen.getByTestId('asset-chart')).toHaveTextContent('2 bars');
-  });
-
-  it('ignores stale overview errors after the trade date changes', async () => {
-    const firstOverview = createDeferred<DashboardOverview>();
-    apiMocks.fetchOverview
-      .mockReturnValueOnce(firstOverview.promise)
-      .mockResolvedValueOnce(makeOverview({ trade_date: '2026-03-01' }));
-
-    render(<App />);
-
-    fireEvent.change(screen.getByLabelText('trade date'), { target: { value: '2026-03-01' } });
-    await waitFor(() => {
-      expect(apiMocks.fetchOverview).toHaveBeenLastCalledWith({
-        tradeDate: '2026-03-01',
-        scoreVersion: 'manual_v1',
-        watchlistId: 'default',
-        topN: 30
-      });
-    });
-
-    await act(async () => {
-      firstOverview.reject(new Error('stale overview failed'));
-    });
-
-    expect(screen.queryByText('stale overview failed')).not.toBeInTheDocument();
   });
 });

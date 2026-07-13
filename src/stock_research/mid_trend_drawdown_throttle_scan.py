@@ -17,6 +17,7 @@ from stock_research.mid_trend_shadow_weekly_optimization import _prices_for_shad
 DEFAULT_THRESHOLDS = [0.08, 0.10, 0.12]
 DEFAULT_INVESTED_WEIGHTS = [0.8, 0.9, 1.0]
 DEFAULT_MAX_REPLACEMENTS = [1, 2]
+DEFAULT_TOP_N = 10
 
 
 def run_mid_trend_drawdown_throttle_scan(
@@ -28,7 +29,7 @@ def run_mid_trend_drawdown_throttle_scan(
     threshold_values: list[float] | None = None,
     invested_weight_values: list[float] | None = None,
     max_replacement_values: list[int] | None = None,
-    top_n: int = 5,
+    top_n: int = DEFAULT_TOP_N,
     buffer_rank: int = 10,
     max_weekly_replacements: int = 2,
     transaction_cost_bps: float = 20.0,
@@ -69,7 +70,7 @@ def build_mid_trend_drawdown_throttle_scan_from_frames(
     threshold_values: list[float] | None = None,
     invested_weight_values: list[float] | None = None,
     max_replacement_values: list[int] | None = None,
-    top_n: int = 5,
+    top_n: int = DEFAULT_TOP_N,
     buffer_rank: int = 10,
     max_weekly_replacements: int = 2,
     transaction_cost_bps: float = 20.0,
@@ -84,13 +85,17 @@ def build_mid_trend_drawdown_throttle_scan_from_frames(
     scoped_prices = _prices_for_shadow(prices, pd.concat([primary_signals, buffer_signals], ignore_index=True))
 
     rows: list[dict[str, Any]] = []
+    variant_prefix = f"top{int(top_n)}"
+    baseline_variant_name = f"{variant_prefix}_weekly_max_2_replacements"
+    throttle_variant_name = f"{variant_prefix}_weekly_max2_drawdown_throttle_v1"
+
     baseline = _simulate_variant(
         primary_signals,
         buffer_signals,
         scoped_prices,
         start_date=start_date,
         end_date=end_date,
-        variant_name="top5_weekly_max_2_replacements",
+        variant_name=baseline_variant_name,
         top_n=top_n,
         buffer_rank=buffer_rank,
         max_weekly_replacements=max_weekly_replacements,
@@ -114,7 +119,7 @@ def build_mid_trend_drawdown_throttle_scan_from_frames(
             scoped_prices,
             start_date=start_date,
             end_date=end_date,
-            variant_name="top5_weekly_max2_drawdown_throttle_v1",
+            variant_name=throttle_variant_name,
             top_n=top_n,
             buffer_rank=buffer_rank,
             max_weekly_replacements=max_weekly_replacements,
@@ -128,7 +133,7 @@ def build_mid_trend_drawdown_throttle_scan_from_frames(
         row.update(
             {
                 "variant_name": (
-                    "drawdown_throttle"
+                    f"{throttle_variant_name}"
                     f"_threshold_{abs(threshold):g}"
                     f"_weight_{invested_weight:g}"
                     f"_maxrep_{replacement_limit:g}"

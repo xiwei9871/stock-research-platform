@@ -2,6 +2,7 @@ from typing import Any
 
 from stock_research.config import SETTINGS
 from stock_research.dashboard.schemas import WatchlistSignalRow
+from stock_research.dashboard.theme_research_context import enrich_watchlist_rows
 from stock_research.db import connect, fetch_all
 
 
@@ -9,6 +10,8 @@ def load_watchlist_signals_for_dashboard(
     watchlist_id: str,
     trade_date: str,
     service: str = SETTINGS.research_service,
+    *,
+    include_theme_research: bool = True,
 ) -> list[dict[str, Any]]:
     sql = """
     SELECT
@@ -31,13 +34,16 @@ def load_watchlist_signals_for_dashboard(
     """
     with connect(service) as conn:
         rows = fetch_all(conn, sql, [watchlist_id, trade_date])
-    return [_signal_row(row).to_dict() for row in rows]
+    signal_rows = [_signal_row(row).to_dict() for row in rows]
+    return enrich_watchlist_rows(signal_rows) if include_theme_research else signal_rows
 
 
 def load_asset_watchlist_signals_for_dashboard(
     asset_id: str,
     trade_date: str,
     service: str = SETTINGS.research_service,
+    *,
+    include_theme_research: bool = True,
 ) -> list[dict[str, Any]]:
     sql = """
     SELECT
@@ -60,7 +66,8 @@ def load_asset_watchlist_signals_for_dashboard(
     """
     with connect(service) as conn:
         rows = fetch_all(conn, sql, [asset_id, trade_date])
-    return [_signal_row(row).to_dict() for row in rows]
+    signal_rows = [_signal_row(row).to_dict() for row in rows]
+    return enrich_watchlist_rows(signal_rows) if include_theme_research else signal_rows
 
 
 def _signal_row(row: dict[str, Any]) -> WatchlistSignalRow:

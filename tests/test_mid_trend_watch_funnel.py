@@ -192,6 +192,45 @@ def test_mid_trend_funnel_enriches_market_and_industry_context():
     assert row["industry_mainline_score_v1"] == 0.82
 
 
+def test_mid_trend_funnel_adds_confirmation_and_quality_fields_with_unknown_fundamentals():
+    context = pd.DataFrame(
+        [
+            {
+                "trade_date": "2025-01-02",
+                "asset_id": "A",
+                "industry_name": "科技",
+                "market_regime": "mainline",
+                "mainline_context": "mainline",
+            }
+        ]
+    )
+    industry_mainline = pd.DataFrame(
+        [
+            {
+                "rebalance_date": "2025-01-02",
+                "industry_name": "科技",
+                "industry_mainline_score_v1": 0.82,
+                "mainline_tag": "sustained_mainline",
+            }
+        ]
+    )
+
+    result = build_mid_trend_watch_funnel_from_frames(
+        discovery_pool_detail=_detail(),
+        context_detail=context,
+        industry_mainline=industry_mainline,
+        top50_size=4,
+        top10_size=2,
+    )
+
+    row = result["detail"].set_index("asset_id").loc["A"]
+    assert bool(row["technical_confirmed"]) is True
+    assert bool(row["mainline_confirmed"]) is True
+    assert bool(row["fundamental_confirmed"]) is False
+    assert row["fundamental_quality_bucket"] == "quality_unknown"
+    assert row["midtrend_confirmation_state"] == "T1_M1_UNKNOWN_F"
+
+
 def test_mid_trend_funnel_backfills_industry_from_membership_context():
     membership = pd.DataFrame(
         [

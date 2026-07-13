@@ -1,0 +1,6 @@
+trade_date,universe,frequency,top_n,protection_name,atr_mult,rank_break,rank_exit,ma_window,confirm_days,asset_id,weight,bottleneck_rank,bottleneck_score,stock_name
+2026-06-04,strict_153_st_only_financial_state,weekly,5,rank_exit_top10_1d,,,10,,1,CN:SH:600183,0.2,6.0,0.5364583333333334,生益科技
+2026-06-04,strict_153_st_only_financial_state,weekly,5,rank_exit_top10_1d,,,10,,1,CN:SH:688002,0.2,3.0,0.5797832548227906,睿创微纳
+2026-06-04,strict_153_st_only_financial_state,weekly,5,rank_exit_top10_1d,,,10,,1,CN:SH:688486,0.2,9.0,0.5145358666467201,龙迅股份
+2026-06-04,strict_153_st_only_financial_state,weekly,5,rank_exit_top10_1d,,,10,,1,CN:SZ:002979,0.2,2.0,0.6216139807642084,雷赛智能
+2026-06-04,strict_153_st_only_financial_state,weekly,5,rank_exit_top10_1d,,,10,,1,CN:SZ:300408,0.2,1.0,0.65,三环集团

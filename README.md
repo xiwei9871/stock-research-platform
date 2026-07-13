@@ -72,11 +72,68 @@ Run the daily research script:
 /Users/xiwei/stock_research/scripts/run_daily_research.sh
 ```
 
+## Ops Snapshot Pages
+
+Internal ops status:
+
+```bash
+curl http://127.0.0.1:8765/api/ops/snapshot
+curl http://127.0.0.1:8765/api/ops/stages
+```
+
+Public snapshot:
+
+```bash
+curl http://127.0.0.1:8765/api/public/snapshot
+```
+
+Canonical frontend deployment:
+
+```bash
+cd /Users/xiwei/stock_research/dashboard
+pnpm build
+```
+
+The only supported frontend is the AppShell bundle from `dashboard/index.html`
+and `dashboard/src/main.tsx`. Do not reintroduce `public-snapshot.html`,
+`src/public-main.tsx`, or a separate public-only bundle. See
+`docs/canonical-frontend.md`.
+
 Start the dashboard API:
 
 ```bash
 stock-research dashboard-api --host 127.0.0.1 --port 8765
 ```
+
+## EOD Auto Repair
+
+Run diagnostics only:
+
+```bash
+rtk .venv/bin/python -m stock_research.eod_auto_repair \
+  --trade-date YYYY-MM-DD \
+  --output-dir outputs/research/eod_auto_repair/YYYY-MM-DD-check \
+  --mode check
+```
+
+Run staged repair:
+
+```bash
+rtk .venv/bin/python -m stock_research.eod_auto_repair \
+  --trade-date YYYY-MM-DD \
+  --output-dir outputs/research/eod_auto_repair/YYYY-MM-DD \
+  --mode repair
+```
+
+Important safety rule: Baostock minute repair is always single-worker. Do not bypass this in cron or manual runs.
+
+The repair command runs dependency stages in this order: base bars, features, scores/watchlists, market monitor, strategy EOD, presentation freshness. It stops before downstream stages when a blocker remains.
+
+Primary outputs:
+
+- `outputs/research/eod_auto_repair/YYYY-MM-DD/run_summary.json`
+- `outputs/research/eod_auto_repair/YYYY-MM-DD/run_report.md`
+- `outputs/research/strategy_daily_eod/YYYY-MM-DD/review_queue_strategy_manifest.csv`
 
 Build a P17 shadow follow-up queue:
 
@@ -147,6 +204,7 @@ matrix and expected evidence.
 | Final release runbook | `docs/quant_system/68_p19_final_release_runbook.md` |
 | Final platform completion | `docs/quant_system/69_p19_final_platform_closure_completion.md` |
 | Dashboard workbench | `docs/dashboard-workbench-runbook.md` |
+| Dashboard ops snapshot runbook | `docs/dashboard-ops-snapshot-runbook.md` |
 | Daily factor pipeline | `docs/daily-factor-pipeline-runbook.md` |
 | P2 daily runbook and smoke report | `docs/quant_system/17_p2_daily_runbook_and_smoke_report.md` |
 | P4 scheduler runbook | `docs/quant_system/21_p4_scheduler_runbook.md` |

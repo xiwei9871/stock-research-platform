@@ -637,6 +637,38 @@ def test_run_vectorized_topn_backtest_caps_holdings_with_max_positions():
     assert result.equity_curve.iloc[0]["holdings_count"] == 2
 
 
+def test_run_vectorized_topn_backtest_caps_weight_with_max_position_weight():
+    scores = _scores(
+        [
+            ("2026-01-01", "A", 1, 90.0),
+            ("2026-01-01", "B", 2, 80.0),
+        ]
+    )
+    prices = _prices(
+        [
+            ("2026-01-01", "A", 10.0),
+            ("2026-01-01", "B", 20.0),
+            ("2026-01-02", "A", 11.0),
+            ("2026-01-02", "B", 22.0),
+            ("2026-01-03", "A", 11.0),
+            ("2026-01-03", "B", 22.0),
+            ("2026-01-04", "A", 12.1),
+            ("2026-01-04", "B", 24.2),
+        ]
+    )
+    config = VectorizedTopNConfig(
+        start_date="2026-01-01",
+        end_date="2026-01-04",
+        top_n=2,
+        max_position_weight=0.3,
+    )
+
+    result = run_vectorized_topn_backtest(scores, prices, config)
+
+    assert list(result.positions["weight"]) == pytest.approx([0.3, 0.3])
+    assert result.equity_curve.iloc[-1]["gross_return"] == pytest.approx(0.06)
+
+
 def test_run_vectorized_topn_backtest_outputs_rebalance_trade_details():
     scores = _scores(
         [

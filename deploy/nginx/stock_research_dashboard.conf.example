@@ -1,0 +1,49 @@
+# Example Nginx config for Stock Research Dashboard external access.
+# PostgreSQL is never exposed by this config. Only static dashboard files and /api/ are public.
+# Keep DASHBOARD_WRITE_TOKEN and database credentials server-side; never inject them into the frontend bundle.
+# WebSocket is not required by the current dashboard.
+
+server {
+    listen 80;
+    server_name stock-research.example.com;
+
+    root /opt/stock_research/dashboard/dist;
+    index index.html;
+
+    client_max_body_size 20m;
+
+    gzip on;
+    gzip_comp_level 5;
+    gzip_min_length 1024;
+    gzip_types
+        text/plain
+        text/css
+        application/json
+        application/javascript
+        application/xml
+        image/svg+xml;
+
+    access_log /var/log/nginx/stock_research_dashboard.access.log;
+    error_log /var/log/nginx/stock_research_dashboard.error.log;
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:8765;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Request-ID $request_id;
+        proxy_read_timeout 120s;
+    }
+
+    location /assets/ {
+        try_files $uri =404;
+        expires 7d;
+        add_header Cache-Control "public, max-age=604800, immutable";
+    }
+
+    location / {
+        try_files $uri /index.html;
+    }
+}

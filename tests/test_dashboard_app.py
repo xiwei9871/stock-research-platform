@@ -1,3 +1,6 @@
+from datetime import date
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 from psycopg import errors as psycopg_errors
 
@@ -7,17 +10,30 @@ from stock_research.dashboard import shadow_outcomes
 
 
 def test_overview_route_returns_payload(monkeypatch):
-    monkeypatch.setattr(
-        dashboard_app,
-        "build_dashboard_overview",
-        lambda trade_date, score_version, watchlist_id, top_n: {
+    captured = {}
+
+    def fake_build_dashboard_overview(trade_date, score_version, watchlist_id, top_n):
+        captured.update(
+            {
+                "trade_date": trade_date,
+                "score_version": score_version,
+                "watchlist_id": watchlist_id,
+                "top_n": top_n,
+            }
+        )
+        return {
             "trade_date": trade_date,
             "score_version": score_version,
             "watchlist_id": watchlist_id,
             "top_scores": [],
             "watchlist_signals": [],
             "reports": [],
-        },
+        }
+
+    monkeypatch.setattr(
+        dashboard_app,
+        "build_dashboard_overview",
+        fake_build_dashboard_overview,
     )
     client = TestClient(dashboard_app.create_app())
 
@@ -25,6 +41,328 @@ def test_overview_route_returns_payload(monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["trade_date"] == "2026-05-29"
+    assert captured["top_n"] == 10
+
+
+def test_topn_route_defaults_to_midtrend_top10(monkeypatch):
+    captured = {}
+
+    def fake_load_top_scores_for_dashboard(trade_date, score_version, top_n):
+        captured.update({"trade_date": trade_date, "score_version": score_version, "top_n": top_n})
+        return []
+
+    monkeypatch.setattr(dashboard_app, "load_top_scores_for_dashboard", fake_load_top_scores_for_dashboard)
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/topn?trade_date=2026-05-29")
+
+    assert response.status_code == 200
+    assert captured["top_n"] == 10
+
+
+def test_data_status_route_returns_pipeline_status(monkeypatch):
+    monkeypatch.setattr(
+        dashboard_app,
+        "load_data_status_for_dashboard",
+        lambda: {
+            "latest_ready_trade_date": "2026-06-05",
+            "current_trade_date": "2026-06-05",
+            "pipeline_status": "READY",
+            "daily_status": "success",
+            "minute5_status": "success",
+            "deps_status": "success",
+            "failed_jobs": [],
+            "warnings": [],
+            "last_updated_at": "2026-06-05T20:00:00+08:00",
+        },
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/data/status")
+
+    assert response.status_code == 200
+    assert response.json()["pipeline_status"] == "READY"
+
+
+def test_intraday_status_route_returns_status(monkeypatch):
+    monkeypatch.setattr(dashboard_app.IntradayConfig, "from_env", lambda: dashboard_app.IntradayConfig(service="test"))
+    monkeypatch.setattr(
+        dashboard_app,
+        "load_intraday_status",
+        lambda service, run_date: {
+            "run_date": run_date.isoformat(),
+            "jobs": [],
+            "universe_count": 1,
+            "universe": [{"ts_code": "000001.SZ"}],
+            "market_sentiment": None,
+        },
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/intraday/status?date=20260618")
+
+    assert response.status_code == 200
+    assert response.json()["universe_count"] == 1
+
+
+def test_public_news_route_returns_filtered_items(monkeypatch):
+    captured = {}
+
+    def fake_load_public_news(**kwargs):
+        captured.update(kwargs)
+        return {
+            "items": [
+                {
+                    "news_id": "news-1",
+                    "source": "sina_finance",
+                    "source_channel": "7x24",
+                    "category": "live",
+                    "title": "全球快讯",
+                    "summary": "摘要",
+                    "url": "https://finance.sina.com.cn/live/1",
+                    "published_at": "2026-06-11 09:00:00",
+                    "collected_at": "2026-06-11T09:01:00+00:00",
+                    "raw_id": "",
+                    "raw_payload": {},
+                    "status": "available",
+                }
+            ],
+            "warnings": [],
+        }
+
+    monkeypatch.setattr(dashboard_app, "load_public_news_for_dashboard", fake_load_public_news)
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get(
+        "/api/public-news?source=sina_finance&category=live&q=%E5%BF%AB%E8%AE%AF&limit=10&offset=2"
+    )
+
+    assert response.status_code == 200
+    assert captured == {
+        "source": "sina_finance",
+        "category": "live",
+        "q": "快讯",
+        "limit": 10,
+        "offset": 2,
+    }
+    assert response.json()["items"][0]["title"] == "全球快讯"
+
+
+def test_public_news_refresh_route_returns_counts(monkeypatch):
+    monkeypatch.setattr(
+        dashboard_app,
+        "refresh_public_news_for_dashboard",
+        lambda: {
+            "received": 2,
+            "stored": 2,
+            "items_received": 2,
+            "counts_by_category": {"live": 2},
+            "warnings": [],
+        },
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.post("/api/public-news/refresh")
+
+    assert response.status_code == 200
+    assert response.json()["counts_by_category"] == {"live": 2}
+
+
+def test_dashboard_cache_clear_route_clears_eod_response_cache():
+    client = TestClient(dashboard_app.create_app())
+    cache = client.app.state.eod_response_cache
+    assert cache.get_or_set(("review_queue", ""), lambda: {"trade_date": "2026-06-30"}) == {
+        "trade_date": "2026-06-30"
+    }
+
+    response = client.post("/api/dashboard/cache/clear")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "cleared"}
+    assert cache.get_or_set(("review_queue", ""), lambda: {"trade_date": "2026-07-02"}) == {
+        "trade_date": "2026-07-02"
+    }
+
+
+def test_midtrend_post_exit_review_lite_route_returns_artifact(monkeypatch):
+    monkeypatch.setattr(
+        dashboard_app,
+        "load_midtrend_post_exit_review_lite",
+        lambda: {
+            "schema_version": "midtrend_post_exit_watch_daily_review_lite_v1",
+            "sections": {
+                "HIGH_FUNDAMENTAL": {
+                    "label_zh": "基本面增强观察",
+                    "count": 1,
+                    "items": [
+                        {
+                            "asset_id": "CN:SZ:000001",
+                            "stock_name": "测试股票",
+                            "suggested_review_action": "review_strong_improving_post_exit_name",
+                        }
+                    ],
+                }
+            },
+            "artifact_health": {"exists": True, "warning": ""},
+        },
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/midtrend/post-exit-review-lite")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["sections"]["HIGH_FUNDAMENTAL"]["count"] == 1
+    assert payload["artifact_health"]["exists"] is True
+
+
+def test_midtrend_post_exit_review_lite_route_returns_safe_missing_state(monkeypatch):
+    monkeypatch.setattr(
+        dashboard_app,
+        "load_midtrend_post_exit_review_lite",
+        lambda: {
+            "schema_version": "midtrend_post_exit_watch_daily_review_lite_v1",
+            "sections": {},
+            "artifact_health": {"exists": False, "warning": "artifact_missing"},
+        },
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/midtrend/post-exit-review-lite")
+
+    assert response.status_code == 200
+    assert response.json()["artifact_health"]["exists"] is False
+
+
+def test_dashboard_ops_snapshot_runbook_exists():
+    path = Path(__file__).resolve().parents[1] / "docs/dashboard-ops-snapshot-runbook.md"
+    assert path.exists()
+    text = path.read_text(encoding="utf-8")
+    assert "/api/ops/snapshot" in text
+    assert "/api/public/snapshot" in text
+    assert "needs_intervention" in text
+
+
+def test_ops_snapshot_route_returns_aggregated_payload(monkeypatch):
+    monkeypatch.setattr(
+        dashboard_app,
+        "build_internal_ops_snapshot",
+        lambda trade_date=None: {
+            "intervention": {"needs_intervention": False},
+            "pipeline": {"overall_status": "running"},
+        },
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/ops/snapshot")
+
+    assert response.status_code == 200
+    assert response.json()["pipeline"]["overall_status"] == "running"
+
+
+def test_ops_stages_route_returns_stage_list(monkeypatch):
+    monkeypatch.setattr(
+        dashboard_app,
+        "load_ops_stage_details",
+        lambda service=None, trade_date=None: [{"stage": "daily", "status": "success"}],
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/ops/stages")
+
+    assert response.status_code == 200
+    assert response.json()["items"] == [{"stage": "daily", "status": "success"}]
+
+
+def test_ops_snapshot_and_stages_routes_share_default_target_date(monkeypatch):
+    captured: dict[str, date | None] = {}
+
+    def fake_build_internal_ops_snapshot(service=None, trade_date=None):
+        captured["snapshot_date"] = trade_date
+        return {"pipeline": {}}
+
+    def fake_load_ops_stage_details(service=None, trade_date=None):
+        captured["stages_date"] = trade_date
+        return []
+
+    monkeypatch.setattr(
+        dashboard_app,
+        "parse_trade_date",
+        lambda value, timezone: date(2026, 6, 24),
+    )
+    monkeypatch.setattr(
+        dashboard_app.IntradayConfig,
+        "from_env",
+        lambda: dashboard_app.IntradayConfig(service="test", timezone="Asia/Shanghai"),
+    )
+    monkeypatch.setattr(
+        dashboard_app,
+        "build_internal_ops_snapshot",
+        fake_build_internal_ops_snapshot,
+    )
+    monkeypatch.setattr(
+        dashboard_app,
+        "load_ops_stage_details",
+        fake_load_ops_stage_details,
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    snapshot_response = client.get("/api/ops/snapshot")
+    stages_response = client.get("/api/ops/stages")
+
+    assert snapshot_response.status_code == 200
+    assert stages_response.status_code == 200
+    assert captured["snapshot_date"] == date(2026, 6, 24)
+    assert captured["stages_date"] == date(2026, 6, 24)
+
+
+def test_ops_stages_route_accepts_explicit_date_query(monkeypatch):
+    captured = {}
+
+    def fake_parse_trade_date(value, timezone):
+        captured["parsed"] = (value, timezone)
+        return date(2026, 6, 23)
+
+    def fake_load_ops_stage_details(service=None, trade_date=None):
+        captured["trade_date"] = trade_date
+        return []
+
+    monkeypatch.setattr(
+        dashboard_app,
+        "parse_trade_date",
+        fake_parse_trade_date,
+    )
+    monkeypatch.setattr(
+        dashboard_app.IntradayConfig,
+        "from_env",
+        lambda: dashboard_app.IntradayConfig(service="test", timezone="Asia/Shanghai"),
+    )
+    monkeypatch.setattr(
+        dashboard_app,
+        "load_ops_stage_details",
+        fake_load_ops_stage_details,
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/ops/stages?date=20260623")
+
+    assert response.status_code == 200
+    assert captured["parsed"] == ("20260623", "Asia/Shanghai")
+    assert captured["trade_date"] == date(2026, 6, 23)
+
+
+def test_public_snapshot_route_returns_public_payload(monkeypatch):
+    monkeypatch.setattr(
+        dashboard_app,
+        "build_public_snapshot",
+        lambda: {"status": "ready", "latest_ready_trade_date": "2026-06-24"},
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/public/snapshot")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "ready"
 
 
 def test_asset_detail_route_returns_404_for_missing_asset(monkeypatch):
@@ -66,6 +404,68 @@ def test_minute_bars_route_passes_source(monkeypatch):
         "tushare",
     ]
     assert response.json()["items"] == [{"time": "2026-05-29 09:35:00"}]
+
+
+def test_asset_bars_route_passes_resolution_to_unified_loader(monkeypatch):
+    captured = {}
+
+    def fake_load_bars(**kwargs):
+        captured.update(kwargs)
+        return [{"time": "2026-05-29 10:00:00", "close": 10.5}]
+
+    monkeypatch.setattr(dashboard_app, "load_bars", fake_load_bars)
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get(
+        "/api/assets/000001.SZ/bars"
+        "?end_date=2026-05-29"
+        "&resolution=30m"
+        "&adjust_type=raw"
+        "&source=akshare"
+    )
+
+    assert response.status_code == 200
+    assert captured == {
+        "asset_id": "000001.SZ",
+        "start_date": None,
+        "end_date": "2026-05-29",
+        "resolution": "30m",
+        "adjust_type": "raw",
+        "source": "akshare",
+    }
+    assert response.json()["resolution"] == "30m"
+    assert response.json()["items"] == [{"time": "2026-05-29 10:00:00", "close": 10.5}]
+
+
+def test_asset_bars_route_accepts_encoded_canonical_asset_for_weekly_bars(monkeypatch):
+    captured = {}
+
+    def fake_load_bars(**kwargs):
+        captured.update(kwargs)
+        return [{"time": "2026-06-05", "close": 10.5}]
+
+    monkeypatch.setattr(dashboard_app, "load_bars", fake_load_bars)
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get(
+        "/api/assets/CN%3ASZ%3A000001/bars"
+        "?start_date=2026-01-02"
+        "&end_date=2026-07-01"
+        "&resolution=1W"
+        "&adjust_type=qfq"
+    )
+
+    assert response.status_code == 200
+    assert captured == {
+        "asset_id": "CN:SZ:000001",
+        "start_date": "2026-01-02",
+        "end_date": "2026-07-01",
+        "resolution": "1W",
+        "adjust_type": "qfq",
+        "source": "baostock",
+    }
+    assert response.json()["resolution"] == "1W"
+    assert response.json()["items"] == [{"time": "2026-06-05", "close": 10.5}]
 
 
 def test_asset_decisions_route_returns_read_only_history(monkeypatch):
@@ -657,6 +1057,20 @@ def test_dashboard_api_cli_parser_accepts_host_and_port():
     assert args.command == "dashboard-api"
     assert args.host == "0.0.0.0"
     assert args.port == 9999
+
+
+def test_dashboard_api_cli_parser_does_not_resolve_unrelated_artifacts(monkeypatch):
+    from stock_research import mid_trend_strategy_validation
+
+    monkeypatch.setattr(
+        mid_trend_strategy_validation,
+        "resolve_default_current_regime_path",
+        lambda path=None: (_ for _ in ()).throw(FileNotFoundError("missing")),
+    )
+
+    args = cli.build_parser().parse_args(["dashboard-api"])
+
+    assert args.command == "dashboard-api"
 
 
 def test_dashboard_api_cli_dispatches_to_runner(monkeypatch):

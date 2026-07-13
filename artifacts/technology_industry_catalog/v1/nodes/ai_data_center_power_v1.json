@@ -1,0 +1,1882 @@
+{
+  "nodes": [
+    {
+      "node_id": "ai_power_load_capacity_planning",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Load and Capacity Planning",
+      "node_kind": "application_role",
+      "node_type": "infrastructure_flow_stage",
+      "description": "This is a non-compositional metrics and planning stage for AI data center demand definition. It records rack density, total capacity, redundancy targets, PUE, and WUE as metrics rather than products, so it intentionally has zero L4 application-role children and no canonical composition.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_load_capacity_planning"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ai_power_energy_supply_resilience",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Energy Supply and Resilience",
+      "node_kind": "application_role",
+      "node_type": "infrastructure_flow_stage",
+      "description": "AI data center stage for choosing and coordinating external and local energy supply portfolios, firm capacity, renewable attributes, generation options, and resilience targets before grid access and backup design.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_energy_supply_resilience"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ai_power_grid_supply_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_energy_supply_resilience",
+      "level": "L4",
+      "node_name": "Utility Grid Supply Strategy",
+      "node_kind": "application_role",
+      "node_type": "energy_supply_service_role",
+      "description": "For an AI data center, the Utility Grid Supply Strategy decision secures utility-delivered service capacity, firm grid volume, tariff exposure, delivery profile, curtailment rights, ramp limits, and utility service obligations. This role covers utility-provided energy service at the point of delivery and excludes onsite generation and procurement instruments such as PPAs, green tariffs, and certificates. It composes the canonical Bulk Grid Power Supply Service by selecting contracted service capacity, delivery terms, and resilience contribution around that reusable capability; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_energy_supply_resilience",
+        "ai_power_grid_supply_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "bulk_grid_power_supply_service"
+      ]
+    },
+    {
+      "node_id": "ai_power_renewable_procurement_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_energy_supply_resilience",
+      "level": "L4",
+      "node_name": "Renewable Energy Procurement",
+      "node_kind": "application_role",
+      "node_type": "energy_procurement_service_role",
+      "description": "For an AI data center, the Renewable Energy Procurement decision specifies PPA structures, green tariffs, certificates, hourly or annual matching, contract tenor, shaped volume, and residual supply. This role covers contractual environmental and energy procurement instruments and excludes physical generation and microgrid control. It composes the canonical Renewable Power Procurement Service by selecting contract form, matching standard, volume profile, and residual-supply treatment around that reusable capability; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_energy_supply_resilience",
+        "ai_power_renewable_procurement_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "renewable_power_procurement_service"
+      ]
+    },
+    {
+      "node_id": "ai_power_distributed_energy_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_energy_supply_resilience",
+      "level": "L4",
+      "node_name": "Distributed Energy Deployment",
+      "node_kind": "application_role",
+      "node_type": "generation_system_role",
+      "description": "For an AI data center, the Distributed Energy Deployment decision configures onsite/local generation assets, capacity, siting, resource or fuel envelope, grid-parallel operation, and resilience contribution. This role covers physical distributed resources other than a dedicated gas turbine system and excludes the gas-turbine-specific route and microgrid orchestration. It composes the canonical Distributed Energy Generation System by selecting asset scale, operating envelope, site interface, and resilience duty around that reusable capability; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_energy_supply_resilience",
+        "ai_power_distributed_energy_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "distributed_energy_generation_system"
+      ]
+    },
+    {
+      "node_id": "ai_power_gas_turbine_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_energy_supply_resilience",
+      "level": "L4",
+      "node_name": "Gas Turbine Generation",
+      "node_kind": "application_role",
+      "node_type": "generation_equipment_role",
+      "description": "For an AI data center, the Gas Turbine Generation decision sets turbine equipment configuration, fuel firmness, dispatch schedule, capacity, duty cycle, emissions limits, ramping, heat recovery, and maintenance interval. This role covers gas turbine plant equipment and operation for an explicitly turbine-based supply route and excludes generic distributed resources. It composes the canonical Gas Turbine Generation System by selecting turbine duty, fuel assurance, dispatch constraints, and resilience contribution around that reusable capability; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_energy_supply_resilience",
+        "ai_power_gas_turbine_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "gas_turbine_generation_system"
+      ]
+    },
+    {
+      "node_id": "ai_power_nuclear_supply_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_energy_supply_resilience",
+      "level": "L4",
+      "node_name": "Nuclear Power Supply",
+      "node_kind": "application_role",
+      "node_type": "energy_supply_service_role",
+      "description": "For an AI data center, the Nuclear Power Supply decision sets nuclear-backed PPA terms, co-location arrangements, dedicated supply availability, firm-energy profile, delivery path, settlement terms, and fit with variable compute load. This role covers a nuclear-backed PPA, nuclear co-location, or another dedicated nuclear supply arrangement and excludes generic grid supply. It composes the canonical Nuclear Power Supply Service by selecting supply structure, delivery path, firmness, and settlement terms around that reusable capability; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_energy_supply_resilience",
+        "ai_power_nuclear_supply_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "nuclear_power_supply_service"
+      ]
+    },
+    {
+      "node_id": "ai_power_microgrid_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_energy_supply_resilience",
+      "level": "L4",
+      "node_name": "Microgrid Architecture",
+      "node_kind": "application_role",
+      "node_type": "generation_system_role",
+      "description": "For an AI data center, the Microgrid Architecture decision establishes microgrid orchestration, islanding boundaries, control logic, critical-load priority, synchronization, restoration logic, and grid-connected operating modes. This role covers control and operating modes across available resources and excludes ownership of generation assets. It composes the canonical Microgrid Generation System by selecting islanding policy, control hierarchy, restoration sequence, and resilience duty around that reusable capability; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_energy_supply_resilience",
+        "ai_power_microgrid_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "microgrid_generation_system"
+      ]
+    },
+    {
+      "node_id": "ai_power_grid_access_substation",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Grid Access and Substations",
+      "node_kind": "application_role",
+      "node_type": "infrastructure_flow_stage",
+      "description": "AI data center stage for utility interconnection, substation topology, transformation, switchgear, and protection from the transmission handoff through medium-voltage distribution.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_grid_access_substation"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ai_power_grid_connection_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_grid_access_substation",
+      "level": "L4",
+      "node_name": "Grid Connection Planning",
+      "node_kind": "application_role",
+      "node_type": "grid_connection_service_role",
+      "description": "For an AI data center, the Grid Connection Planning decision sets grid connection capacity, voltage, fault-duty envelope, study assumptions, utility milestones, connection assets, and energization schedule. This role covers the utility handoff, substation, transformation, interconnect, and grid-facing protection boundary. It composes the canonical Grid Connection Engineering Service by applying utility rules, voltage topology, fault duty, redundancy, and site interfaces to that reusable category; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_grid_access_substation",
+        "ai_power_grid_connection_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "grid_connection_engineering_service"
+      ]
+    },
+    {
+      "node_id": "ai_power_substation_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_grid_access_substation",
+      "level": "L4",
+      "node_name": "Substation Architecture",
+      "node_kind": "application_role",
+      "node_type": "grid_infrastructure_role",
+      "description": "For an AI data center, the Substation Architecture decision sets substation voltage levels, bus topology, redundancy, protection zones, metering, physical layout, maintenance access, and expansion bays. This role covers the utility handoff, substation, transformation, interconnect, and grid-facing protection boundary. It composes the canonical Data Center Substation System by applying utility rules, voltage topology, fault duty, redundancy, and site interfaces to that reusable category; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_grid_access_substation",
+        "ai_power_substation_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "data_center_substation_system"
+      ]
+    },
+    {
+      "node_id": "ai_power_transformer_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_grid_access_substation",
+      "level": "L4",
+      "node_name": "Power Transformer Selection and Integration",
+      "node_kind": "application_role",
+      "node_type": "grid_equipment_role",
+      "description": "For an AI data center, the Power Transformer Selection and Integration decision sets power transformer capacity, impedance, efficiency, cooling, overload profile, tap range, redundancy, harmonic tolerance, and installation arrangement. This role covers the utility handoff, substation, transformation, interconnect, and grid-facing protection boundary. It composes the canonical Power Transformer by applying utility rules, voltage topology, fault duty, redundancy, and site interfaces to that reusable category; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_grid_access_substation",
+        "ai_power_transformer_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "power_transformer"
+      ]
+    },
+    {
+      "node_id": "ai_power_switchgear_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_grid_access_substation",
+      "level": "L4",
+      "node_name": "Medium-Voltage Switchgear Integration",
+      "node_kind": "application_role",
+      "node_type": "grid_equipment_role",
+      "description": "For an AI data center, the Medium-Voltage Switchgear Integration decision sets switchgear voltage and current ratings, bus arrangement, breaker duty, arc-safety controls, interlocks, maintainability, and selective isolation. This role covers the utility handoff, substation, transformation, interconnect, and grid-facing protection boundary. It composes the canonical Medium Voltage Switchgear by applying utility rules, voltage topology, fault duty, redundancy, and site interfaces to that reusable category; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_grid_access_substation",
+        "ai_power_switchgear_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "medium_voltage_switchgear"
+      ]
+    },
+    {
+      "node_id": "ai_power_relay_protection_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_grid_access_substation",
+      "level": "L4",
+      "node_name": "Relay Protection Coordination",
+      "node_kind": "application_role",
+      "node_type": "grid_protection_role",
+      "description": "For an AI data center, the Relay Protection Coordination decision sets relay protection zones, settings, communications, trip logic, selectivity, utility coordination, event records, and restoration constraints. This role covers the utility handoff, substation, transformation, interconnect, and grid-facing protection boundary. It composes the canonical Relay Protection System by applying utility rules, voltage topology, fault duty, redundancy, and site interfaces to that reusable category; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_grid_access_substation",
+        "ai_power_relay_protection_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "relay_protection_system"
+      ]
+    },
+    {
+      "node_id": "ai_power_cable_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_grid_access_substation",
+      "level": "L4",
+      "node_name": "Power Cable Routing and Sizing",
+      "node_kind": "application_role",
+      "node_type": "power_interconnect_role",
+      "description": "For an AI data center, the Power Cable Routing and Sizing decision sets power cable voltage class, conductor area, ampacity derating, route diversity, fire performance, termination, installation method, and spare capacity. This role covers the utility handoff, substation, transformation, interconnect, and grid-facing protection boundary. It composes the canonical Power Cable by applying utility rules, voltage topology, fault duty, redundancy, and site interfaces to that reusable category; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_grid_access_substation",
+        "ai_power_cable_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "power_cable"
+      ]
+    },
+    {
+      "node_id": "ai_power_busbar_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_grid_access_substation",
+      "level": "L4",
+      "node_name": "Power Busbar Integration",
+      "node_kind": "application_role",
+      "node_type": "power_interconnect_role",
+      "description": "For an AI data center, the Power Busbar Integration decision sets power busbar current density, short-circuit withstand, joint resistance, insulation, cooling, clearances, plating, and assembly tolerances. This role covers the utility handoff, substation, transformation, interconnect, and grid-facing protection boundary. It composes the canonical Power Busbar by applying utility rules, voltage topology, fault duty, redundancy, and site interfaces to that reusable category; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_grid_access_substation",
+        "ai_power_busbar_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "power_busbar"
+      ]
+    },
+    {
+      "node_id": "ai_power_power_quality_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_grid_access_substation",
+      "level": "L4",
+      "node_name": "Power Quality Compliance",
+      "node_kind": "application_role",
+      "node_type": "power_quality_role",
+      "description": "For an AI data center, the Power Quality Compliance decision sets power quality limits for harmonics, reactive power, voltage variation, flicker, transients, imbalance, monitoring, and corrective equipment. This role covers the utility handoff, substation, transformation, interconnect, and grid-facing protection boundary. It composes the canonical Power Quality Management System by applying utility rules, voltage topology, fault duty, redundancy, and site interfaces to that reusable category; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_grid_access_substation",
+        "ai_power_power_quality_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "power_quality_management_system"
+      ]
+    },
+    {
+      "node_id": "ai_power_backup_power",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Backup Power",
+      "node_kind": "application_role",
+      "node_type": "infrastructure_flow_stage",
+      "description": "AI data center stage for ride-through and standby power design, including generator and storage capacity, transfer sequencing, black-start recovery, and critical-load autonomy.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_backup_power"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ai_power_diesel_generator_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_backup_power",
+      "level": "L4",
+      "node_name": "Diesel Generator Backup",
+      "node_kind": "application_role",
+      "node_type": "backup_generation_role",
+      "description": "For an AI data center, the Diesel Generator Backup decision sets diesel generator step loading, start time, runtime, fuel autonomy, emissions, acoustic limits, maintenance, and N+1 or 2N coverage. This role covers the outage bridge from source loss through standby generation, stored energy, transfer, and black-start restoration. It composes the canonical Diesel Generator Set by setting duration, start or transfer sequence, redundancy, autonomy, and facility interfaces around that reusable category; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_backup_power",
+        "ai_power_diesel_generator_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "diesel_generator_set"
+      ]
+    },
+    {
+      "node_id": "ai_power_gas_backup_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_backup_power",
+      "level": "L4",
+      "node_name": "Gas-Fired Backup Generation",
+      "node_kind": "application_role",
+      "node_type": "backup_generation_role",
+      "description": "For an AI data center, the Gas-Fired Backup Generation decision sets gas backup generator start performance, pipeline firmness, alternate fuel, emissions, outage-duration coverage, maintenance, and source diversity. This role covers the outage bridge from source loss through standby generation, stored energy, transfer, and black-start restoration. It composes the canonical Gas Fired Backup Generator by setting duration, start or transfer sequence, redundancy, autonomy, and facility interfaces around that reusable category; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_backup_power",
+        "ai_power_gas_backup_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "gas_fired_backup_generator"
+      ]
+    },
+    {
+      "node_id": "ai_power_fuel_cell_backup_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_backup_power",
+      "level": "L4",
+      "node_name": "Fuel Cell Backup Power",
+      "node_kind": "application_role",
+      "node_type": "backup_generation_role",
+      "description": "For an AI data center, the Fuel Cell Backup Power decision sets fuel cell backup output, startup behavior, fuel storage or delivery, runtime, redundancy, power conditioning, ventilation, and maintenance. This role covers the outage bridge from source loss through standby generation, stored energy, transfer, and black-start restoration. It composes the canonical Stationary Fuel Cell Backup System by setting duration, start or transfer sequence, redundancy, autonomy, and facility interfaces around that reusable category; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_backup_power",
+        "ai_power_fuel_cell_backup_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "stationary_fuel_cell_backup_system"
+      ]
+    },
+    {
+      "node_id": "ai_power_battery_backup_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_backup_power",
+      "level": "L4",
+      "node_name": "Stationary Battery Backup",
+      "node_kind": "application_role",
+      "node_type": "energy_storage_role",
+      "description": "For an AI data center, the Stationary Battery Backup decision sets battery backup duration, discharge rate, chemistry, rack layout, fire protection, thermal limits, replacement policy, and inverter interface. This role covers the outage bridge from source loss through standby generation, stored energy, transfer, and black-start restoration. It composes the canonical Stationary Battery Backup System by setting duration, start or transfer sequence, redundancy, autonomy, and facility interfaces around that reusable category; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_backup_power",
+        "ai_power_battery_backup_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "stationary_battery_backup_system"
+      ]
+    },
+    {
+      "node_id": "ai_power_flywheel_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_backup_power",
+      "level": "L4",
+      "node_name": "Flywheel Ride-Through Storage",
+      "node_kind": "application_role",
+      "node_type": "energy_storage_role",
+      "description": "For an AI data center, the Flywheel Ride-Through Storage decision sets flywheel ride-through duration, power rating, bridging sequence, cycle duty, containment, losses, maintenance, and generator-start coordination. This role covers the outage bridge from source loss through standby generation, stored energy, transfer, and black-start restoration. It composes the canonical Flywheel Backup Energy System by setting duration, start or transfer sequence, redundancy, autonomy, and facility interfaces around that reusable category; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_backup_power",
+        "ai_power_flywheel_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "flywheel_backup_energy_system"
+      ]
+    },
+    {
+      "node_id": "ai_power_automatic_transfer_switch_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_backup_power",
+      "level": "L4",
+      "node_name": "Automatic Transfer Switching",
+      "node_kind": "application_role",
+      "node_type": "power_switching_role",
+      "description": "For an AI data center, the Automatic Transfer Switching decision sets automatic transfer switch location, source priority, open or closed transition, bypass, interlocks, source sensing, and transfer timing. This role covers the outage bridge from source loss through standby generation, stored energy, transfer, and black-start restoration. It composes the canonical Automatic Transfer Switch by setting duration, start or transfer sequence, redundancy, autonomy, and facility interfaces around that reusable category; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_backup_power",
+        "ai_power_automatic_transfer_switch_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "automatic_transfer_switch"
+      ]
+    },
+    {
+      "node_id": "ai_power_black_start_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_backup_power",
+      "level": "L4",
+      "node_name": "Black Start and Restoration",
+      "node_kind": "application_role",
+      "node_type": "resilience_service_role",
+      "description": "For an AI data center, the Black Start and Restoration decision sets black start source, auxiliary energization, bus restoration sequence, synchronization, load pickup blocks, operator authority, and validation drills. This role covers the outage bridge from source loss through standby generation, stored energy, transfer, and black-start restoration. It composes the canonical Black Start Generation Service by setting duration, start or transfer sequence, redundancy, autonomy, and facility interfaces around that reusable category; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_backup_power",
+        "ai_power_black_start_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "black_start_generation_service"
+      ]
+    },
+    {
+      "node_id": "ai_power_ups_conversion",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "UPS and Power Conversion",
+      "node_kind": "application_role",
+      "node_type": "infrastructure_flow_stage",
+      "description": "AI data center stage for conditioned power between source and IT loads, covering UPS selection, rectification, inversion, energy storage, and static-transfer coordination.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_ups_conversion"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ai_power_line_frequency_ups_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_ups_conversion",
+      "level": "L4",
+      "node_name": "Line-Frequency UPS Deployment",
+      "node_kind": "application_role",
+      "node_type": "ups_equipment_role",
+      "description": "For an AI data center, the Line-Frequency UPS Deployment decision sets line-frequency UPS efficiency, transformer isolation, footprint, overload and fault behavior, bypass, redundancy, and service access. This role covers the conditioned-power boundary from incoming AC through UPS conversion, transfer, and associated battery energy. It composes the canonical Line Frequency UPS by choosing conversion topology, autonomy, bypass, module redundancy, efficiency, and maintainability around that reusable category; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_ups_conversion",
+        "ai_power_line_frequency_ups_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "line_frequency_ups"
+      ]
+    },
+    {
+      "node_id": "ai_power_high_frequency_ups_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_ups_conversion",
+      "level": "L4",
+      "node_name": "High-Frequency UPS Deployment",
+      "node_kind": "application_role",
+      "node_type": "ups_equipment_role",
+      "description": "For an AI data center, the High-Frequency UPS Deployment decision sets high-frequency UPS efficiency, power density, common-mode behavior, input harmonics, bypass, module serviceability, and redundancy. This role covers the conditioned-power boundary from incoming AC through UPS conversion, transfer, and associated battery energy. It composes the canonical High Frequency UPS by choosing conversion topology, autonomy, bypass, module redundancy, efficiency, and maintainability around that reusable category; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_ups_conversion",
+        "ai_power_high_frequency_ups_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "high_frequency_ups"
+      ]
+    },
+    {
+      "node_id": "ai_power_modular_ups_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_ups_conversion",
+      "level": "L4",
+      "node_name": "Modular UPS",
+      "node_kind": "application_role",
+      "node_type": "ups_equipment_role",
+      "description": "For an AI data center, the Modular UPS decision sets modular UPS frame size, module granularity, hot service, N+X redundancy, growth path, bypass capacity, controls, and load sharing. This role covers the conditioned-power boundary from incoming AC through UPS conversion, transfer, and associated battery energy. It composes the canonical Modular UPS by choosing conversion topology, autonomy, bypass, module redundancy, efficiency, and maintainability around that reusable category; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_ups_conversion",
+        "ai_power_modular_ups_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "modular_ups"
+      ]
+    },
+    {
+      "node_id": "ai_power_medium_voltage_ups_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_ups_conversion",
+      "level": "L4",
+      "node_name": "Medium-Voltage UPS Architecture",
+      "node_kind": "application_role",
+      "node_type": "ups_equipment_role",
+      "description": "For an AI data center, the Medium-Voltage UPS Architecture decision sets medium-voltage UPS placement, voltage class, isolation, feeder scale, switchgear interface, protection, bypass, and maintenance strategy. This role covers the conditioned-power boundary from incoming AC through UPS conversion, transfer, and associated battery energy. It composes the canonical Medium Voltage UPS by choosing conversion topology, autonomy, bypass, module redundancy, efficiency, and maintainability around that reusable category; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_ups_conversion",
+        "ai_power_medium_voltage_ups_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "medium_voltage_ups"
+      ]
+    },
+    {
+      "node_id": "ai_power_static_transfer_switch_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_ups_conversion",
+      "level": "L4",
+      "node_name": "Static Transfer Switching",
+      "node_kind": "application_role",
+      "node_type": "power_switching_role",
+      "description": "For an AI data center, the Static Transfer Switching decision sets static transfer switch source independence, synchronization window, transfer criteria, fault blocking, bypass, downstream selectivity, and testing. This role covers the conditioned-power boundary from incoming AC through UPS conversion, transfer, and associated battery energy. It composes the canonical Static Transfer Switch by choosing conversion topology, autonomy, bypass, module redundancy, efficiency, and maintainability around that reusable category; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_ups_conversion",
+        "ai_power_static_transfer_switch_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "static_transfer_switch"
+      ]
+    },
+    {
+      "node_id": "ai_power_rectifier_inverter_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_ups_conversion",
+      "level": "L4",
+      "node_name": "Rectifier and Inverter Integration",
+      "node_kind": "application_role",
+      "node_type": "power_conversion_role",
+      "description": "For an AI data center, the Rectifier and Inverter Integration decision sets rectifier and inverter stage allocation, conversion direction, DC-link behavior, harmonic performance, redundancy, controls, and cooling. This role covers the conditioned-power boundary from incoming AC through UPS conversion, transfer, and associated battery energy. It composes the canonical Rectifier Inverter System by choosing conversion topology, autonomy, bypass, module redundancy, efficiency, and maintainability around that reusable category; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_ups_conversion",
+        "ai_power_rectifier_inverter_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "rectifier_inverter_system"
+      ]
+    },
+    {
+      "node_id": "ai_power_ups_battery_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_ups_conversion",
+      "level": "L4",
+      "node_name": "UPS Battery Configuration",
+      "node_kind": "application_role",
+      "node_type": "energy_storage_role",
+      "description": "For an AI data center, the UPS Battery Configuration decision sets UPS battery string voltage, autonomy, discharge profile, cabinet layout, monitoring, protection, thermal conditions, and replacement interval. This role covers the conditioned-power boundary from incoming AC through UPS conversion, transfer, and associated battery energy. It composes the canonical UPS Battery System by choosing conversion topology, autonomy, bypass, module redundancy, efficiency, and maintainability around that reusable category; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_ups_conversion",
+        "ai_power_ups_battery_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "ups_battery_system"
+      ]
+    },
+    {
+      "node_id": "ai_power_hvdc_dc_architecture",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "HVDC and DC Architecture",
+      "node_kind": "application_role",
+      "node_type": "infrastructure_flow_stage",
+      "description": "AI data center stage for selecting DC voltage architectures, AC-to-DC rectification, DC buses, breakers, and protection routes to deliver high-current power.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_hvdc_dc_architecture"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ai_power_240_400v_hvdc_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_hvdc_dc_architecture",
+      "level": "L4",
+      "node_name": "240-400 V HVDC Architecture",
+      "node_kind": "application_role",
+      "node_type": "dc_power_architecture_role",
+      "description": "For an AI data center, the 240-400 V HVDC Architecture decision sets 240 and 400V HVDC voltage class, conversion count, efficiency, conductor sizing, grounding, protection, connector safety, and equipment compatibility. This role covers the direct-current path from centralized rectification through buses, conversion boundaries, interruption, and coordinated protection. It composes the canonical 240-400 V HVDC Power System by setting DC voltage, topology, grounding, insulation, fault handling, conversion placement, and interfaces around that reusable category; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_hvdc_dc_architecture",
+        "ai_power_240_400v_hvdc_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "240_400v_hvdc_power_system"
+      ]
+    },
+    {
+      "node_id": "ai_power_800vdc_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_hvdc_dc_architecture",
+      "level": "L4",
+      "node_name": "800 VDC Architecture",
+      "node_kind": "application_role",
+      "node_type": "dc_power_architecture_role",
+      "description": "For an AI data center, the 800 VDC Architecture decision sets 800VDC backbone voltage, current reduction, insulation coordination, conversion placement, connector safety, fault interruption, and ecosystem readiness. This role covers the direct-current path from centralized rectification through buses, conversion boundaries, interruption, and coordinated protection. It composes the canonical 800 VDC Power System by setting DC voltage, topology, grounding, insulation, fault handling, conversion placement, and interfaces around that reusable category; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_hvdc_dc_architecture",
+        "ai_power_800vdc_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "800vdc_power_system"
+      ]
+    },
+    {
+      "node_id": "ai_power_central_rectifier_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_hvdc_dc_architecture",
+      "level": "L4",
+      "node_name": "Central Rectifier Placement",
+      "node_kind": "application_role",
+      "node_type": "power_conversion_role",
+      "description": "For an AI data center, the Central Rectifier Placement decision sets central rectifier capacity, physical location, module redundancy, AC input diversity, DC segmentation, bypass, maintenance, and expansion. This role covers the direct-current path from centralized rectification through buses, conversion boundaries, interruption, and coordinated protection. It composes the canonical Central Rectifier System by setting DC voltage, topology, grounding, insulation, fault handling, conversion placement, and interfaces around that reusable category; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_hvdc_dc_architecture",
+        "ai_power_central_rectifier_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "central_rectifier_system"
+      ]
+    },
+    {
+      "node_id": "ai_power_dc_bus_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_hvdc_dc_architecture",
+      "level": "L4",
+      "node_name": "DC Bus Topology",
+      "node_kind": "application_role",
+      "node_type": "dc_distribution_role",
+      "description": "For an AI data center, the DC Bus Topology decision sets DC bus voltage, radial or meshed topology, sectionalization, conductor system, grounding, monitoring, fault zones, and connection interfaces. This role covers the direct-current path from centralized rectification through buses, conversion boundaries, interruption, and coordinated protection. It composes the canonical DC Power Bus System by setting DC voltage, topology, grounding, insulation, fault handling, conversion placement, and interfaces around that reusable category; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_hvdc_dc_architecture",
+        "ai_power_dc_bus_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "dc_power_bus_system"
+      ]
+    },
+    {
+      "node_id": "ai_power_solid_state_transformer_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_hvdc_dc_architecture",
+      "level": "L4",
+      "node_name": "Solid-State Transformer Deployment",
+      "node_kind": "application_role",
+      "node_type": "power_conversion_role",
+      "description": "For an AI data center, the Solid-State Transformer Deployment decision sets solid-state transformer conversion ratio, isolation, controllability, efficiency, power density, cooling, protection, reliability, and replacement strategy. This role covers the direct-current path from centralized rectification through buses, conversion boundaries, interruption, and coordinated protection. It composes the canonical Solid State Transformer by setting DC voltage, topology, grounding, insulation, fault handling, conversion placement, and interfaces around that reusable category; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_hvdc_dc_architecture",
+        "ai_power_solid_state_transformer_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "solid_state_transformer"
+      ]
+    },
+    {
+      "node_id": "ai_power_dc_breaker_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_hvdc_dc_architecture",
+      "level": "L4",
+      "node_name": "DC Breaker Selection",
+      "node_kind": "application_role",
+      "node_type": "dc_protection_role",
+      "description": "For an AI data center, the DC Breaker Selection decision sets DC breaker interruption technology, voltage and current ratings, fault energy, clearing time, coordination, isolation, and serviceability. This role covers the direct-current path from centralized rectification through buses, conversion boundaries, interruption, and coordinated protection. It composes the canonical DC Circuit Breaker by setting DC voltage, topology, grounding, insulation, fault handling, conversion placement, and interfaces around that reusable category; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_hvdc_dc_architecture",
+        "ai_power_dc_breaker_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "dc_circuit_breaker"
+      ]
+    },
+    {
+      "node_id": "ai_power_dc_protection_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_hvdc_dc_architecture",
+      "level": "L4",
+      "node_name": "DC Protection Coordination",
+      "node_kind": "application_role",
+      "node_type": "dc_protection_role",
+      "description": "For an AI data center, the DC Protection Coordination decision sets DC protection detection method, grounding response, selectivity, breaker commands, fault location, recovery logic, and protection zones. This role covers the direct-current path from centralized rectification through buses, conversion boundaries, interruption, and coordinated protection. It composes the canonical DC Protection System by setting DC voltage, topology, grounding, insulation, fault handling, conversion placement, and interfaces around that reusable category; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_hvdc_dc_architecture",
+        "ai_power_dc_protection_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "dc_protection_system"
+      ]
+    },
+    {
+      "node_id": "ai_power_room_rack_distribution",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Room and Rack Distribution",
+      "node_kind": "application_role",
+      "node_type": "infrastructure_flow_stage",
+      "description": "AI data center stage for moving conditioned power through PDUs, row distribution, busway, rack PDUs, power shelves, and high-current connectors.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_room_rack_distribution"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ai_power_pdu_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_room_rack_distribution",
+      "level": "L4",
+      "node_name": "Room Power Distribution Units",
+      "node_kind": "application_role",
+      "node_type": "power_distribution_role",
+      "description": "For an AI data center, the Room Power Distribution Units decision sets room PDU input capacity, transformation, branch protection, metering, output feeders, maintenance access, redundancy domain, and growth. This role covers the facility distribution boundary from room feeders through row allocation and rack-level delivery. It composes the canonical Data Center Power Distribution Unit by allocating capacity, A/B paths, protection, metering, routing, serviceability, and growth across room, row, and rack layers; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_room_rack_distribution",
+        "ai_power_pdu_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "data_center_power_distribution_unit"
+      ]
+    },
+    {
+      "node_id": "ai_power_row_distribution_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_room_rack_distribution",
+      "level": "L4",
+      "node_name": "Row-Level Power Distribution",
+      "node_kind": "application_role",
+      "node_type": "power_distribution_role",
+      "description": "For an AI data center, the Row-Level Power Distribution decision sets row distribution capacity, cabinet location, branch circuits, protection, metering, feeder diversity, rack allocation, and expansion. This role covers the facility distribution boundary from room feeders through row allocation and rack-level delivery. It composes the canonical Row Level Power Distribution System by allocating capacity, A/B paths, protection, metering, routing, serviceability, and growth across room, row, and rack layers; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_room_rack_distribution",
+        "ai_power_row_distribution_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "row_level_power_distribution_system"
+      ]
+    },
+    {
+      "node_id": "ai_power_busway_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_room_rack_distribution",
+      "level": "L4",
+      "node_name": "Overhead Busway Distribution",
+      "node_kind": "application_role",
+      "node_type": "power_interconnect_role",
+      "description": "For an AI data center, the Overhead Busway Distribution decision sets busway ampacity, route, tap-off spacing, A/B redundancy, joint monitoring, fault withstand, installation access, and live expansion practice. This role covers the facility distribution boundary from room feeders through row allocation and rack-level delivery. It composes the canonical Data Center Busway by allocating capacity, A/B paths, protection, metering, routing, serviceability, and growth across room, row, and rack layers; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_room_rack_distribution",
+        "ai_power_busway_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "data_center_busway"
+      ]
+    },
+    {
+      "node_id": "ai_power_intelligent_rack_pdu_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_room_rack_distribution",
+      "level": "L4",
+      "node_name": "Intelligent Rack PDU Deployment",
+      "node_kind": "application_role",
+      "node_type": "power_distribution_role",
+      "description": "For an AI data center, the Intelligent Rack PDU Deployment decision sets intelligent rack PDU inlet rating, outlet mix, branch metering, outlet switching, telemetry, environmental inputs, and A/B feed placement. This role covers the facility distribution boundary from room feeders through row allocation and rack-level delivery. It composes the canonical Intelligent Rack PDU by allocating capacity, A/B paths, protection, metering, routing, serviceability, and growth across room, row, and rack layers; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_room_rack_distribution",
+        "ai_power_intelligent_rack_pdu_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "intelligent_rack_pdu"
+      ]
+    },
+    {
+      "node_id": "ai_power_power_shelf_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_room_rack_distribution",
+      "level": "L4",
+      "node_name": "Server Power Shelf Architecture",
+      "node_kind": "application_role",
+      "node_type": "power_conversion_role",
+      "description": "For an AI data center, the Server Power Shelf Architecture decision sets power shelf output voltage, module count, current sharing, N+X redundancy, bus interface, telemetry, cooling, and tray allocation. This role covers the facility distribution boundary from room feeders through row allocation and rack-level delivery. It composes the canonical Server Power Shelf by allocating capacity, A/B paths, protection, metering, routing, serviceability, and growth across room, row, and rack layers; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_room_rack_distribution",
+        "ai_power_power_shelf_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "server_power_shelf"
+      ]
+    },
+    {
+      "node_id": "ai_power_high_current_connector_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_room_rack_distribution",
+      "level": "L4",
+      "node_name": "High Current Connector",
+      "node_kind": "application_role",
+      "node_type": "power_interconnect_role",
+      "description": "For an AI data center, the High Current Connector decision sets high current connector rating, temperature rise, touch safety, mating cycles, keying, locking, insertion force, and service access. This role covers the facility distribution boundary from room feeders through row allocation and rack-level delivery. It composes the canonical High Current Power Connector by allocating capacity, A/B paths, protection, metering, routing, serviceability, and growth across room, row, and rack layers; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_room_rack_distribution",
+        "ai_power_high_current_connector_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "high_current_power_connector"
+      ]
+    },
+    {
+      "node_id": "ai_power_hvdc_connector_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_room_rack_distribution",
+      "level": "L4",
+      "node_name": "HVDC Connector",
+      "node_kind": "application_role",
+      "node_type": "power_interconnect_role",
+      "description": "For an AI data center, the HVDC Connector decision sets HVDC connector voltage, creepage, clearance, arc behavior, touch safety, polarity keying, thermal limit, and disconnect procedure. This role covers the facility distribution boundary from room feeders through row allocation and rack-level delivery. It composes the canonical HVDC Power Connector by allocating capacity, A/B paths, protection, metering, routing, serviceability, and growth across room, row, and rack layers; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_room_rack_distribution",
+        "ai_power_hvdc_connector_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "hvdc_power_connector"
+      ]
+    },
+    {
+      "node_id": "ai_power_copper_flexible_connection_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_room_rack_distribution",
+      "level": "L4",
+      "node_name": "Copper Flexible Connection",
+      "node_kind": "application_role",
+      "node_type": "power_interconnect_role",
+      "description": "For an AI data center, the Copper Flexible Connection decision sets copper flexible connection geometry, movement allowance, fatigue life, termination resistance, insulation, thermal rise, and installation tolerance. This role covers the facility distribution boundary from room feeders through row allocation and rack-level delivery. It composes the canonical Copper Flexible Interconnect by allocating capacity, A/B paths, protection, metering, routing, serviceability, and growth across room, row, and rack layers; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_room_rack_distribution",
+        "ai_power_copper_flexible_connection_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "copper_flexible_interconnect"
+      ]
+    },
+    {
+      "node_id": "ai_power_server_board_power",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Server and Board-Level Power",
+      "node_kind": "application_role",
+      "node_type": "infrastructure_flow_stage",
+      "description": "AI data center stage for server PSU conversion, AC-DC and DC-DC modules, voltage regulation, controllers, semiconductors, and board-level power integrity.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_server_board_power"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ai_power_server_psu_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_server_board_power",
+      "level": "L4",
+      "node_name": "Server PSU Requirements",
+      "node_kind": "application_role",
+      "node_type": "server_power_role",
+      "description": "For an AI data center, the Server PSU Requirements decision sets server PSU input range, output rails, efficiency curve, transient response, redundancy, hold-up, telemetry, cooling, and hot-swap behavior. This role covers the conversion boundary from rack or chassis input through server rails and board-level point-of-load delivery. It composes the canonical Server Power Supply Unit by applying accelerator transient, efficiency, density, telemetry, packaging, redundancy, and thermal constraints to that reusable component; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_server_board_power",
+        "ai_power_server_psu_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "server_power_supply_unit"
+      ]
+    },
+    {
+      "node_id": "ai_power_ac_dc_module_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_server_board_power",
+      "level": "L4",
+      "node_name": "AC-DC Power Modules",
+      "node_kind": "application_role",
+      "node_type": "power_conversion_role",
+      "description": "For an AI data center, the AC-DC Power Modules decision sets AC-DC module input quality, power-factor correction, isolation, output range, efficiency, density, thermal limits, protection, and parallel operation. This role covers the conversion boundary from rack or chassis input through server rails and board-level point-of-load delivery. It composes the canonical AC-DC Power Module by applying accelerator transient, efficiency, density, telemetry, packaging, redundancy, and thermal constraints to that reusable component; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_server_board_power",
+        "ai_power_ac_dc_module_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "ac_dc_power_module"
+      ]
+    },
+    {
+      "node_id": "ai_power_dc_dc_module_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_server_board_power",
+      "level": "L4",
+      "node_name": "DC-DC Power Modules",
+      "node_kind": "application_role",
+      "node_type": "power_conversion_role",
+      "description": "For an AI data center, the DC-DC Power Modules decision sets DC-DC module input bus, regulated output, isolation, efficiency, transient response, power density, cooling, protection, and current sharing. This role covers the conversion boundary from rack or chassis input through server rails and board-level point-of-load delivery. It composes the canonical DC-DC Power Module by applying accelerator transient, efficiency, density, telemetry, packaging, redundancy, and thermal constraints to that reusable component; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_server_board_power",
+        "ai_power_dc_dc_module_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "dc_dc_power_module"
+      ]
+    },
+    {
+      "node_id": "ai_power_vrm_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_server_board_power",
+      "level": "L4",
+      "node_name": "Voltage Regulator Module Design",
+      "node_kind": "application_role",
+      "node_type": "board_power_role",
+      "description": "For an AI data center, the Voltage Regulator Module Design decision sets VRM phase count, current capability, voltage accuracy, transient response, switching frequency, telemetry, protection, and board thermal path. This role covers the conversion boundary from rack or chassis input through server rails and board-level point-of-load delivery. It composes the canonical Voltage Regulator Module by applying accelerator transient, efficiency, density, telemetry, packaging, redundancy, and thermal constraints to that reusable component; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_server_board_power",
+        "ai_power_vrm_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "voltage_regulator_module"
+      ]
+    },
+    {
+      "node_id": "ai_power_multiphase_controller_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_server_board_power",
+      "level": "L4",
+      "node_name": "Multiphase Controller",
+      "node_kind": "application_role",
+      "node_type": "power_control_role",
+      "description": "For an AI data center, the Multiphase Controller decision sets multiphase controller phase count, control law, current balance, telemetry, protection, dynamic voltage control, and power-stage compatibility. This role covers the conversion boundary from rack or chassis input through server rails and board-level point-of-load delivery. It composes the canonical Multiphase Power Controller by applying accelerator transient, efficiency, density, telemetry, packaging, redundancy, and thermal constraints to that reusable component; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_server_board_power",
+        "ai_power_multiphase_controller_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "multiphase_power_controller"
+      ]
+    },
+    {
+      "node_id": "ai_power_mosfet_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_server_board_power",
+      "level": "L4",
+      "node_name": "MOSFET",
+      "node_kind": "application_role",
+      "node_type": "power_semiconductor_role",
+      "description": "For an AI data center, the MOSFET decision sets power MOSFET voltage, current, on-resistance, switching charge, package, gate drive, thermal impedance, reliability, and parallel behavior. This role covers the conversion boundary from rack or chassis input through server rails and board-level point-of-load delivery. It composes the canonical Power MOSFET Device by applying accelerator transient, efficiency, density, telemetry, packaging, redundancy, and thermal constraints to that reusable component; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_server_board_power",
+        "ai_power_mosfet_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "power_mosfet_device"
+      ]
+    },
+    {
+      "node_id": "ai_power_sic_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_server_board_power",
+      "level": "L4",
+      "node_name": "SiC",
+      "node_kind": "application_role",
+      "node_type": "power_semiconductor_role",
+      "description": "For an AI data center, the SiC decision sets SiC voltage margin, switching loss, gate drive, short-circuit behavior, package parasitics, cooling, reliability, availability, and cost. This role covers the conversion boundary from rack or chassis input through server rails and board-level point-of-load delivery. It composes the canonical Silicon Carbide Power Device by applying accelerator transient, efficiency, density, telemetry, packaging, redundancy, and thermal constraints to that reusable component; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_server_board_power",
+        "ai_power_sic_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "silicon_carbide_power_device"
+      ]
+    },
+    {
+      "node_id": "ai_power_gan_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_server_board_power",
+      "level": "L4",
+      "node_name": "GaN",
+      "node_kind": "application_role",
+      "node_type": "power_semiconductor_role",
+      "description": "For an AI data center, the GaN decision sets GaN voltage class, switching speed, gate control, reverse conduction, package inductance, thermal path, reliability, integration, and cost. This role covers the conversion boundary from rack or chassis input through server rails and board-level point-of-load delivery. It composes the canonical Gallium Nitride Power Device by applying accelerator transient, efficiency, density, telemetry, packaging, redundancy, and thermal constraints to that reusable component; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_server_board_power",
+        "ai_power_gan_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "gallium_nitride_power_device"
+      ]
+    },
+    {
+      "node_id": "ai_power_magnetic_component_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_server_board_power",
+      "level": "L4",
+      "node_name": "Power Magnetics Design",
+      "node_kind": "application_role",
+      "node_type": "passive_component_role",
+      "description": "For an AI data center, the Power Magnetics Design decision sets magnetic component inductance or turns ratio, core material, saturation, copper and core loss, isolation, leakage, thermal rise, and manufacturability. This role covers the conversion boundary from rack or chassis input through server rails and board-level point-of-load delivery. It composes the canonical Power Magnetic Component by applying accelerator transient, efficiency, density, telemetry, packaging, redundancy, and thermal constraints to that reusable component; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_server_board_power",
+        "ai_power_magnetic_component_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "power_magnetic_component"
+      ]
+    },
+    {
+      "node_id": "ai_power_capacitor_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_server_board_power",
+      "level": "L4",
+      "node_name": "Capacitor",
+      "node_kind": "application_role",
+      "node_type": "passive_component_role",
+      "description": "For an AI data center, the Capacitor decision sets capacitor dielectric, capacitance, voltage, ripple current, ESR, lifetime, temperature rating, packaging, and placement. This role covers the conversion boundary from rack or chassis input through server rails and board-level point-of-load delivery. It composes the canonical Power Capacitor by applying accelerator transient, efficiency, density, telemetry, packaging, redundancy, and thermal constraints to that reusable component; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_server_board_power",
+        "ai_power_capacitor_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "power_capacitor"
+      ]
+    },
+    {
+      "node_id": "ai_power_liquid_cooling_thermal",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Liquid Cooling and Thermal Management",
+      "node_kind": "application_role",
+      "node_type": "infrastructure_flow_stage",
+      "description": "AI data center stage for liquid cooling and thermal management across cold plates, immersion loops, CDUs, coolant distribution, heat rejection, leak detection, and heat recovery.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_liquid_cooling_thermal"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ai_power_cold_plate_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_liquid_cooling_thermal",
+      "level": "L4",
+      "node_name": "Cold Plate Integration",
+      "node_kind": "application_role",
+      "node_type": "liquid_cooling_equipment_role",
+      "description": "For an AI data center, the Cold Plate Integration decision sets cold plate coverage, thermal resistance, channel geometry, pressure drop, materials, mounting force, sealing, serviceability, and accelerator heat flux. This role covers the thermal path from chip interface through coolant transport, heat exchange, heat rejection, monitoring, and heat reuse. It composes the canonical Data Center Cold Plate by applying heat flux, temperatures, flow, pressure, materials, redundancy, service procedures, and facility-water constraints to that reusable category; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_liquid_cooling_thermal",
+        "ai_power_cold_plate_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "data_center_cold_plate"
+      ]
+    },
+    {
+      "node_id": "ai_power_immersion_cooling_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_liquid_cooling_thermal",
+      "level": "L4",
+      "node_name": "Immersion Cooling",
+      "node_kind": "application_role",
+      "node_type": "liquid_cooling_system_role",
+      "description": "For an AI data center, the Immersion Cooling decision sets immersion cooling phase regime, tank density, dielectric fluid, equipment compatibility, heat rejection, service workflow, safety, and qualification. This role covers the thermal path from chip interface through coolant transport, heat exchange, heat rejection, monitoring, and heat reuse. It composes the canonical Immersion Cooling System by applying heat flux, temperatures, flow, pressure, materials, redundancy, service procedures, and facility-water constraints to that reusable category; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_liquid_cooling_thermal",
+        "ai_power_immersion_cooling_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "immersion_cooling_system"
+      ]
+    },
+    {
+      "node_id": "ai_power_spray_cooling_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_liquid_cooling_thermal",
+      "level": "L4",
+      "node_name": "Spray Cooling",
+      "node_kind": "application_role",
+      "node_type": "liquid_cooling_system_role",
+      "description": "For an AI data center, the Spray Cooling decision sets spray cooling target surface, droplet delivery, fluid collection, filtration, pump redundancy, enclosure control, maintenance, and compatibility. This role covers the thermal path from chip interface through coolant transport, heat exchange, heat rejection, monitoring, and heat reuse. It composes the canonical Spray Cooling System by applying heat flux, temperatures, flow, pressure, materials, redundancy, service procedures, and facility-water constraints to that reusable category; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_liquid_cooling_thermal",
+        "ai_power_spray_cooling_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "spray_cooling_system"
+      ]
+    },
+    {
+      "node_id": "ai_power_cdu_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_liquid_cooling_thermal",
+      "level": "L4",
+      "node_name": "Coolant Distribution Unit Architecture",
+      "node_kind": "application_role",
+      "node_type": "liquid_cooling_equipment_role",
+      "description": "For an AI data center, the Coolant Distribution Unit Architecture decision sets CDU heat exchange, secondary flow and pressure, pump redundancy, filtration, controls, water boundary, alarms, rack connections, and service bypass. This role covers the thermal path from chip interface through coolant transport, heat exchange, heat rejection, monitoring, and heat reuse. It composes the canonical Coolant Distribution Unit by applying heat flux, temperatures, flow, pressure, materials, redundancy, service procedures, and facility-water constraints to that reusable category; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_liquid_cooling_thermal",
+        "ai_power_cdu_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "coolant_distribution_unit"
+      ]
+    },
+    {
+      "node_id": "ai_power_chiller_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_liquid_cooling_thermal",
+      "level": "L4",
+      "node_name": "Chiller",
+      "node_kind": "application_role",
+      "node_type": "thermal_equipment_role",
+      "description": "For an AI data center, the Chiller decision sets chiller capacity, lift, supply temperature, part-load efficiency, redundancy, refrigerant constraints, controls, climate mode, and heat rejection. This role covers the thermal path from chip interface through coolant transport, heat exchange, heat rejection, monitoring, and heat reuse. It composes the canonical Data Center Chiller by applying heat flux, temperatures, flow, pressure, materials, redundancy, service procedures, and facility-water constraints to that reusable category; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_liquid_cooling_thermal",
+        "ai_power_chiller_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "data_center_chiller"
+      ]
+    },
+    {
+      "node_id": "ai_power_liquid_pump_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_liquid_cooling_thermal",
+      "level": "L4",
+      "node_name": "Liquid Pump",
+      "node_kind": "application_role",
+      "node_type": "liquid_cooling_component_role",
+      "description": "For an AI data center, the Liquid Pump decision sets liquid pump flow, head, efficiency, turndown, redundancy, seal strategy, cavitation margin, controls, noise, and maintenance access. This role covers the thermal path from chip interface through coolant transport, heat exchange, heat rejection, monitoring, and heat reuse. It composes the canonical Liquid Cooling Pump by applying heat flux, temperatures, flow, pressure, materials, redundancy, service procedures, and facility-water constraints to that reusable category; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_liquid_cooling_thermal",
+        "ai_power_liquid_pump_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "liquid_cooling_pump"
+      ]
+    },
+    {
+      "node_id": "ai_power_heat_exchanger_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_liquid_cooling_thermal",
+      "level": "L4",
+      "node_name": "Heat Exchanger",
+      "node_kind": "application_role",
+      "node_type": "thermal_equipment_role",
+      "description": "For an AI data center, the Heat Exchanger decision sets heat exchanger duty, approach temperature, pressure drop, materials, fouling allowance, footprint, redundancy, cleaning, and loop separation. This role covers the thermal path from chip interface through coolant transport, heat exchange, heat rejection, monitoring, and heat reuse. It composes the canonical Data Center Heat Exchanger by applying heat flux, temperatures, flow, pressure, materials, redundancy, service procedures, and facility-water constraints to that reusable category; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_liquid_cooling_thermal",
+        "ai_power_heat_exchanger_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "data_center_heat_exchanger"
+      ]
+    },
+    {
+      "node_id": "ai_power_quick_connector_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_liquid_cooling_thermal",
+      "level": "L4",
+      "node_name": "Quick Connector",
+      "node_kind": "application_role",
+      "node_type": "liquid_cooling_component_role",
+      "description": "For an AI data center, the Quick Connector decision sets quick connector flow, pressure, dripless behavior, seal compatibility, keying, mating force, cycle life, cleanliness, and accessibility. This role covers the thermal path from chip interface through coolant transport, heat exchange, heat rejection, monitoring, and heat reuse. It composes the canonical Liquid Cooling Quick Connector by applying heat flux, temperatures, flow, pressure, materials, redundancy, service procedures, and facility-water constraints to that reusable category; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_liquid_cooling_thermal",
+        "ai_power_quick_connector_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "liquid_cooling_quick_connector"
+      ]
+    },
+    {
+      "node_id": "ai_power_liquid_pipe_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_liquid_cooling_thermal",
+      "level": "L4",
+      "node_name": "Liquid Cooling Piping",
+      "node_kind": "application_role",
+      "node_type": "liquid_cooling_component_role",
+      "description": "For an AI data center, the Liquid Cooling Piping decision sets liquid pipe and hose diameter, material, cleanliness, routing, support, insulation, pressure class, manifold, drainage, and isolation. This role covers the thermal path from chip interface through coolant transport, heat exchange, heat rejection, monitoring, and heat reuse. It composes the canonical Liquid Cooling Pipe System by applying heat flux, temperatures, flow, pressure, materials, redundancy, service procedures, and facility-water constraints to that reusable category; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_liquid_cooling_thermal",
+        "ai_power_liquid_pipe_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "liquid_cooling_pipe_system"
+      ]
+    },
+    {
+      "node_id": "ai_power_coolant_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_liquid_cooling_thermal",
+      "level": "L4",
+      "node_name": "Coolant Selection and Management",
+      "node_kind": "application_role",
+      "node_type": "thermal_material_role",
+      "description": "For an AI data center, the Coolant Selection and Management decision sets coolant thermal properties, dielectric requirement, viscosity, corrosion control, material compatibility, stability, filtration, sampling, and replacement policy. This role covers the thermal path from chip interface through coolant transport, heat exchange, heat rejection, monitoring, and heat reuse. It composes the canonical Data Center Coolant by applying heat flux, temperatures, flow, pressure, materials, redundancy, service procedures, and facility-water constraints to that reusable category; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_liquid_cooling_thermal",
+        "ai_power_coolant_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "data_center_coolant"
+      ]
+    },
+    {
+      "node_id": "ai_power_leak_detection_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_liquid_cooling_thermal",
+      "level": "L4",
+      "node_name": "Leak Detection",
+      "node_kind": "application_role",
+      "node_type": "thermal_monitoring_role",
+      "description": "For an AI data center, the Leak Detection decision sets leak detection sensor placement, pressure and flow analytics, alarm thresholds, localization, shutdown response, testing, and maintenance coverage. This role covers the thermal path from chip interface through coolant transport, heat exchange, heat rejection, monitoring, and heat reuse. It composes the canonical Liquid Cooling Leak Detection System by applying heat flux, temperatures, flow, pressure, materials, redundancy, service procedures, and facility-water constraints to that reusable category; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_liquid_cooling_thermal",
+        "ai_power_leak_detection_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "liquid_cooling_leak_detection_system"
+      ]
+    },
+    {
+      "node_id": "ai_power_waste_heat_recovery_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_liquid_cooling_thermal",
+      "level": "L4",
+      "node_name": "Waste Heat Recovery",
+      "node_kind": "application_role",
+      "node_type": "thermal_recovery_role",
+      "description": "For an AI data center, the Waste Heat Recovery decision sets waste heat quantity, temperature, seasonal demand, heat-pump uplift, transfer distance, offtake reliability, controls, and project economics. This role covers the thermal path from chip interface through coolant transport, heat exchange, heat rejection, monitoring, and heat reuse. It composes the canonical Data Center Waste Heat Recovery System by applying heat flux, temperatures, flow, pressure, materials, redundancy, service procedures, and facility-water constraints to that reusable category; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_liquid_cooling_thermal",
+        "ai_power_waste_heat_recovery_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "data_center_waste_heat_recovery_system"
+      ]
+    },
+    {
+      "node_id": "ai_power_energy_management_software",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Energy Management Software",
+      "node_kind": "application_role",
+      "node_type": "infrastructure_flow_stage",
+      "description": "AI data center stage for energy management software that combines electrical and thermal monitoring, control, fault prediction, compute scheduling, and carbon-energy cost optimization.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_energy_management_software"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ai_power_epms_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_energy_management_software",
+      "level": "L4",
+      "node_name": "Electrical Power Monitoring System",
+      "node_kind": "application_role",
+      "node_type": "energy_management_software_role",
+      "description": "For an AI data center, the Electrical Power Monitoring System decision sets EPMS device coverage, event resolution, waveform capture, time synchronization, alarms, dashboards, reporting, retention, and cybersecurity interfaces. This role covers the operational data and control boundary spanning electrical, building, infrastructure, thermal, predictive, scheduling, and cost workflows. It composes the canonical Electrical Power Monitoring Software by configuring data models, integrations, analytic or control scope, alarms, objectives, governance, and operator workflows on that reusable platform; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_energy_management_software",
+        "ai_power_epms_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "electrical_power_monitoring_software"
+      ]
+    },
+    {
+      "node_id": "ai_power_bms_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_energy_management_software",
+      "level": "L4",
+      "node_name": "Building Management System",
+      "node_kind": "application_role",
+      "node_type": "facility_management_software_role",
+      "description": "For an AI data center, the Building Management System decision sets BMS control scope, point lists, equipment sequences, setpoints, alarms, overrides, integration, operator access, and fail-safe behavior. This role covers the operational data and control boundary spanning electrical, building, infrastructure, thermal, predictive, scheduling, and cost workflows. It composes the canonical Building Management Software by configuring data models, integrations, analytic or control scope, alarms, objectives, governance, and operator workflows on that reusable platform; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_energy_management_software",
+        "ai_power_bms_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "building_management_software"
+      ]
+    },
+    {
+      "node_id": "ai_power_dcim_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_energy_management_software",
+      "level": "L4",
+      "node_name": "Data Center Infrastructure Management",
+      "node_kind": "application_role",
+      "node_type": "data_center_management_software_role",
+      "description": "For an AI data center, the Data Center Infrastructure Management decision sets DCIM asset hierarchy, capacity model, power and cooling telemetry, alarms, change workflows, visualization, reporting, and source-system integration. This role covers the operational data and control boundary spanning electrical, building, infrastructure, thermal, predictive, scheduling, and cost workflows. It composes the canonical Data Center Infrastructure Management Platform by configuring data models, integrations, analytic or control scope, alarms, objectives, governance, and operator workflows on that reusable platform; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_energy_management_software",
+        "ai_power_dcim_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "data_center_infrastructure_management_platform"
+      ]
+    },
+    {
+      "node_id": "ai_power_distribution_monitoring_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_energy_management_software",
+      "level": "L4",
+      "node_name": "Distribution Monitoring",
+      "node_kind": "application_role",
+      "node_type": "energy_management_software_role",
+      "description": "For an AI data center, the Distribution Monitoring decision sets distribution monitoring status, branch loading, circuit capacity, alarms, A/B balance, trends, and rack-feed utilization from panels to outlets. This role covers the operational data and control boundary spanning electrical, building, infrastructure, thermal, predictive, scheduling, and cost workflows. It composes the canonical Power Distribution Monitoring Software by configuring data models, integrations, analytic or control scope, alarms, objectives, governance, and operator workflows on that reusable platform; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_energy_management_software",
+        "ai_power_distribution_monitoring_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "power_distribution_monitoring_software"
+      ]
+    },
+    {
+      "node_id": "ai_power_thermal_control_software_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_energy_management_software",
+      "level": "L4",
+      "node_name": "Thermal Control Software",
+      "node_kind": "application_role",
+      "node_type": "thermal_control_software_role",
+      "description": "For an AI data center, the Thermal Control Software decision sets thermal control software temperatures, flow, pressure, humidity, equipment staging, setpoint reset, efficiency objectives, limits, and overrides. This role covers the operational data and control boundary spanning electrical, building, infrastructure, thermal, predictive, scheduling, and cost workflows. It composes the canonical Thermal Control Software by configuring data models, integrations, analytic or control scope, alarms, objectives, governance, and operator workflows on that reusable platform; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_energy_management_software",
+        "ai_power_thermal_control_software_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "thermal_control_software"
+      ]
+    },
+    {
+      "node_id": "ai_power_fault_prediction_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_energy_management_software",
+      "level": "L4",
+      "node_name": "Fault Prediction",
+      "node_kind": "application_role",
+      "node_type": "predictive_maintenance_software_role",
+      "description": "For an AI data center, the Fault Prediction decision sets fault prediction data, anomaly features, degradation score, lead-time threshold, alert routing, confidence, and maintenance work priority. This role covers the operational data and control boundary spanning electrical, building, infrastructure, thermal, predictive, scheduling, and cost workflows. It composes the canonical Power Fault Prediction Software by configuring data models, integrations, analytic or control scope, alarms, objectives, governance, and operator workflows on that reusable platform; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_energy_management_software",
+        "ai_power_fault_prediction_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "power_fault_prediction_software"
+      ]
+    },
+    {
+      "node_id": "ai_power_compute_energy_scheduling_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_energy_management_software",
+      "level": "L4",
+      "node_name": "Compute and Energy Scheduling",
+      "node_kind": "application_role",
+      "node_type": "energy_scheduling_software_role",
+      "description": "For an AI data center, the Compute and Energy Scheduling decision sets compute energy scheduling deadlines, capacity limits, tariffs, carbon intensity, cooling headroom, grid events, and geographic placement. This role covers the operational data and control boundary spanning electrical, building, infrastructure, thermal, predictive, scheduling, and cost workflows. It composes the canonical Compute Energy Scheduling Software by configuring data models, integrations, analytic or control scope, alarms, objectives, governance, and operator workflows on that reusable platform; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_energy_management_software",
+        "ai_power_compute_energy_scheduling_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "compute_energy_scheduling_software"
+      ]
+    },
+    {
+      "node_id": "ai_power_carbon_energy_cost_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_energy_management_software",
+      "level": "L4",
+      "node_name": "Carbon and Energy Cost Management",
+      "node_kind": "application_role",
+      "node_type": "energy_optimization_software_role",
+      "description": "For an AI data center, the Carbon and Energy Cost Management decision sets carbon and energy cost meter data, tariffs, demand charges, contracts, carbon factors, forecasts, budgets, optimization, and reporting. This role covers the operational data and control boundary spanning electrical, building, infrastructure, thermal, predictive, scheduling, and cost workflows. It composes the canonical Carbon Energy Cost Optimization Software by configuring data models, integrations, analytic or control scope, alarms, objectives, governance, and operator workflows on that reusable platform; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_energy_management_software",
+        "ai_power_carbon_energy_cost_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "carbon_energy_cost_optimization_software"
+      ]
+    },
+    {
+      "node_id": "ai_power_design_epc_operations",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Design, EPC, and Operations",
+      "node_kind": "application_role",
+      "node_type": "infrastructure_flow_stage",
+      "description": "AI data center stage for electrical design, modular and prefabricated integration, EPC delivery, commissioning, certification, and facility operations.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_design_epc_operations"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ai_power_electrical_design_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_design_epc_operations",
+      "level": "L4",
+      "node_name": "Data Center Electrical Design",
+      "node_kind": "application_role",
+      "node_type": "engineering_service_role",
+      "description": "For an AI data center, the Data Center Electrical Design decision sets electrical design one-lines, load studies, voltage levels, equipment criteria, protection, grounding, layouts, specifications, and assurance reviews. This role covers the facility lifecycle boundary from engineering and modularization through integration, construction, acceptance, and operations. It composes the canonical Data Center Electrical Design Service by defining project scope, interfaces, performance criteria, delivery responsibility, verification, handover, and accountability around that reusable service or system; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_design_epc_operations",
+        "ai_power_electrical_design_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "data_center_electrical_design_service"
+      ]
+    },
+    {
+      "node_id": "ai_power_modular_data_center_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_design_epc_operations",
+      "level": "L4",
+      "node_name": "Modular Data Center Delivery",
+      "node_kind": "application_role",
+      "node_type": "data_center_system_role",
+      "description": "For an AI data center, the Modular Data Center Delivery decision sets modular data center block capacity, factory integration, transport envelope, site interfaces, repeatability, expansion sequence, testing, and handover. This role covers the facility lifecycle boundary from engineering and modularization through integration, construction, acceptance, and operations. It composes the canonical Modular Data Center System by defining project scope, interfaces, performance criteria, delivery responsibility, verification, handover, and accountability around that reusable service or system; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_design_epc_operations",
+        "ai_power_modular_data_center_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "modular_data_center_system"
+      ]
+    },
+    {
+      "node_id": "ai_power_prefabricated_power_module_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_design_epc_operations",
+      "level": "L4",
+      "node_name": "Prefabricated Power Module Integration",
+      "node_kind": "application_role",
+      "node_type": "power_system_integration_role",
+      "description": "For an AI data center, the Prefabricated Power Module Integration decision sets prefabricated power module scope, enclosure, internal topology, factory testing, transport, site connections, commissioning boundary, and repeatability. This role covers the facility lifecycle boundary from engineering and modularization through integration, construction, acceptance, and operations. It composes the canonical Prefabricated Power Module by defining project scope, interfaces, performance criteria, delivery responsibility, verification, handover, and accountability around that reusable service or system; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_design_epc_operations",
+        "ai_power_prefabricated_power_module_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "prefabricated_power_module"
+      ]
+    },
+    {
+      "node_id": "ai_power_liquid_cooling_integration_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_design_epc_operations",
+      "level": "L4",
+      "node_name": "Liquid Cooling System Integration",
+      "node_kind": "application_role",
+      "node_type": "thermal_integration_service_role",
+      "description": "For an AI data center, the Liquid Cooling System Integration decision sets liquid cooling integration across cold plates or tanks, CDUs, pipes, coolant, controls, water boundary, flushing, testing, and IT interfaces. This role covers the facility lifecycle boundary from engineering and modularization through integration, construction, acceptance, and operations. It composes the canonical Liquid Cooling Integration Service by defining project scope, interfaces, performance criteria, delivery responsibility, verification, handover, and accountability around that reusable service or system; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_design_epc_operations",
+        "ai_power_liquid_cooling_integration_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "liquid_cooling_integration_service"
+      ]
+    },
+    {
+      "node_id": "ai_power_data_center_epc_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_design_epc_operations",
+      "level": "L4",
+      "node_name": "Data Center EPC Delivery",
+      "node_kind": "application_role",
+      "node_type": "epc_service_role",
+      "description": "For an AI data center, the Data Center EPC Delivery decision sets data center EPC scope, performance guarantees, design responsibility, procurement packages, construction sequence, schedule, quality, safety, and handover. This role covers the facility lifecycle boundary from engineering and modularization through integration, construction, acceptance, and operations. It composes the canonical Data Center EPC Service by defining project scope, interfaces, performance criteria, delivery responsibility, verification, handover, and accountability around that reusable service or system; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_design_epc_operations",
+        "ai_power_data_center_epc_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "data_center_epc_service"
+      ]
+    },
+    {
+      "node_id": "ai_power_commissioning_certification_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_design_epc_operations",
+      "level": "L4",
+      "node_name": "Commissioning and Certification",
+      "node_kind": "application_role",
+      "node_type": "commissioning_service_role",
+      "description": "For an AI data center, the Commissioning and Certification decision sets commissioning and certification levels, functional tests, integrated systems tests, failure scenarios, records, issue closure, witness points, and standards. This role covers the facility lifecycle boundary from engineering and modularization through integration, construction, acceptance, and operations. It composes the canonical Data Center Commissioning Certification Service by defining project scope, interfaces, performance criteria, delivery responsibility, verification, handover, and accountability around that reusable service or system; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_design_epc_operations",
+        "ai_power_commissioning_certification_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "data_center_commissioning_certification_service"
+      ]
+    },
+    {
+      "node_id": "ai_power_facility_operations_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_design_epc_operations",
+      "level": "L4",
+      "node_name": "Data Center Facility Operations",
+      "node_kind": "application_role",
+      "node_type": "operations_service_role",
+      "description": "For an AI data center, the Data Center Facility Operations decision sets facility operations staffing, procedures, monitoring, preventive maintenance, incident response, change control, spares, vendor support, and service levels. This role covers the facility lifecycle boundary from engineering and modularization through integration, construction, acceptance, and operations. It composes the canonical Data Center Facility Operations Service by defining project scope, interfaces, performance criteria, delivery responsibility, verification, handover, and accountability around that reusable service or system; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_design_epc_operations",
+        "ai_power_facility_operations_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "data_center_facility_operations_service"
+      ]
+    }
+  ]
+}

@@ -105,6 +105,72 @@ def test_build_watchlist_diagnostics_assigns_risk_and_opportunity_groups():
     assert must_watch.loc["B", "watch_group"] == "risk_watch"
 
 
+def test_build_watchlist_diagnostics_merges_lhb_shortline_watch_groups():
+    top_scores = pd.DataFrame(
+        [
+            {"trade_date": "2026-05-20", "asset_id": "A", "rank": 1, "score_total": 90.0},
+            {"trade_date": "2026-05-20", "asset_id": "B", "rank": 2, "score_total": 88.0},
+            {"trade_date": "2026-05-20", "asset_id": "C", "rank": 3, "score_total": 86.0},
+        ]
+    )
+    factor_frame = pd.DataFrame(
+        [
+            {"asset_id": "A", "amount_vs_20d": 1.0, "high_to_close_drawdown": 0.01, "volatility_5d": 0.02},
+            {"asset_id": "B", "amount_vs_20d": 1.0, "high_to_close_drawdown": 0.01, "volatility_5d": 0.02},
+            {"asset_id": "C", "amount_vs_20d": 1.0, "high_to_close_drawdown": 0.01, "volatility_5d": 0.02},
+        ]
+    )
+    lhb_shortline_frame = pd.DataFrame(
+        [
+            {
+                "asset_id": "A",
+                "watch_group": "follow_watch",
+                "watch_reason": "positive_follow_effectiveness",
+                "exit_signal": "",
+                "exit_reason": "",
+            },
+            {
+                "asset_id": "B",
+                "watch_group": "high_elasticity_watch",
+                "watch_reason": "positive_elasticity_with_controlled_drawdown",
+                "exit_signal": "",
+                "exit_reason": "",
+            },
+            {
+                "asset_id": "C",
+                "watch_group": "avoid_watch",
+                "watch_reason": "withdrawal_lhb",
+                "exit_signal": "hard_exit",
+                "exit_reason": "withdrawal_lhb,failure_structure",
+            },
+        ]
+    )
+
+    result = build_watchlist_diagnostics(
+        trade_date="2026-05-20",
+        top_scores=top_scores,
+        factor_frame=factor_frame,
+        dragon_frame=pd.DataFrame(),
+        lhb_frame=pd.DataFrame(),
+        event_frame=pd.DataFrame(),
+        market_frame=pd.DataFrame(),
+        lhb_shortline_frame=lhb_shortline_frame,
+        risk_watch_n=10,
+        opportunity_watch_n=10,
+    )
+
+    full = result["full"].set_index("asset_id")
+    assert full.loc["A", "watch_group"] == "opportunity_watch"
+    assert full.loc["A", "lhb_shortline_watch_group"] == "follow_watch"
+    assert "positive_follow_effectiveness" in full.loc["A", "opportunity_note"]
+    assert full.loc["B", "watch_group"] == "high_odds_burst_watch"
+    assert full.loc["B", "lhb_shortline_watch_group"] == "high_elasticity_watch"
+    assert full.loc["C", "watch_group"] == "risk_watch"
+    assert "lhb_shortline:avoid_watch" in full.loc["C", "risk_note"]
+    assert "withdrawal_lhb" in full.loc["C", "lhb_shortline_exit_reason"]
+    assert set(result["must_watch"]["asset_id"]) == {"A", "B", "C"}
+
+
 def test_build_watchlist_diagnostics_uses_latest_enriched_event_fields_for_grouping():
     top_scores = pd.DataFrame(
         [
@@ -691,6 +757,45 @@ def test_build_watchlist_diagnostics_treats_negative_lhb_as_hard_risk():
     full = result["full"].set_index("asset_id")
     assert full.loc["A", "watch_group"] == "risk_watch"
     assert "lhb_negative_net_buy" in full.loc["A", "risk_note"]
+
+
+def test_build_watchlist_diagnostics_keeps_standalone_lhb_high_pump_as_high_odds_burst():
+    top_scores = pd.DataFrame(
+        [{"trade_date": "2026-05-20", "asset_id": "A", "rank": 4, "score_total": 94.0}]
+    )
+    factor_frame = pd.DataFrame(
+        [{"asset_id": "A", "amount_vs_20d": 3.0, "high_to_close_drawdown": 0.02, "volatility_5d": 0.06}]
+    )
+    dragon_frame = pd.DataFrame(
+        [{"asset_id": "A", "dragon_risk_score": 0.20, "entry_window_v2": "breakout_entry"}]
+    )
+    lhb_frame = pd.DataFrame(
+        [
+            {
+                "asset_id": "A",
+                "lhb_risk_score": 0.45,
+                "lhb_negative_net_buy": False,
+                "lhb_institution_selling": False,
+                "lhb_high_pump_risk": True,
+            }
+        ]
+    )
+
+    result = build_watchlist_diagnostics(
+        trade_date="2026-05-20",
+        top_scores=top_scores,
+        factor_frame=factor_frame,
+        dragon_frame=dragon_frame,
+        lhb_frame=lhb_frame,
+        event_frame=pd.DataFrame(),
+        market_frame=pd.DataFrame(),
+        risk_watch_n=10,
+        opportunity_watch_n=10,
+    )
+
+    full = result["full"].set_index("asset_id")
+    assert full.loc["A", "watch_group"] == "high_odds_burst_watch"
+    assert "lhb_high_pump_risk" in full.loc["A", "risk_note"]
 
 
 def test_build_watchlist_diagnostics_prioritizes_trend_continuation_before_weak_to_strong():

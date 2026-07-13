@@ -72,7 +72,8 @@ def test_drawdown_throttle_scan_builds_grid_with_baseline_and_trigger_metrics(tm
 
     summary = result["summary"]
     assert len(summary) == 9
-    assert "top5_weekly_max_2_replacements" in set(summary["variant_name"])
+    assert "top10_weekly_max_2_replacements" in set(summary["variant_name"])
+    assert summary["variant_name"].str.startswith("top10_weekly_max2_drawdown_throttle_v1").any()
     grid = summary[summary["variant_name"].str.contains("drawdown_throttle")]
     assert set(grid["drawdown_throttle_threshold"]) == {-0.05, -0.08}
     assert set(grid["drawdown_throttle_invested_weight"]) == {0.8, 0.9}
@@ -89,7 +90,7 @@ def test_cli_dispatches_drawdown_throttle_scan(monkeypatch, capsys, tmp_path: Pa
     def fake_run(**kwargs):
         captured.update(kwargs)
         return {
-            "summary": pd.DataFrame([{"variant_name": "top5_weekly_max_2_replacements"}]),
+            "summary": pd.DataFrame([{"variant_name": "top10_weekly_max_2_replacements"}]),
             "paths": {
                 "summary": str(tmp_path / "summary.csv"),
                 "report": str(tmp_path / "report.md"),
@@ -121,5 +122,6 @@ def test_cli_dispatches_drawdown_throttle_scan(monkeypatch, capsys, tmp_path: Pa
     assert captured["threshold_values"] == [0.08, 0.10]
     assert captured["invested_weight_values"] == [0.8, 0.9]
     assert captured["max_replacement_values"] == [1, 2]
+    assert captured["top_n"] == 10
     out = capsys.readouterr().out
     assert "mid_trend_drawdown_throttle_scan|summary|" in out

@@ -142,7 +142,6 @@ def _hard_reason_set() -> set[str]:
         "failure_event",
         "lhb_negative_net_buy",
         "lhb_institution_selling",
-        "lhb_high_pump_risk",
         "dragon_lhb_risk_confluence",
         "dragon_risk_high",
         "lhb_risk_high",
@@ -151,6 +150,7 @@ def _hard_reason_set() -> set[str]:
 
 def _elasticity_reason_set() -> set[str]:
     return {
+        "lhb_high_pump_risk",
         "intraday_fade",
         "extreme_amount",
         "high_volatility",

@@ -1,0 +1,30 @@
+[
+  {
+    "trade_date": "2026-06-20",
+    "strategy_id": "lhb",
+    "asset_id": "CN:SH:600000",
+    "entry_reason": "lhb_follow",
+    "holding_logic": "shortline_event",
+    "current_state": "watch",
+    "risk_status": "elevated",
+    "action": "manual_review",
+    "exit_condition": "break_open_low",
+    "evidence": {
+      "bucket": "trial_list"
+    }
+  },
+  {
+    "trade_date": "2026-06-20",
+    "strategy_id": "mid_trend",
+    "asset_id": "CN:SH:600000",
+    "entry_reason": "trend_hold",
+    "holding_logic": "ma20_intact",
+    "current_state": "healthy",
+    "risk_status": "normal",
+    "action": "hold",
+    "exit_condition": "break_ma20",
+    "evidence": {
+      "bucket": "healthy"
+    }
+  }
+]

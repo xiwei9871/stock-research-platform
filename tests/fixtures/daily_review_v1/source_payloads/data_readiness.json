@@ -1,0 +1,36 @@
+{
+  "daily_bars": {
+    "status": "ready",
+    "required": true,
+    "summary": "market_daily_bar ready for 2026-06-20",
+    "freshness": {
+      "latest_available_date": "2026-06-20",
+      "expected_date": "2026-06-20",
+      "is_fresh": true,
+      "max_allowed_lag_days": 0
+    },
+    "confidence_impact": "none",
+    "blocking_modules": [],
+    "source_refs": [
+      "ops.daily_pipeline_status"
+    ]
+  },
+  "lhb_feed": {
+    "status": "missing",
+    "required": false,
+    "summary": "lhb payload missing for trade date",
+    "freshness": {
+      "latest_available_date": "2026-06-19",
+      "expected_date": "2026-06-20",
+      "is_fresh": false,
+      "max_allowed_lag_days": 0
+    },
+    "confidence_impact": "LHB conclusion confidence reduced",
+    "blocking_modules": [
+      "lhb_review"
+    ],
+    "source_refs": [
+      "raw_lhb_payload"
+    ]
+  }
+}

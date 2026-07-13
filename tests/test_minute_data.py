@@ -1,12 +1,18 @@
 import datetime as dt
+import types
 
 from stock_research import minute_data
+from stock_research import eastmoney_http
 from stock_research.minute_data import (
     adjustflag_for_adjust_type,
     baostock_frequency,
+    eastmoney_adjust_flag,
+    eastmoney_kline_frequency,
+    eastmoney_secid_from_ts_code,
     minute_market_row,
     minute_staging_row,
     parse_baostock_trade_time,
+    query_eastmoney_kline_minute_rows,
     ts_code_from_baostock_code,
     upsert_stock_minute_bars,
 )
@@ -48,6 +54,113 @@ def test_frequency_and_adjust_type_map_to_baostock_parameters():
     assert adjustflag_for_adjust_type("raw") == "3"
     assert adjustflag_for_adjust_type("qfq") == "2"
     assert adjustflag_for_adjust_type("hfq") == "1"
+
+
+def test_eastmoney_kline_parameters_use_direct_endpoint_conventions():
+    assert eastmoney_secid_from_ts_code("000001.SZ") == "0.000001"
+    assert eastmoney_secid_from_ts_code("600000.SH") == "1.600000"
+    assert eastmoney_kline_frequency("5min") == "5"
+    assert eastmoney_adjust_flag("raw") == "0"
+    assert eastmoney_adjust_flag("qfq") == "1"
+    assert eastmoney_adjust_flag("hfq") == "2"
+
+
+def test_query_eastmoney_kline_minute_rows_uses_curl_main_path(monkeypatch):
+    calls = []
+
+    class FakeCompleted:
+        returncode = 0
+        stderr = ""
+        stdout = (
+            '{"data":{"klines":["'
+            '2026-07-03 09:50,10.34,10.38,10.40,10.34,52821,54774461.00,'
+            '0.58,0.48,0.05,0.03"]}}'
+        )
+
+    def fake_run(cmd, *, capture_output, env, text, timeout):
+        calls.append(cmd)
+        assert "HTTP_PROXY" not in env
+        assert "HTTPS_PROXY" not in env
+        assert "ALL_PROXY" not in env
+        return FakeCompleted()
+
+    monkeypatch.setenv("HTTP_PROXY", "http://192.168.3.185:7890")
+    monkeypatch.setenv("HTTPS_PROXY", "http://192.168.3.185:7890")
+    monkeypatch.setenv("ALL_PROXY", "socks5://192.168.3.185:7890")
+    monkeypatch.setattr(eastmoney_http.subprocess, "run", fake_run)
+
+    rows = query_eastmoney_kline_minute_rows(
+        "000001.SZ",
+        dt.date(2026, 7, 3),
+        dt.date(2026, 7, 3),
+        freq="5min",
+        adjust_type="raw",
+        retries=3,
+        retry_sleep_seconds=0,
+    )
+
+    assert len(calls) == 1
+    assert calls[0][0] == "curl"
+    assert "--retry-all-errors" in calls[0]
+    assert "--noproxy" in calls[0]
+    assert calls[0][calls[0].index("--noproxy") + 1] == "*"
+    assert "secid=0.000001" in calls[0][-1]
+    assert "klt=5" in calls[0][-1]
+    assert "fqt=0" in calls[0][-1]
+    assert rows == [
+        {
+            "date": "2026-07-03",
+            "time": "20260703095000000",
+            "code": "sz.000001",
+            "open": "10.34",
+            "close": "10.38",
+            "high": "10.40",
+            "low": "10.34",
+            "volume": "52821",
+            "amount": "54774461.00",
+        }
+    ]
+
+
+def test_query_eastmoney_kline_minute_rows_falls_back_to_alternate_host(monkeypatch):
+    calls = []
+
+    class FakeCompleted:
+        stderr = ""
+
+        def __init__(self, returncode: int, stdout: str = ""):
+            self.returncode = returncode
+            self.stdout = stdout
+            self.stderr = "Empty reply from server" if returncode else ""
+
+    def fake_run(cmd, *, capture_output, env, text, timeout):
+        calls.append(cmd)
+        if len(calls) == 1:
+            return FakeCompleted(52)
+        return FakeCompleted(
+            0,
+            (
+                '{"data":{"klines":["'
+                '2026-07-03 09:50,10.34,10.38,10.40,10.34,52821,54774461.00,'
+                '0.58,0.48,0.05,0.03"]}}'
+            ),
+        )
+
+    monkeypatch.setattr(eastmoney_http.subprocess, "run", fake_run)
+
+    rows = query_eastmoney_kline_minute_rows(
+        "000001.SZ",
+        dt.date(2026, 7, 3),
+        dt.date(2026, 7, 3),
+        freq="5min",
+        adjust_type="raw",
+        retries=1,
+        retry_sleep_seconds=0,
+    )
+
+    assert len(calls) == 2
+    assert calls[0][-1] != calls[1][-1]
+    assert rows[0]["time"] == "20260703095000000"
 
 
 def test_minute_market_row_normalizes_baostock_payload():
@@ -131,6 +244,49 @@ def test_query_baostock_minute_rows_uses_frequency_and_adjustflag(monkeypatch):
     assert calls[0][2]["adjustflag"] == "2"
 
 
+def test_query_baostock_minute_rows_applies_socket_timeout(monkeypatch):
+    class Result:
+        error_code = "0"
+        error_msg = "success"
+        fields = ["date", "time", "code", "open", "high", "low", "close", "volume", "amount"]
+
+        def __init__(self):
+            self.rows = [list(raw_minute_row().values())]
+            self.index = -1
+
+        def next(self):
+            self.index += 1
+            return self.index < len(self.rows)
+
+        def get_row_data(self):
+            return self.rows[self.index]
+
+    observed = {"timeouts": []}
+
+    monkeypatch.setattr(minute_data.socket, "getdefaulttimeout", lambda: None)
+    monkeypatch.setattr(
+        minute_data.socket,
+        "setdefaulttimeout",
+        observed["timeouts"].append,
+    )
+    monkeypatch.setattr(
+        minute_data.bs,
+        "query_history_k_data_plus",
+        lambda *args, **kwargs: Result(),
+    )
+
+    minute_data.query_baostock_minute_rows(
+        "sh.600000",
+        dt.date(2024, 1, 2),
+        dt.date(2024, 1, 2),
+        freq="5min",
+        adjust_type="qfq",
+        timeout_seconds=7,
+    )
+
+    assert observed["timeouts"] == [7, None]
+
+
 def test_query_baostock_minute_rows_retries_network_errors(monkeypatch):
     class Result:
         fields = ["date", "time", "code", "open", "high", "low", "close", "volume", "amount"]
@@ -175,6 +331,112 @@ def test_query_baostock_minute_rows_retries_network_errors(monkeypatch):
 
     assert len(rows) == 1
     assert calls == {"query": 2, "login": 1, "logout": 1}
+
+
+def test_query_baostock_minute_rows_retries_broken_pipe_during_iteration(monkeypatch):
+    class Result:
+        error_code = "0"
+        error_msg = "success"
+        fields = ["date", "time", "code", "open", "high", "low", "close", "volume", "amount"]
+
+        def __init__(self, *, broken_pipe=False):
+            self.broken_pipe = broken_pipe
+            self.rows = [list(raw_minute_row().values())]
+            self.index = -1
+
+        def next(self):
+            if self.broken_pipe:
+                raise BrokenPipeError(32, "Broken pipe")
+            self.index += 1
+            return self.index < len(self.rows)
+
+        def get_row_data(self):
+            return self.rows[self.index]
+
+    class Login:
+        error_code = "0"
+        error_msg = "success"
+
+    calls = {"query": 0, "login": 0, "logout": 0}
+
+    def fake_query(*args, **kwargs):
+        calls["query"] += 1
+        return Result(broken_pipe=calls["query"] == 1)
+
+    monkeypatch.setattr(minute_data.time, "sleep", lambda _: None)
+    monkeypatch.setattr(minute_data.bs, "query_history_k_data_plus", fake_query)
+    monkeypatch.setattr(minute_data.bs, "login", lambda: calls.__setitem__("login", calls["login"] + 1) or Login())
+    monkeypatch.setattr(minute_data.bs, "logout", lambda: calls.__setitem__("logout", calls["logout"] + 1))
+
+    rows = minute_data.query_baostock_minute_rows(
+        "sh.600000",
+        dt.date(2024, 1, 2),
+        dt.date(2024, 1, 2),
+        freq="5min",
+        adjust_type="raw",
+    )
+
+    assert len(rows) == 1
+    assert calls == {"query": 2, "login": 1, "logout": 1}
+
+
+def test_login_or_raise_applies_socket_timeout(monkeypatch):
+    class Login:
+        error_code = "0"
+        error_msg = "success"
+
+    observed = {"timeouts": []}
+
+    monkeypatch.setattr(minute_data.socket, "getdefaulttimeout", lambda: None)
+    monkeypatch.setattr(
+        minute_data.socket,
+        "setdefaulttimeout",
+        observed["timeouts"].append,
+    )
+    monkeypatch.setattr(minute_data.bs, "login", lambda: Login())
+
+    minute_data.login_or_raise(timeout_seconds=9)
+
+    assert observed["timeouts"] == [9, None]
+
+
+def test_login_or_raise_uses_configured_socks_proxy(monkeypatch):
+    class Login:
+        error_code = "0"
+        error_msg = "success"
+
+    proxy_calls = []
+    fake_socks = types.SimpleNamespace(
+        SOCKS5="SOCKS5",
+        socksocket="proxied-socket",
+        setdefaultproxy=lambda *args, **kwargs: proxy_calls.append((args, kwargs)),
+    )
+    fake_socket_module = types.SimpleNamespace(
+        socket=types.SimpleNamespace(socket="original-socket")
+    )
+
+    monkeypatch.setenv("BAOSTOCK_PROXY_HOST", "192.168.3.213")
+    monkeypatch.setenv("BAOSTOCK_PROXY_PORT", "7897")
+    monkeypatch.setattr(minute_data, "_load_socks_module", lambda: fake_socks)
+    monkeypatch.setattr(
+        minute_data,
+        "_load_baostock_socket_module",
+        lambda: fake_socket_module,
+    )
+
+    def fake_login():
+        assert fake_socket_module.socket.socket == "proxied-socket"
+        return Login()
+
+    monkeypatch.setattr(minute_data.bs, "login", fake_login)
+
+    minute_data.login_or_raise(timeout_seconds=9)
+
+    assert proxy_calls == [
+        (("SOCKS5", "192.168.3.213", 7897), {"rdns": True}),
+        ((), {}),
+    ]
+    assert fake_socket_module.socket.socket == "original-socket"
 
 
 def test_login_or_raise_retries_transient_network_error(monkeypatch):

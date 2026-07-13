@@ -1,0 +1,1594 @@
+{
+  "chains": [
+    {
+      "chain_id": "semiconductor_eda_ip_design_services",
+      "sector_id": "semiconductor_electronics",
+      "chain_name": "Semiconductor EDA, IP, and Design Services",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "manufacturing_process",
+      "description": "Design-enablement chain for electronic design automation tools, reusable IP, verification, and specialized chip design services.",
+      "scope": "Covers EDA software, processor and interface IP, physical design, verification, tape-out support, and outsourced semiconductor design services.",
+      "exclusions": [
+        "Fabricated wafers and foundry process capacity remain owned by wafer_manufacturing_specialty_processes."
+      ],
+      "aliases": [
+        "EDA and Semiconductor IP",
+        "Chip Design Services",
+        "半导体EDA、IP与设计服务"
+      ],
+      "status": "skeleton",
+      "order": 1
+    },
+    {
+      "chain_id": "ai_logic_compute_chips",
+      "sector_id": "semiconductor_electronics",
+      "chain_name": "AI Logic and Compute Chips",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "system_architecture",
+      "description": "Compute-system chain for processors and accelerators that execute AI training, inference, graphics, and high-performance workloads.",
+      "scope": "Covers CPUs, GPUs, AI accelerators, NPUs, compute chiplets, and their package-level system interfaces.",
+      "exclusions": [
+        "Memory products remain owned by memory_chips_storage_control, while data-center facilities remain owned by cloud_data_center_infrastructure."
+      ],
+      "aliases": [
+        "AI Accelerators",
+        "Logic ICs",
+        "AI逻辑与算力芯片"
+      ],
+      "status": "skeleton",
+      "order": 2
+    },
+    {
+      "chain_id": "memory_chips_storage_control",
+      "sector_id": "semiconductor_electronics",
+      "chain_name": "Memory Chips, Storage, and Controllers",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "manufacturing_process",
+      "description": "Memory-value-chain coverage for volatile and nonvolatile memory devices, storage media, and controllers that manage data persistence.",
+      "scope": "Covers DRAM, NAND flash, emerging memory, solid-state storage, memory modules, and storage controller manufacturing routes.",
+      "exclusions": [
+        "General-purpose processors and AI accelerators remain owned by ai_logic_compute_chips."
+      ],
+      "aliases": [
+        "Memory and Storage ICs",
+        "Storage Controllers",
+        "存储芯片与控制器"
+      ],
+      "status": "skeleton",
+      "order": 3
+    },
+    {
+      "chain_id": "analog_mixed_signal_rf_chips",
+      "sector_id": "semiconductor_electronics",
+      "chain_name": "Analog, Mixed-Signal, and RF Chips",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "system_architecture",
+      "description": "Signal-chain coverage for analog, mixed-signal, and radio-frequency integrated circuits that sense, condition, convert, and transmit signals.",
+      "scope": "Covers data converters, amplifiers, interface ICs, RF transceivers, timing chips, and mixed-signal subsystems.",
+      "exclusions": [
+        "MEMS sensors are owned by mems_intelligent_sensors, and power switching devices are owned by power_semiconductors."
+      ],
+      "aliases": [
+        "Analog and RF ICs",
+        "Mixed-Signal Chips",
+        "模拟、混合信号与射频芯片"
+      ],
+      "status": "skeleton",
+      "order": 4
+    },
+    {
+      "chain_id": "power_semiconductors",
+      "sector_id": "semiconductor_electronics",
+      "chain_name": "Power Semiconductors",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "manufacturing_process",
+      "description": "Canonical industry chain for discrete and integrated semiconductor devices that switch, convert, and control electrical power.",
+      "scope": "Covers silicon MOSFETs, silicon-carbide power devices, gallium-nitride power devices, and their device-level manufacturing routes for power conversion applications.",
+      "exclusions": [
+        "Power-supply equipment, converter assemblies, and application-specific power architectures remain owned by power_electronics_power_supply_equipment.",
+        "Signal-processing, radio-frequency, memory, and logic semiconductors remain owned by their respective semiconductor chains."
+      ],
+      "aliases": [
+        "Power Devices",
+        "Power Semiconductor Devices",
+        "功率半导体"
+      ],
+      "status": "skeleton",
+      "order": 5
+    },
+    {
+      "chain_id": "mems_intelligent_sensors",
+      "sector_id": "semiconductor_electronics",
+      "chain_name": "MEMS and Intelligent Sensors",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "manufacturing_process",
+      "description": "Sensor-industry chain for MEMS devices and intelligent sensing components that convert physical phenomena into usable electronic data.",
+      "scope": "Covers standalone and general-purpose MEMS and intelligent sensing devices, sensor dies and components, and fabrication across inertial, pressure, acoustic, environmental, optical, force, position, and tactile sensing.",
+      "exclusions": [
+        "Industrial inspection systems remain owned by industrial_inspection_metrology_machine_vision.",
+        "Humanoid-specific sensor requirements, qualification, packaging, calibration, selection, robot-module integration, and system use remain owned by humanoid_robots_embodied_intelligence."
+      ],
+      "aliases": [
+        "MEMS Sensors",
+        "Smart Sensing Components",
+        "MEMS与智能传感器"
+      ],
+      "status": "skeleton",
+      "order": 6
+    },
+    {
+      "chain_id": "wafer_manufacturing_specialty_processes",
+      "sector_id": "semiconductor_electronics",
+      "chain_name": "Wafer Manufacturing and Specialty Processes",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "manufacturing_process",
+      "description": "Foundry-manufacturing chain for wafer fabrication, specialty semiconductor processes, and production services that turn designs into die.",
+      "scope": "Covers logic, memory, analog, compound-semiconductor, and specialty process wafer manufacturing and foundry operations.",
+      "exclusions": [
+        "Fab process tools remain owned by semiconductor_manufacturing_equipment and input materials by semiconductor_materials_electronic_chemicals."
+      ],
+      "aliases": [
+        "Semiconductor Foundry",
+        "Wafer Fabrication",
+        "晶圆制造与特色工艺"
+      ],
+      "status": "skeleton",
+      "order": 7
+    },
+    {
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "sector_id": "semiconductor_electronics",
+      "chain_name": "Semiconductor Manufacturing Equipment",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "manufacturing_process",
+      "description": "Equipment and factory systems used to execute, control, and support front-end semiconductor wafer manufacturing.",
+      "scope": "Covers wafer-fabrication process equipment, inspection and metrology, wafer automation, vacuum and process delivery, and fab utility systems.",
+      "exclusions": [
+        "Semiconductor materials are owned by the semiconductor materials chain.",
+        "Semiconductor packaging and test equipment are owned by the packaging and test chain, except wafer_thinning is temporarily canonical here and may be referenced by advanced packaging."
+      ],
+      "aliases": [
+        "Semiconductor Equipment",
+        "Wafer Fab Equipment",
+        "半导体制造设备"
+      ],
+      "status": "draft",
+      "order": 8
+    },
+    {
+      "chain_id": "semiconductor_materials_electronic_chemicals",
+      "sector_id": "semiconductor_electronics",
+      "chain_name": "Semiconductor Materials and Electronic Chemicals",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "manufacturing_process",
+      "description": "Materials chain for wafers, gases, photoresists, chemicals, targets, and consumables used throughout semiconductor fabrication.",
+      "scope": "Covers silicon and compound wafers, electronic gases, wet chemicals, photoresists, CMP materials, sputtering targets, and cleanroom consumables.",
+      "exclusions": [
+        "Process equipment and fab automation remain owned by semiconductor_manufacturing_equipment."
+      ],
+      "aliases": [
+        "Electronic Chemicals",
+        "Semiconductor Process Materials",
+        "半导体材料与电子化学品"
+      ],
+      "status": "skeleton",
+      "order": 9
+    },
+    {
+      "chain_id": "semiconductor_packaging_test_advanced_packaging",
+      "sector_id": "semiconductor_electronics",
+      "chain_name": "Semiconductor Packaging, Test, and Advanced Packaging",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "manufacturing_process",
+      "description": "Back-end semiconductor chain for assembly, testing, reliability screening, and advanced package integration of semiconductor devices.",
+      "scope": "Covers IC packaging, wafer-level packaging, chiplets, 2.5D and 3D integration, burn-in, test services, and reliability qualification.",
+      "exclusions": [
+        "Front-end wafer processing equipment remains owned by semiconductor_manufacturing_equipment."
+      ],
+      "aliases": [
+        "OSAT and Advanced Packaging",
+        "IC Packaging and Test",
+        "半导体封装测试与先进封装"
+      ],
+      "status": "skeleton",
+      "order": 10
+    },
+    {
+      "chain_id": "pcb_passives_connectors_interconnect",
+      "sector_id": "semiconductor_electronics",
+      "chain_name": "PCB, Passives, Connectors, and Interconnect",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "manufacturing_process",
+      "description": "Canonical industry chain for electrical interconnect products and passive components that route, join, filter, and condition power or signals.",
+      "scope": "Covers power cables, busbars and busways, high-current and HVDC connectors, flexible copper links, magnetic components, capacitors, and related manufacturing processes.",
+      "exclusions": [
+        "Active power semiconductor devices remain owned by power_semiconductors.",
+        "Complete power-conversion and distribution equipment remains owned by power_electronics_power_supply_equipment."
+      ],
+      "aliases": [
+        "Electronic Interconnect and Passives",
+        "PCB and Connector Industry",
+        "印制电路板被动元件与连接互连"
+      ],
+      "status": "skeleton",
+      "order": 11
+    },
+    {
+      "chain_id": "display_panels_optoelectronic_components",
+      "sector_id": "semiconductor_electronics",
+      "chain_name": "Display Panels and Optoelectronic Components",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "manufacturing_process",
+      "description": "Canonical commercial optoelectronics chain for mass-production display panels and qualified light-emitting, imaging, and optical components used in electronic products.",
+      "scope": "Covers commercial and mass-production LCD, OLED, qualified MicroLED, display modules, backplanes, LEDs, laser components, and optical sensing or illumination components.",
+      "exclusions": [
+        "Medical imaging systems remain owned by medical_imaging_diagnostic_equipment, not component-level optoelectronics.",
+        "Pre-commercial display concepts and emerging technical routes remain owned by future_displays until they reach repeatable commercial mass-production; mature commercialization and manufacturing belong here."
+      ],
+      "aliases": [
+        "Display and Optoelectronics",
+        "Panel Industry",
+        "显示面板与光电元件"
+      ],
+      "status": "skeleton",
+      "order": 12
+    },
+    {
+      "chain_id": "ai_foundation_models_application_software",
+      "sector_id": "next_generation_information_technology",
+      "chain_name": "AI Foundation Models and Application Software",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "system_architecture",
+      "description": "Software stack for foundation models, model tooling, and applications that deliver generative and intelligent capabilities to users and enterprises.",
+      "scope": "Covers large language, multimodal, vision, and agent models; training frameworks; inference platforms; and vertical AI applications.",
+      "exclusions": [
+        "AI accelerators remain owned by ai_logic_compute_chips and data-center facilities by cloud_data_center_infrastructure."
+      ],
+      "aliases": [
+        "Foundation Model Ecosystem",
+        "Generative AI Software",
+        "AI大模型与应用软件"
+      ],
+      "status": "skeleton",
+      "order": 1
+    },
+    {
+      "chain_id": "ai_compute_infrastructure",
+      "sector_id": "next_generation_information_technology",
+      "chain_name": "AI Compute Infrastructure",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "system_architecture",
+      "description": "Compute-platform chain for servers, clusters, storage, orchestration, and systems software used to train and serve AI workloads.",
+      "scope": "Covers AI servers, accelerator clusters, distributed storage, scheduling platforms, virtualization, and cluster management software.",
+      "exclusions": [
+        "Facility power-conversion and distribution equipment remain owned by power_electronics_power_supply_equipment, while facility construction and cooling systems remain owned by cloud_data_center_infrastructure."
+      ],
+      "aliases": [
+        "AI Computing Systems",
+        "Intelligent Compute Infrastructure",
+        "AI算力基础设施"
+      ],
+      "status": "skeleton",
+      "order": 2
+    },
+    {
+      "chain_id": "cloud_data_center_infrastructure",
+      "sector_id": "next_generation_information_technology",
+      "chain_name": "Cloud and Data Center Infrastructure",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "infrastructure_flow",
+      "description": "Canonical infrastructure chain for data-center facilities, thermal systems, integrated delivery, commissioning, and operations.",
+      "scope": "Covers modular data-center systems, liquid-cooling equipment and loops, facility integration, DCIM platforms, electrical design, EPC, commissioning, certification, and facility operations.",
+      "exclusions": [
+        "Generic utility generation, grid equipment, and power-conversion products remain owned by their primary energy chains.",
+        "Compute chips, servers, storage, and network equipment remain owned by their respective information-technology and semiconductor chains."
+      ],
+      "aliases": [
+        "Data Center Facilities",
+        "Cloud Infrastructure Facilities",
+        "云与数据中心基础设施"
+      ],
+      "status": "skeleton",
+      "order": 3
+    },
+    {
+      "chain_id": "mobile_communications_5g_6g",
+      "sector_id": "next_generation_information_technology",
+      "chain_name": "Mobile Communications 5G and 6G",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "infrastructure_flow",
+      "description": "Network-infrastructure chain for mobile radio access, core networks, spectrum use, and 5G or 6G service delivery.",
+      "scope": "Covers base stations, radio units, antennas, mobile core platforms, transport interfaces, private networks, and 5G-Advanced or 6G evolution.",
+      "exclusions": [
+        "Fixed optical transport remains owned by optical_communications_data_center_interconnect."
+      ],
+      "aliases": [
+        "5G/6G Communications",
+        "Mobile Network Infrastructure",
+        "5G与6G移动通信"
+      ],
+      "status": "skeleton",
+      "order": 4
+    },
+    {
+      "chain_id": "optical_communications_data_center_interconnect",
+      "sector_id": "next_generation_information_technology",
+      "chain_name": "Optical Communications and Data Center Interconnect",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "infrastructure_flow",
+      "description": "Optical-network chain for high-speed transmission links and interconnect systems joining telecom networks, cloud sites, and AI clusters.",
+      "scope": "Covers optical fiber, modules, coherent transmission, WDM equipment, switches for optical fabrics, and data-center interconnect deployment.",
+      "exclusions": [
+        "Radio access networks remain owned by mobile_communications_5g_6g and general facility construction by cloud_data_center_infrastructure."
+      ],
+      "aliases": [
+        "Optical Interconnect",
+        "Data Center Optical Networking",
+        "光通信与数据中心互连"
+      ],
+      "status": "skeleton",
+      "order": 5
+    },
+    {
+      "chain_id": "network_equipment_edge_iot",
+      "sector_id": "next_generation_information_technology",
+      "chain_name": "Network Equipment, Edge, and IoT",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "infrastructure_flow",
+      "description": "Connectivity chain for enterprise networking, edge platforms, and Internet of Things devices that collect, route, and process distributed data.",
+      "scope": "Covers routers, switches, gateways, edge servers, IoT modules, industrial gateways, and device connectivity management.",
+      "exclusions": [
+        "Mobile carrier radio infrastructure remains owned by mobile_communications_5g_6g."
+      ],
+      "aliases": [
+        "Edge Computing and IoT",
+        "Network Infrastructure Equipment",
+        "网络设备、边缘计算与物联网"
+      ],
+      "status": "skeleton",
+      "order": 6
+    },
+    {
+      "chain_id": "foundational_software_os_database",
+      "sector_id": "next_generation_information_technology",
+      "chain_name": "Foundational Software, Operating Systems, and Databases",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "system_architecture",
+      "description": "Core software chain for operating systems, database engines, middleware, runtime environments, and developer platforms underpinning digital systems.",
+      "scope": "Covers desktop, server, and embedded operating systems; relational and distributed databases; middleware; and foundational development toolchains.",
+      "exclusions": [
+        "Industrial-domain applications remain owned by industrial_software and security products by cybersecurity_data_infrastructure."
+      ],
+      "aliases": [
+        "Basic Software",
+        "OS and Database Software",
+        "基础软件、操作系统与数据库"
+      ],
+      "status": "skeleton",
+      "order": 7
+    },
+    {
+      "chain_id": "industrial_software",
+      "sector_id": "next_generation_information_technology",
+      "chain_name": "Industrial Software",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "system_architecture",
+      "description": "Canonical industry chain for operational, engineering, monitoring, optimization, and predictive software used in industrial and infrastructure systems.",
+      "scope": "Covers electrical and facility monitoring platforms, building management software, thermal control, fault prediction, compute-energy scheduling, and carbon, energy, and cost optimization software.",
+      "exclusions": [
+        "Physical power, grid, cooling, and data-center facility equipment remains owned by the corresponding equipment or infrastructure chain.",
+        "Generic operating systems, databases, and cybersecurity platforms remain owned by their primary foundational-software chains."
+      ],
+      "aliases": [
+        "Industrial Operations Software",
+        "Industrial Digital Software",
+        "工业软件"
+      ],
+      "status": "skeleton",
+      "order": 8
+    },
+    {
+      "chain_id": "cybersecurity_data_infrastructure",
+      "sector_id": "next_generation_information_technology",
+      "chain_name": "Cybersecurity and Data Infrastructure",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "system_architecture",
+      "description": "Digital-trust chain for cybersecurity products, data governance, identity systems, and resilient infrastructure protecting information assets.",
+      "scope": "Covers endpoint, network, cloud, and application security; identity access management; data protection; backup; governance; and security operations.",
+      "exclusions": [
+        "Underlying operating systems and database engines remain owned by foundational_software_os_database."
+      ],
+      "aliases": [
+        "Cybersecurity and Data Governance",
+        "Information Security Infrastructure",
+        "网络安全与数据基础设施"
+      ],
+      "status": "skeleton",
+      "order": 9
+    },
+    {
+      "chain_id": "industrial_machine_tools_cnc",
+      "sector_id": "high_end_equipment_intelligent_manufacturing",
+      "chain_name": "Industrial Machine Tools and CNC",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "system_architecture",
+      "description": "Equipment-system chain for CNC machine tools and machining centers that shape, cut, form, and finish industrial components.",
+      "scope": "Covers CNC controls, lathes, milling centers, grinding machines, machining centers, tooling interfaces, and metalworking automation.",
+      "exclusions": [
+        "Laser processing equipment remains owned by laser_equipment_additive_manufacturing."
+      ],
+      "aliases": [
+        "CNC Machine Tools",
+        "Numerical Control Equipment",
+        "工业母机与数控机床"
+      ],
+      "status": "skeleton",
+      "order": 1
+    },
+    {
+      "chain_id": "industrial_automation_control",
+      "sector_id": "high_end_equipment_intelligent_manufacturing",
+      "chain_name": "Industrial Automation and Control",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "system_architecture",
+      "description": "Control-system chain for industrial automation hardware and software that coordinate machines, production lines, and process operations.",
+      "scope": "Covers PLCs, DCS, motion controllers, servo drives, HMI, SCADA, industrial networks, and automation engineering services.",
+      "exclusions": [
+        "Industrial operations applications remain owned by industrial_software."
+      ],
+      "aliases": [
+        "Factory Automation",
+        "Industrial Control Systems",
+        "工业自动化与控制"
+      ],
+      "status": "skeleton",
+      "order": 2
+    },
+    {
+      "chain_id": "industrial_robots",
+      "sector_id": "high_end_equipment_intelligent_manufacturing",
+      "chain_name": "Industrial Robots",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "system_architecture",
+      "description": "Robot-system chain for programmable industrial manipulators and integrated workcells used in manufacturing, logistics, and hazardous operations.",
+      "scope": "Covers articulated, SCARA, collaborative, mobile industrial robots, robot controllers, end effectors, and system integration.",
+      "exclusions": [
+        "Humanoid products and embodied intelligence remain owned by humanoid_robots_embodied_intelligence."
+      ],
+      "aliases": [
+        "Factory Robots",
+        "Industrial Robotics",
+        "工业机器人"
+      ],
+      "status": "skeleton",
+      "order": 3
+    },
+    {
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "sector_id": "high_end_equipment_intelligent_manufacturing",
+      "chain_name": "Humanoid Robots and Embodied Intelligence",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "system_architecture",
+      "description": "A primarily system-architecture decomposition of humanoid robots spanning embodied intelligence, control, sensing, compute, actuation, body, and energy subsystems, with one explicit supplementary lifecycle and value-chain family.",
+      "scope": "Covers robot-specific models and software; humanoid-specific requirements, qualification, packaging, calibration, selection, joint and module integration, and system use of sensing, compute, actuation, body, and energy components; complete humanoid robots; and their manufacturing, test, operations, and scenario integration. Under the approved mixed-template rule, humanoid_manufacturing_test_integration supplements the primary system architecture with lifecycle coverage.",
+      "exclusions": [
+        "General-purpose AI foundation models remain owned by their primary AI chain; this chain covers robot-adapted embodied models and inference.",
+        "General semiconductor chips remain owned by semiconductor chains; this chain covers robot-selected compute components and integrated modules.",
+        "Generic battery cells, battery management systems, and battery materials remain owned by power_batteries_battery_materials; this chain covers humanoid-specific selection, integration, and control requirements.",
+        "Standalone and general-purpose MEMS and intelligent sensing devices, sensor dies and components, fabrication, and related evidence and company ownership remain with mems_intelligent_sensors; this chain covers humanoid-specific requirements, qualification, packaging, calibration, selection, module integration, and system use.",
+        "Standalone and general-purpose bearings, gears and reducers, screws and linear guides, precision transmission components, and related evidence and company ownership remain with core_mechanical_components; this chain covers humanoid joint and module requirements, qualification, selection, packaging, integration, and system use.",
+        "General industrial robots, machine tools, and factory automation remain owned by their primary equipment chains unless humanoid-specific."
+      ],
+      "aliases": [
+        "Humanoid Robotics",
+        "Embodied Intelligence Robots",
+        "人形机器人与具身智能",
+        "人形机器人"
+      ],
+      "status": "draft",
+      "order": 4
+    },
+    {
+      "chain_id": "laser_equipment_additive_manufacturing",
+      "sector_id": "high_end_equipment_intelligent_manufacturing",
+      "chain_name": "Laser Equipment and Additive Manufacturing",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "manufacturing_process",
+      "description": "Manufacturing-equipment chain for industrial lasers and additive processes that cut, weld, mark, deposit, and build complex parts.",
+      "scope": "Covers laser sources, processing heads, laser machining systems, metal additive manufacturing, and related process materials or services.",
+      "exclusions": [
+        "Conventional CNC machining centers remain owned by industrial_machine_tools_cnc."
+      ],
+      "aliases": [
+        "Industrial Lasers",
+        "3D Printing Equipment",
+        "激光装备与增材制造"
+      ],
+      "status": "skeleton",
+      "order": 5
+    },
+    {
+      "chain_id": "scientific_instruments",
+      "sector_id": "high_end_equipment_intelligent_manufacturing",
+      "chain_name": "Scientific Instruments",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "system_architecture",
+      "description": "Instrument-system chain for laboratory, analytical, measurement, and research equipment used to observe, characterize, and quantify materials or processes.",
+      "scope": "Covers analytical instruments, laboratory instruments, precision measurement devices, spectrometers, chromatographs, and research-grade platforms.",
+      "exclusions": [
+        "Production-line vision and metrology equipment remain owned by industrial_inspection_metrology_machine_vision."
+      ],
+      "aliases": [
+        "Analytical Instruments",
+        "Laboratory Equipment",
+        "科学仪器"
+      ],
+      "status": "skeleton",
+      "order": 6
+    },
+    {
+      "chain_id": "industrial_inspection_metrology_machine_vision",
+      "sector_id": "high_end_equipment_intelligent_manufacturing",
+      "chain_name": "Industrial Inspection, Metrology, and Machine Vision",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "system_architecture",
+      "description": "Quality-system chain for industrial inspection, precision metrology, and machine vision products that measure and detect manufacturing defects.",
+      "scope": "Covers visual inspection, coordinate measurement, non-destructive testing, dimensional metrology, process inspection, and machine-vision software.",
+      "exclusions": [
+        "Standalone scientific research instruments remain owned by scientific_instruments."
+      ],
+      "aliases": [
+        "Machine Vision and Metrology",
+        "Industrial Quality Inspection",
+        "工业检测、计量与机器视觉"
+      ],
+      "status": "skeleton",
+      "order": 7
+    },
+    {
+      "chain_id": "core_mechanical_components",
+      "sector_id": "high_end_equipment_intelligent_manufacturing",
+      "chain_name": "Core Mechanical Components",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "system_architecture",
+      "description": "Component-system chain for high-performance mechanical elements that transmit motion, force, fluid power, and structural load in equipment.",
+      "scope": "Covers standalone and general-purpose bearings, gears and reducers, screws and linear guides, hydraulic and pneumatic components, seals, and precision transmission components and assemblies.",
+      "exclusions": [
+        "Complete robots and machine tools remain owned by industrial_robots and industrial_machine_tools_cnc.",
+        "Humanoid-specific joint and module requirements, qualification, selection, packaging, integration, and system use remain owned by humanoid_robots_embodied_intelligence."
+      ],
+      "aliases": [
+        "Mechanical Basic Parts",
+        "Precision Mechanical Components",
+        "核心机械基础件"
+      ],
+      "status": "skeleton",
+      "order": 8
+    },
+    {
+      "chain_id": "process_industry_specialized_equipment",
+      "sector_id": "high_end_equipment_intelligent_manufacturing",
+      "chain_name": "Process Industry Specialized Equipment",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "system_architecture",
+      "description": "Specialized-equipment chain for process industries that transform chemicals, materials, food, pharmaceuticals, and energy products at scale.",
+      "scope": "Covers reactors, separation equipment, process skids, industrial furnaces, mixing systems, and packaged process production lines.",
+      "exclusions": [
+        "Biologic drug production processes remain owned by biologic_antibody_drugs and synthetic_biology_biomanufacturing."
+      ],
+      "aliases": [
+        "Process Equipment",
+        "Specialized Process Machinery",
+        "流程工业专用装备"
+      ],
+      "status": "skeleton",
+      "order": 9
+    },
+    {
+      "chain_id": "new_power_system_smart_grid",
+      "sector_id": "energy_technology_new_power_system",
+      "chain_name": "New Power System and Smart Grid",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "infrastructure_flow",
+      "description": "Canonical infrastructure chain for connecting, transforming, switching, protecting, monitoring, and maintaining power flows across modern grids.",
+      "scope": "Covers grid-connection engineering, substations, transformers, switchgear, relay protection, power-quality systems, DC breakers, and DC protection systems.",
+      "exclusions": [
+        "Power generation equipment and energy procurement services remain owned by power_generation_energy_equipment.",
+        "Data-center internal UPS, rectification, rack distribution, and server power equipment remain owned by power_electronics_power_supply_equipment."
+      ],
+      "aliases": [
+        "Smart Grid",
+        "Modern Power Grid Infrastructure",
+        "新型电力系统与智能电网"
+      ],
+      "status": "skeleton",
+      "order": 1
+    },
+    {
+      "chain_id": "power_generation_energy_equipment",
+      "sector_id": "energy_technology_new_power_system",
+      "chain_name": "Power Generation and Energy Equipment",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "system_architecture",
+      "description": "Canonical industry chain for generation systems, power-supply services, distributed energy, microgrids, and generation-based resilience.",
+      "scope": "Covers grid and nuclear supply services, renewable procurement services, distributed generation, gas turbines, microgrids, diesel and gas backup generation, and black-start generation services.",
+      "exclusions": [
+        "Grid connection, substations, transformation, and protection remain owned by new_power_system_smart_grid.",
+        "Fuel-cell and stationary energy-storage technologies remain owned by hydrogen_fuel_cells and new_energy_storage respectively."
+      ],
+      "aliases": [
+        "Generation and Energy Systems",
+        "Power Generation Equipment",
+        "发电与能源装备"
+      ],
+      "status": "skeleton",
+      "order": 2
+    },
+    {
+      "chain_id": "power_electronics_power_supply_equipment",
+      "sector_id": "energy_technology_new_power_system",
+      "chain_name": "Power Electronics and Power Supply Equipment",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "system_architecture",
+      "description": "Canonical industry chain for power conversion, transfer, distribution, regulation, and control equipment from facility input through server-board delivery.",
+      "scope": "Covers UPS equipment, transfer switches, rectifiers and inverters, HVDC systems, DC buses, power distribution units, power shelves, server power supplies, AC-DC and DC-DC modules, voltage regulators, and power controllers.",
+      "exclusions": [
+        "Power semiconductor devices and passive interconnect components remain owned by their respective semiconductor and interconnect chains.",
+        "Utility-grid substations, transformers, switchgear, and grid protection remain owned by new_power_system_smart_grid."
+      ],
+      "aliases": [
+        "Power Supply Equipment",
+        "Power Conversion and Distribution Equipment",
+        "电力电子与电源设备"
+      ],
+      "status": "skeleton",
+      "order": 3
+    },
+    {
+      "chain_id": "ai_data_center_power",
+      "sector_id": "energy_technology_new_power_system",
+      "chain_name": "AI Data Center Power",
+      "chain_kind": "application_theme_chain",
+      "decomposition_method": "infrastructure_flow",
+      "description": "Application-chain view of the electrical, thermal, software, engineering, and operational dependencies required to power high-density AI data centers.",
+      "scope": "Covers capacity planning, resilient energy supply, grid access, backup power, UPS and DC conversion, room and rack distribution, server-board power, liquid cooling, energy-management software, and facility delivery and operations for AI data centers.",
+      "exclusions": [
+        "Energy-supply, generation, hydrogen backup, stationary storage, and grid products remain canonically owned by power_generation_energy_equipment, hydrogen_fuel_cells, new_energy_storage, and new_power_system_smart_grid respectively.",
+        "Power-conversion equipment, passive and interconnect products, and power-semiconductor devices remain canonically owned by power_electronics_power_supply_equipment, pcb_passives_connectors_interconnect, and power_semiconductors respectively.",
+        "Data-center facility systems and industrial energy-management software remain canonically owned by cloud_data_center_infrastructure and industrial_software respectively.",
+        "Product, company, and evidence ownership remains on these canonical chains and referenced canonical nodes; this application chain only maps AI data-center dependencies.",
+        "Compute accelerators, servers, networking, storage, and AI software workloads are outside this power-application chain except where they define power or cooling requirements."
+      ],
+      "aliases": [
+        "AI Data Center Power Infrastructure",
+        "AI Compute Power and Cooling Chain",
+        "AI数据中心电力基础设施",
+        "AI数据中心供电"
+      ],
+      "status": "draft",
+      "order": 4
+    },
+    {
+      "chain_id": "solar_power",
+      "sector_id": "energy_technology_new_power_system",
+      "chain_name": "Solar Power",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "manufacturing_process",
+      "description": "Photovoltaic industry chain for solar cells, modules, manufacturing materials, and generation equipment that convert sunlight into electricity.",
+      "scope": "Covers polysilicon, wafers, cells, modules, inverters specific to PV systems, mounting structures, and photovoltaic manufacturing processes.",
+      "exclusions": [
+        "Grid connection and substation infrastructure remain owned by new_power_system_smart_grid."
+      ],
+      "aliases": [
+        "Photovoltaics",
+        "PV Industry",
+        "太阳能光伏"
+      ],
+      "status": "skeleton",
+      "order": 5
+    },
+    {
+      "chain_id": "wind_power",
+      "sector_id": "energy_technology_new_power_system",
+      "chain_name": "Wind Power",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "manufacturing_process",
+      "description": "Wind-energy chain for turbines, blades, drivetrains, offshore foundations, and manufacturing systems that harvest kinetic energy from wind.",
+      "scope": "Covers onshore and offshore wind turbines, blades, nacelles, towers, gearboxes, generators, foundations, and wind-farm equipment supply.",
+      "exclusions": [
+        "Marine vessels and offshore drilling equipment remain owned by ships_offshore_deep_sea_equipment."
+      ],
+      "aliases": [
+        "Wind Energy Equipment",
+        "Wind Turbine Industry",
+        "风电"
+      ],
+      "status": "skeleton",
+      "order": 6
+    },
+    {
+      "chain_id": "power_batteries_battery_materials",
+      "sector_id": "energy_technology_new_power_system",
+      "chain_name": "Power Batteries and Battery Materials",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "manufacturing_process",
+      "description": "Primary canonical ownership skeleton for power-battery cells, battery management platforms, pack and system integration, and battery materials across the manufacturing value chain.",
+      "scope": "This skeleton establishes canonical ownership for generic high-specific-energy power-battery cells and battery management system platforms. Later expansion may add cell manufacturing, pack integration, recycling, and battery-material process families without changing application-chain ownership.",
+      "exclusions": [
+        "Humanoid-specific cell selection, BMS integration, robot battery packs, and robot power controls remain owned by humanoid_robots_embodied_intelligence.",
+        "Stationary energy-storage systems and grid integration remain owned by their primary energy-storage and power-system chains.",
+        "Vehicle-specific battery installation and vehicle energy management remain owned by intelligent-vehicle chains; generic battery products remain canonical here."
+      ],
+      "aliases": [
+        "Power Battery Industry",
+        "Traction Batteries and Materials",
+        "动力电池与电池材料"
+      ],
+      "status": "skeleton",
+      "order": 7
+    },
+    {
+      "chain_id": "new_energy_storage",
+      "sector_id": "energy_technology_new_power_system",
+      "chain_name": "New Energy Storage",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "technical_route",
+      "description": "Canonical technology-route chain for stationary energy-storage systems that provide resilient electrical power through battery, flywheel, and UPS storage technologies.",
+      "scope": "Covers stationary battery backup systems, flywheel backup energy systems, UPS battery systems, and their application-neutral energy-storage technology routes and system ownership.",
+      "exclusions": [
+        "Generic high-specific-energy power-battery cells and battery management system platforms remain owned by power_batteries_battery_materials.",
+        "Application-specific backup-power sizing, redundancy, facility integration, procurement, and operating policy remain owned by the relevant application chain.",
+        "Backup generators, automatic transfer switches, fuel-cell systems, and black-start controls remain owned by their primary generation, power-conversion, and hydrogen chains."
+      ],
+      "aliases": [
+        "Energy Storage Industry",
+        "Stationary Energy Storage",
+        "新型储能"
+      ],
+      "status": "skeleton",
+      "order": 8
+    },
+    {
+      "chain_id": "hydrogen_fuel_cells",
+      "sector_id": "energy_technology_new_power_system",
+      "chain_name": "Hydrogen and Fuel Cells",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "technical_route",
+      "description": "Canonical technology-route chain for hydrogen conversion and fuel-cell systems used in stationary, mobile, and industrial energy applications.",
+      "scope": "Covers stationary fuel-cell backup systems and their fuel-cell technology route, balance-of-plant integration, and application-neutral product ownership.",
+      "exclusions": [
+        "Hydrogen production, transport, and storage infrastructure outside the fuel-cell system boundary remains owned by dedicated hydrogen supply chains when introduced.",
+        "Application-specific backup-power sizing, redundancy, and facility integration remain owned by the relevant application chain."
+      ],
+      "aliases": [
+        "Fuel Cell Industry",
+        "Hydrogen Energy and Fuel Cells",
+        "氢能与燃料电池"
+      ],
+      "status": "skeleton",
+      "order": 9
+    },
+    {
+      "chain_id": "nuclear_power_equipment",
+      "sector_id": "energy_technology_new_power_system",
+      "chain_name": "Nuclear Power Equipment",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "system_architecture",
+      "description": "Nuclear-system chain for reactor islands, conventional islands, safety systems, fuel handling, and specialized equipment supporting fission generation.",
+      "scope": "Covers reactor vessels, steam generators, control systems, nuclear pumps and valves, fuel handling, radiation monitoring, and plant equipment.",
+      "exclusions": [
+        "Experimental fusion routes remain owned by controlled_nuclear_fusion."
+      ],
+      "aliases": [
+        "Nuclear Energy Equipment",
+        "Nuclear Plant Systems",
+        "核电装备"
+      ],
+      "status": "skeleton",
+      "order": 10
+    },
+    {
+      "chain_id": "advanced_metals_specialty_alloys",
+      "sector_id": "advanced_materials",
+      "chain_name": "Advanced Metals and Specialty Alloys",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "manufacturing_process",
+      "description": "Materials chain for high-performance metals and alloys engineered for strength, temperature resistance, corrosion resistance, and precision applications.",
+      "scope": "Covers titanium, nickel-based, high-strength steel, aluminum, magnesium, and other specialty alloy production and processing routes.",
+      "exclusions": [
+        "Rare-earth magnets and critical mineral processing remain owned by rare_earth_permanent_magnets_critical_minerals."
+      ],
+      "aliases": [
+        "Specialty Metals",
+        "High-Performance Alloys",
+        "先进金属与特种合金"
+      ],
+      "status": "skeleton",
+      "order": 1
+    },
+    {
+      "chain_id": "rare_earth_permanent_magnets_critical_minerals",
+      "sector_id": "advanced_materials",
+      "chain_name": "Rare Earth Permanent Magnets and Critical Minerals",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "manufacturing_process",
+      "description": "Critical-materials chain for rare-earth extraction, separation, permanent magnets, and strategic mineral inputs required by advanced industries.",
+      "scope": "Covers rare-earth mining, separation, metal refining, NdFeB magnets, dysprosium materials, and related critical mineral processing.",
+      "exclusions": [
+        "Battery cathode and anode materials remain owned by power_batteries_battery_materials."
+      ],
+      "aliases": [
+        "Rare Earth Magnets",
+        "Critical Mineral Materials",
+        "稀土永磁与关键矿产"
+      ],
+      "status": "skeleton",
+      "order": 2
+    },
+    {
+      "chain_id": "carbon_fiber_advanced_composites",
+      "sector_id": "advanced_materials",
+      "chain_name": "Carbon Fiber and Advanced Composites",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "manufacturing_process",
+      "description": "Composite-materials chain for carbon fiber, resin matrices, prepregs, and engineered structures that reduce weight while maintaining performance.",
+      "scope": "Covers carbon fiber precursor, carbon fiber, prepreg, resin systems, fiber-reinforced composites, and composite forming processes.",
+      "exclusions": [
+        "Aircraft and spacecraft structural integration remain owned by civil_aircraft_aero_engines and commercial_space_launch."
+      ],
+      "aliases": [
+        "Carbon Composites",
+        "Fiber-Reinforced Materials",
+        "碳纤维与先进复合材料"
+      ],
+      "status": "skeleton",
+      "order": 3
+    },
+    {
+      "chain_id": "advanced_ceramics_specialty_glass",
+      "sector_id": "advanced_materials",
+      "chain_name": "Advanced Ceramics and Specialty Glass",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "manufacturing_process",
+      "description": "Inorganic-materials chain for engineered ceramics and specialty glass with optical, thermal, dielectric, structural, or protective performance.",
+      "scope": "Covers technical ceramics, electronic ceramics, optical glass, cover glass, glass substrates, refractory materials, and precision forming processes.",
+      "exclusions": [
+        "Display panel fabrication remains owned by display_panels_optoelectronic_components."
+      ],
+      "aliases": [
+        "Technical Ceramics",
+        "Specialty Glass Materials",
+        "先进陶瓷与特种玻璃"
+      ],
+      "status": "skeleton",
+      "order": 4
+    },
+    {
+      "chain_id": "high_performance_polymers_engineering_plastics",
+      "sector_id": "advanced_materials",
+      "chain_name": "High-Performance Polymers and Engineering Plastics",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "manufacturing_process",
+      "description": "Polymer-materials chain for engineering plastics and high-performance resins designed for heat, chemical, electrical, and mechanical durability.",
+      "scope": "Covers fluoropolymers, polyimides, PEEK, PPS, engineering resins, modified plastics, compounding, and polymer processing materials.",
+      "exclusions": [
+        "Biodegradable materials made through biological synthesis remain owned by synthetic_biology_biomanufacturing."
+      ],
+      "aliases": [
+        "Engineering Plastics",
+        "High-Performance Resins",
+        "高性能聚合物与工程塑料"
+      ],
+      "status": "skeleton",
+      "order": 5
+    },
+    {
+      "chain_id": "membrane_separation_materials",
+      "sector_id": "advanced_materials",
+      "chain_name": "Membrane Separation Materials",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "manufacturing_process",
+      "description": "Functional-materials chain for membranes and separation media that selectively filter, purify, concentrate, or recover gases and liquids.",
+      "scope": "Covers industrial and environmental reverse-osmosis, ultrafiltration, ion-exchange, gas-separation, and catalytic membrane materials and their manufacturing processes.",
+      "exclusions": [
+        "Complete municipal and industrial water-treatment systems remain owned by water_treatment_resource_technology.",
+        "Battery separators remain owned by power_batteries_battery_materials; this chain is limited to industrial and environmental separation membranes."
+      ],
+      "aliases": [
+        "Separation Membranes",
+        "Membrane Materials",
+        "膜分离材料"
+      ],
+      "status": "skeleton",
+      "order": 6
+    },
+    {
+      "chain_id": "nanomaterials_functional_materials",
+      "sector_id": "advanced_materials",
+      "chain_name": "Nanomaterials and Functional Materials",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "manufacturing_process",
+      "description": "Functional-materials chain for nanoscale and engineered materials that provide targeted electrical, magnetic, catalytic, optical, or protective properties.",
+      "scope": "Covers nanocarbon, nanopowders, functional coatings, electronic pastes, catalytic nanomaterials, and advanced material surface treatment routes.",
+      "exclusions": [
+        "Dedicated semiconductor process materials remain owned by semiconductor_materials_electronic_chemicals."
+      ],
+      "aliases": [
+        "Functional Nanomaterials",
+        "Advanced Functional Materials",
+        "纳米材料与功能材料"
+      ],
+      "status": "skeleton",
+      "order": 7
+    },
+    {
+      "chain_id": "new_energy_vehicle_architecture_platforms",
+      "sector_id": "intelligent_vehicles_advanced_transportation",
+      "chain_name": "New Energy Vehicle Architecture and Platforms",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "system_architecture",
+      "description": "Vehicle-platform chain for electric and hybrid vehicle architectures that integrate body, battery, electric drive, controls, and safety systems.",
+      "scope": "Covers dedicated EV platforms, vehicle electrical architectures, body integration, platform engineering, homologation interfaces, and complete vehicle system design.",
+      "exclusions": [
+        "Generic traction batteries remain owned by power_batteries_battery_materials and charging grids by new_power_system_smart_grid."
+      ],
+      "aliases": [
+        "NEV Platforms",
+        "Electric Vehicle Architecture",
+        "新能源汽车整车平台"
+      ],
+      "status": "skeleton",
+      "order": 1
+    },
+    {
+      "chain_id": "intelligent_driving_smart_cockpit",
+      "sector_id": "intelligent_vehicles_advanced_transportation",
+      "chain_name": "Intelligent Driving and Smart Cockpit",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "system_architecture",
+      "description": "Vehicle-intelligence chain for automated driving, cockpit interaction, perception, decision, control, and in-car user-experience systems.",
+      "scope": "Covers ADAS, autonomous-driving software, vehicle perception, domain controllers, cockpit OS, displays, voice interaction, and occupant experience systems.",
+      "exclusions": [
+        "Roadside networking equipment remains owned by network_equipment_edge_iot, while cloud facilities remain owned by cloud_data_center_infrastructure; this chain covers vehicle-side intelligence."
+      ],
+      "aliases": [
+        "Autonomous Driving and Smart Cockpit",
+        "Vehicle Intelligence",
+        "智能驾驶与智能座舱"
+      ],
+      "status": "skeleton",
+      "order": 2
+    },
+    {
+      "chain_id": "automotive_electronics_chip_applications",
+      "sector_id": "intelligent_vehicles_advanced_transportation",
+      "chain_name": "Automotive Electronics and Chip Applications",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "system_architecture",
+      "description": "Automotive-electronics chain for vehicle control, sensing, connectivity, and chip integration that meets transport-grade reliability requirements.",
+      "scope": "Covers ECUs, automotive SoCs, power modules, radar and camera electronics, in-vehicle networks, and qualified chip application integration.",
+      "exclusions": [
+        "Generic semiconductor design and wafer manufacturing remain owned by their semiconductor chains."
+      ],
+      "aliases": [
+        "Automotive Electronics",
+        "Vehicle Chip Applications",
+        "汽车电子与车规芯片应用"
+      ],
+      "status": "skeleton",
+      "order": 3
+    },
+    {
+      "chain_id": "electric_drive_chassis_by_wire_thermal_management",
+      "sector_id": "intelligent_vehicles_advanced_transportation",
+      "chain_name": "Electric Drive, Chassis-by-Wire, and Thermal Management",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "system_architecture",
+      "description": "Vehicle-motion chain for electric propulsion, steer-by-wire and brake-by-wire systems, chassis control, and integrated thermal management.",
+      "scope": "Covers motors, inverters, transmissions, e-axles, wire-control actuators, suspension control, heat pumps, and vehicle thermal loops.",
+      "exclusions": [
+        "Cell chemistry and battery management platforms remain owned by power_batteries_battery_materials."
+      ],
+      "aliases": [
+        "Electric Drive and Chassis Control",
+        "Vehicle Thermal Systems",
+        "电驱、线控底盘与热管理"
+      ],
+      "status": "skeleton",
+      "order": 4
+    },
+    {
+      "chain_id": "rail_transit_equipment",
+      "sector_id": "intelligent_vehicles_advanced_transportation",
+      "chain_name": "Rail Transit Equipment",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "system_architecture",
+      "description": "Rail-system chain for rolling stock, traction, signaling, control, and maintenance equipment that delivers passenger and freight rail services.",
+      "scope": "Covers locomotives, EMUs, metro vehicles, traction systems, signaling, braking, rail control, depot equipment, and maintenance systems.",
+      "exclusions": [
+        "Roadside network equipment remains owned by network_equipment_edge_iot; road-vehicle coordination applications are outside the rail-equipment boundary."
+      ],
+      "aliases": [
+        "Railway Equipment",
+        "Rolling Stock and Signaling",
+        "轨道交通装备"
+      ],
+      "status": "skeleton",
+      "order": 5
+    },
+    {
+      "chain_id": "intelligent_transport_vehicle_road_cloud",
+      "sector_id": "intelligent_vehicles_advanced_transportation",
+      "chain_name": "Intelligent Transport Vehicle-Road-Cloud",
+      "chain_kind": "application_theme_chain",
+      "decomposition_method": "infrastructure_flow",
+      "description": "Application chain for cross-chain orchestration, service delivery, and data flow across vehicles, roadside systems, cloud platforms, and transport operations.",
+      "scope": "Covers cross-chain service and data flow for V2X coordination, traffic-control applications, vehicle-cloud orchestration, digital-road services, fleet dispatch, and mobility operations.",
+      "exclusions": [
+        "Vehicle hardware and subsystems remain owned by new_energy_vehicle_architecture_platforms, intelligent_driving_smart_cockpit, automotive_electronics_chip_applications, and electric_drive_chassis_by_wire_thermal_management.",
+        "Roadside and network hardware remain owned by network_equipment_edge_iot.",
+        "Cloud and data-center infrastructure remain owned by cloud_data_center_infrastructure."
+      ],
+      "aliases": [
+        "Vehicle-Road-Cloud Integration",
+        "Cooperative Vehicle-Road-Cloud Services",
+        "车路云一体化"
+      ],
+      "status": "skeleton",
+      "order": 6
+    },
+    {
+      "chain_id": "civil_aircraft_aero_engines",
+      "sector_id": "aerospace_low_altitude_ocean_technology",
+      "chain_name": "Civil Aircraft and Aero Engines",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "system_architecture",
+      "description": "Aviation-system chain for civil aircraft, aero engines, flight controls, avionics, and the engineering or support systems required for airworthiness.",
+      "scope": "Covers airframes, turbofan engines, avionics, flight-control systems, landing gear, cabin systems, test equipment, and maintenance support.",
+      "exclusions": [
+        "Low-altitude drones and eVTOL platforms remain owned by uav_evtol_low_altitude_economy."
+      ],
+      "aliases": [
+        "Civil Aviation",
+        "Commercial Aircraft and Engines",
+        "民用航空器与航空发动机"
+      ],
+      "status": "skeleton",
+      "order": 1
+    },
+    {
+      "chain_id": "commercial_space_launch",
+      "sector_id": "aerospace_low_altitude_ocean_technology",
+      "chain_name": "Commercial Space Launch",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "system_architecture",
+      "description": "Space-access chain for launch vehicles, rocket propulsion, launch sites, recovery systems, and commercial services that place payloads in orbit.",
+      "scope": "Covers launchers, liquid and solid rocket engines, stages, avionics, ground support, launch operations, recovery, and launch-service integration.",
+      "exclusions": [
+        "Satellite manufacturing and orbital infrastructure remain owned by satellite_manufacturing_space_infrastructure."
+      ],
+      "aliases": [
+        "Commercial Launch Services",
+        "Space Launch Vehicles",
+        "商业航天发射"
+      ],
+      "status": "skeleton",
+      "order": 2
+    },
+    {
+      "chain_id": "satellite_manufacturing_space_infrastructure",
+      "sector_id": "aerospace_low_altitude_ocean_technology",
+      "chain_name": "Satellite Manufacturing and Space Infrastructure",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "system_architecture",
+      "description": "Orbital-infrastructure chain for satellite platforms, payloads, constellation hardware, ground systems, and in-space service engineering.",
+      "scope": "Covers satellite buses, payload integration, power and thermal subsystems, ground stations, constellation deployment, and space infrastructure operations.",
+      "exclusions": [
+        "Ground network equipment remains owned by network_equipment_edge_iot and optical_communications_data_center_interconnect; downstream communications, navigation, and remote-sensing applications are outside this manufacturing boundary."
+      ],
+      "aliases": [
+        "Satellite Platform Manufacturing",
+        "Space Infrastructure",
+        "卫星制造与空间基础设施"
+      ],
+      "status": "skeleton",
+      "order": 3
+    },
+    {
+      "chain_id": "satellite_communications_navigation_remote_sensing",
+      "sector_id": "aerospace_low_altitude_ocean_technology",
+      "chain_name": "Satellite Communications, Navigation, and Remote Sensing",
+      "chain_kind": "application_theme_chain",
+      "decomposition_method": "infrastructure_flow",
+      "description": "Application chain for cross-chain orchestration, service delivery, and data flow across satellite communications, positioning, navigation, timing, and remote sensing.",
+      "scope": "Covers cross-chain service and data flow for satellite broadband, GNSS applications, earth-observation delivery, navigation services, and remote-sensing information products.",
+      "exclusions": [
+        "Satellite platforms and ground-terminal hardware remain owned by satellite_manufacturing_space_infrastructure.",
+        "Terrestrial network infrastructure remains owned by network_equipment_edge_iot and optical_communications_data_center_interconnect."
+      ],
+      "aliases": [
+        "Satellite Applications",
+        "Satcom, Navigation, and Remote Sensing",
+        "卫星通信、导航与遥感"
+      ],
+      "status": "skeleton",
+      "order": 4
+    },
+    {
+      "chain_id": "uav_evtol_low_altitude_economy",
+      "sector_id": "aerospace_low_altitude_ocean_technology",
+      "chain_name": "UAV, eVTOL, and Low-Altitude Economy",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "system_architecture",
+      "description": "Low-altitude aviation chain for unmanned aircraft, eVTOL vehicles, flight systems, airspace services, and commercial operating scenarios.",
+      "scope": "Covers drones, eVTOL aircraft, propulsion and control systems, ground stations, low-altitude operations, airworthiness, and service integration.",
+      "exclusions": [
+        "Conventional civil airliners and turbofan engines remain owned by civil_aircraft_aero_engines."
+      ],
+      "aliases": [
+        "Low-Altitude Aviation",
+        "Drones and eVTOL",
+        "无人机、eVTOL与低空经济"
+      ],
+      "status": "skeleton",
+      "order": 5
+    },
+    {
+      "chain_id": "ships_offshore_deep_sea_equipment",
+      "sector_id": "aerospace_low_altitude_ocean_technology",
+      "chain_name": "Ships, Offshore, and Deep-Sea Equipment",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "system_architecture",
+      "description": "Marine-equipment chain for shipbuilding, offshore engineering, subsea systems, and deep-sea exploration or production equipment.",
+      "scope": "Covers commercial vessels, offshore platforms, subsea production systems, marine power systems, deep-sea vehicles, and ocean engineering equipment.",
+      "exclusions": [
+        "Wind turbine manufacturing remains owned by wind_power even when deployed offshore."
+      ],
+      "aliases": [
+        "Marine and Offshore Equipment",
+        "Deep-Sea Engineering",
+        "船舶、海工与深海装备"
+      ],
+      "status": "skeleton",
+      "order": 6
+    },
+    {
+      "chain_id": "defense_electronics_special_equipment",
+      "sector_id": "aerospace_low_altitude_ocean_technology",
+      "chain_name": "Defense Electronics and Special Equipment",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "system_architecture",
+      "description": "Specialized-system chain for mission electronics, sensing, communications, control, and purpose-built equipment used in defense and security applications.",
+      "scope": "Covers radar, electronic warfare, secure communications, command systems, optoelectronics, mission computers, and specialized support equipment.",
+      "exclusions": [
+        "Commercial telecom networks remain owned by mobile_communications_5g_6g and network_equipment_edge_iot."
+      ],
+      "aliases": [
+        "Defense Information Equipment",
+        "Military Electronics",
+        "国防电子与特种装备"
+      ],
+      "status": "skeleton",
+      "order": 7
+    },
+    {
+      "chain_id": "small_molecule_innovative_drugs",
+      "sector_id": "life_sciences_medical_technology",
+      "chain_name": "Small-Molecule Innovative Drugs",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "manufacturing_process",
+      "description": "Pharmaceutical chain for discovery, development, production, and delivery of innovative chemically synthesized small-molecule medicines.",
+      "scope": "Covers target discovery, medicinal chemistry, preclinical development, clinical supply, API synthesis, formulation, and innovative drug manufacturing.",
+      "exclusions": [
+        "Biologics and antibody therapies remain owned by biologic_antibody_drugs."
+      ],
+      "aliases": [
+        "Innovative Chemical Drugs",
+        "Small-Molecule Pharma",
+        "小分子创新药"
+      ],
+      "status": "skeleton",
+      "order": 1
+    },
+    {
+      "chain_id": "biologic_antibody_drugs",
+      "sector_id": "life_sciences_medical_technology",
+      "chain_name": "Biologic and Antibody Drugs",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "manufacturing_process",
+      "description": "Biopharmaceutical chain for antibody, protein, and other biologic medicines requiring cell culture, purification, and controlled biologic manufacturing.",
+      "scope": "Covers monoclonal antibodies, recombinant proteins, biosimilars, cell-line development, upstream culture, downstream purification, and biologics fill-finish.",
+      "exclusions": [
+        "Cell and gene therapies remain owned by cell_gene_therapy, while prophylactic vaccines remain owned by vaccines."
+      ],
+      "aliases": [
+        "Antibody and Protein Therapeutics",
+        "Antibody Therapeutics",
+        "生物药与抗体药"
+      ],
+      "status": "skeleton",
+      "order": 2
+    },
+    {
+      "chain_id": "vaccines",
+      "sector_id": "life_sciences_medical_technology",
+      "chain_name": "Vaccines",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "manufacturing_process",
+      "description": "Preventive-biologics chain for vaccine research, antigen production, formulation, fill-finish, cold-chain quality, and immunization product delivery.",
+      "scope": "Covers prophylactic vaccines, antigen and adjuvant preparation, vaccine manufacturing, quality control, packaging, and cold-chain product management.",
+      "exclusions": [
+        "Therapeutic antibodies and proteins remain owned by biologic_antibody_drugs."
+      ],
+      "aliases": [
+        "Vaccine Industry",
+        "Immunization Products",
+        "疫苗"
+      ],
+      "status": "skeleton",
+      "order": 3
+    },
+    {
+      "chain_id": "cell_gene_therapy",
+      "sector_id": "life_sciences_medical_technology",
+      "chain_name": "Cell and Gene Therapy",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "manufacturing_process",
+      "description": "Advanced-therapy chain for engineered cells, gene delivery, genome editing, viral vectors, and patient-specific therapeutic manufacturing.",
+      "scope": "Covers CAR-T and other cell therapies, gene therapies, vector production, cell processing, quality release, and clinical delivery workflows.",
+      "exclusions": [
+        "General biologic antibodies remain owned by biologic_antibody_drugs."
+      ],
+      "aliases": [
+        "Advanced Therapy Medicinal Products",
+        "Gene and Cell Medicines",
+        "细胞与基因治疗"
+      ],
+      "status": "skeleton",
+      "order": 4
+    },
+    {
+      "chain_id": "synthetic_biology_biomanufacturing",
+      "sector_id": "life_sciences_medical_technology",
+      "chain_name": "Synthetic Biology and Biomanufacturing",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "manufacturing_process",
+      "description": "Biomanufacturing chain for enabling production platforms, engineered organisms, and biological processes that make non-pharmaceutical chemicals, materials, food, and industrial products.",
+      "scope": "Covers enabling production platforms for strain engineering, DNA synthesis, fermentation, bioreactors, downstream processing, industrial enzymes, and non-pharmaceutical bio-based manufacturing.",
+      "exclusions": [
+        "Clinical cell and gene therapies remain owned by cell_gene_therapy.",
+        "Therapeutic drug products remain owned by biologic_antibody_drugs and small_molecule_innovative_drugs; this chain owns enabling platforms rather than pharmaceutical products."
+      ],
+      "aliases": [
+        "Synthetic Biology",
+        "Industrial Biomanufacturing",
+        "合成生物与生物制造"
+      ],
+      "status": "skeleton",
+      "order": 5
+    },
+    {
+      "chain_id": "high_end_medical_devices",
+      "sector_id": "life_sciences_medical_technology",
+      "chain_name": "High-End Medical Devices",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "system_architecture",
+      "description": "Medical-device chain for advanced diagnostic, therapeutic, surgical, implantable, monitoring, and life-support systems used in clinical care.",
+      "scope": "Covers surgical robots, implants, interventional systems, anesthesia and life-support equipment, patient monitoring, and high-end therapeutic devices.",
+      "exclusions": [
+        "Imaging systems remain owned by medical_imaging_diagnostic_equipment and laboratory assays by in_vitro_diagnostics."
+      ],
+      "aliases": [
+        "Advanced Medical Devices",
+        "High-End Healthcare Equipment",
+        "高端医疗器械"
+      ],
+      "status": "skeleton",
+      "order": 6
+    },
+    {
+      "chain_id": "medical_imaging_diagnostic_equipment",
+      "sector_id": "life_sciences_medical_technology",
+      "chain_name": "Medical Imaging and Diagnostic Equipment",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "system_architecture",
+      "description": "Clinical-imaging chain for equipment and software that acquire, reconstruct, display, and interpret anatomical or functional diagnostic information.",
+      "scope": "Covers CT, MRI, ultrasound, X-ray, nuclear imaging, endoscopic imaging, imaging workstations, and diagnostic equipment integration.",
+      "exclusions": [
+        "In-vitro reagent and analyzer products remain owned by in_vitro_diagnostics."
+      ],
+      "aliases": [
+        "Medical Imaging",
+        "Diagnostic Imaging Systems",
+        "医学影像与诊断设备"
+      ],
+      "status": "skeleton",
+      "order": 7
+    },
+    {
+      "chain_id": "in_vitro_diagnostics",
+      "sector_id": "life_sciences_medical_technology",
+      "chain_name": "In Vitro Diagnostics",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "manufacturing_process",
+      "description": "Diagnostics-manufacturing chain for reagents, analyzers, test consumables, and laboratory workflows that detect conditions from biological samples.",
+      "scope": "Covers immunoassays, molecular diagnostics, clinical chemistry, hematology, diagnostic instruments, reagent production, and point-of-care tests.",
+      "exclusions": [
+        "Imaging-based diagnosis remains owned by medical_imaging_diagnostic_equipment."
+      ],
+      "aliases": [
+        "IVD Industry",
+        "Laboratory Diagnostics",
+        "体外诊断"
+      ],
+      "status": "skeleton",
+      "order": 8
+    },
+    {
+      "chain_id": "digital_health_healthcare_it",
+      "sector_id": "life_sciences_medical_technology",
+      "chain_name": "Digital Health and Healthcare IT",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "system_architecture",
+      "description": "Healthcare-software chain for digital records, care platforms, clinical decision tools, telehealth, and data systems that organize health services.",
+      "scope": "Covers hospital information systems, electronic health records, telemedicine, health-data platforms, clinical AI software, and care-management applications.",
+      "exclusions": [
+        "Physical diagnostic devices remain owned by high_end_medical_devices and medical_imaging_diagnostic_equipment."
+      ],
+      "aliases": [
+        "Healthcare IT",
+        "Digital Medicine",
+        "数字健康与医疗信息化"
+      ],
+      "status": "skeleton",
+      "order": 9
+    },
+    {
+      "chain_id": "agricultural_biotechnology_modern_seeds",
+      "sector_id": "life_sciences_medical_technology",
+      "chain_name": "Agricultural Biotechnology and Modern Seeds",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "manufacturing_process",
+      "description": "Agribiotechnology chain for breeding, seed production, genetic tools, biological inputs, and modern seed systems that improve agricultural productivity.",
+      "scope": "Covers molecular breeding, seed selection, seed multiplication, agricultural genomics, bio-pesticides, bio-fertilizers, and seed quality systems.",
+      "exclusions": [
+        "Industrial fermentation products remain owned by synthetic_biology_biomanufacturing."
+      ],
+      "aliases": [
+        "Modern Seed Industry",
+        "Agricultural Biotechnology",
+        "农业生物技术与现代种业"
+      ],
+      "status": "skeleton",
+      "order": 10
+    },
+    {
+      "chain_id": "air_soil_industrial_pollution_control",
+      "sector_id": "green_low_carbon_resource_recycling",
+      "chain_name": "Air, Soil, and Industrial Pollution Control",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "infrastructure_flow",
+      "description": "Environmental-control chain for equipment and services that prevent, capture, treat, monitor, and remediate air, soil, and industrial pollutants.",
+      "scope": "Covers flue-gas treatment, VOC control, dust removal, contaminated-site remediation, industrial emissions monitoring, and pollution-control engineering.",
+      "exclusions": [
+        "Carbon dioxide capture and storage routes remain owned by carbon_capture_utilization_storage."
+      ],
+      "aliases": [
+        "Air, Soil, and Industrial Emissions Control",
+        "Air and Soil Remediation",
+        "大气、土壤与工业污染治理"
+      ],
+      "status": "skeleton",
+      "order": 1
+    },
+    {
+      "chain_id": "water_treatment_resource_technology",
+      "sector_id": "green_low_carbon_resource_recycling",
+      "chain_name": "Water Treatment and Resource Technology",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "infrastructure_flow",
+      "description": "Water-infrastructure chain for treatment, purification, reuse, desalination, and resource recovery systems serving municipal and industrial users.",
+      "scope": "Covers wastewater treatment, drinking-water purification, desalination, reclaimed-water systems, sludge treatment, and water-resource recovery operations.",
+      "exclusions": [
+        "Membrane material manufacture remains owned by membrane_separation_materials."
+      ],
+      "aliases": [
+        "Water Environmental Services",
+        "Water Treatment Technology",
+        "水处理与资源化技术"
+      ],
+      "status": "skeleton",
+      "order": 2
+    },
+    {
+      "chain_id": "solid_waste_resource_recovery_circular_economy",
+      "sector_id": "green_low_carbon_resource_recycling",
+      "chain_name": "Solid Waste Resource Recovery and Circular Economy",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "infrastructure_flow",
+      "description": "Circular-economy chain for collection, sorting, recycling, treatment, and secondary-resource recovery from solid waste and end-of-life products.",
+      "scope": "Covers municipal waste sorting, industrial waste recovery, e-waste recycling, hazardous waste treatment, material reclamation, and circular logistics.",
+      "exclusions": [
+        "Primary battery material production remains owned by power_batteries_battery_materials."
+      ],
+      "aliases": [
+        "Resource Recycling",
+        "Circular Economy Services",
+        "固废资源化与循环经济"
+      ],
+      "status": "skeleton",
+      "order": 3
+    },
+    {
+      "chain_id": "carbon_capture_utilization_storage",
+      "sector_id": "green_low_carbon_resource_recycling",
+      "chain_name": "Carbon Capture, Utilization, and Storage",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "technical_route",
+      "description": "Decarbonization technology-route chain for capturing carbon dioxide, transporting it, converting it into products, or storing it in durable reservoirs.",
+      "scope": "Covers post-combustion and direct-air capture, CO2 compression and transport, utilization pathways, geological storage, and monitoring verification systems.",
+      "exclusions": [
+        "Conventional pollutant treatment is owned by air_soil_industrial_pollution_control; emissions management software by industrial_energy_efficiency_management."
+      ],
+      "aliases": [
+        "CCUS",
+        "Carbon Capture and Storage",
+        "碳捕集、利用与封存"
+      ],
+      "status": "skeleton",
+      "order": 4
+    },
+    {
+      "chain_id": "industrial_energy_efficiency_management",
+      "sector_id": "green_low_carbon_resource_recycling",
+      "chain_name": "Industrial Energy Efficiency Management",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "infrastructure_flow",
+      "description": "Efficiency-services chain for measuring, optimizing, controlling, and financing industrial energy use, emissions reduction, and demand-side improvement.",
+      "scope": "Covers energy audits, energy-management systems, smart metering, demand response, waste-heat optimization, performance contracts, and carbon management.",
+      "exclusions": [
+        "General industrial operating software remains owned by industrial_software."
+      ],
+      "aliases": [
+        "Industrial Energy Saving",
+        "Energy Management Services",
+        "工业节能与能效管理"
+      ],
+      "status": "skeleton",
+      "order": 5
+    },
+    {
+      "chain_id": "quantum_computing_communication_measurement",
+      "sector_id": "frontier_future_technology",
+      "chain_name": "Quantum Computing, Communication, and Measurement",
+      "chain_kind": "frontier_technology_chain",
+      "decomposition_method": "technical_route",
+      "description": "Frontier technology route for quantum processors, secure communications, sensing, control systems, and precision measurement based on quantum phenomena.",
+      "scope": "Covers qubits, quantum control, quantum error correction, quantum key distribution, quantum sensors, cryogenic interfaces, and quantum measurement platforms.",
+      "exclusions": [
+        "Classical AI accelerators and conventional network equipment remain owned by ai_logic_compute_chips and network_equipment_edge_iot."
+      ],
+      "aliases": [
+        "Quantum Information Technology",
+        "Quantum Tech",
+        "量子计算、通信与测量"
+      ],
+      "status": "skeleton",
+      "order": 1
+    },
+    {
+      "chain_id": "brain_computer_interfaces_neural_engineering",
+      "sector_id": "frontier_future_technology",
+      "chain_name": "Brain-Computer Interfaces and Neural Engineering",
+      "chain_kind": "frontier_technology_chain",
+      "decomposition_method": "technical_route",
+      "description": "Frontier technology route for interfaces, implants, signal decoding, stimulation, and engineering systems that connect neural activity with digital devices.",
+      "scope": "Covers invasive and noninvasive BCI, neural electrodes, decoding algorithms, neurostimulation, rehabilitation interfaces, and neural data platforms.",
+      "exclusions": [
+        "Established diagnostic imaging equipment remains owned by medical_imaging_diagnostic_equipment."
+      ],
+      "aliases": [
+        "BCI",
+        "Neural Interface Technology",
+        "脑机接口与神经工程"
+      ],
+      "status": "skeleton",
+      "order": 2
+    },
+    {
+      "chain_id": "controlled_nuclear_fusion",
+      "sector_id": "frontier_future_technology",
+      "chain_name": "Controlled Nuclear Fusion",
+      "chain_kind": "frontier_technology_chain",
+      "decomposition_method": "technical_route",
+      "description": "Frontier energy route for achieving controlled fusion through magnetic, inertial, or alternative confinement systems and their specialized technologies.",
+      "scope": "Covers tokamak and stellarator systems, fusion magnets, plasma heating, first-wall materials, tritium handling, diagnostics, and fusion engineering.",
+      "exclusions": [
+        "Commercial fission plant equipment remains owned by nuclear_power_equipment."
+      ],
+      "aliases": [
+        "Fusion Energy",
+        "Nuclear Fusion Technology",
+        "可控核聚变"
+      ],
+      "status": "skeleton",
+      "order": 3
+    },
+    {
+      "chain_id": "future_networks_next_generation_internet",
+      "sector_id": "frontier_future_technology",
+      "chain_name": "Future Networks and Next-Generation Internet",
+      "chain_kind": "frontier_technology_chain",
+      "decomposition_method": "technical_route",
+      "description": "Frontier networking route for programmable, deterministic, intelligent, and integrated terrestrial-space networks beyond current internet architectures.",
+      "scope": "Covers network virtualization, deterministic networking, AI-native networks, network slicing, protocol evolution, and future internet testbeds.",
+      "exclusions": [
+        "Deployed carrier mobile networks remain owned by mobile_communications_5g_6g."
+      ],
+      "aliases": [
+        "Next-Generation Internet",
+        "Future Network Technology",
+        "未来网络与下一代互联网"
+      ],
+      "status": "skeleton",
+      "order": 4
+    },
+    {
+      "chain_id": "spatial_computing_xr_metaverse_infrastructure",
+      "sector_id": "frontier_future_technology",
+      "chain_name": "Spatial Computing, XR, and Metaverse Infrastructure",
+      "chain_kind": "frontier_technology_chain",
+      "decomposition_method": "technical_route",
+      "description": "Frontier computing route for immersive spatial interaction, extended reality devices, digital twins, rendering systems, and shared virtual environments.",
+      "scope": "Covers AR and VR hardware, spatial mapping, rendering engines, digital-twin platforms, haptics, content tools, and metaverse infrastructure.",
+      "exclusions": [
+        "Display panel components remain owned by display_panels_optoelectronic_components."
+      ],
+      "aliases": [
+        "XR and Metaverse",
+        "Spatial Computing",
+        "空间计算、XR与元宇宙基础设施"
+      ],
+      "status": "skeleton",
+      "order": 5
+    },
+    {
+      "chain_id": "future_displays",
+      "sector_id": "frontier_future_technology",
+      "chain_name": "Future Displays",
+      "chain_kind": "frontier_technology_chain",
+      "decomposition_method": "technical_route",
+      "description": "Frontier display route for pre-commercial visual technologies and emerging technical routes that improve form factor, efficiency, interaction, and perceptual realism beyond established panels.",
+      "scope": "Covers pre-commercial emerging technical routes for MicroLED, quantum-dot, holographic, flexible, transparent, and light-field displays plus experimental display integration.",
+      "exclusions": [
+        "Commercialized products, repeatable mass-production processes, and mature display manufacturing remain owned by display_panels_optoelectronic_components."
+      ],
+      "aliases": [
+        "Emerging Displays",
+        "Next-Generation Display Technology",
+        "未来显示"
+      ],
+      "status": "skeleton",
+      "order": 6
+    },
+    {
+      "chain_id": "new_computing_routes",
+      "sector_id": "frontier_future_technology",
+      "chain_name": "New Computing Routes",
+      "chain_kind": "frontier_technology_chain",
+      "decomposition_method": "technical_route",
+      "description": "Frontier computing route for nontraditional architectures, devices, and paradigms that pursue new performance, efficiency, security, or intelligence capabilities.",
+      "scope": "Covers neuromorphic, photonic, in-memory, analog, biological, and other emerging computing hardware and software co-design routes.",
+      "exclusions": [
+        "Commercial logic accelerators remain owned by ai_logic_compute_chips, while quantum systems remain owned by quantum_computing_communication_measurement."
+      ],
+      "aliases": [
+        "Novel Computing",
+        "Alternative Computing Architectures",
+        "新型计算路线"
+      ],
+      "status": "skeleton",
+      "order": 7
+    }
+  ]
+}

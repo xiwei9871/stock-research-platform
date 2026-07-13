@@ -12,6 +12,7 @@ from stock_research.backfill_watchdog import BackfillSummary, BackfillWatchdogSt
 from stock_research.minute_backfill import (
     load_backfill_status_rows,
     parse_date,
+    reset_running_jobs_in_scope,
     reset_stale_running_jobs,
     run_baostock_minute_backfill,
     summarize_backfill_status,
@@ -31,6 +32,7 @@ class MinuteBackfillAdapter:
     batch_by: str = "month"
     retry_failed: bool = True
     sleep_seconds: float = 0.0
+    derive_qfq_from_raw: bool | None = None
 
     task_name: str = "minute_backfill"
     dataset: str = "market.stock_minute_bar"
@@ -109,6 +111,10 @@ class MinuteBackfillAdapter:
             workers=workers,
             run_timeout_seconds=run_timeout_seconds,
             reset_stale_before_run=False,
+            derive_qfq_from_raw=self.derive_qfq_from_raw,
+            progress=_print_minute_backfill_progress,
+            progress_interval=50,
+            progress_heartbeat_seconds=0.0,
         )
 
     def format_extra_status_lines(
@@ -143,6 +149,10 @@ def _run_backfill_once_with_timeout(
     workers: int,
     run_timeout_seconds: int,
     reset_stale_before_run: bool = True,
+    derive_qfq_from_raw: bool | None = None,
+    progress: Any | None = None,
+    progress_interval: int = 50,
+    progress_heartbeat_seconds: float = 0.0,
     lock_path: str | Path = DEFAULT_MINUTE_BACKFILL_WATCHDOG_LOCK,
 ) -> dict[str, Any]:
     lock_handle = _try_acquire_watchdog_lock(lock_path)
@@ -159,6 +169,7 @@ def _run_backfill_once_with_timeout(
     context = _timeout_process_context()
     try:
         result_queue: mp.queues.Queue[dict[str, Any]] = context.Queue(maxsize=1)
+        run_started_at = dt.datetime.now(dt.timezone.utc)
         process = context.Process(
             target=_run_backfill_once_target,
             args=(
@@ -174,6 +185,10 @@ def _run_backfill_once_with_timeout(
                     "sleep_seconds": sleep_seconds,
                     "workers": workers,
                     "reset_stale_before_run": reset_stale_before_run,
+                    "derive_qfq_from_raw": derive_qfq_from_raw,
+                    "progress": progress,
+                    "progress_interval": progress_interval,
+                    "progress_heartbeat_seconds": progress_heartbeat_seconds,
                 },
             ),
         )
@@ -186,6 +201,13 @@ def _run_backfill_once_with_timeout(
                 process.kill()
                 process.join(timeout=1)
             result_queue.close()
+            reset_jobs = reset_running_jobs_in_scope(
+                started_at_or_after=run_started_at,
+                start_date=parse_date(start_date) if start_date else None,
+                end_date=parse_date(end_date) if end_date else None,
+                freq=freq,
+                adjust_types=adjust_types,
+            )
             return {
                 "attempted": 0,
                 "success": 0,
@@ -193,6 +215,7 @@ def _run_backfill_once_with_timeout(
                 "rows": 0,
                 "status": "timed_out",
                 "timed_out": True,
+                "reset_running_jobs": reset_jobs,
             }
         exitcode = process.exitcode
         try:
@@ -229,6 +252,24 @@ def _run_backfill_once_with_timeout(
 
 def _run_backfill_once_target(result_queue: Any, kwargs: dict[str, Any]) -> None:
     result_queue.put(run_baostock_minute_backfill(**kwargs))
+
+
+def _print_minute_backfill_progress(event: dict[str, Any]) -> None:
+    fields = [
+        "event",
+        "completed_jobs",
+        "total_jobs",
+        "success_jobs",
+        "failed_jobs",
+        "rows",
+        "last_job_id",
+        "last_error",
+    ]
+    print(
+        "baostock_minute_backfill_progress|"
+        + "|".join(f"{field}={event.get(field, '')}" for field in fields),
+        flush=True,
+    )
 
 
 def _timeout_process_context() -> Any:

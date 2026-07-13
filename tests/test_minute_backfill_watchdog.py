@@ -1,5 +1,6 @@
 import datetime as dt
 import json
+from argparse import Namespace
 import threading
 import time
 from pathlib import Path
@@ -7,6 +8,8 @@ from pathlib import Path
 import pytest
 
 from stock_research.backfill_watchdog import BackfillSummary, BackfillWatchdogStatus
+import stock_research.baostock_minute_backfill_watchdog as baostock_minute_backfill_watchdog
+from stock_research.baostock_minute_backfill_watchdog import allocate_daily_backfill_quota
 from stock_research.minute_backfill_adapter import (
     MinuteBackfillAdapter,
     _run_backfill_once_with_timeout,
@@ -31,6 +34,12 @@ def _row(
         "end_date": end_date,
         "status": status,
     }
+
+
+def test_baostock_daily_progress_treats_skipped_jobs_as_handled():
+    sql = baostock_minute_backfill_watchdog._MINUTE_BACKFILL_DAILY_PROGRESS_SQL
+
+    assert "j.status = ANY(ARRAY['success','skipped'])" in sql
 
 
 def test_run_minute_backfill_watchdog_delegates_through_generic_runner(monkeypatch):
@@ -92,7 +101,7 @@ def test_run_minute_backfill_watchdog_delegates_through_generic_runner(monkeypat
     assert generic_calls[0]["stale_after_minutes"] == 20
     assert generic_calls[0]["run_timeout_seconds"] == 1800
     assert generic_calls[0]["max_jobs"] == 1200
-    assert generic_calls[0]["workers"] == 6
+    assert generic_calls[0]["workers"] == 8
     assert generic_calls[0]["send_message"] is None
     assert sent == []
     assert result["pre_summary"] == {
@@ -129,6 +138,371 @@ def test_run_minute_backfill_watchdog_delegates_through_generic_runner(monkeypat
     }
     assert result["timed_out"] is False
     assert result["message"] == "backfill_watchdog|status\naction=healthy"
+
+
+def test_run_minute_backfill_watchdog_limits_jobs_by_baostock_daily_quota(monkeypatch, tmp_path):
+    generic_calls = []
+
+    def fake_run_watchdog_once(**kwargs):
+        generic_calls.append(kwargs)
+        return {
+            "scope": {"run_id": "minute-backfill:5min:raw,qfq:2024-01-01:2024-01-31", "window": "2024-01-01..2024-01-31"},
+            "pre_rows": [],
+            "post_rows": [],
+            "pre_summary": BackfillSummary(0, 0, 0, 0, 0, 0, 0),
+            "post_summary": BackfillSummary(0, 0, 0, 0, 0, 0, 0),
+            "previous_frontier": {"completed_through": None, "currently_working_on": None},
+            "frontier": {"completed_through": None, "currently_working_on": None},
+            "status": BackfillWatchdogStatus(
+                watchdog_action="healthy",
+                progress_advanced=True,
+                work_remaining=True,
+                stale_tasks_reset=0,
+                timed_out=False,
+                previous_frontier={"completed_through": None, "currently_working_on": None},
+                current_frontier={"completed_through": None, "currently_working_on": "2024-01"},
+            ),
+            "stale_tasks_reset": 0,
+            "run_result": {
+                "attempted": 12,
+                "success": 12,
+                "failed": 0,
+                "rows": 576,
+                "status": "completed",
+                "timed_out": False,
+            },
+            "timed_out": False,
+            "message": "backfill_watchdog|status\nrun_success=12",
+        }
+
+    monkeypatch.setattr(minute_backfill_watchdog, "run_watchdog_once", fake_run_watchdog_once)
+    monkeypatch.setattr(minute_backfill_watchdog, "send_openclaw_feishu_message", lambda **kwargs: None)
+    monkeypatch.setattr(minute_backfill_watchdog, "load_active_baostock_asset_count", lambda: 10)
+
+    result = run_minute_backfill_watchdog(
+        start_date="2024-01-01",
+        end_date="2024-01-31",
+        freq="5min",
+        adjust_types=["raw", "qfq"],
+        max_jobs=100,
+        enable_baostock_request_budget=True,
+        baostock_daily_request_limit=100,
+        baostock_safety_multiplier=1.1,
+        today_adjust_types=["raw", "qfq"],
+        request_ledger_path=tmp_path / "quota.json",
+        quota_day=dt.date(2026, 7, 2),
+        report_target="chat:test",
+    )
+
+    assert generic_calls[0]["max_jobs"] == 70
+    assert result["baostock_request_budget"]["safe_daily_request_budget"] == 90
+    assert result["baostock_request_budget"]["today_reserved_requests"] == 20
+    assert result["baostock_request_budget"]["backfill_request_budget"] == 70
+    assert result["baostock_request_budget"]["allocated_requests"] == 70
+    assert result["baostock_request_budget"]["consumed_requests"] == 12
+
+
+def test_run_minute_backfill_watchdog_claims_only_raw_jobs_when_baostock_budget_is_enabled(monkeypatch, tmp_path):
+    generic_calls = []
+
+    def fake_run_watchdog_once(**kwargs):
+        generic_calls.append(kwargs)
+        return {
+            "scope": {"run_id": "minute-backfill:5min:raw:2024-01-01:2024-01-31", "window": "2024-01-01..2024-01-31"},
+            "pre_rows": [],
+            "post_rows": [],
+            "pre_summary": BackfillSummary(0, 0, 0, 0, 0, 0, 0),
+            "post_summary": BackfillSummary(0, 0, 0, 0, 0, 0, 0),
+            "previous_frontier": {"completed_through": None, "currently_working_on": None},
+            "frontier": {"completed_through": None, "currently_working_on": None},
+            "status": BackfillWatchdogStatus(
+                watchdog_action="healthy",
+                progress_advanced=True,
+                work_remaining=True,
+                stale_tasks_reset=0,
+                timed_out=False,
+                previous_frontier={"completed_through": None, "currently_working_on": None},
+                current_frontier={"completed_through": None, "currently_working_on": "2024-01"},
+            ),
+            "stale_tasks_reset": 0,
+            "run_result": {
+                "attempted": 5,
+                "success": 5,
+                "failed": 0,
+                "rows": 240,
+                "status": "completed",
+                "timed_out": False,
+            },
+            "timed_out": False,
+            "message": "backfill_watchdog|status\nrun_success=5",
+        }
+
+    monkeypatch.setattr(minute_backfill_watchdog, "run_watchdog_once", fake_run_watchdog_once)
+    monkeypatch.setattr(minute_backfill_watchdog, "send_openclaw_feishu_message", lambda **kwargs: None)
+    monkeypatch.setattr(minute_backfill_watchdog, "load_active_baostock_asset_count", lambda: 10)
+
+    result = run_minute_backfill_watchdog(
+        start_date="2024-01-01",
+        end_date="2024-01-31",
+        freq="5min",
+        adjust_types=["raw", "qfq"],
+        max_jobs=100,
+        enable_baostock_request_budget=True,
+        baostock_daily_request_limit=100,
+        baostock_safety_multiplier=1.1,
+        today_adjust_types=["raw", "qfq"],
+        request_ledger_path=tmp_path / "quota.json",
+        quota_day=dt.date(2026, 7, 2),
+        report_target="chat:test",
+    )
+
+    assert generic_calls[0]["adapter"].adjust_types == ["raw"]
+    assert generic_calls[0]["adapter"].derive_qfq_from_raw is True
+    assert result["baostock_request_budget"]["baostock_fetch_adjust_types"] == ["raw"]
+    assert result["baostock_request_budget"]["requested_adjust_types"] == ["raw", "qfq"]
+
+
+def test_run_minute_backfill_watchdog_reports_raw_daily_progress(monkeypatch, tmp_path):
+    progress_snapshots = iter(
+        [
+            {
+                "completed_through": "2020-01-02",
+                "current_trade_date": "2020-01-03",
+                "current_expected_jobs": 3560,
+                "current_success_jobs": 100,
+                "current_remaining_jobs": 3460,
+                "current_progress_pct": "2.81",
+                "completed_trade_days": 1,
+                "total_trade_days": 20,
+            },
+            {
+                "completed_through": "2020-01-02",
+                "current_trade_date": "2020-01-03",
+                "current_expected_jobs": 3560,
+                "current_success_jobs": 150,
+                "current_remaining_jobs": 3410,
+                "current_progress_pct": "4.21",
+                "completed_trade_days": 1,
+                "total_trade_days": 20,
+            },
+        ]
+    )
+
+    def fake_run_watchdog_once(**kwargs):
+        return {
+            "scope": {"run_id": "minute-backfill:5min:raw:2020-01-02:2020-01-31", "window": "2020-01-02..2020-01-31"},
+            "pre_rows": [],
+            "post_rows": [],
+            "pre_summary": BackfillSummary(0, 0, 0, 0, 0, 0, 0),
+            "post_summary": BackfillSummary(0, 0, 0, 0, 0, 0, 0),
+            "previous_frontier": {"completed_through": None, "currently_working_on": None},
+            "frontier": {"completed_through": None, "currently_working_on": "2020-01"},
+            "status": BackfillWatchdogStatus(
+                watchdog_action="healthy",
+                progress_advanced=True,
+                work_remaining=True,
+                stale_tasks_reset=0,
+                timed_out=False,
+                previous_frontier={"completed_through": None, "currently_working_on": None},
+                current_frontier={"completed_through": None, "currently_working_on": "2020-01"},
+            ),
+            "stale_tasks_reset": 0,
+            "run_result": {
+                "attempted": 50,
+                "success": 50,
+                "failed": 0,
+                "rows": 2400,
+                "status": "completed",
+                "timed_out": False,
+            },
+            "timed_out": False,
+            "message": "backfill_watchdog|status\nrun_success=50",
+        }
+
+    monkeypatch.setattr(minute_backfill_watchdog, "run_watchdog_once", fake_run_watchdog_once)
+    monkeypatch.setattr(minute_backfill_watchdog, "send_openclaw_feishu_message", lambda **kwargs: None)
+    monkeypatch.setattr(minute_backfill_watchdog, "load_active_baostock_asset_count", lambda: 10)
+    monkeypatch.setattr(
+        minute_backfill_watchdog,
+        "load_baostock_minute_backfill_progress",
+        lambda **kwargs: next(progress_snapshots),
+        raising=False,
+    )
+
+    result = run_minute_backfill_watchdog(
+        start_date="2020-01-02",
+        end_date="2020-01-31",
+        freq="5min",
+        adjust_types=["raw", "qfq"],
+        max_jobs=100,
+        enable_baostock_request_budget=True,
+        baostock_daily_request_limit=100,
+        baostock_safety_multiplier=1.1,
+        today_adjust_types=["raw", "qfq"],
+        request_ledger_path=tmp_path / "quota.json",
+        quota_day=dt.date(2026, 7, 2),
+        report_target="chat:test",
+    )
+
+    progress = result["baostock_backfill_progress"]
+    assert progress["current_trade_date"] == "2020-01-03"
+    assert progress["current_success_jobs"] == 150
+    assert progress["run_delta_current_success_jobs"] == 50
+    assert "baostock_raw_completed_through=2020-01-02" in result["message"]
+    assert "baostock_raw_current_progress=150/3560 (4.21%)" in result["message"]
+    assert "baostock_raw_run_delta_current_success_jobs=50" in result["message"]
+
+
+def test_baostock_minute_backfill_watchdog_cli_prints_raw_daily_progress(monkeypatch, capsys):
+    from stock_research import cli
+
+    monkeypatch.setattr(
+        cli,
+        "run_minute_backfill_watchdog",
+        lambda **kwargs: {
+            "pre_summary": {"success_jobs": 10},
+            "post_summary": {"success_jobs": 15},
+            "status": {"watchdog_action": "healthy", "work_remaining": True},
+            "run_result": {"rows": 240},
+            "baostock_request_budget": {
+                "safe_daily_request_budget": 90,
+                "today_reserved_requests": 20,
+                "backfill_request_budget": 70,
+                "allocated_requests": 70,
+                "consumed_requests": 5,
+            },
+            "baostock_backfill_progress": {
+                "completed_through": "2020-01-02",
+                "current_trade_date": "2020-01-03",
+                "current_expected_jobs": 3560,
+                "current_success_jobs": 150,
+                "current_remaining_jobs": 3410,
+                "current_progress_pct": "4.21",
+                "run_delta_current_success_jobs": 50,
+            },
+        },
+    )
+
+    cli.run_baostock_minute_backfill_watchdog_command(
+        Namespace(
+            start_date="2020-01-02",
+            end_date="2020-01-31",
+            freq="5min",
+            adjust_types=["raw", "qfq"],
+            max_jobs=100,
+            workers=1,
+            stale_after_minutes=20,
+            run_timeout_seconds=1800,
+            report_target="chat:test",
+            report_account="jarvis",
+            openclaw_bin="openclaw",
+            report_dry_run=False,
+            baostock_daily_request_limit=100,
+            baostock_safety_multiplier=1.1,
+            max_daily_backfill_requests=None,
+            today_adjust_types=["raw", "qfq"],
+            request_ledger_path="quota.json",
+            quota_day=None,
+        )
+    )
+
+    output = capsys.readouterr().out
+    assert "baostock_minute_backfill_watchdog|raw_completed_through|2020-01-02" in output
+    assert "baostock_minute_backfill_watchdog|raw_current_trade_date|2020-01-03" in output
+    assert "baostock_minute_backfill_watchdog|raw_current_progress|150/3560|4.21" in output
+    assert "baostock_minute_backfill_watchdog|raw_run_delta_current_success_jobs|50" in output
+
+
+def test_run_minute_backfill_watchdog_forces_single_worker_for_baostock_budget(monkeypatch, tmp_path):
+    generic_calls = []
+
+    def fake_run_watchdog_once(**kwargs):
+        generic_calls.append(kwargs)
+        return {
+            "scope": {"run_id": "minute-backfill:5min:raw,qfq:2024-01-01:2024-01-31", "window": "2024-01-01..2024-01-31"},
+            "pre_rows": [],
+            "post_rows": [],
+            "pre_summary": BackfillSummary(0, 0, 0, 0, 0, 0, 0),
+            "post_summary": BackfillSummary(0, 0, 0, 0, 0, 0, 0),
+            "previous_frontier": {"completed_through": None, "currently_working_on": None},
+            "frontier": {"completed_through": None, "currently_working_on": None},
+            "status": BackfillWatchdogStatus(
+                watchdog_action="healthy",
+                progress_advanced=False,
+                work_remaining=True,
+                stale_tasks_reset=0,
+                timed_out=False,
+                previous_frontier={"completed_through": None, "currently_working_on": None},
+                current_frontier={"completed_through": None, "currently_working_on": "2024-01"},
+            ),
+            "stale_tasks_reset": 0,
+            "run_result": {
+                "attempted": 0,
+                "success": 0,
+                "failed": 0,
+                "rows": 0,
+                "status": "completed",
+                "timed_out": False,
+            },
+            "timed_out": False,
+            "message": "backfill_watchdog|status\nrun_success=0",
+        }
+
+    monkeypatch.setattr(minute_backfill_watchdog, "run_watchdog_once", fake_run_watchdog_once)
+    monkeypatch.setattr(minute_backfill_watchdog, "send_openclaw_feishu_message", lambda **kwargs: None)
+    monkeypatch.setattr(minute_backfill_watchdog, "load_active_baostock_asset_count", lambda: 10)
+
+    run_minute_backfill_watchdog(
+        start_date="2024-01-01",
+        end_date="2024-01-31",
+        freq="5min",
+        adjust_types=["raw", "qfq"],
+        max_jobs=100,
+        workers=8,
+        enable_baostock_request_budget=True,
+        baostock_daily_request_limit=100,
+        baostock_safety_multiplier=1.1,
+        today_adjust_types=["raw", "qfq"],
+        request_ledger_path=tmp_path / "quota.json",
+        quota_day=dt.date(2026, 7, 2),
+        report_target="chat:test",
+    )
+
+    assert generic_calls[0]["workers"] == 1
+
+
+def test_run_minute_backfill_watchdog_releases_baostock_quota_when_runner_raises(monkeypatch, tmp_path):
+    def raise_from_runner(**kwargs):
+        raise RuntimeError("runner failed before attempting jobs")
+
+    ledger_path = tmp_path / "quota.json"
+    quota_day = dt.date(2026, 7, 2)
+    monkeypatch.setattr(minute_backfill_watchdog, "run_watchdog_once", raise_from_runner)
+    monkeypatch.setattr(minute_backfill_watchdog, "load_active_baostock_asset_count", lambda: 10)
+
+    with pytest.raises(RuntimeError, match="runner failed"):
+        run_minute_backfill_watchdog(
+            start_date="2024-01-01",
+            end_date="2024-01-31",
+            freq="5min",
+            adjust_types=["raw", "qfq"],
+            max_jobs=100,
+            enable_baostock_request_budget=True,
+            baostock_daily_request_limit=100,
+            baostock_safety_multiplier=1.1,
+            today_adjust_types=["raw", "qfq"],
+            request_ledger_path=ledger_path,
+            quota_day=quota_day,
+            report_target="chat:test",
+        )
+
+    allocation = allocate_daily_backfill_quota(
+        ledger_path=ledger_path,
+        day=quota_day,
+        backfill_request_budget=70,
+        requested_requests=70,
+    )
+    assert allocation.allocated_requests == 70
 
 
 def test_run_minute_backfill_watchdog_reuses_generic_message_when_reconciliation_is_unchanged(monkeypatch):
@@ -695,26 +1069,52 @@ def test_cron_jobs_include_minute_backfill_watchdog():
     )
 
 
-def test_cron_jobs_include_stock_daily_data_pipeline():
+def test_cron_jobs_include_stock_close_and_ready_jobs():
     jobs = json.loads(Path("/Users/xiwei/.openclaw/cron/jobs.json").read_text())["jobs"]
-    job = next((item for item in jobs if item["name"] == "stock-daily-data-pipeline"), None)
+    minute_job = next(
+        (item for item in jobs if item["name"] == "stock-daily-close-minute5-split"),
+        None,
+    )
+    build_job = next(
+        (item for item in jobs if item["name"] == "stock-platform-ready-build"),
+        None,
+    )
+    check_job = next(
+        (item for item in jobs if item["name"] == "stock-platform-ready-check"),
+        None,
+    )
 
-    assert job is not None
-    assert job["enabled"] is True
-    assert job["agentId"] == "agent_jarvis"
-    assert job["schedule"] == {
+    assert minute_job is not None
+    assert minute_job["enabled"] is True
+    assert minute_job["agentId"] == "agent_jarvis"
+    assert minute_job["schedule"] == {
         "kind": "cron",
-        "expr": "10 21 * * 1-5",
+        "expr": "0 17 * * 1-5",
         "tz": "Asia/Shanghai",
+        "staggerMs": 0,
     }
-    assert job["delivery"] == {"mode": "none"}
-    assert job["failureAlert"]["channel"] == "feishu"
-    assert job["payload"]["kind"] == "agentTurn"
-    assert job["payload"]["toolsAllow"] == ["exec"]
-    assert job["payload"]["timeoutSeconds"] == 7200
-    assert "/Users/xiwei/stock_research/scripts/run_stock_daily_data_pipeline.sh" in job["payload"]["message"]
-    assert "/approval" not in job["payload"]["message"]
-    assert "不要申请 approval" in job["payload"]["message"]
-    assert job["payload"]["message"].lower().count("approval") == 1
-    assert "飞书进度报告由脚本自己发送" in job["payload"]["message"]
-    assert job["sessionTarget"] == "isolated"
+    assert minute_job["payload"]["timeoutSeconds"] == 5400
+    assert (
+        "/Users/xiwei/stock_research/scripts/run_daily_close_pipeline_cron.sh minute5"
+        in minute_job["payload"]["message"]
+    )
+
+    assert build_job is not None
+    assert build_job["enabled"] is True
+    assert build_job["schedule"] == {
+        "kind": "cron",
+        "expr": "0 19 * * 1-5",
+        "tz": "Asia/Shanghai",
+        "staggerMs": 0,
+    }
+    assert build_job["payload"]["timeoutSeconds"] == 5400
+
+    assert check_job is not None
+    assert check_job["enabled"] is True
+    assert check_job["schedule"] == {
+        "kind": "cron",
+        "expr": "55 19 * * 1-5",
+        "tz": "Asia/Shanghai",
+        "staggerMs": 0,
+    }
+    assert check_job["payload"]["timeoutSeconds"] == 1200

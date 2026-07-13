@@ -35,6 +35,7 @@ def test_build_daily_pipeline_steps_lists_required_initial_steps() -> None:
         "sync_index_constituents",
         "sync_industry_memberships",
         "build_industry_bars",
+        "minute_incremental_plan",
         "minute_incremental_refresh",
         "daily_event_refresh",
         "daily_feature_build",
@@ -56,7 +57,6 @@ def test_build_daily_pipeline_steps_splits_market_refresh_commands() -> None:
 
     assert [step.name for step in incremental_steps] == [
         "sync_core_assets",
-        "load_market_bars",
         "check_market_data_freshness",
         "build_asset_status",
         "sync_index_bars",
@@ -69,6 +69,57 @@ def test_build_daily_pipeline_steps_splits_market_refresh_commands() -> None:
         assert "--only-step" in step.command
     assert "--label-start-date" in incremental_steps[-1].command
     assert "2026-03-07" in incremental_steps[-1].command
+
+
+def test_build_daily_pipeline_steps_loads_both_daily_adjustments() -> None:
+    steps = build_daily_pipeline_steps(trade_date="2026-06-05", output_dir=Path("outputs/daily"))
+
+    load_step = next(step for step in steps if step.name == "load_market_bars")
+
+    assert load_step.command[3:] == [
+        "load-bars",
+        "--start-date",
+        "2026-06-05",
+        "--end-date",
+        "2026-06-05",
+        "--archive-raw",
+    ]
+
+
+def test_build_daily_pipeline_steps_plans_minute_jobs_before_watchdog() -> None:
+    steps = build_daily_pipeline_steps(trade_date="2026-06-05", output_dir=Path("outputs/daily"))
+
+    plan_step = next(step for step in steps if step.name == "minute_incremental_plan")
+    refresh_step = next(step for step in steps if step.name == "minute_incremental_refresh")
+
+    assert steps.index(plan_step) < steps.index(refresh_step)
+    assert plan_step.command[3:] == [
+        "plan-baostock-minute-backfill",
+        "--start-date",
+        "2026-05-31",
+        "--end-date",
+        "2026-06-05",
+        "--freq",
+        "5min",
+        "--adjust-types",
+        "raw,qfq",
+        "--batch-by",
+        "month",
+        "--output-dir",
+        "outputs/daily/minute_incremental_plan",
+    ]
+
+
+def test_build_daily_pipeline_steps_runs_minute_watchdog_to_completion_by_default() -> None:
+    steps = build_daily_pipeline_steps(trade_date="2026-06-05", output_dir=Path("outputs/daily"))
+
+    refresh_step = next(step for step in steps if step.name == "minute_incremental_refresh")
+
+    assert "--max-jobs" in refresh_step.command
+    assert refresh_step.command[refresh_step.command.index("--max-jobs") + 1] == "12000"
+    assert refresh_step.command[refresh_step.command.index("--workers") + 1] == "1"
+    assert refresh_step.command[refresh_step.command.index("--run-timeout-seconds") + 1] == "7200"
+    assert refresh_step.timeout_seconds == 7500
 
 
 def test_build_daily_pipeline_steps_commands_parse_through_cli() -> None:
@@ -96,10 +147,33 @@ def test_render_daily_pipeline_feishu_message_is_mobile_sized() -> None:
 
     assert "A股日频数据任务" in message
     assert "2026-06-05" in message
-    assert "market_daily_refresh: success rows=5200" in message
-    assert "daily_event_refresh: partial_failed rows=45 error=lhb failed" in message
-    assert "outputs/daily/20260605" in message
-    assert len(message) < 1800
+    assert "需要处理" in message
+    assert "完成 1/2" in message
+    assert "daily_event_refresh" in message
+    assert "lhb failed" in message
+    assert "market_daily_refresh" not in message
+    assert "outputs/daily/20260605" not in message
+    assert len(message) < 500
+
+
+def test_render_daily_pipeline_feishu_message_truncates_long_errors() -> None:
+    message = render_daily_pipeline_feishu_message(
+        trade_date="2026-06-05",
+        status="partial_failed",
+        output_dir=Path("/Users/xiwei/stock_research/outputs/research/stock_daily_data_pipeline/2026-06-05"),
+        step_results=[
+            {"step": "load_market_bars", "status": "failed", "rows": 0, "error": "x" * 300},
+            {"step": "daily_event_refresh", "status": "failed", "rows": 0, "error": "y" * 300},
+            {"step": "daily_feature_build", "status": "failed", "rows": 0, "error": "z" * 300},
+            {"step": "label_incremental_refresh", "status": "failed", "rows": 0, "error": "w" * 300},
+        ],
+    )
+
+    assert "/Users/xiwei" not in message
+    assert "另有 1 项异常" in message
+    assert "xxxx" in message
+    assert "x" * 120 not in message
+    assert len(message) < 700
 
 
 def test_run_stock_daily_data_pipeline_records_success_and_failure(tmp_path: Path) -> None:
@@ -119,7 +193,7 @@ def test_run_stock_daily_data_pipeline_records_success_and_failure(tmp_path: Pat
     )
 
     assert result["status"] == "partial_failed"
-    assert len(result["steps"]) == 14
+    assert len(result["steps"]) == 15
     assert any(
         step["step"] == "daily_event_refresh" and step["status"] == "failed"
         for step in result["steps"]
@@ -156,7 +230,7 @@ def test_run_stock_daily_data_pipeline_skips_commands_after_required_failure(
 
     def fake_runner(command: list[str], timeout_seconds: int) -> dict[str, object]:
         calls.append(command)
-        if "load_market_bars" in command:
+        if "load-bars" in command:
             return {"returncode": 1, "stdout": "", "stderr": "market failed"}
         return {"returncode": 0, "stdout": "rows|10", "stderr": ""}
 
@@ -169,7 +243,7 @@ def test_run_stock_daily_data_pipeline_skips_commands_after_required_failure(
 
     assert result["status"] == "partial_failed"
     assert len(calls) == 2
-    assert "load_market_bars" in calls[-1]
+    assert "load-bars" in calls[-1]
 
     steps = {step["step"]: step for step in result["steps"]}
     for step_name in [
@@ -179,6 +253,7 @@ def test_run_stock_daily_data_pipeline_skips_commands_after_required_failure(
         "sync_index_constituents",
         "sync_industry_memberships",
         "build_industry_bars",
+        "minute_incremental_plan",
         "minute_incremental_refresh",
         "daily_event_refresh",
         "daily_feature_build",
@@ -187,6 +262,42 @@ def test_run_stock_daily_data_pipeline_skips_commands_after_required_failure(
         assert steps[step_name]["status"] == "skipped_dependency_failed"
         assert steps[step_name]["rows"] == 0
         assert steps[step_name]["error"] == "upstream required step failed"
+
+
+def test_run_stock_daily_data_pipeline_treats_failed_status_marker_as_failure(
+    tmp_path: Path,
+) -> None:
+    calls: list[list[str]] = []
+
+    def fake_runner(command: list[str], timeout_seconds: int) -> dict[str, object]:
+        calls.append(command)
+        if "check_market_data_freshness" in command:
+            return {
+                "returncode": 0,
+                "stdout": "\n".join(
+                    [
+                        "daily_incremental|status|failed",
+                        "daily_incremental_step|check_market_data_freshness|failed",
+                        "daily_incremental_step_error|check_market_data_freshness|market_daily_bar incomplete",
+                    ]
+                ),
+                "stderr": "",
+            }
+        return {"returncode": 0, "stdout": "rows|10", "stderr": ""}
+
+    result = run_stock_daily_data_pipeline(
+        trade_date="2026-06-05",
+        output_dir=tmp_path,
+        command_runner=fake_runner,
+        send_feishu=False,
+    )
+
+    assert result["status"] == "partial_failed"
+    steps = {step["step"]: step for step in result["steps"]}
+    assert steps["check_market_data_freshness"]["status"] == "failed"
+    assert "market_daily_bar incomplete" in steps["check_market_data_freshness"]["error"]
+    assert steps["build_asset_status"]["status"] == "skipped_dependency_failed"
+    assert len(calls) == 3
 
 
 def test_run_stock_daily_data_pipeline_keeps_optional_label_failure_nonblocking(
@@ -265,7 +376,7 @@ def test_run_stock_daily_data_pipeline_records_successful_feishu_delivery(
         step for step in summary["steps"] if step["step"] == "daily_report_delivery"
     )
     assert summary_delivery["status"] == "success"
-    assert "daily_report_delivery: success" in (tmp_path / "feishu_message.txt").read_text()
+    assert "飞书通知完成" in (tmp_path / "feishu_message.txt").read_text()
 
 
 def test_run_stock_daily_data_pipeline_records_failed_feishu_delivery(
@@ -298,5 +409,5 @@ def test_run_stock_daily_data_pipeline_records_failed_feishu_delivery(
     assert summary["status"] == "partial_failed"
     assert summary_delivery["status"] == "failed"
     assert summary_delivery["error"] == "feishu unavailable"
-    assert "daily_report_delivery: failed" in (tmp_path / "feishu_message.txt").read_text()
+    assert "daily_report_delivery" in (tmp_path / "feishu_message.txt").read_text()
     assert "feishu unavailable" in (tmp_path / "feishu_message.txt").read_text()

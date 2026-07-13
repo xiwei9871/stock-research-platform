@@ -88,6 +88,62 @@ def test_build_watchlist_snapshot_loads_context_and_persists_signal_rows(monkeyp
     assert isinstance(calls[0].iloc[0]["reason_json"]["score_total"], float)
 
 
+def test_build_watchlist_snapshot_adds_top_score_candidates_when_watchlist_is_empty(monkeypatch):
+    calls = []
+
+    monkeypatch.setattr(
+        "stock_research.watchlist.workflow.load_watchlist_items",
+        lambda *args, **kwargs: pd.DataFrame(),
+    )
+    monkeypatch.setattr(
+        "stock_research.watchlist.workflow.load_top_scores",
+        lambda **kwargs: [{"asset_id": "CN:SZ:000001", "rank": Decimal("1"), "score_total": Decimal("88.0")}],
+    )
+    monkeypatch.setattr(
+        "stock_research.watchlist.workflow._load_asset_identity_map",
+        lambda asset_ids: pd.DataFrame(
+            [{"asset_id": "CN:SZ:000001", "ts_code": "000001.SZ", "stock_name": "平安银行"}]
+        ),
+    )
+    monkeypatch.setattr(
+        "stock_research.watchlist.workflow.load_feature_snapshot",
+        lambda **kwargs: pd.DataFrame(
+            [{"asset_id": "CN:SZ:000001", "feature_name": "ret_20d", "feature_value": 0.12}]
+        ),
+    )
+    monkeypatch.setattr(
+        "stock_research.watchlist.workflow.load_industry_memberships",
+        lambda **kwargs: {"CN:SZ:000001": {"industry_code": "BANK", "industry_name": "Bank"}},
+    )
+    monkeypatch.setattr(
+        "stock_research.watchlist.workflow._load_market_state",
+        lambda **kwargs: {"market_state": "bullish", "entry_allowed": True},
+    )
+    monkeypatch.setattr(
+        "stock_research.watchlist.workflow._load_sector_strength",
+        lambda **kwargs: pd.DataFrame([{"industry_code": "BANK", "strength_rank": 1, "strength_score": 80.0}]),
+    )
+    monkeypatch.setattr(
+        "stock_research.watchlist.workflow.store_watchlist_daily_signals",
+        lambda frame, **kwargs: calls.append(frame) or len(frame),
+    )
+
+    frame = build_watchlist_snapshot(
+        trade_date="2026-05-20",
+        watchlist_id="default",
+        score_version="manual_v1",
+    )
+
+    assert len(frame) == 1
+    row = frame.iloc[0]
+    assert row["watchlist_id"] == "default"
+    assert row["stock_code"] == "000001.SZ"
+    assert row["stock_name"] == "平安银行"
+    assert row["priority"] == 1
+    assert row["signal_tags"] == ["candidate", "must_watch"]
+    assert len(calls) == 1
+
+
 def test_build_watchlist_snapshot_uses_full_sector_universe_for_sector_risk(monkeypatch):
     captured = {}
 
@@ -249,6 +305,10 @@ def test_build_watchlist_diagnostics_snapshot_sets_watchlist_identity(monkeypatc
     assert list(result["must_watch"]["watchlist_id"]) == ["diagnostics"]
     assert list(result["full"]["trade_date"]) == ["2026-05-20"]
     assert list(result["must_watch"]["trade_date"]) == ["2026-05-20"]
+    assert list(result["full"]["stock_code"]) == ["000001.SZ"]
+    assert list(result["must_watch"]["stock_code"]) == ["000001.SZ"]
+    assert list(result["full"]["stock_name"]) == ["Alpha"]
+    assert list(result["must_watch"]["stock_name"]) == ["Alpha"]
 
 
 def test_build_watchlist_diagnostics_snapshot_maps_asset_identity_into_diagnostics_inputs(monkeypatch):
@@ -458,6 +518,62 @@ def test_build_watchlist_diagnostics_snapshot_selects_latest_recent_lhb_event_fo
         trade_date="2026-05-20",
         score_version="manual_v1",
         top_n=5,
+    )
+
+
+def test_build_watchlist_diagnostics_snapshot_passes_lhb_shortline_watchlist(monkeypatch, tmp_path):
+    shortline_path = tmp_path / "daily_lhb_shortline_watchlist_20260520.csv"
+    pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-05-20",
+                "ts_code": "000017.SZ",
+                "stock_name": "深中华A",
+                "watch_group": "avoid_watch",
+                "watch_reason": "withdrawal_lhb",
+                "exit_signal": "hard_exit",
+                "exit_reason": "withdrawal_lhb,failure_structure",
+            }
+        ]
+    ).to_csv(shortline_path, index=False)
+
+    def fake_fetch_all(conn, sql, params):
+        assert "FROM core.asset_master" in sql
+        return [{"asset_id": "CN:SZ:000017", "ts_code": "000017.SZ", "name": "深中华A"}]
+
+    def fake_build_watchlist_diagnostics(**kwargs):
+        shortline = kwargs["lhb_shortline_frame"]
+        assert len(shortline) == 1
+        row = shortline.iloc[0]
+        assert row["asset_id"] == "CN:SZ:000017"
+        assert row["watch_group"] == "avoid_watch"
+        assert row["exit_signal"] == "hard_exit"
+        return {
+            "full": pd.DataFrame([{"asset_id": row["asset_id"], "watch_group": "risk_watch"}]),
+            "must_watch": pd.DataFrame([{"asset_id": row["asset_id"], "watch_group": "risk_watch"}]),
+        }
+
+    monkeypatch.setattr(
+        "stock_research.watchlist.workflow.load_top_scores",
+        lambda **kwargs: [{"trade_date": "2026-05-20", "asset_id": "CN:SZ:000017", "rank": 1, "score_total": 91.0}],
+    )
+    monkeypatch.setattr("stock_research.watchlist.workflow.connect", lambda service: _Context(object()))
+    monkeypatch.setattr("stock_research.watchlist.workflow.fetch_all", fake_fetch_all)
+    monkeypatch.setattr("stock_research.watchlist.workflow._load_watchlist_factor_frame", lambda **kwargs: pd.DataFrame())
+    monkeypatch.setattr("stock_research.watchlist.workflow._load_dragon_frame", lambda **kwargs: pd.DataFrame())
+    monkeypatch.setattr("stock_research.watchlist.workflow._load_lhb_frame", lambda **kwargs: pd.DataFrame())
+    monkeypatch.setattr("stock_research.watchlist.workflow._load_event_frame", lambda **kwargs: pd.DataFrame())
+    monkeypatch.setattr("stock_research.watchlist.workflow._load_market_frame", lambda **kwargs: pd.DataFrame())
+    monkeypatch.setattr(
+        "stock_research.watchlist.workflow.build_watchlist_diagnostics",
+        fake_build_watchlist_diagnostics,
+    )
+
+    build_watchlist_diagnostics_snapshot(
+        trade_date="2026-05-20",
+        score_version="manual_v1",
+        top_n=5,
+        lhb_shortline_path=shortline_path,
     )
 
 

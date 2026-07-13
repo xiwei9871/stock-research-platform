@@ -1,0 +1,650 @@
+import { useEffect, useState } from 'react';
+import { FactorLabWorkspace } from './FactorLabWorkspace';
+import { DailyReviewLiteWorkspace } from './DailyReviewLiteWorkspace';
+import { DataToBriefDocling90ReviewWorkspace } from './DataToBriefDocling90ReviewWorkspace';
+import { GeneratedReportsWorkspace } from './GeneratedReportsWorkspace';
+import { GlobalSearchBox } from './GlobalSearchBox';
+import { HomeCockpit } from './HomeCockpit';
+import { MarketMonitorWorkspace } from './MarketMonitorWorkspace';
+import { NewsWorkspace } from './NewsWorkspace';
+import { ResearchReportsWorkspace } from './ResearchReportsWorkspace';
+import { ReviewQueueWorkspace } from './ReviewQueueWorkspace';
+import { StockWorkspace, type StockEntryContext } from './StockWorkspace';
+import { StrategyLabWorkspace } from './StrategyLabWorkspace';
+import { ThemeResearchWorkspace } from './ThemeResearchWorkspace';
+import { UserManagementView } from './UserManagementView';
+import { WatchlistWorkspace } from './WatchlistWorkspace';
+import type { SectorType } from './market-monitor/mockData';
+import { fetchPlatformReadiness, fetchPlatformSummary } from '../api/client';
+import { fetchTechBottleneckReviewUniverseStock } from '../api/techBottleneckReview';
+import type { CurrentUser, GlobalSearchResult } from '../api/types';
+import { TechBottleneckReviewPage } from '../pages/TechBottleneckReviewPage';
+import type { TechBottleneckReviewStock } from '../types/techBottleneckReview';
+import {
+  techBottleneckWorkbenchAdjacentWatchlist,
+  techBottleneckWorkbenchCoreCandidates,
+  techBottleneckWorkbenchEvidenceBackfillQueue,
+  techBottleneckWorkbenchRejectedCandidates
+} from '../features/techBottleneckWatchlistReview/techBottleneckCandidateUniverseData';
+import type { TechBottleneckWorkbenchCandidate } from '../features/techBottleneckWatchlistReview/types';
+
+type WorkspaceMode =
+  | 'home'
+  | 'reviewQueue'
+  | 'dailyReview'
+  | 'market'
+  | 'news'
+  | 'researchReports'
+  | 'stock'
+  | 'watchlist'
+  | 'themeResearch'
+  | 'techBottleneckReviewUniverse'
+  | 'dataToBriefDocling90'
+  | 'factors'
+  | 'strategyLab'
+  | 'generatedReports'
+  | 'userManagement';
+
+type WorkspaceHandoff = {
+  query: string;
+  tradeDate?: string;
+  newsId?: string;
+  assetId?: string;
+  eventKey?: string;
+  reportId?: string;
+  path?: string;
+  monitorTab?: SectorType;
+  version: number;
+};
+
+type StockSourceWorkspace = NonNullable<StockEntryContext['sourceWorkspace']>;
+
+type StockHandoff = {
+  assetId?: string;
+  sourceWorkspace?: StockSourceWorkspace;
+  query?: string;
+  matchReason?: string;
+  newsId?: string;
+  eventKey?: string;
+  reportId?: string;
+  tradeDate?: string;
+  monitorTab?: string;
+  version: number;
+} & Omit<StockEntryContext, 'version'>;
+
+function normalizeMarketMonitorTab(monitorTab?: string | null): SectorType | undefined {
+  if (!monitorTab) return undefined;
+  return monitorTab === 'concept' ? 'concept' : 'industry';
+}
+
+const NAV_ITEMS: Array<{ mode: WorkspaceMode; label: string; ariaLabel: string }> = [
+  { mode: 'home', label: '首页', ariaLabel: 'Open Home workspace' },
+  { mode: 'reviewQueue', label: '复盘队列', ariaLabel: 'Open Review Queue workspace' },
+  { mode: 'dailyReview', label: '每日复盘', ariaLabel: 'Open Daily Review workspace' },
+  { mode: 'market', label: '市场监控', ariaLabel: 'Open Market Monitor workspace' },
+  { mode: 'news', label: '新闻', ariaLabel: 'Open News workspace' },
+  { mode: 'researchReports', label: '研报', ariaLabel: 'Open Research Reports workspace' },
+  { mode: 'stock', label: '个股工作台', ariaLabel: 'Open Stock Workspace workspace' },
+  { mode: 'watchlist', label: '观察池', ariaLabel: 'Open Watchlist workspace' },
+  { mode: 'themeResearch', label: '主题研究', ariaLabel: 'Open Theme Research workspace' },
+  {
+    mode: 'dataToBriefDocling90',
+    label: 'Docling报告审计',
+    ariaLabel: 'Open Data-to-Brief Docling 90-stock review workspace'
+  },
+  {
+    mode: 'techBottleneckReviewUniverse',
+    label: '卡脖子复盘',
+    ariaLabel: 'Open Tech Bottleneck review universe workspace'
+  },
+  { mode: 'factors', label: '因子实验室', ariaLabel: 'Open Factor Lab workspace' },
+  { mode: 'strategyLab', label: '策略实验室', ariaLabel: 'Open Strategy Lab workspace' },
+  { mode: 'generatedReports', label: '生成报告', ariaLabel: 'Open Generated Reports workspace' }
+];
+
+const ADMIN_NAV_ITEMS: Array<{ mode: WorkspaceMode; label: string; ariaLabel: string }> = [
+  { mode: 'userManagement', label: '用户管理', ariaLabel: 'Open User Management workspace' }
+];
+
+const FALLBACK_DISPLAY_TRADE_DATE = '2026-06-18';
+const TECH_BOTTLENECK_REVIEW_PATH = '/tech-bottleneck/watchlist-review';
+const TECH_BOTTLENECK_REVIEW_UNIVERSE_PATH = '/research/tech-bottleneck/review-universe';
+const TECH_BOTTLENECK_STOCK_PREFIX = '/tech-bottleneck/stock/';
+const DATA_TO_BRIEF_DOCLING_90_PATH = '/research/data-to-brief/docling-90';
+const THEME_RESEARCH_PATH = '/theme-research';
+const TECH_BOTTLENECK_REVIEW_UNIVERSE_SOURCE = 'tech_bottleneck_review_universe_frontend_dataset_v1';
+
+function firstDate(...dates: Array<string | null | undefined>) {
+  return dates.map((date) => date?.trim()).find(Boolean) ?? '';
+}
+
+function workspaceModeFromPath(pathname: string): WorkspaceMode {
+  if (pathname === THEME_RESEARCH_PATH || pathname.startsWith(`${THEME_RESEARCH_PATH}/`)) return 'themeResearch';
+  if (pathname === TECH_BOTTLENECK_REVIEW_PATH) return 'techBottleneckReviewUniverse';
+  if (pathname === TECH_BOTTLENECK_REVIEW_UNIVERSE_PATH) return 'techBottleneckReviewUniverse';
+  if (pathname === DATA_TO_BRIEF_DOCLING_90_PATH) return 'dataToBriefDocling90';
+  if (pathname.startsWith(TECH_BOTTLENECK_STOCK_PREFIX)) return 'stock';
+  return 'home';
+}
+
+function stockCodeFromTechBottleneckPath(pathname: string) {
+  if (!pathname.startsWith(TECH_BOTTLENECK_STOCK_PREFIX)) return '';
+  return pathname.slice(TECH_BOTTLENECK_STOCK_PREFIX.length).split('/')[0];
+}
+
+function stockCodeToAssetId(stockCode: string) {
+  const normalized = stockCode.trim().toUpperCase();
+  if (/^\d{6}$/.test(normalized)) {
+    return `${normalized}.${normalized.startsWith('6') ? 'SH' : 'SZ'}`;
+  }
+  return normalized;
+}
+
+function findTechBottleneckCandidate(stockCode: string): TechBottleneckWorkbenchCandidate | undefined {
+  const normalized = stockCode.trim().toUpperCase().split('.')[0];
+  return [
+    ...techBottleneckWorkbenchCoreCandidates,
+    ...techBottleneckWorkbenchAdjacentWatchlist,
+    ...techBottleneckWorkbenchEvidenceBackfillQueue,
+    ...techBottleneckWorkbenchRejectedCandidates
+  ].find((candidate) => candidate.stockCode === normalized);
+}
+
+function techBottleneckStockHandoffFromLocation(pathname: string, search: string): StockHandoff | null {
+  const stockCode = stockCodeFromTechBottleneckPath(pathname);
+  if (!stockCode) return null;
+  const assetId = stockCodeToAssetId(stockCode);
+  const source = new URLSearchParams(search).get('source') ?? 'tech_bottleneck_candidate_universe_workbench_patch_v1';
+  if (source === TECH_BOTTLENECK_REVIEW_UNIVERSE_SOURCE) {
+    return {
+      assetId,
+      sourceWorkspace: 'techBottleneck',
+      query: stockCode,
+      techBottleneckSource: source,
+      matchReason: TECH_BOTTLENECK_REVIEW_UNIVERSE_SOURCE,
+      version: 0
+    };
+  }
+  const candidate = findTechBottleneckCandidate(stockCode);
+  return {
+    assetId,
+    sourceWorkspace: 'techBottleneck',
+    query: candidate?.stockName ?? stockCode,
+    stockName: candidate?.stockName,
+    techBottleneckSource: source,
+    sourceGroup: candidate?.sourceGroup,
+    previousTier: candidate?.previousTier,
+    finalManualApprovalCategory: candidate?.finalManualApprovalCategory,
+    industry: candidate?.industry,
+    conceptTags: candidate?.conceptTags,
+    evidenceCategory: candidate?.evidenceCategory,
+    businessRelevanceCategory: candidate?.businessRelevanceCategory,
+    researchPriorityScore: candidate?.researchPriorityScore,
+    reviewPriorityRank: candidate?.reviewPriorityRank,
+    evidenceStrength: candidate?.evidenceStrength,
+    bottleneckRelevance: candidate?.bottleneckRelevance,
+    reviewDecisionSource: candidate?.reviewDecisionSource,
+    primarySourceUrl: candidate?.primarySourceUrl,
+    manualApprovalRequired: candidate?.manualApprovalRequired,
+    allowedForWorkbenchCandidatePool: candidate?.allowedForWorkbenchCandidatePool,
+    allowedForSignal: candidate?.allowedForSignal ?? false,
+    allowedForAdmission: candidate?.allowedForAdmission ?? false,
+    rationale: candidate?.rationale,
+    reviewStatus: candidate?.reviewStatus,
+    notes: candidate?.notes,
+    nextAction: candidate?.nextAction,
+    evidenceExcerpt: candidate?.evidenceExcerpt,
+    reportStatus: candidate?.reportStatus,
+    bottleneckConfidenceScore: candidate?.bottleneckConfidenceScore,
+    evidenceQualityScore: candidate?.evidenceQualityScore,
+    reportReviewDecision: candidate?.reportReviewDecision,
+    reportUpdatedAt: candidate?.reportUpdatedAt,
+    reportMdPath: candidate?.reportMdPath,
+    reportHtmlPath: candidate?.reportHtmlPath,
+    reportPdfPath: candidate?.reportPdfPath,
+    evidenceMatrixPath: candidate?.evidenceMatrixPath,
+    reportSourcesPath: candidate?.reportSourcesPath,
+    evidenceGapNote: candidate?.evidenceGapNote,
+    matchReason: 'tech_bottleneck_candidate_universe_workbench_patch_v1',
+    version: 0
+  };
+}
+
+function conceptTagsFromReviewUniverseStock(stock: TechBottleneckReviewStock) {
+  if (Array.isArray(stock.concept_tags)) return stock.concept_tags;
+  return String(stock.concept_tags || '')
+    .split(/[;,，、|]/)
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+}
+
+function normalizeTechBottleneckReviewUniverseScore(value: unknown) {
+  if (value === null || value === undefined || value === '') return null;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function techBottleneckReviewUniverseStockHandoff(stock: TechBottleneckReviewStock): StockHandoff {
+  return {
+    assetId: stockCodeToAssetId(stock.stock_code),
+    sourceWorkspace: 'techBottleneck',
+    query: stock.stock_name || stock.stock_code,
+    stockName: stock.stock_name,
+    techBottleneckSource: TECH_BOTTLENECK_REVIEW_UNIVERSE_SOURCE,
+    sourceGroup: stock.source_group || stock.review_universe_source,
+    previousTier: stock.previous_tier || stock.current_layer_status,
+    industry: stock.industry,
+    conceptTags: conceptTagsFromReviewUniverseStock(stock),
+    evidenceStrength: stock.evidence_strength,
+    bottleneckRelevance: stock.bottleneck_relevance,
+    bottleneckConfidenceScore:
+      stock.bottleneckConfidenceScore ?? normalizeTechBottleneckReviewUniverseScore(stock.bottleneck_confidence_score),
+    evidenceQualityScore:
+      stock.evidenceQualityScore ?? normalizeTechBottleneckReviewUniverseScore(stock.evidence_quality_score),
+    reviewStatus: stock.review_status || stock.frontend_review_status,
+    allowedForSignal: false,
+    allowedForAdmission: false,
+    rationale: stock.evidence_summary_for_review,
+    nextAction: stock.next_primary_source_to_check,
+    evidenceExcerpt: stock.strongest_primary_source_claim,
+    evidenceGapNote: stock.weakest_or_riskiest_claim,
+    matchReason: TECH_BOTTLENECK_REVIEW_UNIVERSE_SOURCE,
+    version: 0
+  };
+}
+
+type AppShellProps = {
+  currentUser?: CurrentUser;
+};
+
+export function AppShell({ currentUser: _currentUser }: AppShellProps = {}) {
+  const currentUser = _currentUser;
+  const navItems = currentUser?.role === 'admin' ? [...NAV_ITEMS, ...ADMIN_NAV_ITEMS] : NAV_ITEMS;
+  const initialTechBottleneckStockHandoff =
+    typeof window === 'undefined' ? null : techBottleneckStockHandoffFromLocation(window.location.pathname, window.location.search);
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>(() =>
+    typeof window === 'undefined' ? 'home' : workspaceModeFromPath(window.location.pathname)
+  );
+  const [selectedAssetId, setSelectedAssetId] = useState(initialTechBottleneckStockHandoff?.assetId ?? '000001.SZ');
+  const [newsHandoff, setNewsHandoff] = useState<WorkspaceHandoff>({ query: '', version: 0 });
+  const [researchReportsHandoff, setResearchReportsHandoff] = useState<WorkspaceHandoff>({ query: '', version: 0 });
+  const [generatedReportsHandoff, setGeneratedReportsHandoff] = useState<WorkspaceHandoff>({ query: '', version: 0 });
+  const [marketHandoff, setMarketHandoff] = useState<WorkspaceHandoff>({ query: '', version: 0 });
+  const [stockHandoff, setStockHandoff] = useState<StockHandoff>(initialTechBottleneckStockHandoff ?? { version: 0 });
+  const [themeResearchPathname, setThemeResearchPathname] = useState(() =>
+    typeof window !== 'undefined' && window.location.pathname.startsWith(THEME_RESEARCH_PATH)
+      ? window.location.pathname
+      : THEME_RESEARCH_PATH
+  );
+  const [displayTradeDate, setDisplayTradeDate] = useState(FALLBACK_DISPLAY_TRADE_DATE);
+  const [stockDefaultTradeDate, setStockDefaultTradeDate] = useState(FALLBACK_DISPLAY_TRADE_DATE);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.allSettled([fetchPlatformReadiness(), fetchPlatformSummary()]).then(([readinessResult, summaryResult]) => {
+      if (cancelled) {
+        return;
+      }
+      const readiness = readinessResult.status === 'fulfilled' ? readinessResult.value : null;
+      const summary = summaryResult.status === 'fulfilled' ? summaryResult.value : null;
+      const latestAvailableDate = firstDate(readiness?.latest_market_date, summary?.latest_market_date, readiness?.latest_trade_date);
+      const readinessDate = firstDate(latestAvailableDate, readiness?.display_trade_date);
+      const summaryDate = summaryResult.status === 'fulfilled' ? summaryResult.value.latest_market_date : undefined;
+      setDisplayTradeDate(readinessDate || summaryDate || FALLBACK_DISPLAY_TRADE_DATE);
+      setStockDefaultTradeDate(
+        firstDate(readiness?.latest_market_date, readiness?.latest_trade_date, summary?.latest_market_date, readinessDate) ||
+          FALLBACK_DISPLAY_TRADE_DATE
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleLocationChange = () => {
+      if (window.location.pathname === TECH_BOTTLENECK_REVIEW_PATH) {
+        window.history.replaceState({}, '', TECH_BOTTLENECK_REVIEW_UNIVERSE_PATH);
+      }
+      const nextMode = workspaceModeFromPath(window.location.pathname);
+      if (nextMode === 'themeResearch') {
+        setThemeResearchPathname(window.location.pathname);
+      }
+      if (window.location.pathname.startsWith(TECH_BOTTLENECK_STOCK_PREFIX)) {
+        const techBottleneckHandoff = techBottleneckStockHandoffFromLocation(window.location.pathname, window.location.search);
+        if (techBottleneckHandoff?.assetId) {
+          setSelectedAssetId(techBottleneckHandoff.assetId);
+          setStockHandoff((current) => ({
+            ...techBottleneckHandoff,
+            version: current.version + 1
+          }));
+        }
+      }
+      setWorkspaceMode(nextMode);
+    };
+    handleLocationChange();
+    window.addEventListener('popstate', handleLocationChange);
+    return () => {
+      window.removeEventListener('popstate', handleLocationChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (
+      stockHandoff.sourceWorkspace !== 'techBottleneck' ||
+      stockHandoff.techBottleneckSource !== TECH_BOTTLENECK_REVIEW_UNIVERSE_SOURCE ||
+      !stockHandoff.assetId
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    const stockCode = stockHandoff.assetId.split('.')[0] ?? stockHandoff.assetId;
+
+    fetchTechBottleneckReviewUniverseStock(stockCode)
+      .then((stock) => {
+        if (cancelled) return;
+        const nextContext = techBottleneckReviewUniverseStockHandoff(stock);
+        setStockHandoff((current) => {
+          if (
+            current.sourceWorkspace !== 'techBottleneck' ||
+            current.techBottleneckSource !== TECH_BOTTLENECK_REVIEW_UNIVERSE_SOURCE ||
+            current.assetId !== nextContext.assetId
+          ) {
+            return current;
+          }
+          return {
+            ...current,
+            ...nextContext,
+            version: current.version + 1
+          };
+        });
+      })
+      .catch(() => {
+        // Keep the route-derived handoff if the read-model lookup is unavailable.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [stockHandoff.assetId, stockHandoff.sourceWorkspace, stockHandoff.techBottleneckSource]);
+
+  function openStockWorkspace(assetId: string, context: Omit<StockHandoff, 'assetId' | 'version'> = {}) {
+    setSelectedAssetId(assetId);
+    setStockHandoff((current) => ({
+      ...context,
+      assetId,
+      version: current.version + 1
+    }));
+    setWorkspaceMode('stock');
+  }
+
+  function openWorkspaceMode(mode: WorkspaceMode) {
+    if (mode === 'stock') {
+      openStockWorkspace(selectedAssetId);
+      return;
+    }
+    if (mode === 'techBottleneckReviewUniverse' && window.location.pathname !== TECH_BOTTLENECK_REVIEW_UNIVERSE_PATH) {
+      window.history.pushState({}, '', TECH_BOTTLENECK_REVIEW_UNIVERSE_PATH);
+    } else if (mode === 'themeResearch' && window.location.pathname !== THEME_RESEARCH_PATH) {
+      window.history.pushState({}, '', THEME_RESEARCH_PATH);
+      setThemeResearchPathname(THEME_RESEARCH_PATH);
+    } else if (mode === 'dataToBriefDocling90' && window.location.pathname !== DATA_TO_BRIEF_DOCLING_90_PATH) {
+      window.history.pushState({}, '', DATA_TO_BRIEF_DOCLING_90_PATH);
+    } else if (
+      mode !== 'techBottleneckReviewUniverse' &&
+      mode !== 'themeResearch' &&
+      mode !== 'dataToBriefDocling90' &&
+      (window.location.pathname === TECH_BOTTLENECK_REVIEW_PATH ||
+        window.location.pathname === TECH_BOTTLENECK_REVIEW_UNIVERSE_PATH ||
+        window.location.pathname === DATA_TO_BRIEF_DOCLING_90_PATH ||
+        window.location.pathname.startsWith(THEME_RESEARCH_PATH) ||
+        window.location.pathname.startsWith(TECH_BOTTLENECK_STOCK_PREFIX))
+    ) {
+      window.history.pushState({}, '', '/');
+    }
+    setWorkspaceMode(mode);
+  }
+
+  function navigateThemeResearch(path: string) {
+    if (!path.startsWith(THEME_RESEARCH_PATH)) return;
+    if (`${window.location.pathname}${window.location.search}` !== path) {
+      window.history.pushState({}, '', path);
+    }
+    setThemeResearchPathname(window.location.pathname);
+    setWorkspaceMode('themeResearch');
+  }
+
+  function openStockWorkspaceFromThemeResearch(path: string) {
+    if (!path.startsWith(TECH_BOTTLENECK_STOCK_PREFIX)) return;
+    window.history.pushState({}, '', path);
+    const handoff = techBottleneckStockHandoffFromLocation(window.location.pathname, window.location.search);
+    if (!handoff?.assetId) return;
+    setSelectedAssetId(handoff.assetId);
+    setStockHandoff((current) => ({ ...handoff, version: current.version + 1 }));
+    setWorkspaceMode('stock');
+  }
+
+  function openNewsWorkspaceFromStock(context: StockEntryContext) {
+    setNewsHandoff((current) => ({
+      query: context.query ?? context.assetId ?? selectedAssetId,
+      newsId: context.newsId,
+      assetId: context.assetId ?? selectedAssetId,
+      tradeDate: context.tradeDate,
+      version: current.version + 1
+    }));
+    setWorkspaceMode('news');
+  }
+
+  function openResearchReportsWorkspaceFromStock(context: StockEntryContext) {
+    setResearchReportsHandoff((current) => ({
+      query: context.query ?? context.assetId ?? selectedAssetId,
+      eventKey: context.eventKey,
+      reportId: context.reportId,
+      assetId: context.assetId ?? selectedAssetId,
+      tradeDate: context.tradeDate,
+      version: current.version + 1
+    }));
+    setWorkspaceMode('researchReports');
+  }
+
+  function openMarketMonitorWorkspaceFromStock(context: StockEntryContext) {
+    setMarketHandoff((current) => ({
+      query: context.query ?? context.assetId ?? selectedAssetId,
+      assetId: context.assetId ?? selectedAssetId,
+      tradeDate: context.tradeDate,
+      monitorTab: normalizeMarketMonitorTab(context.monitorTab),
+      version: current.version + 1
+    }));
+    setWorkspaceMode('market');
+  }
+
+  function openStockWorkspaceFromReviewQueue(assetId: string, context?: StockEntryContext) {
+    openStockWorkspace(assetId, {
+      ...context
+    });
+  }
+
+  function openStockWorkspaceFromTechBottleneckReviewUniverse(stock: TechBottleneckReviewStock) {
+    const context = techBottleneckReviewUniverseStockHandoff(stock);
+    if (!context.assetId) return;
+    window.history.pushState({}, '', `/tech-bottleneck/stock/${stock.stock_code}?source=${TECH_BOTTLENECK_REVIEW_UNIVERSE_SOURCE}`);
+    openStockWorkspace(context.assetId, context);
+  }
+
+  function openGlobalSearchResult(result: GlobalSearchResult) {
+    const { target } = result;
+    if (target.workspace === 'stock' && target.asset_id) {
+      openStockWorkspace(target.asset_id, {
+        sourceWorkspace: 'search',
+        query: target.q ?? result.title,
+        matchReason: result.match_reason
+      });
+      return;
+    }
+
+    if (target.workspace === 'news') {
+      const query = target.q ?? result.title;
+      setNewsHandoff((current) => ({
+        query,
+        newsId: target.news_id,
+        assetId: target.asset_id,
+        version: current.version + 1
+      }));
+      setWorkspaceMode('news');
+      return;
+    }
+
+    if (target.workspace === 'researchReports') {
+      const query = target.q ?? result.title;
+      setResearchReportsHandoff((current) => ({
+        query,
+        eventKey: target.event_key,
+        reportId: target.report_id,
+        assetId: target.asset_id,
+        version: current.version + 1
+      }));
+      setWorkspaceMode('researchReports');
+      return;
+    }
+
+    if (target.workspace === 'generatedReports') {
+      const query = target.q ?? result.title;
+      setGeneratedReportsHandoff((current) => ({
+        query,
+        tradeDate: target.trade_date ?? result.trade_date,
+        path: target.path,
+        version: current.version + 1
+      }));
+      setWorkspaceMode('generatedReports');
+    }
+  }
+
+  return (
+    <main className="platform-shell">
+      <aside className="platform-nav" aria-label="Workspace navigation">
+        <div className="panel-title">A股策略研究</div>
+        {navItems.map((item) => (
+          <button
+            type="button"
+            key={item.mode}
+            aria-current={workspaceMode === item.mode ? 'page' : undefined}
+            aria-label={item.ariaLabel}
+            className={workspaceMode === item.mode ? 'active' : ''}
+            onClick={() => openWorkspaceMode(item.mode)}
+          >
+            {item.label}
+          </button>
+        ))}
+      </aside>
+      <div className="platform-main">
+        <header className="platform-topbar">
+          <GlobalSearchBox onOpenResult={openGlobalSearchResult} />
+        </header>
+        <section className="platform-workspace">
+          {workspaceMode === 'home' ? <HomeCockpit onNavigate={openWorkspaceMode} /> : null}
+          {workspaceMode === 'reviewQueue' ? (
+            <ReviewQueueWorkspace
+              onOpenStock={openStockWorkspaceFromReviewQueue}
+              onOpenNews={openNewsWorkspaceFromStock}
+              onOpenResearchReports={openResearchReportsWorkspaceFromStock}
+              onOpenMarketMonitor={openMarketMonitorWorkspaceFromStock}
+            />
+          ) : null}
+          {workspaceMode === 'dailyReview' ? <DailyReviewLiteWorkspace initialTradeDate={displayTradeDate} /> : null}
+          {workspaceMode === 'market' ? (
+            <MarketMonitorWorkspace
+              key={`market:${marketHandoff.version}`}
+              initialTradeDate={marketHandoff.tradeDate}
+              initialMonitorTab={marketHandoff.monitorTab}
+              initialAssetId={marketHandoff.assetId}
+              emotionPresentation="panel"
+              onOpenAsset={(assetId, context) =>
+                openStockWorkspace(assetId, {
+                  sourceWorkspace: 'market',
+                  query: context.query,
+                  matchReason: context.matchReason,
+                  tradeDate: context.tradeDate,
+                  monitorTab: context.monitorTab
+                })
+              }
+            />
+          ) : null}
+          {workspaceMode === 'researchReports' ? (
+            <ResearchReportsWorkspace
+              key={`researchReports:${researchReportsHandoff.version}`}
+              initialQuery={researchReportsHandoff.query}
+              initialEventKey={researchReportsHandoff.eventKey}
+              initialReportId={researchReportsHandoff.reportId}
+              initialTradeDate={researchReportsHandoff.tradeDate}
+              onOpenAsset={(assetId, context) =>
+                openStockWorkspace(assetId, {
+                  sourceWorkspace: 'researchReports',
+                  query: context.query,
+                  eventKey: context.eventKey,
+                  reportId: context.reportId,
+                  tradeDate: context.tradeDate
+                })
+              }
+            />
+          ) : null}
+          {workspaceMode === 'stock' ? (
+            <StockWorkspace
+              key={`stock:${stockHandoff.version}`}
+              initialAssetId={stockHandoff.assetId ?? selectedAssetId}
+              defaultTradeDate={stockDefaultTradeDate}
+              entryContext={stockHandoff}
+              onOpenNews={openNewsWorkspaceFromStock}
+              onOpenResearchReports={openResearchReportsWorkspaceFromStock}
+              onOpenMarketMonitor={openMarketMonitorWorkspaceFromStock}
+            />
+          ) : null}
+          {workspaceMode === 'watchlist' ? (
+            <WatchlistWorkspace
+              defaultTradeDate={displayTradeDate}
+              onOpenAsset={(assetId) => openStockWorkspace(assetId, { sourceWorkspace: 'watchlist' })}
+            />
+          ) : null}
+          {workspaceMode === 'themeResearch' ? (
+            <ThemeResearchWorkspace
+              pathname={themeResearchPathname}
+              onNavigate={navigateThemeResearch}
+              onOpenStock={openStockWorkspaceFromThemeResearch}
+            />
+          ) : null}
+          {workspaceMode === 'techBottleneckReviewUniverse' ? (
+            <TechBottleneckReviewPage onOpenStock={openStockWorkspaceFromTechBottleneckReviewUniverse} />
+          ) : null}
+          {workspaceMode === 'dataToBriefDocling90' ? <DataToBriefDocling90ReviewWorkspace /> : null}
+          {workspaceMode === 'strategyLab' ? <StrategyLabWorkspace defaultEndDate={displayTradeDate} /> : null}
+          {workspaceMode === 'generatedReports' ? (
+            <GeneratedReportsWorkspace
+              key={`generatedReports:${generatedReportsHandoff.version}`}
+              initialQuery={generatedReportsHandoff.query}
+              initialTradeDate={generatedReportsHandoff.tradeDate ?? displayTradeDate}
+              initialPath={generatedReportsHandoff.path}
+            />
+          ) : null}
+          {workspaceMode === 'userManagement' ? <UserManagementView /> : null}
+          {workspaceMode === 'factors' ? <FactorLabWorkspace defaultTradeDate={displayTradeDate} /> : null}
+          {workspaceMode === 'news' ? (
+            <NewsWorkspace
+              key={`news:${newsHandoff.version}`}
+              initialQuery={newsHandoff.query}
+              initialNewsId={newsHandoff.newsId}
+              initialTradeDate={newsHandoff.tradeDate}
+              onOpenAsset={(assetId, context) =>
+                openStockWorkspace(assetId, {
+                  sourceWorkspace: 'news',
+                  query: context.query,
+                  newsId: context.newsId,
+                  tradeDate: context.tradeDate
+                })
+              }
+            />
+          ) : null}
+        </section>
+      </div>
+    </main>
+  );
+}

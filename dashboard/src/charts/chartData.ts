@@ -18,6 +18,13 @@ export type VolumePoint = {
   color: string;
 };
 
+export type AlignedPriceVolumeData = {
+  candles: CandlePoint[];
+  volumes: VolumePoint[];
+  detailsByTimeKey: Map<string, { amount: number | null }>;
+  chartPointCount: number;
+};
+
 function normalizeTime(input: string): Time | null {
   if (DAILY_DATE_PATTERN.test(input)) {
     return input;
@@ -35,10 +42,12 @@ function normalizeTime(input: string): Time | null {
   return Math.floor(milliseconds / 1000) as UTCTimestamp;
 }
 
-export function toCandlestickData(points: BarPoint[]): CandlePoint[] {
+type TimeResolver = (point: BarPoint, index: number) => Time | null;
+
+export function toCandlestickData(points: BarPoint[], resolveTime: TimeResolver = (point) => normalizeTime(point.time)): CandlePoint[] {
   return points
-    .map((point) => {
-      const time = normalizeTime(point.time);
+    .map((point, index) => {
+      const time = resolveTime(point, index);
 
       if (time === null || point.open === null || point.high === null || point.low === null || point.close === null) {
         return null;
@@ -55,10 +64,10 @@ export function toCandlestickData(points: BarPoint[]): CandlePoint[] {
     .filter((point): point is CandlePoint => point !== null);
 }
 
-export function toVolumeData(points: BarPoint[]): VolumePoint[] {
+export function toVolumeData(points: BarPoint[], resolveTime: TimeResolver = (point) => normalizeTime(point.time)): VolumePoint[] {
   return points
-    .map((point) => {
-      const time = normalizeTime(point.time);
+    .map((point, index) => {
+      const time = resolveTime(point, index);
 
       if (time === null || point.volume === null || point.open === null || point.close === null) {
         return null;
@@ -67,8 +76,54 @@ export function toVolumeData(points: BarPoint[]): VolumePoint[] {
       return {
         time,
         value: point.volume,
-        color: point.close >= point.open ? '#1f9d55' : '#d64545'
+        color: point.close >= point.open ? '#d64545' : '#1f9d55'
       };
     })
     .filter((point): point is VolumePoint => point !== null);
+}
+
+export function toAlignedPriceVolumeData(
+  points: BarPoint[],
+  resolveTime: TimeResolver = (point) => normalizeTime(point.time)
+): AlignedPriceVolumeData {
+  const candles: CandlePoint[] = [];
+  const volumes: VolumePoint[] = [];
+  const detailsByTimeKey = new Map<string, { amount: number | null }>();
+
+  points.forEach((point, index) => {
+    const time = resolveTime(point, index);
+    if (
+      time === null ||
+      point.open === null ||
+      point.high === null ||
+      point.low === null ||
+      point.close === null ||
+      point.volume === null
+    ) {
+      return;
+    }
+
+    candles.push({
+      time,
+      open: point.open,
+      high: point.high,
+      low: point.low,
+      close: point.close
+    });
+    volumes.push({
+      time,
+      value: point.volume,
+      color: point.close >= point.open ? '#d64545' : '#1f9d55'
+    });
+    detailsByTimeKey.set(String(time), {
+      amount: point.amount
+    });
+  });
+
+  return {
+    candles,
+    volumes,
+    detailsByTimeKey,
+    chartPointCount: candles.length
+  };
 }

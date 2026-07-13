@@ -32,6 +32,18 @@ def test_sync_core_asset_master_maps_existing_public_assets(monkeypatch):
     assert params is None
 
 
+def test_sync_core_asset_master_does_not_overwrite_existing_region(monkeypatch):
+    conn = FakeConnection()
+    monkeypatch.setattr(core_data, "execute", fake_execute)
+
+    core_data.sync_core_asset_master(conn)
+
+    sql, _params = conn.executed[0]
+    assert "NULL AS region" not in sql
+    assert "region = EXCLUDED.region" not in sql
+    assert "region = COALESCE(NULLIF(a.region, ''), EXCLUDED.region)" in sql
+
+
 def test_sync_chinese_stock_names_from_akshare_updates_public_and_core(monkeypatch):
     conn = FakeConnection()
 
@@ -116,6 +128,9 @@ def test_build_industry_daily_bars_uses_historical_membership_windows(monkeypatc
     assert "INSERT INTO market.industry_daily_bar" in sql
     assert "FROM market_daily_bar b" in sql
     assert "JOIN core.industry_membership m" in sql
+    assert "GROUP BY" in sql
+    assert "m.asset_id" in sql
+    assert "m.level = 1" in sql
     assert "m.start_date <= b.trade_date" in sql
     assert "(m.end_date IS NULL OR b.trade_date < m.end_date)" in sql
     assert "m.industry_system = %s" in sql
@@ -124,3 +139,189 @@ def test_build_industry_daily_bars_uses_historical_membership_windows(monkeypatc
     assert "b.trade_date <= %s" in sql
     assert "ON CONFLICT (industry_system, industry_code, trade_date) DO UPDATE" in sql
     assert params == ["csrc", "hfq", "2026-05-01", "2026-05-08"]
+
+
+def test_build_concept_daily_bars_uses_point_in_time_memberships(monkeypatch):
+    conn = FakeConnection()
+    monkeypatch.setattr(core_data, "execute", fake_execute)
+
+    core_data.build_concept_daily_bars(
+        conn,
+        start_date="2026-06-26",
+        end_date="2026-06-26",
+        concept_system="ths",
+        adjust_type="qfq",
+    )
+
+    sql, params = conn.executed[0]
+    assert "INSERT INTO market.concept_daily_bar" in sql
+    assert "FROM market_daily_bar b" in sql
+    assert "JOIN core.concept_membership m" in sql
+    assert "m.start_date <= b.trade_date" in sql
+    assert "(m.end_date IS NULL OR b.trade_date < m.end_date)" in sql
+    assert "m.concept_system = %s" in sql
+    assert "b.adjust_type = %s" in sql
+    assert "b.trade_date >= %s" in sql
+    assert "b.trade_date <= %s" in sql
+    assert "ON CONFLICT (concept_system, concept_code, trade_date) DO UPDATE" in sql
+    assert params == ["ths", "qfq", "2026-06-26", "2026-06-26"]
+
+
+def test_sync_concept_memberships_from_akshare_upserts_boards_and_members(monkeypatch):
+    import pandas as pd
+
+    conn = FakeConnection()
+    monkeypatch.setattr(core_data, "execute_many", fake_execute_many)
+    monkeypatch.setattr(core_data, "execute", fake_execute)
+
+    def fake_board_fetcher():
+        return pd.DataFrame(
+            [
+                {"name": "人工智能", "code": "309135"},
+                {"name": "机器人概念", "code": "300024"},
+            ]
+        )
+
+    def fake_constituent_fetcher(concept_name):
+        if concept_name == "人工智能":
+            return pd.DataFrame(
+                [
+                    {"代码": "688256", "名称": "寒武纪"},
+                    {"代码": "000063", "名称": "中兴通讯"},
+                ]
+            )
+        return pd.DataFrame([{"代码": "300024", "名称": "机器人"}])
+
+    result = core_data.sync_concept_memberships_from_akshare(
+        conn,
+        trade_date="2026-06-30",
+        concept_system="ths",
+        board_fetcher=fake_board_fetcher,
+        constituent_fetcher=fake_constituent_fetcher,
+    )
+
+    assert result == {"boards": 2, "memberships": 3, "failed_concepts": []}
+    board_sql, board_rows = conn.executed_many[0]
+    membership_sql, membership_rows = conn.executed_many[1]
+    assert "INSERT INTO core.concept_board" in board_sql
+    assert "INSERT INTO core.concept_membership" in membership_sql
+    assert board_rows[0] == ("ths", "309135", "人工智能", "akshare:stock_board_concept_name_ths", True)
+    assert ("CN:SH:688256", "ths", "309135", "人工智能", "2026-06-30", "akshare:concept_constituents") in membership_rows
+    assert ("CN:SZ:000063", "ths", "309135", "人工智能", "2026-06-30", "akshare:concept_constituents") in membership_rows
+    assert ("CN:SZ:300024", "ths", "300024", "机器人概念", "2026-06-30", "akshare:concept_constituents") in membership_rows
+    assert any("UPDATE core.concept_membership" in sql for sql, _params in conn.executed)
+
+
+def test_sync_concept_memberships_from_akshare_defaults_to_eastmoney_sources(monkeypatch):
+    import pandas as pd
+
+    conn = FakeConnection()
+    monkeypatch.setattr(core_data, "execute_many", fake_execute_many)
+    monkeypatch.setattr(core_data, "execute", fake_execute)
+
+    class FakeAk:
+        @staticmethod
+        def stock_board_concept_cons_em(symbol):
+            assert symbol == "BK0545"
+            return pd.DataFrame([{"代码": "300024", "名称": "机器人"}])
+
+    monkeypatch.setattr(core_data, "ak", FakeAk)
+    monkeypatch.setattr(
+        core_data,
+        "fetch_eastmoney_concept_boards_direct",
+        lambda: pd.DataFrame([{"板块名称": "机器人概念", "板块代码": "BK0545"}]),
+    )
+
+    result = core_data.sync_concept_memberships_from_akshare(
+        conn,
+        trade_date="2026-07-09",
+        concept_system="em",
+    )
+
+    assert result == {"boards": 1, "memberships": 1, "failed_concepts": []}
+    board_sql, board_rows = conn.executed_many[0]
+    membership_sql, membership_rows = conn.executed_many[1]
+    assert "INSERT INTO core.concept_board" in board_sql
+    assert "INSERT INTO core.concept_membership" in membership_sql
+    assert board_rows == [("em", "BK0545", "机器人概念", "eastmoney:qt_clist_concept_board", True)]
+    assert membership_rows == [
+        ("CN:SZ:300024", "em", "BK0545", "机器人概念", "2026-07-09", "akshare:stock_board_concept_cons_em")
+    ]
+
+
+def test_sync_concept_memberships_retries_board_fetch_once(monkeypatch):
+    import pandas as pd
+
+    conn = FakeConnection()
+    calls = []
+    monkeypatch.setattr(core_data, "execute_many", fake_execute_many)
+    monkeypatch.setattr(core_data, "execute", fake_execute)
+
+    def flaky_board_fetcher():
+        calls.append("board")
+        if len(calls) == 1:
+            raise ConnectionError("remote disconnected")
+        return pd.DataFrame([{"板块名称": "机器人概念", "板块代码": "BK0545"}])
+
+    def fake_constituent_fetcher(symbol):
+        return pd.DataFrame([{"代码": "300024", "名称": "机器人"}])
+
+    result = core_data.sync_concept_memberships_from_akshare(
+        conn,
+        trade_date="2026-07-09",
+        concept_system="em",
+        board_fetcher=flaky_board_fetcher,
+        constituent_fetcher=fake_constituent_fetcher,
+    )
+
+    assert result == {"boards": 1, "memberships": 1, "failed_concepts": []}
+    assert calls == ["board", "board"]
+
+
+def test_sync_concept_memberships_reports_board_fetch_failure(monkeypatch):
+    conn = FakeConnection()
+    monkeypatch.setattr(core_data, "execute_many", fake_execute_many)
+    monkeypatch.setattr(core_data, "execute", fake_execute)
+
+    def failing_board_fetcher():
+        raise ConnectionError("remote disconnected")
+
+    result = core_data.sync_concept_memberships_from_akshare(
+        conn,
+        trade_date="2026-07-09",
+        concept_system="em",
+        board_fetcher=failing_board_fetcher,
+        constituent_fetcher=lambda symbol: None,
+    )
+
+    assert result["boards"] == 0
+    assert result["memberships"] == 0
+    assert result["failed_concepts"] == ["board_fetch_failed: remote disconnected"]
+    assert conn.executed_many == []
+
+
+def test_fetch_eastmoney_concept_boards_direct_uses_curl_pages(monkeypatch):
+    calls = []
+
+    def fake_curl(urls, params, *, retries, retry_sleep_seconds, timeout_seconds=15):
+        calls.append((urls, params, retries, retry_sleep_seconds, timeout_seconds))
+        return {
+            "data": {
+                "total": 2,
+                "diff": [
+                    {"f12": "BK0545", "f14": "机器人概念"},
+                    {"f12": "BK0800", "f14": "人工智能"},
+                ],
+            }
+        }
+
+    monkeypatch.setattr(core_data, "curl_eastmoney_json", fake_curl)
+
+    frame = core_data.fetch_eastmoney_concept_boards_direct(page_size=100)
+
+    assert frame.to_dict("records") == [
+        {"板块名称": "机器人概念", "板块代码": "BK0545"},
+        {"板块名称": "人工智能", "板块代码": "BK0800"},
+    ]
+    assert calls[0][1]["fs"] == "m:90 t:3 f:!50"
+    assert calls[0][1]["fields"] == "f12,f14"

@@ -262,7 +262,7 @@ def _simulate_variant(
             drawdown_before_rebalance = equity / high_water - 1.0 if high_water else 0.0
             forced_invested_weight: float | None = None
             if (
-                variant_name == "top5_weekly_max2_drawdown_throttle_v1"
+                _is_drawdown_throttle_variant(variant_name)
                 and drawdown_before_rebalance <= float(drawdown_throttle_threshold)
             ):
                 effective_max_weekly_replacements = int(drawdown_throttle_max_replacements)
@@ -860,15 +860,16 @@ def _default_quality_component(value: float) -> float:
 
 def _is_max_replacement_variant(variant_name: str) -> bool:
     return (
-        variant_name == "top5_weekly_max_2_replacements"
+        variant_name.endswith("_weekly_max_2_replacements")
         or "max_replacements" in variant_name
-        or variant_name.startswith("top5_weekly_max2_rank_weight")
+        or "_weekly_max2_rank_weight" in variant_name
     )
 
 
 def _target_variant_name(variant_name: str) -> str:
+    if _is_drawdown_throttle_variant(variant_name):
+        return variant_name.replace("_weekly_max2_drawdown_throttle_v1", "_weekly_max_2_replacements")
     if variant_name in {
-        "top5_weekly_max2_drawdown_throttle_v1",
         "top5_weekly_max2_rank_weight_mild_v1",
         "top5_weekly_max2_rank_weight_aggressive_v1",
         "top5_adaptive_daily_check_max2_v1",
@@ -883,6 +884,10 @@ def _target_variant_name(variant_name: str) -> str:
 
 def _is_adaptive_variant(variant_name: str) -> bool:
     return variant_name.startswith("top5_adaptive_")
+
+
+def _is_drawdown_throttle_variant(variant_name: str) -> bool:
+    return variant_name.endswith("_weekly_max2_drawdown_throttle_v1")
 
 
 def _adaptive_regime_allows_daily_check(signals: pd.DataFrame, *, trade_date: str) -> bool:

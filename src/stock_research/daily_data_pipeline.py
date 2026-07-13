@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from dataclasses import dataclass
 from datetime import date, timedelta
@@ -72,27 +73,93 @@ def _daily_incremental_command(
     return command
 
 
+def _load_market_bars_command(*, python: str, trade_date: str) -> list[str]:
+    return [
+        python,
+        "-m",
+        "stock_research.cli",
+        "load-bars",
+        "--start-date",
+        trade_date,
+        "--end-date",
+        trade_date,
+        "--archive-raw",
+    ]
+
+
+def _minute_incremental_plan_command(
+    *,
+    python: str,
+    start_date: str,
+    end_date: str,
+    output_dir: Path,
+) -> list[str]:
+    return [
+        python,
+        "-m",
+        "stock_research.cli",
+        "plan-baostock-minute-backfill",
+        "--start-date",
+        start_date,
+        "--end-date",
+        end_date,
+        "--freq",
+        "5min",
+        "--adjust-types",
+        "raw,qfq",
+        "--batch-by",
+        "month",
+        "--output-dir",
+        str(output_dir / "minute_incremental_plan"),
+    ]
+
+
+def _env_int(name: str, default: int) -> int:
+    raw = os.environ.get(name)
+    if not raw:
+        return default
+    return int(raw)
+
+
 def build_daily_pipeline_steps(*, trade_date: str, output_dir: Path) -> list[DailyPipelineStep]:
     windows = derive_daily_windows(trade_date)
     python = "/Users/xiwei/stock_research/.venv/bin/python"
+    minute_max_jobs = _env_int("STOCK_DAILY_PIPELINE_MINUTE_MAX_JOBS", 12000)
+    minute_workers = _env_int("STOCK_DAILY_PIPELINE_MINUTE_WORKERS", 1)
+    minute_run_timeout = _env_int("STOCK_DAILY_PIPELINE_MINUTE_RUN_TIMEOUT_SECONDS", 7200)
     steps = [
         DailyPipelineStep(name="start_report", command=[], required=False, timeout_seconds=60),
     ]
     for index, step_name in enumerate(MARKET_REFRESH_STEPS):
+        command = (
+            _load_market_bars_command(python=python, trade_date=trade_date)
+            if step_name == "load_market_bars"
+            else _daily_incremental_command(
+                python=python,
+                trade_date=trade_date,
+                only_step=step_name,
+                apply_schema=index == 0,
+            )
+        )
         steps.append(
             DailyPipelineStep(
                 name=step_name,
-                command=_daily_incremental_command(
-                    python=python,
-                    trade_date=trade_date,
-                    only_step=step_name,
-                    apply_schema=index == 0,
-                ),
+                command=command,
                 timeout_seconds=1200,
             )
         )
     steps.extend(
         [
+            DailyPipelineStep(
+                name="minute_incremental_plan",
+                command=_minute_incremental_plan_command(
+                    python=python,
+                    start_date=windows["minute_start_date"],
+                    end_date=trade_date,
+                    output_dir=output_dir,
+                ),
+                timeout_seconds=900,
+            ),
             DailyPipelineStep(
                 name="minute_incremental_refresh",
                 command=[
@@ -111,11 +178,11 @@ def build_daily_pipeline_steps(*, trade_date: str, output_dir: Path) -> list[Dai
                     "--adjust-types",
                     "raw,qfq",
                     "--max-jobs",
-                    "400",
+                    str(minute_max_jobs),
                     "--workers",
-                    "4",
+                    str(minute_workers),
                     "--run-timeout-seconds",
-                    "1800",
+                    str(minute_run_timeout),
                     "--report-target",
                     "chat:oc_82dd978138a0cde5864868c5b5b8e754",
                     "--report-account",
@@ -123,7 +190,7 @@ def build_daily_pipeline_steps(*, trade_date: str, output_dir: Path) -> list[Dai
                     "--openclaw-bin",
                     "/Users/xiwei/stock_research/scripts/openclaw_runtime_cli.sh",
                 ],
-                timeout_seconds=2100,
+                timeout_seconds=minute_run_timeout + 300,
             ),
             DailyPipelineStep(
                 name="daily_event_refresh",
@@ -190,19 +257,63 @@ def render_daily_pipeline_feishu_message(
     output_dir: Path,
     step_results: list[dict[str, Any]],
 ) -> str:
-    lines = [
-        f"A股日频数据任务 {trade_date}",
-        f"status: {status}",
-        f"output: {output_dir}",
-        "",
-        "steps:",
+    del output_dir
+    total = len(step_results)
+    completed = sum(1 for item in step_results if _is_feishu_step_ok(str(item.get("status") or "")))
+    issues = [
+        item
+        for item in step_results
+        if not _is_feishu_step_ok(str(item.get("status") or ""))
     ]
-    for item in step_results:
-        line = f"- {item['step']}: {item['status']} rows={item.get('rows', 0)}"
-        if item.get("error"):
-            line += f" error={item['error']}"
-        lines.append(line)
+    headline = "完成" if status == "success" and not issues else "需要处理"
+    lines = [
+        f"A股日频数据任务 {trade_date}：{headline}",
+        f"完成 {completed}/{total}；异常 {len(issues)}；总行数 {_sum_step_rows(step_results)}",
+    ]
+
+    if not issues:
+        lines.append("飞书通知完成")
+    else:
+        lines.append("需要看：")
+        for item in issues[:3]:
+            lines.append(_format_feishu_issue_line(item))
+        remaining = len(issues) - 3
+        if remaining > 0:
+            lines.append(f"- 另有 {remaining} 项异常，见 run_summary.json")
+    lines.append("详情：run_summary.json")
     return "\n".join(lines)
+
+
+def _is_feishu_step_ok(status: str) -> bool:
+    return status in {"success", "skipped"}
+
+
+def _sum_step_rows(step_results: list[dict[str, Any]]) -> int:
+    total = 0
+    for item in step_results:
+        try:
+            total += int(item.get("rows") or 0)
+        except (TypeError, ValueError):
+            continue
+    return total
+
+
+def _format_feishu_issue_line(item: dict[str, Any]) -> str:
+    step = str(item.get("step") or "unknown_step")
+    status = str(item.get("status") or "unknown")
+    rows = int(item.get("rows") or 0)
+    line = f"- {step}：{status}，rows={rows}"
+    error = _compact_feishu_error(str(item.get("error") or ""))
+    if error:
+        line += f"，{error}"
+    return line
+
+
+def _compact_feishu_error(error: str, limit: int = 80) -> str:
+    compact = " ".join(error.split())
+    if len(compact) <= limit:
+        return compact
+    return compact[: limit - 1] + "…"
 
 
 def _default_command_runner(
@@ -324,6 +435,24 @@ def _step_rows(stdout: str) -> int:
     return rows
 
 
+def _output_marks_failure(output: str) -> bool:
+    for line in output.splitlines():
+        parts = [part.strip() for part in line.split("|")]
+        if len(parts) >= 3 and parts[-1] == "failed":
+            if parts[1] == "status" or parts[0].endswith("_step"):
+                return True
+    return False
+
+
+def _failure_error(stdout: str, stderr: str) -> str:
+    output = stderr or stdout
+    for line in stdout.splitlines():
+        parts = [part.strip() for part in line.split("|")]
+        if len(parts) >= 4 and parts[0].endswith("_step_error"):
+            return parts[-1][-500:]
+    return output[-500:]
+
+
 def run_stock_daily_data_pipeline(
     *,
     trade_date: str,
@@ -392,13 +521,14 @@ def run_stock_daily_data_pipeline(
             stderr = str(outcome.get("stderr", ""))
             if command_runner is not None:
                 _append_step_log_output(log_path, stdout=stdout, stderr=stderr)
-            status = "success" if returncode == 0 else "failed"
+            output_failed = _output_marks_failure(stdout)
+            status = "success" if returncode == 0 and not output_failed else "failed"
             step_results.append(
                 {
                     "step": step.name,
                     "status": status,
                     "rows": _step_rows(stdout),
-                    "error": "" if status == "success" else (stderr or stdout)[-500:],
+                    "error": "" if status == "success" else _failure_error(stdout, stderr),
                     "returncode": returncode,
                     "log_path": str(log_path),
                 }

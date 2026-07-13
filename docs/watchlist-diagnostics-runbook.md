@@ -28,6 +28,26 @@ Required data layers should already be available for the target `trade_date`:
 
 ## Core Daily Commands
 
+Optional LHB shortline daily pipeline:
+
+```bash
+cd /Users/xiwei/stock_research
+./.venv/bin/stock-research run-lhb-shortline-daily-v1 \
+  --case-path outputs/research/dragon_case_curated_library_2024_2026.csv \
+  --lhb-features-path outputs/research/lhb_event_features_daily_sample.csv \
+  --alignment-path outputs/research/dragon_case_lhb_alignment_audit_2024_2026.csv \
+  --trade-date YYYY-MM-DD \
+  --output-dir outputs/research
+```
+
+This writes:
+
+- `lhb_shortline_event_replay_v1.csv`
+- `daily_lhb_shortline_watchlist_YYYYMMDD.csv`
+- `lhb_shortline_strategy_effectiveness_v1.md`
+- `lhb_shortline_rule_registry_v1.csv`
+- `lhb_shortline_daily_run_summary_YYYYMMDD.json`
+
 Build daily watchlist diagnostics:
 
 ```bash
@@ -38,6 +58,7 @@ cd /Users/xiwei/stock_research
   --top-n 50 \
   --risk-watch-n 10 \
   --opportunity-watch-n 10 \
+  --lhb-shortline-path outputs/research/daily_lhb_shortline_watchlist_YYYYMMDD.csv \
   --output-dir outputs/research
 ```
 
@@ -67,11 +88,12 @@ This writes:
 ## Daily Operating Sequence
 
 1. Confirm the target `trade_date`.
-2. Run `build-watchlist-diagnostics`.
-3. Read `watchlist_diagnostics_must_watch_*.csv`.
-4. Read `watchlist_diagnostics_*.md`.
-5. Record any manual notes outside the system if needed.
-6. After enough future bars exist, run `review-watchlist-diagnostics` for the rolling window.
+2. If LHB shortline inputs are available for the target date, run `run-lhb-shortline-daily-v1`.
+3. Run `build-watchlist-diagnostics`, passing `--lhb-shortline-path` when the daily LHB shortline watchlist exists.
+4. Read `watchlist_diagnostics_must_watch_*.csv`.
+5. Read `watchlist_diagnostics_*.md`.
+6. Record any manual notes outside the system if needed.
+7. After enough future bars exist, run `review-watchlist-diagnostics` for the rolling window.
 
 ## What To Read First
 

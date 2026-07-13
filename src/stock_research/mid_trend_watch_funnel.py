@@ -37,6 +37,33 @@ CONTEXT_COLUMNS = [
     "mainline_status",
     "industry_mainline_score_v1",
 ]
+MAINLINE_CONFIRMED_STATUSES = {
+    "mainline",
+    "sustained_mainline",
+    "overheated_mainline",
+}
+TECHNICAL_CONFIRMATION_THRESHOLDS = {
+    "ret_20_score": 75.0,
+    "ret_60_score": 70.0,
+    "ma20_slope_score": 70.0,
+    "trend_r2_20_score": 60.0,
+    "stock_excess_ret_20_score": 70.0,
+    "max_drawdown_20_score": 55.0,
+}
+FUNDAMENTAL_SCORE_COLUMNS = [
+    "revenue_growth_score",
+    "revenue_growth_yoy",
+    "profit_growth_score",
+    "profit_growth_yoy",
+    "roe_score",
+    "roe",
+    "margin_trend_score",
+    "operating_cashflow_quality",
+    "valuation_percentile",
+    "valuation_pressure_score",
+    "liquidity_score",
+    "market_cap",
+]
 
 
 def run_mid_trend_watch_funnel(
@@ -85,6 +112,7 @@ def build_mid_trend_watch_funnel_from_frames(
         industry_mainline=industry_mainline,
         industry_membership=industry_membership,
     )
+    detail = annotate_midtrend_confirmation_fields(detail)
     layer_effectiveness = _layer_effectiveness(detail)
     top50 = _select_by_trade_date(detail, size=top50_size, target="top50")
     top10 = _select_by_trade_date(top50, size=top10_size, target="top10")
@@ -300,6 +328,134 @@ def _ensure_context_columns(frame: pd.DataFrame) -> pd.DataFrame:
         if column not in frame.columns:
             frame[column] = np.nan
     return frame
+
+
+def annotate_midtrend_confirmation_fields(frame: pd.DataFrame) -> pd.DataFrame:
+    if frame.empty:
+        for column in [
+            "same_industry_candidate_count",
+            "fundamental_quality_score",
+            "fundamental_quality_bucket",
+            "fundamental_risk_flag",
+            "technical_confirmed",
+            "mainline_confirmed",
+            "fundamental_confirmed",
+            "midtrend_confirmation_state",
+        ]:
+            frame[column] = pd.Series(dtype=object)
+        return frame
+
+    result = frame.copy()
+    result["same_industry_candidate_count"] = (
+        result.groupby(["trade_date", "industry_name"], dropna=False)["asset_id"]
+        .transform("nunique")
+        .fillna(0)
+        .astype(int)
+    )
+    result["technical_confirmed"] = result.apply(_technical_confirmed, axis=1).astype(bool)
+    result["mainline_confirmed"] = result.apply(_mainline_confirmed, axis=1).astype(bool)
+    result = result.drop(
+        columns=[
+            "fundamental_quality_score",
+            "fundamental_quality_bucket",
+            "fundamental_risk_flag",
+            "fundamental_confirmed",
+            "midtrend_confirmation_state",
+        ],
+        errors="ignore",
+    )
+    quality = result.apply(_fundamental_quality_fields, axis=1, result_type="expand")
+    quality.columns = [
+        "fundamental_quality_score",
+        "fundamental_quality_bucket",
+        "fundamental_risk_flag",
+    ]
+    result = pd.concat([result, quality], axis=1)
+    result["fundamental_confirmed"] = result["fundamental_quality_bucket"].isin(
+        {"quality_strong", "quality_neutral"}
+    )
+    result["midtrend_confirmation_state"] = result.apply(_confirmation_state, axis=1)
+    return result
+
+
+def _technical_confirmed(row: pd.Series) -> bool:
+    if _text(row.get("mid_trend_layer")) == "risk_exclusion_watch":
+        return False
+    return bool(
+        _score(row, "ret_20_score") >= TECHNICAL_CONFIRMATION_THRESHOLDS["ret_20_score"]
+        and _score(row, "ret_60_score") >= TECHNICAL_CONFIRMATION_THRESHOLDS["ret_60_score"]
+        and _score(row, "ma20_slope_score") >= TECHNICAL_CONFIRMATION_THRESHOLDS["ma20_slope_score"]
+        and _score(row, "trend_r2_20_score") >= TECHNICAL_CONFIRMATION_THRESHOLDS["trend_r2_20_score"]
+        and _score(row, "stock_excess_ret_20_score")
+        >= TECHNICAL_CONFIRMATION_THRESHOLDS["stock_excess_ret_20_score"]
+        and _score(row, "max_drawdown_20_score")
+        >= TECHNICAL_CONFIRMATION_THRESHOLDS["max_drawdown_20_score"]
+    )
+
+
+def _mainline_confirmed(row: pd.Series) -> bool:
+    status = _text(row.get("mainline_status"))
+    context = _text(row.get("mainline_context"))
+    score = _number(row.get("industry_mainline_score_v1"))
+    if status in MAINLINE_CONFIRMED_STATUSES:
+        return True
+    if context == "mainline" and status == "neutral":
+        return True
+    return bool(pd.notna(score) and float(score) >= 0.45)
+
+
+def _fundamental_quality_fields(row: pd.Series) -> tuple[float, str, bool]:
+    explicit_risk = _explicit_fundamental_risk(row)
+    score_values = []
+    for column in FUNDAMENTAL_SCORE_COLUMNS:
+        if column not in row.index:
+            continue
+        value = _number(row.get(column))
+        if pd.notna(value):
+            score_values.append(float(value))
+    if explicit_risk:
+        base_score = float(np.nanmean(score_values)) if score_values else np.nan
+        return base_score, "quality_weak", True
+    if not score_values:
+        return np.nan, "quality_unknown", False
+    score = float(np.nanmean(score_values))
+    if score >= 70.0:
+        return score, "quality_strong", False
+    if score >= 45.0:
+        return score, "quality_neutral", False
+    return score, "quality_weak", False
+
+
+def _explicit_fundamental_risk(row: pd.Series) -> bool:
+    risk_columns = [
+        "financial_risk_flag",
+        "fundamental_risk_flag",
+        "st_or_delisting_risk",
+        "st_or_delisting_risk_flag",
+        "current_st_name_flag",
+    ]
+    for column in risk_columns:
+        if column not in row.index:
+            continue
+        value = row.get(column)
+        if isinstance(value, str) and value.strip():
+            lowered = value.strip().lower()
+            if lowered not in {"0", "false", "none", "ok", "nan"}:
+                return True
+        if bool(value) is True and not (isinstance(value, float) and np.isnan(value)):
+            return True
+    stock_name = _text(row.get("stock_name"))
+    return "ST" in stock_name.upper()
+
+
+def _confirmation_state(row: pd.Series) -> str:
+    t = 1 if bool(row.get("technical_confirmed")) else 0
+    m = 1 if bool(row.get("mainline_confirmed")) else 0
+    bucket = _text(row.get("fundamental_quality_bucket"))
+    if bucket == "quality_unknown":
+        return f"T{t}_M{m}_UNKNOWN_F"
+    f = 1 if bool(row.get("fundamental_confirmed")) else 0
+    return f"T{t}_M{m}_F{f}"
 
 
 def _has_value(series: pd.Series) -> pd.Series:
@@ -562,6 +718,17 @@ def _score(row: pd.Series, name: str) -> float:
 def _number(value: Any) -> float:
     numeric = pd.to_numeric(pd.Series([value]), errors="coerce").iloc[0]
     return float(numeric) if not pd.isna(numeric) else np.nan
+
+
+def _text(value: Any) -> str:
+    if value is None:
+        return ""
+    try:
+        if pd.isna(value):
+            return ""
+    except (TypeError, ValueError):
+        pass
+    return str(value).strip()
 
 
 def _observation_note(layer: str) -> str:

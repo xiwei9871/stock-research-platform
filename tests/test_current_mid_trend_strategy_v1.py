@@ -95,6 +95,7 @@ def test_current_mid_trend_strategy_v1_outputs_holdings_trades_and_summary(tmp_p
     assert day2_assets == {"A", "C"}
     trades = result["trades"]
     assert {"buy", "sell"}.issubset(set(trades["action"]))
+    assert result["paths"]["summary"].exists()
     assert "current_mid_trend_strategy_v1_report.md" in str(result["paths"].get("report", ""))
     assert result["paths"]["report"].exists()
 

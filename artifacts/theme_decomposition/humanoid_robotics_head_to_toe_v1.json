@@ -1,0 +1,764 @@
+{
+  "artifact_version": "theme_decomposition_v1_5",
+  "theme": {
+    "theme_id": "humanoid_robotics_head_to_toe_v1",
+    "theme_name": "人形机器人从头到脚拆解",
+    "theme_type": "humanoid_robotics",
+    "summary": "A read-only baseline that decomposes humanoid robotics from body structure and functional systems into components, value capture, bottlenecks, localization gaps, and evidence requirements.",
+    "status": "draft",
+    "created_from": "mixed",
+    "last_updated": "2026-07-10"
+  },
+  "evidence_policy": {
+    "accepted_source_ids": [],
+    "needs_full_text_source_ids": [
+      "robotics_tesla_official_material",
+      "robotics_unitree_official_material",
+      "robotics_company_filing_template",
+      "robotics_broker_bom_unseen"
+    ],
+    "lead_only_source_ids": [
+      "robotics_media_summary",
+      "robotics_laozheng_video_clue",
+      "robotics_social_stock_mapping_unverified"
+    ],
+    "rejected_source_ids": [],
+    "oral_claim_source_ids": [
+      "robotics_laozheng_video_clue"
+    ],
+    "not_adopted_source_ids": [
+      "robotics_social_stock_mapping_unverified"
+    ],
+    "policy_notes": "Phase 1.5 review_status is authoritative. No source is accepted until the referenced full text or excerpt is attached and reviewed."
+  },
+  "sources": [
+    {
+      "source_id": "robotics_tesla_official_material",
+      "source_type": "official_article",
+      "title": "Tesla official Optimus public materials",
+      "publisher": "Tesla",
+      "author": "",
+      "publish_date": "",
+      "url_or_ref": "public:tesla_optimus_official_materials",
+      "access_level": "public",
+      "reliability_level": "S1",
+      "notes": "Official public materials can support system-level architecture context after excerpt attachment.",
+      "review_status": "needs_full_text"
+    },
+    {
+      "source_id": "robotics_unitree_official_material",
+      "source_type": "official_article",
+      "title": "Unitree official humanoid robot public materials",
+      "publisher": "Unitree",
+      "author": "",
+      "publish_date": "",
+      "url_or_ref": "public:unitree_humanoid_official_materials",
+      "access_level": "public",
+      "reliability_level": "S1",
+      "notes": "Official public materials; used as source slot for form-factor and subsystem verification.",
+      "review_status": "needs_full_text"
+    },
+    {
+      "source_id": "robotics_company_filing_template",
+      "source_type": "company_filing",
+      "title": "Company filing slot for actuator, sensor, motor, and reducer suppliers",
+      "publisher": "Listed company",
+      "author": "",
+      "publish_date": "",
+      "url_or_ref": "template:attach_company_filing_before_company_mapping",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "notes": "S0 evidence requires actual public filing or announcement excerpt before company mapping is accepted.",
+      "review_status": "needs_full_text"
+    },
+    {
+      "source_id": "robotics_broker_bom_unseen",
+      "source_type": "broker_report",
+      "title": "Unseen broker BOM/value-chain report citation for humanoid robotics",
+      "publisher": "Broker research",
+      "author": "",
+      "publish_date": "",
+      "url_or_ref": "private_claimed:full_text_not_attached",
+      "access_level": "gated",
+      "reliability_level": "S2",
+      "notes": "Closed or cited broker content cannot be S0 without full text and excerpt-level traceability.",
+      "review_status": "needs_full_text"
+    },
+    {
+      "source_id": "robotics_media_summary",
+      "source_type": "media_article",
+      "title": "Media summary of humanoid robotics component supply chain",
+      "publisher": "Media",
+      "author": "",
+      "publish_date": "",
+      "url_or_ref": "pending:media_summary_url",
+      "access_level": "public",
+      "reliability_level": "S3",
+      "notes": "Secondary reporting; discovery signal only until corroborated.",
+      "review_status": "lead_only"
+    },
+    {
+      "source_id": "robotics_laozheng_video_clue",
+      "source_type": "video_claim",
+      "title": "老郑说AI前瞻：机器人产业从头到脚口播线索",
+      "publisher": "老郑说AI前瞻",
+      "author": "老郑说AI前瞻",
+      "publish_date": "",
+      "url_or_ref": "manual:douyin_video_observed_by_user",
+      "access_level": "private_claimed",
+      "reliability_level": "S4",
+      "notes": "Method clue only; not formal evidence.",
+      "review_status": "lead_only"
+    },
+    {
+      "source_id": "robotics_social_stock_mapping_unverified",
+      "source_type": "social_post",
+      "title": "Unverified social stock mapping for humanoid robotics suppliers",
+      "publisher": "Social platform",
+      "author": "",
+      "publish_date": "",
+      "url_or_ref": "manual:not_adopted_stock_mapping",
+      "access_level": "unknown",
+      "reliability_level": "S4",
+      "notes": "Not adopted by v1; retained only as follow-up queue clue.",
+      "review_status": "lead_only"
+    }
+  ],
+  "claims": [
+    {
+      "claim_id": "robotics_claim_head_to_toe_method",
+      "theme_id": "humanoid_robotics_head_to_toe_v1",
+      "source_id": "robotics_laozheng_video_clue",
+      "claim_text": "The head-to-toe method is useful for forcing complete component coverage, but node scores must be rebuilt from evidence.",
+      "claim_type": "tech_route",
+      "confidence": 0.35,
+      "evidence_status": "unverified",
+      "supporting_source_ids": [
+        "robotics_laozheng_video_clue"
+      ],
+      "affected_theme_nodes": [
+        "head_vision",
+        "torso_structure",
+        "arm_actuator",
+        "hand_dexterous",
+        "hip_joint",
+        "knee_joint",
+        "ankle_joint"
+      ],
+      "platform_use_status": "research_lead"
+    },
+    {
+      "claim_id": "robotics_claim_actuator_value",
+      "theme_id": "humanoid_robotics_head_to_toe_v1",
+      "source_id": "robotics_broker_bom_unseen",
+      "claim_text": "Actuator assemblies, reducers, roller screws, sensors, and motors should be separated because their value basis differs across BOM share, precision, scarcity, and certification.",
+      "claim_type": "value_capture",
+      "confidence": 0.55,
+      "evidence_status": "partially_verified",
+      "supporting_source_ids": [
+        "robotics_broker_bom_unseen",
+        "robotics_media_summary"
+      ],
+      "affected_theme_nodes": [
+        "arm_actuator",
+        "frameless_motor",
+        "harmonic_reducer",
+        "planetary_roller_screw",
+        "encoder",
+        "torque_sensor",
+        "six_axis_force_sensor"
+      ],
+      "platform_use_status": "draft"
+    },
+    {
+      "claim_id": "robotics_claim_system_architecture",
+      "theme_id": "humanoid_robotics_head_to_toe_v1",
+      "source_id": "robotics_tesla_official_material",
+      "claim_text": "Humanoid robotics research should distinguish perception, compute/control, structure, joints, actuation, sensors, battery, wiring, and materials before company mapping.",
+      "claim_type": "tech_route",
+      "confidence": 0.65,
+      "evidence_status": "partially_verified",
+      "supporting_source_ids": [
+        "robotics_tesla_official_material",
+        "robotics_unitree_official_material"
+      ],
+      "affected_theme_nodes": [
+        "head_vision",
+        "brain_ai_compute",
+        "controller",
+        "battery_bms",
+        "wiring_harness",
+        "lightweight_materials"
+      ],
+      "platform_use_status": "draft"
+    },
+    {
+      "claim_id": "robotics_claim_unverified_stock_mapping",
+      "theme_id": "humanoid_robotics_head_to_toe_v1",
+      "source_id": "robotics_social_stock_mapping_unverified",
+      "claim_text": "Social stock mappings for motor, reducer, screw, and sensor suppliers are not adopted until validated by filings, customer evidence, or reliable source material.",
+      "claim_type": "company_mapping",
+      "confidence": 0.1,
+      "evidence_status": "unverified",
+      "supporting_source_ids": [
+        "robotics_social_stock_mapping_unverified"
+      ],
+      "affected_theme_nodes": [
+        "frameless_motor",
+        "harmonic_reducer",
+        "planetary_roller_screw",
+        "six_axis_force_sensor"
+      ],
+      "platform_use_status": "blocked"
+    }
+  ],
+  "nodes": [
+    {
+      "node_id": "head_vision",
+      "theme_id": "humanoid_robotics_head_to_toe_v1",
+      "parent_node_id": "",
+      "node_name": "Head Vision",
+      "node_type": "subsystem",
+      "description": "Camera, depth perception, and vision sensor module around the head.",
+      "value_capture_score": 3,
+      "bottleneck_score": 3,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 2,
+      "evidence_strength": 2,
+      "key_metrics": [
+        "resolution",
+        "latency",
+        "sensor fusion",
+        "ASP"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "draft"
+    },
+    {
+      "node_id": "brain_ai_compute",
+      "theme_id": "humanoid_robotics_head_to_toe_v1",
+      "parent_node_id": "head_vision",
+      "node_name": "Brain AI Compute",
+      "node_type": "core_component",
+      "description": "Onboard compute for perception, planning, control, and model inference.",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 4,
+      "supply_tightness_score": 3,
+      "evidence_strength": 2,
+      "key_metrics": [
+        "TOPS",
+        "power efficiency",
+        "software stack",
+        "supply availability"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "needs_evidence"
+    },
+    {
+      "node_id": "torso_structure",
+      "theme_id": "humanoid_robotics_head_to_toe_v1",
+      "parent_node_id": "",
+      "node_name": "Torso Structure",
+      "node_type": "subsystem",
+      "description": "Central structural frame connecting compute, battery, wiring, arms, and legs.",
+      "value_capture_score": 2,
+      "bottleneck_score": 2,
+      "localization_gap_score": 2,
+      "supply_tightness_score": 2,
+      "evidence_strength": 2,
+      "key_metrics": [
+        "weight",
+        "stiffness",
+        "manufacturing yield"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "draft"
+    },
+    {
+      "node_id": "arm_actuator",
+      "theme_id": "humanoid_robotics_head_to_toe_v1",
+      "parent_node_id": "torso_structure",
+      "node_name": "Arm Actuator",
+      "node_type": "subsystem",
+      "description": "Integrated actuator units for shoulder, elbow, and wrist motion.",
+      "value_capture_score": 5,
+      "bottleneck_score": 4,
+      "localization_gap_score": 4,
+      "supply_tightness_score": 4,
+      "evidence_strength": 2,
+      "key_metrics": [
+        "torque density",
+        "backlash",
+        "lifetime",
+        "ASP"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "needs_evidence"
+    },
+    {
+      "node_id": "hand_dexterous",
+      "theme_id": "humanoid_robotics_head_to_toe_v1",
+      "parent_node_id": "arm_actuator",
+      "node_name": "Dexterous Hand",
+      "node_type": "subsystem",
+      "description": "Dexterous hand actuation, sensing, and control system.",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 4,
+      "supply_tightness_score": 3,
+      "evidence_strength": 2,
+      "key_metrics": [
+        "degrees of freedom",
+        "grip force",
+        "tactile sensing",
+        "cycle life"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "needs_evidence"
+    },
+    {
+      "node_id": "hip_joint",
+      "theme_id": "humanoid_robotics_head_to_toe_v1",
+      "parent_node_id": "torso_structure",
+      "node_name": "Hip Joint",
+      "node_type": "subsystem",
+      "description": "High-load hip joint and actuator module.",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 2,
+      "key_metrics": [
+        "peak torque",
+        "thermal control",
+        "lifetime"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "needs_evidence"
+    },
+    {
+      "node_id": "knee_joint",
+      "theme_id": "humanoid_robotics_head_to_toe_v1",
+      "parent_node_id": "torso_structure",
+      "node_name": "Knee Joint",
+      "node_type": "subsystem",
+      "description": "Knee joint assembly for walking, balancing, and load bearing.",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 2,
+      "key_metrics": [
+        "torque",
+        "shock load",
+        "cycle life"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "needs_evidence"
+    },
+    {
+      "node_id": "ankle_joint",
+      "theme_id": "humanoid_robotics_head_to_toe_v1",
+      "parent_node_id": "torso_structure",
+      "node_name": "Ankle Joint",
+      "node_type": "subsystem",
+      "description": "Ankle joint assembly for stability, balance, and terrain adaptation.",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 2,
+      "key_metrics": [
+        "response time",
+        "torque",
+        "shock resistance"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "needs_evidence"
+    },
+    {
+      "node_id": "frameless_motor",
+      "theme_id": "humanoid_robotics_head_to_toe_v1",
+      "parent_node_id": "arm_actuator",
+      "node_name": "Frameless Motor",
+      "node_type": "core_component",
+      "description": "Compact high-torque motor used inside integrated actuator modules.",
+      "value_capture_score": 5,
+      "bottleneck_score": 4,
+      "localization_gap_score": 4,
+      "supply_tightness_score": 4,
+      "evidence_strength": 2,
+      "key_metrics": [
+        "torque density",
+        "thermal performance",
+        "yield",
+        "ASP"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "needs_evidence"
+    },
+    {
+      "node_id": "harmonic_reducer",
+      "theme_id": "humanoid_robotics_head_to_toe_v1",
+      "parent_node_id": "arm_actuator",
+      "node_name": "Harmonic Reducer",
+      "node_type": "core_component",
+      "description": "Precision reducer where backlash, lifetime, and consistency drive bottleneck risk.",
+      "value_capture_score": 5,
+      "bottleneck_score": 5,
+      "localization_gap_score": 4,
+      "supply_tightness_score": 4,
+      "evidence_strength": 2,
+      "key_metrics": [
+        "backlash",
+        "lifetime",
+        "yield",
+        "gross margin"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "needs_evidence"
+    },
+    {
+      "node_id": "planetary_roller_screw",
+      "theme_id": "humanoid_robotics_head_to_toe_v1",
+      "parent_node_id": "arm_actuator",
+      "node_name": "Planetary Roller Screw",
+      "node_type": "core_component",
+      "description": "Linear actuation component that can become a bottleneck due to precision manufacturing and durability requirements.",
+      "value_capture_score": 5,
+      "bottleneck_score": 5,
+      "localization_gap_score": 5,
+      "supply_tightness_score": 4,
+      "evidence_strength": 2,
+      "key_metrics": [
+        "load capacity",
+        "precision",
+        "lifetime",
+        "manufacturing yield"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "needs_evidence"
+    },
+    {
+      "node_id": "encoder",
+      "theme_id": "humanoid_robotics_head_to_toe_v1",
+      "parent_node_id": "controller",
+      "node_name": "Encoder",
+      "node_type": "core_component",
+      "description": "Position sensing for motor and joint control.",
+      "value_capture_score": 3,
+      "bottleneck_score": 4,
+      "localization_gap_score": 4,
+      "supply_tightness_score": 3,
+      "evidence_strength": 2,
+      "key_metrics": [
+        "resolution",
+        "accuracy",
+        "temperature stability"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "draft"
+    },
+    {
+      "node_id": "torque_sensor",
+      "theme_id": "humanoid_robotics_head_to_toe_v1",
+      "parent_node_id": "controller",
+      "node_name": "Torque Sensor",
+      "node_type": "core_component",
+      "description": "Torque feedback for compliant and safe motion control.",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 4,
+      "supply_tightness_score": 3,
+      "evidence_strength": 2,
+      "key_metrics": [
+        "accuracy",
+        "response time",
+        "drift",
+        "calibration"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "needs_evidence"
+    },
+    {
+      "node_id": "six_axis_force_sensor",
+      "theme_id": "humanoid_robotics_head_to_toe_v1",
+      "parent_node_id": "controller",
+      "node_name": "Six-Axis Force Sensor",
+      "node_type": "core_component",
+      "description": "Multi-axis force and moment sensing for hands, feet, and force-controlled tasks.",
+      "value_capture_score": 4,
+      "bottleneck_score": 5,
+      "localization_gap_score": 5,
+      "supply_tightness_score": 4,
+      "evidence_strength": 2,
+      "key_metrics": [
+        "range",
+        "accuracy",
+        "cross-axis coupling",
+        "calibration"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "needs_evidence"
+    },
+    {
+      "node_id": "tactile_sensor",
+      "theme_id": "humanoid_robotics_head_to_toe_v1",
+      "parent_node_id": "hand_dexterous",
+      "node_name": "Tactile Sensor",
+      "node_type": "core_component",
+      "description": "Tactile sensing for dexterous manipulation and grip feedback.",
+      "value_capture_score": 3,
+      "bottleneck_score": 4,
+      "localization_gap_score": 4,
+      "supply_tightness_score": 3,
+      "evidence_strength": 2,
+      "key_metrics": [
+        "sensitivity",
+        "array density",
+        "durability"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "draft"
+    },
+    {
+      "node_id": "imu",
+      "theme_id": "humanoid_robotics_head_to_toe_v1",
+      "parent_node_id": "controller",
+      "node_name": "IMU",
+      "node_type": "core_component",
+      "description": "Inertial measurement for balance, posture, and motion estimation.",
+      "value_capture_score": 2,
+      "bottleneck_score": 2,
+      "localization_gap_score": 2,
+      "supply_tightness_score": 2,
+      "evidence_strength": 2,
+      "key_metrics": [
+        "drift",
+        "latency",
+        "shock resistance"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "draft"
+    },
+    {
+      "node_id": "battery_bms",
+      "theme_id": "humanoid_robotics_head_to_toe_v1",
+      "parent_node_id": "torso_structure",
+      "node_name": "Battery and BMS",
+      "node_type": "subsystem",
+      "description": "Battery pack, BMS, charging, and power-safety management.",
+      "value_capture_score": 3,
+      "bottleneck_score": 3,
+      "localization_gap_score": 2,
+      "supply_tightness_score": 2,
+      "evidence_strength": 2,
+      "key_metrics": [
+        "energy density",
+        "safety",
+        "cycle life",
+        "charging time"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "draft"
+    },
+    {
+      "node_id": "wiring_harness",
+      "theme_id": "humanoid_robotics_head_to_toe_v1",
+      "parent_node_id": "torso_structure",
+      "node_name": "Wiring Harness",
+      "node_type": "core_component",
+      "description": "Harness, flexible connection, and internal signal/power routing.",
+      "value_capture_score": 2,
+      "bottleneck_score": 3,
+      "localization_gap_score": 2,
+      "supply_tightness_score": 2,
+      "evidence_strength": 2,
+      "key_metrics": [
+        "bend life",
+        "weight",
+        "current rating",
+        "reliability"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "draft"
+    },
+    {
+      "node_id": "controller",
+      "theme_id": "humanoid_robotics_head_to_toe_v1",
+      "parent_node_id": "brain_ai_compute",
+      "node_name": "Controller",
+      "node_type": "subsystem",
+      "description": "Motion controller, drive electronics, and embedded control software.",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 4,
+      "supply_tightness_score": 3,
+      "evidence_strength": 2,
+      "key_metrics": [
+        "control bandwidth",
+        "safety certification",
+        "integration capability"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "needs_evidence"
+    },
+    {
+      "node_id": "bearing",
+      "theme_id": "humanoid_robotics_head_to_toe_v1",
+      "parent_node_id": "arm_actuator",
+      "node_name": "Bearing",
+      "node_type": "core_component",
+      "description": "Precision bearing for joints and actuator assemblies.",
+      "value_capture_score": 3,
+      "bottleneck_score": 4,
+      "localization_gap_score": 4,
+      "supply_tightness_score": 3,
+      "evidence_strength": 2,
+      "key_metrics": [
+        "precision",
+        "load",
+        "lifetime",
+        "noise"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "draft"
+    },
+    {
+      "node_id": "lightweight_materials",
+      "theme_id": "humanoid_robotics_head_to_toe_v1",
+      "parent_node_id": "torso_structure",
+      "node_name": "Lightweight Materials",
+      "node_type": "upstream_material",
+      "description": "Aluminum alloy, magnesium alloy, carbon-fiber, and structural materials for weight reduction.",
+      "value_capture_score": 2,
+      "bottleneck_score": 2,
+      "localization_gap_score": 2,
+      "supply_tightness_score": 2,
+      "evidence_strength": 2,
+      "key_metrics": [
+        "density",
+        "stiffness",
+        "cost",
+        "manufacturability"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "draft"
+    }
+  ],
+  "value_capture_assessments": [
+    {
+      "node_id": "planetary_roller_screw",
+      "value_basis": "technology_barrier",
+      "assessment_text": "Planetary roller screw requires precision manufacturing validation before any bottleneck or company conclusion is published.",
+      "rank": 1,
+      "evidence_ids": [
+        "robotics_claim_actuator_value",
+        "robotics_company_filing_template"
+      ],
+      "uncertainty": "high"
+    },
+    {
+      "node_id": "harmonic_reducer",
+      "value_basis": "customer_certification",
+      "assessment_text": "Reducer value capture should be tested through backlash, lifetime, yield, and customer certification evidence.",
+      "rank": 2,
+      "evidence_ids": [
+        "robotics_claim_actuator_value"
+      ],
+      "uncertainty": "medium"
+    },
+    {
+      "node_id": "frameless_motor",
+      "value_basis": "gross_margin",
+      "assessment_text": "Motor value capture depends on torque density, thermal performance, yield, and whether the supplier controls actuator integration.",
+      "rank": 3,
+      "evidence_ids": [
+        "robotics_claim_actuator_value"
+      ],
+      "uncertainty": "medium"
+    },
+    {
+      "node_id": "six_axis_force_sensor",
+      "value_basis": "scarcity",
+      "assessment_text": "Six-axis force sensors may be scarce in high-performance applications; confirm with product data and customer qualification evidence.",
+      "rank": 4,
+      "evidence_ids": [
+        "robotics_claim_actuator_value"
+      ],
+      "uncertainty": "high"
+    }
+  ],
+  "decomposition_templates": [
+    {
+      "template_id": "humanoid_robotics_head_to_toe_template_v1",
+      "theme_type": "humanoid_robotics",
+      "steps": [
+        "Start from body structure: head, torso, arms, hands, hips, knees, ankles.",
+        "Map functional systems: perception, compute, control, actuation, sensing, power, wiring, materials.",
+        "Break each system into components and technical routes.",
+        "Separate value basis: BOM share, ASP, margin, scarcity, technology barrier, certification, and integration control.",
+        "Score bottleneck and localization gap at node level before mapping companies.",
+        "Attach source_item and content_claim evidence before publishing any platform view."
+      ],
+      "required_dimensions": [
+        "source reliability",
+        "node value_capture_score",
+        "node bottleneck_score",
+        "localization_gap_score",
+        "value_basis",
+        "evidence_status"
+      ],
+      "optional_dimensions": [
+        "BOM share",
+        "customer qualification",
+        "product model",
+        "company filing excerpt"
+      ],
+      "output_schema": "theme_decomposition_v1_5"
+    }
+  ]
+}
