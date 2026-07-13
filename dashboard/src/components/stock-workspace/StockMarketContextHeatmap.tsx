@@ -24,6 +24,8 @@ type TreemapInput<T> = {
   value: number;
 };
 
+const MAX_PEER_SAMPLE_SIZE = 12;
+
 function formatSignedPercent(value: number | null) {
   if (value === null || Number.isNaN(value)) return '-';
   const sign = value > 0 ? '+' : '';
@@ -121,7 +123,7 @@ function binaryTreemap<T>(items: TreemapInput<T>[], bounds: Bounds, gap = 2): Ar
 function buildPeerRects(payload: StockMarketContextHeatmapPayload, width: number, height: number): PeerRect[] {
   const uniquePeers = dedupePeers(payload.peers);
   return binaryTreemap(
-    uniquePeers.map((peer) => ({ item: peer, value: Math.max(peer.value ?? peer.amount ?? 0, 1) })),
+    uniquePeers.map((peer) => ({ item: peer, value: Math.max(peer.amount ?? peer.value ?? 0, 1) })),
     { x: 0, y: 0, width, height },
     2
   ).map((rect) => ({ ...rect, peer: rect.item }));
@@ -149,14 +151,30 @@ function drawHeatmap(canvas: HTMLCanvasElement, payload: StockMarketContextHeatm
     context.strokeStyle = rect.peer.is_selected ? '#facc15' : '#f8fafc';
     context.lineWidth = rect.peer.is_selected ? 3 : 1;
     context.strokeRect(rect.x, rect.y, rect.width, rect.height);
-    if (rect.width >= 54 && rect.height >= 24) {
+    if (rect.width >= 62 && rect.height >= 28) {
       context.fillStyle = '#ffffff';
       context.font = rect.peer.is_selected ? '700 11px system-ui, sans-serif' : '600 11px system-ui, sans-serif';
-      context.fillText(rect.peer.name, rect.x + 4, rect.y + 13);
+      drawFittedText(context, rect.peer.name, rect.x + 4, rect.y + 13, rect.width - 8);
     }
   }
   context.restore();
   return rects;
+}
+
+function drawFittedText(context: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number) {
+  if (maxWidth <= 12) return;
+  if (context.measureText(text).width <= maxWidth) {
+    context.fillText(text, x, y);
+    return;
+  }
+  const ellipsis = '…';
+  let clipped = text;
+  while (clipped.length > 1 && context.measureText(`${clipped}${ellipsis}`).width > maxWidth) {
+    clipped = clipped.slice(0, -1);
+  }
+  if (clipped.length > 1) {
+    context.fillText(`${clipped}${ellipsis}`, x, y);
+  }
 }
 
 function findRect(rects: PeerRect[], x: number, y: number) {
@@ -174,26 +192,55 @@ function dedupePeers(peers: StockMarketContextPeer[]) {
   });
 }
 
+function peerValue(peer: StockMarketContextPeer) {
+  return Math.max(peer.amount ?? peer.value ?? 0, 0);
+}
+
+function findSelectedPeer(uniquePeers: StockMarketContextPeer[], selected: StockMarketContextHeatmapPayload['selected']) {
+  const selectedAssetId = selected?.asset_id ?? null;
+  return (
+    uniquePeers.find((peer) => peer.asset_id === selectedAssetId) ??
+    uniquePeers.find((peer) => peer.is_selected) ??
+    null
+  );
+}
+
+function buildPeerSampleFromUniverse(uniquePeers: StockMarketContextPeer[]) {
+  const rankedPeers = [...uniquePeers].sort((left, right) => peerValue(right) - peerValue(left));
+  return dedupePeers(rankedPeers.slice(0, MAX_PEER_SAMPLE_SIZE));
+}
+
 export function StockMarketContextHeatmap({ payload, loading, error, onSelectStock }: StockMarketContextHeatmapProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rectsRef = useRef<PeerRect[]>([]);
   const [hoveredPeer, setHoveredPeer] = useState<StockMarketContextPeer | null>(null);
-  const visiblePeers = useMemo(() => dedupePeers(payload?.peers ?? []).slice(0, 8), [payload]);
+  const peerUniverse = useMemo(() => dedupePeers(payload?.peers ?? []), [payload]);
+  const selectedPeer = useMemo(() => (payload ? findSelectedPeer(peerUniverse, payload.selected) : null), [payload, peerUniverse]);
+  const samplePeers = useMemo(() => buildPeerSampleFromUniverse(peerUniverse), [peerUniverse]);
+  const selectedInSample = Boolean(selectedPeer && samplePeers.some((peer) => peer.asset_id === selectedPeer.asset_id));
+  const sampleSummary = useMemo(
+    () => ({
+      peerCount: peerUniverse.length,
+      upCount: peerUniverse.filter((peer) => (peer.change_pct ?? 0) > 0).length,
+      downCount: peerUniverse.filter((peer) => (peer.change_pct ?? 0) < 0).length
+    }),
+    [peerUniverse]
+  );
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !payload || payload.peers.length === 0) return undefined;
-    rectsRef.current = drawHeatmap(canvas, payload);
+    if (!canvas || !payload || samplePeers.length === 0) return undefined;
+    rectsRef.current = drawHeatmap(canvas, { ...payload, peers: samplePeers });
 
     const resizeObserver =
       typeof ResizeObserver !== 'undefined'
         ? new ResizeObserver(() => {
-            rectsRef.current = drawHeatmap(canvas, payload);
+            rectsRef.current = drawHeatmap(canvas, { ...payload, peers: samplePeers });
           })
         : null;
     resizeObserver?.observe(canvas);
     return () => resizeObserver?.disconnect();
-  }, [payload]);
+  }, [payload, samplePeers]);
 
   if (loading) {
     return <div className="stock-market-context-state">同业热力加载中</div>;
@@ -203,20 +250,20 @@ export function StockMarketContextHeatmap({ payload, loading, error, onSelectSto
     return <div className="stock-market-context-state error">{error}</div>;
   }
 
-  if (!payload || payload.peers.length === 0 || payload.summary.peer_count === 0) {
+  if (!payload || peerUniverse.length === 0) {
     return <div className="stock-market-context-state">暂无同业市场定位数据</div>;
   }
 
   const selected = payload.selected;
-  const inspectorPeer = hoveredPeer ?? visiblePeers.find((peer) => peer.is_selected) ?? null;
+  const inspectorPeer = hoveredPeer ?? selectedPeer ?? null;
 
   return (
     <section className="stock-market-context-heatmap" aria-label="同业市场定位面板">
       <div className="stock-market-context-heatmap-summary">
         <span>{payload.industry?.industry_name ?? '未分组'}</span>
-        <span>同业 {payload.summary.peer_count}</span>
-        <span>上涨 {payload.summary.up_count}</span>
-        <span>下跌 {payload.summary.down_count}</span>
+        <span>同业 {sampleSummary.peerCount}</span>
+        <span>上涨 {sampleSummary.upCount}</span>
+        <span>下跌 {sampleSummary.downCount}</span>
         <span>涨跌排名 {rankLabel(selected?.change_rank ?? null)}</span>
         <span>成交额排名 {rankLabel(selected?.amount_rank ?? null)}</span>
       </div>
@@ -247,8 +294,16 @@ export function StockMarketContextHeatmap({ payload, loading, error, onSelectSto
           <span>{formatAmountYi(inspectorPeer.amount)}</span>
         </div>
       ) : null}
+      <p className="muted" aria-label="同业样本说明">
+        热力图与样本卡片仅展示成交额靠前的 {MAX_PEER_SAMPLE_SIZE} 只同业股票。
+      </p>
+      {selectedPeer && !selectedInSample ? (
+        <p className="muted" aria-label="当前股票样本说明">
+          当前股票未进入成交额前 {MAX_PEER_SAMPLE_SIZE}，热力图按同业成交额前 {MAX_PEER_SAMPLE_SIZE} 展示。
+        </p>
+      ) : null}
       <div className="stock-market-context-peer-list" aria-label="同业股票样本">
-        {visiblePeers.map((peer) => (
+        {samplePeers.map((peer) => (
           <button
             key={peer.asset_id}
             type="button"
@@ -258,10 +313,10 @@ export function StockMarketContextHeatmap({ payload, loading, error, onSelectSto
               if (!peer.is_selected) onSelectStock(peer.asset_id);
             }}
           >
-            <strong>{peer.name}</strong>
-            <span>{peer.symbol}</span>
-            <span>{formatSignedPercent(peer.change_pct)}</span>
-            <small>{formatAmountYi(peer.amount)}</small>
+            <strong className="stock-market-context-peer-identity">{peer.name}</strong>
+            <span className="stock-market-context-peer-code">代码 {peer.symbol}</span>
+            <span className="stock-market-context-peer-change">涨跌幅 {formatSignedPercent(peer.change_pct)}</span>
+            <small className="stock-market-context-peer-amount">成交额 {formatAmountYi(peer.amount)}</small>
           </button>
         ))}
       </div>

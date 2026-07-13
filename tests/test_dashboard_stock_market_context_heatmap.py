@@ -4,6 +4,14 @@ from stock_research.dashboard import app as dashboard_app
 from stock_research.dashboard import stock_market_context_heatmap
 
 
+class _FakeConnection:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+
 def test_build_stock_market_context_heatmap_ranks_selected_peer(monkeypatch):
     rows = [
         {
@@ -50,6 +58,89 @@ def test_build_stock_market_context_heatmap_ranks_selected_peer(monkeypatch):
     assert payload["selected"]["change_percentile"] == 1.0
     assert payload["peers"][0]["is_selected"] is True
     assert payload["peers"][0]["change_pct"] == 0.02
+
+
+def test_build_stock_market_context_heatmap_dedupes_repeated_peer_rows(monkeypatch):
+    rows = [
+        {
+            "asset_id": "CN:SZ:002049",
+            "symbol": "002049",
+            "name": "紫光国微",
+            "trade_date": "2026-07-10",
+            "close": 85.83,
+            "pct_chg": -1.4468,
+            "amount": 7841136990.17,
+            "industry_id": "C39",
+            "industry_name": "计算机、通信和其他电子设备制造业",
+            "industry_system": "csrc",
+        },
+        {
+            "asset_id": "CN:SZ:002049",
+            "symbol": "002049",
+            "name": "紫光国微",
+            "trade_date": "2026-07-10",
+            "close": 85.83,
+            "pct_chg": -1.4468,
+            "amount": 7841136990.17,
+            "industry_id": "C39",
+            "industry_name": "计算机、通信和其他电子设备制造业",
+            "industry_system": "csrc",
+        },
+        {
+            "asset_id": "CN:SH:603986",
+            "symbol": "603986",
+            "name": "兆易创新",
+            "trade_date": "2026-07-10",
+            "close": 126.6,
+            "pct_chg": -7.76,
+            "amount": 59891300000,
+            "industry_id": "C39",
+            "industry_name": "计算机、通信和其他电子设备制造业",
+            "industry_system": "csrc",
+        },
+        {
+            "asset_id": "CN:SH:603986",
+            "symbol": "603986",
+            "name": "兆易创新",
+            "trade_date": "2026-07-10",
+            "close": 126.6,
+            "pct_chg": -7.76,
+            "amount": 59891300000,
+            "industry_id": "C39",
+            "industry_name": "计算机、通信和其他电子设备制造业",
+            "industry_system": "csrc",
+        },
+    ]
+    monkeypatch.setattr(
+        stock_market_context_heatmap,
+        "load_peer_heatmap_rows",
+        lambda asset_id, trade_date, service=None: rows,
+    )
+
+    payload = stock_market_context_heatmap.build_stock_market_context_heatmap("002049.SZ", "2026-07-10")
+
+    assert payload["summary"]["peer_count"] == 2
+    assert len(payload["peers"]) == 2
+    assert payload["selected"]["amount_rank"] == 2
+    assert payload["selected"]["change_rank"] == 1
+    assert max(peer["amount_rank"] for peer in payload["peers"]) == 2
+    assert max(peer["change_rank"] for peer in payload["peers"]) == 2
+
+
+def test_load_peer_heatmap_rows_converts_tushare_amount_to_yuan(monkeypatch):
+    captured = {}
+
+    def fake_fetch_all(_conn, sql, params):
+        captured["sql"] = sql
+        captured["params"] = params
+        return []
+
+    monkeypatch.setattr(stock_market_context_heatmap, "connect", lambda _service: _FakeConnection())
+    monkeypatch.setattr(stock_market_context_heatmap, "fetch_all", fake_fetch_all)
+
+    stock_market_context_heatmap.load_peer_heatmap_rows("002049.SZ", "2026-07-09")
+
+    assert "bars.amount * 1000 AS amount" in captured["sql"]
 
 
 def test_build_stock_market_context_heatmap_returns_missing_when_no_rows(monkeypatch):

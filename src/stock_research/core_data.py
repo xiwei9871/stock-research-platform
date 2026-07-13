@@ -1,3 +1,7 @@
+from io import StringIO
+
+import requests
+
 from stock_research.config import SETTINGS
 from stock_research.db import connect, execute
 from stock_research.db import execute_many
@@ -156,16 +160,23 @@ def sync_concept_memberships_from_akshare(
     board_fetcher=None,
     constituent_fetcher=None,
     max_concepts: int | None = None,
+    offset: int = 0,
 ) -> dict[str, object]:
     if ak is None and (board_fetcher is None or constituent_fetcher is None):
         raise RuntimeError("akshare is required to sync concept memberships")
 
     default_em_fetchers = board_fetcher is None and constituent_fetcher is None and concept_system == "em"
+    default_ths_fetchers = board_fetcher is None and constituent_fetcher is None and concept_system == "ths"
     if default_em_fetchers:
         board_fetcher = fetch_eastmoney_concept_boards_direct
         constituent_fetcher = ak.stock_board_concept_cons_em
         board_source = "eastmoney:qt_clist_concept_board"
         constituent_source = "akshare:stock_board_concept_cons_em"
+    elif default_ths_fetchers:
+        board_fetcher = ak.stock_board_concept_name_ths
+        constituent_fetcher = fetch_ths_concept_constituents_direct
+        board_source = "akshare:stock_board_concept_name_ths"
+        constituent_source = "ths:q.10jqka.com.cn_gn_detail"
     else:
         board_fetcher = board_fetcher or ak.stock_board_concept_name_ths
         constituent_fetcher = constituent_fetcher or ak.stock_board_concept_cons_em
@@ -179,6 +190,8 @@ def sync_concept_memberships_from_akshare(
             "memberships": 0,
             "failed_concepts": [f"board_fetch_failed: {exc}"],
         }
+    if offset:
+        boards = boards[max(0, int(offset)) :]
     if max_concepts is not None:
         boards = boards[: max(0, int(max_concepts))]
 
@@ -216,7 +229,7 @@ def sync_concept_memberships_from_akshare(
     for board in boards:
         concept_code = board["concept_code"]
         concept_name = board["concept_name"]
-        constituent_symbol = concept_code if default_em_fetchers else concept_name
+        constituent_symbol = concept_code if default_em_fetchers or default_ths_fetchers else concept_name
         try:
             constituents = _normalize_concept_constituents(
                 _call_with_single_retry(constituent_fetcher, constituent_symbol)
@@ -280,6 +293,7 @@ def sync_concept_memberships_from_akshare(
 
 def _normalize_concept_boards(frame) -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
+    seen_codes: set[str] = set()
     if frame is None or frame.empty:
         return rows
     for item in frame.to_dict("records"):
@@ -299,7 +313,9 @@ def fetch_eastmoney_concept_boards_direct(
     import pandas as pd
 
     url_candidates = [
+        "https://33.push2.eastmoney.com/api/qt/clist/get",
         "https://79.push2.eastmoney.com/api/qt/clist/get",
+        "https://82.push2.eastmoney.com/api/qt/clist/get",
         "https://push2.eastmoney.com/api/qt/clist/get",
     ]
     fields = "f12,f14"
@@ -338,6 +354,53 @@ def fetch_eastmoney_concept_boards_direct(
             if str(row.get("f14") or "").strip() and str(row.get("f12") or "").strip()
         ]
     )
+
+
+def fetch_ths_concept_constituents_direct(
+    symbol: str,
+    *,
+    max_pages: int = 50,
+    timeout_seconds: int = 15,
+):
+    import pandas as pd
+
+    rows: list[dict[str, str]] = []
+    seen_codes: set[str] = set()
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.90 Safari/537.36"
+        )
+    }
+    for page in range(1, max_pages + 1):
+        url = f"http://q.10jqka.com.cn/gn/detail/field/199112/order/desc/page/{page}/ajax/1/code/{symbol}"
+        response = requests.get(url, headers=headers, timeout=timeout_seconds)
+        if hasattr(response, "encoding"):
+            response.encoding = response.encoding or getattr(response, "apparent_encoding", None) or "gbk"
+        try:
+            tables = pd.read_html(StringIO(response.text))
+        except ValueError:
+            break
+
+        page_rows: list[dict[str, str]] = []
+        for table in tables:
+            columns = {str(column).strip(): column for column in table.columns}
+            code_column = columns.get("代码")
+            name_column = columns.get("名称")
+            if code_column is None or name_column is None:
+                continue
+            for item in table[[code_column, name_column]].to_dict("records"):
+                code = str(item.get(code_column) or "").strip().zfill(6)
+                name = str(item.get(name_column) or "").strip()
+                if code.isdigit() and len(code) == 6 and name:
+                    page_rows.append({"代码": code, "名称": name})
+        new_rows = [row for row in page_rows if row["代码"] not in seen_codes]
+        if not new_rows:
+            break
+        for row in new_rows:
+            seen_codes.add(row["代码"])
+        rows.extend(new_rows)
+    return pd.DataFrame(rows, columns=["代码", "名称"])
 
 
 def _call_with_single_retry(func, *args):

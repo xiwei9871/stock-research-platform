@@ -139,7 +139,7 @@ def load_stock_heatmap_rows(
             COALESCE(industry.industry_name, '未分组') AS industry_name,
             bars.close,
             bars.pct_chg,
-            bars.amount,
+            bars.amount * 1000 AS amount,
             bars.source,
             bars.updated_at
         FROM market_daily_bar bars

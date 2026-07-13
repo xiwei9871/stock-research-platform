@@ -5,6 +5,14 @@ from stock_research.dashboard import app as dashboard_app
 from stock_research.dashboard import stock_heatmap_service
 
 
+class _FakeConnection:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+
 def test_build_stock_heatmap_payload_groups_stocks_by_industry(monkeypatch):
     monkeypatch.setattr(
         stock_heatmap_service,
@@ -74,6 +82,22 @@ def test_build_stock_heatmap_payload_groups_stocks_by_industry(monkeypatch):
     assert payload["groups"][1]["value"] == 4000000000.0
     assert payload["groups"][1]["change_pct"] == pytest.approx(0.0125)
     assert [stock["name"] for stock in payload["groups"][1]["children"]] == ["平安银行", "浦发银行"]
+
+
+def test_load_stock_heatmap_rows_converts_tushare_amount_to_yuan(monkeypatch):
+    captured = {}
+
+    def fake_fetch_all(_conn, sql, params):
+        captured["sql"] = sql
+        captured["params"] = params
+        return []
+
+    monkeypatch.setattr(stock_heatmap_service, "connect", lambda _service: _FakeConnection())
+    monkeypatch.setattr(stock_heatmap_service, "fetch_all", fake_fetch_all)
+
+    stock_heatmap_service.load_stock_heatmap_rows("2026-07-09")
+
+    assert "bars.amount * 1000 AS amount" in captured["sql"]
 
 
 def test_build_stock_heatmap_payload_returns_missing_when_no_rows(monkeypatch):
