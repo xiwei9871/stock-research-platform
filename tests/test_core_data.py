@@ -249,6 +249,42 @@ def test_sync_concept_memberships_from_akshare_defaults_to_eastmoney_sources(mon
     ]
 
 
+def test_sync_concept_memberships_from_akshare_defaults_to_ths_sources(monkeypatch):
+    import pandas as pd
+
+    conn = FakeConnection()
+    monkeypatch.setattr(core_data, "execute_many", fake_execute_many)
+    monkeypatch.setattr(core_data, "execute", fake_execute)
+
+    class FakeAk:
+        @staticmethod
+        def stock_board_concept_name_ths():
+            return pd.DataFrame([{"name": "阿尔茨海默概念", "code": "308614"}])
+
+    monkeypatch.setattr(core_data, "ak", FakeAk)
+    monkeypatch.setattr(
+        core_data,
+        "fetch_ths_concept_constituents_direct",
+        lambda symbol: pd.DataFrame([{"代码": "301015", "名称": "百洋医药"}]) if symbol == "308614" else pd.DataFrame(),
+    )
+
+    result = core_data.sync_concept_memberships_from_akshare(
+        conn,
+        trade_date="2026-07-09",
+        concept_system="ths",
+    )
+
+    assert result == {"boards": 1, "memberships": 1, "failed_concepts": []}
+    board_sql, board_rows = conn.executed_many[0]
+    membership_sql, membership_rows = conn.executed_many[1]
+    assert "INSERT INTO core.concept_board" in board_sql
+    assert "INSERT INTO core.concept_membership" in membership_sql
+    assert board_rows == [("ths", "308614", "阿尔茨海默概念", "akshare:stock_board_concept_name_ths", True)]
+    assert membership_rows == [
+        ("CN:SZ:301015", "ths", "308614", "阿尔茨海默概念", "2026-07-09", "ths:q.10jqka.com.cn_gn_detail")
+    ]
+
+
 def test_sync_concept_memberships_retries_board_fetch_once(monkeypatch):
     import pandas as pd
 
@@ -276,6 +312,44 @@ def test_sync_concept_memberships_retries_board_fetch_once(monkeypatch):
 
     assert result == {"boards": 1, "memberships": 1, "failed_concepts": []}
     assert calls == ["board", "board"]
+
+
+def test_sync_concept_memberships_applies_offset_before_limit(monkeypatch):
+    import pandas as pd
+
+    conn = FakeConnection()
+    seen_symbols = []
+    monkeypatch.setattr(core_data, "execute_many", fake_execute_many)
+    monkeypatch.setattr(core_data, "execute", fake_execute)
+
+    def fake_board_fetcher():
+        return pd.DataFrame(
+            [
+                {"板块名称": "跳过概念", "板块代码": "BK0001"},
+                {"板块名称": "保留概念", "板块代码": "BK0002"},
+                {"板块名称": "截断概念", "板块代码": "BK0003"},
+            ]
+        )
+
+    def fake_constituent_fetcher(symbol):
+        seen_symbols.append(symbol)
+        return pd.DataFrame([{"代码": "300024", "名称": "机器人"}])
+
+    result = core_data.sync_concept_memberships_from_akshare(
+        conn,
+        trade_date="2026-07-09",
+        concept_system="em",
+        board_fetcher=fake_board_fetcher,
+        constituent_fetcher=fake_constituent_fetcher,
+        max_concepts=1,
+        offset=1,
+    )
+
+    assert result == {"boards": 1, "memberships": 1, "failed_concepts": []}
+    assert seen_symbols == ["保留概念"]
+    board_sql, board_rows = conn.executed_many[0]
+    assert "INSERT INTO core.concept_board" in board_sql
+    assert board_rows == [("em", "BK0002", "保留概念", "akshare:stock_board_concept_name_ths", True)]
 
 
 def test_sync_concept_memberships_reports_board_fetch_failure(monkeypatch):
@@ -323,5 +397,37 @@ def test_fetch_eastmoney_concept_boards_direct_uses_curl_pages(monkeypatch):
         {"板块名称": "机器人概念", "板块代码": "BK0545"},
         {"板块名称": "人工智能", "板块代码": "BK0800"},
     ]
+    assert "https://33.push2.eastmoney.com/api/qt/clist/get" in calls[0][0]
+    assert "https://82.push2.eastmoney.com/api/qt/clist/get" in calls[0][0]
     assert calls[0][1]["fs"] == "m:90 t:3 f:!50"
     assert calls[0][1]["fields"] == "f12,f14"
+
+
+def test_fetch_ths_concept_constituents_direct_parses_stock_rows(monkeypatch):
+    html = """
+    <table>
+      <thead><tr><th>序号</th><th>代码</th><th>名称</th><th>现价</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td><a>301015</a></td><td><a>百洋医药</a></td><td>22.00</td></tr>
+        <tr><td>2</td><td><a>688271</a></td><td><a>联影医疗</a></td><td>105.55</td></tr>
+      </tbody>
+    </table>
+    """
+    calls = []
+
+    class FakeResponse:
+        text = html
+
+    def fake_get(url, headers, timeout):
+        calls.append((url, headers, timeout))
+        return FakeResponse()
+
+    monkeypatch.setattr(core_data.requests, "get", fake_get)
+
+    frame = core_data.fetch_ths_concept_constituents_direct("308614")
+
+    assert frame[["代码", "名称"]].to_dict("records") == [
+        {"代码": "301015", "名称": "百洋医药"},
+        {"代码": "688271", "名称": "联影医疗"},
+    ]
+    assert calls[0][0] == "http://q.10jqka.com.cn/gn/detail/field/199112/order/desc/page/1/ajax/1/code/308614"
