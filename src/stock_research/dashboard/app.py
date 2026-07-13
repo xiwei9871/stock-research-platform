@@ -9,6 +9,12 @@ from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
 from stock_research.config import SETTINGS
+from stock_research.technology_industry_catalog import (
+    IndustryCatalogValidationError,
+    get_industry_chain,
+    load_industry_catalog,
+    summarize_industry_catalog,
+)
 from stock_research.dashboard.api_guardrails import (
     PublicationGuardBlocked,
     assert_publication_ready,
@@ -371,6 +377,11 @@ def _theme_research_read_http_error() -> HTTPException:
 
 
 AUTH_EXEMPT_PATHS = {"/api/auth/login", "/api/auth/logout", "/api/auth/me"}
+TECHNOLOGY_INDUSTRY_CATALOG_GUARDRAILS = {
+    "research_only": True,
+    "used_for_signal": False,
+    "used_for_admission": False,
+}
 
 
 def _dashboard_auth_required() -> bool:
@@ -552,6 +563,36 @@ def create_app() -> FastAPI:
     @app.get("/api/research/data-to-brief/docling-90")
     def data_to_brief_docling_90_review():
         return load_data_to_brief_docling_90_dashboard_payload()
+
+    @app.get("/api/research/technology-industry-catalog")
+    def technology_industry_catalog():
+        catalog = load_industry_catalog()
+        return {
+            "summary": summarize_industry_catalog(catalog),
+            "sectors": catalog["sectors"],
+            "chains": catalog["chains"],
+            **TECHNOLOGY_INDUSTRY_CATALOG_GUARDRAILS,
+        }
+
+    @app.get("/api/research/technology-industry-catalog/chains/{chain_id}")
+    def technology_industry_catalog_chain(chain_id: str):
+        normalized_chain_id = chain_id.strip()
+        catalog = load_industry_catalog()
+        try:
+            detail = get_industry_chain(catalog, normalized_chain_id)
+        except IndustryCatalogValidationError as exc:
+            if exc.code != "CHAIN_NOT_FOUND":
+                raise
+            raise HTTPException(status_code=404, detail="chain_not_found") from exc
+        return {
+            **detail,
+            "theme_links": [
+                link
+                for link in catalog["theme_links"]
+                if link["chain_id"] == normalized_chain_id
+            ],
+            **TECHNOLOGY_INDUSTRY_CATALOG_GUARDRAILS,
+        }
 
     @app.get("/api/research/theme-decomposition/themes")
     def theme_research_themes():
