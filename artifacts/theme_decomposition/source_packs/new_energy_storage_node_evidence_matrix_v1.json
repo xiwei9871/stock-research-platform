@@ -1,0 +1,246 @@
+{
+  "artifact_version": "new_energy_storage_node_evidence_matrix_v1",
+  "theme_id": "new_energy_storage_value_chain_v1",
+  "as_of_date": "2026-07-14",
+  "node_evidence_matrix": [
+    {
+      "node_id": "storage_cells_materials",
+      "accepted_source_ids": [
+        "storage_002074_filing",
+        "storage_300014_filing",
+        "storage_300750_filing"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "storage_claim_01",
+        "storage_claim_02",
+        "storage_claim_03"
+      ],
+      "evidence_strength_before": 4,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "customer_certification"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "Storage-cell value depends on safety, cycle life, degradation, cost and warranty performance rather than shipment volume alone. Cell suppliers participate directly in stationary storage, but chemistry mix, customer allocation and storage-specific margins require separate tracking. Storage systems combine cells with power conversion, controls, safety and integration; battery manufacturing economics should not be treated as the entire value chain. The annual report identifies storage-battery R&D, production and sales as a principal business alongside power batteries. The filing lists storage-battery R&D, production and sales as one of the company's three principal battery businesses. The annual report identifies storage-battery systems as a core business alongside power batteries and power-distribution equipment.",
+      "next_evidence_needed": "Track node-level revenue, margins, qualification, orders, and counter-evidence."
+    },
+    {
+      "node_id": "storage_modules_packs",
+      "accepted_source_ids": [
+        "storage_002580_filing",
+        "storage_688063_filing"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "storage_claim_05",
+        "storage_claim_08"
+      ],
+      "evidence_strength_before": 4,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "customer_certification"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "Vertically integrated cell, module, BMS and system portfolios can reduce interface risk, but do not automatically prove superior project returns. Storage battery and system suppliers benefit from integrated products, while exact storage revenue, margins and customer concentration must remain visible. The annual report states that the company focuses on LFP cells, modules, BMS and storage-system integration across multiple stationary applications. The annual report identifies storage batteries and systems as the principal business and describes an end-to-end cell, module, BMS and system portfolio.",
+      "next_evidence_needed": "Track node-level revenue, margins, qualification, orders, and counter-evidence."
+    },
+    {
+      "node_id": "storage_pcs",
+      "accepted_source_ids": [
+        "storage_002335_filing",
+        "storage_300376_filing"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "storage_claim_06",
+        "storage_claim_07"
+      ],
+      "evidence_strength_before": 4,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "customer_certification"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "PCS and control quality affect efficiency, grid support and revenue-stack availability, making certification and field operation important evidence. Industry competition is shifting from hardware price toward delivery, operating efficiency and asset returns, increasing the value of controls and operations. The annual report identifies power-electronic conversion and energy management as core technologies supporting the new-energy and storage business. The filing describes storage competition shifting from hardware price toward engineering delivery, operating efficiency and asset returns across multiple use cases.",
+      "next_evidence_needed": "Track node-level revenue, margins, qualification, orders, and counter-evidence."
+    },
+    {
+      "node_id": "storage_bms",
+      "accepted_source_ids": [],
+      "pending_source_ids": [],
+      "supported_claim_ids": [],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 2,
+      "value_capture_score_review_status": "unsupported",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "needs_evidence",
+      "rationale": "No accepted node-specific claim or company relationship evidence is attached yet.",
+      "next_evidence_needed": "Attach an accepted primary source with node-specific product, service, market, or operating evidence before upgrading this node."
+    },
+    {
+      "node_id": "storage_ems",
+      "accepted_source_ids": [],
+      "pending_source_ids": [],
+      "supported_claim_ids": [],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 2,
+      "value_capture_score_review_status": "unsupported",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "needs_evidence",
+      "rationale": "No accepted node-specific claim or company relationship evidence is attached yet.",
+      "next_evidence_needed": "Attach an accepted primary source with node-specific product, service, market, or operating evidence before upgrading this node."
+    },
+    {
+      "node_id": "storage_thermal_management",
+      "accepted_source_ids": [],
+      "pending_source_ids": [],
+      "supported_claim_ids": [],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 2,
+      "value_capture_score_review_status": "unsupported",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "needs_evidence",
+      "rationale": "No accepted node-specific claim or company relationship evidence is attached yet.",
+      "next_evidence_needed": "Attach an accepted primary source with node-specific product, service, market, or operating evidence before upgrading this node."
+    },
+    {
+      "node_id": "storage_fire_protection",
+      "accepted_source_ids": [
+        "storage_300499_filing"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "storage_claim_10"
+      ],
+      "evidence_strength_before": 4,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "customer_certification"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "Tender-price pressure, under-utilization, degradation, safety incidents, warranty costs and uncertain market revenue can transfer value away from equipment volume.",
+      "next_evidence_needed": "Track node-level revenue, margins, qualification, orders, and counter-evidence."
+    },
+    {
+      "node_id": "storage_enclosure_electrical_bos",
+      "accepted_source_ids": [],
+      "pending_source_ids": [],
+      "supported_claim_ids": [],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 2,
+      "value_capture_score_review_status": "unsupported",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "needs_evidence",
+      "rationale": "No accepted node-specific claim or company relationship evidence is attached yet.",
+      "next_evidence_needed": "Attach an accepted primary source with node-specific product, service, market, or operating evidence before upgrading this node."
+    },
+    {
+      "node_id": "storage_system_integration",
+      "accepted_source_ids": [
+        "storage_300274_filing"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "storage_claim_04"
+      ],
+      "evidence_strength_before": 4,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "customer_certification"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "System integration captures value through architecture, grid-forming control, delivery, warranty and lifecycle performance. The filing describes storage interfaces, grid-forming control, charge/discharge coordination and integrated solar-storage microgrid applications.",
+      "next_evidence_needed": "Track node-level revenue, margins, qualification, orders, and counter-evidence."
+    },
+    {
+      "node_id": "storage_epc_grid_connection",
+      "accepted_source_ids": [],
+      "pending_source_ids": [],
+      "supported_claim_ids": [],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 2,
+      "value_capture_score_review_status": "unsupported",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "needs_evidence",
+      "rationale": "No accepted node-specific claim or company relationship evidence is attached yet.",
+      "next_evidence_needed": "Attach an accepted primary source with node-specific product, service, market, or operating evidence before upgrading this node."
+    },
+    {
+      "node_id": "storage_operations_maintenance",
+      "accepted_source_ids": [],
+      "pending_source_ids": [],
+      "supported_claim_ids": [],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 2,
+      "value_capture_score_review_status": "unsupported",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "needs_evidence",
+      "rationale": "No accepted node-specific claim or company relationship evidence is attached yet.",
+      "next_evidence_needed": "Attach an accepted primary source with node-specific product, service, market, or operating evidence before upgrading this node."
+    },
+    {
+      "node_id": "storage_market_participation",
+      "accepted_source_ids": [
+        "storage_688663_filing"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "storage_claim_09"
+      ],
+      "evidence_strength_before": 4,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "customer_certification"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "The key catalysts are higher utilization, broader ancillary-service participation, grid-forming demand and repeatable project economics.",
+      "next_evidence_needed": "Track node-level revenue, margins, qualification, orders, and counter-evidence."
+    },
+    {
+      "node_id": "grid_forming_pcs",
+      "accepted_source_ids": [],
+      "pending_source_ids": [],
+      "supported_claim_ids": [],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 2,
+      "value_capture_score_review_status": "unsupported",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "needs_evidence",
+      "rationale": "No accepted node-specific claim or company relationship evidence is attached yet.",
+      "next_evidence_needed": "Attach an accepted primary source with node-specific product, service, market, or operating evidence before upgrading this node."
+    }
+  ]
+}

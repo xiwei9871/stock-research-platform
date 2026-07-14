@@ -37,7 +37,7 @@ def test_theme_index_aggregates_validated_phase_outputs():
     ai_power = by_theme[AI_POWER_THEME_ID]
     robotics = by_theme[ROBOTICS_THEME_ID]
     assert ai_power["node_count"] == 13
-    assert ai_power["source_count"] == 10
+    assert ai_power["source_count"] == 13
     assert ai_power["claim_count"] == 10
     assert ai_power["company_count"] == 8
     assert ai_power["evidence_gap_count"] == 3
@@ -119,7 +119,7 @@ def test_source_and_claim_collections_preserve_quality_gates():
     sources = list_theme_research_sources(AI_POWER_THEME_ID)
     claims = list_theme_research_claims(AI_POWER_THEME_ID)
 
-    assert sources["total"] == 10
+    assert sources["total"] == 13
     assert claims["total"] == 10
     assert all(row["theme_id"] == AI_POWER_THEME_ID for row in sources["items"])
     assert all(row["theme_id"] == AI_POWER_THEME_ID for row in claims["items"])

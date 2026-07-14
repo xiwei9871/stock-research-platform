@@ -7071,6 +7071,13 @@ table.data-table td {
   font-size: 0.86rem;
 }
 
+.deep-research-disclaimer {
+  margin: 0;
+  color: var(--text-muted, #68726d);
+  font-size: 0.82rem;
+  text-align: right;
+}
+
 .industry-catalog-deep-research {
   display: grid;
   gap: 12px;

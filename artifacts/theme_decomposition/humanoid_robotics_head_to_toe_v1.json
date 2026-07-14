@@ -181,6 +181,97 @@
       "reliability_level": "S0",
       "review_status": "accepted",
       "notes": "CNINFO annual report reviewed for robot-sensor R&D and product capability."
+    },
+    {
+      "source_id": "robotics_tesla_official_material",
+      "source_type": "official_article",
+      "title": "Tesla official Optimus public materials",
+      "publisher": "Tesla",
+      "author": "",
+      "publish_date": "",
+      "url_or_ref": "public:tesla_optimus_official_materials",
+      "access_level": "public",
+      "reliability_level": "S1",
+      "notes": "Official public materials can support system-level architecture context after excerpt attachment.",
+      "review_status": "needs_full_text"
+    },
+    {
+      "source_id": "robotics_unitree_official_material",
+      "source_type": "official_article",
+      "title": "Unitree official humanoid robot public materials",
+      "publisher": "Unitree",
+      "author": "",
+      "publish_date": "",
+      "url_or_ref": "public:unitree_humanoid_official_materials",
+      "access_level": "public",
+      "reliability_level": "S1",
+      "notes": "Official public materials; used as source slot for form-factor and subsystem verification.",
+      "review_status": "needs_full_text"
+    },
+    {
+      "source_id": "robotics_company_filing_template",
+      "source_type": "company_filing",
+      "title": "Company filing slot for actuator, sensor, motor, and reducer suppliers",
+      "publisher": "Listed company",
+      "author": "",
+      "publish_date": "",
+      "url_or_ref": "template:attach_company_filing_before_company_mapping",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "notes": "S0 evidence requires actual public filing or announcement excerpt before company mapping is accepted.",
+      "review_status": "needs_full_text"
+    },
+    {
+      "source_id": "robotics_broker_bom_unseen",
+      "source_type": "broker_report",
+      "title": "Unseen broker BOM/value-chain report citation for humanoid robotics",
+      "publisher": "Broker research",
+      "author": "",
+      "publish_date": "",
+      "url_or_ref": "private_claimed:full_text_not_attached",
+      "access_level": "gated",
+      "reliability_level": "S2",
+      "notes": "Closed or cited broker content cannot be S0 without full text and excerpt-level traceability.",
+      "review_status": "needs_full_text"
+    },
+    {
+      "source_id": "robotics_media_summary",
+      "source_type": "media_article",
+      "title": "Media summary of humanoid robotics component supply chain",
+      "publisher": "Media",
+      "author": "",
+      "publish_date": "",
+      "url_or_ref": "pending:media_summary_url",
+      "access_level": "public",
+      "reliability_level": "S3",
+      "notes": "Secondary reporting; discovery signal only until corroborated.",
+      "review_status": "lead_only"
+    },
+    {
+      "source_id": "robotics_laozheng_video_clue",
+      "source_type": "video_claim",
+      "title": "老郑说AI前瞻：机器人产业从头到脚口播线索",
+      "publisher": "老郑说AI前瞻",
+      "author": "老郑说AI前瞻",
+      "publish_date": "",
+      "url_or_ref": "manual:douyin_video_observed_by_user",
+      "access_level": "private_claimed",
+      "reliability_level": "S4",
+      "notes": "Method clue only; not formal evidence.",
+      "review_status": "lead_only"
+    },
+    {
+      "source_id": "robotics_social_stock_mapping_unverified",
+      "source_type": "social_post",
+      "title": "Unverified social stock mapping for humanoid robotics suppliers",
+      "publisher": "Social platform",
+      "author": "",
+      "publish_date": "",
+      "url_or_ref": "manual:not_adopted_stock_mapping",
+      "access_level": "unknown",
+      "reliability_level": "S4",
+      "notes": "Not adopted by v1; retained only as follow-up queue clue.",
+      "review_status": "lead_only"
     }
   ],
   "claims": [
@@ -323,6 +414,92 @@
         "torque_sensor"
       ],
       "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "robotics_claim_head_to_toe_method",
+      "theme_id": "humanoid_robotics_head_to_toe_v1",
+      "source_id": "robotics_laozheng_video_clue",
+      "claim_text": "The head-to-toe method is useful for forcing complete component coverage, but node scores must be rebuilt from evidence.",
+      "claim_type": "tech_route",
+      "confidence": 0.35,
+      "evidence_status": "unverified",
+      "supporting_source_ids": [
+        "robotics_laozheng_video_clue"
+      ],
+      "affected_theme_nodes": [
+        "head_vision",
+        "torso_structure",
+        "arm_actuator",
+        "hand_dexterous",
+        "hip_joint",
+        "knee_joint",
+        "ankle_joint"
+      ],
+      "platform_use_status": "research_lead"
+    },
+    {
+      "claim_id": "robotics_claim_actuator_value",
+      "theme_id": "humanoid_robotics_head_to_toe_v1",
+      "source_id": "robotics_broker_bom_unseen",
+      "claim_text": "Actuator assemblies, reducers, roller screws, sensors, and motors should be separated because their value basis differs across BOM share, precision, scarcity, and certification.",
+      "claim_type": "value_capture",
+      "confidence": 0.55,
+      "evidence_status": "partially_verified",
+      "supporting_source_ids": [
+        "robotics_broker_bom_unseen",
+        "robotics_media_summary"
+      ],
+      "affected_theme_nodes": [
+        "arm_actuator",
+        "frameless_motor",
+        "harmonic_reducer",
+        "planetary_roller_screw",
+        "encoder",
+        "torque_sensor",
+        "six_axis_force_sensor"
+      ],
+      "platform_use_status": "draft"
+    },
+    {
+      "claim_id": "robotics_claim_system_architecture",
+      "theme_id": "humanoid_robotics_head_to_toe_v1",
+      "source_id": "robotics_tesla_official_material",
+      "claim_text": "Humanoid robotics research should distinguish perception, compute/control, structure, joints, actuation, sensors, battery, wiring, and materials before company mapping.",
+      "claim_type": "tech_route",
+      "confidence": 0.65,
+      "evidence_status": "partially_verified",
+      "supporting_source_ids": [
+        "robotics_tesla_official_material",
+        "robotics_unitree_official_material"
+      ],
+      "affected_theme_nodes": [
+        "head_vision",
+        "brain_ai_compute",
+        "controller",
+        "battery_bms",
+        "wiring_harness",
+        "lightweight_materials"
+      ],
+      "platform_use_status": "draft"
+    },
+    {
+      "claim_id": "robotics_claim_unverified_stock_mapping",
+      "theme_id": "humanoid_robotics_head_to_toe_v1",
+      "source_id": "robotics_social_stock_mapping_unverified",
+      "claim_text": "Social stock mappings for motor, reducer, screw, and sensor suppliers are not adopted until validated by filings, customer evidence, or reliable source material.",
+      "claim_type": "company_mapping",
+      "confidence": 0.1,
+      "evidence_status": "unverified",
+      "supporting_source_ids": [
+        "robotics_social_stock_mapping_unverified"
+      ],
+      "affected_theme_nodes": [
+        "frameless_motor",
+        "harmonic_reducer",
+        "planetary_roller_screw",
+        "six_axis_force_sensor"
+      ],
+      "platform_use_status": "blocked"
     }
   ],
   "nodes": [
@@ -337,7 +514,7 @@
       "bottleneck_score": 3,
       "localization_gap_score": 3,
       "supply_tightness_score": 2,
-      "evidence_strength": 3,
+      "evidence_strength": 2,
       "key_metrics": [
         "resolution",
         "latency",
@@ -347,7 +524,7 @@
       "overseas_leaders": [],
       "domestic_players": [],
       "related_stock_codes": [],
-      "node_review_status": "reviewed"
+      "node_review_status": "needs_evidence"
     },
     {
       "node_id": "brain_ai_compute",
@@ -405,7 +582,7 @@
       "bottleneck_score": 4,
       "localization_gap_score": 4,
       "supply_tightness_score": 4,
-      "evidence_strength": 3,
+      "evidence_strength": 2,
       "key_metrics": [
         "torque density",
         "backlash",
@@ -415,7 +592,7 @@
       "overseas_leaders": [],
       "domestic_players": [],
       "related_stock_codes": [],
-      "node_review_status": "reviewed"
+      "node_review_status": "needs_evidence"
     },
     {
       "node_id": "hand_dexterous",
@@ -451,7 +628,7 @@
       "bottleneck_score": 4,
       "localization_gap_score": 3,
       "supply_tightness_score": 3,
-      "evidence_strength": 3,
+      "evidence_strength": 2,
       "key_metrics": [
         "peak torque",
         "thermal control",
@@ -460,7 +637,7 @@
       "overseas_leaders": [],
       "domestic_players": [],
       "related_stock_codes": [],
-      "node_review_status": "reviewed"
+      "node_review_status": "needs_evidence"
     },
     {
       "node_id": "knee_joint",
@@ -473,7 +650,7 @@
       "bottleneck_score": 4,
       "localization_gap_score": 3,
       "supply_tightness_score": 3,
-      "evidence_strength": 3,
+      "evidence_strength": 2,
       "key_metrics": [
         "torque",
         "shock load",
@@ -482,7 +659,7 @@
       "overseas_leaders": [],
       "domestic_players": [],
       "related_stock_codes": [],
-      "node_review_status": "reviewed"
+      "node_review_status": "needs_evidence"
     },
     {
       "node_id": "ankle_joint",
@@ -495,7 +672,7 @@
       "bottleneck_score": 4,
       "localization_gap_score": 3,
       "supply_tightness_score": 3,
-      "evidence_strength": 3,
+      "evidence_strength": 2,
       "key_metrics": [
         "response time",
         "torque",
@@ -504,7 +681,7 @@
       "overseas_leaders": [],
       "domestic_players": [],
       "related_stock_codes": [],
-      "node_review_status": "reviewed"
+      "node_review_status": "needs_evidence"
     },
     {
       "node_id": "frameless_motor",
@@ -517,7 +694,7 @@
       "bottleneck_score": 4,
       "localization_gap_score": 4,
       "supply_tightness_score": 4,
-      "evidence_strength": 3,
+      "evidence_strength": 2,
       "key_metrics": [
         "torque density",
         "thermal performance",
@@ -527,7 +704,7 @@
       "overseas_leaders": [],
       "domestic_players": [],
       "related_stock_codes": [],
-      "node_review_status": "reviewed"
+      "node_review_status": "needs_evidence"
     },
     {
       "node_id": "harmonic_reducer",
@@ -631,7 +808,7 @@
       "bottleneck_score": 5,
       "localization_gap_score": 5,
       "supply_tightness_score": 4,
-      "evidence_strength": 3,
+      "evidence_strength": 2,
       "key_metrics": [
         "range",
         "accuracy",
@@ -641,7 +818,7 @@
       "overseas_leaders": [],
       "domestic_players": [],
       "related_stock_codes": [],
-      "node_review_status": "reviewed"
+      "node_review_status": "needs_evidence"
     },
     {
       "node_id": "tactile_sensor",
@@ -654,7 +831,7 @@
       "bottleneck_score": 4,
       "localization_gap_score": 4,
       "supply_tightness_score": 3,
-      "evidence_strength": 3,
+      "evidence_strength": 2,
       "key_metrics": [
         "sensitivity",
         "array density",
@@ -663,7 +840,7 @@
       "overseas_leaders": [],
       "domestic_players": [],
       "related_stock_codes": [],
-      "node_review_status": "reviewed"
+      "node_review_status": "needs_evidence"
     },
     {
       "node_id": "imu",
@@ -676,7 +853,7 @@
       "bottleneck_score": 2,
       "localization_gap_score": 2,
       "supply_tightness_score": 2,
-      "evidence_strength": 3,
+      "evidence_strength": 2,
       "key_metrics": [
         "drift",
         "latency",
@@ -685,7 +862,7 @@
       "overseas_leaders": [],
       "domestic_players": [],
       "related_stock_codes": [],
-      "node_review_status": "reviewed"
+      "node_review_status": "needs_evidence"
     },
     {
       "node_id": "battery_bms",
@@ -698,7 +875,7 @@
       "bottleneck_score": 3,
       "localization_gap_score": 2,
       "supply_tightness_score": 2,
-      "evidence_strength": 3,
+      "evidence_strength": 2,
       "key_metrics": [
         "energy density",
         "safety",
@@ -708,7 +885,7 @@
       "overseas_leaders": [],
       "domestic_players": [],
       "related_stock_codes": [],
-      "node_review_status": "reviewed"
+      "node_review_status": "needs_evidence"
     },
     {
       "node_id": "wiring_harness",
@@ -721,7 +898,7 @@
       "bottleneck_score": 3,
       "localization_gap_score": 2,
       "supply_tightness_score": 2,
-      "evidence_strength": 3,
+      "evidence_strength": 2,
       "key_metrics": [
         "bend life",
         "weight",
@@ -731,7 +908,7 @@
       "overseas_leaders": [],
       "domestic_players": [],
       "related_stock_codes": [],
-      "node_review_status": "reviewed"
+      "node_review_status": "needs_evidence"
     },
     {
       "node_id": "controller",
@@ -766,7 +943,7 @@
       "bottleneck_score": 4,
       "localization_gap_score": 4,
       "supply_tightness_score": 3,
-      "evidence_strength": 3,
+      "evidence_strength": 2,
       "key_metrics": [
         "precision",
         "load",
@@ -776,7 +953,7 @@
       "overseas_leaders": [],
       "domestic_players": [],
       "related_stock_codes": [],
-      "node_review_status": "reviewed"
+      "node_review_status": "needs_evidence"
     },
     {
       "node_id": "lightweight_materials",
@@ -789,7 +966,7 @@
       "bottleneck_score": 2,
       "localization_gap_score": 2,
       "supply_tightness_score": 2,
-      "evidence_strength": 3,
+      "evidence_strength": 2,
       "key_metrics": [
         "density",
         "stiffness",
@@ -799,10 +976,52 @@
       "overseas_leaders": [],
       "domestic_players": [],
       "related_stock_codes": [],
-      "node_review_status": "reviewed"
+      "node_review_status": "needs_evidence"
     }
   ],
-  "value_capture_assessments": [],
+  "value_capture_assessments": [
+    {
+      "node_id": "planetary_roller_screw",
+      "value_basis": "technology_barrier",
+      "assessment_text": "Planetary roller screw requires precision manufacturing validation before any bottleneck or company conclusion is published.",
+      "rank": 1,
+      "evidence_ids": [
+        "robotics_claim_actuator_value",
+        "robotics_company_filing_template"
+      ],
+      "uncertainty": "high"
+    },
+    {
+      "node_id": "harmonic_reducer",
+      "value_basis": "customer_certification",
+      "assessment_text": "Reducer value capture should be tested through backlash, lifetime, yield, and customer certification evidence.",
+      "rank": 2,
+      "evidence_ids": [
+        "robotics_claim_actuator_value"
+      ],
+      "uncertainty": "medium"
+    },
+    {
+      "node_id": "frameless_motor",
+      "value_basis": "gross_margin",
+      "assessment_text": "Motor value capture depends on torque density, thermal performance, yield, and whether the supplier controls actuator integration.",
+      "rank": 3,
+      "evidence_ids": [
+        "robotics_claim_actuator_value"
+      ],
+      "uncertainty": "medium"
+    },
+    {
+      "node_id": "six_axis_force_sensor",
+      "value_basis": "scarcity",
+      "assessment_text": "Six-axis force sensors may be scarce in high-performance applications; confirm with product data and customer qualification evidence.",
+      "rank": 4,
+      "evidence_ids": [
+        "robotics_claim_actuator_value"
+      ],
+      "uncertainty": "high"
+    }
+  ],
   "decomposition_templates": [
     {
       "template_id": "robotics_deep_research_template_v1",

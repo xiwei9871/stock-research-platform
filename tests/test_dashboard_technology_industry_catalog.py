@@ -48,7 +48,7 @@ def test_technology_industry_catalog_chain_api_trims_id_and_returns_theme_links(
         "ai_power_value_capture_v1"
     ]
     assert payload["deep_research"]["theme_id"] == "ai_power_value_capture_v1"
-    assert payload["deep_research"]["source_count"] == 10
+    assert payload["deep_research"]["source_count"] == 13
     assert payload["deep_research"]["reviewed_company_count"] == 8
     assert {key: payload[key] for key in EXPECTED_GUARDRAILS} == EXPECTED_GUARDRAILS
 

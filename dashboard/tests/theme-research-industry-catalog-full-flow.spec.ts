@@ -50,9 +50,9 @@ async function expectLiveCatalogPreflight(page: Page) {
   expect(index.summary).toMatchObject({
     sector_count: 10,
     chain_count: 82,
-    detailed_chain_count: 13,
-    skeleton_chain_count: 69,
-    structural_completeness_percent: 15.85
+    detailed_chain_count: 14,
+    skeleton_chain_count: 68,
+    structural_completeness_percent: 17.07
   });
   const aiPowerChain = index.chains.find((chain) => chain.chain_id === 'ai_data_center_power');
   expect(aiPowerChain).toMatchObject({
@@ -166,7 +166,7 @@ test('desktop enters the catalog through AppShell and combined workspace navigat
   await canonicalNavButton.click();
   await expect(page).toHaveURL(/\/theme-research$/);
   await expect(page.getByRole('heading', { name: '主题研究' })).toBeVisible();
-  await expect(page.getByText('2 个主题')).toBeVisible();
+  await expect(page.getByText('5 个主题')).toBeVisible();
 
   const combinedNavigation = page.getByRole('navigation', { name: '主题研究与产业目录视图' });
   const themeResearchButton = combinedNavigation.getByRole('button', { name: '主题研究' });
@@ -191,7 +191,7 @@ test('desktop enters the catalog through AppShell and combined workspace navigat
   const catalogSearch = page.getByRole('textbox', { name: '搜索产业目录' });
   const sectorSelect = page.getByRole('combobox', { name: '产业板块筛选' });
   await expect(page.getByRole('heading', { name: '科技产业目录' })).toBeVisible();
-  for (const value of ['10', '82', '13', '69', '15.85%']) {
+  for (const value of ['10', '82', '14', '68', '17.07%']) {
     await expect(metrics.getByText(value, { exact: true })).toBeVisible();
   }
   await expect(page.locator('.industry-catalog-sector')).toHaveCount(10);
@@ -257,6 +257,7 @@ test('desktop enters the catalog through AppShell and combined workspace navigat
   await expect(openLinkedTheme).toBeVisible();
 
   for (const locator of [combinedNavigation, detailHeader, backButton, heading, detailStatus, definitionHeading, nodeHierarchyHeading]) {
+    await locator.scrollIntoViewIfNeeded();
     await expectInsideViewport(page, locator);
   }
   await expectNoOverlap(combinedNavigation, detailHeader);

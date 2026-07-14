@@ -1,0 +1,237 @@
+{
+  "artifact_version": "semiconductor_manufacturing_equipment_source_pack_v1",
+  "theme_id": "semiconductor_manufacturing_equipment_value_chain_v1",
+  "as_of_date": "2026-07-14",
+  "sources": [
+    {
+      "source_id": "semi_eq_002371_filing",
+      "source_type": "company_filing",
+      "title": "北方华创2025年年度报告",
+      "publisher": "北方华创",
+      "author": "",
+      "publish_date": "2026-04-18",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-18/1225122918.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Company filing, page 14",
+      "evidence_summary": "Front-end equipment value is distributed across multiple qualified process tools; a broad product matrix does not by itself prove equal profit contribution by node. The annual report lists semiconductor equipment covering etch, thin-film deposition, thermal processing, wet cleaning, ion implantation, coat/develop and bonding.",
+      "supported_claim_ids": [
+        "semi_eq_claim_01"
+      ],
+      "supported_node_ids": [
+        "semiconductor_deposition_epitaxy"
+      ],
+      "limitations": "Most filings disclose broad equipment categories. Node-level revenue, gross margin, customer mix, imported critical components and repeat-order evidence remain incomplete.",
+      "notes": "CNINFO annual report reviewed for the semiconductor equipment product matrix."
+    },
+    {
+      "source_id": "semi_eq_002371_interim_filing",
+      "source_type": "company_filing",
+      "title": "北方华创2025年半年度报告",
+      "publisher": "北方华创",
+      "author": "",
+      "publish_date": "2025-08-29",
+      "url": "https://static.cninfo.com.cn/finalpage/2025-08-29/1224615664.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Theme claim and referenced disclosure",
+      "evidence_summary": "The investable catalyst is conversion from verification to repeat orders and installed-base expansion across multiple wafer-fab customers.",
+      "supported_claim_ids": [
+        "semi_eq_claim_09"
+      ],
+      "supported_node_ids": [
+        "semiconductor_wafer_handling_automation"
+      ],
+      "limitations": "Most filings disclose broad equipment categories. Node-level revenue, gross margin, customer mix, imported critical components and repeat-order evidence remain incomplete.",
+      "notes": "CNINFO interim report retained as a second-period validation source."
+    },
+    {
+      "source_id": "semi_eq_300567_filing",
+      "source_type": "company_filing",
+      "title": "精测电子2025年年度报告",
+      "publisher": "精测电子",
+      "author": "",
+      "publish_date": "2026-04-28",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-28/1225201722.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Company filing, page 11",
+      "evidence_summary": "Yield learning raises the importance of inspection, metrology and process-control coverage as process steps and packaging complexity increase. The annual report identifies semiconductor metrology and inspection as a core business serving wafer manufacturers.",
+      "supported_claim_ids": [
+        "semi_eq_claim_06"
+      ],
+      "supported_node_ids": [
+        "semiconductor_inspection_metrology_process_control"
+      ],
+      "limitations": "Most filings disclose broad equipment categories. Node-level revenue, gross margin, customer mix, imported critical components and repeat-order evidence remain incomplete.",
+      "notes": "CNINFO annual report reviewed for semiconductor inspection and metrology products."
+    },
+    {
+      "source_id": "semi_eq_300604_filing",
+      "source_type": "company_filing",
+      "title": "长川科技2025年年度报告",
+      "publisher": "长川科技",
+      "author": "",
+      "publish_date": "2026-04-25",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-25/1225193261.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Company filing, page 37",
+      "evidence_summary": "Testers, probers, handlers and optical inspection tools address different control points and require separate revenue and qualification tracking. The filing describes digital testers, probers, temperature handlers and AOI inspection equipment in its integrated-circuit equipment portfolio.",
+      "supported_claim_ids": [
+        "semi_eq_claim_07"
+      ],
+      "supported_node_ids": [
+        "semiconductor_inspection_metrology_process_control"
+      ],
+      "limitations": "Most filings disclose broad equipment categories. Node-level revenue, gross margin, customer mix, imported critical components and repeat-order evidence remain incomplete.",
+      "notes": "CNINFO annual report reviewed for tester, prober and AOI equipment."
+    },
+    {
+      "source_id": "semi_eq_688012_filing",
+      "source_type": "company_filing",
+      "title": "中微公司2025年年度报告",
+      "publisher": "中微公司",
+      "author": "",
+      "publish_date": "2026-03-31",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-03-31/1225062431.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Company filing, page 30",
+      "evidence_summary": "Etch commercialization depends on process capability, chamber reliability, customer qualification and sustained service support. The filing describes separate R&D and product teams for etch, thin-film and MOCVD equipment.",
+      "supported_claim_ids": [
+        "semi_eq_claim_02"
+      ],
+      "supported_node_ids": [
+        "semiconductor_etch"
+      ],
+      "limitations": "Most filings disclose broad equipment categories. Node-level revenue, gross margin, customer mix, imported critical components and repeat-order evidence remain incomplete.",
+      "notes": "CNINFO annual report reviewed for etch and thin-film equipment."
+    },
+    {
+      "source_id": "semi_eq_688012_interim_filing",
+      "source_type": "company_filing",
+      "title": "中微公司2025年半年度报告",
+      "publisher": "中微公司",
+      "author": "",
+      "publish_date": "2025-08-29",
+      "url": "https://static.cninfo.com.cn/finalpage/2025-08-29/1224606011.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Theme claim and referenced disclosure",
+      "evidence_summary": "Localization narratives can overstate value capture when node revenue, gross margin, customer concentration and imported subcomponents are not separately disclosed.",
+      "supported_claim_ids": [
+        "semi_eq_claim_10"
+      ],
+      "supported_node_ids": [
+        "semiconductor_facilities_pollution_control"
+      ],
+      "limitations": "Most filings disclose broad equipment categories. Node-level revenue, gross margin, customer mix, imported critical components and repeat-order evidence remain incomplete.",
+      "notes": "CNINFO interim report retained as a second-period validation source."
+    },
+    {
+      "source_id": "semi_eq_688037_filing",
+      "source_type": "company_filing",
+      "title": "芯源微2025年年度报告",
+      "publisher": "芯源微",
+      "author": "",
+      "publish_date": "2026-04-18",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-18/1225120170.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Company filing, page 16",
+      "evidence_summary": "Domestic patterning exposure is currently strongest in coat/develop and wet-process support; it should not be conflated with advanced scanner ownership. The filing states that revenue and profit are generated by selling lithography-process coat/develop equipment and single-wafer wet-process tools.",
+      "supported_claim_ids": [
+        "semi_eq_claim_05"
+      ],
+      "supported_node_ids": [
+        "semiconductor_lithography_patterning"
+      ],
+      "limitations": "Most filings disclose broad equipment categories. Node-level revenue, gross margin, customer mix, imported critical components and repeat-order evidence remain incomplete.",
+      "notes": "CNINFO annual report reviewed for coat/develop and wet-process equipment."
+    },
+    {
+      "source_id": "semi_eq_688082_filing",
+      "source_type": "company_filing",
+      "title": "盛美上海2025年年度报告",
+      "publisher": "盛美上海",
+      "author": "",
+      "publish_date": "2026-02-27",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-02-27/1224986438.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Company filing, page 14",
+      "evidence_summary": "Cleaning and wet processing expand with process complexity and contamination-control requirements across front-end and advanced packaging flows. The annual report identifies cleaning equipment as a principal front-end product and also lists electroplating, furnace, coat/develop and PECVD tools.",
+      "supported_claim_ids": [
+        "semi_eq_claim_03"
+      ],
+      "supported_node_ids": [
+        "semiconductor_clean_wet_process"
+      ],
+      "limitations": "Most filings disclose broad equipment categories. Node-level revenue, gross margin, customer mix, imported critical components and repeat-order evidence remain incomplete.",
+      "notes": "CNINFO annual report reviewed for cleaning and wet-process equipment."
+    },
+    {
+      "source_id": "semi_eq_688120_filing",
+      "source_type": "company_filing",
+      "title": "华海清科2025年年度报告",
+      "publisher": "华海清科",
+      "author": "",
+      "publish_date": "2026-04-23",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-23/1225156951.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Company filing, page 18",
+      "evidence_summary": "CMP value includes equipment, consumables, spares, process support and installed-base service rather than initial tool sales alone. The filing describes sales and service activities for CMP and thinning equipment, including consumables, spares, installation, maintenance and process testing.",
+      "supported_claim_ids": [
+        "semi_eq_claim_04"
+      ],
+      "supported_node_ids": [
+        "semiconductor_cmp"
+      ],
+      "limitations": "Most filings disclose broad equipment categories. Node-level revenue, gross margin, customer mix, imported critical components and repeat-order evidence remain incomplete.",
+      "notes": "CNINFO annual report reviewed for CMP equipment and service disclosures."
+    },
+    {
+      "source_id": "semi_eq_688652_filing",
+      "source_type": "company_filing",
+      "title": "京仪装备2025年年度报告",
+      "publisher": "京仪装备",
+      "author": "",
+      "publish_date": "2026-03-31",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-03-31/1225056304.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Company filing, page 27",
+      "evidence_summary": "Temperature, vacuum, gas and fluid-control subsystems are enabling infrastructure whose qualification and reliability can constrain tool delivery. The annual report describes semiconductor-specific temperature-control equipment and proprietary refrigeration, precision-control and energy-saving technologies.",
+      "supported_claim_ids": [
+        "semi_eq_claim_08"
+      ],
+      "supported_node_ids": [
+        "semiconductor_vacuum_gas_fluid_control"
+      ],
+      "limitations": "Most filings disclose broad equipment categories. Node-level revenue, gross margin, customer mix, imported critical components and repeat-order evidence remain incomplete.",
+      "notes": "CNINFO annual report reviewed for semiconductor temperature-control equipment."
+    }
+  ]
+}

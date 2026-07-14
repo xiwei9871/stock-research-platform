@@ -1,0 +1,406 @@
+{
+  "artifact_version": "humanoid_robotics_source_pack_v1",
+  "theme_id": "humanoid_robotics_head_to_toe_v1",
+  "as_of_date": "2026-07-14",
+  "sources": [
+    {
+      "source_id": "robotics_002896_filing",
+      "source_type": "company_filing",
+      "title": "中大力德2025年年度报告",
+      "publisher": "中大力德",
+      "author": "",
+      "publish_date": "2026-04-16",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-16/1225108100.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Company filing, page 19",
+      "evidence_summary": "Precision reducer modules are a localization opportunity, but batch production and humanoid customer allocation must be verified separately. The annual report discusses precision reducer module development for robotics and progress toward batch production.",
+      "supported_claim_ids": [
+        "robotics_claim_08"
+      ],
+      "supported_node_ids": [
+        "harmonic_reducer"
+      ],
+      "limitations": "Humanoid-specific revenue, customer names, allocation, gross margin, order conversion and batch-delivery evidence are still limited across most listed-company filings.",
+      "notes": "CNINFO annual report reviewed for precision reducer module development."
+    },
+    {
+      "source_id": "robotics_300100_filing",
+      "source_type": "company_filing",
+      "title": "双林股份2025年半年度报告",
+      "publisher": "双林股份",
+      "author": "",
+      "publish_date": "2025-08-28",
+      "url": "https://static.cninfo.com.cn/finalpage/2025-08-28/1224592445.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Company filing, page 10",
+      "evidence_summary": "Screw and joint-module products must be separated by screw type, process maturity, sample status and batch-delivery evidence. The filing lists humanoid-robot screws and joint modules among the company's robot-component products.",
+      "supported_claim_ids": [
+        "robotics_claim_01"
+      ],
+      "supported_node_ids": [
+        "planetary_roller_screw"
+      ],
+      "limitations": "Humanoid-specific revenue, customer names, allocation, gross margin, order conversion and batch-delivery evidence are still limited across most listed-company filings.",
+      "notes": "CNINFO interim report reviewed for humanoid screw and joint-module disclosure."
+    },
+    {
+      "source_id": "robotics_300580_filing",
+      "source_type": "company_filing",
+      "title": "贝斯特2025年年度报告",
+      "publisher": "贝斯特",
+      "author": "",
+      "publish_date": "2026-03-31",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-03-31/1225057936.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Company filing, page 16",
+      "evidence_summary": "Planetary roller screws require precision manufacturing, consistency and customer validation; sample completion does not prove material humanoid revenue. The annual report states that a self-developed planetary roller screw has produced samples and that process and equipment development is progressing.",
+      "supported_claim_ids": [
+        "robotics_claim_02"
+      ],
+      "supported_node_ids": [
+        "planetary_roller_screw"
+      ],
+      "limitations": "Humanoid-specific revenue, customer names, allocation, gross margin, order conversion and batch-delivery evidence are still limited across most listed-company filings.",
+      "notes": "CNINFO annual report reviewed for planetary roller screw progress."
+    },
+    {
+      "source_id": "robotics_301023_filing",
+      "source_type": "company_filing",
+      "title": "奕帆传动2025年年度报告",
+      "publisher": "奕帆传动",
+      "author": "",
+      "publish_date": "2026-04-25",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-25/1225175136.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Company filing, page 21",
+      "evidence_summary": "Dexterous-hand value can accumulate in compact motors, transmissions, sensing and integration, but each component requires direct commercialization evidence. The filing describes hollow-cup motor development for robot finger joints and links the design target to dexterous, lightweight hand motion.",
+      "supported_claim_ids": [
+        "robotics_claim_03"
+      ],
+      "supported_node_ids": [
+        "hand_dexterous"
+      ],
+      "limitations": "Humanoid-specific revenue, customer names, allocation, gross margin, order conversion and batch-delivery evidence are still limited across most listed-company filings.",
+      "notes": "CNINFO annual report reviewed for hollow-cup motor and robot finger-joint development."
+    },
+    {
+      "source_id": "robotics_301236_filing",
+      "source_type": "company_filing",
+      "title": "软通动力2025年半年度报告",
+      "publisher": "软通动力",
+      "author": "",
+      "publish_date": "2025-08-28",
+      "url": "https://static.cninfo.com.cn/finalpage/2025-08-28/1224597417.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Company filing, page 16",
+      "evidence_summary": "System vendors and software integrators are beneficiaries through robot products and deployment, but should not be mixed with component profit pools. The filing reports release of the Tianqing S1 biped humanoid robot and small-batch trial production and deployment of a wheeled robot.",
+      "supported_claim_ids": [
+        "robotics_claim_06"
+      ],
+      "supported_node_ids": [
+        "brain_ai_compute"
+      ],
+      "limitations": "Humanoid-specific revenue, customer names, allocation, gross margin, order conversion and batch-delivery evidence are still limited across most listed-company filings.",
+      "notes": "CNINFO interim report reviewed for humanoid product release and small-batch production."
+    },
+    {
+      "source_id": "robotics_301413_filing",
+      "source_type": "company_filing",
+      "title": "安培龙2025年年度报告",
+      "publisher": "安培龙",
+      "author": "",
+      "publish_date": "2026-04-24",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-24/1225161084.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Theme claim and referenced disclosure",
+      "evidence_summary": "The main research risk is treating R&D plans, general robot products or social supply-chain lists as verified humanoid revenue and profit exposure.",
+      "supported_claim_ids": [
+        "robotics_claim_10"
+      ],
+      "supported_node_ids": [
+        "torque_sensor"
+      ],
+      "limitations": "Humanoid-specific revenue, customer names, allocation, gross margin, order conversion and batch-delivery evidence are still limited across most listed-company filings.",
+      "notes": "CNINFO annual report reviewed for robot-sensor R&D and product capability."
+    },
+    {
+      "source_id": "robotics_600845_filing",
+      "source_type": "company_filing",
+      "title": "宝信软件2025年半年度报告",
+      "publisher": "宝信软件",
+      "author": "",
+      "publish_date": "2025-08-19",
+      "url": "https://static.cninfo.com.cn/finalpage/2025-08-19/1224502196.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Company filing, page 9",
+      "evidence_summary": "Industrial humanoid applications provide integration evidence, while repeat deliveries, utilization and application economics remain the key validation steps. The filing describes humanoid automatic loading and sampling applications, heavy-load robot designs and industrial robot delivery.",
+      "supported_claim_ids": [
+        "robotics_claim_07"
+      ],
+      "supported_node_ids": [
+        "controller"
+      ],
+      "limitations": "Humanoid-specific revenue, customer names, allocation, gross margin, order conversion and batch-delivery evidence are still limited across most listed-company filings.",
+      "notes": "CNINFO interim report reviewed for humanoid application and robot-system disclosures."
+    },
+    {
+      "source_id": "robotics_601689_filing",
+      "source_type": "company_filing",
+      "title": "拓普集团2025年年度报告",
+      "publisher": "拓普集团",
+      "author": "",
+      "publish_date": "2026-03-24",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-03-24/1225026446.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Theme claim and referenced disclosure",
+      "evidence_summary": "The commercialization catalyst is movement from prototypes and samples to repeatable small-batch and batch delivery with customer qualification.",
+      "supported_claim_ids": [
+        "robotics_claim_09"
+      ],
+      "supported_node_ids": [
+        "torso_structure"
+      ],
+      "limitations": "Humanoid-specific revenue, customer names, allocation, gross margin, order conversion and batch-delivery evidence are still limited across most listed-company filings.",
+      "notes": "CNINFO annual report reviewed for robot body structures, sensors, actuators and platform products."
+    },
+    {
+      "source_id": "robotics_603416_filing",
+      "source_type": "company_filing",
+      "title": "信捷电气2025年年度报告",
+      "publisher": "信捷电气",
+      "author": "",
+      "publish_date": "2026-04-17",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-17/1225114570.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Company filing, page 36",
+      "evidence_summary": "Encoders and servo feedback affect precision and safety; general robot use is evidence of capability but not proof of humanoid allocation. The annual report identifies optical encoders as key components used in robots and servo control and describes expansion of the humanoid-robot team.",
+      "supported_claim_ids": [
+        "robotics_claim_04"
+      ],
+      "supported_node_ids": [
+        "encoder"
+      ],
+      "limitations": "Humanoid-specific revenue, customer names, allocation, gross margin, order conversion and batch-delivery evidence are still limited across most listed-company filings.",
+      "notes": "CNINFO annual report reviewed for encoder products and humanoid-robot development."
+    },
+    {
+      "source_id": "robotics_688698_filing",
+      "source_type": "company_filing",
+      "title": "伟创电气2025年年度报告",
+      "publisher": "伟创电气",
+      "author": "",
+      "publish_date": "2026-04-16",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-16/1225107260.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Company filing, page 71",
+      "evidence_summary": "Servo motors, drives and integrated controllers form a qualified execution-control stack whose value depends on response, density and system integration. The filing states that the company is developing and supplying servo motors, drives and integrated controllers for humanoid, collaborative and mobile robots.",
+      "supported_claim_ids": [
+        "robotics_claim_05"
+      ],
+      "supported_node_ids": [
+        "controller"
+      ],
+      "limitations": "Humanoid-specific revenue, customer names, allocation, gross margin, order conversion and batch-delivery evidence are still limited across most listed-company filings.",
+      "notes": "CNINFO annual report reviewed for embodied-intelligence actuator and controller products."
+    },
+    {
+      "source_id": "robotics_broker_bom_unseen",
+      "source_type": "broker_report",
+      "title": "Unseen broker BOM/value-chain report citation for humanoid robotics",
+      "publisher": "Broker research",
+      "author": "",
+      "publish_date": "",
+      "url": "private_claimed:full_text_not_attached",
+      "access_level": "gated",
+      "reliability_level": "S2",
+      "review_status": "needs_full_text",
+      "document_status": "pending_review",
+      "evidence_locator": "Theme claim and referenced disclosure",
+      "evidence_summary": "Actuator assemblies, reducers, roller screws, sensors, and motors should be separated because their value basis differs across BOM share, precision, scarcity, and certification.",
+      "supported_claim_ids": [
+        "robotics_claim_actuator_value"
+      ],
+      "supported_node_ids": [
+        "arm_actuator",
+        "encoder",
+        "frameless_motor",
+        "harmonic_reducer",
+        "planetary_roller_screw",
+        "six_axis_force_sensor",
+        "torque_sensor"
+      ],
+      "limitations": "Humanoid-specific revenue, customer names, allocation, gross margin, order conversion and batch-delivery evidence are still limited across most listed-company filings.",
+      "notes": "Closed or cited broker content cannot be S0 without full text and excerpt-level traceability."
+    },
+    {
+      "source_id": "robotics_laozheng_video_clue",
+      "source_type": "video_claim",
+      "title": "老郑说AI前瞻：机器人产业从头到脚口播线索",
+      "publisher": "老郑说AI前瞻",
+      "author": "老郑说AI前瞻",
+      "publish_date": "",
+      "url": "manual:douyin_video_observed_by_user",
+      "access_level": "private_claimed",
+      "reliability_level": "S4",
+      "review_status": "lead_only",
+      "document_status": "pending_review",
+      "evidence_locator": "Theme claim and referenced disclosure",
+      "evidence_summary": "The head-to-toe method is useful for forcing complete component coverage, but node scores must be rebuilt from evidence.",
+      "supported_claim_ids": [
+        "robotics_claim_head_to_toe_method"
+      ],
+      "supported_node_ids": [
+        "ankle_joint",
+        "arm_actuator",
+        "hand_dexterous",
+        "head_vision",
+        "hip_joint",
+        "knee_joint",
+        "torso_structure"
+      ],
+      "limitations": "Humanoid-specific revenue, customer names, allocation, gross margin, order conversion and batch-delivery evidence are still limited across most listed-company filings.",
+      "notes": "Method clue only; not formal evidence."
+    },
+    {
+      "source_id": "robotics_media_summary",
+      "source_type": "media_article",
+      "title": "Media summary of humanoid robotics component supply chain",
+      "publisher": "Media",
+      "author": "",
+      "publish_date": "",
+      "url": "pending:media_summary_url",
+      "access_level": "public",
+      "reliability_level": "S3",
+      "review_status": "lead_only",
+      "document_status": "pending_review",
+      "evidence_locator": "Theme claim and referenced disclosure",
+      "evidence_summary": "Actuator assemblies, reducers, roller screws, sensors, and motors should be separated because their value basis differs across BOM share, precision, scarcity, and certification.",
+      "supported_claim_ids": [
+        "robotics_claim_actuator_value"
+      ],
+      "supported_node_ids": [
+        "arm_actuator",
+        "encoder",
+        "frameless_motor",
+        "harmonic_reducer",
+        "planetary_roller_screw",
+        "six_axis_force_sensor",
+        "torque_sensor"
+      ],
+      "limitations": "Humanoid-specific revenue, customer names, allocation, gross margin, order conversion and batch-delivery evidence are still limited across most listed-company filings.",
+      "notes": "Secondary reporting; discovery signal only until corroborated."
+    },
+    {
+      "source_id": "robotics_social_stock_mapping_unverified",
+      "source_type": "social_post",
+      "title": "Unverified social stock mapping for humanoid robotics suppliers",
+      "publisher": "Social platform",
+      "author": "",
+      "publish_date": "",
+      "url": "manual:not_adopted_stock_mapping",
+      "access_level": "unknown",
+      "reliability_level": "S4",
+      "review_status": "lead_only",
+      "document_status": "pending_review",
+      "evidence_locator": "Theme claim and referenced disclosure",
+      "evidence_summary": "Social stock mappings for motor, reducer, screw, and sensor suppliers are not adopted until validated by filings, customer evidence, or reliable source material.",
+      "supported_claim_ids": [
+        "robotics_claim_unverified_stock_mapping"
+      ],
+      "supported_node_ids": [
+        "frameless_motor",
+        "harmonic_reducer",
+        "planetary_roller_screw",
+        "six_axis_force_sensor"
+      ],
+      "limitations": "Humanoid-specific revenue, customer names, allocation, gross margin, order conversion and batch-delivery evidence are still limited across most listed-company filings.",
+      "notes": "Not adopted by v1; retained only as follow-up queue clue."
+    },
+    {
+      "source_id": "robotics_tesla_official_material",
+      "source_type": "official_article",
+      "title": "Tesla official Optimus public materials",
+      "publisher": "Tesla",
+      "author": "",
+      "publish_date": "",
+      "url": "public:tesla_optimus_official_materials",
+      "access_level": "public",
+      "reliability_level": "S1",
+      "review_status": "needs_full_text",
+      "document_status": "pending_review",
+      "evidence_locator": "Theme claim and referenced disclosure",
+      "evidence_summary": "Humanoid robotics research should distinguish perception, compute/control, structure, joints, actuation, sensors, battery, wiring, and materials before company mapping.",
+      "supported_claim_ids": [
+        "robotics_claim_system_architecture"
+      ],
+      "supported_node_ids": [
+        "battery_bms",
+        "brain_ai_compute",
+        "controller",
+        "head_vision",
+        "lightweight_materials",
+        "wiring_harness"
+      ],
+      "limitations": "Humanoid-specific revenue, customer names, allocation, gross margin, order conversion and batch-delivery evidence are still limited across most listed-company filings.",
+      "notes": "Official public materials can support system-level architecture context after excerpt attachment."
+    },
+    {
+      "source_id": "robotics_unitree_official_material",
+      "source_type": "official_article",
+      "title": "Unitree official humanoid robot public materials",
+      "publisher": "Unitree",
+      "author": "",
+      "publish_date": "",
+      "url": "public:unitree_humanoid_official_materials",
+      "access_level": "public",
+      "reliability_level": "S1",
+      "review_status": "needs_full_text",
+      "document_status": "pending_review",
+      "evidence_locator": "Theme claim and referenced disclosure",
+      "evidence_summary": "Humanoid robotics research should distinguish perception, compute/control, structure, joints, actuation, sensors, battery, wiring, and materials before company mapping.",
+      "supported_claim_ids": [
+        "robotics_claim_system_architecture"
+      ],
+      "supported_node_ids": [
+        "battery_bms",
+        "brain_ai_compute",
+        "controller",
+        "head_vision",
+        "lightweight_materials",
+        "wiring_harness"
+      ],
+      "limitations": "Humanoid-specific revenue, customer names, allocation, gross margin, order conversion and batch-delivery evidence are still limited across most listed-company filings.",
+      "notes": "Official public materials; used as source slot for form-factor and subsystem verification."
+    }
+  ]
+}

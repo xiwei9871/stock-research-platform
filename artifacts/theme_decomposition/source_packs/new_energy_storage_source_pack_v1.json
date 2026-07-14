@@ -1,0 +1,237 @@
+{
+  "artifact_version": "new_energy_storage_source_pack_v1",
+  "theme_id": "new_energy_storage_value_chain_v1",
+  "as_of_date": "2026-07-14",
+  "sources": [
+    {
+      "source_id": "storage_002074_filing",
+      "source_type": "company_filing",
+      "title": "国轩高科2025年年度报告",
+      "publisher": "国轩高科",
+      "author": "",
+      "publish_date": "2026-04-29",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-29/1225254220.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Company filing, page 10",
+      "evidence_summary": "Storage systems combine cells with power conversion, controls, safety and integration; battery manufacturing economics should not be treated as the entire value chain. The annual report identifies storage-battery systems as a core business alongside power batteries and power-distribution equipment.",
+      "supported_claim_ids": [
+        "storage_claim_03"
+      ],
+      "supported_node_ids": [
+        "storage_cells_materials"
+      ],
+      "limitations": "Storage-specific revenue, project margin, utilization hours, degradation, warranty provisions, customer concentration and revenue-stack composition remain unevenly disclosed.",
+      "notes": "CNINFO annual report reviewed for storage battery systems."
+    },
+    {
+      "source_id": "storage_002335_filing",
+      "source_type": "company_filing",
+      "title": "科华数据2025年年度报告",
+      "publisher": "科华数据",
+      "author": "",
+      "publish_date": "2026-04-27",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-27/1225194937.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Company filing, page 17",
+      "evidence_summary": "Industry competition is shifting from hardware price toward delivery, operating efficiency and asset returns, increasing the value of controls and operations. The filing describes storage competition shifting from hardware price toward engineering delivery, operating efficiency and asset returns across multiple use cases.",
+      "supported_claim_ids": [
+        "storage_claim_07"
+      ],
+      "supported_node_ids": [
+        "storage_pcs"
+      ],
+      "limitations": "Storage-specific revenue, project margin, utilization hours, degradation, warranty provisions, customer concentration and revenue-stack composition remain unevenly disclosed.",
+      "notes": "CNINFO annual report reviewed for storage systems, delivery and operations."
+    },
+    {
+      "source_id": "storage_002580_filing",
+      "source_type": "company_filing",
+      "title": "圣阳股份2025年年度报告",
+      "publisher": "圣阳股份",
+      "author": "",
+      "publish_date": "2026-04-24",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-24/1225172160.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Company filing, page 11",
+      "evidence_summary": "Storage battery and system suppliers benefit from integrated products, while exact storage revenue, margins and customer concentration must remain visible. The annual report identifies storage batteries and systems as the principal business and describes an end-to-end cell, module, BMS and system portfolio.",
+      "supported_claim_ids": [
+        "storage_claim_08"
+      ],
+      "supported_node_ids": [
+        "storage_modules_packs"
+      ],
+      "limitations": "Storage-specific revenue, project margin, utilization hours, degradation, warranty provisions, customer concentration and revenue-stack composition remain unevenly disclosed.",
+      "notes": "CNINFO annual report reviewed for storage cells, modules, BMS and systems."
+    },
+    {
+      "source_id": "storage_300014_filing",
+      "source_type": "company_filing",
+      "title": "亿纬锂能2025年年度报告",
+      "publisher": "亿纬锂能",
+      "author": "",
+      "publish_date": "2026-03-28",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-03-28/1225045391.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Company filing, page 11",
+      "evidence_summary": "Cell suppliers participate directly in stationary storage, but chemistry mix, customer allocation and storage-specific margins require separate tracking. The filing lists storage-battery R&D, production and sales as one of the company's three principal battery businesses.",
+      "supported_claim_ids": [
+        "storage_claim_02"
+      ],
+      "supported_node_ids": [
+        "storage_cells_materials"
+      ],
+      "limitations": "Storage-specific revenue, project margin, utilization hours, degradation, warranty provisions, customer concentration and revenue-stack composition remain unevenly disclosed.",
+      "notes": "CNINFO annual report reviewed for storage-cell business."
+    },
+    {
+      "source_id": "storage_300274_filing",
+      "source_type": "company_filing",
+      "title": "阳光电源2025年半年度报告",
+      "publisher": "阳光电源",
+      "author": "",
+      "publish_date": "2025-08-26",
+      "url": "https://static.cninfo.com.cn/finalpage/2025-08-26/1224567943.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Company filing, page 25",
+      "evidence_summary": "System integration captures value through architecture, grid-forming control, delivery, warranty and lifecycle performance. The filing describes storage interfaces, grid-forming control, charge/discharge coordination and integrated solar-storage microgrid applications.",
+      "supported_claim_ids": [
+        "storage_claim_04"
+      ],
+      "supported_node_ids": [
+        "storage_system_integration"
+      ],
+      "limitations": "Storage-specific revenue, project margin, utilization hours, degradation, warranty provisions, customer concentration and revenue-stack composition remain unevenly disclosed.",
+      "notes": "CNINFO interim report reviewed for grid-forming and integrated storage-system disclosures."
+    },
+    {
+      "source_id": "storage_300376_filing",
+      "source_type": "company_filing",
+      "title": "易事特2025年年度报告",
+      "publisher": "易事特",
+      "author": "",
+      "publish_date": "2026-04-29",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-29/1225232534.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Company filing, page 10",
+      "evidence_summary": "PCS and control quality affect efficiency, grid support and revenue-stack availability, making certification and field operation important evidence. The annual report identifies power-electronic conversion and energy management as core technologies supporting the new-energy and storage business.",
+      "supported_claim_ids": [
+        "storage_claim_06"
+      ],
+      "supported_node_ids": [
+        "storage_pcs"
+      ],
+      "limitations": "Storage-specific revenue, project margin, utilization hours, degradation, warranty provisions, customer concentration and revenue-stack composition remain unevenly disclosed.",
+      "notes": "CNINFO annual report reviewed for power-electronic conversion and storage business."
+    },
+    {
+      "source_id": "storage_300499_filing",
+      "source_type": "company_filing",
+      "title": "高澜股份2025年年度报告",
+      "publisher": "高澜股份",
+      "author": "",
+      "publish_date": "2026-04-24",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-24/1225160679.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Theme claim and referenced disclosure",
+      "evidence_summary": "Tender-price pressure, under-utilization, degradation, safety incidents, warranty costs and uncertain market revenue can transfer value away from equipment volume.",
+      "supported_claim_ids": [
+        "storage_claim_10"
+      ],
+      "supported_node_ids": [
+        "storage_fire_protection"
+      ],
+      "limitations": "Storage-specific revenue, project margin, utilization hours, degradation, warranty provisions, customer concentration and revenue-stack composition remain unevenly disclosed.",
+      "notes": "CNINFO annual report reviewed for storage liquid-cooling products and thermal-management technology."
+    },
+    {
+      "source_id": "storage_300750_filing",
+      "source_type": "company_filing",
+      "title": "宁德时代2025年年度报告",
+      "publisher": "宁德时代",
+      "author": "",
+      "publish_date": "2026-03-10",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-03-10/1225002214.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Company filing, page 14",
+      "evidence_summary": "Storage-cell value depends on safety, cycle life, degradation, cost and warranty performance rather than shipment volume alone. The annual report identifies storage-battery R&D, production and sales as a principal business alongside power batteries.",
+      "supported_claim_ids": [
+        "storage_claim_01"
+      ],
+      "supported_node_ids": [
+        "storage_cells_materials"
+      ],
+      "limitations": "Storage-specific revenue, project margin, utilization hours, degradation, warranty provisions, customer concentration and revenue-stack composition remain unevenly disclosed.",
+      "notes": "CNINFO annual report reviewed for storage-battery principal business."
+    },
+    {
+      "source_id": "storage_688063_filing",
+      "source_type": "company_filing",
+      "title": "派能科技2025年年度报告",
+      "publisher": "派能科技",
+      "author": "",
+      "publish_date": "2026-04-01",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-01/1225068748.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Company filing, page 16",
+      "evidence_summary": "Vertically integrated cell, module, BMS and system portfolios can reduce interface risk, but do not automatically prove superior project returns. The annual report states that the company focuses on LFP cells, modules, BMS and storage-system integration across multiple stationary applications.",
+      "supported_claim_ids": [
+        "storage_claim_05"
+      ],
+      "supported_node_ids": [
+        "storage_modules_packs"
+      ],
+      "limitations": "Storage-specific revenue, project margin, utilization hours, degradation, warranty provisions, customer concentration and revenue-stack composition remain unevenly disclosed.",
+      "notes": "CNINFO annual report reviewed for cells, modules, BMS and system integration."
+    },
+    {
+      "source_id": "storage_688663_filing",
+      "source_type": "company_filing",
+      "title": "新风光2025年年度报告",
+      "publisher": "新风光",
+      "author": "",
+      "publish_date": "2026-04-09",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-09/1225086238.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Theme claim and referenced disclosure",
+      "evidence_summary": "The key catalysts are higher utilization, broader ancillary-service participation, grid-forming demand and repeatable project economics.",
+      "supported_claim_ids": [
+        "storage_claim_09"
+      ],
+      "supported_node_ids": [
+        "storage_market_participation"
+      ],
+      "limitations": "Storage-specific revenue, project margin, utilization hours, degradation, warranty provisions, customer concentration and revenue-stack composition remain unevenly disclosed.",
+      "notes": "CNINFO annual report reviewed for PCS, BMS coordination and smart-storage operation."
+    }
+  ]
+}

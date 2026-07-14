@@ -508,6 +508,7 @@ function DeepIndustryOverview({
         <p>{profile.evidence_gap_summary}</p>
         <NodeTable nodes={detail.evidence_gaps} compact />
       </section>
+      <p className="deep-research-disclaimer">仅用于研究，不构成投资建议。</p>
     </div>
   );
 }

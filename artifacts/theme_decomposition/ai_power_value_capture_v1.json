@@ -423,7 +423,10 @@
       "platform_use_status": "reviewed",
       "supporting_source_ids": [
         "ai_power_kehua_2025_annual_report",
-        "ai_power_honor_electronic_2025_annual_report"
+        "ai_power_honor_electronic_2025_annual_report",
+        "ai_power_domestic_broker_report_lead",
+        "ai_power_media_secondary_lead",
+        "ai_power_video_claim_lead"
       ],
       "affected_theme_nodes": [
         "transformer",

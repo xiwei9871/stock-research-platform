@@ -1,0 +1,187 @@
+{
+  "artifact_version": "semiconductor_manufacturing_equipment_claim_review_v1",
+  "theme_id": "semiconductor_manufacturing_equipment_value_chain_v1",
+  "as_of_date": "2026-07-14",
+  "claim_reviews": [
+    {
+      "claim_id": "semi_eq_claim_01",
+      "claim_text": "Front-end equipment value is distributed across multiple qualified process tools; a broad product matrix does not by itself prove equal profit contribution by node.",
+      "claim_type": "value_capture",
+      "review_decision": "reviewed",
+      "evidence_status": "verified",
+      "confidence": 0.86,
+      "accepted_source_ids": [
+        "semi_eq_002371_filing"
+      ],
+      "pending_source_ids": [],
+      "affected_node_ids": [
+        "semiconductor_deposition_epitaxy"
+      ],
+      "rationale": "Evidence is retained at source and node level; platform status is reviewed.",
+      "uncertainty": "Most filings disclose broad equipment categories. Node-level revenue, gross margin, customer mix, imported critical components and repeat-order evidence remain incomplete.",
+      "next_evidence_needed": "Add node-level revenue, margin, customer qualification, orders, and disconfirming evidence where still undisclosed."
+    },
+    {
+      "claim_id": "semi_eq_claim_02",
+      "claim_text": "Etch commercialization depends on process capability, chamber reliability, customer qualification and sustained service support.",
+      "claim_type": "bottleneck",
+      "review_decision": "reviewed",
+      "evidence_status": "verified",
+      "confidence": 0.86,
+      "accepted_source_ids": [
+        "semi_eq_688012_filing"
+      ],
+      "pending_source_ids": [],
+      "affected_node_ids": [
+        "semiconductor_etch"
+      ],
+      "rationale": "Evidence is retained at source and node level; platform status is reviewed.",
+      "uncertainty": "Most filings disclose broad equipment categories. Node-level revenue, gross margin, customer mix, imported critical components and repeat-order evidence remain incomplete.",
+      "next_evidence_needed": "Add node-level revenue, margin, customer qualification, orders, and disconfirming evidence where still undisclosed."
+    },
+    {
+      "claim_id": "semi_eq_claim_03",
+      "claim_text": "Cleaning and wet processing expand with process complexity and contamination-control requirements across front-end and advanced packaging flows.",
+      "claim_type": "tech_route",
+      "review_decision": "reviewed",
+      "evidence_status": "verified",
+      "confidence": 0.86,
+      "accepted_source_ids": [
+        "semi_eq_688082_filing"
+      ],
+      "pending_source_ids": [],
+      "affected_node_ids": [
+        "semiconductor_clean_wet_process"
+      ],
+      "rationale": "Evidence is retained at source and node level; platform status is reviewed.",
+      "uncertainty": "Most filings disclose broad equipment categories. Node-level revenue, gross margin, customer mix, imported critical components and repeat-order evidence remain incomplete.",
+      "next_evidence_needed": "Add node-level revenue, margin, customer qualification, orders, and disconfirming evidence where still undisclosed."
+    },
+    {
+      "claim_id": "semi_eq_claim_04",
+      "claim_text": "CMP value includes equipment, consumables, spares, process support and installed-base service rather than initial tool sales alone.",
+      "claim_type": "value_capture",
+      "review_decision": "reviewed",
+      "evidence_status": "verified",
+      "confidence": 0.86,
+      "accepted_source_ids": [
+        "semi_eq_688120_filing"
+      ],
+      "pending_source_ids": [],
+      "affected_node_ids": [
+        "semiconductor_cmp"
+      ],
+      "rationale": "Evidence is retained at source and node level; platform status is reviewed.",
+      "uncertainty": "Most filings disclose broad equipment categories. Node-level revenue, gross margin, customer mix, imported critical components and repeat-order evidence remain incomplete.",
+      "next_evidence_needed": "Add node-level revenue, margin, customer qualification, orders, and disconfirming evidence where still undisclosed."
+    },
+    {
+      "claim_id": "semi_eq_claim_05",
+      "claim_text": "Domestic patterning exposure is currently strongest in coat/develop and wet-process support; it should not be conflated with advanced scanner ownership.",
+      "claim_type": "localization",
+      "review_decision": "reviewed",
+      "evidence_status": "verified",
+      "confidence": 0.86,
+      "accepted_source_ids": [
+        "semi_eq_688037_filing"
+      ],
+      "pending_source_ids": [],
+      "affected_node_ids": [
+        "semiconductor_lithography_patterning"
+      ],
+      "rationale": "Evidence is retained at source and node level; platform status is reviewed.",
+      "uncertainty": "Most filings disclose broad equipment categories. Node-level revenue, gross margin, customer mix, imported critical components and repeat-order evidence remain incomplete.",
+      "next_evidence_needed": "Add node-level revenue, margin, customer qualification, orders, and disconfirming evidence where still undisclosed."
+    },
+    {
+      "claim_id": "semi_eq_claim_06",
+      "claim_text": "Yield learning raises the importance of inspection, metrology and process-control coverage as process steps and packaging complexity increase.",
+      "claim_type": "bottleneck",
+      "review_decision": "reviewed",
+      "evidence_status": "verified",
+      "confidence": 0.86,
+      "accepted_source_ids": [
+        "semi_eq_300567_filing"
+      ],
+      "pending_source_ids": [],
+      "affected_node_ids": [
+        "semiconductor_inspection_metrology_process_control"
+      ],
+      "rationale": "Evidence is retained at source and node level; platform status is reviewed.",
+      "uncertainty": "Most filings disclose broad equipment categories. Node-level revenue, gross margin, customer mix, imported critical components and repeat-order evidence remain incomplete.",
+      "next_evidence_needed": "Add node-level revenue, margin, customer qualification, orders, and disconfirming evidence where still undisclosed."
+    },
+    {
+      "claim_id": "semi_eq_claim_07",
+      "claim_text": "Testers, probers, handlers and optical inspection tools address different control points and require separate revenue and qualification tracking.",
+      "claim_type": "value_capture",
+      "review_decision": "reviewed",
+      "evidence_status": "verified",
+      "confidence": 0.86,
+      "accepted_source_ids": [
+        "semi_eq_300604_filing"
+      ],
+      "pending_source_ids": [],
+      "affected_node_ids": [
+        "semiconductor_inspection_metrology_process_control"
+      ],
+      "rationale": "Evidence is retained at source and node level; platform status is reviewed.",
+      "uncertainty": "Most filings disclose broad equipment categories. Node-level revenue, gross margin, customer mix, imported critical components and repeat-order evidence remain incomplete.",
+      "next_evidence_needed": "Add node-level revenue, margin, customer qualification, orders, and disconfirming evidence where still undisclosed."
+    },
+    {
+      "claim_id": "semi_eq_claim_08",
+      "claim_text": "Temperature, vacuum, gas and fluid-control subsystems are enabling infrastructure whose qualification and reliability can constrain tool delivery.",
+      "claim_type": "supply_constraint",
+      "review_decision": "reviewed",
+      "evidence_status": "verified",
+      "confidence": 0.86,
+      "accepted_source_ids": [
+        "semi_eq_688652_filing"
+      ],
+      "pending_source_ids": [],
+      "affected_node_ids": [
+        "semiconductor_vacuum_gas_fluid_control"
+      ],
+      "rationale": "Evidence is retained at source and node level; platform status is reviewed.",
+      "uncertainty": "Most filings disclose broad equipment categories. Node-level revenue, gross margin, customer mix, imported critical components and repeat-order evidence remain incomplete.",
+      "next_evidence_needed": "Add node-level revenue, margin, customer qualification, orders, and disconfirming evidence where still undisclosed."
+    },
+    {
+      "claim_id": "semi_eq_claim_09",
+      "claim_text": "The investable catalyst is conversion from verification to repeat orders and installed-base expansion across multiple wafer-fab customers.",
+      "claim_type": "catalyst",
+      "review_decision": "reviewed",
+      "evidence_status": "verified",
+      "confidence": 0.86,
+      "accepted_source_ids": [
+        "semi_eq_002371_interim_filing"
+      ],
+      "pending_source_ids": [],
+      "affected_node_ids": [
+        "semiconductor_wafer_handling_automation"
+      ],
+      "rationale": "Evidence is retained at source and node level; platform status is reviewed.",
+      "uncertainty": "Most filings disclose broad equipment categories. Node-level revenue, gross margin, customer mix, imported critical components and repeat-order evidence remain incomplete.",
+      "next_evidence_needed": "Add node-level revenue, margin, customer qualification, orders, and disconfirming evidence where still undisclosed."
+    },
+    {
+      "claim_id": "semi_eq_claim_10",
+      "claim_text": "Localization narratives can overstate value capture when node revenue, gross margin, customer concentration and imported subcomponents are not separately disclosed.",
+      "claim_type": "risk",
+      "review_decision": "reviewed",
+      "evidence_status": "partially_verified",
+      "confidence": 0.86,
+      "accepted_source_ids": [
+        "semi_eq_688012_interim_filing"
+      ],
+      "pending_source_ids": [],
+      "affected_node_ids": [
+        "semiconductor_facilities_pollution_control"
+      ],
+      "rationale": "Evidence is retained at source and node level; platform status is reviewed.",
+      "uncertainty": "Most filings disclose broad equipment categories. Node-level revenue, gross margin, customer mix, imported critical components and repeat-order evidence remain incomplete.",
+      "next_evidence_needed": "Add node-level revenue, margin, customer qualification, orders, and disconfirming evidence where still undisclosed."
+    }
+  ]
+}

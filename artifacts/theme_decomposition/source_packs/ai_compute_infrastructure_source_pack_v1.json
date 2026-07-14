@@ -1,0 +1,238 @@
+{
+  "artifact_version": "ai_compute_infrastructure_source_pack_v1",
+  "theme_id": "ai_compute_infrastructure_value_chain_v1",
+  "as_of_date": "2026-07-14",
+  "sources": [
+    {
+      "source_id": "ai_compute_000977_filing",
+      "source_type": "company_filing",
+      "title": "浪潮信息2025年年度报告",
+      "publisher": "浪潮信息",
+      "author": "",
+      "publish_date": "2026-04-11",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-11/1225096638.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Company filing, page 11",
+      "evidence_summary": "Server-system value depends on heterogeneous compute support, rack integration, qualification, delivery and lifecycle service rather than chassis volume alone. The filing describes server and open-compute platform development, including standards and architectures supporting heterogeneous processors.",
+      "supported_claim_ids": [
+        "ai_compute_claim_01"
+      ],
+      "supported_node_ids": [
+        "ai_servers_racks"
+      ],
+      "limitations": "Product-level revenue, accelerator allocation, hyperscaler concentration, cluster utilization, margin by speed generation and domestic-supply substitution remain incomplete.",
+      "notes": "CNINFO annual report reviewed for server and open-compute products."
+    },
+    {
+      "source_id": "ai_compute_002281_filing",
+      "source_type": "company_filing",
+      "title": "光迅科技2025年年度报告",
+      "publisher": "光迅科技",
+      "author": "",
+      "publish_date": "2026-04-23",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-23/1225148212.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Company filing, page 10",
+      "evidence_summary": "Optical devices, modules and subsystems provide multiple domestic participation points, but speed generation and customer qualification must be separated. The filing identifies optical devices, modules and subsystems for telecommunications and data-center networks as the principal business.",
+      "supported_claim_ids": [
+        "ai_compute_claim_07"
+      ],
+      "supported_node_ids": [
+        "optical_interconnect"
+      ],
+      "limitations": "Product-level revenue, accelerator allocation, hyperscaler concentration, cluster utilization, margin by speed generation and domestic-supply substitution remain incomplete.",
+      "notes": "CNINFO annual report reviewed for optical modules and data-center network products."
+    },
+    {
+      "source_id": "ai_compute_002463_filing",
+      "source_type": "company_filing",
+      "title": "沪电股份2025年年度报告",
+      "publisher": "沪电股份",
+      "author": "",
+      "publish_date": "2026-03-25",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-03-25/1225027832.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Company filing, page 16",
+      "evidence_summary": "High-layer PCBs supporting high-speed switches, AI servers and HPC can capture value when layer count, signal integrity and high-end capacity are constrained. The filing separately discloses revenue from high-speed switching and routing, AI server and HPC, and general server application areas.",
+      "supported_claim_ids": [
+        "ai_compute_claim_05"
+      ],
+      "supported_node_ids": [
+        "cluster_networking"
+      ],
+      "limitations": "Product-level revenue, accelerator allocation, hyperscaler concentration, cluster utilization, margin by speed generation and domestic-supply substitution remain incomplete.",
+      "notes": "CNINFO annual report reviewed for AI server, HPC and high-speed network PCB exposure."
+    },
+    {
+      "source_id": "ai_compute_002916_filing",
+      "source_type": "company_filing",
+      "title": "深南电路2025年年度报告",
+      "publisher": "深南电路",
+      "author": "",
+      "publish_date": "2026-03-13",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-03-13/1225006760.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Company filing, page 13",
+      "evidence_summary": "AI-server PCB orders can be limited by high-end process capacity and yield, making capacity conversion and product mix key validation signals. The annual report states that AI-server and related product demand accelerated and became a key driver of PCB orders.",
+      "supported_claim_ids": [
+        "ai_compute_claim_06"
+      ],
+      "supported_node_ids": [
+        "cluster_networking"
+      ],
+      "limitations": "Product-level revenue, accelerator allocation, hyperscaler concentration, cluster utilization, margin by speed generation and domestic-supply substitution remain incomplete.",
+      "notes": "CNINFO annual report reviewed for AI-server PCB orders and capacity constraints."
+    },
+    {
+      "source_id": "ai_compute_300308_filing",
+      "source_type": "company_filing",
+      "title": "中际旭创2025年年度报告",
+      "publisher": "中际旭创",
+      "author": "",
+      "publish_date": "2026-03-31",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-03-31/1225056459.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Company filing, page 11",
+      "evidence_summary": "High-speed optical modules are a scaling bottleneck because bandwidth, power, yield and customer qualification rise with cluster scale. The filing describes a portfolio of 100G through 800G and higher-speed optical modules serving cloud data-center customers.",
+      "supported_claim_ids": [
+        "ai_compute_claim_03"
+      ],
+      "supported_node_ids": [
+        "optical_interconnect"
+      ],
+      "limitations": "Product-level revenue, accelerator allocation, hyperscaler concentration, cluster utilization, margin by speed generation and domestic-supply substitution remain incomplete.",
+      "notes": "CNINFO annual report reviewed for high-speed data-center optical modules."
+    },
+    {
+      "source_id": "ai_compute_300502_filing",
+      "source_type": "company_filing",
+      "title": "新易盛2025年年度报告",
+      "publisher": "新易盛",
+      "author": "",
+      "publish_date": "2026-04-24",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-24/1225172598.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Company filing, page 14",
+      "evidence_summary": "AI cluster growth increases demand for higher-speed Ethernet optical modules, while product mix and customer concentration drive earnings sensitivity. The annual report links Ethernet optical-module demand to AI compute clusters and cloud data centers and discusses the high-speed product market.",
+      "supported_claim_ids": [
+        "ai_compute_claim_04"
+      ],
+      "supported_node_ids": [
+        "high_speed_optical_module",
+        "optical_interconnect"
+      ],
+      "limitations": "Product-level revenue, accelerator allocation, hyperscaler concentration, cluster utilization, margin by speed generation and domestic-supply substitution remain incomplete.",
+      "notes": "CNINFO annual report reviewed for AI-cluster optical-module demand and products."
+    },
+    {
+      "source_id": "ai_compute_301165_filing",
+      "source_type": "company_filing",
+      "title": "锐捷网络2025年年度报告",
+      "publisher": "锐捷网络",
+      "author": "",
+      "publish_date": "2026-03-28",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-03-28/1225040067.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Company filing, page 14",
+      "evidence_summary": "Data-center networking is a systems layer spanning switches, adapters, cabling, PCBs and operations rather than a single equipment category. The filing describes switching, network operation and high-density networking solutions and the use of elastic compute and intelligent scheduling in cloud products.",
+      "supported_claim_ids": [
+        "ai_compute_claim_08"
+      ],
+      "supported_node_ids": [
+        "cluster_networking"
+      ],
+      "limitations": "Product-level revenue, accelerator allocation, hyperscaler concentration, cluster utilization, margin by speed generation and domestic-supply substitution remain incomplete.",
+      "notes": "CNINFO annual report reviewed for switching and data-center networking products."
+    },
+    {
+      "source_id": "ai_compute_603019_filing",
+      "source_type": "company_filing",
+      "title": "中科曙光2025年年度报告",
+      "publisher": "中科曙光",
+      "author": "",
+      "publish_date": "2026-04-15",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-15/1225104539.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Company filing, page 12",
+      "evidence_summary": "Compute infrastructure combines high-performance computers, general servers, storage and intelligent-computing platforms into deployable systems. The annual report identifies high-end computers, general servers, storage, data-center products and intelligent-computing infrastructure as core businesses.",
+      "supported_claim_ids": [
+        "ai_compute_claim_02"
+      ],
+      "supported_node_ids": [
+        "ai_servers_racks"
+      ],
+      "limitations": "Product-level revenue, accelerator allocation, hyperscaler concentration, cluster utilization, margin by speed generation and domestic-supply substitution remain incomplete.",
+      "notes": "CNINFO annual report reviewed for computing, server, storage and infrastructure products."
+    },
+    {
+      "source_id": "ai_compute_688047_filing",
+      "source_type": "company_filing",
+      "title": "龙芯中科2025年年度报告",
+      "publisher": "龙芯中科",
+      "author": "",
+      "publish_date": "2026-04-29",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-29/1225234886.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Theme claim and referenced disclosure",
+      "evidence_summary": "The catalyst is conversion of chip and server availability into delivered clusters with rising utilization, network attach and storage demand.",
+      "supported_claim_ids": [
+        "ai_compute_claim_09"
+      ],
+      "supported_node_ids": [
+        "compute_accelerators_boards"
+      ],
+      "limitations": "Product-level revenue, accelerator allocation, hyperscaler concentration, cluster utilization, margin by speed generation and domestic-supply substitution remain incomplete.",
+      "notes": "CNINFO annual report reviewed for processors, supporting chips and base software."
+    },
+    {
+      "source_id": "ai_compute_688183_filing",
+      "source_type": "company_filing",
+      "title": "生益电子2025年年度报告",
+      "publisher": "生益电子",
+      "author": "",
+      "publish_date": "2026-04-24",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-24/1225167248.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Theme claim and referenced disclosure",
+      "evidence_summary": "The major risks are low utilization, supply concentration, rapid architecture change, customer concentration and value migration between chips, systems and interconnect.",
+      "supported_claim_ids": [
+        "ai_compute_claim_10"
+      ],
+      "supported_node_ids": [
+        "compute_operations"
+      ],
+      "limitations": "Product-level revenue, accelerator allocation, hyperscaler concentration, cluster utilization, margin by speed generation and domestic-supply substitution remain incomplete.",
+      "notes": "CNINFO annual report reviewed for intelligent-compute-center high-layer PCB capacity."
+    }
+  ]
+}

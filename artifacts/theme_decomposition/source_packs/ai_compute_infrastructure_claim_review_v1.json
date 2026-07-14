@@ -1,0 +1,187 @@
+{
+  "artifact_version": "ai_compute_infrastructure_claim_review_v1",
+  "theme_id": "ai_compute_infrastructure_value_chain_v1",
+  "as_of_date": "2026-07-14",
+  "claim_reviews": [
+    {
+      "claim_id": "ai_compute_claim_01",
+      "claim_text": "Server-system value depends on heterogeneous compute support, rack integration, qualification, delivery and lifecycle service rather than chassis volume alone.",
+      "claim_type": "value_capture",
+      "review_decision": "reviewed",
+      "evidence_status": "verified",
+      "confidence": 0.86,
+      "accepted_source_ids": [
+        "ai_compute_000977_filing"
+      ],
+      "pending_source_ids": [],
+      "affected_node_ids": [
+        "ai_servers_racks"
+      ],
+      "rationale": "Evidence is retained at source and node level; platform status is reviewed.",
+      "uncertainty": "Product-level revenue, accelerator allocation, hyperscaler concentration, cluster utilization, margin by speed generation and domestic-supply substitution remain incomplete.",
+      "next_evidence_needed": "Add node-level revenue, margin, customer qualification, orders, and disconfirming evidence where still undisclosed."
+    },
+    {
+      "claim_id": "ai_compute_claim_02",
+      "claim_text": "Compute infrastructure combines high-performance computers, general servers, storage and intelligent-computing platforms into deployable systems.",
+      "claim_type": "tech_route",
+      "review_decision": "reviewed",
+      "evidence_status": "verified",
+      "confidence": 0.86,
+      "accepted_source_ids": [
+        "ai_compute_603019_filing"
+      ],
+      "pending_source_ids": [],
+      "affected_node_ids": [
+        "ai_servers_racks"
+      ],
+      "rationale": "Evidence is retained at source and node level; platform status is reviewed.",
+      "uncertainty": "Product-level revenue, accelerator allocation, hyperscaler concentration, cluster utilization, margin by speed generation and domestic-supply substitution remain incomplete.",
+      "next_evidence_needed": "Add node-level revenue, margin, customer qualification, orders, and disconfirming evidence where still undisclosed."
+    },
+    {
+      "claim_id": "ai_compute_claim_03",
+      "claim_text": "High-speed optical modules are a scaling bottleneck because bandwidth, power, yield and customer qualification rise with cluster scale.",
+      "claim_type": "bottleneck",
+      "review_decision": "reviewed",
+      "evidence_status": "verified",
+      "confidence": 0.86,
+      "accepted_source_ids": [
+        "ai_compute_300308_filing"
+      ],
+      "pending_source_ids": [],
+      "affected_node_ids": [
+        "optical_interconnect"
+      ],
+      "rationale": "Evidence is retained at source and node level; platform status is reviewed.",
+      "uncertainty": "Product-level revenue, accelerator allocation, hyperscaler concentration, cluster utilization, margin by speed generation and domestic-supply substitution remain incomplete.",
+      "next_evidence_needed": "Add node-level revenue, margin, customer qualification, orders, and disconfirming evidence where still undisclosed."
+    },
+    {
+      "claim_id": "ai_compute_claim_04",
+      "claim_text": "AI cluster growth increases demand for higher-speed Ethernet optical modules, while product mix and customer concentration drive earnings sensitivity.",
+      "claim_type": "demand_shock",
+      "review_decision": "reviewed",
+      "evidence_status": "verified",
+      "confidence": 0.86,
+      "accepted_source_ids": [
+        "ai_compute_300502_filing"
+      ],
+      "pending_source_ids": [],
+      "affected_node_ids": [
+        "high_speed_optical_module"
+      ],
+      "rationale": "Evidence is retained at source and node level; platform status is reviewed.",
+      "uncertainty": "Product-level revenue, accelerator allocation, hyperscaler concentration, cluster utilization, margin by speed generation and domestic-supply substitution remain incomplete.",
+      "next_evidence_needed": "Add node-level revenue, margin, customer qualification, orders, and disconfirming evidence where still undisclosed."
+    },
+    {
+      "claim_id": "ai_compute_claim_05",
+      "claim_text": "High-layer PCBs supporting high-speed switches, AI servers and HPC can capture value when layer count, signal integrity and high-end capacity are constrained.",
+      "claim_type": "value_capture",
+      "review_decision": "reviewed",
+      "evidence_status": "verified",
+      "confidence": 0.86,
+      "accepted_source_ids": [
+        "ai_compute_002463_filing"
+      ],
+      "pending_source_ids": [],
+      "affected_node_ids": [
+        "cluster_networking"
+      ],
+      "rationale": "Evidence is retained at source and node level; platform status is reviewed.",
+      "uncertainty": "Product-level revenue, accelerator allocation, hyperscaler concentration, cluster utilization, margin by speed generation and domestic-supply substitution remain incomplete.",
+      "next_evidence_needed": "Add node-level revenue, margin, customer qualification, orders, and disconfirming evidence where still undisclosed."
+    },
+    {
+      "claim_id": "ai_compute_claim_06",
+      "claim_text": "AI-server PCB orders can be limited by high-end process capacity and yield, making capacity conversion and product mix key validation signals.",
+      "claim_type": "supply_constraint",
+      "review_decision": "reviewed",
+      "evidence_status": "verified",
+      "confidence": 0.86,
+      "accepted_source_ids": [
+        "ai_compute_002916_filing"
+      ],
+      "pending_source_ids": [],
+      "affected_node_ids": [
+        "cluster_networking"
+      ],
+      "rationale": "Evidence is retained at source and node level; platform status is reviewed.",
+      "uncertainty": "Product-level revenue, accelerator allocation, hyperscaler concentration, cluster utilization, margin by speed generation and domestic-supply substitution remain incomplete.",
+      "next_evidence_needed": "Add node-level revenue, margin, customer qualification, orders, and disconfirming evidence where still undisclosed."
+    },
+    {
+      "claim_id": "ai_compute_claim_07",
+      "claim_text": "Optical devices, modules and subsystems provide multiple domestic participation points, but speed generation and customer qualification must be separated.",
+      "claim_type": "localization",
+      "review_decision": "reviewed",
+      "evidence_status": "verified",
+      "confidence": 0.86,
+      "accepted_source_ids": [
+        "ai_compute_002281_filing"
+      ],
+      "pending_source_ids": [],
+      "affected_node_ids": [
+        "optical_interconnect"
+      ],
+      "rationale": "Evidence is retained at source and node level; platform status is reviewed.",
+      "uncertainty": "Product-level revenue, accelerator allocation, hyperscaler concentration, cluster utilization, margin by speed generation and domestic-supply substitution remain incomplete.",
+      "next_evidence_needed": "Add node-level revenue, margin, customer qualification, orders, and disconfirming evidence where still undisclosed."
+    },
+    {
+      "claim_id": "ai_compute_claim_08",
+      "claim_text": "Data-center networking is a systems layer spanning switches, adapters, cabling, PCBs and operations rather than a single equipment category.",
+      "claim_type": "tech_route",
+      "review_decision": "reviewed",
+      "evidence_status": "verified",
+      "confidence": 0.86,
+      "accepted_source_ids": [
+        "ai_compute_301165_filing"
+      ],
+      "pending_source_ids": [],
+      "affected_node_ids": [
+        "cluster_networking"
+      ],
+      "rationale": "Evidence is retained at source and node level; platform status is reviewed.",
+      "uncertainty": "Product-level revenue, accelerator allocation, hyperscaler concentration, cluster utilization, margin by speed generation and domestic-supply substitution remain incomplete.",
+      "next_evidence_needed": "Add node-level revenue, margin, customer qualification, orders, and disconfirming evidence where still undisclosed."
+    },
+    {
+      "claim_id": "ai_compute_claim_09",
+      "claim_text": "The catalyst is conversion of chip and server availability into delivered clusters with rising utilization, network attach and storage demand.",
+      "claim_type": "catalyst",
+      "review_decision": "reviewed",
+      "evidence_status": "verified",
+      "confidence": 0.86,
+      "accepted_source_ids": [
+        "ai_compute_688047_filing"
+      ],
+      "pending_source_ids": [],
+      "affected_node_ids": [
+        "compute_accelerators_boards"
+      ],
+      "rationale": "Evidence is retained at source and node level; platform status is reviewed.",
+      "uncertainty": "Product-level revenue, accelerator allocation, hyperscaler concentration, cluster utilization, margin by speed generation and domestic-supply substitution remain incomplete.",
+      "next_evidence_needed": "Add node-level revenue, margin, customer qualification, orders, and disconfirming evidence where still undisclosed."
+    },
+    {
+      "claim_id": "ai_compute_claim_10",
+      "claim_text": "The major risks are low utilization, supply concentration, rapid architecture change, customer concentration and value migration between chips, systems and interconnect.",
+      "claim_type": "risk",
+      "review_decision": "reviewed",
+      "evidence_status": "partially_verified",
+      "confidence": 0.86,
+      "accepted_source_ids": [
+        "ai_compute_688183_filing"
+      ],
+      "pending_source_ids": [],
+      "affected_node_ids": [
+        "compute_operations"
+      ],
+      "rationale": "Evidence is retained at source and node level; platform status is reviewed.",
+      "uncertainty": "Product-level revenue, accelerator allocation, hyperscaler concentration, cluster utilization, margin by speed generation and domestic-supply substitution remain incomplete.",
+      "next_evidence_needed": "Add node-level revenue, margin, customer qualification, orders, and disconfirming evidence where still undisclosed."
+    }
+  ]
+}

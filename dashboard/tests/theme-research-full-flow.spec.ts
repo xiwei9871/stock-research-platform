@@ -41,15 +41,15 @@ test('theme research desktop flow preserves routes and stock handoff', async ({ 
   await page.goto('/theme-research');
 
   await expect(page.getByRole('heading', { name: '主题研究' })).toBeVisible();
-  await expect(page.getByText('2 个主题')).toBeVisible();
+  await expect(page.getByText('5 个主题')).toBeVisible();
   await expect(page.getByRole('button', { name: /打开AI供电产业链/ })).toBeVisible();
-  await expect(page.getByRole('button', { name: /打开人形机器人从头到脚拆解/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /打开人形机器人：从头到脚的价值链与受益环节/ })).toBeVisible();
 
   await page.getByRole('button', { name: /打开AI供电产业链/ }).click();
   await expect(page).toHaveURL(/\/theme-research\/ai_power_value_capture_v1$/);
   await expect(page.getByRole('heading', { name: 'AI供电产业链：谁在拿走价值量' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: '待补证据缺口' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: '重点公司' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '研究结论', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '受益公司', exact: true })).toBeVisible();
 
   await page.getByRole('tab', { name: '产业链节点' }).click();
   await expect(page).toHaveURL(/\/theme-research\/ai_power_value_capture_v1\/nodes$/);
@@ -58,7 +58,7 @@ test('theme research desktop flow preserves routes and stock handoff', async ({ 
   await page.getByRole('tab', { name: '来源证据' }).click();
   await expect(page).toHaveURL(/\/theme-research\/ai_power_value_capture_v1\/sources$/);
   await expect(page.getByRole('heading', { name: '来源清单' })).toBeVisible();
-  await expect(page.getByText('仅作线索').first()).toBeVisible();
+  await expect(page.getByText('已采纳').first()).toBeVisible();
   await expect(page.getByRole('columnheader', { name: '访问' })).toBeVisible();
   await expect(page.getByRole('columnheader', { name: '支持来源' })).toBeVisible();
 

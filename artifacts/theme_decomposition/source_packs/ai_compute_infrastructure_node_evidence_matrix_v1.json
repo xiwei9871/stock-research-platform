@@ -1,0 +1,187 @@
+{
+  "artifact_version": "ai_compute_infrastructure_node_evidence_matrix_v1",
+  "theme_id": "ai_compute_infrastructure_value_chain_v1",
+  "as_of_date": "2026-07-14",
+  "node_evidence_matrix": [
+    {
+      "node_id": "compute_accelerators_boards",
+      "accepted_source_ids": [
+        "ai_compute_688047_filing"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "ai_compute_claim_09"
+      ],
+      "evidence_strength_before": 4,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "customer_certification"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "The catalyst is conversion of chip and server availability into delivered clusters with rising utilization, network attach and storage demand.",
+      "next_evidence_needed": "Track node-level revenue, margins, qualification, orders, and counter-evidence."
+    },
+    {
+      "node_id": "ai_servers_racks",
+      "accepted_source_ids": [
+        "ai_compute_000977_filing",
+        "ai_compute_603019_filing"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "ai_compute_claim_01",
+        "ai_compute_claim_02"
+      ],
+      "evidence_strength_before": 4,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "customer_certification"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "Server-system value depends on heterogeneous compute support, rack integration, qualification, delivery and lifecycle service rather than chassis volume alone. Compute infrastructure combines high-performance computers, general servers, storage and intelligent-computing platforms into deployable systems. The filing describes server and open-compute platform development, including standards and architectures supporting heterogeneous processors. The annual report identifies high-end computers, general servers, storage, data-center products and intelligent-computing infrastructure as core businesses.",
+      "next_evidence_needed": "Track node-level revenue, margins, qualification, orders, and counter-evidence."
+    },
+    {
+      "node_id": "memory_storage",
+      "accepted_source_ids": [],
+      "pending_source_ids": [],
+      "supported_claim_ids": [],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 2,
+      "value_capture_score_review_status": "unsupported",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "needs_evidence",
+      "rationale": "No accepted node-specific claim or company relationship evidence is attached yet.",
+      "next_evidence_needed": "Attach an accepted primary source with node-specific product, service, market, or operating evidence before upgrading this node."
+    },
+    {
+      "node_id": "cluster_networking",
+      "accepted_source_ids": [
+        "ai_compute_002463_filing",
+        "ai_compute_002916_filing",
+        "ai_compute_301165_filing"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "ai_compute_claim_05",
+        "ai_compute_claim_06",
+        "ai_compute_claim_08"
+      ],
+      "evidence_strength_before": 4,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "customer_certification"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "High-layer PCBs supporting high-speed switches, AI servers and HPC can capture value when layer count, signal integrity and high-end capacity are constrained. AI-server PCB orders can be limited by high-end process capacity and yield, making capacity conversion and product mix key validation signals. Data-center networking is a systems layer spanning switches, adapters, cabling, PCBs and operations rather than a single equipment category. The filing separately discloses revenue from high-speed switching and routing, AI server and HPC, and general server application areas. The annual report states that AI-server and related product demand accelerated and became a key driver of PCB orders. The filing describes switching, network operation and high-density networking solutions and the use of elastic compute and intelligent scheduling in cloud products.",
+      "next_evidence_needed": "Track node-level revenue, margins, qualification, orders, and counter-evidence."
+    },
+    {
+      "node_id": "optical_interconnect",
+      "accepted_source_ids": [
+        "ai_compute_002281_filing",
+        "ai_compute_300308_filing",
+        "ai_compute_300502_filing"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "ai_compute_claim_03",
+        "ai_compute_claim_07"
+      ],
+      "evidence_strength_before": 4,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "customer_certification"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "High-speed optical modules are a scaling bottleneck because bandwidth, power, yield and customer qualification rise with cluster scale. Optical devices, modules and subsystems provide multiple domestic participation points, but speed generation and customer qualification must be separated. The filing describes a portfolio of 100G through 800G and higher-speed optical modules serving cloud data-center customers. The annual report links Ethernet optical-module demand to AI compute clusters and cloud data centers and discusses the high-speed product market. The filing identifies optical devices, modules and subsystems for telecommunications and data-center networks as the principal business.",
+      "next_evidence_needed": "Track node-level revenue, margins, qualification, orders, and counter-evidence."
+    },
+    {
+      "node_id": "orchestration_system_software",
+      "accepted_source_ids": [],
+      "pending_source_ids": [],
+      "supported_claim_ids": [],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 2,
+      "value_capture_score_review_status": "unsupported",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "needs_evidence",
+      "rationale": "No accepted node-specific claim or company relationship evidence is attached yet.",
+      "next_evidence_needed": "Attach an accepted primary source with node-specific product, service, market, or operating evidence before upgrading this node."
+    },
+    {
+      "node_id": "data_center_deployment",
+      "accepted_source_ids": [],
+      "pending_source_ids": [],
+      "supported_claim_ids": [],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 2,
+      "value_capture_score_review_status": "unsupported",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "needs_evidence",
+      "rationale": "No accepted node-specific claim or company relationship evidence is attached yet.",
+      "next_evidence_needed": "Attach an accepted primary source with node-specific product, service, market, or operating evidence before upgrading this node."
+    },
+    {
+      "node_id": "compute_operations",
+      "accepted_source_ids": [
+        "ai_compute_688183_filing"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "ai_compute_claim_10"
+      ],
+      "evidence_strength_before": 4,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "customer_certification"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "The major risks are low utilization, supply concentration, rapid architecture change, customer concentration and value migration between chips, systems and interconnect.",
+      "next_evidence_needed": "Track node-level revenue, margins, qualification, orders, and counter-evidence."
+    },
+    {
+      "node_id": "high_speed_optical_module",
+      "accepted_source_ids": [
+        "ai_compute_300502_filing"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "ai_compute_claim_04"
+      ],
+      "evidence_strength_before": 4,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "customer_certification"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "AI cluster growth increases demand for higher-speed Ethernet optical modules, while product mix and customer concentration drive earnings sensitivity.",
+      "next_evidence_needed": "Track node-level revenue, margins, qualification, orders, and counter-evidence."
+    }
+  ]
+}

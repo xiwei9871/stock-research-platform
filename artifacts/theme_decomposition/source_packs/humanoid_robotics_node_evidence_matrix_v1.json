@@ -1,0 +1,408 @@
+{
+  "artifact_version": "humanoid_robotics_node_evidence_matrix_v1",
+  "theme_id": "humanoid_robotics_head_to_toe_v1",
+  "as_of_date": "2026-07-14",
+  "node_evidence_matrix": [
+    {
+      "node_id": "head_vision",
+      "accepted_source_ids": [],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "robotics_claim_head_to_toe_method",
+        "robotics_claim_system_architecture"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 2,
+      "value_capture_score_review_status": "unsupported",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "needs_evidence",
+      "rationale": "No accepted node-specific claim or company relationship evidence is attached yet.",
+      "next_evidence_needed": "Attach an accepted primary source with node-specific product, service, market, or operating evidence before upgrading this node."
+    },
+    {
+      "node_id": "brain_ai_compute",
+      "accepted_source_ids": [
+        "robotics_301236_filing"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "robotics_claim_06",
+        "robotics_claim_system_architecture"
+      ],
+      "evidence_strength_before": 3,
+      "evidence_strength_after": 3,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "customer_certification"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "System vendors and software integrators are beneficiaries through robot products and deployment, but should not be mixed with component profit pools. Humanoid robotics research should distinguish perception, compute/control, structure, joints, actuation, sensors, battery, wiring, and materials before company mapping. The filing reports release of the Tianqing S1 biped humanoid robot and small-batch trial production and deployment of a wheeled robot.",
+      "next_evidence_needed": "Track node-level revenue, margins, qualification, orders, and counter-evidence."
+    },
+    {
+      "node_id": "torso_structure",
+      "accepted_source_ids": [
+        "robotics_601689_filing"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "robotics_claim_09",
+        "robotics_claim_head_to_toe_method"
+      ],
+      "evidence_strength_before": 3,
+      "evidence_strength_after": 3,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "customer_certification"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "The commercialization catalyst is movement from prototypes and samples to repeatable small-batch and batch delivery with customer qualification. The head-to-toe method is useful for forcing complete component coverage, but node scores must be rebuilt from evidence.",
+      "next_evidence_needed": "Track node-level revenue, margins, qualification, orders, and counter-evidence."
+    },
+    {
+      "node_id": "arm_actuator",
+      "accepted_source_ids": [],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "robotics_claim_actuator_value",
+        "robotics_claim_head_to_toe_method"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 2,
+      "value_capture_score_review_status": "unsupported",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "needs_evidence",
+      "rationale": "No accepted node-specific claim or company relationship evidence is attached yet.",
+      "next_evidence_needed": "Attach an accepted primary source with node-specific product, service, market, or operating evidence before upgrading this node."
+    },
+    {
+      "node_id": "hand_dexterous",
+      "accepted_source_ids": [
+        "robotics_301023_filing"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "robotics_claim_03",
+        "robotics_claim_head_to_toe_method"
+      ],
+      "evidence_strength_before": 3,
+      "evidence_strength_after": 3,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "customer_certification"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "Dexterous-hand value can accumulate in compact motors, transmissions, sensing and integration, but each component requires direct commercialization evidence. The head-to-toe method is useful for forcing complete component coverage, but node scores must be rebuilt from evidence. The filing describes hollow-cup motor development for robot finger joints and links the design target to dexterous, lightweight hand motion.",
+      "next_evidence_needed": "Track node-level revenue, margins, qualification, orders, and counter-evidence."
+    },
+    {
+      "node_id": "hip_joint",
+      "accepted_source_ids": [],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "robotics_claim_head_to_toe_method"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 2,
+      "value_capture_score_review_status": "unsupported",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "needs_evidence",
+      "rationale": "No accepted node-specific claim or company relationship evidence is attached yet.",
+      "next_evidence_needed": "Attach an accepted primary source with node-specific product, service, market, or operating evidence before upgrading this node."
+    },
+    {
+      "node_id": "knee_joint",
+      "accepted_source_ids": [],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "robotics_claim_head_to_toe_method"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 2,
+      "value_capture_score_review_status": "unsupported",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "needs_evidence",
+      "rationale": "No accepted node-specific claim or company relationship evidence is attached yet.",
+      "next_evidence_needed": "Attach an accepted primary source with node-specific product, service, market, or operating evidence before upgrading this node."
+    },
+    {
+      "node_id": "ankle_joint",
+      "accepted_source_ids": [],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "robotics_claim_head_to_toe_method"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 2,
+      "value_capture_score_review_status": "unsupported",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "needs_evidence",
+      "rationale": "No accepted node-specific claim or company relationship evidence is attached yet.",
+      "next_evidence_needed": "Attach an accepted primary source with node-specific product, service, market, or operating evidence before upgrading this node."
+    },
+    {
+      "node_id": "frameless_motor",
+      "accepted_source_ids": [],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "robotics_claim_actuator_value",
+        "robotics_claim_unverified_stock_mapping"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 2,
+      "value_capture_score_review_status": "unsupported",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "needs_evidence",
+      "rationale": "No accepted node-specific claim or company relationship evidence is attached yet.",
+      "next_evidence_needed": "Attach an accepted primary source with node-specific product, service, market, or operating evidence before upgrading this node."
+    },
+    {
+      "node_id": "harmonic_reducer",
+      "accepted_source_ids": [
+        "robotics_002896_filing"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "robotics_claim_08",
+        "robotics_claim_actuator_value",
+        "robotics_claim_unverified_stock_mapping"
+      ],
+      "evidence_strength_before": 3,
+      "evidence_strength_after": 3,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "customer_certification"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "Precision reducer modules are a localization opportunity, but batch production and humanoid customer allocation must be verified separately. Actuator assemblies, reducers, roller screws, sensors, and motors should be separated because their value basis differs across BOM share, precision, scarcity, and certification. Social stock mappings for motor, reducer, screw, and sensor suppliers are not adopted until validated by filings, customer evidence, or reliable source material. The annual report discusses precision reducer module development for robotics and progress toward batch production.",
+      "next_evidence_needed": "Track node-level revenue, margins, qualification, orders, and counter-evidence."
+    },
+    {
+      "node_id": "planetary_roller_screw",
+      "accepted_source_ids": [
+        "robotics_300100_filing",
+        "robotics_300580_filing"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "robotics_claim_01",
+        "robotics_claim_02",
+        "robotics_claim_actuator_value",
+        "robotics_claim_unverified_stock_mapping"
+      ],
+      "evidence_strength_before": 3,
+      "evidence_strength_after": 3,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "customer_certification"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "Screw and joint-module products must be separated by screw type, process maturity, sample status and batch-delivery evidence. Planetary roller screws require precision manufacturing, consistency and customer validation; sample completion does not prove material humanoid revenue. Actuator assemblies, reducers, roller screws, sensors, and motors should be separated because their value basis differs across BOM share, precision, scarcity, and certification. Social stock mappings for motor, reducer, screw, and sensor suppliers are not adopted until validated by filings, customer evidence, or reliable source material. The filing lists humanoid-robot screws and joint modules among the company's robot-component products. The annual report states that a self-developed planetary roller screw has produced samples and that process and equipment development is progressing.",
+      "next_evidence_needed": "Track node-level revenue, margins, qualification, orders, and counter-evidence."
+    },
+    {
+      "node_id": "encoder",
+      "accepted_source_ids": [
+        "robotics_603416_filing"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "robotics_claim_04",
+        "robotics_claim_actuator_value"
+      ],
+      "evidence_strength_before": 3,
+      "evidence_strength_after": 3,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "customer_certification"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "Encoders and servo feedback affect precision and safety; general robot use is evidence of capability but not proof of humanoid allocation. Actuator assemblies, reducers, roller screws, sensors, and motors should be separated because their value basis differs across BOM share, precision, scarcity, and certification. The annual report identifies optical encoders as key components used in robots and servo control and describes expansion of the humanoid-robot team.",
+      "next_evidence_needed": "Track node-level revenue, margins, qualification, orders, and counter-evidence."
+    },
+    {
+      "node_id": "torque_sensor",
+      "accepted_source_ids": [
+        "robotics_301413_filing"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "robotics_claim_10",
+        "robotics_claim_actuator_value"
+      ],
+      "evidence_strength_before": 3,
+      "evidence_strength_after": 3,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "customer_certification"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "The main research risk is treating R&D plans, general robot products or social supply-chain lists as verified humanoid revenue and profit exposure. Actuator assemblies, reducers, roller screws, sensors, and motors should be separated because their value basis differs across BOM share, precision, scarcity, and certification.",
+      "next_evidence_needed": "Track node-level revenue, margins, qualification, orders, and counter-evidence."
+    },
+    {
+      "node_id": "six_axis_force_sensor",
+      "accepted_source_ids": [],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "robotics_claim_actuator_value",
+        "robotics_claim_unverified_stock_mapping"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 2,
+      "value_capture_score_review_status": "unsupported",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "needs_evidence",
+      "rationale": "No accepted node-specific claim or company relationship evidence is attached yet.",
+      "next_evidence_needed": "Attach an accepted primary source with node-specific product, service, market, or operating evidence before upgrading this node."
+    },
+    {
+      "node_id": "tactile_sensor",
+      "accepted_source_ids": [],
+      "pending_source_ids": [],
+      "supported_claim_ids": [],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 2,
+      "value_capture_score_review_status": "unsupported",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "needs_evidence",
+      "rationale": "No accepted node-specific claim or company relationship evidence is attached yet.",
+      "next_evidence_needed": "Attach an accepted primary source with node-specific product, service, market, or operating evidence before upgrading this node."
+    },
+    {
+      "node_id": "imu",
+      "accepted_source_ids": [],
+      "pending_source_ids": [],
+      "supported_claim_ids": [],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 2,
+      "value_capture_score_review_status": "unsupported",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "needs_evidence",
+      "rationale": "No accepted node-specific claim or company relationship evidence is attached yet.",
+      "next_evidence_needed": "Attach an accepted primary source with node-specific product, service, market, or operating evidence before upgrading this node."
+    },
+    {
+      "node_id": "battery_bms",
+      "accepted_source_ids": [],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "robotics_claim_system_architecture"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 2,
+      "value_capture_score_review_status": "unsupported",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "needs_evidence",
+      "rationale": "No accepted node-specific claim or company relationship evidence is attached yet.",
+      "next_evidence_needed": "Attach an accepted primary source with node-specific product, service, market, or operating evidence before upgrading this node."
+    },
+    {
+      "node_id": "wiring_harness",
+      "accepted_source_ids": [],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "robotics_claim_system_architecture"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 2,
+      "value_capture_score_review_status": "unsupported",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "needs_evidence",
+      "rationale": "No accepted node-specific claim or company relationship evidence is attached yet.",
+      "next_evidence_needed": "Attach an accepted primary source with node-specific product, service, market, or operating evidence before upgrading this node."
+    },
+    {
+      "node_id": "controller",
+      "accepted_source_ids": [
+        "robotics_600845_filing",
+        "robotics_688698_filing"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "robotics_claim_05",
+        "robotics_claim_07",
+        "robotics_claim_system_architecture"
+      ],
+      "evidence_strength_before": 3,
+      "evidence_strength_after": 3,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "customer_certification"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "Servo motors, drives and integrated controllers form a qualified execution-control stack whose value depends on response, density and system integration. Industrial humanoid applications provide integration evidence, while repeat deliveries, utilization and application economics remain the key validation steps. Humanoid robotics research should distinguish perception, compute/control, structure, joints, actuation, sensors, battery, wiring, and materials before company mapping. The filing states that the company is developing and supplying servo motors, drives and integrated controllers for humanoid, collaborative and mobile robots. The filing describes humanoid automatic loading and sampling applications, heavy-load robot designs and industrial robot delivery.",
+      "next_evidence_needed": "Track node-level revenue, margins, qualification, orders, and counter-evidence."
+    },
+    {
+      "node_id": "bearing",
+      "accepted_source_ids": [],
+      "pending_source_ids": [],
+      "supported_claim_ids": [],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 2,
+      "value_capture_score_review_status": "unsupported",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "needs_evidence",
+      "rationale": "No accepted node-specific claim or company relationship evidence is attached yet.",
+      "next_evidence_needed": "Attach an accepted primary source with node-specific product, service, market, or operating evidence before upgrading this node."
+    },
+    {
+      "node_id": "lightweight_materials",
+      "accepted_source_ids": [],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "robotics_claim_system_architecture"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 2,
+      "value_capture_score_review_status": "unsupported",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "needs_evidence",
+      "rationale": "No accepted node-specific claim or company relationship evidence is attached yet.",
+      "next_evidence_needed": "Attach an accepted primary source with node-specific product, service, market, or operating evidence before upgrading this node."
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 {
   "artifact_version": "ai_power_source_pack_v1",
   "theme_id": "ai_power_value_capture_v1",
-  "as_of_date": "2026-07-10",
+  "as_of_date": "2026-07-14",
   "sources": [
     {
       "source_id": "ai_power_doe_data_center_demand_2024",
@@ -14,94 +14,157 @@
       "access_level": "public",
       "reliability_level": "S1",
       "review_status": "accepted",
-      "document_status": "official_page_reviewed",
-      "evidence_locator": "Article body paragraphs reporting 2023 electricity share, 2028 range, and DOE power-system response",
-      "evidence_summary": "DOE reports that U.S. data centers used about 4.4% of electricity in 2023 and could reach roughly 6.7%-12% by 2028. It frames the response across generation, storage, transmission expansion, and demand flexibility.",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Theme claim and referenced disclosure",
+      "evidence_summary": "AI and data-center expansion are creating a material increase in electricity demand. Grid capacity and interconnection are material constraints on AI data-center deployment. Rising data-center electricity demand and rack power density increase the need for grid capacity, resilient power delivery, efficient conversion, and advanced cooling.",
       "supported_claim_ids": [
         "ai_power_claim_demand_growth",
-        "ai_power_claim_grid_bottleneck"
+        "ai_power_claim_grid_bottleneck",
+        "ai_power_claim_capacity_density_catalyst"
       ],
       "supported_node_ids": [
+        "ai_server_integration",
+        "grid_connection",
+        "hvdc_power",
+        "liquid_cooling",
         "power_generation",
-        "grid_connection"
+        "rack_power_distribution",
+        "server_power_supply",
+        "switchgear",
+        "transformer",
+        "ups"
       ],
-      "limitations": "This is an official summary of the LBNL report, not the underlying full report; it supports demand and system-level constraints but not node-level value capture or China localization conclusions.",
-      "notes": "Accepted as public official evidence for demand growth and system-level power constraints."
+      "limitations": "Company disclosures often combine AI data-center products with broader data-center, cooling, power, or cloud segments. Node-level revenue, gross margin, customer concentration, order visibility, and supplier allocation remain incomplete for several mappings.",
+      "notes": "Accepted for quantified U.S. data-center electricity demand and system-level generation, transmission, storage, and flexibility context."
     },
     {
-      "source_id": "ai_power_lbnl_data_center_energy_report_2024",
-      "source_type": "official_report",
-      "title": "2024 United States Data Center Energy Usage Report",
-      "publisher": "Lawrence Berkeley National Laboratory",
+      "source_id": "ai_power_domestic_broker_report_lead",
+      "source_type": "broker_report",
+      "title": "Domestic broker AI data-center power, liquid-cooling, and HVDC report lead",
+      "publisher": "Unconfirmed broker source",
       "author": "",
-      "publish_date": "2024-12-20",
-      "url": "https://eta-publications.lbl.gov/sites/default/files/2024-12/lbnl-2024-united-states-data-center-energy-usage-report.pdf",
+      "publish_date": "",
+      "url": "private_claimed:exact_report_not_attached",
+      "access_level": "gated",
+      "reliability_level": "S2",
+      "review_status": "needs_full_text",
+      "document_status": "pending_review",
+      "evidence_locator": "Theme claim and referenced disclosure",
+      "evidence_summary": "Accepted company filings confirm domestic direct-product participation in liquid cooling, UPS, and server power, while node-level market share and future order growth remain unproven.",
+      "supported_claim_ids": [
+        "ai_power_claim_localization"
+      ],
+      "supported_node_ids": [
+        "hvdc_power",
+        "liquid_cooling",
+        "server_power_supply",
+        "sic_gan_power_semiconductor",
+        "switchgear",
+        "transformer",
+        "ups"
+      ],
+      "limitations": "Company disclosures often combine AI data-center products with broader data-center, cooling, power, or cloud segments. Node-level revenue, gross margin, customer concentration, order visibility, and supplier allocation remain incomplete for several mappings.",
+      "notes": "Cannot support BOM, value capture, localization, or company mapping until exact full text and excerpts are attached."
+    },
+    {
+      "source_id": "ai_power_envicool_2025_annual_report",
+      "source_type": "company_filing",
+      "title": "深圳市英维克科技股份有限公司2025年年度报告",
+      "publisher": "深圳市英维克科技股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-21",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-21/1225131813.PDF",
       "access_level": "public",
       "reliability_level": "S0",
-      "review_status": "needs_full_text",
-      "document_status": "access_blocked",
-      "evidence_locator": "DOE-linked original PDF; local retrieval redirected to an access challenge",
-      "evidence_summary": "The DOE page attributes the public demand figures to this LBNL report, but the report body was not available for excerpt-level review in the current environment.",
-      "supported_claim_ids": [
-        "ai_power_claim_demand_growth"
-      ],
-      "supported_node_ids": [
-        "power_generation",
-        "grid_connection"
-      ],
-      "limitations": "Do not treat as accepted S0 evidence until the PDF body, methodology, and tables are reviewed directly.",
-      "notes": "Preserved as the preferred original source for later full-text acquisition."
-    },
-    {
-      "source_id": "ai_power_jpm_powering_ai_2026",
-      "source_type": "official_article",
-      "title": "Powering the AI Revolution",
-      "publisher": "J.P. Morgan",
-      "author": "",
-      "publish_date": "2026-06-25",
-      "url": "https://www.jpmorgan.com/insights/technology/artificial-intelligence/powering-the-ai-revolution",
-      "access_level": "public",
-      "reliability_level": "S1",
       "review_status": "accepted",
-      "document_status": "official_page_reviewed",
-      "evidence_locator": "Key takeaways and section 'What infrastructure powers the AI revolution?'",
-      "evidence_summary": "J.P. Morgan states that AI compute depends on data centers and reliable power, that AI is increasing infrastructure demand, and that grid capacity is a key development constraint.",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Annual report page 9, principal business: data-center cooling and Coolinside full-chain liquid-cooling products; Annual report pages 15-16, product revenue table",
+      "evidence_summary": "Accepted company filings confirm domestic direct-product participation in liquid cooling, UPS, and server power, while node-level market share and future order growth remain unproven. The filing places data-center and computing-equipment cooling inside the company's principal business and lists an end-to-end liquid-cooling portfolio including cold plates, quick connectors, manifolds, CDU, cabinets, coolant, piping, and cooling sources. Machine-room temperature-control products generated about RMB 3.448 billion, or 56.83% of company revenue. Liquid cooling is included in this broader product family but is not separately disclosed, so exact liquid-cooling revenue remains undisclosed.",
       "supported_claim_ids": [
-        "ai_power_claim_demand_growth",
-        "ai_power_claim_grid_bottleneck"
+        "ai_power_claim_localization"
       ],
       "supported_node_ids": [
-        "power_generation",
-        "grid_connection",
-        "data_center_epc"
-      ],
-      "limitations": "This is institutional analysis and interview material, not a power-system dataset. It supports the research framing, not precise market sizing or company conclusions.",
-      "notes": "Accepted for the demand-to-grid-capacity causal framing."
-    },
-    {
-      "source_id": "ai_power_jpm_grid_resilience_2026",
-      "source_type": "official_article",
-      "title": "Grid Resilience: Neglected No More",
-      "publisher": "J.P. Morgan",
-      "author": "",
-      "publish_date": "2026-03-26",
-      "url": "https://www.jpmorgan.com/insights/sustainability/climate/grid-resilience-neglected-no-more",
-      "access_level": "public",
-      "reliability_level": "S1",
-      "review_status": "accepted",
-      "document_status": "official_page_reviewed",
-      "evidence_locator": "Key takeaways, grid investment discussion, and permitting/lead-time section",
-      "evidence_summary": "The article links data-center demand with aging grid infrastructure, expects grid buildout and upgrades, and highlights multi-year transmission development constraints.",
-      "supported_claim_ids": [
-        "ai_power_claim_grid_bottleneck"
-      ],
-      "supported_node_ids": [
-        "grid_connection",
+        "hvdc_power",
+        "liquid_cooling",
+        "server_power_supply",
+        "sic_gan_power_semiconductor",
+        "switchgear",
         "transformer",
-        "switchgear"
+        "ups"
       ],
-      "limitations": "Forecasts and investment estimates are J.P. Morgan analysis with cited third-party inputs. They do not prove which equipment category captures superior margins or localized scarcity.",
-      "notes": "Accepted for grid buildout and interconnection bottleneck context."
+      "limitations": "Company disclosures often combine AI data-center products with broader data-center, cooling, power, or cloud segments. Node-level revenue, gross margin, customer concentration, order visibility, and supplier allocation remain incomplete for several mappings.",
+      "notes": "CNINFO original filing reviewed at the cited product and revenue pages."
+    },
+    {
+      "source_id": "ai_power_gaolan_2025_annual_report",
+      "source_type": "company_filing",
+      "title": "广州高澜节能技术股份有限公司2025年年度报告",
+      "publisher": "广州高澜节能技术股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-24",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-24/1225160679.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Annual report principal-business section, high-power-density thermal-management products; Annual report business and product discussion",
+      "evidence_summary": "The filing states that thermal-management products have expanded into information and communications and high-power-density equipment, including cooling products used in data-center-related scenarios. Data-center and information-communication cooling are disclosed applications within the company's thermal-management business, but revenue for the AI-data-center subset is not separately disclosed.",
+      "supported_claim_ids": [],
+      "supported_node_ids": [
+        "liquid_cooling"
+      ],
+      "limitations": "Company disclosures often combine AI data-center products with broader data-center, cooling, power, or cloud segments. Node-level revenue, gross margin, customer concentration, order visibility, and supplier allocation remain incomplete for several mappings.",
+      "notes": "CNINFO original filing reviewed for high-power-density and information-communication thermal-management products."
+    },
+    {
+      "source_id": "ai_power_honor_electronic_2025_annual_report",
+      "source_type": "company_filing",
+      "title": "深圳欧陆通电子股份有限公司2025年年度报告",
+      "publisher": "深圳欧陆通电子股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-22",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-22/1225135602.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Annual report pages 20-21, data-center power products and customers; Annual report pages 20 and 22-23, data-center power revenue",
+      "evidence_summary": "Accepted company filings confirm domestic direct-product participation in liquid cooling, UPS, and server power, while node-level market share and future order growth remain unproven. The filing lists air-cooled and immersion-cooled CRPS power supplies, customized GPU power supplies, and centralized power systems, and reports shipments or cooperation with major server-system and cloud customers. Data-center power revenue was about RMB 2.015 billion, representing 45.17% of company revenue; high-power data-center power revenue was about RMB 1.299 billion within that segment.",
+      "supported_claim_ids": [
+        "ai_power_claim_localization"
+      ],
+      "supported_node_ids": [
+        "hvdc_power",
+        "liquid_cooling",
+        "server_power_supply",
+        "sic_gan_power_semiconductor",
+        "switchgear",
+        "transformer",
+        "ups"
+      ],
+      "limitations": "Company disclosures often combine AI data-center products with broader data-center, cooling, power, or cloud segments. Node-level revenue, gross margin, customer concentration, order visibility, and supplier allocation remain incomplete for several mappings.",
+      "notes": "CNINFO original filing reviewed at the cited server-power product, customer, and segment-revenue pages."
+    },
+    {
+      "source_id": "ai_power_icewheel_2025_annual_report",
+      "source_type": "company_filing",
+      "title": "冰轮环境技术股份有限公司2025年年度报告",
+      "publisher": "冰轮环境技术股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-11",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-11/1225092828.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Annual report management discussion, data-center cooling equipment; Annual report business outlook and data-center product discussion",
+      "evidence_summary": "The filing states that the company supplies cold-source equipment and heat-exchange devices to data centers and describes data-center-specific chiller and cooling products. Data-center cooling is an identified growth application inside the broader industrial refrigeration and HVAC business; data-center-only revenue is not separately disclosed.",
+      "supported_claim_ids": [],
+      "supported_node_ids": [
+        "liquid_cooling"
+      ],
+      "limitations": "Company disclosures often combine AI data-center products with broader data-center, cooling, power, or cloud segments. Node-level revenue, gross margin, customer concentration, order visibility, and supplier allocation remain incomplete for several mappings.",
+      "notes": "CNINFO original filing reviewed for data-center cold-source, heat-exchange, and cooling-equipment disclosure."
     },
     {
       "source_id": "ai_power_jpm_data_center_surge_2025",
@@ -114,46 +177,143 @@
       "access_level": "public",
       "reliability_level": "S1",
       "review_status": "accepted",
-      "document_status": "full_text_reviewed",
-      "evidence_locator": "Public transcript paragraphs on data-center power draw, AI workload buildout, and power capacity",
-      "evidence_summary": "The transcript describes data-center capacity in power terms, a shift toward AI workloads, high capital intensity, and power capacity as a constrained input to new builds.",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Theme claim and referenced disclosure",
+      "evidence_summary": "AI and data-center expansion are creating a material increase in electricity demand. Grid capacity and interconnection are material constraints on AI data-center deployment. AI rack-scale systems are increasing power density and forcing changes in power delivery and facility design.",
       "supported_claim_ids": [
         "ai_power_claim_demand_growth",
         "ai_power_claim_grid_bottleneck",
         "ai_power_claim_rack_power_density"
       ],
       "supported_node_ids": [
-        "grid_connection",
         "ai_server_integration",
-        "data_center_epc"
+        "grid_connection",
+        "liquid_cooling",
+        "power_generation",
+        "rack_power_distribution",
+        "server_power_supply",
+        "switchgear",
+        "transformer"
       ],
-      "limitations": "The transcript contains expert estimates and commercial-banking observations. It is not engineering validation of a specific rack architecture or proof of equipment profitability.",
-      "notes": "Accepted as attributable institutional commentary with a public transcript."
+      "limitations": "Company disclosures often combine AI data-center products with broader data-center, cooling, power, or cloud segments. Node-level revenue, gross margin, customer concentration, order visibility, and supplier allocation remain incomplete for several mappings.",
+      "notes": "Accepted as an attributable public transcript on power-denominated data-center capacity, AI workloads, and power constraints."
     },
     {
-      "source_id": "ai_power_nvidia_gb200_nvl72_2026",
+      "source_id": "ai_power_jpm_grid_resilience_2026",
       "source_type": "official_article",
-      "title": "NVIDIA GB200 NVL72",
-      "publisher": "NVIDIA",
+      "title": "Grid Resilience: Neglected No More",
+      "publisher": "J.P. Morgan",
       "author": "",
-      "publish_date": "2026-01-15",
-      "url": "https://www.nvidia.com/en-us/data-center/gb200-nvl72/",
+      "publish_date": "2026-03-26",
+      "url": "https://www.jpmorgan.com/insights/sustainability/climate/grid-resilience-neglected-no-more",
       "access_level": "public",
       "reliability_level": "S1",
       "review_status": "accepted",
-      "document_status": "official_page_reviewed",
-      "evidence_locator": "Product overview and energy-efficient infrastructure sections",
-      "evidence_summary": "NVIDIA describes GB200 NVL72 as a rack-scale system with 72 GPUs and liquid cooling, and says liquid cooling enables greater compute density and reduced floor-space use.",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Theme claim and referenced disclosure",
+      "evidence_summary": "Grid capacity and interconnection are material constraints on AI data-center deployment.",
       "supported_claim_ids": [
-        "ai_power_claim_rack_power_density",
-        "ai_power_claim_liquid_cooling"
+        "ai_power_claim_grid_bottleneck"
+      ],
+      "supported_node_ids": [
+        "grid_connection",
+        "switchgear",
+        "transformer"
+      ],
+      "limitations": "Company disclosures often combine AI data-center products with broader data-center, cooling, power, or cloud segments. Node-level revenue, gross margin, customer concentration, order visibility, and supplier allocation remain incomplete for several mappings.",
+      "notes": "Accepted for grid buildout, infrastructure aging, and multi-year transmission development constraints."
+    },
+    {
+      "source_id": "ai_power_jpm_powering_ai_2026",
+      "source_type": "official_article",
+      "title": "Powering the AI Revolution",
+      "publisher": "J.P. Morgan",
+      "author": "",
+      "publish_date": "2026-06-25",
+      "url": "https://www.jpmorgan.com/insights/technology/artificial-intelligence/powering-the-ai-revolution",
+      "access_level": "public",
+      "reliability_level": "S1",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Theme claim and referenced disclosure",
+      "evidence_summary": "AI and data-center expansion are creating a material increase in electricity demand. Grid capacity and interconnection are material constraints on AI data-center deployment. Rising data-center electricity demand and rack power density increase the need for grid capacity, resilient power delivery, efficient conversion, and advanced cooling.",
+      "supported_claim_ids": [
+        "ai_power_claim_demand_growth",
+        "ai_power_claim_grid_bottleneck",
+        "ai_power_claim_capacity_density_catalyst"
       ],
       "supported_node_ids": [
         "ai_server_integration",
-        "liquid_cooling"
+        "grid_connection",
+        "hvdc_power",
+        "liquid_cooling",
+        "power_generation",
+        "rack_power_distribution",
+        "server_power_supply",
+        "switchgear",
+        "transformer",
+        "ups"
       ],
-      "limitations": "Vendor product material is reliable for the product architecture it describes, but vendor performance comparisons do not establish industry-wide economics or supplier value capture.",
-      "notes": "Accepted for rack-scale and liquid-cooling architecture only."
+      "limitations": "Company disclosures often combine AI data-center products with broader data-center, cooling, power, or cloud segments. Node-level revenue, gross margin, customer concentration, order visibility, and supplier allocation remain incomplete for several mappings.",
+      "notes": "Accepted for the AI infrastructure, reliable-power, and grid-capacity research framing; not used for company conclusions."
+    },
+    {
+      "source_id": "ai_power_kehua_2025_annual_report",
+      "source_type": "company_filing",
+      "title": "科华数据股份有限公司2025年年度报告",
+      "publisher": "科华数据股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-27",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-27/1225194937.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Annual report pages 11-13, AIDC power supply and UPS products; Annual report page 20, revenue composition",
+      "evidence_summary": "Accepted company filings confirm domestic direct-product participation in liquid cooling, UPS, and server power, while node-level market share and future order growth remain unproven. The filing describes mass-market modular UPS products, a 1.2MW UPS certification, deployed prefabricated power modules, and jointly developed UPS products for high-density data-center scenarios. Data-center products generated about RMB 2.239 billion, or 27.44% of company revenue. The filing does not disclose UPS-only revenue inside that broader product category.",
+      "supported_claim_ids": [
+        "ai_power_claim_localization"
+      ],
+      "supported_node_ids": [
+        "hvdc_power",
+        "liquid_cooling",
+        "server_power_supply",
+        "sic_gan_power_semiconductor",
+        "switchgear",
+        "transformer",
+        "ups"
+      ],
+      "limitations": "Company disclosures often combine AI data-center products with broader data-center, cooling, power, or cloud segments. Node-level revenue, gross margin, customer concentration, order visibility, and supplier allocation remain incomplete for several mappings.",
+      "notes": "CNINFO original filing reviewed at the cited UPS, AIDC power, and segment-revenue pages."
+    },
+    {
+      "source_id": "ai_power_media_secondary_lead",
+      "source_type": "media_article",
+      "title": "Secondary reporting on AI power-chain beneficiaries",
+      "publisher": "Unverified media source",
+      "author": "",
+      "publish_date": "",
+      "url": "pending:secondary_source_url",
+      "access_level": "public",
+      "reliability_level": "S3",
+      "review_status": "lead_only",
+      "document_status": "pending_review",
+      "evidence_locator": "Theme claim and referenced disclosure",
+      "evidence_summary": "Accepted company filings confirm domestic direct-product participation in liquid cooling, UPS, and server power, while node-level market share and future order growth remain unproven.",
+      "supported_claim_ids": [
+        "ai_power_claim_localization"
+      ],
+      "supported_node_ids": [
+        "hvdc_power",
+        "liquid_cooling",
+        "server_power_supply",
+        "sic_gan_power_semiconductor",
+        "switchgear",
+        "transformer",
+        "ups"
+      ],
+      "limitations": "Company disclosures often combine AI data-center products with broader data-center, cooling, power, or cloud segments. Node-level revenue, gross margin, customer concentration, order visibility, and supplier allocation remain incomplete for several mappings.",
+      "notes": "Discovery lead only; no traceable original report or filing is attached."
     },
     {
       "source_id": "ai_power_nvidia_800v_architecture_2026",
@@ -166,25 +326,26 @@
       "access_level": "public",
       "reliability_level": "S1",
       "review_status": "accepted",
-      "document_status": "full_text_reviewed",
-      "evidence_locator": "Sections 'Powering AI Factories With 800 VDC', 'Moving to an 800 VDC Architecture', and 'The Advantages of 800 VDC Technology'",
-      "evidence_summary": "NVIDIA presents 800 VDC as a future power-distribution route intended to reduce conversion stages, current, copper use, cable bulk, and distribution losses while supporting denser AI racks.",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Theme claim and referenced disclosure",
+      "evidence_summary": "800 VDC is an emerging technical route for reducing conversion stages and supporting denser future AI racks. Higher AI rack power necessarily means copper interconnect captures more value across all architectures. All transformers, switchgear, UPS, PDU, and power-conversion suppliers benefit uniformly from the 800 VDC transition. New HVDC and 800 VDC architectures can shift, consolidate, or remove legacy conversion and distribution stages, so aggregate demand growth does not guarantee equal benefit for every incumbent equipment supplier.",
       "supported_claim_ids": [
         "ai_power_claim_800v_architecture",
         "ai_power_claim_copper_value_blanket",
-        "ai_power_claim_all_equipment_value_blanket"
+        "ai_power_claim_all_equipment_value_blanket",
+        "ai_power_claim_architecture_value_migration_risk"
       ],
       "supported_node_ids": [
-        "hvdc_power",
-        "server_power_supply",
-        "rack_power_distribution",
         "copper_interconnect",
+        "hvdc_power",
+        "rack_power_distribution",
+        "server_power_supply",
         "switchgear",
         "transformer",
         "ups"
       ],
-      "limitations": "This is a vendor roadmap and architecture proposal. It validates the technical direction described by NVIDIA, not adoption timing, market share, margins, or listed-company exposure.",
-      "notes": "Accepted for technical-route review and for challenging blanket copper/equipment beneficiary claims."
+      "limitations": "Company disclosures often combine AI data-center products with broader data-center, cooling, power, or cloud segments. Node-level revenue, gross margin, customer concentration, order visibility, and supplier allocation remain incomplete for several mappings.",
+      "notes": "Accepted for NVIDIA's declared 800 VDC technical route and its intended reduction in conversion stages, current, copper use, and cable bulk."
     },
     {
       "source_id": "ai_power_nvidia_800v_ecosystem_blog_2025",
@@ -197,161 +358,157 @@
       "access_level": "public",
       "reliability_level": "S1",
       "review_status": "accepted",
-      "document_status": "full_text_reviewed",
-      "evidence_locator": "Rack power-density discussion, 'Advantages of 800 VDC', and '800 VDC power distribution in next-generation AI factories'",
-      "evidence_summary": "The technical article describes rack power density moving beyond 100 kW, workload volatility affecting grid interconnection, and an 800 VDC route that reduces copper and conversion layers. It also describes a future architecture that can remove some AC switchgear, transformer, UPS, and PDU stages from the data hall.",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Theme claim and referenced disclosure",
+      "evidence_summary": "Grid capacity and interconnection are material constraints on AI data-center deployment. AI rack-scale systems are increasing power density and forcing changes in power delivery and facility design. 800 VDC is an emerging technical route for reducing conversion stages and supporting denser future AI racks. Higher AI rack power necessarily means copper interconnect captures more value across all architectures. All transformers, switchgear, UPS, PDU, and power-conversion suppliers benefit uniformly from the 800 VDC transition. New HVDC and 800 VDC architectures can shift, consolidate, or remove legacy conversion and distribution stages, so aggregate demand growth does not guarantee equal benefit for every incumbent equipment supplier.",
       "supported_claim_ids": [
         "ai_power_claim_grid_bottleneck",
         "ai_power_claim_rack_power_density",
         "ai_power_claim_800v_architecture",
         "ai_power_claim_copper_value_blanket",
-        "ai_power_claim_all_equipment_value_blanket"
+        "ai_power_claim_all_equipment_value_blanket",
+        "ai_power_claim_architecture_value_migration_risk"
       ],
       "supported_node_ids": [
+        "ai_server_integration",
+        "copper_interconnect",
         "grid_connection",
         "hvdc_power",
-        "server_power_supply",
-        "rack_power_distribution",
-        "copper_interconnect",
-        "switchgear",
-        "transformer",
-        "ups",
-        "ai_server_integration"
-      ],
-      "limitations": "The author represents NVIDIA and discusses a proposed ecosystem. Technical statements are useful for route analysis, while commercial adoption, bill-of-materials allocation, and profit pools require independent evidence.",
-      "notes": "Accepted as vendor-authored technical evidence, with explicit commercial limitations."
-    },
-    {
-      "source_id": "ai_power_iea_energy_and_ai_2025",
-      "source_type": "official_report",
-      "title": "Energy and AI",
-      "publisher": "International Energy Agency",
-      "author": "",
-      "publish_date": "2025-04-10",
-      "url": "https://www.iea.org/reports/energy-and-ai",
-      "access_level": "public",
-      "reliability_level": "S1",
-      "review_status": "needs_full_text",
-      "document_status": "access_blocked",
-      "evidence_locator": "Official report landing page blocked by an access challenge in the current environment",
-      "evidence_summary": "The official report is a priority source for global electricity-demand context, but no report excerpt was admitted into the pack because the page body was not reviewed.",
-      "supported_claim_ids": [
-        "ai_power_claim_demand_growth"
-      ],
-      "supported_node_ids": [
-        "power_generation",
-        "grid_connection"
-      ],
-      "limitations": "Metadata only. It cannot support a reviewed claim until the relevant chapter and tables are obtained and checked.",
-      "notes": "Retained as a high-priority full-text acquisition target."
-    },
-    {
-      "source_id": "ai_power_ocp_power_architecture",
-      "source_type": "official_report",
-      "title": "Open Compute Project power architecture materials",
-      "publisher": "Open Compute Project",
-      "author": "",
-      "publish_date": "",
-      "url": "https://www.opencompute.org/wiki/Power",
-      "access_level": "public",
-      "reliability_level": "S1",
-      "review_status": "needs_full_text",
-      "document_status": "access_blocked",
-      "evidence_locator": "Official Power project URL returned access denied in the current environment",
-      "evidence_summary": "OCP materials remain the preferred standards source for rack power interoperability, but no specific specification was accepted without direct document review.",
-      "supported_claim_ids": [
-        "ai_power_claim_800v_architecture"
-      ],
-      "supported_node_ids": [
-        "server_power_supply",
-        "rack_power_distribution",
-        "hvdc_power"
-      ],
-      "limitations": "The exact specification, revision, and section still need to be acquired. Do not infer compatibility or deployment from this metadata record.",
-      "notes": "Preserved as a standards-evidence gap."
-    },
-    {
-      "source_id": "ai_power_domestic_broker_report_lead",
-      "source_type": "broker_report",
-      "title": "Domestic broker AI data-center power, liquid-cooling, and HVDC report lead",
-      "publisher": "Unconfirmed broker source",
-      "author": "",
-      "publish_date": "",
-      "url": "https://example.invalid/gated-broker-report-lead",
-      "access_level": "gated",
-      "reliability_level": "S2",
-      "review_status": "needs_full_text",
-      "document_status": "metadata_only",
-      "evidence_locator": "Report title and full text not yet verified",
-      "evidence_summary": "A domestic broker source is still required to test BOM allocation, supplier certification, localization gaps, and China company mapping.",
-      "supported_claim_ids": [
-        "ai_power_claim_liquid_cooling",
-        "ai_power_claim_localization"
-      ],
-      "supported_node_ids": [
-        "transformer",
-        "switchgear",
-        "ups",
-        "hvdc_power",
-        "server_power_supply",
-        "rack_power_distribution",
         "liquid_cooling",
-        "sic_gan_power_semiconductor",
+        "rack_power_distribution",
+        "server_power_supply",
+        "switchgear",
+        "transformer",
+        "ups"
+      ],
+      "limitations": "Company disclosures often combine AI data-center products with broader data-center, cooling, power, or cloud segments. Node-level revenue, gross margin, customer concentration, order visibility, and supplier allocation remain incomplete for several mappings.",
+      "notes": "Accepted for rack power-density, grid-interconnection, and 800 VDC route analysis; commercial adoption and profit pools remain unverified."
+    },
+    {
+      "source_id": "ai_power_nvidia_gb200_nvl72_2026",
+      "source_type": "official_article",
+      "title": "NVIDIA GB200 NVL72",
+      "publisher": "NVIDIA",
+      "author": "",
+      "publish_date": "2026-01-15",
+      "url": "https://www.nvidia.com/en-us/data-center/gb200-nvl72/",
+      "access_level": "public",
+      "reliability_level": "S1",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Theme claim and referenced disclosure",
+      "evidence_summary": "AI rack-scale systems are increasing power density and forcing changes in power delivery and facility design. High-density rack-scale AI systems can require liquid cooling to manage density and floor-space constraints. Rising data-center electricity demand and rack power density increase the need for grid capacity, resilient power delivery, efficient conversion, and advanced cooling.",
+      "supported_claim_ids": [
+        "ai_power_claim_rack_power_density",
+        "ai_power_claim_liquid_cooling",
+        "ai_power_claim_capacity_density_catalyst"
+      ],
+      "supported_node_ids": [
+        "ai_server_integration",
+        "grid_connection",
+        "hvdc_power",
+        "liquid_cooling",
+        "power_generation",
+        "rack_power_distribution",
+        "server_power_supply",
+        "switchgear",
+        "transformer",
+        "ups"
+      ],
+      "limitations": "Company disclosures often combine AI data-center products with broader data-center, cooling, power, or cloud segments. Node-level revenue, gross margin, customer concentration, order visibility, and supplier allocation remain incomplete for several mappings.",
+      "notes": "Accepted for rack-scale and liquid-cooled product architecture only; vendor economics and performance claims are not generalized."
+    },
+    {
+      "source_id": "ai_power_range_technology_2025_annual_report",
+      "source_type": "company_filing",
+      "title": "润泽智算科技集团股份有限公司2025年年度报告",
+      "publisher": "润泽智算科技集团股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-10",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-10/1225090821.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Annual report pages 15 and 24-26, AI compute-center service and infrastructure development; Annual report principal-business and resource-advantage sections",
+      "evidence_summary": "The filing identifies AI-compute-center operation as the company's core service and describes high-density power, network, liquid-cooling, energy-management, and modular-delivery capabilities. AI and data-center infrastructure operation is the company's primary business; the filing also identifies land, energy quotas, power capacity, cooling, and operation as core operating resources.",
+      "supported_claim_ids": [],
+      "supported_node_ids": [
         "data_center_epc"
       ],
-      "limitations": "Placeholder for a source class, not a citable report. It cannot support any reviewed claim or score.",
-      "notes": "Must be replaced with an exact report title, publisher, date, URL/reference, and excerpt before use."
+      "limitations": "Company disclosures often combine AI data-center products with broader data-center, cooling, power, or cloud segments. Node-level revenue, gross margin, customer concentration, order visibility, and supplier allocation remain incomplete for several mappings.",
+      "notes": "CNINFO original filing reviewed for AI-compute-center operation, power resources, liquid-cooling development, and energy-efficiency management."
     },
     {
-      "source_id": "ai_power_media_secondary_lead",
-      "source_type": "media_article",
-      "title": "Secondary reporting on AI power-chain beneficiaries",
-      "publisher": "Unverified media source",
+      "source_id": "ai_power_shenling_2025_annual_report",
+      "source_type": "company_filing",
+      "title": "广东申菱环境系统股份有限公司2025年年度报告",
+      "publisher": "广东申菱环境系统股份有限公司",
       "author": "",
-      "publish_date": "",
-      "url": "https://example.invalid/secondary-ai-power-lead",
+      "publish_date": "2026-04-27",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-27/1225181199.PDF",
       "access_level": "public",
-      "reliability_level": "S3",
-      "review_status": "lead_only",
-      "document_status": "lead_only",
-      "evidence_locator": "No primary-source excerpt attached",
-      "evidence_summary": "Secondary coverage may identify reports or companies to investigate, but it is not used to validate demand, value capture, or localization conclusions.",
-      "supported_claim_ids": [
-        "ai_power_claim_localization"
-      ],
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Annual report principal-business section, data-service cooling products and customer disclosure; Annual report principal-business section, data-service segment discussion",
+      "evidence_summary": "The filing identifies evaporative cooling, phase-change cooling, and liquid-cooling products for data-service customers and lists major internet, colocation, server, and cloud-computing customers. The filing treats data services as a reporting business segment and reports 43.77% year-on-year growth for the segment, but does not isolate AI-data-center liquid-cooling revenue.",
+      "supported_claim_ids": [],
       "supported_node_ids": [
-        "transformer",
-        "liquid_cooling",
-        "sic_gan_power_semiconductor"
+        "liquid_cooling"
       ],
-      "limitations": "No traceable original report or filing is attached.",
-      "notes": "Research lead only."
+      "limitations": "Company disclosures often combine AI data-center products with broader data-center, cooling, power, or cloud segments. Node-level revenue, gross margin, customer concentration, order visibility, and supplier allocation remain incomplete for several mappings.",
+      "notes": "CNINFO original filing reviewed for data-center cooling products, liquid-cooling development, customers, and data-service business disclosure."
     },
     {
       "source_id": "ai_power_video_claim_lead",
       "source_type": "video_claim",
-      "title": "Short-video claim: AI power chain value capture",
+      "title": "老郑说AI前瞻：AI供电产业链口播线索",
       "publisher": "老郑说AI前瞻",
-      "author": "",
+      "author": "老郑说AI前瞻",
       "publish_date": "",
-      "url": "https://example.invalid/manual-video-reference",
+      "url": "manual:douyin_video_observed_by_user",
       "access_level": "private_claimed",
       "reliability_level": "S4",
       "review_status": "lead_only",
-      "document_status": "lead_only",
-      "evidence_locator": "Manual topic note; no verified transcript or cited source attached",
-      "evidence_summary": "The video topic is retained only as a research prompt about who captures value across AI power infrastructure.",
+      "document_status": "pending_review",
+      "evidence_locator": "Theme claim and referenced disclosure",
+      "evidence_summary": "Accepted company filings confirm domestic direct-product participation in liquid cooling, UPS, and server power, while node-level market share and future order growth remain unproven.",
       "supported_claim_ids": [
         "ai_power_claim_localization"
       ],
       "supported_node_ids": [
-        "transformer",
         "hvdc_power",
         "liquid_cooling",
-        "sic_gan_power_semiconductor"
+        "server_power_supply",
+        "sic_gan_power_semiconductor",
+        "switchgear",
+        "transformer",
+        "ups"
       ],
-      "limitations": "Oral claims without verifiable sources cannot be accepted evidence and cannot support reviewed claims or nodes.",
-      "notes": "Lead only; never promote directly to platform evidence."
+      "limitations": "Company disclosures often combine AI data-center products with broader data-center, cooling, power, or cloud segments. Node-level revenue, gross margin, customer concentration, order visibility, and supplier allocation remain incomplete for several mappings.",
+      "notes": "Oral claim only; retained as a decomposition prompt and never used as formal evidence."
+    },
+    {
+      "source_id": "ai_power_zhongheng_2025_annual_report",
+      "source_type": "company_filing",
+      "title": "杭州中恒电气股份有限公司2025年年度报告",
+      "publisher": "杭州中恒电气股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-21",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-21/1225131190.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "Annual report pages 11-12, AIDC key power and HVDC systems; Annual report page 25, product revenue composition",
+      "evidence_summary": "The filing describes 240V, 336V, and 800V HVDC systems, states that the products have been scaled in cloud, intelligent-computing, and colocation data centers, and presents an end-to-end data-center power product matrix. Data-center power revenue was about RMB 775.8 million, representing 36.30% of company revenue. The filing does not split HVDC-only revenue from the broader data-center power category.",
+      "supported_claim_ids": [],
+      "supported_node_ids": [
+        "hvdc_power"
+      ],
+      "limitations": "Company disclosures often combine AI data-center products with broader data-center, cooling, power, or cloud segments. Node-level revenue, gross margin, customer concentration, order visibility, and supplier allocation remain incomplete for several mappings.",
+      "notes": "CNINFO original filing reviewed at the cited HVDC product, deployment, and segment-revenue pages."
     }
   ]
 }

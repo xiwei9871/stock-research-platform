@@ -15,6 +15,12 @@ def test_five_theme_completion_report_is_ready():
     assert report["all_required_sections_ready"] is True
     assert report["completion_status"] == "ready"
     assert all(row["coverage"]["ready"] for row in report["theme_results"])
+    assert all(row["source_pack_ready"] for row in report["theme_results"])
+    assert all(row["node_evidence_matrix_ready"] for row in report["theme_results"])
+    assert all(
+        row["node_evidence_accounted_count"] == row["coverage"]["counts"]["theme_nodes"]
+        for row in report["theme_results"]
+    )
 
 
 def test_five_theme_completion_report_fails_when_a_source_gate_breaks():

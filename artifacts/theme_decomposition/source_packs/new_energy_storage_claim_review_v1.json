@@ -1,0 +1,187 @@
+{
+  "artifact_version": "new_energy_storage_claim_review_v1",
+  "theme_id": "new_energy_storage_value_chain_v1",
+  "as_of_date": "2026-07-14",
+  "claim_reviews": [
+    {
+      "claim_id": "storage_claim_01",
+      "claim_text": "Storage-cell value depends on safety, cycle life, degradation, cost and warranty performance rather than shipment volume alone.",
+      "claim_type": "value_capture",
+      "review_decision": "reviewed",
+      "evidence_status": "verified",
+      "confidence": 0.86,
+      "accepted_source_ids": [
+        "storage_300750_filing"
+      ],
+      "pending_source_ids": [],
+      "affected_node_ids": [
+        "storage_cells_materials"
+      ],
+      "rationale": "Evidence is retained at source and node level; platform status is reviewed.",
+      "uncertainty": "Storage-specific revenue, project margin, utilization hours, degradation, warranty provisions, customer concentration and revenue-stack composition remain unevenly disclosed.",
+      "next_evidence_needed": "Add node-level revenue, margin, customer qualification, orders, and disconfirming evidence where still undisclosed."
+    },
+    {
+      "claim_id": "storage_claim_02",
+      "claim_text": "Cell suppliers participate directly in stationary storage, but chemistry mix, customer allocation and storage-specific margins require separate tracking.",
+      "claim_type": "supply_constraint",
+      "review_decision": "reviewed",
+      "evidence_status": "verified",
+      "confidence": 0.86,
+      "accepted_source_ids": [
+        "storage_300014_filing"
+      ],
+      "pending_source_ids": [],
+      "affected_node_ids": [
+        "storage_cells_materials"
+      ],
+      "rationale": "Evidence is retained at source and node level; platform status is reviewed.",
+      "uncertainty": "Storage-specific revenue, project margin, utilization hours, degradation, warranty provisions, customer concentration and revenue-stack composition remain unevenly disclosed.",
+      "next_evidence_needed": "Add node-level revenue, margin, customer qualification, orders, and disconfirming evidence where still undisclosed."
+    },
+    {
+      "claim_id": "storage_claim_03",
+      "claim_text": "Storage systems combine cells with power conversion, controls, safety and integration; battery manufacturing economics should not be treated as the entire value chain.",
+      "claim_type": "tech_route",
+      "review_decision": "reviewed",
+      "evidence_status": "verified",
+      "confidence": 0.86,
+      "accepted_source_ids": [
+        "storage_002074_filing"
+      ],
+      "pending_source_ids": [],
+      "affected_node_ids": [
+        "storage_cells_materials"
+      ],
+      "rationale": "Evidence is retained at source and node level; platform status is reviewed.",
+      "uncertainty": "Storage-specific revenue, project margin, utilization hours, degradation, warranty provisions, customer concentration and revenue-stack composition remain unevenly disclosed.",
+      "next_evidence_needed": "Add node-level revenue, margin, customer qualification, orders, and disconfirming evidence where still undisclosed."
+    },
+    {
+      "claim_id": "storage_claim_04",
+      "claim_text": "System integration captures value through architecture, grid-forming control, delivery, warranty and lifecycle performance.",
+      "claim_type": "value_capture",
+      "review_decision": "reviewed",
+      "evidence_status": "verified",
+      "confidence": 0.86,
+      "accepted_source_ids": [
+        "storage_300274_filing"
+      ],
+      "pending_source_ids": [],
+      "affected_node_ids": [
+        "storage_system_integration"
+      ],
+      "rationale": "Evidence is retained at source and node level; platform status is reviewed.",
+      "uncertainty": "Storage-specific revenue, project margin, utilization hours, degradation, warranty provisions, customer concentration and revenue-stack composition remain unevenly disclosed.",
+      "next_evidence_needed": "Add node-level revenue, margin, customer qualification, orders, and disconfirming evidence where still undisclosed."
+    },
+    {
+      "claim_id": "storage_claim_05",
+      "claim_text": "Vertically integrated cell, module, BMS and system portfolios can reduce interface risk, but do not automatically prove superior project returns.",
+      "claim_type": "bottleneck",
+      "review_decision": "reviewed",
+      "evidence_status": "verified",
+      "confidence": 0.86,
+      "accepted_source_ids": [
+        "storage_688063_filing"
+      ],
+      "pending_source_ids": [],
+      "affected_node_ids": [
+        "storage_modules_packs"
+      ],
+      "rationale": "Evidence is retained at source and node level; platform status is reviewed.",
+      "uncertainty": "Storage-specific revenue, project margin, utilization hours, degradation, warranty provisions, customer concentration and revenue-stack composition remain unevenly disclosed.",
+      "next_evidence_needed": "Add node-level revenue, margin, customer qualification, orders, and disconfirming evidence where still undisclosed."
+    },
+    {
+      "claim_id": "storage_claim_06",
+      "claim_text": "PCS and control quality affect efficiency, grid support and revenue-stack availability, making certification and field operation important evidence.",
+      "claim_type": "bottleneck",
+      "review_decision": "reviewed",
+      "evidence_status": "verified",
+      "confidence": 0.86,
+      "accepted_source_ids": [
+        "storage_300376_filing"
+      ],
+      "pending_source_ids": [],
+      "affected_node_ids": [
+        "storage_pcs"
+      ],
+      "rationale": "Evidence is retained at source and node level; platform status is reviewed.",
+      "uncertainty": "Storage-specific revenue, project margin, utilization hours, degradation, warranty provisions, customer concentration and revenue-stack composition remain unevenly disclosed.",
+      "next_evidence_needed": "Add node-level revenue, margin, customer qualification, orders, and disconfirming evidence where still undisclosed."
+    },
+    {
+      "claim_id": "storage_claim_07",
+      "claim_text": "Industry competition is shifting from hardware price toward delivery, operating efficiency and asset returns, increasing the value of controls and operations.",
+      "claim_type": "cost_structure",
+      "review_decision": "reviewed",
+      "evidence_status": "verified",
+      "confidence": 0.86,
+      "accepted_source_ids": [
+        "storage_002335_filing"
+      ],
+      "pending_source_ids": [],
+      "affected_node_ids": [
+        "storage_pcs"
+      ],
+      "rationale": "Evidence is retained at source and node level; platform status is reviewed.",
+      "uncertainty": "Storage-specific revenue, project margin, utilization hours, degradation, warranty provisions, customer concentration and revenue-stack composition remain unevenly disclosed.",
+      "next_evidence_needed": "Add node-level revenue, margin, customer qualification, orders, and disconfirming evidence where still undisclosed."
+    },
+    {
+      "claim_id": "storage_claim_08",
+      "claim_text": "Storage battery and system suppliers benefit from integrated products, while exact storage revenue, margins and customer concentration must remain visible.",
+      "claim_type": "value_capture",
+      "review_decision": "reviewed",
+      "evidence_status": "verified",
+      "confidence": 0.86,
+      "accepted_source_ids": [
+        "storage_002580_filing"
+      ],
+      "pending_source_ids": [],
+      "affected_node_ids": [
+        "storage_modules_packs"
+      ],
+      "rationale": "Evidence is retained at source and node level; platform status is reviewed.",
+      "uncertainty": "Storage-specific revenue, project margin, utilization hours, degradation, warranty provisions, customer concentration and revenue-stack composition remain unevenly disclosed.",
+      "next_evidence_needed": "Add node-level revenue, margin, customer qualification, orders, and disconfirming evidence where still undisclosed."
+    },
+    {
+      "claim_id": "storage_claim_09",
+      "claim_text": "The key catalysts are higher utilization, broader ancillary-service participation, grid-forming demand and repeatable project economics.",
+      "claim_type": "catalyst",
+      "review_decision": "reviewed",
+      "evidence_status": "verified",
+      "confidence": 0.86,
+      "accepted_source_ids": [
+        "storage_688663_filing"
+      ],
+      "pending_source_ids": [],
+      "affected_node_ids": [
+        "storage_market_participation"
+      ],
+      "rationale": "Evidence is retained at source and node level; platform status is reviewed.",
+      "uncertainty": "Storage-specific revenue, project margin, utilization hours, degradation, warranty provisions, customer concentration and revenue-stack composition remain unevenly disclosed.",
+      "next_evidence_needed": "Add node-level revenue, margin, customer qualification, orders, and disconfirming evidence where still undisclosed."
+    },
+    {
+      "claim_id": "storage_claim_10",
+      "claim_text": "Tender-price pressure, under-utilization, degradation, safety incidents, warranty costs and uncertain market revenue can transfer value away from equipment volume.",
+      "claim_type": "risk",
+      "review_decision": "reviewed",
+      "evidence_status": "partially_verified",
+      "confidence": 0.86,
+      "accepted_source_ids": [
+        "storage_300499_filing"
+      ],
+      "pending_source_ids": [],
+      "affected_node_ids": [
+        "storage_fire_protection"
+      ],
+      "rationale": "Evidence is retained at source and node level; platform status is reviewed.",
+      "uncertainty": "Storage-specific revenue, project margin, utilization hours, degradation, warranty provisions, customer concentration and revenue-stack composition remain unevenly disclosed.",
+      "next_evidence_needed": "Add node-level revenue, margin, customer qualification, orders, and disconfirming evidence where still undisclosed."
+    }
+  ]
+}

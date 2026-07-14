@@ -1,0 +1,285 @@
+{
+  "artifact_version": "humanoid_robotics_claim_review_v1",
+  "theme_id": "humanoid_robotics_head_to_toe_v1",
+  "as_of_date": "2026-07-14",
+  "claim_reviews": [
+    {
+      "claim_id": "robotics_claim_01",
+      "claim_text": "Screw and joint-module products must be separated by screw type, process maturity, sample status and batch-delivery evidence.",
+      "claim_type": "tech_route",
+      "review_decision": "reviewed",
+      "evidence_status": "verified",
+      "confidence": 0.86,
+      "accepted_source_ids": [
+        "robotics_300100_filing"
+      ],
+      "pending_source_ids": [],
+      "affected_node_ids": [
+        "planetary_roller_screw"
+      ],
+      "rationale": "Evidence is retained at source and node level; platform status is reviewed.",
+      "uncertainty": "Humanoid-specific revenue, customer names, allocation, gross margin, order conversion and batch-delivery evidence are still limited across most listed-company filings.",
+      "next_evidence_needed": "Add node-level revenue, margin, customer qualification, orders, and disconfirming evidence where still undisclosed."
+    },
+    {
+      "claim_id": "robotics_claim_02",
+      "claim_text": "Planetary roller screws require precision manufacturing, consistency and customer validation; sample completion does not prove material humanoid revenue.",
+      "claim_type": "bottleneck",
+      "review_decision": "reviewed",
+      "evidence_status": "verified",
+      "confidence": 0.86,
+      "accepted_source_ids": [
+        "robotics_300580_filing"
+      ],
+      "pending_source_ids": [],
+      "affected_node_ids": [
+        "planetary_roller_screw"
+      ],
+      "rationale": "Evidence is retained at source and node level; platform status is reviewed.",
+      "uncertainty": "Humanoid-specific revenue, customer names, allocation, gross margin, order conversion and batch-delivery evidence are still limited across most listed-company filings.",
+      "next_evidence_needed": "Add node-level revenue, margin, customer qualification, orders, and disconfirming evidence where still undisclosed."
+    },
+    {
+      "claim_id": "robotics_claim_03",
+      "claim_text": "Dexterous-hand value can accumulate in compact motors, transmissions, sensing and integration, but each component requires direct commercialization evidence.",
+      "claim_type": "value_capture",
+      "review_decision": "reviewed",
+      "evidence_status": "verified",
+      "confidence": 0.86,
+      "accepted_source_ids": [
+        "robotics_301023_filing"
+      ],
+      "pending_source_ids": [],
+      "affected_node_ids": [
+        "hand_dexterous"
+      ],
+      "rationale": "Evidence is retained at source and node level; platform status is reviewed.",
+      "uncertainty": "Humanoid-specific revenue, customer names, allocation, gross margin, order conversion and batch-delivery evidence are still limited across most listed-company filings.",
+      "next_evidence_needed": "Add node-level revenue, margin, customer qualification, orders, and disconfirming evidence where still undisclosed."
+    },
+    {
+      "claim_id": "robotics_claim_04",
+      "claim_text": "Encoders and servo feedback affect precision and safety; general robot use is evidence of capability but not proof of humanoid allocation.",
+      "claim_type": "bottleneck",
+      "review_decision": "reviewed",
+      "evidence_status": "verified",
+      "confidence": 0.86,
+      "accepted_source_ids": [
+        "robotics_603416_filing"
+      ],
+      "pending_source_ids": [],
+      "affected_node_ids": [
+        "encoder"
+      ],
+      "rationale": "Evidence is retained at source and node level; platform status is reviewed.",
+      "uncertainty": "Humanoid-specific revenue, customer names, allocation, gross margin, order conversion and batch-delivery evidence are still limited across most listed-company filings.",
+      "next_evidence_needed": "Add node-level revenue, margin, customer qualification, orders, and disconfirming evidence where still undisclosed."
+    },
+    {
+      "claim_id": "robotics_claim_05",
+      "claim_text": "Servo motors, drives and integrated controllers form a qualified execution-control stack whose value depends on response, density and system integration.",
+      "claim_type": "value_capture",
+      "review_decision": "reviewed",
+      "evidence_status": "verified",
+      "confidence": 0.86,
+      "accepted_source_ids": [
+        "robotics_688698_filing"
+      ],
+      "pending_source_ids": [],
+      "affected_node_ids": [
+        "controller"
+      ],
+      "rationale": "Evidence is retained at source and node level; platform status is reviewed.",
+      "uncertainty": "Humanoid-specific revenue, customer names, allocation, gross margin, order conversion and batch-delivery evidence are still limited across most listed-company filings.",
+      "next_evidence_needed": "Add node-level revenue, margin, customer qualification, orders, and disconfirming evidence where still undisclosed."
+    },
+    {
+      "claim_id": "robotics_claim_06",
+      "claim_text": "System vendors and software integrators are beneficiaries through robot products and deployment, but should not be mixed with component profit pools.",
+      "claim_type": "tech_route",
+      "review_decision": "reviewed",
+      "evidence_status": "verified",
+      "confidence": 0.86,
+      "accepted_source_ids": [
+        "robotics_301236_filing"
+      ],
+      "pending_source_ids": [],
+      "affected_node_ids": [
+        "brain_ai_compute"
+      ],
+      "rationale": "Evidence is retained at source and node level; platform status is reviewed.",
+      "uncertainty": "Humanoid-specific revenue, customer names, allocation, gross margin, order conversion and batch-delivery evidence are still limited across most listed-company filings.",
+      "next_evidence_needed": "Add node-level revenue, margin, customer qualification, orders, and disconfirming evidence where still undisclosed."
+    },
+    {
+      "claim_id": "robotics_claim_07",
+      "claim_text": "Industrial humanoid applications provide integration evidence, while repeat deliveries, utilization and application economics remain the key validation steps.",
+      "claim_type": "company_mapping",
+      "review_decision": "reviewed",
+      "evidence_status": "verified",
+      "confidence": 0.86,
+      "accepted_source_ids": [
+        "robotics_600845_filing"
+      ],
+      "pending_source_ids": [],
+      "affected_node_ids": [
+        "controller"
+      ],
+      "rationale": "Evidence is retained at source and node level; platform status is reviewed.",
+      "uncertainty": "Humanoid-specific revenue, customer names, allocation, gross margin, order conversion and batch-delivery evidence are still limited across most listed-company filings.",
+      "next_evidence_needed": "Add node-level revenue, margin, customer qualification, orders, and disconfirming evidence where still undisclosed."
+    },
+    {
+      "claim_id": "robotics_claim_08",
+      "claim_text": "Precision reducer modules are a localization opportunity, but batch production and humanoid customer allocation must be verified separately.",
+      "claim_type": "localization",
+      "review_decision": "reviewed",
+      "evidence_status": "verified",
+      "confidence": 0.86,
+      "accepted_source_ids": [
+        "robotics_002896_filing"
+      ],
+      "pending_source_ids": [],
+      "affected_node_ids": [
+        "harmonic_reducer"
+      ],
+      "rationale": "Evidence is retained at source and node level; platform status is reviewed.",
+      "uncertainty": "Humanoid-specific revenue, customer names, allocation, gross margin, order conversion and batch-delivery evidence are still limited across most listed-company filings.",
+      "next_evidence_needed": "Add node-level revenue, margin, customer qualification, orders, and disconfirming evidence where still undisclosed."
+    },
+    {
+      "claim_id": "robotics_claim_09",
+      "claim_text": "The commercialization catalyst is movement from prototypes and samples to repeatable small-batch and batch delivery with customer qualification.",
+      "claim_type": "catalyst",
+      "review_decision": "reviewed",
+      "evidence_status": "verified",
+      "confidence": 0.86,
+      "accepted_source_ids": [
+        "robotics_601689_filing"
+      ],
+      "pending_source_ids": [],
+      "affected_node_ids": [
+        "torso_structure"
+      ],
+      "rationale": "Evidence is retained at source and node level; platform status is reviewed.",
+      "uncertainty": "Humanoid-specific revenue, customer names, allocation, gross margin, order conversion and batch-delivery evidence are still limited across most listed-company filings.",
+      "next_evidence_needed": "Add node-level revenue, margin, customer qualification, orders, and disconfirming evidence where still undisclosed."
+    },
+    {
+      "claim_id": "robotics_claim_10",
+      "claim_text": "The main research risk is treating R&D plans, general robot products or social supply-chain lists as verified humanoid revenue and profit exposure.",
+      "claim_type": "risk",
+      "review_decision": "reviewed",
+      "evidence_status": "partially_verified",
+      "confidence": 0.86,
+      "accepted_source_ids": [
+        "robotics_301413_filing"
+      ],
+      "pending_source_ids": [],
+      "affected_node_ids": [
+        "torque_sensor"
+      ],
+      "rationale": "Evidence is retained at source and node level; platform status is reviewed.",
+      "uncertainty": "Humanoid-specific revenue, customer names, allocation, gross margin, order conversion and batch-delivery evidence are still limited across most listed-company filings.",
+      "next_evidence_needed": "Add node-level revenue, margin, customer qualification, orders, and disconfirming evidence where still undisclosed."
+    },
+    {
+      "claim_id": "robotics_claim_head_to_toe_method",
+      "claim_text": "The head-to-toe method is useful for forcing complete component coverage, but node scores must be rebuilt from evidence.",
+      "claim_type": "tech_route",
+      "review_decision": "research_lead",
+      "evidence_status": "unverified",
+      "confidence": 0.35,
+      "accepted_source_ids": [],
+      "pending_source_ids": [
+        "robotics_laozheng_video_clue",
+        "robotics_laozheng_video_clue"
+      ],
+      "affected_node_ids": [
+        "head_vision",
+        "torso_structure",
+        "arm_actuator",
+        "hand_dexterous",
+        "hip_joint",
+        "knee_joint",
+        "ankle_joint"
+      ],
+      "rationale": "Evidence is retained at source and node level; platform status is research_lead.",
+      "uncertainty": "Humanoid-specific revenue, customer names, allocation, gross margin, order conversion and batch-delivery evidence are still limited across most listed-company filings.",
+      "next_evidence_needed": "Add node-level revenue, margin, customer qualification, orders, and disconfirming evidence where still undisclosed."
+    },
+    {
+      "claim_id": "robotics_claim_actuator_value",
+      "claim_text": "Actuator assemblies, reducers, roller screws, sensors, and motors should be separated because their value basis differs across BOM share, precision, scarcity, and certification.",
+      "claim_type": "value_capture",
+      "review_decision": "draft",
+      "evidence_status": "partially_verified",
+      "confidence": 0.55,
+      "accepted_source_ids": [],
+      "pending_source_ids": [
+        "robotics_broker_bom_unseen",
+        "robotics_broker_bom_unseen",
+        "robotics_media_summary"
+      ],
+      "affected_node_ids": [
+        "arm_actuator",
+        "frameless_motor",
+        "harmonic_reducer",
+        "planetary_roller_screw",
+        "encoder",
+        "torque_sensor",
+        "six_axis_force_sensor"
+      ],
+      "rationale": "Evidence is retained at source and node level; platform status is draft.",
+      "uncertainty": "Humanoid-specific revenue, customer names, allocation, gross margin, order conversion and batch-delivery evidence are still limited across most listed-company filings.",
+      "next_evidence_needed": "Add node-level revenue, margin, customer qualification, orders, and disconfirming evidence where still undisclosed."
+    },
+    {
+      "claim_id": "robotics_claim_system_architecture",
+      "claim_text": "Humanoid robotics research should distinguish perception, compute/control, structure, joints, actuation, sensors, battery, wiring, and materials before company mapping.",
+      "claim_type": "tech_route",
+      "review_decision": "draft",
+      "evidence_status": "partially_verified",
+      "confidence": 0.65,
+      "accepted_source_ids": [],
+      "pending_source_ids": [
+        "robotics_tesla_official_material",
+        "robotics_tesla_official_material",
+        "robotics_unitree_official_material"
+      ],
+      "affected_node_ids": [
+        "head_vision",
+        "brain_ai_compute",
+        "controller",
+        "battery_bms",
+        "wiring_harness",
+        "lightweight_materials"
+      ],
+      "rationale": "Evidence is retained at source and node level; platform status is draft.",
+      "uncertainty": "Humanoid-specific revenue, customer names, allocation, gross margin, order conversion and batch-delivery evidence are still limited across most listed-company filings.",
+      "next_evidence_needed": "Add node-level revenue, margin, customer qualification, orders, and disconfirming evidence where still undisclosed."
+    },
+    {
+      "claim_id": "robotics_claim_unverified_stock_mapping",
+      "claim_text": "Social stock mappings for motor, reducer, screw, and sensor suppliers are not adopted until validated by filings, customer evidence, or reliable source material.",
+      "claim_type": "company_mapping",
+      "review_decision": "blocked",
+      "evidence_status": "unverified",
+      "confidence": 0.1,
+      "accepted_source_ids": [],
+      "pending_source_ids": [
+        "robotics_social_stock_mapping_unverified",
+        "robotics_social_stock_mapping_unverified"
+      ],
+      "affected_node_ids": [
+        "frameless_motor",
+        "harmonic_reducer",
+        "planetary_roller_screw",
+        "six_axis_force_sensor"
+      ],
+      "rationale": "Evidence is retained at source and node level; platform status is blocked.",
+      "uncertainty": "Humanoid-specific revenue, customer names, allocation, gross margin, order conversion and batch-delivery evidence are still limited across most listed-company filings.",
+      "next_evidence_needed": "Add node-level revenue, margin, customer qualification, orders, and disconfirming evidence where still undisclosed."
+    }
+  ]
+}

@@ -412,7 +412,7 @@
       "bottleneck_score": 4,
       "localization_gap_score": 3,
       "supply_tightness_score": 3,
-      "evidence_strength": 4,
+      "evidence_strength": 2,
       "key_metrics": [
         "qualification progress",
         "segment revenue",
@@ -422,7 +422,7 @@
       "overseas_leaders": [],
       "domestic_players": [],
       "related_stock_codes": [],
-      "node_review_status": "reviewed"
+      "node_review_status": "needs_evidence"
     },
     {
       "node_id": "semiconductor_clean_wet_process",
@@ -582,7 +582,7 @@
       "bottleneck_score": 4,
       "localization_gap_score": 3,
       "supply_tightness_score": 3,
-      "evidence_strength": 4,
+      "evidence_strength": 2,
       "key_metrics": [
         "qualification progress",
         "segment revenue",
@@ -592,7 +592,7 @@
       "overseas_leaders": [],
       "domestic_players": [],
       "related_stock_codes": [],
-      "node_review_status": "reviewed"
+      "node_review_status": "needs_evidence"
     }
   ],
   "value_capture_assessments": [],
