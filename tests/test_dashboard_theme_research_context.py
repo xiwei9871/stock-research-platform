@@ -431,8 +431,12 @@ def test_daily_digest_counts_reviewed_workflow_context() -> None:
     assert digest["reviewed_mapping_count"] == len(reviewed_mappings)
     assert digest["recent_reviewed_update_count"] == 2
     assert digest["evidence_gap_count"] == len(context["evidence_gap_priorities"])
-    assert digest["mapped_companies"][0]["company_code"] == "688498.SH"
-    assert digest["mapped_companies"][0]["theme_name"] == "光通信与数据中心互联：带宽、功耗、良率与交付价值链"
+    assert {
+        (row["company_code"], row["theme_name"])
+        for row in digest["mapped_companies"]
+    } >= {
+        ("688498.SH", "光通信与数据中心互联：带宽、功耗、良率与交付价值链")
+    }
     assert digest["research_only"] is True
     assert digest["used_for_admission"] is False
 

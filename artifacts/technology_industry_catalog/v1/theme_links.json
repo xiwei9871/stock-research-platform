@@ -399,7 +399,20 @@
       "theme_id": "semiconductor_packaging_test_advanced_packaging_value_chain_v1",
       "chain_id": "semiconductor_packaging_test_advanced_packaging",
       "node_links": [],
-      "unmapped_theme_node_ids": []
+      "unmapped_theme_node_ids": [
+        "traditional_wirebond_leadframe_packaging",
+        "flip_chip_fcbga_packaging",
+        "bumping_fanin_wlp",
+        "fanout_plp_packaging",
+        "chiplet_2p5d_3d_cpo",
+        "sip_mem_mems_cis_packaging",
+        "wafer_probe_final_test_reliability",
+        "package_substrates_interposers",
+        "bonding_attach_equipment_process",
+        "dicing_thinning_grinding_equipment",
+        "ate_handler_prober_aoi_equipment",
+        "advanced_packaging_materials"
+      ]
     },
     {
       "theme_id": "cloud_data_center_infrastructure_value_chain_v1",

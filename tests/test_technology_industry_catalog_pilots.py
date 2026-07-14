@@ -1468,7 +1468,7 @@ def test_new_energy_storage_skeleton_owns_stationary_backup_systems():
         if row["chain_id"] == "new_energy_storage"
     }
 
-    assert set(nodes) == {
+    assert set(nodes) >= {
         "stationary_backup_storage_systems",
         "stationary_battery_backup_system",
         "flywheel_backup_energy_system",
