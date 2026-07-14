@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import sys
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
@@ -1402,19 +1403,35 @@ EXPECTED_THEME_RESEARCH_CATALOG_SHA256 = (
 
 THEME_RESEARCH_SCHEMA_MIGRATION_LOCK_KEY = 7_171_271_448_728_574_939
 
-KNOWN_LEGACY_DDL_SHA256 = {
-    "1acce2a856b94b6479c7e08623779e230124fc54fb78fba3358e9cfe4cc882ce"
-}
 
-KNOWN_LEGACY_CATALOG_SHA256 = {
-    "296c75c60f86b1606306d9599c04c4e25a5f06480184ec78f3cefbbf48a409b7"
-}
+@dataclass(frozen=True)
+class LegacyThemeResearchSchemaContract:
+    version_label: str
+    ddl_sha256: str
+    catalog_sha256: str
+    allowed_missing: frozenset[str]
 
-KNOWN_LEGACY_MISSING = {
-    "catalog:sha256",
-    "constraint:ck_theme_research_claim_type",
-    "constraint:ck_theme_research_theme_type",
-}
+
+KNOWN_LEGACY_SCHEMA_CONTRACTS = (
+    LegacyThemeResearchSchemaContract(
+        version_label="94e1de3",
+        ddl_sha256="1acce2a856b94b6479c7e08623779e230124fc54fb78fba3358e9cfe4cc882ce",
+        catalog_sha256="296c75c60f86b1606306d9599c04c4e25a5f06480184ec78f3cefbbf48a409b7",
+        allowed_missing=frozenset(
+            {
+                "catalog:sha256",
+                "constraint:ck_theme_research_claim_type",
+                "constraint:ck_theme_research_theme_type",
+            }
+        ),
+    ),
+    LegacyThemeResearchSchemaContract(
+        version_label="9ad6360/01fae25",
+        ddl_sha256="ae542e49fb740ffb2e54d239c487c58b25f8d47178353161bc3ef58dba3948f6",
+        catalog_sha256="5b21137a399c3304cb4550f7e04ce06c048fe7e37754b3cd1fc316add34b0451",
+        allowed_missing=frozenset(),
+    ),
+)
 
 
 def ddl_sha256() -> str:
@@ -1782,13 +1799,19 @@ def apply_theme_research_schema(
                 }
 
             missing = set(inspection["missing"])
+            legacy_contract = next(
+                (
+                    contract
+                    for contract in KNOWN_LEGACY_SCHEMA_CONTRACTS
+                    if migration is not None
+                    and migration.get("ddl_sha256") == contract.ddl_sha256
+                    and inspection.get("catalog_sha256") == contract.catalog_sha256
+                    and missing <= contract.allowed_missing
+                ),
+                None,
+            )
             known_legacy = (
-                migration is not None
-                and migration.get("ddl_sha256") in KNOWN_LEGACY_DDL_SHA256
-                and existing_count == len(REQUIRED_TABLES)
-                and inspection.get("catalog_sha256") in KNOWN_LEGACY_CATALOG_SHA256
-                and "catalog:sha256" in missing
-                and missing <= KNOWN_LEGACY_MISSING
+                legacy_contract is not None and existing_count == len(REQUIRED_TABLES)
             )
             bootstrap = migration is None and existing_count == 0
             if not bootstrap and not known_legacy:

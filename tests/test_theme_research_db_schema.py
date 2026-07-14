@@ -39,6 +39,9 @@ LEGACY_MISSING = {
     "constraint:ck_theme_research_claim_type",
     "constraint:ck_theme_research_theme_type",
 }
+PREDECESSOR_DDL_SHA256 = "ae542e49fb740ffb2e54d239c487c58b25f8d47178353161bc3ef58dba3948f6"
+PREDECESSOR_CATALOG_SHA256 = "5b21137a399c3304cb4550f7e04ce06c048fe7e37754b3cd1fc316add34b0451"
+PREDECESSOR_MISSING = set()
 
 
 class _Cursor:
@@ -130,10 +133,34 @@ def test_schema_rebuilds_only_exact_known_legacy_theme_and_claim_type_checks() -
     assert "'risk'" in sql
 
 
-def test_known_legacy_schema_hashes_are_explicit() -> None:
-    assert schema.KNOWN_LEGACY_DDL_SHA256 == {LEGACY_DDL_SHA256}
-    assert schema.KNOWN_LEGACY_CATALOG_SHA256 == {LEGACY_CATALOG_SHA256}
-    assert schema.KNOWN_LEGACY_MISSING == LEGACY_MISSING
+def test_known_legacy_schema_contracts_bind_exact_hashes_and_missing_sets() -> None:
+    contracts = {
+        (
+            contract.version_label,
+            contract.ddl_sha256,
+            contract.catalog_sha256,
+            contract.allowed_missing,
+        )
+        for contract in schema.KNOWN_LEGACY_SCHEMA_CONTRACTS
+    }
+
+    assert contracts == {
+        (
+            "94e1de3",
+            LEGACY_DDL_SHA256,
+            LEGACY_CATALOG_SHA256,
+            frozenset(LEGACY_MISSING),
+        ),
+        (
+            "9ad6360/01fae25",
+            PREDECESSOR_DDL_SHA256,
+            PREDECESSOR_CATALOG_SHA256,
+            frozenset(PREDECESSOR_MISSING),
+        ),
+    }
+    assert not hasattr(schema, "KNOWN_LEGACY_DDL_SHA256")
+    assert not hasattr(schema, "KNOWN_LEGACY_CATALOG_SHA256")
+    assert not hasattr(schema, "KNOWN_LEGACY_MISSING")
 
 
 def test_schema_is_idempotent_and_non_destructive() -> None:
@@ -445,6 +472,49 @@ def test_apply_schema_migrates_only_known_legacy_contract(monkeypatch) -> None:
     assert migration_params[2] == schema.ddl_sha256()
 
 
+def test_apply_schema_migrates_immediate_predecessor_contract(monkeypatch) -> None:
+    connection = _Connection()
+    monkeypatch.setattr(schema, "connect", lambda service: _Context(connection))
+    monkeypatch.setattr(
+        schema,
+        "_load_applied_migration",
+        lambda cur: {
+            "schema_version": schema.THEME_RESEARCH_DB_SCHEMA_VERSION,
+            "ddl_sha256": PREDECESSOR_DDL_SHA256,
+            "applied_at": "2026-07-14T00:00:00+00:00",
+        },
+    )
+    inspections = iter(
+        [
+            {
+                "status": "current",
+                "existing_count": len(REQUIRED_TABLES),
+                "missing": [],
+                "catalog_sha256": PREDECESSOR_CATALOG_SHA256,
+            },
+            {
+                "status": "current",
+                "existing_count": len(REQUIRED_TABLES),
+                "missing": [],
+                "catalog_sha256": schema.EXPECTED_THEME_RESEARCH_CATALOG_SHA256,
+            },
+        ]
+    )
+    monkeypatch.setattr(schema, "inspect_theme_research_schema", lambda cur: next(inspections))
+
+    result = schema.apply_theme_research_schema(
+        service="test",
+        actor_user_id="admin-1",
+        actor_role="admin",
+    )
+
+    assert result["ddl_sha256"] == schema.ddl_sha256()
+    assert connection.cursor_obj.calls[1][0] == schema.THEME_RESEARCH_SCHEMA_SQL
+    migration_sql, migration_params = connection.cursor_obj.calls[2]
+    assert "ON CONFLICT (schema_version) DO UPDATE" in migration_sql
+    assert migration_params[2] == schema.ddl_sha256()
+
+
 def test_apply_schema_rejects_partial_schema_even_with_migration(monkeypatch) -> None:
     connection = _Connection()
     monkeypatch.setattr(schema, "connect", lambda service: _Context(connection))
@@ -484,6 +554,8 @@ def test_apply_schema_rejects_partial_schema_even_with_migration(monkeypatch) ->
     ("applied_ddl_sha256", "catalog_sha256", "missing"),
     [
         (schema.ddl_sha256(), "f" * 64, ["catalog:sha256"]),
+        (LEGACY_DDL_SHA256, PREDECESSOR_CATALOG_SHA256, []),
+        (PREDECESSOR_DDL_SHA256, LEGACY_CATALOG_SHA256, sorted(LEGACY_MISSING)),
         (LEGACY_DDL_SHA256, "f" * 64, sorted(LEGACY_MISSING)),
         (
             LEGACY_DDL_SHA256,

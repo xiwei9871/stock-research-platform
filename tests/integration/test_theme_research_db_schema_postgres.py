@@ -26,6 +26,15 @@ pytestmark = pytest.mark.skipif(
 
 TEST_MIGRATION_SERVICE = os.getenv("THEME_RESEARCH_POSTGRES_TEST_SERVICE", "")
 TEST_RUNTIME_SERVICE = os.getenv("THEME_RESEARCH_POSTGRES_TEST_RUNTIME_SERVICE", "")
+LEGACY_DDL_SHA256 = "1acce2a856b94b6479c7e08623779e230124fc54fb78fba3358e9cfe4cc882ce"
+LEGACY_CATALOG_SHA256 = "296c75c60f86b1606306d9599c04c4e25a5f06480184ec78f3cefbbf48a409b7"
+LEGACY_MISSING = {
+    "catalog:sha256",
+    "constraint:ck_theme_research_claim_type",
+    "constraint:ck_theme_research_theme_type",
+}
+PREDECESSOR_DDL_SHA256 = "ae542e49fb740ffb2e54d239c487c58b25f8d47178353161bc3ef58dba3948f6"
+PREDECESSOR_CATALOG_SHA256 = "5b21137a399c3304cb4550f7e04ce06c048fe7e37754b3cd1fc316add34b0451"
 
 
 class _BorrowedConnectionContext:
@@ -39,13 +48,13 @@ class _BorrowedConnectionContext:
         return False
 
 
-def _legacy_schema_sql() -> str:
+def _schema_sql_at(revision: str, expected_ddl_sha256: str) -> str:
     repository_root = Path(__file__).resolve().parents[2]
     source = subprocess.check_output(
         [
             "git",
             "show",
-            "94e1de3:src/stock_research/theme_research_db_schema.py",
+            f"{revision}:src/stock_research/theme_research_db_schema.py",
         ],
         cwd=repository_root,
         text=True,
@@ -59,15 +68,18 @@ def _legacy_schema_sql() -> str:
             for target in node.targets
         ):
             value = ast.literal_eval(node.value)
-            assert hashlib.sha256(value.encode("utf-8")).hexdigest() in (
-                schema.KNOWN_LEGACY_DDL_SHA256
-            )
+            assert hashlib.sha256(value.encode("utf-8")).hexdigest() == expected_ddl_sha256
             return value
-    raise AssertionError("legacy theme research schema SQL was not found")
+    raise AssertionError(f"theme research schema SQL was not found at {revision}")
 
 
-def _install_legacy_schema(connection) -> None:
-    connection.execute(_legacy_schema_sql())
+def _install_recorded_schema(
+    connection,
+    *,
+    revision: str = "94e1de3",
+    ddl_sha256: str = LEGACY_DDL_SHA256,
+) -> None:
+    connection.execute(_schema_sql_at(revision, ddl_sha256))
     connection.execute(
         """
         INSERT INTO research.theme_research_schema_migration (
@@ -76,7 +88,7 @@ def _install_legacy_schema(connection) -> None:
         """,
         (
             schema.THEME_RESEARCH_DB_SCHEMA_VERSION,
-            next(iter(schema.KNOWN_LEGACY_DDL_SHA256)),
+            ddl_sha256,
         ),
     )
 
@@ -113,10 +125,10 @@ def test_apply_schema_migrates_exact_legacy_contract(
     isolated_schema_conn,
     monkeypatch,
 ) -> None:
-    _install_legacy_schema(isolated_schema_conn)
+    _install_recorded_schema(isolated_schema_conn)
     before = inspect_theme_research_schema(isolated_schema_conn.cursor())
-    assert before["catalog_sha256"] in schema.KNOWN_LEGACY_CATALOG_SHA256
-    assert set(before["missing"]) == schema.KNOWN_LEGACY_MISSING
+    assert before["catalog_sha256"] == LEGACY_CATALOG_SHA256
+    assert set(before["missing"]) == LEGACY_MISSING
     monkeypatch.setattr(
         schema,
         "connect",
@@ -142,11 +154,53 @@ def test_apply_schema_migrates_exact_legacy_contract(
     assert applied == ("admin-test", schema.ddl_sha256())
 
 
+def test_apply_schema_migrates_immediate_predecessor_and_is_idempotent(
+    isolated_schema_conn,
+    monkeypatch,
+) -> None:
+    _install_recorded_schema(
+        isolated_schema_conn,
+        revision="01fae25",
+        ddl_sha256=PREDECESSOR_DDL_SHA256,
+    )
+    before = inspect_theme_research_schema(isolated_schema_conn.cursor())
+    assert before["status"] == "current"
+    assert before["catalog_sha256"] == PREDECESSOR_CATALOG_SHA256
+    assert before["missing"] == []
+    monkeypatch.setattr(
+        schema,
+        "connect",
+        lambda service: _BorrowedConnectionContext(isolated_schema_conn),
+    )
+
+    first = schema.apply_theme_research_schema(
+        service="test",
+        actor_user_id="predecessor-test",
+        actor_role="admin",
+    )
+    second = schema.apply_theme_research_schema(
+        service="test",
+        actor_user_id="idempotent-test",
+        actor_role="admin",
+    )
+
+    assert first == second
+    applied = isolated_schema_conn.execute(
+        """
+        SELECT applied_by, ddl_sha256
+        FROM research.theme_research_schema_migration
+        WHERE schema_version = %s
+        """,
+        (schema.THEME_RESEARCH_DB_SCHEMA_VERSION,),
+    ).fetchone()
+    assert applied == ("predecessor-test", schema.ddl_sha256())
+
+
 def test_apply_schema_preserves_custom_type_check_and_rejects_unknown_drift(
     isolated_schema_conn,
     monkeypatch,
 ) -> None:
-    _install_legacy_schema(isolated_schema_conn)
+    _install_recorded_schema(isolated_schema_conn)
     isolated_schema_conn.execute(
         """
         ALTER TABLE research.theme_research_theme
@@ -184,14 +238,14 @@ def test_apply_schema_preserves_custom_type_check_and_rejects_unknown_drift(
         """,
         (schema.THEME_RESEARCH_DB_SCHEMA_VERSION,),
     ).fetchone()[0]
-    assert applied_sha256 in schema.KNOWN_LEGACY_DDL_SHA256
+    assert applied_sha256 == LEGACY_DDL_SHA256
 
 
 def test_apply_schema_rejects_versioned_partial_schema_without_replaying_ddl(
     isolated_schema_conn,
     monkeypatch,
 ) -> None:
-    _install_legacy_schema(isolated_schema_conn)
+    _install_recorded_schema(isolated_schema_conn)
     isolated_schema_conn.execute("DROP TABLE research.theme_research_snapshot")
     monkeypatch.setattr(
         schema,
