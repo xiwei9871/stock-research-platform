@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from copy import deepcopy
 import json
 from pathlib import Path
+import shutil
 
 import pytest
 
@@ -76,6 +78,124 @@ def test_verifier_runs_real_phase_checks_with_injected_database_probe() -> None:
     assert by_phase["10"]["requirements"]
 
 
+def _wave_a_theme_ids() -> set[str]:
+    manifest = json.loads(
+        (
+            Path(__file__).resolve().parents[1]
+            / "artifacts"
+            / "theme_decomposition"
+            / "batch_manifests"
+            / "next_fifteen_industry_chain_themes_v1.json"
+        ).read_text(encoding="utf-8")
+    )
+    return {
+        manifest["themes"][chain_id]["theme_id"]
+        for chain_id in manifest["waves"]["wave_a"]
+    }
+
+
+@pytest.mark.parametrize(
+    "probe",
+    [
+        phase_verifier._verify_phase_1,
+        phase_verifier._verify_phase_4,
+        phase_verifier._verify_phase_6,
+        phase_verifier._verify_phase_7,
+    ],
+)
+def test_wave_a_rollout_gates_are_complete_for_canonical_packages(probe) -> None:
+    assert probe()["status"] == "complete"
+
+
+def test_phase_1_fails_when_theme_loader_drops_one_wave_a_theme(monkeypatch) -> None:
+    missing_theme_id = sorted(_wave_a_theme_ids())[0]
+    package = deepcopy(phase_verifier.load_theme_package())
+    package["themes"] = [
+        row for row in package["themes"] if row["theme_id"] != missing_theme_id
+    ]
+    monkeypatch.setattr(phase_verifier, "load_theme_package", lambda: package)
+
+    result = phase_verifier._verify_phase_1()
+
+    assert result["status"] == "failed"
+    assert any(missing_theme_id in row["evidence"] for row in result["requirements"])
+
+
+def test_phase_4_fails_when_mapping_loader_drops_one_wave_a_theme(monkeypatch) -> None:
+    missing_theme_id = sorted(_wave_a_theme_ids())[0]
+    package = deepcopy(phase_verifier.load_theme_company_mapping_package())
+    package["company_mappings"] = [
+        row
+        for row in package["company_mappings"]
+        if row["theme_id"] != missing_theme_id
+    ]
+    monkeypatch.setattr(
+        phase_verifier,
+        "load_theme_company_mapping_package",
+        lambda: package,
+    )
+
+    result = phase_verifier._verify_phase_4()
+
+    assert result["status"] == "failed"
+    assert any(missing_theme_id in row["evidence"] for row in result["requirements"])
+
+
+def test_phase_6_fails_when_priority_loader_drops_one_wave_a_theme(monkeypatch) -> None:
+    missing_theme_id = sorted(_wave_a_theme_ids())[0]
+    package = deepcopy(phase_verifier.load_theme_research_priority_package())
+    package["node_priorities"] = [
+        row
+        for row in package["node_priorities"]
+        if row["theme_id"] != missing_theme_id
+    ]
+    package["company_priorities"] = [
+        row
+        for row in package["company_priorities"]
+        if row["theme_id"] != missing_theme_id
+    ]
+    monkeypatch.setattr(
+        phase_verifier,
+        "load_theme_research_priority_package",
+        lambda: package,
+    )
+
+    result = phase_verifier._verify_phase_6()
+
+    assert result["status"] == "failed"
+    assert any(missing_theme_id in row["evidence"] for row in result["requirements"])
+
+
+def test_phase_7_fails_when_dashboard_loader_drops_one_wave_a_theme(monkeypatch) -> None:
+    missing_theme_id = sorted(_wave_a_theme_ids())[0]
+    theme_package = deepcopy(phase_verifier.load_theme_package())
+    theme_package["themes"] = [
+        row
+        for row in theme_package["themes"]
+        if row["theme_id"] != missing_theme_id
+    ]
+    dashboard_payload = deepcopy(
+        phase_verifier.list_theme_research_themes(read_source="artifact")
+    )
+    dashboard_payload["items"] = [
+        row
+        for row in dashboard_payload["items"]
+        if row["theme_id"] != missing_theme_id
+    ]
+    dashboard_payload["total"] = len(dashboard_payload["items"])
+    monkeypatch.setattr(phase_verifier, "load_theme_package", lambda: theme_package)
+    monkeypatch.setattr(
+        phase_verifier,
+        "list_theme_research_themes",
+        lambda *, read_source: dashboard_payload,
+    )
+
+    result = phase_verifier._verify_phase_7()
+
+    assert result["status"] == "failed"
+    assert any(missing_theme_id in row["evidence"] for row in result["requirements"])
+
+
 def _configure_phase_2b_state(
     monkeypatch,
     tmp_path: Path,
@@ -109,7 +229,7 @@ def _configure_phase_2b_state(
     )
 
 
-def test_phase_2b_is_complete_when_all_source_pack_files_are_valid_and_theme_reviewed(
+def test_phase_2b_rejects_truthy_but_structurally_invalid_source_pack_files(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
@@ -122,8 +242,82 @@ def test_phase_2b_is_complete_when_all_source_pack_files_are_valid_and_theme_rev
 
     result = phase_verifier._verify_phase_2b()
 
+    assert result["status"] == "failed"
+    assert any("artifact_version" in row["evidence"] for row in result["requirements"])
+
+
+def _configure_valid_phase_2b_state(monkeypatch, tmp_path: Path) -> Path:
+    canonical_root = phase_verifier.REPOSITORY_ROOT
+    canonical_package = phase_verifier.load_theme_package()
+    source_pack_root = tmp_path / "artifacts" / "theme_decomposition" / "source_packs"
+    source_pack_root.mkdir(parents=True)
+    for filename in (
+        "humanoid_robotics_source_pack_v1.json",
+        "humanoid_robotics_claim_review_v1.json",
+        "humanoid_robotics_node_evidence_matrix_v1.json",
+    ):
+        shutil.copyfile(
+            canonical_root / "artifacts" / "theme_decomposition" / "source_packs" / filename,
+            source_pack_root / filename,
+        )
+    monkeypatch.setattr(phase_verifier, "REPOSITORY_ROOT", tmp_path)
+    monkeypatch.setattr(phase_verifier, "load_theme_package", lambda: canonical_package)
+    return source_pack_root
+
+
+def test_phase_2b_is_complete_for_canonical_valid_pack(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    _configure_valid_phase_2b_state(monkeypatch, tmp_path)
+
+    result = phase_verifier._verify_phase_2b()
+
     assert result["status"] == "complete"
     assert all(row["status"] == "passed" for row in result["requirements"])
+
+
+@pytest.mark.parametrize(
+    ("filename", "mutation", "expected_error"),
+    [
+        (
+            "humanoid_robotics_source_pack_v1.json",
+            lambda payload: payload.update({"theme_id": "wrong_theme"}),
+            "theme_id",
+        ),
+        (
+            "humanoid_robotics_claim_review_v1.json",
+            lambda payload: payload["claim_reviews"][0].update(
+                {"accepted_source_ids": ["missing_source"]}
+            ),
+            "missing_source",
+        ),
+        (
+            "humanoid_robotics_node_evidence_matrix_v1.json",
+            lambda payload: payload["node_evidence_matrix"][0].update(
+                {"node_id": "missing_node"}
+            ),
+            "node matrix",
+        ),
+    ],
+)
+def test_phase_2b_fails_for_cross_artifact_mismatch(
+    monkeypatch,
+    tmp_path: Path,
+    filename: str,
+    mutation,
+    expected_error: str,
+) -> None:
+    source_pack_root = _configure_valid_phase_2b_state(monkeypatch, tmp_path)
+    artifact = source_pack_root / filename
+    payload = json.loads(artifact.read_text(encoding="utf-8"))
+    mutation(payload)
+    artifact.write_text(json.dumps(payload), encoding="utf-8")
+
+    result = phase_verifier._verify_phase_2b()
+
+    assert result["status"] == "failed"
+    assert any(expected_error in row["evidence"] for row in result["requirements"])
 
 
 def test_phase_2b_declares_gap_when_all_source_pack_files_are_missing_and_theme_draft(

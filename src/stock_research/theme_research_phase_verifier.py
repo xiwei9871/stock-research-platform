@@ -12,8 +12,12 @@ from typing import Any, Callable
 from fastapi.testclient import TestClient
 
 from stock_research.ai_power_source_pack import (
+    _validate_claim_reviews,
+    _validate_node_matrix,
+    _validate_source_claim_references,
     load_ai_power_evidence_pack,
     summarize_ai_power_evidence_pack,
+    validate_theme_evidence_sources,
 )
 from stock_research.config import SETTINGS
 from stock_research.dashboard.asset_profile import build_asset_profile
@@ -54,6 +58,25 @@ from stock_research.theme_tech_bottleneck_crosswalk import (
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT_DIR = REPOSITORY_ROOT / "outputs" / "research" / "theme_research_phase_verification"
 PHASE_ORDER = ("1", "1.5", "2A", "2B", "3", "4", "5", "6", "7", "8", "9", "10")
+WAVE_A_BATCH_MANIFEST = (
+    "artifacts/theme_decomposition/batch_manifests/"
+    "next_fifteen_industry_chain_themes_v1.json"
+)
+HUMANOID_THEME_ID = "humanoid_robotics_head_to_toe_v1"
+HUMANOID_SOURCE_PACK_SPECS = {
+    "humanoid_robotics_source_pack_v1.json": (
+        "humanoid_robotics_source_pack_v1",
+        "sources",
+    ),
+    "humanoid_robotics_claim_review_v1.json": (
+        "humanoid_robotics_claim_review_v1",
+        "claim_reviews",
+    ),
+    "humanoid_robotics_node_evidence_matrix_v1.json": (
+        "humanoid_robotics_node_evidence_matrix_v1",
+        "node_evidence_matrix",
+    ),
+}
 
 
 def verify_theme_research_phases(
@@ -210,6 +233,9 @@ def cli(argv: list[str] | None = None) -> int:
 def _verify_phase_1() -> dict[str, Any]:
     package = load_theme_package()
     summary = summarize_theme_package(package)
+    expected_wave_a_theme_ids = _load_wave_a_expected_theme_ids()
+    actual_theme_ids = {row["theme_id"] for row in package["themes"]}
+    missing_wave_a_theme_ids = sorted(expected_wave_a_theme_ids - actual_theme_ids)
     actual_counts = {
         "theme_count": len(package["themes"]),
         "node_count": len(package["nodes"]),
@@ -225,10 +251,12 @@ def _verify_phase_1() -> dict[str, Any]:
             actual_counts["theme_count"] >= 2
             and actual_counts["node_count"] > 0
             and summary["theme_count"] == actual_counts["theme_count"]
-            and summary["node_count"] == actual_counts["node_count"],
+            and summary["node_count"] == actual_counts["node_count"]
+            and not missing_wave_a_theme_ids,
             (
                 f"themes={summary['theme_count']}/{actual_counts['theme_count']}, "
-                f"nodes={summary['node_count']}/{actual_counts['node_count']}"
+                f"nodes={summary['node_count']}/{actual_counts['node_count']}, "
+                f"missing_wave_a_themes={missing_wave_a_theme_ids}"
             ),
         ),
         _requirement(
@@ -314,36 +342,30 @@ def _verify_phase_2a() -> dict[str, Any]:
 
 def _verify_phase_2b() -> dict[str, Any]:
     source_pack_root = REPOSITORY_ROOT / "artifacts" / "theme_decomposition" / "source_packs"
-    expected = [
-        source_pack_root / "humanoid_robotics_source_pack_v1.json",
-        source_pack_root / "humanoid_robotics_claim_review_v1.json",
-        source_pack_root / "humanoid_robotics_node_evidence_matrix_v1.json",
-    ]
+    expected = [source_pack_root / filename for filename in HUMANOID_SOURCE_PACK_SPECS]
     present = [path.name for path in expected if path.exists()]
-    invalid = []
-    for path in expected:
-        if not path.exists():
-            continue
-        try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            invalid.append(path.name)
-            continue
-        if not payload:
-            invalid.append(path.name)
     theme_package = load_theme_package()
     robotics_theme = next(
         row
         for row in theme_package["themes"]
-        if row["theme_id"] == "humanoid_robotics_head_to_toe_v1"
-    )
-    complete_state_is_valid = (
-        len(present) == len(expected)
-        and not invalid
-        and robotics_theme["status"] == "reviewed"
+        if row["theme_id"] == HUMANOID_THEME_ID
     )
     declared_gap_is_valid = not present and robotics_theme["status"] == "draft"
-    if complete_state_is_valid:
+    validation_errors: list[str] = []
+    if len(present) == len(expected) and robotics_theme["status"] == "reviewed":
+        try:
+            _validate_humanoid_evidence_pack(source_pack_root, theme_package)
+        except (OSError, json.JSONDecodeError, ValueError, TypeError, KeyError) as exc:
+            validation_errors.append(f"{type(exc).__name__}: {exc}")
+    elif not declared_gap_is_valid:
+        validation_errors.append(
+            "source-pack presence and theme review status do not form an allowed state"
+        )
+    if (
+        not validation_errors
+        and len(present) == len(expected)
+        and robotics_theme["status"] == "reviewed"
+    ):
         status = "complete"
         requirement_status = "passed"
     elif declared_gap_is_valid:
@@ -362,7 +384,7 @@ def _verify_phase_2b() -> dict[str, Any]:
                 "status": requirement_status,
                 "evidence": (
                     f"present_source_pack_files={present}; "
-                    f"invalid_source_pack_files={invalid}; "
+                    f"validation_errors={validation_errors}; "
                     f"artifact_status={robotics_theme['status']}; "
                     "valid_states=complete_reviewed_or_declared_draft_gap"
                 ),
@@ -389,6 +411,7 @@ def _verify_phase_3() -> dict[str, Any]:
 def _verify_phase_4() -> dict[str, Any]:
     package = load_theme_company_mapping_package()
     summary = summarize_theme_company_mapping_package(package)
+    expected_wave_a_theme_ids = _load_wave_a_expected_theme_ids()
     mapping_count = len(package["company_mappings"])
     reviewed_mapping_count = sum(
         row["review_status"] == "reviewed"
@@ -399,6 +422,12 @@ def _verify_phase_4() -> dict[str, Any]:
         for row in package["company_mappings"]
         if row["review_status"] == "reviewed" and not row["evidence_ids"]
     ]
+    reviewed_theme_ids = {
+        row["theme_id"]
+        for row in package["company_mappings"]
+        if row["review_status"] == "reviewed"
+    }
+    missing_wave_a_theme_ids = sorted(expected_wave_a_theme_ids - reviewed_theme_ids)
     requirements = [
         _requirement(
             "company mappings validate",
@@ -410,10 +439,13 @@ def _verify_phase_4() -> dict[str, Any]:
         ),
         _requirement(
             "reviewed mappings are evidence-backed",
-            reviewed_mapping_count > 0 and not missing_evidence,
+            reviewed_mapping_count > 0
+            and not missing_evidence
+            and not missing_wave_a_theme_ids,
             (
                 f"reviewed_mappings={reviewed_mapping_count}, "
-                f"missing_evidence={missing_evidence}"
+                f"missing_evidence={missing_evidence}, "
+                f"missing_wave_a_themes={missing_wave_a_theme_ids}"
             ),
         ),
     ]
@@ -441,18 +473,39 @@ def _verify_phase_5() -> dict[str, Any]:
 def _verify_phase_6() -> dict[str, Any]:
     package = load_theme_research_priority_package()
     summary = summarize_theme_research_priority_package(package)
+    expected_wave_a_theme_ids = _load_wave_a_expected_theme_ids()
     node_priority_count = len(package["node_priorities"])
     company_priority_count = len(package["company_priorities"])
+    node_priority_theme_ids = {row["theme_id"] for row in package["node_priorities"]}
+    company_priority_theme_ids = {
+        row["theme_id"] for row in package["company_priorities"]
+    }
+    mapped_wave_a_theme_ids = {
+        row["theme_id"]
+        for row in package["mapping_package"]["company_mappings"]
+        if row["theme_id"] in expected_wave_a_theme_ids
+        and row["review_status"] == "reviewed"
+    }
+    missing_wave_a_node_priorities = sorted(
+        expected_wave_a_theme_ids - node_priority_theme_ids
+    )
+    missing_wave_a_company_priorities = sorted(
+        mapped_wave_a_theme_ids - company_priority_theme_ids
+    )
     requirements = [
         _requirement(
             "node and company priorities are generated",
             node_priority_count > 0
             and company_priority_count > 0
             and summary["node_priority_count"] == node_priority_count
-            and summary["company_priority_count"] == company_priority_count,
+            and summary["company_priority_count"] == company_priority_count
+            and not missing_wave_a_node_priorities
+            and not missing_wave_a_company_priorities,
             (
                 f"node_priorities={summary['node_priority_count']}/{node_priority_count}, "
-                f"company_priorities={summary['company_priority_count']}/{company_priority_count}"
+                f"company_priorities={summary['company_priority_count']}/{company_priority_count}, "
+                f"missing_wave_a_node_priorities={missing_wave_a_node_priorities}, "
+                f"missing_wave_a_company_priorities={missing_wave_a_company_priorities}"
             ),
         ),
         _requirement(
@@ -470,7 +523,10 @@ def _verify_phase_6() -> dict[str, Any]:
 
 def _verify_phase_7() -> dict[str, Any]:
     payload = list_theme_research_themes(read_source="artifact")
+    expected_wave_a_theme_ids = _load_wave_a_expected_theme_ids()
     canonical_theme_count = len(load_theme_package()["themes"])
+    dashboard_theme_ids = {row["theme_id"] for row in payload["items"]}
+    missing_wave_a_theme_ids = sorted(expected_wave_a_theme_ids - dashboard_theme_ids)
     guarded = all(
         row["research_only"] is True
         and row["used_for_signal"] is False
@@ -482,10 +538,12 @@ def _verify_phase_7() -> dict[str, Any]:
             "read-only dashboard exposes the canonical themes",
             canonical_theme_count > 0
             and payload["total"] == canonical_theme_count
-            and len(payload["items"]) == payload["total"],
+            and len(payload["items"]) == payload["total"]
+            and not missing_wave_a_theme_ids,
             (
                 f"dashboard_theme_count={payload['total']}, "
-                f"canonical_theme_count={canonical_theme_count}"
+                f"canonical_theme_count={canonical_theme_count}, "
+                f"missing_wave_a_themes={missing_wave_a_theme_ids}"
             ),
         ),
         _requirement(
@@ -797,6 +855,135 @@ def _runtime_privileges_are_constrained(privilege: dict[str, Any]) -> bool:
             )
         )
     )
+
+
+def _load_wave_a_expected_theme_ids() -> set[str]:
+    manifest_path = REPOSITORY_ROOT / WAVE_A_BATCH_MANIFEST
+    manifest = _load_json_object(manifest_path)
+    wave_a = manifest.get("waves", {}).get("wave_a")
+    themes = manifest.get("themes")
+    if not isinstance(wave_a, list) or not isinstance(themes, dict):
+        raise ValueError(f"invalid Wave A batch manifest: {manifest_path}")
+    expected_theme_ids = {
+        themes[chain_id]["theme_id"]
+        for chain_id in wave_a
+        if isinstance(themes.get(chain_id), dict)
+        and isinstance(themes[chain_id].get("theme_id"), str)
+    }
+    if len(wave_a) != 5 or len(expected_theme_ids) != 5:
+        raise ValueError(
+            "Wave A batch manifest must resolve exactly five unique theme_ids; "
+            f"chains={wave_a}, theme_ids={sorted(expected_theme_ids)}"
+        )
+    return expected_theme_ids
+
+
+def _load_json_object(path: Path) -> dict[str, Any]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"{path.name} root must be a JSON object")
+    return payload
+
+
+def _validate_humanoid_evidence_pack(
+    source_pack_root: Path,
+    theme_package: dict[str, Any],
+) -> None:
+    payloads: dict[str, dict[str, Any]] = {}
+    for filename, (artifact_version, list_field) in HUMANOID_SOURCE_PACK_SPECS.items():
+        payload = _load_json_object(source_pack_root / filename)
+        if payload.get("artifact_version") != artifact_version:
+            raise ValueError(
+                f"{filename}.artifact_version must be {artifact_version}"
+            )
+        if payload.get("theme_id") != HUMANOID_THEME_ID:
+            raise ValueError(
+                f"{filename}.theme_id must be {HUMANOID_THEME_ID}"
+            )
+        rows = payload.get(list_field)
+        if not isinstance(rows, list) or not rows:
+            raise ValueError(f"{filename}.{list_field} must be a non-empty list")
+        if not all(isinstance(row, dict) for row in rows):
+            raise ValueError(f"{filename}.{list_field} rows must be JSON objects")
+        payloads[filename] = payload
+
+    canonical_node_ids = {
+        row["node_id"]
+        for row in theme_package["nodes"]
+        if row["theme_id"] == HUMANOID_THEME_ID
+    }
+    canonical_claims = {
+        row["claim_id"]: row
+        for row in theme_package["claims"]
+        if row["theme_id"] == HUMANOID_THEME_ID
+    }
+    if not canonical_node_ids or not canonical_claims:
+        raise ValueError("canonical humanoid theme nodes and claims must be populated")
+
+    sources = payloads["humanoid_robotics_source_pack_v1.json"]["sources"]
+    claim_reviews = payloads["humanoid_robotics_claim_review_v1.json"][
+        "claim_reviews"
+    ]
+    matrix = payloads["humanoid_robotics_node_evidence_matrix_v1.json"][
+        "node_evidence_matrix"
+    ]
+    source_by_id = validate_theme_evidence_sources(sources, canonical_node_ids)
+    accepted_source_ids = {
+        source_id
+        for source_id, row in source_by_id.items()
+        if row["review_status"] == "accepted"
+    }
+    if len(accepted_source_ids) < 10:
+        raise ValueError(
+            "humanoid source pack requires at least 10 accepted sources; "
+            f"accepted={len(accepted_source_ids)}"
+        )
+
+    claim_by_id = _validate_claim_reviews(
+        claim_reviews,
+        source_by_id=source_by_id,
+        canonical_node_ids=canonical_node_ids,
+    )
+    reviewed_claim_ids = {
+        claim_id
+        for claim_id, row in claim_by_id.items()
+        if row["review_decision"] == "reviewed"
+    }
+    canonical_reviewed_claim_ids = {
+        claim_id
+        for claim_id, row in canonical_claims.items()
+        if row["platform_use_status"] == "reviewed"
+    }
+    unknown_claim_ids = set(claim_by_id) - set(canonical_claims)
+    missing_reviewed_claim_ids = canonical_reviewed_claim_ids - reviewed_claim_ids
+    if len(reviewed_claim_ids) < 10 or unknown_claim_ids or missing_reviewed_claim_ids:
+        raise ValueError(
+            "humanoid claim reviews must cover canonical reviewed claims; "
+            f"reviewed={len(reviewed_claim_ids)}, "
+            f"unknown={sorted(unknown_claim_ids)}, "
+            f"missing={sorted(missing_reviewed_claim_ids)}"
+        )
+    _validate_source_claim_references(sources, claim_by_id)
+    _validate_node_matrix(
+        matrix,
+        source_by_id=source_by_id,
+        claim_by_id=claim_by_id,
+        canonical_node_ids=canonical_node_ids,
+    )
+    rows_without_evidence_or_gap = []
+    for row in matrix:
+        supported_claims = [claim_by_id[claim_id] for claim_id in row["supported_claim_ids"]]
+        has_technical_route = any(
+            claim["claim_type"] == "tech_route" for claim in supported_claims
+        )
+        has_explicit_gap = row["evidence_gap_status"] == "evidence_gap"
+        if not row["accepted_source_ids"] and not has_explicit_gap and not has_technical_route:
+            rows_without_evidence_or_gap.append(row["node_id"])
+    if rows_without_evidence_or_gap:
+        raise ValueError(
+            "node matrix rows require accepted evidence or explicit gap/technical_route; "
+            f"invalid={sorted(rows_without_evidence_or_gap)}"
+        )
 
 
 def _requirement(requirement: str, passed: bool, evidence: str) -> dict[str, str]:
