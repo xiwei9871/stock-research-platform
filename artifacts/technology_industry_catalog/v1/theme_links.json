@@ -525,7 +525,7 @@
         "recycling_second_life",
         "sodium_ion_solid_state_validation"
       ],
-      "notes": "仅将语义等价的动力电芯与BMS目录父节点、BMS平台节点接入现有L3/L4 skeleton；目录高比能电芯L4窄于本主题宽动力电芯家族，钠离子/固态又是验证期混合节点，因此不强连。资源、材料、铜铝箔、结构件和回收尚无完整等价canonical节点，全部保持unmapped，待目录扩展后回填。"
+      "notes": "完整等价依据：主题父节点范围=通用动力电芯产品+BMS平台；目录L3范围=generic power-battery cell products and BMS platforms；主题BMS子节点范围=状态估计、均衡、保护、充电、诊断与系统接口；目录L4范围=state estimation, balancing, protection, charging, diagnostics and system interfaces；主题父子层级与目录L3/L4父子层级一致。映射排除Pack集成收入，也排除高比能电芯窄节点；目录高比能电芯L4窄于本主题宽动力电芯家族，钠离子/固态又是验证期混合节点，因此不强连。资源、材料、铜铝箔、结构件和回收尚无完整等价canonical节点，全部保持unmapped，待目录扩展后回填。"
     },
     {
       "theme_id": "intelligent_driving_smart_cockpit_value_chain_v1",

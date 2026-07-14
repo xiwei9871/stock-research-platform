@@ -713,10 +713,69 @@ def test_power_batteries_profile_catalog_boundaries_and_validation_gaps_are_read
         "evidence_gaps",
     }
     assert {
-        claim_id
-        for section_claim_ids in profile["readable_section_claim_ids"].values()
-        for claim_id in section_claim_ids
-    } == claim_ids
+        section: set(section_claim_ids)
+        for section, section_claim_ids in profile["readable_section_claim_ids"].items()
+    } == {
+        "conclusion": {
+            "battery_claim_04_cathode_profit_risk",
+            "battery_claim_09_copper_foil_margin_risk",
+            "battery_claim_11_cell_scale_margin",
+            "battery_claim_14_sodium_solid_validation",
+        },
+        "value_chain": {
+            "battery_claim_01_value_flow",
+            "battery_claim_02_resource_cycle",
+            "battery_claim_03_precursor_cathode_routes",
+            "battery_claim_08_foil_scope_split",
+            "battery_claim_10_structural_components_pool",
+            "battery_claim_12_bms_pack_disclosure_gap",
+            "battery_claim_13_recycling_economics",
+        },
+        "profit_pool_barriers": {
+            "battery_claim_02_resource_cycle",
+            "battery_claim_03_precursor_cathode_routes",
+            "battery_claim_04_cathode_profit_risk",
+            "battery_claim_05_anode_scope_boundary",
+            "battery_claim_06_separator_scope_boundary",
+            "battery_claim_07_electrolyte_scope_boundary",
+            "battery_claim_09_copper_foil_margin_risk",
+            "battery_claim_10_structural_components_pool",
+            "battery_claim_11_cell_scale_margin",
+            "battery_claim_12_bms_pack_disclosure_gap",
+            "battery_claim_13_recycling_economics",
+        },
+        "catalysts_validation_risks": {
+            "battery_claim_02_resource_cycle",
+            "battery_claim_04_cathode_profit_risk",
+            "battery_claim_09_copper_foil_margin_risk",
+            "battery_claim_11_cell_scale_margin",
+            "battery_claim_13_recycling_economics",
+            "battery_claim_14_sodium_solid_validation",
+        },
+        "beneficiary_companies": {
+            "battery_claim_02_resource_cycle",
+            "battery_claim_03_precursor_cathode_routes",
+            "battery_claim_04_cathode_profit_risk",
+            "battery_claim_05_anode_scope_boundary",
+            "battery_claim_06_separator_scope_boundary",
+            "battery_claim_07_electrolyte_scope_boundary",
+            "battery_claim_09_copper_foil_margin_risk",
+            "battery_claim_10_structural_components_pool",
+            "battery_claim_11_cell_scale_margin",
+            "battery_claim_12_bms_pack_disclosure_gap",
+            "battery_claim_13_recycling_economics",
+        },
+        "source_evidence": claim_ids,
+        "evidence_gaps": {
+            "battery_claim_05_anode_scope_boundary",
+            "battery_claim_06_separator_scope_boundary",
+            "battery_claim_07_electrolyte_scope_boundary",
+            "battery_claim_08_foil_scope_split",
+            "battery_claim_12_bms_pack_disclosure_gap",
+            "battery_claim_13_recycling_economics",
+            "battery_claim_14_sodium_solid_validation",
+        },
+    }
     assert link["node_links"] == [
         {
             "theme_node_id": "battery_cells_management_systems",
@@ -732,6 +791,47 @@ def test_power_batteries_profile_catalog_boundaries_and_validation_gaps_are_read
         "battery_management_system_platforms",
     }
     assert "高比能" in link["notes"] and "不强连" in link["notes"]
+    theme_node_by_id = {row["node_id"]: row for row in theme["nodes"]}
+    catalog_node_by_id = {row["node_id"]: row for row in catalog["nodes"]}
+    theme_family = theme_node_by_id["battery_cells_management_systems"]
+    theme_bms = theme_node_by_id["battery_management_system_platforms"]
+    catalog_family = catalog_node_by_id["battery_cell_and_management_systems"]
+    catalog_bms = catalog_node_by_id["battery_management_system_platform"]
+
+    assert theme_family["parent_node_id"] == ""
+    assert catalog_family["parent_node_id"] is None
+    assert catalog_family["level"] == "L3"
+    assert "动力电芯" in theme_family["node_name"]
+    assert "电池管理系统" in theme_family["node_name"]
+    assert "通用动力电芯产品" in theme_family["description"]
+    assert "电池管理平台" in theme_family["description"]
+    assert "generic power-battery cell products and BMS platforms" in catalog_family[
+        "description"
+    ]
+    assert theme_bms["parent_node_id"] == theme_family["node_id"]
+    assert catalog_bms["parent_node_id"] == catalog_family["node_id"]
+    assert catalog_bms["level"] == "L4"
+    for theme_term in ("状态估计", "均衡", "保护", "充电", "诊断", "接口"):
+        assert theme_term in theme_bms["description"]
+    for catalog_term in (
+        "state estimation",
+        "balancing",
+        "protection",
+        "charging",
+        "diagnostics",
+        "system interfaces",
+    ):
+        assert catalog_term in catalog_bms["description"]
+    for equivalence_term in (
+        "主题父节点范围=通用动力电芯产品+BMS平台",
+        "目录L3范围=generic power-battery cell products and BMS platforms",
+        "主题BMS子节点范围=状态估计、均衡、保护、充电、诊断与系统接口",
+        "目录L4范围=state estimation, balancing, protection, charging, diagnostics and system interfaces",
+        "主题父子层级与目录L3/L4父子层级一致",
+        "排除Pack集成收入",
+        "排除高比能电芯窄节点",
+    ):
+        assert equivalence_term in link["notes"]
     for node_id in {
         "anode_materials",
         "recycling_second_life",
@@ -808,3 +908,40 @@ def test_power_batteries_revenue_margin_and_scope_boundaries_block_over_attribut
     assert "不是循环业务总收入" in evidence["battery_ev_002340_revenue"]["evidence_summary"]
     assert "中试" in claim_text and "量产线" in claim_text
     assert "验证期" in claim_text and "成熟规模收入" in claim_text
+
+
+def test_power_batteries_product_relationship_and_revenue_boundary_locators_are_distinct():
+    mapping = _read_json(BATTERY_MAPPING_PATH)
+    source_pack = _read_json(BATTERY_SOURCE_PACK_PATH)
+    evidence = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+    sources = {row["source_id"]: row for row in source_pack["sources"]}
+
+    expected = {
+        "battery_002709_ar2025": {
+            "product_id": "battery_ev_002709_product",
+            "product_locator": "PDF第11-13、17页，第三节主要业务、产品体系与核心技术",
+            "revenue_id": "battery_ev_002709_revenue",
+            "revenue_locator": "PDF第19页，第三节分产品收入成本毛利率及产销量表",
+            "source_locator": "产品体系与核心技术见PDF第11-13、17页；宽口径收入、毛利率与产销量见PDF第19页",
+        },
+        "battery_603876_ar2025": {
+            "product_id": "battery_ev_603876_product",
+            "product_locator": "PDF第10-15页，第三节主要业务、客户结构与动力电池铝箔技术",
+            "revenue_id": "battery_ev_603876_revenue",
+            "revenue_locator": "PDF第16页，第三节主营业务分产品收入成本毛利率表",
+            "source_locator": "动力电池铝箔产品、客户与技术见PDF第10-15页；全部铝箔宽口径收入与毛利率见PDF第16页",
+        },
+    }
+    for source_id, locator_contract in expected.items():
+        product = evidence[locator_contract["product_id"]]
+        revenue = evidence[locator_contract["revenue_id"]]
+        assert product["source_id"] == source_id
+        assert revenue["source_id"] == source_id
+        assert product["evidence_type"] == "product_relationship"
+        assert revenue["evidence_type"] == "revenue_materiality"
+        assert product["excerpt_locator"] == locator_contract["product_locator"]
+        assert revenue["excerpt_locator"] == locator_contract["revenue_locator"]
+        assert product["excerpt_locator"] != revenue["excerpt_locator"]
+        assert sources[source_id]["evidence_locator"] == locator_contract[
+            "source_locator"
+        ]
