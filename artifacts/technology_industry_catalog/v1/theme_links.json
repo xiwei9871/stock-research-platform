@@ -449,7 +449,20 @@
       "theme_id": "core_mechanical_components_value_chain_v1",
       "chain_id": "core_mechanical_components",
       "node_links": [],
-      "unmapped_theme_node_ids": []
+      "unmapped_theme_node_ids": [
+        "precision_rolling_bearings",
+        "plain_self_lubricating_bearings",
+        "ball_roller_screws_linear_guides",
+        "precision_reducers",
+        "precision_gears_industrial_transmission",
+        "precision_spindles_rotary_tables",
+        "hydraulic_components",
+        "pneumatic_components",
+        "industrial_seals",
+        "springs_fasteners",
+        "precision_casting_forging_surface_treatment"
+      ],
+      "notes": "core_mechanical_components catalog仍为L2 skeleton，尚无可承接这些主题节点的自有L3/L4 canonical node，因此本轮不建立部分等价或一对多链接；不映射整机、机器人关节、机床系统或人形机器人场景节点，待该canonical chain扩展精确基础件节点后再逐项回填。"
     },
     {
       "theme_id": "industrial_inspection_metrology_machine_vision_value_chain_v1",

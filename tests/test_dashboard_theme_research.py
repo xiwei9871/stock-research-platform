@@ -48,6 +48,7 @@ def test_theme_index_aggregates_validated_phase_outputs():
         "new_energy_storage_value_chain_v1",
         ADVANCED_PACKAGING_THEME_ID,
         SMART_GRID_THEME_ID,
+        "core_mechanical_components_value_chain_v1",
     }
     assert payload["total"] == len(expected_theme_ids)
     assert {row["theme_id"] for row in payload["items"]} == expected_theme_ids

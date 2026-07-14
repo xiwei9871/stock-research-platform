@@ -239,6 +239,13 @@ def test_next_fifteen_catalog_theme_links_match_canonical_batch_manifest():
                 "仅用于阶段级L3覆盖，不是柔直或换流阀产品等价映射；具体产品与收入"
                 "口径以主题 claim 和公司 mapping 边界为准。"
             )
+        if chain_id == "core_mechanical_components":
+            expected_link["notes"] = (
+                "core_mechanical_components catalog仍为L2 skeleton，尚无可承接这些"
+                "主题节点的自有L3/L4 canonical node，因此本轮不建立部分等价或一对多"
+                "链接；不映射整机、机器人关节、机床系统或人形机器人场景节点，待该"
+                "canonical chain扩展精确基础件节点后再逐项回填。"
+            )
         assert links_by_chain[chain_id] == [expected_link]
 
 

@@ -134,8 +134,8 @@ def test_advanced_packaging_artifacts_load_and_first_wave_b_row_is_ready():
     assert rows[CHAIN_ID]["ready"] is True
     assert all(rows[CHAIN_ID]["checks"].values())
     assert report["wave_results"]["wave_b"]["ready"] is False
-    assert report["wave_results"]["wave_b"]["ready_theme_count"] == 2
-    assert report["wave_results"]["wave_b"]["not_ready_theme_count"] == 3
+    assert report["wave_results"]["wave_b"]["ready_theme_count"] == 3
+    assert report["wave_results"]["wave_b"]["not_ready_theme_count"] == 2
     assert {chain_id for chain_id, row in rows.items() if row["ready"]} == (
         _implemented_wave_chain_ids("wave_b")
     )
@@ -170,8 +170,6 @@ def test_advanced_packaging_evidence_mapping_and_links_are_exact():
     } == {
         source_id: row["url_or_ref"] for source_id, row in canonical_sources.items()
     }
-
-
 def test_advanced_packaging_company_beneficiary_tiers_are_exact():
     expected = {
         "600584.SH": ("elastic_beneficiary", "core_business", "undisclosed"),
@@ -354,8 +352,8 @@ def test_smart_grid_artifacts_load_and_second_wave_b_row_is_ready():
     assert rows[SMART_GRID_CHAIN_ID]["ready"] is True
     assert all(rows[SMART_GRID_CHAIN_ID]["checks"].values())
     assert report["wave_results"]["wave_b"]["ready"] is False
-    assert report["wave_results"]["wave_b"]["ready_theme_count"] == 2
-    assert report["wave_results"]["wave_b"]["not_ready_theme_count"] == 3
+    assert report["wave_results"]["wave_b"]["ready_theme_count"] == 3
+    assert report["wave_results"]["wave_b"]["not_ready_theme_count"] == 2
     assert {chain_id for chain_id, row in rows.items() if row["ready"]} == (
         _implemented_wave_chain_ids("wave_b")
     )
@@ -489,3 +487,345 @@ def test_smart_grid_revenue_and_scope_boundaries_block_over_attribution():
     assert "通信模块收入下降、通信网关收入增长" in claim_text
     assert "集中招标价格" in claim_text
     assert mapping_by_company["600131.SH"]["bottleneck_relevance"] == "adjacent"
+
+
+CORE_MECHANICAL_THEME_ID = "core_mechanical_components_value_chain_v1"
+CORE_MECHANICAL_CHAIN_ID = "core_mechanical_components"
+CORE_MECHANICAL_THEME_PATH = (
+    REPOSITORY_ROOT / f"artifacts/theme_decomposition/{CORE_MECHANICAL_THEME_ID}.json"
+)
+CORE_MECHANICAL_MAPPING_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/company_mappings"
+    / "core_mechanical_components_company_mapping_v1.json"
+)
+CORE_MECHANICAL_SOURCE_PACK_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "core_mechanical_components_source_pack_v1.json"
+)
+CORE_MECHANICAL_MATRIX_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "core_mechanical_components_node_evidence_matrix_v1.json"
+)
+
+
+def _assert_core_mechanical_bidirectional_source_and_matrix_links() -> None:
+    theme = _read_json(CORE_MECHANICAL_THEME_PATH)
+    source_pack = _read_json(CORE_MECHANICAL_SOURCE_PACK_PATH)
+    matrix = _read_json(CORE_MECHANICAL_MATRIX_PATH)
+    node_ids = {row["node_id"] for row in theme["nodes"]}
+    accepted_source_ids = {
+        row["source_id"]
+        for row in source_pack["sources"]
+        if row["review_status"] == "accepted"
+    }
+    source_by_id = {row["source_id"]: row for row in source_pack["sources"]}
+    claim_by_id = {row["claim_id"]: row for row in theme["claims"]}
+    matrix_by_node = {
+        row["node_id"]: row for row in matrix["node_evidence_matrix"]
+    }
+
+    assert {
+        source["source_id"]: set(source["supported_claim_ids"])
+        for source in source_pack["sources"]
+    } == {
+        source["source_id"]: {
+            claim["claim_id"]
+            for claim in theme["claims"]
+            if source["source_id"]
+            in {claim["source_id"], *claim["supporting_source_ids"]}
+        }
+        for source in source_pack["sources"]
+    }
+    assert {row["node_id"] for row in matrix["node_evidence_matrix"]} == node_ids
+    assert len(matrix["node_evidence_matrix"]) == len(node_ids)
+    for row in matrix["node_evidence_matrix"]:
+        expected_claim_ids = {
+            claim["claim_id"]
+            for claim in theme["claims"]
+            if row["node_id"] in claim["affected_theme_nodes"]
+        }
+        assert set(row["supported_claim_ids"]) == expected_claim_ids
+        assert set(row["accepted_source_ids"]) <= accepted_source_ids
+        assert row["accepted_source_ids"] or row["evidence_gap_status"] == "evidence_gap"
+        for source_id in row["accepted_source_ids"]:
+            source = source_by_id[source_id]
+            assert row["node_id"] in source["supported_node_ids"]
+            assert expected_claim_ids & set(source["supported_claim_ids"])
+        for claim_id in expected_claim_ids:
+            claim = claim_by_id[claim_id]
+            if row["accepted_source_ids"]:
+                assert set(row["accepted_source_ids"]) & {
+                    claim["source_id"],
+                    *claim["supporting_source_ids"],
+                }
+            else:
+                assert row["evidence_gap_status"] == "evidence_gap"
+                assert claim["claim_type"] == "risk"
+    for source in source_pack["sources"]:
+        for node_id in source["supported_node_ids"]:
+            assert set(source["supported_claim_ids"]) & set(
+                matrix_by_node[node_id]["supported_claim_ids"]
+            )
+
+
+def test_core_mechanical_artifacts_load_and_third_wave_b_row_is_ready():
+    theme_package = load_theme_package()
+    mapping_package = load_theme_company_mapping_package()
+    priority_package = load_theme_research_priority_package()
+
+    assert CORE_MECHANICAL_THEME_ID in {
+        row["theme_id"] for row in theme_package["themes"]
+    }
+    assert CORE_MECHANICAL_THEME_ID in {
+        row["theme_id"] for row in mapping_package["company_mappings"]
+    }
+    assert CORE_MECHANICAL_THEME_ID in {
+        row["theme_id"] for row in priority_package["node_priorities"]
+    }
+    report = VERIFIER.build_theme_batch_report(MANIFEST_PATH, wave="wave_b")
+    rows = {row["chain_id"]: row for row in report["theme_results"]}
+
+    assert rows[CORE_MECHANICAL_CHAIN_ID]["ready"] is True
+    assert all(rows[CORE_MECHANICAL_CHAIN_ID]["checks"].values())
+    assert report["wave_results"]["wave_b"]["ready"] is False
+    assert report["wave_results"]["wave_b"]["ready_theme_count"] == 3
+    assert report["wave_results"]["wave_b"]["not_ready_theme_count"] == 2
+    assert {chain_id for chain_id, row in rows.items() if row["ready"]} == (
+        _implemented_wave_chain_ids("wave_b")
+    )
+
+
+def test_core_mechanical_evidence_mapping_and_duplicate_company_are_exact():
+    _assert_core_mechanical_bidirectional_source_and_matrix_links()
+    theme = _read_json(CORE_MECHANICAL_THEME_PATH)
+    mapping = _read_json(CORE_MECHANICAL_MAPPING_PATH)
+    source_pack = _read_json(CORE_MECHANICAL_SOURCE_PACK_PATH)
+    node_ids = {row["node_id"] for row in theme["nodes"]}
+    accepted = validate_theme_evidence_sources(source_pack["sources"], node_ids)
+    reviewed_mappings = [
+        row for row in mapping["company_mappings"] if row["review_status"] == "reviewed"
+    ]
+    canonical_sources = {row["source_id"]: row for row in theme["sources"]}
+    mapping_sources = {row["source_id"]: row for row in mapping["sources"]}
+    pack_sources = {row["source_id"]: row for row in source_pack["sources"]}
+
+    assert len(
+        [row for row in accepted.values() if row["review_status"] == "accepted"]
+    ) == 14
+    assert all(
+        row["source_type"] == "company_filing" and row["reliability_level"] == "S0"
+        for row in source_pack["sources"]
+    )
+    assert len(theme["nodes"]) == 11
+    assert len(theme["claims"]) == 16
+    assert all(set(row) >= CLAIM_FIELDS for row in theme["claims"])
+    assert len(reviewed_mappings) == 15
+    assert len({row["company_code"] for row in reviewed_mappings}) == 14
+    assert [row["company_code"] for row in reviewed_mappings].count("000837.SZ") == 2
+    assert {
+        row["mapped_node_id"]
+        for row in reviewed_mappings
+        if row["company_code"] == "000837.SZ"
+    } == {"ball_roller_screws_linear_guides", "precision_reducers"}
+    assert len({row["source_id"] for row in source_pack["sources"]}) == 14
+    assert len({row["url"] for row in source_pack["sources"]}) == 14
+    assert {
+        row["source_id"]: row["url_or_ref"] for row in mapping["sources"]
+    } == {
+        source_id: row["url_or_ref"] for source_id, row in canonical_sources.items()
+    }
+    for source_id, canonical_source in canonical_sources.items():
+        assert {
+            field: mapping_sources[source_id][field]
+            for field in ("title", "publisher", "publish_date", "url_or_ref")
+        } == {
+            field: canonical_source[field]
+            for field in ("title", "publisher", "publish_date", "url_or_ref")
+        }
+        assert {
+            "title": pack_sources[source_id]["title"],
+            "publisher": pack_sources[source_id]["publisher"],
+            "publish_date": pack_sources[source_id]["publish_date"],
+            "url_or_ref": pack_sources[source_id]["url"],
+        } == {
+            field: canonical_source[field]
+            for field in ("title", "publisher", "publish_date", "url_or_ref")
+        }
+
+
+def test_core_mechanical_company_beneficiary_tiers_follow_classifier_exactly():
+    expected = {
+        ("603667.SH", "precision_rolling_bearings"): (
+            "core_beneficiary",
+            "core_business",
+            "material",
+        ),
+        ("300718.SZ", "plain_self_lubricating_bearings"): (
+            "core_beneficiary",
+            "core_business",
+            "material",
+        ),
+        ("000837.SZ", "ball_roller_screws_linear_guides"): (
+            "elastic_beneficiary",
+            "emerging_segment",
+            "undisclosed",
+        ),
+        ("300580.SZ", "ball_roller_screws_linear_guides"): (
+            "elastic_beneficiary",
+            "emerging_segment",
+            "undisclosed",
+        ),
+        ("688017.SH", "precision_reducers"): (
+            "core_beneficiary",
+            "core_business",
+            "material",
+        ),
+        ("000837.SZ", "precision_reducers"): (
+            "elastic_beneficiary",
+            "emerging_segment",
+            "undisclosed",
+        ),
+        ("603915.SH", "precision_gears_industrial_transmission"): (
+            "core_beneficiary",
+            "core_business",
+            "material",
+        ),
+        ("002472.SZ", "precision_gears_industrial_transmission"): (
+            "core_beneficiary",
+            "core_business",
+            "material",
+        ),
+        ("300503.SZ", "precision_spindles_rotary_tables"): (
+            "core_beneficiary",
+            "core_business",
+            "material",
+        ),
+        ("601100.SH", "hydraulic_components"): (
+            "core_beneficiary",
+            "core_business",
+            "material",
+        ),
+        ("300470.SZ", "industrial_seals"): (
+            "core_beneficiary",
+            "core_business",
+            "material",
+        ),
+        ("301161.SZ", "industrial_seals"): (
+            "core_beneficiary",
+            "core_business",
+            "material",
+        ),
+        ("601002.SH", "springs_fasteners"): (
+            "core_beneficiary",
+            "core_business",
+            "material",
+        ),
+        ("001380.SZ", "springs_fasteners"): (
+            "elastic_beneficiary",
+            "emerging_segment",
+            "undisclosed",
+        ),
+        ("688355.SH", "precision_casting_forging_surface_treatment"): (
+            "core_beneficiary",
+            "meaningful_segment",
+            "meaningful",
+        ),
+    }
+    read_model = list_theme_research_companies(CORE_MECHANICAL_THEME_ID)
+    response = TestClient(dashboard_app.create_app()).get(
+        f"/api/research/theme-decomposition/themes/{CORE_MECHANICAL_THEME_ID}/companies"
+    )
+
+    assert response.status_code == 200
+    for payload in (read_model, response.json()):
+        assert payload["total"] == len(expected)
+        assert {
+            (row["company_code"], row["mapped_node_id"]): (
+                row["beneficiary_tier"],
+                row["business_materiality"],
+                row["revenue_relevance"],
+            )
+            for row in payload["items"]
+        } == expected
+
+
+def test_core_mechanical_profile_catalog_and_pneumatic_gap_are_ready():
+    theme = _read_json(CORE_MECHANICAL_THEME_PATH)
+    mapping = _read_json(CORE_MECHANICAL_MAPPING_PATH)
+    matrix = _read_json(CORE_MECHANICAL_MATRIX_PATH)
+    profile = theme["research_profile"]
+    node_ids = {row["node_id"] for row in theme["nodes"]}
+    claim_ids = {row["claim_id"] for row in theme["claims"]}
+    catalog = load_industry_catalog()
+    link = next(
+        row for row in catalog["theme_links"] if row["theme_id"] == CORE_MECHANICAL_THEME_ID
+    )
+    pneumatic_node = next(
+        row for row in theme["nodes"] if row["node_id"] == "pneumatic_components"
+    )
+    pneumatic_matrix = next(
+        row
+        for row in matrix["node_evidence_matrix"]
+        if row["node_id"] == "pneumatic_components"
+    )
+
+    assert profile["catalog_chain_id"] == CORE_MECHANICAL_CHAIN_ID
+    assert profile["research_kind"] == "industry_chain_deep_research"
+    assert set(profile["catalyst_claim_ids"] + profile["risk_claim_ids"]) <= claim_ids
+    assert link["node_links"] == []
+    assert set(link["unmapped_theme_node_ids"]) == node_ids
+    assert "catalog仍为L2 skeleton" in link["notes"]
+    assert "不映射整机、机器人关节" in link["notes"]
+    assert pneumatic_node["node_review_status"] == "draft"
+    assert pneumatic_node["evidence_strength"] <= 2
+    assert pneumatic_matrix["node_review_status"] == "draft"
+    assert pneumatic_matrix["evidence_gap_status"] == "evidence_gap"
+    assert pneumatic_matrix["accepted_source_ids"] == ["coremech_301161_ar2025"]
+    assert pneumatic_matrix["supported_claim_ids"] == [
+        "coremech_claim_11_hydraulic_pneumatic_seals_boundary"
+    ]
+    pneumatic_boundary_claim = next(
+        row
+        for row in theme["claims"]
+        if row["claim_id"] == "coremech_claim_11_hydraulic_pneumatic_seals_boundary"
+    )
+    assert pneumatic_boundary_claim["claim_type"] == "risk"
+    assert "pneumatic_components" in pneumatic_boundary_claim["affected_theme_nodes"]
+    assert "仅用于排除误映射" in pneumatic_matrix["rationale"]
+    assert "气动执行与控制元件" in pneumatic_matrix["next_evidence_needed"]
+    assert "pneumatic_components" not in {
+        row["mapped_node_id"] for row in mapping["company_mappings"]
+    }
+    result = verify_deep_theme_coverage(
+        CORE_MECHANICAL_THEME_ID,
+        catalog=catalog,
+        theme_context=load_theme_research_priority_package(),
+    )
+    assert result["ready"] is True
+    assert all(result["checks"].values())
+
+
+def test_core_mechanical_scope_boundaries_block_over_attribution():
+    theme = _read_json(CORE_MECHANICAL_THEME_PATH)
+    mapping = _read_json(CORE_MECHANICAL_MAPPING_PATH)
+    evidence = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+    claim_text = " ".join(row["claim_text"] for row in theme["claims"])
+
+    assert "少量" in evidence["coremech_ev_603667_revenue"]["evidence_summary"]
+    assert "配件与铸件" in evidence["coremech_ev_601100_revenue"]["evidence_summary"]
+    assert "丝杠不可拆" in evidence["coremech_ev_601100_revenue"]["evidence_summary"]
+    assert "14.72亿元" in evidence["coremech_ev_000837_revenue"]["evidence_summary"]
+    assert "宽口径" in evidence["coremech_ev_000837_revenue"]["evidence_summary"]
+    assert "其他零部件不可拆" in evidence["coremech_ev_300580_revenue"]["evidence_summary"]
+    assert "金属件" in evidence["coremech_ev_688017_revenue"]["evidence_summary"]
+    assert "谐波未拆" in evidence["coremech_ev_603915_revenue"]["evidence_summary"]
+    assert "转台组合" in evidence["coremech_ev_300503_revenue"]["evidence_summary"]
+    assert "稳定杆" in evidence["coremech_ev_001380_revenue"]["evidence_summary"]
+    assert "仅铸件" in evidence["coremech_ev_688355_product"]["evidence_summary"]
+    assert "非锻造或热处理" in evidence["coremech_ev_688355_product"]["evidence_summary"]
+    assert "仅为密封件" in evidence["coremech_ev_301161_product"]["evidence_summary"]
+    assert "不是气缸或气阀" in evidence["coremech_ev_301161_product"]["evidence_summary"]
+    assert "不能用气动密封替代气动执行与控制元件证据" in claim_text
