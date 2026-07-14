@@ -487,7 +487,19 @@
       "theme_id": "industrial_robots_value_chain_v1",
       "chain_id": "industrial_robots",
       "node_links": [],
-      "unmapped_theme_node_ids": []
+      "unmapped_theme_node_ids": [
+        "multi_joint_robot_bodies",
+        "scara_cartesian_parallel_robots",
+        "collaborative_specialized_robots",
+        "robot_specific_controllers_software",
+        "servo_drives_motors_encoders_dependency",
+        "precision_reducers_transmission_dependency",
+        "vision_force_sensing_safety_dependency",
+        "end_effectors_process_packages",
+        "workstations_lines_system_integration",
+        "industry_applications_lifecycle_services"
+      ],
+      "notes": "industrial_robots catalog仍为L2 skeleton，尚无承接本体、专用控制、工艺包、集成和服务的自有L3/L4 canonical node，因此本轮10个主题节点全部保持unmapped；伺服、减速器和通用视觉分别属于工业自动化、核心机械与机器视觉的跨链依赖，仅保留应用关系，不重复所有权。"
     },
     {
       "theme_id": "power_batteries_battery_materials_value_chain_v1",
