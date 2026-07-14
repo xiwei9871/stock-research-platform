@@ -210,6 +210,83 @@ def test_unsupported_artifact_version_has_stable_error_code(tmp_path):
     assert error.code == "UNSUPPORTED_ARTIFACT_VERSION"
 
 
+def test_v1_6_deep_industry_research_profile_loads(tmp_path):
+    artifact_dir = tmp_path / "theme_decomposition"
+    artifact_dir.mkdir()
+    artifact = _minimal_valid_artifact()
+    artifact["artifact_version"] = "theme_decomposition_v1_6"
+    artifact["theme"]["theme_type"] = "new_energy_storage"
+    artifact["claims"].extend(
+        [
+            {
+                "claim_id": "storage_catalyst_1",
+                "theme_id": "theme_minimal",
+                "source_id": "source_s0",
+                "claim_text": "Utilization and market participation are observable demand validators.",
+                "claim_type": "catalyst",
+                "confidence": 0.7,
+                "evidence_status": "partially_verified",
+                "platform_use_status": "draft",
+                "supporting_source_ids": ["source_s0"],
+                "affected_theme_nodes": ["root_node"],
+            },
+            {
+                "claim_id": "storage_risk_1",
+                "theme_id": "theme_minimal",
+                "source_id": "source_s0",
+                "claim_text": "Low utilization can prevent installed capacity from producing durable economics.",
+                "claim_type": "risk",
+                "confidence": 0.7,
+                "evidence_status": "partially_verified",
+                "platform_use_status": "draft",
+                "supporting_source_ids": ["source_s0"],
+                "affected_theme_nodes": ["root_node"],
+            },
+        ]
+    )
+    artifact["research_profile"] = {
+        "catalog_chain_id": "new_energy_storage",
+        "research_kind": "industry_chain_deep_research",
+        "industry_stage": "commercial_scaling",
+        "central_conflict": "System economics depend on cells, conversion, safety, and utilization together.",
+        "investment_summary": "Storage value is captured across equipment and operating layers.",
+        "value_flow_summary": "cells -> packs -> PCS/BMS/EMS -> integration -> grid service",
+        "profit_pool_summary": "Qualification, control, integration, and operation are assessed separately.",
+        "catalyst_claim_ids": ["storage_catalyst_1"],
+        "risk_claim_ids": ["storage_risk_1"],
+        "validation_signals": ["system tender prices", "utilization hours"],
+        "evidence_gap_summary": "Revenue exposure requires company-level filings.",
+    }
+    _write_artifact(artifact_dir / "deep_theme.json", artifact)
+
+    package = load_theme_package(artifact_dir)
+    detail = load_theme("theme_minimal", artifact_dir)
+
+    assert package["research_profiles"] == [artifact["research_profile"] | {"theme_id": "theme_minimal"}]
+    assert detail["research_profile"] == artifact["research_profile"]
+
+
+def test_v1_6_deep_research_profile_requires_all_fields(tmp_path):
+    artifact = _minimal_valid_artifact()
+    artifact["artifact_version"] = "theme_decomposition_v1_6"
+    artifact["research_profile"] = _minimal_research_profile()
+    del artifact["research_profile"]["central_conflict"]
+
+    error = _load_invalid_artifact(tmp_path, artifact)
+
+    assert error.code == "MISSING_RESEARCH_PROFILE_FIELD"
+
+
+def test_v1_6_profile_claim_references_must_exist(tmp_path):
+    artifact = _minimal_valid_artifact()
+    artifact["artifact_version"] = "theme_decomposition_v1_6"
+    artifact["research_profile"] = _minimal_research_profile()
+
+    error = _load_invalid_artifact(tmp_path, artifact)
+
+    assert error.code == "RESEARCH_PROFILE_CLAIM_NOT_FOUND"
+
+
 def test_cli_validate_returns_structured_gate_error(tmp_path, capsys):
     artifact_dir = tmp_path / "theme_decomposition"
     artifact_dir.mkdir()
@@ -335,4 +412,20 @@ def _minimal_valid_artifact() -> dict:
                 "output_schema": "theme_decomposition_v1_5",
             }
         ],
+    }
+
+
+def _minimal_research_profile() -> dict:
+    return {
+        "catalog_chain_id": "new_energy_storage",
+        "research_kind": "industry_chain_deep_research",
+        "industry_stage": "commercial_scaling",
+        "central_conflict": "System economics depend on cells, conversion, safety, and utilization together.",
+        "investment_summary": "Storage value is captured across equipment and operating layers.",
+        "value_flow_summary": "cells -> packs -> PCS/BMS/EMS -> integration -> grid service",
+        "profit_pool_summary": "Qualification, control, integration, and operation are assessed separately.",
+        "catalyst_claim_ids": ["missing_catalyst"],
+        "risk_claim_ids": ["missing_risk"],
+        "validation_signals": ["system tender prices", "utilization hours"],
+        "evidence_gap_summary": "Revenue exposure requires company-level filings.",
     }

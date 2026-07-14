@@ -10,6 +10,10 @@ from typing import Any
 
 ARTIFACT_DIR = Path(__file__).resolve().parents[2] / "artifacts" / "theme_decomposition"
 ARTIFACT_VERSION = "theme_decomposition_v1_5"
+SUPPORTED_ARTIFACT_VERSIONS = {
+    ARTIFACT_VERSION,
+    "theme_decomposition_v1_6",
+}
 HIGH_PRIORITY_SCORE_THRESHOLD = 4
 STRONG_EVIDENCE_THRESHOLD = 3
 
@@ -36,6 +40,8 @@ CLAIM_TYPES = {
     "cost_structure",
     "tech_route",
     "valuation_signal",
+    "catalyst",
+    "risk",
 }
 EVIDENCE_STATUSES = {"verified", "partially_verified", "unverified", "contradicted"}
 CLAIM_PLATFORM_USE_STATUSES = {"research_lead", "draft", "reviewed", "blocked"}
@@ -45,6 +51,7 @@ THEME_TYPES = {
     "ai_compute",
     "semiconductor_equipment",
     "industrial_software",
+    "new_energy_storage",
     "other",
 }
 THEME_STATUSES = {"draft", "reviewed", "published"}
@@ -139,6 +146,20 @@ TEMPLATE_FIELDS = {
     "optional_dimensions",
     "output_schema",
 }
+RESEARCH_KINDS = {"industry_chain_deep_research"}
+RESEARCH_PROFILE_FIELDS = {
+    "catalog_chain_id",
+    "research_kind",
+    "industry_stage",
+    "central_conflict",
+    "investment_summary",
+    "value_flow_summary",
+    "profit_pool_summary",
+    "catalyst_claim_ids",
+    "risk_claim_ids",
+    "validation_signals",
+    "evidence_gap_summary",
+}
 
 
 class ThemeDecompositionValidationError(ValueError):
@@ -171,6 +192,11 @@ def load_theme_package(artifact_dir: str | Path | None = None) -> dict[str, Any]
             template
             for artifact in artifacts
             for template in artifact.get("decomposition_templates", [])
+        ],
+        "research_profiles": [
+            {**artifact["research_profile"], "theme_id": artifact["theme"]["theme_id"]}
+            for artifact in artifacts
+            if artifact.get("research_profile") is not None
         ],
     }
     _validate_package(package)
@@ -223,6 +249,14 @@ def load_theme(theme_id: str, artifact_dir: str | Path | None = None) -> dict[st
             for template in package["decomposition_templates"]
             if template["theme_type"] == themes[0]["theme_type"]
         ],
+        "research_profile": next(
+            (
+                {key: value for key, value in profile.items() if key != "theme_id"}
+                for profile in package["research_profiles"]
+                if profile["theme_id"] == theme_id
+            ),
+            None,
+        ),
     }
 
 
@@ -281,7 +315,7 @@ def _validate_artifact_versions(artifacts: list[dict[str, Any]]) -> None:
                 f"artifacts[{index}].artifact_version is required",
                 code="MISSING_ARTIFACT_VERSION",
             )
-        if artifact["artifact_version"] != ARTIFACT_VERSION:
+        if artifact["artifact_version"] not in SUPPORTED_ARTIFACT_VERSIONS:
             raise ThemeDecompositionValidationError(
                 f"artifacts[{index}].artifact_version unsupported: {artifact['artifact_version']}",
                 code="UNSUPPORTED_ARTIFACT_VERSION",
@@ -391,6 +425,50 @@ def _validate_package(package: dict[str, Any]) -> None:
     for index, template in enumerate(package["decomposition_templates"]):
         _require_fields(template, TEMPLATE_FIELDS, f"decomposition_templates[{index}]")
         _check_enum(template, "theme_type", THEME_TYPES, f"decomposition_templates[{index}]")
+
+    for index, profile in enumerate(package["research_profiles"]):
+        path = f"research_profiles[{index}]"
+        missing = sorted((RESEARCH_PROFILE_FIELDS | {"theme_id"}) - profile.keys())
+        if missing:
+            raise ThemeDecompositionValidationError(
+                f"{path}.{missing[0]} is required",
+                code="MISSING_RESEARCH_PROFILE_FIELD",
+            )
+        if profile["theme_id"] not in theme_ids:
+            raise ThemeDecompositionValidationError(
+                f"{path}.theme_id references missing theme",
+                code="RESEARCH_PROFILE_THEME_NOT_FOUND",
+            )
+        _check_enum(profile, "research_kind", RESEARCH_KINDS, path)
+        for field in (
+            "catalog_chain_id",
+            "industry_stage",
+            "central_conflict",
+            "investment_summary",
+            "value_flow_summary",
+            "profit_pool_summary",
+            "evidence_gap_summary",
+        ):
+            if not isinstance(profile[field], str) or not profile[field].strip():
+                raise ThemeDecompositionValidationError(
+                    f"{path}.{field} must be a non-empty string",
+                    code="INVALID_RESEARCH_PROFILE_FIELD",
+                )
+        for field in ("catalyst_claim_ids", "risk_claim_ids", "validation_signals"):
+            if not isinstance(profile[field], list) or not all(
+                isinstance(value, str) and value.strip() for value in profile[field]
+            ):
+                raise ThemeDecompositionValidationError(
+                    f"{path}.{field} must be a list of non-empty strings",
+                    code="INVALID_RESEARCH_PROFILE_FIELD",
+                )
+        for field in ("catalyst_claim_ids", "risk_claim_ids"):
+            for claim_id in profile[field]:
+                if claim_id not in claim_ids:
+                    raise ThemeDecompositionValidationError(
+                        f"{path}.{field} references missing claim: {claim_id}",
+                        code="RESEARCH_PROFILE_CLAIM_NOT_FOUND",
+                    )
 
     _validate_review_gates(
         package,
