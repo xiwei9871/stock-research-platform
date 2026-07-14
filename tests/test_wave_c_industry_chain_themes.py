@@ -255,10 +255,36 @@ def _implemented_wave_chain_ids(wave: str) -> set[str]:
     }
 
 
-def _assert_bidirectional_source_and_matrix_links() -> None:
-    theme = _read_json(THEME_PATH)
-    source_pack = _read_json(SOURCE_PACK_PATH)
-    matrix = _read_json(MATRIX_PATH)
+def _assert_wave_progress_matches_manifest(report: dict, wave: str) -> None:
+    manifest = _read_json(MANIFEST_PATH)
+    implemented_chain_ids = _implemented_wave_chain_ids(wave)
+    wave_chain_ids = manifest["waves"][wave]
+    wave_result = report["wave_results"][wave]
+    ready_chain_ids = {
+        row["chain_id"] for row in report["theme_results"] if row["ready"]
+    }
+
+    assert wave_result["ready_theme_count"] == len(implemented_chain_ids)
+    assert wave_result["not_ready_theme_count"] == (
+        len(wave_chain_ids) - len(implemented_chain_ids)
+    )
+    assert wave_result["ready"] is (
+        len(implemented_chain_ids) == len(wave_chain_ids)
+    )
+    assert ready_chain_ids == implemented_chain_ids
+
+
+def _assert_bidirectional_source_and_matrix_links(
+    *,
+    theme_path: Path,
+    source_pack_path: Path,
+    matrix_path: Path,
+    node_ids: set[str],
+    require_accepted_source: bool,
+) -> None:
+    theme = _read_json(theme_path)
+    source_pack = _read_json(source_pack_path)
+    matrix = _read_json(matrix_path)
     accepted_source_ids = {
         row["source_id"]
         for row in source_pack["sources"]
@@ -282,8 +308,8 @@ def _assert_bidirectional_source_and_matrix_links() -> None:
         }
         for source in source_pack["sources"]
     }
-    assert set(matrix_by_node) == NODE_IDS
-    assert len(matrix_by_node) == len(NODE_IDS)
+    assert set(matrix_by_node) == node_ids
+    assert len(matrix_by_node) == len(node_ids)
     for node_id, row in matrix_by_node.items():
         expected_claim_ids = {
             claim["claim_id"]
@@ -292,7 +318,10 @@ def _assert_bidirectional_source_and_matrix_links() -> None:
         }
         assert set(row["supported_claim_ids"]) == expected_claim_ids
         assert set(row["accepted_source_ids"]) <= accepted_source_ids
-        assert row["accepted_source_ids"] or row["evidence_gap_status"] == "evidence_gap"
+        if require_accepted_source:
+            assert row["accepted_source_ids"]
+        else:
+            assert row["accepted_source_ids"] or row["evidence_gap_status"] == "evidence_gap"
         for source_id in row["accepted_source_ids"]:
             source = source_by_id[source_id]
             assert node_id in source["supported_node_ids"]
@@ -315,64 +344,6 @@ def _assert_bidirectional_source_and_matrix_links() -> None:
             )
 
 
-def _assert_battery_bidirectional_source_and_matrix_links() -> None:
-    theme = _read_json(BATTERY_THEME_PATH)
-    source_pack = _read_json(BATTERY_SOURCE_PACK_PATH)
-    matrix = _read_json(BATTERY_MATRIX_PATH)
-    accepted_source_ids = {
-        row["source_id"]
-        for row in source_pack["sources"]
-        if row["review_status"] == "accepted"
-    }
-    source_by_id = {row["source_id"]: row for row in source_pack["sources"]}
-    claim_by_id = {row["claim_id"]: row for row in theme["claims"]}
-    matrix_by_node = {
-        row["node_id"]: row for row in matrix["node_evidence_matrix"]
-    }
-
-    assert {
-        source["source_id"]: set(source["supported_claim_ids"])
-        for source in source_pack["sources"]
-    } == {
-        source["source_id"]: {
-            claim["claim_id"]
-            for claim in theme["claims"]
-            if source["source_id"]
-            in {claim["source_id"], *claim["supporting_source_ids"]}
-        }
-        for source in source_pack["sources"]
-    }
-    assert set(matrix_by_node) == BATTERY_NODE_IDS
-    for node_id, row in matrix_by_node.items():
-        expected_claim_ids = {
-            claim["claim_id"]
-            for claim in theme["claims"]
-            if node_id in claim["affected_theme_nodes"]
-        }
-        assert set(row["supported_claim_ids"]) == expected_claim_ids
-        assert set(row["accepted_source_ids"]) <= accepted_source_ids
-        assert row["accepted_source_ids"]
-        for source_id in row["accepted_source_ids"]:
-            source = source_by_id[source_id]
-            assert node_id in source["supported_node_ids"]
-            assert expected_claim_ids & set(source["supported_claim_ids"])
-        for claim_id in expected_claim_ids:
-            claim = claim_by_id[claim_id]
-            assert set(row["accepted_source_ids"]) & {
-                claim["source_id"],
-                *claim["supporting_source_ids"],
-            }
-    for source in source_pack["sources"]:
-        for claim_id in source["supported_claim_ids"]:
-            assert set(source["supported_node_ids"]) & set(
-                claim_by_id[claim_id]["affected_theme_nodes"]
-            )
-        for node_id in source["supported_node_ids"]:
-            assert set(source["supported_claim_ids"]) & set(
-                matrix_by_node[node_id]["supported_claim_ids"]
-            )
-
-
 def test_industrial_robots_artifacts_load_and_first_wave_c_row_is_ready():
     theme_package = load_theme_package()
     mapping_package = load_theme_company_mapping_package()
@@ -390,16 +361,17 @@ def test_industrial_robots_artifacts_load_and_first_wave_c_row_is_ready():
 
     assert rows[CHAIN_ID]["ready"] is True
     assert all(rows[CHAIN_ID]["checks"].values())
-    assert report["wave_results"]["wave_c"]["ready"] is False
-    assert report["wave_results"]["wave_c"]["ready_theme_count"] == 2
-    assert report["wave_results"]["wave_c"]["not_ready_theme_count"] == 3
-    assert {chain_id for chain_id, row in rows.items() if row["ready"]} == (
-        _implemented_wave_chain_ids("wave_c")
-    )
+    _assert_wave_progress_matches_manifest(report, "wave_c")
 
 
 def test_industrial_robots_evidence_mapping_and_source_identity_are_exact():
-    _assert_bidirectional_source_and_matrix_links()
+    _assert_bidirectional_source_and_matrix_links(
+        theme_path=THEME_PATH,
+        source_pack_path=SOURCE_PACK_PATH,
+        matrix_path=MATRIX_PATH,
+        node_ids=NODE_IDS,
+        require_accepted_source=False,
+    )
     theme = _read_json(THEME_PATH)
     mapping = _read_json(MAPPING_PATH)
     source_pack = _read_json(SOURCE_PACK_PATH)
@@ -602,12 +574,18 @@ def test_power_batteries_artifacts_load_and_second_wave_c_row_is_ready():
 
     assert rows[BATTERY_CHAIN_ID]["ready"] is True
     assert all(rows[BATTERY_CHAIN_ID]["checks"].values())
-    assert report["wave_results"]["wave_c"]["ready_theme_count"] == 2
-    assert report["wave_results"]["wave_c"]["not_ready_theme_count"] == 3
+    assert rows[BATTERY_CHAIN_ID]["counts"]["reviewed_mappings"] == 14
+    _assert_wave_progress_matches_manifest(report, "wave_c")
 
 
 def test_power_batteries_evidence_mapping_and_source_identity_are_exact():
-    _assert_battery_bidirectional_source_and_matrix_links()
+    _assert_bidirectional_source_and_matrix_links(
+        theme_path=BATTERY_THEME_PATH,
+        source_pack_path=BATTERY_SOURCE_PACK_PATH,
+        matrix_path=BATTERY_MATRIX_PATH,
+        node_ids=BATTERY_NODE_IDS,
+        require_accepted_source=True,
+    )
     theme = _read_json(BATTERY_THEME_PATH)
     mapping = _read_json(BATTERY_MAPPING_PATH)
     source_pack = _read_json(BATTERY_SOURCE_PACK_PATH)
@@ -630,8 +608,8 @@ def test_power_batteries_evidence_mapping_and_source_identity_are_exact():
     assert len(theme["nodes"]) == 11
     assert len(theme["claims"]) == 14
     assert all(set(row) >= CLAIM_FIELDS for row in theme["claims"])
-    assert len(reviewed_mappings) == 13
-    assert len({row["company_code"] for row in reviewed_mappings}) == 13
+    assert len(reviewed_mappings) == 14
+    assert len({row["company_code"] for row in reviewed_mappings}) == 14
     assert set(canonical_sources) == set(BATTERY_SOURCE_IDENTITIES)
     assert set(mapping_sources) == set(BATTERY_SOURCE_IDENTITIES)
     assert set(pack_sources) == set(BATTERY_SOURCE_IDENTITIES)
@@ -661,6 +639,7 @@ def test_power_batteries_evidence_mapping_and_source_identity_are_exact():
 def test_power_batteries_company_beneficiary_tiers_follow_classifier_exactly():
     expected = {
         "300750.SZ": ("core_beneficiary", "core_business", "material"),
+        "300014.SZ": ("core_beneficiary", "meaningful_segment", "material"),
         "002074.SZ": ("core_beneficiary", "core_business", "material"),
         "300207.SZ": ("elastic_beneficiary", "meaningful_segment", "undisclosed"),
         "603799.SH": ("core_beneficiary", "core_business", "material"),
@@ -687,6 +666,50 @@ def test_power_batteries_company_beneficiary_tiers_follow_classifier_exactly():
     } == expected
 
 
+def test_power_batteries_accepted_eve_source_has_mapping_evidence_and_reviewed_mapping():
+    source_pack = _read_json(BATTERY_SOURCE_PACK_PATH)
+    matrix = _read_json(BATTERY_MATRIX_PATH)
+    mapping = _read_json(BATTERY_MAPPING_PATH)
+    source = next(
+        row
+        for row in source_pack["sources"]
+        if row["source_id"] == "battery_300014_ar2025"
+    )
+    consuming_nodes = {
+        row["node_id"]
+        for row in matrix["node_evidence_matrix"]
+        if source["source_id"] in row["accepted_source_ids"]
+    }
+    mapping_row = next(
+        row
+        for row in mapping["company_mappings"]
+        if row["company_code"] == "300014.SZ"
+    )
+    evidence = [
+        row
+        for row in mapping["evidence_items"]
+        if row["evidence_id"] in mapping_row["evidence_ids"]
+    ]
+
+    assert source["review_status"] == "accepted"
+    assert source["reliability_level"] == "S0"
+    assert consuming_nodes == {
+        "battery_cells_management_systems",
+        "battery_management_system_platforms",
+        "sodium_ion_solid_state_validation",
+    }
+    assert mapping_row["mapped_node_id"] == "battery_cells_management_systems"
+    assert mapping_row["review_status"] == "reviewed"
+    assert mapping_row["business_materiality"] == "meaningful_segment"
+    assert mapping_row["revenue_relevance"] == "material"
+    assert {row["evidence_type"] for row in evidence} >= {
+        "product_relationship",
+        "revenue_materiality",
+    }
+    assert {row["source_id"] for row in evidence} == {source["source_id"]}
+    assert all(row["related_company_codes"] == ["300014.SZ"] for row in evidence)
+
+
 def test_power_batteries_profile_catalog_boundaries_and_validation_gaps_are_ready():
     theme = _read_json(BATTERY_THEME_PATH)
     matrix = _read_json(BATTERY_MATRIX_PATH)
@@ -702,6 +725,7 @@ def test_power_batteries_profile_catalog_boundaries_and_validation_gaps_are_read
 
     assert profile["catalog_chain_id"] == BATTERY_CHAIN_ID
     assert profile["research_kind"] == "industry_chain_deep_research"
+    assert "14条reviewed映射" in profile["evidence_gap_summary"]
     assert set(profile["catalyst_claim_ids"] + profile["risk_claim_ids"]) <= claim_ids
     assert set(profile["readable_section_claim_ids"]) == {
         "conclusion",

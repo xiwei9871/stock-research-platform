@@ -87,6 +87,6 @@
       "evidence_gaps": ["battery_claim_05_anode_scope_boundary","battery_claim_06_separator_scope_boundary","battery_claim_07_electrolyte_scope_boundary","battery_claim_08_foil_scope_split","battery_claim_12_bms_pack_disclosure_gap","battery_claim_13_recycling_economics","battery_claim_14_sodium_solid_validation"]
     },
     "validation_signals": ["资源与冶炼的镍钴锂现金成本、回收率和价格敏感性","前驱体/正极与负极分产品收入、毛利率、利用率及新客户认证","隔膜基膜与涂覆、电解液和锂盐的单品收入、良率与单位盈利","铜箔与铝箔必须分开披露电池口径收入、加工费和毛利率","精密结构件的动力电池口径收入、良率、客户份额和海外爬坡","动力电芯的GWh销量、单Wh收入毛利、现金流和质保损失","BMS与Pack独立收入、SOC/SOH精度、功能安全和客户复购","回收与梯次利用的回收量、合规原料、金属收率与单吨利润","钠离子与固态的中试到量产线进度、客户验证、良率、成本和成熟规模收入"],
-    "evidence_gap_summary": "14份2025年报支持11个节点、14条判断和13条reviewed映射；负极、隔膜、电解液、铝箔、BMS/Pack及回收仍有宽收入或独立收入缺口，铜箔0.19%毛利提示利润风险，钠离子与固态仅按验证期处理。"
+    "evidence_gap_summary": "14份2025年报支持11个节点、14条判断和14条reviewed映射；负极、隔膜、电解液、铝箔、BMS/Pack及回收仍有宽收入或独立收入缺口，铜箔0.19%毛利提示利润风险，钠离子与固态仅按验证期处理。"
   }
 }
