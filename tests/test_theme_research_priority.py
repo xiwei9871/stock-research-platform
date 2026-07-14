@@ -22,15 +22,46 @@ from stock_research.theme_research_priority import (
 def test_priority_package_scores_all_nodes_and_company_mappings_once():
     package = load_theme_research_priority_package()
     summary = summarize_theme_research_priority_package(package)
+    canonical_node_keys = {
+        (row["theme_id"], row["node_id"])
+        for row in package["theme_package"]["nodes"]
+    }
+    priority_node_keys = {
+        (row["theme_id"], row["node_id"])
+        for row in package["node_priorities"]
+    }
+    canonical_mapping_ids = {
+        row["mapping_id"]
+        for row in package["mapping_package"]["company_mappings"]
+    }
+    priority_mapping_ids = {
+        row["mapping_id"] for row in package["company_priorities"]
+    }
 
-    assert summary["theme_count"] == 5
-    assert summary["node_priority_count"] == 67
-    assert summary["company_priority_count"] == 40
-    assert summary["unique_company_count"] == 39
-    assert summary["linked_company_count"] == 6
-    assert summary["coverage_gap_company_count"] == 2
-    assert len({row["node_id"] for row in package["node_priorities"]}) == 67
-    assert len({row["mapping_id"] for row in package["company_priorities"]}) == 40
+    assert summary["theme_count"] == len(package["theme_package"]["themes"])
+    assert summary["node_priority_count"] == len(canonical_node_keys)
+    assert summary["company_priority_count"] == len(canonical_mapping_ids)
+    assert summary["unique_company_count"] == len(
+        {row["company_code"] for row in package["company_priorities"]}
+    )
+    assert summary["linked_company_count"] == sum(
+        row["integration_status"] == "linked_existing_universe"
+        for row in package["company_priorities"]
+    )
+    assert summary["coverage_gap_company_count"] == sum(
+        row["integration_status"] == "coverage_gap"
+        for row in package["company_priorities"]
+    )
+    assert priority_node_keys == canonical_node_keys
+    assert priority_mapping_ids == canonical_mapping_ids
+    assert sum(
+        row["theme_id"] == "ai_power_value_capture_v1"
+        for row in package["node_priorities"]
+    ) == 13
+    assert sum(
+        row["theme_id"] == "ai_power_value_capture_v1"
+        for row in package["company_priorities"]
+    ) == 8
 
 
 def test_low_evidence_structural_node_becomes_evidence_collection_priority():
@@ -317,14 +348,20 @@ def test_boolean_score_scale_is_rejected(tmp_path: Path):
 
 
 def test_cli_commands_emit_structured_json(capsys):
+    expected_summary = summarize_theme_research_priority_package(
+        load_theme_research_priority_package()
+    )
+
     assert cli(["validate"]) == 0
     validate_payload = json.loads(capsys.readouterr().out)
     assert validate_payload["status"] == "ok"
-    assert validate_payload["node_priority_count"] == 67
+    assert {
+        key: validate_payload[key] for key in expected_summary
+    } == expected_summary
 
     assert cli(["summary"]) == 0
     summary_payload = json.loads(capsys.readouterr().out)
-    assert summary_payload["company_priority_count"] == 40
+    assert summary_payload == expected_summary
 
     for command in ("theme-nodes", "companies", "evidence-gaps", "review-queue"):
         assert cli([command]) == 0

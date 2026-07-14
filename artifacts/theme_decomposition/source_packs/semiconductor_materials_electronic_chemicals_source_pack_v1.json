@@ -71,22 +71,20 @@
       "reliability_level": "S0",
       "review_status": "accepted",
       "document_status": "primary_source_reviewed",
-      "evidence_locator": "第23、25、27-30页前驱体、光刻胶、电子特气、LDS产品、产能及分类收入；第35页纯度与研发风险",
-      "evidence_summary": "公司披露high-k、硅基和金属前驱体、电子特气、光刻胶和材料输送系统，以及前驱体设计产能和纯度研发要求。",
+      "evidence_locator": "第23、25、27-30页前驱体、电子特气、LDS及显示用CFPR/TFT-PR/OC-PS产品和产能；第35页纯度与研发风险",
+      "evidence_summary": "公司披露high-k、硅基和金属前驱体、电子特气和材料输送系统；年报中的CFPR、TFT-PR、OC-PS属于LCD/OLED显示用光刻胶，不用于支持晶圆光刻胶节点。",
       "supported_claim_ids": [
-        "semimat_claim_03_photoresists",
         "semimat_claim_07_gases",
         "semimat_claim_08_precursors",
         "semimat_claim_11_catalyst"
       ],
       "supported_node_ids": [
-        "photoresists_ancillaries",
         "electronic_gases",
         "deposition_etch_precursors",
         "purification_delivery_qualification"
       ],
-      "limitations": "半导体化学材料收入未拆分至前驱体，不能据此判断前驱体收入材料性。",
-      "notes": "巨潮资讯年报全文逐页复核。"
+      "limitations": "半导体化学材料收入未拆分至前驱体，不能据此判断前驱体收入材料性；显示用CFPR/TFT-PR/OC-PS明确排除为晶圆光刻胶证据。",
+      "notes": "巨潮资讯年报全文逐页复核；仅保留前驱体、电子特气、LDS和产能催化证据，显示用光刻胶不链接晶圆光刻胶节点。"
     },
     {
       "source_id": "semimat_300346_2025_report",

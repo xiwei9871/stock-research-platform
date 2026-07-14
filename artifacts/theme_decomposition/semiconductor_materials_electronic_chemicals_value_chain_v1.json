@@ -71,7 +71,7 @@
       "access_level": "public",
       "reliability_level": "S0",
       "review_status": "accepted",
-      "notes": "第23、25、27-30页前驱体、光刻胶、电子特气、LDS产品、产能及分类收入；第35页纯度与研发风险已复核。"
+      "notes": "第23、25、27-30页前驱体、电子特气、LDS和显示用CFPR/TFT-PR/OC-PS产品、产能及分类收入；第35页纯度与研发风险已复核。显示用光刻胶不作为晶圆光刻胶证据。"
     },
     {
       "source_id": "semimat_300346_2025_report",
@@ -499,14 +499,13 @@
       "claim_id": "semimat_claim_03_photoresists",
       "theme_id": "semiconductor_materials_electronic_chemicals_value_chain_v1",
       "source_id": "semimat_300655_2025_report",
-      "claim_text": "晶瑞电材披露光刻胶分产品收入，i线、KrF和ArF产品处于不同放量阶段；鼎龙和雅克的报告补充高端晶圆光刻胶产线与产品，但不得把宽口径电子材料收入归入单一光刻胶节点。",
+      "claim_text": "晶瑞电材披露光刻胶分产品收入，i线、KrF和ArF产品处于不同放量阶段；鼎龙年报补充高端晶圆光刻胶产线与产品，但不得把宽口径半导体材料收入归入单一光刻胶节点。",
       "claim_type": "bottleneck",
       "confidence": 0.96,
       "evidence_status": "verified",
       "platform_use_status": "reviewed",
       "supporting_source_ids": [
-        "semimat_300054_2025_report",
-        "semimat_002409_2025_report"
+        "semimat_300054_2025_report"
       ],
       "affected_theme_nodes": [
         "photoresists_ancillaries",

@@ -883,3 +883,23 @@ def test_semiconductor_materials_profile_and_catalog_link_cover_every_node():
     )
     assert result["ready"] is True
     assert all(result["checks"].values())
+
+
+def test_yake_display_photoresists_are_excluded_from_wafer_photoresist_evidence():
+    theme = _read_json(SEMICONDUCTOR_MATERIALS_THEME_PATH)
+    source_pack = _read_json(SEMICONDUCTOR_MATERIALS_SOURCE_PACK_PATH)
+    source_id = "semimat_002409_2025_report"
+    claim = next(
+        row
+        for row in theme["claims"]
+        if row["claim_id"] == "semimat_claim_03_photoresists"
+    )
+    source = next(
+        row for row in source_pack["sources"] if row["source_id"] == source_id
+    )
+
+    assert source_id not in claim["supporting_source_ids"]
+    assert "semimat_claim_03_photoresists" not in source["supported_claim_ids"]
+    assert "photoresists_ancillaries" not in source["supported_node_ids"]
+    assert "显示" in source["evidence_summary"]
+    assert "晶圆光刻胶证据" in source["limitations"]
