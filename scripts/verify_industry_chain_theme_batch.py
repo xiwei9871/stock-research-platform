@@ -3,17 +3,31 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from pathlib import Path
+import re
 import sys
 from typing import Any
 
+from stock_research.industry_chain_theme_research import classify_beneficiary
 from stock_research.theme_company_mapping import (
+    BOTTLENECK_RELEVANCE,
+    BUSINESS_MATERIALITY,
+    BUSINESS_STAGES,
     DIRECT_RELATIONSHIP_EVIDENCE_TYPES,
+    EVIDENCE_TYPES,
+    MAPPING_FIELDS,
     MAPPING_REVIEW_STATUSES,
+    MAPPING_TYPES,
+    MARKETS,
+    REVENUE_RELEVANCE,
     REVIEWED_CONFIDENCE_THRESHOLD,
 )
 from stock_research.theme_decomposition import (
+    CLAIM_FIELDS,
+    CLAIM_PLATFORM_USE_STATUSES,
     CLAIM_TYPES,
+    EVIDENCE_STATUSES,
     RELIABILITY_LEVELS,
     SOURCE_REVIEW_STATUSES,
     SOURCE_TYPES,
@@ -525,9 +539,12 @@ def _validate_claims(
     seen_ids: set[str] = set()
     for index, row in enumerate(rows):
         label = f"claim[{index}]"
+        missing_fields = sorted(CLAIM_FIELDS - set(row))
+        row_errors = [f"{label}.{field} is required" for field in missing_fields]
         claim_id = row.get("claim_id")
         if not _is_non_empty_string(claim_id):
-            errors.append(f"{label} requires non-empty claim_id")
+            row_errors.append(f"{label} requires non-empty claim_id")
+            errors.extend(row_errors)
             continue
         if claim_id in seen_ids:
             errors.append(f"{label} duplicate claim_id: {claim_id}")
@@ -535,7 +552,6 @@ def _validate_claims(
             schema_valid_claims.pop(claim_id, None)
             continue
         seen_ids.add(claim_id)
-        row_errors = []
         if row.get("theme_id") != expected_theme_id:
             row_errors.append(
                 f"{label}.theme_id must equal {expected_theme_id}: {row.get('theme_id')}"
@@ -550,6 +566,36 @@ def _validate_claims(
                 row_errors.append(f"{label}.{field} must be a non-empty string")
         if row.get("claim_type") not in CLAIM_TYPES:
             row_errors.append(f"{label}.claim_type is invalid: {row.get('claim_type')}")
+        if row.get("evidence_status") not in EVIDENCE_STATUSES:
+            row_errors.append(
+                f"{label}.evidence_status is invalid: {row.get('evidence_status')}"
+            )
+        if row.get("platform_use_status") not in CLAIM_PLATFORM_USE_STATUSES:
+            row_errors.append(
+                f"{label}.platform_use_status is invalid: "
+                f"{row.get('platform_use_status')}"
+            )
+        confidence = row.get("confidence")
+        if (
+            isinstance(confidence, bool)
+            or not isinstance(confidence, (int, float))
+            or not math.isfinite(float(confidence))
+            or not 0 <= float(confidence) <= 1
+        ):
+            row_errors.append(f"{label}.confidence must be a finite number from 0 to 1")
+        supporting_source_ids = row.get("supporting_source_ids")
+        if not _is_string_list(supporting_source_ids, allow_empty=True):
+            row_errors.append(f"{label}.supporting_source_ids must be a string list")
+            supporting_source_ids = []
+        elif len(supporting_source_ids) != len(set(supporting_source_ids)):
+            row_errors.append(f"{label}.supporting_source_ids contains duplicates")
+        else:
+            unknown_supporting_sources = set(supporting_source_ids) - known_source_ids
+            if unknown_supporting_sources:
+                row_errors.append(
+                    f"{label}.supporting_source_ids references unknown sources: "
+                    f"{sorted(unknown_supporting_sources)}"
+                )
         affected_nodes = row.get("affected_theme_nodes")
         if not _is_string_list(affected_nodes, allow_empty=False):
             row_errors.append(f"{label}.affected_theme_nodes must be a non-empty string list")
@@ -562,11 +608,12 @@ def _validate_claims(
             errors.extend(row_errors)
             continue
         schema_valid_claims[claim_id] = row
-        if source_id in accepted_source_ids:
+        claim_source_ids = {source_id, *supporting_source_ids}
+        if claim_source_ids & accepted_source_ids:
             valid_claims[claim_id] = row
         if (
             row.get("platform_use_status") == "reviewed"
-            and source_id not in accepted_source_ids
+            and not (claim_source_ids & accepted_source_ids)
         ):
             errors.append(f"{label} reviewed claim requires accepted source: {source_id}")
     return valid_claims, set(schema_valid_claims), not errors, errors
@@ -628,6 +675,10 @@ def _validate_mappings(
             row_errors.append(f"{label}.source_id references missing mapping source: {source_id}")
         if not _is_non_empty_string(row.get("evidence_type")):
             row_errors.append(f"{label}.evidence_type must be a non-empty string")
+        if row.get("evidence_type") not in EVIDENCE_TYPES:
+            row_errors.append(
+                f"{label}.evidence_type is invalid: {row.get('evidence_type')}"
+            )
         if not _is_non_empty_string(row.get("evidence_summary")):
             row_errors.append(f"{label}.evidence_summary must be a non-empty string")
         if not _is_string_list(row.get("related_company_codes"), allow_empty=False):
@@ -650,15 +701,31 @@ def _validate_mappings(
     seen_relationships: set[tuple[str, str]] = set()
     for index, row in enumerate(mapping_rows):
         label = f"mapping[{index}]"
+        row_errors = [
+            f"{label}.{field} is required"
+            for field in sorted(MAPPING_FIELDS - set(row))
+        ]
         mapping_id = row.get("mapping_id")
         if not _is_non_empty_string(mapping_id):
-            errors.append(f"{label} requires non-empty mapping_id")
+            row_errors.append(f"{label} requires non-empty mapping_id")
+            errors.extend(row_errors)
             continue
         if mapping_id in seen_mapping_ids:
             errors.append(f"{label} duplicate mapping_id: {mapping_id}")
             continue
         seen_mapping_ids.add(mapping_id)
-        row_errors = []
+        for field in (
+            "theme_id",
+            "company_code",
+            "company_name",
+            "mapped_node_id",
+            "product_or_service",
+            "relationship_summary",
+        ):
+            if not _is_non_empty_string(row.get(field)):
+                row_errors.append(f"{label}.{field} must be a non-empty string")
+        if not isinstance(row.get("notes"), str):
+            row_errors.append(f"{label}.notes must be a string")
         if row.get("theme_id") != expected_theme_id:
             row_errors.append(
                 f"{label}.theme_id must equal {expected_theme_id}: {row.get('theme_id')}"
@@ -667,7 +734,23 @@ def _validate_mappings(
             row_errors.append(
                 f"{label}.review_status is invalid: {row.get('review_status')}"
             )
+        enum_fields = {
+            "market": MARKETS,
+            "mapping_type": MAPPING_TYPES,
+            "business_stage": BUSINESS_STAGES,
+            "revenue_relevance": REVENUE_RELEVANCE,
+            "bottleneck_relevance": BOTTLENECK_RELEVANCE,
+            "business_materiality": BUSINESS_MATERIALITY,
+        }
+        for field, allowed in enum_fields.items():
+            if row.get(field) not in allowed:
+                row_errors.append(f"{label}.{field} is invalid: {row.get(field)}")
         company_code = row.get("company_code")
+        market = row.get("market")
+        if market == "CN" and not re.fullmatch(
+            r"\d{6}\.(?:SH|SZ|BJ)", str(company_code or "").strip()
+        ):
+            row_errors.append(f"{label}.company_code is invalid for CN market: {company_code}")
         node_id = row.get("mapped_node_id")
         if not _is_non_empty_string(company_code):
             row_errors.append(f"{label}.company_code must be a non-empty string")
@@ -690,6 +773,7 @@ def _validate_mappings(
         if (
             isinstance(confidence, bool)
             or not isinstance(confidence, (int, float))
+            or not math.isfinite(float(confidence))
             or not 0 <= float(confidence) <= 1
         ):
             row_errors.append(f"{label}.confidence must be a number from 0 to 1")
@@ -697,7 +781,36 @@ def _validate_mappings(
             row_errors.append(
                 f"{label}.confidence must be >= {REVIEWED_CONFIDENCE_THRESHOLD} when reviewed"
             )
-        qualifying_evidence = []
+        business_stage = row.get("business_stage")
+        materiality = row.get("business_materiality")
+        revenue_relevance = row.get("revenue_relevance")
+        if business_stage == "concept_exposure":
+            if row.get("review_status") == "reviewed":
+                row_errors.append(f"{label} reviewed concept_exposure mapping is forbidden")
+            if materiality != "concept_only" or revenue_relevance != "none":
+                row_errors.append(
+                    f"{label} concept_exposure requires concept_only materiality and no revenue"
+                )
+        if business_stage == "reserve_stage":
+            if row.get("review_status") == "reviewed":
+                row_errors.append(f"{label} reserve_stage cannot satisfy reviewed mapping gate")
+            if materiality != "reserve_only" or revenue_relevance not in {
+                "none",
+                "undisclosed",
+            }:
+                row_errors.append(
+                    f"{label} reserve_stage requires reserve_only materiality and no material revenue"
+                )
+        if business_stage == "primary_business" and materiality in {
+            "reserve_only",
+            "concept_only",
+            "unknown",
+        }:
+            row_errors.append(
+                f"{label} primary_business has incompatible materiality: {materiality}"
+            )
+        scoped_evidence: list[dict[str, Any]] = []
+        accepted_evidence: list[dict[str, Any]] = []
         for evidence_id in evidence_ids:
             evidence = evidence_by_id.get(evidence_id)
             if evidence is None:
@@ -709,21 +822,40 @@ def _validate_mappings(
                 row_errors.append(f"{label} evidence scope mismatch: {evidence_id}")
                 continue
             source = source_by_id.get(evidence["source_id"], {})
+            scoped_evidence.append({**evidence, "source": source})
             if (
                 source.get("review_status") == "accepted"
                 and source.get("reliability_level") in {"S0", "S1"}
-                and evidence.get("evidence_type") in DIRECT_RELATIONSHIP_EVIDENCE_TYPES
             ):
-                qualifying_evidence.append(evidence)
-        if row.get("review_status") == "reviewed" and not qualifying_evidence:
-            row_errors.append(
-                f"{label} reviewed mapping requires scoped direct relationship evidence "
-                "backed by an accepted S0/S1 source"
-            )
+                accepted_evidence.append(evidence)
+        if row.get("review_status") == "reviewed":
+            if not any(
+                evidence.get("evidence_type") in DIRECT_RELATIONSHIP_EVIDENCE_TYPES
+                for evidence in accepted_evidence
+            ):
+                row_errors.append(
+                    f"{label} reviewed mapping requires scoped direct relationship evidence "
+                    "backed by an accepted S0/S1 source"
+                )
+            makes_materiality_claim = revenue_relevance in {
+                "material",
+                "meaningful",
+                "limited",
+            } or materiality in {"core_business", "meaningful_segment"}
+            if makes_materiality_claim and not any(
+                evidence.get("evidence_type") == "revenue_materiality"
+                for evidence in accepted_evidence
+            ):
+                row_errors.append(
+                    f"{label} materiality claim requires accepted revenue_materiality evidence"
+                )
         if row_errors:
             errors.extend(row_errors)
             continue
-        if row.get("review_status") == "reviewed":
+        if (
+            row.get("review_status") == "reviewed"
+            and classify_beneficiary(row, scoped_evidence) != "concept_association"
+        ):
             reviewed_mappings.append(row)
     return reviewed_mappings, not errors, errors
 

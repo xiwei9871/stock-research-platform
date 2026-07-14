@@ -81,6 +81,11 @@ def test_canonical_manifest_freezes_scope_wave_order_files_and_gates():
 
     assert manifest["batch_id"] == "next_fifteen_industry_chain_themes_v1"
     assert manifest["target_theme_count"] == 15
+    assert manifest["primary_source_types"] == [
+        "company_filing",
+        "official_report",
+        "official_article",
+    ]
     assert manifest["waves"] == WAVES
     assert {
         chain_id: metadata["theme_id"]
@@ -276,6 +281,44 @@ def test_duplicate_cross_theme_or_unbacked_claims_do_not_count(
     assert any("claim" in error for error in theme["errors"])
 
 
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "missing_field",
+        "invalid_platform_status",
+        "invalid_evidence_status",
+        "invalid_confidence",
+        "unknown_supporting_source",
+        "invalid_affected_node",
+    ],
+)
+def test_claims_must_satisfy_canonical_contract(tmp_path: Path, mutation: str):
+    manifest_path = _write_ready_batch(tmp_path)
+    path = tmp_path / "sample_theme.json"
+    payload = _read_json(path)
+    claim = payload["claims"][-1]
+    if mutation == "missing_field":
+        claim.pop("confidence")
+    elif mutation == "invalid_platform_status":
+        claim["platform_use_status"] = "bogus"
+    elif mutation == "invalid_evidence_status":
+        claim["evidence_status"] = "bogus"
+    elif mutation == "invalid_confidence":
+        claim["confidence"] = 1.5
+    elif mutation == "unknown_supporting_source":
+        claim["supporting_source_ids"] = ["unknown_source"]
+    else:
+        claim["affected_theme_nodes"] = ["other_node"]
+    _write_json(path, payload)
+
+    theme = build_theme_batch_report(manifest_path)["theme_results"][0]
+
+    assert theme["ready"] is False
+    assert theme["counts"]["claims"] < 10
+    assert theme["checks"]["claim_rows_valid"] is False
+    assert any("claim" in error for error in theme["errors"])
+
+
 def test_known_nonaccepted_source_draft_claim_counts_toward_claim_gate(
     tmp_path: Path,
 ):
@@ -381,6 +424,57 @@ def test_invalid_reviewed_mappings_do_not_count(tmp_path: Path, mutation: str):
     assert theme["counts"]["reviewed_mappings"] == 7
     assert theme["checks"]["mapping_rows_valid"] is False
     assert any("mapping" in error or "evidence" in error for error in theme["errors"])
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "concept_exposure",
+        "reserve_only",
+        "missing_field",
+        "incompatible_materiality",
+        "invalid_enum",
+        "invalid_confidence",
+        "invalid_company_code",
+        "missing_revenue_evidence",
+    ],
+)
+def test_reviewed_mappings_must_satisfy_canonical_beneficiary_contract(
+    tmp_path: Path,
+    mutation: str,
+):
+    manifest_path = _write_ready_batch(tmp_path)
+    path = tmp_path / "sample_company_mapping.json"
+    payload = _read_json(path)
+    mapping = payload["company_mappings"][-1]
+    if mutation == "concept_exposure":
+        mapping["business_stage"] = "concept_exposure"
+        mapping["business_materiality"] = "concept_only"
+        mapping["revenue_relevance"] = "none"
+    elif mutation == "reserve_only":
+        mapping["business_stage"] = "reserve_stage"
+        mapping["business_materiality"] = "reserve_only"
+        mapping["revenue_relevance"] = "none"
+    elif mutation == "missing_field":
+        mapping.pop("company_name")
+    elif mutation == "incompatible_materiality":
+        mapping["business_materiality"] = "concept_only"
+    elif mutation == "invalid_enum":
+        mapping["mapping_type"] = "bogus"
+    elif mutation == "invalid_confidence":
+        mapping["confidence"] = 0.4
+    elif mutation == "invalid_company_code":
+        mapping["company_code"] = "invalid"
+    else:
+        mapping["evidence_ids"] = [mapping["evidence_ids"][0]]
+    _write_json(path, payload)
+
+    theme = build_theme_batch_report(manifest_path)["theme_results"][0]
+
+    assert theme["ready"] is False
+    assert theme["counts"]["reviewed_mappings"] == 7
+    assert theme["checks"]["mapping_rows_valid"] is False
+    assert any("mapping" in error or "materiality" in error for error in theme["errors"])
 
 
 @pytest.mark.parametrize(
@@ -645,6 +739,10 @@ def _write_ready_batch(root: Path) -> Path:
                 "source_id": f"source_{index}",
                 "claim_text": f"Claim {index}",
                 "claim_type": "catalyst" if index == 8 else "risk" if index == 9 else "value_capture",
+                "confidence": 0.8,
+                "evidence_status": "verified",
+                "platform_use_status": "reviewed",
+                "supporting_source_ids": [],
                 "affected_theme_nodes": [f"node_{index % 2 + 1}"],
             }
             for index in range(10)
@@ -684,25 +782,51 @@ def _write_ready_batch(root: Path) -> Path:
             for index in range(8)
         ],
         "evidence_items": [
-            {
-                "evidence_id": f"evidence_{index}",
-                "source_id": f"source_{index}",
-                "evidence_type": "product_relationship",
-                "evidence_summary": f"Scoped relationship {index}",
-                "related_company_codes": [f"00000{index}.SZ"],
-                "related_node_ids": [f"node_{index % 2 + 1}"],
-            }
+            evidence
             for index in range(8)
+            for evidence in (
+                {
+                    "evidence_id": f"relationship_evidence_{index}",
+                    "source_id": f"source_{index}",
+                    "evidence_type": "product_relationship",
+                    "excerpt_locator": f"page {index + 1}",
+                    "evidence_summary": f"Scoped relationship {index}",
+                    "related_company_codes": [f"00000{index}.SZ"],
+                    "related_node_ids": [f"node_{index % 2 + 1}"],
+                },
+                {
+                    "evidence_id": f"revenue_evidence_{index}",
+                    "source_id": f"source_{index}",
+                    "evidence_type": "revenue_materiality",
+                    "excerpt_locator": f"page {index + 1}",
+                    "evidence_summary": f"Revenue materiality {index}",
+                    "related_company_codes": [f"00000{index}.SZ"],
+                    "related_node_ids": [f"node_{index % 2 + 1}"],
+                },
+            )
         ],
         "company_mappings": [
             {
                 "mapping_id": f"mapping_{index}",
                 "theme_id": "sample_theme_v1",
                 "company_code": f"00000{index}.SZ",
+                "company_name": f"Company {index}",
+                "market": "CN",
                 "mapped_node_id": f"node_{index % 2 + 1}",
+                "mapping_type": "direct_product",
+                "business_stage": "primary_business",
                 "confidence": 0.9,
-                "evidence_ids": [f"evidence_{index}"],
+                "evidence_ids": [
+                    f"relationship_evidence_{index}",
+                    f"revenue_evidence_{index}",
+                ],
+                "revenue_relevance": "meaningful",
+                "bottleneck_relevance": "core",
+                "business_materiality": "meaningful_segment",
+                "product_or_service": f"Product {index}",
+                "relationship_summary": f"Relationship {index}",
                 "review_status": "reviewed",
+                "notes": "",
             }
             for index in range(8)
         ],
