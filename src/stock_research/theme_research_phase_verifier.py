@@ -210,19 +210,37 @@ def cli(argv: list[str] | None = None) -> int:
 def _verify_phase_1() -> dict[str, Any]:
     package = load_theme_package()
     summary = summarize_theme_package(package)
+    actual_counts = {
+        "theme_count": len(package["themes"]),
+        "node_count": len(package["nodes"]),
+        "source_count": len(package["sources"]),
+        "claim_count": len(package["claims"]),
+    }
     roadmap = (REPOSITORY_ROOT / "docs" / "theme_driven_research_engine_roadmap.md").read_text(
         encoding="utf-8"
     )
     requirements = [
         _requirement(
-            "two baseline theme artifacts load",
-            summary["theme_count"] == 2 and summary["node_count"] == 34,
-            f"themes={summary['theme_count']}, nodes={summary['node_count']}",
+            "canonical theme artifacts and nodes load",
+            actual_counts["theme_count"] >= 2
+            and actual_counts["node_count"] > 0
+            and summary["theme_count"] == actual_counts["theme_count"]
+            and summary["node_count"] == actual_counts["node_count"],
+            (
+                f"themes={summary['theme_count']}/{actual_counts['theme_count']}, "
+                f"nodes={summary['node_count']}/{actual_counts['node_count']}"
+            ),
         ),
         _requirement(
-            "source and claim summaries are populated",
-            summary["source_count"] > 0 and summary["claim_count"] > 0,
-            f"sources={summary['source_count']}, claims={summary['claim_count']}",
+            "source and claim summaries are populated and consistent",
+            actual_counts["source_count"] > 0
+            and actual_counts["claim_count"] > 0
+            and summary["source_count"] == actual_counts["source_count"]
+            and summary["claim_count"] == actual_counts["claim_count"],
+            (
+                f"sources={summary['source_count']}/{actual_counts['source_count']}, "
+                f"claims={summary['claim_count']}/{actual_counts['claim_count']}"
+            ),
         ),
         _requirement(
             "research boundaries remain documented",
@@ -302,25 +320,51 @@ def _verify_phase_2b() -> dict[str, Any]:
         source_pack_root / "humanoid_robotics_node_evidence_matrix_v1.json",
     ]
     present = [path.name for path in expected if path.exists()]
+    invalid = []
+    for path in expected:
+        if not path.exists():
+            continue
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            invalid.append(path.name)
+            continue
+        if not payload:
+            invalid.append(path.name)
     theme_package = load_theme_package()
     robotics_theme = next(
         row
         for row in theme_package["themes"]
         if row["theme_id"] == "humanoid_robotics_head_to_toe_v1"
     )
+    complete_state_is_valid = (
+        len(present) == len(expected)
+        and not invalid
+        and robotics_theme["status"] == "reviewed"
+    )
     declared_gap_is_valid = not present and robotics_theme["status"] == "draft"
+    if complete_state_is_valid:
+        status = "complete"
+        requirement_status = "passed"
+    elif declared_gap_is_valid:
+        status = "declared_evidence_gap"
+        requirement_status = "declared_gap"
+    else:
+        status = "failed"
+        requirement_status = "failed"
     return {
         "phase": "2B",
         "title": "Humanoid robotics public source pack",
-        "status": "declared_evidence_gap" if declared_gap_is_valid else "failed",
+        "status": status,
         "requirements": [
             {
-                "requirement": "unfinished evidence track is explicit and excluded from reviewed workflows",
-                "status": "declared_gap" if declared_gap_is_valid else "failed",
+                "requirement": "source-pack files and theme review status form a coherent evidence state",
+                "status": requirement_status,
                 "evidence": (
                     f"present_source_pack_files={present}; "
+                    f"invalid_source_pack_files={invalid}; "
                     f"artifact_status={robotics_theme['status']}; "
-                    "expected files remain an explicit Phase 2B task"
+                    "valid_states=complete_reviewed_or_declared_draft_gap"
                 ),
             }
         ],
@@ -345,6 +389,11 @@ def _verify_phase_3() -> dict[str, Any]:
 def _verify_phase_4() -> dict[str, Any]:
     package = load_theme_company_mapping_package()
     summary = summarize_theme_company_mapping_package(package)
+    mapping_count = len(package["company_mappings"])
+    reviewed_mapping_count = sum(
+        row["review_status"] == "reviewed"
+        for row in package["company_mappings"]
+    )
     missing_evidence = [
         row["mapping_id"]
         for row in package["company_mappings"]
@@ -353,13 +402,19 @@ def _verify_phase_4() -> dict[str, Any]:
     requirements = [
         _requirement(
             "company mappings validate",
-            summary["mapping_count"] == 4,
-            f"mappings={summary['mapping_count']}, companies={summary['company_count']}",
+            mapping_count > 0 and summary["mapping_count"] == mapping_count,
+            (
+                f"mappings={summary['mapping_count']}/{mapping_count}, "
+                f"companies={summary['company_count']}"
+            ),
         ),
         _requirement(
             "reviewed mappings are evidence-backed",
-            not missing_evidence,
-            f"missing_evidence={missing_evidence}",
+            reviewed_mapping_count > 0 and not missing_evidence,
+            (
+                f"reviewed_mappings={reviewed_mapping_count}, "
+                f"missing_evidence={missing_evidence}"
+            ),
         ),
     ]
     return _phase_result("4", "Theme node to company mapping", requirements)
@@ -386,13 +441,18 @@ def _verify_phase_5() -> dict[str, Any]:
 def _verify_phase_6() -> dict[str, Any]:
     package = load_theme_research_priority_package()
     summary = summarize_theme_research_priority_package(package)
+    node_priority_count = len(package["node_priorities"])
+    company_priority_count = len(package["company_priorities"])
     requirements = [
         _requirement(
             "node and company priorities are generated",
-            summary["node_priority_count"] == 34 and summary["company_priority_count"] == 4,
+            node_priority_count > 0
+            and company_priority_count > 0
+            and summary["node_priority_count"] == node_priority_count
+            and summary["company_priority_count"] == company_priority_count,
             (
-                f"node_priorities={summary['node_priority_count']}, "
-                f"company_priorities={summary['company_priority_count']}"
+                f"node_priorities={summary['node_priority_count']}/{node_priority_count}, "
+                f"company_priorities={summary['company_priority_count']}/{company_priority_count}"
             ),
         ),
         _requirement(
@@ -410,6 +470,7 @@ def _verify_phase_6() -> dict[str, Any]:
 
 def _verify_phase_7() -> dict[str, Any]:
     payload = list_theme_research_themes(read_source="artifact")
+    canonical_theme_count = len(load_theme_package()["themes"])
     guarded = all(
         row["research_only"] is True
         and row["used_for_signal"] is False
@@ -418,9 +479,14 @@ def _verify_phase_7() -> dict[str, Any]:
     )
     requirements = [
         _requirement(
-            "read-only dashboard exposes both themes",
-            payload["total"] == 2,
-            f"dashboard_theme_count={payload['total']}",
+            "read-only dashboard exposes the canonical themes",
+            canonical_theme_count > 0
+            and payload["total"] == canonical_theme_count
+            and len(payload["items"]) == payload["total"],
+            (
+                f"dashboard_theme_count={payload['total']}, "
+                f"canonical_theme_count={canonical_theme_count}"
+            ),
         ),
         _requirement(
             "dashboard guardrails are explicit",

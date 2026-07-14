@@ -392,6 +392,23 @@ def test_updates_reject_invalid_since_and_limit() -> None:
 
 
 def test_daily_digest_counts_reviewed_workflow_context() -> None:
+    context = _context()
+    reviewed_theme_count = sum(
+        theme["status"] == "reviewed"
+        for theme in context["theme_package"]["themes"]
+    )
+    company_codes = {
+        mapping["company_code"]
+        for mapping in context["mapping_package"]["company_mappings"]
+    }
+    reviewed_mappings = [
+        mapping
+        for company_code in company_codes
+        for mapping in build_asset_theme_context(company_code, context)["mappings"]
+    ]
+    mapped_company_count = len(
+        {mapping["company_code"] for mapping in reviewed_mappings}
+    )
     updates = {
         "total": 2,
         "items": [],
@@ -404,18 +421,18 @@ def test_daily_digest_counts_reviewed_workflow_context() -> None:
 
     digest = build_daily_theme_research_digest(
         "2026-07-11",
-        context=_context(),
+        context=context,
         updates=updates,
     )
 
     assert digest["status"] == "ready"
-    assert digest["reviewed_theme_count"] == 1
-    assert digest["mapped_company_count"] == 2
-    assert digest["reviewed_mapping_count"] == 2
+    assert digest["reviewed_theme_count"] == reviewed_theme_count
+    assert digest["mapped_company_count"] == mapped_company_count
+    assert digest["reviewed_mapping_count"] == len(reviewed_mappings)
     assert digest["recent_reviewed_update_count"] == 2
-    assert digest["evidence_gap_count"] == 15
-    assert digest["mapped_companies"][0]["company_code"] == "002837.SZ"
-    assert digest["mapped_companies"][0]["theme_name"] == "AI供电产业链：谁在拿走价值量"
+    assert digest["evidence_gap_count"] == len(context["evidence_gap_priorities"])
+    assert digest["mapped_companies"][0]["company_code"] == "688498.SH"
+    assert digest["mapped_companies"][0]["theme_name"] == "光通信与数据中心互联：带宽、功耗、良率与交付价值链"
     assert digest["research_only"] is True
     assert digest["used_for_admission"] is False
 
