@@ -504,8 +504,28 @@
     {
       "theme_id": "power_batteries_battery_materials_value_chain_v1",
       "chain_id": "power_batteries_battery_materials",
-      "node_links": [],
-      "unmapped_theme_node_ids": []
+      "node_links": [
+        {
+          "theme_node_id": "battery_cells_management_systems",
+          "catalog_node_id": "battery_cell_and_management_systems"
+        },
+        {
+          "theme_node_id": "battery_management_system_platforms",
+          "catalog_node_id": "battery_management_system_platform"
+        }
+      ],
+      "unmapped_theme_node_ids": [
+        "resource_extraction_refining",
+        "precursor_cathode_materials",
+        "anode_materials",
+        "separator_coating",
+        "electrolyte_lithium_salts",
+        "copper_aluminum_foil",
+        "precision_structural_components",
+        "recycling_second_life",
+        "sodium_ion_solid_state_validation"
+      ],
+      "notes": "仅将语义等价的动力电芯与BMS目录父节点、BMS平台节点接入现有L3/L4 skeleton；目录高比能电芯L4窄于本主题宽动力电芯家族，钠离子/固态又是验证期混合节点，因此不强连。资源、材料、铜铝箔、结构件和回收尚无完整等价canonical节点，全部保持unmapped，待目录扩展后回填。"
     },
     {
       "theme_id": "intelligent_driving_smart_cockpit_value_chain_v1",

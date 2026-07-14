@@ -34,6 +34,7 @@ MACHINE_VISION_THEME_ID = (
     "industrial_inspection_metrology_machine_vision_value_chain_v1"
 )
 INDUSTRIAL_ROBOTS_THEME_ID = "industrial_robots_value_chain_v1"
+POWER_BATTERIES_THEME_ID = "power_batteries_battery_materials_value_chain_v1"
 
 
 def test_theme_index_aggregates_validated_phase_outputs():
@@ -55,6 +56,7 @@ def test_theme_index_aggregates_validated_phase_outputs():
         "core_mechanical_components_value_chain_v1",
         MACHINE_VISION_THEME_ID,
         INDUSTRIAL_ROBOTS_THEME_ID,
+        POWER_BATTERIES_THEME_ID,
     }
     assert payload["total"] == len(expected_theme_ids)
     assert {row["theme_id"] for row in payload["items"]} == expected_theme_ids

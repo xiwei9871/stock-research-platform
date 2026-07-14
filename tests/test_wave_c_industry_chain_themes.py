@@ -35,6 +35,24 @@ MATRIX_PATH = (
     / "artifacts/theme_decomposition/source_packs"
     / "industrial_robots_node_evidence_matrix_v1.json"
 )
+BATTERY_THEME_ID = "power_batteries_battery_materials_value_chain_v1"
+BATTERY_CHAIN_ID = "power_batteries_battery_materials"
+BATTERY_THEME_PATH = REPOSITORY_ROOT / f"artifacts/theme_decomposition/{BATTERY_THEME_ID}.json"
+BATTERY_MAPPING_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/company_mappings"
+    / "power_batteries_battery_materials_company_mapping_v1.json"
+)
+BATTERY_SOURCE_PACK_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "power_batteries_battery_materials_source_pack_v1.json"
+)
+BATTERY_MATRIX_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "power_batteries_battery_materials_node_evidence_matrix_v1.json"
+)
 MANIFEST_PATH = (
     REPOSITORY_ROOT
     / "artifacts/theme_decomposition/batch_manifests"
@@ -120,6 +138,105 @@ SOURCE_IDENTITIES = {
         "https://static.cninfo.com.cn/finalpage/2026-04-03/1225078058.PDF",
     ),
 }
+BATTERY_NODE_IDS = {
+    "resource_extraction_refining",
+    "precursor_cathode_materials",
+    "anode_materials",
+    "separator_coating",
+    "electrolyte_lithium_salts",
+    "copper_aluminum_foil",
+    "precision_structural_components",
+    "battery_cells_management_systems",
+    "battery_management_system_platforms",
+    "recycling_second_life",
+    "sodium_ion_solid_state_validation",
+}
+BATTERY_SOURCE_IDENTITIES = {
+    "battery_300750_ar2025": (
+        "宁德时代2025年年度报告",
+        "宁德时代新能源科技股份有限公司",
+        "2026-03-10",
+        "https://static.cninfo.com.cn/finalpage/2026-03-10/1225002214.PDF",
+    ),
+    "battery_300014_ar2025": (
+        "亿纬锂能2025年年度报告",
+        "惠州亿纬锂能股份有限公司",
+        "2026-03-28",
+        "https://static.cninfo.com.cn/finalpage/2026-03-28/1225045391.PDF",
+    ),
+    "battery_002074_ar2025": (
+        "国轩高科2025年年度报告",
+        "国轩高科股份有限公司",
+        "2026-04-29",
+        "https://static.cninfo.com.cn/finalpage/2026-04-29/1225254220.pdf",
+    ),
+    "battery_300207_ar2025": (
+        "欣旺达2025年年度报告",
+        "欣旺达电子股份有限公司",
+        "2026-04-24",
+        "https://static.cninfo.com.cn/finalpage/2026-04-24/1225160491.PDF",
+    ),
+    "battery_603799_ar2025": (
+        "华友钴业2025年年度报告",
+        "浙江华友钴业股份有限公司",
+        "2026-04-08",
+        "https://static.cninfo.com.cn/finalpage/2026-04-08/1225083106.PDF",
+    ),
+    "battery_300919_ar2025": (
+        "中伟股份2025年年度报告",
+        "中伟新材料股份有限公司",
+        "2026-03-31",
+        "https://static.cninfo.com.cn/finalpage/2026-03-31/1225054811.PDF",
+    ),
+    "battery_688005_ar2025": (
+        "容百科技2025年年度报告",
+        "宁波容百新能源科技股份有限公司",
+        "2026-04-11",
+        "https://static.cninfo.com.cn/finalpage/2026-04-11/1225095564.PDF",
+    ),
+    "battery_603659_ar2025": (
+        "璞泰来2025年年度报告",
+        "上海璞泰来新能源科技集团股份有限公司",
+        "2026-03-06",
+        "https://static.cninfo.com.cn/finalpage/2026-03-06/1224998510.PDF",
+    ),
+    "battery_002812_ar2025": (
+        "恩捷股份2025年年度报告",
+        "云南恩捷新材料（集团）股份有限公司",
+        "2026-04-23",
+        "https://static.cninfo.com.cn/finalpage/2026-04-23/1225148267.PDF",
+    ),
+    "battery_002709_ar2025": (
+        "天赐材料2025年年度报告",
+        "广州天赐高新材料股份有限公司",
+        "2026-03-10",
+        "https://static.cninfo.com.cn/finalpage/2026-03-10/1225002090.PDF",
+    ),
+    "battery_603876_ar2025": (
+        "鼎胜新材2025年年度报告",
+        "江苏鼎胜新能源材料股份有限公司",
+        "2026-04-30",
+        "https://static.cninfo.com.cn/finalpage/2026-04-30/1225255150.PDF",
+    ),
+    "battery_301217_ar2025": (
+        "铜冠铜箔2025年年度报告",
+        "安徽铜冠铜箔集团股份有限公司",
+        "2026-04-18",
+        "https://static.cninfo.com.cn/finalpage/2026-04-18/1225118023.PDF",
+    ),
+    "battery_002850_ar2025": (
+        "科达利2025年年度报告",
+        "深圳市科达利实业股份有限公司",
+        "2026-03-28",
+        "https://static.cninfo.com.cn/finalpage/2026-03-28/1225041059.PDF",
+    ),
+    "battery_002340_ar2025": (
+        "格林美2025年年度报告",
+        "格林美股份有限公司",
+        "2026-04-22",
+        "https://static.cninfo.com.cn/finalpage/2026-04-22/1225142250.PDF",
+    ),
+}
 
 
 def _read_json(path: Path) -> dict:
@@ -198,6 +315,64 @@ def _assert_bidirectional_source_and_matrix_links() -> None:
             )
 
 
+def _assert_battery_bidirectional_source_and_matrix_links() -> None:
+    theme = _read_json(BATTERY_THEME_PATH)
+    source_pack = _read_json(BATTERY_SOURCE_PACK_PATH)
+    matrix = _read_json(BATTERY_MATRIX_PATH)
+    accepted_source_ids = {
+        row["source_id"]
+        for row in source_pack["sources"]
+        if row["review_status"] == "accepted"
+    }
+    source_by_id = {row["source_id"]: row for row in source_pack["sources"]}
+    claim_by_id = {row["claim_id"]: row for row in theme["claims"]}
+    matrix_by_node = {
+        row["node_id"]: row for row in matrix["node_evidence_matrix"]
+    }
+
+    assert {
+        source["source_id"]: set(source["supported_claim_ids"])
+        for source in source_pack["sources"]
+    } == {
+        source["source_id"]: {
+            claim["claim_id"]
+            for claim in theme["claims"]
+            if source["source_id"]
+            in {claim["source_id"], *claim["supporting_source_ids"]}
+        }
+        for source in source_pack["sources"]
+    }
+    assert set(matrix_by_node) == BATTERY_NODE_IDS
+    for node_id, row in matrix_by_node.items():
+        expected_claim_ids = {
+            claim["claim_id"]
+            for claim in theme["claims"]
+            if node_id in claim["affected_theme_nodes"]
+        }
+        assert set(row["supported_claim_ids"]) == expected_claim_ids
+        assert set(row["accepted_source_ids"]) <= accepted_source_ids
+        assert row["accepted_source_ids"]
+        for source_id in row["accepted_source_ids"]:
+            source = source_by_id[source_id]
+            assert node_id in source["supported_node_ids"]
+            assert expected_claim_ids & set(source["supported_claim_ids"])
+        for claim_id in expected_claim_ids:
+            claim = claim_by_id[claim_id]
+            assert set(row["accepted_source_ids"]) & {
+                claim["source_id"],
+                *claim["supporting_source_ids"],
+            }
+    for source in source_pack["sources"]:
+        for claim_id in source["supported_claim_ids"]:
+            assert set(source["supported_node_ids"]) & set(
+                claim_by_id[claim_id]["affected_theme_nodes"]
+            )
+        for node_id in source["supported_node_ids"]:
+            assert set(source["supported_claim_ids"]) & set(
+                matrix_by_node[node_id]["supported_claim_ids"]
+            )
+
+
 def test_industrial_robots_artifacts_load_and_first_wave_c_row_is_ready():
     theme_package = load_theme_package()
     mapping_package = load_theme_company_mapping_package()
@@ -216,8 +391,8 @@ def test_industrial_robots_artifacts_load_and_first_wave_c_row_is_ready():
     assert rows[CHAIN_ID]["ready"] is True
     assert all(rows[CHAIN_ID]["checks"].values())
     assert report["wave_results"]["wave_c"]["ready"] is False
-    assert report["wave_results"]["wave_c"]["ready_theme_count"] == 1
-    assert report["wave_results"]["wave_c"]["not_ready_theme_count"] == 4
+    assert report["wave_results"]["wave_c"]["ready_theme_count"] == 2
+    assert report["wave_results"]["wave_c"]["not_ready_theme_count"] == 3
     assert {chain_id for chain_id, row in rows.items() if row["ready"]} == (
         _implemented_wave_chain_ids("wave_c")
     )
@@ -401,3 +576,235 @@ def test_industrial_robots_revenue_and_scope_boundaries_block_over_attribution()
     assert "协作" in claim_text and "早期" in claim_text
     assert "具身" in claim_text and "力传感" in claim_text
     assert "不重复所有权" in claim_text
+
+
+def test_power_batteries_battery_materials_four_artifacts_exist_before_validation():
+    assert BATTERY_THEME_PATH.is_file()
+    assert BATTERY_MAPPING_PATH.is_file()
+    assert BATTERY_SOURCE_PACK_PATH.is_file()
+    assert BATTERY_MATRIX_PATH.is_file()
+
+
+def test_power_batteries_artifacts_load_and_second_wave_c_row_is_ready():
+    theme_package = load_theme_package()
+    mapping_package = load_theme_company_mapping_package()
+    priority_package = load_theme_research_priority_package()
+
+    assert BATTERY_THEME_ID in {row["theme_id"] for row in theme_package["themes"]}
+    assert BATTERY_THEME_ID in {
+        row["theme_id"] for row in mapping_package["company_mappings"]
+    }
+    assert BATTERY_THEME_ID in {
+        row["theme_id"] for row in priority_package["node_priorities"]
+    }
+    report = VERIFIER.build_theme_batch_report(MANIFEST_PATH, wave="wave_c")
+    rows = {row["chain_id"]: row for row in report["theme_results"]}
+
+    assert rows[BATTERY_CHAIN_ID]["ready"] is True
+    assert all(rows[BATTERY_CHAIN_ID]["checks"].values())
+    assert report["wave_results"]["wave_c"]["ready_theme_count"] == 2
+    assert report["wave_results"]["wave_c"]["not_ready_theme_count"] == 3
+
+
+def test_power_batteries_evidence_mapping_and_source_identity_are_exact():
+    _assert_battery_bidirectional_source_and_matrix_links()
+    theme = _read_json(BATTERY_THEME_PATH)
+    mapping = _read_json(BATTERY_MAPPING_PATH)
+    source_pack = _read_json(BATTERY_SOURCE_PACK_PATH)
+    accepted = validate_theme_evidence_sources(
+        source_pack["sources"], BATTERY_NODE_IDS
+    )
+    reviewed_mappings = [
+        row for row in mapping["company_mappings"] if row["review_status"] == "reviewed"
+    ]
+    canonical_sources = {row["source_id"]: row for row in theme["sources"]}
+    mapping_sources = {row["source_id"]: row for row in mapping["sources"]}
+    pack_sources = {row["source_id"]: row for row in source_pack["sources"]}
+
+    assert len([row for row in accepted.values() if row["review_status"] == "accepted"]) == 14
+    assert all(
+        row["source_type"] == "company_filing" and row["reliability_level"] == "S0"
+        for row in source_pack["sources"]
+    )
+    assert {row["node_id"] for row in theme["nodes"]} == BATTERY_NODE_IDS
+    assert len(theme["nodes"]) == 11
+    assert len(theme["claims"]) == 14
+    assert all(set(row) >= CLAIM_FIELDS for row in theme["claims"])
+    assert len(reviewed_mappings) == 13
+    assert len({row["company_code"] for row in reviewed_mappings}) == 13
+    assert set(canonical_sources) == set(BATTERY_SOURCE_IDENTITIES)
+    assert set(mapping_sources) == set(BATTERY_SOURCE_IDENTITIES)
+    assert set(pack_sources) == set(BATTERY_SOURCE_IDENTITIES)
+    for source_id, (title, publisher, publish_date, url) in BATTERY_SOURCE_IDENTITIES.items():
+        expected = {
+            "title": title,
+            "publisher": publisher,
+            "publish_date": publish_date,
+            "url_or_ref": url,
+        }
+        assert {
+            field: canonical_sources[source_id][field]
+            for field in ("title", "publisher", "publish_date", "url_or_ref")
+        } == expected
+        assert {
+            field: mapping_sources[source_id][field]
+            for field in ("title", "publisher", "publish_date", "url_or_ref")
+        } == expected
+        assert {
+            "title": pack_sources[source_id]["title"],
+            "publisher": pack_sources[source_id]["publisher"],
+            "publish_date": pack_sources[source_id]["publish_date"],
+            "url_or_ref": pack_sources[source_id]["url"],
+        } == expected
+
+
+def test_power_batteries_company_beneficiary_tiers_follow_classifier_exactly():
+    expected = {
+        "300750.SZ": ("core_beneficiary", "core_business", "material"),
+        "002074.SZ": ("core_beneficiary", "core_business", "material"),
+        "300207.SZ": ("elastic_beneficiary", "meaningful_segment", "undisclosed"),
+        "603799.SH": ("core_beneficiary", "core_business", "material"),
+        "300919.SZ": ("core_beneficiary", "core_business", "material"),
+        "688005.SH": ("core_beneficiary", "core_business", "material"),
+        "603659.SH": ("elastic_beneficiary", "meaningful_segment", "undisclosed"),
+        "002812.SZ": ("elastic_beneficiary", "core_business", "undisclosed"),
+        "002709.SZ": ("elastic_beneficiary", "core_business", "undisclosed"),
+        "603876.SH": ("elastic_beneficiary", "core_business", "undisclosed"),
+        "301217.SZ": ("core_beneficiary", "core_business", "material"),
+        "002850.SZ": ("core_beneficiary", "core_business", "material"),
+        "002340.SZ": ("elastic_beneficiary", "meaningful_segment", "undisclosed"),
+    }
+    payload = list_theme_research_companies(BATTERY_THEME_ID)
+
+    assert payload["total"] == len(expected)
+    assert {
+        row["company_code"]: (
+            row["beneficiary_tier"],
+            row["business_materiality"],
+            row["revenue_relevance"],
+        )
+        for row in payload["items"]
+    } == expected
+
+
+def test_power_batteries_profile_catalog_boundaries_and_validation_gaps_are_ready():
+    theme = _read_json(BATTERY_THEME_PATH)
+    matrix = _read_json(BATTERY_MATRIX_PATH)
+    profile = theme["research_profile"]
+    claim_ids = {row["claim_id"] for row in theme["claims"]}
+    catalog = load_industry_catalog()
+    link = next(
+        row for row in catalog["theme_links"] if row["theme_id"] == BATTERY_THEME_ID
+    )
+    matrix_by_node = {
+        row["node_id"]: row for row in matrix["node_evidence_matrix"]
+    }
+
+    assert profile["catalog_chain_id"] == BATTERY_CHAIN_ID
+    assert profile["research_kind"] == "industry_chain_deep_research"
+    assert set(profile["catalyst_claim_ids"] + profile["risk_claim_ids"]) <= claim_ids
+    assert set(profile["readable_section_claim_ids"]) == {
+        "conclusion",
+        "value_chain",
+        "profit_pool_barriers",
+        "catalysts_validation_risks",
+        "beneficiary_companies",
+        "source_evidence",
+        "evidence_gaps",
+    }
+    assert {
+        claim_id
+        for section_claim_ids in profile["readable_section_claim_ids"].values()
+        for claim_id in section_claim_ids
+    } == claim_ids
+    assert link["node_links"] == [
+        {
+            "theme_node_id": "battery_cells_management_systems",
+            "catalog_node_id": "battery_cell_and_management_systems",
+        },
+        {
+            "theme_node_id": "battery_management_system_platforms",
+            "catalog_node_id": "battery_management_system_platform",
+        },
+    ]
+    assert set(link["unmapped_theme_node_ids"]) == BATTERY_NODE_IDS - {
+        "battery_cells_management_systems",
+        "battery_management_system_platforms",
+    }
+    assert "高比能" in link["notes"] and "不强连" in link["notes"]
+    for node_id in {
+        "anode_materials",
+        "recycling_second_life",
+        "sodium_ion_solid_state_validation",
+    }:
+        assert matrix_by_node[node_id]["evidence_gap_status"] == "evidence_gap"
+        assert matrix_by_node[node_id]["next_evidence_needed"]
+    claim_text = " ".join(row["claim_text"] for row in theme["claims"])
+    readable_profile = " ".join(
+        [
+            profile["industry_stage"],
+            profile["central_conflict"],
+            profile["investment_summary"],
+            profile["value_flow_summary"],
+            profile["profit_pool_summary"],
+            *profile["validation_signals"],
+            profile["evidence_gap_summary"],
+        ]
+    )
+    for keyword in (
+        "价值流",
+        "利润池",
+        "资源",
+        "正极",
+        "负极",
+        "隔膜",
+        "电解液",
+        "铜箔",
+        "结构件",
+        "动力电芯",
+        "BMS",
+        "回收",
+        "钠离子",
+        "固态",
+        "验证期",
+    ):
+        assert keyword in claim_text
+        assert keyword in readable_profile
+    result = verify_deep_theme_coverage(
+        BATTERY_THEME_ID,
+        catalog=catalog,
+        theme_context=load_theme_research_priority_package(),
+    )
+    assert result["ready"] is True
+    assert all(result["checks"].values())
+
+
+def test_power_batteries_revenue_margin_and_scope_boundaries_block_over_attribution():
+    theme = _read_json(BATTERY_THEME_PATH)
+    mapping = _read_json(BATTERY_MAPPING_PATH)
+    evidence = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+    claim_text = " ".join(row["claim_text"] for row in theme["claims"])
+
+    assert evidence["battery_ev_300750_revenue"]["excerpt_locator"] == "PDF第24-25页，第三节营业收入构成及分产品毛利率表"
+    assert "3165.06亿元" in evidence["battery_ev_300750_revenue"]["evidence_summary"]
+    assert "23.84%" in evidence["battery_ev_300750_revenue"]["evidence_summary"]
+    assert evidence["battery_ev_300207_bms"]["excerpt_locator"] == "PDF第5、12-13页，释义、核心竞争力与电动汽车类电池业务"
+    assert "未披露BMS/Pack独立收入" in evidence["battery_ev_300207_revenue"]["evidence_summary"]
+    assert "-1.87亿元" in evidence["battery_ev_688005_risk"]["evidence_summary"]
+    assert "6.54%" in evidence["battery_ev_688005_revenue"]["evidence_summary"]
+    assert "117.93亿元" in evidence["battery_ev_603659_revenue"]["evidence_summary"]
+    assert "不是纯负极收入" in evidence["battery_ev_603659_revenue"]["evidence_summary"]
+    assert "122.06亿元" in evidence["battery_ev_002812_revenue"]["evidence_summary"]
+    assert "含BOPP" in evidence["battery_ev_002812_revenue"]["evidence_summary"]
+    assert "150.51亿元" in evidence["battery_ev_002709_revenue"]["evidence_summary"]
+    assert "不是纯电解液收入" in evidence["battery_ev_002709_revenue"]["evidence_summary"]
+    assert "221.81亿元" in evidence["battery_ev_603876_revenue"]["evidence_summary"]
+    assert "未拆电池铝箔" in evidence["battery_ev_603876_revenue"]["evidence_summary"]
+    assert evidence["battery_ev_301217_revenue"]["excerpt_locator"] == "PDF第20页，第三节分产品收入成本毛利率表"
+    assert "0.19%" in evidence["battery_ev_301217_revenue"]["evidence_summary"]
+    assert "147.05亿元" in evidence["battery_ev_002850_revenue"]["evidence_summary"]
+    assert "动力、储能与消费" in evidence["battery_ev_002850_revenue"]["evidence_summary"]
+    assert "12.52亿元" in evidence["battery_ev_002340_revenue"]["evidence_summary"]
+    assert "不是循环业务总收入" in evidence["battery_ev_002340_revenue"]["evidence_summary"]
+    assert "中试" in claim_text and "量产线" in claim_text
+    assert "验证期" in claim_text and "成熟规模收入" in claim_text
