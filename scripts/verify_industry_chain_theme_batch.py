@@ -4,7 +4,20 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import sys
 from typing import Any
+
+from stock_research.theme_company_mapping import (
+    DIRECT_RELATIONSHIP_EVIDENCE_TYPES,
+    MAPPING_REVIEW_STATUSES,
+    REVIEWED_CONFIDENCE_THRESHOLD,
+)
+from stock_research.theme_decomposition import (
+    CLAIM_TYPES,
+    RELIABILITY_LEVELS,
+    SOURCE_REVIEW_STATUSES,
+    SOURCE_TYPES,
+)
 
 
 ARTIFACT_KEYS = (
@@ -19,6 +32,20 @@ NUMERIC_GATE_KEYS = (
     "min_claims",
     "min_reviewed_mappings",
 )
+SUPPORTED_SCHEMA_VERSION = "industry_chain_theme_batch_v1"
+MATRIX_COVERAGE_STATUSES = {
+    "covered",
+    "supported",
+    "technical_route_only",
+    "evidence_gap",
+}
+MATRIX_EXPLICIT_GAP_STATUSES = {"technical_route_only", "evidence_gap"}
+ACCEPTED_SOURCE_REQUIRED_FIELDS = (
+    "document_status",
+    "evidence_locator",
+    "evidence_summary",
+    "limitations",
+)
 
 
 def load_theme_batch_manifest(path: str | Path) -> dict[str, Any]:
@@ -31,6 +58,8 @@ def load_theme_batch_manifest(path: str | Path) -> dict[str, Any]:
         raise ValueError(
             f"Invalid JSON in theme batch manifest {manifest_path}: {exc.msg}"
         ) from exc
+    except (OSError, UnicodeError) as exc:
+        raise ValueError(f"Theme batch manifest is not readable: {manifest_path}: {exc}") from exc
     if not isinstance(payload, dict):
         raise ValueError(f"Theme batch manifest must contain a JSON object: {manifest_path}")
     _validate_manifest(payload, manifest_path)
@@ -115,6 +144,7 @@ def assert_theme_batch_ready(report: dict[str, Any]) -> None:
 
 def _validate_manifest(manifest: dict[str, Any], path: Path) -> None:
     for key in (
+        "schema_version",
         "batch_id",
         "target_theme_count",
         "waves",
@@ -124,8 +154,18 @@ def _validate_manifest(manifest: dict[str, Any], path: Path) -> None:
     ):
         if key not in manifest:
             raise ValueError(f"Theme batch manifest {path} is missing {key!r}")
+    if manifest["schema_version"] != SUPPORTED_SCHEMA_VERSION:
+        raise ValueError(
+            f"Theme batch manifest {path} schema_version must be "
+            f"{SUPPORTED_SCHEMA_VERSION!r}"
+        )
     if not isinstance(manifest["batch_id"], str) or not manifest["batch_id"]:
         raise ValueError(f"Theme batch manifest {path} has an invalid batch_id")
+    artifact_base = manifest.get("artifact_base", ".")
+    if not isinstance(artifact_base, str) or not artifact_base.strip():
+        raise ValueError(
+            f"Theme batch manifest {path} artifact_base must be a non-empty string path"
+        )
     if not isinstance(manifest["waves"], dict) or not manifest["waves"]:
         raise ValueError(f"Theme batch manifest {path} must define non-empty waves")
     if not isinstance(manifest["themes"], dict) or not manifest["themes"]:
@@ -163,21 +203,60 @@ def _validate_manifest(manifest: dict[str, Any], path: Path) -> None:
             f"does not match themes={len(theme_ids)}"
         )
 
+    resolved_artifact_base = (path.parent / artifact_base).resolve()
+    manifest_theme_ids: set[str] = set()
+    resolved_artifact_owners: dict[Path, tuple[str, str]] = {}
     for chain_id, metadata in manifest["themes"].items():
-        if not isinstance(metadata, dict) or not metadata.get("theme_id"):
+        if not isinstance(metadata, dict):
             raise ValueError(
-                f"Theme batch manifest {path} theme {chain_id!r} needs theme_id"
+                f"Theme batch manifest {path} theme {chain_id!r} metadata must be an object"
             )
+        theme_id = metadata.get("theme_id")
+        if not isinstance(theme_id, str) or not theme_id.strip():
+            raise ValueError(
+                f"Theme batch manifest {path} theme {chain_id!r}.theme_id "
+                "must be a non-empty string"
+            )
+        if theme_id in manifest_theme_ids:
+            raise ValueError(
+                f"Theme batch manifest {path} has duplicate theme_id: {theme_id}"
+            )
+        manifest_theme_ids.add(theme_id)
         artifacts = metadata.get("artifacts")
         if not isinstance(artifacts, dict) or set(artifacts) != set(ARTIFACT_KEYS):
             raise ValueError(
                 f"Theme batch manifest {path} theme {chain_id!r} must define artifacts "
                 f"{list(ARTIFACT_KEYS)}"
             )
-        if not all(isinstance(value, str) and value for value in artifacts.values()):
-            raise ValueError(
-                f"Theme batch manifest {path} theme {chain_id!r} has invalid artifact paths"
-            )
+        for artifact_name in ARTIFACT_KEYS:
+            field = f"themes.{chain_id}.artifacts.{artifact_name}"
+            value = artifacts[artifact_name]
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(
+                    f"Theme batch manifest {path} {field} must be a non-empty string path"
+                )
+            artifact_path = Path(value)
+            if artifact_path.is_absolute():
+                raise ValueError(
+                    f"Theme batch manifest {path} {field} must be relative to artifact_base"
+                )
+            if ".." in artifact_path.parts:
+                raise ValueError(
+                    f"Theme batch manifest {path} {field} cannot contain '..'"
+                )
+            if artifact_path.suffix.lower() != ".json":
+                raise ValueError(
+                    f"Theme batch manifest {path} {field} must name a JSON file"
+                )
+            resolved_path = (resolved_artifact_base / artifact_path).resolve()
+            if resolved_path in resolved_artifact_owners:
+                owner_chain, owner_artifact = resolved_artifact_owners[resolved_path]
+                raise ValueError(
+                    f"Theme batch manifest {path} {field} reuses resolved artifact path "
+                    f"owned by themes.{owner_chain}.artifacts.{owner_artifact}: "
+                    f"{resolved_path}"
+                )
+            resolved_artifact_owners[resolved_path] = (chain_id, artifact_name)
 
     source_types = manifest["primary_source_types"]
     if not isinstance(source_types, list) or not source_types or not all(
@@ -248,25 +327,49 @@ def _build_theme_result(
             errors.append(error)
 
     expected_theme_id = metadata["theme_id"]
-    source_rows = (artifacts["source_pack"] or {}).get("sources", [])
-    source_rows = source_rows if isinstance(source_rows, list) else []
-    accepted_sources = [
-        row
-        for row in source_rows
-        if isinstance(row, dict) and row.get("review_status") == "accepted"
-    ]
+    (
+        accepted_sources,
+        known_source_ids,
+        source_rows_valid,
+        source_errors,
+    ) = _validate_source_pack_sources(artifacts["source_pack"])
+    errors.extend(source_errors)
     primary_sources = [
-        row for row in accepted_sources if row.get("source_type") in primary_source_types
-    ]
-    claims = (artifacts["theme"] or {}).get("claims", [])
-    claims = claims if isinstance(claims, list) else []
-    mappings = (artifacts["company_mapping"] or {}).get("company_mappings", [])
-    mappings = mappings if isinstance(mappings, list) else []
-    reviewed_mappings = [
         row
-        for row in mappings
-        if isinstance(row, dict) and row.get("review_status") == "reviewed"
+        for row in accepted_sources.values()
+        if row.get("source_type") in primary_source_types
     ]
+    theme_node_ids, theme_nodes_valid, node_errors = _validate_theme_nodes(
+        artifacts["theme"],
+        expected_theme_id=expected_theme_id,
+    )
+    errors.extend(node_errors)
+    (
+        counted_claims,
+        valid_claim_ids,
+        claim_rows_valid,
+        claim_errors,
+    ) = _validate_claims(
+        artifacts["theme"],
+        expected_theme_id=expected_theme_id,
+        accepted_source_ids=set(accepted_sources),
+        known_source_ids=known_source_ids,
+        theme_node_ids=theme_node_ids,
+    )
+    errors.extend(claim_errors)
+    reviewed_mappings, mapping_rows_valid, mapping_errors = _validate_mappings(
+        artifacts["company_mapping"],
+        expected_theme_id=expected_theme_id,
+        theme_node_ids=theme_node_ids,
+    )
+    errors.extend(mapping_errors)
+    matrix_coverage, matrix_errors = _validate_node_evidence_matrix(
+        artifacts["node_evidence_matrix"],
+        theme_node_ids=theme_node_ids,
+        accepted_source_ids=set(accepted_sources),
+        valid_claim_ids=valid_claim_ids,
+    )
+    errors.extend(matrix_errors)
     readable_sections = {
         section["name"]: all(
             _requirement_is_non_empty(requirement, artifacts)
@@ -286,10 +389,15 @@ def _build_theme_result(
     checks = {
         **artifact_checks,
         **identity_checks,
+        "source_rows_valid": source_rows_valid,
+        "theme_nodes_valid": theme_nodes_valid,
+        "claim_rows_valid": claim_rows_valid,
+        "mapping_rows_valid": mapping_rows_valid,
+        "node_evidence_matrix_coverage": matrix_coverage,
         "accepted_source_count": len(accepted_sources)
         >= gates["min_accepted_sources"],
         "primary_source_count": len(primary_sources) >= gates["min_primary_sources"],
-        "claim_count": len(claims) >= gates["min_claims"],
+        "claim_count": len(counted_claims) >= gates["min_claims"],
         "reviewed_mapping_count": len(reviewed_mappings)
         >= gates["min_reviewed_mappings"],
         "required_sections_ready": all(readable_sections.values()),
@@ -302,7 +410,7 @@ def _build_theme_result(
         "counts": {
             "accepted_sources": len(accepted_sources),
             "primary_sources": len(primary_sources),
-            "claims": len(claims),
+            "claims": len(counted_claims),
             "reviewed_mappings": len(reviewed_mappings),
         },
         "readable_sections": readable_sections,
@@ -311,6 +419,393 @@ def _build_theme_result(
         "errors": errors,
         "ready": all(checks.values()),
     }
+
+
+def _validate_source_pack_sources(
+    payload: dict[str, Any] | None,
+) -> tuple[dict[str, dict[str, Any]], set[str], bool, list[str]]:
+    rows, errors = _object_rows(payload, "sources", "source pack sources")
+    accepted: dict[str, dict[str, Any]] = {}
+    known_source_ids: set[str] = set()
+    seen_ids: set[str] = set()
+    for index, row in enumerate(rows):
+        label = f"source pack source[{index}]"
+        source_id = row.get("source_id")
+        if not _is_non_empty_string(source_id):
+            errors.append(f"{label} requires non-empty source_id")
+            continue
+        if source_id in seen_ids:
+            errors.append(f"{label} duplicate source_id: {source_id}")
+            continue
+        seen_ids.add(source_id)
+        row_errors = []
+        for field in (
+            "source_id",
+            "source_type",
+            "title",
+            "publisher",
+            "reliability_level",
+            "review_status",
+        ):
+            if not _is_non_empty_string(row.get(field)):
+                row_errors.append(f"{label}.{field} must be a non-empty string")
+        if row.get("source_type") not in SOURCE_TYPES:
+            row_errors.append(f"{label}.source_type is unsupported: {row.get('source_type')}")
+        if row.get("reliability_level") not in RELIABILITY_LEVELS:
+            row_errors.append(
+                f"{label}.reliability_level is invalid: {row.get('reliability_level')}"
+            )
+        if row.get("review_status") not in SOURCE_REVIEW_STATUSES:
+            row_errors.append(
+                f"{label}.review_status is invalid: {row.get('review_status')}"
+            )
+        if not any(
+            _is_non_empty_string(row.get(field)) for field in ("url", "url_or_ref")
+        ):
+            row_errors.append(f"{label} requires non-empty url or url_or_ref")
+        if row.get("review_status") == "accepted":
+            for field in ACCEPTED_SOURCE_REQUIRED_FIELDS:
+                if not _is_non_empty_string(row.get(field)):
+                    row_errors.append(f"{label}.{field} must be a non-empty string")
+        if row_errors:
+            errors.extend(row_errors)
+            continue
+        known_source_ids.add(source_id)
+        if row.get("review_status") == "accepted":
+            accepted[source_id] = row
+    return accepted, known_source_ids, not errors, errors
+
+
+def _validate_theme_nodes(
+    payload: dict[str, Any] | None,
+    *,
+    expected_theme_id: str,
+) -> tuple[set[str], bool, list[str]]:
+    rows, errors = _object_rows(payload, "nodes", "theme nodes")
+    node_ids: set[str] = set()
+    for index, row in enumerate(rows):
+        label = f"theme node[{index}]"
+        node_id = row.get("node_id")
+        if not _is_non_empty_string(node_id):
+            errors.append(f"{label} requires non-empty node_id")
+            continue
+        if node_id in node_ids:
+            errors.append(f"{label} duplicate node_id: {node_id}")
+            continue
+        if row.get("theme_id") != expected_theme_id:
+            errors.append(
+                f"{label}.theme_id must equal {expected_theme_id}: {row.get('theme_id')}"
+            )
+            continue
+        node_ids.add(node_id)
+    if not node_ids:
+        errors.append("theme nodes must contain at least one valid node")
+    return node_ids, not errors, errors
+
+
+def _validate_claims(
+    payload: dict[str, Any] | None,
+    *,
+    expected_theme_id: str,
+    accepted_source_ids: set[str],
+    known_source_ids: set[str],
+    theme_node_ids: set[str],
+) -> tuple[dict[str, dict[str, Any]], set[str], bool, list[str]]:
+    rows, errors = _object_rows(payload, "claims", "theme claims")
+    valid_claims: dict[str, dict[str, Any]] = {}
+    schema_valid_claims: dict[str, dict[str, Any]] = {}
+    seen_ids: set[str] = set()
+    for index, row in enumerate(rows):
+        label = f"claim[{index}]"
+        claim_id = row.get("claim_id")
+        if not _is_non_empty_string(claim_id):
+            errors.append(f"{label} requires non-empty claim_id")
+            continue
+        if claim_id in seen_ids:
+            errors.append(f"{label} duplicate claim_id: {claim_id}")
+            valid_claims.pop(claim_id, None)
+            schema_valid_claims.pop(claim_id, None)
+            continue
+        seen_ids.add(claim_id)
+        row_errors = []
+        if row.get("theme_id") != expected_theme_id:
+            row_errors.append(
+                f"{label}.theme_id must equal {expected_theme_id}: {row.get('theme_id')}"
+            )
+        source_id = row.get("source_id")
+        if not _is_non_empty_string(source_id) or source_id not in known_source_ids:
+            row_errors.append(
+                f"{label}.source_id must reference a known source: {source_id}"
+            )
+        for field in ("claim_text", "claim_type"):
+            if not _is_non_empty_string(row.get(field)):
+                row_errors.append(f"{label}.{field} must be a non-empty string")
+        if row.get("claim_type") not in CLAIM_TYPES:
+            row_errors.append(f"{label}.claim_type is invalid: {row.get('claim_type')}")
+        affected_nodes = row.get("affected_theme_nodes")
+        if not _is_string_list(affected_nodes, allow_empty=False):
+            row_errors.append(f"{label}.affected_theme_nodes must be a non-empty string list")
+        elif not set(affected_nodes) <= theme_node_ids:
+            row_errors.append(
+                f"{label}.affected_theme_nodes references nodes outside the theme: "
+                f"{sorted(set(affected_nodes) - theme_node_ids)}"
+            )
+        if row_errors:
+            errors.extend(row_errors)
+            continue
+        schema_valid_claims[claim_id] = row
+        if source_id in accepted_source_ids:
+            valid_claims[claim_id] = row
+    return valid_claims, set(schema_valid_claims), not errors, errors
+
+
+def _validate_mappings(
+    payload: dict[str, Any] | None,
+    *,
+    expected_theme_id: str,
+    theme_node_ids: set[str],
+) -> tuple[list[dict[str, Any]], bool, list[str]]:
+    source_rows, errors = _object_rows(payload, "sources", "mapping sources")
+    source_by_id: dict[str, dict[str, Any]] = {}
+    for index, row in enumerate(source_rows):
+        label = f"mapping source[{index}]"
+        source_id = row.get("source_id")
+        if not _is_non_empty_string(source_id):
+            errors.append(f"{label} requires non-empty source_id")
+            continue
+        if source_id in source_by_id:
+            errors.append(f"{label} duplicate source_id: {source_id}")
+            continue
+        row_errors = []
+        for field in ("source_type", "title", "publisher", "review_status"):
+            if not _is_non_empty_string(row.get(field)):
+                row_errors.append(f"{label}.{field} must be a non-empty string")
+        if row.get("source_type") not in SOURCE_TYPES:
+            row_errors.append(f"{label}.source_type is unsupported: {row.get('source_type')}")
+        if not any(
+            _is_non_empty_string(row.get(field)) for field in ("url", "url_or_ref")
+        ):
+            row_errors.append(f"{label} requires non-empty url or url_or_ref")
+        if row.get("reliability_level") not in RELIABILITY_LEVELS:
+            row_errors.append(
+                f"{label}.reliability_level is invalid: {row.get('reliability_level')}"
+            )
+        if row_errors:
+            errors.extend(row_errors)
+            continue
+        source_by_id[source_id] = row
+
+    evidence_rows, evidence_errors = _object_rows(
+        payload, "evidence_items", "mapping evidence_items"
+    )
+    errors.extend(evidence_errors)
+    evidence_by_id: dict[str, dict[str, Any]] = {}
+    for index, row in enumerate(evidence_rows):
+        label = f"mapping evidence[{index}]"
+        evidence_id = row.get("evidence_id")
+        if not _is_non_empty_string(evidence_id):
+            errors.append(f"{label} requires non-empty evidence_id")
+            continue
+        if evidence_id in evidence_by_id:
+            errors.append(f"{label} duplicate evidence_id: {evidence_id}")
+            continue
+        row_errors = []
+        source_id = row.get("source_id")
+        if not _is_non_empty_string(source_id) or source_id not in source_by_id:
+            row_errors.append(f"{label}.source_id references missing mapping source: {source_id}")
+        if not _is_non_empty_string(row.get("evidence_type")):
+            row_errors.append(f"{label}.evidence_type must be a non-empty string")
+        if not _is_non_empty_string(row.get("evidence_summary")):
+            row_errors.append(f"{label}.evidence_summary must be a non-empty string")
+        if not _is_string_list(row.get("related_company_codes"), allow_empty=False):
+            row_errors.append(
+                f"{label}.related_company_codes must be a non-empty string list"
+            )
+        if not _is_string_list(row.get("related_node_ids"), allow_empty=False):
+            row_errors.append(f"{label}.related_node_ids must be a non-empty string list")
+        if row_errors:
+            errors.extend(row_errors)
+            continue
+        evidence_by_id[evidence_id] = row
+
+    mapping_rows, mapping_errors = _object_rows(
+        payload, "company_mappings", "company mappings"
+    )
+    errors.extend(mapping_errors)
+    reviewed_mappings: list[dict[str, Any]] = []
+    seen_mapping_ids: set[str] = set()
+    seen_relationships: set[tuple[str, str]] = set()
+    for index, row in enumerate(mapping_rows):
+        label = f"mapping[{index}]"
+        mapping_id = row.get("mapping_id")
+        if not _is_non_empty_string(mapping_id):
+            errors.append(f"{label} requires non-empty mapping_id")
+            continue
+        if mapping_id in seen_mapping_ids:
+            errors.append(f"{label} duplicate mapping_id: {mapping_id}")
+            continue
+        seen_mapping_ids.add(mapping_id)
+        row_errors = []
+        if row.get("theme_id") != expected_theme_id:
+            row_errors.append(
+                f"{label}.theme_id must equal {expected_theme_id}: {row.get('theme_id')}"
+            )
+        if row.get("review_status") not in MAPPING_REVIEW_STATUSES:
+            row_errors.append(
+                f"{label}.review_status is invalid: {row.get('review_status')}"
+            )
+        company_code = row.get("company_code")
+        node_id = row.get("mapped_node_id")
+        if not _is_non_empty_string(company_code):
+            row_errors.append(f"{label}.company_code must be a non-empty string")
+        if not _is_non_empty_string(node_id) or node_id not in theme_node_ids:
+            row_errors.append(f"{label}.mapped_node_id must belong to this theme: {node_id}")
+        relationship = (str(company_code or ""), str(node_id or ""))
+        if relationship in seen_relationships:
+            row_errors.append(
+                f"{label} duplicates company/node mapping relationship: {relationship}"
+            )
+        else:
+            seen_relationships.add(relationship)
+        evidence_ids = row.get("evidence_ids")
+        if not _is_string_list(evidence_ids, allow_empty=False):
+            row_errors.append(f"{label}.evidence_ids must be a non-empty string list")
+            evidence_ids = []
+        elif len(evidence_ids) != len(set(evidence_ids)):
+            row_errors.append(f"{label}.evidence_ids contains duplicates")
+        confidence = row.get("confidence")
+        if (
+            isinstance(confidence, bool)
+            or not isinstance(confidence, (int, float))
+            or not 0 <= float(confidence) <= 1
+        ):
+            row_errors.append(f"{label}.confidence must be a number from 0 to 1")
+        elif row.get("review_status") == "reviewed" and confidence < REVIEWED_CONFIDENCE_THRESHOLD:
+            row_errors.append(
+                f"{label}.confidence must be >= {REVIEWED_CONFIDENCE_THRESHOLD} when reviewed"
+            )
+        qualifying_evidence = []
+        for evidence_id in evidence_ids:
+            evidence = evidence_by_id.get(evidence_id)
+            if evidence is None:
+                row_errors.append(f"{label}.evidence_ids references missing evidence: {evidence_id}")
+                continue
+            if company_code not in evidence["related_company_codes"] or node_id not in evidence[
+                "related_node_ids"
+            ]:
+                row_errors.append(f"{label} evidence scope mismatch: {evidence_id}")
+                continue
+            source = source_by_id.get(evidence["source_id"], {})
+            if (
+                source.get("review_status") == "accepted"
+                and source.get("reliability_level") in {"S0", "S1"}
+                and evidence.get("evidence_type") in DIRECT_RELATIONSHIP_EVIDENCE_TYPES
+            ):
+                qualifying_evidence.append(evidence)
+        if row.get("review_status") == "reviewed" and not qualifying_evidence:
+            row_errors.append(
+                f"{label} reviewed mapping requires scoped direct relationship evidence "
+                "backed by an accepted S0/S1 source"
+            )
+        if row_errors:
+            errors.extend(row_errors)
+            continue
+        if row.get("review_status") == "reviewed":
+            reviewed_mappings.append(row)
+    return reviewed_mappings, not errors, errors
+
+
+def _validate_node_evidence_matrix(
+    payload: dict[str, Any] | None,
+    *,
+    theme_node_ids: set[str],
+    accepted_source_ids: set[str],
+    valid_claim_ids: set[str],
+) -> tuple[bool, list[str]]:
+    rows, errors = _object_rows(
+        payload, "node_evidence_matrix", "node evidence matrix rows"
+    )
+    seen_node_ids: set[str] = set()
+    for index, row in enumerate(rows):
+        label = f"node evidence matrix[{index}]"
+        node_id = row.get("node_id")
+        if not _is_non_empty_string(node_id):
+            errors.append(f"{label} requires non-empty node_id")
+            continue
+        if node_id in seen_node_ids:
+            errors.append(f"{label} duplicate node_id: {node_id}")
+            continue
+        seen_node_ids.add(node_id)
+        if node_id not in theme_node_ids:
+            errors.append(f"{label}.node_id is outside this theme: {node_id}")
+        accepted_ids = row.get("accepted_source_ids")
+        if not _is_string_list(accepted_ids, allow_empty=True):
+            errors.append(f"{label}.accepted_source_ids must be a string list")
+            accepted_ids = []
+        elif len(accepted_ids) != len(set(accepted_ids)):
+            errors.append(f"{label}.accepted_source_ids contains duplicates")
+        unknown_sources = set(accepted_ids) - accepted_source_ids
+        if unknown_sources:
+            errors.append(
+                f"{label}.accepted_source_ids references non-accepted sources: "
+                f"{sorted(unknown_sources)}"
+            )
+        supported_claim_ids = row.get("supported_claim_ids")
+        if not _is_string_list(supported_claim_ids, allow_empty=True):
+            errors.append(f"{label}.supported_claim_ids must be a string list")
+        else:
+            unknown_claims = set(supported_claim_ids) - valid_claim_ids
+            if unknown_claims:
+                errors.append(
+                    f"{label}.supported_claim_ids references invalid claims: "
+                    f"{sorted(unknown_claims)}"
+                )
+        gap_status = row.get("evidence_gap_status")
+        if gap_status not in MATRIX_COVERAGE_STATUSES:
+            errors.append(f"{label}.evidence_gap_status is invalid: {gap_status}")
+        if not accepted_ids and gap_status not in MATRIX_EXPLICIT_GAP_STATUSES:
+            errors.append(
+                f"{label} requires accepted sources or an explicit evidence-gap status"
+            )
+    if seen_node_ids != theme_node_ids:
+        errors.append(
+            "node evidence matrix coverage mismatch: "
+            f"missing={sorted(theme_node_ids - seen_node_ids)}, "
+            f"extra={sorted(seen_node_ids - theme_node_ids)}"
+        )
+    return not errors, errors
+
+
+def _object_rows(
+    payload: dict[str, Any] | None,
+    key: str,
+    label: str,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    if payload is None:
+        return [], [f"{label} are unavailable"]
+    value = payload.get(key)
+    if not isinstance(value, list):
+        return [], [f"{label} must be a list"]
+    rows = []
+    errors = []
+    for index, row in enumerate(value):
+        if not isinstance(row, dict):
+            errors.append(f"{label}[{index}] must be an object")
+            continue
+        rows.append(row)
+    return rows, errors
+
+
+def _is_non_empty_string(value: Any) -> bool:
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _is_string_list(value: Any, *, allow_empty: bool) -> bool:
+    return bool(
+        isinstance(value, list)
+        and (allow_empty or value)
+        and all(_is_non_empty_string(item) for item in value)
+    )
 
 
 def _load_json_artifact(path: Path) -> tuple[dict[str, Any] | None, str | None]:
@@ -382,6 +877,13 @@ def _render_markdown(report: dict[str, Any]) -> str:
                 f"{counts['primary_sources']} primary sources, {counts['claims']} claims, "
                 f"{counts['reviewed_mappings']} reviewed mappings)"
             )
+            if not row["ready"]:
+                failed_checks = [
+                    name for name, passed in row["checks"].items() if not passed
+                ]
+                lines.append(f"  - Failed checks: {', '.join(failed_checks)}")
+                if row["errors"]:
+                    lines.append(f"  - Artifact errors: {'; '.join(row['errors'])}")
         lines.append("")
     return "\n".join(lines)
 
@@ -392,7 +894,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--wave")
     parser.add_argument("--format", choices=("json", "markdown"), default="json")
     args = parser.parse_args(argv)
-    report = build_theme_batch_report(args.manifest, wave=args.wave)
+    try:
+        report = build_theme_batch_report(args.manifest, wave=args.wave)
+    except (FileNotFoundError, ValueError, OSError, UnicodeError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
     if args.format == "markdown":
         print(_render_markdown(report))
     else:
