@@ -134,8 +134,8 @@ def test_advanced_packaging_artifacts_load_and_first_wave_b_row_is_ready():
     assert rows[CHAIN_ID]["ready"] is True
     assert all(rows[CHAIN_ID]["checks"].values())
     assert report["wave_results"]["wave_b"]["ready"] is False
-    assert report["wave_results"]["wave_b"]["ready_theme_count"] == 3
-    assert report["wave_results"]["wave_b"]["not_ready_theme_count"] == 2
+    assert report["wave_results"]["wave_b"]["ready_theme_count"] == 4
+    assert report["wave_results"]["wave_b"]["not_ready_theme_count"] == 1
     assert {chain_id for chain_id, row in rows.items() if row["ready"]} == (
         _implemented_wave_chain_ids("wave_b")
     )
@@ -352,8 +352,8 @@ def test_smart_grid_artifacts_load_and_second_wave_b_row_is_ready():
     assert rows[SMART_GRID_CHAIN_ID]["ready"] is True
     assert all(rows[SMART_GRID_CHAIN_ID]["checks"].values())
     assert report["wave_results"]["wave_b"]["ready"] is False
-    assert report["wave_results"]["wave_b"]["ready_theme_count"] == 3
-    assert report["wave_results"]["wave_b"]["not_ready_theme_count"] == 2
+    assert report["wave_results"]["wave_b"]["ready_theme_count"] == 4
+    assert report["wave_results"]["wave_b"]["not_ready_theme_count"] == 1
     assert {chain_id for chain_id, row in rows.items() if row["ready"]} == (
         _implemented_wave_chain_ids("wave_b")
     )
@@ -591,8 +591,8 @@ def test_core_mechanical_artifacts_load_and_third_wave_b_row_is_ready():
     assert rows[CORE_MECHANICAL_CHAIN_ID]["ready"] is True
     assert all(rows[CORE_MECHANICAL_CHAIN_ID]["checks"].values())
     assert report["wave_results"]["wave_b"]["ready"] is False
-    assert report["wave_results"]["wave_b"]["ready_theme_count"] == 3
-    assert report["wave_results"]["wave_b"]["not_ready_theme_count"] == 2
+    assert report["wave_results"]["wave_b"]["ready_theme_count"] == 4
+    assert report["wave_results"]["wave_b"]["not_ready_theme_count"] == 1
     assert {chain_id for chain_id, row in rows.items() if row["ready"]} == (
         _implemented_wave_chain_ids("wave_b")
     )
@@ -829,3 +829,269 @@ def test_core_mechanical_scope_boundaries_block_over_attribution():
     assert "仅为密封件" in evidence["coremech_ev_301161_product"]["evidence_summary"]
     assert "不是气缸或气阀" in evidence["coremech_ev_301161_product"]["evidence_summary"]
     assert "不能用气动密封替代气动执行与控制元件证据" in claim_text
+
+
+MACHINE_VISION_THEME_ID = (
+    "industrial_inspection_metrology_machine_vision_value_chain_v1"
+)
+MACHINE_VISION_CHAIN_ID = "industrial_inspection_metrology_machine_vision"
+MACHINE_VISION_THEME_PATH = (
+    REPOSITORY_ROOT / f"artifacts/theme_decomposition/{MACHINE_VISION_THEME_ID}.json"
+)
+MACHINE_VISION_MAPPING_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/company_mappings"
+    / "industrial_inspection_metrology_machine_vision_company_mapping_v1.json"
+)
+MACHINE_VISION_SOURCE_PACK_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "industrial_inspection_metrology_machine_vision_source_pack_v1.json"
+)
+MACHINE_VISION_MATRIX_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "industrial_inspection_metrology_machine_vision_node_evidence_matrix_v1.json"
+)
+
+
+def _assert_machine_vision_bidirectional_source_and_matrix_links() -> None:
+    theme = _read_json(MACHINE_VISION_THEME_PATH)
+    source_pack = _read_json(MACHINE_VISION_SOURCE_PACK_PATH)
+    matrix = _read_json(MACHINE_VISION_MATRIX_PATH)
+    node_ids = {row["node_id"] for row in theme["nodes"]}
+    accepted_source_ids = {
+        row["source_id"]
+        for row in source_pack["sources"]
+        if row["review_status"] == "accepted"
+    }
+    source_by_id = {row["source_id"]: row for row in source_pack["sources"]}
+    claim_by_id = {row["claim_id"]: row for row in theme["claims"]}
+    matrix_by_node = {
+        row["node_id"]: row for row in matrix["node_evidence_matrix"]
+    }
+
+    assert {
+        source["source_id"]: set(source["supported_claim_ids"])
+        for source in source_pack["sources"]
+    } == {
+        source["source_id"]: {
+            claim["claim_id"]
+            for claim in theme["claims"]
+            if source["source_id"]
+            in {claim["source_id"], *claim["supporting_source_ids"]}
+        }
+        for source in source_pack["sources"]
+    }
+    assert {row["node_id"] for row in matrix["node_evidence_matrix"]} == node_ids
+    assert len(matrix["node_evidence_matrix"]) == len(node_ids)
+    for row in matrix["node_evidence_matrix"]:
+        expected_claim_ids = {
+            claim["claim_id"]
+            for claim in theme["claims"]
+            if row["node_id"] in claim["affected_theme_nodes"]
+        }
+        assert set(row["supported_claim_ids"]) == expected_claim_ids
+        assert set(row["accepted_source_ids"]) <= accepted_source_ids
+        assert row["accepted_source_ids"] or row["evidence_gap_status"] == "evidence_gap"
+        for source_id in row["accepted_source_ids"]:
+            source = source_by_id[source_id]
+            assert row["node_id"] in source["supported_node_ids"]
+            assert expected_claim_ids & set(source["supported_claim_ids"])
+        for claim_id in expected_claim_ids:
+            claim = claim_by_id[claim_id]
+            assert set(row["accepted_source_ids"]) & {
+                claim["source_id"],
+                *claim["supporting_source_ids"],
+            }
+    for source in source_pack["sources"]:
+        for node_id in source["supported_node_ids"]:
+            assert set(source["supported_claim_ids"]) & set(
+                matrix_by_node[node_id]["supported_claim_ids"]
+            )
+
+
+def test_machine_vision_artifacts_load_and_fourth_wave_b_row_is_ready():
+    theme_package = load_theme_package()
+    mapping_package = load_theme_company_mapping_package()
+    priority_package = load_theme_research_priority_package()
+
+    assert MACHINE_VISION_THEME_ID in {
+        row["theme_id"] for row in theme_package["themes"]
+    }
+    assert MACHINE_VISION_THEME_ID in {
+        row["theme_id"] for row in mapping_package["company_mappings"]
+    }
+    assert MACHINE_VISION_THEME_ID in {
+        row["theme_id"] for row in priority_package["node_priorities"]
+    }
+    report = VERIFIER.build_theme_batch_report(MANIFEST_PATH, wave="wave_b")
+    rows = {row["chain_id"]: row for row in report["theme_results"]}
+
+    assert rows[MACHINE_VISION_CHAIN_ID]["ready"] is True
+    assert all(rows[MACHINE_VISION_CHAIN_ID]["checks"].values())
+    assert report["wave_results"]["wave_b"]["ready"] is False
+    assert report["wave_results"]["wave_b"]["ready_theme_count"] == 4
+    assert report["wave_results"]["wave_b"]["not_ready_theme_count"] == 1
+    assert {chain_id for chain_id, row in rows.items() if row["ready"]} == (
+        _implemented_wave_chain_ids("wave_b")
+    )
+
+
+def test_machine_vision_evidence_mapping_and_source_identity_are_exact():
+    _assert_machine_vision_bidirectional_source_and_matrix_links()
+    theme = _read_json(MACHINE_VISION_THEME_PATH)
+    mapping = _read_json(MACHINE_VISION_MAPPING_PATH)
+    source_pack = _read_json(MACHINE_VISION_SOURCE_PACK_PATH)
+    node_ids = {row["node_id"] for row in theme["nodes"]}
+    accepted = validate_theme_evidence_sources(source_pack["sources"], node_ids)
+    reviewed_mappings = [
+        row for row in mapping["company_mappings"] if row["review_status"] == "reviewed"
+    ]
+    canonical_sources = {row["source_id"]: row for row in theme["sources"]}
+    mapping_sources = {row["source_id"]: row for row in mapping["sources"]}
+    pack_sources = {row["source_id"]: row for row in source_pack["sources"]}
+
+    assert len(
+        [row for row in accepted.values() if row["review_status"] == "accepted"]
+    ) == 12
+    assert all(
+        row["source_type"] == "company_filing" and row["reliability_level"] == "S0"
+        for row in source_pack["sources"]
+    )
+    assert len(theme["nodes"]) == 11
+    assert len(theme["claims"]) == 14
+    assert all(set(row) >= CLAIM_FIELDS for row in theme["claims"])
+    assert len(reviewed_mappings) == 12
+    assert len({row["company_code"] for row in reviewed_mappings}) == 12
+    assert len({row["source_id"] for row in source_pack["sources"]}) == 12
+    assert len({row["url"] for row in source_pack["sources"]}) == 12
+    assert {
+        row["source_id"]: row["url_or_ref"] for row in mapping["sources"]
+    } == {
+        source_id: row["url_or_ref"] for source_id, row in canonical_sources.items()
+    }
+    for source_id, canonical_source in canonical_sources.items():
+        assert {
+            field: mapping_sources[source_id][field]
+            for field in ("title", "publisher", "publish_date", "url_or_ref")
+        } == {
+            field: canonical_source[field]
+            for field in ("title", "publisher", "publish_date", "url_or_ref")
+        }
+        assert {
+            "title": pack_sources[source_id]["title"],
+            "publisher": pack_sources[source_id]["publisher"],
+            "publish_date": pack_sources[source_id]["publish_date"],
+            "url_or_ref": pack_sources[source_id]["url"],
+        } == {
+            field: canonical_source[field]
+            for field in ("title", "publisher", "publish_date", "url_or_ref")
+        }
+
+
+def test_machine_vision_company_beneficiary_tiers_follow_classifier_exactly():
+    expected = {
+        "688400.SH": ("core_beneficiary", "core_business", "material"),
+        "688686.SH": ("core_beneficiary", "core_business", "material"),
+        "688610.SH": ("core_beneficiary", "core_business", "material"),
+        "688003.SH": ("core_beneficiary", "core_business", "material"),
+        "300567.SZ": ("core_beneficiary", "meaningful_segment", "material"),
+        "603203.SH": ("core_beneficiary", "meaningful_segment", "meaningful"),
+        "300400.SZ": ("elastic_beneficiary", "emerging_segment", "undisclosed"),
+        "688001.SH": ("elastic_beneficiary", "meaningful_segment", "undisclosed"),
+        "603297.SH": ("elastic_beneficiary", "meaningful_segment", "undisclosed"),
+        "300416.SZ": ("indirect_beneficiary", "meaningful_segment", "material"),
+        "688097.SH": ("indirect_beneficiary", "core_business", "undisclosed"),
+        "603283.SH": ("indirect_beneficiary", "core_business", "undisclosed"),
+    }
+    read_model = list_theme_research_companies(MACHINE_VISION_THEME_ID)
+    response = TestClient(dashboard_app.create_app()).get(
+        f"/api/research/theme-decomposition/themes/{MACHINE_VISION_THEME_ID}/companies"
+    )
+
+    assert response.status_code == 200
+    for payload in (read_model, response.json()):
+        assert payload["total"] == len(expected)
+        assert {
+            row["company_code"]: (
+                row["beneficiary_tier"],
+                row["business_materiality"],
+                row["revenue_relevance"],
+            )
+            for row in payload["items"]
+        } == expected
+
+
+def test_machine_vision_profile_catalog_and_service_gap_are_ready():
+    theme = _read_json(MACHINE_VISION_THEME_PATH)
+    mapping = _read_json(MACHINE_VISION_MAPPING_PATH)
+    matrix = _read_json(MACHINE_VISION_MATRIX_PATH)
+    profile = theme["research_profile"]
+    node_ids = {row["node_id"] for row in theme["nodes"]}
+    claim_ids = {row["claim_id"] for row in theme["claims"]}
+    catalog = load_industry_catalog()
+    link = next(
+        row for row in catalog["theme_links"] if row["theme_id"] == MACHINE_VISION_THEME_ID
+    )
+    service_matrix = next(
+        row
+        for row in matrix["node_evidence_matrix"]
+        if row["node_id"] == "imv_calibration_testing_services"
+    )
+    service_node = next(
+        row
+        for row in theme["nodes"]
+        if row["node_id"] == "imv_calibration_testing_services"
+    )
+
+    assert profile["catalog_chain_id"] == MACHINE_VISION_CHAIN_ID
+    assert profile["research_kind"] == "industry_chain_deep_research"
+    assert set(profile["catalyst_claim_ids"] + profile["risk_claim_ids"]) <= claim_ids
+    assert link["node_links"] == []
+    assert set(link["unmapped_theme_node_ids"]) == node_ids
+    assert "catalog仍为L2 skeleton" in link["notes"]
+    assert "宽节点不得映到窄节点" in link["notes"]
+    assert service_node["node_review_status"] == "draft"
+    assert service_node["evidence_strength"] == 2
+    assert service_matrix["node_review_status"] == "draft"
+    assert service_matrix["evidence_strength_after"] == service_node["evidence_strength"]
+    assert service_matrix["evidence_gap_status"] == "evidence_gap"
+    assert service_matrix["accepted_source_ids"] == ["imv_300416_2025_ar"]
+    assert "邻近检测服务" in service_matrix["rationale"]
+    assert "校准" in service_matrix["next_evidence_needed"]
+    service_mapping = next(
+        row for row in mapping["company_mappings"] if row["company_code"] == "300416.SZ"
+    )
+    assert service_mapping["mapped_node_id"] == "imv_calibration_testing_services"
+    assert service_mapping["bottleneck_relevance"] == "adjacent"
+    assert "邻近" in service_mapping["notes"]
+    result = verify_deep_theme_coverage(
+        MACHINE_VISION_THEME_ID,
+        catalog=catalog,
+        theme_context=load_theme_research_priority_package(),
+    )
+    assert result["ready"] is True
+    assert all(result["checks"].values())
+
+
+def test_machine_vision_scope_boundaries_block_over_attribution():
+    theme = _read_json(MACHINE_VISION_THEME_PATH)
+    mapping = _read_json(MACHINE_VISION_MAPPING_PATH)
+    evidence = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+    claim_text = " ".join(row["claim_text"] for row in theme["claims"])
+    mapped_codes = {row["company_code"] for row in mapping["company_mappings"]}
+
+    assert "半导体前道排除" in evidence["imv_ev_300567_revenue"]["evidence_summary"]
+    assert "TCB/固晶排除" in evidence["imv_ev_603203_revenue"]["evidence_summary"]
+    assert "晶圆检测排除" in evidence["imv_ev_603283_revenue"]["evidence_summary"]
+    assert "集成电路测试排除" in evidence["imv_ev_688001_revenue"]["evidence_summary"]
+    assert "自动化总收入" in evidence["imv_ev_688097_revenue"]["evidence_summary"]
+    assert "自动化总收入" in evidence["imv_ev_603283_revenue"]["evidence_summary"]
+    assert "电子装联" in evidence["imv_ev_300400_revenue"]["evidence_summary"]
+    assert "检测设备" in evidence["imv_ev_688001_revenue"]["evidence_summary"]
+    assert "光学元件" in evidence["imv_ev_603297_revenue"]["evidence_summary"]
+    assert "非机器视觉单节点收入" in claim_text
+    assert "标准部件毛利" in claim_text
+    assert "不跨公司估值" in claim_text
+    assert mapped_codes.isdisjoint({"688112.SH", "002065.SZ", "688115.SH"})

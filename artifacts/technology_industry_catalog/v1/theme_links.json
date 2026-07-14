@@ -468,7 +468,20 @@
       "theme_id": "industrial_inspection_metrology_machine_vision_value_chain_v1",
       "chain_id": "industrial_inspection_metrology_machine_vision",
       "node_links": [],
-      "unmapped_theme_node_ids": []
+      "unmapped_theme_node_ids": [
+        "imv_industrial_cameras",
+        "imv_lenses_lighting_optics",
+        "imv_acquisition_controllers",
+        "imv_algorithms_software",
+        "imv_online_inspection_metrology",
+        "imv_electronics_aoi_spi",
+        "imv_display_optical_measurement",
+        "imv_battery_pv_auto_inspection",
+        "imv_precision_metrology_instruments",
+        "imv_integration_quality_loop",
+        "imv_calibration_testing_services"
+      ],
+      "notes": "industrial_inspection_metrology_machine_vision catalog仍为L2 skeleton，尚无可承接相机、光路、采集、算法、专用检测、计量、集成或服务节点的自有L3/L4 canonical node；目录仅做语义精确映射，宽节点不得映到窄节点，因此本轮全部保持unmapped，待canonical chain扩展后逐项回填。"
     },
     {
       "theme_id": "industrial_robots_value_chain_v1",
