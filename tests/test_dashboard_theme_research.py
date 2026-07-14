@@ -17,6 +17,7 @@ from stock_research.dashboard.theme_research import (
 
 AI_POWER_THEME_ID = "ai_power_value_capture_v1"
 ROBOTICS_THEME_ID = "humanoid_robotics_head_to_toe_v1"
+NEXT_FIFTEEN_THEME_ID = "ai_logic_compute_chips_value_chain_v1"
 
 
 def test_theme_index_aggregates_validated_phase_outputs():
@@ -188,6 +189,19 @@ def test_unknown_theme_is_rejected_by_every_detail_read_model():
     for reader in readers:
         with pytest.raises(ThemeResearchNotFoundError):
             reader("missing-theme")
+
+
+def test_next_fifteen_theme_remains_unavailable_until_artifact_exists():
+    assert list_theme_research_themes()["total"] == 5
+
+    with pytest.raises(ThemeResearchNotFoundError):
+        get_theme_research_theme(NEXT_FIFTEEN_THEME_ID)
+
+    response = TestClient(dashboard_app.create_app()).get(
+        f"/api/research/theme-decomposition/themes/{NEXT_FIFTEEN_THEME_ID}"
+    )
+    assert response.status_code == 404
+    assert response.json()["detail"] == "theme_not_found"
 
 
 def test_theme_ids_must_match_exactly_instead_of_returning_empty_aggregates():

@@ -576,6 +576,7 @@ def create_app() -> FastAPI:
         deep_research_rows = list_selected_chain_research(
             catalog=catalog,
             theme_context=theme_context,
+            include_unfinished_targets=True,
         )
         deep_research_by_chain = {
             row["chain_id"]: row for row in deep_research_rows

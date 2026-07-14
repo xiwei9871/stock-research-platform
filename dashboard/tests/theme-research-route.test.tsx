@@ -133,6 +133,15 @@ describe('Theme research AppShell routing', () => {
     expect(screen.getByText('/theme-research/ai_power_value_capture_v1/nodes')).toBeInTheDocument();
   });
 
+  it('restores a next-fifteen theme route into the theme research workspace', () => {
+    window.history.replaceState({}, '', '/theme-research/ai_logic_compute_chips_value_chain_v1');
+    render(<AppShell />);
+
+    expect(screen.getByRole('heading', { name: 'Theme Research Mock' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Industry Catalog Mock' })).not.toBeInTheDocument();
+    expect(screen.getByText('/theme-research/ai_logic_compute_chips_value_chain_v1')).toBeInTheDocument();
+  });
+
   it('hands a mapped company to the existing tech-bottleneck stock route', () => {
     window.history.replaceState({}, '', '/theme-research/ai_power_value_capture_v1/companies');
     render(<AppShell />);
