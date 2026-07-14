@@ -690,6 +690,12 @@ def test_power_batteries_accepted_eve_source_has_mapping_evidence_and_reviewed_m
         for row in mapping["evidence_items"]
         if row["evidence_id"] in mapping_row["evidence_ids"]
     ]
+    product_evidence = next(
+        row for row in evidence if row["evidence_type"] == "product_relationship"
+    )
+    revenue_evidence = next(
+        row for row in evidence if row["evidence_type"] == "revenue_materiality"
+    )
 
     assert source["review_status"] == "accepted"
     assert source["reliability_level"] == "S0"
@@ -708,6 +714,17 @@ def test_power_batteries_accepted_eve_source_has_mapping_evidence_and_reviewed_m
     }
     assert {row["source_id"] for row in evidence} == {source["source_id"]}
     assert all(row["related_company_codes"] == ["300014.SZ"] for row in evidence)
+    assert "BMS" in product_evidence["evidence_summary"]
+    assert "258.58亿元" in revenue_evidence["evidence_summary"]
+    assert "15.50%" in revenue_evidence["evidence_summary"]
+    assert "动力电池宽口径" in revenue_evidence["evidence_summary"]
+    assert "BMS" in revenue_evidence["evidence_summary"]
+    assert "未拆" in revenue_evidence["evidence_summary"]
+    assert "BMS未披露独立收入" in mapping_row["notes"]
+    assert "固态中试" in mapping_row["notes"]
+    assert "钠离子示范" in mapping_row["notes"]
+    assert "规划产能" in mapping_row["notes"]
+    assert "不作为成熟独立收入" in mapping_row["notes"]
 
 
 def test_power_batteries_profile_catalog_boundaries_and_validation_gaps_are_ready():
