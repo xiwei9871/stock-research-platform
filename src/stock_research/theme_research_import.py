@@ -140,6 +140,7 @@ def normalize_artifact_package(
             "decomposition_templates": copy.deepcopy(
                 artifact.get("decomposition_templates", [])
             ),
+            "research_profile": copy.deepcopy(artifact.get("research_profile")),
         }
         themes.append(row)
 
@@ -147,15 +148,19 @@ def normalize_artifact_package(
     for source in [*theme_package["sources"], *mapping_package["sources"]]:
         row = copy.deepcopy(source)
         row["publish_date"] = row.get("publish_date") or None
-        row.setdefault("content_sha256", _content_sha256(source))
+        row.pop("content_sha256", None)
         row.setdefault("provenance", {})
+        content_payload = copy.deepcopy(row)
+        content_payload.pop("provenance", None)
+        row["content_sha256"] = _content_sha256(content_payload)
         existing = sources_by_id.get(row["source_id"])
-        if existing is not None and existing != row:
+        if existing is not None and _source_comparison_row(existing) != _source_comparison_row(row):
             raise ThemeResearchDomainError(
                 f"conflicting source rows: {row['source_id']}",
                 code="THEME_RESEARCH_CONFLICTING_SOURCE",
             )
-        sources_by_id[row["source_id"]] = row
+        if existing is None:
+            sources_by_id[row["source_id"]] = row
 
     theme_sources: set[tuple[str, str, str]] = set()
     claims: list[dict[str, Any]] = []
@@ -249,6 +254,13 @@ def normalize_artifact_package(
         mapping_evidence_items=mapping_package["evidence_items"],
         company_mapping_evidence=company_mapping_evidence,
     )
+
+
+def _source_comparison_row(row: dict[str, Any]) -> dict[str, Any]:
+    comparable = copy.deepcopy(row)
+    comparable.pop("notes", None)
+    comparable.pop("content_sha256", None)
+    return comparable
 
 
 def semantic_diff(

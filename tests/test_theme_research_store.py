@@ -10,6 +10,7 @@ from stock_research.theme_research_import import normalize_artifact_package
 from stock_research.theme_research_store import (
     _assert_runtime_connection,
     _assert_rollback_has_no_shared_source_changes,
+    build_theme_artifact_from_package,
     create_snapshot,
     package_for_theme,
     rollback_theme,
@@ -70,6 +71,20 @@ def test_package_for_theme_keeps_only_owned_rows() -> None:
     assert all(row["theme_id"] == "ai_power_value_capture_v1" for row in selected.claims)
     assert all(row["theme_id"] == "ai_power_value_capture_v1" for row in selected.company_mappings)
     assert selected.package_sha256 != package.package_sha256
+
+
+def test_build_theme_artifact_restores_research_profile() -> None:
+    package = normalize_artifact_package()
+    theme_id = "power_semiconductors_value_chain_v1"
+    profile = next(
+        row["artifact_metadata"]["research_profile"]
+        for row in package.themes
+        if row["theme_id"] == theme_id
+    )
+
+    artifact = build_theme_artifact_from_package(package, theme_id)
+
+    assert artifact["research_profile"] == profile
 
 
 def test_package_for_theme_rejects_unknown_theme() -> None:

@@ -5,6 +5,9 @@ from dataclasses import replace
 
 import pytest
 
+from stock_research import theme_research_import as import_module
+from stock_research.theme_company_mapping import load_theme_company_mapping_package
+from stock_research.theme_decomposition import load_theme_package
 from stock_research.theme_research_db_models import ThemeResearchDomainError
 from stock_research.theme_research_import import (
     NormalizedThemeResearchPackage,
@@ -17,8 +20,9 @@ from stock_research.theme_research_import import (
 def test_normalize_current_artifacts_to_relational_rows() -> None:
     package = normalize_artifact_package()
 
-    assert len(package.themes) == 5
-    assert len(package.nodes) == 67
+    artifact_package = load_theme_package()
+    assert len(package.themes) == len(artifact_package["themes"])
+    assert len(package.nodes) == len(artifact_package["nodes"])
     assert package.sources
     assert package.claims
     assert package.assessments
@@ -29,6 +33,68 @@ def test_normalize_current_artifacts_to_relational_rows() -> None:
     assert all(row["claim_id"] and row["node_id"] for row in package.claim_nodes)
     assert all(row["assessment_id"] for row in package.assessment_evidence)
     assert all(row["mapping_id"] for row in package.company_mapping_evidence)
+
+
+def test_normalize_current_artifacts_reuses_notes_only_duplicate_sources() -> None:
+    artifact_package = load_theme_package()
+    package = normalize_artifact_package()
+    normalized_by_id = {row["source_id"]: row for row in package.sources}
+    artifact_by_id = {row["source_id"]: row for row in artifact_package["sources"]}
+
+    for source_id in ("power_688396_2025_report", "semimat_688019_2025_report"):
+        normalized = normalized_by_id[source_id]
+        artifact = artifact_by_id[source_id]
+        assert normalized["notes"] == artifact["notes"]
+        assert normalized["content_sha256"] == import_module._content_sha256(artifact)
+
+
+def test_normalize_artifacts_rejects_duplicate_source_core_field_conflict(
+    monkeypatch,
+) -> None:
+    theme_package = load_theme_package()
+    mapping_package = load_theme_company_mapping_package(
+        None,
+        theme_package["artifact_dir"],
+    )
+    theme_sources = {row["source_id"]: row for row in theme_package["sources"]}
+    mapping_package = copy.deepcopy(mapping_package)
+    for row in mapping_package["sources"]:
+        if row["source_id"] in theme_sources:
+            row["notes"] = theme_sources[row["source_id"]]["notes"]
+    target = next(
+        row
+        for row in mapping_package["sources"]
+        if row["source_id"] == "power_688396_2025_report"
+    )
+    target["publisher"] = "conflicting publisher"
+    monkeypatch.setattr(import_module, "load_theme_package", lambda _path: theme_package)
+    monkeypatch.setattr(
+        import_module,
+        "load_theme_company_mapping_package",
+        lambda _mapping_dir, _theme_dir: mapping_package,
+    )
+
+    with pytest.raises(ThemeResearchDomainError) as exc_info:
+        normalize_artifact_package()
+
+    assert exc_info.value.code == "THEME_RESEARCH_CONFLICTING_SOURCE"
+
+
+def test_normalized_theme_metadata_preserves_research_profiles() -> None:
+    artifact_package = load_theme_package()
+    package = normalize_artifact_package()
+    expected = {
+        row["theme_id"]: {
+            key: value for key, value in row.items() if key != "theme_id"
+        }
+        for row in artifact_package["research_profiles"]
+    }
+
+    assert {
+        row["theme_id"]: row["artifact_metadata"]["research_profile"]
+        for row in package.themes
+        if row["theme_id"] in expected
+    } == expected
 
 
 def test_normalization_is_deterministic() -> None:

@@ -388,6 +388,14 @@ def _theme_package(normalized) -> dict[str, Any]:
             for row in artifacts
             for template in row["decomposition_templates"]
         ],
+        "research_profiles": [
+            {
+                **copy.deepcopy(row["research_profile"]),
+                "theme_id": row["theme"]["theme_id"],
+            }
+            for row in artifacts
+            if row.get("research_profile") is not None
+        ],
     }
 
 

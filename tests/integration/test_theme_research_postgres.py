@@ -124,8 +124,8 @@ def test_bootstrap_current_artifacts_is_transactional_and_idempotent(
 
     assert first["status"] == "committed"
     assert first["resulting_generation"] == 1
-    assert first["object_counts"]["themes"] == 2
-    assert first["object_counts"]["nodes"] == 34
+    assert first["object_counts"]["themes"] == len(package.themes)
+    assert first["object_counts"]["nodes"] == len(package.nodes)
     database = store.load_database_package(service="integration")
     parity = semantic_diff(database, package)
     changed = {
@@ -323,6 +323,7 @@ def test_partial_import_changes_only_affected_theme_and_object_versions(
     )
     changed_node = dict(package.nodes[0])
     changed_node["description"] = "updated in integration test"
+    changed_theme_id = changed_node["theme_id"]
     changed_package = package.__class__.build(
         artifact_version=package.artifact_version,
         themes=package.themes,
@@ -348,15 +349,18 @@ def test_partial_import_changes_only_affected_theme_and_object_versions(
         service="integration",
     )
 
-    assert result["theme_versions"] == {"ai_power_value_capture_v1": 2}
+    assert result["theme_versions"] == {changed_theme_id: 2}
     themes = {
         row["theme_id"]: (row["theme_version"], row["row_version"])
         for row in store_connection.execute(
             "SELECT theme_id, theme_version, row_version FROM research.theme_research_theme"
         ).fetchall()
     }
-    assert themes["ai_power_value_capture_v1"] == (2, 2)
-    assert themes["humanoid_robotics_head_to_toe_v1"] == (1, 1)
+    assert themes[changed_theme_id] == (2, 2)
+    unchanged_theme_id = next(
+        row["theme_id"] for row in package.themes if row["theme_id"] != changed_theme_id
+    )
+    assert themes[unchanged_theme_id] == (1, 1)
     nodes = {
         row["node_id"]: row["row_version"]
         for row in store_connection.execute(

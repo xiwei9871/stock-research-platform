@@ -81,6 +81,9 @@ def test_schema_contains_production_constraints_and_triggers() -> None:
     sql = schema.THEME_RESEARCH_SCHEMA_SQL
 
     assert "value_capture_score BETWEEN 0 AND 5" in sql
+    assert "new_energy_storage" in sql
+    assert "catalyst" in sql
+    assert "risk" in sql
     assert "confidence BETWEEN 0 AND 1" in sql
     assert "reliability_level <> 'S4' OR review_status <> 'accepted'" in sql
     assert "node_review_status <> 'reviewed' OR evidence_strength >= 3" in sql
@@ -104,6 +107,18 @@ def test_schema_contains_production_constraints_and_triggers() -> None:
     assert "BEFORE TRUNCATE ON research.theme_research_review_event" in sql
     assert "BEFORE TRUNCATE ON research.theme_research_object_revision" in sql
     assert "WHERE idempotency_key <> ''" in sql
+
+
+def test_schema_rebuilds_all_legacy_theme_and_claim_type_checks() -> None:
+    sql = schema.THEME_RESEARCH_SCHEMA_SQL
+
+    assert sql.count("FOR existing_constraint IN") == 2
+    assert "conname <> 'ck_theme_research_theme_type'" not in sql
+    assert "conname <> 'ck_theme_research_claim_type'" not in sql
+    assert "LIMIT 1" not in sql
+    assert "'new_energy_storage'" in sql
+    assert "'catalyst'" in sql
+    assert "'risk'" in sql
 
 
 def test_schema_is_idempotent_and_non_destructive() -> None:
@@ -317,7 +332,7 @@ def test_schema_cli_import_execute_requires_generation(capsys) -> None:
     assert payload["error_code"] == "THEME_RESEARCH_IMPORT_REQUEST_INVALID"
 
 
-def test_apply_schema_rejects_existing_drift_without_overwriting_migration(monkeypatch) -> None:
+def test_apply_schema_reconciles_existing_drift_and_updates_migration(monkeypatch) -> None:
     connection = _Connection()
     monkeypatch.setattr(schema, "connect", lambda service: _Context(connection))
     monkeypatch.setattr(
@@ -329,25 +344,38 @@ def test_apply_schema_rejects_existing_drift_without_overwriting_migration(monke
             "applied_at": "2026-07-11T00:00:00+00:00",
         },
     )
-    monkeypatch.setattr(
-        schema,
-        "inspect_theme_research_schema",
-        lambda cur: {
-            "status": "drifted",
-            "existing_count": len(REQUIRED_TABLES),
-            "missing": ["constraint:ck_theme_research_source_s4_not_accepted"],
-        },
+    inspections = iter(
+        [
+            {
+                "status": "drifted",
+                "existing_count": len(REQUIRED_TABLES),
+                "missing": ["constraint:ck_theme_research_theme_type"],
+            },
+            {
+                "status": "current",
+                "existing_count": len(REQUIRED_TABLES),
+                "missing": [],
+            },
+        ]
+    )
+    monkeypatch.setattr(schema, "inspect_theme_research_schema", lambda cur: next(inspections))
+
+    result = schema.apply_theme_research_schema(
+        service="test",
+        actor_user_id="admin-1",
+        actor_role="admin",
     )
 
-    with pytest.raises(ThemeResearchDomainError) as exc_info:
-        schema.apply_theme_research_schema(
-            service="test",
-            actor_user_id="admin-1",
-            actor_role="admin",
-        )
-
-    assert exc_info.value.code == "THEME_RESEARCH_SCHEMA_DRIFT"
-    assert connection.cursor_obj.calls == []
+    assert result == {
+        "status": "ok",
+        "schema_version": schema.THEME_RESEARCH_DB_SCHEMA_VERSION,
+        "ddl_sha256": schema.ddl_sha256(),
+    }
+    assert connection.cursor_obj.calls[0][0] == schema.THEME_RESEARCH_SCHEMA_SQL
+    migration_sql, migration_params = connection.cursor_obj.calls[1]
+    assert "ON CONFLICT (schema_version) DO UPDATE" in migration_sql
+    assert migration_params[0] == schema.THEME_RESEARCH_DB_SCHEMA_VERSION
+    assert migration_params[2] == schema.ddl_sha256()
 
 
 def test_apply_schema_rejects_partial_unversioned_schema(monkeypatch) -> None:

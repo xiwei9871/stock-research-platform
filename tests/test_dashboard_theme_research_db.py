@@ -23,6 +23,46 @@ def test_db_context_matches_artifact_context_contract(monkeypatch) -> None:
     assert database == artifact
 
 
+def test_theme_package_preserves_wave_a_research_profiles() -> None:
+    package = normalize_artifact_package()
+    wave_a_theme_ids = {
+        "ai_logic_compute_chips_value_chain_v1",
+        "optical_communications_data_center_interconnect_value_chain_v1",
+        "semiconductor_materials_electronic_chemicals_value_chain_v1",
+        "power_semiconductors_value_chain_v1",
+        "industrial_automation_control_value_chain_v1",
+    }
+    artifact_profiles = {
+        row["theme_id"]: row["artifact_metadata"]["research_profile"]
+        for row in package.themes
+        if row["theme_id"] in wave_a_theme_ids
+    }
+    assert set(artifact_profiles) == wave_a_theme_ids
+
+    database_package = theme_research_db._theme_package(package)
+
+    assert {
+        row["theme_id"]: row
+        for row in database_package["research_profiles"]
+        if row["theme_id"] in wave_a_theme_ids
+    } == {
+        theme_id: {**profile, "theme_id": theme_id}
+        for theme_id, profile in artifact_profiles.items()
+    }
+    detail_fields = {
+        "industry_stage",
+        "central_conflict",
+        "investment_summary",
+        "value_flow_summary",
+        "profit_pool_summary",
+        "catalyst_claim_ids",
+        "risk_claim_ids",
+        "validation_signals",
+        "evidence_gap_summary",
+    }
+    assert all(detail_fields <= set(row) for row in artifact_profiles.values())
+
+
 def test_scoped_priority_support_failure_does_not_block_core_context(monkeypatch) -> None:
     monkeypatch.setattr(
         theme_research_db,
