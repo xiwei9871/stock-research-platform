@@ -112,6 +112,7 @@ def test_canonical_manifest_freezes_scope_wave_order_files_and_gates():
     assert gates["min_primary_sources"] == 4
     assert gates["min_claims"] == 10
     assert gates["min_reviewed_mappings"] == 8
+    assert gates["require_node_evidence_matrix_coverage"] is True
     assert [row["name"] for row in gates["required_readable_sections"]] == REQUIRED_SECTIONS
 
 
@@ -128,6 +129,7 @@ def test_ready_fixture_builds_theme_and_wave_summary(tmp_path: Path):
         "accepted_sources": 10,
         "primary_sources": 4,
         "claims": 10,
+        "accepted_source_backed_claims": 10,
         "reviewed_mappings": 8,
     }
     assert theme["required_sections_ready"] is True
@@ -274,7 +276,7 @@ def test_duplicate_cross_theme_or_unbacked_claims_do_not_count(
     assert any("claim" in error for error in theme["errors"])
 
 
-def test_known_nonaccepted_source_claim_is_retained_but_not_counted(
+def test_known_nonaccepted_source_draft_claim_counts_toward_claim_gate(
     tmp_path: Path,
 ):
     manifest_path = _write_ready_batch(tmp_path)
@@ -298,30 +300,39 @@ def test_known_nonaccepted_source_claim_is_retained_but_not_counted(
     _write_json(source_path, source_pack)
     theme_path = tmp_path / "sample_theme.json"
     theme_payload = _read_json(theme_path)
-    theme_payload["claims"].append(
-        {
-            "claim_id": "pending_claim",
-            "theme_id": "sample_theme_v1",
-            "source_id": "pending_source",
-            "claim_text": "Pending claim",
-            "claim_type": "value_capture",
-            "affected_theme_nodes": ["node_1"],
-        }
-    )
+    theme_payload["claims"][-1]["source_id"] = "pending_source"
+    theme_payload["claims"][-1]["platform_use_status"] = "draft"
     _write_json(theme_path, theme_payload)
-    matrix_path = tmp_path / "sample_node_evidence_matrix.json"
-    matrix_payload = _read_json(matrix_path)
-    matrix_payload["node_evidence_matrix"][0]["supported_claim_ids"].append(
-        "pending_claim"
-    )
-    _write_json(matrix_path, matrix_payload)
 
     theme = build_theme_batch_report(manifest_path)["theme_results"][0]
 
     assert theme["ready"] is True
     assert theme["counts"]["claims"] == 10
+    assert theme["counts"]["accepted_source_backed_claims"] == 9
     assert theme["checks"]["claim_rows_valid"] is True
     assert theme["checks"]["node_evidence_matrix_coverage"] is True
+
+
+def test_reviewed_claim_on_known_nonaccepted_source_fails_integrity_but_still_counts(
+    tmp_path: Path,
+):
+    manifest_path = _write_ready_batch(tmp_path)
+    source_path = tmp_path / "sample_source_pack.json"
+    source_pack = _read_json(source_path)
+    source_pack["sources"][-1]["review_status"] = "needs_full_text"
+    _write_json(source_path, source_pack)
+    theme_path = tmp_path / "sample_theme.json"
+    theme_payload = _read_json(theme_path)
+    theme_payload["claims"][-1]["platform_use_status"] = "reviewed"
+    _write_json(theme_path, theme_payload)
+
+    theme = build_theme_batch_report(manifest_path)["theme_results"][0]
+
+    assert theme["ready"] is False
+    assert theme["counts"]["claims"] == 10
+    assert theme["counts"]["accepted_source_backed_claims"] == 9
+    assert theme["checks"]["claim_rows_valid"] is False
+    assert any("reviewed claim requires accepted source" in error for error in theme["errors"])
 
 
 @pytest.mark.parametrize(
@@ -409,6 +420,26 @@ def test_irrelevant_or_incomplete_node_matrix_never_satisfies_coverage(
     assert any("node evidence matrix" in error for error in theme["errors"])
 
 
+def test_node_matrix_coverage_is_diagnostic_when_manifest_gate_is_disabled(
+    tmp_path: Path,
+):
+    manifest_path = _write_ready_batch(tmp_path)
+    manifest = _read_json(manifest_path)
+    manifest["completion_gates"]["require_node_evidence_matrix_coverage"] = False
+    _write_json(manifest_path, manifest)
+    matrix_path = tmp_path / "sample_node_evidence_matrix.json"
+    matrix = _read_json(matrix_path)
+    matrix["node_evidence_matrix"].pop()
+    _write_json(matrix_path, matrix)
+
+    theme = build_theme_batch_report(manifest_path)["theme_results"][0]
+
+    assert theme["ready"] is True
+    assert theme["node_evidence_matrix_coverage"] is False
+    assert "node_evidence_matrix_coverage" not in theme["checks"]
+    assert any("coverage mismatch" in error for error in theme["errors"])
+
+
 def test_manifest_rejects_duplicate_theme_ids(tmp_path: Path):
     manifest_path = _write_two_theme_manifest(tmp_path)
     manifest = _read_json(manifest_path)
@@ -431,6 +462,7 @@ def test_manifest_rejects_duplicate_theme_ids(tmp_path: Path):
         ("theme_path", "", "artifacts.theme"),
         ("theme_path", "/tmp/theme.json", "artifacts.theme"),
         ("theme_path", "../theme.json", "artifacts.theme"),
+        ("require_matrix_coverage", "yes", "require_node_evidence_matrix_coverage"),
     ],
 )
 def test_manifest_rejects_invalid_schema_base_theme_and_artifact_paths(
@@ -445,6 +477,8 @@ def test_manifest_rejects_invalid_schema_base_theme_and_artifact_paths(
         manifest["themes"]["sample_chain"]["theme_id"] = value
     elif field == "theme_path":
         manifest["themes"]["sample_chain"]["artifacts"]["theme"] = value
+    elif field == "require_matrix_coverage":
+        manifest["completion_gates"]["require_node_evidence_matrix_coverage"] = value
     else:
         manifest[field] = value
     _write_json(manifest_path, manifest)
@@ -543,6 +577,7 @@ def _write_ready_batch(root: Path) -> Path:
             "min_primary_sources": 4,
             "min_claims": 10,
             "min_reviewed_mappings": 8,
+            "require_node_evidence_matrix_coverage": True,
             "required_readable_sections": [
                 {
                     "name": "研究结论",

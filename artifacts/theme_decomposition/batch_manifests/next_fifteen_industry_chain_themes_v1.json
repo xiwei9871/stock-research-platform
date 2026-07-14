@@ -13,6 +13,7 @@
     "min_primary_sources": 4,
     "min_claims": 10,
     "min_reviewed_mappings": 8,
+    "require_node_evidence_matrix_coverage": true,
     "required_readable_sections": [
       {
         "name": "研究结论",

@@ -272,6 +272,11 @@ def _validate_manifest(manifest: dict[str, Any], path: Path) -> None:
             raise ValueError(
                 f"Theme batch manifest {path} completion gate {key!r} must be non-negative"
             )
+    if not isinstance(gates.get("require_node_evidence_matrix_coverage"), bool):
+        raise ValueError(
+            f"Theme batch manifest {path} completion gate "
+            "'require_node_evidence_matrix_coverage' must be boolean"
+        )
     sections = gates.get("required_readable_sections")
     if not isinstance(sections, list) or not sections:
         raise ValueError(
@@ -345,7 +350,7 @@ def _build_theme_result(
     )
     errors.extend(node_errors)
     (
-        counted_claims,
+        accepted_source_backed_claims,
         valid_claim_ids,
         claim_rows_valid,
         claim_errors,
@@ -393,15 +398,16 @@ def _build_theme_result(
         "theme_nodes_valid": theme_nodes_valid,
         "claim_rows_valid": claim_rows_valid,
         "mapping_rows_valid": mapping_rows_valid,
-        "node_evidence_matrix_coverage": matrix_coverage,
         "accepted_source_count": len(accepted_sources)
         >= gates["min_accepted_sources"],
         "primary_source_count": len(primary_sources) >= gates["min_primary_sources"],
-        "claim_count": len(counted_claims) >= gates["min_claims"],
+        "claim_count": len(valid_claim_ids) >= gates["min_claims"],
         "reviewed_mapping_count": len(reviewed_mappings)
         >= gates["min_reviewed_mappings"],
         "required_sections_ready": all(readable_sections.values()),
     }
+    if gates["require_node_evidence_matrix_coverage"]:
+        checks["node_evidence_matrix_coverage"] = matrix_coverage
     return {
         "chain_id": chain_id,
         "theme_id": expected_theme_id,
@@ -410,9 +416,11 @@ def _build_theme_result(
         "counts": {
             "accepted_sources": len(accepted_sources),
             "primary_sources": len(primary_sources),
-            "claims": len(counted_claims),
+            "claims": len(valid_claim_ids),
+            "accepted_source_backed_claims": len(accepted_source_backed_claims),
             "reviewed_mappings": len(reviewed_mappings),
         },
+        "node_evidence_matrix_coverage": matrix_coverage,
         "readable_sections": readable_sections,
         "required_sections_ready": all(readable_sections.values()),
         "checks": checks,
@@ -556,6 +564,11 @@ def _validate_claims(
         schema_valid_claims[claim_id] = row
         if source_id in accepted_source_ids:
             valid_claims[claim_id] = row
+        if (
+            row.get("platform_use_status") == "reviewed"
+            and source_id not in accepted_source_ids
+        ):
+            errors.append(f"{label} reviewed claim requires accepted source: {source_id}")
     return valid_claims, set(schema_valid_claims), not errors, errors
 
 
