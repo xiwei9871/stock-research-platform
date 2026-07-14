@@ -4,7 +4,7 @@
   "as_of_date": "2026-07-14",
   "sources": [
     {
-      "source_id": "ai_logic_mapping_688256_filing",
+      "source_id": "ai_logic_688256_2025_annual_report",
       "source_type": "company_filing",
       "title": "中科寒武纪科技股份有限公司2025年年度报告",
       "publisher": "寒武纪",
@@ -17,7 +17,7 @@
       "notes": "上交所年度报告全文，产品关系与分产品收入页已复核。"
     },
     {
-      "source_id": "ai_logic_mapping_688041_filing",
+      "source_id": "ai_logic_688041_2025_annual_report",
       "source_type": "company_filing",
       "title": "海光信息技术股份有限公司2025年年度报告",
       "publisher": "海光信息",
@@ -30,7 +30,7 @@
       "notes": "上交所年度报告全文，CPU/DCU产品关系已复核；未披露DCU单独收入。"
     },
     {
-      "source_id": "ai_logic_mapping_688047_filing",
+      "source_id": "ai_logic_688047_2025_annual_report",
       "source_type": "company_filing",
       "title": "龙芯中科2025年年度报告",
       "publisher": "龙芯中科",
@@ -43,7 +43,7 @@
       "notes": "巨潮资讯年度报告全文，处理器产品关系已复核；未披露服务器CPU单独收入。"
     },
     {
-      "source_id": "ai_logic_mapping_688521_filing",
+      "source_id": "ai_logic_688521_2025_annual_report",
       "source_type": "company_filing",
       "title": "芯原微电子（上海）股份有限公司2025年年度报告",
       "publisher": "芯原股份",
@@ -56,7 +56,7 @@
       "notes": "上交所年度报告全文，处理器IP、定制服务与收入结构页已复核。"
     },
     {
-      "source_id": "ai_logic_mapping_603893_filing",
+      "source_id": "ai_logic_603893_2025_annual_report",
       "source_type": "company_filing",
       "title": "瑞芯微电子股份有限公司2025年年度报告",
       "publisher": "瑞芯微",
@@ -69,7 +69,7 @@
       "notes": "上交所年度报告全文，AIoT SoC与智能应用处理器收入页已复核。"
     },
     {
-      "source_id": "ai_logic_mapping_688008_filing",
+      "source_id": "ai_logic_688008_2025_annual_report",
       "source_type": "company_filing",
       "title": "澜起科技股份有限公司2025年年度报告",
       "publisher": "澜起科技",
@@ -82,7 +82,7 @@
       "notes": "上交所年度报告全文，内存/PCIe/CXL互连与收入页已复核。"
     },
     {
-      "source_id": "ai_logic_mapping_688262_filing",
+      "source_id": "ai_logic_688262_2025_annual_report",
       "source_type": "company_filing",
       "title": "苏州国芯科技股份有限公司2025年年度报告",
       "publisher": "国芯科技",
@@ -95,7 +95,7 @@
       "notes": "上交所年度报告全文，嵌入式CPU IP、AI定制与分产品收入页已复核。"
     },
     {
-      "source_id": "ai_logic_mapping_688049_filing",
+      "source_id": "ai_logic_688049_2025_annual_report",
       "source_type": "company_filing",
       "title": "炬芯科技股份有限公司2025年年度报告",
       "publisher": "炬芯科技",
@@ -111,7 +111,7 @@
   "evidence_items": [
     {
       "evidence_id": "ai_logic_688256_product",
-      "source_id": "ai_logic_mapping_688256_filing",
+      "source_id": "ai_logic_688256_2025_annual_report",
       "evidence_type": "product_relationship",
       "excerpt_locator": "年度报告第12页，第三节‘主要业务、主要产品或服务情况’",
       "evidence_summary": "公司主营云服务器、边缘计算设备和终端设备中的人工智能核心芯片，产品线包括云端芯片及板卡、智能整机、边缘产品和软件。",
@@ -120,7 +120,7 @@
     },
     {
       "evidence_id": "ai_logic_688256_revenue",
-      "source_id": "ai_logic_mapping_688256_filing",
+      "source_id": "ai_logic_688256_2025_annual_report",
       "evidence_type": "revenue_materiality",
       "excerpt_locator": "年度报告第27页及第178页，主营业务分产品与营业收入分解",
       "evidence_summary": "2025年云端产品线构成绝大部分营业收入，人工智能芯片及系统交付属于公司核心主营业务。",
@@ -129,7 +129,7 @@
     },
     {
       "evidence_id": "ai_logic_688041_product",
-      "source_id": "ai_logic_mapping_688041_filing",
+      "source_id": "ai_logic_688041_2025_annual_report",
       "evidence_type": "product_relationship",
       "excerpt_locator": "年度报告第13-14页，主要业务及海光DCU产品说明",
       "evidence_summary": "公司研发、设计和销售服务器高端处理器，海光DCU基于GPGPU架构，面向人工智能、大模型训练推理、科学与商业计算。",
@@ -138,7 +138,7 @@
     },
     {
       "evidence_id": "ai_logic_688047_product",
-      "source_id": "ai_logic_mapping_688047_filing",
+      "source_id": "ai_logic_688047_2025_annual_report",
       "evidence_type": "product_relationship",
       "excerpt_locator": "年度报告第16页，主要业务、主要产品或服务情况",
       "evidence_summary": "公司主营处理器及配套芯片研制、销售和服务，并提供基于龙架构的基础软硬件解决方案。",
@@ -147,7 +147,7 @@
     },
     {
       "evidence_id": "ai_logic_688521_product",
-      "source_id": "ai_logic_mapping_688521_filing",
+      "source_id": "ai_logic_688521_2025_annual_report",
       "evidence_type": "service_relationship",
       "excerpt_locator": "年度报告第17-20页，主要业务与SiPaaS商业模式",
       "evidence_summary": "公司依托自主GPU、NPU、VPU、DSP等处理器IP提供半导体IP授权和一站式芯片定制服务。",
@@ -156,7 +156,7 @@
     },
     {
       "evidence_id": "ai_logic_688521_revenue",
-      "source_id": "ai_logic_mapping_688521_filing",
+      "source_id": "ai_logic_688521_2025_annual_report",
       "evidence_type": "revenue_materiality",
       "excerpt_locator": "年度报告第84页，主营业务分产品",
       "evidence_summary": "知识产权授权使用费、特许权使用费和芯片量产业务均形成主营业务收入，IP与设计服务具有明确收入贡献。",
@@ -165,7 +165,7 @@
     },
     {
       "evidence_id": "ai_logic_603893_product",
-      "source_id": "ai_logic_mapping_603893_filing",
+      "source_id": "ai_logic_603893_2025_annual_report",
       "evidence_type": "product_relationship",
       "excerpt_locator": "年度报告第10-15页，智能应用处理器与RK182X说明",
       "evidence_summary": "智能应用处理器集成CPU、GPU、NPU等内核；RK182X采用3D堆叠并面向端侧大模型推理和多模态任务。",
@@ -174,7 +174,7 @@
     },
     {
       "evidence_id": "ai_logic_603893_revenue",
-      "source_id": "ai_logic_mapping_603893_filing",
+      "source_id": "ai_logic_603893_2025_annual_report",
       "evidence_type": "revenue_materiality",
       "excerpt_locator": "年度报告第20页，主营业务分产品",
       "evidence_summary": "智能应用处理器芯片收入占2025年主营业务收入的主要部分，属于核心业务。",
@@ -183,7 +183,7 @@
     },
     {
       "evidence_id": "ai_logic_688008_product",
-      "source_id": "ai_logic_mapping_688008_filing",
+      "source_id": "ai_logic_688008_2025_annual_report",
       "evidence_type": "product_relationship",
       "excerpt_locator": "年度报告第18-26页，互连类芯片产品线",
       "evidence_summary": "公司互连芯片包括DDR内存接口、PCIe Retimer、CXL MXC和时钟芯片，直接服务服务器和硬件加速器的数据通路。",
@@ -192,7 +192,7 @@
     },
     {
       "evidence_id": "ai_logic_688008_revenue",
-      "source_id": "ai_logic_mapping_688008_filing",
+      "source_id": "ai_logic_688008_2025_annual_report",
       "evidence_type": "revenue_materiality",
       "excerpt_locator": "年度报告第69页，主营业务分产品",
       "evidence_summary": "互连类芯片贡献2025年主营业务收入的主要部分并披露独立毛利率，业务具备明确材料性。",
@@ -201,7 +201,7 @@
     },
     {
       "evidence_id": "ai_logic_688262_product",
-      "source_id": "ai_logic_mapping_688262_filing",
+      "source_id": "ai_logic_688262_2025_annual_report",
       "evidence_type": "service_relationship",
       "excerpt_locator": "年度报告第16-17页，IP授权与芯片定制服务业务",
       "evidence_summary": "公司基于RISC-V、PowerPC和M*Core研发嵌入式CPU内核，并向多个客户提供AI芯片定制设计和量产服务。",
@@ -210,7 +210,7 @@
     },
     {
       "evidence_id": "ai_logic_688262_revenue",
-      "source_id": "ai_logic_mapping_688262_filing",
+      "source_id": "ai_logic_688262_2025_annual_report",
       "evidence_type": "revenue_materiality",
       "excerpt_locator": "年度报告第74-75页，主营业务分产品",
       "evidence_summary": "自主芯片及模组、芯片定制服务和IP授权均形成主营收入，芯片定制服务为重要收入组成。",
@@ -219,7 +219,7 @@
     },
     {
       "evidence_id": "ai_logic_688049_product",
-      "source_id": "ai_logic_mapping_688049_filing",
+      "source_id": "ai_logic_688049_2025_annual_report",
       "evidence_type": "product_relationship",
       "excerpt_locator": "年度报告第12-13页，主要业务及端侧AI处理器芯片系列",
       "evidence_summary": "公司专注低功耗AIoT和智能音频SoC，并提供面向端侧AI音频场景的处理器芯片及开发工具。",
@@ -228,7 +228,7 @@
     },
     {
       "evidence_id": "ai_logic_688049_revenue",
-      "source_id": "ai_logic_mapping_688049_filing",
+      "source_id": "ai_logic_688049_2025_annual_report",
       "evidence_type": "revenue_materiality",
       "excerpt_locator": "年度报告第32页，主营业务分产品",
       "evidence_summary": "智能无线音频SoC、便携式音视频SoC和端侧AI处理器芯片系列均披露收入，AIoT SoC为核心主营业务。",

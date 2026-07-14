@@ -6,6 +6,7 @@ import json
 from dataclasses import dataclass, fields
 from pathlib import Path
 from typing import Any, Iterable
+from urllib.parse import urlsplit, urlunsplit
 
 from stock_research.theme_company_mapping import load_theme_company_mapping_package
 from stock_research.theme_decomposition import load_theme, load_theme_package
@@ -131,6 +132,10 @@ def normalize_artifact_package(
     for path in sorted(Path(theme_package["artifact_dir"]).glob("*.json")):
         artifact = json.loads(path.read_text(encoding="utf-8"))
         artifact_by_theme_id[artifact["theme"]["theme_id"]] = artifact
+    _validate_theme_source_identities(
+        artifact_by_theme_id=artifact_by_theme_id,
+        mapping_package=mapping_package,
+    )
     for theme in theme_package["themes"]:
         row = copy.deepcopy(theme)
         row["content_sha256"] = _content_sha256(theme)
@@ -261,6 +266,85 @@ def _source_comparison_row(row: dict[str, Any]) -> dict[str, Any]:
     comparable.pop("notes", None)
     comparable.pop("content_sha256", None)
     return comparable
+
+
+def _validate_theme_source_identities(
+    *,
+    artifact_by_theme_id: dict[str, dict[str, Any]],
+    mapping_package: dict[str, Any],
+) -> None:
+    evidence_source_by_id = {
+        evidence["evidence_id"]: evidence["source_id"]
+        for evidence in mapping_package["evidence_items"]
+    }
+    mapping_source_by_id = {
+        source["source_id"]: source for source in mapping_package.get("sources", [])
+    }
+    sources_by_theme: dict[str, list[dict[str, Any]]] = {
+        theme_id: list(artifact.get("sources", []))
+        for theme_id, artifact in artifact_by_theme_id.items()
+    }
+
+    for artifact in mapping_package["artifacts"]:
+        for mapping in artifact.get("company_mappings", []):
+            theme_id = mapping["theme_id"]
+            theme_sources = sources_by_theme.setdefault(theme_id, [])
+            for evidence_id in mapping.get("evidence_ids", []):
+                source_id = evidence_source_by_id.get(evidence_id)
+                source = mapping_source_by_id.get(source_id or "")
+                if source is not None:
+                    theme_sources.append(source)
+
+    for theme_id in sorted(sources_by_theme):
+        source_ids_by_url: dict[str, set[str]] = {}
+        for source in sources_by_theme[theme_id]:
+            normalized_url = _normalize_source_url(source.get("url_or_ref"))
+            if not normalized_url:
+                continue
+            source_ids_by_url.setdefault(normalized_url, set()).add(source["source_id"])
+        for normalized_url in sorted(source_ids_by_url):
+            source_ids = sorted(source_ids_by_url[normalized_url])
+            if len(source_ids) > 1:
+                raise ThemeResearchDomainError(
+                    f"duplicate source identity in theme {theme_id}: {normalized_url}",
+                    code="THEME_RESEARCH_DUPLICATE_SOURCE_IDENTITY",
+                    details={
+                        "theme_id": theme_id,
+                        "url": normalized_url,
+                        "source_ids": source_ids,
+                    },
+                )
+
+
+def _normalize_source_url(value: Any) -> str:
+    if not isinstance(value, str) or not value.strip():
+        return ""
+    parsed = urlsplit(value.strip())
+    path = parsed.path.rstrip("/") or "/"
+    return urlunsplit(
+        (
+            parsed.scheme.lower(),
+            _normalize_url_netloc(parsed.netloc),
+            path,
+            parsed.query,
+            "",
+        )
+    )
+
+
+def _normalize_url_netloc(netloc: str) -> str:
+    userinfo, separator, host_port = netloc.rpartition("@")
+    prefix = f"{userinfo}@" if separator else ""
+    if host_port.startswith("["):
+        closing_bracket = host_port.find("]")
+        if closing_bracket >= 0:
+            host = host_port[1:closing_bracket].lower()
+            suffix = host_port[closing_bracket + 1 :]
+            return f"{prefix}[{host}]{suffix}"
+    host, colon, port = host_port.rpartition(":")
+    if colon and host and port.isdigit():
+        return f"{prefix}{host.lower()}:{port}"
+    return f"{prefix}{host_port.lower()}"
 
 
 def semantic_diff(

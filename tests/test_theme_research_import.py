@@ -80,6 +80,259 @@ def test_normalize_artifacts_rejects_duplicate_source_core_field_conflict(
     assert exc_info.value.code == "THEME_RESEARCH_CONFLICTING_SOURCE"
 
 
+def test_normalize_artifacts_rejects_duplicate_source_identity_within_theme(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    theme_id = "theme-a"
+    theme_source = {
+        "source_id": "canonical-source",
+        "url_or_ref": "HTTPS://Example.COM/reports/annual.pdf/",
+    }
+    mapping_source = {
+        "source_id": "mapping-source",
+        "url_or_ref": "https://example.com/reports/annual.pdf#page=12",
+    }
+    artifact = {
+        "theme": {"theme_id": theme_id},
+        "sources": [theme_source],
+        "claims": [],
+        "value_capture_assessments": [],
+    }
+    (tmp_path / "theme-a.json").write_text(
+        import_module._canonical_json(artifact),
+        encoding="utf-8",
+    )
+    theme_package = {
+        "artifact_dir": str(tmp_path),
+        "artifact_versions": ["theme_decomposition_v1_6"],
+        "themes": [artifact["theme"]],
+        "nodes": [{"node_id": "node-a", "theme_id": theme_id}],
+        "sources": [theme_source],
+        "claims": [],
+    }
+    mapping_package = {
+        "artifacts": [
+            {
+                "theme_id": theme_id,
+                "sources": [mapping_source],
+                "company_mappings": [
+                    {
+                        "mapping_id": "mapping-a",
+                        "theme_id": theme_id,
+                        "mapped_node_id": "node-a",
+                        "evidence_ids": ["evidence-a"],
+                    }
+                ],
+            }
+        ],
+        "sources": [mapping_source],
+        "evidence_items": [
+            {
+                "evidence_id": "evidence-a",
+                "source_id": "mapping-source",
+            }
+        ],
+    }
+    monkeypatch.setattr(import_module, "load_theme_package", lambda _path: theme_package)
+    monkeypatch.setattr(import_module, "load_theme", lambda _theme_id, _path: artifact)
+    monkeypatch.setattr(
+        import_module,
+        "load_theme_company_mapping_package",
+        lambda _mapping_dir, _theme_dir: mapping_package,
+    )
+
+    with pytest.raises(ThemeResearchDomainError) as exc_info:
+        normalize_artifact_package()
+
+    assert exc_info.value.code == "THEME_RESEARCH_DUPLICATE_SOURCE_IDENTITY"
+    assert exc_info.value.details == {
+        "theme_id": theme_id,
+        "url": "https://example.com/reports/annual.pdf",
+        "source_ids": ["canonical-source", "mapping-source"],
+    }
+
+
+def test_source_identity_validation_allows_same_url_across_themes() -> None:
+    import_module._validate_theme_source_identities(
+        artifact_by_theme_id={
+            "theme-a": {
+                "sources": [
+                    {
+                        "source_id": "theme-a-source",
+                        "url_or_ref": "https://example.com/report.pdf",
+                    }
+                ]
+            },
+            "theme-b": {"sources": []},
+        },
+        mapping_package={
+            "artifacts": [
+                {
+                    "theme_id": "theme-b",
+                    "sources": [
+                        {
+                            "source_id": "theme-b-source",
+                            "url_or_ref": "https://example.com/report.pdf",
+                        }
+                    ],
+                    "company_mappings": [
+                        {
+                            "mapping_id": "mapping-b",
+                            "theme_id": "theme-b",
+                            "evidence_ids": ["evidence-b"],
+                        }
+                    ],
+                }
+            ],
+            "sources": [
+                {
+                    "source_id": "theme-b-source",
+                    "url_or_ref": "https://example.com/report.pdf",
+                }
+            ],
+            "evidence_items": [
+                {"evidence_id": "evidence-b", "source_id": "theme-b-source"}
+            ],
+        },
+    )
+
+
+def test_source_identity_validation_ignores_unreferenced_mapping_sources() -> None:
+    import_module._validate_theme_source_identities(
+        artifact_by_theme_id={
+            "theme-a": {
+                "sources": [
+                    {
+                        "source_id": "canonical-source",
+                        "url_or_ref": "https://example.com/report.pdf",
+                    }
+                ]
+            }
+        },
+        mapping_package={
+            "artifacts": [
+                {
+                    "theme_id": "theme-a",
+                    "sources": [
+                        {
+                            "source_id": "unused-mapping-source",
+                            "url_or_ref": "https://example.com/report.pdf",
+                        }
+                    ],
+                    "company_mappings": [
+                        {
+                            "mapping_id": "mapping-a",
+                            "theme_id": "theme-a",
+                            "evidence_ids": [],
+                        }
+                    ],
+                }
+            ],
+            "sources": [
+                {
+                    "source_id": "unused-mapping-source",
+                    "url_or_ref": "https://example.com/report.pdf",
+                }
+            ],
+            "evidence_items": [
+                {
+                    "evidence_id": "unused-evidence",
+                    "source_id": "unused-mapping-source",
+                }
+            ],
+        },
+    )
+
+
+def test_source_identity_validation_preserves_query_strings() -> None:
+    import_module._validate_theme_source_identities(
+        artifact_by_theme_id={
+            "theme-a": {
+                "sources": [
+                    {
+                        "source_id": "canonical-source",
+                        "url_or_ref": "https://example.com/report.pdf?version=1",
+                    }
+                ]
+            }
+        },
+        mapping_package={
+            "artifacts": [
+                {
+                    "theme_id": "theme-a",
+                    "sources": [
+                        {
+                            "source_id": "mapping-source",
+                            "url_or_ref": "https://example.com/report.pdf?version=2",
+                        }
+                    ],
+                    "company_mappings": [
+                        {
+                            "mapping_id": "mapping-a",
+                            "theme_id": "theme-a",
+                            "evidence_ids": ["evidence-a"],
+                        }
+                    ],
+                }
+            ],
+            "sources": [
+                {
+                    "source_id": "mapping-source",
+                    "url_or_ref": "https://example.com/report.pdf?version=2",
+                }
+            ],
+            "evidence_items": [
+                {"evidence_id": "evidence-a", "source_id": "mapping-source"}
+            ],
+        },
+    )
+
+
+def test_source_identity_validation_preserves_url_userinfo_case() -> None:
+    import_module._validate_theme_source_identities(
+        artifact_by_theme_id={
+            "theme-a": {
+                "sources": [
+                    {
+                        "source_id": "canonical-source",
+                        "url_or_ref": "https://User@example.com/report.pdf",
+                    }
+                ]
+            }
+        },
+        mapping_package={
+            "artifacts": [
+                {
+                    "theme_id": "theme-a",
+                    "sources": [
+                        {
+                            "source_id": "mapping-source",
+                            "url_or_ref": "https://user@EXAMPLE.COM/report.pdf",
+                        }
+                    ],
+                    "company_mappings": [
+                        {
+                            "mapping_id": "mapping-a",
+                            "theme_id": "theme-a",
+                            "evidence_ids": ["evidence-a"],
+                        }
+                    ],
+                }
+            ],
+            "sources": [
+                {
+                    "source_id": "mapping-source",
+                    "url_or_ref": "https://user@EXAMPLE.COM/report.pdf",
+                }
+            ],
+            "evidence_items": [
+                {"evidence_id": "evidence-a", "source_id": "mapping-source"}
+            ],
+        },
+    )
+
+
 def test_normalized_theme_metadata_preserves_research_profiles() -> None:
     artifact_package = load_theme_package()
     package = normalize_artifact_package()
