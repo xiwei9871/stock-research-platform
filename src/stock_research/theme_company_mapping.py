@@ -177,6 +177,28 @@ def summarize_theme_company_mapping_package(package: dict[str, Any]) -> dict[str
     }
 
 
+def validate_theme_company_mapping_artifact(
+    artifact: dict[str, Any],
+    theme_artifact: dict[str, Any],
+) -> None:
+    theme = theme_artifact.get("theme")
+    nodes = theme_artifact.get("nodes")
+    if not isinstance(theme, dict) or not isinstance(nodes, list):
+        raise ThemeCompanyMappingValidationError(
+            "theme artifact must contain theme object and nodes list",
+            code="INVALID_THEME_ARTIFACT",
+        )
+    package = {
+        "artifacts": [artifact],
+        "themes": [theme],
+        "theme_nodes": nodes,
+        "sources": artifact.get("sources", []),
+        "evidence_items": artifact.get("evidence_items", []),
+        "company_mappings": artifact.get("company_mappings", []),
+    }
+    _validate_package(package)
+
+
 def load_theme_company_mappings(
     theme_id: str,
     artifact_dir: str | Path | None = None,

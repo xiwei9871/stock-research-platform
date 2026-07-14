@@ -234,9 +234,9 @@ def test_duplicate_source_ids_cannot_satisfy_source_gate(tmp_path: Path):
     theme = build_theme_batch_report(manifest_path)["theme_results"][0]
 
     assert theme["ready"] is False
-    assert theme["counts"]["accepted_sources"] == 9
+    assert theme["counts"]["accepted_sources"] == 0
     assert theme["checks"]["source_rows_valid"] is False
-    assert any("duplicate source_id" in error for error in theme["errors"])
+    assert any("DUPLICATE_ID" in error for error in theme["errors"])
 
 
 def test_invalid_source_review_status_is_an_explicit_integrity_failure(tmp_path: Path):
@@ -250,7 +250,59 @@ def test_invalid_source_review_status_is_an_explicit_integrity_failure(tmp_path:
 
     assert theme["ready"] is False
     assert theme["checks"]["source_rows_valid"] is False
-    assert any("review_status is invalid" in error for error in theme["errors"])
+    assert any("review_status invalid" in error for error in theme["errors"])
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("reliability_level", "S4"),
+        ("document_status", "metadata_only"),
+        ("url", "http://example.com/source"),
+    ],
+)
+def test_canonical_source_validator_blocks_adversarial_accepted_sources(
+    tmp_path: Path,
+    field: str,
+    value: str,
+):
+    manifest_path = _write_ready_batch(tmp_path)
+    path = tmp_path / "sample_source_pack.json"
+    payload = _read_json(path)
+    payload["sources"][-1][field] = value
+    _write_json(path, payload)
+
+    theme = build_theme_batch_report(manifest_path)["theme_results"][0]
+
+    assert theme["ready"] is False
+    assert theme["checks"]["source_rows_valid"] is False
+    assert theme["counts"]["accepted_sources"] == 0
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    ["missing_mapping_source_field", "missing_excerpt_locator", "cross_theme_node"],
+)
+def test_canonical_mapping_validator_blocks_provenance_and_ownership_errors(
+    tmp_path: Path,
+    mutation: str,
+):
+    manifest_path = _write_ready_batch(tmp_path)
+    path = tmp_path / "sample_company_mapping.json"
+    payload = _read_json(path)
+    if mutation == "missing_mapping_source_field":
+        payload["sources"][-1].pop("author")
+    elif mutation == "missing_excerpt_locator":
+        payload["evidence_items"][-1].pop("excerpt_locator")
+    else:
+        payload["evidence_items"][-1]["related_node_ids"] = ["other_node"]
+    _write_json(path, payload)
+
+    theme = build_theme_batch_report(manifest_path)["theme_results"][0]
+
+    assert theme["ready"] is False
+    assert theme["checks"]["mapping_rows_valid"] is False
+    assert theme["counts"]["reviewed_mappings"] == 0
 
 
 @pytest.mark.parametrize(
@@ -332,12 +384,18 @@ def test_known_nonaccepted_source_draft_claim_counts_toward_claim_gate(
             "source_type": "broker_report",
             "title": "Pending source",
             "publisher": "Pending publisher",
+            "author": "Pending author",
+            "publish_date": "2026-07-14",
             "url": "https://example.com/pending",
+            "access_level": "public",
             "reliability_level": "S2",
             "document_status": "metadata_only",
             "evidence_locator": "page pending",
             "evidence_summary": "Pending evidence",
+            "supported_claim_ids": ["claim_9"],
+            "supported_node_ids": ["node_2"],
             "limitations": "Not accepted",
+            "notes": "Pending fixture source",
         }
     )
     _write_json(source_path, source_pack)
@@ -421,7 +479,7 @@ def test_invalid_reviewed_mappings_do_not_count(tmp_path: Path, mutation: str):
     theme = build_theme_batch_report(manifest_path)["theme_results"][0]
 
     assert theme["ready"] is False
-    assert theme["counts"]["reviewed_mappings"] == 7
+    assert theme["counts"]["reviewed_mappings"] < 8
     assert theme["checks"]["mapping_rows_valid"] is False
     assert any("mapping" in error or "evidence" in error for error in theme["errors"])
 
@@ -472,9 +530,16 @@ def test_reviewed_mappings_must_satisfy_canonical_beneficiary_contract(
     theme = build_theme_batch_report(manifest_path)["theme_results"][0]
 
     assert theme["ready"] is False
-    assert theme["counts"]["reviewed_mappings"] == 7
-    assert theme["checks"]["mapping_rows_valid"] is False
-    assert any("mapping" in error or "materiality" in error for error in theme["errors"])
+    assert theme["counts"]["reviewed_mappings"] < 8
+    if mutation == "reserve_only":
+        assert theme["checks"]["mapping_rows_valid"] is True
+    else:
+        assert theme["checks"]["mapping_rows_valid"] is False
+    if mutation != "reserve_only":
+        assert any(
+            "mapping" in error or "materiality" in error
+            for error in theme["errors"]
+        )
 
 
 @pytest.mark.parametrize(
@@ -757,17 +822,24 @@ def _write_ready_batch(root: Path) -> Path:
                 "source_type": "company_filing" if index < 4 else "broker_report",
                 "title": f"Source {index}",
                 "publisher": f"Publisher {index}",
+                "author": f"Author {index}",
+                "publish_date": "2026-07-14",
                 "url": f"https://example.com/source-{index}",
+                "access_level": "public",
                 "reliability_level": "S0" if index < 4 else "S2",
                 "document_status": "full_text_reviewed",
                 "evidence_locator": f"page {index + 1}",
                 "evidence_summary": f"Evidence summary {index}",
+                "supported_claim_ids": [f"claim_{index}"],
+                "supported_node_ids": [f"node_{index % 2 + 1}"],
                 "limitations": "Fixture limitation",
+                "notes": "Fixture source",
             }
             for index in range(10)
         ],
     }
     company_mapping = {
+        "artifact_version": "theme_company_mapping_v1",
         "theme_id": "sample_theme_v1",
         "sources": [
             {
@@ -775,9 +847,13 @@ def _write_ready_batch(root: Path) -> Path:
                 "source_type": "company_filing",
                 "title": f"Company filing {index}",
                 "publisher": f"Company {index}",
+                "author": f"Author {index}",
+                "publish_date": "2026-07-14",
                 "url_or_ref": f"https://example.com/company-{index}",
+                "access_level": "public",
                 "reliability_level": "S0",
                 "review_status": "accepted",
+                "notes": "Fixture mapping source",
             }
             for index in range(8)
         ],

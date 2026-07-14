@@ -40,9 +40,11 @@ SOURCE_REVIEW_STATUSES = {"accepted", "needs_full_text", "lead_only", "rejected"
 DOCUMENT_STATUSES = {
     "full_text_reviewed",
     "official_page_reviewed",
+    "primary_source_reviewed",
     "metadata_only",
     "access_blocked",
     "lead_only",
+    "pending_review",
 }
 CLAIM_TYPES = {
     "demand_shock",
@@ -54,11 +56,24 @@ CLAIM_TYPES = {
     "cost_structure",
     "tech_route",
     "valuation_signal",
+    "catalyst",
+    "risk",
 }
 EVIDENCE_STATUSES = {"verified", "partially_verified", "unverified", "contradicted"}
 CLAIM_REVIEW_DECISIONS = {"reviewed", "blocked", "research_lead", "draft"}
-SCORE_REVIEW_STATUSES = {"confirmed", "provisional", "unsupported", "conflicted"}
-EVIDENCE_GAP_STATUSES = {"supported", "technical_route_only", "evidence_gap"}
+SCORE_REVIEW_STATUSES = {
+    "confirmed",
+    "provisional",
+    "unsupported",
+    "conflicted",
+    "supported",
+}
+EVIDENCE_GAP_STATUSES = {
+    "supported",
+    "technical_route_only",
+    "evidence_gap",
+    "covered",
+}
 NODE_REVIEW_STATUSES = {"reviewed", "needs_evidence", "draft", "blocked"}
 VALUE_BASES = {
     "BOM_share",
@@ -185,7 +200,9 @@ def validate_ai_power_evidence_pack(package: dict[str, Any]) -> None:
     canonical_node_ids = {
         node["node_id"] for node in canonical_theme.get("nodes", []) if node.get("node_id")
     }
-    source_by_id = _validate_sources(package["sources"], canonical_node_ids)
+    source_by_id = validate_theme_evidence_sources(
+        package["sources"], canonical_node_ids
+    )
     claim_by_id = _validate_claim_reviews(
         package["claim_reviews"],
         source_by_id=source_by_id,
@@ -283,7 +300,7 @@ def _check_version(payload: dict[str, Any], expected: str, path: str) -> None:
         )
 
 
-def _validate_sources(
+def validate_theme_evidence_sources(
     sources: list[dict[str, Any]],
     canonical_node_ids: set[str],
 ) -> dict[str, dict[str, Any]]:
@@ -306,6 +323,7 @@ def _validate_sources(
             if source["document_status"] not in {
                 "official_page_reviewed",
                 "full_text_reviewed",
+                "primary_source_reviewed",
             }:
                 raise AiPowerEvidenceValidationError(
                     f"{path} accepted source requires reviewed document",

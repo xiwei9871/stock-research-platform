@@ -12,6 +12,7 @@ from stock_research.theme_company_mapping import (
     load_theme_company_mapping_package,
     load_theme_company_mappings,
     summarize_theme_company_mapping_package,
+    validate_theme_company_mapping_artifact,
 )
 
 
@@ -30,6 +31,39 @@ def test_ai_power_company_mapping_package_loads_and_summarizes():
     assert summary["mappings_by_business_stage"] == {"primary_business": 40}
     assert summary["mappings_by_node"]["liquid_cooling"] == 4
     assert summary["mappings_by_node"]["storage_cells_materials"] == 3
+
+
+def test_public_single_mapping_artifact_validator_accepts_canonical_artifact():
+    artifact = _read_json(
+        THEME_COMPANY_MAPPING_DIR / "ai_power_company_mapping_v1.json"
+    )
+    theme_artifact = _read_json(
+        THEME_COMPANY_MAPPING_DIR.parent / "ai_power_value_capture_v1.json"
+    )
+
+    validate_theme_company_mapping_artifact(artifact, theme_artifact)
+
+
+@pytest.mark.parametrize(
+    ("collection", "field"),
+    [("sources", "author"), ("evidence_items", "excerpt_locator")],
+)
+def test_public_single_mapping_artifact_validator_requires_canonical_provenance(
+    collection: str,
+    field: str,
+):
+    artifact = _read_json(
+        THEME_COMPANY_MAPPING_DIR / "ai_power_company_mapping_v1.json"
+    )
+    theme_artifact = _read_json(
+        THEME_COMPANY_MAPPING_DIR.parent / "ai_power_value_capture_v1.json"
+    )
+    artifact[collection][0].pop(field)
+
+    with pytest.raises(ThemeCompanyMappingValidationError) as exc_info:
+        validate_theme_company_mapping_artifact(artifact, theme_artifact)
+
+    assert exc_info.value.code == "MISSING_REQUIRED_FIELD"
 
 
 def test_theme_and_company_lookup_preserve_node_relationship():

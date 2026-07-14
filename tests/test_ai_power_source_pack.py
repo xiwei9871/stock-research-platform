@@ -10,6 +10,7 @@ from stock_research.ai_power_source_pack import (
     cli,
     load_ai_power_evidence_pack,
     summarize_ai_power_evidence_pack,
+    validate_theme_evidence_sources,
 )
 
 
@@ -19,32 +20,30 @@ def test_sample_ai_power_evidence_pack_loads_and_summarizes():
     summary = summarize_ai_power_evidence_pack(package)
 
     assert summary == {
-        "accepted_source_count": 7,
-        "claim_count": 8,
+        "accepted_source_count": 15,
+        "claim_count": 10,
         "claims_by_review_decision": {
             "blocked": 2,
-            "research_lead": 1,
-            "reviewed": 5,
+            "draft": 1,
+            "reviewed": 7,
         },
         "matrix_nodes_by_evidence_gap_status": {
-            "evidence_gap": 7,
-            "supported": 4,
-            "technical_route_only": 2,
+            "covered": 13,
         },
-        "needs_full_text_source_count": 4,
+        "needs_full_text_source_count": 1,
         "node_count": 13,
-        "source_count": 13,
+        "source_count": 18,
         "sources_by_reliability_level": {
-            "S0": 1,
-            "S1": 9,
+            "S0": 8,
+            "S1": 7,
             "S2": 1,
             "S3": 1,
             "S4": 1,
         },
         "sources_by_review_status": {
-            "accepted": 7,
+            "accepted": 15,
             "lead_only": 2,
-            "needs_full_text": 4,
+            "needs_full_text": 1,
         },
         "theme_id": "ai_power_value_capture_v1",
     }
@@ -60,10 +59,42 @@ def test_accepted_sources_have_traceable_excerpt_level_evidence():
     assert accepted_sources
     for source in accepted_sources:
         assert source["url"].startswith("https://")
-        assert source["document_status"] in {"official_page_reviewed", "full_text_reviewed"}
+        assert source["document_status"] in {
+            "official_page_reviewed",
+            "full_text_reviewed",
+            "primary_source_reviewed",
+        }
         assert source["evidence_locator"]
         assert source["evidence_summary"]
         assert source["limitations"]
+
+
+def test_public_theme_evidence_source_validator_returns_sources_by_id():
+    package = load_ai_power_evidence_pack()
+    canonical_node_ids = {
+        node["node_id"] for node in package["canonical_theme"]["nodes"]
+    }
+
+    source_by_id = validate_theme_evidence_sources(
+        package["sources"], canonical_node_ids
+    )
+
+    assert set(source_by_id) == {source["source_id"] for source in package["sources"]}
+
+
+def test_public_theme_evidence_source_validator_rejects_non_https_accepted_source():
+    package = load_ai_power_evidence_pack()
+    sources = [dict(source) for source in package["sources"]]
+    accepted = next(source for source in sources if source["review_status"] == "accepted")
+    accepted["url"] = "http://example.com/source"
+
+    with pytest.raises(AiPowerEvidenceValidationError) as exc_info:
+        validate_theme_evidence_sources(
+            sources,
+            {node["node_id"] for node in package["canonical_theme"]["nodes"]},
+        )
+
+    assert exc_info.value.code == "ACCEPTED_SOURCE_REQUIRES_PUBLIC_URL"
 
 
 def test_reviewed_claims_use_accepted_sources():
@@ -140,7 +171,7 @@ def test_cli_validate_emits_structured_json(capsys):
     assert exit_code == 0
     assert payload["status"] == "ok"
     assert payload["theme_id"] == "ai_power_value_capture_v1"
-    assert payload["accepted_source_count"] == 7
+    assert payload["accepted_source_count"] == 15
 
 
 def _copy_sample_pack(tmp_path: Path) -> tuple[Path, Path]:
