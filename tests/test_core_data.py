@@ -44,7 +44,7 @@ def test_sync_core_asset_master_does_not_overwrite_existing_region(monkeypatch):
     assert "region = COALESCE(NULLIF(a.region, ''), EXCLUDED.region)" in sql
 
 
-def test_sync_chinese_stock_names_from_akshare_updates_public_and_core(monkeypatch):
+def test_sync_chinese_stock_names_from_akshare_upserts_public_and_core(monkeypatch):
     conn = FakeConnection()
 
     class FakeAk:
@@ -54,8 +54,8 @@ def test_sync_chinese_stock_names_from_akshare_updates_public_and_core(monkeypat
 
             return pd.DataFrame(
                 [
-                    {"code": "002484", "name": "江海股份"},
-                    {"code": "600183", "name": "生益科技"},
+                    {"code": "001399", "name": "惠科股份"},
+                    {"code": "688001", "name": "华兴源创"},
                 ]
             )
 
@@ -68,12 +68,32 @@ def test_sync_chinese_stock_names_from_akshare_updates_public_and_core(monkeypat
     assert len(conn.executed_many) == 2
     public_sql, public_rows = conn.executed_many[0]
     core_sql, core_rows = conn.executed_many[1]
-    assert "UPDATE asset_master" in public_sql
-    assert "name = data.name" in public_sql
-    assert "UPDATE core.asset_master" in core_sql
-    assert "ts_code = data.ts_code" in core_sql
-    assert public_rows[0] == ("002484", "江海股份", "002484.SZ")
-    assert core_rows[1] == ("600183", "生益科技", "600183.SH")
+    assert "INSERT INTO asset_master" in public_sql
+    assert "ON CONFLICT (asset_id) DO UPDATE" in public_sql
+    assert "INSERT INTO core.asset_master" in core_sql
+    assert "ON CONFLICT (asset_id) DO UPDATE" in core_sql
+    assert "is_star" in core_sql
+    assert public_rows[0] == (
+        "CN:SZ:001399",
+        core_data.SETTINGS.default_market,
+        "001399",
+        "SZ",
+        "惠科股份",
+        core_data.SETTINGS.default_currency,
+    )
+    assert core_rows[1] == (
+        "CN:SH:688001",
+        "688001.SH",
+        "688001",
+        "688001",
+        "华兴源创",
+        "SH",
+        "STAR",
+        True,
+        False,
+        True,
+        False,
+    )
 
 
 def test_build_asset_status_daily_uses_point_in_time_daily_bars(monkeypatch):

@@ -97,33 +97,74 @@ def sync_chinese_stock_names_from_akshare(conn) -> int:
     if not rows:
         return 0
     public_sql = """
-    UPDATE asset_master AS a
-    SET
-        name = data.name,
+    INSERT INTO asset_master (
+        asset_id, market, symbol, exchange, name, currency, status, source, updated_at
+    )
+    VALUES (%s, %s, %s, %s, %s, %s, 'listed', 'akshare:stock_info_a_code_name', now())
+    ON CONFLICT (asset_id) DO UPDATE SET
+        market = EXCLUDED.market,
+        symbol = EXCLUDED.symbol,
+        exchange = EXCLUDED.exchange,
+        name = EXCLUDED.name,
+        currency = EXCLUDED.currency,
         updated_at = now()
-    FROM (VALUES (%s, %s, %s)) AS data(symbol, name, ts_code)
-    WHERE a.symbol = data.symbol
-      AND (a.name IS NULL OR a.name = '' OR a.name = a.symbol OR a.name <> data.name)
     """
     core_sql = """
-    UPDATE core.asset_master AS a
-    SET
-        name = data.name,
-        ts_code = data.ts_code,
+    INSERT INTO core.asset_master (
+        asset_id,
+        ts_code,
+        akshare_code,
+        symbol,
+        name,
+        exchange,
+        board,
+        is_active,
+        is_beijing,
+        is_star,
+        is_chinext,
+        source,
+        updated_at
+    )
+    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'akshare:stock_info_a_code_name', now())
+    ON CONFLICT (asset_id) DO UPDATE SET
+        ts_code = EXCLUDED.ts_code,
+        akshare_code = EXCLUDED.akshare_code,
+        symbol = EXCLUDED.symbol,
+        name = EXCLUDED.name,
+        exchange = EXCLUDED.exchange,
+        board = EXCLUDED.board,
+        is_active = EXCLUDED.is_active,
+        is_beijing = EXCLUDED.is_beijing,
+        is_star = EXCLUDED.is_star,
+        is_chinext = EXCLUDED.is_chinext,
         updated_at = now()
-    FROM (VALUES (%s, %s, %s)) AS data(symbol, name, ts_code)
-    WHERE a.symbol = data.symbol
-      AND (
-          a.name IS NULL OR a.name = '' OR a.name = a.symbol OR a.name <> data.name
-          OR a.ts_code IS NULL OR a.ts_code = ''
-      )
     """
-    execute_many(conn, public_sql, rows)
-    execute_many(conn, core_sql, rows)
+    public_rows = [
+        (asset_id, SETTINGS.default_market, symbol, exchange, name, SETTINGS.default_currency)
+        for asset_id, symbol, name, exchange, _ts_code in rows
+    ]
+    core_rows = [
+        (
+            asset_id,
+            ts_code,
+            symbol,
+            symbol,
+            name,
+            exchange,
+            _asset_board(symbol, exchange),
+            True,
+            exchange == "BJ",
+            exchange == "SH" and symbol.startswith("688"),
+            exchange == "SZ" and symbol.startswith(("300", "301", "302")),
+        )
+        for asset_id, symbol, name, exchange, ts_code in rows
+    ]
+    execute_many(conn, public_sql, public_rows)
+    execute_many(conn, core_sql, core_rows)
     return len(rows)
 
 
-def _normalize_akshare_code_name_rows(frame) -> list[tuple[str, str, str]]:
+def _normalize_akshare_code_name_rows(frame) -> list[tuple[str, str, str, str, str]]:
     if frame is None or frame.empty:
         return []
     code_column = "code" if "code" in frame.columns else "代码"
@@ -144,8 +185,20 @@ def _normalize_akshare_code_name_rows(frame) -> list[tuple[str, str, str]]:
             exchange = "BJ"
         else:
             continue
-        rows.append((symbol, name, f"{symbol}.{exchange}"))
+        rows.append((f"CN:{exchange}:{symbol}", symbol, name, exchange, f"{symbol}.{exchange}"))
     return rows
+
+
+def _asset_board(symbol: str, exchange: str) -> str:
+    if exchange == "BJ":
+        return "BSE"
+    if exchange == "SH" and symbol.startswith("688"):
+        return "STAR"
+    if exchange == "SZ" and symbol.startswith(("300", "301", "302")):
+        return "CHINEXT"
+    if exchange == "SH":
+        return "SSE_MAIN"
+    return "SZSE_MAIN"
 
 
 def sync_concept_memberships_from_akshare(
