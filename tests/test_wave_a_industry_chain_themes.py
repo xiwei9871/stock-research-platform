@@ -93,6 +93,27 @@ SEMICONDUCTOR_MATERIALS_MATRIX_PATH = (
     / "artifacts/theme_decomposition/source_packs"
     / "semiconductor_materials_electronic_chemicals_node_evidence_matrix_v1.json"
 )
+INDUSTRIAL_AUTOMATION_THEME_ID = "industrial_automation_control_value_chain_v1"
+INDUSTRIAL_AUTOMATION_CHAIN_ID = "industrial_automation_control"
+INDUSTRIAL_AUTOMATION_THEME_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/industrial_automation_control_value_chain_v1.json"
+)
+INDUSTRIAL_AUTOMATION_MAPPING_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/company_mappings"
+    / "industrial_automation_control_company_mapping_v1.json"
+)
+INDUSTRIAL_AUTOMATION_SOURCE_PACK_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "industrial_automation_control_source_pack_v1.json"
+)
+INDUSTRIAL_AUTOMATION_MATRIX_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "industrial_automation_control_node_evidence_matrix_v1.json"
+)
 MANIFEST_PATH = (
     REPOSITORY_ROOT
     / "artifacts/theme_decomposition/batch_manifests"
@@ -726,10 +747,17 @@ def test_semiconductor_materials_artifacts_load_and_batch_row_is_ready():
     assert {chain_id for chain_id, row in rows.items() if row["ready"]} == (
         implemented_chain_ids
     )
-    assert report["wave_results"]["wave_a"]["ready_theme_count"] == 3
-    assert report["wave_results"]["wave_a"]["not_ready_theme_count"] == 2
-    assert report["wave_results"]["wave_a"]["ready"] is False
-    assert report["completion_status"] == "not_ready"
+    assert report["wave_results"]["wave_a"]["ready_theme_count"] == len(
+        implemented_chain_ids
+    )
+    assert report["wave_results"]["wave_a"]["not_ready_theme_count"] == (
+        len(rows) - len(implemented_chain_ids)
+    )
+    wave_is_complete = len(implemented_chain_ids) == len(rows)
+    assert report["wave_results"]["wave_a"]["ready"] is wave_is_complete
+    assert report["completion_status"] == (
+        "ready" if wave_is_complete else "not_ready"
+    )
 
 
 def test_semiconductor_materials_evidence_mapping_and_semantic_links_are_exact():
@@ -903,3 +931,158 @@ def test_yake_display_photoresists_are_excluded_from_wafer_photoresist_evidence(
     assert "photoresists_ancillaries" not in source["supported_node_ids"]
     assert "显示" in source["evidence_summary"]
     assert "晶圆光刻胶证据" in source["limitations"]
+
+
+def test_industrial_automation_artifacts_load_and_batch_row_is_ready():
+    theme_package = load_theme_package()
+    mapping_package = load_theme_company_mapping_package()
+    priority_package = load_theme_research_priority_package()
+    catalog = load_industry_catalog()
+
+    assert INDUSTRIAL_AUTOMATION_THEME_ID in {
+        row["theme_id"] for row in theme_package["themes"]
+    }
+    assert INDUSTRIAL_AUTOMATION_THEME_ID in {
+        row["theme_id"] for row in mapping_package["company_mappings"]
+    }
+    assert INDUSTRIAL_AUTOMATION_THEME_ID in {
+        row["theme_id"] for row in priority_package["node_priorities"]
+    }
+    report = VERIFIER.build_theme_batch_report(MANIFEST_PATH, wave="wave_a")
+    rows = {row["chain_id"]: row for row in report["theme_results"]}
+    implemented_chain_ids = _implemented_wave_chain_ids("wave_a")
+
+    assert rows[INDUSTRIAL_AUTOMATION_CHAIN_ID]["ready"] is True
+    assert all(rows[INDUSTRIAL_AUTOMATION_CHAIN_ID]["checks"].values())
+    assert {chain_id for chain_id, row in rows.items() if row["ready"]} == (
+        implemented_chain_ids
+    )
+
+
+def test_industrial_automation_evidence_mapping_and_links_are_exact():
+    _assert_bidirectional_source_and_matrix_links(
+        INDUSTRIAL_AUTOMATION_THEME_PATH,
+        INDUSTRIAL_AUTOMATION_SOURCE_PACK_PATH,
+        INDUSTRIAL_AUTOMATION_MATRIX_PATH,
+        exact_node_claim_coverage=True,
+    )
+    theme = _read_json(INDUSTRIAL_AUTOMATION_THEME_PATH)
+    mapping = _read_json(INDUSTRIAL_AUTOMATION_MAPPING_PATH)
+    source_pack = _read_json(INDUSTRIAL_AUTOMATION_SOURCE_PACK_PATH)
+    node_ids = {row["node_id"] for row in theme["nodes"]}
+    accepted = validate_theme_evidence_sources(source_pack["sources"], node_ids)
+    reviewed_mappings = [
+        row for row in mapping["company_mappings"] if row["review_status"] == "reviewed"
+    ]
+
+    assert len([row for row in accepted.values() if row["review_status"] == "accepted"]) == 10
+    assert all(
+        row["source_type"] == "company_filing"
+        and row["reliability_level"] == "S0"
+        for row in source_pack["sources"]
+    )
+    assert len(theme["nodes"]) == 10
+    assert len(theme["claims"]) == 12
+    assert len(reviewed_mappings) == 10
+    assert all(set(row) >= CLAIM_FIELDS for row in theme["claims"])
+
+
+def test_industrial_automation_company_beneficiary_tiers_are_exact():
+    expected = {
+        "300124.SZ": ("core_beneficiary", "meaningful_segment", "meaningful"),
+        "688777.SH": ("core_beneficiary", "meaningful_segment", "meaningful"),
+        "688320.SH": ("core_beneficiary", "core_business", "material"),
+        "002979.SZ": ("core_beneficiary", "meaningful_segment", "material"),
+        "603416.SH": ("core_beneficiary", "meaningful_segment", "meaningful"),
+        "688698.SH": ("core_beneficiary", "core_business", "material"),
+        "688160.SH": ("elastic_beneficiary", "emerging_segment", "undisclosed"),
+        "688188.SH": ("core_beneficiary", "core_business", "material"),
+        "301510.SZ": ("core_beneficiary", "meaningful_segment", "meaningful"),
+        "002334.SZ": ("core_beneficiary", "core_business", "material"),
+    }
+    read_model = list_theme_research_companies(INDUSTRIAL_AUTOMATION_THEME_ID)
+    response = TestClient(dashboard_app.create_app()).get(
+        "/api/research/theme-decomposition/themes/"
+        f"{INDUSTRIAL_AUTOMATION_THEME_ID}/companies"
+    )
+
+    assert response.status_code == 200
+    for payload in (read_model, response.json()):
+        assert payload["total"] == len(expected)
+        assert {
+            row["company_code"]: (
+                row["beneficiary_tier"],
+                row["business_materiality"],
+                row["revenue_relevance"],
+            )
+            for row in payload["items"]
+        } == expected
+
+
+def test_industrial_automation_profile_and_catalog_cover_every_node():
+    theme = _read_json(INDUSTRIAL_AUTOMATION_THEME_PATH)
+    profile = theme["research_profile"]
+    node_ids = {row["node_id"] for row in theme["nodes"]}
+    claim_ids = {row["claim_id"] for row in theme["claims"]}
+    catalog = load_industry_catalog()
+    link = next(
+        row
+        for row in catalog["theme_links"]
+        if row["theme_id"] == INDUSTRIAL_AUTOMATION_THEME_ID
+    )
+
+    assert profile["catalog_chain_id"] == INDUSTRIAL_AUTOMATION_CHAIN_ID
+    assert profile["research_kind"] == "industry_chain_deep_research"
+    assert set(profile["catalyst_claim_ids"] + profile["risk_claim_ids"]) <= claim_ids
+    assert link["node_links"] == []
+    assert set(link["unmapped_theme_node_ids"]) == node_ids
+    result = verify_deep_theme_coverage(
+        INDUSTRIAL_AUTOMATION_THEME_ID,
+        catalog=catalog,
+        theme_context=load_theme_research_priority_package(),
+    )
+    assert result["ready"] is True
+    assert all(result["checks"].values())
+
+
+def test_industrial_automation_revenue_claims_keep_product_boundaries():
+    theme = _read_json(INDUSTRIAL_AUTOMATION_THEME_PATH)
+    mapping = _read_json(INDUSTRIAL_AUTOMATION_MAPPING_PATH)
+    claim_text = next(
+        row["claim_text"]
+        for row in theme["claims"]
+        if row["claim_id"] == "iac_claim_10_direct_revenue"
+    )
+    evidence_by_id = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+
+    assert "PLC与HMI合并口径" in claim_text
+    assert "控制系统总收入而非DCS收入" in claim_text
+    assert "伺服与控制系统合并口径" in claim_text
+    assert "控制系统包含HMI与PLC" in claim_text
+    assert "解决方案包含软件、控制器与硬件" in claim_text
+    assert "核心部件包含控制器、驱动器与编码器" in claim_text
+    assert "工业自动化总收入不能下沉到PLC或伺服节点" in claim_text
+    assert "18亿元为PLC与HMI合并口径" in evidence_by_id[
+        "iac_ev_300124_revenue"
+    ]["evidence_summary"]
+    assert "控制系统总收入11.80亿元" in evidence_by_id[
+        "iac_ev_688777_revenue"
+    ]["evidence_summary"]
+    assert "DCS或SIS独立收入" in evidence_by_id[
+        "iac_ev_688777_revenue"
+    ]["evidence_summary"]
+    assert "包含HMI与PLC" in evidence_by_id["iac_ev_688160_revenue"][
+        "evidence_summary"
+    ]
+    assert "5.765亿元为伺服与控制系统合并口径" in evidence_by_id[
+        "iac_ev_688698_revenue"
+    ]["evidence_summary"]
+    assert "不是纯运动控制卡收入" in evidence_by_id[
+        "iac_ev_688188_revenue"
+    ]["evidence_summary"]
+    assert "3.807亿元核心部件收入包含控制器、驱动器与编码器" in evidence_by_id[
+        "iac_ev_301510_revenue"
+    ]["evidence_summary"]
+    assert "28.111亿元工业自动化总收入不能归入PLC或伺服" in evidence_by_id[
+        "iac_ev_002334_revenue"
+    ]["evidence_summary"]

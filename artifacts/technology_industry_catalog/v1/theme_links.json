@@ -358,7 +358,18 @@
       "theme_id": "industrial_automation_control_value_chain_v1",
       "chain_id": "industrial_automation_control",
       "node_links": [],
-      "unmapped_theme_node_ids": []
+      "unmapped_theme_node_ids": [
+        "plc_pac_controllers",
+        "dcs_sis_process_control",
+        "servo_drive_motor_feedback",
+        "variable_frequency_drives",
+        "motion_control_cnc",
+        "industrial_network_remote_io",
+        "hmi_scada_visualization",
+        "industrial_software_platforms",
+        "automation_system_integration",
+        "lifecycle_maintenance_services"
+      ]
     },
     {
       "theme_id": "semiconductor_packaging_test_advanced_packaging_value_chain_v1",
