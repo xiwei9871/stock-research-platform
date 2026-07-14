@@ -61,6 +61,22 @@ export type TechnologyIndustryCatalogSummary = {
   readonly skeleton_chain_count: number;
   readonly structural_completeness_percent: number;
   readonly unexpanded_chain_ids: readonly string[];
+  readonly deep_research_chain_count?: number;
+};
+
+export type TechnologyIndustryDeepResearchSummary = {
+  readonly chain_id: string;
+  readonly chain_name: string;
+  readonly theme_id: string;
+  readonly theme_title: string;
+  readonly theme_route: string;
+  readonly research_status: 'not_started' | 'researching' | 'reviewed' | 'needs_update';
+  readonly freshness_status: 'not_available' | 'unknown' | 'current' | 'needs_update';
+  readonly source_count: number;
+  readonly claim_count: number;
+  readonly reviewed_company_count: number;
+  readonly evidence_gap_count: number;
+  readonly last_updated: string;
 };
 
 export type TechnologyIndustrySector = {
@@ -83,6 +99,7 @@ export type TechnologyIndustryChain = {
   readonly aliases: readonly string[];
   readonly status: TechnologyIndustryCatalogStatus;
   readonly order: number;
+  readonly deep_research?: TechnologyIndustryDeepResearchSummary | null;
 };
 
 export type TechnologyIndustryNode = {
@@ -142,4 +159,5 @@ export type TechnologyIndustryChainDetail = TechnologyIndustryCatalogGuardrails 
   readonly edges: readonly TechnologyIndustryEdge[];
   readonly theme_compositions: readonly TechnologyIndustryThemeComposition[];
   readonly theme_links: readonly TechnologyIndustryThemeLink[];
+  readonly deep_research?: TechnologyIndustryDeepResearchSummary | null;
 };

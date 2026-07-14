@@ -63,7 +63,13 @@ const catalogPayload = {
       exclusions: ['算力芯片'],
       aliases: ['AI Power', '智算中心电力'],
       status: 'skeleton',
-      order: 1
+      order: 1,
+      deep_research: {
+        chain_id: 'ai_data_center_power', chain_name: 'AI 数据中心供电', theme_id: 'ai_power_value_capture_v1',
+        theme_title: 'AI供电产业链：谁在拿走价值量', theme_route: '/theme-research/ai_power_value_capture_v1',
+        research_status: 'researching', freshness_status: 'current', source_count: 10, claim_count: 8,
+        reviewed_company_count: 4, evidence_gap_count: 3, last_updated: '2026-07-14'
+      }
     },
     {
       chain_id: 'humanoid_robot',
@@ -117,6 +123,7 @@ const aiPowerDetail = {
       unmapped_theme_node_ids: ['theme_backup_generator']
     }
   ],
+  deep_research: catalogPayload.chains[1].deep_research,
   research_only: true,
   used_for_signal: false,
   used_for_admission: false
@@ -254,6 +261,26 @@ describe('IndustryCatalogWorkspace', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /打开AI 数据中心供电产业链/ }));
     expect(onNavigate).toHaveBeenCalledWith('/theme-research/catalog/ai_data_center_power');
+  });
+
+  it('shows deep-research status in the directory and opens the linked Theme Research page', async () => {
+    const onNavigate = vi.fn();
+    const indexRender = render(<IndustryCatalogWorkspace pathname="/theme-research/catalog" onNavigate={onNavigate} />);
+    await screen.findByRole('heading', { name: '科技产业目录' });
+
+    const aiRow = screen.getByRole('button', { name: /打开AI 数据中心供电产业链/ }).closest('tr');
+    expect(aiRow).not.toBeNull();
+    expect(within(aiRow as HTMLTableRowElement).getByText('研究中')).toBeInTheDocument();
+
+    indexRender.unmount();
+    render(<IndustryCatalogWorkspace pathname="/theme-research/catalog/ai_data_center_power" onNavigate={onNavigate} />);
+    const card = await screen.findByRole('region', { name: '产业链深度研究' });
+    expect(within(card).getByText('AI供电产业链：谁在拿走价值量')).toBeInTheDocument();
+    expect(within(card).getByText('10 个来源')).toBeInTheDocument();
+    expect(within(card).getByText('4 家已审核公司')).toBeInTheDocument();
+
+    fireEvent.click(within(card).getByRole('button', { name: '进入深度研究' }));
+    expect(onNavigate).toHaveBeenCalledWith('/theme-research/ai_power_value_capture_v1');
   });
 
   it('preserves index search and sector filters after opening a chain and returning', async () => {

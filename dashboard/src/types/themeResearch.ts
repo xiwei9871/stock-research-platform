@@ -14,7 +14,36 @@ export type ThemeResearchTheme = ThemeResearchGuardrails & {
   last_updated: string;
 };
 
+export type ThemeResearchCatalogContext = {
+  chain_id: string;
+  chain_name: string;
+  sector_id: string;
+  catalog_route: string;
+};
+
+export type ThemeResearchProfile = {
+  catalog_chain_id: string;
+  research_kind: 'industry_chain_deep_research';
+  industry_stage: string;
+  central_conflict: string;
+  investment_summary: string;
+  value_flow_summary: string;
+  profit_pool_summary: string;
+  catalyst_claim_ids: string[];
+  risk_claim_ids: string[];
+  validation_signals: string[];
+  evidence_gap_summary: string;
+};
+
+export type ThemeResearchBeneficiaryTier =
+  | 'core_beneficiary'
+  | 'elastic_beneficiary'
+  | 'indirect_beneficiary'
+  | 'concept_association';
+
 export type ThemeResearchThemeIndexItem = ThemeResearchTheme & {
+  research_kind?: 'industry_chain_deep_research' | 'theme_research';
+  catalog_context?: ThemeResearchCatalogContext | null;
   node_count: number;
   source_count: number;
   claim_count: number;
@@ -119,6 +148,28 @@ export type ThemeResearchCompany = ThemeResearchGuardrails & {
     reviewer_decision: string;
   };
   tech_bottleneck_stock_path: string;
+  beneficiary_tier: ThemeResearchBeneficiaryTier;
+  mapping_evidence: Array<{
+    evidence_id: string;
+    evidence_type: string;
+    excerpt_locator: string;
+    evidence_summary: string;
+    related_company_codes: string[];
+    related_node_ids: string[];
+    source: {
+      source_id: string;
+      source_type: string;
+      title: string;
+      publisher: string;
+      author: string;
+      publish_date: string;
+      url_or_ref: string;
+      access_level: string;
+      reliability_level: string;
+      review_status: string;
+      notes: string;
+    };
+  }>;
 };
 
 export type ThemeResearchCollection<T> = {
@@ -156,6 +207,13 @@ export type ThemeResearchThemeDetail = ThemeResearchGuardrails & {
   top_node_priorities: ThemeResearchNode[];
   evidence_gaps: ThemeResearchNode[];
   top_company_priorities: ThemeResearchCompany[];
+  catalog_context: ThemeResearchCatalogContext | null;
+  research_profile: ThemeResearchProfile | null;
+  beneficiary_summary: {
+    total: number;
+    by_tier: Partial<Record<ThemeResearchBeneficiaryTier, number>>;
+    reviewed_beneficiary_count: number;
+  };
 };
 
 export type ThemeResearchThemeCollection = ThemeResearchCollection<ThemeResearchThemeIndexItem>;

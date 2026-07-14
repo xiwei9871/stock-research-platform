@@ -38,6 +38,13 @@ const METHOD_LABELS: Record<TechnologyIndustryDecompositionMethod, string> = {
   technical_route: '技术路线'
 };
 
+const DEEP_RESEARCH_STATUS_LABELS = {
+  not_started: '未开始',
+  researching: '研究中',
+  reviewed: '已审核',
+  needs_update: '需更新'
+} as const;
+
 function detailChainId(pathname: string) {
   const match = pathname.match(/^\/theme-research\/catalog\/([^/]+)$/);
   if (!match) return null;
@@ -243,7 +250,7 @@ function CatalogIndex({
           <div className="theme-research-table-wrap industry-catalog-table-wrap">
             <table className="theme-research-table industry-catalog-table">
               <thead>
-                <tr><th>产业链</th><th>类型</th><th>拆解方法</th><th>状态</th><th>节点展开</th></tr>
+                <tr><th>产业链</th><th>类型</th><th>拆解方法</th><th>状态</th><th>节点展开</th><th>深度研究</th></tr>
               </thead>
               <tbody>
                 {chains.map((chain) => {
@@ -267,6 +274,7 @@ function CatalogIndex({
                       <td>{METHOD_LABELS[chain.decomposition_method]}</td>
                       <td><Status value={chain.status} /></td>
                       <td>{expanded ? '已展开' : '未展开'}</td>
+                      <td>{chain.deep_research ? DEEP_RESEARCH_STATUS_LABELS[chain.deep_research.research_status] : '未选择'}</td>
                     </tr>
                   );
                 })}
@@ -317,6 +325,26 @@ function CatalogDetail({ detail, onNavigate }: { detail: TechnologyIndustryChain
           </table>
         </div>
       </section>
+      {detail.deep_research ? (
+        <section className="theme-research-section industry-catalog-deep-research" role="region" aria-label="产业链深度研究">
+          <div className="theme-research-view-header">
+            <div>
+              <h2>产业链深度研究</h2>
+              <strong>{detail.deep_research.theme_title || detail.chain.chain_name}</strong>
+            </div>
+            <span className="theme-research-status">{DEEP_RESEARCH_STATUS_LABELS[detail.deep_research.research_status]}</span>
+          </div>
+          <div className="industry-catalog-deep-research-metrics">
+            <span>{detail.deep_research.source_count} 个来源</span>
+            <span>{detail.deep_research.claim_count} 条观点</span>
+            <span>{detail.deep_research.reviewed_company_count} 家已审核公司</span>
+            <span>{detail.deep_research.evidence_gap_count} 个证据缺口</span>
+          </div>
+          <button className="icon-text-button" type="button" onClick={() => onNavigate(detail.deep_research?.theme_route ?? '/theme-research')}>
+            <Link2 size={16} aria-hidden="true" /> 进入深度研究
+          </button>
+        </section>
+      ) : null}
       <section className="theme-research-section industry-catalog-node-groups" aria-label="L3和L4节点">
         <h2>L3/L4 节点</h2>
         {l3Nodes.length ? l3Nodes.map((node) => (

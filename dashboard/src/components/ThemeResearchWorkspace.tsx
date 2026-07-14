@@ -10,6 +10,7 @@ import {
 } from '../api/themeResearch';
 import type {
   ThemeResearchClaim,
+  ThemeResearchBeneficiaryTier,
   ThemeResearchCompany,
   ThemeResearchNode,
   ThemeResearchSource,
@@ -166,6 +167,13 @@ function readableStatus(value: string) {
     cost_structure: '成本结构',
     tech_route: '技术路线',
     valuation_signal: '估值线索',
+    catalyst: '催化',
+    risk: '风险',
+    core_beneficiary: '核心受益',
+    elastic_beneficiary: '弹性受益',
+    indirect_beneficiary: '间接受益',
+    concept_association: '概念关联',
+    industry_chain_deep_research: '产业链深度研究',
     public: '公开',
     gated: '受限访问',
     private_claimed: '声称私有'
@@ -224,10 +232,10 @@ export function ThemeResearchWorkspace({ pathname, onNavigate, onOpenStock }: Pr
         })
       : Promise.all([
           fetchThemeResearchTheme(route.themeId),
-          route.tab === 'nodes' ? fetchThemeResearchNodes(route.themeId) : Promise.resolve(null),
-          route.tab === 'sources' ? fetchThemeResearchSources(route.themeId) : Promise.resolve(null),
-          route.tab === 'sources' ? fetchThemeResearchClaims(route.themeId) : Promise.resolve(null),
-          route.tab === 'companies' ? fetchThemeResearchCompanies(route.themeId) : Promise.resolve(null)
+          route.tab === 'nodes' || route.tab === 'overview' ? fetchThemeResearchNodes(route.themeId) : Promise.resolve(null),
+          route.tab === 'sources' || route.tab === 'overview' ? fetchThemeResearchSources(route.themeId) : Promise.resolve(null),
+          route.tab === 'sources' || route.tab === 'overview' ? fetchThemeResearchClaims(route.themeId) : Promise.resolve(null),
+          route.tab === 'companies' || route.tab === 'overview' ? fetchThemeResearchCompanies(route.themeId) : Promise.resolve(null)
         ]).then(([nextDetail, nextNodes, nextSources, nextClaims, nextCompanies]) => {
           if (cancelled) return;
           setDetail(nextDetail);
@@ -311,7 +319,11 @@ export function ThemeResearchWorkspace({ pathname, onNavigate, onOpenStock }: Pr
                   <tr key={theme.theme_id}>
                     <td>
                       <button className="theme-research-primary-link" type="button" onClick={() => onNavigate(`/theme-research/${theme.theme_id}`)} aria-label={`打开${theme.theme_name}`}>
-                        <strong>{theme.theme_name}</strong><small>{readableStatus(theme.theme_type)}</small>
+                        <strong>{theme.theme_name}</strong>
+                        <small>{readableStatus(theme.theme_type)}</small>
+                        {theme.research_kind === 'industry_chain_deep_research' ? (
+                          <small className="deep-research-theme-identity"><span>产业链深度研究</span> · <span>{theme.catalog_context?.chain_name}</span></small>
+                        ) : null}
                       </button>
                     </td>
                     <td><StatusBadge value={theme.status} /></td>
@@ -361,7 +373,9 @@ export function ThemeResearchWorkspace({ pathname, onNavigate, onOpenStock }: Pr
           </button>
         ))}
       </nav>
-      {route.tab === 'overview' ? <Overview detail={detail} /> : null}
+      {route.tab === 'overview' ? (
+        <Overview detail={detail} nodes={nodes} sources={sources} claims={claims} companies={companies} onOpenStock={onOpenStock} />
+      ) : null}
       {route.tab === 'nodes' ? (
         <NodesView nodes={filteredNodes} query={query} setQuery={setQuery} nodeState={nodeState} setNodeState={setNodeState} />
       ) : null}
@@ -375,7 +389,33 @@ function Metric({ label, value, tone = '' }: { label: string; value: number; ton
   return <div className={`theme-research-metric ${tone}`}><span>{label}</span><strong>{value}</strong></div>;
 }
 
-function Overview({ detail }: { detail: ThemeResearchThemeDetail }) {
+function Overview({
+  detail,
+  nodes,
+  sources,
+  claims,
+  companies,
+  onOpenStock
+}: {
+  detail: ThemeResearchThemeDetail;
+  nodes: ThemeResearchNode[];
+  sources: ThemeResearchSource[];
+  claims: ThemeResearchClaim[];
+  companies: ThemeResearchCompany[];
+  onOpenStock: (path: string) => void;
+}) {
+  if (detail.research_profile) {
+    return (
+      <DeepIndustryOverview
+        detail={detail}
+        nodes={nodes}
+        sources={sources}
+        claims={claims}
+        companies={companies}
+        onOpenStock={onOpenStock}
+      />
+    );
+  }
   return (
     <div className="theme-research-view">
       <section className="theme-research-section">
@@ -399,6 +439,122 @@ function Overview({ detail }: { detail: ThemeResearchThemeDetail }) {
         </div>
       </section>
     </div>
+  );
+}
+
+function DeepIndustryOverview({
+  detail,
+  nodes,
+  sources,
+  claims,
+  companies,
+  onOpenStock
+}: {
+  detail: ThemeResearchThemeDetail;
+  nodes: ThemeResearchNode[];
+  sources: ThemeResearchSource[];
+  claims: ThemeResearchClaim[];
+  companies: ThemeResearchCompany[];
+  onOpenStock: (path: string) => void;
+}) {
+  const profile = detail.research_profile;
+  if (!profile) return null;
+  const catalysts = claims.filter((claim) => profile.catalyst_claim_ids.includes(claim.claim_id));
+  const risks = claims.filter((claim) => profile.risk_claim_ids.includes(claim.claim_id));
+  return (
+    <div className="theme-research-view deep-industry-research-view">
+      <section className="theme-research-section deep-research-conclusion">
+        <h2>研究结论</h2>
+        <p className="deep-research-lead">{profile.investment_summary}</p>
+        <dl className="deep-research-definition-list">
+          <div><dt>产业阶段</dt><dd>{readableStatus(profile.industry_stage)}</dd></div>
+          <div><dt>核心矛盾</dt><dd>{profile.central_conflict}</dd></div>
+        </dl>
+      </section>
+      <section className="theme-research-section deep-research-value-chain">
+        <h2>价值链</h2>
+        <p className="deep-research-flow">{profile.value_flow_summary}</p>
+        <NodeTable nodes={nodes} compact />
+      </section>
+      <section className="theme-research-section deep-research-profit-pool">
+        <h2>利润池与竞争壁垒</h2>
+        <p>{profile.profit_pool_summary}</p>
+      </section>
+      <section className="theme-research-section deep-research-catalysts-risks">
+        <h2>催化、验证信号与风险</h2>
+        <div className="deep-research-three-column">
+          <div><h3>催化</h3>{catalysts.length ? <ul>{catalysts.map((claim) => <li key={claim.claim_id}>{claim.claim_text}</li>)}</ul> : <p className="muted">尚无已结构化催化观点。</p>}</div>
+          <div><h3>验证信号</h3><ul>{profile.validation_signals.map((signal) => <li key={signal}>{signal}</li>)}</ul></div>
+          <div><h3>风险</h3>{risks.length ? <ul>{risks.map((claim) => <li key={claim.claim_id}>{claim.claim_text}</li>)}</ul> : <p className="muted">尚无已结构化风险观点。</p>}</div>
+        </div>
+      </section>
+      <BeneficiarySection companies={companies} onOpenStock={onOpenStock} />
+      <section className="theme-research-section deep-research-sources">
+        <h2>来源证据</h2>
+        {sources.length ? (
+          <ul className="deep-research-source-list">
+            {sources.map((source) => (
+              <li key={source.source_id}>
+                <strong>{source.title}</strong>
+                <span>{source.publisher} · {source.publish_date || '未标注日期'} · {source.reliability_level}</span>
+                <StatusBadge value={source.review_status} />
+              </li>
+            ))}
+          </ul>
+        ) : <div className="theme-research-empty">当前主题还没有关联来源。</div>}
+      </section>
+      <section className="theme-research-section deep-research-gaps">
+        <h2>证据缺口与更新</h2>
+        <p>{profile.evidence_gap_summary}</p>
+        <NodeTable nodes={detail.evidence_gaps} compact />
+      </section>
+    </div>
+  );
+}
+
+const BENEFICIARY_FILTERS: Array<{ value: 'reviewed' | ThemeResearchBeneficiaryTier; label: string }> = [
+  { value: 'reviewed', label: '已审核受益' },
+  { value: 'core_beneficiary', label: '核心受益' },
+  { value: 'elastic_beneficiary', label: '弹性受益' },
+  { value: 'indirect_beneficiary', label: '间接受益' },
+  { value: 'concept_association', label: '概念关联' }
+];
+
+function BeneficiarySection({ companies, onOpenStock }: {
+  companies: ThemeResearchCompany[];
+  onOpenStock: (path: string) => void;
+}) {
+  const [filter, setFilter] = useState<'reviewed' | ThemeResearchBeneficiaryTier>('reviewed');
+  const visible = companies.filter((company) => (
+    filter === 'reviewed' ? company.beneficiary_tier !== 'concept_association' : company.beneficiary_tier === filter
+  ));
+  return (
+    <section className="theme-research-section deep-research-beneficiaries" role="region" aria-label="受益公司">
+      <h2>受益公司</h2>
+      <div className="deep-research-beneficiary-filters" aria-label="受益公司分层">
+        {BENEFICIARY_FILTERS.map((item) => (
+          <button key={item.value} type="button" aria-pressed={filter === item.value} onClick={() => setFilter(item.value)}>{item.label}</button>
+        ))}
+      </div>
+      {visible.length ? (
+        <div className="theme-research-table-wrap">
+          <table className="theme-research-table deep-research-beneficiary-table">
+            <thead><tr><th>公司</th><th>分层</th><th>价值链节点</th><th>产品/服务</th><th>业务重要性</th><th>证据</th><th>操作</th></tr></thead>
+            <tbody>{visible.map((company) => (
+              <tr key={company.mapping_id}>
+                <td><strong>{company.company_name}</strong><small>{company.company_code}</small></td>
+                <td><StatusBadge value={company.beneficiary_tier} /></td>
+                <td>{nodeLabel(company.mapped_node.node_id, company.mapped_node.node_name)}</td>
+                <td>{company.product_or_service}<small>{company.relationship_summary}</small></td>
+                <td>{readableStatus(company.business_materiality)}<small>{readableStatus(company.revenue_relevance)}</small></td>
+                <td>{company.mapping_evidence.length}<small>{company.mapping_evidence[0]?.evidence_summary || '待补直接证据'}</small></td>
+                <td><button className="icon-button" type="button" onClick={() => onOpenStock(company.tech_bottleneck_stock_path)} aria-label={`打开${company.company_name}个股工作台`} title="打开个股工作台"><ExternalLink size={16} aria-hidden="true" /></button></td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+      ) : <div className="theme-research-empty">当前分层没有公司。</div>}
+    </section>
   );
 }
 
