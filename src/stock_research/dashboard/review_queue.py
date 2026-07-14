@@ -321,6 +321,12 @@ def _read_manifest_strategy_artifact(
                 "source_rank": rank,
                 "review_tier": str(row.get("review_tier") or ("top5_focus" if rank <= 5 else "top10_watch")),
                 "stock_name": _optional_text(row.get("stock_name") or row.get("name") or row.get("security_name")),
+                "top5_eligible": _optional_bool(row.get("top5_eligible")),
+                "risk_gate_code": _optional_text(row.get("risk_gate_code")),
+                "risk_gate_reason": _optional_text(row.get("risk_gate_reason")),
+                "price_limit_regime": _optional_text(row.get("price_limit_regime")),
+                "near_limit_down_threshold": _optional_float(row.get("near_limit_down_threshold")),
+                "pct_chg": _optional_float(row.get("pct_chg")),
                 "score_source": score_source,
                 "score_explanation": score_explanation,
                 "review_notes": _optional_json_list(row.get("review_notes")),
@@ -781,7 +787,10 @@ def _strategy_lightweight_digest(row: dict[str, Any], asset_id: str, trade_date:
     display_name = _row_display_name(row, asset_id)
     rank = _optional_int(row.get("rank"))
     tier = str(row.get("review_tier") or "")
-    tier_label = "Top5 重点复盘" if tier == "top5_focus" else "Top6-10 观察"
+    tier_label = {
+        "top5_focus": "Top5 重点复盘",
+        "risk_watch": "跌停风险观察",
+    }.get(tier, "Top6-10 观察")
     title = f"{strategy_name} {tier_label}"
     facts = [
         {
@@ -815,6 +824,15 @@ def _strategy_lightweight_digest(row: dict[str, Any], asset_id: str, trade_date:
             }
         )
     risk_flags = [dict(flag) for flag in (row.get("risk_flags") or []) if isinstance(flag, dict)]
+    risk_gate_code = _optional_text(row.get("risk_gate_code"))
+    if risk_gate_code:
+        risk_flags.append(
+            {
+                "code": risk_gate_code,
+                "message": _optional_text(row.get("risk_gate_reason")) or risk_gate_code,
+                "severity": "warning",
+            }
+        )
     digest_warnings = [str(warning) for warning in (row.get("warnings") or []) if str(warning)]
     if not digest_warnings:
         digest_warnings.append("策略列表页为轻量复盘，完整新闻/研报证据请打开个股工作台")
@@ -927,6 +945,12 @@ def _queue_item(
         "strategy_name": _optional_text(row.get("strategy_name") or lineage.get("strategy_name")),
         "strategy_run_id": strategy_run_id,
         "review_tier": _optional_text(row.get("review_tier")),
+        "top5_eligible": _optional_bool(row.get("top5_eligible")),
+        "risk_gate_code": _optional_text(row.get("risk_gate_code")),
+        "risk_gate_reason": _optional_text(row.get("risk_gate_reason")),
+        "price_limit_regime": _optional_text(row.get("price_limit_regime")),
+        "near_limit_down_threshold": _optional_float(row.get("near_limit_down_threshold")),
+        "pct_chg": _optional_float(row.get("pct_chg")),
         "weight": _optional_float(row.get("weight")),
         "factor_as_of": str(lineage.get("factor_as_of") or trade_date),
         "factor_snapshot_id": _optional_text(lineage.get("factor_snapshot_id") or row.get("factor_snapshot_id")),
@@ -1143,6 +1167,19 @@ def _optional_float(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _optional_bool(value: Any) -> bool | None:
+    if value in (None, ""):
+        return None
+    if isinstance(value, bool):
+        return value
+    text = str(value).strip().lower()
+    if text in {"true", "1", "yes"}:
+        return True
+    if text in {"false", "0", "no"}:
+        return False
+    return None
 
 
 def _optional_text(value: Any) -> str | None:
