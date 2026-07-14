@@ -1,0 +1,179 @@
+{
+  "artifact_version": "theme_decomposition_v1_6",
+  "theme": {
+    "theme_id": "intelligent_driving_smart_cockpit_value_chain_v1",
+    "theme_name": "智能驾驶与智能座舱价值链",
+    "theme_type": "other",
+    "summary": "覆盖车端感知、数据闭环、定位地图、智驾计算与软件、座舱域控与人机交互、舱驾融合、量产验证及生命周期服务；跨链传感器、芯片和线控执行仅表达应用依赖。",
+    "status": "reviewed",
+    "created_from": "mixed",
+    "last_updated": "2026-07-15"
+  },
+  "research_profile": {
+    "catalog_chain_id": "intelligent_driving_smart_cockpit",
+    "research_kind": "industry_chain_deep_research",
+    "industry_stage": "L2/L2+辅助驾驶与智能座舱已规模量产，域控制、数据闭环、操作系统和多模态交互持续升级；高阶自动驾驶、舱驾融合与后装运营仍需按车型、法规、交付和收入逐项验证。",
+    "central_conflict": "技术展示、项目定点和量产功能不能直接外推为高阶自动驾驶收入或成熟利润；宽汽车电子、智能汽车和AI解决方案收入也不能替代单一节点收入。",
+    "investment_summary": "优先验证已量产的感知硬件、域控制器、座舱平台、DMS/OMS、HUD与汽车软件收入，并将地图、算法、舱驾融合、激光雷达、线控执行和生命周期服务的未拆收入保留为缺口。",
+    "value_flow_summary": "价值流由摄像头、毫米波雷达等车端感知进入算法与数据闭环，经定位地图、智驾计算、规划决策和车辆控制接口形成辅助驾驶功能；座舱侧由计算平台、域控、OS/中间件进入显示、HUD、声学和人机交互，再在DMS/OMS与舱驾融合层汇合，最终经过量产验证、功能安全、数据合规和生命周期运营兑现。",
+    "profit_pool_summary": "可验证利润池集中在规模量产的域控制器、汽车软件IP与开发服务、DMS/OMS算法授权、HUD/显示系统和具备车规交付能力的感知系统；项目制集成、宽口径硬件、验证期融合方案与未拆地图算法收入不构成稳定利润池证据。",
+    "catalyst_claim_ids": [
+      "cockpit_claim_05_driving_compute_domain_control",
+      "cockpit_claim_06_driving_software_l2_boundary",
+      "cockpit_claim_11_dms_oms_fusion_validation",
+      "cockpit_claim_12_integration_safety_compliance"
+    ],
+    "risk_claim_ids": [
+      "cockpit_claim_02_sensor_scope_boundary",
+      "cockpit_claim_04_positioning_map_disclosure_gap",
+      "cockpit_claim_07_by_wire_cross_chain",
+      "cockpit_claim_08_cockpit_compute_cross_chain",
+      "cockpit_claim_13_aftermarket_lifecycle_gap",
+      "cockpit_claim_14_revenue_project_maturity_boundary"
+    ],
+    "readable_section_claim_ids": {
+      "conclusion": [
+        "cockpit_claim_02_sensor_scope_boundary",
+        "cockpit_claim_05_driving_compute_domain_control",
+        "cockpit_claim_06_driving_software_l2_boundary",
+        "cockpit_claim_11_dms_oms_fusion_validation",
+        "cockpit_claim_14_revenue_project_maturity_boundary"
+      ],
+      "value_chain": [
+        "cockpit_claim_01_value_flow",
+        "cockpit_claim_02_sensor_scope_boundary",
+        "cockpit_claim_03_perception_data_closed_loop",
+        "cockpit_claim_04_positioning_map_disclosure_gap",
+        "cockpit_claim_05_driving_compute_domain_control",
+        "cockpit_claim_06_driving_software_l2_boundary",
+        "cockpit_claim_07_by_wire_cross_chain",
+        "cockpit_claim_08_cockpit_compute_cross_chain",
+        "cockpit_claim_09_cockpit_domain_os_middleware",
+        "cockpit_claim_10_display_hud_hmi",
+        "cockpit_claim_11_dms_oms_fusion_validation",
+        "cockpit_claim_12_integration_safety_compliance",
+        "cockpit_claim_13_aftermarket_lifecycle_gap"
+      ],
+      "profit_pool_barriers": [
+        "cockpit_claim_02_sensor_scope_boundary",
+        "cockpit_claim_03_perception_data_closed_loop",
+        "cockpit_claim_05_driving_compute_domain_control",
+        "cockpit_claim_06_driving_software_l2_boundary",
+        "cockpit_claim_09_cockpit_domain_os_middleware",
+        "cockpit_claim_10_display_hud_hmi",
+        "cockpit_claim_11_dms_oms_fusion_validation",
+        "cockpit_claim_12_integration_safety_compliance",
+        "cockpit_claim_14_revenue_project_maturity_boundary"
+      ],
+      "catalysts_validation_risks": [
+        "cockpit_claim_05_driving_compute_domain_control",
+        "cockpit_claim_06_driving_software_l2_boundary",
+        "cockpit_claim_11_dms_oms_fusion_validation",
+        "cockpit_claim_12_integration_safety_compliance",
+        "cockpit_claim_14_revenue_project_maturity_boundary"
+      ],
+      "beneficiary_companies": [
+        "cockpit_claim_02_sensor_scope_boundary",
+        "cockpit_claim_04_positioning_map_disclosure_gap",
+        "cockpit_claim_05_driving_compute_domain_control",
+        "cockpit_claim_06_driving_software_l2_boundary",
+        "cockpit_claim_09_cockpit_domain_os_middleware",
+        "cockpit_claim_10_display_hud_hmi",
+        "cockpit_claim_11_dms_oms_fusion_validation",
+        "cockpit_claim_12_integration_safety_compliance",
+        "cockpit_claim_13_aftermarket_lifecycle_gap",
+        "cockpit_claim_14_revenue_project_maturity_boundary"
+      ],
+      "source_evidence": [
+        "cockpit_claim_01_value_flow",
+        "cockpit_claim_02_sensor_scope_boundary",
+        "cockpit_claim_03_perception_data_closed_loop",
+        "cockpit_claim_04_positioning_map_disclosure_gap",
+        "cockpit_claim_05_driving_compute_domain_control",
+        "cockpit_claim_06_driving_software_l2_boundary",
+        "cockpit_claim_07_by_wire_cross_chain",
+        "cockpit_claim_08_cockpit_compute_cross_chain",
+        "cockpit_claim_09_cockpit_domain_os_middleware",
+        "cockpit_claim_10_display_hud_hmi",
+        "cockpit_claim_11_dms_oms_fusion_validation",
+        "cockpit_claim_12_integration_safety_compliance",
+        "cockpit_claim_13_aftermarket_lifecycle_gap",
+        "cockpit_claim_14_revenue_project_maturity_boundary"
+      ],
+      "evidence_gaps": [
+        "cockpit_claim_03_perception_data_closed_loop",
+        "cockpit_claim_04_positioning_map_disclosure_gap",
+        "cockpit_claim_06_driving_software_l2_boundary",
+        "cockpit_claim_07_by_wire_cross_chain",
+        "cockpit_claim_08_cockpit_compute_cross_chain",
+        "cockpit_claim_11_dms_oms_fusion_validation",
+        "cockpit_claim_13_aftermarket_lifecycle_gap",
+        "cockpit_claim_14_revenue_project_maturity_boundary"
+      ]
+    },
+    "validation_signals": [
+      "分车型量产交付与软件版本",
+      "分业务收入、毛利率和现金回款",
+      "功能安全、预期功能安全与数据合规认证",
+      "定点转量产、样品转批量和舱驾融合真实装车",
+      "后装SaaS续费、车队运营与生命周期服务收入"
+    ],
+    "evidence_gap_summary": "10份2025年报和10条reviewed映射可覆盖主要量产公司，但地图、感知算法、规划软件、舱驾融合、激光雷达、线控执行和生命周期服务的单节点收入仍普遍未拆。"
+  },
+  "nodes": [
+    {"node_id":"vehicle_perception_sensors_dependency","theme_id":"intelligent_driving_smart_cockpit_value_chain_v1","parent_node_id":"","node_name":"车端传感器与感知硬件依赖","node_type":"core_component","description":"摄像头、毫米波雷达与超声波雷达承担环境和舱内感知；激光雷达仅在公司直接披露产品主体和量产证据时纳入，本主题不重复传感器链所有权。","value_capture_score":4,"bottleneck_score":4,"localization_gap_score":3,"supply_tightness_score":3,"evidence_strength":5,"node_review_status":"reviewed","key_metrics":["车载摄像头收入","雷达/摄像头出货量","车规认证","单车搭载量"],"overseas_leaders":["Bosch","Continental","Valeo"],"domestic_players":["德赛西威","华阳集团","欧菲光","豪恩汽电"],"related_stock_codes":["002920.SZ","002906.SZ","002456.SZ","301488.SZ"]},
+    {"node_id":"perception_algorithms_data_closed_loop","theme_id":"intelligent_driving_smart_cockpit_value_chain_v1","parent_node_id":"","node_name":"感知算法与数据闭环","node_type":"software","description":"视觉感知、融合、标注、训练、仿真、回灌和合规数据治理形成持续迭代闭环，价值取决于量产覆盖、数据质量和软件收费。","value_capture_score":5,"bottleneck_score":5,"localization_gap_score":3,"supply_tightness_score":3,"evidence_strength":4,"node_review_status":"reviewed","key_metrics":["算法授权收入","数据闭环客户数","回灌里程","模型迭代周期"],"overseas_leaders":["Mobileye","NVIDIA","Qualcomm"],"domestic_players":["四维图新","虹软科技","光庭信息"],"related_stock_codes":["002405.SZ","688088.SH","301221.SZ"]},
+    {"node_id":"positioning_mapping_inertial_navigation","theme_id":"intelligent_driving_smart_cockpit_value_chain_v1","parent_node_id":"","node_name":"定位、地图与惯导","node_type":"software","description":"高精定位、导航地图、动态地图、惯导融合和位置服务支撑行泊与座舱导航；地图、数据合规和云服务宽口径不能替代地图单节点收入。","value_capture_score":4,"bottleneck_score":4,"localization_gap_score":3,"supply_tightness_score":2,"evidence_strength":4,"node_review_status":"reviewed","key_metrics":["地图数据收入","量产车型","更新频率","定位精度"],"overseas_leaders":["HERE","TomTom","Google"],"domestic_players":["四维图新","光庭信息"],"related_stock_codes":["002405.SZ","301221.SZ"]},
+    {"node_id":"intelligent_driving_compute_domain_control","theme_id":"intelligent_driving_smart_cockpit_value_chain_v1","parent_node_id":"","node_name":"智驾计算平台与域控制器","node_type":"subsystem","description":"智驾域控把车规计算平台、接口、散热、基础软件和传感器接入整合为可量产控制器，规模、平台复用和交付质量决定价值。","value_capture_score":5,"bottleneck_score":5,"localization_gap_score":3,"supply_tightness_score":3,"evidence_strength":5,"node_review_status":"reviewed","key_metrics":["域控收入","量产车型","平台复用率","单机毛利率"],"overseas_leaders":["Bosch","Aptiv","ZF"],"domestic_players":["德赛西威","华阳集团","经纬恒润"],"related_stock_codes":["002920.SZ","002906.SZ","688326.SH"]},
+    {"node_id":"planning_decision_middleware_driving_software","theme_id":"intelligent_driving_smart_cockpit_value_chain_v1","parent_node_id":"","node_name":"规划决策、中间件与自动驾驶软件","node_type":"software","description":"感知融合后的预测、规划、控制、中间件与行泊软件形成辅助驾驶功能；L2/L2+量产不能外推为高阶自动驾驶收入。","value_capture_score":5,"bottleneck_score":5,"localization_gap_score":4,"supply_tightness_score":3,"evidence_strength":4,"node_review_status":"reviewed","key_metrics":["软件收入","功能订阅率","量产车型","接管与安全指标"],"overseas_leaders":["Mobileye","NVIDIA","Waymo"],"domestic_players":["德赛西威","四维图新","经纬恒润","光庭信息"],"related_stock_codes":["002920.SZ","002405.SZ","688326.SH","301221.SZ"]},
+    {"node_id":"by_wire_execution_vehicle_control_dependency","theme_id":"intelligent_driving_smart_cockpit_value_chain_v1","parent_node_id":"","node_name":"线控执行与车辆控制接口依赖","node_type":"subsystem","description":"智驾软件通过制动、转向、动力和底盘接口执行控制；硬件本体归electric_drive_chassis等链，本主题仅研究接口、冗余、功能安全和集成依赖。","value_capture_score":3,"bottleneck_score":5,"localization_gap_score":4,"supply_tightness_score":3,"evidence_strength":3,"node_review_status":"reviewed","key_metrics":["接口覆盖","冗余等级","ASIL等级","量产车型"],"overseas_leaders":["Bosch","ZF","BorgWarner"],"domestic_players":["经纬恒润","光庭信息"],"related_stock_codes":["688326.SH","301221.SZ"]},
+    {"node_id":"cockpit_soc_compute_platform_dependency","theme_id":"intelligent_driving_smart_cockpit_value_chain_v1","parent_node_id":"","node_name":"座舱SoC与计算平台依赖","node_type":"core_component","description":"座舱应用依赖SoC、NPU、内存和车规计算平台，但芯片本体归automotive_electronics_chip_applications链，本主题只保留平台适配和应用依赖。","value_capture_score":4,"bottleneck_score":5,"localization_gap_score":4,"supply_tightness_score":3,"evidence_strength":4,"node_review_status":"reviewed","key_metrics":["芯片平台适配数","量产车型","算力利用率","平台生命周期"],"overseas_leaders":["Qualcomm","NVIDIA","Renesas"],"domestic_players":["华阳集团","中科创达","四维图新"],"related_stock_codes":["002906.SZ","300496.SZ","002405.SZ"]},
+    {"node_id":"cockpit_domain_control_os_middleware","theme_id":"intelligent_driving_smart_cockpit_value_chain_v1","parent_node_id":"","node_name":"座舱域控制器、操作系统与中间件","node_type":"subsystem","description":"座舱域控、AIOS、虚拟化、基础软件和中间件连接芯片平台与应用，价值来自软硬解耦、跨平台复用和量产交付。","value_capture_score":5,"bottleneck_score":5,"localization_gap_score":3,"supply_tightness_score":3,"evidence_strength":5,"node_review_status":"reviewed","key_metrics":["座舱域控收入","OS许可收入","量产车型","平台适配数"],"overseas_leaders":["Qualcomm","BlackBerry QNX","Elektrobit"],"domestic_players":["德赛西威","华阳集团","中科创达","光庭信息"],"related_stock_codes":["002920.SZ","002906.SZ","300496.SZ","301221.SZ"]},
+    {"node_id":"display_hud_acoustics_human_machine_interaction","theme_id":"intelligent_driving_smart_cockpit_value_chain_v1","parent_node_id":"","node_name":"显示、HUD、声学与人机交互","node_type":"subsystem","description":"车载显示、HUD/AR-HUD、数字声学、语音和3D HMI把座舱计算转化为可感知体验，量产、光学性能和软件交互决定溢价。","value_capture_score":4,"bottleneck_score":4,"localization_gap_score":2,"supply_tightness_score":2,"evidence_strength":5,"node_review_status":"reviewed","key_metrics":["HUD/显示收入","量产车型","AR-HUD良率","软件授权"],"overseas_leaders":["Continental","Visteon","Panasonic"],"domestic_players":["华阳集团","德赛西威","光庭信息"],"related_stock_codes":["002906.SZ","002920.SZ","301221.SZ"]},
+    {"node_id":"dms_oms_cockpit_driving_fusion","theme_id":"intelligent_driving_smart_cockpit_value_chain_v1","parent_node_id":"","node_name":"DMS、OMS与舱驾融合","node_type":"subsystem","description":"DMS/OMS、舱内外感知和舱泊/舱驾融合连接安全监控与交互；量产DMS/OMS可验证，融合样品、POC或定点不等于成熟利润。","value_capture_score":5,"bottleneck_score":4,"localization_gap_score":3,"supply_tightness_score":2,"evidence_strength":5,"node_review_status":"reviewed","key_metrics":["DMS/OMS收入","法规认证","量产车型","融合方案收入"],"overseas_leaders":["Seeing Machines","Smart Eye","Valeo"],"domestic_players":["虹软科技","欧菲光","锐明技术","德赛西威"],"related_stock_codes":["688088.SH","002456.SZ","002970.SZ","002920.SZ"]},
+    {"node_id":"system_integration_validation_safety_compliance","theme_id":"intelligent_driving_smart_cockpit_value_chain_v1","parent_node_id":"","node_name":"系统集成、量产验证、功能安全与数据合规","node_type":"service","description":"车型适配、ASPICE、ISO 26262/21448、网络安全、数据合规、测试验证和供应链交付决定项目能否从样件进入规模量产。","value_capture_score":4,"bottleneck_score":5,"localization_gap_score":3,"supply_tightness_score":3,"evidence_strength":5,"node_review_status":"reviewed","key_metrics":["认证等级","验证周期","量产项目数","测试服务收入"],"overseas_leaders":["Aptiv","Bosch Engineering","Vector"],"domestic_players":["经纬恒润","光庭信息","四维图新"],"related_stock_codes":["688326.SH","301221.SZ","002405.SZ"]},
+    {"node_id":"aftermarket_operations_lifecycle_services","theme_id":"intelligent_driving_smart_cockpit_value_chain_v1","parent_node_id":"","node_name":"后装、运营与生命周期服务","node_type":"service","description":"商用车后装、SaaS、车队运营、OTA、远程运维、数据服务和软件升级延长单车价值，但独立订阅、续费和生命周期收入仍需披露。","value_capture_score":3,"bottleneck_score":3,"localization_gap_score":2,"supply_tightness_score":2,"evidence_strength":3,"node_review_status":"reviewed","key_metrics":["SaaS收入","续费率","在线车辆数","OTA服务收入"],"overseas_leaders":["Geotab","Samsara","Mobileye"],"domestic_players":["锐明技术","光庭信息"],"related_stock_codes":["002970.SZ","301221.SZ"]}
+  ],
+  "claims": [
+    {"claim_id":"cockpit_claim_01_value_flow","theme_id":"intelligent_driving_smart_cockpit_value_chain_v1","source_id":"cockpit_002920_ar2025","claim_text":"智能驾驶与智能座舱价值流由车端感知、算法与数据闭环、定位地图、智驾计算和软件进入车辆控制接口；座舱侧由计算平台、域控OS中间件进入显示HUD声学与HMI，并在DMS/OMS、舱驾融合、量产验证和生命周期服务层汇合。","claim_type":"tech_route","confidence":0.98,"evidence_status":"verified","platform_use_status":"reviewed","supporting_source_ids":["cockpit_002906_ar2025","cockpit_300496_ar2025","cockpit_002405_ar2025","cockpit_688326_ar2025","cockpit_301221_ar2025"],"affected_theme_nodes":["vehicle_perception_sensors_dependency","perception_algorithms_data_closed_loop","positioning_mapping_inertial_navigation","intelligent_driving_compute_domain_control","planning_decision_middleware_driving_software","by_wire_execution_vehicle_control_dependency","cockpit_soc_compute_platform_dependency","cockpit_domain_control_os_middleware","display_hud_acoustics_human_machine_interaction","dms_oms_cockpit_driving_fusion","system_integration_validation_safety_compliance","aftermarket_operations_lifecycle_services"]},
+    {"claim_id":"cockpit_claim_02_sensor_scope_boundary","theme_id":"intelligent_driving_smart_cockpit_value_chain_v1","source_id":"cockpit_301488_ar2025","claim_text":"摄像头、超声波雷达和毫米波雷达已有直接主体与量产收入证据；激光雷达若公司只是布局、零部件或非直接主体，不能虚挂为激光雷达量产受益，感知硬件所有权也不在本主题重复。","claim_type":"bottleneck","confidence":0.99,"evidence_status":"verified","platform_use_status":"reviewed","supporting_source_ids":["cockpit_002456_ar2025","cockpit_002920_ar2025","cockpit_002906_ar2025","cockpit_688326_ar2025","cockpit_688088_ar2025","cockpit_002970_ar2025"],"affected_theme_nodes":["vehicle_perception_sensors_dependency","dms_oms_cockpit_driving_fusion"]},
+    {"claim_id":"cockpit_claim_03_perception_data_closed_loop","theme_id":"intelligent_driving_smart_cockpit_value_chain_v1","source_id":"cockpit_002405_ar2025","claim_text":"感知算法的价值来自采集、脱敏、标注、训练、仿真、回灌和合规治理构成的数据闭环，但多数公司未拆算法授权、数据处理和云服务单节点收入。","claim_type":"value_capture","confidence":0.95,"evidence_status":"verified","platform_use_status":"reviewed","supporting_source_ids":["cockpit_002920_ar2025","cockpit_688088_ar2025","cockpit_002970_ar2025","cockpit_301488_ar2025","cockpit_301221_ar2025"],"affected_theme_nodes":["perception_algorithms_data_closed_loop","system_integration_validation_safety_compliance"]},
+    {"claim_id":"cockpit_claim_04_positioning_map_disclosure_gap","theme_id":"intelligent_driving_smart_cockpit_value_chain_v1","source_id":"cockpit_002405_ar2025","claim_text":"地图、定位、惯导、数据合规和云服务共同支撑智驾与座舱导航；地图、算法和软件收入未拆时必须保留缺口，智云宽口径不能全部计作高精地图收入。","claim_type":"risk","confidence":0.99,"evidence_status":"verified","platform_use_status":"reviewed","supporting_source_ids":["cockpit_301221_ar2025"],"affected_theme_nodes":["positioning_mapping_inertial_navigation"]},
+    {"claim_id":"cockpit_claim_05_driving_compute_domain_control","theme_id":"intelligent_driving_smart_cockpit_value_chain_v1","source_id":"cockpit_002920_ar2025","claim_text":"智驾域控制器的价值来自车规计算、接口、散热、基础软件、传感器接入、平台复用和规模交付；明确分业务收入与量产车型比单纯大算力概念更能验证材料性。","claim_type":"value_capture","confidence":0.98,"evidence_status":"verified","platform_use_status":"reviewed","supporting_source_ids":["cockpit_002906_ar2025","cockpit_002405_ar2025","cockpit_688326_ar2025","cockpit_301488_ar2025"],"affected_theme_nodes":["intelligent_driving_compute_domain_control"]},
+    {"claim_id":"cockpit_claim_06_driving_software_l2_boundary","theme_id":"intelligent_driving_smart_cockpit_value_chain_v1","source_id":"cockpit_002920_ar2025","claim_text":"L2/L2+功能量产不等于高阶自动驾驶收入；辅助驾驶、NOA、L3/L4能力和自动驾驶软件必须按功能范围、责任边界、量产车型及独立收入分别验证。","claim_type":"risk","confidence":0.99,"evidence_status":"verified","platform_use_status":"reviewed","supporting_source_ids":["cockpit_002405_ar2025","cockpit_688326_ar2025","cockpit_688088_ar2025","cockpit_002970_ar2025","cockpit_301488_ar2025","cockpit_301221_ar2025"],"affected_theme_nodes":["intelligent_driving_compute_domain_control","planning_decision_middleware_driving_software"]},
+    {"claim_id":"cockpit_claim_07_by_wire_cross_chain","theme_id":"intelligent_driving_smart_cockpit_value_chain_v1","source_id":"cockpit_688326_ar2025","claim_text":"智驾决策需要制动、转向、动力和底盘接口执行，但线控硬件本体归electric_drive_chassis等链，本主题只保留控制接口、冗余、功能安全和系统集成依赖，不重复所有权。","claim_type":"bottleneck","confidence":0.99,"evidence_status":"verified","platform_use_status":"reviewed","supporting_source_ids":["cockpit_301221_ar2025"],"affected_theme_nodes":["by_wire_execution_vehicle_control_dependency","system_integration_validation_safety_compliance"]},
+    {"claim_id":"cockpit_claim_08_cockpit_compute_cross_chain","theme_id":"intelligent_driving_smart_cockpit_value_chain_v1","source_id":"cockpit_300496_ar2025","claim_text":"座舱SoC和车规计算平台是应用底座，但芯片本体归automotive_electronics_chip_applications链；本主题只研究OS、中间件、平台适配和座舱应用对算力的依赖，不重复所有权。","claim_type":"bottleneck","confidence":0.99,"evidence_status":"verified","platform_use_status":"reviewed","supporting_source_ids":["cockpit_002906_ar2025","cockpit_002405_ar2025"],"affected_theme_nodes":["cockpit_soc_compute_platform_dependency"]},
+    {"claim_id":"cockpit_claim_09_cockpit_domain_os_middleware","theme_id":"intelligent_driving_smart_cockpit_value_chain_v1","source_id":"cockpit_300496_ar2025","claim_text":"座舱域控、AIOS、虚拟化和中间件通过软硬解耦、跨芯片适配和量产服务承接价值；智能汽车宽口径收入仍不能直接视作单一OS或座舱软件收入。","claim_type":"value_capture","confidence":0.97,"evidence_status":"verified","platform_use_status":"reviewed","supporting_source_ids":["cockpit_002920_ar2025","cockpit_002906_ar2025","cockpit_002405_ar2025","cockpit_688326_ar2025","cockpit_301221_ar2025"],"affected_theme_nodes":["cockpit_domain_control_os_middleware"]},
+    {"claim_id":"cockpit_claim_10_display_hud_hmi","theme_id":"intelligent_driving_smart_cockpit_value_chain_v1","source_id":"cockpit_002906_ar2025","claim_text":"显示、HUD/AR-HUD、数字声学和3D HMI的价值来自光学性能、交互软件、量产良率与客户平台复用；汽车电子宽收入不能全部下沉为HUD或HMI收入。","claim_type":"value_capture","confidence":0.97,"evidence_status":"verified","platform_use_status":"reviewed","supporting_source_ids":["cockpit_002920_ar2025","cockpit_300496_ar2025","cockpit_688326_ar2025","cockpit_002456_ar2025","cockpit_301221_ar2025"],"affected_theme_nodes":["display_hud_acoustics_human_machine_interaction"]},
+    {"claim_id":"cockpit_claim_11_dms_oms_fusion_validation","theme_id":"intelligent_driving_smart_cockpit_value_chain_v1","source_id":"cockpit_688088_ar2025","claim_text":"DMS/OMS已有法规认证、量产车型和车载AI收入可验证；舱驾融合样品或项目不等于成熟利润，POC、原型、可量产状态、定点和即将量产必须与规模收入分开。","claim_type":"catalyst","confidence":0.99,"evidence_status":"verified","platform_use_status":"reviewed","supporting_source_ids":["cockpit_002920_ar2025","cockpit_002906_ar2025","cockpit_300496_ar2025","cockpit_002405_ar2025","cockpit_688326_ar2025","cockpit_002456_ar2025","cockpit_002970_ar2025","cockpit_301221_ar2025"],"affected_theme_nodes":["dms_oms_cockpit_driving_fusion","cockpit_domain_control_os_middleware"]},
+    {"claim_id":"cockpit_claim_12_integration_safety_compliance","theme_id":"intelligent_driving_smart_cockpit_value_chain_v1","source_id":"cockpit_688326_ar2025","claim_text":"从样件到量产必须经过车型适配、ASPICE、ISO 26262/21448、网络安全、数据合规、测试验证、供应链和持续交付，系统集成和验证能力本身构成壁垒。","claim_type":"bottleneck","confidence":0.98,"evidence_status":"verified","platform_use_status":"reviewed","supporting_source_ids":["cockpit_002920_ar2025","cockpit_002405_ar2025","cockpit_688088_ar2025","cockpit_002970_ar2025","cockpit_301488_ar2025","cockpit_301221_ar2025"],"affected_theme_nodes":["system_integration_validation_safety_compliance"]},
+    {"claim_id":"cockpit_claim_13_aftermarket_lifecycle_gap","theme_id":"intelligent_driving_smart_cockpit_value_chain_v1","source_id":"cockpit_002970_ar2025","claim_text":"商用车后装、车队运营、SaaS、OTA、远程运维和数据服务可延长单车价值，但后装硬件、AI解决方案和云平台收入未完全拆分，续费率与生命周期服务收入仍是缺口。","claim_type":"risk","confidence":0.96,"evidence_status":"verified","platform_use_status":"reviewed","supporting_source_ids":["cockpit_301221_ar2025"],"affected_theme_nodes":["aftermarket_operations_lifecycle_services"]},
+    {"claim_id":"cockpit_claim_14_revenue_project_maturity_boundary","theme_id":"intelligent_driving_smart_cockpit_value_chain_v1","source_id":"cockpit_002920_ar2025","claim_text":"定点、合作或开发中不等于量产收入；宽汽车电子、智能汽车、智云、电子产品、AI解决方案和智能汽车产品收入不能自动归入单一节点，必须同时锁定产品关系、量产阶段、收入材料性、客户验证和风险边界。","claim_type":"risk","confidence":0.99,"evidence_status":"verified","platform_use_status":"reviewed","supporting_source_ids":["cockpit_002906_ar2025","cockpit_300496_ar2025","cockpit_002405_ar2025","cockpit_688326_ar2025","cockpit_688088_ar2025","cockpit_002456_ar2025","cockpit_002970_ar2025","cockpit_301488_ar2025","cockpit_301221_ar2025"],"affected_theme_nodes":["vehicle_perception_sensors_dependency","perception_algorithms_data_closed_loop","positioning_mapping_inertial_navigation","intelligent_driving_compute_domain_control","planning_decision_middleware_driving_software","by_wire_execution_vehicle_control_dependency","cockpit_soc_compute_platform_dependency","cockpit_domain_control_os_middleware","display_hud_acoustics_human_machine_interaction","dms_oms_cockpit_driving_fusion","system_integration_validation_safety_compliance","aftermarket_operations_lifecycle_services"]}
+  ],
+  "value_capture_assessments": [
+    {"node_id":"vehicle_perception_sensors_dependency","rank":1,"value_basis":"customer_certification","assessment_text":"车载感知硬件具备规模量产与认证壁垒，但激光雷达和跨链器件必须核验直接主体。","evidence_ids":["cockpit_claim_02_sensor_scope_boundary"],"uncertainty":"摄像头、雷达和激光雷达单品收入拆分不足。"},
+    {"node_id":"perception_algorithms_data_closed_loop","rank":2,"value_basis":"technology_barrier","assessment_text":"数据闭环和感知算法决定持续迭代速度，软件收费与数据服务口径仍需拆分。","evidence_ids":["cockpit_claim_03_perception_data_closed_loop"],"uncertainty":"算法授权、数据处理与云服务收入未普遍独立披露。"},
+    {"node_id":"positioning_mapping_inertial_navigation","rank":3,"value_basis":"technology_barrier","assessment_text":"地图定位具备资质和更新壁垒，但宽智云收入不能视作纯地图收入。","evidence_ids":["cockpit_claim_04_positioning_map_disclosure_gap"],"uncertainty":"高精地图与数据合规服务收入边界不清。"},
+    {"node_id":"intelligent_driving_compute_domain_control","rank":4,"value_basis":"integration_control","assessment_text":"域控承接硬件、软件和量产交付，是当前材料性最清晰的智驾利润池之一。","evidence_ids":["cockpit_claim_05_driving_compute_domain_control"],"uncertainty":"高阶功能收入与硬件平台收入仍需分拆。"},
+    {"node_id":"planning_decision_middleware_driving_software","rank":5,"value_basis":"technology_barrier","assessment_text":"规划决策与中间件壁垒高，但L2/L2+与高阶收入不能混写。","evidence_ids":["cockpit_claim_06_driving_software_l2_boundary"],"uncertainty":"软件独立收入、订阅率和功能责任边界披露不足。"},
+    {"node_id":"by_wire_execution_vehicle_control_dependency","rank":6,"value_basis":"customer_certification","assessment_text":"接口冗余和功能安全是量产前提，但硬件所有权归相邻底盘链。","evidence_ids":["cockpit_claim_07_by_wire_cross_chain"],"uncertainty":"本主题不计线控制动转向硬件收入。"},
+    {"node_id":"cockpit_soc_compute_platform_dependency","rank":7,"value_basis":"scarcity","assessment_text":"座舱SoC决定平台能力，主题只研究应用适配依赖。","evidence_ids":["cockpit_claim_08_cockpit_compute_cross_chain"],"uncertainty":"芯片收入归汽车电子芯片应用链。"},
+    {"node_id":"cockpit_domain_control_os_middleware","rank":8,"value_basis":"integration_control","assessment_text":"域控、OS和中间件具备平台复用与软件许可价值。","evidence_ids":["cockpit_claim_09_cockpit_domain_os_middleware"],"uncertainty":"智能汽车宽口径未拆OS、服务和硬件收入。"},
+    {"node_id":"display_hud_acoustics_human_machine_interaction","rank":9,"value_basis":"ASP","assessment_text":"HUD、显示和HMI可由量产和客户项目验证，但单品收入披露不均。","evidence_ids":["cockpit_claim_10_display_hud_hmi"],"uncertainty":"汽车电子宽收入不能下沉到单一HUD/HMI。"},
+    {"node_id":"dms_oms_cockpit_driving_fusion","rank":10,"value_basis":"customer_certification","assessment_text":"DMS/OMS法规驱动清晰，舱驾融合仍需量产与利润验证。","evidence_ids":["cockpit_claim_11_dms_oms_fusion_validation"],"uncertainty":"融合样品、POC和项目尚未形成统一成熟收入。"},
+    {"node_id":"system_integration_validation_safety_compliance","rank":11,"value_basis":"customer_certification","assessment_text":"测试、功能安全、数据合规和工程交付决定量产准入。","evidence_ids":["cockpit_claim_12_integration_safety_compliance"],"uncertainty":"验证服务与产品收入常混合披露。"},
+    {"node_id":"aftermarket_operations_lifecycle_services","rank":12,"value_basis":"gross_margin","assessment_text":"后装和SaaS存在存量价值，但续费和独立收入证据不足。","evidence_ids":["cockpit_claim_13_aftermarket_lifecycle_gap"],"uncertainty":"生命周期服务收入和续费率未拆。"}
+  ],
+  "sources": [
+    {"source_id":"cockpit_002920_ar2025","source_type":"company_filing","title":"德赛西威2025年年度报告","publisher":"惠州市德赛西威汽车电子股份有限公司","author":"","publish_date":"2026-03-06","url_or_ref":"https://static.cninfo.com.cn/finalpage/2026-03-06/1224998406.PDF","access_level":"public","reliability_level":"S0","review_status":"accepted","notes":"PDF第22-24页核验智能座舱、智能驾驶量产与分产品收入毛利率。"},
+    {"source_id":"cockpit_002906_ar2025","source_type":"company_filing","title":"华阳集团2025年年度报告","publisher":"惠州市华阳集团股份有限公司","author":"","publish_date":"2026-03-28","url_or_ref":"https://static.cninfo.com.cn/finalpage/2026-03-28/1225043222.PDF","access_level":"public","reliability_level":"S0","review_status":"accepted","notes":"PDF第10-11、15、17页核验产品体系与宽汽车电子收入。"},
+    {"source_id":"cockpit_300496_ar2025","source_type":"company_filing","title":"中科创达2025年年度报告","publisher":"中科创达软件股份有限公司","author":"","publish_date":"2026-04-22","url_or_ref":"https://static.cninfo.com.cn/finalpage/2026-04-22/1225141001.PDF","access_level":"public","reliability_level":"S0","review_status":"accepted","notes":"PDF第10-12、16-18页核验AIOS、智能汽车产品与收入毛利率。"},
+    {"source_id":"cockpit_002405_ar2025","source_type":"company_filing","title":"四维图新2025年年度报告","publisher":"北京四维图新科技股份有限公司","author":"","publish_date":"2026-04-29","url_or_ref":"https://static.cninfo.com.cn/finalpage/2026-04-29/1225236620.PDF","access_level":"public","reliability_level":"S0","review_status":"accepted","notes":"PDF第11-13、16-18页核验智云、智驾、智舱业务及分板块收入。"},
+    {"source_id":"cockpit_688326_ar2025","source_type":"company_filing","title":"经纬恒润2025年年度报告","publisher":"北京经纬恒润科技股份有限公司","author":"","publish_date":"2026-04-25","url_or_ref":"https://static.cninfo.com.cn/finalpage/2026-04-25/1225186431.PDF","access_level":"public","reliability_level":"S0","review_status":"accepted","notes":"PDF第15-16、21-22、38-39页核验电子产品、域控量产、验证与宽收入。"},
+    {"source_id":"cockpit_688088_ar2025","source_type":"company_filing","title":"虹软科技2025年年度报告","publisher":"虹软科技股份有限公司","author":"","publish_date":"2026-04-21","url_or_ref":"https://static.cninfo.com.cn/finalpage/2026-04-21/1225131042.PDF","access_level":"public","reliability_level":"S0","review_status":"accepted","notes":"PDF第14、22-24页核验DMS/OMS/ADAS产品、量产/POC边界与车载AI收入。"},
+    {"source_id":"cockpit_002456_ar2025","source_type":"company_filing","title":"欧菲光2025年年度报告","publisher":"欧菲光集团股份有限公司","author":"","publish_date":"2026-04-02","url_or_ref":"https://static.cninfo.com.cn/finalpage/2026-04-02/1225073292.PDF","access_level":"public","reliability_level":"S0","review_status":"accepted","notes":"PDF第13-15、23-24页核验车载感知产品、激光雷达边界和宽智能汽车收入。"},
+    {"source_id":"cockpit_002970_ar2025","source_type":"company_filing","title":"锐明技术2025年年度报告","publisher":"深圳市锐明技术股份有限公司","author":"","publish_date":"2026-03-31","url_or_ref":"https://static.cninfo.com.cn/finalpage/2026-03-31/1225055546.PDF","access_level":"public","reliability_level":"S0","review_status":"accepted","notes":"PDF第15-16、20-22页核验商用车DMS/ADAS、前后装和宽AI解决方案收入。"},
+    {"source_id":"cockpit_301488_ar2025","source_type":"company_filing","title":"豪恩汽电2025年年度报告","publisher":"深圳市豪恩汽车电子装备股份有限公司","author":"","publish_date":"2026-04-03","url_or_ref":"https://static.cninfo.com.cn/finalpage/2026-04-03/1225076124.PDF","access_level":"public","reliability_level":"S0","review_status":"accepted","notes":"PDF第11-12、15-16页核验感知系统、定点至量产流程和独立收入毛利率。"},
+    {"source_id":"cockpit_301221_ar2025","source_type":"company_filing","title":"光庭信息2025年年度报告","publisher":"武汉光庭信息技术股份有限公司","author":"","publish_date":"2026-04-22","url_or_ref":"https://static.cninfo.com.cn/finalpage/2026-04-22/1225136840.PDF","access_level":"public","reliability_level":"S0","review_status":"accepted","notes":"PDF第10-12、17-19页核验座舱、智驾、测试、数据工程与细分收入。"}
+  ]
+}

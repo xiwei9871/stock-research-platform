@@ -53,6 +53,24 @@ BATTERY_MATRIX_PATH = (
     / "artifacts/theme_decomposition/source_packs"
     / "power_batteries_battery_materials_node_evidence_matrix_v1.json"
 )
+COCKPIT_THEME_ID = "intelligent_driving_smart_cockpit_value_chain_v1"
+COCKPIT_CHAIN_ID = "intelligent_driving_smart_cockpit"
+COCKPIT_THEME_PATH = REPOSITORY_ROOT / f"artifacts/theme_decomposition/{COCKPIT_THEME_ID}.json"
+COCKPIT_MAPPING_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/company_mappings"
+    / "intelligent_driving_smart_cockpit_company_mapping_v1.json"
+)
+COCKPIT_SOURCE_PACK_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "intelligent_driving_smart_cockpit_source_pack_v1.json"
+)
+COCKPIT_MATRIX_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "intelligent_driving_smart_cockpit_node_evidence_matrix_v1.json"
+)
 MANIFEST_PATH = (
     REPOSITORY_ROOT
     / "artifacts/theme_decomposition/batch_manifests"
@@ -235,6 +253,82 @@ BATTERY_SOURCE_IDENTITIES = {
         "格林美股份有限公司",
         "2026-04-22",
         "https://static.cninfo.com.cn/finalpage/2026-04-22/1225142250.PDF",
+    ),
+}
+COCKPIT_NODE_IDS = {
+    "vehicle_perception_sensors_dependency",
+    "perception_algorithms_data_closed_loop",
+    "positioning_mapping_inertial_navigation",
+    "intelligent_driving_compute_domain_control",
+    "planning_decision_middleware_driving_software",
+    "by_wire_execution_vehicle_control_dependency",
+    "cockpit_soc_compute_platform_dependency",
+    "cockpit_domain_control_os_middleware",
+    "display_hud_acoustics_human_machine_interaction",
+    "dms_oms_cockpit_driving_fusion",
+    "system_integration_validation_safety_compliance",
+    "aftermarket_operations_lifecycle_services",
+}
+COCKPIT_SOURCE_IDENTITIES = {
+    "cockpit_002920_ar2025": (
+        "德赛西威2025年年度报告",
+        "惠州市德赛西威汽车电子股份有限公司",
+        "2026-03-06",
+        "https://static.cninfo.com.cn/finalpage/2026-03-06/1224998406.PDF",
+    ),
+    "cockpit_002906_ar2025": (
+        "华阳集团2025年年度报告",
+        "惠州市华阳集团股份有限公司",
+        "2026-03-28",
+        "https://static.cninfo.com.cn/finalpage/2026-03-28/1225043222.PDF",
+    ),
+    "cockpit_300496_ar2025": (
+        "中科创达2025年年度报告",
+        "中科创达软件股份有限公司",
+        "2026-04-22",
+        "https://static.cninfo.com.cn/finalpage/2026-04-22/1225141001.PDF",
+    ),
+    "cockpit_002405_ar2025": (
+        "四维图新2025年年度报告",
+        "北京四维图新科技股份有限公司",
+        "2026-04-29",
+        "https://static.cninfo.com.cn/finalpage/2026-04-29/1225236620.PDF",
+    ),
+    "cockpit_688326_ar2025": (
+        "经纬恒润2025年年度报告",
+        "北京经纬恒润科技股份有限公司",
+        "2026-04-25",
+        "https://static.cninfo.com.cn/finalpage/2026-04-25/1225186431.PDF",
+    ),
+    "cockpit_688088_ar2025": (
+        "虹软科技2025年年度报告",
+        "虹软科技股份有限公司",
+        "2026-04-21",
+        "https://static.cninfo.com.cn/finalpage/2026-04-21/1225131042.PDF",
+    ),
+    "cockpit_002456_ar2025": (
+        "欧菲光2025年年度报告",
+        "欧菲光集团股份有限公司",
+        "2026-04-02",
+        "https://static.cninfo.com.cn/finalpage/2026-04-02/1225073292.PDF",
+    ),
+    "cockpit_002970_ar2025": (
+        "锐明技术2025年年度报告",
+        "深圳市锐明技术股份有限公司",
+        "2026-03-31",
+        "https://static.cninfo.com.cn/finalpage/2026-03-31/1225055546.PDF",
+    ),
+    "cockpit_301488_ar2025": (
+        "豪恩汽电2025年年度报告",
+        "深圳市豪恩汽车电子装备股份有限公司",
+        "2026-04-03",
+        "https://static.cninfo.com.cn/finalpage/2026-04-03/1225076124.PDF",
+    ),
+    "cockpit_301221_ar2025": (
+        "光庭信息2025年年度报告",
+        "武汉光庭信息技术股份有限公司",
+        "2026-04-22",
+        "https://static.cninfo.com.cn/finalpage/2026-04-22/1225136840.PDF",
     ),
 }
 
@@ -986,3 +1080,389 @@ def test_power_batteries_product_relationship_and_revenue_boundary_locators_are_
         assert sources[source_id]["evidence_locator"] == locator_contract[
             "source_locator"
         ]
+
+
+def test_intelligent_driving_smart_cockpit_four_artifacts_exist_before_validation():
+    assert COCKPIT_THEME_PATH.is_file()
+    assert COCKPIT_MAPPING_PATH.is_file()
+    assert COCKPIT_SOURCE_PACK_PATH.is_file()
+    assert COCKPIT_MATRIX_PATH.is_file()
+
+
+def test_intelligent_driving_smart_cockpit_artifacts_load_and_third_wave_c_row_is_ready():
+    theme_package = load_theme_package()
+    mapping_package = load_theme_company_mapping_package()
+    priority_package = load_theme_research_priority_package()
+
+    assert COCKPIT_THEME_ID in {row["theme_id"] for row in theme_package["themes"]}
+    assert COCKPIT_THEME_ID in {
+        row["theme_id"] for row in mapping_package["company_mappings"]
+    }
+    assert COCKPIT_THEME_ID in {
+        row["theme_id"] for row in priority_package["node_priorities"]
+    }
+    report = VERIFIER.build_theme_batch_report(MANIFEST_PATH, wave="wave_c")
+    rows = {row["chain_id"]: row for row in report["theme_results"]}
+
+    assert rows[COCKPIT_CHAIN_ID]["ready"] is True
+    assert all(rows[COCKPIT_CHAIN_ID]["checks"].values())
+    assert rows[COCKPIT_CHAIN_ID]["counts"]["primary_sources"] == 10
+    assert rows[COCKPIT_CHAIN_ID]["counts"]["claims"] == 14
+    assert rows[COCKPIT_CHAIN_ID]["counts"]["reviewed_mappings"] == 10
+    _assert_wave_progress_matches_manifest(report, "wave_c")
+
+
+def test_intelligent_driving_smart_cockpit_source_claim_node_matrix_contract_is_exact():
+    _assert_bidirectional_source_and_matrix_links(
+        theme_path=COCKPIT_THEME_PATH,
+        source_pack_path=COCKPIT_SOURCE_PACK_PATH,
+        matrix_path=COCKPIT_MATRIX_PATH,
+        node_ids=COCKPIT_NODE_IDS,
+        require_accepted_source=True,
+    )
+    theme = _read_json(COCKPIT_THEME_PATH)
+    mapping = _read_json(COCKPIT_MAPPING_PATH)
+    source_pack = _read_json(COCKPIT_SOURCE_PACK_PATH)
+    accepted = validate_theme_evidence_sources(
+        source_pack["sources"], COCKPIT_NODE_IDS
+    )
+    reviewed_mappings = [
+        row for row in mapping["company_mappings"] if row["review_status"] == "reviewed"
+    ]
+    canonical_sources = {row["source_id"]: row for row in theme["sources"]}
+    mapping_sources = {row["source_id"]: row for row in mapping["sources"]}
+    pack_sources = {row["source_id"]: row for row in source_pack["sources"]}
+
+    assert len([row for row in accepted.values() if row["review_status"] == "accepted"]) == 10
+    assert all(
+        row["source_type"] == "company_filing" and row["reliability_level"] == "S0"
+        for row in source_pack["sources"]
+    )
+    assert {row["node_id"] for row in theme["nodes"]} == COCKPIT_NODE_IDS
+    assert len(theme["nodes"]) == 12
+    assert len(theme["claims"]) == 14
+    assert all(set(row) >= CLAIM_FIELDS for row in theme["claims"])
+    assert len(reviewed_mappings) == 10
+    assert len({row["company_code"] for row in reviewed_mappings}) == 10
+    assert set(canonical_sources) == set(COCKPIT_SOURCE_IDENTITIES)
+    assert set(mapping_sources) == set(COCKPIT_SOURCE_IDENTITIES)
+    assert set(pack_sources) == set(COCKPIT_SOURCE_IDENTITIES)
+    for source_id, (title, publisher, publish_date, url) in COCKPIT_SOURCE_IDENTITIES.items():
+        expected = {
+            "title": title,
+            "publisher": publisher,
+            "publish_date": publish_date,
+            "url_or_ref": url,
+        }
+        assert {
+            field: canonical_sources[source_id][field]
+            for field in ("title", "publisher", "publish_date", "url_or_ref")
+        } == expected
+        assert {
+            field: mapping_sources[source_id][field]
+            for field in ("title", "publisher", "publish_date", "url_or_ref")
+        } == expected
+        assert {
+            "title": pack_sources[source_id]["title"],
+            "publisher": pack_sources[source_id]["publisher"],
+            "publish_date": pack_sources[source_id]["publish_date"],
+            "url_or_ref": pack_sources[source_id]["url"],
+        } == expected
+
+
+def test_intelligent_driving_smart_cockpit_readable_sections_and_catalog_boundary_are_exact():
+    theme = _read_json(COCKPIT_THEME_PATH)
+    profile = theme["research_profile"]
+    claim_ids = {row["claim_id"] for row in theme["claims"]}
+    expected_section_claim_ids = {
+        "conclusion": {
+            "cockpit_claim_02_sensor_scope_boundary",
+            "cockpit_claim_05_driving_compute_domain_control",
+            "cockpit_claim_06_driving_software_l2_boundary",
+            "cockpit_claim_11_dms_oms_fusion_validation",
+            "cockpit_claim_14_revenue_project_maturity_boundary",
+        },
+        "value_chain": claim_ids - {"cockpit_claim_14_revenue_project_maturity_boundary"},
+        "profit_pool_barriers": {
+            "cockpit_claim_02_sensor_scope_boundary",
+            "cockpit_claim_03_perception_data_closed_loop",
+            "cockpit_claim_05_driving_compute_domain_control",
+            "cockpit_claim_06_driving_software_l2_boundary",
+            "cockpit_claim_09_cockpit_domain_os_middleware",
+            "cockpit_claim_10_display_hud_hmi",
+            "cockpit_claim_11_dms_oms_fusion_validation",
+            "cockpit_claim_12_integration_safety_compliance",
+            "cockpit_claim_14_revenue_project_maturity_boundary",
+        },
+        "catalysts_validation_risks": {
+            "cockpit_claim_05_driving_compute_domain_control",
+            "cockpit_claim_06_driving_software_l2_boundary",
+            "cockpit_claim_11_dms_oms_fusion_validation",
+            "cockpit_claim_12_integration_safety_compliance",
+            "cockpit_claim_14_revenue_project_maturity_boundary",
+        },
+        "beneficiary_companies": {
+            "cockpit_claim_02_sensor_scope_boundary",
+            "cockpit_claim_04_positioning_map_disclosure_gap",
+            "cockpit_claim_05_driving_compute_domain_control",
+            "cockpit_claim_06_driving_software_l2_boundary",
+            "cockpit_claim_09_cockpit_domain_os_middleware",
+            "cockpit_claim_10_display_hud_hmi",
+            "cockpit_claim_11_dms_oms_fusion_validation",
+            "cockpit_claim_12_integration_safety_compliance",
+            "cockpit_claim_13_aftermarket_lifecycle_gap",
+            "cockpit_claim_14_revenue_project_maturity_boundary",
+        },
+        "source_evidence": claim_ids,
+        "evidence_gaps": {
+            "cockpit_claim_03_perception_data_closed_loop",
+            "cockpit_claim_04_positioning_map_disclosure_gap",
+            "cockpit_claim_06_driving_software_l2_boundary",
+            "cockpit_claim_07_by_wire_cross_chain",
+            "cockpit_claim_08_cockpit_compute_cross_chain",
+            "cockpit_claim_11_dms_oms_fusion_validation",
+            "cockpit_claim_13_aftermarket_lifecycle_gap",
+            "cockpit_claim_14_revenue_project_maturity_boundary",
+        },
+    }
+
+    assert profile["catalog_chain_id"] == COCKPIT_CHAIN_ID
+    assert profile["research_kind"] == "industry_chain_deep_research"
+    assert {
+        section: set(section_claim_ids)
+        for section, section_claim_ids in profile["readable_section_claim_ids"].items()
+    } == expected_section_claim_ids
+    catalog = load_industry_catalog()
+    link = next(
+        row for row in catalog["theme_links"] if row["theme_id"] == COCKPIT_THEME_ID
+    )
+    assert link["node_links"] == []
+    assert set(link["unmapped_theme_node_ids"]) == COCKPIT_NODE_IDS
+    assert "L2 skeleton" in link["notes"]
+    assert "不重复所有权" in link["notes"]
+    assert "electric_drive_chassis" in link["notes"]
+    assert "automotive_electronics" in link["notes"]
+
+
+def test_intelligent_driving_smart_cockpit_mapping_and_revenue_boundaries_block_over_attribution():
+    theme = _read_json(COCKPIT_THEME_PATH)
+    mapping = _read_json(COCKPIT_MAPPING_PATH)
+    source_pack = _read_json(COCKPIT_SOURCE_PACK_PATH)
+    claim_text = " ".join(row["claim_text"] for row in theme["claims"])
+    evidence_by_id = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+    reviewed = [
+        row for row in mapping["company_mappings"] if row["review_status"] == "reviewed"
+    ]
+    mapping_source_ids = {row["source_id"] for row in mapping["sources"]}
+
+    assert {row["company_code"] for row in reviewed} == {
+        "002920.SZ",
+        "002906.SZ",
+        "300496.SZ",
+        "002405.SZ",
+        "688326.SH",
+        "688088.SH",
+        "002456.SZ",
+        "002970.SZ",
+        "301488.SZ",
+        "301221.SZ",
+    }
+    expected_company_contracts = {
+        "002920.SZ": (
+            "intelligent_driving_compute_domain_control",
+            "core_business",
+            "material",
+            "core_beneficiary",
+        ),
+        "002906.SZ": (
+            "display_hud_acoustics_human_machine_interaction",
+            "meaningful_segment",
+            "undisclosed",
+            "elastic_beneficiary",
+        ),
+        "300496.SZ": (
+            "cockpit_domain_control_os_middleware",
+            "meaningful_segment",
+            "material",
+            "core_beneficiary",
+        ),
+        "002405.SZ": (
+            "positioning_mapping_inertial_navigation",
+            "meaningful_segment",
+            "undisclosed",
+            "elastic_beneficiary",
+        ),
+        "688326.SH": (
+            "system_integration_validation_safety_compliance",
+            "core_business",
+            "undisclosed",
+            "elastic_beneficiary",
+        ),
+        "688088.SH": (
+            "dms_oms_cockpit_driving_fusion",
+            "meaningful_segment",
+            "meaningful",
+            "core_beneficiary",
+        ),
+        "002456.SZ": (
+            "vehicle_perception_sensors_dependency",
+            "meaningful_segment",
+            "undisclosed",
+            "elastic_beneficiary",
+        ),
+        "002970.SZ": (
+            "dms_oms_cockpit_driving_fusion",
+            "core_business",
+            "undisclosed",
+            "elastic_beneficiary",
+        ),
+        "301488.SZ": (
+            "vehicle_perception_sensors_dependency",
+            "core_business",
+            "material",
+            "core_beneficiary",
+        ),
+        "301221.SZ": (
+            "planning_decision_middleware_driving_software",
+            "core_business",
+            "material",
+            "core_beneficiary",
+        ),
+    }
+    for row in reviewed:
+        row_evidence = [evidence_by_id[evidence_id] for evidence_id in row["evidence_ids"]]
+        assert {item["evidence_type"] for item in row_evidence} >= {
+            "product_relationship",
+            "revenue_materiality",
+        }
+        assert row["product_or_service"]
+        assert row["relationship_summary"]
+        assert row["revenue_relevance"] in {
+            "material",
+            "meaningful",
+            "limited",
+            "undisclosed",
+        }
+        assert row["business_materiality"] in {
+            "core_business",
+            "meaningful_segment",
+            "emerging_segment",
+        }
+        assert row["notes"]
+        assert all(item["excerpt_locator"].startswith("PDF第") for item in row_evidence)
+        assert all(item["related_company_codes"] == [row["company_code"]] for item in row_evidence)
+        assert all(item["source_id"] in mapping_source_ids for item in row_evidence)
+    used_mapping_source_ids = {
+        item["source_id"] for item in mapping["evidence_items"]
+    }
+    assert used_mapping_source_ids == mapping_source_ids
+    assert used_mapping_source_ids == {
+        row["source_id"] for row in source_pack["sources"]
+    }
+    api_companies = list_theme_research_companies(COCKPIT_THEME_ID)
+    assert api_companies["total"] == len(reviewed)
+    assert {row["company_code"] for row in api_companies["items"]} == {
+        row["company_code"] for row in reviewed
+    }
+    mapping_by_company = {row["company_code"]: row for row in reviewed}
+    api_by_company = {row["company_code"]: row for row in api_companies["items"]}
+    assert {
+        company_code: (
+            mapping_by_company[company_code]["mapped_node_id"],
+            mapping_by_company[company_code]["business_materiality"],
+            mapping_by_company[company_code]["revenue_relevance"],
+            api_by_company[company_code]["beneficiary_tier"],
+        )
+        for company_code in expected_company_contracts
+    } == expected_company_contracts
+    for required_boundary in (
+        "L2/L2+功能量产不等于高阶自动驾驶收入",
+        "定点、合作或开发中不等于量产收入",
+        "舱驾融合样品或项目不等于成熟利润",
+        "地图、算法和软件收入未拆",
+        "激光雷达",
+        "非直接主体",
+        "不重复所有权",
+    ):
+        assert required_boundary in claim_text
+
+
+def test_intelligent_driving_smart_cockpit_product_and_revenue_locators_are_precise():
+    mapping = _read_json(COCKPIT_MAPPING_PATH)
+    source_pack = _read_json(COCKPIT_SOURCE_PACK_PATH)
+    evidence = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+    sources = {row["source_id"]: row for row in source_pack["sources"]}
+    expected = {
+        "cockpit_002920_ar2025": (
+            "cockpit_ev_002920_product",
+            "PDF第22-23页，第三节智能座舱、智能驾驶产品与量产交付",
+            "cockpit_ev_002920_revenue",
+            "PDF第24页，第三节分产品收入及毛利率表",
+        ),
+        "cockpit_002906_ar2025": (
+            "cockpit_ev_002906_product",
+            "PDF第10-11页，第三节汽车电子产品体系",
+            "cockpit_ev_002906_revenue",
+            "PDF第15、17页，第三节汽车电子业务概述及分行业收入毛利率",
+        ),
+        "cockpit_300496_ar2025": (
+            "cockpit_ev_300496_product",
+            "PDF第10-12页，第三节AIOS、智能汽车与舱驾融合产品",
+            "cockpit_ev_300496_revenue",
+            "PDF第16-18页，第三节智能汽车收入及毛利率",
+        ),
+        "cockpit_002405_ar2025": (
+            "cockpit_ev_002405_product",
+            "PDF第11-13页，第三节智云、智驾、智舱业务",
+            "cockpit_ev_002405_revenue",
+            "PDF第16-18页，第三节智云、智驾、智舱分板块收入及毛利率",
+        ),
+        "cockpit_688326_ar2025": (
+            "cockpit_ev_688326_product",
+            "PDF第15-16、21-22页，第三节电子产品、研发验证与域控制器量产",
+            "cockpit_ev_688326_revenue",
+            "PDF第38-39页，第三节分产品收入及毛利率",
+        ),
+        "cockpit_688088_ar2025": (
+            "cockpit_ev_688088_product",
+            "PDF第14、22-24页，第三节车载AI视觉产品与量产/POC进展",
+            "cockpit_ev_688088_revenue",
+            "PDF第22-23页，第三节车载AI视觉解决方案收入",
+        ),
+        "cockpit_002456_ar2025": (
+            "cockpit_ev_002456_product",
+            "PDF第13-15页，第三节车载摄像头、镜头、DMS/OMS与激光雷达布局",
+            "cockpit_ev_002456_revenue",
+            "PDF第23-24页，第三节智能汽车产品收入及毛利率",
+        ),
+        "cockpit_002970_ar2025": (
+            "cockpit_ev_002970_product",
+            "PDF第15-16页，第三节商用车AI辅助驾驶与前后装产品体系",
+            "cockpit_ev_002970_revenue",
+            "PDF第20-22页，第三节AI解决方案与视频设备收入及毛利率",
+        ),
+        "cockpit_301488_ar2025": (
+            "cockpit_ev_301488_product",
+            "PDF第11-12页，第三节智能驾驶感知产品及定点至量产流程",
+            "cockpit_ev_301488_revenue",
+            "PDF第15-16页，第三节汽车智能驾驶感知系统收入及毛利率",
+        ),
+        "cockpit_301221_ar2025": (
+            "cockpit_ev_301221_product",
+            "PDF第10-12页，第三节座舱、智驾、测试、数据工程与操作系统中间件",
+            "cockpit_ev_301221_revenue",
+            "PDF第17-19页，第三节智能座舱与智能驾驶细分收入",
+        ),
+    }
+    for source_id, (product_id, product_locator, revenue_id, revenue_locator) in expected.items():
+        product = evidence[product_id]
+        revenue = evidence[revenue_id]
+        assert product["source_id"] == source_id
+        assert revenue["source_id"] == source_id
+        assert product["evidence_type"] == "product_relationship"
+        assert revenue["evidence_type"] == "revenue_materiality"
+        assert product["excerpt_locator"] == product_locator
+        assert revenue["excerpt_locator"] == revenue_locator
+        assert product_locator != revenue_locator
+        assert product_locator.removeprefix("PDF") in sources[source_id]["evidence_locator"]
+        assert revenue_locator.removeprefix("PDF") in sources[source_id]["evidence_locator"]

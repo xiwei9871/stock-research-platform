@@ -531,7 +531,21 @@
       "theme_id": "intelligent_driving_smart_cockpit_value_chain_v1",
       "chain_id": "intelligent_driving_smart_cockpit",
       "node_links": [],
-      "unmapped_theme_node_ids": []
+      "unmapped_theme_node_ids": [
+        "vehicle_perception_sensors_dependency",
+        "perception_algorithms_data_closed_loop",
+        "positioning_mapping_inertial_navigation",
+        "intelligent_driving_compute_domain_control",
+        "planning_decision_middleware_driving_software",
+        "by_wire_execution_vehicle_control_dependency",
+        "cockpit_soc_compute_platform_dependency",
+        "cockpit_domain_control_os_middleware",
+        "display_hud_acoustics_human_machine_interaction",
+        "dms_oms_cockpit_driving_fusion",
+        "system_integration_validation_safety_compliance",
+        "aftermarket_operations_lifecycle_services"
+      ],
+      "notes": "目录当前只有 intelligent_driving_smart_cockpit 的 L2 skeleton，没有完整等价的自有L3/L4节点，因此12个主题节点全部保持unmapped。摄像头、毫米波雷达、激光雷达等感知硬件仅表达跨链应用依赖；线控执行硬件归 electric_drive_chassis 等链；座舱SoC与车规芯片本体归 automotive_electronics_chip_applications 链。本主题只研究智能驾驶与智能座舱应用、软件、域控、集成和量产验证，不重复所有权。"
     },
     {
       "theme_id": "automotive_electronics_chip_applications_value_chain_v1",
