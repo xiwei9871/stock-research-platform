@@ -223,14 +223,6 @@ def test_next_fifteen_catalog_theme_links_match_canonical_batch_manifest():
                     "theme_node_id": "primary_power_transformers",
                     "catalog_node_id": "power_transformer",
                 },
-                {
-                    "theme_node_id": "protection_substation_automation",
-                    "catalog_node_id": "relay_protection_system",
-                },
-                {
-                    "theme_node_id": "storage_grid_connection_power_quality",
-                    "catalog_node_id": "power_quality_management_system",
-                },
             ]
         unmapped_theme_node_ids = links_by_chain[chain_id][0][
             "unmapped_theme_node_ids"
@@ -246,10 +238,6 @@ def test_next_fifteen_catalog_theme_links_match_canonical_batch_manifest():
                 "uhv_hvdc_flexible_dc -> grid_connection_transmission_protection "
                 "仅用于阶段级L3覆盖，不是柔直或换流阀产品等价映射；具体产品与收入"
                 "口径以主题 claim 和公司 mapping 边界为准。"
-                "protection_substation_automation -> relay_protection_system 仅覆盖继电保护"
-                "子功能，不代表全部变电站自动化；storage_grid_connection_power_quality -> "
-                "power_quality_management_system 仅覆盖电能质量子功能，不代表储能系统或"
-                "全部并网工程。"
             )
         assert links_by_chain[chain_id] == [expected_link]
 

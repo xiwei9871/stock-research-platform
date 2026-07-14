@@ -439,13 +439,17 @@ def test_smart_grid_profile_catalog_and_unmapped_nodes_are_ready():
     assert link["node_links"] == [
         {"theme_node_id": "uhv_hvdc_flexible_dc", "catalog_node_id": "grid_connection_transmission_protection"},
         {"theme_node_id": "primary_power_transformers", "catalog_node_id": "power_transformer"},
-        {"theme_node_id": "protection_substation_automation", "catalog_node_id": "relay_protection_system"},
-        {"theme_node_id": "storage_grid_connection_power_quality", "catalog_node_id": "power_quality_management_system"},
     ]
     assert "阶段级L3覆盖" in link["notes"]
     assert "不是柔直或换流阀产品等价映射" in link["notes"]
-    assert "仅覆盖继电保护子功能" in link["notes"]
-    assert "仅覆盖电能质量子功能" in link["notes"]
+    assert "protection_substation_automation" in link["unmapped_theme_node_ids"]
+    assert "storage_grid_connection_power_quality" in link["unmapped_theme_node_ids"]
+    assert "relay_protection_system" not in {
+        row["catalog_node_id"] for row in link["node_links"]
+    }
+    assert "power_quality_management_system" not in {
+        row["catalog_node_id"] for row in link["node_links"]
+    }
     assert set(link["unmapped_theme_node_ids"]) == node_ids - {
         row["theme_node_id"] for row in link["node_links"]
     }
