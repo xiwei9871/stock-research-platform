@@ -1,0 +1,805 @@
+{
+  "artifact_version": "theme_decomposition_v1_6",
+  "theme": {
+    "theme_id": "semiconductor_materials_electronic_chemicals_value_chain_v1",
+    "theme_name": "半导体材料与电子化学品：纯度、认证、一致性与国产替代价值链",
+    "theme_type": "other",
+    "summary": "从硅片与化合物半导体衬底、光刻胶、湿电子化学品、CMP材料、溅射靶材、电子气体和沉积前驱体，延伸至纯化、容器输送、晶圆厂认证与批次一致性，识别材料从样品走向稳定量产的价值瓶颈。",
+    "status": "reviewed",
+    "created_from": "mixed",
+    "last_updated": "2026-07-14"
+  },
+  "research_profile": {
+    "catalog_chain_id": "semiconductor_materials_electronic_chemicals",
+    "research_kind": "industry_chain_deep_research",
+    "industry_stage": "国产材料由单点验证向多品类稳定批量供应过渡",
+    "central_conflict": "晶圆厂扩产与供应链本土化带来需求，但材料的名义纯度和产能不等于可用供给；客户认证、缺陷控制、批次一致性、洁净包装输送和持续交付共同决定收入与利润兑现。",
+    "investment_summary": "研究应优先核验分产品收入、产销量、纯度与杂质指标、客户验证阶段、稳定批量供应和产能利用率；只有披露口径与具体材料节点匹配时才赋予材料性，宽口径半导体材料或电子材料收入不得下沉到单一节点。",
+    "value_flow_summary": "基础衬底与高纯原料 -> 配方、合成、纯化和精密加工 -> 洁净包装、专用容器与输送 -> 晶圆厂审厂、样品、小批量和批量验证 -> 稳定供货与工艺迭代；良率反馈再反向约束配方和批次控制。",
+    "profit_pool_summary": "利润池更可能沉淀在高纯原料自制、复杂配方与精密加工、先进节点适配、长周期客户认证、批次一致性和稳定交付环节；只有名义产能、研发项目或宽泛国产替代表述不足以证明价值捕获。",
+    "catalyst_claim_ids": [
+      "semimat_claim_11_catalyst"
+    ],
+    "risk_claim_ids": [
+      "semimat_claim_12_risk"
+    ],
+    "validation_signals": [
+      "分产品收入、销量和毛利率是否与具体材料节点匹配",
+      "新规格由样品、小批量验证转入稳定批量供应",
+      "金属杂质、颗粒、缺陷和批次一致性指标",
+      "新产线产能利用率、良率和折旧吸收",
+      "核心原料自制与第二供应源验证",
+      "洁净容器、现场供气和交付满足率"
+    ],
+    "evidence_gap_summary": "年报可确认产品、分类收入、产能和部分客户验证，但普遍未披露单一客户、单一先进节点收入、认证通过率、批次报废率、晶圆良率改善、容器周转效率和分产品利润，后续需继续按节点跟踪。"
+  },
+  "sources": [
+    {
+      "source_id": "semimat_688019_2025_report",
+      "source_type": "company_filing",
+      "title": "安集微电子科技（上海）股份有限公司2025年年度报告",
+      "publisher": "安集科技",
+      "author": "",
+      "publish_date": "2026-04-16",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-16/1225108553.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第14-25页产品、认证、国产替代、产能与质量；第39-40页CMP抛光液和功能性湿电子化学品分产品收入及产销量已复核。"
+    },
+    {
+      "source_id": "semimat_300054_2025_report",
+      "source_type": "company_filing",
+      "title": "湖北鼎龙控股股份有限公司2025年年度报告全文",
+      "publisher": "鼎龙股份",
+      "author": "",
+      "publish_date": "2026-03-27",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-27/1225036149.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第17-18页CMP抛光垫、抛光液及清洗液收入、客户导入和量产；第23-25、34、37页原料、产能、客户供货及利用率风险已复核。"
+    },
+    {
+      "source_id": "semimat_002409_2025_report",
+      "source_type": "company_filing",
+      "title": "江苏雅克科技股份有限公司2025年年度报告全文",
+      "publisher": "雅克科技",
+      "author": "",
+      "publish_date": "2026-04-28",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-28/1225216877.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第23、25、27-30页前驱体、光刻胶、电子特气、LDS产品、产能及分类收入；第35页纯度与研发风险已复核。"
+    },
+    {
+      "source_id": "semimat_300346_2025_report",
+      "source_type": "company_filing",
+      "title": "江苏南大光电材料股份有限公司2025年年度报告全文",
+      "publisher": "南大光电",
+      "author": "",
+      "publish_date": "2026-04-10",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-10/1225087469.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第12-21页前驱体、电子特气、光刻胶产品、验证与分产品收入；第74-77页项目进度、品质验证和市场风险已复核。"
+    },
+    {
+      "source_id": "semimat_300666_2025_report",
+      "source_type": "company_filing",
+      "title": "宁波江丰电子材料股份有限公司2025年年度报告全文",
+      "publisher": "江丰电子",
+      "author": "",
+      "publish_date": "2026-04-16",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-16/1225108970.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第11-23页超高纯金属溅射靶材产品、工艺和客户覆盖；第24页超高纯靶材分产品收入已复核。"
+    },
+    {
+      "source_id": "semimat_688126_2025_report",
+      "source_type": "company_filing",
+      "title": "上海硅产业集团股份有限公司2025年年度报告",
+      "publisher": "沪硅产业",
+      "author": "",
+      "publish_date": "2026-04-17",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-17/1225114274.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第15-23页300mm、200mm及SOI半导体硅片产品、扩产和客户认证；第29-31页分产品收入、产销量与成本已复核。"
+    },
+    {
+      "source_id": "semimat_300655_2025_report",
+      "source_type": "company_filing",
+      "title": "晶瑞电子材料股份有限公司2025年年度报告全文",
+      "publisher": "晶瑞电材",
+      "author": "",
+      "publish_date": "2026-04-28",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-28/1225199721.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第12-22页高纯湿电子化学品、光刻胶、纯度等级、产能与客户；第25-27、49页分产品收入、出货及国产替代已复核。"
+    },
+    {
+      "source_id": "semimat_300236_2025_report",
+      "source_type": "company_filing",
+      "title": "上海新阳半导体材料股份有限公司2025年年度报告全文",
+      "publisher": "上海新阳",
+      "author": "",
+      "publish_date": "2026-03-13",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-13/1225006867.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第12-24页晶圆制造与先进封装用电子化学材料、产品验证和供应；第25-26页集成电路材料宽口径收入已复核。"
+    },
+    {
+      "source_id": "semimat_688268_2025_report",
+      "source_type": "company_filing",
+      "title": "广东华特气体股份有限公司2025年年度报告",
+      "publisher": "华特气体",
+      "author": "",
+      "publish_date": "2026-04-10",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-10/1225090204.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第13-36页电子特种气体产品、纯化混配、认证周期和客户覆盖；第46、53、66-68页技术风险、分类收入与国产替代已复核。"
+    },
+    {
+      "source_id": "semimat_688234_2025_report",
+      "source_type": "company_filing",
+      "title": "山东天岳先进科技股份有限公司2025年年度报告",
+      "publisher": "天岳先进",
+      "author": "",
+      "publish_date": "2026-03-28",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-28/1225049103.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第14-35页碳化硅衬底产品、导电型路线、客户认证、产销量与碳化硅材料收入；第41-47页扩产与经营风险已复核。"
+    }
+  ],
+  "nodes": [
+    {
+      "node_id": "silicon_wafers",
+      "theme_id": "semiconductor_materials_electronic_chemicals_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "半导体硅片",
+      "node_type": "upstream_material",
+      "description": "300mm、200mm及SOI硅片是晶圆制造的基础衬底，晶体缺陷、平坦度、洁净度、外延与批次一致性影响器件良率。",
+      "value_capture_score": 5,
+      "bottleneck_score": 5,
+      "localization_gap_score": 4,
+      "supply_tightness_score": 3,
+      "evidence_strength": 5,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "300mm硅片分产品收入与销量",
+        "客户认证规格数",
+        "晶体缺陷与平坦度",
+        "产能利用率"
+      ],
+      "overseas_leaders": [
+        "信越化学",
+        "SUMCO"
+      ],
+      "domestic_players": [
+        "沪硅产业"
+      ],
+      "related_stock_codes": [
+        "688126.SH"
+      ]
+    },
+    {
+      "node_id": "compound_semiconductor_substrates",
+      "theme_id": "semiconductor_materials_electronic_chemicals_value_chain_v1",
+      "parent_node_id": "silicon_wafers",
+      "node_name": "化合物半导体衬底",
+      "node_type": "upstream_material",
+      "description": "碳化硅等化合物半导体衬底面向功率、射频等器件，晶体生长、切磨抛和缺陷控制决定可用面积与器件良率。",
+      "value_capture_score": 5,
+      "bottleneck_score": 5,
+      "localization_gap_score": 4,
+      "supply_tightness_score": 4,
+      "evidence_strength": 5,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "衬底尺寸与导电类型",
+        "微管和位错密度",
+        "客户认证与出货",
+        "产能利用率"
+      ],
+      "overseas_leaders": [
+        "Wolfspeed",
+        "Coherent"
+      ],
+      "domestic_players": [
+        "天岳先进"
+      ],
+      "related_stock_codes": [
+        "688234.SH"
+      ]
+    },
+    {
+      "node_id": "photoresists_ancillaries",
+      "theme_id": "semiconductor_materials_electronic_chemicals_value_chain_v1",
+      "parent_node_id": "compound_semiconductor_substrates",
+      "node_name": "光刻胶及配套材料",
+      "node_type": "upstream_material",
+      "description": "g/i线、KrF、ArF光刻胶及显影液、剥离液、稀释剂等配套材料共同决定图形转移分辨率、缺陷和工艺窗口。",
+      "value_capture_score": 5,
+      "bottleneck_score": 5,
+      "localization_gap_score": 5,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "光刻胶代际与客户验证",
+        "批次金属杂质和颗粒",
+        "分产品收入与出货",
+        "配套试剂覆盖"
+      ],
+      "overseas_leaders": [
+        "JSR",
+        "东京应化",
+        "信越化学"
+      ],
+      "domestic_players": [
+        "晶瑞电材",
+        "鼎龙股份",
+        "雅克科技",
+        "南大光电"
+      ],
+      "related_stock_codes": [
+        "300655.SZ",
+        "300054.SZ",
+        "002409.SZ",
+        "300346.SZ"
+      ]
+    },
+    {
+      "node_id": "wet_electronic_chemicals",
+      "theme_id": "semiconductor_materials_electronic_chemicals_value_chain_v1",
+      "parent_node_id": "photoresists_ancillaries",
+      "node_name": "湿电子化学品与高纯试剂",
+      "node_type": "upstream_material",
+      "description": "高纯酸碱、溶剂、清洗液、刻蚀液和剥离液用于清洗、刻蚀、显影和去胶，金属杂质、颗粒和交付洁净度直接影响良率。",
+      "value_capture_score": 5,
+      "bottleneck_score": 5,
+      "localization_gap_score": 4,
+      "supply_tightness_score": 3,
+      "evidence_strength": 5,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "SEMI G4/G5等级",
+        "金属杂质与颗粒",
+        "晶圆厂批量供应",
+        "分产品收入与产销量"
+      ],
+      "overseas_leaders": [
+        "巴斯夫",
+        "三菱化学",
+        "关东化学"
+      ],
+      "domestic_players": [
+        "晶瑞电材",
+        "安集科技",
+        "上海新阳"
+      ],
+      "related_stock_codes": [
+        "300655.SZ",
+        "688019.SH",
+        "300236.SZ"
+      ]
+    },
+    {
+      "node_id": "cmp_materials",
+      "theme_id": "semiconductor_materials_electronic_chemicals_value_chain_v1",
+      "parent_node_id": "wet_electronic_chemicals",
+      "node_name": "CMP抛光液、抛光垫与清洗液",
+      "node_type": "upstream_material",
+      "description": "CMP材料通过化学反应、纳米磨料和抛光垫协同实现晶圆平坦化，配方、磨料、垫材、缺陷控制和抛光后清洗共同决定良率。",
+      "value_capture_score": 5,
+      "bottleneck_score": 5,
+      "localization_gap_score": 4,
+      "supply_tightness_score": 3,
+      "evidence_strength": 5,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "CMP分产品收入",
+        "客户验证与量产节点",
+        "划伤和颗粒缺陷",
+        "抛光垫寿命与批次一致性"
+      ],
+      "overseas_leaders": [
+        "卡博特微电子",
+        "杜邦"
+      ],
+      "domestic_players": [
+        "安集科技",
+        "鼎龙股份"
+      ],
+      "related_stock_codes": [
+        "688019.SH",
+        "300054.SZ"
+      ]
+    },
+    {
+      "node_id": "sputtering_targets",
+      "theme_id": "semiconductor_materials_electronic_chemicals_value_chain_v1",
+      "parent_node_id": "cmp_materials",
+      "node_name": "高纯金属与溅射靶材",
+      "node_type": "upstream_material",
+      "description": "超高纯铝、钛、钽、铜等金属及靶材用于物理气相沉积，纯度、晶粒组织、焊接与利用率影响薄膜均匀性和缺陷。",
+      "value_capture_score": 5,
+      "bottleneck_score": 5,
+      "localization_gap_score": 4,
+      "supply_tightness_score": 3,
+      "evidence_strength": 5,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "靶材纯度与晶粒",
+        "分产品收入",
+        "先进制程客户覆盖",
+        "靶材利用率与回收"
+      ],
+      "overseas_leaders": [
+        "JX金属",
+        "霍尼韦尔"
+      ],
+      "domestic_players": [
+        "江丰电子"
+      ],
+      "related_stock_codes": [
+        "300666.SZ"
+      ]
+    },
+    {
+      "node_id": "electronic_gases",
+      "theme_id": "semiconductor_materials_electronic_chemicals_value_chain_v1",
+      "parent_node_id": "sputtering_targets",
+      "node_name": "电子特种气体与大宗工艺气体",
+      "node_type": "upstream_material",
+      "description": "刻蚀、沉积、离子注入、清洗和光刻使用高纯特气及大宗工艺气体，纯化、混配、分析、气瓶处理和现场供气决定稳定供应。",
+      "value_capture_score": 5,
+      "bottleneck_score": 5,
+      "localization_gap_score": 4,
+      "supply_tightness_score": 4,
+      "evidence_strength": 5,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "气体纯度与杂质",
+        "客户认证周期",
+        "电子气体分类收入",
+        "现场供气与容器周转"
+      ],
+      "overseas_leaders": [
+        "林德",
+        "液化空气",
+        "日本酸素"
+      ],
+      "domestic_players": [
+        "南大光电",
+        "华特气体",
+        "雅克科技"
+      ],
+      "related_stock_codes": [
+        "300346.SZ",
+        "688268.SH",
+        "002409.SZ"
+      ]
+    },
+    {
+      "node_id": "deposition_etch_precursors",
+      "theme_id": "semiconductor_materials_electronic_chemicals_value_chain_v1",
+      "parent_node_id": "electronic_gases",
+      "node_name": "沉积与刻蚀前驱体",
+      "node_type": "upstream_material",
+      "description": "ALD/CVD用硅基、金属及high-k前驱体和部分刻蚀材料决定薄膜成分、覆盖性和杂质水平，配方放大与容器输送是量产关键。",
+      "value_capture_score": 5,
+      "bottleneck_score": 5,
+      "localization_gap_score": 5,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "前驱体品类与先进节点",
+        "纯度和金属杂质",
+        "客户验证与量产",
+        "产能利用率与容器兼容"
+      ],
+      "overseas_leaders": [
+        "默克",
+        "液化空气"
+      ],
+      "domestic_players": [
+        "雅克科技",
+        "南大光电"
+      ],
+      "related_stock_codes": [
+        "002409.SZ",
+        "300346.SZ"
+      ]
+    },
+    {
+      "node_id": "purification_delivery_qualification",
+      "theme_id": "semiconductor_materials_electronic_chemicals_value_chain_v1",
+      "parent_node_id": "deposition_etch_precursors",
+      "node_name": "纯化、容器、输送与晶圆厂认证",
+      "node_type": "service",
+      "description": "材料从实验室进入晶圆厂需完成纯化分析、洁净包装、专用容器与输送、审厂、样品测试、小批量和批量验证，并持续满足批次一致性。",
+      "value_capture_score": 5,
+      "bottleneck_score": 5,
+      "localization_gap_score": 4,
+      "supply_tightness_score": 4,
+      "evidence_strength": 5,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "金属杂质和颗粒检出限",
+        "认证周期与通过节点",
+        "批次一致性和良率",
+        "容器周转与交付满足率"
+      ],
+      "overseas_leaders": [
+        "Entegris",
+        "林德"
+      ],
+      "domestic_players": [
+        "安集科技",
+        "雅克科技",
+        "华特气体",
+        "晶瑞电材"
+      ],
+      "related_stock_codes": [
+        "688019.SH",
+        "002409.SZ",
+        "688268.SH",
+        "300655.SZ"
+      ]
+    }
+  ],
+  "claims": [
+    {
+      "claim_id": "semimat_claim_01_silicon_wafers",
+      "theme_id": "semiconductor_materials_electronic_chemicals_value_chain_v1",
+      "source_id": "semimat_688126_2025_report",
+      "claim_text": "沪硅产业披露300mm、200mm及SOI半导体硅片业务，300mm硅片有独立收入、产销量和扩产数据；新规格仍需客户认证，扩产固定成本和利用率会影响盈利。",
+      "claim_type": "value_capture",
+      "confidence": 0.98,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "silicon_wafers",
+        "purification_delivery_qualification"
+      ]
+    },
+    {
+      "claim_id": "semimat_claim_02_compound_substrates",
+      "theme_id": "semiconductor_materials_electronic_chemicals_value_chain_v1",
+      "source_id": "semimat_688234_2025_report",
+      "claim_text": "天岳先进主营碳化硅半导体材料并披露碳化硅衬底产销量与收入；晶体缺陷控制、导电型产品客户认证和扩产爬坡共同决定价值兑现。",
+      "claim_type": "value_capture",
+      "confidence": 0.98,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "compound_semiconductor_substrates",
+        "purification_delivery_qualification"
+      ]
+    },
+    {
+      "claim_id": "semimat_claim_03_photoresists",
+      "theme_id": "semiconductor_materials_electronic_chemicals_value_chain_v1",
+      "source_id": "semimat_300655_2025_report",
+      "claim_text": "晶瑞电材披露光刻胶分产品收入，i线、KrF和ArF产品处于不同放量阶段；鼎龙和雅克的报告补充高端晶圆光刻胶产线与产品，但不得把宽口径电子材料收入归入单一光刻胶节点。",
+      "claim_type": "bottleneck",
+      "confidence": 0.96,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "semimat_300054_2025_report",
+        "semimat_002409_2025_report"
+      ],
+      "affected_theme_nodes": [
+        "photoresists_ancillaries",
+        "purification_delivery_qualification"
+      ]
+    },
+    {
+      "claim_id": "semimat_claim_04_wet_chemicals",
+      "theme_id": "semiconductor_materials_electronic_chemicals_value_chain_v1",
+      "source_id": "semimat_300655_2025_report",
+      "claim_text": "高纯湿电子化学品需要控制金属杂质、颗粒和纯度等级，晶瑞披露高纯化学品收入、产能和晶圆厂供应；安集与上海新阳补充功能性清洗、刻蚀、剥离和电镀化学品的客户导入。",
+      "claim_type": "value_capture",
+      "confidence": 0.98,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "semimat_688019_2025_report",
+        "semimat_300236_2025_report"
+      ],
+      "affected_theme_nodes": [
+        "wet_electronic_chemicals",
+        "purification_delivery_qualification"
+      ]
+    },
+    {
+      "claim_id": "semimat_claim_05_cmp",
+      "theme_id": "semiconductor_materials_electronic_chemicals_value_chain_v1",
+      "source_id": "semimat_688019_2025_report",
+      "claim_text": "安集科技披露CMP抛光液独立收入、产销量和客户认证，鼎龙披露CMP抛光垫以及抛光液与清洗液独立销售收入；纳米磨料、配方、垫材和清洗的稳定性决定批量良率。",
+      "claim_type": "value_capture",
+      "confidence": 0.99,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "semimat_300054_2025_report"
+      ],
+      "affected_theme_nodes": [
+        "cmp_materials",
+        "purification_delivery_qualification"
+      ]
+    },
+    {
+      "claim_id": "semimat_claim_06_targets",
+      "theme_id": "semiconductor_materials_electronic_chemicals_value_chain_v1",
+      "source_id": "semimat_300666_2025_report",
+      "claim_text": "江丰电子披露超高纯靶材独立收入，产品覆盖超高纯金属及半导体用溅射靶材；纯度、晶粒、焊接和客户工艺适配构成直接壁垒。",
+      "claim_type": "value_capture",
+      "confidence": 0.99,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "sputtering_targets",
+        "purification_delivery_qualification"
+      ]
+    },
+    {
+      "claim_id": "semimat_claim_07_gases",
+      "theme_id": "semiconductor_materials_electronic_chemicals_value_chain_v1",
+      "source_id": "semimat_300346_2025_report",
+      "claim_text": "南大光电披露特气产品独立收入，华特气体与雅克科技披露电子特种气体产品、纯化混配和认证；不同公司的宽口径气体收入仅在披露口径与电子气体节点匹配时用于材料性判断。",
+      "claim_type": "value_capture",
+      "confidence": 0.97,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "semimat_688268_2025_report",
+        "semimat_002409_2025_report"
+      ],
+      "affected_theme_nodes": [
+        "electronic_gases",
+        "purification_delivery_qualification"
+      ]
+    },
+    {
+      "claim_id": "semimat_claim_08_precursors",
+      "theme_id": "semiconductor_materials_electronic_chemicals_value_chain_v1",
+      "source_id": "semimat_300346_2025_report",
+      "claim_text": "南大光电披露前驱体材料（含MO源）独立收入，雅克科技披露high-k、硅基和金属前驱体及既有产能；雅克的半导体化学材料收入未拆到前驱体节点，因此只用于产品关系而非节点收入。",
+      "claim_type": "tech_route",
+      "confidence": 0.97,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "semimat_002409_2025_report"
+      ],
+      "affected_theme_nodes": [
+        "deposition_etch_precursors",
+        "purification_delivery_qualification"
+      ]
+    },
+    {
+      "claim_id": "semimat_claim_09_purity_consistency",
+      "theme_id": "semiconductor_materials_electronic_chemicals_value_chain_v1",
+      "source_id": "semimat_300655_2025_report",
+      "claim_text": "半导体湿化学品、电子特气和配方材料的投资判断不能只看名义产能：G4/G5纯度、ppt级杂质、颗粒控制、洁净容器、审厂、样品和批量验证以及持续批次一致性才决定可用供给。",
+      "claim_type": "bottleneck",
+      "confidence": 0.97,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "semimat_688268_2025_report",
+        "semimat_688019_2025_report",
+        "semimat_300236_2025_report"
+      ],
+      "affected_theme_nodes": [
+        "wet_electronic_chemicals",
+        "electronic_gases",
+        "purification_delivery_qualification"
+      ]
+    },
+    {
+      "claim_id": "semimat_claim_10_localization",
+      "theme_id": "semiconductor_materials_electronic_chemicals_value_chain_v1",
+      "source_id": "semimat_688019_2025_report",
+      "claim_text": "安集、晶瑞、江丰和华特的年报均披露部分材料实现进口替代或打破海外供应格局；国产替代应以通过客户验证并形成稳定批量供应为准，不以研发项目、样品或宽口径国产化表述替代。",
+      "claim_type": "localization",
+      "confidence": 0.95,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "semimat_300655_2025_report",
+        "semimat_300666_2025_report",
+        "semimat_688268_2025_report"
+      ],
+      "affected_theme_nodes": [
+        "cmp_materials",
+        "wet_electronic_chemicals",
+        "sputtering_targets",
+        "electronic_gases",
+        "purification_delivery_qualification"
+      ]
+    },
+    {
+      "claim_id": "semimat_claim_11_catalyst",
+      "theme_id": "semiconductor_materials_electronic_chemicals_value_chain_v1",
+      "source_id": "semimat_300054_2025_report",
+      "claim_text": "已验证产品放量、分产品收入提升、新产线按客户订单爬坡以及核心原料自制，是材料企业价值兑现的可核验催化；鼎龙、沪硅、天岳和雅克均披露了对应产能或利用率信息。",
+      "claim_type": "catalyst",
+      "confidence": 0.94,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "semimat_688126_2025_report",
+        "semimat_688234_2025_report",
+        "semimat_002409_2025_report"
+      ],
+      "affected_theme_nodes": [
+        "cmp_materials",
+        "silicon_wafers",
+        "compound_semiconductor_substrates",
+        "deposition_etch_precursors",
+        "purification_delivery_qualification"
+      ]
+    },
+    {
+      "claim_id": "semimat_claim_12_risk",
+      "theme_id": "semiconductor_materials_electronic_chemicals_value_chain_v1",
+      "source_id": "semimat_300346_2025_report",
+      "claim_text": "光刻胶和电子特气项目验证不及预期、产能利用率偏低、竞争导致价格下行，以及碳化硅扩产固定成本和客户需求波动，都会使名义产能无法转化为收入和利润。",
+      "claim_type": "risk",
+      "confidence": 0.96,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "semimat_300054_2025_report",
+        "semimat_688268_2025_report",
+        "semimat_688234_2025_report"
+      ],
+      "affected_theme_nodes": [
+        "photoresists_ancillaries",
+        "electronic_gases",
+        "compound_semiconductor_substrates",
+        "purification_delivery_qualification"
+      ]
+    }
+  ],
+  "value_capture_assessments": [
+    {
+      "node_id": "silicon_wafers",
+      "value_basis": "technology_barrier",
+      "assessment_text": "硅片晶体生长、加工、洁净和客户规格认证形成长周期壁垒，独立收入与产销量提供直接验证.",
+      "rank": 1,
+      "evidence_ids": [
+        "semimat_claim_01_silicon_wafers"
+      ],
+      "uncertainty": "未披露单客户规格、认证通过率和月度良率。"
+    },
+    {
+      "node_id": "compound_semiconductor_substrates",
+      "value_basis": "technology_barrier",
+      "assessment_text": "碳化硅晶体缺陷、尺寸升级和切磨抛良率决定可用衬底供给。",
+      "rank": 2,
+      "evidence_ids": [
+        "semimat_claim_02_compound_substrates"
+      ],
+      "uncertainty": "未披露分尺寸、分导电类型收入与客户份额。"
+    },
+    {
+      "node_id": "photoresists_ancillaries",
+      "value_basis": "customer_certification",
+      "assessment_text": "光刻胶需同时满足分辨率、缺陷、工艺窗口和配套试剂兼容，客户验证是收入兑现前置条件。",
+      "rank": 3,
+      "evidence_ids": [
+        "semimat_claim_03_photoresists"
+      ],
+      "uncertainty": "多数公司未披露单一胶种收入和认证周期。"
+    },
+    {
+      "node_id": "wet_electronic_chemicals",
+      "value_basis": "technology_barrier",
+      "assessment_text": "纯度、金属杂质、颗粒、复配和洁净交付共同影响晶圆良率。",
+      "rank": 4,
+      "evidence_ids": [
+        "semimat_claim_04_wet_chemicals"
+      ],
+      "uncertainty": "高纯化学品收入仍包含多下游应用，映射需保留口径限制。"
+    },
+    {
+      "node_id": "cmp_materials",
+      "value_basis": "technology_barrier",
+      "assessment_text": "抛光液、抛光垫、磨料与清洗协同决定平坦化和缺陷，客户配方粘性高。",
+      "rank": 5,
+      "evidence_ids": [
+        "semimat_claim_05_cmp"
+      ],
+      "uncertainty": "未披露单客户、单制程配方收入和批次良率。"
+    },
+    {
+      "node_id": "sputtering_targets",
+      "value_basis": "scarcity",
+      "assessment_text": "超高纯金属、晶粒控制和焊接工艺决定先进制程靶材供给。",
+      "rank": 6,
+      "evidence_ids": [
+        "semimat_claim_06_targets"
+      ],
+      "uncertainty": "未披露先进节点收入和单客户份额。"
+    },
+    {
+      "node_id": "electronic_gases",
+      "value_basis": "customer_certification",
+      "assessment_text": "纯化、混配、分析、容器处理与长周期认证共同形成供给壁垒。",
+      "rank": 7,
+      "evidence_ids": [
+        "semimat_claim_07_gases"
+      ],
+      "uncertainty": "华特和雅克的收入口径未完全拆至半导体电子气体。"
+    },
+    {
+      "node_id": "deposition_etch_precursors",
+      "value_basis": "technology_barrier",
+      "assessment_text": "前驱体纯度、挥发输送、薄膜性能和配方放大决定先进工艺适配。",
+      "rank": 8,
+      "evidence_ids": [
+        "semimat_claim_08_precursors"
+      ],
+      "uncertainty": "雅克未披露前驱体独立收入。"
+    },
+    {
+      "node_id": "purification_delivery_qualification",
+      "value_basis": "customer_certification",
+      "assessment_text": "材料必须跨越纯化分析、包装输送、审厂和批量验证，持续一致性而非样品决定价值。",
+      "rank": 9,
+      "evidence_ids": [
+        "semimat_claim_09_purity_consistency"
+      ],
+      "uncertainty": "多数公司未披露认证通过率、批次报废率和容器周转效率。"
+    }
+  ],
+  "decomposition_templates": [
+    {
+      "template_id": "semiconductor_materials_deep_research_template_v1",
+      "theme_type": "other",
+      "steps": [
+        "拆分衬底、图形化、清洗抛光、沉积刻蚀和交付认证环节。",
+        "核验分产品收入、纯度、产能、验证与量产。",
+        "区分名义产能、样品、客户验证和稳定批量供货。",
+        "仅用与节点匹配的披露判断业务材料性。"
+      ],
+      "required_dimensions": [
+        "材料纯度与杂质",
+        "客户认证",
+        "批次一致性",
+        "产能利用率",
+        "国产替代"
+      ],
+      "optional_dimensions": [
+        "分产品收入",
+        "产销量",
+        "良率",
+        "容器与交付"
+      ],
+      "output_schema": "theme_decomposition_v1_6"
+    }
+  ]
+}

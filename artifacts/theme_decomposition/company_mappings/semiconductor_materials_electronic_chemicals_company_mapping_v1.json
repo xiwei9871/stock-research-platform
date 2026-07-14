@@ -1,0 +1,578 @@
+{
+  "artifact_version": "theme_company_mapping_v1",
+  "theme_id": "semiconductor_materials_electronic_chemicals_value_chain_v1",
+  "sources": [
+    {
+      "source_id": "semimat_688019_2025_report",
+      "source_type": "company_filing",
+      "title": "安集微电子科技（上海）股份有限公司2025年年度报告",
+      "publisher": "安集科技",
+      "author": "",
+      "publish_date": "2026-04-16",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-16/1225108553.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第14-25、39-40页CMP产品、认证、收入及产销量已复核。"
+    },
+    {
+      "source_id": "semimat_300054_2025_report",
+      "source_type": "company_filing",
+      "title": "湖北鼎龙控股股份有限公司2025年年度报告全文",
+      "publisher": "鼎龙股份",
+      "author": "",
+      "publish_date": "2026-03-27",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-27/1225036149.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第17-18、23-25、34、37页CMP产品收入、产能、客户与风险已复核。"
+    },
+    {
+      "source_id": "semimat_002409_2025_report",
+      "source_type": "company_filing",
+      "title": "江苏雅克科技股份有限公司2025年年度报告全文",
+      "publisher": "雅克科技",
+      "author": "",
+      "publish_date": "2026-04-28",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-28/1225216877.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第23、25、27-30、35页前驱体产品、产能和宽口径收入已复核。"
+    },
+    {
+      "source_id": "semimat_300346_2025_report",
+      "source_type": "company_filing",
+      "title": "江苏南大光电材料股份有限公司2025年年度报告全文",
+      "publisher": "南大光电",
+      "author": "",
+      "publish_date": "2026-04-10",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-10/1225087469.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第12-21、74-77页前驱体、特气、收入与验证风险已复核。"
+    },
+    {
+      "source_id": "semimat_300666_2025_report",
+      "source_type": "company_filing",
+      "title": "宁波江丰电子材料股份有限公司2025年年度报告全文",
+      "publisher": "江丰电子",
+      "author": "",
+      "publish_date": "2026-04-16",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-16/1225108970.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第11-24页超高纯靶材产品、工艺与分产品收入已复核。"
+    },
+    {
+      "source_id": "semimat_688126_2025_report",
+      "source_type": "company_filing",
+      "title": "上海硅产业集团股份有限公司2025年年度报告",
+      "publisher": "沪硅产业",
+      "author": "",
+      "publish_date": "2026-04-17",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-17/1225114274.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第15-23、29-31页半导体硅片产品、认证、收入及产销量已复核。"
+    },
+    {
+      "source_id": "semimat_300655_2025_report",
+      "source_type": "company_filing",
+      "title": "晶瑞电子材料股份有限公司2025年年度报告全文",
+      "publisher": "晶瑞电材",
+      "author": "",
+      "publish_date": "2026-04-28",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-28/1225199721.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第12-27、49页高纯湿化学品产品、纯度、客户与收入已复核。"
+    },
+    {
+      "source_id": "semimat_300236_2025_report",
+      "source_type": "company_filing",
+      "title": "上海新阳半导体材料股份有限公司2025年年度报告全文",
+      "publisher": "上海新阳",
+      "author": "",
+      "publish_date": "2026-03-13",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-13/1225006867.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第12-26页晶圆制造用化学材料与宽口径集成电路材料收入已复核。"
+    },
+    {
+      "source_id": "semimat_688268_2025_report",
+      "source_type": "company_filing",
+      "title": "广东华特气体股份有限公司2025年年度报告",
+      "publisher": "华特气体",
+      "author": "",
+      "publish_date": "2026-04-10",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-10/1225090204.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第13-36、46、53、66-68页电子特气产品、认证及宽口径特种气体收入已复核。"
+    },
+    {
+      "source_id": "semimat_688234_2025_report",
+      "source_type": "company_filing",
+      "title": "山东天岳先进科技股份有限公司2025年年度报告",
+      "publisher": "天岳先进",
+      "author": "",
+      "publish_date": "2026-03-28",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-28/1225049103.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第14-35、41-47页碳化硅衬底、收入、产销量与风险已复核。"
+    }
+  ],
+  "evidence_items": [
+    {
+      "evidence_id": "semimat_ev_688019_product",
+      "source_id": "semimat_688019_2025_report",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "第14-16页主要业务、CMP抛光液产品平台与客户认证",
+      "evidence_summary": "公司提供覆盖晶圆制造和先进封装的多系列CMP抛光液，并以终端客户直销和认证测试导入。",
+      "related_company_codes": [
+        "688019.SH"
+      ],
+      "related_node_ids": [
+        "cmp_materials"
+      ]
+    },
+    {
+      "evidence_id": "semimat_ev_688019_revenue",
+      "source_id": "semimat_688019_2025_report",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "第39-40页主营业务分产品及产销量",
+      "evidence_summary": "2025年化学机械抛光液营业收入20.40亿元，占主营业务绝大部分，并披露销量与产量。",
+      "related_company_codes": [
+        "688019.SH"
+      ],
+      "related_node_ids": [
+        "cmp_materials"
+      ]
+    },
+    {
+      "evidence_id": "semimat_ev_300054_product",
+      "source_id": "semimat_300054_2025_report",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "第17-18页CMP抛光垫、抛光液与清洗液业务",
+      "evidence_summary": "公司CMP抛光垫、抛光液与清洗液已向晶圆厂销售，多款产品验证后稳定上量。",
+      "related_company_codes": [
+        "300054.SZ"
+      ],
+      "related_node_ids": [
+        "cmp_materials"
+      ]
+    },
+    {
+      "evidence_id": "semimat_ev_300054_revenue",
+      "source_id": "semimat_300054_2025_report",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "第17页CMP细分业务销售收入",
+      "evidence_summary": "2025年CMP抛光垫销售收入10.91亿元，CMP抛光液和清洗液销售收入2.94亿元。",
+      "related_company_codes": [
+        "300054.SZ"
+      ],
+      "related_node_ids": [
+        "cmp_materials"
+      ]
+    },
+    {
+      "evidence_id": "semimat_ev_002409_product",
+      "source_id": "semimat_002409_2025_report",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "第23、25、27页前驱体产能和产品",
+      "evidence_summary": "公司提供high-k、硅基和金属等半导体前驱体，并披露前驱体既有产能和客户覆盖。",
+      "related_company_codes": [
+        "002409.SZ"
+      ],
+      "related_node_ids": [
+        "deposition_etch_precursors"
+      ]
+    },
+    {
+      "evidence_id": "semimat_ev_300346_product",
+      "source_id": "semimat_300346_2025_report",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "第12-19页电子特气产品、产能与客户导入",
+      "evidence_summary": "公司电子特气用于半导体制造并披露高纯三氟化氮、磷烷砷烷等产品及产能。",
+      "related_company_codes": [
+        "300346.SZ"
+      ],
+      "related_node_ids": [
+        "electronic_gases"
+      ]
+    },
+    {
+      "evidence_id": "semimat_ev_300346_revenue",
+      "source_id": "semimat_300346_2025_report",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "第20-21页主营业务分产品",
+      "evidence_summary": "2025年特气产品营业收入15.36亿元，占公司营业收入59.39%。",
+      "related_company_codes": [
+        "300346.SZ"
+      ],
+      "related_node_ids": [
+        "electronic_gases"
+      ]
+    },
+    {
+      "evidence_id": "semimat_ev_300666_product",
+      "source_id": "semimat_300666_2025_report",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "第11-23页超高纯金属与半导体溅射靶材",
+      "evidence_summary": "公司主营超高纯金属材料及溅射靶材，产品用于半导体芯片制造。",
+      "related_company_codes": [
+        "300666.SZ"
+      ],
+      "related_node_ids": [
+        "sputtering_targets"
+      ]
+    },
+    {
+      "evidence_id": "semimat_ev_300666_revenue",
+      "source_id": "semimat_300666_2025_report",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "第24页主营业务分产品",
+      "evidence_summary": "2025年超高纯靶材营业收入28.50亿元，占公司营业收入61.90%。",
+      "related_company_codes": [
+        "300666.SZ"
+      ],
+      "related_node_ids": [
+        "sputtering_targets"
+      ]
+    },
+    {
+      "evidence_id": "semimat_ev_688126_product",
+      "source_id": "semimat_688126_2025_report",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "第15-23页300mm、200mm及SOI半导体硅片",
+      "evidence_summary": "公司主营半导体硅片，产品覆盖300mm、200mm及以下和SOI硅片，并持续推进客户认证。",
+      "related_company_codes": [
+        "688126.SH"
+      ],
+      "related_node_ids": [
+        "silicon_wafers"
+      ]
+    },
+    {
+      "evidence_id": "semimat_ev_688126_revenue",
+      "source_id": "semimat_688126_2025_report",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "第29-30页主营业务分产品",
+      "evidence_summary": "2025年半导体硅片主营收入36.79亿元，其中300mm硅片收入24.39亿元。",
+      "related_company_codes": [
+        "688126.SH"
+      ],
+      "related_node_ids": [
+        "silicon_wafers"
+      ]
+    },
+    {
+      "evidence_id": "semimat_ev_300655_product",
+      "source_id": "semimat_300655_2025_report",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "第16-22页高纯湿电子化学品产品、纯度与客户",
+      "evidence_summary": "公司高纯化学品包括半导体用高纯酸碱和溶剂，披露G5级产品、晶圆厂供货和批量订单。",
+      "related_company_codes": [
+        "300655.SZ"
+      ],
+      "related_node_ids": [
+        "wet_electronic_chemicals"
+      ]
+    },
+    {
+      "evidence_id": "semimat_ev_300655_revenue",
+      "source_id": "semimat_300655_2025_report",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "第25-27页主营业务分产品",
+      "evidence_summary": "2025年高纯湿化学品营业收入9.29亿元，占公司营业收入57.69%。",
+      "related_company_codes": [
+        "300655.SZ"
+      ],
+      "related_node_ids": [
+        "wet_electronic_chemicals"
+      ]
+    },
+    {
+      "evidence_id": "semimat_ev_300236_product",
+      "source_id": "semimat_300236_2025_report",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "第12-24页晶圆制造用电子化学材料",
+      "evidence_summary": "公司提供晶圆制造与先进封装使用的清洗、刻蚀、电镀及配套电子化学材料。",
+      "related_company_codes": [
+        "300236.SZ"
+      ],
+      "related_node_ids": [
+        "wet_electronic_chemicals"
+      ]
+    },
+    {
+      "evidence_id": "semimat_ev_688268_product",
+      "source_id": "semimat_688268_2025_report",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "第13-36页电子特种气体、纯化混配和客户认证",
+      "evidence_summary": "公司提供集成电路用电子特种气体，掌握合成、纯化、混配、检测及气瓶处理并通过客户认证。",
+      "related_company_codes": [
+        "688268.SH"
+      ],
+      "related_node_ids": [
+        "electronic_gases"
+      ]
+    },
+    {
+      "evidence_id": "semimat_ev_688234_product",
+      "source_id": "semimat_688234_2025_report",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "第14-23页碳化硅衬底产品与客户认证",
+      "evidence_summary": "公司主营碳化硅衬底，覆盖导电型等产品，并推进新规格和客户认证。",
+      "related_company_codes": [
+        "688234.SH"
+      ],
+      "related_node_ids": [
+        "compound_semiconductor_substrates"
+      ]
+    },
+    {
+      "evidence_id": "semimat_ev_688234_revenue",
+      "source_id": "semimat_688234_2025_report",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "第34-35页主营业务分产品及产销量",
+      "evidence_summary": "2025年碳化硅半导体材料主营收入12.25亿元，并披露碳化硅衬底产销量。",
+      "related_company_codes": [
+        "688234.SH"
+      ],
+      "related_node_ids": [
+        "compound_semiconductor_substrates"
+      ]
+    }
+  ],
+  "company_mappings": [
+    {
+      "mapping_id": "semimat_map_688019_cmp_v1",
+      "theme_id": "semiconductor_materials_electronic_chemicals_value_chain_v1",
+      "company_code": "688019.SH",
+      "company_name": "安集科技",
+      "market": "CN",
+      "mapped_node_id": "cmp_materials",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.99,
+      "evidence_ids": [
+        "semimat_ev_688019_product",
+        "semimat_ev_688019_revenue"
+      ],
+      "revenue_relevance": "material",
+      "bottleneck_relevance": "core",
+      "business_materiality": "core_business",
+      "product_or_service": "化学机械抛光液",
+      "relationship_summary": "CMP抛光液是公司核心主营，并有节点匹配的分产品收入与产销量。",
+      "review_status": "reviewed",
+      "notes": "披露口径不外推单客户、单配方或先进节点收入。"
+    },
+    {
+      "mapping_id": "semimat_map_300054_cmp_v1",
+      "theme_id": "semiconductor_materials_electronic_chemicals_value_chain_v1",
+      "company_code": "300054.SZ",
+      "company_name": "鼎龙股份",
+      "market": "CN",
+      "mapped_node_id": "cmp_materials",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.98,
+      "evidence_ids": [
+        "semimat_ev_300054_product",
+        "semimat_ev_300054_revenue"
+      ],
+      "revenue_relevance": "meaningful",
+      "bottleneck_relevance": "core",
+      "business_materiality": "meaningful_segment",
+      "product_or_service": "CMP抛光垫、抛光液和清洗液",
+      "relationship_summary": "CMP材料形成重要业务板块，并披露抛光垫与抛光液清洗液销售收入。",
+      "review_status": "reviewed",
+      "notes": "不把半导体显示、封装或芯片收入归入CMP节点。"
+    },
+    {
+      "mapping_id": "semimat_map_002409_precursor_v1",
+      "theme_id": "semiconductor_materials_electronic_chemicals_value_chain_v1",
+      "company_code": "002409.SZ",
+      "company_name": "雅克科技",
+      "market": "CN",
+      "mapped_node_id": "deposition_etch_precursors",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.94,
+      "evidence_ids": [
+        "semimat_ev_002409_product"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "high-k、硅基和金属半导体前驱体",
+      "relationship_summary": "年报直接确认半导体前驱体产品与产能，但未披露前驱体独立收入。",
+      "review_status": "reviewed",
+      "notes": "半导体化学材料宽口径收入不下沉到前驱体节点。"
+    },
+    {
+      "mapping_id": "semimat_map_300346_gas_v1",
+      "theme_id": "semiconductor_materials_electronic_chemicals_value_chain_v1",
+      "company_code": "300346.SZ",
+      "company_name": "南大光电",
+      "market": "CN",
+      "mapped_node_id": "electronic_gases",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.98,
+      "evidence_ids": [
+        "semimat_ev_300346_product",
+        "semimat_ev_300346_revenue"
+      ],
+      "revenue_relevance": "material",
+      "bottleneck_relevance": "core",
+      "business_materiality": "core_business",
+      "product_or_service": "电子特种气体",
+      "relationship_summary": "电子特气为公司核心半导体材料产品，并有特气分产品收入支持。",
+      "review_status": "reviewed",
+      "notes": "不把前驱体、光刻胶或其他材料收入归入气体节点。"
+    },
+    {
+      "mapping_id": "semimat_map_300666_target_v1",
+      "theme_id": "semiconductor_materials_electronic_chemicals_value_chain_v1",
+      "company_code": "300666.SZ",
+      "company_name": "江丰电子",
+      "market": "CN",
+      "mapped_node_id": "sputtering_targets",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.99,
+      "evidence_ids": [
+        "semimat_ev_300666_product",
+        "semimat_ev_300666_revenue"
+      ],
+      "revenue_relevance": "material",
+      "bottleneck_relevance": "core",
+      "business_materiality": "core_business",
+      "product_or_service": "超高纯金属溅射靶材",
+      "relationship_summary": "超高纯靶材为公司核心主营，并有节点匹配的分产品收入。",
+      "review_status": "reviewed",
+      "notes": "不将精密零部件和其他收入归入靶材节点。"
+    },
+    {
+      "mapping_id": "semimat_map_688126_wafer_v1",
+      "theme_id": "semiconductor_materials_electronic_chemicals_value_chain_v1",
+      "company_code": "688126.SH",
+      "company_name": "沪硅产业",
+      "market": "CN",
+      "mapped_node_id": "silicon_wafers",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.99,
+      "evidence_ids": [
+        "semimat_ev_688126_product",
+        "semimat_ev_688126_revenue"
+      ],
+      "revenue_relevance": "material",
+      "bottleneck_relevance": "core",
+      "business_materiality": "core_business",
+      "product_or_service": "300mm、200mm及SOI半导体硅片",
+      "relationship_summary": "半导体硅片是公司主营，且披露300mm及其他硅片分产品收入与产销量。",
+      "review_status": "reviewed",
+      "notes": "不外推单客户、单规格收入或认证通过率。"
+    },
+    {
+      "mapping_id": "semimat_map_300655_wet_v1",
+      "theme_id": "semiconductor_materials_electronic_chemicals_value_chain_v1",
+      "company_code": "300655.SZ",
+      "company_name": "晶瑞电材",
+      "market": "CN",
+      "mapped_node_id": "wet_electronic_chemicals",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.98,
+      "evidence_ids": [
+        "semimat_ev_300655_product",
+        "semimat_ev_300655_revenue"
+      ],
+      "revenue_relevance": "material",
+      "bottleneck_relevance": "core",
+      "business_materiality": "core_business",
+      "product_or_service": "高纯湿电子化学品",
+      "relationship_summary": "高纯化学品与湿电子化学品节点口径一致，并有分产品收入、产量和客户供货支持。",
+      "review_status": "reviewed",
+      "notes": "收入仍含多个电子下游，不外推单一晶圆厂或先进节点收入。"
+    },
+    {
+      "mapping_id": "semimat_map_300236_wet_v1",
+      "theme_id": "semiconductor_materials_electronic_chemicals_value_chain_v1",
+      "company_code": "300236.SZ",
+      "company_name": "上海新阳",
+      "market": "CN",
+      "mapped_node_id": "wet_electronic_chemicals",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.93,
+      "evidence_ids": [
+        "semimat_ev_300236_product"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "晶圆制造与先进封装用湿法电子化学材料",
+      "relationship_summary": "年报确认清洗、刻蚀、电镀等直接产品关系，但收入只披露集成电路材料宽口径。",
+      "review_status": "reviewed",
+      "notes": "集成电路材料收入不下沉到湿电子化学品节点。"
+    },
+    {
+      "mapping_id": "semimat_map_688268_gas_v1",
+      "theme_id": "semiconductor_materials_electronic_chemicals_value_chain_v1",
+      "company_code": "688268.SH",
+      "company_name": "华特气体",
+      "market": "CN",
+      "mapped_node_id": "electronic_gases",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.96,
+      "evidence_ids": [
+        "semimat_ev_688268_product"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "集成电路用电子特种气体",
+      "relationship_summary": "年报确认电子特气、纯化混配和晶圆厂认证，但特种气体收入包含非半导体用途。",
+      "review_status": "reviewed",
+      "notes": "宽口径特种气体收入不等同于半导体电子气体收入。"
+    },
+    {
+      "mapping_id": "semimat_map_688234_substrate_v1",
+      "theme_id": "semiconductor_materials_electronic_chemicals_value_chain_v1",
+      "company_code": "688234.SH",
+      "company_name": "天岳先进",
+      "market": "CN",
+      "mapped_node_id": "compound_semiconductor_substrates",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.99,
+      "evidence_ids": [
+        "semimat_ev_688234_product",
+        "semimat_ev_688234_revenue"
+      ],
+      "revenue_relevance": "material",
+      "bottleneck_relevance": "core",
+      "business_materiality": "core_business",
+      "product_or_service": "碳化硅半导体衬底",
+      "relationship_summary": "碳化硅半导体材料为公司核心主营，并有衬底产销量与匹配收入支持。",
+      "review_status": "reviewed",
+      "notes": "不外推分尺寸、分导电类型或单客户收入。"
+    }
+  ]
+}

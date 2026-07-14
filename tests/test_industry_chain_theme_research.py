@@ -103,6 +103,9 @@ def test_selected_chain_summaries_report_existing_and_missing_theme_packages():
     assert by_chain["optical_communications_data_center_interconnect"][
         "research_status"
     ] == "reviewed"
+    assert by_chain["semiconductor_materials_electronic_chemicals"][
+        "research_status"
+    ] == "reviewed"
     assert by_chain["ai_compute_infrastructure"]["theme_route"].endswith(
         "/ai_compute_infrastructure_value_chain_v1"
     )

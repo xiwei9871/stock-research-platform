@@ -1,0 +1,276 @@
+{
+  "artifact_version": "semiconductor_materials_electronic_chemicals_source_pack_v1",
+  "theme_id": "semiconductor_materials_electronic_chemicals_value_chain_v1",
+  "as_of": "2026-07-14",
+  "sources": [
+    {
+      "source_id": "semimat_688019_2025_report",
+      "source_type": "company_filing",
+      "title": "安集微电子科技（上海）股份有限公司2025年年度报告",
+      "publisher": "安集科技",
+      "author": "",
+      "publish_date": "2026-04-16",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-16/1225108553.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第14-25页产品、认证、国产替代、产能与质量；第39-40页CMP抛光液和功能性湿电子化学品分产品收入及产销量",
+      "evidence_summary": "公司披露CMP抛光液、功能性湿电子化学品和电镀材料，说明长周期客户认证、核心原料自制、稳定交付及节点匹配收入。",
+      "supported_claim_ids": [
+        "semimat_claim_04_wet_chemicals",
+        "semimat_claim_05_cmp",
+        "semimat_claim_09_purity_consistency",
+        "semimat_claim_10_localization"
+      ],
+      "supported_node_ids": [
+        "wet_electronic_chemicals",
+        "cmp_materials",
+        "purification_delivery_qualification"
+      ],
+      "limitations": "未披露单一客户、单配方、先进节点收入、认证通过率或批次良率。",
+      "notes": "巨潮资讯年报全文逐页复核。"
+    },
+    {
+      "source_id": "semimat_300054_2025_report",
+      "source_type": "company_filing",
+      "title": "湖北鼎龙控股股份有限公司2025年年度报告全文",
+      "publisher": "鼎龙股份",
+      "author": "",
+      "publish_date": "2026-03-27",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-03-27/1225036149.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第17-18页CMP抛光垫、抛光液及清洗液收入、客户导入和量产；第23-25、34、37页原料、产能、客户供货及利用率风险",
+      "evidence_summary": "公司披露CMP抛光垫、抛光液与清洗液的细分销售收入、客户稳定供货、原料自制、产线规划及利用率风险。",
+      "supported_claim_ids": [
+        "semimat_claim_03_photoresists",
+        "semimat_claim_05_cmp",
+        "semimat_claim_11_catalyst",
+        "semimat_claim_12_risk"
+      ],
+      "supported_node_ids": [
+        "photoresists_ancillaries",
+        "cmp_materials",
+        "purification_delivery_qualification"
+      ],
+      "limitations": "半导体材料及芯片宽口径收入包含显示、封装和芯片业务，不能全部归入CMP。",
+      "notes": "巨潮资讯年报全文逐页复核。"
+    },
+    {
+      "source_id": "semimat_002409_2025_report",
+      "source_type": "company_filing",
+      "title": "江苏雅克科技股份有限公司2025年年度报告全文",
+      "publisher": "雅克科技",
+      "author": "",
+      "publish_date": "2026-04-28",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-28/1225216877.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第23、25、27-30页前驱体、光刻胶、电子特气、LDS产品、产能及分类收入；第35页纯度与研发风险",
+      "evidence_summary": "公司披露high-k、硅基和金属前驱体、电子特气、光刻胶和材料输送系统，以及前驱体设计产能和纯度研发要求。",
+      "supported_claim_ids": [
+        "semimat_claim_03_photoresists",
+        "semimat_claim_07_gases",
+        "semimat_claim_08_precursors",
+        "semimat_claim_11_catalyst"
+      ],
+      "supported_node_ids": [
+        "photoresists_ancillaries",
+        "electronic_gases",
+        "deposition_etch_precursors",
+        "purification_delivery_qualification"
+      ],
+      "limitations": "半导体化学材料收入未拆分至前驱体，不能据此判断前驱体收入材料性。",
+      "notes": "巨潮资讯年报全文逐页复核。"
+    },
+    {
+      "source_id": "semimat_300346_2025_report",
+      "source_type": "company_filing",
+      "title": "江苏南大光电材料股份有限公司2025年年度报告全文",
+      "publisher": "南大光电",
+      "author": "",
+      "publish_date": "2026-04-10",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-10/1225087469.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第12-21页前驱体、电子特气、光刻胶产品、验证与分产品收入；第74-77页项目进度、品质验证和市场风险",
+      "evidence_summary": "公司披露特气和前驱体分产品收入、产品及产能，并说明光刻胶验证变化、电子特气品质、竞争与项目进度风险。",
+      "supported_claim_ids": [
+        "semimat_claim_07_gases",
+        "semimat_claim_08_precursors",
+        "semimat_claim_12_risk"
+      ],
+      "supported_node_ids": [
+        "photoresists_ancillaries",
+        "electronic_gases",
+        "deposition_etch_precursors",
+        "purification_delivery_qualification"
+      ],
+      "limitations": "未披露单一气体品种或单一客户收入；光刻胶项目进度不代表稳定商业化。",
+      "notes": "巨潮资讯年报全文逐页复核。"
+    },
+    {
+      "source_id": "semimat_300666_2025_report",
+      "source_type": "company_filing",
+      "title": "宁波江丰电子材料股份有限公司2025年年度报告全文",
+      "publisher": "江丰电子",
+      "author": "",
+      "publish_date": "2026-04-16",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-16/1225108970.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第11-23页超高纯金属溅射靶材产品、工艺和客户覆盖；第24页超高纯靶材分产品收入",
+      "evidence_summary": "公司披露超高纯金属与半导体溅射靶材业务、先进制造工艺和超高纯靶材分产品收入。",
+      "supported_claim_ids": [
+        "semimat_claim_06_targets",
+        "semimat_claim_10_localization"
+      ],
+      "supported_node_ids": [
+        "sputtering_targets",
+        "purification_delivery_qualification"
+      ],
+      "limitations": "未披露单一金属、工艺节点、客户份额、靶材利用率或回收收益。",
+      "notes": "巨潮资讯年报全文逐页复核。"
+    },
+    {
+      "source_id": "semimat_688126_2025_report",
+      "source_type": "company_filing",
+      "title": "上海硅产业集团股份有限公司2025年年度报告",
+      "publisher": "沪硅产业",
+      "author": "",
+      "publish_date": "2026-04-17",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-17/1225114274.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第15-23页300mm、200mm及SOI半导体硅片产品、扩产和客户认证；第29-31页分产品收入、产销量与成本",
+      "evidence_summary": "公司披露半导体硅片主营业务、300mm与其他硅片分产品收入和产销量，并说明新规格客户认证与扩产成本。",
+      "supported_claim_ids": [
+        "semimat_claim_01_silicon_wafers",
+        "semimat_claim_11_catalyst"
+      ],
+      "supported_node_ids": [
+        "silicon_wafers",
+        "purification_delivery_qualification"
+      ],
+      "limitations": "未披露单客户、单规格收入、认证通过率、成品良率或月度利用率。",
+      "notes": "巨潮资讯年报全文逐页复核。"
+    },
+    {
+      "source_id": "semimat_300655_2025_report",
+      "source_type": "company_filing",
+      "title": "晶瑞电子材料股份有限公司2025年年度报告全文",
+      "publisher": "晶瑞电材",
+      "author": "",
+      "publish_date": "2026-04-28",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-28/1225199721.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第12-22页高纯湿电子化学品、光刻胶、纯度等级、产能与客户；第25-27、49页分产品收入、出货及国产替代",
+      "evidence_summary": "公司披露G4/G5高纯湿化学品、光刻胶、ppt级杂质控制、晶圆厂批量供应、分产品收入和产能。",
+      "supported_claim_ids": [
+        "semimat_claim_03_photoresists",
+        "semimat_claim_04_wet_chemicals",
+        "semimat_claim_09_purity_consistency",
+        "semimat_claim_10_localization"
+      ],
+      "supported_node_ids": [
+        "photoresists_ancillaries",
+        "wet_electronic_chemicals",
+        "purification_delivery_qualification"
+      ],
+      "limitations": "高纯化学品收入包含多个电子下游，未披露单一晶圆厂或先进节点收入。",
+      "notes": "巨潮资讯年报全文逐页复核。"
+    },
+    {
+      "source_id": "semimat_300236_2025_report",
+      "source_type": "company_filing",
+      "title": "上海新阳半导体材料股份有限公司2025年年度报告全文",
+      "publisher": "上海新阳",
+      "author": "",
+      "publish_date": "2026-03-13",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-03-13/1225006867.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第12-24页晶圆制造与先进封装用电子化学材料、产品验证和供应；第25-26页集成电路材料宽口径收入",
+      "evidence_summary": "公司披露晶圆制造和先进封装用清洗、刻蚀、电镀及配套电子化学材料，以及客户导入和宽口径集成电路材料收入。",
+      "supported_claim_ids": [
+        "semimat_claim_04_wet_chemicals",
+        "semimat_claim_09_purity_consistency"
+      ],
+      "supported_node_ids": [
+        "wet_electronic_chemicals",
+        "purification_delivery_qualification"
+      ],
+      "limitations": "集成电路材料收入包含多类产品，不能归因于湿电子化学品单一节点。",
+      "notes": "巨潮资讯年报全文逐页复核。"
+    },
+    {
+      "source_id": "semimat_688268_2025_report",
+      "source_type": "company_filing",
+      "title": "广东华特气体股份有限公司2025年年度报告",
+      "publisher": "华特气体",
+      "author": "",
+      "publish_date": "2026-04-10",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-10/1225090204.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第13-36页电子特种气体产品、纯化混配、认证周期和客户覆盖；第46、53、66-68页技术风险、分类收入与国产替代",
+      "evidence_summary": "公司披露电子特气合成、纯化、混配、检测、气瓶处理，1-3年客户认证和先进制程供应，以及宽口径特种气体收入。",
+      "supported_claim_ids": [
+        "semimat_claim_07_gases",
+        "semimat_claim_09_purity_consistency",
+        "semimat_claim_10_localization",
+        "semimat_claim_12_risk"
+      ],
+      "supported_node_ids": [
+        "electronic_gases",
+        "purification_delivery_qualification"
+      ],
+      "limitations": "特种气体收入包括非半导体用途，不能等同于半导体电子气体收入。",
+      "notes": "巨潮资讯年报全文逐页复核。"
+    },
+    {
+      "source_id": "semimat_688234_2025_report",
+      "source_type": "company_filing",
+      "title": "山东天岳先进科技股份有限公司2025年年度报告",
+      "publisher": "天岳先进",
+      "author": "",
+      "publish_date": "2026-03-28",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-03-28/1225049103.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第14-35页碳化硅衬底产品、导电型路线、客户认证、产销量与碳化硅材料收入；第41-47页扩产与经营风险",
+      "evidence_summary": "公司披露碳化硅衬底主营业务、产品路线、客户认证、产销量和匹配收入，并说明扩产与需求波动风险。",
+      "supported_claim_ids": [
+        "semimat_claim_02_compound_substrates",
+        "semimat_claim_11_catalyst",
+        "semimat_claim_12_risk"
+      ],
+      "supported_node_ids": [
+        "compound_semiconductor_substrates",
+        "purification_delivery_qualification"
+      ],
+      "limitations": "未披露分尺寸、分导电类型收入、单客户份额、晶体缺陷密度或认证通过率。",
+      "notes": "巨潮资讯年报全文逐页复核。"
+    }
+  ]
+}

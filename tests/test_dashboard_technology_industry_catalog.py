@@ -159,6 +159,28 @@ def test_optical_interconnect_chain_detail_exposes_reviewed_theme():
     assert payload["deep_research"]["reviewed_company_count"] >= 8
 
 
+def test_semiconductor_materials_chain_detail_exposes_reviewed_theme():
+    response = TestClient(dashboard_app.create_app()).get(
+        f"{CATALOG_PATH}/chains/semiconductor_materials_electronic_chemicals"
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["chain"]["chain_id"] == (
+        "semiconductor_materials_electronic_chemicals"
+    )
+    assert payload["nodes"] == []
+    link = payload["theme_links"][0]
+    assert link["theme_id"] == (
+        "semiconductor_materials_electronic_chemicals_value_chain_v1"
+    )
+    assert link["node_links"] == []
+    assert len(link["unmapped_theme_node_ids"]) >= 9
+    assert payload["deep_research"]["research_status"] == "reviewed"
+    assert payload["deep_research"]["source_count"] >= 10
+    assert payload["deep_research"]["reviewed_company_count"] == 10
+
+
 def test_next_fifteen_catalog_theme_links_match_canonical_batch_manifest():
     catalog = load_industry_catalog()
     manifest = load_theme_batch_manifest(NEXT_FIFTEEN_MANIFEST_PATH)

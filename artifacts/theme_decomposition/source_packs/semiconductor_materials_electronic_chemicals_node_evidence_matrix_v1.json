@@ -1,0 +1,244 @@
+{
+  "artifact_version": "semiconductor_materials_electronic_chemicals_node_evidence_matrix_v1",
+  "theme_id": "semiconductor_materials_electronic_chemicals_value_chain_v1",
+  "as_of_date": "2026-07-14",
+  "node_evidence_matrix": [
+    {
+      "node_id": "silicon_wafers",
+      "accepted_source_ids": [
+        "semimat_688126_2025_report"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "semimat_claim_01_silicon_wafers",
+        "semimat_claim_11_catalyst"
+      ],
+      "evidence_strength_before": 3,
+      "evidence_strength_after": 5,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "technology_barrier",
+        "customer_certification"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "半导体硅片产品、收入、产销量、认证和扩产均有公司年报直接证据。",
+      "next_evidence_needed": "跟踪300mm硅片分规格认证、良率和产能利用率。"
+    },
+    {
+      "node_id": "compound_semiconductor_substrates",
+      "accepted_source_ids": [
+        "semimat_688234_2025_report"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "semimat_claim_02_compound_substrates",
+        "semimat_claim_11_catalyst",
+        "semimat_claim_12_risk"
+      ],
+      "evidence_strength_before": 3,
+      "evidence_strength_after": 5,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "technology_barrier",
+        "capacity_constraint"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "碳化硅衬底产品、收入、产销量、认证和扩产风险均有直接披露。",
+      "next_evidence_needed": "补充尺寸、导电类型、缺陷密度和客户份额。"
+    },
+    {
+      "node_id": "photoresists_ancillaries",
+      "accepted_source_ids": [
+        "semimat_300655_2025_report",
+        "semimat_300346_2025_report"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "semimat_claim_03_photoresists",
+        "semimat_claim_12_risk"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "technology_barrier",
+        "customer_certification"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "晶瑞披露光刻胶分产品收入与不同代际出货，南大披露验证和项目风险。",
+      "next_evidence_needed": "跟踪KrF、ArF分产品收入、批次缺陷和客户验证周期。"
+    },
+    {
+      "node_id": "wet_electronic_chemicals",
+      "accepted_source_ids": [
+        "semimat_300655_2025_report",
+        "semimat_688019_2025_report",
+        "semimat_300236_2025_report"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "semimat_claim_04_wet_chemicals",
+        "semimat_claim_09_purity_consistency",
+        "semimat_claim_10_localization"
+      ],
+      "evidence_strength_before": 3,
+      "evidence_strength_after": 5,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "technology_barrier",
+        "customer_certification"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "高纯试剂、功能性清洗刻蚀材料、纯度和国产替代均有多份年报交叉支持。",
+      "next_evidence_needed": "区分半导体、面板和光伏收入并跟踪G5批次一致性。"
+    },
+    {
+      "node_id": "cmp_materials",
+      "accepted_source_ids": [
+        "semimat_688019_2025_report",
+        "semimat_300054_2025_report"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "semimat_claim_05_cmp",
+        "semimat_claim_10_localization",
+        "semimat_claim_11_catalyst"
+      ],
+      "evidence_strength_before": 3,
+      "evidence_strength_after": 5,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "technology_barrier",
+        "customer_certification"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "安集与鼎龙披露CMP产品、细分收入、量产、原料自制和产能。",
+      "next_evidence_needed": "跟踪单制程配方收入、缺陷率、抛光垫寿命和客户份额。"
+    },
+    {
+      "node_id": "sputtering_targets",
+      "accepted_source_ids": [
+        "semimat_300666_2025_report"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "semimat_claim_06_targets",
+        "semimat_claim_10_localization"
+      ],
+      "evidence_strength_before": 3,
+      "evidence_strength_after": 5,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "scarcity",
+        "technology_barrier"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "江丰年报直接披露超高纯靶材产品、收入和国产供应关系。",
+      "next_evidence_needed": "补充先进节点、单一金属收入、靶材利用率和回收率。"
+    },
+    {
+      "node_id": "electronic_gases",
+      "accepted_source_ids": [
+        "semimat_300346_2025_report",
+        "semimat_688268_2025_report"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "semimat_claim_07_gases",
+        "semimat_claim_09_purity_consistency",
+        "semimat_claim_10_localization",
+        "semimat_claim_12_risk"
+      ],
+      "evidence_strength_before": 3,
+      "evidence_strength_after": 5,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "technology_barrier",
+        "customer_certification"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "南大提供节点匹配收入，华特补充纯化混配、认证、国产替代和技术风险。",
+      "next_evidence_needed": "继续拆分半导体电子气体与其他特种气体收入。"
+    },
+    {
+      "node_id": "deposition_etch_precursors",
+      "accepted_source_ids": [
+        "semimat_300346_2025_report",
+        "semimat_002409_2025_report"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "semimat_claim_08_precursors",
+        "semimat_claim_11_catalyst"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "technology_barrier",
+        "customer_certification"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "南大披露前驱体收入，雅克披露产品类别、产能和先进制程应用。",
+      "next_evidence_needed": "跟踪雅克前驱体独立收入、纯度、客户验证与利用率。"
+    },
+    {
+      "node_id": "purification_delivery_qualification",
+      "accepted_source_ids": [
+        "semimat_688019_2025_report",
+        "semimat_300054_2025_report",
+        "semimat_002409_2025_report",
+        "semimat_300346_2025_report",
+        "semimat_300666_2025_report",
+        "semimat_688126_2025_report",
+        "semimat_300655_2025_report",
+        "semimat_300236_2025_report",
+        "semimat_688268_2025_report",
+        "semimat_688234_2025_report"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "semimat_claim_01_silicon_wafers",
+        "semimat_claim_02_compound_substrates",
+        "semimat_claim_03_photoresists",
+        "semimat_claim_04_wet_chemicals",
+        "semimat_claim_05_cmp",
+        "semimat_claim_06_targets",
+        "semimat_claim_07_gases",
+        "semimat_claim_08_precursors",
+        "semimat_claim_09_purity_consistency",
+        "semimat_claim_10_localization",
+        "semimat_claim_11_catalyst",
+        "semimat_claim_12_risk"
+      ],
+      "evidence_strength_before": 3,
+      "evidence_strength_after": 5,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "customer_certification",
+        "integration_control"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "十份年报共同表明纯化分析、洁净包装输送、客户认证和持续一致性是材料商业化的共同门槛。",
+      "next_evidence_needed": "持续收集认证通过率、批次报废率、容器周转和晶圆良率数据。"
+    }
+  ]
+}

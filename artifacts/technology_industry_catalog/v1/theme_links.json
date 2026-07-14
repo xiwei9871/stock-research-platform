@@ -336,7 +336,17 @@
       "theme_id": "semiconductor_materials_electronic_chemicals_value_chain_v1",
       "chain_id": "semiconductor_materials_electronic_chemicals",
       "node_links": [],
-      "unmapped_theme_node_ids": []
+      "unmapped_theme_node_ids": [
+        "silicon_wafers",
+        "compound_semiconductor_substrates",
+        "photoresists_ancillaries",
+        "wet_electronic_chemicals",
+        "cmp_materials",
+        "sputtering_targets",
+        "electronic_gases",
+        "deposition_etch_precursors",
+        "purification_delivery_qualification"
+      ]
     },
     {
       "theme_id": "power_semiconductors_value_chain_v1",
