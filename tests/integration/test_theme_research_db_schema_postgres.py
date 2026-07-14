@@ -1,15 +1,21 @@
 from __future__ import annotations
 
+import ast
+import hashlib
 import os
+from pathlib import Path
+import subprocess
 
 import psycopg
 import pytest
 
+from stock_research import theme_research_db_schema as schema
 from stock_research.config import SETTINGS
 from stock_research.theme_research_db_schema import (
     THEME_RESEARCH_SCHEMA_SQL,
     inspect_theme_research_schema,
 )
+from stock_research.theme_research_db_models import ThemeResearchDomainError
 
 
 pytestmark = pytest.mark.skipif(
@@ -20,6 +26,59 @@ pytestmark = pytest.mark.skipif(
 
 TEST_MIGRATION_SERVICE = os.getenv("THEME_RESEARCH_POSTGRES_TEST_SERVICE", "")
 TEST_RUNTIME_SERVICE = os.getenv("THEME_RESEARCH_POSTGRES_TEST_RUNTIME_SERVICE", "")
+
+
+class _BorrowedConnectionContext:
+    def __init__(self, connection):
+        self.connection = connection
+
+    def __enter__(self):
+        return self.connection
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+
+def _legacy_schema_sql() -> str:
+    repository_root = Path(__file__).resolve().parents[2]
+    source = subprocess.check_output(
+        [
+            "git",
+            "show",
+            "94e1de3:src/stock_research/theme_research_db_schema.py",
+        ],
+        cwd=repository_root,
+        text=True,
+    )
+    module = ast.parse(source)
+    for node in module.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        if any(
+            isinstance(target, ast.Name) and target.id == "THEME_RESEARCH_SCHEMA_SQL"
+            for target in node.targets
+        ):
+            value = ast.literal_eval(node.value)
+            assert hashlib.sha256(value.encode("utf-8")).hexdigest() in (
+                schema.KNOWN_LEGACY_DDL_SHA256
+            )
+            return value
+    raise AssertionError("legacy theme research schema SQL was not found")
+
+
+def _install_legacy_schema(connection) -> None:
+    connection.execute(_legacy_schema_sql())
+    connection.execute(
+        """
+        INSERT INTO research.theme_research_schema_migration (
+            schema_version, applied_by, ddl_sha256, metadata
+        ) VALUES (%s, 'legacy-test', %s, '{"legacy": true}'::jsonb)
+        """,
+        (
+            schema.THEME_RESEARCH_DB_SCHEMA_VERSION,
+            next(iter(schema.KNOWN_LEGACY_DDL_SHA256)),
+        ),
+    )
 
 
 @pytest.fixture
@@ -34,6 +93,165 @@ def conn():
     finally:
         connection.rollback()
         connection.close()
+
+
+@pytest.fixture
+def isolated_schema_conn():
+    connection = psycopg.connect(f"service={TEST_MIGRATION_SERVICE}")
+    try:
+        database_name = connection.execute("SELECT current_database()").fetchone()[0]
+        if not database_name.endswith("_test"):
+            pytest.fail(f"refusing to run integration tests against {database_name}")
+        connection.execute("DROP SCHEMA IF EXISTS research CASCADE")
+        yield connection
+    finally:
+        connection.rollback()
+        connection.close()
+
+
+def test_apply_schema_migrates_exact_legacy_contract(
+    isolated_schema_conn,
+    monkeypatch,
+) -> None:
+    _install_legacy_schema(isolated_schema_conn)
+    before = inspect_theme_research_schema(isolated_schema_conn.cursor())
+    assert before["catalog_sha256"] in schema.KNOWN_LEGACY_CATALOG_SHA256
+    assert set(before["missing"]) == schema.KNOWN_LEGACY_MISSING
+    monkeypatch.setattr(
+        schema,
+        "connect",
+        lambda service: _BorrowedConnectionContext(isolated_schema_conn),
+    )
+
+    result = schema.apply_theme_research_schema(
+        service="test",
+        actor_user_id="admin-test",
+        actor_role="admin",
+    )
+
+    assert result["ddl_sha256"] == schema.ddl_sha256()
+    assert inspect_theme_research_schema(isolated_schema_conn.cursor())["status"] == "current"
+    applied = isolated_schema_conn.execute(
+        """
+        SELECT applied_by, ddl_sha256
+        FROM research.theme_research_schema_migration
+        WHERE schema_version = %s
+        """,
+        (schema.THEME_RESEARCH_DB_SCHEMA_VERSION,),
+    ).fetchone()
+    assert applied == ("admin-test", schema.ddl_sha256())
+
+
+def test_apply_schema_preserves_custom_type_check_and_rejects_unknown_drift(
+    isolated_schema_conn,
+    monkeypatch,
+) -> None:
+    _install_legacy_schema(isolated_schema_conn)
+    isolated_schema_conn.execute(
+        """
+        ALTER TABLE research.theme_research_theme
+        ADD CONSTRAINT custom_theme_type_guard CHECK (theme_type <> 'forbidden_custom')
+        """
+    )
+    monkeypatch.setattr(
+        schema,
+        "connect",
+        lambda service: _BorrowedConnectionContext(isolated_schema_conn),
+    )
+
+    with pytest.raises(ThemeResearchDomainError) as exc_info:
+        schema.apply_theme_research_schema(
+            service="test",
+            actor_user_id="admin-test",
+            actor_role="admin",
+        )
+
+    assert exc_info.value.code == "THEME_RESEARCH_SCHEMA_DRIFT"
+    custom_definition = isolated_schema_conn.execute(
+        """
+        SELECT pg_get_constraintdef(oid, true)
+        FROM pg_constraint
+        WHERE conrelid = 'research.theme_research_theme'::regclass
+          AND conname = 'custom_theme_type_guard'
+        """
+    ).fetchone()
+    assert custom_definition is not None
+    applied_sha256 = isolated_schema_conn.execute(
+        """
+        SELECT ddl_sha256
+        FROM research.theme_research_schema_migration
+        WHERE schema_version = %s
+        """,
+        (schema.THEME_RESEARCH_DB_SCHEMA_VERSION,),
+    ).fetchone()[0]
+    assert applied_sha256 in schema.KNOWN_LEGACY_DDL_SHA256
+
+
+def test_apply_schema_rejects_versioned_partial_schema_without_replaying_ddl(
+    isolated_schema_conn,
+    monkeypatch,
+) -> None:
+    _install_legacy_schema(isolated_schema_conn)
+    isolated_schema_conn.execute("DROP TABLE research.theme_research_snapshot")
+    monkeypatch.setattr(
+        schema,
+        "connect",
+        lambda service: _BorrowedConnectionContext(isolated_schema_conn),
+    )
+
+    with pytest.raises(ThemeResearchDomainError) as exc_info:
+        schema.apply_theme_research_schema(
+            service="test",
+            actor_user_id="admin-test",
+            actor_role="admin",
+        )
+
+    assert exc_info.value.code == "THEME_RESEARCH_PARTIAL_SCHEMA"
+    assert isolated_schema_conn.execute(
+        "SELECT to_regclass('research.theme_research_snapshot')"
+    ).fetchone() == (None,)
+
+
+def test_apply_schema_is_idempotent_for_current_recorded_contract(
+    isolated_schema_conn,
+    monkeypatch,
+) -> None:
+    isolated_schema_conn.execute(THEME_RESEARCH_SCHEMA_SQL)
+    isolated_schema_conn.execute(
+        """
+        INSERT INTO research.theme_research_schema_migration (
+            schema_version, applied_by, ddl_sha256, metadata
+        ) VALUES (%s, 'original-test', %s, '{"sentinel": true}'::jsonb)
+        """,
+        (schema.THEME_RESEARCH_DB_SCHEMA_VERSION, schema.ddl_sha256()),
+    )
+    monkeypatch.setattr(
+        schema,
+        "connect",
+        lambda service: _BorrowedConnectionContext(isolated_schema_conn),
+    )
+
+    first = schema.apply_theme_research_schema(
+        service="test",
+        actor_user_id="other-test",
+        actor_role="admin",
+    )
+    second = schema.apply_theme_research_schema(
+        service="test",
+        actor_user_id="other-test",
+        actor_role="admin",
+    )
+
+    assert first == second
+    recorded = isolated_schema_conn.execute(
+        """
+        SELECT applied_by, metadata
+        FROM research.theme_research_schema_migration
+        WHERE schema_version = %s
+        """,
+        (schema.THEME_RESEARCH_DB_SCHEMA_VERSION,),
+    ).fetchone()
+    assert recorded == ("original-test", {"sentinel": True})
 
 
 def _insert_theme(conn, theme_id: str) -> None:
