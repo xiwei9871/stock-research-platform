@@ -54,7 +54,9 @@ def test_technology_industry_catalog_api_returns_repository_summary_and_guardrai
         for chain_id, row in deep_by_chain.items()
         if row["deep_research"]["research_status"] == "not_started"
     }
-    assert not_started_chain_ids == set(NEXT_FIFTEEN_CHAIN_THEMES)
+    assert not_started_chain_ids == set(NEXT_FIFTEEN_CHAIN_THEMES) - {
+        "ai_logic_compute_chips"
+    }
     assert all(
         deep_by_chain[chain_id]["deep_research"]["research_status"] != "not_started"
         for chain_id in COMPLETED_CHAIN_THEMES
@@ -103,7 +105,7 @@ def test_technology_industry_catalog_chain_api_returns_404_for_unknown_chain():
     assert response.json()["detail"] == "chain_not_found"
 
 
-def test_next_fifteen_chain_detail_exposes_registered_unfinished_theme():
+def test_ai_logic_compute_chain_detail_exposes_reviewed_theme():
     response = TestClient(dashboard_app.create_app()).get(
         f"{CATALOG_PATH}/chains/ai_logic_compute_chips"
     )
@@ -112,21 +114,20 @@ def test_next_fifteen_chain_detail_exposes_registered_unfinished_theme():
     payload = response.json()
     assert payload["chain"]["chain_id"] == "ai_logic_compute_chips"
     assert payload["nodes"] == []
-    assert payload["theme_links"] == [
-        {
-            "theme_id": "ai_logic_compute_chips_value_chain_v1",
-            "chain_id": "ai_logic_compute_chips",
-            "node_links": [],
-            "unmapped_theme_node_ids": [],
-        }
-    ]
+    link = payload["theme_links"][0]
+    assert link["theme_id"] == "ai_logic_compute_chips_value_chain_v1"
+    assert link["chain_id"] == "ai_logic_compute_chips"
+    assert link["node_links"] == []
+    assert len(link["unmapped_theme_node_ids"]) >= 9
     assert payload["deep_research"]["theme_id"] == (
         "ai_logic_compute_chips_value_chain_v1"
     )
     assert payload["deep_research"]["theme_route"] == (
         "/theme-research/ai_logic_compute_chips_value_chain_v1"
     )
-    assert payload["deep_research"]["research_status"] == "not_started"
+    assert payload["deep_research"]["research_status"] == "reviewed"
+    assert payload["deep_research"]["source_count"] >= 10
+    assert payload["deep_research"]["reviewed_company_count"] >= 8
 
 
 def test_next_fifteen_catalog_theme_links_match_canonical_batch_manifest():
@@ -141,12 +142,17 @@ def test_next_fifteen_catalog_theme_links_match_canonical_batch_manifest():
         for chain_id, metadata in manifest["themes"].items()
     } == NEXT_FIFTEEN_CHAIN_THEMES
     for chain_id, metadata in manifest["themes"].items():
+        unmapped_theme_node_ids = (
+            links_by_chain[chain_id][0]["unmapped_theme_node_ids"]
+            if chain_id == "ai_logic_compute_chips"
+            else []
+        )
         assert links_by_chain[chain_id] == [
             {
                 "theme_id": metadata["theme_id"],
                 "chain_id": chain_id,
                 "node_links": [],
-                "unmapped_theme_node_ids": [],
+                "unmapped_theme_node_ids": unmapped_theme_node_ids,
             }
         ]
 

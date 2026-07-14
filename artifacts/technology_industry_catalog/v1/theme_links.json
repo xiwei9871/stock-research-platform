@@ -302,7 +302,18 @@
       "theme_id": "ai_logic_compute_chips_value_chain_v1",
       "chain_id": "ai_logic_compute_chips",
       "node_links": [],
-      "unmapped_theme_node_ids": []
+      "unmapped_theme_node_ids": [
+        "processor_architecture_ip",
+        "server_cpu",
+        "gpgpu_dcu",
+        "ai_accelerator_npu",
+        "edge_ai_soc",
+        "chiplet_die_interconnect",
+        "memory_high_speed_interfaces",
+        "advanced_package_interface",
+        "compiler_runtime_ecosystem",
+        "system_customer_validation"
+      ]
     },
     {
       "theme_id": "optical_communications_data_center_interconnect_value_chain_v1",

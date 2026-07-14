@@ -23,10 +23,11 @@ NEXT_FIFTEEN_THEME_ID = "ai_logic_compute_chips_value_chain_v1"
 def test_theme_index_aggregates_validated_phase_outputs():
     payload = list_theme_research_themes()
 
-    assert payload["total"] == 5
+    assert payload["total"] == 6
     assert [row["theme_id"] for row in payload["items"]] == [
         AI_POWER_THEME_ID,
         "ai_compute_infrastructure_value_chain_v1",
+        NEXT_FIFTEEN_THEME_ID,
         ROBOTICS_THEME_ID,
         "semiconductor_manufacturing_equipment_value_chain_v1",
         "new_energy_storage_value_chain_v1",
@@ -191,17 +192,22 @@ def test_unknown_theme_is_rejected_by_every_detail_read_model():
             reader("missing-theme")
 
 
-def test_next_fifteen_theme_remains_unavailable_until_artifact_exists():
-    assert list_theme_research_themes()["total"] == 5
-
-    with pytest.raises(ThemeResearchNotFoundError):
-        get_theme_research_theme(NEXT_FIFTEEN_THEME_ID)
+def test_ai_logic_compute_theme_is_readable_through_detail_and_api():
+    assert list_theme_research_themes()["total"] == 6
+    detail = get_theme_research_theme(NEXT_FIFTEEN_THEME_ID)
+    assert detail["theme"]["status"] == "reviewed"
+    assert detail["research_profile"]["catalog_chain_id"] == "ai_logic_compute_chips"
+    assert detail["node_summary"]["total"] >= 9
+    assert detail["company_summary"]["total"] >= 8
+    assert detail["source_reliability_distribution"]
+    assert list_theme_research_companies(NEXT_FIFTEEN_THEME_ID)["total"] >= 8
+    assert list_theme_research_sources(NEXT_FIFTEEN_THEME_ID)["total"] >= 10
 
     response = TestClient(dashboard_app.create_app()).get(
         f"/api/research/theme-decomposition/themes/{NEXT_FIFTEEN_THEME_ID}"
     )
-    assert response.status_code == 404
-    assert response.json()["detail"] == "theme_not_found"
+    assert response.status_code == 200
+    assert response.json()["theme"]["theme_id"] == NEXT_FIFTEEN_THEME_ID
 
 
 def test_theme_ids_must_match_exactly_instead_of_returning_empty_aggregates():
@@ -223,7 +229,7 @@ def test_theme_research_api_exposes_six_get_only_routes():
     }
 
     assert all(response.status_code == 200 for response in responses.values())
-    assert responses["themes"].json()["total"] == 5
+    assert responses["themes"].json()["total"] == 6
     assert responses["detail"].json()["theme"]["theme_id"] == AI_POWER_THEME_ID
     for name in ("nodes", "sources", "claims", "companies"):
         assert all(

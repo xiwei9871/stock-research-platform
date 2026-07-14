@@ -99,12 +99,14 @@ def test_selected_chain_summaries_report_existing_and_missing_theme_packages():
     assert by_chain["semiconductor_manufacturing_equipment"]["research_status"] == "reviewed"
     assert by_chain["ai_compute_infrastructure"]["research_status"] == "reviewed"
     assert by_chain["new_energy_storage"]["research_status"] == "reviewed"
+    assert by_chain["ai_logic_compute_chips"]["research_status"] == "reviewed"
     assert by_chain["ai_compute_infrastructure"]["theme_route"].endswith(
         "/ai_compute_infrastructure_value_chain_v1"
     )
     assert all(
         by_chain[chain_id]["research_status"] == "not_started"
         for chain_id in NEXT_FIFTEEN_CHAIN_THEMES
+        if chain_id != "ai_logic_compute_chips"
     )
 
 

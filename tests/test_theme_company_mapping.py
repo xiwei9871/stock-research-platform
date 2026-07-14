@@ -21,14 +21,14 @@ def test_ai_power_company_mapping_package_loads_and_summarizes():
 
     summary = summarize_theme_company_mapping_package(package)
 
-    assert summary["artifact_count"] == 5
-    assert summary["theme_count"] == 5
-    assert summary["company_count"] == 39
-    assert summary["mapping_count"] == 40
-    assert summary["source_count"] == 40
-    assert summary["evidence_count"] == 48
-    assert summary["mappings_by_review_status"] == {"reviewed": 40}
-    assert summary["mappings_by_business_stage"] == {"primary_business": 40}
+    assert summary["artifact_count"] == 6
+    assert summary["theme_count"] == 6
+    assert summary["company_count"] == 47
+    assert summary["mapping_count"] == 48
+    assert summary["source_count"] == 48
+    assert summary["evidence_count"] == 64
+    assert summary["mappings_by_review_status"] == {"reviewed": 48}
+    assert summary["mappings_by_business_stage"] == {"primary_business": 48}
     assert summary["mappings_by_node"]["liquid_cooling"] == 4
     assert summary["mappings_by_node"]["storage_cells_materials"] == 3
 
@@ -201,7 +201,7 @@ def test_reviewed_mapping_allows_weaker_supplemental_source(tmp_path: Path):
 
     package = load_theme_company_mapping_package(artifact_dir)
 
-    assert len(package["company_mappings"]) == 40
+    assert len(package["company_mappings"]) == 48
 
 
 def test_reviewed_material_claim_requires_materiality_evidence(tmp_path: Path):
@@ -553,9 +553,9 @@ def test_cli_validate_summary_and_company_lookup_emit_json(capsys):
 
     assert validate_exit == 0
     assert validate_payload["status"] == "ok"
-    assert validate_payload["mapping_count"] == 40
+    assert validate_payload["mapping_count"] == 48
     assert summary_exit == 0
-    assert summary_payload["company_count"] == 39
+    assert summary_payload["company_count"] == 47
     assert company_exit == 0
     assert company_payload[0]["mapped_node_id"] == "liquid_cooling"
     assert company_payload[0]["evidence"][0]["source"]["review_status"] == "accepted"

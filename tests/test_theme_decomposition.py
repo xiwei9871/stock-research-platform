@@ -17,8 +17,8 @@ def test_sample_artifacts_load_and_summarize():
 
     summary = summarize_theme_package(package)
 
-    assert summary["theme_count"] == 5
-    assert summary["node_count"] == 67
+    assert summary["theme_count"] == 6
+    assert summary["node_count"] == 77
     assert summary["source_count"] >= 50
     assert summary["claim_count"] >= 50
     assert summary["sources_by_reliability_level"]["S4"] >= 2
