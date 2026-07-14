@@ -22,6 +22,16 @@ def test_technology_industry_catalog_api_returns_repository_summary_and_guardrai
     assert payload["summary"]["chain_count"] == 82
     assert len(payload["sectors"]) == 10
     assert len(payload["chains"]) == 82
+    deep_rows = [row for row in payload["chains"] if row["deep_research"] is not None]
+    assert len(deep_rows) == 5
+    ai_power = next(row for row in deep_rows if row["chain_id"] == "ai_data_center_power")
+    assert ai_power["deep_research"]["theme_id"] == "ai_power_value_capture_v1"
+    assert ai_power["deep_research"]["research_status"] == "researching"
+    industrial_software = next(
+        row for row in payload["chains"] if row["chain_id"] == "industrial_software"
+    )
+    assert industrial_software["deep_research"] is None
+    assert payload["summary"]["deep_research_chain_count"] == 5
     assert {key: payload[key] for key in EXPECTED_GUARDRAILS} == EXPECTED_GUARDRAILS
 
 
@@ -37,6 +47,9 @@ def test_technology_industry_catalog_chain_api_trims_id_and_returns_theme_links(
     assert [link["theme_id"] for link in payload["theme_links"]] == [
         "ai_power_value_capture_v1"
     ]
+    assert payload["deep_research"]["theme_id"] == "ai_power_value_capture_v1"
+    assert payload["deep_research"]["source_count"] == 10
+    assert payload["deep_research"]["reviewed_company_count"] == 4
     assert {key: payload[key] for key in EXPECTED_GUARDRAILS} == EXPECTED_GUARDRAILS
 
 

@@ -9,6 +9,10 @@ from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
 from stock_research.config import SETTINGS
+from stock_research.industry_chain_theme_research import (
+    build_chain_research_summary,
+    list_selected_chain_research,
+)
 from stock_research.technology_industry_catalog import (
     IndustryCatalogValidationError,
     get_industry_chain,
@@ -184,6 +188,7 @@ from stock_research.dashboard.theme_research_context import (
     load_asset_theme_context,
 )
 from stock_research.theme_research_db_models import ThemeResearchDomainError
+from stock_research.theme_research_priority import load_theme_research_priority_package
 from stock_research.theme_research_store import (
     list_review_history as list_theme_research_review_history,
     list_snapshots as list_theme_research_snapshots,
@@ -567,10 +572,27 @@ def create_app() -> FastAPI:
     @app.get("/api/research/technology-industry-catalog")
     def technology_industry_catalog():
         catalog = load_industry_catalog()
+        theme_context = load_theme_research_priority_package()
+        deep_research_rows = list_selected_chain_research(
+            catalog=catalog,
+            theme_context=theme_context,
+        )
+        deep_research_by_chain = {
+            row["chain_id"]: row for row in deep_research_rows
+        }
         return {
-            "summary": summarize_industry_catalog(catalog),
+            "summary": {
+                **summarize_industry_catalog(catalog),
+                "deep_research_chain_count": len(deep_research_rows),
+            },
             "sectors": catalog["sectors"],
-            "chains": catalog["chains"],
+            "chains": [
+                {
+                    **chain,
+                    "deep_research": deep_research_by_chain.get(chain["chain_id"]),
+                }
+                for chain in catalog["chains"]
+            ],
             **TECHNOLOGY_INDUSTRY_CATALOG_GUARDRAILS,
         }
 
@@ -578,6 +600,7 @@ def create_app() -> FastAPI:
     def technology_industry_catalog_chain(chain_id: str):
         normalized_chain_id = chain_id.strip()
         catalog = load_industry_catalog()
+        theme_context = load_theme_research_priority_package()
         try:
             detail = get_industry_chain(catalog, normalized_chain_id)
         except IndustryCatalogValidationError as exc:
@@ -586,6 +609,11 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404, detail="chain_not_found") from exc
         return {
             **detail,
+            "deep_research": build_chain_research_summary(
+                normalized_chain_id,
+                catalog=catalog,
+                theme_context=theme_context,
+            ),
             "theme_links": [
                 link
                 for link in catalog["theme_links"]

@@ -41,6 +41,16 @@ def test_theme_index_aggregates_validated_phase_outputs():
     assert ai_power["review_queue_count"] == 9
     assert robotics["node_count"] == 21
     assert robotics["company_count"] == 0
+    assert ai_power["research_kind"] == "industry_chain_deep_research"
+    assert ai_power["catalog_context"] == {
+        "chain_id": "ai_data_center_power",
+        "chain_name": "AI Data Center Power",
+        "sector_id": "energy_technology_new_power_system",
+        "catalog_route": "/theme-research/catalog/ai_data_center_power",
+    }
+    assert robotics["catalog_context"]["chain_id"] == (
+        "humanoid_robots_embodied_intelligence"
+    )
     assert all(row["research_only"] is True for row in payload["items"])
     assert all(row["used_for_signal"] is False for row in payload["items"])
     assert all(row["used_for_admission"] is False for row in payload["items"])
@@ -73,6 +83,11 @@ def test_theme_detail_contains_priority_and_evidence_distributions():
     assert detail["source_reliability_distribution"]["S1"] == 7
     assert detail["claim_evidence_status_distribution"]["verified"] >= 1
     assert detail["review_queue_action_distribution"]
+    assert detail["catalog_context"]["chain_id"] == "ai_data_center_power"
+    assert detail["research_profile"] is None
+    assert detail["beneficiary_summary"]["total"] == 4
+    assert sum(detail["beneficiary_summary"]["by_tier"].values()) == 4
+    assert detail["beneficiary_summary"]["reviewed_beneficiary_count"] == 4
     assert detail["top_node_priorities"][0]["theme_id"] == AI_POWER_THEME_ID
     assert all(row["used_for_signal"] is False for row in detail["top_node_priorities"])
 
@@ -143,6 +158,9 @@ def test_company_collection_joins_mapping_priority_and_crosswalk_context():
     assert envicool["tech_bottleneck_stock_path"] == (
         "/tech-bottleneck/stock/002837.SZ?source=theme_research"
     )
+    assert envicool["beneficiary_tier"] == "elastic_beneficiary"
+    assert envicool["mapping_evidence"]
+    assert envicool["mapping_evidence"][0]["source"]["review_status"] == "accepted"
     assert all(row["research_only"] is True for row in payload["items"])
     assert all(row["used_for_signal"] is False for row in payload["items"])
     assert all(row["used_for_admission"] is False for row in payload["items"])

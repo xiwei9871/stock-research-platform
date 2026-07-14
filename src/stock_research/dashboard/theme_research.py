@@ -7,6 +7,11 @@ import os
 from typing import Any
 from urllib.parse import quote
 
+from stock_research.industry_chain_theme_research import (
+    build_theme_catalog_context,
+    classify_beneficiary,
+)
+from stock_research.technology_industry_catalog import load_industry_catalog
 from stock_research.theme_research_priority import (
     load_theme_research_priority_package,
 )
@@ -72,6 +77,19 @@ def _get_theme_research_theme(
     queue = [
         row for row in context["review_queue"] if row["theme_id"] == theme_id
     ]
+    beneficiary_counts = _count_by(companies, "beneficiary_tier")
+    catalog_context = build_theme_catalog_context(
+        theme_id,
+        catalog=load_industry_catalog(),
+    )
+    research_profile = next(
+        (
+            {key: value for key, value in row.items() if key != "theme_id"}
+            for row in context["theme_package"].get("research_profiles", [])
+            if row["theme_id"] == theme_id
+        ),
+        None,
+    )
     return {
         "theme": _with_guardrails(theme),
         "node_summary": {
@@ -108,6 +126,16 @@ def _get_theme_research_theme(
         "top_node_priorities": nodes[:5],
         "evidence_gaps": evidence_gaps[:5],
         "top_company_priorities": companies[:5],
+        "catalog_context": catalog_context,
+        "research_profile": research_profile,
+        "beneficiary_summary": {
+            "total": len(companies),
+            "by_tier": beneficiary_counts,
+            "reviewed_beneficiary_count": sum(
+                row["beneficiary_tier"] != "concept_association"
+                for row in companies
+            ),
+        },
         "research_only": True,
         "used_for_signal": False,
         "used_for_admission": False,
@@ -265,8 +293,16 @@ def _theme_index_row(
     queue = [
         row for row in context["review_queue"] if row["theme_id"] == theme_id
     ]
+    catalog_context = build_theme_catalog_context(
+        theme_id,
+        catalog=load_industry_catalog(),
+    )
     return {
         **theme,
+        "research_kind": (
+            "industry_chain_deep_research" if catalog_context is not None else "theme_research"
+        ),
+        "catalog_context": catalog_context,
         "node_count": len(nodes),
         "source_count": len(sources),
         "claim_count": len(claims),
@@ -391,16 +427,35 @@ def _theme_company_rows(
         for row in context["theme_package"]["nodes"]
         if row["theme_id"] == theme_id
     }
+    source_by_id = {
+        row["source_id"]: row for row in context["mapping_package"]["sources"]
+    }
+    evidence_by_id = {
+        row["evidence_id"]: {
+            **row,
+            "source": source_by_id[row["source_id"]],
+        }
+        for row in context["mapping_package"]["evidence_items"]
+    }
     items = []
     for priority in context["company_priorities"]:
         if priority["theme_id"] != theme_id:
             continue
         mapping = mapping_by_id[priority["mapping_id"]]
+        mapping_evidence = [
+            evidence_by_id[evidence_id]
+            for evidence_id in mapping["evidence_ids"]
+        ]
         stock_code = quote(priority["company_code"], safe="")
         items.append(
             {
                 **mapping,
                 **priority,
+                "beneficiary_tier": classify_beneficiary(
+                    mapping,
+                    mapping_evidence,
+                ),
+                "mapping_evidence": mapping_evidence,
                 "mapped_node": node_by_id[priority["theme_node_id"]],
                 "tech_bottleneck_stock_path": (
                     f"/tech-bottleneck/stock/{stock_code}?source=theme_research"
