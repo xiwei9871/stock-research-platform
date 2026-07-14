@@ -5,6 +5,87 @@ from stock_research.strategy_eod_publish import _review_rows_from_result
 import pytest
 
 
+def _lhb_result_for_review_test():
+    candidates = []
+    for rank, (asset_id, score) in enumerate(
+        [
+            ("CN:SZ:002463", 77.0),
+            ("CN:SZ:000636", 76.3),
+            ("CN:SZ:002384", 75.5),
+            ("CN:SZ:001399", 69.3698),
+            ("CN:SZ:000078", 66.0),
+            ("CN:SZ:000001", 65.0),
+        ],
+        start=1,
+    ):
+        candidates.append(
+            {
+                "trade_date": "2026-07-14",
+                "asset_id": asset_id,
+                "rank": rank,
+                "auction_enhanced_score": score,
+                "phase12a_rule_layer": "pending_intraday",
+                "stock_name": "候选原名" if rank == 1 else "",
+            }
+        )
+    return {
+        "strategy_id": "lhb_shortline",
+        "strategy_name": "LHB Shortline Combo",
+        "positions": [],
+        "candidates": candidates,
+    }
+
+
+def test_lhb_review_resolves_names_and_downgrades_limit_down_candidate(monkeypatch):
+    lookup = {
+        "CN:SZ:002463": {"score_total": 77.0, "stock_name": "沪电股份", "pct_chg": 2.0},
+        "CN:SZ:000636": {"score_total": 76.3, "stock_name": "风华高科", "pct_chg": 1.0},
+        "CN:SZ:002384": {"score_total": 75.5, "stock_name": "东山精密", "pct_chg": 0.5},
+        "CN:SZ:001399": {"score_total": 69.3698, "stock_name": "惠科股份", "pct_chg": -9.991},
+        "CN:SZ:000078": {"score_total": 66.0, "stock_name": "ST海王", "pct_chg": 1.0},
+        "CN:SZ:000001": {"score_total": 65.0, "stock_name": "平安银行", "pct_chg": 1.0},
+    }
+    monkeypatch.setattr(strategy_eod_publish, "_lhb_base_score_lookup_for_trade_date", lambda trade_date: lookup)
+
+    review = _review_rows_from_result(_lhb_result_for_review_test(), trade_date="2026-07-14")
+
+    first = review.loc[review["asset_id"].eq("CN:SZ:002463")].iloc[0]
+    gated = review.loc[review["asset_id"].eq("CN:SZ:001399")].iloc[0]
+    assert first["stock_name"] == "候选原名"
+    assert gated["stock_name"] == "惠科股份"
+    assert gated["score_total"] == pytest.approx(69.3698)
+    assert gated["raw_score"] == pytest.approx(69.3698)
+    assert gated["review_tier"] == "risk_watch"
+    assert gated["risk_gate_code"] == "near_limit_down_followthrough_risk"
+    assert review.loc[review["review_tier"].eq("top5_focus"), "asset_id"].nunique() == 5
+    assert "CN:SZ:000001" in set(review.loc[review["review_tier"].eq("top5_focus"), "asset_id"])
+
+
+def test_load_lhb_base_score_source_prefers_master_name_then_lhb_name(monkeypatch):
+    queries = []
+
+    class DummyConnection:
+        def __enter__(self):
+            return object()
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+    def fake_fetch_all(conn, sql, params):
+        queries.append(sql)
+        return []
+
+    monkeypatch.setattr(strategy_eod_publish, "connect", lambda service: DummyConnection())
+    monkeypatch.setattr(strategy_eod_publish, "fetch_all", fake_fetch_all)
+
+    strategy_eod_publish._load_lhb_base_score_source_frames("2026-07-14")
+
+    lhb_sql = queries[0]
+    assert "COALESCE(NULLIF(a.name, ''), NULLIF(t.name, '')) AS stock_name" in lhb_sql
+    assert "market.lhb_top_list_daily" in lhb_sql
+    assert "pct_chg" in lhb_sql
+
+
 def test_mid_trend_review_uses_latest_signal_score_for_continued_holdings():
     result = {
         "strategy_id": "mid_trend",
