@@ -535,6 +535,10 @@ def test_catalog_summary_reports_structural_completeness_from_loaded_nodes():
         for chain in catalog["chains"]
         if not {"L3", "L4"} <= node_levels_by_chain[chain["chain_id"]]
     )
+    expected_detailed_chain_count = (
+        len(catalog["chains"]) - len(expected_unexpanded_chain_ids)
+    )
+    expected_skeleton_chain_count = len(expected_unexpanded_chain_ids)
 
     assert summary["sector_count"] == 10
     assert summary["chain_count"] == 82
@@ -544,10 +548,13 @@ def test_catalog_summary_reports_structural_completeness_from_loaded_nodes():
         "system_architecture": 32,
         "technical_route": 10,
     }
-    assert summary["detailed_chain_count"] == 13
-    assert summary["skeleton_chain_count"] == 69
+    assert summary["detailed_chain_count"] == expected_detailed_chain_count
+    assert summary["skeleton_chain_count"] == expected_skeleton_chain_count
     assert summary["detailed_chain_count"] + summary["skeleton_chain_count"] == 82
-    assert summary["structural_completeness_percent"] == 15.85
+    assert summary["structural_completeness_percent"] == round(
+        expected_detailed_chain_count / len(catalog["chains"]) * 100,
+        2,
+    )
     assert summary["unexpanded_chain_ids"] == expected_unexpanded_chain_ids
     assert "evidence_completeness_percent" not in summary
     assert "company_coverage_percent" not in summary

@@ -24,7 +24,7 @@ from stock_research.technology_industry_catalog import (
     project_theme_to_catalog,
     summarize_industry_catalog,
 )
-from stock_research.theme_decomposition import load_theme
+from stock_research.theme_decomposition import load_theme, load_theme_package
 
 
 def _theme_link(
@@ -202,6 +202,9 @@ def test_repository_catalog_starts_with_ten_approved_sectors():
 def test_repository_catalog_has_exact_theme_research_links():
     catalog = load_industry_catalog()
     links_by_chain = {row["chain_id"]: row for row in catalog["theme_links"]}
+    implemented_theme_ids = {
+        row["theme_id"] for row in load_theme_package()["themes"]
+    }
 
     assert len(catalog["theme_links"]) == len(SELECTED_CHAIN_THEMES)
     assert {
@@ -213,12 +216,22 @@ def test_repository_catalog_has_exact_theme_research_links():
         assert link["node_links"]
         assert isinstance(link["unmapped_theme_node_ids"], list)
     for chain_id, theme_id in NEXT_FIFTEEN_CHAIN_THEMES.items():
-        assert links_by_chain[chain_id] == {
-            "theme_id": theme_id,
-            "chain_id": chain_id,
-            "node_links": [],
-            "unmapped_theme_node_ids": [],
+        link = links_by_chain[chain_id]
+        assert link["theme_id"] == theme_id
+        assert link["chain_id"] == chain_id
+        assert isinstance(link["node_links"], list)
+        assert isinstance(link["unmapped_theme_node_ids"], list)
+        if theme_id not in implemented_theme_ids:
+            assert link["node_links"] == []
+            assert link["unmapped_theme_node_ids"] == []
+            continue
+        theme_node_ids = {row["node_id"] for row in load_theme(theme_id)["nodes"]}
+        linked_theme_node_ids = {
+            row["theme_node_id"] for row in link["node_links"]
         }
+        unmapped_theme_node_ids = set(link["unmapped_theme_node_ids"])
+        assert linked_theme_node_ids.isdisjoint(unmapped_theme_node_ids)
+        assert linked_theme_node_ids | unmapped_theme_node_ids == theme_node_ids
 
 
 def test_project_theme_to_catalog_preserves_source_data_and_is_read_only():
