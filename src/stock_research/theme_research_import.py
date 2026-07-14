@@ -273,27 +273,14 @@ def _validate_theme_source_identities(
     artifact_by_theme_id: dict[str, dict[str, Any]],
     mapping_package: dict[str, Any],
 ) -> None:
-    evidence_source_by_id = {
-        evidence["evidence_id"]: evidence["source_id"]
-        for evidence in mapping_package["evidence_items"]
-    }
-    mapping_source_by_id = {
-        source["source_id"]: source for source in mapping_package.get("sources", [])
-    }
     sources_by_theme: dict[str, list[dict[str, Any]]] = {
         theme_id: list(artifact.get("sources", []))
         for theme_id, artifact in artifact_by_theme_id.items()
     }
 
     for artifact in mapping_package["artifacts"]:
-        for mapping in artifact.get("company_mappings", []):
-            theme_id = mapping["theme_id"]
-            theme_sources = sources_by_theme.setdefault(theme_id, [])
-            for evidence_id in mapping.get("evidence_ids", []):
-                source_id = evidence_source_by_id.get(evidence_id)
-                source = mapping_source_by_id.get(source_id or "")
-                if source is not None:
-                    theme_sources.append(source)
+        theme_id = artifact["theme_id"]
+        sources_by_theme.setdefault(theme_id, []).extend(artifact.get("sources", []))
 
     for theme_id in sorted(sources_by_theme):
         source_ids_by_url: dict[str, set[str]] = {}

@@ -198,51 +198,127 @@ def test_source_identity_validation_allows_same_url_across_themes() -> None:
     )
 
 
-def test_source_identity_validation_ignores_unreferenced_mapping_sources() -> None:
-    import_module._validate_theme_source_identities(
-        artifact_by_theme_id={
-            "theme-a": {
-                "sources": [
-                    {
-                        "source_id": "canonical-source",
-                        "url_or_ref": "https://example.com/report.pdf",
-                    }
-                ]
-            }
-        },
-        mapping_package={
-            "artifacts": [
-                {
-                    "theme_id": "theme-a",
+def test_source_identity_validation_rejects_unreferenced_mapping_sources() -> None:
+    with pytest.raises(ThemeResearchDomainError) as exc_info:
+        import_module._validate_theme_source_identities(
+            artifact_by_theme_id={
+                "theme-a": {
                     "sources": [
                         {
-                            "source_id": "unused-mapping-source",
+                            "source_id": "canonical-source",
                             "url_or_ref": "https://example.com/report.pdf",
                         }
-                    ],
-                    "company_mappings": [
-                        {
-                            "mapping_id": "mapping-a",
-                            "theme_id": "theme-a",
-                            "evidence_ids": [],
-                        }
-                    ],
+                    ]
                 }
-            ],
-            "sources": [
-                {
-                    "source_id": "unused-mapping-source",
-                    "url_or_ref": "https://example.com/report.pdf",
-                }
-            ],
-            "evidence_items": [
-                {
-                    "evidence_id": "unused-evidence",
-                    "source_id": "unused-mapping-source",
-                }
-            ],
-        },
+            },
+            mapping_package={
+                "artifacts": [
+                    {
+                        "theme_id": "theme-a",
+                        "sources": [
+                            {
+                                "source_id": "unused-mapping-source",
+                                "url_or_ref": "https://example.com/report.pdf",
+                            }
+                        ],
+                        "company_mappings": [
+                            {
+                                "mapping_id": "mapping-a",
+                                "theme_id": "theme-a",
+                                "evidence_ids": [],
+                            }
+                        ],
+                    }
+                ],
+                "sources": [
+                    {
+                        "source_id": "unused-mapping-source",
+                        "url_or_ref": "https://example.com/report.pdf",
+                    }
+                ],
+                "evidence_items": [
+                    {
+                        "evidence_id": "unused-evidence",
+                        "source_id": "unused-mapping-source",
+                    }
+                ],
+            }
+        )
+
+    assert exc_info.value.code == "THEME_RESEARCH_DUPLICATE_SOURCE_IDENTITY"
+    assert exc_info.value.details == {
+        "theme_id": "theme-a",
+        "url": "https://example.com/report.pdf",
+        "source_ids": ["canonical-source", "unused-mapping-source"],
+    }
+
+
+def test_normalize_rejects_orphan_mapping_source_with_duplicate_identity(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    theme_id = "theme-a"
+    theme_source = {
+        "source_id": "canonical-source",
+        "url_or_ref": "https://example.com/report.pdf",
+    }
+    orphan_mapping_source = {
+        "source_id": "orphan-mapping-source",
+        "url_or_ref": "https://example.com/report.pdf#orphan",
+    }
+    artifact = {
+        "theme": {"theme_id": theme_id},
+        "sources": [theme_source],
+        "claims": [],
+        "value_capture_assessments": [],
+    }
+    (tmp_path / "theme-a.json").write_text(
+        import_module._canonical_json(artifact),
+        encoding="utf-8",
     )
+    theme_package = {
+        "artifact_dir": str(tmp_path),
+        "artifact_versions": ["theme_decomposition_v1_6"],
+        "themes": [artifact["theme"]],
+        "nodes": [{"node_id": "node-a", "theme_id": theme_id}],
+        "sources": [theme_source],
+        "claims": [],
+    }
+    mapping_package = {
+        "artifacts": [
+            {
+                "theme_id": theme_id,
+                "sources": [orphan_mapping_source],
+                "company_mappings": [
+                    {
+                        "mapping_id": "mapping-a",
+                        "theme_id": theme_id,
+                        "mapped_node_id": "node-a",
+                        "evidence_ids": [],
+                    }
+                ],
+            }
+        ],
+        "sources": [orphan_mapping_source],
+        "evidence_items": [],
+    }
+    monkeypatch.setattr(import_module, "load_theme_package", lambda _path: theme_package)
+    monkeypatch.setattr(import_module, "load_theme", lambda _theme_id, _path: artifact)
+    monkeypatch.setattr(
+        import_module,
+        "load_theme_company_mapping_package",
+        lambda _mapping_dir, _theme_dir: mapping_package,
+    )
+
+    with pytest.raises(ThemeResearchDomainError) as exc_info:
+        normalize_artifact_package()
+
+    assert exc_info.value.code == "THEME_RESEARCH_DUPLICATE_SOURCE_IDENTITY"
+    assert exc_info.value.details == {
+        "theme_id": theme_id,
+        "url": "https://example.com/report.pdf",
+        "source_ids": ["canonical-source", "orphan-mapping-source"],
+    }
 
 
 def test_source_identity_validation_preserves_query_strings() -> None:
