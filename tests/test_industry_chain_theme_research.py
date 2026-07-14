@@ -1,6 +1,8 @@
 from copy import deepcopy
 
 from stock_research.industry_chain_theme_research import (
+    COMPLETED_CHAIN_THEMES,
+    NEXT_FIFTEEN_CHAIN_THEMES,
     SELECTED_CHAIN_THEMES,
     build_chain_research_summary,
     classify_beneficiary,
@@ -12,12 +14,33 @@ from stock_research.theme_research_priority import load_theme_research_priority_
 
 
 def test_selected_chain_registry_is_frozen():
-    assert SELECTED_CHAIN_THEMES == {
+    assert COMPLETED_CHAIN_THEMES == {
         "ai_data_center_power": "ai_power_value_capture_v1",
         "semiconductor_manufacturing_equipment": "semiconductor_manufacturing_equipment_value_chain_v1",
         "humanoid_robots_embodied_intelligence": "humanoid_robotics_head_to_toe_v1",
         "ai_compute_infrastructure": "ai_compute_infrastructure_value_chain_v1",
         "new_energy_storage": "new_energy_storage_value_chain_v1",
+    }
+    assert NEXT_FIFTEEN_CHAIN_THEMES == {
+        "ai_logic_compute_chips": "ai_logic_compute_chips_value_chain_v1",
+        "optical_communications_data_center_interconnect": "optical_communications_data_center_interconnect_value_chain_v1",
+        "semiconductor_materials_electronic_chemicals": "semiconductor_materials_electronic_chemicals_value_chain_v1",
+        "power_semiconductors": "power_semiconductors_value_chain_v1",
+        "industrial_automation_control": "industrial_automation_control_value_chain_v1",
+        "semiconductor_packaging_test_advanced_packaging": "semiconductor_packaging_test_advanced_packaging_value_chain_v1",
+        "cloud_data_center_infrastructure": "cloud_data_center_infrastructure_value_chain_v1",
+        "new_power_system_smart_grid": "new_power_system_smart_grid_value_chain_v1",
+        "core_mechanical_components": "core_mechanical_components_value_chain_v1",
+        "industrial_inspection_metrology_machine_vision": "industrial_inspection_metrology_machine_vision_value_chain_v1",
+        "industrial_robots": "industrial_robots_value_chain_v1",
+        "power_batteries_battery_materials": "power_batteries_battery_materials_value_chain_v1",
+        "intelligent_driving_smart_cockpit": "intelligent_driving_smart_cockpit_value_chain_v1",
+        "automotive_electronics_chip_applications": "automotive_electronics_chip_applications_value_chain_v1",
+        "commercial_space_launch": "commercial_space_launch_value_chain_v1",
+    }
+    assert SELECTED_CHAIN_THEMES == {
+        **COMPLETED_CHAIN_THEMES,
+        **NEXT_FIFTEEN_CHAIN_THEMES,
     }
 
 
@@ -61,9 +84,15 @@ def test_selected_chain_summaries_report_existing_and_missing_theme_packages():
     context = load_theme_research_priority_package()
 
     rows = list_selected_chain_research(catalog=catalog, theme_context=context)
-    by_chain = {row["chain_id"]: row for row in rows}
+    expanded_rows = list_selected_chain_research(
+        catalog=catalog,
+        theme_context=context,
+        include_unfinished_targets=True,
+    )
+    by_chain = {row["chain_id"]: row for row in expanded_rows}
 
     assert len(rows) == 5
+    assert len(expanded_rows) == 20
     assert by_chain["ai_data_center_power"]["theme_id"] == "ai_power_value_capture_v1"
     assert by_chain["ai_data_center_power"]["research_status"] == "reviewed"
     assert by_chain["humanoid_robots_embodied_intelligence"]["research_status"] == "reviewed"
@@ -72,6 +101,10 @@ def test_selected_chain_summaries_report_existing_and_missing_theme_packages():
     assert by_chain["new_energy_storage"]["research_status"] == "reviewed"
     assert by_chain["ai_compute_infrastructure"]["theme_route"].endswith(
         "/ai_compute_infrastructure_value_chain_v1"
+    )
+    assert all(
+        by_chain[chain_id]["research_status"] == "not_started"
+        for chain_id in NEXT_FIFTEEN_CHAIN_THEMES
     )
 
 

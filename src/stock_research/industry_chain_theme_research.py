@@ -4,12 +4,35 @@ from datetime import date
 from typing import Any
 
 
-SELECTED_CHAIN_THEMES = {
+COMPLETED_CHAIN_THEMES = {
     "ai_data_center_power": "ai_power_value_capture_v1",
     "semiconductor_manufacturing_equipment": "semiconductor_manufacturing_equipment_value_chain_v1",
     "humanoid_robots_embodied_intelligence": "humanoid_robotics_head_to_toe_v1",
     "ai_compute_infrastructure": "ai_compute_infrastructure_value_chain_v1",
     "new_energy_storage": "new_energy_storage_value_chain_v1",
+}
+
+NEXT_FIFTEEN_CHAIN_THEMES = {
+    "ai_logic_compute_chips": "ai_logic_compute_chips_value_chain_v1",
+    "optical_communications_data_center_interconnect": "optical_communications_data_center_interconnect_value_chain_v1",
+    "semiconductor_materials_electronic_chemicals": "semiconductor_materials_electronic_chemicals_value_chain_v1",
+    "power_semiconductors": "power_semiconductors_value_chain_v1",
+    "industrial_automation_control": "industrial_automation_control_value_chain_v1",
+    "semiconductor_packaging_test_advanced_packaging": "semiconductor_packaging_test_advanced_packaging_value_chain_v1",
+    "cloud_data_center_infrastructure": "cloud_data_center_infrastructure_value_chain_v1",
+    "new_power_system_smart_grid": "new_power_system_smart_grid_value_chain_v1",
+    "core_mechanical_components": "core_mechanical_components_value_chain_v1",
+    "industrial_inspection_metrology_machine_vision": "industrial_inspection_metrology_machine_vision_value_chain_v1",
+    "industrial_robots": "industrial_robots_value_chain_v1",
+    "power_batteries_battery_materials": "power_batteries_battery_materials_value_chain_v1",
+    "intelligent_driving_smart_cockpit": "intelligent_driving_smart_cockpit_value_chain_v1",
+    "automotive_electronics_chip_applications": "automotive_electronics_chip_applications_value_chain_v1",
+    "commercial_space_launch": "commercial_space_launch_value_chain_v1",
+}
+
+SELECTED_CHAIN_THEMES = {
+    **COMPLETED_CHAIN_THEMES,
+    **NEXT_FIFTEEN_CHAIN_THEMES,
 }
 
 BENEFICIARY_TIERS = {
@@ -271,10 +294,12 @@ def list_selected_chain_research(
     catalog: dict[str, Any],
     theme_context: dict[str, Any],
     as_of_date: date | None = None,
+    include_unfinished_targets: bool = False,
 ) -> list[dict[str, Any]]:
+    registry = SELECTED_CHAIN_THEMES if include_unfinished_targets else COMPLETED_CHAIN_THEMES
     return [
         summary
-        for chain_id in SELECTED_CHAIN_THEMES
+        for chain_id in registry
         if (
             summary := build_chain_research_summary(
                 chain_id,

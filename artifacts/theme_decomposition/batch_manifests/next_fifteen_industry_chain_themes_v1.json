@@ -1,0 +1,227 @@
+{
+  "schema_version": "industry_chain_theme_batch_v1",
+  "batch_id": "next_fifteen_industry_chain_themes_v1",
+  "target_theme_count": 15,
+  "artifact_base": "../../..",
+  "primary_source_types": [
+    "company_filing",
+    "official_report",
+    "official_article"
+  ],
+  "completion_gates": {
+    "min_accepted_sources": 10,
+    "min_primary_sources": 4,
+    "min_claims": 10,
+    "min_reviewed_mappings": 8,
+    "required_readable_sections": [
+      {
+        "name": "研究结论",
+        "non_empty": [
+          "theme:research_profile.investment_summary",
+          "theme:research_profile.industry_stage",
+          "theme:research_profile.central_conflict"
+        ]
+      },
+      {
+        "name": "价值链",
+        "non_empty": [
+          "theme:research_profile.value_flow_summary",
+          "theme:nodes"
+        ]
+      },
+      {
+        "name": "利润池与竞争壁垒",
+        "non_empty": [
+          "theme:research_profile.profit_pool_summary"
+        ]
+      },
+      {
+        "name": "催化、验证信号与风险",
+        "non_empty": [
+          "theme:research_profile.catalyst_claim_ids",
+          "theme:research_profile.risk_claim_ids",
+          "theme:research_profile.validation_signals"
+        ]
+      },
+      {
+        "name": "受益公司",
+        "non_empty": [
+          "company_mapping:company_mappings"
+        ]
+      },
+      {
+        "name": "来源证据",
+        "non_empty": [
+          "source_pack:sources"
+        ]
+      },
+      {
+        "name": "证据缺口与更新",
+        "non_empty": [
+          "theme:research_profile.evidence_gap_summary",
+          "node_evidence_matrix:node_evidence_matrix"
+        ]
+      }
+    ]
+  },
+  "waves": {
+    "wave_a": [
+      "ai_logic_compute_chips",
+      "optical_communications_data_center_interconnect",
+      "semiconductor_materials_electronic_chemicals",
+      "power_semiconductors",
+      "industrial_automation_control"
+    ],
+    "wave_b": [
+      "semiconductor_packaging_test_advanced_packaging",
+      "cloud_data_center_infrastructure",
+      "new_power_system_smart_grid",
+      "core_mechanical_components",
+      "industrial_inspection_metrology_machine_vision"
+    ],
+    "wave_c": [
+      "industrial_robots",
+      "power_batteries_battery_materials",
+      "intelligent_driving_smart_cockpit",
+      "automotive_electronics_chip_applications",
+      "commercial_space_launch"
+    ]
+  },
+  "themes": {
+    "ai_logic_compute_chips": {
+      "theme_id": "ai_logic_compute_chips_value_chain_v1",
+      "artifacts": {
+        "theme": "artifacts/theme_decomposition/ai_logic_compute_chips_value_chain_v1.json",
+        "company_mapping": "artifacts/theme_decomposition/company_mappings/ai_logic_compute_chips_company_mapping_v1.json",
+        "source_pack": "artifacts/theme_decomposition/source_packs/ai_logic_compute_chips_source_pack_v1.json",
+        "node_evidence_matrix": "artifacts/theme_decomposition/source_packs/ai_logic_compute_chips_node_evidence_matrix_v1.json"
+      }
+    },
+    "optical_communications_data_center_interconnect": {
+      "theme_id": "optical_communications_data_center_interconnect_value_chain_v1",
+      "artifacts": {
+        "theme": "artifacts/theme_decomposition/optical_communications_data_center_interconnect_value_chain_v1.json",
+        "company_mapping": "artifacts/theme_decomposition/company_mappings/optical_communications_data_center_interconnect_company_mapping_v1.json",
+        "source_pack": "artifacts/theme_decomposition/source_packs/optical_communications_data_center_interconnect_source_pack_v1.json",
+        "node_evidence_matrix": "artifacts/theme_decomposition/source_packs/optical_communications_data_center_interconnect_node_evidence_matrix_v1.json"
+      }
+    },
+    "semiconductor_materials_electronic_chemicals": {
+      "theme_id": "semiconductor_materials_electronic_chemicals_value_chain_v1",
+      "artifacts": {
+        "theme": "artifacts/theme_decomposition/semiconductor_materials_electronic_chemicals_value_chain_v1.json",
+        "company_mapping": "artifacts/theme_decomposition/company_mappings/semiconductor_materials_electronic_chemicals_company_mapping_v1.json",
+        "source_pack": "artifacts/theme_decomposition/source_packs/semiconductor_materials_electronic_chemicals_source_pack_v1.json",
+        "node_evidence_matrix": "artifacts/theme_decomposition/source_packs/semiconductor_materials_electronic_chemicals_node_evidence_matrix_v1.json"
+      }
+    },
+    "power_semiconductors": {
+      "theme_id": "power_semiconductors_value_chain_v1",
+      "artifacts": {
+        "theme": "artifacts/theme_decomposition/power_semiconductors_value_chain_v1.json",
+        "company_mapping": "artifacts/theme_decomposition/company_mappings/power_semiconductors_company_mapping_v1.json",
+        "source_pack": "artifacts/theme_decomposition/source_packs/power_semiconductors_source_pack_v1.json",
+        "node_evidence_matrix": "artifacts/theme_decomposition/source_packs/power_semiconductors_node_evidence_matrix_v1.json"
+      }
+    },
+    "industrial_automation_control": {
+      "theme_id": "industrial_automation_control_value_chain_v1",
+      "artifacts": {
+        "theme": "artifacts/theme_decomposition/industrial_automation_control_value_chain_v1.json",
+        "company_mapping": "artifacts/theme_decomposition/company_mappings/industrial_automation_control_company_mapping_v1.json",
+        "source_pack": "artifacts/theme_decomposition/source_packs/industrial_automation_control_source_pack_v1.json",
+        "node_evidence_matrix": "artifacts/theme_decomposition/source_packs/industrial_automation_control_node_evidence_matrix_v1.json"
+      }
+    },
+    "semiconductor_packaging_test_advanced_packaging": {
+      "theme_id": "semiconductor_packaging_test_advanced_packaging_value_chain_v1",
+      "artifacts": {
+        "theme": "artifacts/theme_decomposition/semiconductor_packaging_test_advanced_packaging_value_chain_v1.json",
+        "company_mapping": "artifacts/theme_decomposition/company_mappings/semiconductor_packaging_test_advanced_packaging_company_mapping_v1.json",
+        "source_pack": "artifacts/theme_decomposition/source_packs/semiconductor_packaging_test_advanced_packaging_source_pack_v1.json",
+        "node_evidence_matrix": "artifacts/theme_decomposition/source_packs/semiconductor_packaging_test_advanced_packaging_node_evidence_matrix_v1.json"
+      }
+    },
+    "cloud_data_center_infrastructure": {
+      "theme_id": "cloud_data_center_infrastructure_value_chain_v1",
+      "artifacts": {
+        "theme": "artifacts/theme_decomposition/cloud_data_center_infrastructure_value_chain_v1.json",
+        "company_mapping": "artifacts/theme_decomposition/company_mappings/cloud_data_center_infrastructure_company_mapping_v1.json",
+        "source_pack": "artifacts/theme_decomposition/source_packs/cloud_data_center_infrastructure_source_pack_v1.json",
+        "node_evidence_matrix": "artifacts/theme_decomposition/source_packs/cloud_data_center_infrastructure_node_evidence_matrix_v1.json"
+      }
+    },
+    "new_power_system_smart_grid": {
+      "theme_id": "new_power_system_smart_grid_value_chain_v1",
+      "artifacts": {
+        "theme": "artifacts/theme_decomposition/new_power_system_smart_grid_value_chain_v1.json",
+        "company_mapping": "artifacts/theme_decomposition/company_mappings/new_power_system_smart_grid_company_mapping_v1.json",
+        "source_pack": "artifacts/theme_decomposition/source_packs/new_power_system_smart_grid_source_pack_v1.json",
+        "node_evidence_matrix": "artifacts/theme_decomposition/source_packs/new_power_system_smart_grid_node_evidence_matrix_v1.json"
+      }
+    },
+    "core_mechanical_components": {
+      "theme_id": "core_mechanical_components_value_chain_v1",
+      "artifacts": {
+        "theme": "artifacts/theme_decomposition/core_mechanical_components_value_chain_v1.json",
+        "company_mapping": "artifacts/theme_decomposition/company_mappings/core_mechanical_components_company_mapping_v1.json",
+        "source_pack": "artifacts/theme_decomposition/source_packs/core_mechanical_components_source_pack_v1.json",
+        "node_evidence_matrix": "artifacts/theme_decomposition/source_packs/core_mechanical_components_node_evidence_matrix_v1.json"
+      }
+    },
+    "industrial_inspection_metrology_machine_vision": {
+      "theme_id": "industrial_inspection_metrology_machine_vision_value_chain_v1",
+      "artifacts": {
+        "theme": "artifacts/theme_decomposition/industrial_inspection_metrology_machine_vision_value_chain_v1.json",
+        "company_mapping": "artifacts/theme_decomposition/company_mappings/industrial_inspection_metrology_machine_vision_company_mapping_v1.json",
+        "source_pack": "artifacts/theme_decomposition/source_packs/industrial_inspection_metrology_machine_vision_source_pack_v1.json",
+        "node_evidence_matrix": "artifacts/theme_decomposition/source_packs/industrial_inspection_metrology_machine_vision_node_evidence_matrix_v1.json"
+      }
+    },
+    "industrial_robots": {
+      "theme_id": "industrial_robots_value_chain_v1",
+      "artifacts": {
+        "theme": "artifacts/theme_decomposition/industrial_robots_value_chain_v1.json",
+        "company_mapping": "artifacts/theme_decomposition/company_mappings/industrial_robots_company_mapping_v1.json",
+        "source_pack": "artifacts/theme_decomposition/source_packs/industrial_robots_source_pack_v1.json",
+        "node_evidence_matrix": "artifacts/theme_decomposition/source_packs/industrial_robots_node_evidence_matrix_v1.json"
+      }
+    },
+    "power_batteries_battery_materials": {
+      "theme_id": "power_batteries_battery_materials_value_chain_v1",
+      "artifacts": {
+        "theme": "artifacts/theme_decomposition/power_batteries_battery_materials_value_chain_v1.json",
+        "company_mapping": "artifacts/theme_decomposition/company_mappings/power_batteries_battery_materials_company_mapping_v1.json",
+        "source_pack": "artifacts/theme_decomposition/source_packs/power_batteries_battery_materials_source_pack_v1.json",
+        "node_evidence_matrix": "artifacts/theme_decomposition/source_packs/power_batteries_battery_materials_node_evidence_matrix_v1.json"
+      }
+    },
+    "intelligent_driving_smart_cockpit": {
+      "theme_id": "intelligent_driving_smart_cockpit_value_chain_v1",
+      "artifacts": {
+        "theme": "artifacts/theme_decomposition/intelligent_driving_smart_cockpit_value_chain_v1.json",
+        "company_mapping": "artifacts/theme_decomposition/company_mappings/intelligent_driving_smart_cockpit_company_mapping_v1.json",
+        "source_pack": "artifacts/theme_decomposition/source_packs/intelligent_driving_smart_cockpit_source_pack_v1.json",
+        "node_evidence_matrix": "artifacts/theme_decomposition/source_packs/intelligent_driving_smart_cockpit_node_evidence_matrix_v1.json"
+      }
+    },
+    "automotive_electronics_chip_applications": {
+      "theme_id": "automotive_electronics_chip_applications_value_chain_v1",
+      "artifacts": {
+        "theme": "artifacts/theme_decomposition/automotive_electronics_chip_applications_value_chain_v1.json",
+        "company_mapping": "artifacts/theme_decomposition/company_mappings/automotive_electronics_chip_applications_company_mapping_v1.json",
+        "source_pack": "artifacts/theme_decomposition/source_packs/automotive_electronics_chip_applications_source_pack_v1.json",
+        "node_evidence_matrix": "artifacts/theme_decomposition/source_packs/automotive_electronics_chip_applications_node_evidence_matrix_v1.json"
+      }
+    },
+    "commercial_space_launch": {
+      "theme_id": "commercial_space_launch_value_chain_v1",
+      "artifacts": {
+        "theme": "artifacts/theme_decomposition/commercial_space_launch_value_chain_v1.json",
+        "company_mapping": "artifacts/theme_decomposition/company_mappings/commercial_space_launch_company_mapping_v1.json",
+        "source_pack": "artifacts/theme_decomposition/source_packs/commercial_space_launch_source_pack_v1.json",
+        "node_evidence_matrix": "artifacts/theme_decomposition/source_packs/commercial_space_launch_node_evidence_matrix_v1.json"
+      }
+    }
+  }
+}
