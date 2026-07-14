@@ -133,7 +133,7 @@ describe('Theme research AppShell routing', () => {
     expect(screen.getByText('/theme-research/ai_power_value_capture_v1/nodes')).toBeInTheDocument();
   });
 
-  it('restores a next-fifteen theme route into the theme research workspace', () => {
+  it('restores generic direct theme routes without route-specific registration', () => {
     window.history.replaceState({}, '', '/theme-research/ai_logic_compute_chips_value_chain_v1');
     render(<AppShell />);
 

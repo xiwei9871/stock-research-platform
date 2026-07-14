@@ -1,18 +1,32 @@
+import importlib.util
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
-from scripts.verify_industry_chain_theme_batch import load_theme_batch_manifest
 from stock_research.dashboard import app as dashboard_app
-from stock_research.industry_chain_theme_research import NEXT_FIFTEEN_CHAIN_THEMES
+from stock_research.industry_chain_theme_research import (
+    COMPLETED_CHAIN_THEMES,
+    NEXT_FIFTEEN_CHAIN_THEMES,
+    SELECTED_CHAIN_THEMES,
+)
 from stock_research.technology_industry_catalog import load_industry_catalog
 
 
 CATALOG_PATH = "/api/research/technology-industry-catalog"
 CHAIN_PATH = f"{CATALOG_PATH}/chains/ai_data_center_power"
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+SCRIPT_PATH = REPOSITORY_ROOT / "scripts/verify_industry_chain_theme_batch.py"
+SPEC = importlib.util.spec_from_file_location(
+    "verify_industry_chain_theme_batch_dashboard_test",
+    SCRIPT_PATH,
+)
+assert SPEC is not None and SPEC.loader is not None
+VERIFIER = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(VERIFIER)
+load_theme_batch_manifest = VERIFIER.load_theme_batch_manifest
 NEXT_FIFTEEN_MANIFEST_PATH = (
-    Path(__file__).resolve().parents[1]
+    REPOSITORY_ROOT
     / "artifacts/theme_decomposition/batch_manifests"
     / "next_fifteen_industry_chain_themes_v1.json"
 )
@@ -33,14 +47,21 @@ def test_technology_industry_catalog_api_returns_repository_summary_and_guardrai
     assert len(payload["sectors"]) == 10
     assert len(payload["chains"]) == 82
     deep_rows = [row for row in payload["chains"] if row["deep_research"] is not None]
-    assert len(deep_rows) == 20
-    research_statuses = [row["deep_research"]["research_status"] for row in deep_rows]
-    assert research_statuses.count("reviewed") == 5
-    assert research_statuses.count("not_started") == 15
-    ai_power = next(row for row in deep_rows if row["chain_id"] == "ai_data_center_power")
+    deep_by_chain = {row["chain_id"]: row for row in deep_rows}
+    assert set(deep_by_chain) == set(SELECTED_CHAIN_THEMES)
+    not_started_chain_ids = {
+        chain_id
+        for chain_id, row in deep_by_chain.items()
+        if row["deep_research"]["research_status"] == "not_started"
+    }
+    assert not_started_chain_ids == set(NEXT_FIFTEEN_CHAIN_THEMES)
+    assert all(
+        deep_by_chain[chain_id]["deep_research"]["research_status"] != "not_started"
+        for chain_id in COMPLETED_CHAIN_THEMES
+    )
+    ai_power = deep_by_chain["ai_data_center_power"]
     assert ai_power["deep_research"]["theme_id"] == "ai_power_value_capture_v1"
-    assert ai_power["deep_research"]["research_status"] == "reviewed"
-    ai_logic = next(row for row in deep_rows if row["chain_id"] == "ai_logic_compute_chips")
+    ai_logic = deep_by_chain["ai_logic_compute_chips"]
     assert ai_logic["deep_research"]["theme_id"] == (
         "ai_logic_compute_chips_value_chain_v1"
     )

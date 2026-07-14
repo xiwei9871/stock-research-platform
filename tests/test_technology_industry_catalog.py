@@ -10,6 +10,11 @@ import pytest
 
 from stock_research import cli as stock_research_cli
 from stock_research import technology_industry_catalog
+from stock_research.industry_chain_theme_research import (
+    COMPLETED_CHAIN_THEMES,
+    NEXT_FIFTEEN_CHAIN_THEMES,
+    SELECTED_CHAIN_THEMES,
+)
 from stock_research.technology_industry_catalog import (
     IndustryCatalogValidationError,
     NODE_LINK_FIELDS,
@@ -196,32 +201,24 @@ def test_repository_catalog_starts_with_ten_approved_sectors():
 
 def test_repository_catalog_has_exact_theme_research_links():
     catalog = load_industry_catalog()
-    links = {row["theme_id"]: row for row in catalog["theme_links"]}
+    links_by_chain = {row["chain_id"]: row for row in catalog["theme_links"]}
 
-    assert set(links) == {
-        "ai_power_value_capture_v1",
-        "semiconductor_manufacturing_equipment_value_chain_v1",
-        "humanoid_robotics_head_to_toe_v1",
-        "ai_compute_infrastructure_value_chain_v1",
-        "new_energy_storage_value_chain_v1",
-    }
-    assert links["ai_power_value_capture_v1"]["chain_id"] == "ai_data_center_power"
-    assert links["humanoid_robotics_head_to_toe_v1"]["chain_id"] == (
-        "humanoid_robots_embodied_intelligence"
-    )
-    assert links["semiconductor_manufacturing_equipment_value_chain_v1"][
-        "chain_id"
-    ] == "semiconductor_manufacturing_equipment"
-    assert links["ai_compute_infrastructure_value_chain_v1"]["chain_id"] == (
-        "ai_compute_infrastructure"
-    )
-    assert links["new_energy_storage_value_chain_v1"]["chain_id"] == (
-        "new_energy_storage"
-    )
-    assert all(
-        row["node_links"] or row["unmapped_theme_node_ids"]
-        for row in links.values()
-    )
+    assert len(catalog["theme_links"]) == len(SELECTED_CHAIN_THEMES)
+    assert {
+        chain_id: link["theme_id"] for chain_id, link in links_by_chain.items()
+    } == SELECTED_CHAIN_THEMES
+    for chain_id, theme_id in COMPLETED_CHAIN_THEMES.items():
+        link = links_by_chain[chain_id]
+        assert link["theme_id"] == theme_id
+        assert link["node_links"]
+        assert isinstance(link["unmapped_theme_node_ids"], list)
+    for chain_id, theme_id in NEXT_FIFTEEN_CHAIN_THEMES.items():
+        assert links_by_chain[chain_id] == {
+            "theme_id": theme_id,
+            "chain_id": chain_id,
+            "node_links": [],
+            "unmapped_theme_node_ids": [],
+        }
 
 
 def test_project_theme_to_catalog_preserves_source_data_and_is_read_only():
