@@ -381,7 +381,7 @@ def test_ai_logic_compute_matrix_covers_every_node_with_evidence_or_explicit_gap
         THEME_PATH,
         SOURCE_PACK_PATH,
         MATRIX_PATH,
-        exact_node_claim_coverage=False,
+        exact_node_claim_coverage=True,
     )
     theme = _read_json(THEME_PATH)
     source_pack = _read_json(SOURCE_PACK_PATH)

@@ -52,7 +52,7 @@
       "node_id": "ai_accelerator_npu",
       "accepted_source_ids": ["ai_logic_688256_2025_annual_report"],
       "pending_source_ids": [],
-      "supported_claim_ids": ["ai_logic_claim_04_ai_accelerator", "ai_logic_claim_12_risk"],
+      "supported_claim_ids": ["ai_logic_claim_04_ai_accelerator", "ai_logic_claim_11_catalyst", "ai_logic_claim_12_risk"],
       "evidence_strength_before": 3,
       "evidence_strength_after": 5,
       "value_capture_score_review_status": "supported",

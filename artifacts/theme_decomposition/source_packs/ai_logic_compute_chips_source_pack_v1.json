@@ -17,7 +17,7 @@
       "document_status": "primary_source_reviewed",
       "evidence_locator": "第12-15页主要业务、产品线、基础软件和客户验证；第27页及第178页分产品收入",
       "evidence_summary": "公司主营云边端人工智能核心芯片、板卡、智能整机和软件；2025年云端产品线为主要收入来源，产品在多个重点行业规模化部署并通过严苛环境验证。",
-      "supported_claim_ids": ["ai_logic_claim_04_ai_accelerator", "ai_logic_claim_09_software_ecosystem", "ai_logic_claim_10_customer_validation", "ai_logic_claim_12_risk"],
+      "supported_claim_ids": ["ai_logic_claim_04_ai_accelerator", "ai_logic_claim_09_software_ecosystem", "ai_logic_claim_10_customer_validation", "ai_logic_claim_11_catalyst", "ai_logic_claim_12_risk"],
       "supported_node_ids": ["ai_accelerator_npu", "compiler_runtime_ecosystem", "system_customer_validation"],
       "limitations": "未披露单一芯片型号收入、先进封装产能、客户名称及工作负载利用率。",
       "notes": "上交所年度报告全文已逐页复核。"

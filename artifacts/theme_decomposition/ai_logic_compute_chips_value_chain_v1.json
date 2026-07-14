@@ -477,7 +477,7 @@
       "confidence": 0.86,
       "evidence_status": "partially_verified",
       "platform_use_status": "reviewed",
-      "supporting_source_ids": ["ai_logic_688041_2025_annual_report", "ai_logic_603893_2025_annual_report", "ai_logic_ucie_3_specifications", "ai_logic_cxl_3_2_release"],
+      "supporting_source_ids": ["ai_logic_688041_2025_annual_report", "ai_logic_603893_2025_annual_report", "ai_logic_688256_2025_annual_report", "ai_logic_ucie_3_specifications", "ai_logic_cxl_3_2_release"],
       "affected_theme_nodes": ["server_cpu", "gpgpu_dcu", "ai_accelerator_npu", "edge_ai_soc", "chiplet_die_interconnect", "memory_high_speed_interfaces"]
     },
     {
