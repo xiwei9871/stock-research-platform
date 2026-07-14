@@ -34,11 +34,11 @@ def test_theme_index_aggregates_validated_phase_outputs():
     robotics = payload["items"][1]
     assert ai_power["node_count"] == 13
     assert ai_power["source_count"] == 10
-    assert ai_power["claim_count"] == 8
-    assert ai_power["company_count"] == 4
+    assert ai_power["claim_count"] == 10
+    assert ai_power["company_count"] == 8
     assert ai_power["evidence_gap_count"] == 3
     assert ai_power["deep_research_node_count"] == 2
-    assert ai_power["review_queue_count"] == 9
+    assert ai_power["review_queue_count"] == 13
     assert robotics["node_count"] == 21
     assert robotics["company_count"] == 0
     assert ai_power["research_kind"] == "industry_chain_deep_research"
@@ -74,20 +74,20 @@ def test_theme_detail_contains_priority_and_evidence_distributions():
             "reviewed": 4,
         },
     }
-    assert detail["company_summary"]["total"] == 4
+    assert detail["company_summary"]["total"] == 8
     assert detail["company_summary"]["by_integration_status"] == {
         "coverage_gap": 2,
-        "linked_existing_universe": 2,
+        "linked_existing_universe": 6,
     }
     assert detail["evidence_gap_summary"]["total"] == 3
     assert detail["source_reliability_distribution"]["S1"] == 7
     assert detail["claim_evidence_status_distribution"]["verified"] >= 1
     assert detail["review_queue_action_distribution"]
     assert detail["catalog_context"]["chain_id"] == "ai_data_center_power"
-    assert detail["research_profile"] is None
-    assert detail["beneficiary_summary"]["total"] == 4
-    assert sum(detail["beneficiary_summary"]["by_tier"].values()) == 4
-    assert detail["beneficiary_summary"]["reviewed_beneficiary_count"] == 4
+    assert detail["research_profile"]["catalog_chain_id"] == "ai_data_center_power"
+    assert detail["beneficiary_summary"]["total"] == 8
+    assert sum(detail["beneficiary_summary"]["by_tier"].values()) == 8
+    assert detail["beneficiary_summary"]["reviewed_beneficiary_count"] == 8
     assert detail["top_node_priorities"][0]["theme_id"] == AI_POWER_THEME_ID
     assert all(row["used_for_signal"] is False for row in detail["top_node_priorities"])
 
@@ -116,7 +116,7 @@ def test_source_and_claim_collections_preserve_quality_gates():
     claims = list_theme_research_claims(AI_POWER_THEME_ID)
 
     assert sources["total"] == 10
-    assert claims["total"] == 8
+    assert claims["total"] == 10
     assert all(row["theme_id"] == AI_POWER_THEME_ID for row in sources["items"])
     assert all(row["theme_id"] == AI_POWER_THEME_ID for row in claims["items"])
     video = next(
@@ -143,12 +143,16 @@ def test_source_and_claim_collections_preserve_quality_gates():
 def test_company_collection_joins_mapping_priority_and_crosswalk_context():
     payload = list_theme_research_companies(AI_POWER_THEME_ID)
 
-    assert payload["total"] == 4
+    assert payload["total"] == 8
     assert [row["company_code"] for row in payload["items"]] == [
         "002837.SZ",
+        "301018.SZ",
+        "000811.SZ",
         "002364.SZ",
+        "300499.SZ",
         "300870.SZ",
         "002335.SZ",
+        "300442.SZ",
     ]
     envicool = payload["items"][0]
     assert envicool["mapped_node"]["node_id"] == "liquid_cooling"

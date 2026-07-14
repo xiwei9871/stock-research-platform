@@ -1,7 +1,7 @@
 {
   "artifact_version": "theme_company_mapping_v1",
   "theme_id": "ai_power_value_capture_v1",
-  "as_of_date": "2026-07-10",
+  "as_of_date": "2026-07-14",
   "review_policy": {
     "reviewed_mapping_requires": [
       "accepted S0 or S1 source",
@@ -69,6 +69,58 @@
       "reliability_level": "S0",
       "review_status": "accepted",
       "notes": "CNINFO original filing reviewed at the cited HVDC product, deployment, and segment-revenue pages."
+    },
+    {
+      "source_id": "ai_power_shenling_2025_annual_report",
+      "source_type": "company_filing",
+      "title": "广东申菱环境系统股份有限公司2025年年度报告",
+      "publisher": "广东申菱环境系统股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-27",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-27/1225181199.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO original filing reviewed for data-center cooling products, liquid-cooling development, customers, and data-service business disclosure."
+    },
+    {
+      "source_id": "ai_power_gaolan_2025_annual_report",
+      "source_type": "company_filing",
+      "title": "广州高澜节能技术股份有限公司2025年年度报告",
+      "publisher": "广州高澜节能技术股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-24",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-24/1225160679.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO original filing reviewed for high-power-density and information-communication thermal-management products."
+    },
+    {
+      "source_id": "ai_power_icewheel_2025_annual_report",
+      "source_type": "company_filing",
+      "title": "冰轮环境技术股份有限公司2025年年度报告",
+      "publisher": "冰轮环境技术股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-11",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-11/1225092828.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO original filing reviewed for data-center cold-source, heat-exchange, and cooling-equipment disclosure."
+    },
+    {
+      "source_id": "ai_power_range_technology_2025_annual_report",
+      "source_type": "company_filing",
+      "title": "润泽智算科技集团股份有限公司2025年年度报告",
+      "publisher": "润泽智算科技集团股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-10",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-10/1225090821.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO original filing reviewed for AI-compute-center operation, power resources, liquid-cooling development, and energy-efficiency management."
     }
   ],
   "evidence_items": [
@@ -175,6 +227,110 @@
       "related_node_ids": [
         "hvdc_power"
       ]
+    },
+    {
+      "evidence_id": "ai_power_shenling_liquid_cooling_product_2025",
+      "source_id": "ai_power_shenling_2025_annual_report",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "Annual report principal-business section, data-service cooling products and customer disclosure",
+      "evidence_summary": "The filing identifies evaporative cooling, phase-change cooling, and liquid-cooling products for data-service customers and lists major internet, colocation, server, and cloud-computing customers.",
+      "related_company_codes": [
+        "301018.SZ"
+      ],
+      "related_node_ids": [
+        "liquid_cooling"
+      ]
+    },
+    {
+      "evidence_id": "ai_power_shenling_data_service_materiality_2025",
+      "source_id": "ai_power_shenling_2025_annual_report",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "Annual report principal-business section, data-service segment discussion",
+      "evidence_summary": "The filing treats data services as a reporting business segment and reports 43.77% year-on-year growth for the segment, but does not isolate AI-data-center liquid-cooling revenue.",
+      "related_company_codes": [
+        "301018.SZ"
+      ],
+      "related_node_ids": [
+        "liquid_cooling"
+      ]
+    },
+    {
+      "evidence_id": "ai_power_gaolan_data_center_cooling_product_2025",
+      "source_id": "ai_power_gaolan_2025_annual_report",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "Annual report principal-business section, high-power-density thermal-management products",
+      "evidence_summary": "The filing states that thermal-management products have expanded into information and communications and high-power-density equipment, including cooling products used in data-center-related scenarios.",
+      "related_company_codes": [
+        "300499.SZ"
+      ],
+      "related_node_ids": [
+        "liquid_cooling"
+      ]
+    },
+    {
+      "evidence_id": "ai_power_gaolan_data_center_materiality_2025",
+      "source_id": "ai_power_gaolan_2025_annual_report",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "Annual report business and product discussion",
+      "evidence_summary": "Data-center and information-communication cooling are disclosed applications within the company's thermal-management business, but revenue for the AI-data-center subset is not separately disclosed.",
+      "related_company_codes": [
+        "300499.SZ"
+      ],
+      "related_node_ids": [
+        "liquid_cooling"
+      ]
+    },
+    {
+      "evidence_id": "ai_power_icewheel_data_center_cold_source_2025",
+      "source_id": "ai_power_icewheel_2025_annual_report",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "Annual report management discussion, data-center cooling equipment",
+      "evidence_summary": "The filing states that the company supplies cold-source equipment and heat-exchange devices to data centers and describes data-center-specific chiller and cooling products.",
+      "related_company_codes": [
+        "000811.SZ"
+      ],
+      "related_node_ids": [
+        "liquid_cooling"
+      ]
+    },
+    {
+      "evidence_id": "ai_power_icewheel_data_center_materiality_2025",
+      "source_id": "ai_power_icewheel_2025_annual_report",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "Annual report business outlook and data-center product discussion",
+      "evidence_summary": "Data-center cooling is an identified growth application inside the broader industrial refrigeration and HVAC business; data-center-only revenue is not separately disclosed.",
+      "related_company_codes": [
+        "000811.SZ"
+      ],
+      "related_node_ids": [
+        "liquid_cooling"
+      ]
+    },
+    {
+      "evidence_id": "ai_power_range_compute_center_service_2025",
+      "source_id": "ai_power_range_technology_2025_annual_report",
+      "evidence_type": "service_relationship",
+      "excerpt_locator": "Annual report pages 15 and 24-26, AI compute-center service and infrastructure development",
+      "evidence_summary": "The filing identifies AI-compute-center operation as the company's core service and describes high-density power, network, liquid-cooling, energy-management, and modular-delivery capabilities.",
+      "related_company_codes": [
+        "300442.SZ"
+      ],
+      "related_node_ids": [
+        "data_center_epc"
+      ]
+    },
+    {
+      "evidence_id": "ai_power_range_compute_center_materiality_2025",
+      "source_id": "ai_power_range_technology_2025_annual_report",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "Annual report principal-business and resource-advantage sections",
+      "evidence_summary": "AI and data-center infrastructure operation is the company's primary business; the filing also identifies land, energy quotas, power capacity, cooling, and operation as core operating resources.",
+      "related_company_codes": [
+        "300442.SZ"
+      ],
+      "related_node_ids": [
+        "data_center_epc"
+      ]
     }
   ],
   "company_mappings": [
@@ -265,6 +421,94 @@
       "relationship_summary": "The company directly supplies HVDC systems and reports data-center power revenue representing 36.30% of company revenue, while HVDC-only revenue is not separately disclosed.",
       "review_status": "reviewed",
       "notes": "Research mapping only. Technical deployment evidence does not establish profit-pool leadership or stock attractiveness."
+    },
+    {
+      "mapping_id": "ai_power_liquid_cooling_301018_v1",
+      "theme_id": "ai_power_value_capture_v1",
+      "company_code": "301018.SZ",
+      "company_name": "申菱环境",
+      "market": "CN",
+      "mapped_node_id": "liquid_cooling",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.91,
+      "evidence_ids": [
+        "ai_power_shenling_liquid_cooling_product_2025",
+        "ai_power_shenling_data_service_materiality_2025"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "High-efficiency data-center cooling products including evaporative, phase-change, and liquid-cooling systems.",
+      "relationship_summary": "The company directly supplies cooling products to data-service customers. Segment growth and customer disclosures support relevance, while AI-data-center liquid-cooling revenue remains undisclosed.",
+      "review_status": "reviewed",
+      "notes": "Research mapping only. Customer lists and segment growth do not establish future order growth or investment returns."
+    },
+    {
+      "mapping_id": "ai_power_liquid_cooling_300499_v1",
+      "theme_id": "ai_power_value_capture_v1",
+      "company_code": "300499.SZ",
+      "company_name": "高澜股份",
+      "market": "CN",
+      "mapped_node_id": "liquid_cooling",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.84,
+      "evidence_ids": [
+        "ai_power_gaolan_data_center_cooling_product_2025",
+        "ai_power_gaolan_data_center_materiality_2025"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "Thermal-management products for high-power-density and information-communication equipment.",
+      "relationship_summary": "The company directly supplies thermal-management products applicable to data-center infrastructure, but AI-data-center revenue and customer concentration are not separately disclosed.",
+      "review_status": "reviewed",
+      "notes": "Research mapping only. The mapping reflects disclosed products, not a forecast of market share or profit growth."
+    },
+    {
+      "mapping_id": "ai_power_cold_source_000811_v1",
+      "theme_id": "ai_power_value_capture_v1",
+      "company_code": "000811.SZ",
+      "company_name": "冰轮环境",
+      "market": "CN",
+      "mapped_node_id": "liquid_cooling",
+      "mapping_type": "equipment_supplier",
+      "business_stage": "primary_business",
+      "confidence": 0.88,
+      "evidence_ids": [
+        "ai_power_icewheel_data_center_cold_source_2025",
+        "ai_power_icewheel_data_center_materiality_2025"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "adjacent",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "Data-center cold-source equipment, chillers, heat exchangers, and related cooling systems.",
+      "relationship_summary": "The company supplies upstream cold-source and heat-exchange equipment used by data centers. The exposure is direct at the equipment layer but data-center-only revenue is undisclosed.",
+      "review_status": "reviewed",
+      "notes": "Research mapping only. The company is an adjacent cooling-equipment beneficiary rather than proof of liquid-cooling system leadership."
+    },
+    {
+      "mapping_id": "ai_power_data_center_operations_300442_v1",
+      "theme_id": "ai_power_value_capture_v1",
+      "company_code": "300442.SZ",
+      "company_name": "润泽科技",
+      "market": "CN",
+      "mapped_node_id": "data_center_epc",
+      "mapping_type": "downstream_customer",
+      "business_stage": "primary_business",
+      "confidence": 0.93,
+      "evidence_ids": [
+        "ai_power_range_compute_center_service_2025",
+        "ai_power_range_compute_center_materiality_2025"
+      ],
+      "revenue_relevance": "material",
+      "bottleneck_relevance": "adjacent",
+      "business_materiality": "core_business",
+      "product_or_service": "AI-compute-center development, delivery, energy-efficiency management, and operation services.",
+      "relationship_summary": "The company is a downstream infrastructure owner/operator whose service economics depend on power access, cooling, delivery, and utilization rather than an equipment-supplier profit pool.",
+      "review_status": "reviewed",
+      "notes": "Research mapping only. It is classified as an indirect beneficiary because it consumes and operates the infrastructure rather than supplying the mapped equipment."
     }
   ]
 }

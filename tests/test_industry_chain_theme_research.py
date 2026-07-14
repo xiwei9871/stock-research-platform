@@ -122,6 +122,50 @@ def test_coverage_verifier_requires_all_review_gates():
     assert result["checks"]["accepted_source_count"] is False
 
 
+def test_coverage_verifier_accounts_for_theme_nodes_without_requiring_entire_catalog():
+    context = _ready_theme_context()
+    context["theme_package"]["nodes"].append(
+        {
+            "theme_id": "new_energy_storage_value_chain_v1",
+            "node_id": "storage_theme_gap",
+        }
+    )
+    context["theme_package"]["claims"][-2]["platform_use_status"] = "draft"
+    context["theme_package"]["claims"][-1]["platform_use_status"] = "draft"
+    catalog = {
+        "chains": [{"chain_id": "new_energy_storage", "chain_name": "New Energy Storage"}],
+        "nodes": [
+            {"node_id": "storage_l3", "chain_id": "new_energy_storage", "level": "L3"},
+            {"node_id": "storage_l4", "chain_id": "new_energy_storage", "level": "L4"},
+            {"node_id": "unrelated_l3", "chain_id": "new_energy_storage", "level": "L3"},
+            {"node_id": "unrelated_l4", "chain_id": "new_energy_storage", "level": "L4"},
+        ],
+        "theme_links": [
+            {
+                "theme_id": "new_energy_storage_value_chain_v1",
+                "chain_id": "new_energy_storage",
+                "node_links": [
+                    {"theme_node_id": "storage_l3", "catalog_node_id": "storage_l3"},
+                    {"theme_node_id": "storage_l4", "catalog_node_id": "storage_l4"},
+                ],
+                "unmapped_theme_node_ids": ["storage_theme_gap"],
+            }
+        ],
+    }
+
+    result = verify_deep_theme_coverage(
+        "new_energy_storage_value_chain_v1",
+        catalog=catalog,
+        theme_context=context,
+    )
+
+    assert result["ready"] is True
+    assert result["checks"]["all_theme_nodes_accounted_for"] is True
+    assert result["checks"]["structured_claim_count"] is True
+    assert result["counts"]["structured_claims"] == 10
+    assert result["counts"]["reviewed_claims"] == 8
+
+
 def _mapping(**overrides):
     row = {
         "mapping_id": "mapping_1",

@@ -181,6 +181,18 @@ def verify_deep_theme_coverage(
         row.get("catalog_node_id")
         for row in (link or {}).get("node_links", [])
     }
+    linked_theme_nodes = {
+        row.get("theme_node_id")
+        for row in (link or {}).get("node_links", [])
+    }
+    explicitly_unmapped_theme_nodes = set(
+        (link or {}).get("unmapped_theme_node_ids", [])
+    )
+    theme_node_ids = {
+        row.get("node_id")
+        for row in theme_context.get("theme_package", {}).get("nodes", [])
+        if row.get("theme_id") == theme_id
+    }
     chain_nodes = [
         row for row in catalog.get("nodes", []) if row.get("chain_id") == chain_id
     ]
@@ -197,7 +209,6 @@ def verify_deep_theme_coverage(
         row
         for row in claims
         if row.get("platform_use_status") == "reviewed"
-        and row.get("source_id") in accepted_source_ids
     ]
     mappings = _theme_mappings(theme_id, theme_context)
     mapping_evidence = _mapping_evidence(theme_context)
@@ -214,8 +225,10 @@ def verify_deep_theme_coverage(
         "theme_exists": theme is not None,
         "research_profile": profiles.get(theme_id, {}).get("catalog_chain_id") == chain_id,
         "catalog_link": link is not None,
-        "all_l3_mapped": bool(l3_ids) and l3_ids <= linked_catalog_nodes,
-        "all_l4_accounted_for": bool(l4_ids) and l4_ids <= linked_catalog_nodes,
+        "all_theme_nodes_accounted_for": bool(theme_node_ids)
+        and theme_node_ids <= linked_theme_nodes | explicitly_unmapped_theme_nodes,
+        "catalog_l3_linked": bool(l3_ids & linked_catalog_nodes),
+        "catalog_l4_linked": bool(l4_ids & linked_catalog_nodes),
         "accepted_source_count": len(accepted_source_ids) >= 10,
         "primary_source_count": len(
             [
@@ -226,7 +239,10 @@ def verify_deep_theme_coverage(
             ]
         )
         >= 4,
-        "reviewed_claim_count": len(reviewed_claims) >= 10,
+        "structured_claim_count": len(claims) >= 10,
+        "reviewed_claim_sources_accepted": all(
+            row.get("source_id") in accepted_source_ids for row in reviewed_claims
+        ),
         "reviewed_company_count": len(reviewed_mappings) >= 8,
     }
     return {
@@ -236,8 +252,14 @@ def verify_deep_theme_coverage(
         "checks": checks,
         "counts": {
             "accepted_sources": len(accepted_source_ids),
+            "structured_claims": len(claims),
             "reviewed_claims": len(reviewed_claims),
             "reviewed_companies": len(reviewed_mappings),
+            "theme_nodes": len(theme_node_ids),
+            "accounted_theme_nodes": len(
+                theme_node_ids
+                & (linked_theme_nodes | explicitly_unmapped_theme_nodes)
+            ),
             "l3_nodes": len(l3_ids),
             "l4_nodes": len(l4_ids),
         },

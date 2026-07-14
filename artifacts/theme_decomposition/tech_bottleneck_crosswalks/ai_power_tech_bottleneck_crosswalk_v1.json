@@ -51,6 +51,86 @@
       "confidence": 0.96,
       "review_status": "reviewed",
       "notes": "The crosswalk adds the UPS node and filing evidence while preserving the existing pending-review record unchanged."
+    },
+    {
+      "crosswalk_id": "ai_power_liquid_cooling_301018_to_tech_bottleneck_v1",
+      "theme_id": "ai_power_value_capture_v1",
+      "theme_node_id": "liquid_cooling",
+      "company_code": "301018.SZ",
+      "company_name": "申菱环境",
+      "mapping_id": "ai_power_liquid_cooling_301018_v1",
+      "existing_review_universe_id": "tech_bottleneck_review_universe_v1:301018",
+      "existing_evidence_ids": [
+        "tech_bottleneck_evidence_v1:301018:c5aa0f89da5fc30ac41ae74b"
+      ],
+      "new_theme_evidence_ids": [
+        "ai_power_shenling_liquid_cooling_product_2025",
+        "ai_power_shenling_data_service_materiality_2025"
+      ],
+      "relationship_type": "evidence_context_enrichment",
+      "confidence": 0.97,
+      "review_status": "reviewed",
+      "notes": "The crosswalk adds the liquid-cooling node and preserves the existing pending-review record without changing admission state."
+    },
+    {
+      "crosswalk_id": "ai_power_liquid_cooling_300499_to_tech_bottleneck_v1",
+      "theme_id": "ai_power_value_capture_v1",
+      "theme_node_id": "liquid_cooling",
+      "company_code": "300499.SZ",
+      "company_name": "高澜股份",
+      "mapping_id": "ai_power_liquid_cooling_300499_v1",
+      "existing_review_universe_id": "tech_bottleneck_review_universe_v1:300499",
+      "existing_evidence_ids": [
+        "tech_bottleneck_evidence_v1:300499:ba675bb6c6771aa1f1341ef7"
+      ],
+      "new_theme_evidence_ids": [
+        "ai_power_gaolan_data_center_cooling_product_2025",
+        "ai_power_gaolan_data_center_materiality_2025"
+      ],
+      "relationship_type": "evidence_context_enrichment",
+      "confidence": 0.93,
+      "review_status": "reviewed",
+      "notes": "The crosswalk adds data-center liquid-cooling context while leaving the existing manual-review workflow unchanged."
+    },
+    {
+      "crosswalk_id": "ai_power_cold_source_000811_to_tech_bottleneck_v1",
+      "theme_id": "ai_power_value_capture_v1",
+      "theme_node_id": "liquid_cooling",
+      "company_code": "000811.SZ",
+      "company_name": "冰轮环境",
+      "mapping_id": "ai_power_cold_source_000811_v1",
+      "existing_review_universe_id": "tech_bottleneck_review_universe_v1:000811",
+      "existing_evidence_ids": [
+        "tech_bottleneck_evidence_v1:000811:c6ef6c2dc187fcd112363796"
+      ],
+      "new_theme_evidence_ids": [
+        "ai_power_icewheel_data_center_cold_source_2025",
+        "ai_power_icewheel_data_center_materiality_2025"
+      ],
+      "relationship_type": "evidence_context_enrichment",
+      "confidence": 0.94,
+      "review_status": "reviewed",
+      "notes": "The crosswalk adds cold-source equipment context while preserving the existing pending-review status."
+    },
+    {
+      "crosswalk_id": "ai_power_data_center_operations_300442_to_tech_bottleneck_v1",
+      "theme_id": "ai_power_value_capture_v1",
+      "theme_node_id": "data_center_epc",
+      "company_code": "300442.SZ",
+      "company_name": "润泽科技",
+      "mapping_id": "ai_power_data_center_operations_300442_v1",
+      "existing_review_universe_id": "tech_bottleneck_review_universe_v1:300442",
+      "existing_evidence_ids": [
+        "tech_bottleneck_evidence_v1:300442:d21389a6f7f5ffb16bc1d655"
+      ],
+      "new_theme_evidence_ids": [
+        "ai_power_range_compute_center_service_2025",
+        "ai_power_range_compute_center_materiality_2025"
+      ],
+      "relationship_type": "evidence_context_enrichment",
+      "confidence": 0.96,
+      "review_status": "reviewed",
+      "notes": "The crosswalk adds downstream data-center operation context and does not change any existing review or admission decision."
     }
   ],
   "coverage_gaps": [

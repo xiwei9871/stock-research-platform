@@ -40,15 +40,15 @@ def test_ai_power_crosswalk_package_loads_and_summarizes_without_writes():
 
     assert _input_hashes(REPOSITORY_ROOT) == before
     assert summary == {
-        "accounted_mapping_count": 4,
+            "accounted_mapping_count": 8,
         "artifact_count": 1,
         "coverage_gap_count": 2,
-        "crosswalk_count": 2,
-        "existing_evidence_count": 3,
-        "linked_company_count": 2,
+            "crosswalk_count": 6,
+            "existing_evidence_count": 7,
+            "linked_company_count": 6,
         "mapping_coverage_rate": 1.0,
-        "new_theme_evidence_count": 4,
-        "p4_mapping_count": 4,
+            "new_theme_evidence_count": 12,
+            "p4_mapping_count": 8,
         "theme_count": 1,
         "universe_count": 371,
     }
@@ -119,13 +119,17 @@ def test_missing_universe_companies_are_explicit_coverage_gaps(
 def test_theme_detail_accounts_for_every_phase4_mapping():
     details = load_theme_crosswalk_details("ai_power_value_capture_v1")
 
-    assert len(details) == 4
+    assert len(details) == 8
     assert {row["status"] for row in details} == {"linked", "coverage_gap"}
     assert {row["company_code"] for row in details} == {
         "002335.SZ",
         "002364.SZ",
         "002837.SZ",
+        "000811.SZ",
+        "300442.SZ",
+        "300499.SZ",
         "300870.SZ",
+        "301018.SZ",
     }
 
 
@@ -430,7 +434,7 @@ def test_cli_commands_emit_structured_json(capsys):
     assert cli(["validate"]) == 0
     validate_payload = json.loads(capsys.readouterr().out)
     assert validate_payload["status"] == "ok"
-    assert validate_payload["crosswalk_count"] == 2
+    assert validate_payload["crosswalk_count"] == 6
 
     assert cli(["summary"]) == 0
     summary_payload = json.loads(capsys.readouterr().out)
@@ -438,7 +442,7 @@ def test_cli_commands_emit_structured_json(capsys):
 
     assert cli(["show-theme", "--theme-id", "ai_power_value_capture_v1"]) == 0
     theme_payload = json.loads(capsys.readouterr().out)
-    assert len(theme_payload) == 4
+    assert len(theme_payload) == 8
 
     assert cli(["show-company", "--company-code", "002837.SZ"]) == 0
     company_payload = json.loads(capsys.readouterr().out)

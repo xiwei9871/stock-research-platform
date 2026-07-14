@@ -1,5 +1,5 @@
 {
-  "artifact_version": "theme_decomposition_v1_5",
+  "artifact_version": "theme_decomposition_v1_6",
   "theme": {
     "theme_id": "ai_power_value_capture_v1",
     "theme_name": "AI供电产业链：谁在拿走价值量",
@@ -7,7 +7,29 @@
     "summary": "A read-only baseline that decomposes AI power infrastructure from compute demand to grid connection, power conversion, rack distribution, cooling, and integration. Phase 2A adds traceable public evidence while preserving unresolved value-capture and localization gaps.",
     "status": "reviewed",
     "created_from": "mixed",
-    "last_updated": "2026-07-11"
+    "last_updated": "2026-07-14"
+  },
+  "research_profile": {
+    "catalog_chain_id": "ai_data_center_power",
+    "research_kind": "industry_chain_deep_research",
+    "industry_stage": "commercial_scaling",
+    "central_conflict": "AI rack power density is rising faster than conventional grid access, backup, conversion, distribution, and cooling architectures can be upgraded.",
+    "investment_summary": "Value capture is shifting from generic data-center equipment toward qualified high-efficiency power conversion, rack-scale delivery, liquid cooling, system integration, and operations, while architecture changes can also remove or relocate legacy equipment value.",
+    "value_flow_summary": "capacity planning -> power generation and procurement -> grid connection and substations -> backup power -> UPS/HVDC conversion -> room and rack distribution -> server-board power -> liquid cooling -> energy management -> EPC, commissioning, and operations",
+    "profit_pool_summary": "The strongest barriers are reliability certification, high-power-density design, power and thermal co-optimization, customer qualification, installed operating data, and end-to-end delivery. Equipment presence alone does not prove pricing power or durable profit capture.",
+    "catalyst_claim_ids": [
+      "ai_power_claim_capacity_density_catalyst"
+    ],
+    "risk_claim_ids": [
+      "ai_power_claim_architecture_value_migration_risk"
+    ],
+    "validation_signals": [
+      "AI rack power density and liquid-cooling adoption",
+      "data-center grid-connection lead times and transformer capacity",
+      "customer qualification, disclosed orders, and segment revenue",
+      "800 VDC, HVDC, and rack-level power architecture adoption"
+    ],
+    "evidence_gap_summary": "Company disclosures often combine AI data-center products with broader data-center, cooling, power, or cloud segments. Node-level revenue, gross margin, customer concentration, order visibility, and supplier allocation remain incomplete for several mappings."
   },
   "evidence_policy": {
     "accepted_source_ids": [
@@ -369,6 +391,53 @@
         "server_power_supply",
         "liquid_cooling",
         "sic_gan_power_semiconductor"
+      ]
+    },
+    {
+      "claim_id": "ai_power_claim_capacity_density_catalyst",
+      "theme_id": "ai_power_value_capture_v1",
+      "source_id": "ai_power_doe_data_center_demand_2024",
+      "claim_text": "Rising data-center electricity demand and rack power density increase the need for grid capacity, resilient power delivery, efficient conversion, and advanced cooling.",
+      "claim_type": "catalyst",
+      "confidence": 0.9,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "ai_power_jpm_powering_ai_2026",
+        "ai_power_nvidia_gb200_nvl72_2026"
+      ],
+      "affected_theme_nodes": [
+        "power_generation",
+        "grid_connection",
+        "transformer",
+        "switchgear",
+        "ups",
+        "hvdc_power",
+        "rack_power_distribution",
+        "server_power_supply",
+        "liquid_cooling"
+      ]
+    },
+    {
+      "claim_id": "ai_power_claim_architecture_value_migration_risk",
+      "theme_id": "ai_power_value_capture_v1",
+      "source_id": "ai_power_nvidia_800v_architecture_2026",
+      "claim_text": "New HVDC and 800 VDC architectures can shift, consolidate, or remove legacy conversion and distribution stages, so aggregate demand growth does not guarantee equal benefit for every incumbent equipment supplier.",
+      "claim_type": "risk",
+      "confidence": 0.88,
+      "evidence_status": "partially_verified",
+      "platform_use_status": "draft",
+      "supporting_source_ids": [
+        "ai_power_nvidia_800v_ecosystem_blog_2025"
+      ],
+      "affected_theme_nodes": [
+        "transformer",
+        "switchgear",
+        "ups",
+        "hvdc_power",
+        "rack_power_distribution",
+        "server_power_supply",
+        "copper_interconnect"
       ]
     }
   ],
@@ -758,7 +827,7 @@
         "margin trend",
         "customer certification"
       ],
-      "output_schema": "theme_decomposition_v1_5"
+      "output_schema": "theme_decomposition_v1_6"
     }
   ]
 }
