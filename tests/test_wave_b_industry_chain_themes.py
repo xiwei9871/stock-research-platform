@@ -134,8 +134,8 @@ def test_advanced_packaging_artifacts_load_and_first_wave_b_row_is_ready():
     assert rows[CHAIN_ID]["ready"] is True
     assert all(rows[CHAIN_ID]["checks"].values())
     assert report["wave_results"]["wave_b"]["ready"] is False
-    assert report["wave_results"]["wave_b"]["ready_theme_count"] == 1
-    assert report["wave_results"]["wave_b"]["not_ready_theme_count"] == 4
+    assert report["wave_results"]["wave_b"]["ready_theme_count"] == 2
+    assert report["wave_results"]["wave_b"]["not_ready_theme_count"] == 3
     assert {chain_id for chain_id, row in rows.items() if row["ready"]} == (
         _implemented_wave_chain_ids("wave_b")
     )
@@ -264,3 +264,224 @@ def test_advanced_packaging_revenue_evidence_blocks_over_attribution():
     assert "非先进封装专属" in evidence["advpkg_ev_688200_revenue"]["evidence_summary"]
     assert "不可外推AI/HPC" in mapping_by_company["603005.SH"]["notes"]
     assert all(row["business_stage"] == "primary_business" for row in mapping_by_company.values())
+
+
+SMART_GRID_THEME_ID = "new_power_system_smart_grid_value_chain_v1"
+SMART_GRID_CHAIN_ID = "new_power_system_smart_grid"
+SMART_GRID_THEME_PATH = (
+    REPOSITORY_ROOT / f"artifacts/theme_decomposition/{SMART_GRID_THEME_ID}.json"
+)
+SMART_GRID_MAPPING_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/company_mappings"
+    / "new_power_system_smart_grid_company_mapping_v1.json"
+)
+SMART_GRID_SOURCE_PACK_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "new_power_system_smart_grid_source_pack_v1.json"
+)
+SMART_GRID_MATRIX_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "new_power_system_smart_grid_node_evidence_matrix_v1.json"
+)
+
+
+def _assert_smart_grid_bidirectional_source_and_matrix_links() -> None:
+    theme = _read_json(SMART_GRID_THEME_PATH)
+    source_pack = _read_json(SMART_GRID_SOURCE_PACK_PATH)
+    matrix = _read_json(SMART_GRID_MATRIX_PATH)
+    node_ids = {row["node_id"] for row in theme["nodes"]}
+    accepted_source_ids = {
+        row["source_id"]
+        for row in source_pack["sources"]
+        if row["review_status"] == "accepted"
+    }
+    source_by_id = {row["source_id"]: row for row in source_pack["sources"]}
+    claim_by_id = {row["claim_id"]: row for row in theme["claims"]}
+
+    assert {
+        source["source_id"]: set(source["supported_claim_ids"])
+        for source in source_pack["sources"]
+    } == {
+        source["source_id"]: {
+            claim["claim_id"]
+            for claim in theme["claims"]
+            if source["source_id"]
+            in {claim["source_id"], *claim["supporting_source_ids"]}
+        }
+        for source in source_pack["sources"]
+    }
+    assert {row["node_id"] for row in matrix["node_evidence_matrix"]} == node_ids
+    assert len(matrix["node_evidence_matrix"]) == len(node_ids)
+    for row in matrix["node_evidence_matrix"]:
+        expected_claim_ids = {
+            claim["claim_id"]
+            for claim in theme["claims"]
+            if row["node_id"] in claim["affected_theme_nodes"]
+        }
+        assert set(row["supported_claim_ids"]) == expected_claim_ids
+        assert set(row["accepted_source_ids"]) <= accepted_source_ids
+        assert row["accepted_source_ids"]
+        for source_id in row["accepted_source_ids"]:
+            source = source_by_id[source_id]
+            assert row["node_id"] in source["supported_node_ids"]
+            assert expected_claim_ids & set(source["supported_claim_ids"])
+        for claim_id in expected_claim_ids:
+            claim = claim_by_id[claim_id]
+            assert set(row["accepted_source_ids"]) & {
+                claim["source_id"],
+                *claim["supporting_source_ids"],
+            }
+
+
+def test_smart_grid_artifacts_load_and_second_wave_b_row_is_ready():
+    theme_package = load_theme_package()
+    mapping_package = load_theme_company_mapping_package()
+    priority_package = load_theme_research_priority_package()
+
+    assert SMART_GRID_THEME_ID in {row["theme_id"] for row in theme_package["themes"]}
+    assert SMART_GRID_THEME_ID in {
+        row["theme_id"] for row in mapping_package["company_mappings"]
+    }
+    assert SMART_GRID_THEME_ID in {
+        row["theme_id"] for row in priority_package["node_priorities"]
+    }
+    report = VERIFIER.build_theme_batch_report(MANIFEST_PATH, wave="wave_b")
+    rows = {row["chain_id"]: row for row in report["theme_results"]}
+
+    assert rows[SMART_GRID_CHAIN_ID]["ready"] is True
+    assert all(rows[SMART_GRID_CHAIN_ID]["checks"].values())
+    assert report["wave_results"]["wave_b"]["ready"] is False
+    assert report["wave_results"]["wave_b"]["ready_theme_count"] == 2
+    assert report["wave_results"]["wave_b"]["not_ready_theme_count"] == 3
+    assert {chain_id for chain_id, row in rows.items() if row["ready"]} == (
+        _implemented_wave_chain_ids("wave_b")
+    )
+
+
+def test_smart_grid_evidence_mapping_and_links_are_exact():
+    _assert_smart_grid_bidirectional_source_and_matrix_links()
+    theme = _read_json(SMART_GRID_THEME_PATH)
+    mapping = _read_json(SMART_GRID_MAPPING_PATH)
+    source_pack = _read_json(SMART_GRID_SOURCE_PACK_PATH)
+    node_ids = {row["node_id"] for row in theme["nodes"]}
+    accepted = validate_theme_evidence_sources(source_pack["sources"], node_ids)
+    reviewed_mappings = [
+        row for row in mapping["company_mappings"] if row["review_status"] == "reviewed"
+    ]
+    canonical_sources = {row["source_id"]: row for row in theme["sources"]}
+
+    assert len([row for row in accepted.values() if row["review_status"] == "accepted"]) == 10
+    assert all(
+        row["source_type"] == "company_filing" and row["reliability_level"] == "S0"
+        for row in source_pack["sources"]
+    )
+    assert len(theme["nodes"]) == 10
+    assert len(theme["claims"]) == 15
+    assert all(set(row) >= CLAIM_FIELDS for row in theme["claims"])
+    assert len(reviewed_mappings) == 10
+    assert len({row["company_code"] for row in reviewed_mappings}) == 10
+    assert len({row["source_id"] for row in source_pack["sources"]}) == 10
+    assert len({row["url"] for row in source_pack["sources"]}) == 10
+    assert {
+        row["source_id"]: row["url_or_ref"] for row in mapping["sources"]
+    } == {
+        source_id: row["url_or_ref"] for source_id, row in canonical_sources.items()
+    }
+
+
+def test_smart_grid_company_beneficiary_tiers_follow_classifier_exactly():
+    expected = {
+        "600406.SH": ("elastic_beneficiary", "core_business", "undisclosed"),
+        "000400.SZ": ("elastic_beneficiary", "meaningful_segment", "limited"),
+        "600312.SH": ("core_beneficiary", "core_business", "material"),
+        "601179.SH": ("core_beneficiary", "core_business", "material"),
+        "601126.SH": ("elastic_beneficiary", "core_business", "undisclosed"),
+        "000682.SZ": ("elastic_beneficiary", "core_business", "undisclosed"),
+        "688100.SH": ("core_beneficiary", "core_business", "material"),
+        "603556.SH": ("elastic_beneficiary", "core_business", "undisclosed"),
+        "002028.SZ": ("elastic_beneficiary", "meaningful_segment", "undisclosed"),
+        "600131.SH": ("indirect_beneficiary", "meaningful_segment", "undisclosed"),
+    }
+    read_model = list_theme_research_companies(SMART_GRID_THEME_ID)
+    response = TestClient(dashboard_app.create_app()).get(
+        f"/api/research/theme-decomposition/themes/{SMART_GRID_THEME_ID}/companies"
+    )
+
+    assert response.status_code == 200
+    for payload in (read_model, response.json()):
+        assert payload["total"] == len(expected)
+        assert {
+            row["company_code"]: (
+                row["beneficiary_tier"],
+                row["business_materiality"],
+                row["revenue_relevance"],
+            )
+            for row in payload["items"]
+        } == expected
+
+
+def test_smart_grid_profile_catalog_and_unmapped_nodes_are_ready():
+    theme = _read_json(SMART_GRID_THEME_PATH)
+    profile = theme["research_profile"]
+    node_ids = {row["node_id"] for row in theme["nodes"]}
+    claim_ids = {row["claim_id"] for row in theme["claims"]}
+    catalog = load_industry_catalog()
+    link = next(
+        row for row in catalog["theme_links"] if row["theme_id"] == SMART_GRID_THEME_ID
+    )
+
+    assert profile["catalog_chain_id"] == SMART_GRID_CHAIN_ID
+    assert profile["research_kind"] == "industry_chain_deep_research"
+    assert set(profile["catalyst_claim_ids"] + profile["risk_claim_ids"]) <= claim_ids
+    assert link["node_links"] == [
+        {"theme_node_id": "uhv_hvdc_flexible_dc", "catalog_node_id": "grid_connection_transmission_protection"},
+        {"theme_node_id": "primary_power_transformers", "catalog_node_id": "power_transformer"},
+        {"theme_node_id": "protection_substation_automation", "catalog_node_id": "relay_protection_system"},
+        {"theme_node_id": "storage_grid_connection_power_quality", "catalog_node_id": "power_quality_management_system"},
+    ]
+    assert "阶段级L3覆盖" in link["notes"]
+    assert "不是柔直或换流阀产品等价映射" in link["notes"]
+    assert "仅覆盖继电保护子功能" in link["notes"]
+    assert "仅覆盖电能质量子功能" in link["notes"]
+    assert set(link["unmapped_theme_node_ids"]) == node_ids - {
+        row["theme_node_id"] for row in link["node_links"]
+    }
+    result = verify_deep_theme_coverage(
+        SMART_GRID_THEME_ID,
+        catalog=catalog,
+        theme_context=load_theme_research_priority_package(),
+    )
+    assert result["ready"] is True
+    assert all(result["checks"].values())
+
+
+def test_smart_grid_revenue_and_scope_boundaries_block_over_attribution():
+    theme = _read_json(SMART_GRID_THEME_PATH)
+    mapping = _read_json(SMART_GRID_MAPPING_PATH)
+    evidence = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+    mapping_by_company = {
+        row["company_code"]: row for row in mapping["company_mappings"]
+    }
+    claim_text = " ".join(row["claim_text"] for row in theme["claims"])
+
+    assert "334.22亿元" in evidence["smartgrid_ev_600406_revenue"]["evidence_summary"]
+    assert "不是单一调度或柔直收入" in evidence["smartgrid_ev_600406_revenue"]["evidence_summary"]
+    assert "77.47亿元" in evidence["smartgrid_ev_600312_revenue"]["evidence_summary"]
+    assert "不是特高压独立收入" in evidence["smartgrid_ev_600312_revenue"]["evidence_summary"]
+    assert "39.72亿元" in evidence["smartgrid_ev_601179_revenue"]["evidence_summary"]
+    assert "不能强映射为柔直收入" in evidence["smartgrid_ev_601179_revenue"]["evidence_summary"]
+    assert "41.69亿元" in evidence["smartgrid_ev_603556_revenue"]["evidence_summary"]
+    assert "不等于电表独立收入" in evidence["smartgrid_ev_603556_revenue"]["evidence_summary"]
+    assert "15.25亿元" in evidence["smartgrid_ev_002028_revenue"]["evidence_summary"]
+    assert "15.31亿元" in evidence["smartgrid_ev_002028_revenue"]["evidence_summary"]
+    assert "不是柔直突破的独立收入" in evidence["smartgrid_ev_002028_revenue"]["evidence_summary"]
+    assert "53.78亿元" in evidence["smartgrid_ev_600131_revenue"]["evidence_summary"]
+    assert "25.01亿元" in evidence["smartgrid_ev_600131_revenue"]["evidence_summary"]
+    assert "不等于AI或单一软件收入" in evidence["smartgrid_ev_600131_revenue"]["evidence_summary"]
+    assert "直流输电系统收入同比下降" in claim_text
+    assert "通信模块收入下降、通信网关收入增长" in claim_text
+    assert "集中招标价格" in claim_text
+    assert mapping_by_company["600131.SH"]["bottleneck_relevance"] == "adjacent"

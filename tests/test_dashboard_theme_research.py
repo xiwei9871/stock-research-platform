@@ -29,6 +29,7 @@ POWER_SEMICONDUCTORS_THEME_ID = "power_semiconductors_value_chain_v1"
 ADVANCED_PACKAGING_THEME_ID = (
     "semiconductor_packaging_test_advanced_packaging_value_chain_v1"
 )
+SMART_GRID_THEME_ID = "new_power_system_smart_grid_value_chain_v1"
 
 
 def test_theme_index_aggregates_validated_phase_outputs():
@@ -46,6 +47,7 @@ def test_theme_index_aggregates_validated_phase_outputs():
         "semiconductor_manufacturing_equipment_value_chain_v1",
         "new_energy_storage_value_chain_v1",
         ADVANCED_PACKAGING_THEME_ID,
+        SMART_GRID_THEME_ID,
     }
     assert payload["total"] == len(expected_theme_ids)
     assert {row["theme_id"] for row in payload["items"]} == expected_theme_ids
