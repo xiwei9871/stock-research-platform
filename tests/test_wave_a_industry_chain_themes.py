@@ -166,6 +166,19 @@ def test_ai_logic_compute_matrix_covers_every_node_with_evidence_or_explicit_gap
         }
 
 
+def test_ai_logic_compute_ucie_source_uses_exact_official_release_date():
+    theme = _read_json(THEME_PATH)
+    source_pack = _read_json(SOURCE_PACK_PATH)
+    source_id = "ai_logic_ucie_3_specifications"
+    theme_source = next(row for row in theme["sources"] if row["source_id"] == source_id)
+    pack_source = next(
+        row for row in source_pack["sources"] if row["source_id"] == source_id
+    )
+
+    assert theme_source["publish_date"] == "2025-08-05"
+    assert pack_source["publish_date"] == theme_source["publish_date"]
+
+
 def test_ai_logic_compute_profile_claim_refs_and_skeleton_catalog_are_ready():
     theme = _read_json(THEME_PATH)
     profile = theme["research_profile"]
