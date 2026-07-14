@@ -11,6 +11,7 @@ from stock_research.industry_chain_theme_research import (
     SELECTED_CHAIN_THEMES,
 )
 from stock_research.technology_industry_catalog import load_industry_catalog
+from stock_research.theme_decomposition import load_theme_package
 
 
 CATALOG_PATH = "/api/research/technology-industry-catalog"
@@ -54,9 +55,15 @@ def test_technology_industry_catalog_api_returns_repository_summary_and_guardrai
         for chain_id, row in deep_by_chain.items()
         if row["deep_research"]["research_status"] == "not_started"
     }
-    assert not_started_chain_ids == set(NEXT_FIFTEEN_CHAIN_THEMES) - {
-        "ai_logic_compute_chips"
+    implemented_theme_ids = {
+        row["theme_id"] for row in load_theme_package()["themes"]
     }
+    expected_not_started = {
+        chain_id
+        for chain_id, theme_id in NEXT_FIFTEEN_CHAIN_THEMES.items()
+        if theme_id not in implemented_theme_ids
+    }
+    assert not_started_chain_ids == expected_not_started
     assert all(
         deep_by_chain[chain_id]["deep_research"]["research_status"] != "not_started"
         for chain_id in COMPLETED_CHAIN_THEMES
@@ -130,6 +137,28 @@ def test_ai_logic_compute_chain_detail_exposes_reviewed_theme():
     assert payload["deep_research"]["reviewed_company_count"] >= 8
 
 
+def test_optical_interconnect_chain_detail_exposes_reviewed_theme():
+    response = TestClient(dashboard_app.create_app()).get(
+        f"{CATALOG_PATH}/chains/optical_communications_data_center_interconnect"
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["chain"]["chain_id"] == (
+        "optical_communications_data_center_interconnect"
+    )
+    assert payload["nodes"] == []
+    link = payload["theme_links"][0]
+    assert link["theme_id"] == (
+        "optical_communications_data_center_interconnect_value_chain_v1"
+    )
+    assert link["node_links"] == []
+    assert len(link["unmapped_theme_node_ids"]) >= 9
+    assert payload["deep_research"]["research_status"] == "reviewed"
+    assert payload["deep_research"]["source_count"] >= 10
+    assert payload["deep_research"]["reviewed_company_count"] >= 8
+
+
 def test_next_fifteen_catalog_theme_links_match_canonical_batch_manifest():
     catalog = load_industry_catalog()
     manifest = load_theme_batch_manifest(NEXT_FIFTEEN_MANIFEST_PATH)
@@ -142,11 +171,9 @@ def test_next_fifteen_catalog_theme_links_match_canonical_batch_manifest():
         for chain_id, metadata in manifest["themes"].items()
     } == NEXT_FIFTEEN_CHAIN_THEMES
     for chain_id, metadata in manifest["themes"].items():
-        unmapped_theme_node_ids = (
-            links_by_chain[chain_id][0]["unmapped_theme_node_ids"]
-            if chain_id == "ai_logic_compute_chips"
-            else []
-        )
+        unmapped_theme_node_ids = links_by_chain[chain_id][0][
+            "unmapped_theme_node_ids"
+        ]
         assert links_by_chain[chain_id] == [
             {
                 "theme_id": metadata["theme_id"],

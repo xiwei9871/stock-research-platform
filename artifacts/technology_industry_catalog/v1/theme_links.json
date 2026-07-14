@@ -319,7 +319,18 @@
       "theme_id": "optical_communications_data_center_interconnect_value_chain_v1",
       "chain_id": "optical_communications_data_center_interconnect",
       "node_links": [],
-      "unmapped_theme_node_ids": []
+      "unmapped_theme_node_ids": [
+        "active_optical_chips",
+        "passive_precision_optics",
+        "optical_engines_subassemblies",
+        "pluggable_high_speed_modules",
+        "coherent_dci_modules",
+        "silicon_photonics",
+        "cpo_npo_optical_io",
+        "dsp_serdes_electrical_interfaces",
+        "switch_transport_dci_systems",
+        "qualification_yield_delivery"
+      ]
     },
     {
       "theme_id": "semiconductor_materials_electronic_chemicals_value_chain_v1",
