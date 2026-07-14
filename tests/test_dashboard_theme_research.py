@@ -22,16 +22,20 @@ ROBOTICS_THEME_ID = "humanoid_robotics_head_to_toe_v1"
 def test_theme_index_aggregates_validated_phase_outputs():
     payload = list_theme_research_themes()
 
-    assert payload["total"] == 2
+    assert payload["total"] == 5
     assert [row["theme_id"] for row in payload["items"]] == [
         AI_POWER_THEME_ID,
+        "ai_compute_infrastructure_value_chain_v1",
         ROBOTICS_THEME_ID,
+        "semiconductor_manufacturing_equipment_value_chain_v1",
+        "new_energy_storage_value_chain_v1",
     ]
     assert [
         (row["theme_name"], row["theme_id"]) for row in payload["items"]
     ] == sorted((row["theme_name"], row["theme_id"]) for row in payload["items"])
-    ai_power = payload["items"][0]
-    robotics = payload["items"][1]
+    by_theme = {row["theme_id"]: row for row in payload["items"]}
+    ai_power = by_theme[AI_POWER_THEME_ID]
+    robotics = by_theme[ROBOTICS_THEME_ID]
     assert ai_power["node_count"] == 13
     assert ai_power["source_count"] == 10
     assert ai_power["claim_count"] == 10
@@ -40,7 +44,7 @@ def test_theme_index_aggregates_validated_phase_outputs():
     assert ai_power["deep_research_node_count"] == 2
     assert ai_power["review_queue_count"] == 13
     assert robotics["node_count"] == 21
-    assert robotics["company_count"] == 0
+    assert robotics["company_count"] == 8
     assert ai_power["research_kind"] == "industry_chain_deep_research"
     assert ai_power["catalog_context"] == {
         "chain_id": "ai_data_center_power",
@@ -119,12 +123,14 @@ def test_source_and_claim_collections_preserve_quality_gates():
     assert claims["total"] == 10
     assert all(row["theme_id"] == AI_POWER_THEME_ID for row in sources["items"])
     assert all(row["theme_id"] == AI_POWER_THEME_ID for row in claims["items"])
-    video = next(
-        row for row in sources["items"] if row["source_id"] == "ai_power_video_claim_lead"
+    company_filing = next(
+        row
+        for row in sources["items"]
+        if row["source_id"] == "ai_power_envicool_2025_annual_report"
     )
-    assert video["reliability_level"] == "S4"
-    assert video["review_status"] == "lead_only"
-    assert video["claim_count"] >= 1
+    assert company_filing["reliability_level"] == "S0"
+    assert company_filing["review_status"] == "accepted"
+    assert company_filing["claim_count"] >= 1
     assert all("platform_use_status" in row for row in claims["items"])
     assert all(row["used_for_signal"] is False for row in claims["items"])
     architecture_claim = next(
@@ -203,7 +209,7 @@ def test_theme_research_api_exposes_six_get_only_routes():
     }
 
     assert all(response.status_code == 200 for response in responses.values())
-    assert responses["themes"].json()["total"] == 2
+    assert responses["themes"].json()["total"] == 5
     assert responses["detail"].json()["theme"]["theme_id"] == AI_POWER_THEME_ID
     for name in ("nodes", "sources", "claims", "companies"):
         assert all(

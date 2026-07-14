@@ -100,3 +100,7 @@ Add nodes in a chain artifact under `artifacts/technology_industry_catalog/v1/no
 ## v1 Boundary
 
 v1 is limited to versioned catalog artifacts, the loader, and the read-only CLI. It does not perform database writes, schema migrations, dashboard writes, automated company mapping, or fabricated evidence-completeness reporting. Theme Research, Theme Decomposition, and the Tech Bottleneck review universe remain their existing systems of record for their respective workflows.
+
+## Deep-research handoff
+
+Five selected chains carry a `theme_link` and a read-only deep-research summary. The catalog continues to own canonical L3/L4 structure; Theme Research owns conclusions, claims, sources, company mappings, beneficiary tiers, and evidence gaps. AI compute infrastructure and new energy storage now include expanded L3/L4 directory nodes so their catalog pages remain useful before entering the research narrative.

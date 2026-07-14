@@ -210,3 +210,7 @@ The Theme Research and Industry Catalog Playwright flows cover desktop and mobil
 ## Next Phase
 
 Theme Research ingestion remains a separate human-review staging workflow. It must not write AI output directly into reviewed artifacts or production tables. Catalog expansion should continue branch by branch, preserving canonical ownership and reporting structural coverage without claiming the catalog is complete.
+
+## Five priority deep-research packages
+
+The overview now renders readable deep-research sections for AI data-center power, semiconductor manufacturing equipment, humanoid robots, AI compute infrastructure, and new energy storage. These packages expose value flow, profit pools, catalysts, risks, beneficiary tiers, primary evidence, and evidence gaps. The completion methodology and user workflow are documented in `docs/five_priority_industry_chain_theme_research_v1.md`.

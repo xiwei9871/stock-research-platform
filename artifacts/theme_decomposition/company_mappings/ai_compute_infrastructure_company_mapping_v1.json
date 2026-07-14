@@ -1,0 +1,387 @@
+{
+  "artifact_version": "theme_company_mapping_v1",
+  "theme_id": "ai_compute_infrastructure_value_chain_v1",
+  "as_of_date": "2026-07-14",
+  "sources": [
+    {
+      "source_id": "ai_compute_000977_filing",
+      "source_type": "company_filing",
+      "title": "浪潮信息2025年年度报告",
+      "publisher": "浪潮信息",
+      "author": "",
+      "publish_date": "2026-04-11",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-11/1225096638.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for server and open-compute products."
+    },
+    {
+      "source_id": "ai_compute_603019_filing",
+      "source_type": "company_filing",
+      "title": "中科曙光2025年年度报告",
+      "publisher": "中科曙光",
+      "author": "",
+      "publish_date": "2026-04-15",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-15/1225104539.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for computing, server, storage and infrastructure products."
+    },
+    {
+      "source_id": "ai_compute_300308_filing",
+      "source_type": "company_filing",
+      "title": "中际旭创2025年年度报告",
+      "publisher": "中际旭创",
+      "author": "",
+      "publish_date": "2026-03-31",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-31/1225056459.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for high-speed data-center optical modules."
+    },
+    {
+      "source_id": "ai_compute_300502_filing",
+      "source_type": "company_filing",
+      "title": "新易盛2025年年度报告",
+      "publisher": "新易盛",
+      "author": "",
+      "publish_date": "2026-04-24",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-24/1225172598.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for AI-cluster optical-module demand and products."
+    },
+    {
+      "source_id": "ai_compute_002463_filing",
+      "source_type": "company_filing",
+      "title": "沪电股份2025年年度报告",
+      "publisher": "沪电股份",
+      "author": "",
+      "publish_date": "2026-03-25",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-25/1225027832.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for AI server, HPC and high-speed network PCB exposure."
+    },
+    {
+      "source_id": "ai_compute_002916_filing",
+      "source_type": "company_filing",
+      "title": "深南电路2025年年度报告",
+      "publisher": "深南电路",
+      "author": "",
+      "publish_date": "2026-03-13",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-13/1225006760.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for AI-server PCB orders and capacity constraints."
+    },
+    {
+      "source_id": "ai_compute_002281_filing",
+      "source_type": "company_filing",
+      "title": "光迅科技2025年年度报告",
+      "publisher": "光迅科技",
+      "author": "",
+      "publish_date": "2026-04-23",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-23/1225148212.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for optical modules and data-center network products."
+    },
+    {
+      "source_id": "ai_compute_301165_filing",
+      "source_type": "company_filing",
+      "title": "锐捷网络2025年年度报告",
+      "publisher": "锐捷网络",
+      "author": "",
+      "publish_date": "2026-03-28",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-28/1225040067.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for switching and data-center networking products."
+    }
+  ],
+  "evidence_items": [
+    {
+      "evidence_id": "ai_compute_000977_relationship",
+      "source_id": "ai_compute_000977_filing",
+      "evidence_type": "service_relationship",
+      "excerpt_locator": "Company filing, page 11",
+      "evidence_summary": "The filing describes server and open-compute platform development, including standards and architectures supporting heterogeneous processors.",
+      "related_company_codes": [
+        "000977.SZ"
+      ],
+      "related_node_ids": [
+        "ai_servers_racks"
+      ]
+    },
+    {
+      "evidence_id": "ai_compute_603019_relationship",
+      "source_id": "ai_compute_603019_filing",
+      "evidence_type": "service_relationship",
+      "excerpt_locator": "Company filing, page 12",
+      "evidence_summary": "The annual report identifies high-end computers, general servers, storage, data-center products and intelligent-computing infrastructure as core businesses.",
+      "related_company_codes": [
+        "603019.SH"
+      ],
+      "related_node_ids": [
+        "ai_servers_racks"
+      ]
+    },
+    {
+      "evidence_id": "ai_compute_300308_relationship",
+      "source_id": "ai_compute_300308_filing",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "Company filing, page 11",
+      "evidence_summary": "The filing describes a portfolio of 100G through 800G and higher-speed optical modules serving cloud data-center customers.",
+      "related_company_codes": [
+        "300308.SZ"
+      ],
+      "related_node_ids": [
+        "optical_interconnect"
+      ]
+    },
+    {
+      "evidence_id": "ai_compute_300502_relationship",
+      "source_id": "ai_compute_300502_filing",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "Company filing, page 14",
+      "evidence_summary": "The annual report links Ethernet optical-module demand to AI compute clusters and cloud data centers and discusses the high-speed product market.",
+      "related_company_codes": [
+        "300502.SZ"
+      ],
+      "related_node_ids": [
+        "optical_interconnect"
+      ]
+    },
+    {
+      "evidence_id": "ai_compute_002463_relationship",
+      "source_id": "ai_compute_002463_filing",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "Company filing, page 16",
+      "evidence_summary": "The filing separately discloses revenue from high-speed switching and routing, AI server and HPC, and general server application areas.",
+      "related_company_codes": [
+        "002463.SZ"
+      ],
+      "related_node_ids": [
+        "cluster_networking"
+      ]
+    },
+    {
+      "evidence_id": "ai_compute_002916_relationship",
+      "source_id": "ai_compute_002916_filing",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "Company filing, page 13",
+      "evidence_summary": "The annual report states that AI-server and related product demand accelerated and became a key driver of PCB orders.",
+      "related_company_codes": [
+        "002916.SZ"
+      ],
+      "related_node_ids": [
+        "cluster_networking"
+      ]
+    },
+    {
+      "evidence_id": "ai_compute_002281_relationship",
+      "source_id": "ai_compute_002281_filing",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "Company filing, page 10",
+      "evidence_summary": "The filing identifies optical devices, modules and subsystems for telecommunications and data-center networks as the principal business.",
+      "related_company_codes": [
+        "002281.SZ"
+      ],
+      "related_node_ids": [
+        "optical_interconnect"
+      ]
+    },
+    {
+      "evidence_id": "ai_compute_301165_relationship",
+      "source_id": "ai_compute_301165_filing",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "Company filing, page 14",
+      "evidence_summary": "The filing describes switching, network operation and high-density networking solutions and the use of elastic compute and intelligent scheduling in cloud products.",
+      "related_company_codes": [
+        "301165.SZ"
+      ],
+      "related_node_ids": [
+        "cluster_networking"
+      ]
+    }
+  ],
+  "company_mappings": [
+    {
+      "mapping_id": "ai_compute_000977_ai_servers_racks_v1",
+      "theme_id": "ai_compute_infrastructure_value_chain_v1",
+      "company_code": "000977.SZ",
+      "company_name": "浪潮信息",
+      "market": "CN",
+      "mapped_node_id": "ai_servers_racks",
+      "mapping_type": "system_integrator",
+      "business_stage": "primary_business",
+      "confidence": 0.86,
+      "evidence_ids": [
+        "ai_compute_000977_relationship"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "AI servers, open-compute systems and rack-scale computing platforms.",
+      "relationship_summary": "Direct server and rack-system exposure.",
+      "review_status": "reviewed",
+      "notes": "Research mapping only. Direct product or service evidence establishes relevance, not future orders, margins, valuation, or investment returns."
+    },
+    {
+      "mapping_id": "ai_compute_603019_ai_servers_racks_v1",
+      "theme_id": "ai_compute_infrastructure_value_chain_v1",
+      "company_code": "603019.SH",
+      "company_name": "中科曙光",
+      "market": "CN",
+      "mapped_node_id": "ai_servers_racks",
+      "mapping_type": "system_integrator",
+      "business_stage": "primary_business",
+      "confidence": 0.86,
+      "evidence_ids": [
+        "ai_compute_603019_relationship"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "High-performance computers, servers, storage and intelligent-computing infrastructure.",
+      "relationship_summary": "Direct full-stack compute-infrastructure exposure.",
+      "review_status": "reviewed",
+      "notes": "Research mapping only. Direct product or service evidence establishes relevance, not future orders, margins, valuation, or investment returns."
+    },
+    {
+      "mapping_id": "ai_compute_300308_optical_interconnect_v1",
+      "theme_id": "ai_compute_infrastructure_value_chain_v1",
+      "company_code": "300308.SZ",
+      "company_name": "中际旭创",
+      "market": "CN",
+      "mapped_node_id": "optical_interconnect",
+      "mapping_type": "component_supplier",
+      "business_stage": "primary_business",
+      "confidence": 0.86,
+      "evidence_ids": [
+        "ai_compute_300308_relationship"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "High-speed optical transceiver modules for cloud data centers and data communications.",
+      "relationship_summary": "Direct optical-interconnect exposure at the high-speed transceiver layer.",
+      "review_status": "reviewed",
+      "notes": "Research mapping only. Direct product or service evidence establishes relevance, not future orders, margins, valuation, or investment returns."
+    },
+    {
+      "mapping_id": "ai_compute_300502_optical_interconnect_v1",
+      "theme_id": "ai_compute_infrastructure_value_chain_v1",
+      "company_code": "300502.SZ",
+      "company_name": "新易盛",
+      "market": "CN",
+      "mapped_node_id": "optical_interconnect",
+      "mapping_type": "component_supplier",
+      "business_stage": "primary_business",
+      "confidence": 0.86,
+      "evidence_ids": [
+        "ai_compute_300502_relationship"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "High-speed Ethernet optical modules for AI clusters and cloud data centers.",
+      "relationship_summary": "Direct optical-interconnect exposure; customer mix and product-level margin require continued tracking.",
+      "review_status": "reviewed",
+      "notes": "Research mapping only. Direct product or service evidence establishes relevance, not future orders, margins, valuation, or investment returns."
+    },
+    {
+      "mapping_id": "ai_compute_002463_cluster_networking_v1",
+      "theme_id": "ai_compute_infrastructure_value_chain_v1",
+      "company_code": "002463.SZ",
+      "company_name": "沪电股份",
+      "market": "CN",
+      "mapped_node_id": "cluster_networking",
+      "mapping_type": "component_supplier",
+      "business_stage": "primary_business",
+      "confidence": 0.86,
+      "evidence_ids": [
+        "ai_compute_002463_relationship"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "High-layer PCBs for high-speed switches, AI servers and HPC systems.",
+      "relationship_summary": "Direct board-level component exposure supporting networking and server platforms.",
+      "review_status": "reviewed",
+      "notes": "Research mapping only. Direct product or service evidence establishes relevance, not future orders, margins, valuation, or investment returns."
+    },
+    {
+      "mapping_id": "ai_compute_002916_cluster_networking_v1",
+      "theme_id": "ai_compute_infrastructure_value_chain_v1",
+      "company_code": "002916.SZ",
+      "company_name": "深南电路",
+      "market": "CN",
+      "mapped_node_id": "cluster_networking",
+      "mapping_type": "component_supplier",
+      "business_stage": "primary_business",
+      "confidence": 0.86,
+      "evidence_ids": [
+        "ai_compute_002916_relationship"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "High-density and high-layer PCBs for AI servers and associated infrastructure.",
+      "relationship_summary": "Direct PCB component exposure to AI-server and network systems.",
+      "review_status": "reviewed",
+      "notes": "Research mapping only. Direct product or service evidence establishes relevance, not future orders, margins, valuation, or investment returns."
+    },
+    {
+      "mapping_id": "ai_compute_002281_optical_interconnect_v1",
+      "theme_id": "ai_compute_infrastructure_value_chain_v1",
+      "company_code": "002281.SZ",
+      "company_name": "光迅科技",
+      "market": "CN",
+      "mapped_node_id": "optical_interconnect",
+      "mapping_type": "component_supplier",
+      "business_stage": "primary_business",
+      "confidence": 0.86,
+      "evidence_ids": [
+        "ai_compute_002281_relationship"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "Optical devices, modules and subsystems for data-center networks.",
+      "relationship_summary": "Direct optical-device and module exposure across the data-center network.",
+      "review_status": "reviewed",
+      "notes": "Research mapping only. Direct product or service evidence establishes relevance, not future orders, margins, valuation, or investment returns."
+    },
+    {
+      "mapping_id": "ai_compute_301165_cluster_networking_v1",
+      "theme_id": "ai_compute_infrastructure_value_chain_v1",
+      "company_code": "301165.SZ",
+      "company_name": "锐捷网络",
+      "market": "CN",
+      "mapped_node_id": "cluster_networking",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.86,
+      "evidence_ids": [
+        "ai_compute_301165_relationship"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "Data-center switches, enterprise networking and network-management products.",
+      "relationship_summary": "Direct networking equipment exposure; AI-cluster-specific revenue remains undisclosed.",
+      "review_status": "reviewed",
+      "notes": "Research mapping only. Direct product or service evidence establishes relevance, not future orders, margins, valuation, or investment returns."
+    }
+  ]
+}

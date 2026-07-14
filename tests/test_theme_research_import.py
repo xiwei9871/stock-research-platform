@@ -17,8 +17,8 @@ from stock_research.theme_research_import import (
 def test_normalize_current_artifacts_to_relational_rows() -> None:
     package = normalize_artifact_package()
 
-    assert len(package.themes) == 2
-    assert len(package.nodes) == 34
+    assert len(package.themes) == 5
+    assert len(package.nodes) == 67
     assert package.sources
     assert package.claims
     assert package.assessments

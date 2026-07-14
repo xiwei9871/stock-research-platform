@@ -39,7 +39,10 @@
       "ai_power_jpm_data_center_surge_2025",
       "ai_power_nvidia_gb200_nvl72_2026",
       "ai_power_nvidia_800v_architecture_2026",
-      "ai_power_nvidia_800v_ecosystem_blog_2025"
+      "ai_power_nvidia_800v_ecosystem_blog_2025",
+      "ai_power_envicool_2025_annual_report",
+      "ai_power_kehua_2025_annual_report",
+      "ai_power_honor_electronic_2025_annual_report"
     ],
     "needs_full_text_source_ids": [
       "ai_power_ocp_power_architecture",
@@ -230,6 +233,45 @@
       "reliability_level": "S4",
       "review_status": "lead_only",
       "notes": "Explicitly not adopted; company mapping requires filings, product evidence, customer evidence, or reliable full-text reports."
+    },
+    {
+      "source_id": "ai_power_envicool_2025_annual_report",
+      "source_type": "company_filing",
+      "title": "深圳市英维克科技股份有限公司2025年年度报告",
+      "publisher": "深圳市英维克科技股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-21",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-21/1225131813.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO original filing reviewed at the cited product and revenue pages."
+    },
+    {
+      "source_id": "ai_power_kehua_2025_annual_report",
+      "source_type": "company_filing",
+      "title": "科华数据股份有限公司2025年年度报告",
+      "publisher": "科华数据股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-27",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-27/1225194937.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO original filing reviewed at the cited UPS, AIDC power, and segment-revenue pages."
+    },
+    {
+      "source_id": "ai_power_honor_electronic_2025_annual_report",
+      "source_type": "company_filing",
+      "title": "深圳欧陆通电子股份有限公司2025年年度报告",
+      "publisher": "深圳欧陆通电子股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-22",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-22/1225135602.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO original filing reviewed at the cited server-power product, customer, and segment-revenue pages."
     }
   ],
   "claims": [
@@ -373,15 +415,15 @@
     {
       "claim_id": "ai_power_claim_localization",
       "theme_id": "ai_power_value_capture_v1",
-      "source_id": "ai_power_video_claim_lead",
-      "claim_text": "Specific AI power nodes have material China localization gaps that create investable domestic substitution opportunities.",
+      "source_id": "ai_power_envicool_2025_annual_report",
+      "claim_text": "Accepted company filings confirm domestic direct-product participation in liquid cooling, UPS, and server power, while node-level market share and future order growth remain unproven.",
       "claim_type": "localization",
-      "confidence": 0.3,
-      "evidence_status": "unverified",
-      "platform_use_status": "research_lead",
+      "confidence": 0.88,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
       "supporting_source_ids": [
-        "ai_power_domestic_broker_report_lead",
-        "ai_power_media_secondary_lead"
+        "ai_power_kehua_2025_annual_report",
+        "ai_power_honor_electronic_2025_annual_report"
       ],
       "affected_theme_nodes": [
         "transformer",

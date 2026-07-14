@@ -1,0 +1,387 @@
+{
+  "artifact_version": "theme_company_mapping_v1",
+  "theme_id": "semiconductor_manufacturing_equipment_value_chain_v1",
+  "as_of_date": "2026-07-14",
+  "sources": [
+    {
+      "source_id": "semi_eq_002371_filing",
+      "source_type": "company_filing",
+      "title": "北方华创2025年年度报告",
+      "publisher": "北方华创",
+      "author": "",
+      "publish_date": "2026-04-18",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-18/1225122918.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for the semiconductor equipment product matrix."
+    },
+    {
+      "source_id": "semi_eq_688012_filing",
+      "source_type": "company_filing",
+      "title": "中微公司2025年年度报告",
+      "publisher": "中微公司",
+      "author": "",
+      "publish_date": "2026-03-31",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-31/1225062431.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for etch and thin-film equipment."
+    },
+    {
+      "source_id": "semi_eq_688082_filing",
+      "source_type": "company_filing",
+      "title": "盛美上海2025年年度报告",
+      "publisher": "盛美上海",
+      "author": "",
+      "publish_date": "2026-02-27",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-02-27/1224986438.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for cleaning and wet-process equipment."
+    },
+    {
+      "source_id": "semi_eq_688120_filing",
+      "source_type": "company_filing",
+      "title": "华海清科2025年年度报告",
+      "publisher": "华海清科",
+      "author": "",
+      "publish_date": "2026-04-23",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-23/1225156951.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for CMP equipment and service disclosures."
+    },
+    {
+      "source_id": "semi_eq_688037_filing",
+      "source_type": "company_filing",
+      "title": "芯源微2025年年度报告",
+      "publisher": "芯源微",
+      "author": "",
+      "publish_date": "2026-04-18",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-18/1225120170.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for coat/develop and wet-process equipment."
+    },
+    {
+      "source_id": "semi_eq_300567_filing",
+      "source_type": "company_filing",
+      "title": "精测电子2025年年度报告",
+      "publisher": "精测电子",
+      "author": "",
+      "publish_date": "2026-04-28",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-28/1225201722.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for semiconductor inspection and metrology products."
+    },
+    {
+      "source_id": "semi_eq_300604_filing",
+      "source_type": "company_filing",
+      "title": "长川科技2025年年度报告",
+      "publisher": "长川科技",
+      "author": "",
+      "publish_date": "2026-04-25",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-25/1225193261.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for tester, prober and AOI equipment."
+    },
+    {
+      "source_id": "semi_eq_688652_filing",
+      "source_type": "company_filing",
+      "title": "京仪装备2025年年度报告",
+      "publisher": "京仪装备",
+      "author": "",
+      "publish_date": "2026-03-31",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-31/1225056304.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for semiconductor temperature-control equipment."
+    }
+  ],
+  "evidence_items": [
+    {
+      "evidence_id": "semi_eq_002371_relationship",
+      "source_id": "semi_eq_002371_filing",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "Company filing, page 14",
+      "evidence_summary": "The annual report lists semiconductor equipment covering etch, thin-film deposition, thermal processing, wet cleaning, ion implantation, coat/develop and bonding.",
+      "related_company_codes": [
+        "002371.SZ"
+      ],
+      "related_node_ids": [
+        "semiconductor_deposition_epitaxy"
+      ]
+    },
+    {
+      "evidence_id": "semi_eq_688012_relationship",
+      "source_id": "semi_eq_688012_filing",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "Company filing, page 30",
+      "evidence_summary": "The filing describes separate R&D and product teams for etch, thin-film and MOCVD equipment.",
+      "related_company_codes": [
+        "688012.SH"
+      ],
+      "related_node_ids": [
+        "semiconductor_etch"
+      ]
+    },
+    {
+      "evidence_id": "semi_eq_688082_relationship",
+      "source_id": "semi_eq_688082_filing",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "Company filing, page 14",
+      "evidence_summary": "The annual report identifies cleaning equipment as a principal front-end product and also lists electroplating, furnace, coat/develop and PECVD tools.",
+      "related_company_codes": [
+        "688082.SH"
+      ],
+      "related_node_ids": [
+        "semiconductor_clean_wet_process"
+      ]
+    },
+    {
+      "evidence_id": "semi_eq_688120_relationship",
+      "source_id": "semi_eq_688120_filing",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "Company filing, page 18",
+      "evidence_summary": "The filing describes sales and service activities for CMP and thinning equipment, including consumables, spares, installation, maintenance and process testing.",
+      "related_company_codes": [
+        "688120.SH"
+      ],
+      "related_node_ids": [
+        "semiconductor_cmp"
+      ]
+    },
+    {
+      "evidence_id": "semi_eq_688037_relationship",
+      "source_id": "semi_eq_688037_filing",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "Company filing, page 16",
+      "evidence_summary": "The filing states that revenue and profit are generated by selling lithography-process coat/develop equipment and single-wafer wet-process tools.",
+      "related_company_codes": [
+        "688037.SH"
+      ],
+      "related_node_ids": [
+        "semiconductor_lithography_patterning"
+      ]
+    },
+    {
+      "evidence_id": "semi_eq_300567_relationship",
+      "source_id": "semi_eq_300567_filing",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "Company filing, page 11",
+      "evidence_summary": "The annual report identifies semiconductor metrology and inspection as a core business serving wafer manufacturers.",
+      "related_company_codes": [
+        "300567.SZ"
+      ],
+      "related_node_ids": [
+        "semiconductor_inspection_metrology_process_control"
+      ]
+    },
+    {
+      "evidence_id": "semi_eq_300604_relationship",
+      "source_id": "semi_eq_300604_filing",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "Company filing, page 37",
+      "evidence_summary": "The filing describes digital testers, probers, temperature handlers and AOI inspection equipment in its integrated-circuit equipment portfolio.",
+      "related_company_codes": [
+        "300604.SZ"
+      ],
+      "related_node_ids": [
+        "semiconductor_inspection_metrology_process_control"
+      ]
+    },
+    {
+      "evidence_id": "semi_eq_688652_relationship",
+      "source_id": "semi_eq_688652_filing",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "Company filing, page 27",
+      "evidence_summary": "The annual report describes semiconductor-specific temperature-control equipment and proprietary refrigeration, precision-control and energy-saving technologies.",
+      "related_company_codes": [
+        "688652.SH"
+      ],
+      "related_node_ids": [
+        "semiconductor_vacuum_gas_fluid_control"
+      ]
+    }
+  ],
+  "company_mappings": [
+    {
+      "mapping_id": "semi_eq_002371_semiconductor_deposition_epitaxy_v1",
+      "theme_id": "semiconductor_manufacturing_equipment_value_chain_v1",
+      "company_code": "002371.SZ",
+      "company_name": "北方华创",
+      "market": "CN",
+      "mapped_node_id": "semiconductor_deposition_epitaxy",
+      "mapping_type": "equipment_supplier",
+      "business_stage": "primary_business",
+      "confidence": 0.86,
+      "evidence_ids": [
+        "semi_eq_002371_relationship"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "Etch, deposition, thermal, cleaning, implantation, coat/develop and bonding equipment.",
+      "relationship_summary": "A diversified front-end equipment supplier mapped to deposition while retaining cross-node exposure.",
+      "review_status": "reviewed",
+      "notes": "Research mapping only. Direct product or service evidence establishes relevance, not future orders, margins, valuation, or investment returns."
+    },
+    {
+      "mapping_id": "semi_eq_688012_semiconductor_etch_v1",
+      "theme_id": "semiconductor_manufacturing_equipment_value_chain_v1",
+      "company_code": "688012.SH",
+      "company_name": "中微公司",
+      "market": "CN",
+      "mapped_node_id": "semiconductor_etch",
+      "mapping_type": "equipment_supplier",
+      "business_stage": "primary_business",
+      "confidence": 0.86,
+      "evidence_ids": [
+        "semi_eq_688012_relationship"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "Etch, thin-film and MOCVD semiconductor process equipment.",
+      "relationship_summary": "Direct process-tool exposure with etch as the mapped node; node-level revenue must still be read from detailed disclosures.",
+      "review_status": "reviewed",
+      "notes": "Research mapping only. Direct product or service evidence establishes relevance, not future orders, margins, valuation, or investment returns."
+    },
+    {
+      "mapping_id": "semi_eq_688082_semiconductor_clean_wet_process_v1",
+      "theme_id": "semiconductor_manufacturing_equipment_value_chain_v1",
+      "company_code": "688082.SH",
+      "company_name": "盛美上海",
+      "market": "CN",
+      "mapped_node_id": "semiconductor_clean_wet_process",
+      "mapping_type": "equipment_supplier",
+      "business_stage": "primary_business",
+      "confidence": 0.86,
+      "evidence_ids": [
+        "semi_eq_688082_relationship"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "Single-wafer and batch cleaning plus electroplating, furnace, track and PECVD equipment.",
+      "relationship_summary": "Direct cleaning and wet-process equipment exposure with adjacent process-tool optionality.",
+      "review_status": "reviewed",
+      "notes": "Research mapping only. Direct product or service evidence establishes relevance, not future orders, margins, valuation, or investment returns."
+    },
+    {
+      "mapping_id": "semi_eq_688120_semiconductor_cmp_v1",
+      "theme_id": "semiconductor_manufacturing_equipment_value_chain_v1",
+      "company_code": "688120.SH",
+      "company_name": "华海清科",
+      "market": "CN",
+      "mapped_node_id": "semiconductor_cmp",
+      "mapping_type": "equipment_supplier",
+      "business_stage": "primary_business",
+      "confidence": 0.86,
+      "evidence_ids": [
+        "semi_eq_688120_relationship"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "CMP equipment, thinning equipment, consumables, spares and process services.",
+      "relationship_summary": "Direct CMP equipment and lifecycle-service exposure.",
+      "review_status": "reviewed",
+      "notes": "Research mapping only. Direct product or service evidence establishes relevance, not future orders, margins, valuation, or investment returns."
+    },
+    {
+      "mapping_id": "semi_eq_688037_semiconductor_lithography_patterning_v1",
+      "theme_id": "semiconductor_manufacturing_equipment_value_chain_v1",
+      "company_code": "688037.SH",
+      "company_name": "芯源微",
+      "market": "CN",
+      "mapped_node_id": "semiconductor_lithography_patterning",
+      "mapping_type": "equipment_supplier",
+      "business_stage": "primary_business",
+      "confidence": 0.86,
+      "evidence_ids": [
+        "semi_eq_688037_relationship"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "Coat/develop tracks and single-wafer wet-process equipment.",
+      "relationship_summary": "Direct patterning-support equipment exposure rather than ownership of lithography scanners.",
+      "review_status": "reviewed",
+      "notes": "Research mapping only. Direct product or service evidence establishes relevance, not future orders, margins, valuation, or investment returns."
+    },
+    {
+      "mapping_id": "semi_eq_300567_semiconductor_inspection_metrology_process_control_v1",
+      "theme_id": "semiconductor_manufacturing_equipment_value_chain_v1",
+      "company_code": "300567.SZ",
+      "company_name": "精测电子",
+      "market": "CN",
+      "mapped_node_id": "semiconductor_inspection_metrology_process_control",
+      "mapping_type": "equipment_supplier",
+      "business_stage": "primary_business",
+      "confidence": 0.86,
+      "evidence_ids": [
+        "semi_eq_300567_relationship"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "Front-end semiconductor metrology and inspection systems.",
+      "relationship_summary": "Direct inspection and metrology equipment exposure.",
+      "review_status": "reviewed",
+      "notes": "Research mapping only. Direct product or service evidence establishes relevance, not future orders, margins, valuation, or investment returns."
+    },
+    {
+      "mapping_id": "semi_eq_300604_semiconductor_inspection_metrology_process_control_v1",
+      "theme_id": "semiconductor_manufacturing_equipment_value_chain_v1",
+      "company_code": "300604.SZ",
+      "company_name": "长川科技",
+      "market": "CN",
+      "mapped_node_id": "semiconductor_inspection_metrology_process_control",
+      "mapping_type": "equipment_supplier",
+      "business_stage": "primary_business",
+      "confidence": 0.86,
+      "evidence_ids": [
+        "semi_eq_300604_relationship"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "Semiconductor testers, probers, handlers and optical inspection equipment.",
+      "relationship_summary": "Direct test and inspection equipment exposure, with front-end relevance concentrated in probe and inspection steps.",
+      "review_status": "reviewed",
+      "notes": "Research mapping only. Direct product or service evidence establishes relevance, not future orders, margins, valuation, or investment returns."
+    },
+    {
+      "mapping_id": "semi_eq_688652_semiconductor_vacuum_gas_fluid_control_v1",
+      "theme_id": "semiconductor_manufacturing_equipment_value_chain_v1",
+      "company_code": "688652.SH",
+      "company_name": "京仪装备",
+      "market": "CN",
+      "mapped_node_id": "semiconductor_vacuum_gas_fluid_control",
+      "mapping_type": "equipment_supplier",
+      "business_stage": "primary_business",
+      "confidence": 0.86,
+      "evidence_ids": [
+        "semi_eq_688652_relationship"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "Semiconductor temperature-control and process-support equipment.",
+      "relationship_summary": "Direct process-support equipment exposure mapped to fab utility and fluid-control infrastructure.",
+      "review_status": "reviewed",
+      "notes": "Research mapping only. Direct product or service evidence establishes relevance, not future orders, margins, valuation, or investment returns."
+    }
+  ]
+}

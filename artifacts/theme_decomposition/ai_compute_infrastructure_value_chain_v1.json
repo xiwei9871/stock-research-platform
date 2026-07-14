@@ -1,0 +1,574 @@
+{
+  "artifact_version": "theme_decomposition_v1_6",
+  "theme": {
+    "theme_id": "ai_compute_infrastructure_value_chain_v1",
+    "theme_name": "AI算力基础设施：从芯片到集群利用率",
+    "theme_type": "ai_compute",
+    "summary": "A system-stack research map of compute boards, servers, memory, networking, optical interconnect, software, deployment and operations, with power and cooling treated as linked dependencies.",
+    "status": "reviewed",
+    "created_from": "mixed",
+    "last_updated": "2026-07-14"
+  },
+  "research_profile": {
+    "catalog_chain_id": "ai_compute_infrastructure",
+    "research_kind": "industry_chain_deep_research",
+    "industry_stage": "commercial_scaling",
+    "central_conflict": "Compute demand can grow while economics diverge sharply by chip availability, network scaling, system delivery, utilization and architecture changes.",
+    "investment_summary": "Follow the flow from accelerators to delivered and utilized clusters. The best evidence combines direct product exposure, qualification, high-end capacity, orders and utilization.",
+    "value_flow_summary": "accelerators and boards -> servers and racks -> memory/storage -> switching and PCB -> optical interconnect -> orchestration software -> deployment -> utilization and operations",
+    "profit_pool_summary": "Chip ecosystem, system integration, high-speed signal integrity, optical yield, customer qualification, software control and sustained utilization are the main barriers.",
+    "catalyst_claim_ids": [
+      "ai_compute_claim_09"
+    ],
+    "risk_claim_ids": [
+      "ai_compute_claim_10"
+    ],
+    "validation_signals": [
+      "accelerator availability and server shipments",
+      "800G/1.6T optical product mix",
+      "high-layer PCB capacity and yield",
+      "cluster delivery and utilization"
+    ],
+    "evidence_gap_summary": "Product-level revenue, accelerator allocation, hyperscaler concentration, cluster utilization, margin by speed generation and domestic-supply substitution remain incomplete."
+  },
+  "evidence_policy": {
+    "accepted_source_ids": [
+      "ai_compute_000977_filing",
+      "ai_compute_603019_filing",
+      "ai_compute_300308_filing",
+      "ai_compute_300502_filing",
+      "ai_compute_002463_filing",
+      "ai_compute_002916_filing",
+      "ai_compute_002281_filing",
+      "ai_compute_301165_filing",
+      "ai_compute_688047_filing",
+      "ai_compute_688183_filing"
+    ],
+    "needs_full_text_source_ids": [],
+    "lead_only_source_ids": [],
+    "rejected_source_ids": [],
+    "oral_claim_source_ids": [],
+    "not_adopted_source_ids": [],
+    "policy_notes": "Only accepted company-primary disclosures are used for reviewed claims; exact theme revenue and customer allocation remain explicit evidence gaps."
+  },
+  "sources": [
+    {
+      "source_id": "ai_compute_000977_filing",
+      "source_type": "company_filing",
+      "title": "浪潮信息2025年年度报告",
+      "publisher": "浪潮信息",
+      "author": "",
+      "publish_date": "2026-04-11",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-11/1225096638.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for server and open-compute products."
+    },
+    {
+      "source_id": "ai_compute_603019_filing",
+      "source_type": "company_filing",
+      "title": "中科曙光2025年年度报告",
+      "publisher": "中科曙光",
+      "author": "",
+      "publish_date": "2026-04-15",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-15/1225104539.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for computing, server, storage and infrastructure products."
+    },
+    {
+      "source_id": "ai_compute_300308_filing",
+      "source_type": "company_filing",
+      "title": "中际旭创2025年年度报告",
+      "publisher": "中际旭创",
+      "author": "",
+      "publish_date": "2026-03-31",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-31/1225056459.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for high-speed data-center optical modules."
+    },
+    {
+      "source_id": "ai_compute_300502_filing",
+      "source_type": "company_filing",
+      "title": "新易盛2025年年度报告",
+      "publisher": "新易盛",
+      "author": "",
+      "publish_date": "2026-04-24",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-24/1225172598.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for AI-cluster optical-module demand and products."
+    },
+    {
+      "source_id": "ai_compute_002463_filing",
+      "source_type": "company_filing",
+      "title": "沪电股份2025年年度报告",
+      "publisher": "沪电股份",
+      "author": "",
+      "publish_date": "2026-03-25",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-25/1225027832.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for AI server, HPC and high-speed network PCB exposure."
+    },
+    {
+      "source_id": "ai_compute_002916_filing",
+      "source_type": "company_filing",
+      "title": "深南电路2025年年度报告",
+      "publisher": "深南电路",
+      "author": "",
+      "publish_date": "2026-03-13",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-13/1225006760.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for AI-server PCB orders and capacity constraints."
+    },
+    {
+      "source_id": "ai_compute_002281_filing",
+      "source_type": "company_filing",
+      "title": "光迅科技2025年年度报告",
+      "publisher": "光迅科技",
+      "author": "",
+      "publish_date": "2026-04-23",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-23/1225148212.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for optical modules and data-center network products."
+    },
+    {
+      "source_id": "ai_compute_301165_filing",
+      "source_type": "company_filing",
+      "title": "锐捷网络2025年年度报告",
+      "publisher": "锐捷网络",
+      "author": "",
+      "publish_date": "2026-03-28",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-28/1225040067.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for switching and data-center networking products."
+    },
+    {
+      "source_id": "ai_compute_688047_filing",
+      "source_type": "company_filing",
+      "title": "龙芯中科2025年年度报告",
+      "publisher": "龙芯中科",
+      "author": "",
+      "publish_date": "2026-04-29",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-29/1225234886.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for processors, supporting chips and base software."
+    },
+    {
+      "source_id": "ai_compute_688183_filing",
+      "source_type": "company_filing",
+      "title": "生益电子2025年年度报告",
+      "publisher": "生益电子",
+      "author": "",
+      "publish_date": "2026-04-24",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-24/1225167248.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for intelligent-compute-center high-layer PCB capacity."
+    }
+  ],
+  "claims": [
+    {
+      "claim_id": "ai_compute_claim_01",
+      "theme_id": "ai_compute_infrastructure_value_chain_v1",
+      "source_id": "ai_compute_000977_filing",
+      "claim_text": "Server-system value depends on heterogeneous compute support, rack integration, qualification, delivery and lifecycle service rather than chassis volume alone.",
+      "claim_type": "value_capture",
+      "confidence": 0.86,
+      "evidence_status": "verified",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "ai_servers_racks"
+      ],
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "ai_compute_claim_02",
+      "theme_id": "ai_compute_infrastructure_value_chain_v1",
+      "source_id": "ai_compute_603019_filing",
+      "claim_text": "Compute infrastructure combines high-performance computers, general servers, storage and intelligent-computing platforms into deployable systems.",
+      "claim_type": "tech_route",
+      "confidence": 0.86,
+      "evidence_status": "verified",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "ai_servers_racks"
+      ],
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "ai_compute_claim_03",
+      "theme_id": "ai_compute_infrastructure_value_chain_v1",
+      "source_id": "ai_compute_300308_filing",
+      "claim_text": "High-speed optical modules are a scaling bottleneck because bandwidth, power, yield and customer qualification rise with cluster scale.",
+      "claim_type": "bottleneck",
+      "confidence": 0.86,
+      "evidence_status": "verified",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "optical_interconnect"
+      ],
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "ai_compute_claim_04",
+      "theme_id": "ai_compute_infrastructure_value_chain_v1",
+      "source_id": "ai_compute_300502_filing",
+      "claim_text": "AI cluster growth increases demand for higher-speed Ethernet optical modules, while product mix and customer concentration drive earnings sensitivity.",
+      "claim_type": "demand_shock",
+      "confidence": 0.86,
+      "evidence_status": "verified",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "high_speed_optical_module"
+      ],
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "ai_compute_claim_05",
+      "theme_id": "ai_compute_infrastructure_value_chain_v1",
+      "source_id": "ai_compute_002463_filing",
+      "claim_text": "High-layer PCBs supporting high-speed switches, AI servers and HPC can capture value when layer count, signal integrity and high-end capacity are constrained.",
+      "claim_type": "value_capture",
+      "confidence": 0.86,
+      "evidence_status": "verified",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "cluster_networking"
+      ],
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "ai_compute_claim_06",
+      "theme_id": "ai_compute_infrastructure_value_chain_v1",
+      "source_id": "ai_compute_002916_filing",
+      "claim_text": "AI-server PCB orders can be limited by high-end process capacity and yield, making capacity conversion and product mix key validation signals.",
+      "claim_type": "supply_constraint",
+      "confidence": 0.86,
+      "evidence_status": "verified",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "cluster_networking"
+      ],
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "ai_compute_claim_07",
+      "theme_id": "ai_compute_infrastructure_value_chain_v1",
+      "source_id": "ai_compute_002281_filing",
+      "claim_text": "Optical devices, modules and subsystems provide multiple domestic participation points, but speed generation and customer qualification must be separated.",
+      "claim_type": "localization",
+      "confidence": 0.86,
+      "evidence_status": "verified",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "optical_interconnect"
+      ],
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "ai_compute_claim_08",
+      "theme_id": "ai_compute_infrastructure_value_chain_v1",
+      "source_id": "ai_compute_301165_filing",
+      "claim_text": "Data-center networking is a systems layer spanning switches, adapters, cabling, PCBs and operations rather than a single equipment category.",
+      "claim_type": "tech_route",
+      "confidence": 0.86,
+      "evidence_status": "verified",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "cluster_networking"
+      ],
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "ai_compute_claim_09",
+      "theme_id": "ai_compute_infrastructure_value_chain_v1",
+      "source_id": "ai_compute_688047_filing",
+      "claim_text": "The catalyst is conversion of chip and server availability into delivered clusters with rising utilization, network attach and storage demand.",
+      "claim_type": "catalyst",
+      "confidence": 0.86,
+      "evidence_status": "verified",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "compute_accelerators_boards"
+      ],
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "ai_compute_claim_10",
+      "theme_id": "ai_compute_infrastructure_value_chain_v1",
+      "source_id": "ai_compute_688183_filing",
+      "claim_text": "The major risks are low utilization, supply concentration, rapid architecture change, customer concentration and value migration between chips, systems and interconnect.",
+      "claim_type": "risk",
+      "confidence": 0.86,
+      "evidence_status": "partially_verified",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "compute_operations"
+      ],
+      "platform_use_status": "reviewed"
+    }
+  ],
+  "nodes": [
+    {
+      "node_id": "compute_accelerators_boards",
+      "theme_id": "ai_compute_infrastructure_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "加速器与计算板卡",
+      "node_type": "core_component",
+      "description": "Processors, accelerator boards and heterogeneous compute modules.",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "key_metrics": [
+        "qualification progress",
+        "segment revenue",
+        "gross margin",
+        "orders and capacity"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "reviewed"
+    },
+    {
+      "node_id": "ai_servers_racks",
+      "theme_id": "ai_compute_infrastructure_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "AI服务器与机架系统",
+      "node_type": "subsystem",
+      "description": "Server systems, rack-scale architecture and hardware integration.",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "key_metrics": [
+        "qualification progress",
+        "segment revenue",
+        "gross margin",
+        "orders and capacity"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [
+        "000977.SZ",
+        "603019.SH"
+      ],
+      "node_review_status": "reviewed"
+    },
+    {
+      "node_id": "memory_storage",
+      "theme_id": "ai_compute_infrastructure_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "内存与存储",
+      "node_type": "core_component",
+      "description": "Memory hierarchy, local storage and distributed storage systems.",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "key_metrics": [
+        "qualification progress",
+        "segment revenue",
+        "gross margin",
+        "orders and capacity"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "reviewed"
+    },
+    {
+      "node_id": "cluster_networking",
+      "theme_id": "ai_compute_infrastructure_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "集群网络",
+      "node_type": "subsystem",
+      "description": "Switching, routing, network adapters and high-speed PCB platforms.",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "key_metrics": [
+        "qualification progress",
+        "segment revenue",
+        "gross margin",
+        "orders and capacity"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [
+        "002463.SZ",
+        "002916.SZ",
+        "301165.SZ"
+      ],
+      "node_review_status": "reviewed"
+    },
+    {
+      "node_id": "optical_interconnect",
+      "theme_id": "ai_compute_infrastructure_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "光互连",
+      "node_type": "core_component",
+      "description": "High-speed optical modules, devices and optical-network subsystems.",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "key_metrics": [
+        "qualification progress",
+        "segment revenue",
+        "gross margin",
+        "orders and capacity"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [
+        "300308.SZ",
+        "300502.SZ",
+        "002281.SZ"
+      ],
+      "node_review_status": "reviewed"
+    },
+    {
+      "node_id": "orchestration_system_software",
+      "theme_id": "ai_compute_infrastructure_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "编排与系统软件",
+      "node_type": "software",
+      "description": "Scheduling, virtualization, cluster management and system software.",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "key_metrics": [
+        "qualification progress",
+        "segment revenue",
+        "gross margin",
+        "orders and capacity"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "reviewed"
+    },
+    {
+      "node_id": "data_center_deployment",
+      "theme_id": "ai_compute_infrastructure_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "算力中心部署",
+      "node_type": "service",
+      "description": "Cluster delivery, integration, testing and deployment.",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "key_metrics": [
+        "qualification progress",
+        "segment revenue",
+        "gross margin",
+        "orders and capacity"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "reviewed"
+    },
+    {
+      "node_id": "compute_operations",
+      "theme_id": "ai_compute_infrastructure_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "算力运营",
+      "node_type": "service",
+      "description": "Utilization, reliability, observability and lifecycle operations.",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "key_metrics": [
+        "qualification progress",
+        "segment revenue",
+        "gross margin",
+        "orders and capacity"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "reviewed"
+    },
+    {
+      "node_id": "high_speed_optical_module",
+      "theme_id": "ai_compute_infrastructure_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "高速光模块",
+      "node_type": "core_component",
+      "description": "800G, 1.6T and evolving high-speed optical transceiver products.",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "key_metrics": [
+        "qualification progress",
+        "segment revenue",
+        "gross margin",
+        "orders and capacity"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "reviewed"
+    }
+  ],
+  "value_capture_assessments": [],
+  "decomposition_templates": [
+    {
+      "template_id": "ai_compute_deep_research_template_v1",
+      "theme_type": "ai_compute",
+      "steps": [
+        "Map the value flow.",
+        "Separate bottlenecks and profit pools.",
+        "Attach primary evidence.",
+        "Classify company beneficiaries conservatively."
+      ],
+      "required_dimensions": [
+        "source reliability",
+        "value capture",
+        "bottleneck",
+        "company relationship"
+      ],
+      "optional_dimensions": [
+        "orders",
+        "segment revenue",
+        "gross margin",
+        "customer qualification"
+      ],
+      "output_schema": "theme_decomposition_v1_6"
+    }
+  ]
+}

@@ -1,0 +1,448 @@
+{
+  "nodes": [
+    {
+      "node_id": "storage_cells_materials",
+      "chain_id": "new_energy_storage",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Cells and Materials",
+      "node_kind": "canonical",
+      "node_type": "storage_hardware",
+      "description": "Stationary storage cells and material systems.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "new_energy_storage",
+        "storage_cells_materials"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "storage_long_cycle_cell",
+      "chain_id": "new_energy_storage",
+      "parent_node_id": "storage_cells_materials",
+      "level": "L4",
+      "node_name": "Long-Cycle Storage Cells",
+      "node_kind": "canonical",
+      "node_type": "storage_hardware",
+      "description": "Long-Cycle Storage Cells as a canonical sub-node of Cells and Materials.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "new_energy_storage",
+        "storage_cells_materials",
+        "storage_long_cycle_cell"
+      ],
+      "canonical_key": "new_energy_storage:storage_long_cycle_cell",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "storage_modules_packs",
+      "chain_id": "new_energy_storage",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Modules and Packs",
+      "node_kind": "canonical",
+      "node_type": "storage_hardware",
+      "description": "Module, pack and battery-system assembly.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "new_energy_storage",
+        "storage_modules_packs"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "storage_containerized_pack",
+      "chain_id": "new_energy_storage",
+      "parent_node_id": "storage_modules_packs",
+      "level": "L4",
+      "node_name": "Containerized Battery Packs",
+      "node_kind": "canonical",
+      "node_type": "storage_hardware",
+      "description": "Containerized Battery Packs as a canonical sub-node of Modules and Packs.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "new_energy_storage",
+        "storage_modules_packs",
+        "storage_containerized_pack"
+      ],
+      "canonical_key": "new_energy_storage:storage_containerized_pack",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "storage_pcs",
+      "chain_id": "new_energy_storage",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Power Conversion Systems",
+      "node_kind": "canonical",
+      "node_type": "storage_power_electronics",
+      "description": "Bidirectional PCS and grid-support controls.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "new_energy_storage",
+        "storage_pcs"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "storage_grid_forming_pcs",
+      "chain_id": "new_energy_storage",
+      "parent_node_id": "storage_pcs",
+      "level": "L4",
+      "node_name": "Grid-Forming PCS",
+      "node_kind": "canonical",
+      "node_type": "storage_power_electronics",
+      "description": "Grid-Forming PCS as a canonical sub-node of Power Conversion Systems.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "new_energy_storage",
+        "storage_pcs",
+        "storage_grid_forming_pcs"
+      ],
+      "canonical_key": "new_energy_storage:storage_grid_forming_pcs",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "storage_bms",
+      "chain_id": "new_energy_storage",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Battery Management Systems",
+      "node_kind": "canonical",
+      "node_type": "storage_control",
+      "description": "State estimation, balancing and protection.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "new_energy_storage",
+        "storage_bms"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "storage_bms_diagnostics",
+      "chain_id": "new_energy_storage",
+      "parent_node_id": "storage_bms",
+      "level": "L4",
+      "node_name": "BMS Diagnostics",
+      "node_kind": "canonical",
+      "node_type": "storage_control",
+      "description": "BMS Diagnostics as a canonical sub-node of Battery Management Systems.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "new_energy_storage",
+        "storage_bms",
+        "storage_bms_diagnostics"
+      ],
+      "canonical_key": "new_energy_storage:storage_bms_diagnostics",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "storage_ems",
+      "chain_id": "new_energy_storage",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Energy Management Systems",
+      "node_kind": "canonical",
+      "node_type": "storage_software",
+      "description": "Dispatch and operating optimization.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "new_energy_storage",
+        "storage_ems"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "storage_ems_dispatch",
+      "chain_id": "new_energy_storage",
+      "parent_node_id": "storage_ems",
+      "level": "L4",
+      "node_name": "EMS Dispatch Optimization",
+      "node_kind": "canonical",
+      "node_type": "storage_software",
+      "description": "EMS Dispatch Optimization as a canonical sub-node of Energy Management Systems.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "new_energy_storage",
+        "storage_ems",
+        "storage_ems_dispatch"
+      ],
+      "canonical_key": "new_energy_storage:storage_ems_dispatch",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "storage_thermal_management",
+      "chain_id": "new_energy_storage",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Thermal Management",
+      "node_kind": "canonical",
+      "node_type": "storage_safety",
+      "description": "Cooling and temperature-uniformity control.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "new_energy_storage",
+        "storage_thermal_management"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "storage_liquid_cooling",
+      "chain_id": "new_energy_storage",
+      "parent_node_id": "storage_thermal_management",
+      "level": "L4",
+      "node_name": "Storage Liquid Cooling",
+      "node_kind": "canonical",
+      "node_type": "storage_safety",
+      "description": "Storage Liquid Cooling as a canonical sub-node of Thermal Management.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "new_energy_storage",
+        "storage_thermal_management",
+        "storage_liquid_cooling"
+      ],
+      "canonical_key": "new_energy_storage:storage_liquid_cooling",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "storage_fire_protection",
+      "chain_id": "new_energy_storage",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Fire Protection and Safety",
+      "node_kind": "canonical",
+      "node_type": "storage_safety",
+      "description": "Detection, propagation control and suppression.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "new_energy_storage",
+        "storage_fire_protection"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "storage_thermal_runaway_protection",
+      "chain_id": "new_energy_storage",
+      "parent_node_id": "storage_fire_protection",
+      "level": "L4",
+      "node_name": "Thermal-Runaway Protection",
+      "node_kind": "canonical",
+      "node_type": "storage_safety",
+      "description": "Thermal-Runaway Protection as a canonical sub-node of Fire Protection and Safety.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "new_energy_storage",
+        "storage_fire_protection",
+        "storage_thermal_runaway_protection"
+      ],
+      "canonical_key": "new_energy_storage:storage_thermal_runaway_protection",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "storage_enclosure_electrical_bos",
+      "chain_id": "new_energy_storage",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Enclosure and Electrical BOS",
+      "node_kind": "canonical",
+      "node_type": "storage_infrastructure",
+      "description": "Containers, transformers, switchgear and cabling.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "new_energy_storage",
+        "storage_enclosure_electrical_bos"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "storage_medium_voltage_bos",
+      "chain_id": "new_energy_storage",
+      "parent_node_id": "storage_enclosure_electrical_bos",
+      "level": "L4",
+      "node_name": "Medium-Voltage Balance of System",
+      "node_kind": "canonical",
+      "node_type": "storage_infrastructure",
+      "description": "Medium-Voltage Balance of System as a canonical sub-node of Enclosure and Electrical BOS.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "new_energy_storage",
+        "storage_enclosure_electrical_bos",
+        "storage_medium_voltage_bos"
+      ],
+      "canonical_key": "new_energy_storage:storage_medium_voltage_bos",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "storage_system_integration",
+      "chain_id": "new_energy_storage",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "System Integration",
+      "node_kind": "canonical",
+      "node_type": "storage_service",
+      "description": "Architecture, procurement, integration and warranty.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "new_energy_storage",
+        "storage_system_integration"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "storage_system_acceptance",
+      "chain_id": "new_energy_storage",
+      "parent_node_id": "storage_system_integration",
+      "level": "L4",
+      "node_name": "System Acceptance Testing",
+      "node_kind": "canonical",
+      "node_type": "storage_service",
+      "description": "System Acceptance Testing as a canonical sub-node of System Integration.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "new_energy_storage",
+        "storage_system_integration",
+        "storage_system_acceptance"
+      ],
+      "canonical_key": "new_energy_storage:storage_system_acceptance",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "storage_epc_grid_connection",
+      "chain_id": "new_energy_storage",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "EPC and Grid Connection",
+      "node_kind": "canonical",
+      "node_type": "storage_service",
+      "description": "Engineering, construction, commissioning and interconnection.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "new_energy_storage",
+        "storage_epc_grid_connection"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "storage_grid_connection_commissioning",
+      "chain_id": "new_energy_storage",
+      "parent_node_id": "storage_epc_grid_connection",
+      "level": "L4",
+      "node_name": "Grid-Connection Commissioning",
+      "node_kind": "canonical",
+      "node_type": "storage_service",
+      "description": "Grid-Connection Commissioning as a canonical sub-node of EPC and Grid Connection.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "new_energy_storage",
+        "storage_epc_grid_connection",
+        "storage_grid_connection_commissioning"
+      ],
+      "canonical_key": "new_energy_storage:storage_grid_connection_commissioning",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "storage_operations_maintenance",
+      "chain_id": "new_energy_storage",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Operations and Maintenance",
+      "node_kind": "canonical",
+      "node_type": "storage_service",
+      "description": "Availability, degradation and lifecycle service.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "new_energy_storage",
+        "storage_operations_maintenance"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "storage_degradation_management",
+      "chain_id": "new_energy_storage",
+      "parent_node_id": "storage_operations_maintenance",
+      "level": "L4",
+      "node_name": "Degradation Management",
+      "node_kind": "canonical",
+      "node_type": "storage_service",
+      "description": "Degradation Management as a canonical sub-node of Operations and Maintenance.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "new_energy_storage",
+        "storage_operations_maintenance",
+        "storage_degradation_management"
+      ],
+      "canonical_key": "new_energy_storage:storage_degradation_management",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "storage_market_participation",
+      "chain_id": "new_energy_storage",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Market Participation",
+      "node_kind": "canonical",
+      "node_type": "storage_service",
+      "description": "Arbitrage, capacity and ancillary-service revenue.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "new_energy_storage",
+        "storage_market_participation"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "storage_ancillary_services",
+      "chain_id": "new_energy_storage",
+      "parent_node_id": "storage_market_participation",
+      "level": "L4",
+      "node_name": "Ancillary Services",
+      "node_kind": "canonical",
+      "node_type": "storage_service",
+      "description": "Ancillary Services as a canonical sub-node of Market Participation.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "new_energy_storage",
+        "storage_market_participation",
+        "storage_ancillary_services"
+      ],
+      "canonical_key": "new_energy_storage:storage_ancillary_services",
+      "canonical_node_refs": []
+    }
+  ]
+}

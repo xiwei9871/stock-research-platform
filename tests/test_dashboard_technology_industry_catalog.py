@@ -26,7 +26,7 @@ def test_technology_industry_catalog_api_returns_repository_summary_and_guardrai
     assert len(deep_rows) == 5
     ai_power = next(row for row in deep_rows if row["chain_id"] == "ai_data_center_power")
     assert ai_power["deep_research"]["theme_id"] == "ai_power_value_capture_v1"
-    assert ai_power["deep_research"]["research_status"] == "researching"
+    assert ai_power["deep_research"]["research_status"] == "reviewed"
     industrial_software = next(
         row for row in payload["chains"] if row["chain_id"] == "industrial_software"
     )

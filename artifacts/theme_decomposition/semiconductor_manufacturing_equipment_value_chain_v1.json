@@ -1,0 +1,624 @@
+{
+  "artifact_version": "theme_decomposition_v1_6",
+  "theme": {
+    "theme_id": "semiconductor_manufacturing_equipment_value_chain_v1",
+    "theme_name": "半导体制造设备：工艺环节、瓶颈与国产化",
+    "theme_type": "semiconductor_equipment",
+    "summary": "A process-by-process deep research map of wafer-fab equipment, support subsystems, qualification barriers and evidence-backed domestic beneficiaries.",
+    "status": "reviewed",
+    "created_from": "mixed",
+    "last_updated": "2026-07-14"
+  },
+  "research_profile": {
+    "catalog_chain_id": "semiconductor_manufacturing_equipment",
+    "research_kind": "industry_chain_deep_research",
+    "industry_stage": "commercial_scaling",
+    "central_conflict": "Fab expansion and localization create demand, but durable value capture depends on process performance, customer qualification, reliability, service capability and repeat orders.",
+    "investment_summary": "Read the chain by process ownership and qualification depth. Direct equipment exposure is more valuable when installed-base service, repeat orders and node-level revenue can be verified.",
+    "value_flow_summary": "pattern definition -> etch/deposition -> thermal and doping -> clean/wet -> CMP -> inspection/metrology -> wafer automation -> vacuum/gas/fluid -> facilities and abatement",
+    "profit_pool_summary": "Process IP, chamber reliability, customer qualification, yield learning, installed-base service and critical subsystems are the main barriers; generic factory exposure is lower quality.",
+    "catalyst_claim_ids": [
+      "semi_eq_claim_09"
+    ],
+    "risk_claim_ids": [
+      "semi_eq_claim_10"
+    ],
+    "validation_signals": [
+      "customer verification to repeat orders",
+      "installed-base and service revenue",
+      "node-level revenue and gross margin",
+      "fab capex and localization progress"
+    ],
+    "evidence_gap_summary": "Most filings disclose broad equipment categories. Node-level revenue, gross margin, customer mix, imported critical components and repeat-order evidence remain incomplete."
+  },
+  "evidence_policy": {
+    "accepted_source_ids": [
+      "semi_eq_002371_filing",
+      "semi_eq_688012_filing",
+      "semi_eq_688082_filing",
+      "semi_eq_688120_filing",
+      "semi_eq_688037_filing",
+      "semi_eq_300567_filing",
+      "semi_eq_300604_filing",
+      "semi_eq_688652_filing",
+      "semi_eq_002371_interim_filing",
+      "semi_eq_688012_interim_filing"
+    ],
+    "needs_full_text_source_ids": [],
+    "lead_only_source_ids": [],
+    "rejected_source_ids": [],
+    "oral_claim_source_ids": [],
+    "not_adopted_source_ids": [],
+    "policy_notes": "Only accepted company-primary disclosures are used for reviewed claims; exact theme revenue and customer allocation remain explicit evidence gaps."
+  },
+  "sources": [
+    {
+      "source_id": "semi_eq_002371_filing",
+      "source_type": "company_filing",
+      "title": "北方华创2025年年度报告",
+      "publisher": "北方华创",
+      "author": "",
+      "publish_date": "2026-04-18",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-18/1225122918.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for the semiconductor equipment product matrix."
+    },
+    {
+      "source_id": "semi_eq_688012_filing",
+      "source_type": "company_filing",
+      "title": "中微公司2025年年度报告",
+      "publisher": "中微公司",
+      "author": "",
+      "publish_date": "2026-03-31",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-31/1225062431.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for etch and thin-film equipment."
+    },
+    {
+      "source_id": "semi_eq_688082_filing",
+      "source_type": "company_filing",
+      "title": "盛美上海2025年年度报告",
+      "publisher": "盛美上海",
+      "author": "",
+      "publish_date": "2026-02-27",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-02-27/1224986438.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for cleaning and wet-process equipment."
+    },
+    {
+      "source_id": "semi_eq_688120_filing",
+      "source_type": "company_filing",
+      "title": "华海清科2025年年度报告",
+      "publisher": "华海清科",
+      "author": "",
+      "publish_date": "2026-04-23",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-23/1225156951.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for CMP equipment and service disclosures."
+    },
+    {
+      "source_id": "semi_eq_688037_filing",
+      "source_type": "company_filing",
+      "title": "芯源微2025年年度报告",
+      "publisher": "芯源微",
+      "author": "",
+      "publish_date": "2026-04-18",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-18/1225120170.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for coat/develop and wet-process equipment."
+    },
+    {
+      "source_id": "semi_eq_300567_filing",
+      "source_type": "company_filing",
+      "title": "精测电子2025年年度报告",
+      "publisher": "精测电子",
+      "author": "",
+      "publish_date": "2026-04-28",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-28/1225201722.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for semiconductor inspection and metrology products."
+    },
+    {
+      "source_id": "semi_eq_300604_filing",
+      "source_type": "company_filing",
+      "title": "长川科技2025年年度报告",
+      "publisher": "长川科技",
+      "author": "",
+      "publish_date": "2026-04-25",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-25/1225193261.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for tester, prober and AOI equipment."
+    },
+    {
+      "source_id": "semi_eq_688652_filing",
+      "source_type": "company_filing",
+      "title": "京仪装备2025年年度报告",
+      "publisher": "京仪装备",
+      "author": "",
+      "publish_date": "2026-03-31",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-31/1225056304.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for semiconductor temperature-control equipment."
+    },
+    {
+      "source_id": "semi_eq_002371_interim_filing",
+      "source_type": "company_filing",
+      "title": "北方华创2025年半年度报告",
+      "publisher": "北方华创",
+      "author": "",
+      "publish_date": "2025-08-29",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2025-08-29/1224615664.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO interim report retained as a second-period validation source."
+    },
+    {
+      "source_id": "semi_eq_688012_interim_filing",
+      "source_type": "company_filing",
+      "title": "中微公司2025年半年度报告",
+      "publisher": "中微公司",
+      "author": "",
+      "publish_date": "2025-08-29",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2025-08-29/1224606011.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO interim report retained as a second-period validation source."
+    }
+  ],
+  "claims": [
+    {
+      "claim_id": "semi_eq_claim_01",
+      "theme_id": "semiconductor_manufacturing_equipment_value_chain_v1",
+      "source_id": "semi_eq_002371_filing",
+      "claim_text": "Front-end equipment value is distributed across multiple qualified process tools; a broad product matrix does not by itself prove equal profit contribution by node.",
+      "claim_type": "value_capture",
+      "confidence": 0.86,
+      "evidence_status": "verified",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "semiconductor_deposition_epitaxy"
+      ],
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "semi_eq_claim_02",
+      "theme_id": "semiconductor_manufacturing_equipment_value_chain_v1",
+      "source_id": "semi_eq_688012_filing",
+      "claim_text": "Etch commercialization depends on process capability, chamber reliability, customer qualification and sustained service support.",
+      "claim_type": "bottleneck",
+      "confidence": 0.86,
+      "evidence_status": "verified",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "semiconductor_etch"
+      ],
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "semi_eq_claim_03",
+      "theme_id": "semiconductor_manufacturing_equipment_value_chain_v1",
+      "source_id": "semi_eq_688082_filing",
+      "claim_text": "Cleaning and wet processing expand with process complexity and contamination-control requirements across front-end and advanced packaging flows.",
+      "claim_type": "tech_route",
+      "confidence": 0.86,
+      "evidence_status": "verified",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "semiconductor_clean_wet_process"
+      ],
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "semi_eq_claim_04",
+      "theme_id": "semiconductor_manufacturing_equipment_value_chain_v1",
+      "source_id": "semi_eq_688120_filing",
+      "claim_text": "CMP value includes equipment, consumables, spares, process support and installed-base service rather than initial tool sales alone.",
+      "claim_type": "value_capture",
+      "confidence": 0.86,
+      "evidence_status": "verified",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "semiconductor_cmp"
+      ],
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "semi_eq_claim_05",
+      "theme_id": "semiconductor_manufacturing_equipment_value_chain_v1",
+      "source_id": "semi_eq_688037_filing",
+      "claim_text": "Domestic patterning exposure is currently strongest in coat/develop and wet-process support; it should not be conflated with advanced scanner ownership.",
+      "claim_type": "localization",
+      "confidence": 0.86,
+      "evidence_status": "verified",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "semiconductor_lithography_patterning"
+      ],
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "semi_eq_claim_06",
+      "theme_id": "semiconductor_manufacturing_equipment_value_chain_v1",
+      "source_id": "semi_eq_300567_filing",
+      "claim_text": "Yield learning raises the importance of inspection, metrology and process-control coverage as process steps and packaging complexity increase.",
+      "claim_type": "bottleneck",
+      "confidence": 0.86,
+      "evidence_status": "verified",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "semiconductor_inspection_metrology_process_control"
+      ],
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "semi_eq_claim_07",
+      "theme_id": "semiconductor_manufacturing_equipment_value_chain_v1",
+      "source_id": "semi_eq_300604_filing",
+      "claim_text": "Testers, probers, handlers and optical inspection tools address different control points and require separate revenue and qualification tracking.",
+      "claim_type": "value_capture",
+      "confidence": 0.86,
+      "evidence_status": "verified",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "semiconductor_inspection_metrology_process_control"
+      ],
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "semi_eq_claim_08",
+      "theme_id": "semiconductor_manufacturing_equipment_value_chain_v1",
+      "source_id": "semi_eq_688652_filing",
+      "claim_text": "Temperature, vacuum, gas and fluid-control subsystems are enabling infrastructure whose qualification and reliability can constrain tool delivery.",
+      "claim_type": "supply_constraint",
+      "confidence": 0.86,
+      "evidence_status": "verified",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "semiconductor_vacuum_gas_fluid_control"
+      ],
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "semi_eq_claim_09",
+      "theme_id": "semiconductor_manufacturing_equipment_value_chain_v1",
+      "source_id": "semi_eq_002371_interim_filing",
+      "claim_text": "The investable catalyst is conversion from verification to repeat orders and installed-base expansion across multiple wafer-fab customers.",
+      "claim_type": "catalyst",
+      "confidence": 0.86,
+      "evidence_status": "verified",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "semiconductor_wafer_handling_automation"
+      ],
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "semi_eq_claim_10",
+      "theme_id": "semiconductor_manufacturing_equipment_value_chain_v1",
+      "source_id": "semi_eq_688012_interim_filing",
+      "claim_text": "Localization narratives can overstate value capture when node revenue, gross margin, customer concentration and imported subcomponents are not separately disclosed.",
+      "claim_type": "risk",
+      "confidence": 0.86,
+      "evidence_status": "partially_verified",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "semiconductor_facilities_pollution_control"
+      ],
+      "platform_use_status": "reviewed"
+    }
+  ],
+  "nodes": [
+    {
+      "node_id": "semiconductor_lithography_patterning",
+      "theme_id": "semiconductor_manufacturing_equipment_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "光刻与图形化",
+      "node_type": "equipment",
+      "description": "Scanner-adjacent patterning, coat/develop and mask process equipment.",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "key_metrics": [
+        "qualification progress",
+        "segment revenue",
+        "gross margin",
+        "orders and capacity"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [
+        "688037.SH"
+      ],
+      "node_review_status": "reviewed"
+    },
+    {
+      "node_id": "semiconductor_etch",
+      "theme_id": "semiconductor_manufacturing_equipment_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "刻蚀设备",
+      "node_type": "equipment",
+      "description": "Dielectric, conductor, silicon and advanced etch process tools.",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "key_metrics": [
+        "qualification progress",
+        "segment revenue",
+        "gross margin",
+        "orders and capacity"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [
+        "688012.SH"
+      ],
+      "node_review_status": "reviewed"
+    },
+    {
+      "node_id": "semiconductor_deposition_epitaxy",
+      "theme_id": "semiconductor_manufacturing_equipment_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "薄膜沉积与外延",
+      "node_type": "equipment",
+      "description": "PVD, CVD, ALD, electrochemical deposition and epitaxy.",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "key_metrics": [
+        "qualification progress",
+        "segment revenue",
+        "gross margin",
+        "orders and capacity"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [
+        "002371.SZ"
+      ],
+      "node_review_status": "reviewed"
+    },
+    {
+      "node_id": "semiconductor_thermal_doping",
+      "theme_id": "semiconductor_manufacturing_equipment_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "热处理与掺杂",
+      "node_type": "equipment",
+      "description": "Oxidation, diffusion, RTP, annealing and implantation.",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "key_metrics": [
+        "qualification progress",
+        "segment revenue",
+        "gross margin",
+        "orders and capacity"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "reviewed"
+    },
+    {
+      "node_id": "semiconductor_clean_wet_process",
+      "theme_id": "semiconductor_manufacturing_equipment_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "清洗与湿法工艺",
+      "node_type": "equipment",
+      "description": "Single-wafer, batch wet clean and wet chemical process tools.",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "key_metrics": [
+        "qualification progress",
+        "segment revenue",
+        "gross margin",
+        "orders and capacity"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [
+        "688082.SH"
+      ],
+      "node_review_status": "reviewed"
+    },
+    {
+      "node_id": "semiconductor_cmp",
+      "theme_id": "semiconductor_manufacturing_equipment_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "CMP与减薄",
+      "node_type": "equipment",
+      "description": "Chemical mechanical polishing, thinning and planarization.",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "key_metrics": [
+        "qualification progress",
+        "segment revenue",
+        "gross margin",
+        "orders and capacity"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [
+        "688120.SH"
+      ],
+      "node_review_status": "reviewed"
+    },
+    {
+      "node_id": "semiconductor_inspection_metrology_process_control",
+      "theme_id": "semiconductor_manufacturing_equipment_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "检测量测与过程控制",
+      "node_type": "equipment",
+      "description": "Defect inspection, metrology, electrical test and process control.",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "key_metrics": [
+        "qualification progress",
+        "segment revenue",
+        "gross margin",
+        "orders and capacity"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [
+        "300567.SZ",
+        "300604.SZ"
+      ],
+      "node_review_status": "reviewed"
+    },
+    {
+      "node_id": "semiconductor_wafer_handling_automation",
+      "theme_id": "semiconductor_manufacturing_equipment_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "晶圆搬运与自动化",
+      "node_type": "equipment",
+      "description": "EFEM, robots, stockers and fab material-handling automation.",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "key_metrics": [
+        "qualification progress",
+        "segment revenue",
+        "gross margin",
+        "orders and capacity"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "reviewed"
+    },
+    {
+      "node_id": "semiconductor_vacuum_gas_fluid_control",
+      "theme_id": "semiconductor_manufacturing_equipment_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "真空气体与流体控制",
+      "node_type": "core_component",
+      "description": "Vacuum, gas delivery, temperature and fluid-control subsystems.",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "key_metrics": [
+        "qualification progress",
+        "segment revenue",
+        "gross margin",
+        "orders and capacity"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [
+        "688652.SH"
+      ],
+      "node_review_status": "reviewed"
+    },
+    {
+      "node_id": "semiconductor_facilities_pollution_control",
+      "theme_id": "semiconductor_manufacturing_equipment_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "厂务与污染治理",
+      "node_type": "infrastructure",
+      "description": "Abatement, ultrapure water, exhaust and facility support systems.",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "key_metrics": [
+        "qualification progress",
+        "segment revenue",
+        "gross margin",
+        "orders and capacity"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "reviewed"
+    },
+    {
+      "node_id": "coat_develop_track",
+      "theme_id": "semiconductor_manufacturing_equipment_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "涂胶显影Track",
+      "node_type": "equipment",
+      "description": "Coat/develop track equipment supporting the lithography process.",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "key_metrics": [
+        "qualification progress",
+        "segment revenue",
+        "gross margin",
+        "orders and capacity"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "reviewed"
+    }
+  ],
+  "value_capture_assessments": [],
+  "decomposition_templates": [
+    {
+      "template_id": "semi_eq_deep_research_template_v1",
+      "theme_type": "semiconductor_equipment",
+      "steps": [
+        "Map the value flow.",
+        "Separate bottlenecks and profit pools.",
+        "Attach primary evidence.",
+        "Classify company beneficiaries conservatively."
+      ],
+      "required_dimensions": [
+        "source reliability",
+        "value capture",
+        "bottleneck",
+        "company relationship"
+      ],
+      "optional_dimensions": [
+        "orders",
+        "segment revenue",
+        "gross margin",
+        "customer qualification"
+      ],
+      "output_schema": "theme_decomposition_v1_6"
+    }
+  ]
+}

@@ -65,9 +65,11 @@ def test_selected_chain_summaries_report_existing_and_missing_theme_packages():
 
     assert len(rows) == 5
     assert by_chain["ai_data_center_power"]["theme_id"] == "ai_power_value_capture_v1"
-    assert by_chain["ai_data_center_power"]["research_status"] == "researching"
-    assert by_chain["humanoid_robots_embodied_intelligence"]["research_status"] == "researching"
-    assert by_chain["semiconductor_manufacturing_equipment"]["research_status"] == "not_started"
+    assert by_chain["ai_data_center_power"]["research_status"] == "reviewed"
+    assert by_chain["humanoid_robots_embodied_intelligence"]["research_status"] == "reviewed"
+    assert by_chain["semiconductor_manufacturing_equipment"]["research_status"] == "reviewed"
+    assert by_chain["ai_compute_infrastructure"]["research_status"] == "reviewed"
+    assert by_chain["new_energy_storage"]["research_status"] == "reviewed"
     assert by_chain["ai_compute_infrastructure"]["theme_route"].endswith(
         "/ai_compute_infrastructure_value_chain_v1"
     )

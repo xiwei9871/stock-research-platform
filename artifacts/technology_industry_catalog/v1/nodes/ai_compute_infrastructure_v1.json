@@ -1,0 +1,300 @@
+{
+  "nodes": [
+    {
+      "node_id": "ai_compute_accelerators_boards",
+      "chain_id": "ai_compute_infrastructure",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Accelerators and Compute Boards",
+      "node_kind": "canonical",
+      "node_type": "compute_hardware",
+      "description": "Accelerator chips, boards and heterogeneous compute modules.",
+      "status": "draft",
+      "primary_path": [
+        "next_generation_information_technology",
+        "ai_compute_infrastructure",
+        "ai_compute_accelerators_boards"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ai_compute_accelerator_module",
+      "chain_id": "ai_compute_infrastructure",
+      "parent_node_id": "ai_compute_accelerators_boards",
+      "level": "L4",
+      "node_name": "Accelerator Modules",
+      "node_kind": "canonical",
+      "node_type": "compute_hardware",
+      "description": "Accelerator Modules as a canonical sub-node of Accelerators and Compute Boards.",
+      "status": "draft",
+      "primary_path": [
+        "next_generation_information_technology",
+        "ai_compute_infrastructure",
+        "ai_compute_accelerators_boards",
+        "ai_compute_accelerator_module"
+      ],
+      "canonical_key": "ai_compute_infrastructure:ai_compute_accelerator_module",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ai_compute_servers_racks",
+      "chain_id": "ai_compute_infrastructure",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "AI Servers and Rack Systems",
+      "node_kind": "canonical",
+      "node_type": "compute_system",
+      "description": "Servers, rack-scale integration and hardware platforms.",
+      "status": "draft",
+      "primary_path": [
+        "next_generation_information_technology",
+        "ai_compute_infrastructure",
+        "ai_compute_servers_racks"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ai_compute_rack_scale_system",
+      "chain_id": "ai_compute_infrastructure",
+      "parent_node_id": "ai_compute_servers_racks",
+      "level": "L4",
+      "node_name": "Rack-Scale AI Systems",
+      "node_kind": "canonical",
+      "node_type": "compute_system",
+      "description": "Rack-Scale AI Systems as a canonical sub-node of AI Servers and Rack Systems.",
+      "status": "draft",
+      "primary_path": [
+        "next_generation_information_technology",
+        "ai_compute_infrastructure",
+        "ai_compute_servers_racks",
+        "ai_compute_rack_scale_system"
+      ],
+      "canonical_key": "ai_compute_infrastructure:ai_compute_rack_scale_system",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ai_compute_memory_storage",
+      "chain_id": "ai_compute_infrastructure",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Memory and Storage",
+      "node_kind": "canonical",
+      "node_type": "compute_storage",
+      "description": "Memory hierarchy, local and distributed storage.",
+      "status": "draft",
+      "primary_path": [
+        "next_generation_information_technology",
+        "ai_compute_infrastructure",
+        "ai_compute_memory_storage"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ai_compute_distributed_storage",
+      "chain_id": "ai_compute_infrastructure",
+      "parent_node_id": "ai_compute_memory_storage",
+      "level": "L4",
+      "node_name": "Distributed AI Storage",
+      "node_kind": "canonical",
+      "node_type": "compute_storage",
+      "description": "Distributed AI Storage as a canonical sub-node of Memory and Storage.",
+      "status": "draft",
+      "primary_path": [
+        "next_generation_information_technology",
+        "ai_compute_infrastructure",
+        "ai_compute_memory_storage",
+        "ai_compute_distributed_storage"
+      ],
+      "canonical_key": "ai_compute_infrastructure:ai_compute_distributed_storage",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ai_compute_cluster_networking",
+      "chain_id": "ai_compute_infrastructure",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Cluster Networking",
+      "node_kind": "canonical",
+      "node_type": "compute_network",
+      "description": "Switching, adapters, cabling and PCB infrastructure.",
+      "status": "draft",
+      "primary_path": [
+        "next_generation_information_technology",
+        "ai_compute_infrastructure",
+        "ai_compute_cluster_networking"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ai_compute_high_speed_switching",
+      "chain_id": "ai_compute_infrastructure",
+      "parent_node_id": "ai_compute_cluster_networking",
+      "level": "L4",
+      "node_name": "High-Speed Cluster Switching",
+      "node_kind": "canonical",
+      "node_type": "compute_network",
+      "description": "High-Speed Cluster Switching as a canonical sub-node of Cluster Networking.",
+      "status": "draft",
+      "primary_path": [
+        "next_generation_information_technology",
+        "ai_compute_infrastructure",
+        "ai_compute_cluster_networking",
+        "ai_compute_high_speed_switching"
+      ],
+      "canonical_key": "ai_compute_infrastructure:ai_compute_high_speed_switching",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ai_compute_optical_interconnect",
+      "chain_id": "ai_compute_infrastructure",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Optical Interconnect",
+      "node_kind": "canonical",
+      "node_type": "compute_interconnect",
+      "description": "High-speed optical connectivity inside and between clusters.",
+      "status": "draft",
+      "primary_path": [
+        "next_generation_information_technology",
+        "ai_compute_infrastructure",
+        "ai_compute_optical_interconnect"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ai_compute_high_speed_optical_module",
+      "chain_id": "ai_compute_infrastructure",
+      "parent_node_id": "ai_compute_optical_interconnect",
+      "level": "L4",
+      "node_name": "High-Speed Optical Modules",
+      "node_kind": "canonical",
+      "node_type": "compute_interconnect",
+      "description": "High-Speed Optical Modules as a canonical sub-node of Optical Interconnect.",
+      "status": "draft",
+      "primary_path": [
+        "next_generation_information_technology",
+        "ai_compute_infrastructure",
+        "ai_compute_optical_interconnect",
+        "ai_compute_high_speed_optical_module"
+      ],
+      "canonical_key": "ai_compute_infrastructure:ai_compute_high_speed_optical_module",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ai_compute_orchestration_system_software",
+      "chain_id": "ai_compute_infrastructure",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Orchestration and System Software",
+      "node_kind": "canonical",
+      "node_type": "compute_software",
+      "description": "Scheduling, virtualization and cluster management.",
+      "status": "draft",
+      "primary_path": [
+        "next_generation_information_technology",
+        "ai_compute_infrastructure",
+        "ai_compute_orchestration_system_software"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ai_compute_cluster_scheduler",
+      "chain_id": "ai_compute_infrastructure",
+      "parent_node_id": "ai_compute_orchestration_system_software",
+      "level": "L4",
+      "node_name": "Cluster Scheduling Software",
+      "node_kind": "canonical",
+      "node_type": "compute_software",
+      "description": "Cluster Scheduling Software as a canonical sub-node of Orchestration and System Software.",
+      "status": "draft",
+      "primary_path": [
+        "next_generation_information_technology",
+        "ai_compute_infrastructure",
+        "ai_compute_orchestration_system_software",
+        "ai_compute_cluster_scheduler"
+      ],
+      "canonical_key": "ai_compute_infrastructure:ai_compute_cluster_scheduler",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ai_compute_data_center_deployment",
+      "chain_id": "ai_compute_infrastructure",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Compute Deployment",
+      "node_kind": "canonical",
+      "node_type": "compute_service",
+      "description": "Cluster integration, testing and deployment.",
+      "status": "draft",
+      "primary_path": [
+        "next_generation_information_technology",
+        "ai_compute_infrastructure",
+        "ai_compute_data_center_deployment"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ai_compute_cluster_commissioning",
+      "chain_id": "ai_compute_infrastructure",
+      "parent_node_id": "ai_compute_data_center_deployment",
+      "level": "L4",
+      "node_name": "Cluster Commissioning",
+      "node_kind": "canonical",
+      "node_type": "compute_service",
+      "description": "Cluster Commissioning as a canonical sub-node of Compute Deployment.",
+      "status": "draft",
+      "primary_path": [
+        "next_generation_information_technology",
+        "ai_compute_infrastructure",
+        "ai_compute_data_center_deployment",
+        "ai_compute_cluster_commissioning"
+      ],
+      "canonical_key": "ai_compute_infrastructure:ai_compute_cluster_commissioning",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ai_compute_operations",
+      "chain_id": "ai_compute_infrastructure",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Compute Operations",
+      "node_kind": "canonical",
+      "node_type": "compute_service",
+      "description": "Utilization, observability, reliability and lifecycle operation.",
+      "status": "draft",
+      "primary_path": [
+        "next_generation_information_technology",
+        "ai_compute_infrastructure",
+        "ai_compute_operations"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ai_compute_utilization_management",
+      "chain_id": "ai_compute_infrastructure",
+      "parent_node_id": "ai_compute_operations",
+      "level": "L4",
+      "node_name": "Utilization Management",
+      "node_kind": "canonical",
+      "node_type": "compute_service",
+      "description": "Utilization Management as a canonical sub-node of Compute Operations.",
+      "status": "draft",
+      "primary_path": [
+        "next_generation_information_technology",
+        "ai_compute_infrastructure",
+        "ai_compute_operations",
+        "ai_compute_utilization_management"
+      ],
+      "canonical_key": "ai_compute_infrastructure:ai_compute_utilization_management",
+      "canonical_node_refs": []
+    }
+  ]
+}

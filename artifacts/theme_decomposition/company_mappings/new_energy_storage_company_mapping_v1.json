@@ -1,0 +1,387 @@
+{
+  "artifact_version": "theme_company_mapping_v1",
+  "theme_id": "new_energy_storage_value_chain_v1",
+  "as_of_date": "2026-07-14",
+  "sources": [
+    {
+      "source_id": "storage_300750_filing",
+      "source_type": "company_filing",
+      "title": "宁德时代2025年年度报告",
+      "publisher": "宁德时代",
+      "author": "",
+      "publish_date": "2026-03-10",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-10/1225002214.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for storage-battery principal business."
+    },
+    {
+      "source_id": "storage_300014_filing",
+      "source_type": "company_filing",
+      "title": "亿纬锂能2025年年度报告",
+      "publisher": "亿纬锂能",
+      "author": "",
+      "publish_date": "2026-03-28",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-28/1225045391.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for storage-cell business."
+    },
+    {
+      "source_id": "storage_002074_filing",
+      "source_type": "company_filing",
+      "title": "国轩高科2025年年度报告",
+      "publisher": "国轩高科",
+      "author": "",
+      "publish_date": "2026-04-29",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-29/1225254220.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for storage battery systems."
+    },
+    {
+      "source_id": "storage_300274_filing",
+      "source_type": "company_filing",
+      "title": "阳光电源2025年半年度报告",
+      "publisher": "阳光电源",
+      "author": "",
+      "publish_date": "2025-08-26",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2025-08-26/1224567943.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO interim report reviewed for grid-forming and integrated storage-system disclosures."
+    },
+    {
+      "source_id": "storage_688063_filing",
+      "source_type": "company_filing",
+      "title": "派能科技2025年年度报告",
+      "publisher": "派能科技",
+      "author": "",
+      "publish_date": "2026-04-01",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-01/1225068748.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for cells, modules, BMS and system integration."
+    },
+    {
+      "source_id": "storage_300376_filing",
+      "source_type": "company_filing",
+      "title": "易事特2025年年度报告",
+      "publisher": "易事特",
+      "author": "",
+      "publish_date": "2026-04-29",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-29/1225232534.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for power-electronic conversion and storage business."
+    },
+    {
+      "source_id": "storage_002335_filing",
+      "source_type": "company_filing",
+      "title": "科华数据2025年年度报告",
+      "publisher": "科华数据",
+      "author": "",
+      "publish_date": "2026-04-27",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-27/1225194937.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for storage systems, delivery and operations."
+    },
+    {
+      "source_id": "storage_002580_filing",
+      "source_type": "company_filing",
+      "title": "圣阳股份2025年年度报告",
+      "publisher": "圣阳股份",
+      "author": "",
+      "publish_date": "2026-04-24",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-24/1225172160.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for storage cells, modules, BMS and systems."
+    }
+  ],
+  "evidence_items": [
+    {
+      "evidence_id": "storage_300750_relationship",
+      "source_id": "storage_300750_filing",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "Company filing, page 14",
+      "evidence_summary": "The annual report identifies storage-battery R&D, production and sales as a principal business alongside power batteries.",
+      "related_company_codes": [
+        "300750.SZ"
+      ],
+      "related_node_ids": [
+        "storage_cells_materials"
+      ]
+    },
+    {
+      "evidence_id": "storage_300014_relationship",
+      "source_id": "storage_300014_filing",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "Company filing, page 11",
+      "evidence_summary": "The filing lists storage-battery R&D, production and sales as one of the company's three principal battery businesses.",
+      "related_company_codes": [
+        "300014.SZ"
+      ],
+      "related_node_ids": [
+        "storage_cells_materials"
+      ]
+    },
+    {
+      "evidence_id": "storage_002074_relationship",
+      "source_id": "storage_002074_filing",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "Company filing, page 10",
+      "evidence_summary": "The annual report identifies storage-battery systems as a core business alongside power batteries and power-distribution equipment.",
+      "related_company_codes": [
+        "002074.SZ"
+      ],
+      "related_node_ids": [
+        "storage_cells_materials"
+      ]
+    },
+    {
+      "evidence_id": "storage_300274_relationship",
+      "source_id": "storage_300274_filing",
+      "evidence_type": "service_relationship",
+      "excerpt_locator": "Company filing, page 25",
+      "evidence_summary": "The filing describes storage interfaces, grid-forming control, charge/discharge coordination and integrated solar-storage microgrid applications.",
+      "related_company_codes": [
+        "300274.SZ"
+      ],
+      "related_node_ids": [
+        "storage_system_integration"
+      ]
+    },
+    {
+      "evidence_id": "storage_688063_relationship",
+      "source_id": "storage_688063_filing",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "Company filing, page 16",
+      "evidence_summary": "The annual report states that the company focuses on LFP cells, modules, BMS and storage-system integration across multiple stationary applications.",
+      "related_company_codes": [
+        "688063.SH"
+      ],
+      "related_node_ids": [
+        "storage_modules_packs"
+      ]
+    },
+    {
+      "evidence_id": "storage_300376_relationship",
+      "source_id": "storage_300376_filing",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "Company filing, page 10",
+      "evidence_summary": "The annual report identifies power-electronic conversion and energy management as core technologies supporting the new-energy and storage business.",
+      "related_company_codes": [
+        "300376.SZ"
+      ],
+      "related_node_ids": [
+        "storage_pcs"
+      ]
+    },
+    {
+      "evidence_id": "storage_002335_relationship",
+      "source_id": "storage_002335_filing",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "Company filing, page 17",
+      "evidence_summary": "The filing describes storage competition shifting from hardware price toward engineering delivery, operating efficiency and asset returns across multiple use cases.",
+      "related_company_codes": [
+        "002335.SZ"
+      ],
+      "related_node_ids": [
+        "storage_pcs"
+      ]
+    },
+    {
+      "evidence_id": "storage_002580_relationship",
+      "source_id": "storage_002580_filing",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "Company filing, page 11",
+      "evidence_summary": "The annual report identifies storage batteries and systems as the principal business and describes an end-to-end cell, module, BMS and system portfolio.",
+      "related_company_codes": [
+        "002580.SZ"
+      ],
+      "related_node_ids": [
+        "storage_modules_packs"
+      ]
+    }
+  ],
+  "company_mappings": [
+    {
+      "mapping_id": "storage_300750_storage_cells_materials_v1",
+      "theme_id": "new_energy_storage_value_chain_v1",
+      "company_code": "300750.SZ",
+      "company_name": "宁德时代",
+      "market": "CN",
+      "mapped_node_id": "storage_cells_materials",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.86,
+      "evidence_ids": [
+        "storage_300750_relationship"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "Stationary energy-storage cells and battery systems.",
+      "relationship_summary": "Direct storage-cell and system exposure.",
+      "review_status": "reviewed",
+      "notes": "Research mapping only. Direct product or service evidence establishes relevance, not future orders, margins, valuation, or investment returns."
+    },
+    {
+      "mapping_id": "storage_300014_storage_cells_materials_v1",
+      "theme_id": "new_energy_storage_value_chain_v1",
+      "company_code": "300014.SZ",
+      "company_name": "亿纬锂能",
+      "market": "CN",
+      "mapped_node_id": "storage_cells_materials",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.86,
+      "evidence_ids": [
+        "storage_300014_relationship"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "Storage cells and battery systems.",
+      "relationship_summary": "Direct storage-cell exposure with node-level margin and customer allocation requiring follow-up.",
+      "review_status": "reviewed",
+      "notes": "Research mapping only. Direct product or service evidence establishes relevance, not future orders, margins, valuation, or investment returns."
+    },
+    {
+      "mapping_id": "storage_002074_storage_cells_materials_v1",
+      "theme_id": "new_energy_storage_value_chain_v1",
+      "company_code": "002074.SZ",
+      "company_name": "国轩高科",
+      "market": "CN",
+      "mapped_node_id": "storage_cells_materials",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.86,
+      "evidence_ids": [
+        "storage_002074_relationship"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "Storage battery systems and green-energy solutions.",
+      "relationship_summary": "Direct storage-cell and system exposure.",
+      "review_status": "reviewed",
+      "notes": "Research mapping only. Direct product or service evidence establishes relevance, not future orders, margins, valuation, or investment returns."
+    },
+    {
+      "mapping_id": "storage_300274_storage_system_integration_v1",
+      "theme_id": "new_energy_storage_value_chain_v1",
+      "company_code": "300274.SZ",
+      "company_name": "阳光电源",
+      "market": "CN",
+      "mapped_node_id": "storage_system_integration",
+      "mapping_type": "system_integrator",
+      "business_stage": "primary_business",
+      "confidence": 0.86,
+      "evidence_ids": [
+        "storage_300274_relationship"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "Grid-supporting storage systems, power conversion and integrated energy solutions.",
+      "relationship_summary": "Direct system-integration and power-electronics exposure.",
+      "review_status": "reviewed",
+      "notes": "Research mapping only. Direct product or service evidence establishes relevance, not future orders, margins, valuation, or investment returns."
+    },
+    {
+      "mapping_id": "storage_688063_storage_modules_packs_v1",
+      "theme_id": "new_energy_storage_value_chain_v1",
+      "company_code": "688063.SH",
+      "company_name": "派能科技",
+      "market": "CN",
+      "mapped_node_id": "storage_modules_packs",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.86,
+      "evidence_ids": [
+        "storage_688063_relationship"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "LFP cells, modules, BMS and integrated storage systems.",
+      "relationship_summary": "Direct vertically integrated storage-product exposure.",
+      "review_status": "reviewed",
+      "notes": "Research mapping only. Direct product or service evidence establishes relevance, not future orders, margins, valuation, or investment returns."
+    },
+    {
+      "mapping_id": "storage_300376_storage_pcs_v1",
+      "theme_id": "new_energy_storage_value_chain_v1",
+      "company_code": "300376.SZ",
+      "company_name": "易事特",
+      "market": "CN",
+      "mapped_node_id": "storage_pcs",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.86,
+      "evidence_ids": [
+        "storage_300376_relationship"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "Power-electronic conversion, energy management and storage systems.",
+      "relationship_summary": "Direct PCS-adjacent power-electronics and system exposure.",
+      "review_status": "reviewed",
+      "notes": "Research mapping only. Direct product or service evidence establishes relevance, not future orders, margins, valuation, or investment returns."
+    },
+    {
+      "mapping_id": "storage_002335_storage_pcs_v1",
+      "theme_id": "new_energy_storage_value_chain_v1",
+      "company_code": "002335.SZ",
+      "company_name": "科华数据",
+      "market": "CN",
+      "mapped_node_id": "storage_pcs",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.86,
+      "evidence_ids": [
+        "storage_002335_relationship"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "Storage power conversion, systems and operational technology.",
+      "relationship_summary": "Direct storage power and system exposure with an operations-oriented value proposition.",
+      "review_status": "reviewed",
+      "notes": "Research mapping only. Direct product or service evidence establishes relevance, not future orders, margins, valuation, or investment returns."
+    },
+    {
+      "mapping_id": "storage_002580_storage_modules_packs_v1",
+      "theme_id": "new_energy_storage_value_chain_v1",
+      "company_code": "002580.SZ",
+      "company_name": "圣阳股份",
+      "market": "CN",
+      "mapped_node_id": "storage_modules_packs",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.86,
+      "evidence_ids": [
+        "storage_002580_relationship"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "Storage cells, modules, BMS and integrated power systems.",
+      "relationship_summary": "Direct storage battery and system exposure.",
+      "review_status": "reviewed",
+      "notes": "Research mapping only. Direct product or service evidence establishes relevance, not future orders, margins, valuation, or investment returns."
+    }
+  ]
+}

@@ -20,27 +20,16 @@ def test_ai_power_company_mapping_package_loads_and_summarizes():
 
     summary = summarize_theme_company_mapping_package(package)
 
-    assert summary == {
-        "artifact_count": 1,
-        "company_count": 8,
-        "evidence_count": 16,
-        "mapping_count": 8,
-        "mappings_by_business_stage": {"primary_business": 8},
-        "mappings_by_node": {
-            "data_center_epc": 1,
-            "hvdc_power": 1,
-            "liquid_cooling": 4,
-            "server_power_supply": 1,
-            "ups": 1,
-        },
-        "mappings_by_revenue_relevance": {
-            "material": 2,
-            "undisclosed": 6,
-        },
-        "mappings_by_review_status": {"reviewed": 8},
-        "source_count": 8,
-        "theme_count": 1,
-    }
+    assert summary["artifact_count"] == 5
+    assert summary["theme_count"] == 5
+    assert summary["company_count"] == 39
+    assert summary["mapping_count"] == 40
+    assert summary["source_count"] == 40
+    assert summary["evidence_count"] == 48
+    assert summary["mappings_by_review_status"] == {"reviewed": 40}
+    assert summary["mappings_by_business_stage"] == {"primary_business": 40}
+    assert summary["mappings_by_node"]["liquid_cooling"] == 4
+    assert summary["mappings_by_node"]["storage_cells_materials"] == 3
 
 
 def test_theme_and_company_lookup_preserve_node_relationship():
@@ -178,7 +167,7 @@ def test_reviewed_mapping_allows_weaker_supplemental_source(tmp_path: Path):
 
     package = load_theme_company_mapping_package(artifact_dir)
 
-    assert len(package["company_mappings"]) == 8
+    assert len(package["company_mappings"]) == 40
 
 
 def test_reviewed_material_claim_requires_materiality_evidence(tmp_path: Path):
@@ -530,9 +519,9 @@ def test_cli_validate_summary_and_company_lookup_emit_json(capsys):
 
     assert validate_exit == 0
     assert validate_payload["status"] == "ok"
-    assert validate_payload["mapping_count"] == 8
+    assert validate_payload["mapping_count"] == 40
     assert summary_exit == 0
-    assert summary_payload["company_count"] == 8
+    assert summary_payload["company_count"] == 39
     assert company_exit == 0
     assert company_payload[0]["mapped_node_id"] == "liquid_cooling"
     assert company_payload[0]["evidence"][0]["source"]["review_status"] == "accepted"

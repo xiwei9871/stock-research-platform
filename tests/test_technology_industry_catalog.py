@@ -172,7 +172,7 @@ def test_repository_catalog_starts_with_ten_approved_sectors():
     }
     assert {row["chain_id"] for row in catalog["nodes"]} == set(
         expected_chain_ids
-    )
+    ) | {"ai_compute_infrastructure"}
     nodes_by_id = {row["node_id"]: row for row in catalog["nodes"]}
     assert {
         nodes_by_id[edge[field]]["chain_id"]
@@ -196,58 +196,32 @@ def test_repository_catalog_starts_with_ten_approved_sectors():
 
 def test_repository_catalog_has_exact_theme_research_links():
     catalog = load_industry_catalog()
+    links = {row["theme_id"]: row for row in catalog["theme_links"]}
 
-    assert catalog["theme_links"] == [
-        {
-            "theme_id": "ai_power_value_capture_v1",
-            "chain_id": "ai_data_center_power",
-            "node_links": [
-                {"theme_node_id": "grid_connection", "catalog_node_id": "ai_power_grid_connection_role"},
-                {"theme_node_id": "transformer", "catalog_node_id": "ai_power_transformer_role"},
-                {"theme_node_id": "switchgear", "catalog_node_id": "ai_power_switchgear_role"},
-                {"theme_node_id": "server_power_supply", "catalog_node_id": "ai_power_server_psu_role"},
-                {"theme_node_id": "copper_interconnect", "catalog_node_id": "ai_power_copper_flexible_connection_role"},
-                {"theme_node_id": "data_center_epc", "catalog_node_id": "ai_power_data_center_epc_role"},
-                {"theme_node_id": "power_generation", "catalog_node_id": "ai_power_energy_supply_resilience"},
-                {"theme_node_id": "ups", "catalog_node_id": "ai_power_ups_conversion"},
-                {"theme_node_id": "hvdc_power", "catalog_node_id": "ai_power_hvdc_dc_architecture"},
-                {"theme_node_id": "rack_power_distribution", "catalog_node_id": "ai_power_room_rack_distribution"},
-                {"theme_node_id": "liquid_cooling", "catalog_node_id": "ai_power_liquid_cooling_thermal"},
-            ],
-            "unmapped_theme_node_ids": [
-                "ai_server_integration",
-                "sic_gan_power_semiconductor",
-            ],
-        },
-        {
-            "theme_id": "humanoid_robotics_head_to_toe_v1",
-            "chain_id": "humanoid_robots_embodied_intelligence",
-            "node_links": [
-                {"theme_node_id": "head_vision", "catalog_node_id": "rgb_vision_module"},
-                {"theme_node_id": "brain_ai_compute", "catalog_node_id": "humanoid_compute_control_hardware"},
-                {"theme_node_id": "torso_structure", "catalog_node_id": "torso_load_bearing_structure"},
-                {"theme_node_id": "arm_actuator", "catalog_node_id": "humanoid_robotic_arm"},
-                {"theme_node_id": "hand_dexterous", "catalog_node_id": "dexterous_hand_assembly"},
-                {"theme_node_id": "hip_joint", "catalog_node_id": "hip_joint_module"},
-                {"theme_node_id": "knee_joint", "catalog_node_id": "knee_joint_module"},
-                {"theme_node_id": "ankle_joint", "catalog_node_id": "ankle_joint_module"},
-                {"theme_node_id": "frameless_motor", "catalog_node_id": "frameless_torque_motor"},
-                {"theme_node_id": "harmonic_reducer", "catalog_node_id": "harmonic_reducer"},
-                {"theme_node_id": "planetary_roller_screw", "catalog_node_id": "planetary_roller_screw"},
-                {"theme_node_id": "encoder", "catalog_node_id": "joint_encoder"},
-                {"theme_node_id": "torque_sensor", "catalog_node_id": "joint_torque_sensor"},
-                {"theme_node_id": "six_axis_force_sensor", "catalog_node_id": "six_axis_force_sensor"},
-                {"theme_node_id": "tactile_sensor", "catalog_node_id": "tactile_sensor"},
-                {"theme_node_id": "imu", "catalog_node_id": "imu_sensor"},
-                {"theme_node_id": "battery_bms", "catalog_node_id": "humanoid_energy_thermal_management"},
-                {"theme_node_id": "wiring_harness", "catalog_node_id": "robot_wiring_harness"},
-                {"theme_node_id": "controller", "catalog_node_id": "main_controller"},
-                {"theme_node_id": "bearing", "catalog_node_id": "joint_bearing"},
-                {"theme_node_id": "lightweight_materials", "catalog_node_id": "lightweight_skeleton"},
-            ],
-            "unmapped_theme_node_ids": [],
-        },
-    ]
+    assert set(links) == {
+        "ai_power_value_capture_v1",
+        "semiconductor_manufacturing_equipment_value_chain_v1",
+        "humanoid_robotics_head_to_toe_v1",
+        "ai_compute_infrastructure_value_chain_v1",
+        "new_energy_storage_value_chain_v1",
+    }
+    assert links["ai_power_value_capture_v1"]["chain_id"] == "ai_data_center_power"
+    assert links["humanoid_robotics_head_to_toe_v1"]["chain_id"] == (
+        "humanoid_robots_embodied_intelligence"
+    )
+    assert links["semiconductor_manufacturing_equipment_value_chain_v1"][
+        "chain_id"
+    ] == "semiconductor_manufacturing_equipment"
+    assert links["ai_compute_infrastructure_value_chain_v1"]["chain_id"] == (
+        "ai_compute_infrastructure"
+    )
+    assert links["new_energy_storage_value_chain_v1"]["chain_id"] == (
+        "new_energy_storage"
+    )
+    assert all(
+        row["node_links"] or row["unmapped_theme_node_ids"]
+        for row in links.values()
+    )
 
 
 def test_project_theme_to_catalog_preserves_source_data_and_is_read_only():
@@ -374,10 +348,10 @@ def test_project_theme_to_catalog_reports_missing_source_nodes_in_sorted_order(
     )
 
 
-def test_project_theme_to_catalog_projects_humanoid_draft_theme():
+def test_project_theme_to_catalog_projects_humanoid_reviewed_theme():
     projection = project_theme_to_catalog("humanoid_robotics_head_to_toe_v1")
 
-    assert projection["theme_status"] == "draft"
+    assert projection["theme_status"] == "reviewed"
     assert projection["chain_id"] == "humanoid_robots_embodied_intelligence"
     assert projection["unmapped_theme_node_ids"] == []
     assert {

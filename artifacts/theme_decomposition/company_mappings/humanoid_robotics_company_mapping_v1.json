@@ -1,0 +1,387 @@
+{
+  "artifact_version": "theme_company_mapping_v1",
+  "theme_id": "humanoid_robotics_head_to_toe_v1",
+  "as_of_date": "2026-07-14",
+  "sources": [
+    {
+      "source_id": "robotics_300100_filing",
+      "source_type": "company_filing",
+      "title": "双林股份2025年半年度报告",
+      "publisher": "双林股份",
+      "author": "",
+      "publish_date": "2025-08-28",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2025-08-28/1224592445.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO interim report reviewed for humanoid screw and joint-module disclosure."
+    },
+    {
+      "source_id": "robotics_300580_filing",
+      "source_type": "company_filing",
+      "title": "贝斯特2025年年度报告",
+      "publisher": "贝斯特",
+      "author": "",
+      "publish_date": "2026-03-31",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-31/1225057936.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for planetary roller screw progress."
+    },
+    {
+      "source_id": "robotics_301023_filing",
+      "source_type": "company_filing",
+      "title": "奕帆传动2025年年度报告",
+      "publisher": "奕帆传动",
+      "author": "",
+      "publish_date": "2026-04-25",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-25/1225175136.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for hollow-cup motor and robot finger-joint development."
+    },
+    {
+      "source_id": "robotics_603416_filing",
+      "source_type": "company_filing",
+      "title": "信捷电气2025年年度报告",
+      "publisher": "信捷电气",
+      "author": "",
+      "publish_date": "2026-04-17",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-17/1225114570.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for encoder products and humanoid-robot development."
+    },
+    {
+      "source_id": "robotics_688698_filing",
+      "source_type": "company_filing",
+      "title": "伟创电气2025年年度报告",
+      "publisher": "伟创电气",
+      "author": "",
+      "publish_date": "2026-04-16",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-16/1225107260.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for embodied-intelligence actuator and controller products."
+    },
+    {
+      "source_id": "robotics_301236_filing",
+      "source_type": "company_filing",
+      "title": "软通动力2025年半年度报告",
+      "publisher": "软通动力",
+      "author": "",
+      "publish_date": "2025-08-28",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2025-08-28/1224597417.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO interim report reviewed for humanoid product release and small-batch production."
+    },
+    {
+      "source_id": "robotics_600845_filing",
+      "source_type": "company_filing",
+      "title": "宝信软件2025年半年度报告",
+      "publisher": "宝信软件",
+      "author": "",
+      "publish_date": "2025-08-19",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2025-08-19/1224502196.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO interim report reviewed for humanoid application and robot-system disclosures."
+    },
+    {
+      "source_id": "robotics_002896_filing",
+      "source_type": "company_filing",
+      "title": "中大力德2025年年度报告",
+      "publisher": "中大力德",
+      "author": "",
+      "publish_date": "2026-04-16",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-16/1225108100.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for precision reducer module development."
+    }
+  ],
+  "evidence_items": [
+    {
+      "evidence_id": "robotics_300100_relationship",
+      "source_id": "robotics_300100_filing",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "Company filing, page 10",
+      "evidence_summary": "The filing lists humanoid-robot screws and joint modules among the company's robot-component products.",
+      "related_company_codes": [
+        "300100.SZ"
+      ],
+      "related_node_ids": [
+        "planetary_roller_screw"
+      ]
+    },
+    {
+      "evidence_id": "robotics_300580_relationship",
+      "source_id": "robotics_300580_filing",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "Company filing, page 16",
+      "evidence_summary": "The annual report states that a self-developed planetary roller screw has produced samples and that process and equipment development is progressing.",
+      "related_company_codes": [
+        "300580.SZ"
+      ],
+      "related_node_ids": [
+        "planetary_roller_screw"
+      ]
+    },
+    {
+      "evidence_id": "robotics_301023_relationship",
+      "source_id": "robotics_301023_filing",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "Company filing, page 21",
+      "evidence_summary": "The filing describes hollow-cup motor development for robot finger joints and links the design target to dexterous, lightweight hand motion.",
+      "related_company_codes": [
+        "301023.SZ"
+      ],
+      "related_node_ids": [
+        "hand_dexterous"
+      ]
+    },
+    {
+      "evidence_id": "robotics_603416_relationship",
+      "source_id": "robotics_603416_filing",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "Company filing, page 36",
+      "evidence_summary": "The annual report identifies optical encoders as key components used in robots and servo control and describes expansion of the humanoid-robot team.",
+      "related_company_codes": [
+        "603416.SH"
+      ],
+      "related_node_ids": [
+        "encoder"
+      ]
+    },
+    {
+      "evidence_id": "robotics_688698_relationship",
+      "source_id": "robotics_688698_filing",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "Company filing, page 71",
+      "evidence_summary": "The filing states that the company is developing and supplying servo motors, drives and integrated controllers for humanoid, collaborative and mobile robots.",
+      "related_company_codes": [
+        "688698.SH"
+      ],
+      "related_node_ids": [
+        "controller"
+      ]
+    },
+    {
+      "evidence_id": "robotics_301236_relationship",
+      "source_id": "robotics_301236_filing",
+      "evidence_type": "service_relationship",
+      "excerpt_locator": "Company filing, page 16",
+      "evidence_summary": "The filing reports release of the Tianqing S1 biped humanoid robot and small-batch trial production and deployment of a wheeled robot.",
+      "related_company_codes": [
+        "301236.SZ"
+      ],
+      "related_node_ids": [
+        "brain_ai_compute"
+      ]
+    },
+    {
+      "evidence_id": "robotics_600845_relationship",
+      "source_id": "robotics_600845_filing",
+      "evidence_type": "service_relationship",
+      "excerpt_locator": "Company filing, page 9",
+      "evidence_summary": "The filing describes humanoid automatic loading and sampling applications, heavy-load robot designs and industrial robot delivery.",
+      "related_company_codes": [
+        "600845.SH"
+      ],
+      "related_node_ids": [
+        "controller"
+      ]
+    },
+    {
+      "evidence_id": "robotics_002896_relationship",
+      "source_id": "robotics_002896_filing",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "Company filing, page 19",
+      "evidence_summary": "The annual report discusses precision reducer module development for robotics and progress toward batch production.",
+      "related_company_codes": [
+        "002896.SZ"
+      ],
+      "related_node_ids": [
+        "harmonic_reducer"
+      ]
+    }
+  ],
+  "company_mappings": [
+    {
+      "mapping_id": "robotics_300100_planetary_roller_screw_v1",
+      "theme_id": "humanoid_robotics_head_to_toe_v1",
+      "company_code": "300100.SZ",
+      "company_name": "双林股份",
+      "market": "CN",
+      "mapped_node_id": "planetary_roller_screw",
+      "mapping_type": "component_supplier",
+      "business_stage": "primary_business",
+      "confidence": 0.86,
+      "evidence_ids": [
+        "robotics_300100_relationship"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "Humanoid-robot screw and joint modules.",
+      "relationship_summary": "Direct component exposure at the screw and joint-module layer.",
+      "review_status": "reviewed",
+      "notes": "Research mapping only. Direct product or service evidence establishes relevance, not future orders, margins, valuation, or investment returns."
+    },
+    {
+      "mapping_id": "robotics_300580_planetary_roller_screw_v1",
+      "theme_id": "humanoid_robotics_head_to_toe_v1",
+      "company_code": "300580.SZ",
+      "company_name": "贝斯特",
+      "market": "CN",
+      "mapped_node_id": "planetary_roller_screw",
+      "mapping_type": "component_supplier",
+      "business_stage": "primary_business",
+      "confidence": 0.86,
+      "evidence_ids": [
+        "robotics_300580_relationship"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "Planetary roller screws and precision linear-motion components.",
+      "relationship_summary": "Direct screw-component exposure, with commercialization stage and humanoid allocation still requiring follow-up.",
+      "review_status": "reviewed",
+      "notes": "Research mapping only. Direct product or service evidence establishes relevance, not future orders, margins, valuation, or investment returns."
+    },
+    {
+      "mapping_id": "robotics_301023_hand_dexterous_v1",
+      "theme_id": "humanoid_robotics_head_to_toe_v1",
+      "company_code": "301023.SZ",
+      "company_name": "奕帆传动",
+      "market": "CN",
+      "mapped_node_id": "hand_dexterous",
+      "mapping_type": "component_supplier",
+      "business_stage": "primary_business",
+      "confidence": 0.86,
+      "evidence_ids": [
+        "robotics_301023_relationship"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "Hollow-cup motors under development for robot finger joints.",
+      "relationship_summary": "Direct emerging component exposure inside the dexterous-hand subsystem.",
+      "review_status": "reviewed",
+      "notes": "Research mapping only. Direct product or service evidence establishes relevance, not future orders, margins, valuation, or investment returns."
+    },
+    {
+      "mapping_id": "robotics_603416_encoder_v1",
+      "theme_id": "humanoid_robotics_head_to_toe_v1",
+      "company_code": "603416.SH",
+      "company_name": "信捷电气",
+      "market": "CN",
+      "mapped_node_id": "encoder",
+      "mapping_type": "component_supplier",
+      "business_stage": "primary_business",
+      "confidence": 0.86,
+      "evidence_ids": [
+        "robotics_603416_relationship"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "Optical encoders and servo-control products for robotic motion systems.",
+      "relationship_summary": "Direct encoder and control-component relevance; humanoid-specific revenue is not disclosed.",
+      "review_status": "reviewed",
+      "notes": "Research mapping only. Direct product or service evidence establishes relevance, not future orders, margins, valuation, or investment returns."
+    },
+    {
+      "mapping_id": "robotics_688698_controller_v1",
+      "theme_id": "humanoid_robotics_head_to_toe_v1",
+      "company_code": "688698.SH",
+      "company_name": "伟创电气",
+      "market": "CN",
+      "mapped_node_id": "controller",
+      "mapping_type": "component_supplier",
+      "business_stage": "primary_business",
+      "confidence": 0.86,
+      "evidence_ids": [
+        "robotics_688698_relationship"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "High-precision servo motors, responsive drives and integrated controllers for robot joints.",
+      "relationship_summary": "Direct execution and control-component exposure.",
+      "review_status": "reviewed",
+      "notes": "Research mapping only. Direct product or service evidence establishes relevance, not future orders, margins, valuation, or investment returns."
+    },
+    {
+      "mapping_id": "robotics_301236_brain_ai_compute_v1",
+      "theme_id": "humanoid_robotics_head_to_toe_v1",
+      "company_code": "301236.SZ",
+      "company_name": "软通动力",
+      "market": "CN",
+      "mapped_node_id": "brain_ai_compute",
+      "mapping_type": "system_integrator",
+      "business_stage": "primary_business",
+      "confidence": 0.86,
+      "evidence_ids": [
+        "robotics_301236_relationship"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "Humanoid and wheeled embodied-intelligence robots and related software solutions.",
+      "relationship_summary": "System-level embodied-robot exposure, classified separately from component profit pools.",
+      "review_status": "reviewed",
+      "notes": "Research mapping only. Direct product or service evidence establishes relevance, not future orders, margins, valuation, or investment returns."
+    },
+    {
+      "mapping_id": "robotics_600845_controller_v1",
+      "theme_id": "humanoid_robotics_head_to_toe_v1",
+      "company_code": "600845.SH",
+      "company_name": "宝信软件",
+      "market": "CN",
+      "mapped_node_id": "controller",
+      "mapping_type": "system_integrator",
+      "business_stage": "primary_business",
+      "confidence": 0.86,
+      "evidence_ids": [
+        "robotics_600845_relationship"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "Industrial humanoid-robot applications, heavy-load robots and control software.",
+      "relationship_summary": "Industrial application and integration beneficiary rather than a pure-play component supplier.",
+      "review_status": "reviewed",
+      "notes": "Research mapping only. Direct product or service evidence establishes relevance, not future orders, margins, valuation, or investment returns."
+    },
+    {
+      "mapping_id": "robotics_002896_harmonic_reducer_v1",
+      "theme_id": "humanoid_robotics_head_to_toe_v1",
+      "company_code": "002896.SZ",
+      "company_name": "中大力德",
+      "market": "CN",
+      "mapped_node_id": "harmonic_reducer",
+      "mapping_type": "component_supplier",
+      "business_stage": "primary_business",
+      "confidence": 0.86,
+      "evidence_ids": [
+        "robotics_002896_relationship"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "Precision reducer modules and intelligent-transmission components for robots.",
+      "relationship_summary": "Direct reducer and transmission-module exposure; humanoid-specific customer and revenue evidence remains a gap.",
+      "review_status": "reviewed",
+      "notes": "Research mapping only. Direct product or service evidence establishes relevance, not future orders, margins, valuation, or investment returns."
+    }
+  ]
+}

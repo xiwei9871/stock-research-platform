@@ -17,17 +17,17 @@ def test_sample_artifacts_load_and_summarize():
 
     summary = summarize_theme_package(package)
 
-    assert summary["theme_count"] == 2
-    assert summary["node_count"] == 34
-    assert summary["source_count"] >= 8
-    assert summary["claim_count"] >= 8
+    assert summary["theme_count"] == 5
+    assert summary["node_count"] == 67
+    assert summary["source_count"] >= 50
+    assert summary["claim_count"] >= 50
     assert summary["sources_by_reliability_level"]["S4"] >= 2
-    assert summary["claims_by_evidence_status"]["unverified"] >= 2
+    assert summary["claims_by_evidence_status"]["verified"] >= 40
     assert summary["sources_by_review_status"]["lead_only"] >= 2
-    assert summary["claims_by_platform_use_status"]["research_lead"] >= 2
+    assert summary["claims_by_platform_use_status"]["reviewed"] >= 47
     assert summary["nodes_by_review_status"]["needs_evidence"] >= 1
     assert summary["high_priority_evidence_gap_count"] >= 1
-    assert "planetary_roller_screw" in summary["high_priority_evidence_gap"]
+    assert "transformer" in summary["high_priority_evidence_gap"]
     assert "transformer" in summary["nodes_by_value_capture_score"]["5"]
     assert "planetary_roller_screw" in summary["nodes_by_bottleneck_score"]["5"]
 

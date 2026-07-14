@@ -23,14 +23,14 @@ def test_priority_package_scores_all_nodes_and_company_mappings_once():
     package = load_theme_research_priority_package()
     summary = summarize_theme_research_priority_package(package)
 
-    assert summary["theme_count"] == 2
-    assert summary["node_priority_count"] == 34
-    assert summary["company_priority_count"] == 4
-    assert summary["unique_company_count"] == 4
-    assert summary["linked_company_count"] == 2
+    assert summary["theme_count"] == 5
+    assert summary["node_priority_count"] == 67
+    assert summary["company_priority_count"] == 40
+    assert summary["unique_company_count"] == 39
+    assert summary["linked_company_count"] == 6
     assert summary["coverage_gap_company_count"] == 2
-    assert len({row["node_id"] for row in package["node_priorities"]}) == 34
-    assert len({row["mapping_id"] for row in package["company_priorities"]}) == 4
+    assert len({row["node_id"] for row in package["node_priorities"]}) == 67
+    assert len({row["mapping_id"] for row in package["company_priorities"]}) == 40
 
 
 def test_low_evidence_structural_node_becomes_evidence_collection_priority():
@@ -71,7 +71,17 @@ def test_strong_evidence_structural_node_becomes_deep_research_priority():
 
 
 def test_company_priority_arithmetic_and_order_are_stable():
-    rows = list_company_research_priorities()
+    rows = [
+        row
+        for row in list_company_research_priorities()
+        if row["theme_id"] == "ai_power_value_capture_v1"
+        and row["company_code"] in {
+            "002335.SZ",
+            "002364.SZ",
+            "002837.SZ",
+            "300870.SZ",
+        }
+    ]
 
     assert [row["company_code"] for row in rows] == [
         "002837.SZ",
@@ -310,11 +320,11 @@ def test_cli_commands_emit_structured_json(capsys):
     assert cli(["validate"]) == 0
     validate_payload = json.loads(capsys.readouterr().out)
     assert validate_payload["status"] == "ok"
-    assert validate_payload["node_priority_count"] == 34
+    assert validate_payload["node_priority_count"] == 67
 
     assert cli(["summary"]) == 0
     summary_payload = json.loads(capsys.readouterr().out)
-    assert summary_payload["company_priority_count"] == 4
+    assert summary_payload["company_priority_count"] == 40
 
     for command in ("theme-nodes", "companies", "evidence-gaps", "review-queue"):
         assert cli([command]) == 0

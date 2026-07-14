@@ -1,0 +1,667 @@
+{
+  "artifact_version": "theme_decomposition_v1_6",
+  "theme": {
+    "theme_id": "new_energy_storage_value_chain_v1",
+    "theme_name": "新型储能：设备、系统集成与运营收益",
+    "theme_type": "new_energy_storage",
+    "summary": "A full-chain research map from storage cells through PCS/BMS/EMS, safety, integration, grid connection, operations and power-market revenue.",
+    "status": "reviewed",
+    "created_from": "mixed",
+    "last_updated": "2026-07-14"
+  },
+  "research_profile": {
+    "catalog_chain_id": "new_energy_storage",
+    "research_kind": "industry_chain_deep_research",
+    "industry_stage": "commercial_scaling",
+    "central_conflict": "Installed capacity can grow while project returns remain weak if tender prices, degradation, safety, utilization and market participation are not managed together.",
+    "investment_summary": "Separate battery manufacturing, power electronics, system integration and operating revenue. Beneficiaries need direct products plus evidence of delivery, efficiency, safety and project economics.",
+    "value_flow_summary": "cells/materials -> modules/packs -> PCS/BMS/EMS -> thermal/fire/BOS -> integration -> EPC/grid connection -> operations -> energy and ancillary-service revenue",
+    "profit_pool_summary": "Cell performance, PCS control, BMS/EMS software, safety engineering, integration responsibility, warranty capability and market operation are distinct barriers and profit pools.",
+    "catalyst_claim_ids": [
+      "storage_claim_09"
+    ],
+    "risk_claim_ids": [
+      "storage_claim_10"
+    ],
+    "validation_signals": [
+      "storage-specific segment revenue and margins",
+      "tender prices and repeat orders",
+      "cycle life, safety and warranty data",
+      "utilization hours and ancillary-service revenue"
+    ],
+    "evidence_gap_summary": "Storage-specific revenue, project margin, utilization hours, degradation, warranty provisions, customer concentration and revenue-stack composition remain unevenly disclosed."
+  },
+  "evidence_policy": {
+    "accepted_source_ids": [
+      "storage_300750_filing",
+      "storage_300014_filing",
+      "storage_002074_filing",
+      "storage_300274_filing",
+      "storage_688063_filing",
+      "storage_300376_filing",
+      "storage_002335_filing",
+      "storage_002580_filing",
+      "storage_688663_filing",
+      "storage_300499_filing"
+    ],
+    "needs_full_text_source_ids": [],
+    "lead_only_source_ids": [],
+    "rejected_source_ids": [],
+    "oral_claim_source_ids": [],
+    "not_adopted_source_ids": [],
+    "policy_notes": "Only accepted company-primary disclosures are used for reviewed claims; exact theme revenue and customer allocation remain explicit evidence gaps."
+  },
+  "sources": [
+    {
+      "source_id": "storage_300750_filing",
+      "source_type": "company_filing",
+      "title": "宁德时代2025年年度报告",
+      "publisher": "宁德时代",
+      "author": "",
+      "publish_date": "2026-03-10",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-10/1225002214.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for storage-battery principal business."
+    },
+    {
+      "source_id": "storage_300014_filing",
+      "source_type": "company_filing",
+      "title": "亿纬锂能2025年年度报告",
+      "publisher": "亿纬锂能",
+      "author": "",
+      "publish_date": "2026-03-28",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-28/1225045391.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for storage-cell business."
+    },
+    {
+      "source_id": "storage_002074_filing",
+      "source_type": "company_filing",
+      "title": "国轩高科2025年年度报告",
+      "publisher": "国轩高科",
+      "author": "",
+      "publish_date": "2026-04-29",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-29/1225254220.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for storage battery systems."
+    },
+    {
+      "source_id": "storage_300274_filing",
+      "source_type": "company_filing",
+      "title": "阳光电源2025年半年度报告",
+      "publisher": "阳光电源",
+      "author": "",
+      "publish_date": "2025-08-26",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2025-08-26/1224567943.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO interim report reviewed for grid-forming and integrated storage-system disclosures."
+    },
+    {
+      "source_id": "storage_688063_filing",
+      "source_type": "company_filing",
+      "title": "派能科技2025年年度报告",
+      "publisher": "派能科技",
+      "author": "",
+      "publish_date": "2026-04-01",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-01/1225068748.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for cells, modules, BMS and system integration."
+    },
+    {
+      "source_id": "storage_300376_filing",
+      "source_type": "company_filing",
+      "title": "易事特2025年年度报告",
+      "publisher": "易事特",
+      "author": "",
+      "publish_date": "2026-04-29",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-29/1225232534.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for power-electronic conversion and storage business."
+    },
+    {
+      "source_id": "storage_002335_filing",
+      "source_type": "company_filing",
+      "title": "科华数据2025年年度报告",
+      "publisher": "科华数据",
+      "author": "",
+      "publish_date": "2026-04-27",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-27/1225194937.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for storage systems, delivery and operations."
+    },
+    {
+      "source_id": "storage_002580_filing",
+      "source_type": "company_filing",
+      "title": "圣阳股份2025年年度报告",
+      "publisher": "圣阳股份",
+      "author": "",
+      "publish_date": "2026-04-24",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-24/1225172160.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for storage cells, modules, BMS and systems."
+    },
+    {
+      "source_id": "storage_688663_filing",
+      "source_type": "company_filing",
+      "title": "新风光2025年年度报告",
+      "publisher": "新风光",
+      "author": "",
+      "publish_date": "2026-04-09",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-09/1225086238.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for PCS, BMS coordination and smart-storage operation."
+    },
+    {
+      "source_id": "storage_300499_filing",
+      "source_type": "company_filing",
+      "title": "高澜股份2025年年度报告",
+      "publisher": "高澜股份",
+      "author": "",
+      "publish_date": "2026-04-24",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-24/1225160679.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO annual report reviewed for storage liquid-cooling products and thermal-management technology."
+    }
+  ],
+  "claims": [
+    {
+      "claim_id": "storage_claim_01",
+      "theme_id": "new_energy_storage_value_chain_v1",
+      "source_id": "storage_300750_filing",
+      "claim_text": "Storage-cell value depends on safety, cycle life, degradation, cost and warranty performance rather than shipment volume alone.",
+      "claim_type": "value_capture",
+      "confidence": 0.86,
+      "evidence_status": "verified",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "storage_cells_materials"
+      ],
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "storage_claim_02",
+      "theme_id": "new_energy_storage_value_chain_v1",
+      "source_id": "storage_300014_filing",
+      "claim_text": "Cell suppliers participate directly in stationary storage, but chemistry mix, customer allocation and storage-specific margins require separate tracking.",
+      "claim_type": "supply_constraint",
+      "confidence": 0.86,
+      "evidence_status": "verified",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "storage_cells_materials"
+      ],
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "storage_claim_03",
+      "theme_id": "new_energy_storage_value_chain_v1",
+      "source_id": "storage_002074_filing",
+      "claim_text": "Storage systems combine cells with power conversion, controls, safety and integration; battery manufacturing economics should not be treated as the entire value chain.",
+      "claim_type": "tech_route",
+      "confidence": 0.86,
+      "evidence_status": "verified",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "storage_cells_materials"
+      ],
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "storage_claim_04",
+      "theme_id": "new_energy_storage_value_chain_v1",
+      "source_id": "storage_300274_filing",
+      "claim_text": "System integration captures value through architecture, grid-forming control, delivery, warranty and lifecycle performance.",
+      "claim_type": "value_capture",
+      "confidence": 0.86,
+      "evidence_status": "verified",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "storage_system_integration"
+      ],
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "storage_claim_05",
+      "theme_id": "new_energy_storage_value_chain_v1",
+      "source_id": "storage_688063_filing",
+      "claim_text": "Vertically integrated cell, module, BMS and system portfolios can reduce interface risk, but do not automatically prove superior project returns.",
+      "claim_type": "bottleneck",
+      "confidence": 0.86,
+      "evidence_status": "verified",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "storage_modules_packs"
+      ],
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "storage_claim_06",
+      "theme_id": "new_energy_storage_value_chain_v1",
+      "source_id": "storage_300376_filing",
+      "claim_text": "PCS and control quality affect efficiency, grid support and revenue-stack availability, making certification and field operation important evidence.",
+      "claim_type": "bottleneck",
+      "confidence": 0.86,
+      "evidence_status": "verified",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "storage_pcs"
+      ],
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "storage_claim_07",
+      "theme_id": "new_energy_storage_value_chain_v1",
+      "source_id": "storage_002335_filing",
+      "claim_text": "Industry competition is shifting from hardware price toward delivery, operating efficiency and asset returns, increasing the value of controls and operations.",
+      "claim_type": "cost_structure",
+      "confidence": 0.86,
+      "evidence_status": "verified",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "storage_pcs"
+      ],
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "storage_claim_08",
+      "theme_id": "new_energy_storage_value_chain_v1",
+      "source_id": "storage_002580_filing",
+      "claim_text": "Storage battery and system suppliers benefit from integrated products, while exact storage revenue, margins and customer concentration must remain visible.",
+      "claim_type": "value_capture",
+      "confidence": 0.86,
+      "evidence_status": "verified",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "storage_modules_packs"
+      ],
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "storage_claim_09",
+      "theme_id": "new_energy_storage_value_chain_v1",
+      "source_id": "storage_688663_filing",
+      "claim_text": "The key catalysts are higher utilization, broader ancillary-service participation, grid-forming demand and repeatable project economics.",
+      "claim_type": "catalyst",
+      "confidence": 0.86,
+      "evidence_status": "verified",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "storage_market_participation"
+      ],
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "storage_claim_10",
+      "theme_id": "new_energy_storage_value_chain_v1",
+      "source_id": "storage_300499_filing",
+      "claim_text": "Tender-price pressure, under-utilization, degradation, safety incidents, warranty costs and uncertain market revenue can transfer value away from equipment volume.",
+      "claim_type": "risk",
+      "confidence": 0.86,
+      "evidence_status": "partially_verified",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "storage_fire_protection"
+      ],
+      "platform_use_status": "reviewed"
+    }
+  ],
+  "nodes": [
+    {
+      "node_id": "storage_cells_materials",
+      "theme_id": "new_energy_storage_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "电芯与关键材料",
+      "node_type": "core_component",
+      "description": "Stationary storage cells and material choices determining cost, safety and cycle life.",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "key_metrics": [
+        "qualification progress",
+        "segment revenue",
+        "gross margin",
+        "orders and capacity"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [
+        "300750.SZ",
+        "300014.SZ",
+        "002074.SZ"
+      ],
+      "node_review_status": "reviewed"
+    },
+    {
+      "node_id": "storage_modules_packs",
+      "theme_id": "new_energy_storage_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "模组与Pack",
+      "node_type": "subsystem",
+      "description": "Module, pack, enclosure and battery-system assembly.",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "key_metrics": [
+        "qualification progress",
+        "segment revenue",
+        "gross margin",
+        "orders and capacity"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [
+        "688063.SH",
+        "002580.SZ"
+      ],
+      "node_review_status": "reviewed"
+    },
+    {
+      "node_id": "storage_pcs",
+      "theme_id": "new_energy_storage_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "储能变流器PCS",
+      "node_type": "equipment",
+      "description": "Bidirectional conversion, grid support and grid-forming power electronics.",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "key_metrics": [
+        "qualification progress",
+        "segment revenue",
+        "gross margin",
+        "orders and capacity"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [
+        "300376.SZ",
+        "002335.SZ"
+      ],
+      "node_review_status": "reviewed"
+    },
+    {
+      "node_id": "storage_bms",
+      "theme_id": "new_energy_storage_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "电池管理系统BMS",
+      "node_type": "software",
+      "description": "State estimation, balancing, protection and battery diagnostics.",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "key_metrics": [
+        "qualification progress",
+        "segment revenue",
+        "gross margin",
+        "orders and capacity"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "reviewed"
+    },
+    {
+      "node_id": "storage_ems",
+      "theme_id": "new_energy_storage_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "能量管理系统EMS",
+      "node_type": "software",
+      "description": "Dispatch, optimization, aggregation and operating control.",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "key_metrics": [
+        "qualification progress",
+        "segment revenue",
+        "gross margin",
+        "orders and capacity"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "reviewed"
+    },
+    {
+      "node_id": "storage_thermal_management",
+      "theme_id": "new_energy_storage_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "热管理",
+      "node_type": "subsystem",
+      "description": "Liquid and air cooling, temperature uniformity and thermal control.",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "key_metrics": [
+        "qualification progress",
+        "segment revenue",
+        "gross margin",
+        "orders and capacity"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "reviewed"
+    },
+    {
+      "node_id": "storage_fire_protection",
+      "theme_id": "new_energy_storage_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "消防与安全",
+      "node_type": "subsystem",
+      "description": "Detection, propagation control, suppression and safety systems.",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "key_metrics": [
+        "qualification progress",
+        "segment revenue",
+        "gross margin",
+        "orders and capacity"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "reviewed"
+    },
+    {
+      "node_id": "storage_enclosure_electrical_bos",
+      "theme_id": "new_energy_storage_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "舱体与电气BOS",
+      "node_type": "infrastructure",
+      "description": "Containers, switchgear, transformers, cabling and electrical balance of system.",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "key_metrics": [
+        "qualification progress",
+        "segment revenue",
+        "gross margin",
+        "orders and capacity"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "reviewed"
+    },
+    {
+      "node_id": "storage_system_integration",
+      "theme_id": "new_energy_storage_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "系统集成",
+      "node_type": "service",
+      "description": "Architecture, procurement, integration, testing and warranty responsibility.",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "key_metrics": [
+        "qualification progress",
+        "segment revenue",
+        "gross margin",
+        "orders and capacity"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [
+        "300274.SZ"
+      ],
+      "node_review_status": "reviewed"
+    },
+    {
+      "node_id": "storage_epc_grid_connection",
+      "theme_id": "new_energy_storage_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "EPC与并网",
+      "node_type": "service",
+      "description": "Engineering, construction, commissioning and grid connection.",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "key_metrics": [
+        "qualification progress",
+        "segment revenue",
+        "gross margin",
+        "orders and capacity"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "reviewed"
+    },
+    {
+      "node_id": "storage_operations_maintenance",
+      "theme_id": "new_energy_storage_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "运营维护",
+      "node_type": "service",
+      "description": "Availability, degradation, warranty and lifecycle maintenance.",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "key_metrics": [
+        "qualification progress",
+        "segment revenue",
+        "gross margin",
+        "orders and capacity"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "reviewed"
+    },
+    {
+      "node_id": "storage_market_participation",
+      "theme_id": "new_energy_storage_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "电力市场与收益叠加",
+      "node_type": "service",
+      "description": "Energy arbitrage, capacity, ancillary services and virtual-power-plant participation.",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "key_metrics": [
+        "qualification progress",
+        "segment revenue",
+        "gross margin",
+        "orders and capacity"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "reviewed"
+    },
+    {
+      "node_id": "grid_forming_pcs",
+      "theme_id": "new_energy_storage_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "构网型PCS",
+      "node_type": "equipment",
+      "description": "Grid-forming conversion and control for weak-grid and high-renewable conditions.",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "key_metrics": [
+        "qualification progress",
+        "segment revenue",
+        "gross margin",
+        "orders and capacity"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "reviewed"
+    }
+  ],
+  "value_capture_assessments": [],
+  "decomposition_templates": [
+    {
+      "template_id": "storage_deep_research_template_v1",
+      "theme_type": "new_energy_storage",
+      "steps": [
+        "Map the value flow.",
+        "Separate bottlenecks and profit pools.",
+        "Attach primary evidence.",
+        "Classify company beneficiaries conservatively."
+      ],
+      "required_dimensions": [
+        "source reliability",
+        "value capture",
+        "bottleneck",
+        "company relationship"
+      ],
+      "optional_dimensions": [
+        "orders",
+        "segment revenue",
+        "gross margin",
+        "customer qualification"
+      ],
+      "output_schema": "theme_decomposition_v1_6"
+    }
+  ]
+}
