@@ -535,3 +535,44 @@ def test_optical_interconnect_profile_and_catalog_link_cover_every_node():
     )
     assert result["ready"] is True
     assert all(result["checks"].values())
+
+
+def test_optical_new_ease_source_uses_exact_revenue_and_route_locators():
+    theme = _read_json(OPTICAL_THEME_PATH)
+    source_pack = _read_json(OPTICAL_SOURCE_PACK_PATH)
+    source_id = "optical_300502_2025_report"
+    theme_source = next(row for row in theme["sources"] if row["source_id"] == source_id)
+    pack_source = next(
+        row for row in source_pack["sources"] if row["source_id"] == source_id
+    )
+
+    assert pack_source["evidence_locator"] == (
+        "第10-12页产品矩阵、产销量、营业收入和量产交付；"
+        "第14-21页硅光、LPO/LRO、NPO/CPO、相干及研发项目"
+    )
+    assert theme_source["notes"] == f"{pack_source['evidence_locator']}已复核。"
+    assert pack_source["title"] == theme_source["title"]
+    assert pack_source["publisher"] == theme_source["publisher"]
+    assert pack_source["publish_date"] == theme_source["publish_date"]
+    assert pack_source["url"] == theme_source["url_or_ref"]
+
+
+def test_optical_linktel_source_locator_covers_qualification_yield_and_delivery():
+    theme = _read_json(OPTICAL_THEME_PATH)
+    source_pack = _read_json(OPTICAL_SOURCE_PACK_PATH)
+    source_id = "optical_301205_2025_report"
+    theme_source = next(row for row in theme["sources"] if row["source_id"] == source_id)
+    pack_source = next(
+        row for row in source_pack["sources"] if row["source_id"] == source_id
+    )
+
+    assert pack_source["evidence_locator"] == (
+        "第9页光模块主营和产品；第13-14页供应商开发与产品认证；"
+        "第19-21、34页良率、规模制造和全球交付；"
+        "第36-37页芯片供应风险；第93页收入审计事项"
+    )
+    assert theme_source["notes"] == f"{pack_source['evidence_locator']}已复核。"
+    assert pack_source["title"] == theme_source["title"]
+    assert pack_source["publisher"] == theme_source["publisher"]
+    assert pack_source["publish_date"] == theme_source["publish_date"]
+    assert pack_source["url"] == theme_source["url_or_ref"]
