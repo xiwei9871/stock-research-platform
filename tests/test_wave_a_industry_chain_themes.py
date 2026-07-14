@@ -576,3 +576,19 @@ def test_optical_linktel_source_locator_covers_qualification_yield_and_delivery(
     assert pack_source["publisher"] == theme_source["publisher"]
     assert pack_source["publish_date"] == theme_source["publish_date"]
     assert pack_source["url"] == theme_source["url_or_ref"]
+
+
+def test_optical_active_chip_claim_keeps_revenue_at_data_center_category_level():
+    theme = _read_json(OPTICAL_THEME_PATH)
+    claim_text = next(
+        row["claim_text"]
+        for row in theme["claims"]
+        if row["claim_id"] == "optical_claim_01_active_chips"
+    )
+
+    assert (
+        "源杰科技数据中心领域收入占比超过50%，主要产品为CW激光器芯片"
+        in claim_text
+    )
+    assert "数据中心CW光源收入占比超过50%" not in claim_text
+    assert "200G及以上EML仍以进口供应为主" in claim_text
