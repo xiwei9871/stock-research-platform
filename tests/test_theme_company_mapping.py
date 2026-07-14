@@ -26,7 +26,7 @@ def test_ai_power_company_mapping_package_loads_and_summarizes():
     assert summary["company_count"] == 47
     assert summary["mapping_count"] == 48
     assert summary["source_count"] == 48
-    assert summary["evidence_count"] == 64
+    assert summary["evidence_count"] == 62
     assert summary["mappings_by_review_status"] == {"reviewed": 48}
     assert summary["mappings_by_business_stage"] == {"primary_business": 48}
     assert summary["mappings_by_node"]["liquid_cooling"] == 4

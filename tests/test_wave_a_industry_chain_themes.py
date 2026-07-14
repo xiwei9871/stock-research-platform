@@ -4,7 +4,11 @@ import importlib.util
 import json
 from pathlib import Path
 
+from fastapi.testclient import TestClient
+
 from stock_research.ai_power_source_pack import validate_theme_evidence_sources
+from stock_research.dashboard import app as dashboard_app
+from stock_research.dashboard.theme_research import list_theme_research_companies
 from stock_research.industry_chain_theme_research import (
     classify_beneficiary,
     verify_deep_theme_coverage,
@@ -143,6 +147,60 @@ def test_ai_logic_compute_research_meets_evidence_and_mapping_gates():
         assert classify_beneficiary(row, evidence) != "concept_association"
 
 
+def test_ai_logic_compute_company_beneficiary_tiers_are_evidence_conservative():
+    expected = {
+        "688256.SH": ("core_beneficiary", "core_business", "material"),
+        "688041.SH": ("elastic_beneficiary", "emerging_segment", "undisclosed"),
+        "688047.SH": ("elastic_beneficiary", "emerging_segment", "undisclosed"),
+        "688521.SH": ("core_beneficiary", "meaningful_segment", "meaningful"),
+        "603893.SH": ("core_beneficiary", "core_business", "material"),
+        "688008.SH": ("core_beneficiary", "meaningful_segment", "material"),
+        "688262.SH": ("indirect_beneficiary", "meaningful_segment", "meaningful"),
+        "688049.SH": ("core_beneficiary", "core_business", "material"),
+    }
+    read_model = list_theme_research_companies(THEME_ID)
+    response = TestClient(dashboard_app.create_app()).get(
+        f"/api/research/theme-decomposition/themes/{THEME_ID}/companies"
+    )
+
+    assert response.status_code == 200
+    for payload in (read_model, response.json()):
+        assert payload["total"] == 8
+        assert {
+            row["company_code"]: (
+                row["beneficiary_tier"],
+                row["business_materiality"],
+                row["revenue_relevance"],
+            )
+            for row in payload["items"]
+        } == expected
+        by_company = {row["company_code"]: row for row in payload["items"]}
+        for company_code in ("688041.SH", "688047.SH"):
+            assert {
+                item["evidence_type"]
+                for item in by_company[company_code]["mapping_evidence"]
+            } == {"product_relationship"}
+
+
+def test_ai_logic_compute_source_pack_claim_links_are_bidirectionally_exact():
+    theme = _read_json(THEME_PATH)
+    source_pack = _read_json(SOURCE_PACK_PATH)
+    expected_claim_ids_by_source = {
+        source["source_id"]: {
+            claim["claim_id"]
+            for claim in theme["claims"]
+            if source["source_id"]
+            in {claim["source_id"], *claim["supporting_source_ids"]}
+        }
+        for source in source_pack["sources"]
+    }
+
+    assert {
+        source["source_id"]: set(source["supported_claim_ids"])
+        for source in source_pack["sources"]
+    } == expected_claim_ids_by_source
+
+
 def test_ai_logic_compute_matrix_covers_every_node_with_evidence_or_explicit_gap():
     theme = _read_json(THEME_PATH)
     source_pack = _read_json(SOURCE_PACK_PATH)
@@ -153,7 +211,9 @@ def test_ai_logic_compute_matrix_covers_every_node_with_evidence_or_explicit_gap
         for row in source_pack["sources"]
         if row["review_status"] == "accepted"
     }
-    claim_ids = {row["claim_id"] for row in theme["claims"]}
+    source_by_id = {row["source_id"]: row for row in source_pack["sources"]}
+    claim_by_id = {row["claim_id"]: row for row in theme["claims"]}
+    claim_ids = set(claim_by_id)
 
     assert {row["node_id"] for row in matrix["node_evidence_matrix"]} == node_ids
     assert len(matrix["node_evidence_matrix"]) == len(node_ids)
@@ -164,6 +224,19 @@ def test_ai_logic_compute_matrix_covers_every_node_with_evidence_or_explicit_gap
             "evidence_gap",
             "technical_route_only",
         }
+        for source_id in row["accepted_source_ids"]:
+            source = source_by_id[source_id]
+            assert row["node_id"] in source["supported_node_ids"]
+            assert set(row["supported_claim_ids"]) & set(
+                source["supported_claim_ids"]
+            )
+        for claim_id in row["supported_claim_ids"]:
+            claim = claim_by_id[claim_id]
+            assert row["node_id"] in claim["affected_theme_nodes"]
+            assert set(row["accepted_source_ids"]) & {
+                claim["source_id"],
+                *claim["supporting_source_ids"],
+            }
 
 
 def test_ai_logic_compute_ucie_source_uses_exact_official_release_date():

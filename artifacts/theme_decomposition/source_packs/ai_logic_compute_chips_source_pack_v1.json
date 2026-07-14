@@ -74,7 +74,7 @@
       "document_status": "primary_source_reviewed",
       "evidence_locator": "第17-20页处理器IP与SiPaaS；第29-31页NPU/GPGPU-AI IP；第84页分产品收入",
       "evidence_summary": "公司拥有GPU、NPU等处理器IP，提供半导体IP授权和一站式芯片定制，并推进Chiplet架构及接口IP产业化。",
-      "supported_claim_ids": ["ai_logic_claim_01_architecture_ip", "ai_logic_claim_04_ai_accelerator", "ai_logic_claim_06_chiplet"],
+      "supported_claim_ids": ["ai_logic_claim_01_architecture_ip", "ai_logic_claim_06_chiplet"],
       "supported_node_ids": ["processor_architecture_ip", "ai_accelerator_npu", "chiplet_die_interconnect"],
       "limitations": "客户采用和授权数量不等于持续特许权收入；Chiplet量产项目、封装良率和收入披露有限。",
       "notes": "上交所年度报告全文已逐页复核。"

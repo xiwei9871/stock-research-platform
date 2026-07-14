@@ -5,7 +5,7 @@
   "node_evidence_matrix": [
     {
       "node_id": "processor_architecture_ip",
-      "accepted_source_ids": ["ai_logic_688521_2025_annual_report", "ai_logic_688262_2025_annual_report", "ai_logic_688047_2025_annual_report"],
+      "accepted_source_ids": ["ai_logic_688521_2025_annual_report", "ai_logic_688262_2025_annual_report"],
       "pending_source_ids": [],
       "supported_claim_ids": ["ai_logic_claim_01_architecture_ip"],
       "evidence_strength_before": 2,
@@ -15,7 +15,7 @@
       "value_bases": ["technology_barrier", "integration_control"],
       "evidence_gap_status": "covered",
       "node_review_status": "reviewed",
-      "rationale": "三份年报直接确认自主指令集/处理器IP、授权或定制服务及收入关系。",
+      "rationale": "芯原与国芯年报直接确认处理器IP、授权或定制服务及收入关系。",
       "next_evidence_needed": "跟踪授权客户量产、特许权收入、PPA和工艺节点覆盖。"
     },
     {
@@ -50,9 +50,9 @@
     },
     {
       "node_id": "ai_accelerator_npu",
-      "accepted_source_ids": ["ai_logic_688256_2025_annual_report", "ai_logic_688521_2025_annual_report"],
+      "accepted_source_ids": ["ai_logic_688256_2025_annual_report"],
       "pending_source_ids": [],
-      "supported_claim_ids": ["ai_logic_claim_04_ai_accelerator", "ai_logic_claim_11_catalyst", "ai_logic_claim_12_risk"],
+      "supported_claim_ids": ["ai_logic_claim_04_ai_accelerator", "ai_logic_claim_12_risk"],
       "evidence_strength_before": 3,
       "evidence_strength_after": 5,
       "value_capture_score_review_status": "supported",
@@ -60,7 +60,7 @@
       "value_bases": ["integration_control", "customer_certification"],
       "evidence_gap_status": "covered",
       "node_review_status": "reviewed",
-      "rationale": "寒武纪披露芯片、板卡、整机、软件和规模部署；芯原披露NPU/GPGPU-AI IP。",
+      "rationale": "寒武纪披露芯片、板卡、整机、软件和规模部署，直接支持该节点的价值链与验证主张。",
       "next_evidence_needed": "补充单型号收入、先进封装和存储配置、客户集中度与复购。"
     },
     {
@@ -125,7 +125,7 @@
     },
     {
       "node_id": "compiler_runtime_ecosystem",
-      "accepted_source_ids": ["ai_logic_688256_2025_annual_report", "ai_logic_688041_2025_annual_report", "ai_logic_688047_2025_annual_report", "ai_logic_603893_2025_annual_report", "ai_logic_688049_2025_annual_report"],
+      "accepted_source_ids": ["ai_logic_688256_2025_annual_report", "ai_logic_688041_2025_annual_report", "ai_logic_688047_2025_annual_report"],
       "pending_source_ids": [],
       "supported_claim_ids": ["ai_logic_claim_02_server_cpu", "ai_logic_claim_03_gpgpu_dcu", "ai_logic_claim_09_software_ecosystem", "ai_logic_claim_12_risk"],
       "evidence_strength_before": 2,
@@ -135,12 +135,12 @@
       "value_bases": ["integration_control", "customer_certification"],
       "evidence_gap_status": "covered",
       "node_review_status": "reviewed",
-      "rationale": "多家年报直接披露基础软件、工具链、模型适配和开发工具，证明软件是硬件商业化必要条件。",
+      "rationale": "寒武纪、海光和龙芯年报直接披露基础软件与工具链，证明软件是硬件商业化必要条件。",
       "next_evidence_needed": "补充生产工作负载性能、迁移时间、开发者采用和算子覆盖。"
     },
     {
       "node_id": "system_customer_validation",
-      "accepted_source_ids": ["ai_logic_688256_2025_annual_report", "ai_logic_688041_2025_annual_report"],
+      "accepted_source_ids": ["ai_logic_688256_2025_annual_report"],
       "pending_source_ids": [],
       "supported_claim_ids": ["ai_logic_claim_04_ai_accelerator", "ai_logic_claim_10_customer_validation", "ai_logic_claim_12_risk"],
       "evidence_strength_before": 2,
@@ -150,7 +150,7 @@
       "value_bases": ["customer_certification"],
       "evidence_gap_status": "covered",
       "node_review_status": "reviewed",
-      "rationale": "寒武纪披露重点行业规模部署和严苛环境验证，海光披露产品在多行业广泛应用。",
+      "rationale": "寒武纪披露重点行业规模部署和严苛环境验证，直接支持板卡整机与客户工作负载验证节点。",
       "next_evidence_needed": "补充客户名称、部署规模、复购、故障率和工作负载利用率。"
     }
   ]

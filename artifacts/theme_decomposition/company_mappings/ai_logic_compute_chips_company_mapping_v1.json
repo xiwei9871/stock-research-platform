@@ -27,7 +27,7 @@
       "access_level": "public",
       "reliability_level": "S0",
       "review_status": "accepted",
-      "notes": "上交所年度报告全文，CPU/DCU关系与主营收入页已复核。"
+      "notes": "上交所年度报告全文，CPU/DCU产品关系已复核；未披露DCU单独收入。"
     },
     {
       "source_id": "ai_logic_mapping_688047_filing",
@@ -40,7 +40,7 @@
       "access_level": "public",
       "reliability_level": "S0",
       "review_status": "accepted",
-      "notes": "巨潮资讯年度报告全文，处理器业务与主营收入页已复核。"
+      "notes": "巨潮资讯年度报告全文，处理器产品关系已复核；未披露服务器CPU单独收入。"
     },
     {
       "source_id": "ai_logic_mapping_688521_filing",
@@ -137,29 +137,11 @@
       "related_node_ids": ["gpgpu_dcu"]
     },
     {
-      "evidence_id": "ai_logic_688041_revenue",
-      "source_id": "ai_logic_mapping_688041_filing",
-      "evidence_type": "revenue_materiality",
-      "excerpt_locator": "年度报告第32页，主营业务分行业、分产品",
-      "evidence_summary": "集成电路产品贡献2025年主营业务收入，CPU与DCU为公司披露的两类核心产品。",
-      "related_company_codes": ["688041.SH"],
-      "related_node_ids": ["gpgpu_dcu"]
-    },
-    {
       "evidence_id": "ai_logic_688047_product",
       "source_id": "ai_logic_mapping_688047_filing",
       "evidence_type": "product_relationship",
       "excerpt_locator": "年度报告第16页，主要业务、主要产品或服务情况",
       "evidence_summary": "公司主营处理器及配套芯片研制、销售和服务，并提供基于龙架构的基础软硬件解决方案。",
-      "related_company_codes": ["688047.SH"],
-      "related_node_ids": ["server_cpu"]
-    },
-    {
-      "evidence_id": "ai_logic_688047_revenue",
-      "source_id": "ai_logic_mapping_688047_filing",
-      "evidence_type": "revenue_materiality",
-      "excerpt_locator": "年度报告第36-37页，主营业务分行业、分产品及产销量",
-      "evidence_summary": "2025年主营收入来自集成电路业务，披露信息化类芯片、工控类芯片、解决方案及处理器配套芯片产销量。",
       "related_company_codes": ["688047.SH"],
       "related_node_ids": ["server_cpu"]
     },
@@ -284,12 +266,12 @@
       "mapping_type": "direct_product",
       "business_stage": "primary_business",
       "confidence": 0.96,
-      "evidence_ids": ["ai_logic_688041_product", "ai_logic_688041_revenue"],
-      "revenue_relevance": "material",
+      "evidence_ids": ["ai_logic_688041_product"],
+      "revenue_relevance": "undisclosed",
       "bottleneck_relevance": "core",
-      "business_materiality": "core_business",
+      "business_materiality": "emerging_segment",
       "product_or_service": "海光DCU通用并行处理器及DTK软件工具链",
-      "relationship_summary": "DCU为公司两类核心高端处理器产品之一，直接服务AI训练推理和通用并行计算。",
+      "relationship_summary": "DCU是公司披露的高端处理器产品，直接服务AI训练推理和通用并行计算；年报未提供DCU节点独立收入。",
       "review_status": "reviewed",
       "notes": "年度报告未拆分DCU单独收入和客户利用率。"
     },
@@ -303,12 +285,12 @@
       "mapping_type": "direct_product",
       "business_stage": "primary_business",
       "confidence": 0.94,
-      "evidence_ids": ["ai_logic_688047_product", "ai_logic_688047_revenue"],
-      "revenue_relevance": "material",
+      "evidence_ids": ["ai_logic_688047_product"],
+      "revenue_relevance": "undisclosed",
       "bottleneck_relevance": "core",
-      "business_materiality": "core_business",
+      "business_materiality": "emerging_segment",
       "product_or_service": "龙架构处理器、配套芯片及基础软硬件解决方案",
-      "relationship_summary": "自主处理器及配套芯片构成核心主营，服务器CPU价值与龙架构和基础软件生态绑定。",
+      "relationship_summary": "公司直接提供龙架构处理器及基础软件，但年报未把服务器CPU节点从信息化、工控和解决方案收入中单独拆分。",
       "review_status": "reviewed",
       "notes": "信息化类芯片包含多种处理器，未将全部收入归因于服务器CPU。"
     },
