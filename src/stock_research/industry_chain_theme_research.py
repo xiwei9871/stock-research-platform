@@ -250,8 +250,8 @@ def verify_deep_theme_coverage(
         "catalog_link": link is not None,
         "all_theme_nodes_accounted_for": bool(theme_node_ids)
         and theme_node_ids <= linked_theme_nodes | explicitly_unmapped_theme_nodes,
-        "catalog_l3_linked": bool(l3_ids & linked_catalog_nodes),
-        "catalog_l4_linked": bool(l4_ids & linked_catalog_nodes),
+        "catalog_l3_linked": not l3_ids or bool(l3_ids & linked_catalog_nodes),
+        "catalog_l4_linked": not l4_ids or bool(l4_ids & linked_catalog_nodes),
         "accepted_source_count": len(accepted_source_ids) >= 10,
         "primary_source_count": len(
             [

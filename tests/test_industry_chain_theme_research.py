@@ -201,6 +201,77 @@ def test_coverage_verifier_accounts_for_theme_nodes_without_requiring_entire_cat
     assert result["counts"]["reviewed_claims"] == 8
 
 
+def test_coverage_verifier_allows_catalog_skeletons_when_theme_nodes_are_accounted_for():
+    context = _ready_theme_context()
+    theme_id = "new_energy_storage_value_chain_v1"
+    theme_node_ids = {
+        row["node_id"]
+        for row in context["theme_package"]["nodes"]
+        if row["theme_id"] == theme_id
+    }
+    catalog = {
+        "chains": [{"chain_id": "new_energy_storage", "chain_name": "New Energy Storage"}],
+        "nodes": [],
+        "theme_links": [
+            {
+                "theme_id": theme_id,
+                "chain_id": "new_energy_storage",
+                "node_links": [],
+                "unmapped_theme_node_ids": sorted(theme_node_ids),
+            }
+        ],
+    }
+
+    result = verify_deep_theme_coverage(
+        theme_id,
+        catalog=catalog,
+        theme_context=context,
+    )
+
+    assert result["ready"] is True
+    assert result["checks"]["all_theme_nodes_accounted_for"] is True
+    assert result["checks"]["catalog_l3_linked"] is True
+    assert result["checks"]["catalog_l4_linked"] is True
+    assert result["counts"]["l3_nodes"] == 0
+    assert result["counts"]["l4_nodes"] == 0
+
+
+def test_coverage_verifier_still_requires_links_for_populated_catalog_levels():
+    context = _ready_theme_context()
+    theme_id = "new_energy_storage_value_chain_v1"
+    theme_node_ids = {
+        row["node_id"]
+        for row in context["theme_package"]["nodes"]
+        if row["theme_id"] == theme_id
+    }
+    catalog = {
+        "chains": [{"chain_id": "new_energy_storage", "chain_name": "New Energy Storage"}],
+        "nodes": [
+            {"node_id": "storage_l3", "chain_id": "new_energy_storage", "level": "L3"},
+            {"node_id": "storage_l4", "chain_id": "new_energy_storage", "level": "L4"},
+        ],
+        "theme_links": [
+            {
+                "theme_id": theme_id,
+                "chain_id": "new_energy_storage",
+                "node_links": [],
+                "unmapped_theme_node_ids": sorted(theme_node_ids),
+            }
+        ],
+    }
+
+    result = verify_deep_theme_coverage(
+        theme_id,
+        catalog=catalog,
+        theme_context=context,
+    )
+
+    assert result["ready"] is False
+    assert result["checks"]["all_theme_nodes_accounted_for"] is True
+    assert result["checks"]["catalog_l3_linked"] is False
+    assert result["checks"]["catalog_l4_linked"] is False
+
+
 def _mapping(**overrides):
     row = {
         "mapping_id": "mapping_1",
