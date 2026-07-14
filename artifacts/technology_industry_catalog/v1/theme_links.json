@@ -351,8 +351,32 @@
     {
       "theme_id": "power_semiconductors_value_chain_v1",
       "chain_id": "power_semiconductors",
-      "node_links": [],
-      "unmapped_theme_node_ids": []
+      "node_links": [
+        {
+          "theme_node_id": "device_design_process_platforms",
+          "catalog_node_id": "power_semiconductor_devices"
+        },
+        {
+          "theme_node_id": "silicon_mosfet",
+          "catalog_node_id": "power_mosfet_device"
+        },
+        {
+          "theme_node_id": "sic_power_devices",
+          "catalog_node_id": "silicon_carbide_power_device"
+        },
+        {
+          "theme_node_id": "gan_power_devices",
+          "catalog_node_id": "gallium_nitride_power_device"
+        }
+      ],
+      "unmapped_theme_node_ids": [
+        "wide_bandgap_substrates_epitaxy",
+        "power_wafer_fabrication",
+        "diodes_thyristors_protection",
+        "igbt_chips_modules",
+        "power_packaging_testing_modules",
+        "qualification_system_applications"
+      ]
     },
     {
       "theme_id": "industrial_automation_control_value_chain_v1",

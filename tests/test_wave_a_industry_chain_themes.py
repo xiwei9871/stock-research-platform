@@ -114,6 +114,27 @@ INDUSTRIAL_AUTOMATION_MATRIX_PATH = (
     / "artifacts/theme_decomposition/source_packs"
     / "industrial_automation_control_node_evidence_matrix_v1.json"
 )
+POWER_SEMICONDUCTORS_THEME_ID = "power_semiconductors_value_chain_v1"
+POWER_SEMICONDUCTORS_CHAIN_ID = "power_semiconductors"
+POWER_SEMICONDUCTORS_THEME_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/power_semiconductors_value_chain_v1.json"
+)
+POWER_SEMICONDUCTORS_MAPPING_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/company_mappings"
+    / "power_semiconductors_company_mapping_v1.json"
+)
+POWER_SEMICONDUCTORS_SOURCE_PACK_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "power_semiconductors_source_pack_v1.json"
+)
+POWER_SEMICONDUCTORS_MATRIX_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "power_semiconductors_node_evidence_matrix_v1.json"
+)
 MANIFEST_PATH = (
     REPOSITORY_ROOT
     / "artifacts/theme_decomposition/batch_manifests"
@@ -226,13 +247,13 @@ def test_ai_logic_compute_artifacts_load_through_canonical_packages():
     )["node_links"] == []
 
 
-def test_ai_logic_compute_batch_row_is_ready_before_wave_a_is_complete():
+def test_ai_logic_compute_batch_row_stays_ready_when_wave_a_is_complete():
     report = VERIFIER.build_theme_batch_report(MANIFEST_PATH, wave="wave_a")
     row = next(row for row in report["theme_results"] if row["chain_id"] == CHAIN_ID)
 
     assert row["ready"] is True
     assert all(row["checks"].values())
-    assert report["wave_results"]["wave_a"]["ready"] is False
+    assert report["wave_results"]["wave_a"]["ready"] is True
     implemented_chain_ids = _implemented_wave_chain_ids("wave_a")
     assert {
         result["chain_id"] for result in report["theme_results"] if result["ready"]
@@ -240,6 +261,7 @@ def test_ai_logic_compute_batch_row_is_ready_before_wave_a_is_complete():
     assert report["wave_results"]["wave_a"]["ready_theme_count"] == len(
         implemented_chain_ids
     )
+    assert report["completion_status"] == "ready"
 
 
 def test_ai_logic_compute_research_meets_evidence_and_mapping_gates():
@@ -462,7 +484,7 @@ def test_optical_interconnect_batch_row_is_ready_and_ai_logic_stays_ready():
     assert all(rows[OPTICAL_CHAIN_ID]["checks"].values())
     assert rows[CHAIN_ID]["ready"] is True
     assert all(rows[CHAIN_ID]["checks"].values())
-    assert report["wave_results"]["wave_a"]["ready"] is False
+    assert report["wave_results"]["wave_a"]["ready"] is True
     implemented_chain_ids = _implemented_wave_chain_ids("wave_a")
     assert {
         chain_id for chain_id, row in rows.items() if row["ready"]
@@ -473,7 +495,7 @@ def test_optical_interconnect_batch_row_is_ready_and_ai_logic_stays_ready():
     assert report["wave_results"]["wave_a"]["not_ready_theme_count"] == (
         len(rows) - len(implemented_chain_ids)
     )
-    assert report["completion_status"] == "not_ready"
+    assert report["completion_status"] == "ready"
 
 
 def test_optical_interconnect_research_meets_evidence_and_mapping_gates():
@@ -1086,3 +1108,187 @@ def test_industrial_automation_revenue_claims_keep_product_boundaries():
     assert "28.111亿元工业自动化总收入不能归入PLC或伺服" in evidence_by_id[
         "iac_ev_002334_revenue"
     ]["evidence_summary"]
+
+
+def test_power_semiconductors_artifacts_load_and_complete_wave_a():
+    theme_package = load_theme_package()
+    mapping_package = load_theme_company_mapping_package()
+    priority_package = load_theme_research_priority_package()
+    catalog = load_industry_catalog()
+
+    assert POWER_SEMICONDUCTORS_THEME_ID in {
+        row["theme_id"] for row in theme_package["themes"]
+    }
+    assert POWER_SEMICONDUCTORS_THEME_ID in {
+        row["theme_id"] for row in mapping_package["company_mappings"]
+    }
+    assert POWER_SEMICONDUCTORS_THEME_ID in {
+        row["theme_id"] for row in priority_package["node_priorities"]
+    }
+    report = VERIFIER.build_theme_batch_report(MANIFEST_PATH, wave="wave_a")
+    rows = {row["chain_id"]: row for row in report["theme_results"]}
+
+    assert rows[POWER_SEMICONDUCTORS_CHAIN_ID]["ready"] is True
+    assert all(rows[POWER_SEMICONDUCTORS_CHAIN_ID]["checks"].values())
+    assert report["wave_results"]["wave_a"]["ready"] is True
+    assert report["wave_results"]["wave_a"]["theme_count"] == 5
+    assert report["wave_results"]["wave_a"]["ready_theme_count"] == 5
+    assert report["wave_results"]["wave_a"]["not_ready_theme_count"] == 0
+    assert report["completion_status"] == "ready"
+
+
+def test_power_semiconductors_evidence_mapping_and_links_are_exact():
+    _assert_bidirectional_source_and_matrix_links(
+        POWER_SEMICONDUCTORS_THEME_PATH,
+        POWER_SEMICONDUCTORS_SOURCE_PACK_PATH,
+        POWER_SEMICONDUCTORS_MATRIX_PATH,
+        exact_node_claim_coverage=True,
+    )
+    theme = _read_json(POWER_SEMICONDUCTORS_THEME_PATH)
+    mapping = _read_json(POWER_SEMICONDUCTORS_MAPPING_PATH)
+    source_pack = _read_json(POWER_SEMICONDUCTORS_SOURCE_PACK_PATH)
+    node_ids = {row["node_id"] for row in theme["nodes"]}
+    accepted = validate_theme_evidence_sources(source_pack["sources"], node_ids)
+    reviewed_mappings = [
+        row for row in mapping["company_mappings"] if row["review_status"] == "reviewed"
+    ]
+    evidence_by_id = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+
+    assert len([row for row in accepted.values() if row["review_status"] == "accepted"]) == 11
+    assert all(
+        row["source_type"] == "company_filing"
+        and row["reliability_level"] == "S0"
+        for row in source_pack["sources"]
+    )
+    assert len(theme["nodes"]) == 10
+    assert len(theme["claims"]) == 14
+    assert all(set(row) >= CLAIM_FIELDS for row in theme["claims"])
+    assert len(reviewed_mappings) == 11
+    assert len({row["company_code"] for row in reviewed_mappings}) == 11
+    for row in reviewed_mappings:
+        evidence = [evidence_by_id[evidence_id] for evidence_id in row["evidence_ids"]]
+        assert any(
+            item["evidence_type"] in {
+                "product_relationship",
+                "service_relationship",
+                "customer_relationship",
+            }
+            for item in evidence
+        )
+        assert any(item["evidence_type"] == "revenue_materiality" for item in evidence)
+
+
+def test_power_semiconductors_company_beneficiary_tiers_are_exact():
+    expected = {
+        "603290.SH": ("core_beneficiary", "core_business", "material"),
+        "600460.SH": ("core_beneficiary", "core_business", "material"),
+        "688396.SH": ("elastic_beneficiary", "meaningful_segment", "undisclosed"),
+        "300373.SZ": ("elastic_beneficiary", "meaningful_segment", "undisclosed"),
+        "300623.SZ": ("elastic_beneficiary", "meaningful_segment", "undisclosed"),
+        "605111.SH": ("core_beneficiary", "core_business", "material"),
+        "688261.SH": ("core_beneficiary", "core_business", "material"),
+        "688187.SH": ("elastic_beneficiary", "meaningful_segment", "undisclosed"),
+        "688711.SH": ("core_beneficiary", "core_business", "material"),
+        "688234.SH": ("core_beneficiary", "core_business", "material"),
+        "600703.SH": ("elastic_beneficiary", "emerging_segment", "undisclosed"),
+    }
+    read_model = list_theme_research_companies(POWER_SEMICONDUCTORS_THEME_ID)
+    response = TestClient(dashboard_app.create_app()).get(
+        "/api/research/theme-decomposition/themes/"
+        f"{POWER_SEMICONDUCTORS_THEME_ID}/companies"
+    )
+
+    assert response.status_code == 200
+    for payload in (read_model, response.json()):
+        assert payload["total"] == len(expected)
+        assert {
+            row["company_code"]: (
+                row["beneficiary_tier"],
+                row["business_materiality"],
+                row["revenue_relevance"],
+            )
+            for row in payload["items"]
+        } == expected
+
+
+def test_power_semiconductors_profile_catalog_and_gan_route_are_ready():
+    theme = _read_json(POWER_SEMICONDUCTORS_THEME_PATH)
+    matrix = _read_json(POWER_SEMICONDUCTORS_MATRIX_PATH)
+    profile = theme["research_profile"]
+    node_ids = {row["node_id"] for row in theme["nodes"]}
+    claim_ids = {row["claim_id"] for row in theme["claims"]}
+    catalog = load_industry_catalog()
+    link = next(
+        row
+        for row in catalog["theme_links"]
+        if row["theme_id"] == POWER_SEMICONDUCTORS_THEME_ID
+    )
+    gan_row = next(
+        row for row in matrix["node_evidence_matrix"] if row["node_id"] == "gan_power_devices"
+    )
+
+    assert profile["catalog_chain_id"] == POWER_SEMICONDUCTORS_CHAIN_ID
+    assert profile["research_kind"] == "industry_chain_deep_research"
+    assert set(profile["catalyst_claim_ids"] + profile["risk_claim_ids"]) <= claim_ids
+    assert {
+        (row["theme_node_id"], row["catalog_node_id"])
+        for row in link["node_links"]
+    } == {
+        ("device_design_process_platforms", "power_semiconductor_devices"),
+        ("silicon_mosfet", "power_mosfet_device"),
+        ("sic_power_devices", "silicon_carbide_power_device"),
+        ("gan_power_devices", "gallium_nitride_power_device"),
+    }
+    linked_theme_node_ids = {row["theme_node_id"] for row in link["node_links"]}
+    assert set(link["unmapped_theme_node_ids"]) == node_ids - linked_theme_node_ids
+    assert gan_row["evidence_gap_status"] == "technical_route_only"
+    assert gan_row["accepted_source_ids"]
+    assert "power_claim_08_gan_early" in gan_row["supported_claim_ids"]
+    result = verify_deep_theme_coverage(
+        POWER_SEMICONDUCTORS_THEME_ID,
+        catalog=catalog,
+        theme_context=load_theme_research_priority_package(),
+    )
+    assert result["ready"] is True
+    assert all(result["checks"].values())
+
+
+def test_power_semiconductors_revenue_evidence_blocks_over_attribution():
+    mapping = _read_json(POWER_SEMICONDUCTORS_MAPPING_PATH)
+    by_id = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+    mapped_nodes = {
+        row["company_code"]: row["mapped_node_id"] for row in mapping["company_mappings"]
+    }
+
+    assert "60.28亿元产品与方案包含传感与控制" in by_id[
+        "power_ev_688396_revenue"
+    ]["evidence_summary"]
+    assert "62.57亿元半导体器件收入包含多品类" in by_id[
+        "power_ev_300373_revenue"
+    ]["evidence_summary"]
+    assert "芯片及器件收入未按节点拆分" in by_id[
+        "power_ev_300623_revenue"
+    ]["evidence_summary"]
+    assert "53.60亿元半导体板块收入并非IGBT独立收入" in by_id[
+        "power_ev_688187_revenue"
+    ]["evidence_summary"]
+    assert "29.16亿元集成电路收入包含多品类" in by_id[
+        "power_ev_600703_revenue"
+    ]["evidence_summary"]
+    assert "32.73亿元为IGBT与SiC合计" in by_id[
+        "power_ev_600460_revenue"
+    ]["evidence_summary"]
+    assert "10.3429亿元为模块封装收入，并非单独SiC收入" in by_id[
+        "power_ev_688711_revenue"
+    ]["evidence_summary"]
+    assert "SiC收入约125.69万元" in by_id[
+        "power_ev_688261_revenue"
+    ]["evidence_summary"]
+    assert mapped_nodes["688261.SH"] == "silicon_mosfet"
+    assert mapped_nodes["603290.SH"] == "igbt_chips_modules"
+    assert "gan_power_devices" not in {
+        row["mapped_node_id"]
+        for row in mapping["company_mappings"]
+        if row["company_code"] == "603290.SH"
+    }
+    assert all("规划产能" not in row["relationship_summary"] for row in mapping["company_mappings"])

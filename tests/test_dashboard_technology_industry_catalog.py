@@ -193,6 +193,26 @@ def test_next_fifteen_catalog_theme_links_match_canonical_batch_manifest():
         for chain_id, metadata in manifest["themes"].items()
     } == NEXT_FIFTEEN_CHAIN_THEMES
     for chain_id, metadata in manifest["themes"].items():
+        node_links = []
+        if chain_id == "power_semiconductors":
+            node_links = [
+                {
+                    "theme_node_id": "device_design_process_platforms",
+                    "catalog_node_id": "power_semiconductor_devices",
+                },
+                {
+                    "theme_node_id": "silicon_mosfet",
+                    "catalog_node_id": "power_mosfet_device",
+                },
+                {
+                    "theme_node_id": "sic_power_devices",
+                    "catalog_node_id": "silicon_carbide_power_device",
+                },
+                {
+                    "theme_node_id": "gan_power_devices",
+                    "catalog_node_id": "gallium_nitride_power_device",
+                },
+            ]
         unmapped_theme_node_ids = links_by_chain[chain_id][0][
             "unmapped_theme_node_ids"
         ]
@@ -200,7 +220,7 @@ def test_next_fifteen_catalog_theme_links_match_canonical_batch_manifest():
             {
                 "theme_id": metadata["theme_id"],
                 "chain_id": chain_id,
-                "node_links": [],
+                "node_links": node_links,
                 "unmapped_theme_node_ids": unmapped_theme_node_ids,
             }
         ]

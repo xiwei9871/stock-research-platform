@@ -25,12 +25,13 @@ SEMICONDUCTOR_MATERIALS_THEME_ID = (
     "semiconductor_materials_electronic_chemicals_value_chain_v1"
 )
 INDUSTRIAL_AUTOMATION_THEME_ID = "industrial_automation_control_value_chain_v1"
+POWER_SEMICONDUCTORS_THEME_ID = "power_semiconductors_value_chain_v1"
 
 
 def test_theme_index_aggregates_validated_phase_outputs():
     payload = list_theme_research_themes()
 
-    assert payload["total"] == 9
+    assert payload["total"] == 10
     assert {row["theme_id"] for row in payload["items"]} == {
         AI_POWER_THEME_ID,
         "ai_compute_infrastructure_value_chain_v1",
@@ -38,6 +39,7 @@ def test_theme_index_aggregates_validated_phase_outputs():
         OPTICAL_THEME_ID,
         SEMICONDUCTOR_MATERIALS_THEME_ID,
         INDUSTRIAL_AUTOMATION_THEME_ID,
+        POWER_SEMICONDUCTORS_THEME_ID,
         ROBOTICS_THEME_ID,
         "semiconductor_manufacturing_equipment_value_chain_v1",
         "new_energy_storage_value_chain_v1",
@@ -203,7 +205,7 @@ def test_unknown_theme_is_rejected_by_every_detail_read_model():
 
 
 def test_ai_logic_compute_theme_is_readable_through_detail_and_api():
-    assert list_theme_research_themes()["total"] == 9
+    assert list_theme_research_themes()["total"] == 10
     detail = get_theme_research_theme(NEXT_FIFTEEN_THEME_ID)
     assert detail["theme"]["status"] == "reviewed"
     assert detail["research_profile"]["catalog_chain_id"] == "ai_logic_compute_chips"
@@ -274,7 +276,7 @@ def test_theme_research_api_exposes_six_get_only_routes():
     }
 
     assert all(response.status_code == 200 for response in responses.values())
-    assert responses["themes"].json()["total"] == 9
+    assert responses["themes"].json()["total"] == 10
     assert responses["detail"].json()["theme"]["theme_id"] == AI_POWER_THEME_ID
     for name in ("nodes", "sources", "claims", "companies"):
         assert all(
