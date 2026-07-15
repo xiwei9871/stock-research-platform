@@ -63,10 +63,10 @@ def test_manifest_strategy_reader_preserves_lhb_risk_gate_fields(tmp_path):
     artifact = tmp_path / "strategy_lhb_shortline_review.csv"
     artifact.write_text(
         "trade_date,asset_id,stock_name,rank,score_total,strategy_id,strategy_name,review_tier,"
-        "top5_eligible,risk_gate_code,risk_gate_reason,price_limit_regime,"
+        "stock_name_source,top5_eligible,risk_gate_code,risk_gate_reason,price_limit_regime,"
         "near_limit_down_threshold,pct_chg\n"
         "2026-07-14,CN:SZ:001399,惠科股份,4,69.3698,lhb_shortline,LHB Shortline Combo,"
-        "risk_watch,False,near_limit_down_followthrough_risk,接近跌停,main_board,-9.5,-9.991\n",
+        "risk_watch,lhb_top_list_daily,False,near_limit_down_followthrough_risk,接近跌停,main_board,-9.5,-9.991\n",
         encoding="utf-8",
     )
 
@@ -78,6 +78,7 @@ def test_manifest_strategy_reader_preserves_lhb_risk_gate_fields(tmp_path):
     )
 
     assert rows[0]["stock_name"] == "惠科股份"
+    assert rows[0]["stock_name_source"] == "lhb_top_list_daily"
     assert rows[0]["top5_eligible"] is False
     assert rows[0]["risk_gate_code"] == "near_limit_down_followthrough_risk"
     assert rows[0]["risk_gate_reason"] == "接近跌停"

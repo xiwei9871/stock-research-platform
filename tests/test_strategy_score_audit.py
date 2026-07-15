@@ -55,6 +55,7 @@ def test_lhb_audit_preserves_published_name_and_risk_gate_fields():
             "strategy_name": "LHB Shortline Combo",
             "asset_id": "CN:SZ:001399",
             "stock_name": "惠科股份",
+            "stock_name_source": "lhb_top_list_daily",
             "rank": 4,
             "source_rank": 4,
             "score_total": 69.3698,
@@ -93,6 +94,7 @@ def test_lhb_audit_preserves_published_name_and_risk_gate_fields():
 
     row = detail.iloc[0]
     assert row["stock_name"] == "惠科股份"
+    assert row["stock_name_source"] == "lhb_top_list_daily"
     assert bool(row["top5_eligible"]) is False
     assert row["risk_gate_code"] == "near_limit_down_followthrough_risk"
     assert row["price_limit_regime"] == "main_board"
