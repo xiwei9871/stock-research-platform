@@ -55,7 +55,10 @@ def test_sync_chinese_stock_names_from_akshare_upserts_public_and_core(monkeypat
     assert "INSERT INTO core.asset_master" in core_sql
     assert "ON CONFLICT (asset_id) DO UPDATE" in core_sql
     assert "is_star" in core_sql
-    assert public_rows[0] == ("CN:SZ:001399", "CN", "001399", "SZ", "惠科股份", "CNY")
+    assert public_rows[0] == (
+        "CN:SZ:001399", core_data.SETTINGS.default_market, "001399", "SZ",
+        "惠科股份", core_data.SETTINGS.default_currency,
+    )
     assert core_rows[1] == (
         "CN:SH:688001", "688001.SH", "688001", "688001", "华兴源创",
         "SH", "STAR", True, False, True, False,
@@ -108,7 +111,7 @@ ON CONFLICT (asset_id) DO UPDATE SET
 """
 ```
 
-Build public tuples as `(asset_id, "CN", symbol, exchange, name, SETTINGS.default_currency)` and core tuples as `(asset_id, ts_code, symbol, symbol, name, exchange, board, True, is_beijing, is_star, is_chinext)`. Preserve existing list/delist metadata on conflict by not updating those columns.
+Build public tuples as `(asset_id, SETTINGS.default_market, symbol, exchange, name, SETTINGS.default_currency)` and core tuples as `(asset_id, ts_code, symbol, symbol, name, exchange, board, True, is_beijing, is_star, is_chinext)`. Preserve existing list/delist metadata on conflict by not updating those columns.
 
 - [ ] **Step 4: Run focused and module tests**
 
@@ -271,6 +274,8 @@ Import `is_valid_stock_name` and `apply_lhb_top5_gate`. Extend review columns wi
 
 For LHB rows, resolve name in this order: valid row name, lookup payload name (already `core` then LHB), then normalized code/asset ID. Populate `pct_chg` from the lookup. After collecting rows, call `apply_lhb_top5_gate(review)` instead of assigning Top5 by rank alone. Do not apply the policy to other strategies.
 
+The gate may refill only from rows already present in the strategy's own candidate frame. Do not expand the candidate frame from the broader base-score universe, because those securities may not have passed the lifecycle, rule, or auction layers. If the strategy frame has fewer than five eligible rows after gating, publish fewer than five `top5_focus` rows.
+
 - [ ] **Step 5: Run focused publication tests**
 
 Run: `rtk pytest -q tests/test_strategy_eod_publish.py`
@@ -372,7 +377,7 @@ Run:
 ```bash
 rtk python -m stock_research.strategy_eod_publish \
   --trade-date 2026-07-14 \
-  --output-root outputs/research/strategy_daily_eod
+  --output-root outputs
 ```
 
 Expected: JSON summary with successful LHB strategy publication and review artifact path under `2026-07-14`.
