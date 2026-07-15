@@ -1434,6 +1434,45 @@ def test_intelligent_driving_by_wire_dependency_uses_full_canonical_chain_id_eve
         assert "electric_drive_chassis" not in chain_id_tokens, label
 
 
+def test_intelligent_driving_artifacts_have_no_truncated_electric_chassis_chain_id():
+    def iter_string_fields(value: object, path: str):
+        if isinstance(value, str):
+            yield path, value
+        elif isinstance(value, dict):
+            for key, child in value.items():
+                yield from iter_string_fields(child, f"{path}.{key}")
+        elif isinstance(value, list):
+            for index, child in enumerate(value):
+                yield from iter_string_fields(child, f"{path}[{index}]")
+
+    catalog = load_industry_catalog()
+    link = next(
+        row for row in catalog["theme_links"] if row["theme_id"] == COCKPIT_THEME_ID
+    )
+    payloads = {
+        "theme": _read_json(COCKPIT_THEME_PATH),
+        "company_mapping": _read_json(COCKPIT_MAPPING_PATH),
+        "source_pack": _read_json(COCKPIT_SOURCE_PACK_PATH),
+        "node_evidence_matrix": _read_json(COCKPIT_MATRIX_PATH),
+        "theme_link": link,
+    }
+    truncated_id = re.compile(
+        r"(?<![a-z0-9_])electric_drive_chassis(?![a-z0-9_])"
+    )
+    all_strings = [
+        (path, text)
+        for artifact_name, payload in payloads.items()
+        for path, text in iter_string_fields(payload, artifact_name)
+    ]
+    offenders = [path for path, text in all_strings if truncated_id.search(text)]
+
+    assert offenders == []
+    assert any(
+        "electric_drive_chassis_by_wire_thermal_management" in text
+        for _, text in all_strings
+    )
+
+
 def test_lightgarden_mapping_uses_disclosed_testing_revenue_not_broad_driving_revenue():
     mapping = _read_json(COCKPIT_MAPPING_PATH)
     mapping_row = next(

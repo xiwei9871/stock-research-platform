@@ -90,7 +90,7 @@
       "value_bases": ["customer_certification","integration_control"],
       "evidence_gap_status": "evidence_gap",
       "node_review_status": "reviewed",
-      "rationale": "年报支持控制接口、转向制动软件和冗余安全依赖，但硬件本体归electric_drive_chassis等相邻链。",
+      "rationale": "年报支持控制接口、转向制动软件和冗余安全依赖，但硬件本体归electric_drive_chassis_by_wire_thermal_management等相邻链。",
       "next_evidence_needed": "仅跟踪智驾接口集成、冗余等级和功能安全，不采纳线控硬件宽收入。"
     },
     {
