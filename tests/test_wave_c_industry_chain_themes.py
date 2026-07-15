@@ -93,6 +93,26 @@ AUTOMOTIVE_CHIP_MATRIX_PATH = (
     / "artifacts/theme_decomposition/source_packs"
     / "automotive_electronics_chip_applications_node_evidence_matrix_v1.json"
 )
+COMMERCIAL_SPACE_THEME_ID = "commercial_space_launch_value_chain_v1"
+COMMERCIAL_SPACE_CHAIN_ID = "commercial_space_launch"
+COMMERCIAL_SPACE_THEME_PATH = REPOSITORY_ROOT / (
+    f"artifacts/theme_decomposition/{COMMERCIAL_SPACE_THEME_ID}.json"
+)
+COMMERCIAL_SPACE_MAPPING_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/company_mappings"
+    / "commercial_space_launch_company_mapping_v1.json"
+)
+COMMERCIAL_SPACE_SOURCE_PACK_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "commercial_space_launch_source_pack_v1.json"
+)
+COMMERCIAL_SPACE_MATRIX_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "commercial_space_launch_node_evidence_matrix_v1.json"
+)
 MANIFEST_PATH = (
     REPOSITORY_ROOT
     / "artifacts/theme_decomposition/batch_manifests"
@@ -458,6 +478,24 @@ AUTOMOTIVE_CHIP_SOURCE_IDENTITIES = {
         "2026-03-31",
         "https://static.cninfo.com.cn/finalpage/2026-03-31/1225064570.PDF",
     ),
+}
+COMMERCIAL_SPACE_NODE_IDS = {
+    "high_temperature_lightweight_materials_dependency",
+    "additive_manufacturing_forging_precision_forming_dependency",
+    "fasteners_connectors_airframe_structures",
+    "liquid_rocket_engine_thrust_chamber_nozzle_components",
+    "solid_rocket_propulsion_components",
+    "launch_vehicle_avionics_control_measurement_power",
+    "launch_ground_support_test_final_assembly_equipment",
+    "launch_vehicle_stages_final_assembly_integration",
+    "launch_services_tt_c_commercial_delivery",
+    "reusable_launch_recovery_validation",
+    "reliability_testing_qualification_supply_chain",
+    "payload_orbit_delivery_interface",
+}
+COMMERCIAL_SPACE_NODE_DIRECT_CLAIM_IDS = {
+    node_id: {f"space_launch_claim_{index:02d}_{node_id}"}
+    for index, node_id in enumerate(sorted(COMMERCIAL_SPACE_NODE_IDS), start=3)
 }
 
 
@@ -1993,3 +2031,238 @@ def test_automotive_electronics_chip_company_tiers_and_validation_boundaries_are
     chipsea = mapping_by_company["688595.SH"]
     assert "开发验证期" in chipsea["notes"]
     assert "不作为汽车量产收入" in chipsea["notes"]
+
+
+def test_commercial_space_launch_four_artifacts_exist_before_validation():
+    assert COMMERCIAL_SPACE_THEME_PATH.is_file()
+    assert COMMERCIAL_SPACE_MAPPING_PATH.is_file()
+    assert COMMERCIAL_SPACE_SOURCE_PACK_PATH.is_file()
+    assert COMMERCIAL_SPACE_MATRIX_PATH.is_file()
+
+
+def test_commercial_space_launch_artifacts_load_and_complete_wave_c():
+    theme_package = load_theme_package()
+    mapping_package = load_theme_company_mapping_package()
+    priority_package = load_theme_research_priority_package()
+
+    assert COMMERCIAL_SPACE_THEME_ID in {
+        row["theme_id"] for row in theme_package["themes"]
+    }
+    assert COMMERCIAL_SPACE_THEME_ID in {
+        row["theme_id"] for row in mapping_package["company_mappings"]
+    }
+    assert COMMERCIAL_SPACE_THEME_ID in {
+        row["theme_id"] for row in priority_package["node_priorities"]
+    }
+    report = VERIFIER.build_theme_batch_report(MANIFEST_PATH, wave="wave_c")
+    rows = {row["chain_id"]: row for row in report["theme_results"]}
+
+    assert rows[COMMERCIAL_SPACE_CHAIN_ID]["ready"] is True
+    assert all(rows[COMMERCIAL_SPACE_CHAIN_ID]["checks"].values())
+    assert rows[COMMERCIAL_SPACE_CHAIN_ID]["counts"] == {
+        "accepted_sources": 10,
+        "primary_sources": 10,
+        "claims": 14,
+        "accepted_source_backed_claims": 14,
+        "reviewed_mappings": 8,
+    }
+    _assert_wave_progress_matches_manifest(report, "wave_c")
+    assert report["wave_results"]["wave_c"]["ready_theme_count"] == 5
+    assert report["wave_results"]["wave_c"]["not_ready_theme_count"] == 0
+    assert report["wave_results"]["wave_c"]["ready"] is True
+
+
+def test_commercial_space_launch_source_claim_node_matrix_contract_is_exact():
+    _assert_bidirectional_source_and_matrix_links(
+        theme_path=COMMERCIAL_SPACE_THEME_PATH,
+        source_pack_path=COMMERCIAL_SPACE_SOURCE_PACK_PATH,
+        matrix_path=COMMERCIAL_SPACE_MATRIX_PATH,
+        node_ids=COMMERCIAL_SPACE_NODE_IDS,
+        require_accepted_source=False,
+    )
+    theme = _read_json(COMMERCIAL_SPACE_THEME_PATH)
+    mapping = _read_json(COMMERCIAL_SPACE_MAPPING_PATH)
+    source_pack = _read_json(COMMERCIAL_SPACE_SOURCE_PACK_PATH)
+    accepted = validate_theme_evidence_sources(
+        source_pack["sources"], COMMERCIAL_SPACE_NODE_IDS
+    )
+    reviewed = [
+        row
+        for row in mapping["company_mappings"]
+        if row["review_status"] == "reviewed"
+    ]
+    canonical_sources = {row["source_id"]: row for row in theme["sources"]}
+    mapping_sources = {row["source_id"]: row for row in mapping["sources"]}
+    pack_sources = {row["source_id"]: row for row in source_pack["sources"]}
+
+    assert len(accepted) == 10
+    assert all(
+        row["source_type"] == "company_filing"
+        and row["reliability_level"] == "S0"
+        and row["review_status"] == "accepted"
+        and row["document_status"] == "full_text_reviewed"
+        for row in source_pack["sources"]
+    )
+    assert {row["node_id"] for row in theme["nodes"]} == COMMERCIAL_SPACE_NODE_IDS
+    assert len(theme["nodes"]) == 12
+    assert len(theme["claims"]) == 14
+    assert all(set(row) >= CLAIM_FIELDS for row in theme["claims"])
+    assert len(reviewed) == 8
+    assert len({row["company_code"] for row in reviewed}) == 8
+    assert set(canonical_sources) == set(mapping_sources) == set(pack_sources)
+
+
+def test_commercial_space_launch_source_node_links_require_node_direct_claims():
+    source_pack = _read_json(COMMERCIAL_SPACE_SOURCE_PACK_PATH)
+    matrix = _read_json(COMMERCIAL_SPACE_MATRIX_PATH)
+    source_by_id = {row["source_id"]: row for row in source_pack["sources"]}
+    offenders = []
+
+    for source in source_pack["sources"]:
+        supported_claim_ids = set(source["supported_claim_ids"])
+        for node_id in source["supported_node_ids"]:
+            if not (
+                supported_claim_ids
+                & COMMERCIAL_SPACE_NODE_DIRECT_CLAIM_IDS[node_id]
+            ):
+                offenders.append(f"source:{source['source_id']}->{node_id}")
+
+    for matrix_row in matrix["node_evidence_matrix"]:
+        node_id = matrix_row["node_id"]
+        direct_claim_ids = COMMERCIAL_SPACE_NODE_DIRECT_CLAIM_IDS[node_id]
+        for source_id in matrix_row["accepted_source_ids"]:
+            if not (
+                set(source_by_id[source_id]["supported_claim_ids"])
+                & direct_claim_ids
+            ):
+                offenders.append(f"matrix:{source_id}->{node_id}")
+
+    assert offenders == []
+
+
+def test_commercial_space_launch_readable_sections_catalog_and_cross_chain_ids_are_exact():
+    theme = _read_json(COMMERCIAL_SPACE_THEME_PATH)
+    mapping = _read_json(COMMERCIAL_SPACE_MAPPING_PATH)
+    source_pack = _read_json(COMMERCIAL_SPACE_SOURCE_PACK_PATH)
+    matrix = _read_json(COMMERCIAL_SPACE_MATRIX_PATH)
+    profile = theme["research_profile"]
+    claim_ids = {row["claim_id"] for row in theme["claims"]}
+    catalog = load_industry_catalog()
+    catalog_chain_ids = {row["chain_id"] for row in catalog["chains"]}
+    link = next(
+        row
+        for row in catalog["theme_links"]
+        if row["theme_id"] == COMMERCIAL_SPACE_THEME_ID
+    )
+
+    assert profile["catalog_chain_id"] == COMMERCIAL_SPACE_CHAIN_ID
+    assert profile["research_kind"] == "industry_chain_deep_research"
+    assert set(profile["readable_section_claim_ids"]) == {
+        "conclusion",
+        "value_chain",
+        "profit_pool_barriers",
+        "catalysts_validation_risks",
+        "beneficiary_companies",
+        "source_evidence",
+        "evidence_gaps",
+    }
+    assert all(profile["readable_section_claim_ids"].values())
+    assert all(
+        set(section_claim_ids) <= claim_ids
+        for section_claim_ids in profile["readable_section_claim_ids"].values()
+    )
+    assert set(profile["catalyst_claim_ids"] + profile["risk_claim_ids"]) <= claim_ids
+    assert link["node_links"] == []
+    assert set(link["unmapped_theme_node_ids"]) == COMMERCIAL_SPACE_NODE_IDS
+    assert "L2 skeleton" in link["notes"]
+
+    def iter_string_fields(value: object, path: str):
+        if isinstance(value, str):
+            yield path, value
+        elif isinstance(value, dict):
+            for key, child in value.items():
+                yield from iter_string_fields(child, f"{path}.{key}")
+        elif isinstance(value, list):
+            for index, child in enumerate(value):
+                yield from iter_string_fields(child, f"{path}[{index}]")
+
+    payloads = {
+        "theme": theme,
+        "company_mapping": mapping,
+        "source_pack": source_pack,
+        "node_evidence_matrix": matrix,
+        "theme_link": link,
+    }
+    referenced_chain_ids = {
+        match.group(1)
+        for artifact_name, payload in payloads.items()
+        for _, text in iter_string_fields(payload, artifact_name)
+        for match in re.finditer(r"`([a-z][a-z0-9_]+)`", text)
+    }
+    assert referenced_chain_ids >= {
+        "satellite_manufacturing_space_infrastructure",
+        "civil_aircraft_aero_engines",
+    }
+    assert referenced_chain_ids <= catalog_chain_ids
+
+
+def test_commercial_space_launch_company_evidence_tiers_and_unused_source_roles_are_exact():
+    mapping = _read_json(COMMERCIAL_SPACE_MAPPING_PATH)
+    source_pack = _read_json(COMMERCIAL_SPACE_SOURCE_PACK_PATH)
+    source_by_id = {row["source_id"]: row for row in source_pack["sources"]}
+    evidence = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+    reviewed = [
+        row
+        for row in mapping["company_mappings"]
+        if row["review_status"] == "reviewed"
+    ]
+    read_model = list_theme_research_companies(COMMERCIAL_SPACE_THEME_ID)
+    api_by_company = {row["company_code"]: row for row in read_model["items"]}
+
+    for row in reviewed:
+        row_evidence = [evidence[evidence_id] for evidence_id in row["evidence_ids"]]
+        assert {item["evidence_type"] for item in row_evidence} >= {
+            "product_relationship",
+            "revenue_materiality",
+            "business_stage",
+        }
+        assert len({item["excerpt_locator"] for item in row_evidence}) >= 3
+        assert all(item["excerpt_locator"].startswith("PDF第") for item in row_evidence)
+        assert all(
+            item["related_company_codes"] == [row["company_code"]]
+            for item in row_evidence
+        )
+        source_locator = source_by_id[row_evidence[0]["source_id"]]["evidence_locator"]
+        assert all(
+            item["excerpt_locator"].removeprefix("PDF") in source_locator
+            for item in row_evidence
+        )
+        tier = api_by_company[row["company_code"]]["beneficiary_tier"]
+        if row["revenue_relevance"] in {"undisclosed", "limited"}:
+            assert tier in {
+                "elastic_beneficiary",
+                "indirect_beneficiary",
+                "adjacent_beneficiary",
+            }
+
+    used_source_ids = {item["source_id"] for item in mapping["evidence_items"]}
+    accepted_source_ids = set(source_by_id)
+    unused_source_ids = accepted_source_ids - used_source_ids
+    assert len(used_source_ids) == 8
+    assert len(unused_source_ids) == 2
+    assert {
+        source_by_id[source_id]["research_role"] for source_id in unused_source_ids
+    } == {"negative_boundary", "evidence_gap"}
+
+    theme_text = " ".join(
+        row["claim_text"] for row in _read_json(COMMERCIAL_SPACE_THEME_PATH)["claims"]
+    )
+    for boundary in (
+        "“航天”“航空航天”“军工”宽收入不等于商业火箭收入",
+        "供应商认证、合作、送样、小批、试制、项目中标不等于稳定规模收入",
+        "发射次数、行业规划和可重复使用试验不等于上市公司利润兑现",
+        "卫星制造、星座和地面站归`satellite_manufacturing_space_infrastructure`",
+        "航空发动机和民机材料归`civil_aircraft_aero_engines`",
+        "通用材料、功率器件和半导体仅表达跨链依赖",
+    ):
+        assert boundary in theme_text

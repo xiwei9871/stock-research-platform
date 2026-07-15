@@ -569,7 +569,21 @@
       "theme_id": "commercial_space_launch_value_chain_v1",
       "chain_id": "commercial_space_launch",
       "node_links": [],
-      "unmapped_theme_node_ids": []
+      "unmapped_theme_node_ids": [
+        "high_temperature_lightweight_materials_dependency",
+        "additive_manufacturing_forging_precision_forming_dependency",
+        "fasteners_connectors_airframe_structures",
+        "liquid_rocket_engine_thrust_chamber_nozzle_components",
+        "solid_rocket_propulsion_components",
+        "launch_vehicle_avionics_control_measurement_power",
+        "launch_ground_support_test_final_assembly_equipment",
+        "launch_vehicle_stages_final_assembly_integration",
+        "launch_services_tt_c_commercial_delivery",
+        "reusable_launch_recovery_validation",
+        "reliability_testing_qualification_supply_chain",
+        "payload_orbit_delivery_interface"
+      ],
+      "notes": "commercial_space_launch catalog仍为L2 skeleton，尚无完整等价的自有L3/L4 canonical node，因此12个主题节点全部保持unmapped。卫星制造、星载载荷、星座和地面站归 `satellite_manufacturing_space_infrastructure`；民机、航空发动机及其材料归 `civil_aircraft_aero_engines`。通用材料、增材、锻件、功率器件与半导体只表达跨链依赖；本主题不以宽航天、军工或航空航天收入替代商业火箭收入。"
     }
   ]
 }
