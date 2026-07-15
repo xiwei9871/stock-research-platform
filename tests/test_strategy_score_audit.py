@@ -117,3 +117,44 @@ def test_lhb_audit_preserves_published_name_and_risk_gate_fields():
     assert row["near_limit_down_threshold"] == -9.5
     assert row["data_quality_status"] == "complete"
     assert row["pct_chg"] == -9.991
+
+
+def test_lhb_audit_uses_auction_enhanced_lineage_as_raw_score():
+    review_rows = [
+        {
+            "trade_date": "2026-07-13",
+            "strategy_id": "lhb_shortline",
+            "strategy_name": "LHB Shortline Combo",
+            "asset_id": "000920.SZ",
+            "rank": 2,
+            "score_total": 10.0,
+            "score_source": "auction_enhanced_score",
+            "source_type": "strategy_manifest",
+            "review_tier": "top5_focus",
+            "confirmation_state": "watch_only",
+        }
+    ]
+    strategy_results = {
+        "lhb_shortline": {
+            "candidates": [
+                {
+                    "trade_date": "2026-07-13",
+                    "ts_code": "000920.SZ",
+                    "auction_enhanced_score": 10.0,
+                    "phase12a_rule_layer": "watch_pool",
+                }
+            ]
+        }
+    }
+
+    detail = build_strategy_score_audit(
+        trade_date="2026-07-13",
+        review_rows=review_rows,
+        strategy_results=strategy_results,
+        display_rows=review_rows,
+    )
+
+    row = detail.iloc[0]
+    assert row["raw_candidate_score"] == 10.0
+    assert row["raw_candidate_score_source"] == "auction_enhanced_score"
+    assert row["anomaly_flags"] == []

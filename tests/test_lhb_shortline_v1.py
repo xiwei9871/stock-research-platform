@@ -160,6 +160,32 @@ def test_parity_audit_treats_legitimate_downstream_attrition_as_not_observed():
     assert audit.iloc[0]["parity_status"] == "match"
 
 
+def test_review_candidates_keep_t_plus_one_confirmation_without_becoming_account_fill():
+    scored = pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-07-08",
+                "entry_trade_date": "2026-07-09",
+                "ts_code": "300017.SZ",
+                "top_n": 5,
+                "phase12a_rule_layer": "follow_pool_core",
+                "fill_status": "filled",
+                "auction_enhanced_score": 100.0,
+                "eligibility_status": "eligible",
+            }
+        ]
+    )
+
+    review = lhb_shortline_v1._build_lhb_review_candidates(
+        scored_candidates=scored,
+        risk_watch_candidates=pd.DataFrame(),
+        top_n=5,
+    )
+
+    assert review["ts_code"].tolist() == ["300017.SZ"]
+    assert review.iloc[0]["phase12a_rule_layer"] == "follow_pool_core"
+
+
 def test_cash_account_summary_uses_curve_end_as_performance_effective_date():
     account_trades = pd.DataFrame(
         [
