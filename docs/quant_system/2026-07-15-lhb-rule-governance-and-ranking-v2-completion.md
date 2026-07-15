@@ -19,10 +19,12 @@ All seven approved work items are implemented and verified. `lhb_selection_score
 Focused final suite:
 
 ```text
-174 passed, 2 third-party Python 3.14 deprecation warnings
+182 passed, 2 third-party Python 3.14 deprecation warnings
 ```
 
 The pre-existing `tech_bottleneck_review_universe_frontend_*` worktree changes remain untouched and uncommitted.
+
+The production asset-status service now runs a post-build quality assertion. If same-day LHB names contain ST-prefixed securities while `core.asset_status_daily` reports zero ST securities for that date, the build raises `asset status ST quality violation` and cannot silently publish a normal state. The 2026-07-14 production build and quality assertion completed successfully.
 
 ## Eligibility and replay evidence
 
