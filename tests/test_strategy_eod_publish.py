@@ -71,8 +71,12 @@ def test_lhb_review_resolves_names_and_downgrades_limit_down_candidate(monkeypat
 def test_lhb_review_preserves_upstream_eligibility_without_recomputing(monkeypatch):
     result = _lhb_result_for_review_test()
     candidate = result["candidates"][3]
+    candidate.pop("auction_enhanced_score")
     candidate.update(
         {
+            "auction_enhanced_score": 20.0,
+            "selection_score": 618.3,
+            "phase12a_rule_layer": "risk_watch",
             "eligibility_status": "risk_watch",
             "top5_eligible": False,
             "backtest_entry_eligible": False,
@@ -86,7 +90,17 @@ def test_lhb_review_preserves_upstream_eligibility_without_recomputing(monkeypat
             "pct_chg": 2.0,
         }
     )
-    monkeypatch.setattr(strategy_eod_publish, "_lhb_base_score_lookup_for_trade_date", lambda trade_date: {})
+    monkeypatch.setattr(
+        strategy_eod_publish,
+        "_lhb_base_score_lookup_for_trade_date",
+        lambda trade_date: {
+            "CN:SZ:001399": {
+                "score_total": 69.3698,
+                "stock_name": "惠科股份",
+                "pct_chg": 2.0,
+            }
+        },
+    )
 
     review = _review_rows_from_result(result, trade_date="2026-07-14")
 
@@ -95,6 +109,7 @@ def test_lhb_review_preserves_upstream_eligibility_without_recomputing(monkeypat
     assert row["eligibility_status"] == "risk_watch"
     assert bool(row["top5_eligible"]) is False
     assert row["eligibility_reason_codes"] == ["near_limit_down_followthrough_risk"]
+    assert row["score_total"] == pytest.approx(69.3698)
 
 
 def test_lhb_review_rejects_contradictory_upstream_eligibility(monkeypatch):

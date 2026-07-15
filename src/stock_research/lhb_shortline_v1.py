@@ -1763,7 +1763,6 @@ def _build_lhb_eligibility_parity_audit(
         if frame.empty or not {"trade_date", "ts_code", "eligibility_status", "eligibility_contract_version"}.issubset(frame.columns):
             base[status_column] = pd.NA
             base[version_column] = pd.NA
-            parity &= False
             continue
         observed = frame[["trade_date", "ts_code", "eligibility_status", "eligibility_contract_version"]].copy()
         observed["trade_date"] = pd.to_datetime(observed["trade_date"], errors="coerce").dt.strftime("%Y-%m-%d")
@@ -1772,11 +1771,12 @@ def _build_lhb_eligibility_parity_audit(
             columns={"eligibility_status": status_column, "eligibility_contract_version": version_column}
         )
         base = base.merge(observed, on=["trade_date", "ts_code"], how="left", validate="one_to_one")
-        parity = (
+        observed = base[status_column].notna() | base[version_column].notna()
+        stage_match = ~observed | (
             base[status_column].eq(base["source_eligibility_status"])
             & base[version_column].eq(base["source_contract_version"])
-            & parity.reset_index(drop=True)
         )
+        parity = stage_match & parity.reset_index(drop=True)
     base["eligibility_contract_version"] = base["source_contract_version"]
     base["parity_status"] = parity.map({True: "match", False: "mismatch"})
     return base
@@ -2069,10 +2069,6 @@ def run_lhb_shortline_v1_lifecycle_from_frames(
     risk_watch = pool["rejected_events"].copy()
     if not risk_watch.empty:
         risk_watch = risk_watch[risk_watch["eligibility_status"].eq("risk_watch")].copy()
-        risk_watch["auction_enhanced_score"] = pd.to_numeric(
-            risk_watch.get("selection_score", pd.Series(index=risk_watch.index)),
-            errors="coerce",
-        )
         risk_watch["phase12a_rule_layer"] = "risk_watch"
         risk_watch["top_n"] = config.top_n
     review_candidates = pd.concat([review_candidates, risk_watch], ignore_index=True, sort=False)
