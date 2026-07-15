@@ -320,6 +320,10 @@ def _read_manifest_strategy_artifact(
                 "source_name": str(row.get("source_name") or row.get("strategy_name") or strategy_id),
                 "source_rank": rank,
                 "review_tier": str(row.get("review_tier") or ("top5_focus" if rank <= 5 else "top10_watch")),
+                "confirmation_state": _optional_text(row.get("confirmation_state")),
+                "phase12a_rule_layer": _optional_text(row.get("phase12a_rule_layer")),
+                "phase12a_rule_action": _optional_text(row.get("phase12a_rule_action")),
+                "fill_status": _optional_text(row.get("fill_status")),
                 "stock_name": _optional_text(row.get("stock_name") or row.get("name") or row.get("security_name")),
                 "stock_name_source": _optional_text(row.get("stock_name_source")),
                 "eligibility_status": _optional_text(row.get("eligibility_status")),
@@ -572,6 +576,13 @@ def _load_lhb_shortline_artifact_rows(*, trade_date: str, limit: int) -> list[di
             continue
         score = _optional_float(row.get("auction_enhanced_score") or row.get("score_total"))
         rule_layer = _optional_text(row.get("phase12a_rule_layer"))
+        eligibility_status = _optional_text(row.get("eligibility_status"))
+        confirmation_state = _optional_text(row.get("confirmation_state")) or _lhb_artifact_confirmation_state(
+            rule_layer=rule_layer,
+            rule_action=_optional_text(row.get("phase12a_rule_action")),
+            fill_status=_optional_text(row.get("fill_status")),
+            eligibility_status=eligibility_status,
+        )
         fill_status = _optional_text(row.get("fill_status"))
         notes = []
         if rule_layer:
@@ -604,7 +615,17 @@ def _load_lhb_shortline_artifact_rows(*, trade_date: str, limit: int) -> list[di
                 "source_type": "strategy_artifact",
                 "source_name": "LHB Shortline Combo",
                 "source_rank": index,
-                "review_tier": "top5_focus" if index <= 5 else "top10_watch",
+                "review_tier": "risk_watch" if confirmation_state == "risk_watch" else ("top5_focus" if index <= 5 else "top10_watch"),
+                "confirmation_state": confirmation_state,
+                "phase12a_rule_layer": rule_layer,
+                "phase12a_rule_action": _optional_text(row.get("phase12a_rule_action")),
+                "fill_status": fill_status,
+                "eligibility_status": eligibility_status,
+                "top5_eligible": _optional_bool(row.get("top5_eligible")),
+                "backtest_entry_eligible": _optional_bool(row.get("backtest_entry_eligible")),
+                "eligibility_reason_codes": _optional_json_list(row.get("eligibility_reason_codes")),
+                "eligibility_warning_codes": _optional_json_list(row.get("eligibility_warning_codes")),
+                "eligibility_contract_version": _optional_text(row.get("eligibility_contract_version")),
                 "weight": _optional_float(row.get("weight") or row.get("target_weight")),
                 "stock_name": _optional_text(row.get("stock_name") or row.get("name") or row.get("security_name")),
                 "score_source": "auction_enhanced_score",
@@ -615,6 +636,28 @@ def _load_lhb_shortline_artifact_rows(*, trade_date: str, limit: int) -> list[di
             }
         )
     return normalized
+
+
+def _lhb_artifact_confirmation_state(
+    *,
+    rule_layer: str | None,
+    rule_action: str | None,
+    fill_status: str | None,
+    eligibility_status: str | None,
+) -> str:
+    if eligibility_status == "risk_watch":
+        return "risk_watch"
+    if eligibility_status == "hard_reject":
+        return "retreat"
+    if rule_layer == "pending_intraday" or rule_action == "pending":
+        return "pending_confirmation"
+    if (rule_layer or "").startswith("follow_pool") or rule_action == "follow_allowed" or fill_status == "filled":
+        return "confirmed_follow"
+    if rule_layer in {"watch_pool", "chase_control"}:
+        return "watch_only"
+    if rule_layer == "retreat_hard":
+        return "retreat"
+    return "pending_confirmation" if eligibility_status == "eligible" else "watch_only"
 
 
 def _load_mid_trend_artifact_rows(*, trade_date: str, limit: int) -> list[dict[str, Any]]:
@@ -794,7 +837,14 @@ def _strategy_lightweight_digest(row: dict[str, Any], asset_id: str, trade_date:
     display_name = _row_display_name(row, asset_id)
     rank = _optional_int(row.get("rank"))
     tier = str(row.get("review_tier") or "")
+    confirmation_state = _optional_text(row.get("confirmation_state"))
     tier_label = {
+        "pending_confirmation": "Top5 次日确认待定",
+        "confirmed_follow": "已确认可跟踪",
+        "watch_only": "观察候选",
+        "risk_watch": "风险观察",
+        "retreat": "退出/回避",
+    }.get(confirmation_state) or {
         "top5_focus": "Top5 重点复盘",
         "risk_watch": "跌停风险观察",
     }.get(tier, "Top6-10 观察")
@@ -819,6 +869,25 @@ def _strategy_lightweight_digest(row: dict[str, Any], asset_id: str, trade_date:
         )
     for note in row.get("review_notes") or []:
         facts.append({"kind": "strategy", "label": str(note), "value": "", "severity": "neutral"})
+    if confirmation_state:
+        facts.append(
+            {
+                "kind": "strategy",
+                "label": "确认状态",
+                "value": confirmation_state,
+                "severity": "neutral",
+            }
+        )
+    rule_layer = _optional_text(row.get("phase12a_rule_layer"))
+    if rule_layer:
+        facts.append(
+            {
+                "kind": "strategy",
+                "label": "规则层",
+                "value": rule_layer,
+                "severity": "neutral",
+            }
+        )
     score_source = _optional_text(row.get("score_source"))
     score_explanation = _optional_text(row.get("score_explanation"))
     if score_source or score_explanation:
@@ -952,6 +1021,10 @@ def _queue_item(
         "strategy_name": _optional_text(row.get("strategy_name") or lineage.get("strategy_name")),
         "strategy_run_id": strategy_run_id,
         "review_tier": _optional_text(row.get("review_tier")),
+        "confirmation_state": _optional_text(row.get("confirmation_state")),
+        "phase12a_rule_layer": _optional_text(row.get("phase12a_rule_layer")),
+        "phase12a_rule_action": _optional_text(row.get("phase12a_rule_action")),
+        "fill_status": _optional_text(row.get("fill_status")),
         "stock_name_source": _optional_text(row.get("stock_name_source")),
         "eligibility_status": _optional_text(row.get("eligibility_status")),
         "top5_eligible": _optional_bool(row.get("top5_eligible")),

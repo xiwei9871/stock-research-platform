@@ -66,6 +66,26 @@ def test_lhb_review_resolves_names_and_downgrades_limit_down_candidate(monkeypat
     assert gated["risk_gate_code"] == "near_limit_down_followthrough_risk"
     assert review.loc[review["review_tier"].eq("top5_focus"), "asset_id"].nunique() == 5
     assert "CN:SZ:000001" in set(review.loc[review["review_tier"].eq("top5_focus"), "asset_id"])
+    assert review.loc[review["review_tier"].eq("top5_focus"), "confirmation_state"].eq("pending_confirmation").all()
+
+
+@pytest.mark.parametrize(
+    ("layer", "action", "fill_status", "eligibility_status", "expected"),
+    [
+        ("pending_intraday", "pending", "not_follow_allowed", "eligible", "pending_confirmation"),
+        ("follow_pool_core", "follow_allowed", "filled", "eligible", "confirmed_follow"),
+        ("watch_pool", "watch_only", "not_follow_allowed", "eligible", "watch_only"),
+        ("retreat_hard", "retreat", "not_follow_allowed", "eligible", "retreat"),
+        ("pending_intraday", "pending", "not_follow_allowed", "risk_watch", "risk_watch"),
+    ],
+)
+def test_lhb_confirmation_state_mapping(layer, action, fill_status, eligibility_status, expected):
+    assert strategy_eod_publish._lhb_confirmation_state(
+        phase12a_rule_layer=layer,
+        phase12a_rule_action=action,
+        fill_status=fill_status,
+        eligibility_status=eligibility_status,
+    ) == expected
 
 
 def test_lhb_review_preserves_upstream_eligibility_without_recomputing(monkeypatch):
