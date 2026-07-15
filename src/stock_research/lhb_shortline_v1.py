@@ -2065,7 +2065,20 @@ def run_lhb_shortline_v1_lifecycle_from_frames(
     parity_path = output_dir / "lhb_eligibility_parity_audit_v2.csv"
     parity_audit.to_csv(parity_path, index=False)
     paths["pipeline_eligibility_parity_audit"] = str(parity_path)
-    return result, selected_trades.reset_index(drop=True), paths
+    review_candidates = selected_trades.copy()
+    risk_watch = pool["rejected_events"].copy()
+    if not risk_watch.empty:
+        risk_watch = risk_watch[risk_watch["eligibility_status"].eq("risk_watch")].copy()
+        risk_watch["auction_enhanced_score"] = pd.to_numeric(
+            risk_watch.get("selection_score", pd.Series(index=risk_watch.index)),
+            errors="coerce",
+        )
+        risk_watch["phase12a_rule_layer"] = "risk_watch"
+        risk_watch["top_n"] = config.top_n
+    review_candidates = pd.concat([review_candidates, risk_watch], ignore_index=True, sort=False)
+    if "ts_code" in review_candidates.columns:
+        review_candidates["asset_id"] = review_candidates["ts_code"]
+    return result, review_candidates.reset_index(drop=True), paths
 
 
 def run_lhb_shortline_v1_backtest_for_dashboard(payload: dict[str, Any]) -> dict[str, Any]:
