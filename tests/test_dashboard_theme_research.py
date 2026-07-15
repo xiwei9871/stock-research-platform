@@ -35,6 +35,7 @@ MACHINE_VISION_THEME_ID = (
 )
 INDUSTRIAL_ROBOTS_THEME_ID = "industrial_robots_value_chain_v1"
 POWER_BATTERIES_THEME_ID = "power_batteries_battery_materials_value_chain_v1"
+INTELLIGENT_DRIVING_THEME_ID = "intelligent_driving_smart_cockpit_value_chain_v1"
 
 
 def test_theme_index_aggregates_validated_phase_outputs():
@@ -57,6 +58,7 @@ def test_theme_index_aggregates_validated_phase_outputs():
         MACHINE_VISION_THEME_ID,
         INDUSTRIAL_ROBOTS_THEME_ID,
         POWER_BATTERIES_THEME_ID,
+        INTELLIGENT_DRIVING_THEME_ID,
     }
     assert payload["total"] == len(expected_theme_ids)
     assert {row["theme_id"] for row in payload["items"]} == expected_theme_ids
@@ -273,6 +275,35 @@ def test_semiconductor_materials_theme_is_readable_through_detail_and_api():
     )
     assert response.status_code == 200
     assert response.json()["theme"]["theme_id"] == SEMICONDUCTOR_MATERIALS_THEME_ID
+
+
+def test_intelligent_driving_theme_is_readable_through_detail_and_company_api():
+    detail = get_theme_research_theme(INTELLIGENT_DRIVING_THEME_ID)
+    companies = list_theme_research_companies(INTELLIGENT_DRIVING_THEME_ID)
+    sources = list_theme_research_sources(INTELLIGENT_DRIVING_THEME_ID)
+
+    assert detail["theme"]["status"] == "reviewed"
+    assert detail["research_profile"]["catalog_chain_id"] == (
+        "intelligent_driving_smart_cockpit"
+    )
+    assert detail["node_summary"]["total"] == 12
+    assert detail["company_summary"]["total"] == 10
+    assert companies["total"] == 10
+    assert sources["total"] == 10
+
+    client = TestClient(dashboard_app.create_app())
+    base = f"/api/research/theme-decomposition/themes/{INTELLIGENT_DRIVING_THEME_ID}"
+    detail_response = client.get(base)
+    company_response = client.get(f"{base}/companies")
+
+    assert detail_response.status_code == 200
+    assert detail_response.json()["theme"]["theme_id"] == INTELLIGENT_DRIVING_THEME_ID
+    assert company_response.status_code == 200
+    assert company_response.json()["total"] == 10
+    assert all(
+        row["theme_id"] == INTELLIGENT_DRIVING_THEME_ID
+        for row in company_response.json()["items"]
+    )
 
 
 def test_theme_ids_must_match_exactly_instead_of_returning_empty_aggregates():
