@@ -2266,3 +2266,34 @@ def test_commercial_space_launch_company_evidence_tiers_and_unused_source_roles_
         "通用材料、功率器件和半导体仅表达跨链依赖",
     ):
         assert boundary in theme_text
+
+
+def test_commercial_space_launch_zhenlei_total_revenue_unit_is_exact():
+    theme = _read_json(COMMERCIAL_SPACE_THEME_PATH)
+    mapping = _read_json(COMMERCIAL_SPACE_MAPPING_PATH)
+    source_pack = _read_json(COMMERCIAL_SPACE_SOURCE_PACK_PATH)
+    matrix = _read_json(COMMERCIAL_SPACE_MATRIX_PATH)
+    claim = next(
+        row
+        for row in theme["claims"]
+        if row["claim_id"]
+        == "space_launch_claim_08_launch_vehicle_avionics_control_measurement_power"
+    )
+    source = next(
+        row
+        for row in source_pack["sources"]
+        if row["source_id"] == "space_688270_ar2025"
+    )
+    revenue_evidence = next(
+        row
+        for row in mapping["evidence_items"]
+        if row["evidence_id"] == "space_ev_688270_revenue"
+    )
+
+    assert "4.32亿元芯片与微系统总收入" in claim["claim_text"]
+    assert "4.32亿元为芯片与微系统总收入" in source["limitations"]
+    assert revenue_evidence["evidence_summary"].startswith("总收入4.32亿元")
+    assert all(
+        "43.17亿元" not in json.dumps(payload, ensure_ascii=False)
+        for payload in (theme, mapping, source_pack, matrix)
+    )

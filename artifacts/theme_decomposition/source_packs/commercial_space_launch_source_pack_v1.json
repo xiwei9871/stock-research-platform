@@ -119,7 +119,7 @@
       "evidence_summary": "电源模块明确用于火箭，射频和微系统多面向卫星与特种领域，火箭收入未拆。",
       "supported_claim_ids": ["space_launch_claim_01_value_flow","space_launch_claim_02_boundaries","space_launch_claim_08_launch_vehicle_avionics_control_measurement_power"],
       "supported_node_ids": ["launch_vehicle_avionics_control_measurement_power"],
-      "limitations": "43.17亿元为芯片与微系统总收入；卫星产品不得映射火箭，火箭用电源模块收入未单拆。",
+      "limitations": "4.32亿元为芯片与微系统总收入；卫星产品不得映射火箭，火箭用电源模块收入未单拆。",
       "research_role": "beneficiary_mapping",
       "notes": "巨潮资讯官方年报全文逐页核验。"
     },
