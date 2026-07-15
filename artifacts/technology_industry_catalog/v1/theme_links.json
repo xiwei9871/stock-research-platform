@@ -551,7 +551,19 @@
       "theme_id": "automotive_electronics_chip_applications_value_chain_v1",
       "chain_id": "automotive_electronics_chip_applications",
       "node_links": [],
-      "unmapped_theme_node_ids": []
+      "unmapped_theme_node_ids": [
+        "automotive_mcu_control_soc_applications",
+        "cockpit_driving_soc_compute_applications",
+        "automotive_memory_interfaces",
+        "cmos_image_sensor_signal_chain",
+        "analog_power_interface_chips",
+        "power_semiconductor_module_applications_dependency",
+        "in_vehicle_network_gateway_chips",
+        "ecu_domain_zonal_hardware_integration",
+        "automotive_grade_safety_reliability_validation",
+        "localization_supply_chain_mass_production_validation"
+      ],
+      "notes": "automotive_electronics_chip_applications catalog仍为L2 skeleton，尚无完整等价的自有L3/L4 canonical node，因此本轮10个主题节点全部保持unmapped。汽车功率器件仅表达对 `power_semiconductors` 的应用依赖；AEC-Q、功能安全与可靠性验证不重复 `semiconductor_packaging_test_advanced_packaging` 的封装测试所有权；智驾和座舱功能软件仍归 `intelligent_driving_smart_cockpit`。本主题聚焦芯片与ECU/域控硬件的车规应用、认证和量产验证，不重复所有权。"
     },
     {
       "theme_id": "commercial_space_launch_value_chain_v1",

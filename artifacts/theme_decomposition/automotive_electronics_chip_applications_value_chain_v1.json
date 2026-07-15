@@ -1,0 +1,1053 @@
+{
+  "artifact_version": "theme_decomposition_v1_6",
+  "theme": {
+    "theme_id": "automotive_electronics_chip_applications_value_chain_v1",
+    "theme_name": "汽车电子芯片应用价值链",
+    "theme_type": "other",
+    "summary": "聚焦车规MCU/SoC、存储、CIS、模拟接口、功率器件、车载网络和ECU/域控硬件应用，以及车规安全和量产验证边界。",
+    "status": "reviewed",
+    "created_from": "mixed",
+    "last_updated": "2026-07-15"
+  },
+  "research_profile": {
+    "catalog_chain_id": "automotive_electronics_chip_applications",
+    "research_kind": "industry_chain_deep_research",
+    "industry_stage": "车规MCU、存储、CIS、模拟和功率器件已形成不同程度量产，座舱/智驾SoC、区域控制与国产替代仍需按车型和收入验证。",
+    "central_conflict": "车规认证、发布、送样、定点和导入不等于规模量产收入，宽半导体收入也不等于单一汽车芯片节点收入。",
+    "investment_summary": "优先验证已有汽车收入或累计出货的CIS、MCU、存储和功率模块，谨慎处理仅认证、样品、定点或宽产品收入的公司。",
+    "value_flow_summary": "芯片从感知、计算、存储、模拟与功率环节进入车载网络和ECU/域控，经车规认证、客户量产和供应链验证形成价值。",
+    "profit_pool_summary": "可验证价值集中在具备车规可靠性、量产车型、规模出货和明确汽车收入的产品；未拆汽车口径的宽产品收入只证明材料性。",
+    "validation_signals": [
+      "AEC-Q与ASIL认证",
+      "客户量产车型与累计出货",
+      "汽车单一产品收入与毛利率",
+      "送样/定点转规模量产",
+      "国产供应链和车企交叉验证"
+    ],
+    "catalyst_claim_ids": [
+      "auto_chip_claim_02_mcu_control_soc_mass_production",
+      "auto_chip_claim_04_automotive_memory",
+      "auto_chip_claim_05_cis_module_radar_boundary",
+      "auto_chip_claim_07_power_cross_chain",
+      "auto_chip_claim_11_localization_cross_validation"
+    ],
+    "risk_claim_ids": [
+      "auto_chip_claim_10_certification_not_revenue",
+      "auto_chip_claim_12_stage_boundary",
+      "auto_chip_claim_13_broad_revenue_boundary",
+      "auto_chip_claim_14_margin_supply_risk"
+    ],
+    "readable_section_claim_ids": {
+      "conclusion": [
+        "auto_chip_claim_02_mcu_control_soc_mass_production",
+        "auto_chip_claim_04_automotive_memory",
+        "auto_chip_claim_05_cis_module_radar_boundary",
+        "auto_chip_claim_07_power_cross_chain",
+        "auto_chip_claim_10_certification_not_revenue",
+        "auto_chip_claim_13_broad_revenue_boundary"
+      ],
+      "value_chain": [
+        "auto_chip_claim_01_value_flow",
+        "auto_chip_claim_02_mcu_control_soc_mass_production",
+        "auto_chip_claim_03_cockpit_driving_soc_boundary",
+        "auto_chip_claim_04_automotive_memory",
+        "auto_chip_claim_05_cis_module_radar_boundary",
+        "auto_chip_claim_06_analog_power_interface",
+        "auto_chip_claim_07_power_cross_chain",
+        "auto_chip_claim_08_vehicle_network_gateway",
+        "auto_chip_claim_09_ecu_domain_integration"
+      ],
+      "profit_pool_barriers": [
+        "auto_chip_claim_02_mcu_control_soc_mass_production",
+        "auto_chip_claim_04_automotive_memory",
+        "auto_chip_claim_05_cis_module_radar_boundary",
+        "auto_chip_claim_06_analog_power_interface",
+        "auto_chip_claim_07_power_cross_chain",
+        "auto_chip_claim_08_vehicle_network_gateway",
+        "auto_chip_claim_09_ecu_domain_integration",
+        "auto_chip_claim_14_margin_supply_risk"
+      ],
+      "catalysts_validation_risks": [
+        "auto_chip_claim_02_mcu_control_soc_mass_production",
+        "auto_chip_claim_10_certification_not_revenue",
+        "auto_chip_claim_11_localization_cross_validation",
+        "auto_chip_claim_12_stage_boundary",
+        "auto_chip_claim_13_broad_revenue_boundary",
+        "auto_chip_claim_14_margin_supply_risk"
+      ],
+      "beneficiary_companies": [
+        "auto_chip_claim_02_mcu_control_soc_mass_production",
+        "auto_chip_claim_03_cockpit_driving_soc_boundary",
+        "auto_chip_claim_04_automotive_memory",
+        "auto_chip_claim_05_cis_module_radar_boundary",
+        "auto_chip_claim_06_analog_power_interface",
+        "auto_chip_claim_07_power_cross_chain",
+        "auto_chip_claim_08_vehicle_network_gateway",
+        "auto_chip_claim_09_ecu_domain_integration"
+      ],
+      "source_evidence": [
+        "auto_chip_claim_01_value_flow",
+        "auto_chip_claim_02_mcu_control_soc_mass_production",
+        "auto_chip_claim_03_cockpit_driving_soc_boundary",
+        "auto_chip_claim_04_automotive_memory",
+        "auto_chip_claim_05_cis_module_radar_boundary",
+        "auto_chip_claim_06_analog_power_interface",
+        "auto_chip_claim_07_power_cross_chain",
+        "auto_chip_claim_08_vehicle_network_gateway",
+        "auto_chip_claim_09_ecu_domain_integration",
+        "auto_chip_claim_10_certification_not_revenue",
+        "auto_chip_claim_11_localization_cross_validation",
+        "auto_chip_claim_12_stage_boundary",
+        "auto_chip_claim_13_broad_revenue_boundary",
+        "auto_chip_claim_14_margin_supply_risk"
+      ],
+      "evidence_gaps": [
+        "auto_chip_claim_03_cockpit_driving_soc_boundary",
+        "auto_chip_claim_06_analog_power_interface",
+        "auto_chip_claim_08_vehicle_network_gateway",
+        "auto_chip_claim_10_certification_not_revenue",
+        "auto_chip_claim_12_stage_boundary",
+        "auto_chip_claim_13_broad_revenue_boundary",
+        "auto_chip_claim_14_margin_supply_risk"
+      ]
+    },
+    "evidence_gap_summary": "10份S0年报覆盖10家公司和10个节点；雷达/RF、车载网络单品收入、ECU硬件独立收入及多数汽车细分毛利率仍未拆分。"
+  },
+  "nodes": [
+    {
+      "node_id": "automotive_mcu_control_soc_applications",
+      "theme_id": "automotive_electronics_chip_applications_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "车规MCU与控制SoC应用",
+      "node_type": "core_component",
+      "description": "车身、底盘、动力、BMS与域控中的MCU和控制SoC应用；仅把已披露量产/出货与客户导入计入，不把研发样品外推为收入。",
+      "value_capture_score": 5,
+      "bottleneck_score": 5,
+      "localization_gap_score": 4,
+      "supply_tightness_score": 3,
+      "evidence_strength": 5,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "车规MCU出货量",
+        "量产车型",
+        "ASIL等级",
+        "单车用量"
+      ],
+      "overseas_leaders": [
+        "Infineon",
+        "NXP",
+        "Renesas"
+      ],
+      "domestic_players": [
+        "兆易创新",
+        "杰发科技",
+        "芯海科技",
+        "斯达半导"
+      ],
+      "related_stock_codes": [
+        "603986.SH",
+        "002405.SZ",
+        "688595.SH",
+        "603290.SH"
+      ]
+    },
+    {
+      "node_id": "cockpit_driving_soc_compute_applications",
+      "theme_id": "automotive_electronics_chip_applications_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "智驾/座舱SoC与计算芯片应用",
+      "node_type": "core_component",
+      "description": "聚焦车规SoC在座舱域控、车载AI Box、仪表和计算平台的硬件应用；芯片本体归半导体设计，功能软件归`intelligent_driving_smart_cockpit`。",
+      "value_capture_score": 5,
+      "bottleneck_score": 4,
+      "localization_gap_score": 4,
+      "supply_tightness_score": 3,
+      "evidence_strength": 5,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "量产车型数",
+        "车规SoC出货",
+        "NPU算力",
+        "域控导入"
+      ],
+      "overseas_leaders": [
+        "Qualcomm",
+        "NVIDIA",
+        "NXP"
+      ],
+      "domestic_players": [
+        "杰发科技",
+        "全志科技",
+        "瑞芯微"
+      ],
+      "related_stock_codes": [
+        "002405.SZ",
+        "300458.SZ",
+        "603893.SH"
+      ]
+    },
+    {
+      "node_id": "automotive_memory_interfaces",
+      "theme_id": "automotive_electronics_chip_applications_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "车规存储与NOR/DRAM接口",
+      "node_type": "core_component",
+      "description": "覆盖车规NOR、SLC NAND、SRAM、DRAM及其与座舱/域控的接口需求；宽存储收入不得全部归入汽车。",
+      "value_capture_score": 5,
+      "bottleneck_score": 5,
+      "localization_gap_score": 4,
+      "supply_tightness_score": 4,
+      "evidence_strength": 5,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "车规存储出货",
+        "容量规格",
+        "量产收入",
+        "供应周期"
+      ],
+      "overseas_leaders": [
+        "Micron",
+        "Infineon",
+        "ISSI"
+      ],
+      "domestic_players": [
+        "兆易创新",
+        "北京君正"
+      ],
+      "related_stock_codes": [
+        "603986.SH",
+        "300223.SZ"
+      ]
+    },
+    {
+      "node_id": "cmos_image_sensor_signal_chain",
+      "theme_id": "automotive_electronics_chip_applications_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "CMOS图像传感器与信号链",
+      "node_type": "core_component",
+      "description": "覆盖ADAS、DMS/OMS、电子后视镜等车载CIS与片上信号链；摄像头模组和算法软件不等同CMOS芯片收入。",
+      "value_capture_score": 5,
+      "bottleneck_score": 5,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 5,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "车载CIS收入",
+        "像素/动态范围",
+        "平台支持",
+        "量产车型"
+      ],
+      "overseas_leaders": [
+        "Sony",
+        "onsemi",
+        "Samsung"
+      ],
+      "domestic_players": [
+        "豪威集团"
+      ],
+      "related_stock_codes": [
+        "603501.SH"
+      ]
+    },
+    {
+      "node_id": "analog_power_interface_chips",
+      "theme_id": "automotive_electronics_chip_applications_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "模拟、电源管理与接口芯片",
+      "node_type": "core_component",
+      "description": "覆盖车规电源管理、信号链、SerDes、驱动、SBC和接口芯片；宽模拟收入需与汽车量产交叉验证。",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 4,
+      "supply_tightness_score": 3,
+      "evidence_strength": 5,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "车规模拟型号",
+        "客户验证",
+        "分产品毛利",
+        "量产收入"
+      ],
+      "overseas_leaders": [
+        "Texas Instruments",
+        "Analog Devices",
+        "NXP"
+      ],
+      "domestic_players": [
+        "北京君正",
+        "豪威集团",
+        "圣邦股份"
+      ],
+      "related_stock_codes": [
+        "300223.SZ",
+        "603501.SH",
+        "300661.SZ"
+      ]
+    },
+    {
+      "node_id": "power_semiconductor_module_applications_dependency",
+      "theme_id": "automotive_electronics_chip_applications_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "功率半导体与模块应用依赖",
+      "node_type": "core_component",
+      "description": "覆盖主驱、OBC、DC/DC、热管理中的IGBT、SiC、MOSFET及模块应用；技术、晶圆与模块产能所有权仍归`power_semiconductors`。",
+      "value_capture_score": 5,
+      "bottleneck_score": 5,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 4,
+      "evidence_strength": 5,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "车规模块出货",
+        "主驱定点",
+        "SiC量产",
+        "模块毛利"
+      ],
+      "overseas_leaders": [
+        "Infineon",
+        "STMicroelectronics",
+        "onsemi"
+      ],
+      "domestic_players": [
+        "斯达半导",
+        "扬杰科技"
+      ],
+      "related_stock_codes": [
+        "603290.SH",
+        "300373.SZ"
+      ]
+    },
+    {
+      "node_id": "in_vehicle_network_gateway_chips",
+      "theme_id": "automotive_electronics_chip_applications_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "车载网络、以太网、CAN/LIN与网关芯片",
+      "node_type": "core_component",
+      "description": "覆盖CAN/LIN、GreenPHY、车载以太网、SerDes和SBC等连接器件在网关与域控中的应用；雷达整机不作为RF芯片证据。",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 4,
+      "supply_tightness_score": 3,
+      "evidence_strength": 5,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "接口协议",
+        "量产客户",
+        "带宽",
+        "车规认证"
+      ],
+      "overseas_leaders": [
+        "NXP",
+        "Broadcom",
+        "Marvell"
+      ],
+      "domestic_players": [
+        "北京君正",
+        "豪威集团",
+        "杰发科技"
+      ],
+      "related_stock_codes": [
+        "300223.SZ",
+        "603501.SH",
+        "002405.SZ"
+      ]
+    },
+    {
+      "node_id": "ecu_domain_zonal_hardware_integration",
+      "theme_id": "automotive_electronics_chip_applications_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "ECU、域控制器与区域控制器硬件集成",
+      "node_type": "core_component",
+      "description": "覆盖芯片进入ECU、域控制和区域控制硬件的适配、参考设计与量产验证；不纳入上层智驾/座舱功能软件收入。",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 4,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "域控定点",
+        "参考设计",
+        "量产车型",
+        "硬件安全"
+      ],
+      "overseas_leaders": [
+        "Bosch",
+        "Continental",
+        "Aptiv"
+      ],
+      "domestic_players": [
+        "杰发科技",
+        "全志科技",
+        "瑞芯微",
+        "芯海科技"
+      ],
+      "related_stock_codes": [
+        "002405.SZ",
+        "300458.SZ",
+        "603893.SH",
+        "688595.SH"
+      ]
+    },
+    {
+      "node_id": "automotive_grade_safety_reliability_validation",
+      "theme_id": "automotive_electronics_chip_applications_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "AEC-Q、功能安全与可靠性验证",
+      "node_type": "core_component",
+      "description": "覆盖AEC-Q100、IATF16949、ISO 26262/ASIL与可靠性筛选；封装本体归`semiconductor_packaging_test_advanced_packaging`，本节点只研究车规认证和应用验证。",
+      "value_capture_score": 4,
+      "bottleneck_score": 5,
+      "localization_gap_score": 4,
+      "supply_tightness_score": 3,
+      "evidence_strength": 5,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "AEC-Q等级",
+        "ASIL等级",
+        "可靠性验证",
+        "量产PPM"
+      ],
+      "overseas_leaders": [
+        "TÜV Rheinland",
+        "SGS",
+        "DEKRA"
+      ],
+      "domestic_players": [
+        "兆易创新",
+        "北京君正",
+        "杰发科技",
+        "豪威集团",
+        "圣邦股份",
+        "全志科技",
+        "瑞芯微",
+        "斯达半导",
+        "扬杰科技",
+        "芯海科技"
+      ],
+      "related_stock_codes": [
+        "603986.SH",
+        "300223.SZ",
+        "002405.SZ",
+        "603501.SH",
+        "300661.SZ",
+        "300458.SZ",
+        "603893.SH",
+        "603290.SH",
+        "300373.SZ",
+        "688595.SH"
+      ]
+    },
+    {
+      "node_id": "localization_supply_chain_mass_production_validation",
+      "theme_id": "automotive_electronics_chip_applications_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "供应链、国产替代与量产验证",
+      "node_type": "core_component",
+      "description": "以车规认证、客户量产、收入或出货交叉验证国产替代；产品发布、送样、定点和导入均不是规模量产收入。",
+      "value_capture_score": 4,
+      "bottleneck_score": 5,
+      "localization_gap_score": 5,
+      "supply_tightness_score": 4,
+      "evidence_strength": 4,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "国产化产线",
+        "量产出货",
+        "客户数量",
+        "收入拆分"
+      ],
+      "overseas_leaders": [
+        "TSMC",
+        "GlobalFoundries",
+        "ASE"
+      ],
+      "domestic_players": [
+        "兆易创新",
+        "北京君正",
+        "杰发科技",
+        "豪威集团",
+        "圣邦股份",
+        "全志科技",
+        "瑞芯微",
+        "斯达半导",
+        "扬杰科技",
+        "芯海科技"
+      ],
+      "related_stock_codes": [
+        "603986.SH",
+        "300223.SZ",
+        "002405.SZ",
+        "603501.SH",
+        "300661.SZ",
+        "300458.SZ",
+        "603893.SH",
+        "603290.SH",
+        "300373.SZ",
+        "688595.SH"
+      ]
+    }
+  ],
+  "claims": [
+    {
+      "claim_id": "auto_chip_claim_01_value_flow",
+      "theme_id": "automotive_electronics_chip_applications_value_chain_v1",
+      "source_id": "auto_chip_603986_ar2025",
+      "claim_text": "车规芯片应用价值流从MCU/控制SoC、座舱/智驾SoC、存储、CIS、模拟接口和功率器件进入车载网络、ECU/域控，再经车规安全与量产验证形成可确认的应用收入。",
+      "claim_type": "tech_route",
+      "confidence": 0.98,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "auto_chip_300223_ar2025",
+        "auto_chip_002405_ar2025",
+        "auto_chip_603501_ar2025",
+        "auto_chip_300661_ar2025",
+        "auto_chip_300458_ar2025",
+        "auto_chip_603893_ar2025",
+        "auto_chip_603290_ar2025",
+        "auto_chip_300373_ar2025",
+        "auto_chip_688595_ar2025"
+      ],
+      "affected_theme_nodes": [
+        "automotive_mcu_control_soc_applications",
+        "cockpit_driving_soc_compute_applications",
+        "automotive_memory_interfaces",
+        "cmos_image_sensor_signal_chain",
+        "analog_power_interface_chips",
+        "power_semiconductor_module_applications_dependency",
+        "in_vehicle_network_gateway_chips",
+        "ecu_domain_zonal_hardware_integration",
+        "automotive_grade_safety_reliability_validation",
+        "localization_supply_chain_mass_production_validation"
+      ]
+    },
+    {
+      "claim_id": "auto_chip_claim_02_mcu_control_soc_mass_production",
+      "theme_id": "automotive_electronics_chip_applications_value_chain_v1",
+      "source_id": "auto_chip_603986_ar2025",
+      "claim_text": "兆易车规MCU累计出货、杰发MCU规模装车可验证应用成熟度；斯达与芯海披露的车规MCU认证或开发进展必须与量产收入区分。",
+      "claim_type": "company_mapping",
+      "confidence": 0.98,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "auto_chip_002405_ar2025",
+        "auto_chip_603290_ar2025",
+        "auto_chip_688595_ar2025"
+      ],
+      "affected_theme_nodes": [
+        "automotive_mcu_control_soc_applications",
+        "ecu_domain_zonal_hardware_integration",
+        "automotive_grade_safety_reliability_validation",
+        "localization_supply_chain_mass_production_validation"
+      ]
+    },
+    {
+      "claim_id": "auto_chip_claim_03_cockpit_driving_soc_boundary",
+      "theme_id": "automotive_electronics_chip_applications_value_chain_v1",
+      "source_id": "auto_chip_002405_ar2025",
+      "claim_text": "杰发、全志与瑞芯微均披露车规SoC或量产车型，但智驾与座舱功能软件归`intelligent_driving_smart_cockpit`，本主题仅保留芯片、ECU硬件应用与可靠性验证。",
+      "claim_type": "tech_route",
+      "confidence": 0.98,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "auto_chip_300458_ar2025",
+        "auto_chip_603893_ar2025"
+      ],
+      "affected_theme_nodes": [
+        "cockpit_driving_soc_compute_applications",
+        "ecu_domain_zonal_hardware_integration",
+        "automotive_grade_safety_reliability_validation"
+      ]
+    },
+    {
+      "claim_id": "auto_chip_claim_04_automotive_memory",
+      "theme_id": "automotive_electronics_chip_applications_value_chain_v1",
+      "source_id": "auto_chip_603986_ar2025",
+      "claim_text": "兆易车规Flash累计出货超3亿颗，北京君正2Gb车规NOR已量产并推进车规DRAM；汽车与工业共用的宽存储收入不能全部归入汽车。",
+      "claim_type": "value_capture",
+      "confidence": 0.98,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "auto_chip_300223_ar2025"
+      ],
+      "affected_theme_nodes": [
+        "automotive_memory_interfaces",
+        "automotive_grade_safety_reliability_validation",
+        "localization_supply_chain_mass_production_validation"
+      ]
+    },
+    {
+      "claim_id": "auto_chip_claim_05_cis_module_radar_boundary",
+      "theme_id": "automotive_electronics_chip_applications_value_chain_v1",
+      "source_id": "auto_chip_603501_ar2025",
+      "claim_text": "豪威披露汽车图像传感器收入74.71亿元，可直接支持车载CIS节点；摄像头模组不等于CMOS芯片收入，雷达整机不等于RF芯片收入，缺少直接RF芯片证据时不设雷达/RF独立节点。",
+      "claim_type": "value_capture",
+      "confidence": 0.98,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "cmos_image_sensor_signal_chain",
+        "automotive_grade_safety_reliability_validation"
+      ]
+    },
+    {
+      "claim_id": "auto_chip_claim_06_analog_power_interface",
+      "theme_id": "automotive_electronics_chip_applications_value_chain_v1",
+      "source_id": "auto_chip_300223_ar2025",
+      "claim_text": "北京君正、豪威与圣邦披露车规模拟、电源、SerDes或接口产品，但除已单拆汽车收入外，宽信号链与电源管理收入只能作为业务材料性边界。",
+      "claim_type": "value_capture",
+      "confidence": 0.98,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "auto_chip_603501_ar2025",
+        "auto_chip_300661_ar2025"
+      ],
+      "affected_theme_nodes": [
+        "analog_power_interface_chips",
+        "automotive_grade_safety_reliability_validation"
+      ]
+    },
+    {
+      "claim_id": "auto_chip_claim_07_power_cross_chain",
+      "theme_id": "automotive_electronics_chip_applications_value_chain_v1",
+      "source_id": "auto_chip_603290_ar2025",
+      "claim_text": "斯达与扬杰披露车规IGBT、SiC、MOSFET及模块量产应用；汽车功率器件在本主题表达应用关系，功率器件技术与产能所有权仍归`power_semiconductors`。",
+      "claim_type": "tech_route",
+      "confidence": 0.98,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "auto_chip_300373_ar2025"
+      ],
+      "affected_theme_nodes": [
+        "power_semiconductor_module_applications_dependency",
+        "automotive_grade_safety_reliability_validation"
+      ]
+    },
+    {
+      "claim_id": "auto_chip_claim_08_vehicle_network_gateway",
+      "theme_id": "automotive_electronics_chip_applications_value_chain_v1",
+      "source_id": "auto_chip_300223_ar2025",
+      "claim_text": "北京君正CAN/LIN/GreenPHY、豪威SerDes/SBC和杰发车规MCU接口共同支持车载网络与网关应用，但项目定点需继续核验量产收入。",
+      "claim_type": "tech_route",
+      "confidence": 0.98,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "auto_chip_603501_ar2025",
+        "auto_chip_002405_ar2025"
+      ],
+      "affected_theme_nodes": [
+        "in_vehicle_network_gateway_chips",
+        "ecu_domain_zonal_hardware_integration",
+        "automotive_grade_safety_reliability_validation"
+      ]
+    },
+    {
+      "claim_id": "auto_chip_claim_09_ecu_domain_integration",
+      "theme_id": "automotive_electronics_chip_applications_value_chain_v1",
+      "source_id": "auto_chip_002405_ar2025",
+      "claim_text": "芯片进入ECU、域控制或区域控制需核验参考设计、客户定点、量产车型与安全等级，不能把上层软件或整机收入归入芯片硬件节点。",
+      "claim_type": "bottleneck",
+      "confidence": 0.98,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "auto_chip_300458_ar2025",
+        "auto_chip_603893_ar2025",
+        "auto_chip_688595_ar2025"
+      ],
+      "affected_theme_nodes": [
+        "automotive_mcu_control_soc_applications",
+        "cockpit_driving_soc_compute_applications",
+        "ecu_domain_zonal_hardware_integration"
+      ]
+    },
+    {
+      "claim_id": "auto_chip_claim_10_certification_not_revenue",
+      "theme_id": "automotive_electronics_chip_applications_value_chain_v1",
+      "source_id": "auto_chip_603986_ar2025",
+      "claim_text": "AEC-Q/ASIL认证、产品发布、送样、定点、客户导入不等于规模量产收入；认证只证明质量或安全门槛，仍需出货和收入证据。",
+      "claim_type": "risk",
+      "confidence": 0.98,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "auto_chip_300223_ar2025",
+        "auto_chip_002405_ar2025",
+        "auto_chip_603501_ar2025",
+        "auto_chip_300661_ar2025",
+        "auto_chip_300458_ar2025",
+        "auto_chip_603893_ar2025",
+        "auto_chip_603290_ar2025",
+        "auto_chip_300373_ar2025",
+        "auto_chip_688595_ar2025"
+      ],
+      "affected_theme_nodes": [
+        "automotive_grade_safety_reliability_validation",
+        "localization_supply_chain_mass_production_validation"
+      ]
+    },
+    {
+      "claim_id": "auto_chip_claim_11_localization_cross_validation",
+      "theme_id": "automotive_electronics_chip_applications_value_chain_v1",
+      "source_id": "auto_chip_603986_ar2025",
+      "claim_text": "国产替代需交叉验证车规认证、客户量产和收入或出货；仅有国产产线、奖项、研发项目或供应链表述不能确认份额。",
+      "claim_type": "localization",
+      "confidence": 0.98,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "auto_chip_300223_ar2025",
+        "auto_chip_002405_ar2025",
+        "auto_chip_603501_ar2025",
+        "auto_chip_300661_ar2025",
+        "auto_chip_300458_ar2025",
+        "auto_chip_603893_ar2025",
+        "auto_chip_603290_ar2025",
+        "auto_chip_300373_ar2025",
+        "auto_chip_688595_ar2025"
+      ],
+      "affected_theme_nodes": [
+        "localization_supply_chain_mass_production_validation"
+      ]
+    },
+    {
+      "claim_id": "auto_chip_claim_12_stage_boundary",
+      "theme_id": "automotive_electronics_chip_applications_value_chain_v1",
+      "source_id": "auto_chip_603986_ar2025",
+      "claim_text": "车规产品处于研发、回片、样品、送样、小批量验证、定点、客户导入和规模量产的证据强度不同，必须逐项标注，不能跨阶段外推。",
+      "claim_type": "risk",
+      "confidence": 0.94,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "auto_chip_300223_ar2025",
+        "auto_chip_002405_ar2025",
+        "auto_chip_603501_ar2025",
+        "auto_chip_300661_ar2025",
+        "auto_chip_300458_ar2025",
+        "auto_chip_603893_ar2025",
+        "auto_chip_603290_ar2025",
+        "auto_chip_300373_ar2025",
+        "auto_chip_688595_ar2025"
+      ],
+      "affected_theme_nodes": [
+        "automotive_mcu_control_soc_applications",
+        "cockpit_driving_soc_compute_applications",
+        "analog_power_interface_chips",
+        "power_semiconductor_module_applications_dependency",
+        "automotive_grade_safety_reliability_validation",
+        "localization_supply_chain_mass_production_validation"
+      ]
+    },
+    {
+      "claim_id": "auto_chip_claim_13_broad_revenue_boundary",
+      "theme_id": "automotive_electronics_chip_applications_value_chain_v1",
+      "source_id": "auto_chip_603986_ar2025",
+      "claim_text": "宽集成电路、半导体或汽车电子收入不等于单一车规芯片节点收入；存储、SoC、模拟、功率器件等多场景分产品收入均按未拆汽车口径降级。",
+      "claim_type": "cost_structure",
+      "confidence": 0.98,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "auto_chip_300223_ar2025",
+        "auto_chip_002405_ar2025",
+        "auto_chip_603501_ar2025",
+        "auto_chip_300661_ar2025",
+        "auto_chip_300458_ar2025",
+        "auto_chip_603893_ar2025",
+        "auto_chip_603290_ar2025",
+        "auto_chip_300373_ar2025",
+        "auto_chip_688595_ar2025"
+      ],
+      "affected_theme_nodes": [
+        "automotive_mcu_control_soc_applications",
+        "cockpit_driving_soc_compute_applications",
+        "automotive_memory_interfaces",
+        "cmos_image_sensor_signal_chain",
+        "analog_power_interface_chips",
+        "power_semiconductor_module_applications_dependency",
+        "in_vehicle_network_gateway_chips",
+        "ecu_domain_zonal_hardware_integration",
+        "automotive_grade_safety_reliability_validation",
+        "localization_supply_chain_mass_production_validation"
+      ]
+    },
+    {
+      "claim_id": "auto_chip_claim_14_margin_supply_risk",
+      "theme_id": "automotive_electronics_chip_applications_value_chain_v1",
+      "source_id": "auto_chip_603986_ar2025",
+      "claim_text": "汽车芯片仍面临存储晶圆与封测供给、产品价格、综合毛利率、客户认证周期和车型需求波动风险；宽产品毛利率不能替代汽车节点毛利率。",
+      "claim_type": "risk",
+      "confidence": 0.94,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "auto_chip_300223_ar2025",
+        "auto_chip_300661_ar2025",
+        "auto_chip_603290_ar2025",
+        "auto_chip_300373_ar2025",
+        "auto_chip_688595_ar2025"
+      ],
+      "affected_theme_nodes": [
+        "automotive_memory_interfaces",
+        "analog_power_interface_chips",
+        "power_semiconductor_module_applications_dependency",
+        "automotive_grade_safety_reliability_validation",
+        "localization_supply_chain_mass_production_validation"
+      ]
+    }
+  ],
+  "value_capture_assessments": [
+    {
+      "node_id": "automotive_mcu_control_soc_applications",
+      "rank": 1,
+      "value_basis": "technology_barrier",
+      "assessment_text": "车规MCU与控制SoC应用的价值量必须由直接产品、量产与收入证据共同支持。",
+      "evidence_ids": [
+        "auto_chip_claim_01_value_flow",
+        "auto_chip_claim_02_mcu_control_soc_mass_production"
+      ],
+      "uncertainty": "汽车单一节点收入和毛利率拆分仍有限。"
+    },
+    {
+      "node_id": "cockpit_driving_soc_compute_applications",
+      "rank": 2,
+      "value_basis": "technology_barrier",
+      "assessment_text": "智驾/座舱SoC与计算芯片应用的价值量必须由直接产品、量产与收入证据共同支持。",
+      "evidence_ids": [
+        "auto_chip_claim_01_value_flow",
+        "auto_chip_claim_03_cockpit_driving_soc_boundary"
+      ],
+      "uncertainty": "汽车单一节点收入和毛利率拆分仍有限。"
+    },
+    {
+      "node_id": "automotive_memory_interfaces",
+      "rank": 3,
+      "value_basis": "technology_barrier",
+      "assessment_text": "车规存储与NOR/DRAM接口的价值量必须由直接产品、量产与收入证据共同支持。",
+      "evidence_ids": [
+        "auto_chip_claim_01_value_flow",
+        "auto_chip_claim_04_automotive_memory"
+      ],
+      "uncertainty": "汽车单一节点收入和毛利率拆分仍有限。"
+    },
+    {
+      "node_id": "cmos_image_sensor_signal_chain",
+      "rank": 4,
+      "value_basis": "technology_barrier",
+      "assessment_text": "CMOS图像传感器与信号链的价值量必须由直接产品、量产与收入证据共同支持。",
+      "evidence_ids": [
+        "auto_chip_claim_01_value_flow",
+        "auto_chip_claim_05_cis_module_radar_boundary"
+      ],
+      "uncertainty": "汽车单一节点收入和毛利率拆分仍有限。"
+    },
+    {
+      "node_id": "analog_power_interface_chips",
+      "rank": 5,
+      "value_basis": "technology_barrier",
+      "assessment_text": "模拟、电源管理与接口芯片的价值量必须由直接产品、量产与收入证据共同支持。",
+      "evidence_ids": [
+        "auto_chip_claim_01_value_flow",
+        "auto_chip_claim_06_analog_power_interface"
+      ],
+      "uncertainty": "汽车单一节点收入和毛利率拆分仍有限。"
+    },
+    {
+      "node_id": "power_semiconductor_module_applications_dependency",
+      "rank": 6,
+      "value_basis": "technology_barrier",
+      "assessment_text": "功率半导体与模块应用依赖的价值量必须由直接产品、量产与收入证据共同支持。",
+      "evidence_ids": [
+        "auto_chip_claim_01_value_flow",
+        "auto_chip_claim_07_power_cross_chain"
+      ],
+      "uncertainty": "汽车单一节点收入和毛利率拆分仍有限。"
+    },
+    {
+      "node_id": "in_vehicle_network_gateway_chips",
+      "rank": 7,
+      "value_basis": "technology_barrier",
+      "assessment_text": "车载网络、以太网、CAN/LIN与网关芯片的价值量必须由直接产品、量产与收入证据共同支持。",
+      "evidence_ids": [
+        "auto_chip_claim_01_value_flow",
+        "auto_chip_claim_08_vehicle_network_gateway"
+      ],
+      "uncertainty": "汽车单一节点收入和毛利率拆分仍有限。"
+    },
+    {
+      "node_id": "ecu_domain_zonal_hardware_integration",
+      "rank": 8,
+      "value_basis": "technology_barrier",
+      "assessment_text": "ECU、域控制器与区域控制器硬件集成的价值量必须由直接产品、量产与收入证据共同支持。",
+      "evidence_ids": [
+        "auto_chip_claim_01_value_flow",
+        "auto_chip_claim_02_mcu_control_soc_mass_production"
+      ],
+      "uncertainty": "汽车单一节点收入和毛利率拆分仍有限。"
+    },
+    {
+      "node_id": "automotive_grade_safety_reliability_validation",
+      "rank": 9,
+      "value_basis": "customer_certification",
+      "assessment_text": "AEC-Q、功能安全与可靠性验证的价值量必须由直接产品、量产与收入证据共同支持。",
+      "evidence_ids": [
+        "auto_chip_claim_01_value_flow",
+        "auto_chip_claim_02_mcu_control_soc_mass_production"
+      ],
+      "uncertainty": "汽车单一节点收入和毛利率拆分仍有限。"
+    },
+    {
+      "node_id": "localization_supply_chain_mass_production_validation",
+      "rank": 10,
+      "value_basis": "customer_certification",
+      "assessment_text": "供应链、国产替代与量产验证的价值量必须由直接产品、量产与收入证据共同支持。",
+      "evidence_ids": [
+        "auto_chip_claim_01_value_flow",
+        "auto_chip_claim_02_mcu_control_soc_mass_production"
+      ],
+      "uncertainty": "汽车单一节点收入和毛利率拆分仍有限。"
+    }
+  ],
+  "sources": [
+    {
+      "source_id": "auto_chip_603986_ar2025",
+      "source_type": "company_filing",
+      "title": "兆易创新2025年年度报告",
+      "publisher": "兆易创新科技集团股份有限公司",
+      "author": "",
+      "publish_date": "2026-03-31",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-31/1225061352.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "车规Flash累计出货超3亿颗，GD32A车规MCU累计出货超800万颗；收入仅披露存储/MCU宽产品口径。"
+    },
+    {
+      "source_id": "auto_chip_300223_ar2025",
+      "source_type": "company_filing",
+      "title": "北京君正2025年年度报告",
+      "publisher": "北京君正集成电路股份有限公司",
+      "author": "",
+      "publish_date": "2026-03-28",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-28/1225045085.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "车规SRAM/DRAM/NOR、LED驱动、CAN/LIN/GreenPHY覆盖汽车应用，2Gb车规NOR已量产。"
+    },
+    {
+      "source_id": "auto_chip_002405_ar2025",
+      "source_type": "company_filing",
+      "title": "四维图新2025年年度报告",
+      "publisher": "北京四维图新科技股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-29",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-29/1225236620.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "杰发SoC与MCU累计出货均过亿，智芯收入6.59亿元；AC7870与AC8025覆盖域控和座舱。"
+    },
+    {
+      "source_id": "auto_chip_603501_ar2025",
+      "source_type": "company_filing",
+      "title": "豪威集团2025年年度报告",
+      "publisher": "豪威集成电路（集团）股份有限公司",
+      "author": "",
+      "publish_date": "2026-03-31",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-31/1225055056.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "车载CIS覆盖ADAS/DMS/OMS等场景，汽车图像传感器收入74.71亿元；SerDes/SBC/MCU仍处验证导入。"
+    },
+    {
+      "source_id": "auto_chip_300661_ar2025",
+      "source_type": "company_filing",
+      "title": "圣邦股份2025年年度报告",
+      "publisher": "圣邦微电子（北京）股份有限公司",
+      "author": "",
+      "publish_date": "2026-03-28",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-28/1225045012.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "车规级电源管理与信号链产品部分量产，宽信号链和电源管理收入分别14.71亿元与23.80亿元。"
+    },
+    {
+      "source_id": "auto_chip_300458_ar2025",
+      "source_type": "company_filing",
+      "title": "全志科技2025年年度报告",
+      "publisher": "珠海全志科技股份有限公司",
+      "author": "",
+      "publish_date": "2026-03-27",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-27/1225035756.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "高性能车规SoC项目处量产阶段，T527V通过AEC-Q100并在前装定点项目量产。"
+    },
+    {
+      "source_id": "auto_chip_603893_ar2025",
+      "source_type": "company_filing",
+      "title": "瑞芯微2025年年度报告",
+      "publisher": "瑞芯微电子股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-15",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-15/1225103780.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "RK-M车规SoC已量产于多家车企上百款车型，RK2118M车载音频方案量产。"
+    },
+    {
+      "source_id": "auto_chip_603290_ar2025",
+      "source_type": "company_filing",
+      "title": "斯达半导体2025年年度报告",
+      "publisher": "斯达半导体股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-30",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-30/1225264305.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "车规SiC模块新增多个量产车型并大批量上车，IGBT模块向海外Tier1批量交付。"
+    },
+    {
+      "source_id": "auto_chip_300373_ar2025",
+      "source_type": "company_filing",
+      "title": "扬杰科技2025年年度报告",
+      "publisher": "扬州扬杰电子科技股份有限公司",
+      "author": "",
+      "publish_date": "2026-03-31",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-31/1225060951.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "SiC车规模块封装项目投产并获Tier1订单，车规MOSFET由验证进入量产。"
+    },
+    {
+      "source_id": "auto_chip_688595_ar2025",
+      "source_type": "company_filing",
+      "title": "芯海科技2025年年度报告",
+      "publisher": "芯海科技（深圳）股份有限公司",
+      "author": "",
+      "publish_date": "2026-03-31",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-31/1225064570.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "车规MCU按ISO 26262 ASIL-D与AEC-Q100 Grade1目标开发，用于底盘、域控和BMS。"
+    }
+  ]
+}

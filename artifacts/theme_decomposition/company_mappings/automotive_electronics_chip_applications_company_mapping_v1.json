@@ -1,0 +1,760 @@
+{
+  "artifact_version": "theme_company_mapping_v1",
+  "theme_id": "automotive_electronics_chip_applications_value_chain_v1",
+  "sources": [
+    {
+      "source_id": "auto_chip_603986_ar2025",
+      "source_type": "company_filing",
+      "title": "兆易创新2025年年度报告",
+      "publisher": "兆易创新科技集团股份有限公司",
+      "author": "",
+      "publish_date": "2026-03-31",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-31/1225061352.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "车规Flash累计出货超3亿颗，GD32A车规MCU累计出货超800万颗；收入仅披露存储/MCU宽产品口径。"
+    },
+    {
+      "source_id": "auto_chip_300223_ar2025",
+      "source_type": "company_filing",
+      "title": "北京君正2025年年度报告",
+      "publisher": "北京君正集成电路股份有限公司",
+      "author": "",
+      "publish_date": "2026-03-28",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-28/1225045085.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "车规SRAM/DRAM/NOR、LED驱动、CAN/LIN/GreenPHY覆盖汽车应用，2Gb车规NOR已量产。"
+    },
+    {
+      "source_id": "auto_chip_002405_ar2025",
+      "source_type": "company_filing",
+      "title": "四维图新2025年年度报告",
+      "publisher": "北京四维图新科技股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-29",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-29/1225236620.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "杰发SoC与MCU累计出货均过亿，智芯收入6.59亿元；AC7870与AC8025覆盖域控和座舱。"
+    },
+    {
+      "source_id": "auto_chip_603501_ar2025",
+      "source_type": "company_filing",
+      "title": "豪威集团2025年年度报告",
+      "publisher": "豪威集成电路（集团）股份有限公司",
+      "author": "",
+      "publish_date": "2026-03-31",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-31/1225055056.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "车载CIS覆盖ADAS/DMS/OMS等场景，汽车图像传感器收入74.71亿元；SerDes/SBC/MCU仍处验证导入。"
+    },
+    {
+      "source_id": "auto_chip_300661_ar2025",
+      "source_type": "company_filing",
+      "title": "圣邦股份2025年年度报告",
+      "publisher": "圣邦微电子（北京）股份有限公司",
+      "author": "",
+      "publish_date": "2026-03-28",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-28/1225045012.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "车规级电源管理与信号链产品部分量产，宽信号链和电源管理收入分别14.71亿元与23.80亿元。"
+    },
+    {
+      "source_id": "auto_chip_300458_ar2025",
+      "source_type": "company_filing",
+      "title": "全志科技2025年年度报告",
+      "publisher": "珠海全志科技股份有限公司",
+      "author": "",
+      "publish_date": "2026-03-27",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-27/1225035756.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "高性能车规SoC项目处量产阶段，T527V通过AEC-Q100并在前装定点项目量产。"
+    },
+    {
+      "source_id": "auto_chip_603893_ar2025",
+      "source_type": "company_filing",
+      "title": "瑞芯微2025年年度报告",
+      "publisher": "瑞芯微电子股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-15",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-15/1225103780.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "RK-M车规SoC已量产于多家车企上百款车型，RK2118M车载音频方案量产。"
+    },
+    {
+      "source_id": "auto_chip_603290_ar2025",
+      "source_type": "company_filing",
+      "title": "斯达半导体2025年年度报告",
+      "publisher": "斯达半导体股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-30",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-30/1225264305.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "车规SiC模块新增多个量产车型并大批量上车，IGBT模块向海外Tier1批量交付。"
+    },
+    {
+      "source_id": "auto_chip_300373_ar2025",
+      "source_type": "company_filing",
+      "title": "扬杰科技2025年年度报告",
+      "publisher": "扬州扬杰电子科技股份有限公司",
+      "author": "",
+      "publish_date": "2026-03-31",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-31/1225060951.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "SiC车规模块封装项目投产并获Tier1订单，车规MOSFET由验证进入量产。"
+    },
+    {
+      "source_id": "auto_chip_688595_ar2025",
+      "source_type": "company_filing",
+      "title": "芯海科技2025年年度报告",
+      "publisher": "芯海科技（深圳）股份有限公司",
+      "author": "",
+      "publish_date": "2026-03-31",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-31/1225064570.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "车规MCU按ISO 26262 ASIL-D与AEC-Q100 Grade1目标开发，用于底盘、域控和BMS。"
+    }
+  ],
+  "evidence_items": [
+    {
+      "evidence_id": "auto_chip_ev_603986_product",
+      "source_id": "auto_chip_603986_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "PDF第12、14-15页，第三节车规Flash与GD32A车规MCU产品和累计出货",
+      "evidence_summary": "车规Flash与GD32A车规MCU",
+      "related_company_codes": [
+        "603986.SH"
+      ],
+      "related_node_ids": [
+        "automotive_mcu_control_soc_applications"
+      ]
+    },
+    {
+      "evidence_id": "auto_chip_ev_603986_revenue",
+      "source_id": "auto_chip_603986_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "PDF第17页，第三节主营业务分产品收入和毛利率",
+      "evidence_summary": "车规Flash与MCU均有累计出货，但92.03亿元总收入、65.66亿元存储及19.10亿元MCU均为宽口径。",
+      "related_company_codes": [
+        "603986.SH"
+      ],
+      "related_node_ids": [
+        "automotive_mcu_control_soc_applications"
+      ]
+    },
+    {
+      "evidence_id": "auto_chip_ev_603986_stage",
+      "source_id": "auto_chip_603986_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "PDF第30-32页，第六节汽车存储/MCU行业趋势、经营计划及供应链风险",
+      "evidence_summary": "车规Flash累计出货超3亿颗，GD32A车规MCU累计出货超800万颗。",
+      "related_company_codes": [
+        "603986.SH"
+      ],
+      "related_node_ids": [
+        "automotive_mcu_control_soc_applications"
+      ]
+    },
+    {
+      "evidence_id": "auto_chip_ev_300223_product",
+      "source_id": "auto_chip_300223_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "PDF第20-22页，第三节车规存储、模拟与互联产品量产和客户导入",
+      "evidence_summary": "车规SRAM/DRAM/NOR与CAN/LIN/GreenPHY",
+      "related_company_codes": [
+        "300223.SZ"
+      ],
+      "related_node_ids": [
+        "automotive_memory_interfaces"
+      ]
+    },
+    {
+      "evidence_id": "auto_chip_ev_300223_revenue",
+      "source_id": "auto_chip_300223_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "PDF第23-24页，第三节存储、计算、模拟与互联分产品收入及毛利率",
+      "evidence_summary": "车规存储与互联产品明确，存储29.11亿元及模拟互联5.06亿元均未拆汽车。",
+      "related_company_codes": [
+        "300223.SZ"
+      ],
+      "related_node_ids": [
+        "automotive_memory_interfaces"
+      ]
+    },
+    {
+      "evidence_id": "auto_chip_ev_300223_stage",
+      "source_id": "auto_chip_300223_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "PDF第36-37页，第三节市场、研发、毛利率和供应短缺风险",
+      "evidence_summary": "2Gb车规NOR已量产，部分DRAM量产；客户评估导入不外推为收入。",
+      "related_company_codes": [
+        "300223.SZ"
+      ],
+      "related_node_ids": [
+        "automotive_memory_interfaces"
+      ]
+    },
+    {
+      "evidence_id": "auto_chip_ev_002405_product",
+      "source_id": "auto_chip_002405_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "PDF第12、16页，第三节杰发MCU/SoC量产、功能安全与域控应用",
+      "evidence_summary": "杰发科技车规MCU与座舱SoC",
+      "related_company_codes": [
+        "002405.SZ"
+      ],
+      "related_node_ids": [
+        "automotive_mcu_control_soc_applications"
+      ]
+    },
+    {
+      "evidence_id": "auto_chip_ev_002405_revenue",
+      "source_id": "auto_chip_002405_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "PDF第17-18页，第三节智芯分业务收入、成本及毛利率",
+      "evidence_summary": "智芯收入6.59亿元且MCU出货同比增长近40%，但收入涵盖MCU与SoC。",
+      "related_company_codes": [
+        "002405.SZ"
+      ],
+      "related_node_ids": [
+        "automotive_mcu_control_soc_applications"
+      ]
+    },
+    {
+      "evidence_id": "auto_chip_ev_002405_stage",
+      "source_id": "auto_chip_002405_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "PDF第30页，第三节汽车芯片经营计划、客户与量产验证风险",
+      "evidence_summary": "MCU与SoC累计出货均过亿，AC7870/AC8025覆盖域控和座舱。",
+      "related_company_codes": [
+        "002405.SZ"
+      ],
+      "related_node_ids": [
+        "automotive_mcu_control_soc_applications"
+      ]
+    },
+    {
+      "evidence_id": "auto_chip_ev_603501_product",
+      "source_id": "auto_chip_603501_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "PDF第26-28页，第三节车载CIS、SerDes、SBC与MCU产品",
+      "evidence_summary": "车载CMOS图像传感器",
+      "related_company_codes": [
+        "603501.SH"
+      ],
+      "related_node_ids": [
+        "cmos_image_sensor_signal_chain"
+      ]
+    },
+    {
+      "evidence_id": "auto_chip_ev_603501_revenue",
+      "source_id": "auto_chip_603501_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "PDF第20页，第三节汽车图像传感器收入74.71亿元",
+      "evidence_summary": "汽车图像传感器收入74.71亿元可直接确认；车规模拟新品仍处测试验证或定点。",
+      "related_company_codes": [
+        "603501.SH"
+      ],
+      "related_node_ids": [
+        "cmos_image_sensor_signal_chain"
+      ]
+    },
+    {
+      "evidence_id": "auto_chip_ev_603501_stage",
+      "source_id": "auto_chip_603501_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "PDF第55-58页，第六节车载产品竞争、客户验证和供应链风险",
+      "evidence_summary": "车载CIS覆盖ADAS、DMS/OMS、电子后视镜等场景。",
+      "related_company_codes": [
+        "603501.SH"
+      ],
+      "related_node_ids": [
+        "cmos_image_sensor_signal_chain"
+      ]
+    },
+    {
+      "evidence_id": "auto_chip_ev_300661_product",
+      "source_id": "auto_chip_300661_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "PDF第25-26页，第三节车规模拟芯片研发、量产与送样阶段",
+      "evidence_summary": "车规级电源管理与信号链模拟芯片",
+      "related_company_codes": [
+        "300661.SZ"
+      ],
+      "related_node_ids": [
+        "analog_power_interface_chips"
+      ]
+    },
+    {
+      "evidence_id": "auto_chip_ev_300661_revenue",
+      "source_id": "auto_chip_300661_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "PDF第21页，第三节信号链和电源管理分产品收入及毛利率",
+      "evidence_summary": "部分车规产品量产，但14.71亿元信号链与23.80亿元电源管理均未拆汽车。",
+      "related_company_codes": [
+        "300661.SZ"
+      ],
+      "related_node_ids": [
+        "analog_power_interface_chips"
+      ]
+    },
+    {
+      "evidence_id": "auto_chip_ev_300661_stage",
+      "source_id": "auto_chip_300661_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "PDF第32页，第三节汽车应用、产品迭代与市场不确定性",
+      "evidence_summary": "车规产品含驱动、隔离、DC/DC、LDO、运放、比较器等。",
+      "related_company_codes": [
+        "300661.SZ"
+      ],
+      "related_node_ids": [
+        "analog_power_interface_chips"
+      ]
+    },
+    {
+      "evidence_id": "auto_chip_ev_300458_product",
+      "source_id": "auto_chip_300458_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "PDF第14、18、23及31页，第三节车规SoC、功能安全、量产项目与T527V",
+      "evidence_summary": "T527V等车规SoC与智能驾舱芯片",
+      "related_company_codes": [
+        "300458.SZ"
+      ],
+      "related_node_ids": [
+        "cockpit_driving_soc_compute_applications"
+      ]
+    },
+    {
+      "evidence_id": "auto_chip_ev_300458_revenue",
+      "source_id": "auto_chip_300458_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "PDF第20页，第三节智能终端处理器及电源管理分产品收入毛利率",
+      "evidence_summary": "T527V在前装定点项目量产；24.28亿元智能终端处理器收入为多场景宽口径。",
+      "related_company_codes": [
+        "300458.SZ"
+      ],
+      "related_node_ids": [
+        "cockpit_driving_soc_compute_applications"
+      ]
+    },
+    {
+      "evidence_id": "auto_chip_ev_300458_stage",
+      "source_id": "auto_chip_300458_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "PDF第32页，第三节市场、研发、毛利率与库存风险",
+      "evidence_summary": "先进工艺车规SoC处量产阶段并通过AEC-Q100。",
+      "related_company_codes": [
+        "300458.SZ"
+      ],
+      "related_node_ids": [
+        "cockpit_driving_soc_compute_applications"
+      ]
+    },
+    {
+      "evidence_id": "auto_chip_ev_603893_product",
+      "source_id": "auto_chip_603893_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "PDF第16、18页，第三节RK-M车规SoC、量产车型与平台应用",
+      "evidence_summary": "RK-M车规SoC与车载音频芯片",
+      "related_company_codes": [
+        "603893.SH"
+      ],
+      "related_node_ids": [
+        "cockpit_driving_soc_compute_applications"
+      ]
+    },
+    {
+      "evidence_id": "auto_chip_ev_603893_revenue",
+      "source_id": "auto_chip_603893_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "PDF第20-21页，第三节智能应用处理器分产品收入及毛利率",
+      "evidence_summary": "已量产上百款车型；39.27亿元智能应用处理器收入未拆汽车。",
+      "related_company_codes": [
+        "603893.SH"
+      ],
+      "related_node_ids": [
+        "cockpit_driving_soc_compute_applications"
+      ]
+    },
+    {
+      "evidence_id": "auto_chip_ev_603893_stage",
+      "source_id": "auto_chip_603893_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "PDF第31-32页，第六节汽车市场拓展、产品和供应链风险",
+      "evidence_summary": "RK-M用于中控、域控和娱乐屏，RK2118M在多家车企量产。",
+      "related_company_codes": [
+        "603893.SH"
+      ],
+      "related_node_ids": [
+        "cockpit_driving_soc_compute_applications"
+      ]
+    },
+    {
+      "evidence_id": "auto_chip_ev_603290_product",
+      "source_id": "auto_chip_603290_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "PDF第14-17页，第三节车规IGBT/SiC模块、主驱量产与MCU认证",
+      "evidence_summary": "车规IGBT/SiC模块与主驱应用",
+      "related_company_codes": [
+        "603290.SH"
+      ],
+      "related_node_ids": [
+        "power_semiconductor_module_applications_dependency"
+      ]
+    },
+    {
+      "evidence_id": "auto_chip_ev_603290_revenue",
+      "source_id": "auto_chip_603290_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "PDF第18-19页，第三节IGBT模块收入、毛利率及SiC大批量供货",
+      "evidence_summary": "车规SiC模块大批量上车，但IGBT模块33.53亿元及其他产品6.54亿元含非汽车。",
+      "related_company_codes": [
+        "603290.SH"
+      ],
+      "related_node_ids": [
+        "power_semiconductor_module_applications_dependency"
+      ]
+    },
+    {
+      "evidence_id": "auto_chip_ev_603290_stage",
+      "source_id": "auto_chip_603290_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "PDF第31-32页，第六节新能源汽车竞争、原材料价格和市场风险",
+      "evidence_summary": "功率器件技术产能归`power_semiconductors`；本主题只表达汽车应用关系。",
+      "related_company_codes": [
+        "603290.SH"
+      ],
+      "related_node_ids": [
+        "power_semiconductor_module_applications_dependency"
+      ]
+    },
+    {
+      "evidence_id": "auto_chip_ev_300373_product",
+      "source_id": "auto_chip_300373_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "PDF第13、19-20页，第三节车规SiC模块、MOSFET/IGBT量产应用",
+      "evidence_summary": "车规SiC模块、MOSFET与IGBT",
+      "related_company_codes": [
+        "300373.SZ"
+      ],
+      "related_node_ids": [
+        "power_semiconductor_module_applications_dependency"
+      ]
+    },
+    {
+      "evidence_id": "auto_chip_ev_300373_revenue",
+      "source_id": "auto_chip_300373_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "PDF第22页，第三节半导体器件/芯片收入与毛利率",
+      "evidence_summary": "车规模块投产并获Tier1订单，半导体器件62.57亿元未拆汽车。",
+      "related_company_codes": [
+        "300373.SZ"
+      ],
+      "related_node_ids": [
+        "power_semiconductor_module_applications_dependency"
+      ]
+    },
+    {
+      "evidence_id": "auto_chip_ev_300373_stage",
+      "source_id": "auto_chip_300373_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "PDF第37-42页，第六节汽车市场、产能、价格与供应链风险",
+      "evidence_summary": "功率器件技术产能归`power_semiconductors`；车规MOSFET由验证进入量产。",
+      "related_company_codes": [
+        "300373.SZ"
+      ],
+      "related_node_ids": [
+        "power_semiconductor_module_applications_dependency"
+      ]
+    },
+    {
+      "evidence_id": "auto_chip_ev_688595_product",
+      "source_id": "auto_chip_688595_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "PDF第17-23、29页，第三节车规MCU、AEC-Q100与ASIL-D开发验证",
+      "evidence_summary": "ASIL-D车规MCU设计与验证",
+      "related_company_codes": [
+        "688595.SH"
+      ],
+      "related_node_ids": [
+        "automotive_grade_safety_reliability_validation"
+      ]
+    },
+    {
+      "evidence_id": "auto_chip_ev_688595_revenue",
+      "source_id": "auto_chip_688595_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "PDF第35-36页，第三节MCU/信号链分产品收入、毛利率与BMS放量",
+      "evidence_summary": "车规MCU处开发验证期，3.40亿元MCU收入为全应用宽口径，不作为汽车量产收入。",
+      "related_company_codes": [
+        "688595.SH"
+      ],
+      "related_node_ids": [
+        "automotive_grade_safety_reliability_validation"
+      ]
+    },
+    {
+      "evidence_id": "auto_chip_ev_688595_stage",
+      "source_id": "auto_chip_688595_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "PDF第33-34、44-45页，第三/六节毛利、市场、国产替代与验证期风险",
+      "evidence_summary": "开发验证期，不作为汽车量产收入；需后续客户量产和收入证据。",
+      "related_company_codes": [
+        "688595.SH"
+      ],
+      "related_node_ids": [
+        "automotive_grade_safety_reliability_validation"
+      ]
+    }
+  ],
+  "company_mappings": [
+    {
+      "mapping_id": "auto_chip_map_603986_v1",
+      "theme_id": "automotive_electronics_chip_applications_value_chain_v1",
+      "company_code": "603986.SH",
+      "company_name": "兆易创新",
+      "market": "CN",
+      "mapped_node_id": "automotive_mcu_control_soc_applications",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.94,
+      "evidence_ids": [
+        "auto_chip_ev_603986_product",
+        "auto_chip_ev_603986_revenue",
+        "auto_chip_ev_603986_stage"
+      ],
+      "revenue_relevance": "meaningful",
+      "bottleneck_relevance": "core",
+      "business_materiality": "meaningful_segment",
+      "product_or_service": "车规Flash与GD32A车规MCU",
+      "relationship_summary": "车规Flash与MCU均有累计出货，但92.03亿元总收入、65.66亿元存储及19.10亿元MCU均为宽口径。",
+      "review_status": "reviewed",
+      "notes": "车规Flash累计出货超3亿颗，GD32A车规MCU累计出货超800万颗。"
+    },
+    {
+      "mapping_id": "auto_chip_map_300223_v1",
+      "theme_id": "automotive_electronics_chip_applications_value_chain_v1",
+      "company_code": "300223.SZ",
+      "company_name": "北京君正",
+      "market": "CN",
+      "mapped_node_id": "automotive_memory_interfaces",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.94,
+      "evidence_ids": [
+        "auto_chip_ev_300223_product",
+        "auto_chip_ev_300223_revenue",
+        "auto_chip_ev_300223_stage"
+      ],
+      "revenue_relevance": "meaningful",
+      "bottleneck_relevance": "core",
+      "business_materiality": "meaningful_segment",
+      "product_or_service": "车规SRAM/DRAM/NOR与CAN/LIN/GreenPHY",
+      "relationship_summary": "车规存储与互联产品明确，存储29.11亿元及模拟互联5.06亿元均未拆汽车。",
+      "review_status": "reviewed",
+      "notes": "2Gb车规NOR已量产，部分DRAM量产；客户评估导入不外推为收入。"
+    },
+    {
+      "mapping_id": "auto_chip_map_002405_v1",
+      "theme_id": "automotive_electronics_chip_applications_value_chain_v1",
+      "company_code": "002405.SZ",
+      "company_name": "四维图新",
+      "market": "CN",
+      "mapped_node_id": "automotive_mcu_control_soc_applications",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.99,
+      "evidence_ids": [
+        "auto_chip_ev_002405_product",
+        "auto_chip_ev_002405_revenue",
+        "auto_chip_ev_002405_stage"
+      ],
+      "revenue_relevance": "material",
+      "bottleneck_relevance": "core",
+      "business_materiality": "meaningful_segment",
+      "product_or_service": "杰发科技车规MCU与座舱SoC",
+      "relationship_summary": "智芯收入6.59亿元且MCU出货同比增长近40%，但收入涵盖MCU与SoC。",
+      "review_status": "reviewed",
+      "notes": "MCU与SoC累计出货均过亿，AC7870/AC8025覆盖域控和座舱。"
+    },
+    {
+      "mapping_id": "auto_chip_map_603501_v1",
+      "theme_id": "automotive_electronics_chip_applications_value_chain_v1",
+      "company_code": "603501.SH",
+      "company_name": "豪威集团",
+      "market": "CN",
+      "mapped_node_id": "cmos_image_sensor_signal_chain",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.99,
+      "evidence_ids": [
+        "auto_chip_ev_603501_product",
+        "auto_chip_ev_603501_revenue",
+        "auto_chip_ev_603501_stage"
+      ],
+      "revenue_relevance": "material",
+      "bottleneck_relevance": "core",
+      "business_materiality": "meaningful_segment",
+      "product_or_service": "车载CMOS图像传感器",
+      "relationship_summary": "汽车图像传感器收入74.71亿元可直接确认；车规模拟新品仍处测试验证或定点。",
+      "review_status": "reviewed",
+      "notes": "车载CIS覆盖ADAS、DMS/OMS、电子后视镜等场景。"
+    },
+    {
+      "mapping_id": "auto_chip_map_300661_v1",
+      "theme_id": "automotive_electronics_chip_applications_value_chain_v1",
+      "company_code": "300661.SZ",
+      "company_name": "圣邦股份",
+      "market": "CN",
+      "mapped_node_id": "analog_power_interface_chips",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.94,
+      "evidence_ids": [
+        "auto_chip_ev_300661_product",
+        "auto_chip_ev_300661_revenue",
+        "auto_chip_ev_300661_stage"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "车规级电源管理与信号链模拟芯片",
+      "relationship_summary": "部分车规产品量产，但14.71亿元信号链与23.80亿元电源管理均未拆汽车。",
+      "review_status": "reviewed",
+      "notes": "车规产品含驱动、隔离、DC/DC、LDO、运放、比较器等。"
+    },
+    {
+      "mapping_id": "auto_chip_map_300458_v1",
+      "theme_id": "automotive_electronics_chip_applications_value_chain_v1",
+      "company_code": "300458.SZ",
+      "company_name": "全志科技",
+      "market": "CN",
+      "mapped_node_id": "cockpit_driving_soc_compute_applications",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.94,
+      "evidence_ids": [
+        "auto_chip_ev_300458_product",
+        "auto_chip_ev_300458_revenue",
+        "auto_chip_ev_300458_stage"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "meaningful_segment",
+      "product_or_service": "T527V等车规SoC与智能驾舱芯片",
+      "relationship_summary": "T527V在前装定点项目量产；24.28亿元智能终端处理器收入为多场景宽口径。",
+      "review_status": "reviewed",
+      "notes": "先进工艺车规SoC处量产阶段并通过AEC-Q100。"
+    },
+    {
+      "mapping_id": "auto_chip_map_603893_v1",
+      "theme_id": "automotive_electronics_chip_applications_value_chain_v1",
+      "company_code": "603893.SH",
+      "company_name": "瑞芯微",
+      "market": "CN",
+      "mapped_node_id": "cockpit_driving_soc_compute_applications",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.94,
+      "evidence_ids": [
+        "auto_chip_ev_603893_product",
+        "auto_chip_ev_603893_revenue",
+        "auto_chip_ev_603893_stage"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "meaningful_segment",
+      "product_or_service": "RK-M车规SoC与车载音频芯片",
+      "relationship_summary": "已量产上百款车型；39.27亿元智能应用处理器收入未拆汽车。",
+      "review_status": "reviewed",
+      "notes": "RK-M用于中控、域控和娱乐屏，RK2118M在多家车企量产。"
+    },
+    {
+      "mapping_id": "auto_chip_map_603290_v1",
+      "theme_id": "automotive_electronics_chip_applications_value_chain_v1",
+      "company_code": "603290.SH",
+      "company_name": "斯达半导",
+      "market": "CN",
+      "mapped_node_id": "power_semiconductor_module_applications_dependency",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.94,
+      "evidence_ids": [
+        "auto_chip_ev_603290_product",
+        "auto_chip_ev_603290_revenue",
+        "auto_chip_ev_603290_stage"
+      ],
+      "revenue_relevance": "meaningful",
+      "bottleneck_relevance": "adjacent",
+      "business_materiality": "core_business",
+      "product_or_service": "车规IGBT/SiC模块与主驱应用",
+      "relationship_summary": "车规SiC模块大批量上车，但IGBT模块33.53亿元及其他产品6.54亿元含非汽车。",
+      "review_status": "reviewed",
+      "notes": "功率器件技术产能归`power_semiconductors`；本主题只表达汽车应用关系。"
+    },
+    {
+      "mapping_id": "auto_chip_map_300373_v1",
+      "theme_id": "automotive_electronics_chip_applications_value_chain_v1",
+      "company_code": "300373.SZ",
+      "company_name": "扬杰科技",
+      "market": "CN",
+      "mapped_node_id": "power_semiconductor_module_applications_dependency",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.94,
+      "evidence_ids": [
+        "auto_chip_ev_300373_product",
+        "auto_chip_ev_300373_revenue",
+        "auto_chip_ev_300373_stage"
+      ],
+      "revenue_relevance": "meaningful",
+      "bottleneck_relevance": "adjacent",
+      "business_materiality": "core_business",
+      "product_or_service": "车规SiC模块、MOSFET与IGBT",
+      "relationship_summary": "车规模块投产并获Tier1订单，半导体器件62.57亿元未拆汽车。",
+      "review_status": "reviewed",
+      "notes": "功率器件技术产能归`power_semiconductors`；车规MOSFET由验证进入量产。"
+    },
+    {
+      "mapping_id": "auto_chip_map_688595_v1",
+      "theme_id": "automotive_electronics_chip_applications_value_chain_v1",
+      "company_code": "688595.SH",
+      "company_name": "芯海科技",
+      "market": "CN",
+      "mapped_node_id": "automotive_grade_safety_reliability_validation",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.94,
+      "evidence_ids": [
+        "auto_chip_ev_688595_product",
+        "auto_chip_ev_688595_revenue",
+        "auto_chip_ev_688595_stage"
+      ],
+      "revenue_relevance": "limited",
+      "bottleneck_relevance": "core",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "ASIL-D车规MCU设计与验证",
+      "relationship_summary": "车规MCU处开发验证期，3.40亿元MCU收入为全应用宽口径，不作为汽车量产收入。",
+      "review_status": "reviewed",
+      "notes": "开发验证期，不作为汽车量产收入；需后续客户量产和收入证据。"
+    }
+  ]
+}

@@ -1,0 +1,306 @@
+{
+  "artifact_version": "automotive_electronics_chip_applications_node_evidence_matrix_v1",
+  "theme_id": "automotive_electronics_chip_applications_value_chain_v1",
+  "as_of_date": "2026-07-15",
+  "node_evidence_matrix": [
+    {
+      "node_id": "automotive_mcu_control_soc_applications",
+      "accepted_source_ids": [
+        "auto_chip_603986_ar2025",
+        "auto_chip_002405_ar2025",
+        "auto_chip_603290_ar2025",
+        "auto_chip_688595_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "auto_chip_claim_01_value_flow",
+        "auto_chip_claim_02_mcu_control_soc_mass_production",
+        "auto_chip_claim_09_ecu_domain_integration",
+        "auto_chip_claim_12_stage_boundary",
+        "auto_chip_claim_13_broad_revenue_boundary"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 5,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "customer_certification",
+        "technology_barrier"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "车规MCU与控制SoC应用由直接产品、量产阶段和收入边界证据支持。",
+      "next_evidence_needed": "继续补充汽车单一节点收入、毛利率、量产车型和客户出货数据。"
+    },
+    {
+      "node_id": "cockpit_driving_soc_compute_applications",
+      "accepted_source_ids": [
+        "auto_chip_002405_ar2025",
+        "auto_chip_300458_ar2025",
+        "auto_chip_603893_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "auto_chip_claim_01_value_flow",
+        "auto_chip_claim_03_cockpit_driving_soc_boundary",
+        "auto_chip_claim_09_ecu_domain_integration",
+        "auto_chip_claim_12_stage_boundary",
+        "auto_chip_claim_13_broad_revenue_boundary"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 5,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "customer_certification",
+        "technology_barrier"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "智驾/座舱SoC与计算芯片应用由直接产品、量产阶段和收入边界证据支持。",
+      "next_evidence_needed": "继续补充汽车单一节点收入、毛利率、量产车型和客户出货数据。"
+    },
+    {
+      "node_id": "automotive_memory_interfaces",
+      "accepted_source_ids": [
+        "auto_chip_603986_ar2025",
+        "auto_chip_300223_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "auto_chip_claim_01_value_flow",
+        "auto_chip_claim_04_automotive_memory",
+        "auto_chip_claim_13_broad_revenue_boundary",
+        "auto_chip_claim_14_margin_supply_risk"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 5,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "customer_certification",
+        "technology_barrier"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "车规存储与NOR/DRAM接口由直接产品、量产阶段和收入边界证据支持。",
+      "next_evidence_needed": "继续补充汽车单一节点收入、毛利率、量产车型和客户出货数据。"
+    },
+    {
+      "node_id": "cmos_image_sensor_signal_chain",
+      "accepted_source_ids": [
+        "auto_chip_603501_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "auto_chip_claim_01_value_flow",
+        "auto_chip_claim_05_cis_module_radar_boundary",
+        "auto_chip_claim_13_broad_revenue_boundary"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 5,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "customer_certification",
+        "technology_barrier"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "CMOS图像传感器与信号链由直接产品、量产阶段和收入边界证据支持。",
+      "next_evidence_needed": "继续补充汽车单一节点收入、毛利率、量产车型和客户出货数据。"
+    },
+    {
+      "node_id": "analog_power_interface_chips",
+      "accepted_source_ids": [
+        "auto_chip_300223_ar2025",
+        "auto_chip_603501_ar2025",
+        "auto_chip_300661_ar2025",
+        "auto_chip_603893_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "auto_chip_claim_01_value_flow",
+        "auto_chip_claim_06_analog_power_interface",
+        "auto_chip_claim_12_stage_boundary",
+        "auto_chip_claim_13_broad_revenue_boundary",
+        "auto_chip_claim_14_margin_supply_risk"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 5,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "customer_certification",
+        "technology_barrier"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "模拟、电源管理与接口芯片由直接产品、量产阶段和收入边界证据支持。",
+      "next_evidence_needed": "继续补充汽车单一节点收入、毛利率、量产车型和客户出货数据。"
+    },
+    {
+      "node_id": "power_semiconductor_module_applications_dependency",
+      "accepted_source_ids": [
+        "auto_chip_603290_ar2025",
+        "auto_chip_300373_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "auto_chip_claim_01_value_flow",
+        "auto_chip_claim_07_power_cross_chain",
+        "auto_chip_claim_12_stage_boundary",
+        "auto_chip_claim_13_broad_revenue_boundary",
+        "auto_chip_claim_14_margin_supply_risk"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 5,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "customer_certification",
+        "technology_barrier"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "功率半导体与模块应用依赖由直接产品、量产阶段和收入边界证据支持。",
+      "next_evidence_needed": "继续补充汽车单一节点收入、毛利率、量产车型和客户出货数据。"
+    },
+    {
+      "node_id": "in_vehicle_network_gateway_chips",
+      "accepted_source_ids": [
+        "auto_chip_300223_ar2025",
+        "auto_chip_002405_ar2025",
+        "auto_chip_603501_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "auto_chip_claim_01_value_flow",
+        "auto_chip_claim_08_vehicle_network_gateway",
+        "auto_chip_claim_13_broad_revenue_boundary"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 5,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "customer_certification",
+        "technology_barrier"
+      ],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "reviewed",
+      "rationale": "车载网络、以太网、CAN/LIN与网关芯片由直接产品、量产阶段和收入边界证据支持。",
+      "next_evidence_needed": "继续补充汽车单一节点收入、毛利率、量产车型和客户出货数据。"
+    },
+    {
+      "node_id": "ecu_domain_zonal_hardware_integration",
+      "accepted_source_ids": [
+        "auto_chip_002405_ar2025",
+        "auto_chip_300458_ar2025",
+        "auto_chip_603893_ar2025",
+        "auto_chip_688595_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "auto_chip_claim_01_value_flow",
+        "auto_chip_claim_02_mcu_control_soc_mass_production",
+        "auto_chip_claim_03_cockpit_driving_soc_boundary",
+        "auto_chip_claim_08_vehicle_network_gateway",
+        "auto_chip_claim_09_ecu_domain_integration",
+        "auto_chip_claim_13_broad_revenue_boundary"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "customer_certification",
+        "technology_barrier"
+      ],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "reviewed",
+      "rationale": "ECU、域控制器与区域控制器硬件集成由直接产品、量产阶段和收入边界证据支持。",
+      "next_evidence_needed": "继续补充汽车单一节点收入、毛利率、量产车型和客户出货数据。"
+    },
+    {
+      "node_id": "automotive_grade_safety_reliability_validation",
+      "accepted_source_ids": [
+        "auto_chip_603986_ar2025",
+        "auto_chip_300223_ar2025",
+        "auto_chip_002405_ar2025",
+        "auto_chip_603501_ar2025",
+        "auto_chip_300661_ar2025",
+        "auto_chip_300458_ar2025",
+        "auto_chip_603893_ar2025",
+        "auto_chip_603290_ar2025",
+        "auto_chip_300373_ar2025",
+        "auto_chip_688595_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "auto_chip_claim_01_value_flow",
+        "auto_chip_claim_02_mcu_control_soc_mass_production",
+        "auto_chip_claim_03_cockpit_driving_soc_boundary",
+        "auto_chip_claim_04_automotive_memory",
+        "auto_chip_claim_05_cis_module_radar_boundary",
+        "auto_chip_claim_06_analog_power_interface",
+        "auto_chip_claim_07_power_cross_chain",
+        "auto_chip_claim_08_vehicle_network_gateway",
+        "auto_chip_claim_10_certification_not_revenue",
+        "auto_chip_claim_12_stage_boundary",
+        "auto_chip_claim_13_broad_revenue_boundary",
+        "auto_chip_claim_14_margin_supply_risk"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 5,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "customer_certification",
+        "technology_barrier"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "AEC-Q、功能安全与可靠性验证由直接产品、量产阶段和收入边界证据支持。",
+      "next_evidence_needed": "继续补充汽车单一节点收入、毛利率、量产车型和客户出货数据。"
+    },
+    {
+      "node_id": "localization_supply_chain_mass_production_validation",
+      "accepted_source_ids": [
+        "auto_chip_603986_ar2025",
+        "auto_chip_300223_ar2025",
+        "auto_chip_002405_ar2025",
+        "auto_chip_603501_ar2025",
+        "auto_chip_300661_ar2025",
+        "auto_chip_300458_ar2025",
+        "auto_chip_603893_ar2025",
+        "auto_chip_603290_ar2025",
+        "auto_chip_300373_ar2025",
+        "auto_chip_688595_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "auto_chip_claim_01_value_flow",
+        "auto_chip_claim_02_mcu_control_soc_mass_production",
+        "auto_chip_claim_04_automotive_memory",
+        "auto_chip_claim_10_certification_not_revenue",
+        "auto_chip_claim_11_localization_cross_validation",
+        "auto_chip_claim_12_stage_boundary",
+        "auto_chip_claim_13_broad_revenue_boundary",
+        "auto_chip_claim_14_margin_supply_risk"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "customer_certification",
+        "technology_barrier"
+      ],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "reviewed",
+      "rationale": "供应链、国产替代与量产验证由直接产品、量产阶段和收入边界证据支持。",
+      "next_evidence_needed": "继续补充汽车单一节点收入、毛利率、量产车型和客户出货数据。"
+    }
+  ]
+}

@@ -72,6 +72,27 @@ COCKPIT_MATRIX_PATH = (
     / "artifacts/theme_decomposition/source_packs"
     / "intelligent_driving_smart_cockpit_node_evidence_matrix_v1.json"
 )
+AUTOMOTIVE_CHIP_THEME_ID = "automotive_electronics_chip_applications_value_chain_v1"
+AUTOMOTIVE_CHIP_CHAIN_ID = "automotive_electronics_chip_applications"
+AUTOMOTIVE_CHIP_THEME_PATH = REPOSITORY_ROOT / (
+    "artifacts/theme_decomposition/"
+    f"{AUTOMOTIVE_CHIP_THEME_ID}.json"
+)
+AUTOMOTIVE_CHIP_MAPPING_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/company_mappings"
+    / "automotive_electronics_chip_applications_company_mapping_v1.json"
+)
+AUTOMOTIVE_CHIP_SOURCE_PACK_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "automotive_electronics_chip_applications_source_pack_v1.json"
+)
+AUTOMOTIVE_CHIP_MATRIX_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "automotive_electronics_chip_applications_node_evidence_matrix_v1.json"
+)
 MANIFEST_PATH = (
     REPOSITORY_ROOT
     / "artifacts/theme_decomposition/batch_manifests"
@@ -330,6 +351,80 @@ COCKPIT_SOURCE_IDENTITIES = {
         "武汉光庭信息技术股份有限公司",
         "2026-04-22",
         "https://static.cninfo.com.cn/finalpage/2026-04-22/1225136840.PDF",
+    ),
+}
+AUTOMOTIVE_CHIP_NODE_IDS = {
+    "automotive_mcu_control_soc_applications",
+    "cockpit_driving_soc_compute_applications",
+    "automotive_memory_interfaces",
+    "cmos_image_sensor_signal_chain",
+    "analog_power_interface_chips",
+    "power_semiconductor_module_applications_dependency",
+    "in_vehicle_network_gateway_chips",
+    "ecu_domain_zonal_hardware_integration",
+    "automotive_grade_safety_reliability_validation",
+    "localization_supply_chain_mass_production_validation",
+}
+AUTOMOTIVE_CHIP_SOURCE_IDENTITIES = {
+    "auto_chip_603986_ar2025": (
+        "兆易创新2025年年度报告",
+        "兆易创新科技集团股份有限公司",
+        "2026-03-31",
+        "https://static.cninfo.com.cn/finalpage/2026-03-31/1225061352.PDF",
+    ),
+    "auto_chip_300223_ar2025": (
+        "北京君正2025年年度报告",
+        "北京君正集成电路股份有限公司",
+        "2026-03-28",
+        "https://static.cninfo.com.cn/finalpage/2026-03-28/1225045085.PDF",
+    ),
+    "auto_chip_002405_ar2025": (
+        "四维图新2025年年度报告",
+        "北京四维图新科技股份有限公司",
+        "2026-04-29",
+        "https://static.cninfo.com.cn/finalpage/2026-04-29/1225236620.PDF",
+    ),
+    "auto_chip_603501_ar2025": (
+        "豪威集团2025年年度报告",
+        "豪威集成电路（集团）股份有限公司",
+        "2026-03-31",
+        "https://static.cninfo.com.cn/finalpage/2026-03-31/1225055056.PDF",
+    ),
+    "auto_chip_300661_ar2025": (
+        "圣邦股份2025年年度报告",
+        "圣邦微电子（北京）股份有限公司",
+        "2026-03-28",
+        "https://static.cninfo.com.cn/finalpage/2026-03-28/1225045012.PDF",
+    ),
+    "auto_chip_300458_ar2025": (
+        "全志科技2025年年度报告",
+        "珠海全志科技股份有限公司",
+        "2026-03-27",
+        "https://static.cninfo.com.cn/finalpage/2026-03-27/1225035756.PDF",
+    ),
+    "auto_chip_603893_ar2025": (
+        "瑞芯微2025年年度报告",
+        "瑞芯微电子股份有限公司",
+        "2026-04-15",
+        "https://static.cninfo.com.cn/finalpage/2026-04-15/1225103780.PDF",
+    ),
+    "auto_chip_603290_ar2025": (
+        "斯达半导体2025年年度报告",
+        "斯达半导体股份有限公司",
+        "2026-04-30",
+        "https://static.cninfo.com.cn/finalpage/2026-04-30/1225264305.PDF",
+    ),
+    "auto_chip_300373_ar2025": (
+        "扬杰科技2025年年度报告",
+        "扬州扬杰电子科技股份有限公司",
+        "2026-03-31",
+        "https://static.cninfo.com.cn/finalpage/2026-03-31/1225060951.PDF",
+    ),
+    "auto_chip_688595_ar2025": (
+        "芯海科技2025年年度报告",
+        "芯海科技（深圳）股份有限公司",
+        "2026-03-31",
+        "https://static.cninfo.com.cn/finalpage/2026-03-31/1225064570.PDF",
     ),
 }
 
@@ -1603,3 +1698,238 @@ def test_intelligent_driving_smart_cockpit_product_and_revenue_locators_are_prec
         assert product_locator != revenue_locator
         assert product_locator.removeprefix("PDF") in sources[source_id]["evidence_locator"]
         assert revenue_locator.removeprefix("PDF") in sources[source_id]["evidence_locator"]
+
+
+def test_automotive_electronics_chip_applications_four_artifacts_exist_before_validation():
+    assert AUTOMOTIVE_CHIP_THEME_PATH.is_file()
+    assert AUTOMOTIVE_CHIP_MAPPING_PATH.is_file()
+    assert AUTOMOTIVE_CHIP_SOURCE_PACK_PATH.is_file()
+    assert AUTOMOTIVE_CHIP_MATRIX_PATH.is_file()
+
+
+def test_automotive_electronics_chip_applications_artifacts_load_and_fourth_wave_c_row_is_ready():
+    theme_package = load_theme_package()
+    mapping_package = load_theme_company_mapping_package()
+    priority_package = load_theme_research_priority_package()
+
+    assert AUTOMOTIVE_CHIP_THEME_ID in {
+        row["theme_id"] for row in theme_package["themes"]
+    }
+    assert AUTOMOTIVE_CHIP_THEME_ID in {
+        row["theme_id"] for row in mapping_package["company_mappings"]
+    }
+    assert AUTOMOTIVE_CHIP_THEME_ID in {
+        row["theme_id"] for row in priority_package["node_priorities"]
+    }
+    report = VERIFIER.build_theme_batch_report(MANIFEST_PATH, wave="wave_c")
+    rows = {row["chain_id"]: row for row in report["theme_results"]}
+
+    assert rows[AUTOMOTIVE_CHIP_CHAIN_ID]["ready"] is True
+    assert all(rows[AUTOMOTIVE_CHIP_CHAIN_ID]["checks"].values())
+    assert rows[AUTOMOTIVE_CHIP_CHAIN_ID]["counts"]["accepted_sources"] == 10
+    assert rows[AUTOMOTIVE_CHIP_CHAIN_ID]["counts"]["primary_sources"] == 10
+    assert rows[AUTOMOTIVE_CHIP_CHAIN_ID]["counts"]["claims"] == 14
+    assert rows[AUTOMOTIVE_CHIP_CHAIN_ID]["counts"]["accepted_source_backed_claims"] == 14
+    assert rows[AUTOMOTIVE_CHIP_CHAIN_ID]["counts"]["reviewed_mappings"] == 10
+    _assert_wave_progress_matches_manifest(report, "wave_c")
+
+
+def test_automotive_electronics_chip_source_claim_node_matrix_contract_is_exact():
+    _assert_bidirectional_source_and_matrix_links(
+        theme_path=AUTOMOTIVE_CHIP_THEME_PATH,
+        source_pack_path=AUTOMOTIVE_CHIP_SOURCE_PACK_PATH,
+        matrix_path=AUTOMOTIVE_CHIP_MATRIX_PATH,
+        node_ids=AUTOMOTIVE_CHIP_NODE_IDS,
+        require_accepted_source=True,
+    )
+    theme = _read_json(AUTOMOTIVE_CHIP_THEME_PATH)
+    mapping = _read_json(AUTOMOTIVE_CHIP_MAPPING_PATH)
+    source_pack = _read_json(AUTOMOTIVE_CHIP_SOURCE_PACK_PATH)
+    accepted = validate_theme_evidence_sources(
+        source_pack["sources"], AUTOMOTIVE_CHIP_NODE_IDS
+    )
+    reviewed = [
+        row for row in mapping["company_mappings"]
+        if row["review_status"] == "reviewed"
+    ]
+    canonical_sources = {row["source_id"]: row for row in theme["sources"]}
+    mapping_sources = {row["source_id"]: row for row in mapping["sources"]}
+    pack_sources = {row["source_id"]: row for row in source_pack["sources"]}
+
+    assert len([row for row in accepted.values() if row["review_status"] == "accepted"]) == 10
+    assert all(
+        row["source_type"] == "company_filing"
+        and row["reliability_level"] == "S0"
+        and row["document_status"] == "full_text_reviewed"
+        for row in source_pack["sources"]
+    )
+    assert {row["node_id"] for row in theme["nodes"]} == AUTOMOTIVE_CHIP_NODE_IDS
+    assert len(theme["nodes"]) == 10
+    assert len(theme["claims"]) == 14
+    assert all(set(row) >= CLAIM_FIELDS for row in theme["claims"])
+    assert len(reviewed) == 10
+    assert len({row["company_code"] for row in reviewed}) == 10
+    assert set(canonical_sources) == set(AUTOMOTIVE_CHIP_SOURCE_IDENTITIES)
+    assert set(mapping_sources) == set(AUTOMOTIVE_CHIP_SOURCE_IDENTITIES)
+    assert set(pack_sources) == set(AUTOMOTIVE_CHIP_SOURCE_IDENTITIES)
+    for source_id, (title, publisher, publish_date, url) in (
+        AUTOMOTIVE_CHIP_SOURCE_IDENTITIES.items()
+    ):
+        expected = {
+            "title": title,
+            "publisher": publisher,
+            "publish_date": publish_date,
+            "url_or_ref": url,
+        }
+        assert {
+            field: canonical_sources[source_id][field]
+            for field in ("title", "publisher", "publish_date", "url_or_ref")
+        } == expected
+        assert {
+            field: mapping_sources[source_id][field]
+            for field in ("title", "publisher", "publish_date", "url_or_ref")
+        } == expected
+        assert {
+            "title": pack_sources[source_id]["title"],
+            "publisher": pack_sources[source_id]["publisher"],
+            "publish_date": pack_sources[source_id]["publish_date"],
+            "url_or_ref": pack_sources[source_id]["url"],
+        } == expected
+
+
+def test_automotive_electronics_chip_readable_sections_catalog_and_cross_chain_ids_are_exact():
+    theme = _read_json(AUTOMOTIVE_CHIP_THEME_PATH)
+    mapping = _read_json(AUTOMOTIVE_CHIP_MAPPING_PATH)
+    source_pack = _read_json(AUTOMOTIVE_CHIP_SOURCE_PACK_PATH)
+    matrix = _read_json(AUTOMOTIVE_CHIP_MATRIX_PATH)
+    profile = theme["research_profile"]
+    claim_ids = {row["claim_id"] for row in theme["claims"]}
+    catalog = load_industry_catalog()
+    catalog_chain_ids = {row["chain_id"] for row in catalog["chains"]}
+    link = next(
+        row for row in catalog["theme_links"]
+        if row["theme_id"] == AUTOMOTIVE_CHIP_THEME_ID
+    )
+
+    assert profile["catalog_chain_id"] == AUTOMOTIVE_CHIP_CHAIN_ID
+    assert profile["research_kind"] == "industry_chain_deep_research"
+    assert set(profile["readable_section_claim_ids"]) == {
+        "conclusion",
+        "value_chain",
+        "profit_pool_barriers",
+        "catalysts_validation_risks",
+        "beneficiary_companies",
+        "source_evidence",
+        "evidence_gaps",
+    }
+    assert all(profile["readable_section_claim_ids"].values())
+    assert all(
+        set(section_claim_ids) <= claim_ids
+        for section_claim_ids in profile["readable_section_claim_ids"].values()
+    )
+    assert set(profile["catalyst_claim_ids"] + profile["risk_claim_ids"]) <= claim_ids
+    assert link["node_links"] == []
+    assert set(link["unmapped_theme_node_ids"]) == AUTOMOTIVE_CHIP_NODE_IDS
+    assert "L2 skeleton" in link["notes"]
+    assert "不重复所有权" in link["notes"]
+
+    def iter_string_fields(value: object, path: str):
+        if isinstance(value, str):
+            yield path, value
+        elif isinstance(value, dict):
+            for key, child in value.items():
+                yield from iter_string_fields(child, f"{path}.{key}")
+        elif isinstance(value, list):
+            for index, child in enumerate(value):
+                yield from iter_string_fields(child, f"{path}[{index}]")
+
+    payloads = {
+        "theme": theme,
+        "company_mapping": mapping,
+        "source_pack": source_pack,
+        "node_evidence_matrix": matrix,
+        "theme_link": link,
+    }
+    referenced_chain_ids = {
+        match.group(1)
+        for artifact_name, payload in payloads.items()
+        for _, text in iter_string_fields(payload, artifact_name)
+        for match in re.finditer(r"`([a-z][a-z0-9_]+)`", text)
+    }
+    assert referenced_chain_ids >= {
+        "power_semiconductors",
+        "semiconductor_packaging_test_advanced_packaging",
+        "intelligent_driving_smart_cockpit",
+    }
+    assert referenced_chain_ids <= catalog_chain_ids
+
+
+def test_automotive_electronics_chip_company_tiers_and_validation_boundaries_are_exact():
+    expected = {
+        "603986.SH": ("automotive_mcu_control_soc_applications", "meaningful_segment", "meaningful", "core_beneficiary"),
+        "300223.SZ": ("automotive_memory_interfaces", "meaningful_segment", "meaningful", "core_beneficiary"),
+        "002405.SZ": ("automotive_mcu_control_soc_applications", "meaningful_segment", "material", "core_beneficiary"),
+        "603501.SH": ("cmos_image_sensor_signal_chain", "meaningful_segment", "material", "core_beneficiary"),
+        "300661.SZ": ("analog_power_interface_chips", "emerging_segment", "undisclosed", "elastic_beneficiary"),
+        "300458.SZ": ("cockpit_driving_soc_compute_applications", "meaningful_segment", "undisclosed", "elastic_beneficiary"),
+        "603893.SH": ("cockpit_driving_soc_compute_applications", "meaningful_segment", "undisclosed", "elastic_beneficiary"),
+        "603290.SH": ("power_semiconductor_module_applications_dependency", "core_business", "meaningful", "indirect_beneficiary"),
+        "300373.SZ": ("power_semiconductor_module_applications_dependency", "core_business", "meaningful", "indirect_beneficiary"),
+        "688595.SH": ("automotive_grade_safety_reliability_validation", "emerging_segment", "limited", "elastic_beneficiary"),
+    }
+    mapping = _read_json(AUTOMOTIVE_CHIP_MAPPING_PATH)
+    source_pack = _read_json(AUTOMOTIVE_CHIP_SOURCE_PACK_PATH)
+    source_by_id = {row["source_id"]: row for row in source_pack["sources"]}
+    evidence = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+    reviewed = [
+        row for row in mapping["company_mappings"]
+        if row["review_status"] == "reviewed"
+    ]
+    read_model = list_theme_research_companies(AUTOMOTIVE_CHIP_THEME_ID)
+    api_by_company = {row["company_code"]: row for row in read_model["items"]}
+
+    assert {row["company_code"] for row in reviewed} == set(expected)
+    for row in reviewed:
+        row_evidence = [evidence[evidence_id] for evidence_id in row["evidence_ids"]]
+        assert {item["evidence_type"] for item in row_evidence} >= {
+            "product_relationship",
+            "revenue_materiality",
+            "business_stage",
+        }
+        assert len({item["excerpt_locator"] for item in row_evidence}) >= 3
+        assert all(item["excerpt_locator"].startswith("PDF第") for item in row_evidence)
+        assert all(item["related_company_codes"] == [row["company_code"]] for item in row_evidence)
+        source_locator = source_by_id[row_evidence[0]["source_id"]]["evidence_locator"]
+        assert all(
+            item["excerpt_locator"].removeprefix("PDF") in source_locator
+            for item in row_evidence
+        )
+    mapping_by_company = {row["company_code"]: row for row in reviewed}
+    assert {
+        company_code: (
+            mapping_by_company[company_code]["mapped_node_id"],
+            mapping_by_company[company_code]["business_materiality"],
+            mapping_by_company[company_code]["revenue_relevance"],
+            api_by_company[company_code]["beneficiary_tier"],
+        )
+        for company_code in expected
+    } == expected
+    used_source_ids = {item["source_id"] for item in mapping["evidence_items"]}
+    assert used_source_ids == {row["source_id"] for row in mapping["sources"]}
+    assert used_source_ids == {row["source_id"] for row in source_pack["sources"]}
+
+    theme_text = " ".join(row["claim_text"] for row in _read_json(AUTOMOTIVE_CHIP_THEME_PATH)["claims"])
+    for boundary in (
+        "AEC-Q/ASIL认证、产品发布、送样、定点、客户导入不等于规模量产收入",
+        "宽集成电路、半导体或汽车电子收入不等于单一车规芯片节点收入",
+        "摄像头模组不等于CMOS芯片收入",
+        "雷达整机不等于RF芯片收入",
+        "功率器件技术与产能所有权仍归`power_semiconductors`",
+        "智驾与座舱功能软件归`intelligent_driving_smart_cockpit`",
+        "国产替代需交叉验证车规认证、客户量产和收入或出货",
+    ):
+        assert boundary in theme_text
+
+    chipsea = mapping_by_company["688595.SH"]
+    assert "开发验证期" in chipsea["notes"]
+    assert "不作为汽车量产收入" in chipsea["notes"]
