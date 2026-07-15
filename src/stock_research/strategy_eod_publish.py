@@ -834,6 +834,16 @@ def _review_rows_from_result(
         _mid_trend_daily_score_lookup(trade_date, frame[asset_col].astype(str).tolist()) if strategy_id == "mid_trend" else {}
     )
     lhb_base_score_lookup = _lhb_base_score_lookup_for_trade_date(trade_date) if strategy_id == "lhb_shortline" else {}
+    if strategy_id == "lhb_shortline":
+        frame = _extend_lhb_candidate_frame_from_base_scores(
+            frame,
+            lookup=lhb_base_score_lookup,
+            trade_date=trade_date,
+            asset_col=asset_col,
+            date_col=date_col,
+            rank_col=rank_col,
+            score_col=score_col,
+        )
     excluded_assets = set(excluded_lhb_assets or set())
     if strategy_id == "lhb_shortline":
         excluded_assets.update(_lhb_delisting_assets_from_result(result))
@@ -1046,15 +1056,77 @@ def _lhb_base_score_lookup_for_trade_date(trade_date: str) -> dict[str, dict[str
         raw_asset_id = str(row.get("asset_id") or "")
         metadata = metadata_lookup.get(raw_asset_id) or metadata_lookup.get(_asset_id_from_review_code(raw_asset_id)) or {}
         payload = {
+            "asset_id": raw_asset_id,
             "score_total": score,
             "score_components": _dict_or_empty(row.get("score_components")),
             "stock_name": metadata.get("stock_name"),
             "pct_chg": metadata.get("pct_chg"),
+            "eligibility": row.get("eligibility"),
         }
         for key in {raw_asset_id, _asset_id_from_review_code(raw_asset_id)}:
             if key:
                 lookup[key] = payload
     return lookup
+
+
+def _extend_lhb_candidate_frame_from_base_scores(
+    frame: pd.DataFrame,
+    *,
+    lookup: dict[str, dict[str, Any]],
+    trade_date: str,
+    asset_col: str,
+    date_col: str | None,
+    rank_col: str | None,
+    score_col: str | None,
+    max_candidates: int = 10,
+) -> pd.DataFrame:
+    if frame.empty or not lookup or not score_col:
+        return frame
+
+    existing_assets = {
+        _asset_id_from_review_code(value) or str(value or "")
+        for value in frame[asset_col].tolist()
+    }
+    unique_payloads: dict[str, dict[str, Any]] = {}
+    for payload in lookup.values():
+        payload_asset = str(payload.get("asset_id") or "")
+        canonical_asset = _asset_id_from_review_code(payload_asset) or payload_asset
+        if canonical_asset and canonical_asset not in unique_payloads:
+            unique_payloads[canonical_asset] = payload
+
+    ranked_payloads = sorted(
+        unique_payloads.items(),
+        key=lambda item: (
+            -(_score_value(item[1].get("score_total"), "score_total") or float("-inf")),
+            item[0],
+        ),
+    )
+    additions: list[dict[str, Any]] = []
+    candidate_count = len(existing_assets)
+    for canonical_asset, payload in ranked_payloads:
+        if candidate_count >= max_candidates:
+            break
+        if canonical_asset in existing_assets or payload.get("eligibility") is False:
+            continue
+        addition = {
+            asset_col: payload.get("asset_id") or canonical_asset,
+            score_col: payload.get("score_total"),
+            "phase12a_rule_layer": "pending_intraday",
+            "stock_name": payload.get("stock_name"),
+        }
+        if date_col:
+            addition[date_col] = trade_date
+        else:
+            addition["trade_date"] = trade_date
+        if rank_col:
+            addition[rank_col] = None
+        additions.append(addition)
+        existing_assets.add(canonical_asset)
+        candidate_count += 1
+
+    if not additions:
+        return frame
+    return pd.concat([frame, pd.DataFrame(additions)], ignore_index=True, sort=False)
 
 
 def _load_lhb_base_score_source_frames(trade_date: str) -> tuple[pd.DataFrame, pd.DataFrame]:
