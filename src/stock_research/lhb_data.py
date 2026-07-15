@@ -13,6 +13,12 @@ from stock_research.dragon_case_library import (
     build_failure_event_rule_v21_curated_view,
     build_failure_event_rule_v21_transition_matrix,
 )
+from stock_research.lhb_eligibility import (
+    LHB_ELIGIBILITY_CONTRACT_VERSION,
+    PUMP_WARNING_THRESHOLD,
+    evaluate_lhb_eligibility,
+    resolve_price_limit_state,
+)
 
 
 TOP_LIST_COLUMNS = [
@@ -340,6 +346,9 @@ LHB_FULL_MARKET_POOL_SELECTED_COLUMNS = [
     "top_n",
     "trade_date",
     "ts_code",
+    "stock_name",
+    "stock_name_source",
+    "lhb_reason",
     "selection_rank",
     "selection_score",
     "lhb_net_buy_amount",
@@ -352,6 +361,20 @@ LHB_FULL_MARKET_POOL_SELECTED_COLUMNS = [
     "lhb_after_break_limit",
     "lhb_after_reversal",
     "lhb_one_day_pump_risk",
+    "high_to_close_drawdown",
+    "pct_chg",
+    "stored_is_st",
+    "stored_status_quality",
+    "eligibility_status",
+    "top5_eligible",
+    "backtest_entry_eligible",
+    "eligibility_reason_codes",
+    "eligibility_reason_texts",
+    "eligibility_warning_codes",
+    "price_limit_regime",
+    "near_limit_down_threshold",
+    "data_quality_status",
+    "eligibility_contract_version",
     "future_1d_return",
     "future_3d_return",
     "future_5d_return",
@@ -2198,13 +2221,15 @@ def build_lhb_full_market_pool_backtest_v1(
     output_dir: str | Path,
     pool_mode: str = "raw_lhb_positive",
 ) -> dict[str, Any]:
-    candidates = _build_lhb_full_market_pool_candidates(
+    evaluated = _build_lhb_full_market_pool_candidates(
         lhb_features=lhb_features,
         daily_bars=daily_bars,
         start_date=start_date,
         end_date=end_date,
         pool_mode=pool_mode,
     )
+    rejected = evaluated[~evaluated["backtest_entry_eligible"].fillna(False)].copy()
+    candidates = evaluated[evaluated["backtest_entry_eligible"].fillna(False)].copy()
     selected = _build_lhb_full_market_pool_selected(candidates, top_n_values=top_n_values)
     daily_curve = _build_lhb_shortline_shadow_backtest_daily_curve(selected)
     summary = _build_lhb_shortline_shadow_backtest_summary(
@@ -2233,16 +2258,19 @@ def build_lhb_full_market_pool_backtest_v1(
         "summary": str(out / f"lhb_full_market_pool_summary_{safe_start}_{safe_end}_v1.csv"),
         "selected_trades": str(out / f"lhb_full_market_pool_selected_trades_{safe_start}_{safe_end}_v1.csv"),
         "daily_curve": str(out / f"lhb_full_market_pool_daily_curve_{safe_start}_{safe_end}_v1.csv"),
+        "rejected_events": str(out / "lhb_full_market_pool_rejected_events_v2.csv"),
         "markdown_report": str(out / f"lhb_full_market_pool_backtest_{safe_start}_{safe_end}_v1.md"),
     }
     summary.to_csv(paths["summary"], index=False)
     selected.to_csv(paths["selected_trades"], index=False)
     daily_curve.to_csv(paths["daily_curve"], index=False)
+    rejected.to_csv(paths["rejected_events"], index=False)
     Path(paths["markdown_report"]).write_text(report, encoding="utf-8")
     return {
         "summary": summary,
         "selected_trades": selected,
         "daily_curve": daily_curve,
+        "rejected_events": rejected,
         "paths": paths,
     }
 
@@ -7245,6 +7273,15 @@ def _build_lhb_full_market_pool_candidates(
     if lhb_features.empty:
         return pd.DataFrame(columns=columns)
     frame = lhb_features.copy()
+    aliases = {
+        "name": "stock_name",
+        "pct_change": "pct_chg",
+        "is_st": "stored_is_st",
+        "status_quality": "stored_status_quality",
+    }
+    for source, target in aliases.items():
+        if target not in frame.columns and source in frame.columns:
+            frame[target] = frame[source]
     for column in columns:
         if column not in frame.columns:
             frame[column] = pd.NA
@@ -7273,6 +7310,7 @@ def _build_lhb_full_market_pool_candidates(
     frame = _filter_lhb_full_market_pool(frame, pool_mode=pool_mode)
     if frame.empty:
         return pd.DataFrame(columns=columns)
+    frame = _attach_lhb_full_market_eligibility(frame, daily_bars=daily_bars)
     frame["selection_score"] = _score_lhb_full_market_pool(frame)
     frame = _attach_lhb_full_market_future_returns(frame, daily_bars)
     frame["pool_mode"] = pool_mode
@@ -7294,14 +7332,140 @@ def _filter_lhb_full_market_pool(frame: pd.DataFrame, *, pool_mode: str) -> pd.D
     after_break = frame["lhb_after_break_limit"].map(_coerce_lhb_bool)
     after_reversal = frame["lhb_after_reversal"].map(_coerce_lhb_bool)
     if mode == "raw_lhb_positive":
-        mask = net_buy.gt(0) & net_ratio.gt(0) & inst_buy.ge(0) & pump.lt(0.90)
+        mask = net_buy.gt(0) & net_ratio.gt(0) & inst_buy.ge(0)
     elif mode == "positive_no_pump":
-        mask = net_buy.gt(0) & net_ratio.gt(0) & inst_buy.ge(0) & pump.lt(0.70)
+        mask = net_buy.gt(0) & net_ratio.gt(0) & inst_buy.ge(0) & pump.lt(PUMP_WARNING_THRESHOLD)
     elif mode == "limit_support":
         mask = net_buy.gt(0) & net_ratio.gt(0) & inst_buy.ge(0) & after_limit & ~after_break & ~after_reversal
     else:
         raise ValueError("pool_mode must be one of: raw_lhb_positive, positive_no_pump, limit_support")
     return frame[mask].copy()
+
+
+def _attach_lhb_full_market_eligibility(
+    frame: pd.DataFrame,
+    *,
+    daily_bars: pd.DataFrame,
+) -> pd.DataFrame:
+    result = frame.copy()
+    bars = _normalize_lhb_full_market_eligibility_bars(daily_bars)
+    if not bars.empty:
+        result = result.merge(
+            bars,
+            on=["trade_date", "ts_code"],
+            how="left",
+            suffixes=("", "_bar"),
+            validate="many_to_one",
+        )
+    for column in [
+        "stock_name",
+        "stock_name_source",
+        "pct_chg",
+        "stored_is_st",
+        "stored_status_quality",
+        "list_date",
+        "listing_age_trading_days",
+        "high_to_close_drawdown",
+    ]:
+        bar_column = f"{column}_bar"
+        if column not in result.columns:
+            result[column] = pd.NA
+        if bar_column in result.columns:
+            result[column] = result[column].combine_first(result[bar_column])
+            result = result.drop(columns=[bar_column])
+    has_name = result["stock_name"].notna() & result["stock_name"].astype(str).str.strip().ne("")
+    result.loc[has_name & result["stock_name_source"].isna(), "stock_name_source"] = "lhb_same_day_name"
+    result.loc[~has_name & result["stock_name_source"].isna(), "stock_name_source"] = "unavailable"
+
+    decisions: list[dict[str, Any]] = []
+    for row in result.to_dict("records"):
+        state = resolve_price_limit_state(
+            trade_date=str(row.get("trade_date") or ""),
+            ts_code=str(row.get("ts_code") or ""),
+            same_day_name=_lhb_optional_value(row.get("stock_name")),
+            current_name=_lhb_optional_value(row.get("current_name")),
+            pct_chg=_lhb_optional_value(row.get("pct_chg")),
+            stored_is_st=_lhb_optional_value(row.get("stored_is_st")),
+            stored_status_quality=str(_lhb_optional_value(row.get("stored_status_quality")) or ""),
+            list_date=_lhb_optional_value(row.get("list_date")),
+            listing_age_trading_days=_lhb_optional_value(row.get("listing_age_trading_days")),
+        )
+        decision = evaluate_lhb_eligibility(
+            trade_date=str(row.get("trade_date") or ""),
+            ts_code=str(row.get("ts_code") or ""),
+            lhb_reason=_lhb_optional_value(row.get("lhb_reason")),
+            price_limit_state=state,
+            pump_risk=_lhb_optional_value(row.get("lhb_one_day_pump_risk")),
+            high_to_close_drawdown=_lhb_optional_value(row.get("high_to_close_drawdown")),
+            institution_net_buy=_lhb_optional_value(row.get("institution_net_buy")),
+        )
+        decisions.append(
+            {
+                "eligibility_status": decision.eligibility_status,
+                "top5_eligible": decision.top5_eligible,
+                "backtest_entry_eligible": decision.backtest_entry_eligible,
+                "eligibility_reason_codes": json.dumps(list(decision.reason_codes), ensure_ascii=False),
+                "eligibility_reason_texts": json.dumps(list(decision.reason_texts), ensure_ascii=False),
+                "eligibility_warning_codes": json.dumps(list(decision.warning_codes), ensure_ascii=False),
+                "price_limit_regime": decision.price_limit_regime,
+                "near_limit_down_threshold": decision.near_limit_down_threshold,
+                "data_quality_status": decision.data_quality_status,
+                "eligibility_contract_version": LHB_ELIGIBILITY_CONTRACT_VERSION,
+            }
+        )
+    decision_frame = pd.DataFrame(decisions, index=result.index)
+    for column in decision_frame.columns:
+        result[column] = decision_frame[column]
+    return result
+
+
+def _normalize_lhb_full_market_eligibility_bars(daily_bars: pd.DataFrame) -> pd.DataFrame:
+    columns = [
+        "trade_date",
+        "ts_code",
+        "stock_name",
+        "stock_name_source",
+        "pct_chg",
+        "stored_is_st",
+        "stored_status_quality",
+        "list_date",
+        "listing_age_trading_days",
+        "high_to_close_drawdown",
+    ]
+    if daily_bars.empty:
+        return pd.DataFrame(columns=columns)
+    bars = daily_bars.copy()
+    aliases = {
+        "name": "stock_name",
+        "pct_change": "pct_chg",
+        "is_st": "stored_is_st",
+        "status_quality": "stored_status_quality",
+    }
+    for source, target in aliases.items():
+        if target not in bars.columns and source in bars.columns:
+            bars[target] = bars[source]
+    if "pct_chg" not in bars.columns and {"close", "preclose"}.issubset(bars.columns):
+        close = pd.to_numeric(bars["close"], errors="coerce")
+        preclose = pd.to_numeric(bars["preclose"], errors="coerce")
+        bars["pct_chg"] = (close / preclose - 1.0) * 100.0
+    for column in columns:
+        if column not in bars.columns:
+            bars[column] = pd.NA
+    bars["trade_date"] = pd.to_datetime(bars["trade_date"], errors="coerce")
+    bars["ts_code"] = bars["ts_code"].fillna("").astype(str).str.strip().str.upper()
+    return bars.reindex(columns=columns).drop_duplicates(
+        subset=["trade_date", "ts_code"],
+        keep="last",
+    )
+
+
+def _lhb_optional_value(value: Any) -> Any:
+    try:
+        if pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        pass
+    return value
 
 
 def _score_lhb_full_market_pool(frame: pd.DataFrame) -> pd.Series:
