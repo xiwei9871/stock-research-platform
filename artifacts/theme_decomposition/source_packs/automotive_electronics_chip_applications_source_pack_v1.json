@@ -229,7 +229,6 @@
       ],
       "supported_node_ids": [
         "cockpit_driving_soc_compute_applications",
-        "analog_power_interface_chips",
         "ecu_domain_zonal_hardware_integration",
         "automotive_grade_safety_reliability_validation",
         "localization_supply_chain_mass_production_validation"

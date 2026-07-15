@@ -365,6 +365,38 @@ AUTOMOTIVE_CHIP_NODE_IDS = {
     "automotive_grade_safety_reliability_validation",
     "localization_supply_chain_mass_production_validation",
 }
+AUTOMOTIVE_CHIP_NODE_DIRECT_CLAIM_IDS = {
+    "automotive_mcu_control_soc_applications": {
+        "auto_chip_claim_02_mcu_control_soc_mass_production",
+    },
+    "cockpit_driving_soc_compute_applications": {
+        "auto_chip_claim_03_cockpit_driving_soc_boundary",
+    },
+    "automotive_memory_interfaces": {
+        "auto_chip_claim_04_automotive_memory",
+    },
+    "cmos_image_sensor_signal_chain": {
+        "auto_chip_claim_05_cis_module_radar_boundary",
+    },
+    "analog_power_interface_chips": {
+        "auto_chip_claim_06_analog_power_interface",
+    },
+    "power_semiconductor_module_applications_dependency": {
+        "auto_chip_claim_07_power_cross_chain",
+    },
+    "in_vehicle_network_gateway_chips": {
+        "auto_chip_claim_08_vehicle_network_gateway",
+    },
+    "ecu_domain_zonal_hardware_integration": {
+        "auto_chip_claim_09_ecu_domain_integration",
+    },
+    "automotive_grade_safety_reliability_validation": {
+        "auto_chip_claim_10_certification_not_revenue",
+    },
+    "localization_supply_chain_mass_production_validation": {
+        "auto_chip_claim_11_localization_cross_validation",
+    },
+}
 AUTOMOTIVE_CHIP_SOURCE_IDENTITIES = {
     "auto_chip_603986_ar2025": (
         "兆易创新2025年年度报告",
@@ -1795,6 +1827,34 @@ def test_automotive_electronics_chip_source_claim_node_matrix_contract_is_exact(
             "publish_date": pack_sources[source_id]["publish_date"],
             "url_or_ref": pack_sources[source_id]["url"],
         } == expected
+
+
+def test_automotive_electronics_chip_source_node_links_require_node_direct_claims():
+    source_pack = _read_json(AUTOMOTIVE_CHIP_SOURCE_PACK_PATH)
+    matrix = _read_json(AUTOMOTIVE_CHIP_MATRIX_PATH)
+    source_by_id = {row["source_id"]: row for row in source_pack["sources"]}
+    offenders = []
+
+    for source in source_pack["sources"]:
+        supported_claim_ids = set(source["supported_claim_ids"])
+        for node_id in source["supported_node_ids"]:
+            if not (
+                supported_claim_ids
+                & AUTOMOTIVE_CHIP_NODE_DIRECT_CLAIM_IDS[node_id]
+            ):
+                offenders.append(f"source:{source['source_id']}->{node_id}")
+
+    for matrix_row in matrix["node_evidence_matrix"]:
+        node_id = matrix_row["node_id"]
+        direct_claim_ids = AUTOMOTIVE_CHIP_NODE_DIRECT_CLAIM_IDS[node_id]
+        for source_id in matrix_row["accepted_source_ids"]:
+            if not (
+                set(source_by_id[source_id]["supported_claim_ids"])
+                & direct_claim_ids
+            ):
+                offenders.append(f"matrix:{source_id}->{node_id}")
+
+    assert offenders == []
 
 
 def test_automotive_electronics_chip_readable_sections_catalog_and_cross_chain_ids_are_exact():
