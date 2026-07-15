@@ -15,7 +15,6 @@ from stock_research.dragon_case_library import (
 )
 from stock_research.lhb_eligibility import (
     LHB_ELIGIBILITY_CONTRACT_VERSION,
-    PUMP_WARNING_THRESHOLD,
     evaluate_lhb_eligibility,
     resolve_price_limit_state,
 )
@@ -7314,6 +7313,23 @@ def _build_lhb_full_market_pool_candidates(
     if frame.empty:
         return pd.DataFrame(columns=columns)
     frame = _attach_lhb_full_market_eligibility(frame, daily_bars=daily_bars)
+    incomplete_by_date = frame.groupby("trade_date", dropna=False)["data_quality_status"].apply(
+        lambda values: values.fillna("").ne("complete").all()
+    )
+    failed_dates = [str(value)[:10] for value in incomplete_by_date[incomplete_by_date].index]
+    if failed_dates:
+        raise ValueError(
+            "all candidates have incomplete price-limit data for: " + ", ".join(failed_dates[:10])
+        )
+    if pool_mode == "positive_no_pump":
+        frame = frame[
+            ~frame["eligibility_warning_codes"].fillna("").astype(str).str.contains(
+                "high_elasticity_pump_risk",
+                regex=False,
+            )
+        ].copy()
+    if frame.empty:
+        return pd.DataFrame(columns=columns)
     frame["selection_score"] = _score_lhb_full_market_pool(frame)
     frame = _attach_lhb_full_market_future_returns(frame, daily_bars)
     frame["pool_mode"] = pool_mode
@@ -7330,14 +7346,13 @@ def _filter_lhb_full_market_pool(frame: pd.DataFrame, *, pool_mode: str) -> pd.D
     net_buy = pd.to_numeric(frame["lhb_net_buy_amount"], errors="coerce").fillna(0.0)
     net_ratio = pd.to_numeric(frame["lhb_net_buy_ratio"], errors="coerce").fillna(0.0)
     inst_buy = pd.to_numeric(frame["institution_net_buy"], errors="coerce").fillna(0.0)
-    pump = pd.to_numeric(frame["lhb_one_day_pump_risk"], errors="coerce").fillna(0.0)
     after_limit = frame["lhb_after_limit_up"].map(_coerce_lhb_bool)
     after_break = frame["lhb_after_break_limit"].map(_coerce_lhb_bool)
     after_reversal = frame["lhb_after_reversal"].map(_coerce_lhb_bool)
     if mode == "raw_lhb_positive":
         mask = net_buy.gt(0) & net_ratio.gt(0) & inst_buy.ge(0)
     elif mode == "positive_no_pump":
-        mask = net_buy.gt(0) & net_ratio.gt(0) & inst_buy.ge(0) & pump.lt(PUMP_WARNING_THRESHOLD)
+        mask = net_buy.gt(0) & net_ratio.gt(0) & inst_buy.ge(0)
     elif mode == "limit_support":
         mask = net_buy.gt(0) & net_ratio.gt(0) & inst_buy.ge(0) & after_limit & ~after_break & ~after_reversal
     else:
@@ -7401,6 +7416,7 @@ def _attach_lhb_full_market_eligibility(
             pump_risk=_lhb_optional_value(row.get("lhb_one_day_pump_risk")),
             high_to_close_drawdown=_lhb_optional_value(row.get("high_to_close_drawdown")),
             institution_net_buy=_lhb_optional_value(row.get("institution_net_buy")),
+            security_state=_lhb_optional_value(row.get("stock_name")),
         )
         decisions.append(
             {

@@ -1,6 +1,7 @@
 from stock_research.config import SETTINGS
 from stock_research.db import connect, execute
 from stock_research.db import execute_many
+from stock_research.db import fetch_all
 from stock_research.eastmoney_http import curl_eastmoney_json
 
 try:
@@ -447,6 +448,7 @@ def build_asset_status_daily_for_service(
 ) -> None:
     with connect(service) as conn:
         build_asset_status_daily(conn, start_date, end_date, adjust_type)
+        assert_asset_status_daily_quality(conn, start_date=start_date, end_date=end_date)
 
 
 def build_asset_status_daily(
@@ -549,6 +551,59 @@ def build_asset_status_daily(
         updated_at = now()
     """
     execute(conn, sql, params)
+
+
+def assert_asset_status_daily_quality(
+    conn,
+    *,
+    start_date: str | None = None,
+    end_date: str | None = None,
+) -> dict[str, object]:
+    filters = ["NULLIF(l.name, '') ~* '^(\\*?ST|S\\*ST)'"]
+    params: list[object] = []
+    if start_date:
+        filters.append("l.trade_date >= %s")
+        params.append(start_date)
+    if end_date:
+        filters.append("l.trade_date <= %s")
+        params.append(end_date)
+    rows = fetch_all(
+        conn,
+        f"""
+        WITH lhb_st AS (
+            SELECT
+                l.trade_date,
+                count(DISTINCT l.ts_code)::int AS lhb_st_count
+            FROM market.lhb_top_list_daily l
+            WHERE {' AND '.join(filters)}
+            GROUP BY l.trade_date
+        ),
+        status_st AS (
+            SELECT
+                s.trade_date,
+                count(DISTINCT s.asset_id)::int AS asset_status_st_count
+            FROM core.asset_status_daily s
+            WHERE s.is_st
+            GROUP BY s.trade_date
+        )
+        SELECT
+            l.trade_date::text AS trade_date,
+            l.lhb_st_count,
+            COALESCE(s.asset_status_st_count, 0)::int AS asset_status_st_count
+        FROM lhb_st l
+        LEFT JOIN status_st s ON s.trade_date = l.trade_date
+        WHERE COALESCE(s.asset_status_st_count, 0) = 0
+        ORDER BY l.trade_date
+        """,
+        params,
+    )
+    if rows:
+        sample = ", ".join(
+            f"{row.get('trade_date')}:lhb_st={row.get('lhb_st_count')}:status_st={row.get('asset_status_st_count')}"
+            for row in rows[:5]
+        )
+        raise RuntimeError(f"asset status ST quality violation: {sample}")
+    return {"violation_count": 0, "start_date": start_date, "end_date": end_date}
 
 
 def build_industry_daily_bars_for_service(

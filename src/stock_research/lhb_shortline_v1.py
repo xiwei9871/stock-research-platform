@@ -1214,7 +1214,7 @@ def _minute_asset_ids_for_lhb_shortline_v1(lhb_features: pd.DataFrame, top_value
         frame["lhb_net_buy_amount"].fillna(0.0).gt(0)
         & frame["lhb_net_buy_ratio"].fillna(0.0).gt(0)
         & frame["institution_net_buy"].fillna(0.0).ge(0)
-        & frame["lhb_one_day_pump_risk"].fillna(0.0).lt(0.90)
+        & frame["lhb_one_day_pump_risk"].fillna(0.0).lt(PUMP_REJECT_THRESHOLD)
     )
     frame = frame[mask].copy()
     if frame.empty:

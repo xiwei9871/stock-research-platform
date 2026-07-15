@@ -1,3 +1,5 @@
+import pytest
+
 from stock_research import core_data
 
 
@@ -137,6 +139,74 @@ def test_build_asset_status_daily_allows_open_date_range(monkeypatch):
     assert "b.trade_date >=" not in sql
     assert "b.trade_date <=" not in sql
     assert params == ["qfq"]
+
+
+def test_asset_status_quality_rejects_zero_st_when_same_day_lhb_has_st(monkeypatch):
+    monkeypatch.setattr(
+        core_data,
+        "fetch_all",
+        lambda conn, sql, params: [
+            {
+                "trade_date": "2026-07-14",
+                "lhb_st_count": 2,
+                "asset_status_st_count": 0,
+            }
+        ],
+    )
+
+    with pytest.raises(RuntimeError, match="asset status ST quality violation"):
+        core_data.assert_asset_status_daily_quality(
+            object(),
+            start_date="2026-07-14",
+            end_date="2026-07-14",
+        )
+
+
+def test_asset_status_quality_accepts_nonzero_resolved_st(monkeypatch):
+    monkeypatch.setattr(core_data, "fetch_all", lambda conn, sql, params: [])
+
+    result = core_data.assert_asset_status_daily_quality(
+        object(),
+        start_date="2026-07-14",
+        end_date="2026-07-14",
+    )
+
+    assert result["violation_count"] == 0
+
+
+def test_asset_status_service_runs_quality_guard_after_build(monkeypatch):
+    calls = []
+
+    class ConnectionContext:
+        def __enter__(self):
+            return "conn"
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+    monkeypatch.setattr(core_data, "connect", lambda service: ConnectionContext())
+    monkeypatch.setattr(
+        core_data,
+        "build_asset_status_daily",
+        lambda conn, start_date, end_date, adjust_type: calls.append(("build", conn, start_date, end_date, adjust_type)),
+    )
+    monkeypatch.setattr(
+        core_data,
+        "assert_asset_status_daily_quality",
+        lambda conn, start_date, end_date: calls.append(("quality", conn, start_date, end_date)),
+    )
+
+    core_data.build_asset_status_daily_for_service(
+        start_date="2026-07-14",
+        end_date="2026-07-14",
+        adjust_type="hfq",
+        service="stock_research",
+    )
+
+    assert calls == [
+        ("build", "conn", "2026-07-14", "2026-07-14", "hfq"),
+        ("quality", "conn", "2026-07-14", "2026-07-14"),
+    ]
 
 
 def test_build_industry_daily_bars_uses_historical_membership_windows(monkeypatch):

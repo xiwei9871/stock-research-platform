@@ -119,6 +119,23 @@ def test_delisting_is_hard_reject_and_wins_over_other_rules():
     assert decision.reason_codes[0] == "delisting_period"
 
 
+@pytest.mark.parametrize("security_state", ["DELISTING_PERIOD", "退市整理", "listing_termination"])
+def test_delisting_security_state_markers_are_hard_rejects(security_state):
+    decision = evaluate_lhb_eligibility(
+        trade_date="2026-06-26",
+        ts_code="000004.SZ",
+        lhb_reason="异常期间证券",
+        security_state=security_state,
+        price_limit_state=main_board_state(pct_chg=1.0),
+        pump_risk=0.20,
+        high_to_close_drawdown=0.01,
+        institution_net_buy=1.0,
+    )
+
+    assert decision.eligibility_status == "hard_reject"
+    assert decision.reason_codes == ("delisting_period",)
+
+
 @pytest.mark.parametrize(
     ("pump", "status", "top5", "reason_or_warning"),
     [
