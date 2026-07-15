@@ -203,6 +203,29 @@ def load_theme_package(artifact_dir: str | Path | None = None) -> dict[str, Any]
     return package
 
 
+def validate_theme_decomposition_artifact(
+    artifact: dict[str, Any],
+    *,
+    expected_theme_id: str | None = None,
+) -> set[str]:
+    if not isinstance(artifact, dict):
+        raise ThemeDecompositionValidationError("theme artifact must be an object")
+    _validate_artifact_versions([artifact])
+    theme = artifact.get("theme")
+    if not isinstance(theme, dict):
+        raise ThemeDecompositionValidationError("theme must be an object")
+    nodes = artifact.get("nodes")
+    if not isinstance(nodes, list):
+        raise ThemeDecompositionValidationError("nodes must be a list")
+    if any(not isinstance(node, dict) for node in nodes):
+        raise ThemeDecompositionValidationError("nodes must contain only objects")
+    return _validate_theme_and_nodes(
+        [theme],
+        nodes,
+        expected_theme_id=expected_theme_id,
+    )
+
+
 def summarize_theme_package(package: dict[str, Any]) -> dict[str, Any]:
     nodes = package.get("nodes", [])
     sources = package.get("sources", [])
@@ -324,19 +347,11 @@ def _validate_artifact_versions(artifacts: list[dict[str, Any]]) -> None:
 
 def _validate_package(package: dict[str, Any]) -> None:
     source_ids: set[str] = set()
-    node_ids: set[str] = set()
-    theme_ids: set[str] = set()
     claim_ids: set[str] = set()
     source_by_id: dict[str, dict[str, Any]] = {}
     claim_by_id: dict[str, dict[str, Any]] = {}
-
-    for index, theme in enumerate(package["themes"]):
-        path = "theme" if len(package["themes"]) == 1 else f"themes[{index}]"
-        _require_fields(theme, THEME_FIELDS, path)
-        _check_enum(theme, "theme_type", THEME_TYPES, path)
-        _check_enum(theme, "status", THEME_STATUSES, path)
-        _check_enum(theme, "created_from", CREATED_FROM, path)
-        _check_unique(theme_ids, theme["theme_id"], f"theme.theme_id {theme['theme_id']}")
+    node_ids = _validate_theme_and_nodes(package["themes"], package["nodes"])
+    theme_ids = {theme["theme_id"] for theme in package["themes"]}
 
     for index, source in enumerate(package["sources"]):
         _require_fields(source, SOURCE_FIELDS, f"sources[{index}]")
@@ -357,33 +372,6 @@ def _validate_package(package: dict[str, Any]) -> None:
             )
         _check_unique(source_ids, source["source_id"], f"source.source_id {source['source_id']}")
         source_by_id[source["source_id"]] = source
-
-    for index, node in enumerate(package["nodes"]):
-        _require_fields(node, NODE_FIELDS, f"nodes[{index}]")
-        _check_enum(node, "node_type", NODE_TYPES, f"nodes[{index}]")
-        _check_enum(
-            node,
-            "node_review_status",
-            NODE_REVIEW_STATUSES,
-            f"nodes[{index}]",
-            code="INVALID_NODE_REVIEW_STATUS",
-        )
-        if node["theme_id"] not in theme_ids:
-            raise ThemeDecompositionValidationError(f"nodes[{index}].theme_id references missing theme")
-        for field in (
-            "value_capture_score",
-            "bottleneck_score",
-            "localization_gap_score",
-            "supply_tightness_score",
-            "evidence_strength",
-        ):
-            _check_score(node, field, f"nodes[{index}]")
-        _check_unique(node_ids, node["node_id"], f"node.node_id {node['node_id']}")
-
-    for index, node in enumerate(package["nodes"]):
-        parent_node_id = str(node.get("parent_node_id") or "").strip()
-        if parent_node_id and parent_node_id not in node_ids:
-            raise ThemeDecompositionValidationError(f"nodes[{index}].parent_node_id references missing node")
 
     for index, claim in enumerate(package["claims"]):
         _require_fields(claim, CLAIM_FIELDS, f"claims[{index}]")
@@ -475,6 +463,76 @@ def _validate_package(package: dict[str, Any]) -> None:
         source_by_id=source_by_id,
         claim_by_id=claim_by_id,
     )
+
+
+def _validate_theme_and_nodes(
+    themes: list[dict[str, Any]],
+    nodes: list[dict[str, Any]],
+    *,
+    expected_theme_id: str | None = None,
+) -> set[str]:
+    theme_ids: set[str] = set()
+    for index, theme in enumerate(themes):
+        path = "theme" if len(themes) == 1 else f"themes[{index}]"
+        _require_fields(theme, THEME_FIELDS, path)
+        for field in ("theme_id", "theme_name", "summary", "last_updated"):
+            _check_non_empty_string(theme, field, path)
+        _check_enum(theme, "theme_type", THEME_TYPES, path)
+        _check_enum(theme, "status", THEME_STATUSES, path)
+        _check_enum(theme, "created_from", CREATED_FROM, path)
+        _check_unique(theme_ids, theme["theme_id"], f"theme.theme_id {theme['theme_id']}")
+    if expected_theme_id is not None and theme_ids != {expected_theme_id}:
+        actual = next(iter(theme_ids), None)
+        raise ThemeDecompositionValidationError(
+            f"theme.theme_id must equal {expected_theme_id}: {actual}"
+        )
+
+    node_ids: set[str] = set()
+    for index, node in enumerate(nodes):
+        path = f"nodes[{index}]"
+        _require_fields(node, NODE_FIELDS, path)
+        for field in ("node_id", "theme_id", "node_name", "description"):
+            _check_non_empty_string(node, field, path)
+        if not isinstance(node["parent_node_id"], str):
+            raise ThemeDecompositionValidationError(
+                f"{path}.parent_node_id must be a string"
+            )
+        for field in (
+            "key_metrics",
+            "overseas_leaders",
+            "domestic_players",
+            "related_stock_codes",
+        ):
+            _check_string_list(node, field, path)
+        _check_enum(node, "node_type", NODE_TYPES, path)
+        _check_enum(
+            node,
+            "node_review_status",
+            NODE_REVIEW_STATUSES,
+            path,
+            code="INVALID_NODE_REVIEW_STATUS",
+        )
+        if node["theme_id"] not in theme_ids:
+            raise ThemeDecompositionValidationError(
+                f"{path}.theme_id references missing theme"
+            )
+        for field in (
+            "value_capture_score",
+            "bottleneck_score",
+            "localization_gap_score",
+            "supply_tightness_score",
+            "evidence_strength",
+        ):
+            _check_score(node, field, path)
+        _check_unique(node_ids, node["node_id"], f"node.node_id {node['node_id']}")
+
+    for index, node in enumerate(nodes):
+        parent_node_id = node["parent_node_id"].strip()
+        if parent_node_id and parent_node_id not in node_ids:
+            raise ThemeDecompositionValidationError(
+                f"nodes[{index}].parent_node_id references missing node"
+            )
+    return node_ids
 
 
 def _validate_review_gates(
@@ -590,9 +648,25 @@ def _check_enum(
         raise ThemeDecompositionValidationError(f"{path}.{field} invalid: {value}", code=code)
 
 
+def _check_non_empty_string(row: dict[str, Any], field: str, path: str) -> None:
+    value = row.get(field)
+    if not isinstance(value, str) or not value.strip():
+        raise ThemeDecompositionValidationError(
+            f"{path}.{field} must be a non-empty string"
+        )
+
+
+def _check_string_list(row: dict[str, Any], field: str, path: str) -> None:
+    value = row.get(field)
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        raise ThemeDecompositionValidationError(
+            f"{path}.{field} must be a list of strings"
+        )
+
+
 def _check_score(row: dict[str, Any], field: str, path: str) -> None:
     value = row.get(field)
-    if not isinstance(value, int) or value < 0 or value > 5:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0 or value > 5:
         raise ThemeDecompositionValidationError(f"{path}.{field} must be integer 0-5")
 
 

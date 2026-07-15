@@ -27,6 +27,8 @@ from stock_research.theme_decomposition import (
     CLAIM_PLATFORM_USE_STATUSES,
     CLAIM_TYPES,
     EVIDENCE_STATUSES,
+    ThemeDecompositionValidationError,
+    validate_theme_decomposition_artifact,
 )
 
 
@@ -473,26 +475,20 @@ def _validate_theme_nodes(
     *,
     expected_theme_id: str,
 ) -> tuple[set[str], bool, list[str]]:
-    rows, errors = _object_rows(payload, "nodes", "theme nodes")
-    node_ids: set[str] = set()
-    for index, row in enumerate(rows):
-        label = f"theme node[{index}]"
-        node_id = row.get("node_id")
-        if not _is_non_empty_string(node_id):
-            errors.append(f"{label} requires non-empty node_id")
-            continue
-        if node_id in node_ids:
-            errors.append(f"{label} duplicate node_id: {node_id}")
-            continue
-        if row.get("theme_id") != expected_theme_id:
-            errors.append(
-                f"{label}.theme_id must equal {expected_theme_id}: {row.get('theme_id')}"
-            )
-            continue
-        node_ids.add(node_id)
+    if payload is None:
+        return set(), False, ["theme artifact is unavailable"]
+    try:
+        node_ids = validate_theme_decomposition_artifact(
+            payload,
+            expected_theme_id=expected_theme_id,
+        )
+    except ThemeDecompositionValidationError as exc:
+        return set(), False, [
+            f"theme artifact validation failed [{exc.code}]: {exc}"
+        ]
     if not node_ids:
-        errors.append("theme nodes must contain at least one valid node")
-    return node_ids, not errors, errors
+        return set(), False, ["theme nodes must contain at least one valid node"]
+    return node_ids, True, []
 
 
 def _validate_claims(

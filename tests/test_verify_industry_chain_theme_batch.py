@@ -6,6 +6,14 @@ from pathlib import Path
 
 import pytest
 
+from stock_research.theme_decomposition import (
+    ARTIFACT_VERSION as THEME_ARTIFACT_VERSION,
+    NODE_FIELDS,
+    NODE_REVIEW_STATUSES as THEME_NODE_REVIEW_STATUSES,
+    NODE_TYPES,
+    THEME_STATUSES,
+)
+
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT_PATH = REPOSITORY_ROOT / "scripts/verify_industry_chain_theme_batch.py"
 SPEC = importlib.util.spec_from_file_location("verify_industry_chain_theme_batch", SCRIPT_PATH)
@@ -330,6 +338,62 @@ def test_source_pack_and_matrix_schema_mutations_fail_closed(
 
     assert theme["ready"] is False
     assert theme["checks"][failed_check] is False
+    assert any(error_fragment in error for error in theme["errors"])
+
+
+@pytest.mark.parametrize(
+    ("mutation", "error_fragment"),
+    [
+        ("artifact_version", "artifact_version"),
+        ("theme_status", "theme.status"),
+        ("missing_node_field", "nodes[0].description"),
+        ("invalid_node_field_type", "nodes[0].node_name"),
+        ("node_type", "nodes[0].node_type"),
+        ("node_review_status", "nodes[0].node_review_status"),
+        ("evidence_strength", "nodes[0].evidence_strength"),
+        ("score", "nodes[0].bottleneck_score"),
+    ],
+)
+def test_theme_artifact_schema_mutations_fail_closed(
+    tmp_path: Path,
+    mutation: str,
+    error_fragment: str,
+):
+    manifest_path = _write_ready_batch(tmp_path)
+    path = tmp_path / "sample_theme.json"
+    payload = _read_json(path)
+    node = payload["nodes"][0]
+    if mutation == "artifact_version":
+        payload["artifact_version"] = "bogus_v0"
+    elif mutation == "theme_status":
+        payload["theme"]["status"] = next(
+            value for value in ("bogus", "invalid") if value not in THEME_STATUSES
+        )
+    elif mutation == "missing_node_field":
+        node.pop(next(field for field in ("description", "node_name") if field in NODE_FIELDS))
+    elif mutation == "invalid_node_field_type":
+        node["node_name"] = 123
+    elif mutation == "node_type":
+        node[mutation] = next(
+            value for value in ("bogus", "invalid") if value not in NODE_TYPES
+        )
+    elif mutation == "node_review_status":
+        node[mutation] = next(
+            value
+            for value in ("bogus", "invalid")
+            if value not in THEME_NODE_REVIEW_STATUSES
+        )
+    else:
+        node["bottleneck_score" if mutation == "score" else mutation] = 99
+    _write_json(path, payload)
+
+    report = build_theme_batch_report(manifest_path)
+    theme = report["theme_results"][0]
+
+    assert theme["ready"] is False
+    assert theme["checks"]["theme_nodes_valid"] is False
+    assert report["wave_results"]["wave_a"]["ready"] is False
+    assert report["completion_status"] == "not_ready"
     assert any(error_fragment in error for error in theme["errors"])
 
 
@@ -861,7 +925,16 @@ def _write_ready_batch(root: Path) -> Path:
         },
     }
     theme = {
-        "theme": {"theme_id": "sample_theme_v1"},
+        "artifact_version": THEME_ARTIFACT_VERSION,
+        "theme": {
+            "theme_id": "sample_theme_v1",
+            "theme_name": "Sample Theme",
+            "theme_type": "other",
+            "summary": "Sample theme for verifier contract tests.",
+            "status": "reviewed",
+            "created_from": "manual",
+            "last_updated": "2026-07-15",
+        },
         "research_profile": {
             "investment_summary": "Conclusion",
             "industry_stage": "scaling",
@@ -874,8 +947,25 @@ def _write_ready_batch(root: Path) -> Path:
             "evidence_gap_summary": "Known gaps",
         },
         "nodes": [
-            {"node_id": "node_1", "theme_id": "sample_theme_v1"},
-            {"node_id": "node_2", "theme_id": "sample_theme_v1"},
+            {
+                "node_id": f"node_{index}",
+                "theme_id": "sample_theme_v1",
+                "parent_node_id": "",
+                "node_name": f"Node {index}",
+                "node_type": "subsystem",
+                "description": f"Sample node {index}.",
+                "value_capture_score": 4,
+                "bottleneck_score": 4,
+                "localization_gap_score": 3,
+                "supply_tightness_score": 3,
+                "evidence_strength": 4,
+                "node_review_status": "reviewed",
+                "key_metrics": ["metric"],
+                "overseas_leaders": [],
+                "domestic_players": [],
+                "related_stock_codes": [],
+            }
+            for index in range(1, 3)
         ],
         "claims": [
             {
