@@ -63,6 +63,10 @@ def test_lhb_audit_preserves_published_name_and_risk_gate_fields():
             "score_source": "score_total",
             "source_type": "strategy_manifest",
             "review_tier": "risk_watch",
+            "confirmation_state": "risk_watch",
+            "phase12a_rule_layer": "pending_intraday",
+            "phase12a_rule_action": "pending",
+            "fill_status": "not_follow_allowed",
             "eligibility_status": "risk_watch",
             "top5_eligible": False,
             "backtest_entry_eligible": False,
@@ -102,6 +106,8 @@ def test_lhb_audit_preserves_published_name_and_risk_gate_fields():
     assert row["stock_name"] == "惠科股份"
     assert row["stock_name_source"] == "lhb_top_list_daily"
     assert bool(row["top5_eligible"]) is False
+    assert row["confirmation_state"] == "risk_watch"
+    assert row["phase12a_rule_layer"] == "pending_intraday"
     assert row["eligibility_status"] == "risk_watch"
     assert bool(row["backtest_entry_eligible"]) is False
     assert row["eligibility_reason_codes"] == ["near_limit_down_followthrough_risk"]

@@ -779,6 +779,10 @@ def _review_rows_from_result(
         "source_name",
         "source_rank",
         "review_tier",
+        "confirmation_state",
+        "phase12a_rule_layer",
+        "phase12a_rule_action",
+        "fill_status",
         "eligibility_status",
         "top5_eligible",
         "backtest_entry_eligible",
@@ -944,6 +948,15 @@ def _review_rows_from_result(
                 "source_name": source_name,
                 "source_rank": rank or index + 1,
                 "review_tier": "top5_focus" if (rank or index + 1) <= 5 else "watch",
+                "confirmation_state": _lhb_confirmation_state(
+                    phase12a_rule_layer=row.get("phase12a_rule_layer"),
+                    phase12a_rule_action=row.get("phase12a_rule_action"),
+                    fill_status=row.get("fill_status"),
+                    eligibility_status=row.get("eligibility_status"),
+                ) if strategy_id == "lhb_shortline" else "",
+                "phase12a_rule_layer": row.get("phase12a_rule_layer"),
+                "phase12a_rule_action": row.get("phase12a_rule_action"),
+                "fill_status": row.get("fill_status"),
                 "eligibility_status": row.get("eligibility_status"),
                 "top5_eligible": row.get("top5_eligible"),
                 "backtest_entry_eligible": row.get("backtest_entry_eligible"),
@@ -966,6 +979,32 @@ def _review_rows_from_result(
         review = apply_lhb_top5_gate(review)
         return review.reset_index(drop=True).reindex(columns=columns)
     return review.sort_values(["rank", "asset_id"], kind="stable").reset_index(drop=True)
+
+
+def _lhb_confirmation_state(
+    *,
+    phase12a_rule_layer: object,
+    phase12a_rule_action: object,
+    fill_status: object,
+    eligibility_status: object,
+) -> str:
+    eligibility = str(eligibility_status or "").strip().lower()
+    layer = str(phase12a_rule_layer or "").strip().lower()
+    action = str(phase12a_rule_action or "").strip().lower()
+    fill = str(fill_status or "").strip().lower()
+    if eligibility == "risk_watch":
+        return "risk_watch"
+    if eligibility == "hard_reject":
+        return "retreat"
+    if layer == "pending_intraday" or action == "pending":
+        return "pending_confirmation"
+    if layer.startswith("follow_pool") or action == "follow_allowed" or fill == "filled":
+        return "confirmed_follow"
+    if layer in {"watch_pool", "chase_control"} or action in {"watch_only", "chase_control"}:
+        return "watch_only"
+    if layer == "retreat_hard" or action in {"retreat", "reject_follow"}:
+        return "retreat"
+    return "pending_confirmation" if eligibility == "eligible" else "watch_only"
 
 
 def _mid_trend_latest_equity_is_flat_cash(result: dict[str, Any], *, trade_date: str) -> bool:

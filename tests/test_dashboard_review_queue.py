@@ -59,14 +59,48 @@ def test_strategy_lightweight_digest_labels_lhb_risk_watch_and_exposes_reason():
     ]
 
 
+def test_strategy_lightweight_digest_distinguishes_pending_and_confirmed_lhb_states():
+    pending = review_queue._strategy_lightweight_digest(
+        {
+            "asset_id": "CN:SZ:002463",
+            "strategy_name": "LHB Shortline Combo",
+            "rank": 1,
+            "score_total": 77.0,
+            "review_tier": "top5_focus",
+            "confirmation_state": "pending_confirmation",
+            "phase12a_rule_layer": "pending_intraday",
+        },
+        "CN:SZ:002463",
+        "2026-07-14",
+    )
+    confirmed = review_queue._strategy_lightweight_digest(
+        {
+            "asset_id": "CN:SZ:002463",
+            "strategy_name": "LHB Shortline Combo",
+            "rank": 1,
+            "score_total": 77.0,
+            "review_tier": "top5_focus",
+            "confirmation_state": "confirmed_follow",
+            "phase12a_rule_layer": "follow_pool_core",
+        },
+        "CN:SZ:002463",
+        "2026-07-15",
+    )
+
+    assert "Top5 次日确认待定" in pending["title"]
+    assert "Top5 重点复盘" not in pending["title"]
+    assert "已确认可跟踪" in confirmed["title"]
+
+
 def test_manifest_strategy_reader_preserves_lhb_risk_gate_fields(tmp_path):
     artifact = tmp_path / "strategy_lhb_shortline_review.csv"
     artifact.write_text(
         "trade_date,asset_id,stock_name,rank,score_total,strategy_id,strategy_name,review_tier,"
         "stock_name_source,top5_eligible,risk_gate_code,risk_gate_reason,price_limit_regime,"
-        "near_limit_down_threshold,pct_chg\n"
+        "near_limit_down_threshold,pct_chg,confirmation_state,phase12a_rule_layer,phase12a_rule_action,fill_status\n"
         "2026-07-14,CN:SZ:001399,惠科股份,4,69.3698,lhb_shortline,LHB Shortline Combo,"
-        "risk_watch,lhb_top_list_daily,False,near_limit_down_followthrough_risk,接近跌停,main_board,-9.5,-9.991\n",
+        "risk_watch,lhb_top_list_daily,False,near_limit_down_followthrough_risk,接近跌停,main_board,-9.5,-9.991,"
+        "risk_watch,pending_intraday,pending,not_follow_allowed\n",
         encoding="utf-8",
     )
 
@@ -82,3 +116,5 @@ def test_manifest_strategy_reader_preserves_lhb_risk_gate_fields(tmp_path):
     assert rows[0]["top5_eligible"] is False
     assert rows[0]["risk_gate_code"] == "near_limit_down_followthrough_risk"
     assert rows[0]["risk_gate_reason"] == "接近跌停"
+    assert rows[0]["confirmation_state"] == "risk_watch"
+    assert rows[0]["phase12a_rule_layer"] == "pending_intraday"
