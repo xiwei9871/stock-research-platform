@@ -765,6 +765,7 @@ def _review_rows_from_result(
         "trade_date",
         "asset_id",
         "stock_name",
+        "stock_name_source",
         "rank",
         "score_total",
         "raw_score",
@@ -898,15 +899,19 @@ def _review_rows_from_result(
         )
         lookup_name = (base_score_row or {}).get("stock_name")
         resolved_name = candidate_name
+        resolved_name_source = "strategy_candidate" if candidate_name else ""
         if not is_valid_stock_name(resolved_name, asset_id=normalized_asset_id or raw_asset_id):
             resolved_name = lookup_name
+            resolved_name_source = str((base_score_row or {}).get("stock_name_source") or "")
         if not is_valid_stock_name(resolved_name, asset_id=normalized_asset_id or raw_asset_id):
             resolved_name = normalized_asset_id or raw_asset_id
+            resolved_name_source = "code_fallback"
         rows.append(
             {
                 "trade_date": trade_date,
                 "asset_id": raw_asset_id,
                 "stock_name": str(resolved_name or ""),
+                "stock_name_source": resolved_name_source,
                 "rank": rank or index + 1,
                 "score_total": score,
                 "raw_score": score,
@@ -1033,6 +1038,7 @@ def _lhb_base_score_lookup_for_trade_date(trade_date: str) -> dict[str, dict[str
         raw_asset_id = str(row.get("asset_id") or "")
         metadata = {
             "stock_name": row.get("stock_name"),
+            "stock_name_source": row.get("stock_name_source"),
             "pct_chg": row.get("pct_chg"),
         }
         for key in {raw_asset_id, _asset_id_from_review_code(raw_asset_id)}:
@@ -1049,6 +1055,7 @@ def _lhb_base_score_lookup_for_trade_date(trade_date: str) -> dict[str, dict[str
             "score_total": score,
             "score_components": _dict_or_empty(row.get("score_components")),
             "stock_name": metadata.get("stock_name"),
+            "stock_name_source": metadata.get("stock_name_source"),
             "pct_chg": metadata.get("pct_chg"),
         }
         for key in {raw_asset_id, _asset_id_from_review_code(raw_asset_id)}:
@@ -1070,6 +1077,11 @@ def _load_lhb_base_score_source_frames(trade_date: str) -> tuple[pd.DataFrame, p
             l.lhb_after_reversal,
             l.lhb_one_day_pump_risk,
             COALESCE(NULLIF(a.name, ''), NULLIF(t.name, '')) AS stock_name,
+            CASE
+                WHEN NULLIF(a.name, '') IS NOT NULL THEN 'core_asset_master'
+                WHEN NULLIF(t.name, '') IS NOT NULL THEN 'lhb_top_list_daily'
+                ELSE ''
+            END AS stock_name_source,
             COALESCE(d.pct_chg, t.pct_change) AS pct_chg
         FROM factor.lhb_event_features_daily l
         LEFT JOIN core.asset_master a ON a.ts_code = l.ts_code
