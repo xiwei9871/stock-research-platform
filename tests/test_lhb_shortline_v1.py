@@ -56,6 +56,90 @@ def test_pump_warning_band_is_not_rejected_by_candidate_or_dashboard_adapter():
     assert dashboard.iloc[0]["eligibility"] is True
 
 
+def test_lifecycle_contract_filter_keeps_only_entry_eligible_rows():
+    candidates = pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-07-14",
+                "ts_code": "ELIGIBLE.SZ",
+                "eligibility_status": "eligible",
+                "backtest_entry_eligible": True,
+                "eligibility_contract_version": "lhb_eligibility_v2",
+            },
+            {
+                "trade_date": "2026-07-14",
+                "ts_code": "RISK.SZ",
+                "eligibility_status": "risk_watch",
+                "backtest_entry_eligible": False,
+                "eligibility_contract_version": "lhb_eligibility_v2",
+            },
+            {
+                "trade_date": "2026-07-14",
+                "ts_code": "REJECT.SZ",
+                "eligibility_status": "hard_reject",
+                "backtest_entry_eligible": False,
+                "eligibility_contract_version": "lhb_eligibility_v2",
+            },
+        ]
+    )
+
+    result = lhb_shortline_v1._filter_lhb_entry_eligible_contract_rows(candidates, stage="test_candidates")
+
+    assert result["ts_code"].tolist() == ["ELIGIBLE.SZ"]
+
+
+@pytest.mark.parametrize(
+    "invalid",
+    [
+        {"backtest_entry_eligible": True},
+        {
+            "backtest_entry_eligible": True,
+            "eligibility_contract_version": "lhb_eligibility_v1",
+        },
+    ],
+)
+def test_lifecycle_contract_assertion_rejects_missing_or_mismatched_version(invalid):
+    frame = pd.DataFrame([{"trade_date": "2026-07-14", "ts_code": "000001.SZ", **invalid}])
+
+    with pytest.raises(ValueError, match="LHB eligibility parity violation"):
+        lhb_shortline_v1._assert_lhb_entry_eligibility_contract(frame, stage="account_entry")
+
+
+def test_contract_propagation_rejects_contradictory_downstream_decision_and_audits_matches():
+    source = pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-07-14",
+                "ts_code": "000001.SZ",
+                "eligibility_status": "eligible",
+                "backtest_entry_eligible": True,
+                "eligibility_contract_version": "lhb_eligibility_v2",
+            }
+        ]
+    )
+    downstream = pd.DataFrame(
+        [{"trade_date": "2026-07-14", "ts_code": "000001.SZ", "fill_status": "filled"}]
+    )
+    propagated = lhb_shortline_v1._attach_lhb_contract_decisions(
+        downstream,
+        decisions=source,
+        stage="account",
+    )
+    audit = lhb_shortline_v1._build_lhb_eligibility_parity_audit(
+        decisions=source,
+        stages={"account": propagated},
+    )
+
+    assert audit.iloc[0]["parity_status"] == "match"
+    contradictory = downstream.assign(eligibility_status="risk_watch")
+    with pytest.raises(ValueError, match="contradictory eligibility_status"):
+        lhb_shortline_v1._attach_lhb_contract_decisions(
+            contradictory,
+            decisions=source,
+            stage="account",
+        )
+
+
 def test_cash_account_summary_uses_curve_end_as_performance_effective_date():
     account_trades = pd.DataFrame(
         [
