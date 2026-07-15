@@ -140,6 +140,26 @@ def test_contract_propagation_rejects_contradictory_downstream_decision_and_audi
         )
 
 
+def test_parity_audit_treats_legitimate_downstream_attrition_as_not_observed():
+    source = pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-07-14",
+                "ts_code": "000001.SZ",
+                "eligibility_status": "eligible",
+                "eligibility_contract_version": "lhb_eligibility_v2",
+            }
+        ]
+    )
+
+    audit = lhb_shortline_v1._build_lhb_eligibility_parity_audit(
+        decisions=source,
+        stages={"account": pd.DataFrame()},
+    )
+
+    assert audit.iloc[0]["parity_status"] == "match"
+
+
 def test_cash_account_summary_uses_curve_end_as_performance_effective_date():
     account_trades = pd.DataFrame(
         [

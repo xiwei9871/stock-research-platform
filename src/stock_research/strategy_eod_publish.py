@@ -890,6 +890,18 @@ def _review_rows_from_result(
             if strategy_id == "lhb_shortline"
             else None
         )
+        if strategy_id == "lhb_shortline" and score is None:
+            base_score = _score_value(base_score_row.get("score_total"), "score_total") if base_score_row else None
+            if base_score is not None:
+                score = base_score
+                resolved_score_col = "score_total"
+                score_components = _dict_or_empty(base_score_row.get("score_components"))
+        if strategy_id == "lhb_shortline" and str(row.get("eligibility_status") or "") == "risk_watch":
+            base_score = _score_value(base_score_row.get("score_total"), "score_total") if base_score_row else None
+            if base_score is not None:
+                score = base_score
+                resolved_score_col = "score_total"
+                score_components = _dict_or_empty(base_score_row.get("score_components"))
         if strategy_id == "lhb_shortline" and _should_use_lhb_base_score(row=row, score_source=resolved_score_col):
             base_score = _score_value(base_score_row.get("score_total"), "score_total") if base_score_row else None
             if base_score is not None:
@@ -1150,7 +1162,8 @@ def _lhb_same_day_candidate_frame(result: dict[str, Any], *, trade_date: str) ->
         return pd.DataFrame()
     if "auction_enhanced_score" in frame.columns:
         scored = pd.to_numeric(frame["auction_enhanced_score"], errors="coerce")
-        frame = frame[scored.notna()].copy()
+        risk_watch = frame.get("eligibility_status", pd.Series("", index=frame.index)).fillna("").astype(str).eq("risk_watch")
+        frame = frame[scored.notna() | risk_watch].copy()
     return frame
 
 
