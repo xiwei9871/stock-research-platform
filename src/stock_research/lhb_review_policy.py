@@ -160,6 +160,7 @@ def _lhb_review_contract_fields(row: dict[str, Any]) -> dict[str, Any]:
         pump_risk=row.get("lhb_one_day_pump_risk", 0.0),
         high_to_close_drawdown=row.get("high_to_close_drawdown", 0.0),
         institution_net_buy=row.get("institution_net_buy", 0.0),
+        security_state=row.get("stock_name"),
     )
     return {
         "eligibility_status": decision.eligibility_status,

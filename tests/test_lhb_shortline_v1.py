@@ -186,6 +186,28 @@ def test_review_candidates_keep_t_plus_one_confirmation_without_becoming_account
     assert review.iloc[0]["phase12a_rule_layer"] == "follow_pool_core"
 
 
+def test_minute_prefetch_uses_shared_pump_reject_threshold(monkeypatch):
+    monkeypatch.setattr(lhb_shortline_v1, "PUMP_REJECT_THRESHOLD", 0.80)
+    features = pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-07-14",
+                "ts_code": "000001.SZ",
+                "lhb_net_buy_amount": 1_000.0,
+                "lhb_net_buy_ratio": 0.10,
+                "institution_net_buy": 1.0,
+                "top_seat_concentration": 0.10,
+                "repeat_on_list_count_3d": 1,
+                "lhb_one_day_pump_risk": 0.85,
+                "lhb_after_limit_up": False,
+                "lhb_after_break_limit": False,
+            }
+        ]
+    )
+
+    assert lhb_shortline_v1._minute_asset_ids_for_lhb_shortline_v1(features, [5]) == []
+
+
 def test_cash_account_summary_uses_curve_end_as_performance_effective_date():
     account_trades = pd.DataFrame(
         [

@@ -1,9 +1,11 @@
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from stock_research import cli
 import stock_research.lhb_data as lhb_data
+import stock_research.lhb_eligibility as lhb_eligibility
 
 
 def test_normalize_top_list_rows():
@@ -1747,7 +1749,7 @@ def test_build_lhb_full_market_pool_backtest_v1_scores_daily_lhb_topn(tmp_path):
     assert Path(result["paths"]["markdown_report"]).exists()
 
 
-def test_build_lhb_full_market_pool_backtest_v1_applies_shared_eligibility_before_ranking(tmp_path):
+def test_build_lhb_full_market_pool_backtest_v1_applies_shared_eligibility_before_ranking(tmp_path, monkeypatch):
     base = {
         "trade_date": "2026-07-14",
         "lhb_net_buy_amount": 1000.0,
@@ -1845,6 +1847,48 @@ def test_build_lhb_full_market_pool_backtest_v1_applies_shared_eligibility_befor
     assert "high_elasticity_pump_risk" in warning["eligibility_warning_codes"]
     assert Path(result["paths"]["rejected_events"]).exists()
     assert Path(result["paths"]["eligible_candidates"]).exists()
+
+    monkeypatch.setattr(lhb_eligibility, "PUMP_WARNING_THRESHOLD", 0.85)
+    no_pump = lhb_data.build_lhb_full_market_pool_backtest_v1(
+        lhb_features=lhb_features,
+        daily_bars=daily_bars,
+        start_date="2026-07-14",
+        end_date="2026-07-14",
+        top_n_values=[10],
+        output_dir=tmp_path / "no_pump",
+        pool_mode="positive_no_pump",
+    )
+    assert "000080.SZ" in set(no_pump["eligible_candidates"]["ts_code"])
+
+
+def test_full_market_pool_fails_when_entire_date_has_incomplete_price_limit_data(tmp_path):
+    lhb_features = pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-07-14",
+                "ts_code": "000001.SZ",
+                "lhb_net_buy_amount": 1_000.0,
+                "lhb_net_buy_ratio": 0.10,
+                "institution_net_buy": 1.0,
+                "top_seat_concentration": 0.10,
+                "repeat_on_list_count_3d": 1,
+                "lhb_after_limit_up": False,
+                "lhb_after_break_limit": False,
+                "lhb_after_reversal": False,
+                "lhb_one_day_pump_risk": 0.20,
+            }
+        ]
+    )
+
+    with pytest.raises(ValueError, match="all candidates have incomplete price-limit data"):
+        lhb_data.build_lhb_full_market_pool_backtest_v1(
+            lhb_features=lhb_features,
+            daily_bars=pd.DataFrame(),
+            start_date="2026-07-14",
+            end_date="2026-07-14",
+            top_n_values=[5],
+            output_dir=tmp_path,
+        )
 
 
 def test_build_lhb_intraday_filtered_topn_comparison_v1_compares_actions(tmp_path):

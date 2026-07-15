@@ -90,6 +90,7 @@ def evaluate_lhb_eligibility(
     pump_risk: object,
     high_to_close_drawdown: object,
     institution_net_buy: object,
+    security_state: object = None,
 ) -> EligibilityDecision:
     del trade_date, ts_code
     warnings: list[str] = []
@@ -97,7 +98,7 @@ def evaluate_lhb_eligibility(
         warnings.append("institution_activity_unknown")
 
     reason = str(lhb_reason or "")
-    if "退市" in reason:
+    if _contains_delisting_marker(reason) or _contains_delisting_marker(security_state):
         return _decision(
             status="hard_reject",
             reason_code="delisting_period",
@@ -164,6 +165,20 @@ def evaluate_lhb_eligibility(
         price_limit_regime=price_limit_state.regime,
         near_limit_down_threshold=price_limit_state.near_limit_down_threshold,
         data_quality_status=price_limit_state.data_quality_status,
+    )
+
+
+def _contains_delisting_marker(value: object) -> bool:
+    text = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+    return any(
+        marker in text
+        for marker in (
+            "退市",
+            "delisting",
+            "delist",
+            "listing_termination",
+            "termination_listing",
+        )
     )
 
 
