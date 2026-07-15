@@ -1830,11 +1830,13 @@ def test_build_lhb_full_market_pool_backtest_v1_applies_shared_eligibility_befor
     )
 
     selected = result["selected_trades"]
+    eligible_candidates = result["eligible_candidates"]
     rejected = result["rejected_events"]
     assert "000004.SZ" not in set(selected["ts_code"])
     assert "001399.SZ" not in set(selected["ts_code"])
     assert "000080.SZ" in set(selected["ts_code"])
     assert "000090.SZ" not in set(selected["ts_code"])
+    assert set(eligible_candidates["ts_code"]) == {"000001.SZ", "000080.SZ"}
     assert set(rejected["eligibility_status"]) == {"hard_reject", "risk_watch"}
     assert rejected["eligibility_reason_codes"].str.contains("delisting_period").any()
     assert rejected["eligibility_reason_codes"].str.contains("near_limit_down_followthrough_risk").any()
@@ -1842,6 +1844,7 @@ def test_build_lhb_full_market_pool_backtest_v1_applies_shared_eligibility_befor
     warning = selected[selected["ts_code"].eq("000080.SZ")].iloc[0]
     assert "high_elasticity_pump_risk" in warning["eligibility_warning_codes"]
     assert Path(result["paths"]["rejected_events"]).exists()
+    assert Path(result["paths"]["eligible_candidates"]).exists()
 
 
 def test_build_lhb_intraday_filtered_topn_comparison_v1_compares_actions(tmp_path):

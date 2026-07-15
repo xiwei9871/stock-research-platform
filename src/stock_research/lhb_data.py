@@ -2257,18 +2257,21 @@ def build_lhb_full_market_pool_backtest_v1(
     paths = {
         "summary": str(out / f"lhb_full_market_pool_summary_{safe_start}_{safe_end}_v1.csv"),
         "selected_trades": str(out / f"lhb_full_market_pool_selected_trades_{safe_start}_{safe_end}_v1.csv"),
+        "eligible_candidates": str(out / "lhb_full_market_pool_eligible_candidates_v2.csv"),
         "daily_curve": str(out / f"lhb_full_market_pool_daily_curve_{safe_start}_{safe_end}_v1.csv"),
         "rejected_events": str(out / "lhb_full_market_pool_rejected_events_v2.csv"),
         "markdown_report": str(out / f"lhb_full_market_pool_backtest_{safe_start}_{safe_end}_v1.md"),
     }
     summary.to_csv(paths["summary"], index=False)
     selected.to_csv(paths["selected_trades"], index=False)
+    candidates.to_csv(paths["eligible_candidates"], index=False)
     daily_curve.to_csv(paths["daily_curve"], index=False)
     rejected.to_csv(paths["rejected_events"], index=False)
     Path(paths["markdown_report"]).write_text(report, encoding="utf-8")
     return {
         "summary": summary,
         "selected_trades": selected,
+        "eligible_candidates": candidates,
         "daily_curve": daily_curve,
         "rejected_events": rejected,
         "paths": paths,

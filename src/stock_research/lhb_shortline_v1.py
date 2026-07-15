@@ -1279,6 +1279,8 @@ def load_lhb_shortline_v1_frames_from_db(
                     WHEN s.source LIKE '%%status_quality=daily_bar' THEN 'trusted'
                     ELSE 'unverified'
                 END AS stored_status_quality,
+                tech.amount_vs_20d,
+                tech.high_to_close_drawdown,
                 f.on_lhb,
                 f.lhb_reason,
                 f.lhb_net_buy_amount,
@@ -1300,10 +1302,14 @@ def load_lhb_shortline_v1_frames_from_db(
             LEFT JOIN core.asset_status_daily s
               ON s.trade_date = f.trade_date
              AND s.asset_id = a.asset_id
+            LEFT JOIN factor.stock_technical_features_daily tech
+              ON tech.trade_date = f.trade_date
+             AND tech.asset_id = a.asset_id
+             AND tech.adjust_type = %s
             WHERE f.trade_date BETWEEN %s::date AND %s::date
             ORDER BY f.trade_date, f.ts_code
             """,
-            [config.start_date, config.end_date, config.start_date, config.end_date],
+            [config.start_date, config.end_date, config.adjust_type, config.start_date, config.end_date],
         )
         technical_rows = fetch_all(
             conn,
@@ -1325,7 +1331,7 @@ def load_lhb_shortline_v1_frames_from_db(
             """
             SELECT
                 b.trade_date::text AS trade_date,
-                b.asset_id AS ts_code,
+                COALESCE(a.ts_code, b.asset_id) AS ts_code,
                 b.open,
                 b.low,
                 b.close,
@@ -1334,6 +1340,8 @@ def load_lhb_shortline_v1_frames_from_db(
                 b.is_st AS stored_is_st,
                 CASE WHEN b.is_st THEN 'trusted' ELSE 'unverified' END AS stored_status_quality
             FROM market_daily_bar b
+            LEFT JOIN core.asset_master a
+              ON a.asset_id = b.asset_id
             WHERE b.trade_date BETWEEN %s::date AND (%s::date + INTERVAL '7 days')
               AND b.adjust_type = %s
               AND COALESCE(b.trade_status, '') <> '停牌'
