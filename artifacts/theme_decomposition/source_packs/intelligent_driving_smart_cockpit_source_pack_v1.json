@@ -150,7 +150,7 @@
       "document_status": "full_text_reviewed",
       "evidence_locator": "产品见PDF第15-16页，第三节商用车AI辅助驾驶与前后装产品体系；收入见PDF第20-22页，第三节AI解决方案与视频设备收入及毛利率",
       "evidence_summary": "商用车ADAS、DMS、BSD与运营平台覆盖前后装；AI解决方案收入20.15亿元，视频设备4.14亿元。",
-      "supported_claim_ids": ["cockpit_claim_02_sensor_scope_boundary","cockpit_claim_03_perception_data_closed_loop","cockpit_claim_06_driving_software_l2_boundary","cockpit_claim_11_dms_oms_fusion_validation","cockpit_claim_12_integration_safety_compliance","cockpit_claim_13_aftermarket_lifecycle_gap","cockpit_claim_14_revenue_project_maturity_boundary"],
+      "supported_claim_ids": ["cockpit_claim_01_value_flow","cockpit_claim_02_sensor_scope_boundary","cockpit_claim_03_perception_data_closed_loop","cockpit_claim_06_driving_software_l2_boundary","cockpit_claim_11_dms_oms_fusion_validation","cockpit_claim_12_integration_safety_compliance","cockpit_claim_13_aftermarket_lifecycle_gap","cockpit_claim_14_revenue_project_maturity_boundary"],
       "supported_node_ids": ["vehicle_perception_sensors_dependency","perception_algorithms_data_closed_loop","planning_decision_middleware_driving_software","dms_oms_cockpit_driving_fusion","system_integration_validation_safety_compliance","aftermarket_operations_lifecycle_services"],
       "limitations": "AI解决方案包含辅助驾驶、车队作业和大模型管理；SaaS、续费和生命周期收入未拆。",
       "notes": "自动驾驶业务仅按限定场景与实际运营验证。"
@@ -187,11 +187,11 @@
       "review_status": "accepted",
       "document_status": "full_text_reviewed",
       "evidence_locator": "产品见PDF第10-12页，第三节座舱、智驾、测试、数据工程与操作系统中间件；收入见PDF第17-19页，第三节智能座舱与智能驾驶细分收入",
-      "evidence_summary": "座舱收入3.44亿元；智能驾驶2.34亿元，其中测试1.61亿元、ADAS0.41亿元、地图数据0.32亿元。",
-      "supported_claim_ids": ["cockpit_claim_01_value_flow","cockpit_claim_03_perception_data_closed_loop","cockpit_claim_04_positioning_map_disclosure_gap","cockpit_claim_06_driving_software_l2_boundary","cockpit_claim_07_by_wire_cross_chain","cockpit_claim_09_cockpit_domain_os_middleware","cockpit_claim_10_display_hud_hmi","cockpit_claim_11_dms_oms_fusion_validation","cockpit_claim_12_integration_safety_compliance","cockpit_claim_13_aftermarket_lifecycle_gap","cockpit_claim_14_revenue_project_maturity_boundary"],
-      "supported_node_ids": ["perception_algorithms_data_closed_loop","positioning_mapping_inertial_navigation","planning_decision_middleware_driving_software","by_wire_execution_vehicle_control_dependency","cockpit_domain_control_os_middleware","display_hud_acoustics_human_machine_interaction","dms_oms_cockpit_driving_fusion","system_integration_validation_safety_compliance","aftermarket_operations_lifecycle_services"],
-      "limitations": "智能驾驶收入含测试、ADAS和地图数据；规划软件、A²OS、SDW订阅和融合方案独立收入未披露。",
-      "notes": "分业务收入可用于锁定宽口径边界。"
+      "evidence_summary": "座舱收入3.44亿元；2.34亿元智能驾驶宽口径中，测试业务1.61亿元、ADAS 0.41亿元、地图数据0.32亿元，本mapping仅采用测试收入。",
+      "supported_claim_ids": ["cockpit_claim_01_value_flow","cockpit_claim_03_perception_data_closed_loop","cockpit_claim_04_positioning_map_disclosure_gap","cockpit_claim_06_driving_software_l2_boundary","cockpit_claim_07_by_wire_cross_chain","cockpit_claim_09_cockpit_domain_os_middleware","cockpit_claim_10_display_hud_hmi","cockpit_claim_11_dms_oms_fusion_validation","cockpit_claim_12_integration_safety_compliance","cockpit_claim_14_revenue_project_maturity_boundary"],
+      "supported_node_ids": ["perception_algorithms_data_closed_loop","positioning_mapping_inertial_navigation","planning_decision_middleware_driving_software","by_wire_execution_vehicle_control_dependency","cockpit_domain_control_os_middleware","display_hud_acoustics_human_machine_interaction","dms_oms_cockpit_driving_fusion","system_integration_validation_safety_compliance"],
+      "limitations": "2.34亿元智能驾驶收入含测试、ADAS和地图数据；全生命周期软件测试不等同后装部署、车队运营、SaaS续费、远程运维或OTA运营收入。",
+      "notes": "1.61亿元测试业务支持系统集成验证mapping；ADAS与地图数据不计入该mapping。"
     }
   ]
 }

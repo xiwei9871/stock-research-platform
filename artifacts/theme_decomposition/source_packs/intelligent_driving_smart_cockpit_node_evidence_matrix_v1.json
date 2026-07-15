@@ -170,7 +170,7 @@
     },
     {
       "node_id": "aftermarket_operations_lifecycle_services",
-      "accepted_source_ids": ["cockpit_002970_ar2025","cockpit_301221_ar2025"],
+      "accepted_source_ids": ["cockpit_002970_ar2025"],
       "pending_source_ids": [],
       "supported_claim_ids": ["cockpit_claim_01_value_flow","cockpit_claim_13_aftermarket_lifecycle_gap","cockpit_claim_14_revenue_project_maturity_boundary"],
       "evidence_strength_before": 1,
@@ -180,7 +180,7 @@
       "value_bases": ["gross_margin","integration_control"],
       "evidence_gap_status": "evidence_gap",
       "node_review_status": "reviewed",
-      "rationale": "锐明披露前后装、车队平台和运营闭环，光庭披露数据工程与测试服务，但续费和生命周期收入未拆。",
+      "rationale": "锐明披露前后装、车队平台和运营闭环；光庭的全生命周期软件测试属于量产验证，不等同后装、运营或SaaS续费证据。",
       "next_evidence_needed": "补充SaaS收入、续费率、在线车辆数、OTA和远程运维独立收入。"
     }
   ]

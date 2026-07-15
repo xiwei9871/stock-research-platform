@@ -1323,7 +1323,7 @@ def test_intelligent_driving_smart_cockpit_mapping_and_revenue_boundaries_block_
             "core_beneficiary",
         ),
         "301221.SZ": (
-            "planning_decision_middleware_driving_software",
+            "system_integration_validation_safety_compliance",
             "core_business",
             "material",
             "core_beneficiary",
@@ -1385,6 +1385,57 @@ def test_intelligent_driving_smart_cockpit_mapping_and_revenue_boundaries_block_
         "不重复所有权",
     ):
         assert required_boundary in claim_text
+
+
+def test_lightgarden_mapping_uses_disclosed_testing_revenue_not_broad_driving_revenue():
+    mapping = _read_json(COCKPIT_MAPPING_PATH)
+    mapping_row = next(
+        row for row in mapping["company_mappings"] if row["company_code"] == "301221.SZ"
+    )
+    evidence = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+    product = evidence["cockpit_ev_301221_product"]
+    revenue = evidence["cockpit_ev_301221_revenue"]
+
+    assert mapping_row["mapped_node_id"] == "system_integration_validation_safety_compliance"
+    assert mapping_row["revenue_relevance"] == "material"
+    assert product["related_node_ids"] == ["system_integration_validation_safety_compliance"]
+    assert revenue["related_node_ids"] == ["system_integration_validation_safety_compliance"]
+    assert "全生命周期软件测试" in product["evidence_summary"]
+    assert "1.61亿元" in revenue["evidence_summary"]
+    assert "测试业务" in revenue["evidence_summary"]
+    for boundary in ("2.34亿元智能驾驶宽口径", "0.41亿元ADAS", "0.32亿元地图数据"):
+        assert boundary in revenue["evidence_summary"]
+        assert boundary in mapping_row["notes"]
+    assert "不能计入本测试验证mapping收入" in mapping_row["notes"]
+
+
+def test_lightgarden_testing_evidence_is_excluded_from_aftermarket_chain():
+    theme = _read_json(COCKPIT_THEME_PATH)
+    source_pack = _read_json(COCKPIT_SOURCE_PACK_PATH)
+    matrix = _read_json(COCKPIT_MATRIX_PATH)
+    claim = next(
+        row for row in theme["claims"] if row["claim_id"] == "cockpit_claim_13_aftermarket_lifecycle_gap"
+    )
+    node = next(
+        row for row in theme["nodes"] if row["node_id"] == "aftermarket_operations_lifecycle_services"
+    )
+    source = next(
+        row for row in source_pack["sources"] if row["source_id"] == "cockpit_301221_ar2025"
+    )
+    matrix_row = next(
+        row for row in matrix["node_evidence_matrix"]
+        if row["node_id"] == "aftermarket_operations_lifecycle_services"
+    )
+
+    assert "cockpit_301221_ar2025" not in claim["supporting_source_ids"]
+    assert "cockpit_claim_13_aftermarket_lifecycle_gap" not in source["supported_claim_ids"]
+    assert "aftermarket_operations_lifecycle_services" not in source["supported_node_ids"]
+    assert "cockpit_301221_ar2025" not in matrix_row["accepted_source_ids"]
+    assert "光庭信息" not in node["domestic_players"]
+    assert "301221.SZ" not in node["related_stock_codes"]
+    assert "全生命周期软件测试不等同后装部署" in source["limitations"]
+    assert "SaaS续费" in source["limitations"]
+    assert "OTA运营收入" in source["limitations"]
 
 
 def test_intelligent_driving_smart_cockpit_product_and_revenue_locators_are_precise():
