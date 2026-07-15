@@ -477,12 +477,46 @@ def build_asset_status_daily(
     where_sql = " AND ".join(filters)
     limit_threshold_sql = """
         CASE
-            WHEN b.is_st THEN 4.8
-            WHEN a.is_star OR a.is_chinext OR a.is_beijing THEN 19.8
+            WHEN resolved_is_st THEN 4.8
+            WHEN is_beijing THEN 29.8
+            WHEN is_star OR is_chinext THEN 19.8
             ELSE 9.8
         END
     """
     sql = f"""
+    WITH same_day_lhb AS (
+        SELECT
+            trade_date,
+            ts_code,
+            max(NULLIF(name, '')) AS same_day_lhb_name
+        FROM market.lhb_top_list_daily
+        GROUP BY trade_date, ts_code
+    ),
+    resolved AS (
+        SELECT
+            b.*,
+            a.is_star,
+            a.is_chinext,
+            a.is_beijing,
+            l.same_day_lhb_name,
+            COALESCE(
+                l.same_day_lhb_name ~* '^(\\*?ST|S\\*ST)',
+                b.is_st,
+                false
+            ) AS resolved_is_st,
+            CASE
+                WHEN l.same_day_lhb_name IS NOT NULL THEN 'same_day_lhb_name'
+                WHEN b.is_st THEN 'daily_bar'
+                ELSE 'daily_bar_unverified_false'
+            END AS status_quality
+        FROM market_daily_bar b
+        LEFT JOIN core.asset_master a
+          ON a.asset_id = b.asset_id
+        LEFT JOIN same_day_lhb l
+          ON l.trade_date = b.trade_date
+         AND l.ts_code = a.ts_code
+        WHERE {where_sql}
+    )
     INSERT INTO core.asset_status_daily (
         trade_date,
         asset_id,
@@ -499,7 +533,7 @@ def build_asset_status_daily(
         b.trade_date,
         b.asset_id,
         b.trade_status = '1' AS is_trade,
-        b.is_st,
+        b.resolved_is_st,
         b.trade_status <> '1' AS is_suspended,
         b.pct_chg >= {limit_threshold_sql} AS is_limit_up,
         b.pct_chg <= -{limit_threshold_sql} AS is_limit_down,
@@ -511,11 +545,8 @@ def build_asset_status_daily(
             WHEN b.preclose IS NULL THEN NULL
             ELSE b.preclose * (1 - ({limit_threshold_sql} / 100.0))
         END AS limit_down_price,
-        b.source
-    FROM market_daily_bar b
-    LEFT JOIN core.asset_master a
-      ON a.asset_id = b.asset_id
-    WHERE {where_sql}
+        b.source || ':status_quality=' || b.status_quality
+    FROM resolved b
     ON CONFLICT (trade_date, asset_id) DO UPDATE SET
         is_trade = EXCLUDED.is_trade,
         is_st = EXCLUDED.is_st,
