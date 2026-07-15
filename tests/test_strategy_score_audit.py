@@ -63,11 +63,17 @@ def test_lhb_audit_preserves_published_name_and_risk_gate_fields():
             "score_source": "score_total",
             "source_type": "strategy_manifest",
             "review_tier": "risk_watch",
+            "eligibility_status": "risk_watch",
             "top5_eligible": False,
+            "backtest_entry_eligible": False,
+            "eligibility_reason_codes": ["near_limit_down_followthrough_risk"],
+            "eligibility_warning_codes": ["institution_activity_unknown"],
+            "eligibility_contract_version": "lhb_eligibility_v2",
             "risk_gate_code": "near_limit_down_followthrough_risk",
             "risk_gate_reason": "当日涨跌幅 -9.99% 触及 main_board 接近跌停阈值 -9.50%",
             "price_limit_regime": "main_board",
             "near_limit_down_threshold": -9.5,
+            "data_quality_status": "complete",
             "pct_chg": -9.991,
         }
     ]
@@ -96,7 +102,12 @@ def test_lhb_audit_preserves_published_name_and_risk_gate_fields():
     assert row["stock_name"] == "惠科股份"
     assert row["stock_name_source"] == "lhb_top_list_daily"
     assert bool(row["top5_eligible"]) is False
+    assert row["eligibility_status"] == "risk_watch"
+    assert bool(row["backtest_entry_eligible"]) is False
+    assert row["eligibility_reason_codes"] == ["near_limit_down_followthrough_risk"]
+    assert row["eligibility_contract_version"] == "lhb_eligibility_v2"
     assert row["risk_gate_code"] == "near_limit_down_followthrough_risk"
     assert row["price_limit_regime"] == "main_board"
     assert row["near_limit_down_threshold"] == -9.5
+    assert row["data_quality_status"] == "complete"
     assert row["pct_chg"] == -9.991

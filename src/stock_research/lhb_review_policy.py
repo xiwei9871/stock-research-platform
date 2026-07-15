@@ -7,6 +7,12 @@ from typing import Any
 
 import pandas as pd
 
+from stock_research.lhb_eligibility import (
+    LHB_ELIGIBILITY_CONTRACT_VERSION,
+    evaluate_lhb_eligibility,
+    resolve_price_limit_state,
+)
+
 
 NEAR_LIMIT_DOWN_RISK_CODE = "near_limit_down_followthrough_risk"
 
@@ -62,24 +68,22 @@ def apply_lhb_top5_gate(frame: pd.DataFrame, *, top_n: int = 5) -> pd.DataFrame:
     if "pct_chg" not in result.columns:
         result["pct_chg"] = pd.NA
 
-    decisions = [
-        classify_price_limit(
-            asset_id=str(row.get("asset_id") or ""),
-            stock_name=row.get("stock_name"),
-            pct_chg=row.get("pct_chg"),
-        )
-        for row in result.to_dict("records")
-    ]
-    result["top5_eligible"] = [not decision.near_limit_down for decision in decisions]
-    result["risk_gate_code"] = [
-        NEAR_LIMIT_DOWN_RISK_CODE if decision.near_limit_down else "" for decision in decisions
-    ]
-    result["risk_gate_reason"] = [
-        _risk_gate_reason(decision=decision, pct_chg=pct_chg)
-        for decision, pct_chg in zip(decisions, result["pct_chg"], strict=True)
-    ]
-    result["price_limit_regime"] = [decision.regime for decision in decisions]
-    result["near_limit_down_threshold"] = [decision.threshold for decision in decisions]
+    decision_rows = [_lhb_review_contract_fields(row) for row in result.to_dict("records")]
+    for column in [
+        "eligibility_status",
+        "top5_eligible",
+        "backtest_entry_eligible",
+        "eligibility_reason_codes",
+        "eligibility_reason_texts",
+        "eligibility_warning_codes",
+        "eligibility_contract_version",
+        "price_limit_regime",
+        "near_limit_down_threshold",
+        "data_quality_status",
+        "risk_gate_code",
+        "risk_gate_reason",
+    ]:
+        result[column] = [decision[column] for decision in decision_rows]
 
     result = result.sort_values(
         ["score_total", "asset_id"],
@@ -103,6 +107,108 @@ def apply_lhb_top5_gate(frame: pd.DataFrame, *, top_n: int = 5) -> pd.DataFrame:
     result["rank"] = ranks
     result["review_tier"] = tiers
     return result
+
+
+def _lhb_review_contract_fields(row: dict[str, Any]) -> dict[str, Any]:
+    raw_version = row.get("eligibility_contract_version")
+    version = "" if pd.isna(raw_version) else str(raw_version or "").strip()
+    if version:
+        if version != LHB_ELIGIBILITY_CONTRACT_VERSION:
+            raise ValueError("LHB eligibility parity violation: unsupported contract version")
+        status = str(row.get("eligibility_status") or "").strip()
+        top5 = _optional_bool(row.get("top5_eligible"))
+        entry = _optional_bool(row.get("backtest_entry_eligible"))
+        expected = status == "eligible"
+        if status not in {"eligible", "risk_watch", "hard_reject"} or top5 is None or entry is None:
+            raise ValueError("LHB eligibility parity violation: incomplete upstream decision")
+        if top5 is not expected or entry is not expected:
+            raise ValueError("LHB eligibility parity violation: contradictory upstream decision")
+        reason_codes = _list_value(row.get("eligibility_reason_codes"))
+        reason_texts = _list_value(row.get("eligibility_reason_texts"))
+        warning_codes = _list_value(row.get("eligibility_warning_codes"))
+        return {
+            "eligibility_status": status,
+            "top5_eligible": top5,
+            "backtest_entry_eligible": entry,
+            "eligibility_reason_codes": reason_codes,
+            "eligibility_reason_texts": reason_texts,
+            "eligibility_warning_codes": warning_codes,
+            "eligibility_contract_version": version,
+            "price_limit_regime": row.get("price_limit_regime") or "",
+            "near_limit_down_threshold": row.get("near_limit_down_threshold"),
+            "data_quality_status": row.get("data_quality_status") or "",
+            "risk_gate_code": reason_codes[0] if reason_codes else "",
+            "risk_gate_reason": reason_texts[0] if reason_texts else "",
+        }
+
+    asset_id = str(row.get("asset_id") or "")
+    state = resolve_price_limit_state(
+        trade_date=str(row.get("trade_date") or ""),
+        ts_code=_contract_ts_code(asset_id),
+        same_day_name=row.get("stock_name"),
+        current_name=None,
+        pct_chg=row.get("pct_chg"),
+        stored_is_st=False,
+        stored_status_quality="trusted",
+        list_date=None,
+    )
+    decision = evaluate_lhb_eligibility(
+        trade_date=str(row.get("trade_date") or ""),
+        ts_code=_contract_ts_code(asset_id),
+        lhb_reason=row.get("lhb_reason"),
+        price_limit_state=state,
+        pump_risk=row.get("lhb_one_day_pump_risk", 0.0),
+        high_to_close_drawdown=row.get("high_to_close_drawdown", 0.0),
+        institution_net_buy=row.get("institution_net_buy", 0.0),
+    )
+    return {
+        "eligibility_status": decision.eligibility_status,
+        "top5_eligible": decision.top5_eligible,
+        "backtest_entry_eligible": decision.backtest_entry_eligible,
+        "eligibility_reason_codes": list(decision.reason_codes),
+        "eligibility_reason_texts": list(decision.reason_texts),
+        "eligibility_warning_codes": list(decision.warning_codes),
+        "eligibility_contract_version": decision.contract_version,
+        "price_limit_regime": decision.price_limit_regime,
+        "near_limit_down_threshold": decision.near_limit_down_threshold,
+        "data_quality_status": decision.data_quality_status,
+        "risk_gate_code": decision.reason_codes[0] if decision.reason_codes else "",
+        "risk_gate_reason": decision.reason_texts[0] if decision.reason_texts else "",
+    }
+
+
+def _contract_ts_code(asset_id: str) -> str:
+    symbol, exchange = _symbol_and_exchange(asset_id)
+    return f"{symbol}.{exchange}" if exchange else symbol
+
+
+def _optional_bool(value: Any) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    text = str(value or "").strip().lower()
+    if text in {"true", "1", "yes"}:
+        return True
+    if text in {"false", "0", "no"}:
+        return False
+    return None
+
+
+def _list_value(value: Any) -> list[str]:
+    if isinstance(value, (list, tuple)):
+        return [str(item) for item in value]
+    text = str(value or "").strip()
+    if not text or text.lower() == "nan":
+        return []
+    if text.startswith("["):
+        import json
+
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError:
+            return [text]
+        if isinstance(parsed, list):
+            return [str(item) for item in parsed]
+    return [text]
 
 
 def _price_limit_regime(*, asset_id: str, stock_name: object) -> tuple[str, float]:

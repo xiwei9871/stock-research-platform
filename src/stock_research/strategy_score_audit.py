@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
+import json
 from typing import Any
 
 import pandas as pd
@@ -13,11 +14,17 @@ DETAIL_COLUMNS = [
     "asset_id",
     "stock_name",
     "stock_name_source",
+    "eligibility_status",
     "top5_eligible",
+    "backtest_entry_eligible",
+    "eligibility_reason_codes",
+    "eligibility_warning_codes",
+    "eligibility_contract_version",
     "risk_gate_code",
     "risk_gate_reason",
     "price_limit_regime",
     "near_limit_down_threshold",
+    "data_quality_status",
     "pct_chg",
     "selected_flag",
     "selected_rank",
@@ -165,11 +172,17 @@ def _build_audit_row(
         "asset_id": _text(review_row.get("asset_id")),
         "stock_name": stock_name,
         "stock_name_source": _text(review_row.get("stock_name_source")),
+        "eligibility_status": _text(review_row.get("eligibility_status")),
         "top5_eligible": review_row.get("top5_eligible"),
+        "backtest_entry_eligible": review_row.get("backtest_entry_eligible"),
+        "eligibility_reason_codes": _list_field(review_row.get("eligibility_reason_codes")),
+        "eligibility_warning_codes": _list_field(review_row.get("eligibility_warning_codes")),
+        "eligibility_contract_version": _text(review_row.get("eligibility_contract_version")),
         "risk_gate_code": _text(review_row.get("risk_gate_code")),
         "risk_gate_reason": _text(review_row.get("risk_gate_reason")),
         "price_limit_regime": _text(review_row.get("price_limit_regime")),
         "near_limit_down_threshold": _optional_float(review_row.get("near_limit_down_threshold")),
+        "data_quality_status": _text(review_row.get("data_quality_status")),
         "pct_chg": _optional_float(review_row.get("pct_chg")),
         "selected_flag": True,
         "selected_rank": _optional_int(review_row.get("rank")),
@@ -476,3 +489,19 @@ def _optional_int(value: Any) -> int | None:
 
 def _text(value: Any) -> str:
     return str(value or "").strip()
+
+
+def _list_field(value: Any) -> list[str]:
+    if isinstance(value, (list, tuple)):
+        return [str(item) for item in value]
+    text = _text(value)
+    if not text or text.lower() == "nan":
+        return []
+    if text.startswith("["):
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError:
+            return [text]
+        if isinstance(parsed, list):
+            return [str(item) for item in parsed]
+    return [text]

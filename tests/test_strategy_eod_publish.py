@@ -68,6 +68,53 @@ def test_lhb_review_resolves_names_and_downgrades_limit_down_candidate(monkeypat
     assert "CN:SZ:000001" in set(review.loc[review["review_tier"].eq("top5_focus"), "asset_id"])
 
 
+def test_lhb_review_preserves_upstream_eligibility_without_recomputing(monkeypatch):
+    result = _lhb_result_for_review_test()
+    candidate = result["candidates"][3]
+    candidate.update(
+        {
+            "eligibility_status": "risk_watch",
+            "top5_eligible": False,
+            "backtest_entry_eligible": False,
+            "eligibility_reason_codes": ["near_limit_down_followthrough_risk"],
+            "eligibility_reason_texts": ["接近跌停，禁止进入跟随和回测交易"],
+            "eligibility_warning_codes": ["institution_activity_unknown"],
+            "eligibility_contract_version": "lhb_eligibility_v2",
+            "price_limit_regime": "main_board",
+            "near_limit_down_threshold": -9.5,
+            "data_quality_status": "complete",
+            "pct_chg": 2.0,
+        }
+    )
+    monkeypatch.setattr(strategy_eod_publish, "_lhb_base_score_lookup_for_trade_date", lambda trade_date: {})
+
+    review = _review_rows_from_result(result, trade_date="2026-07-14")
+
+    row = review.loc[review["asset_id"].eq("CN:SZ:001399")].iloc[0]
+    assert row["eligibility_contract_version"] == "lhb_eligibility_v2"
+    assert row["eligibility_status"] == "risk_watch"
+    assert bool(row["top5_eligible"]) is False
+    assert row["eligibility_reason_codes"] == ["near_limit_down_followthrough_risk"]
+
+
+def test_lhb_review_rejects_contradictory_upstream_eligibility(monkeypatch):
+    result = _lhb_result_for_review_test()
+    result["candidates"][0].update(
+        {
+            "eligibility_status": "eligible",
+            "top5_eligible": False,
+            "backtest_entry_eligible": True,
+            "eligibility_reason_codes": [],
+            "eligibility_warning_codes": [],
+            "eligibility_contract_version": "lhb_eligibility_v2",
+        }
+    )
+    monkeypatch.setattr(strategy_eod_publish, "_lhb_base_score_lookup_for_trade_date", lambda trade_date: {})
+
+    with pytest.raises(ValueError, match="LHB eligibility parity violation"):
+        _review_rows_from_result(result, trade_date="2026-07-14")
+
+
 def test_load_lhb_base_score_source_prefers_master_name_then_lhb_name(monkeypatch):
     queries = []
 
