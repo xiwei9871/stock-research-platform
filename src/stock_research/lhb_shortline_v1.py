@@ -11,7 +11,7 @@ from uuid import uuid4
 
 import pandas as pd
 
-from stock_research.lhb_eligibility import PUMP_REJECT_THRESHOLD
+from stock_research.lhb_eligibility import LHB_ELIGIBILITY_CONTRACT_VERSION, PUMP_REJECT_THRESHOLD
 
 
 LEGACY_LHB_BENCHMARK_SUMMARY_PATH = Path(
@@ -1642,6 +1642,146 @@ def _lhb_shortline_daily_auction_score_fallback(
     return fallback.reindex(columns=columns)
 
 
+LHB_ELIGIBILITY_DECISION_COLUMNS = [
+    "eligibility_status",
+    "top5_eligible",
+    "backtest_entry_eligible",
+    "eligibility_reason_codes",
+    "eligibility_reason_texts",
+    "eligibility_warning_codes",
+    "price_limit_regime",
+    "near_limit_down_threshold",
+    "data_quality_status",
+    "eligibility_contract_version",
+]
+
+
+def _assert_lhb_contract_versions(frame: pd.DataFrame, *, stage: str) -> None:
+    required = {"backtest_entry_eligible", "eligibility_contract_version"}
+    missing = sorted(required.difference(frame.columns))
+    if missing:
+        raise ValueError(
+            f"LHB eligibility parity violation at {stage}: missing columns {', '.join(missing)}"
+        )
+    versions = frame["eligibility_contract_version"].fillna("").astype(str)
+    invalid = ~versions.eq(LHB_ELIGIBILITY_CONTRACT_VERSION)
+    if invalid.any():
+        raise ValueError(
+            f"LHB eligibility parity violation at {stage}: invalid contract version rows={int(invalid.sum())}"
+        )
+
+
+def _filter_lhb_entry_eligible_contract_rows(frame: pd.DataFrame, *, stage: str) -> pd.DataFrame:
+    if frame.empty:
+        return frame.copy()
+    _assert_lhb_contract_versions(frame, stage=stage)
+    eligible = frame["backtest_entry_eligible"].fillna(False).astype(bool)
+    return frame[eligible].copy().reset_index(drop=True)
+
+
+def _assert_lhb_entry_eligibility_contract(frame: pd.DataFrame, *, stage: str) -> None:
+    if frame.empty:
+        return
+    _assert_lhb_contract_versions(frame, stage=stage)
+    invalid = ~frame["backtest_entry_eligible"].fillna(False).astype(bool)
+    if invalid.any():
+        raise ValueError(
+            f"LHB eligibility parity violation at {stage}: ineligible entry rows={int(invalid.sum())}"
+        )
+
+
+def _attach_lhb_contract_decisions(
+    frame: pd.DataFrame,
+    *,
+    decisions: pd.DataFrame,
+    stage: str,
+) -> pd.DataFrame:
+    if frame.empty:
+        result = frame.copy()
+        for column in LHB_ELIGIBILITY_DECISION_COLUMNS:
+            if column not in result.columns:
+                result[column] = pd.NA
+        return result
+    decision_columns = [column for column in LHB_ELIGIBILITY_DECISION_COLUMNS if column in decisions.columns]
+    required = {"trade_date", "ts_code", "backtest_entry_eligible", "eligibility_contract_version"}
+    if not required.issubset(decisions.columns):
+        raise ValueError(f"LHB eligibility parity violation at {stage}: upstream decision fields missing")
+    source = decisions[["trade_date", "ts_code", *decision_columns]].copy()
+    source["trade_date"] = pd.to_datetime(source["trade_date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    source["ts_code"] = source["ts_code"].map(_canonical_ts_code)
+    source = source.drop_duplicates(["trade_date", "ts_code"], keep="last")
+
+    result = frame.copy()
+    result["trade_date"] = pd.to_datetime(result["trade_date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    result["ts_code"] = result["ts_code"].map(_canonical_ts_code)
+    comparison = result[["trade_date", "ts_code"]].merge(
+        source,
+        on=["trade_date", "ts_code"],
+        how="left",
+        validate="many_to_one",
+    )
+    if comparison["eligibility_contract_version"].isna().any():
+        raise ValueError(f"LHB eligibility parity violation at {stage}: decision key missing")
+    for column in decision_columns:
+        if column not in result.columns:
+            continue
+        existing = result[column]
+        upstream = comparison[column]
+        both = existing.notna() & upstream.notna()
+        mismatch = both & existing.astype(str).ne(upstream.astype(str))
+        if mismatch.any():
+            raise ValueError(
+                f"LHB eligibility parity violation at {stage}: contradictory {column} rows={int(mismatch.sum())}"
+            )
+    result = result.drop(columns=decision_columns, errors="ignore")
+    return result.merge(
+        source,
+        on=["trade_date", "ts_code"],
+        how="left",
+        validate="many_to_one",
+    )
+
+
+def _build_lhb_eligibility_parity_audit(
+    *,
+    decisions: pd.DataFrame,
+    stages: dict[str, pd.DataFrame],
+) -> pd.DataFrame:
+    base = decisions[["trade_date", "ts_code", "eligibility_status", "eligibility_contract_version"]].copy()
+    base["trade_date"] = pd.to_datetime(base["trade_date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    base["ts_code"] = base["ts_code"].map(_canonical_ts_code)
+    base = base.drop_duplicates(["trade_date", "ts_code"], keep="last").rename(
+        columns={
+            "eligibility_status": "source_eligibility_status",
+            "eligibility_contract_version": "source_contract_version",
+        }
+    )
+    parity = pd.Series(True, index=base.index)
+    for stage, frame in stages.items():
+        status_column = f"{stage}_eligibility_status"
+        version_column = f"{stage}_contract_version"
+        if frame.empty or not {"trade_date", "ts_code", "eligibility_status", "eligibility_contract_version"}.issubset(frame.columns):
+            base[status_column] = pd.NA
+            base[version_column] = pd.NA
+            parity &= False
+            continue
+        observed = frame[["trade_date", "ts_code", "eligibility_status", "eligibility_contract_version"]].copy()
+        observed["trade_date"] = pd.to_datetime(observed["trade_date"], errors="coerce").dt.strftime("%Y-%m-%d")
+        observed["ts_code"] = observed["ts_code"].map(_canonical_ts_code)
+        observed = observed.drop_duplicates(["trade_date", "ts_code"], keep="last").rename(
+            columns={"eligibility_status": status_column, "eligibility_contract_version": version_column}
+        )
+        base = base.merge(observed, on=["trade_date", "ts_code"], how="left", validate="one_to_one")
+        parity = (
+            base[status_column].eq(base["source_eligibility_status"])
+            & base[version_column].eq(base["source_contract_version"])
+            & parity.reset_index(drop=True)
+        )
+    base["eligibility_contract_version"] = base["source_contract_version"]
+    base["parity_status"] = parity.map({True: "match", False: "mismatch"})
+    return base
+
+
 def run_lhb_shortline_v1_lifecycle_from_frames(
     *,
     config: LHBShortlineV1Config,
@@ -1667,7 +1807,11 @@ def run_lhb_shortline_v1_lifecycle_from_frames(
         pool_mode="raw_lhb_positive",
         output_dir=output_dir,
     )
-    selected = pool["selected_trades"]
+    selected = _filter_lhb_entry_eligible_contract_rows(
+        pool["selected_trades"],
+        stage="full_market_selected",
+    )
+    contract_decisions = selected.copy()
     lifecycle_minute_bars = _filter_lhb_shortline_v1_lifecycle_minute_window(
         selected=selected,
         minute_bars=frames.minute_bars,
@@ -1685,9 +1829,19 @@ def run_lhb_shortline_v1_lifecycle_from_frames(
         output_dir=output_dir,
         pre_context_days=2,
     )
+    phase12a["decision"] = _attach_lhb_contract_decisions(
+        phase12a["decision"],
+        decisions=contract_decisions,
+        stage="phase12a_decision",
+    )
     rule = build_lhb_phase12a_rule_decision_v1(
         phase12a_decision=phase12a["decision"],
         output_dir=output_dir,
+    )
+    rule["rule_decision"] = _attach_lhb_contract_decisions(
+        rule["rule_decision"],
+        decisions=contract_decisions,
+        stage="phase12a_rule",
     )
     real_entry = build_lhb_phase12a_real_entry_backtest_v1(
         rule_decision=rule["rule_decision"],
@@ -1697,6 +1851,11 @@ def run_lhb_shortline_v1_lifecycle_from_frames(
         entry_start_time="10:30:00",
         slippage_bps=0.0,
     )
+    real_entry["trades"] = _attach_lhb_contract_decisions(
+        real_entry["trades"],
+        decisions=contract_decisions,
+        stage="real_entry",
+    )
     lifecycle = build_lhb_phase14c_lifecycle_portfolio_v1(
         entry_trades=real_entry["trades"],
         minute_bars=lifecycle_minute_bars,
@@ -1705,6 +1864,12 @@ def run_lhb_shortline_v1_lifecycle_from_frames(
         threshold_profile="sensitive_entry_buffer",
     )
     lifecycle_trades = lifecycle["lifecycle_trades"].copy()
+    lifecycle_trades = _attach_lhb_contract_decisions(
+        lifecycle_trades,
+        decisions=contract_decisions,
+        stage="lifecycle",
+    )
+    lifecycle["lifecycle_trades"] = lifecycle_trades
     lifecycle_trades = _filter_rows_to_lhb_shortline_asof_cutoff(
         lifecycle_trades,
         end_date=config.end_date,
@@ -1723,6 +1888,12 @@ def run_lhb_shortline_v1_lifecycle_from_frames(
         frames.auction_open,
         daily_bars=frames.daily_bars,
     )
+    scored = _attach_lhb_contract_decisions(
+        scored,
+        decisions=contract_decisions,
+        stage="phase18c_scored_candidates",
+    )
+    _assert_lhb_entry_eligibility_contract(scored, stage="phase18c_account_entry")
     phase18c = build_lhb_phase18c_auction_enhanced_cash_account_backtest_v1(
         lifecycle_trades=lifecycle_trades,
         scored_candidates=scored,
@@ -1738,6 +1909,18 @@ def run_lhb_shortline_v1_lifecycle_from_frames(
     account_curve = phase18c["account_curve"]
     summary_frame = phase18c["summary"]
     selected_trades = phase18c["selected_trades"]
+    account_trades = _attach_lhb_contract_decisions(
+        account_trades,
+        decisions=contract_decisions,
+        stage="phase18c_account_trades",
+    )
+    selected_trades = _attach_lhb_contract_decisions(
+        selected_trades,
+        decisions=contract_decisions,
+        stage="phase18c_selected_trades",
+    )
+    phase18c["account_trades"] = account_trades
+    phase18c["selected_trades"] = selected_trades
     account_trades = _filter_rows_to_lhb_shortline_asof_cutoff(
         account_trades,
         end_date=config.end_date,
@@ -1787,6 +1970,7 @@ def run_lhb_shortline_v1_lifecycle_from_frames(
         if market_regime.empty:
             summary = baseline_summary.copy()
         else:
+            _assert_lhb_entry_eligibility_contract(account_trades, stage="market_regime_account_entry")
             market_account = run_lhb_shortline_market_regime_account(
                 lifecycle_trades=account_trades,
                 market_regime=market_regime,
@@ -1797,6 +1981,11 @@ def run_lhb_shortline_v1_lifecycle_from_frames(
                 end_date=config.end_date,
             )
             account_trades = market_account["account_trades"].copy()
+            account_trades = _attach_lhb_contract_decisions(
+                account_trades,
+                decisions=contract_decisions,
+                stage="market_regime_account_trades",
+            )
             account_curve = market_account["account_curve"].copy()
             if not account_trades.empty:
                 account_trades["strategy"] = strategy
@@ -1863,6 +2052,19 @@ def run_lhb_shortline_v1_lifecycle_from_frames(
         market_regime_path = output_dir / "lhb_shortline_v1_1_market_regime.csv"
         market_regime.to_csv(market_regime_path, index=False)
         paths["pipeline_market_regime"] = str(market_regime_path)
+    parity_audit = _build_lhb_eligibility_parity_audit(
+        decisions=contract_decisions,
+        stages={
+            "phase12a": phase12a["decision"],
+            "rule": rule["rule_decision"],
+            "real_entry": real_entry["trades"],
+            "lifecycle": lifecycle["lifecycle_trades"],
+            "phase18c_account": phase18c["account_trades"],
+        },
+    )
+    parity_path = output_dir / "lhb_eligibility_parity_audit_v2.csv"
+    parity_audit.to_csv(parity_path, index=False)
+    paths["pipeline_eligibility_parity_audit"] = str(parity_path)
     return result, selected_trades.reset_index(drop=True), paths
 
 

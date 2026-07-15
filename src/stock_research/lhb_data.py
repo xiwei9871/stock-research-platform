@@ -8174,11 +8174,14 @@ def _find_lhb_next_tradable_entry_execution_idx(
     start_idx: int,
     reference_price: float,
 ) -> tuple[int | None, int]:
-    _ = reference_price
-    idx = int(start_idx)
-    if idx < len(frame):
-        return idx, 0
-    return None, 0
+    blocked_count = 0
+    for idx in range(int(start_idx), len(frame)):
+        bar = frame.iloc[idx]
+        if _is_lhb_locked_limit_up_bar(bar, reference_price=reference_price):
+            blocked_count += 1
+            continue
+        return idx, blocked_count
+    return None, blocked_count
 
 
 def _lhb_phase12a_real_entry_exits(
