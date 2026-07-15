@@ -1790,6 +1790,36 @@ def _build_lhb_eligibility_parity_audit(
     return base
 
 
+def _build_lhb_review_candidates(
+    *,
+    scored_candidates: pd.DataFrame,
+    risk_watch_candidates: pd.DataFrame,
+    top_n: int,
+) -> pd.DataFrame:
+    scored = scored_candidates.copy()
+    if "top_n" in scored.columns:
+        requested = pd.to_numeric(scored["top_n"], errors="coerce").eq(int(top_n))
+        if requested.any():
+            scored = scored[requested].copy()
+    if not scored.empty and {"trade_date", "ts_code"}.issubset(scored.columns):
+        scored = scored.sort_values(
+            ["trade_date", "auction_enhanced_score", "ts_code"],
+            ascending=[True, False, True],
+            kind="stable",
+            na_position="last",
+        ).drop_duplicates(["trade_date", "ts_code"], keep="first")
+
+    risk_watch = risk_watch_candidates.copy()
+    if not risk_watch.empty and "eligibility_status" in risk_watch.columns:
+        risk_watch = risk_watch[risk_watch["eligibility_status"].eq("risk_watch")].copy()
+        risk_watch["phase12a_rule_layer"] = "risk_watch"
+        risk_watch["top_n"] = int(top_n)
+    review = pd.concat([scored, risk_watch], ignore_index=True, sort=False)
+    if "ts_code" in review.columns:
+        review["asset_id"] = review["ts_code"]
+    return review.reset_index(drop=True)
+
+
 def run_lhb_shortline_v1_lifecycle_from_frames(
     *,
     config: LHBShortlineV1Config,
@@ -1878,6 +1908,16 @@ def run_lhb_shortline_v1_lifecycle_from_frames(
         stage="lifecycle",
     )
     lifecycle["lifecycle_trades"] = lifecycle_trades
+    review_scored = _attach_lhb_shortline_v1_auction_score(
+        lifecycle_trades,
+        frames.auction_open,
+        daily_bars=frames.daily_bars,
+    )
+    review_scored = _attach_lhb_contract_decisions(
+        review_scored,
+        decisions=contract_decisions,
+        stage="review_scored_candidates",
+    )
     lifecycle_trades = _filter_rows_to_lhb_shortline_asof_cutoff(
         lifecycle_trades,
         end_date=config.end_date,
@@ -2073,15 +2113,11 @@ def run_lhb_shortline_v1_lifecycle_from_frames(
     parity_path = output_dir / "lhb_eligibility_parity_audit_v2.csv"
     parity_audit.to_csv(parity_path, index=False)
     paths["pipeline_eligibility_parity_audit"] = str(parity_path)
-    review_candidates = selected_trades.copy()
-    risk_watch = pool["rejected_events"].copy()
-    if not risk_watch.empty:
-        risk_watch = risk_watch[risk_watch["eligibility_status"].eq("risk_watch")].copy()
-        risk_watch["phase12a_rule_layer"] = "risk_watch"
-        risk_watch["top_n"] = config.top_n
-    review_candidates = pd.concat([review_candidates, risk_watch], ignore_index=True, sort=False)
-    if "ts_code" in review_candidates.columns:
-        review_candidates["asset_id"] = review_candidates["ts_code"]
+    review_candidates = _build_lhb_review_candidates(
+        scored_candidates=review_scored,
+        risk_watch_candidates=pool["rejected_events"],
+        top_n=config.top_n,
+    )
     return result, review_candidates.reset_index(drop=True), paths
 
 

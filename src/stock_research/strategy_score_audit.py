@@ -369,7 +369,7 @@ def _raw_score_for_strategy(
 ) -> tuple[float | None, str]:
     source_row = lineage_row or {}
     if strategy_id == "lhb_shortline":
-        for column in ("final_score", "score_total", "lhb_shortline_score"):
+        for column in ("final_score", "score_total", "lhb_shortline_score", "auction_enhanced_score"):
             value = _optional_float(source_row.get(column))
             if value is not None:
                 return value, column
