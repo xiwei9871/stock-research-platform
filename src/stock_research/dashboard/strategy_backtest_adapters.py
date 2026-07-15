@@ -734,9 +734,15 @@ def build_lhb_shortline_scores_from_frames(lhb: pd.DataFrame, technical: pd.Data
         - pump_risk.clip(0, 1) * 25.0
         - high_drawdown.clip(0, 1) * 40.0
     )
-    eligible = _bool(frame.get("on_lhb", pd.Series(index=frame.index))) & (pump_risk < 0.75)
+    if "top5_eligible" in frame.columns:
+        eligible = _bool(frame["top5_eligible"])
+    else:
+        eligible = _bool(frame.get("on_lhb", pd.Series(index=frame.index)))
     frame["eligibility"] = eligible.map(lambda value: bool(value)).astype(object)
-    frame["eligibility_reason"] = eligible.map({True: "lhb_support", False: "pump_risk_or_missing_lhb"})
+    if "eligibility_status" in frame.columns:
+        frame["eligibility_reason"] = frame["eligibility_status"].fillna("eligibility_unknown").astype(str)
+    else:
+        frame["eligibility_reason"] = eligible.map({True: "lhb_support", False: "missing_lhb"})
     frame["score_components"] = [
         {
             "lhb_net_buy_ratio": float(net_ratio.iloc[index]),

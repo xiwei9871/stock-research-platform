@@ -11,6 +11,8 @@ from uuid import uuid4
 
 import pandas as pd
 
+from stock_research.lhb_eligibility import PUMP_REJECT_THRESHOLD
+
 
 LEGACY_LHB_BENCHMARK_SUMMARY_PATH = Path(
     "/Users/xiwei/stock_research/outputs/research/web_lhb_phase18c_runs/"
@@ -814,7 +816,7 @@ def build_lhb_shortline_v1_candidates(
     reversal = reversal.fillna(False).astype(bool).astype(float)
     amount_confirm = _optional_num(frame, "amount_vs_20d", 1.0).clip(0, 3)
     pump_risk = _optional_num(frame, "lhb_one_day_pump_risk").clip(0, 1)
-    drawdown = _optional_num(frame, "high_to_close_drawdown").clip(-1, 0).abs()
+    drawdown = _optional_num(frame, "high_to_close_drawdown").clip(0, 1)
 
     frame["score_total"] = (
         50.0
@@ -830,7 +832,10 @@ def build_lhb_shortline_v1_candidates(
     on_lhb = frame.get("on_lhb", False)
     if not isinstance(on_lhb, pd.Series):
         on_lhb = pd.Series(on_lhb, index=frame.index)
-    eligible = on_lhb.fillna(False).astype(bool) & pump_risk.lt(0.75)
+    if "backtest_entry_eligible" in frame.columns:
+        eligible = frame["backtest_entry_eligible"].fillna(False).astype(bool)
+    else:
+        eligible = on_lhb.fillna(False).astype(bool) & pump_risk.lt(PUMP_REJECT_THRESHOLD)
     frame = frame[eligible].copy()
     frame["candidate_reason"] = "lhb_capital_plus_structure"
     frame = frame.sort_values(
