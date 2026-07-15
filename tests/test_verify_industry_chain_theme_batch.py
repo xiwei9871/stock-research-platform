@@ -254,6 +254,86 @@ def test_invalid_source_review_status_is_an_explicit_integrity_failure(tmp_path:
 
 
 @pytest.mark.parametrize(
+    ("artifact_name", "mutation", "failed_check", "error_fragment"),
+    [
+        ("source_pack", "artifact_version", "source_rows_valid", "artifact_version"),
+        (
+            "node_evidence_matrix",
+            "artifact_version",
+            "node_evidence_matrix_coverage",
+            "artifact_version",
+        ),
+        (
+            "node_evidence_matrix",
+            "value_capture_score_review_status",
+            "node_evidence_matrix_coverage",
+            "value_capture_score_review_status",
+        ),
+        (
+            "node_evidence_matrix",
+            "bottleneck_score_review_status",
+            "node_evidence_matrix_coverage",
+            "bottleneck_score_review_status",
+        ),
+        (
+            "node_evidence_matrix",
+            "node_review_status",
+            "node_evidence_matrix_coverage",
+            "node_review_status",
+        ),
+        (
+            "node_evidence_matrix",
+            "value_bases",
+            "node_evidence_matrix_coverage",
+            "value_bases",
+        ),
+        (
+            "node_evidence_matrix",
+            "evidence_strength_after",
+            "node_evidence_matrix_coverage",
+            "evidence_strength_after",
+        ),
+        (
+            "node_evidence_matrix",
+            "missing_required_field",
+            "node_evidence_matrix_coverage",
+            "next_evidence_needed",
+        ),
+    ],
+)
+def test_source_pack_and_matrix_schema_mutations_fail_closed(
+    tmp_path: Path,
+    artifact_name: str,
+    mutation: str,
+    failed_check: str,
+    error_fragment: str,
+):
+    manifest_path = _write_ready_batch(tmp_path)
+    path = {
+        "source_pack": tmp_path / "sample_source_pack.json",
+        "node_evidence_matrix": tmp_path / "sample_node_evidence_matrix.json",
+    }[artifact_name]
+    payload = _read_json(path)
+    if mutation == "artifact_version":
+        payload["artifact_version"] = "bogus_v0"
+    elif mutation == "value_bases":
+        payload["node_evidence_matrix"][0][mutation] = ["typo"]
+    elif mutation == "evidence_strength_after":
+        payload["node_evidence_matrix"][0][mutation] = 99
+    elif mutation == "missing_required_field":
+        payload["node_evidence_matrix"][0].pop("next_evidence_needed")
+    else:
+        payload["node_evidence_matrix"][0][mutation] = "typo"
+    _write_json(path, payload)
+
+    theme = build_theme_batch_report(manifest_path)["theme_results"][0]
+
+    assert theme["ready"] is False
+    assert theme["checks"][failed_check] is False
+    assert any(error_fragment in error for error in theme["errors"])
+
+
+@pytest.mark.parametrize(
     ("field", "value"),
     [
         ("reliability_level", "S4"),
@@ -814,6 +894,7 @@ def _write_ready_batch(root: Path) -> Path:
         ],
     }
     source_pack = {
+        "artifact_version": "sample_source_pack",
         "theme_id": "sample_theme_v1",
         "sources": [
             {
@@ -908,19 +989,38 @@ def _write_ready_batch(root: Path) -> Path:
         ],
     }
     matrix = {
+        "artifact_version": "sample_node_evidence_matrix",
         "theme_id": "sample_theme_v1",
         "node_evidence_matrix": [
             {
                 "node_id": "node_1",
                 "accepted_source_ids": [f"source_{index}" for index in range(0, 10, 2)],
+                "pending_source_ids": [],
                 "supported_claim_ids": [f"claim_{index}" for index in range(0, 10, 2)],
+                "evidence_strength_before": 2,
+                "evidence_strength_after": 4,
+                "value_capture_score_review_status": "supported",
+                "bottleneck_score_review_status": "supported",
+                "value_bases": ["technology_barrier"],
                 "evidence_gap_status": "covered",
+                "node_review_status": "reviewed",
+                "rationale": "Fixture rationale",
+                "next_evidence_needed": "Fixture next evidence",
             },
             {
                 "node_id": "node_2",
                 "accepted_source_ids": [f"source_{index}" for index in range(1, 10, 2)],
+                "pending_source_ids": [],
                 "supported_claim_ids": [f"claim_{index}" for index in range(1, 10, 2)],
+                "evidence_strength_before": 2,
+                "evidence_strength_after": 4,
+                "value_capture_score_review_status": "supported",
+                "bottleneck_score_review_status": "supported",
+                "value_bases": ["technology_barrier"],
                 "evidence_gap_status": "covered",
+                "node_review_status": "reviewed",
+                "rationale": "Fixture rationale",
+                "next_evidence_needed": "Fixture next evidence",
             },
         ],
     }

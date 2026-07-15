@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 from pathlib import Path
+import re
 
 from fastapi.testclient import TestClient
 
@@ -1240,7 +1241,11 @@ def test_intelligent_driving_smart_cockpit_readable_sections_and_catalog_boundar
     assert set(link["unmapped_theme_node_ids"]) == COCKPIT_NODE_IDS
     assert "L2 skeleton" in link["notes"]
     assert "不重复所有权" in link["notes"]
-    assert "electric_drive_chassis" in link["notes"]
+    note_chain_ids = set(
+        re.findall(r"(?<![a-z0-9_])[a-z][a-z0-9_]+(?![a-z0-9_])", link["notes"])
+    )
+    assert "electric_drive_chassis_by_wire_thermal_management" in note_chain_ids
+    assert "electric_drive_chassis" not in note_chain_ids
     assert "automotive_electronics" in link["notes"]
 
 
@@ -1385,6 +1390,17 @@ def test_intelligent_driving_smart_cockpit_mapping_and_revenue_boundaries_block_
         "不重复所有权",
     ):
         assert required_boundary in claim_text
+    by_wire_claim = next(
+        row for row in theme["claims"] if row["claim_id"] == "cockpit_claim_07_by_wire_cross_chain"
+    )
+    claim_chain_ids = set(
+        re.findall(
+            r"(?<![a-z0-9_])[a-z][a-z0-9_]+(?![a-z0-9_])",
+            by_wire_claim["claim_text"],
+        )
+    )
+    assert "electric_drive_chassis_by_wire_thermal_management" in claim_chain_ids
+    assert "electric_drive_chassis" not in claim_chain_ids
 
 
 def test_lightgarden_mapping_uses_disclosed_testing_revenue_not_broad_driving_revenue():

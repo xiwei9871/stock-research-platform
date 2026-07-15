@@ -10,6 +10,11 @@ from typing import Any
 
 from stock_research.ai_power_source_pack import (
     AiPowerEvidenceValidationError,
+    EVIDENCE_GAP_STATUSES,
+    NODE_MATRIX_FIELDS,
+    NODE_REVIEW_STATUSES,
+    SCORE_REVIEW_STATUSES,
+    VALUE_BASES,
     validate_theme_evidence_sources,
 )
 from stock_research.industry_chain_theme_research import classify_beneficiary
@@ -38,12 +43,7 @@ NUMERIC_GATE_KEYS = (
     "min_reviewed_mappings",
 )
 SUPPORTED_SCHEMA_VERSION = "industry_chain_theme_batch_v1"
-MATRIX_COVERAGE_STATUSES = {
-    "covered",
-    "supported",
-    "technical_route_only",
-    "evidence_gap",
-}
+MATRIX_COVERAGE_STATUSES = EVIDENCE_GAP_STATUSES
 MATRIX_EXPLICIT_GAP_STATUSES = {"technical_route_only", "evidence_gap"}
 
 
@@ -344,6 +344,7 @@ def _build_theme_result(
     ) = _validate_source_pack_sources(
         artifacts["source_pack"],
         theme_node_ids=theme_node_ids,
+        expected_artifact_version=Path(artifact_paths["source_pack"]).stem,
     )
     errors.extend(source_errors)
     primary_sources = [
@@ -369,11 +370,19 @@ def _build_theme_result(
         theme_artifact=artifacts["theme"],
     )
     errors.extend(mapping_errors)
-    matrix_coverage, matrix_errors = _validate_node_evidence_matrix(
+    (
+        matrix_rows_valid,
+        matrix_coverage,
+        matrix_errors,
+    ) = _validate_node_evidence_matrix(
         artifacts["node_evidence_matrix"],
         theme_node_ids=theme_node_ids,
         accepted_source_ids=set(accepted_sources),
+        known_source_ids=known_source_ids,
         valid_claim_ids=valid_claim_ids,
+        expected_artifact_version=Path(
+            artifact_paths["node_evidence_matrix"]
+        ).stem,
     )
     errors.extend(matrix_errors)
     readable_sections = {
@@ -399,6 +408,7 @@ def _build_theme_result(
         "theme_nodes_valid": theme_nodes_valid,
         "claim_rows_valid": claim_rows_valid,
         "mapping_rows_valid": mapping_rows_valid,
+        "node_evidence_matrix_rows_valid": matrix_rows_valid,
         "accepted_source_count": len(accepted_sources)
         >= gates["min_accepted_sources"],
         "primary_source_count": len(primary_sources) >= gates["min_primary_sources"],
@@ -434,7 +444,15 @@ def _validate_source_pack_sources(
     payload: dict[str, Any] | None,
     *,
     theme_node_ids: set[str],
+    expected_artifact_version: str,
 ) -> tuple[dict[str, dict[str, Any]], set[str], bool, list[str]]:
+    version_errors = _validate_artifact_version(
+        payload,
+        expected=expected_artifact_version,
+        label="source pack",
+    )
+    if version_errors:
+        return {}, set(), False, version_errors
     rows, errors = _object_rows(payload, "sources", "source pack sources")
     if errors:
         return {}, set(), False, errors
@@ -607,60 +625,123 @@ def _validate_node_evidence_matrix(
     *,
     theme_node_ids: set[str],
     accepted_source_ids: set[str],
+    known_source_ids: set[str],
     valid_claim_ids: set[str],
-) -> tuple[bool, list[str]]:
+    expected_artifact_version: str,
+) -> tuple[bool, bool, list[str]]:
+    version_errors = _validate_artifact_version(
+        payload,
+        expected=expected_artifact_version,
+        label="node evidence matrix",
+    )
+    if version_errors:
+        return False, False, version_errors
     rows, errors = _object_rows(
         payload, "node_evidence_matrix", "node evidence matrix rows"
     )
+    schema_errors = list(errors)
     seen_node_ids: set[str] = set()
     for index, row in enumerate(rows):
         label = f"node evidence matrix[{index}]"
+        missing_fields = sorted(NODE_MATRIX_FIELDS - set(row))
+        for field in missing_fields:
+            schema_errors.append(f"{label}.{field} is required")
         node_id = row.get("node_id")
         if not _is_non_empty_string(node_id):
-            errors.append(f"{label} requires non-empty node_id")
+            schema_errors.append(f"{label} requires non-empty node_id")
             continue
         if node_id in seen_node_ids:
-            errors.append(f"{label} duplicate node_id: {node_id}")
+            schema_errors.append(f"{label} duplicate node_id: {node_id}")
             continue
         seen_node_ids.add(node_id)
         if node_id not in theme_node_ids:
-            errors.append(f"{label}.node_id is outside this theme: {node_id}")
+            schema_errors.append(f"{label}.node_id is outside this theme: {node_id}")
         accepted_ids = row.get("accepted_source_ids")
         if not _is_string_list(accepted_ids, allow_empty=True):
-            errors.append(f"{label}.accepted_source_ids must be a string list")
+            schema_errors.append(f"{label}.accepted_source_ids must be a string list")
             accepted_ids = []
         elif len(accepted_ids) != len(set(accepted_ids)):
-            errors.append(f"{label}.accepted_source_ids contains duplicates")
+            schema_errors.append(f"{label}.accepted_source_ids contains duplicates")
         unknown_sources = set(accepted_ids) - accepted_source_ids
         if unknown_sources:
-            errors.append(
+            schema_errors.append(
                 f"{label}.accepted_source_ids references non-accepted sources: "
                 f"{sorted(unknown_sources)}"
             )
+        pending_ids = row.get("pending_source_ids")
+        if not _is_string_list(pending_ids, allow_empty=True):
+            schema_errors.append(f"{label}.pending_source_ids must be a string list")
+            pending_ids = []
+        elif len(pending_ids) != len(set(pending_ids)):
+            schema_errors.append(f"{label}.pending_source_ids contains duplicates")
+        unknown_pending_sources = set(pending_ids) - known_source_ids
+        if unknown_pending_sources:
+            schema_errors.append(
+                f"{label}.pending_source_ids references unknown sources: "
+                f"{sorted(unknown_pending_sources)}"
+            )
         supported_claim_ids = row.get("supported_claim_ids")
         if not _is_string_list(supported_claim_ids, allow_empty=True):
-            errors.append(f"{label}.supported_claim_ids must be a string list")
+            schema_errors.append(f"{label}.supported_claim_ids must be a string list")
         else:
             unknown_claims = set(supported_claim_ids) - valid_claim_ids
             if unknown_claims:
-                errors.append(
+                schema_errors.append(
                     f"{label}.supported_claim_ids references invalid claims: "
                     f"{sorted(unknown_claims)}"
                 )
+        for field in ("evidence_strength_before", "evidence_strength_after"):
+            if not _is_valid_evidence_strength(row.get(field)):
+                schema_errors.append(f"{label}.{field} must be integer 0-5")
+        for field in (
+            "value_capture_score_review_status",
+            "bottleneck_score_review_status",
+        ):
+            if row.get(field) not in SCORE_REVIEW_STATUSES:
+                schema_errors.append(f"{label}.{field} is invalid: {row.get(field)}")
         gap_status = row.get("evidence_gap_status")
         if gap_status not in MATRIX_COVERAGE_STATUSES:
-            errors.append(f"{label}.evidence_gap_status is invalid: {gap_status}")
+            schema_errors.append(f"{label}.evidence_gap_status is invalid: {gap_status}")
+        node_review_status = row.get("node_review_status")
+        if node_review_status not in NODE_REVIEW_STATUSES:
+            schema_errors.append(
+                f"{label}.node_review_status is invalid: {node_review_status}"
+            )
+        value_bases = row.get("value_bases")
+        if not _is_string_list(value_bases, allow_empty=True):
+            schema_errors.append(f"{label}.value_bases must be a string list")
+            value_bases = []
+        invalid_value_bases = set(value_bases) - VALUE_BASES
+        if invalid_value_bases:
+            schema_errors.append(
+                f"{label}.value_bases invalid: {sorted(invalid_value_bases)}"
+            )
+        for field in ("rationale", "next_evidence_needed"):
+            if not _is_non_empty_string(row.get(field)):
+                schema_errors.append(f"{label}.{field} must be a non-empty string")
         if not accepted_ids and gap_status not in MATRIX_EXPLICIT_GAP_STATUSES:
-            errors.append(
+            schema_errors.append(
                 f"{label} requires accepted sources or an explicit evidence-gap status"
             )
-    if seen_node_ids != theme_node_ids:
-        errors.append(
+        strength_after = row.get("evidence_strength_after")
+        if (
+            node_review_status == "reviewed"
+            and _is_valid_evidence_strength(strength_after)
+            and (strength_after < 3 or not accepted_ids)
+        ):
+            schema_errors.append(
+                f"{label} reviewed node requires strength >= 3 and accepted source"
+            )
+    coverage_valid = seen_node_ids == theme_node_ids
+    coverage_errors: list[str] = []
+    if not coverage_valid:
+        coverage_errors.append(
             "node evidence matrix coverage mismatch: "
             f"missing={sorted(theme_node_ids - seen_node_ids)}, "
             f"extra={sorted(seen_node_ids - theme_node_ids)}"
         )
-    return not errors, errors
+    all_errors = [*schema_errors, *coverage_errors]
+    return not schema_errors, coverage_valid and not schema_errors, all_errors
 
 
 def _object_rows(
@@ -683,8 +764,32 @@ def _object_rows(
     return rows, errors
 
 
+def _validate_artifact_version(
+    payload: dict[str, Any] | None,
+    *,
+    expected: str,
+    label: str,
+) -> list[str]:
+    if payload is None:
+        return [f"{label} artifact_version is unavailable"]
+    actual = payload.get("artifact_version")
+    if actual != expected:
+        return [
+            f"{label}.artifact_version must equal {expected}: {actual}"
+        ]
+    return []
+
+
 def _is_non_empty_string(value: Any) -> bool:
     return isinstance(value, str) and bool(value.strip())
+
+
+def _is_valid_evidence_strength(value: Any) -> bool:
+    return bool(
+        isinstance(value, int)
+        and not isinstance(value, bool)
+        and 0 <= value <= 5
+    )
 
 
 def _is_string_list(value: Any, *, allow_empty: bool) -> bool:
