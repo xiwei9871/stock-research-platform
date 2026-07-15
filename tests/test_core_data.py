@@ -110,6 +110,10 @@ def test_build_asset_status_daily_uses_point_in_time_daily_bars(monkeypatch):
     assert "INSERT INTO core.asset_status_daily" in sql
     assert "FROM market_daily_bar b" in sql
     assert "LEFT JOIN core.asset_master a" in sql
+    assert "market.lhb_top_list_daily" in sql
+    assert "same_day_lhb_name" in sql
+    assert "resolved_is_st" in sql
+    assert "status_quality" in sql
     assert "b.adjust_type = %s" in sql
     assert "b.trade_date >= %s" in sql
     assert "b.trade_date <= %s" in sql
@@ -117,6 +121,8 @@ def test_build_asset_status_daily_uses_point_in_time_daily_bars(monkeypatch):
     assert "b.trade_status <> '1'" in sql
     assert "b.pct_chg >= " in sql
     assert "b.pct_chg <= -" in sql
+    assert "WHEN resolved_is_st THEN 4.8" in sql
+    assert "WHEN is_beijing THEN 29.8" in sql
     assert "ON CONFLICT (trade_date, asset_id) DO UPDATE" in sql
     assert params == ["hfq", "2026-05-06", "2026-05-08"]
 
