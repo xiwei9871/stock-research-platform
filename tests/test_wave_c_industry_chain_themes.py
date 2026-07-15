@@ -1403,6 +1403,37 @@ def test_intelligent_driving_smart_cockpit_mapping_and_revenue_boundaries_block_
     assert "electric_drive_chassis" not in claim_chain_ids
 
 
+def test_intelligent_driving_by_wire_dependency_uses_full_canonical_chain_id_everywhere():
+    theme = _read_json(COCKPIT_THEME_PATH)
+    catalog = load_industry_catalog()
+    node = next(
+        row for row in theme["nodes"]
+        if row["node_id"] == "by_wire_execution_vehicle_control_dependency"
+    )
+    claim = next(
+        row for row in theme["claims"]
+        if row["claim_id"] == "cockpit_claim_07_by_wire_cross_chain"
+    )
+    link = next(
+        row for row in catalog["theme_links"] if row["theme_id"] == COCKPIT_THEME_ID
+    )
+    related_texts = {
+        "node_description": node["description"],
+        "claim_text": claim["claim_text"],
+        "theme_link_notes": link["notes"],
+    }
+
+    for label, related_text in related_texts.items():
+        chain_id_tokens = set(
+            re.findall(
+                r"(?<![a-z0-9_])[a-z][a-z0-9_]+(?![a-z0-9_])",
+                related_text,
+            )
+        )
+        assert "electric_drive_chassis_by_wire_thermal_management" in chain_id_tokens, label
+        assert "electric_drive_chassis" not in chain_id_tokens, label
+
+
 def test_lightgarden_mapping_uses_disclosed_testing_revenue_not_broad_driving_revenue():
     mapping = _read_json(COCKPIT_MAPPING_PATH)
     mapping_row = next(
