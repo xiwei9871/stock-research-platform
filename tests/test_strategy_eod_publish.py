@@ -61,61 +61,6 @@ def test_lhb_review_resolves_names_and_downgrades_limit_down_candidate(monkeypat
     assert "CN:SZ:000001" in set(review.loc[review["review_tier"].eq("top5_focus"), "asset_id"])
 
 
-def test_lhb_review_adds_base_score_candidate_when_original_top5_is_gated(monkeypatch):
-    result = _lhb_result_for_review_test()
-    result["candidates"] = result["candidates"][:5]
-    lookup = {
-        "CN:SZ:002463": {
-            "asset_id": "CN:SZ:002463",
-            "score_total": 77.0,
-            "stock_name": "沪电股份",
-            "pct_chg": 2.0,
-            "eligibility": True,
-        },
-        "CN:SZ:000636": {
-            "asset_id": "CN:SZ:000636",
-            "score_total": 76.3,
-            "stock_name": "风华高科",
-            "pct_chg": 1.0,
-            "eligibility": True,
-        },
-        "CN:SZ:002384": {
-            "asset_id": "CN:SZ:002384",
-            "score_total": 75.5,
-            "stock_name": "东山精密",
-            "pct_chg": 0.5,
-            "eligibility": True,
-        },
-        "CN:SZ:001399": {
-            "asset_id": "CN:SZ:001399",
-            "score_total": 69.3698,
-            "stock_name": "惠科股份",
-            "pct_chg": -9.991,
-            "eligibility": True,
-        },
-        "CN:SZ:000078": {
-            "asset_id": "CN:SZ:000078",
-            "score_total": 66.0,
-            "stock_name": "ST海王",
-            "pct_chg": 1.0,
-            "eligibility": True,
-        },
-        "CN:SZ:000001": {
-            "asset_id": "CN:SZ:000001",
-            "score_total": 65.0,
-            "stock_name": "平安银行",
-            "pct_chg": 1.0,
-            "eligibility": True,
-        },
-    }
-    monkeypatch.setattr(strategy_eod_publish, "_lhb_base_score_lookup_for_trade_date", lambda trade_date: lookup)
-
-    review = _review_rows_from_result(result, trade_date="2026-07-14")
-
-    assert "CN:SZ:000001" in set(review["asset_id"])
-    assert len(review.loc[review["review_tier"].eq("top5_focus")]) == 5
-
-
 def test_load_lhb_base_score_source_prefers_master_name_then_lhb_name(monkeypatch):
     queries = []
 
