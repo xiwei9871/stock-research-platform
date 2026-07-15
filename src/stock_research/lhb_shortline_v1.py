@@ -1249,26 +1249,56 @@ def load_lhb_shortline_v1_frames_from_db(
         lhb_rows = fetch_all(
             conn,
             """
+            WITH same_day_top AS (
+                SELECT
+                    trade_date,
+                    ts_code,
+                    max(NULLIF(name, '')) AS stock_name,
+                    max(pct_change) AS pct_chg
+                FROM market.lhb_top_list_daily
+                WHERE trade_date BETWEEN %s::date AND %s::date
+                GROUP BY trade_date, ts_code
+            )
             SELECT
-                trade_date::text AS trade_date,
-                ts_code,
-                on_lhb,
-                lhb_reason,
-                lhb_net_buy_amount,
-                lhb_net_buy_ratio,
-                institution_net_buy,
-                top_seat_concentration,
-                repeat_on_list_count_3d,
-                repeat_on_list_count_5d,
-                lhb_after_limit_up,
-                lhb_after_break_limit,
-                lhb_after_reversal,
-                lhb_one_day_pump_risk
-            FROM factor.lhb_event_features_daily
-            WHERE trade_date BETWEEN %s::date AND %s::date
-            ORDER BY trade_date, ts_code
+                f.trade_date::text AS trade_date,
+                f.ts_code,
+                t.stock_name,
+                CASE WHEN t.stock_name IS NULL THEN 'unavailable' ELSE 'lhb_same_day_name' END
+                    AS stock_name_source,
+                t.pct_chg,
+                a.name AS current_name,
+                a.list_date::text AS list_date,
+                s.is_st AS stored_is_st,
+                CASE
+                    WHEN s.source LIKE '%%status_quality=same_day_lhb_name' THEN 'trusted'
+                    WHEN s.source LIKE '%%status_quality=daily_bar' THEN 'trusted'
+                    ELSE 'unverified'
+                END AS stored_status_quality,
+                f.on_lhb,
+                f.lhb_reason,
+                f.lhb_net_buy_amount,
+                f.lhb_net_buy_ratio,
+                f.institution_net_buy,
+                f.top_seat_concentration,
+                f.repeat_on_list_count_3d,
+                f.repeat_on_list_count_5d,
+                f.lhb_after_limit_up,
+                f.lhb_after_break_limit,
+                f.lhb_after_reversal,
+                f.lhb_one_day_pump_risk
+            FROM factor.lhb_event_features_daily f
+            LEFT JOIN same_day_top t
+              ON t.trade_date = f.trade_date
+             AND t.ts_code = f.ts_code
+            LEFT JOIN core.asset_master a
+              ON a.ts_code = f.ts_code
+            LEFT JOIN core.asset_status_daily s
+              ON s.trade_date = f.trade_date
+             AND s.asset_id = a.asset_id
+            WHERE f.trade_date BETWEEN %s::date AND %s::date
+            ORDER BY f.trade_date, f.ts_code
             """,
-            [config.start_date, config.end_date],
+            [config.start_date, config.end_date, config.start_date, config.end_date],
         )
         technical_rows = fetch_all(
             conn,
@@ -1294,7 +1324,10 @@ def load_lhb_shortline_v1_frames_from_db(
                 b.open,
                 b.low,
                 b.close,
-                b.preclose
+                b.preclose,
+                b.pct_chg,
+                b.is_st AS stored_is_st,
+                CASE WHEN b.is_st THEN 'trusted' ELSE 'unverified' END AS stored_status_quality
             FROM market_daily_bar b
             WHERE b.trade_date BETWEEN %s::date AND (%s::date + INTERVAL '7 days')
               AND b.adjust_type = %s

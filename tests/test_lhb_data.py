@@ -1656,6 +1656,10 @@ def test_build_lhb_full_market_pool_backtest_v1_scores_daily_lhb_topn(tmp_path):
             {
                 "trade_date": "2026-01-02",
                 "ts_code": "000001.SZ",
+                "stock_name": "平安银行",
+                "pct_chg": 2.0,
+                "stored_is_st": False,
+                "stored_status_quality": "trusted",
                 "lhb_net_buy_amount": 1000.0,
                 "lhb_net_buy_ratio": 0.10,
                 "institution_net_buy": 100.0,
@@ -1668,6 +1672,10 @@ def test_build_lhb_full_market_pool_backtest_v1_scores_daily_lhb_topn(tmp_path):
             {
                 "trade_date": "2026-01-02",
                 "ts_code": "000002.SZ",
+                "stock_name": "万科A",
+                "pct_chg": 1.0,
+                "stored_is_st": False,
+                "stored_status_quality": "trusted",
                 "lhb_net_buy_amount": 200.0,
                 "lhb_net_buy_ratio": 0.03,
                 "institution_net_buy": 0.0,
@@ -1680,6 +1688,10 @@ def test_build_lhb_full_market_pool_backtest_v1_scores_daily_lhb_topn(tmp_path):
             {
                 "trade_date": "2026-01-02",
                 "ts_code": "000003.SZ",
+                "stock_name": "国华网安",
+                "pct_chg": -1.0,
+                "stored_is_st": False,
+                "stored_status_quality": "trusted",
                 "lhb_net_buy_amount": -500.0,
                 "lhb_net_buy_ratio": -0.08,
                 "institution_net_buy": -50.0,
@@ -1733,6 +1745,103 @@ def test_build_lhb_full_market_pool_backtest_v1_scores_daily_lhb_topn(tmp_path):
     assert Path(result["paths"]["selected_trades"]).exists()
     assert Path(result["paths"]["daily_curve"]).exists()
     assert Path(result["paths"]["markdown_report"]).exists()
+
+
+def test_build_lhb_full_market_pool_backtest_v1_applies_shared_eligibility_before_ranking(tmp_path):
+    base = {
+        "trade_date": "2026-07-14",
+        "lhb_net_buy_amount": 1000.0,
+        "lhb_net_buy_ratio": 0.10,
+        "institution_net_buy": 100.0,
+        "top_seat_concentration": 0.20,
+        "repeat_on_list_count_3d": 1,
+        "repeat_on_list_count_5d": 1,
+        "lhb_after_limit_up": False,
+        "lhb_after_break_limit": False,
+        "lhb_after_reversal": False,
+        "stored_is_st": False,
+        "stored_status_quality": "trusted",
+        "high_to_close_drawdown": 0.02,
+    }
+    lhb_features = pd.DataFrame(
+        [
+            {
+                **base,
+                "ts_code": "000001.SZ",
+                "stock_name": "平安银行",
+                "lhb_reason": "日涨幅偏离值达到7%的前5只证券",
+                "pct_chg": 2.0,
+                "lhb_one_day_pump_risk": 0.20,
+            },
+            {
+                **base,
+                "ts_code": "000004.SZ",
+                "stock_name": "退市测试",
+                "lhb_reason": "退市整理期",
+                "pct_chg": -2.0,
+                "lhb_one_day_pump_risk": 0.20,
+            },
+            {
+                **base,
+                "ts_code": "001399.SZ",
+                "stock_name": "惠科股份",
+                "lhb_reason": "日跌幅偏离值达到7%的前5只证券",
+                "pct_chg": -9.991,
+                "lhb_one_day_pump_risk": 0.30,
+            },
+            {
+                **base,
+                "ts_code": "000080.SZ",
+                "stock_name": "高弹性测试",
+                "lhb_reason": "日涨幅偏离值达到7%的前5只证券",
+                "pct_chg": 3.0,
+                "lhb_one_day_pump_risk": 0.80,
+            },
+            {
+                **base,
+                "ts_code": "000090.SZ",
+                "stock_name": "极端拉升测试",
+                "lhb_reason": "日涨幅偏离值达到7%的前5只证券",
+                "pct_chg": 4.0,
+                "lhb_one_day_pump_risk": 0.90,
+            },
+        ]
+    )
+    daily_bars = pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-07-14",
+                "ts_code": ts_code,
+                "close": 10.0,
+                "low": 9.8,
+            }
+            for ts_code in lhb_features["ts_code"]
+        ]
+    )
+
+    result = lhb_data.build_lhb_full_market_pool_backtest_v1(
+        lhb_features=lhb_features,
+        daily_bars=daily_bars,
+        start_date="2026-07-14",
+        end_date="2026-07-14",
+        top_n_values=[10],
+        output_dir=tmp_path,
+        pool_mode="raw_lhb_positive",
+    )
+
+    selected = result["selected_trades"]
+    rejected = result["rejected_events"]
+    assert "000004.SZ" not in set(selected["ts_code"])
+    assert "001399.SZ" not in set(selected["ts_code"])
+    assert "000080.SZ" in set(selected["ts_code"])
+    assert "000090.SZ" not in set(selected["ts_code"])
+    assert set(rejected["eligibility_status"]) == {"hard_reject", "risk_watch"}
+    assert rejected["eligibility_reason_codes"].str.contains("delisting_period").any()
+    assert rejected["eligibility_reason_codes"].str.contains("near_limit_down_followthrough_risk").any()
+    assert selected["eligibility_contract_version"].eq("lhb_eligibility_v2").all()
+    warning = selected[selected["ts_code"].eq("000080.SZ")].iloc[0]
+    assert "high_elasticity_pump_risk" in warning["eligibility_warning_codes"]
+    assert Path(result["paths"]["rejected_events"]).exists()
 
 
 def test_build_lhb_intraday_filtered_topn_comparison_v1_compares_actions(tmp_path):
