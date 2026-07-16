@@ -186,6 +186,48 @@ def test_review_candidates_keep_t_plus_one_confirmation_without_becoming_account
     assert review.iloc[0]["phase12a_rule_layer"] == "follow_pool_core"
 
 
+def test_build_lhb_review_candidates_keeps_only_eligible_original_top5_without_refill():
+    scored = pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-07-15",
+                "ts_code": ts_code,
+                "top_n": 5,
+                "selection_rank": rank,
+                "auction_enhanced_score": 100.0 - rank,
+                "eligibility_status": "eligible",
+                "backtest_entry_eligible": True,
+            }
+            for rank, ts_code in [(1, "000001.SZ"), (3, "000003.SZ"), (5, "000005.SZ"), (6, "000006.SZ")]
+        ]
+    )
+    risk_watch = pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-07-15",
+                "ts_code": "000002.SZ",
+                "selection_rank": 2,
+                "eligibility_status": "risk_watch",
+                "backtest_entry_eligible": False,
+            }
+        ]
+    )
+
+    review = lhb_shortline_v1._build_lhb_review_candidates(
+        scored_candidates=scored,
+        risk_watch_candidates=risk_watch,
+        top_n=5,
+    )
+
+    assert review["selection_rank"].tolist() == [1, 3, 5]
+    assert review["ts_code"].tolist() == ["000001.SZ", "000003.SZ", "000005.SZ"]
+    assert review["eligibility_status"].eq("eligible").all()
+
+
+def test_lhb_lifecycle_selects_only_requested_top_n_before_safety_filtering():
+    assert lhb_shortline_v1._lhb_shortline_v1_top_values(5) == [5]
+
+
 def test_minute_prefetch_uses_shared_pump_reject_threshold(monkeypatch):
     monkeypatch.setattr(lhb_shortline_v1, "PUMP_REJECT_THRESHOLD", 0.80)
     features = pd.DataFrame(

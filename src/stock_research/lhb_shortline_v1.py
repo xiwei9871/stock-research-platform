@@ -1453,7 +1453,7 @@ def _records(frame: pd.DataFrame) -> list[dict[str, Any]]:
 
 
 def _lhb_shortline_v1_top_values(top_n: int) -> list[int]:
-    return [max(int(top_n), 10)]
+    return [int(top_n)]
 
 
 def _filter_lhb_shortline_v1_lifecycle_minute_window(
@@ -1796,6 +1796,7 @@ def _build_lhb_review_candidates(
     risk_watch_candidates: pd.DataFrame,
     top_n: int,
 ) -> pd.DataFrame:
+    del risk_watch_candidates
     scored = scored_candidates.copy()
     if "top_n" in scored.columns:
         requested = pd.to_numeric(scored["top_n"], errors="coerce").eq(int(top_n))
@@ -1808,13 +1809,23 @@ def _build_lhb_review_candidates(
             kind="stable",
             na_position="last",
         ).drop_duplicates(["trade_date", "ts_code"], keep="first")
-
-    risk_watch = risk_watch_candidates.copy()
-    if not risk_watch.empty and "eligibility_status" in risk_watch.columns:
-        risk_watch = risk_watch[risk_watch["eligibility_status"].eq("risk_watch")].copy()
-        risk_watch["phase12a_rule_layer"] = "risk_watch"
-        risk_watch["top_n"] = int(top_n)
-    review = pd.concat([scored, risk_watch], ignore_index=True, sort=False)
+    if scored.empty:
+        return scored.reset_index(drop=True)
+    if "selection_rank" not in scored.columns:
+        rank_source = next((column for column in ("source_rank", "rank") if column in scored.columns), None)
+        if rank_source is not None:
+            scored["selection_rank"] = pd.to_numeric(scored[rank_source], errors="coerce")
+        elif "trade_date" in scored.columns:
+            scored["selection_rank"] = scored.groupby("trade_date", dropna=False).cumcount() + 1
+        else:
+            scored["selection_rank"] = range(1, len(scored) + 1)
+    original_rank = pd.to_numeric(scored["selection_rank"], errors="coerce")
+    if "backtest_entry_eligible" in scored.columns:
+        eligible = scored["backtest_entry_eligible"].fillna(False).astype(bool)
+    else:
+        eligible = scored.get("eligibility_status", pd.Series("eligible", index=scored.index)).eq("eligible")
+    review = scored[eligible & original_rank.le(int(top_n))].copy()
+    review = review.sort_values(["trade_date", "selection_rank", "ts_code"], kind="stable")
     if "ts_code" in review.columns:
         review["asset_id"] = review["ts_code"]
     return review.reset_index(drop=True)
@@ -1849,6 +1860,7 @@ def run_lhb_shortline_v1_lifecycle_from_frames(
         pool["selected_trades"],
         stage="full_market_selected",
     )
+    selected_rejected = pool["selected_rejected_events"].copy()
     contract_decisions = selected.copy()
     lifecycle_minute_bars = _filter_lhb_shortline_v1_lifecycle_minute_window(
         selected=selected,
@@ -2061,6 +2073,9 @@ def run_lhb_shortline_v1_lifecycle_from_frames(
         summary.update(
             {
                 "engine_version": config.engine_version,
+                "strategy_version": "lhb_v1_safe_top5",
+                "selection_policy": "original_topn_then_eligibility_no_refill",
+                "cash_slot_count": int(len(selected_rejected)),
                 "fresh_engine_note": "LHB Shortline DB lifecycle recompute with selectable risk profile",
                 "phase18c_strategy": strategy,
                 "phase18c_top_n": config.top_n,
