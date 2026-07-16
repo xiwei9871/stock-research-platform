@@ -253,7 +253,7 @@ export function ReviewQueueWorkspace({
                 </div>
                 <div>
                   <span className="muted">复盘范围</span>
-                  <strong>{queue.review_mode === 'strategy_topn' ? '启用策略 Top10' : queue.score_version}</strong>
+                  <strong>{queue.review_mode === 'strategy_topn' ? '按策略正式复盘范围' : queue.score_version}</strong>
                 </div>
               </div>
 
