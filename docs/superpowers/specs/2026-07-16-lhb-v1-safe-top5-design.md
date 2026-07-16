@@ -74,10 +74,30 @@ Platform copy must describe LHB as Top5; the generic Mid Trend Top10 label must 
 Historical performance must be versioned:
 
 - `lhb_v1_legacy`: original unfiltered Top5 benchmark.
-- `lhb_v1_safe_top5`: this design, the official candidate after validation.
+- `lhb_v1_stable_safe_top5`: the stable production strategy defined by this design.
+- `lhb_v1_safe_top5_market_overlay_experiment`: the rejected market-regime overlay experiment.
 - `lhb_v2_refill`: the current eligibility-before-ranking refill experiment.
 
 No version may overwrite another version's displayed historical curve without an explicit methodology label.
+
+## Stable Account Policy
+
+The production-stable LHB strategy uses the Phase18C safe Top5 cash account directly. It must not apply the current LHB market-regime position-scaling overlay.
+
+Stable metadata is fixed as:
+
+- `strategy_version=lhb_v1_stable_safe_top5`;
+- `selection_policy=phase18c_top5_then_eligibility_no_refill`;
+- `market_regime_policy=disabled_for_stable_strategy`.
+
+The market-regime implementation may remain available for separately named research experiments, but the default dashboard runner, official historical metrics, positions, trades, and equity curve must use the Phase18C safe account. Re-enabling any market overlay for the stable strategy requires a new strategy version and a new approved same-database and walk-forward validation.
+
+The decision is based on the 2026-01-01 through 2026-07-15 same-database comparison:
+
+- Phase18C safe account: 91.8648% total return and -4.2355% maximum drawdown;
+- current market overlay: 83.8218% total return and -5.1168% maximum drawdown.
+
+The overlay reduced return and worsened drawdown, so it cannot be part of the stable strategy.
 
 ## Validation
 
@@ -94,6 +114,9 @@ Automated tests must prove:
 - A delisting-period row remains a hard reject.
 - Official LHB review output contains at most five final selections and cannot imply that a research-only row is a buy signal.
 - Mid Trend Top10 behavior is unchanged.
+- Stable strategy output equals the Phase18C safe-account output and does not call the market-regime account path.
+- Stable summary exposes the fixed strategy, selection, and market-regime policy metadata.
+- Market-regime experiments cannot overwrite stable positions, trades, equity, or displayed performance.
 
 The same-database backtest for 2026-01-01 through 2026-07-15 must report:
 
@@ -106,4 +129,4 @@ The same-database backtest for 2026-01-01 through 2026-07-15 must report:
 
 ## Rollout
 
-The change is acceptable for platform publication only when unit tests, LHB lifecycle tests, strategy publication tests, score-audit tests, and a fresh same-database backtest all pass. The replay must be compared with the legacy 182.33%, refill 90.25%, and invalid early-cutoff 17.33% runs. The platform must display the safe-Top5 version label and its own metrics rather than retaining another version's result under the generic LHB name.
+The change is acceptable for platform publication only when unit tests, LHB lifecycle tests, strategy publication tests, score-audit tests, and a fresh same-database backtest all pass. The replay must be compared with the legacy 182.33%, refill 90.25%, invalid early-cutoff 17.33%, and rejected market-overlay 83.82% runs. The platform must display the stable Safe Top5 version label and its own Phase18C metrics rather than retaining another version's result under the generic LHB name.
