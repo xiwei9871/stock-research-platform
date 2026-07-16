@@ -31,6 +31,17 @@ All Wave E themes, and all later waves unless separately approved, must satisfy 
 
 Wave E is further limited to currently unselected `application_theme_chain` and `frontier_technology_chain` records. `ai_data_center_power` is not eligible because it is already covered by `ai_power_value_capture_v1`.
 
+## Program Accounting
+
+Theme counts use two explicit measures:
+
+- Wave A through Wave D contain five themes each, so the wave program currently contains 20 themes.
+- Five earlier foundation themes predate the A-D wave program.
+- The current Theme Research priority pool therefore contains 25 themes in total: five foundation themes plus 20 Wave A-D themes.
+- After Wave E is delivered, the A-E wave program will contain 25 themes and the total priority pool will contain 30 themes.
+
+Wave readiness and total-pool readiness must be reported separately. A statement such as `Wave A-E 25/25` must not be presented as the total Theme Research count; the corresponding total-pool statement is `30/30`.
+
 ## Selected Wave E Themes
 
 The approved Scheme A uses two application themes and three frontier-technology themes.
