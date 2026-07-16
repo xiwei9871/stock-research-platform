@@ -732,6 +732,28 @@
         "customer_qualification_revenue_validation"
       ],
       "notes": "主题研究按存储晶圆、控制器、模组/SSD、企业存储和商业验证聚合。价格周期、库存和客户收入验证是跨节点研究判断，不建立 canonical 所有权。HBM 仅映射技术节点，不代表任何公司自动获得受益映射。"
+    },
+    {
+      "theme_id":"industrial_machine_tools_cnc_value_chain_v1",
+      "chain_id":"industrial_machine_tools_cnc",
+      "node_links":[
+        {"theme_node_id":"high_end_cnc_control_systems","catalog_node_id":"cnc_control_motion_integration"},
+        {"theme_node_id":"high_end_cnc_control_systems","catalog_node_id":"high_end_cnc_systems"},
+        {"theme_node_id":"machine_tool_servo_drive_feedback_integration","catalog_node_id":"machine_tool_servo_drive_integration"},
+        {"theme_node_id":"machine_tool_servo_drive_feedback_integration","catalog_node_id":"machine_tool_feedback_measurement_integration"},
+        {"theme_node_id":"precision_machine_bodies_castings","catalog_node_id":"machine_tool_structure_component_integration"},
+        {"theme_node_id":"precision_machine_bodies_castings","catalog_node_id":"precision_machine_body_casting_integration"},
+        {"theme_node_id":"spindle_ball_screw_linear_guide","catalog_node_id":"spindle_drive_toolholder_integration"},
+        {"theme_node_id":"spindle_ball_screw_linear_guide","catalog_node_id":"feed_screw_guide_integration"},
+        {"theme_node_id":"metal_cutting_grinding_machine_tools","catalog_node_id":"machine_tool_equipment"},
+        {"theme_node_id":"metal_cutting_grinding_machine_tools","catalog_node_id":"metal_cutting_grinding_machine_tools"},
+        {"theme_node_id":"multi_axis_composite_processing_centers","catalog_node_id":"multi_axis_composite_machining_centers"},
+        {"theme_node_id":"tooling_fixtures_measurement_integration","catalog_node_id":"tooling_fixture_in_process_measurement"},
+        {"theme_node_id":"installed_base_retrofit_service","catalog_node_id":"machine_tool_lifecycle_services"},
+        {"theme_node_id":"installed_base_retrofit_service","catalog_node_id":"retrofit_maintenance_digital_service"}
+      ],
+      "unmapped_theme_node_ids":["orders_delivery_acceptance_revenue_validation"],
+      "notes":"主题研究聚合机床专用控制、结构与部件集成、整机和生命周期服务。通用伺服、编码器、丝杠、导轨、轴承和材料的canonical所有权仍留在工业自动化、传感器、核心机械基础件和材料链；本链只拥有面向机床精度与工艺的系统集成角色。订单、发货、验收和收入属于跨节点商业验证，不建立canonical所有权。"
     }
   ]
 }

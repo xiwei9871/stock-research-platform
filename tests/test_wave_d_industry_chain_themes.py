@@ -153,6 +153,70 @@ D2_CATALOG_LINKS = {
     },
 }
 
+D3_CHAIN_ID = "industrial_machine_tools_cnc"
+D3_THEME_ID = "industrial_machine_tools_cnc_value_chain_v1"
+D3_THEME_PATH = REPOSITORY_ROOT / f"artifacts/theme_decomposition/{D3_THEME_ID}.json"
+D3_MAPPING_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/company_mappings"
+    / "industrial_machine_tools_cnc_company_mapping_v1.json"
+)
+D3_SOURCE_PACK_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "industrial_machine_tools_cnc_source_pack_v1.json"
+)
+D3_MATRIX_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "industrial_machine_tools_cnc_node_evidence_matrix_v1.json"
+)
+
+D3_NODE_IDS = {
+    "high_end_cnc_control_systems",
+    "machine_tool_servo_drive_feedback_integration",
+    "precision_machine_bodies_castings",
+    "spindle_ball_screw_linear_guide",
+    "metal_cutting_grinding_machine_tools",
+    "multi_axis_composite_processing_centers",
+    "tooling_fixtures_measurement_integration",
+    "installed_base_retrofit_service",
+    "orders_delivery_acceptance_revenue_validation",
+}
+
+D3_CATALOG_LINKS = {
+    "high_end_cnc_control_systems": {
+        "cnc_control_motion_integration",
+        "high_end_cnc_systems",
+    },
+    "machine_tool_servo_drive_feedback_integration": {
+        "machine_tool_servo_drive_integration",
+        "machine_tool_feedback_measurement_integration",
+    },
+    "precision_machine_bodies_castings": {
+        "machine_tool_structure_component_integration",
+        "precision_machine_body_casting_integration",
+    },
+    "spindle_ball_screw_linear_guide": {
+        "spindle_drive_toolholder_integration",
+        "feed_screw_guide_integration",
+    },
+    "metal_cutting_grinding_machine_tools": {
+        "machine_tool_equipment",
+        "metal_cutting_grinding_machine_tools",
+    },
+    "multi_axis_composite_processing_centers": {
+        "multi_axis_composite_machining_centers"
+    },
+    "tooling_fixtures_measurement_integration": {
+        "tooling_fixture_in_process_measurement"
+    },
+    "installed_base_retrofit_service": {
+        "machine_tool_lifecycle_services",
+        "retrofit_maintenance_digital_service",
+    },
+}
+
 
 def _read_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
@@ -405,3 +469,124 @@ def test_d2_readable_detail_keeps_controller_module_and_hbm_boundaries():
         "同有科技": "core_beneficiary",
         "国科微": "elastic_beneficiary",
     }
+
+
+def test_d3_four_artifacts_exist_before_validation():
+    for path in (
+        D3_THEME_PATH,
+        D3_MAPPING_PATH,
+        D3_SOURCE_PACK_PATH,
+        D3_MATRIX_PATH,
+    ):
+        assert path.is_file(), path
+
+
+def test_d3_theme_meets_wave_d_gate_and_exact_node_scope():
+    theme = _read_json(D3_THEME_PATH)
+    mapping = _read_json(D3_MAPPING_PATH)
+    validate_theme_decomposition_artifact(theme, expected_theme_id=D3_THEME_ID)
+    validate_theme_company_mapping_artifact(mapping, theme)
+    report = VERIFIER.build_theme_batch_report(MANIFEST_PATH, wave="wave_d")
+    row = next(item for item in report["theme_results"] if item["chain_id"] == D3_CHAIN_ID)
+
+    assert {node["node_id"] for node in theme["nodes"]} == D3_NODE_IDS
+    assert len(theme["sources"]) >= 10
+    assert len(theme["claims"]) >= 12
+    assert len(
+        [item for item in mapping["company_mappings"] if item["review_status"] == "reviewed"]
+    ) >= 8
+    assert row["ready"] is True
+    assert row["checks"]["bidirectional_evidence_contract"] is True
+    assert row["checks"]["precise_mapping_locators"] is True
+
+
+def test_d3_catalog_projection_preserves_component_ownership_and_links():
+    catalog = load_industry_catalog()
+    link = next(row for row in catalog["theme_links"] if row["theme_id"] == D3_THEME_ID)
+    actual: dict[str, set[str]] = {}
+    for row in link["node_links"]:
+        actual.setdefault(row["theme_node_id"], set()).add(row["catalog_node_id"])
+
+    assert actual == D3_CATALOG_LINKS
+    assert set(link["unmapped_theme_node_ids"]) == {
+        "orders_delivery_acceptance_revenue_validation"
+    }
+    chain_nodes = {
+        row["node_id"]
+        for row in catalog["nodes"]
+        if row["chain_id"] == D3_CHAIN_ID
+    }
+    assert chain_nodes == set().union(*D3_CATALOG_LINKS.values())
+    assert all(
+        "generic component ownership remains" in row["description"].lower()
+        for row in catalog["nodes"]
+        if row["node_id"] in {
+            "machine_tool_servo_drive_integration",
+            "machine_tool_feedback_measurement_integration",
+            "spindle_drive_toolholder_integration",
+            "feed_screw_guide_integration",
+        }
+    )
+
+
+def test_d3_company_evidence_is_precise_and_does_not_claim_generic_components():
+    theme = _read_json(D3_THEME_PATH)
+    mapping = _read_json(D3_MAPPING_PATH)
+    source_pack = _read_json(D3_SOURCE_PACK_PATH)
+
+    source_ids = {row["source_id"] for row in theme["sources"]}
+    assert source_ids == {row["source_id"] for row in mapping["sources"]}
+    assert source_ids == {row["source_id"] for row in source_pack["sources"]}
+    assert {
+        row["mapped_node_id"] for row in mapping["company_mappings"]
+    } <= {
+        "high_end_cnc_control_systems",
+        "metal_cutting_grinding_machine_tools",
+        "multi_axis_composite_processing_centers",
+    }
+
+    evidence_by_id = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+    for row in mapping["company_mappings"]:
+        evidence = [evidence_by_id[evidence_id] for evidence_id in row["evidence_ids"]]
+        assert len(evidence) == 3
+        assert {item["evidence_type"] for item in evidence} in (
+            {"product_relationship", "revenue_materiality", "business_stage"},
+            {"service_relationship", "revenue_materiality", "business_stage"},
+        )
+        assert len({item["excerpt_locator"] for item in evidence}) == 3
+
+
+def test_d3_readable_detail_separates_orders_delivery_acceptance_and_revenue():
+    detail = get_theme_research_theme(D3_THEME_ID)
+    assert "订单、排产、发货" in detail["research_profile"]["central_conflict"]
+    assert "高风险核心受益" in detail["research_profile"]["investment_summary"]
+    boundary_claim = next(
+        row
+        for row in list_theme_research_claims(D3_THEME_ID)["items"]
+        if row["claim_id"] == "machine_claim_09"
+    )
+    assert "在手订单、合同负债和发出商品不得当作已确认收入" in boundary_claim[
+        "claim_text"
+    ]
+
+    mapping = _read_json(D3_MAPPING_PATH)
+    genesis_revenue = next(
+        row for row in mapping["evidence_items"]
+        if row["evidence_id"] == "machine_300083_revenue"
+    )
+    rifa_stage = next(
+        row for row in mapping["evidence_items"]
+        if row["evidence_id"] == "machine_002520_stage"
+    )
+    assert "4205台已发货未验收" in genesis_revenue["evidence_summary"]
+    assert "保留意见" in rifa_stage["evidence_summary"]
+    assert "第69-70页" in rifa_stage["excerpt_locator"]
+    assert "第111-113页" in rifa_stage["excerpt_locator"]
+
+    rifa_company = next(
+        row
+        for row in list_theme_research_companies(D3_THEME_ID)["items"]
+        if row["company_code"] == "002520.SZ"
+    )
+    assert rifa_company["beneficiary_tier"] == "core_beneficiary"
+    assert "审计保留意见" in rifa_company["relationship_summary"]

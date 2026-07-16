@@ -181,6 +181,7 @@ def test_repository_catalog_starts_with_ten_approved_sectors():
         "ai_compute_infrastructure",
         "semiconductor_eda_ip_design_services",
         "memory_chips_storage_control",
+        "industrial_machine_tools_cnc",
     }
     nodes_by_id = {row["node_id"]: row for row in catalog["nodes"]}
     assert {
