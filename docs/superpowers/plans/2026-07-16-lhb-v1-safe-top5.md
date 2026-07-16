@@ -433,3 +433,173 @@ rtk git status --short
 ```
 
 Expected: no whitespace errors and only intentional branch changes. Production output refresh remains a separate approval step after the replay result is reviewed.
+
+### Task 6: Lock The Stable Strategy To The Phase18C Safe Account
+
+**Files:**
+- Modify: `tests/test_lhb_shortline_v1.py`
+- Modify: `src/stock_research/lhb_shortline_v1.py`
+
+- [ ] **Step 1: Write failing stable-account tests**
+
+Add tests asserting the stable metadata and account selector:
+
+```python
+def test_safe_top5_summary_metadata_identifies_stable_strategy_without_market_overlay():
+    metadata = lhb_shortline_v1._lhb_safe_top5_summary_metadata({"cash_slot_count": 45})
+    assert metadata == {
+        "strategy_version": "lhb_v1_stable_safe_top5",
+        "selection_policy": "phase18c_top5_then_eligibility_no_refill",
+        "market_regime_policy": "disabled_for_stable_strategy",
+        "cash_slot_count": 45,
+    }
+
+
+def test_select_lhb_stable_account_returns_phase18c_outputs_unchanged():
+    summary = {"total_return": 0.918648, "max_drawdown": -0.042355}
+    trades = pd.DataFrame([{"ts_code": "000001.SZ", "account_trade_status": "filled"}])
+    curve = pd.DataFrame([{"trade_date": "2026-07-15", "equity": 1.918648}])
+    selected = lhb_shortline_v1._select_lhb_stable_account(
+        phase18c_summary=summary,
+        phase18c_account_trades=trades,
+        phase18c_account_curve=curve,
+    )
+    assert selected["summary"] == summary
+    pd.testing.assert_frame_equal(selected["account_trades"], trades)
+    pd.testing.assert_frame_equal(selected["account_curve"], curve)
+```
+
+- [ ] **Step 2: Run the tests and verify RED**
+
+```bash
+rtk /Users/xiwei/stock_research/.venv/bin/pytest tests/test_lhb_shortline_v1.py::test_safe_top5_summary_metadata_identifies_stable_strategy_without_market_overlay tests/test_lhb_shortline_v1.py::test_select_lhb_stable_account_returns_phase18c_outputs_unchanged -q
+```
+
+Expected: FAIL because the metadata still identifies the candidate version and `_select_lhb_stable_account` does not exist.
+
+- [ ] **Step 3: Implement the stable account selector**
+
+Change `_lhb_safe_top5_summary_metadata` to return the fixed stable metadata. Add:
+
+```python
+def _select_lhb_stable_account(
+    *,
+    phase18c_summary: dict[str, Any],
+    phase18c_account_trades: pd.DataFrame,
+    phase18c_account_curve: pd.DataFrame,
+) -> dict[str, Any]:
+    return {
+        "summary": phase18c_summary.copy(),
+        "account_trades": phase18c_account_trades.copy(),
+        "account_curve": phase18c_account_curve.copy(),
+    }
+```
+
+In `run_lhb_shortline_v1_lifecycle_from_frames`, replace the default market-regime branch with `_select_lhb_stable_account(...)`. Do not call `build_lhb_shortline_market_regime_control` or `run_lhb_shortline_market_regime_account` in the stable path. Keep those functions available for separately named experiments.
+
+- [ ] **Step 4: Run lifecycle tests**
+
+```bash
+rtk /Users/xiwei/stock_research/.venv/bin/pytest tests/test_lhb_shortline_v1.py tests/test_lhb_data.py -q
+```
+
+Expected: PASS; stable output uses Phase18C account data directly.
+
+- [ ] **Step 5: Commit stable account behavior**
+
+```bash
+rtk git add src/stock_research/lhb_shortline_v1.py tests/test_lhb_shortline_v1.py
+rtk git commit -m "fix: lock LHB stable strategy to Phase18C account"
+```
+
+### Task 7: Expose Stable Version And Disabled Overlay On The Platform
+
+**Files:**
+- Modify: `tests/test_dashboard_backtests.py`
+- Modify: `src/stock_research/dashboard/backtests.py`
+- Modify: `dashboard/src/components/HomeCockpit.tsx`
+- Modify: `dashboard/tests/home-cockpit.test.tsx`
+
+- [ ] **Step 1: Write failing metadata and label tests**
+
+Update the backend metric fixture to contain:
+
+```python
+"strategy_version": "lhb_v1_stable_safe_top5",
+"selection_policy": "phase18c_top5_then_eligibility_no_refill",
+"market_regime_policy": "disabled_for_stable_strategy",
+```
+
+Assert all three fields are present in the returned metrics. Update frontend assertions to require `LHB V1 Stable Safe Top5`.
+
+- [ ] **Step 2: Run tests and verify RED**
+
+```bash
+rtk /Users/xiwei/stock_research/.venv/bin/pytest tests/test_dashboard_backtests.py -q
+rtk npm --prefix dashboard test -- --run tests/home-cockpit.test.tsx
+```
+
+Expected: backend fails to expose `market_regime_policy` and frontend still displays the candidate label.
+
+- [ ] **Step 3: Implement stable platform metadata**
+
+Add `market_regime_policy` to `_metrics_from_eod_summary`. Replace user-facing `LHB V1 Safe Top5` strings with `LHB V1 Stable Safe Top5`. Do not change Mid Trend labels.
+
+- [ ] **Step 4: Verify platform tests and build**
+
+```bash
+rtk /Users/xiwei/stock_research/.venv/bin/pytest tests/test_dashboard_backtests.py tests/test_dashboard_review_queue.py -q
+rtk npm --prefix dashboard test -- --run tests/home-cockpit.test.tsx tests/review-queue-workspace.test.tsx
+rtk npm --prefix dashboard run build
+```
+
+Expected: all tests and the production build pass.
+
+- [ ] **Step 5: Commit platform labels**
+
+```bash
+rtk git add src/stock_research/dashboard/backtests.py tests/test_dashboard_backtests.py dashboard/src/components/HomeCockpit.tsx dashboard/tests/home-cockpit.test.tsx
+rtk git commit -m "fix: label LHB Phase18C account as stable"
+```
+
+### Task 8: Verify And Replay The Frozen Stable Strategy
+
+**Files:**
+- Runtime artifacts only: `/tmp/lhb_v1_stable_safe_top5_20260715`
+- Do not refresh production outputs until replay review.
+
+- [ ] **Step 1: Run the complete affected test suite**
+
+```bash
+rtk /Users/xiwei/stock_research/.venv/bin/pytest tests/test_lhb_eligibility.py tests/test_lhb_review_policy.py tests/test_lhb_data.py tests/test_lhb_shortline_v1.py tests/test_strategy_eod_publish.py tests/test_strategy_score_audit.py tests/test_dashboard_backtests.py tests/test_dashboard_review_queue.py -q
+```
+
+Expected: zero failures.
+
+- [ ] **Step 2: Run the same-database stable replay**
+
+Run `run_lhb_shortline_v1_backtest_for_dashboard` for 2026-01-01 through 2026-07-15 with Top5, 10 bps costs, 20% position weight, and output directory `/tmp/lhb_v1_stable_safe_top5_20260715`.
+
+Expected stable summary:
+
+```python
+assert summary["strategy_version"] == "lhb_v1_stable_safe_top5"
+assert summary["market_regime_policy"] == "disabled_for_stable_strategy"
+assert summary["total_return"] == pytest.approx(0.918648063982811, abs=1e-10)
+assert summary["max_drawdown"] == pytest.approx(-0.042355025316131334, abs=1e-10)
+assert summary["filled_trade_count"] == 186
+assert summary["cash_slot_count"] == 45
+```
+
+- [ ] **Step 3: Audit frozen safety invariants**
+
+Verify final Phase18C ranks are at most five, account ineligible rows are zero, research-only rows are absent from account trades, ST warnings remain present, and eligibility parity mismatches are zero.
+
+- [ ] **Step 4: Run final repository checks**
+
+```bash
+rtk git diff --check
+rtk git status --short
+```
+
+Expected: clean worktree and no whitespace errors. Production refresh remains a separate controlled step.
