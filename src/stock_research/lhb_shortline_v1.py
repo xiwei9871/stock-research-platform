@@ -1820,13 +1820,21 @@ def _build_lhb_review_candidates(
             scored["selection_rank"] = scored.groupby("trade_date", dropna=False).cumcount() + 1
         else:
             scored["selection_rank"] = range(1, len(scored) + 1)
-    original_rank = pd.to_numeric(scored["selection_rank"], errors="coerce")
+    rank_column = "phase18c_selection_rank" if "phase18c_selection_rank" in scored.columns else "selection_rank"
+    final_rank = pd.to_numeric(scored[rank_column], errors="coerce")
     if "backtest_entry_eligible" in scored.columns:
         eligible = scored["backtest_entry_eligible"].fillna(False).astype(bool)
     else:
         eligible = scored.get("eligibility_status", pd.Series("eligible", index=scored.index)).eq("eligible")
-    review = scored[eligible & original_rank.le(int(top_n))].copy()
-    review = review.sort_values(["trade_date", "selection_rank", "ts_code"], kind="stable")
+    if "buy_signal_status" in scored.columns:
+        eligible &= scored["buy_signal_status"].eq("tradable")
+    review = scored[eligible & final_rank.le(int(top_n))].copy()
+    if rank_column == "phase18c_selection_rank":
+        review["pool_selection_rank"] = pd.to_numeric(review["selection_rank"], errors="coerce")
+        review["selection_rank"] = pd.to_numeric(
+            review["phase18c_selection_rank"], errors="coerce"
+        )
+    review = review.sort_values(["trade_date", rank_column, "ts_code"], kind="stable")
     if "ts_code" in review.columns:
         review["asset_id"] = review["ts_code"]
     return review.reset_index(drop=True)
@@ -2127,7 +2135,7 @@ def run_lhb_shortline_v1_lifecycle_from_frames(
     parity_audit.to_csv(parity_path, index=False)
     paths["pipeline_eligibility_parity_audit"] = str(parity_path)
     review_candidates = _build_lhb_review_candidates(
-        scored_candidates=review_scored,
+        scored_candidates=selected_trades,
         risk_watch_candidates=pool["rejected_events"],
         top_n=config.top_n,
     )

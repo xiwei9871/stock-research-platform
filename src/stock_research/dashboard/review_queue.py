@@ -329,6 +329,7 @@ def _read_manifest_strategy_artifact(
                 "eligibility_status": _optional_text(row.get("eligibility_status")),
                 "top5_eligible": _optional_bool(row.get("top5_eligible")),
                 "backtest_entry_eligible": _optional_bool(row.get("backtest_entry_eligible")),
+                "buy_signal_status": _optional_text(row.get("buy_signal_status")),
                 "eligibility_reason_codes": _optional_json_list(row.get("eligibility_reason_codes")),
                 "eligibility_warning_codes": _optional_json_list(row.get("eligibility_warning_codes")),
                 "eligibility_contract_version": _optional_text(row.get("eligibility_contract_version")),
@@ -909,6 +910,15 @@ def _strategy_lightweight_digest(row: dict[str, Any], asset_id: str, trade_date:
                 "severity": "warning",
             }
         )
+    eligibility_warning_codes = _optional_json_list(row.get("eligibility_warning_codes"))
+    if "st_high_risk" in eligibility_warning_codes:
+        risk_flags.append(
+            {
+                "code": "st_high_risk",
+                "message": "ST高风险",
+                "severity": "warning",
+            }
+        )
     digest_warnings = [str(warning) for warning in (row.get("warnings") or []) if str(warning)]
     if not digest_warnings:
         digest_warnings.append("策略列表页为轻量复盘，完整新闻/研报证据请打开个股工作台")
@@ -1029,6 +1039,7 @@ def _queue_item(
         "eligibility_status": _optional_text(row.get("eligibility_status")),
         "top5_eligible": _optional_bool(row.get("top5_eligible")),
         "backtest_entry_eligible": _optional_bool(row.get("backtest_entry_eligible")),
+        "buy_signal_status": _optional_text(row.get("buy_signal_status")),
         "eligibility_reason_codes": _optional_json_list(row.get("eligibility_reason_codes")),
         "eligibility_warning_codes": _optional_json_list(row.get("eligibility_warning_codes")),
         "eligibility_contract_version": _optional_text(row.get("eligibility_contract_version")),

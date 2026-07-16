@@ -786,6 +786,7 @@ def _review_rows_from_result(
         "eligibility_status",
         "top5_eligible",
         "backtest_entry_eligible",
+        "buy_signal_status",
         "eligibility_reason_codes",
         "eligibility_reason_texts",
         "eligibility_warning_codes",
@@ -960,6 +961,7 @@ def _review_rows_from_result(
                 "eligibility_status": row.get("eligibility_status"),
                 "top5_eligible": row.get("top5_eligible"),
                 "backtest_entry_eligible": row.get("backtest_entry_eligible"),
+                "buy_signal_status": row.get("buy_signal_status"),
                 "eligibility_reason_codes": row.get("eligibility_reason_codes"),
                 "eligibility_reason_texts": row.get("eligibility_reason_texts"),
                 "eligibility_warning_codes": row.get("eligibility_warning_codes"),
@@ -980,7 +982,8 @@ def _review_rows_from_result(
         original_rank = pd.to_numeric(review["rank"], errors="coerce")
         eligible = review["eligibility_status"].eq("eligible")
         entry_eligible = review["backtest_entry_eligible"].fillna(False).astype(bool)
-        review = review[eligible & entry_eligible & original_rank.le(5)].copy()
+        tradable = review["buy_signal_status"].eq("tradable")
+        review = review[eligible & entry_eligible & tradable & original_rank.le(5)].copy()
         review["review_tier"] = "top5_focus"
         review = review.sort_values(["rank", "asset_id"], kind="stable")
         return review.reset_index(drop=True).reindex(columns=columns)
