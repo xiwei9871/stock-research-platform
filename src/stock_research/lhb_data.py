@@ -2229,7 +2229,9 @@ def build_lhb_full_market_pool_backtest_v1(
     )
     rejected = evaluated[~evaluated["backtest_entry_eligible"].fillna(False)].copy()
     candidates = evaluated[evaluated["backtest_entry_eligible"].fillna(False)].copy()
-    selected = _build_lhb_full_market_pool_selected(candidates, top_n_values=top_n_values)
+    ranked_topn = _build_lhb_full_market_pool_selected(evaluated, top_n_values=top_n_values)
+    selected_rejected = ranked_topn[~ranked_topn["backtest_entry_eligible"].fillna(False)].copy()
+    selected = ranked_topn[ranked_topn["backtest_entry_eligible"].fillna(False)].copy()
     daily_curve = _build_lhb_shortline_shadow_backtest_daily_curve(selected)
     summary = _build_lhb_shortline_shadow_backtest_summary(
         selected=selected,
@@ -2256,6 +2258,7 @@ def build_lhb_full_market_pool_backtest_v1(
     paths = {
         "summary": str(out / f"lhb_full_market_pool_summary_{safe_start}_{safe_end}_v1.csv"),
         "selected_trades": str(out / f"lhb_full_market_pool_selected_trades_{safe_start}_{safe_end}_v1.csv"),
+        "selected_rejected_events": str(out / "lhb_full_market_pool_selected_rejected_events_v1.csv"),
         "eligible_candidates": str(out / "lhb_full_market_pool_eligible_candidates_v2.csv"),
         "daily_curve": str(out / f"lhb_full_market_pool_daily_curve_{safe_start}_{safe_end}_v1.csv"),
         "rejected_events": str(out / "lhb_full_market_pool_rejected_events_v2.csv"),
@@ -2263,6 +2266,7 @@ def build_lhb_full_market_pool_backtest_v1(
     }
     summary.to_csv(paths["summary"], index=False)
     selected.to_csv(paths["selected_trades"], index=False)
+    selected_rejected.to_csv(paths["selected_rejected_events"], index=False)
     candidates.to_csv(paths["eligible_candidates"], index=False)
     daily_curve.to_csv(paths["daily_curve"], index=False)
     rejected.to_csv(paths["rejected_events"], index=False)
@@ -2270,6 +2274,7 @@ def build_lhb_full_market_pool_backtest_v1(
     return {
         "summary": summary,
         "selected_trades": selected,
+        "selected_rejected_events": selected_rejected,
         "eligible_candidates": candidates,
         "daily_curve": daily_curve,
         "rejected_events": rejected,
