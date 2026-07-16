@@ -217,6 +217,73 @@ D3_CATALOG_LINKS = {
     },
 }
 
+D4_CHAIN_ID = "satellite_manufacturing_space_infrastructure"
+D4_THEME_ID = "satellite_manufacturing_space_infrastructure_value_chain_v1"
+D4_THEME_PATH = REPOSITORY_ROOT / f"artifacts/theme_decomposition/{D4_THEME_ID}.json"
+D4_MAPPING_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/company_mappings"
+    / "satellite_manufacturing_space_infrastructure_company_mapping_v1.json"
+)
+D4_SOURCE_PACK_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "satellite_manufacturing_space_infrastructure_source_pack_v1.json"
+)
+D4_MATRIX_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "satellite_manufacturing_space_infrastructure_node_evidence_matrix_v1.json"
+)
+
+D4_NODE_IDS = {
+    "satellite_platform_bus_final_assembly",
+    "communication_navigation_remote_sensing_payloads",
+    "onboard_avionics_tt_c_data_handling",
+    "satellite_power_thermal_attitude_propulsion",
+    "spaceborne_rf_microwave_components_integration",
+    "satellite_ground_station_gateway_terminals",
+    "satellite_batch_manufacturing_ait_test",
+    "constellation_delivery_launch_in_orbit_validation",
+    "in_orbit_operations_service_revenue_validation",
+}
+
+D4_CATALOG_LINKS = {
+    "satellite_platform_bus_final_assembly": {
+        "satellite_platform_bus_integration",
+        "satellite_final_assembly_ait",
+    },
+    "communication_navigation_remote_sensing_payloads": {
+        "satellite_payload_hardware_integration",
+        "communication_navigation_remote_sensing_payload_hardware",
+    },
+    "onboard_avionics_tt_c_data_handling": {
+        "onboard_avionics_tt_c_data_handling",
+    },
+    "satellite_power_thermal_attitude_propulsion": {
+        "satellite_power_thermal_attitude_orbit_control",
+    },
+    "spaceborne_rf_microwave_components_integration": {
+        "spaceborne_rf_microwave_component_integration",
+    },
+    "satellite_ground_station_gateway_terminals": {
+        "ground_space_link_infrastructure",
+        "satellite_ground_tt_c_gateway_terminal_integration",
+    },
+    "satellite_batch_manufacturing_ait_test": {
+        "batch_satellite_manufacturing",
+        "satellite_ait_environmental_qualification",
+    },
+    "constellation_delivery_launch_in_orbit_validation": {
+        "constellation_deployment_validation",
+        "satellite_delivery_launch_in_orbit_boundary",
+    },
+    "in_orbit_operations_service_revenue_validation": {
+        "in_orbit_infrastructure_operations",
+        "satellite_service_capacity_revenue_validation",
+    },
+}
+
 
 def _read_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
@@ -590,3 +657,150 @@ def test_d3_readable_detail_separates_orders_delivery_acceptance_and_revenue():
     )
     assert rifa_company["beneficiary_tier"] == "core_beneficiary"
     assert "审计保留意见" in rifa_company["relationship_summary"]
+
+
+def test_d4_four_artifacts_exist_before_validation():
+    for path in (
+        D4_THEME_PATH,
+        D4_MAPPING_PATH,
+        D4_SOURCE_PACK_PATH,
+        D4_MATRIX_PATH,
+    ):
+        assert path.is_file(), path
+
+
+def test_d4_theme_meets_wave_d_gate_and_exact_node_scope():
+    theme = _read_json(D4_THEME_PATH)
+    mapping = _read_json(D4_MAPPING_PATH)
+    validate_theme_decomposition_artifact(theme, expected_theme_id=D4_THEME_ID)
+    validate_theme_company_mapping_artifact(mapping, theme)
+    report = VERIFIER.build_theme_batch_report(MANIFEST_PATH, wave="wave_d")
+    row = next(item for item in report["theme_results"] if item["chain_id"] == D4_CHAIN_ID)
+
+    assert {node["node_id"] for node in theme["nodes"]} == D4_NODE_IDS
+    assert len(theme["sources"]) >= 10
+    assert len(theme["claims"]) >= 12
+    assert len(
+        [item for item in mapping["company_mappings"] if item["review_status"] == "reviewed"]
+    ) >= 8
+    assert row["ready"] is True
+    assert row["checks"]["bidirectional_evidence_contract"] is True
+    assert row["checks"]["precise_mapping_locators"] is True
+
+
+def test_d4_catalog_projection_preserves_launch_chip_and_network_ownership():
+    catalog = load_industry_catalog()
+    link = next(row for row in catalog["theme_links"] if row["theme_id"] == D4_THEME_ID)
+    actual: dict[str, set[str]] = {}
+    for row in link["node_links"]:
+        actual.setdefault(row["theme_node_id"], set()).add(row["catalog_node_id"])
+
+    assert actual == D4_CATALOG_LINKS
+    assert link["unmapped_theme_node_ids"] == []
+    chain_nodes = {
+        row["node_id"]
+        for row in catalog["nodes"]
+        if row["chain_id"] == D4_CHAIN_ID
+    }
+    assert chain_nodes == set().union(*D4_CATALOG_LINKS.values())
+
+    descriptions = {
+        row["node_id"]: row["description"].lower()
+        for row in catalog["nodes"]
+        if row["chain_id"] == D4_CHAIN_ID
+    }
+    assert "commercial_space_launch ownership remains" in descriptions[
+        "satellite_delivery_launch_in_orbit_boundary"
+    ]
+    assert "generic semiconductor ownership remains" in descriptions[
+        "spaceborne_rf_microwave_component_integration"
+    ]
+    assert "terrestrial network equipment ownership remains" in descriptions[
+        "satellite_ground_tt_c_gateway_terminal_integration"
+    ]
+
+
+def test_d4_company_evidence_is_precise_and_does_not_claim_launch_revenue():
+    theme = _read_json(D4_THEME_PATH)
+    mapping = _read_json(D4_MAPPING_PATH)
+    source_pack = _read_json(D4_SOURCE_PACK_PATH)
+
+    source_ids = {row["source_id"] for row in theme["sources"]}
+    assert source_ids == {row["source_id"] for row in mapping["sources"]}
+    assert source_ids == {row["source_id"] for row in source_pack["sources"]}
+    assert {
+        row["mapped_node_id"] for row in mapping["company_mappings"]
+    } <= D4_NODE_IDS - {"constellation_delivery_launch_in_orbit_validation"}
+
+    evidence_by_id = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+    for row in mapping["company_mappings"]:
+        evidence = [evidence_by_id[evidence_id] for evidence_id in row["evidence_ids"]]
+        assert len(evidence) == 3
+        assert {item["evidence_type"] for item in evidence} in (
+            {"product_relationship", "revenue_materiality", "business_stage"},
+            {"service_relationship", "revenue_materiality", "business_stage"},
+        )
+        assert len({item["excerpt_locator"] for item in evidence}) == 3
+        assert all("页" in item["excerpt_locator"] for item in evidence)
+
+    all_text = json.dumps(
+        {"theme": theme, "mapping": mapping, "source_pack": source_pack},
+        ensure_ascii=False,
+    )
+    assert "运载火箭及发射服务归`commercial_space_launch`" in all_text
+
+    claim_by_id = {row["claim_id"]: row for row in theme["claims"]}
+    assert "sat_002465_filing" not in claim_by_id["satellite_claim_05"][
+        "supporting_source_ids"
+    ]
+    source_by_id = {row["source_id"]: row for row in source_pack["sources"]}
+    assert "spaceborne_rf_microwave_components_integration" not in source_by_id[
+        "sat_002465_filing"
+    ]["supported_node_ids"]
+    assert claim_by_id["satellite_claim_07"]["supporting_source_ids"] == []
+    batch_node = next(
+        row
+        for row in theme["nodes"]
+        if row["node_id"] == "satellite_batch_manufacturing_ait_test"
+    )
+    assert batch_node["related_stock_codes"] == ["600118.SH"]
+
+
+def test_d4_readable_detail_separates_plans_delivery_launch_and_service_revenue():
+    detail = get_theme_research_theme(D4_THEME_ID)
+    assert "星座规划" in detail["research_profile"]["central_conflict"]
+    assert "已交付卫星" in detail["research_profile"]["central_conflict"]
+    assert "已发射" in detail["research_profile"]["central_conflict"]
+    assert "在轨服务收入" in detail["research_profile"]["central_conflict"]
+
+    boundary_claim = next(
+        row
+        for row in list_theme_research_claims(D4_THEME_ID)["items"]
+        if row["claim_id"] == "satellite_claim_09"
+    )
+    assert "星座规划、框架协议、合同负债、已交付、已发射、在轨运营" in boundary_claim[
+        "claim_text"
+    ]
+    assert "不得互相替代" in boundary_claim["claim_text"]
+
+    companies = list_theme_research_companies(D4_THEME_ID)["items"]
+    by_company = {row["company_code"]: row for row in companies}
+    assert {
+        company_code: row["beneficiary_tier"]
+        for company_code, row in by_company.items()
+    } == {
+        "600118.SH": "elastic_beneficiary",
+        "600879.SH": "elastic_beneficiary",
+        "601698.SH": "core_beneficiary",
+        "001270.SZ": "elastic_beneficiary",
+        "688270.SH": "elastic_beneficiary",
+        "300342.SZ": "elastic_beneficiary",
+        "688311.SH": "elastic_beneficiary",
+        "300762.SZ": "elastic_beneficiary",
+        "002465.SZ": "elastic_beneficiary",
+    }
+    assert "688066.SH" not in by_company
+
+    satcom = by_company["601698.SH"]
+    assert satcom["mapped_node_id"] == "in_orbit_operations_service_revenue_validation"
+    assert "卫星运营服务收入" in satcom["relationship_summary"]

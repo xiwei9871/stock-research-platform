@@ -42,6 +42,9 @@ CLOUD_DATA_CENTER_THEME_ID = "cloud_data_center_infrastructure_value_chain_v1"
 SEMICONDUCTOR_EDA_IP_THEME_ID = "semiconductor_eda_ip_design_services_value_chain_v1"
 MEMORY_STORAGE_THEME_ID = "memory_chips_storage_control_value_chain_v1"
 INDUSTRIAL_MACHINE_TOOLS_THEME_ID = "industrial_machine_tools_cnc_value_chain_v1"
+SATELLITE_INFRASTRUCTURE_THEME_ID = (
+    "satellite_manufacturing_space_infrastructure_value_chain_v1"
+)
 
 
 def test_theme_index_aggregates_validated_phase_outputs():
@@ -71,6 +74,7 @@ def test_theme_index_aggregates_validated_phase_outputs():
         SEMICONDUCTOR_EDA_IP_THEME_ID,
         MEMORY_STORAGE_THEME_ID,
         INDUSTRIAL_MACHINE_TOOLS_THEME_ID,
+        SATELLITE_INFRASTRUCTURE_THEME_ID,
     }
     assert payload["total"] == len(expected_theme_ids)
     assert {row["theme_id"] for row in payload["items"]} == expected_theme_ids

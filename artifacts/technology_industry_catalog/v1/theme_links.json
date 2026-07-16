@@ -754,6 +754,29 @@
       ],
       "unmapped_theme_node_ids":["orders_delivery_acceptance_revenue_validation"],
       "notes":"主题研究聚合机床专用控制、结构与部件集成、整机和生命周期服务。通用伺服、编码器、丝杠、导轨、轴承和材料的canonical所有权仍留在工业自动化、传感器、核心机械基础件和材料链；本链只拥有面向机床精度与工艺的系统集成角色。订单、发货、验收和收入属于跨节点商业验证，不建立canonical所有权。"
+    },
+    {
+      "theme_id":"satellite_manufacturing_space_infrastructure_value_chain_v1",
+      "chain_id":"satellite_manufacturing_space_infrastructure",
+      "node_links":[
+        {"theme_node_id":"satellite_platform_bus_final_assembly","catalog_node_id":"satellite_platform_bus_integration"},
+        {"theme_node_id":"satellite_platform_bus_final_assembly","catalog_node_id":"satellite_final_assembly_ait"},
+        {"theme_node_id":"communication_navigation_remote_sensing_payloads","catalog_node_id":"satellite_payload_hardware_integration"},
+        {"theme_node_id":"communication_navigation_remote_sensing_payloads","catalog_node_id":"communication_navigation_remote_sensing_payload_hardware"},
+        {"theme_node_id":"onboard_avionics_tt_c_data_handling","catalog_node_id":"onboard_avionics_tt_c_data_handling"},
+        {"theme_node_id":"satellite_power_thermal_attitude_propulsion","catalog_node_id":"satellite_power_thermal_attitude_orbit_control"},
+        {"theme_node_id":"spaceborne_rf_microwave_components_integration","catalog_node_id":"spaceborne_rf_microwave_component_integration"},
+        {"theme_node_id":"satellite_ground_station_gateway_terminals","catalog_node_id":"ground_space_link_infrastructure"},
+        {"theme_node_id":"satellite_ground_station_gateway_terminals","catalog_node_id":"satellite_ground_tt_c_gateway_terminal_integration"},
+        {"theme_node_id":"satellite_batch_manufacturing_ait_test","catalog_node_id":"batch_satellite_manufacturing"},
+        {"theme_node_id":"satellite_batch_manufacturing_ait_test","catalog_node_id":"satellite_ait_environmental_qualification"},
+        {"theme_node_id":"constellation_delivery_launch_in_orbit_validation","catalog_node_id":"constellation_deployment_validation"},
+        {"theme_node_id":"constellation_delivery_launch_in_orbit_validation","catalog_node_id":"satellite_delivery_launch_in_orbit_boundary"},
+        {"theme_node_id":"in_orbit_operations_service_revenue_validation","catalog_node_id":"in_orbit_infrastructure_operations"},
+        {"theme_node_id":"in_orbit_operations_service_revenue_validation","catalog_node_id":"satellite_service_capacity_revenue_validation"}
+      ],
+      "unmapped_theme_node_ids":[],
+      "notes":"主题研究拥有卫星平台、载荷硬件、星上系统、卫星专用地面链路、批量制造和在轨基础设施运营。运载火箭、发射场和发射服务仍归`commercial_space_launch`；通用半导体与地面网络设备只表达卫星场景集成，不重复canonical所有权；星座规划、合同、交付、发射、在轨验收和服务收入必须分阶段验证。"
     }
   ]
 }
