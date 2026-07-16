@@ -702,6 +702,36 @@
         "customer_adoption_revenue_validation"
       ],
       "notes": "主题研究节点按投资阅读逻辑聚合；前端EDA、后端实现签核、IP、设计服务和设计使能节点分别映射到完整L3/L4目录族。许可订阅与版税模式、客户采用与收入验证属于跨节点商业判断，不建立canonical所有权。晶圆制造能力仍归 wafer_manufacturing_specialty_processes。"
+    },
+    {
+      "theme_id": "memory_chips_storage_control_value_chain_v1",
+      "chain_id": "memory_chips_storage_control",
+      "node_links": [
+        {"theme_node_id":"dram_nand_memory_die_products","catalog_node_id":"memory_die_devices"},
+        {"theme_node_id":"dram_nand_memory_die_products","catalog_node_id":"dram_memory_devices"},
+        {"theme_node_id":"dram_nand_memory_die_products","catalog_node_id":"nand_flash_devices"},
+        {"theme_node_id":"high_bandwidth_memory_advanced_memory","catalog_node_id":"advanced_memory_hbm"},
+        {"theme_node_id":"specialty_nor_slc_nand_memory","catalog_node_id":"specialty_nor_slc_memory"},
+        {"theme_node_id":"memory_controller_ssd_control_soc","catalog_node_id":"storage_controller_soc"},
+        {"theme_node_id":"memory_controller_ssd_control_soc","catalog_node_id":"nand_flash_controller"},
+        {"theme_node_id":"memory_controller_ssd_control_soc","catalog_node_id":"enterprise_ssd_controller"},
+        {"theme_node_id":"enterprise_ssd_storage_systems","catalog_node_id":"enterprise_ssd_products"},
+        {"theme_node_id":"enterprise_ssd_storage_systems","catalog_node_id":"enterprise_storage_systems"},
+        {"theme_node_id":"enterprise_ssd_storage_systems","catalog_node_id":"all_flash_storage_array"},
+        {"theme_node_id":"enterprise_ssd_storage_systems","catalog_node_id":"distributed_storage_system"},
+        {"theme_node_id":"memory_module_packaging_integration","catalog_node_id":"memory_modules_ssd_products"},
+        {"theme_node_id":"memory_module_packaging_integration","catalog_node_id":"memory_module_integration"},
+        {"theme_node_id":"memory_module_packaging_integration","catalog_node_id":"embedded_storage_ufs_emmc"},
+        {"theme_node_id":"memory_module_packaging_integration","catalog_node_id":"client_industrial_ssd"},
+        {"theme_node_id":"storage_firmware_interface_ecosystem","catalog_node_id":"storage_firmware_controller_ecosystem"},
+        {"theme_node_id":"storage_firmware_interface_ecosystem","catalog_node_id":"memory_interface_interconnect_chips"},
+        {"theme_node_id":"storage_firmware_interface_ecosystem","catalog_node_id":"memory_buffer_clock_driver_chips"}
+      ],
+      "unmapped_theme_node_ids": [
+        "capacity_cycle_pricing_inventory",
+        "customer_qualification_revenue_validation"
+      ],
+      "notes": "主题研究按存储晶圆、控制器、模组/SSD、企业存储和商业验证聚合。价格周期、库存和客户收入验证是跨节点研究判断，不建立 canonical 所有权。HBM 仅映射技术节点，不代表任何公司自动获得受益映射。"
     }
   ]
 }

@@ -90,6 +90,69 @@ D1_CATALOG_LINKS = {
     },
 }
 
+D2_CHAIN_ID = "memory_chips_storage_control"
+D2_THEME_ID = "memory_chips_storage_control_value_chain_v1"
+D2_THEME_PATH = REPOSITORY_ROOT / f"artifacts/theme_decomposition/{D2_THEME_ID}.json"
+D2_MAPPING_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/company_mappings"
+    / "memory_chips_storage_control_company_mapping_v1.json"
+)
+D2_SOURCE_PACK_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "memory_chips_storage_control_source_pack_v1.json"
+)
+D2_MATRIX_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "memory_chips_storage_control_node_evidence_matrix_v1.json"
+)
+
+D2_NODE_IDS = {
+    "dram_nand_memory_die_products",
+    "high_bandwidth_memory_advanced_memory",
+    "specialty_nor_slc_nand_memory",
+    "memory_controller_ssd_control_soc",
+    "enterprise_ssd_storage_systems",
+    "memory_module_packaging_integration",
+    "storage_firmware_interface_ecosystem",
+    "capacity_cycle_pricing_inventory",
+    "customer_qualification_revenue_validation",
+}
+
+D2_CATALOG_LINKS = {
+    "dram_nand_memory_die_products": {
+        "memory_die_devices",
+        "dram_memory_devices",
+        "nand_flash_devices",
+    },
+    "high_bandwidth_memory_advanced_memory": {"advanced_memory_hbm"},
+    "specialty_nor_slc_nand_memory": {"specialty_nor_slc_memory"},
+    "memory_controller_ssd_control_soc": {
+        "storage_controller_soc",
+        "nand_flash_controller",
+        "enterprise_ssd_controller",
+    },
+    "enterprise_ssd_storage_systems": {
+        "enterprise_ssd_products",
+        "enterprise_storage_systems",
+        "all_flash_storage_array",
+        "distributed_storage_system",
+    },
+    "memory_module_packaging_integration": {
+        "memory_modules_ssd_products",
+        "memory_module_integration",
+        "embedded_storage_ufs_emmc",
+        "client_industrial_ssd",
+    },
+    "storage_firmware_interface_ecosystem": {
+        "storage_firmware_controller_ecosystem",
+        "memory_interface_interconnect_chips",
+        "memory_buffer_clock_driver_chips",
+    },
+}
+
 
 def _read_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
@@ -208,4 +271,137 @@ def test_d1_chiplet_claim_only_uses_sources_with_precise_declared_pages():
     assert {claim["source_id"], *claim["supporting_source_ids"]} == {
         "eda_ip_301269_filing",
         "eda_ip_688521_filing",
+    }
+
+
+def test_d2_four_artifacts_exist_before_validation():
+    for path in (
+        D2_THEME_PATH,
+        D2_MAPPING_PATH,
+        D2_SOURCE_PACK_PATH,
+        D2_MATRIX_PATH,
+    ):
+        assert path.is_file(), path
+
+
+def test_d2_theme_meets_wave_d_gate_and_exact_node_scope():
+    theme = _read_json(D2_THEME_PATH)
+    mapping = _read_json(D2_MAPPING_PATH)
+    validate_theme_decomposition_artifact(theme, expected_theme_id=D2_THEME_ID)
+    validate_theme_company_mapping_artifact(mapping, theme)
+    report = VERIFIER.build_theme_batch_report(MANIFEST_PATH, wave="wave_d")
+    row = next(item for item in report["theme_results"] if item["chain_id"] == D2_CHAIN_ID)
+
+    assert {node["node_id"] for node in theme["nodes"]} == D2_NODE_IDS
+    assert len(theme["sources"]) >= 10
+    assert len(theme["claims"]) >= 12
+    assert len(
+        [item for item in mapping["company_mappings"] if item["review_status"] == "reviewed"]
+    ) >= 8
+    assert row["ready"] is True
+    assert row["checks"]["bidirectional_evidence_contract"] is True
+    assert row["checks"]["precise_mapping_locators"] is True
+
+
+def test_d2_catalog_projection_preserves_approved_one_to_many_links():
+    catalog = load_industry_catalog()
+    link = next(row for row in catalog["theme_links"] if row["theme_id"] == D2_THEME_ID)
+    actual: dict[str, set[str]] = {}
+    for row in link["node_links"]:
+        actual.setdefault(row["theme_node_id"], set()).add(row["catalog_node_id"])
+
+    assert actual == D2_CATALOG_LINKS
+    assert set(link["unmapped_theme_node_ids"]) == {
+        "capacity_cycle_pricing_inventory",
+        "customer_qualification_revenue_validation",
+    }
+
+    chain_nodes = {
+        row["node_id"]
+        for row in catalog["nodes"]
+        if row["chain_id"] == D2_CHAIN_ID
+    }
+    assert chain_nodes == set().union(*D2_CATALOG_LINKS.values())
+
+
+def test_d2_company_evidence_is_precise_and_never_maps_hbm_without_direct_proof():
+    theme = _read_json(D2_THEME_PATH)
+    mapping = _read_json(D2_MAPPING_PATH)
+    source_pack = _read_json(D2_SOURCE_PACK_PATH)
+    matrix = _read_json(D2_MATRIX_PATH)
+
+    source_ids = {row["source_id"] for row in theme["sources"]}
+    assert source_ids == {row["source_id"] for row in mapping["sources"]}
+    assert source_ids == {row["source_id"] for row in source_pack["sources"]}
+    assert all(
+        row["mapped_node_id"] != "high_bandwidth_memory_advanced_memory"
+        for row in mapping["company_mappings"]
+    )
+
+    hbm_node = next(
+        row for row in theme["nodes"]
+        if row["node_id"] == "high_bandwidth_memory_advanced_memory"
+    )
+    hbm_matrix = next(
+        row for row in matrix["node_evidence_matrix"]
+        if row["node_id"] == "high_bandwidth_memory_advanced_memory"
+    )
+    assert (hbm_node["node_review_status"], hbm_node["evidence_strength"]) == (
+        "draft",
+        2,
+    )
+    assert (
+        hbm_matrix["node_review_status"],
+        hbm_matrix["evidence_strength_after"],
+        hbm_matrix["evidence_gap_status"],
+    ) == ("draft", 2, "technical_route_only")
+    hbm_claim = next(
+        row for row in theme["claims"] if row["claim_id"] == "memory_claim_07"
+    )
+    assert {hbm_claim["source_id"], *hbm_claim["supporting_source_ids"]} == {
+        "memory_603986_filing",
+        "memory_300223_filing",
+        "memory_688110_filing",
+        "memory_688008_filing",
+    }
+    assert set(hbm_matrix["accepted_source_ids"]) == {
+        "memory_603986_filing",
+        "memory_300223_filing",
+        "memory_688110_filing",
+        "memory_688008_filing",
+    }
+
+    evidence_by_id = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+    for row in mapping["company_mappings"]:
+        evidence = [evidence_by_id[evidence_id] for evidence_id in row["evidence_ids"]]
+        assert len(evidence) == 3
+        assert {item["evidence_type"] for item in evidence} in (
+            {"product_relationship", "revenue_materiality", "business_stage"},
+            {"service_relationship", "revenue_materiality", "business_stage"},
+        )
+        assert len({item["excerpt_locator"] for item in evidence}) == 3
+
+
+def test_d2_readable_detail_keeps_controller_module_and_hbm_boundaries():
+    detail = get_theme_research_theme(D2_THEME_ID)
+    assert "HBM" in detail["research_profile"]["central_conflict"]
+    guardrail = next(
+        row["claim_text"]
+        for row in list_theme_research_claims(D2_THEME_ID)["items"]
+        if row["claim_id"] == "memory_claim_07"
+    )
+    assert "自产颗粒、直接客户认证或明确收入证据" in guardrail
+
+    companies = list_theme_research_companies(D2_THEME_ID)["items"]
+    assert {row["company_name"]: row["beneficiary_tier"] for row in companies} == {
+        "兆易创新": "core_beneficiary",
+        "北京君正": "core_beneficiary",
+        "东芯股份": "core_beneficiary",
+        "普冉股份": "core_beneficiary",
+        "澜起科技": "core_beneficiary",
+        "江波龙": "core_beneficiary",
+        "佰维存储": "core_beneficiary",
+        "德明利": "elastic_beneficiary",
+        "同有科技": "core_beneficiary",
+        "国科微": "elastic_beneficiary",
     }
