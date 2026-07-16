@@ -224,8 +224,8 @@ def test_build_lhb_review_candidates_keeps_only_eligible_original_top5_without_r
     assert review["eligibility_status"].eq("eligible").all()
 
 
-def test_lhb_lifecycle_selects_only_requested_top_n_before_safety_filtering():
-    assert lhb_shortline_v1._lhb_shortline_v1_top_values(5) == [5]
+def test_lhb_lifecycle_keeps_legacy_top10_research_pool_for_top5_account():
+    assert lhb_shortline_v1._lhb_shortline_v1_top_values(5) == [10]
 
 
 def test_minute_prefetch_uses_shared_pump_reject_threshold(monkeypatch):

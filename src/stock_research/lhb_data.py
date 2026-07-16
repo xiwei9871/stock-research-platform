@@ -2232,7 +2232,7 @@ def build_lhb_full_market_pool_backtest_v1(
     candidates = evaluated[evaluated["backtest_entry_eligible"].fillna(False)].copy()
     ranked_topn = _build_lhb_full_market_pool_selected(evaluated, top_n_values=top_n_values)
     selected_rejected = ranked_topn[~ranked_topn["backtest_entry_eligible"].fillna(False)].copy()
-    selected = ranked_topn[ranked_topn["backtest_entry_eligible"].fillna(False)].copy()
+    selected = ranked_topn.copy()
     daily_curve = _build_lhb_shortline_shadow_backtest_daily_curve(selected)
     summary = _build_lhb_shortline_shadow_backtest_summary(
         selected=selected,

@@ -1453,7 +1453,7 @@ def _records(frame: pd.DataFrame) -> list[dict[str, Any]]:
 
 
 def _lhb_shortline_v1_top_values(top_n: int) -> list[int]:
-    return [int(top_n)]
+    return [max(int(top_n), 10)]
 
 
 def _filter_lhb_shortline_v1_lifecycle_minute_window(
@@ -1857,10 +1857,8 @@ def run_lhb_shortline_v1_lifecycle_from_frames(
         pool_mode="raw_lhb_positive",
         output_dir=output_dir,
     )
-    selected = _filter_lhb_entry_eligible_contract_rows(
-        pool["selected_trades"],
-        stage="full_market_selected",
-    )
+    selected = pool["selected_trades"].copy()
+    _assert_lhb_contract_versions(selected, stage="full_market_selected")
     selected_rejected = pool["selected_rejected_events"].copy()
     contract_decisions = selected.copy()
     lifecycle_minute_bars = _filter_lhb_shortline_v1_lifecycle_minute_window(

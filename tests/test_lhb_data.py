@@ -1834,10 +1834,15 @@ def test_build_lhb_full_market_pool_backtest_v1_applies_shared_eligibility_befor
     selected = result["selected_trades"]
     eligible_candidates = result["eligible_candidates"]
     rejected = result["rejected_events"]
-    assert "000004.SZ" not in set(selected["ts_code"])
-    assert "001399.SZ" not in set(selected["ts_code"])
+    assert "000004.SZ" in set(selected["ts_code"])
+    assert "001399.SZ" in set(selected["ts_code"])
     assert "000080.SZ" in set(selected["ts_code"])
-    assert "000090.SZ" not in set(selected["ts_code"])
+    assert "000090.SZ" in set(selected["ts_code"])
+    assert set(selected["eligibility_status"]) == {"eligible", "risk_watch", "hard_reject"}
+    assert set(result["selected_rejected_events"]["eligibility_status"]) == {
+        "risk_watch",
+        "hard_reject",
+    }
     assert set(eligible_candidates["ts_code"]) == {"000001.SZ", "000080.SZ"}
     assert set(rejected["eligibility_status"]) == {"hard_reject", "risk_watch"}
     assert rejected["eligibility_reason_codes"].str.contains("delisting_period").any()
@@ -1920,7 +1925,8 @@ def test_build_lhb_full_market_pool_backtest_v1_filters_after_original_topn_with
 
     selected = result["selected_trades"]
     selected_rejected = result["selected_rejected_events"]
-    assert selected["selection_rank"].tolist() == [1, 3, 4, 5]
+    assert selected["selection_rank"].tolist() == [1, 2, 3, 4, 5]
+    assert selected.loc[selected["selection_rank"].eq(2), "backtest_entry_eligible"].tolist() == [False]
     assert "000006.SZ" not in set(selected["ts_code"])
     assert selected_rejected["selection_rank"].tolist() == [2]
     assert selected_rejected["ts_code"].tolist() == ["000002.SZ"]
