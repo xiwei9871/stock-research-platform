@@ -1654,6 +1654,7 @@ LHB_ELIGIBILITY_DECISION_COLUMNS = [
     "eligibility_status",
     "top5_eligible",
     "backtest_entry_eligible",
+    "buy_signal_status",
     "eligibility_reason_codes",
     "eligibility_reason_texts",
     "eligibility_warning_codes",
