@@ -257,6 +257,18 @@ def test_lhb_lifecycle_keeps_legacy_top10_research_pool_for_top5_account():
     assert lhb_shortline_v1._lhb_shortline_v1_top_values(5) == [10]
 
 
+def test_safe_top5_summary_metadata_uses_phase18c_cash_slots_and_policy_name():
+    metadata = lhb_shortline_v1._lhb_safe_top5_summary_metadata(
+        {"cash_slot_count": 45}
+    )
+
+    assert metadata == {
+        "strategy_version": "lhb_v1_safe_top5",
+        "selection_policy": "phase18c_top5_then_eligibility_no_refill",
+        "cash_slot_count": 45,
+    }
+
+
 def test_minute_prefetch_uses_shared_pump_reject_threshold(monkeypatch):
     monkeypatch.setattr(lhb_shortline_v1, "PUMP_REJECT_THRESHOLD", 0.80)
     features = pd.DataFrame(

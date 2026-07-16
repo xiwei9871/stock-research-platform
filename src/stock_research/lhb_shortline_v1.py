@@ -1456,6 +1456,14 @@ def _lhb_shortline_v1_top_values(top_n: int) -> list[int]:
     return [max(int(top_n), 10)]
 
 
+def _lhb_safe_top5_summary_metadata(phase18c_summary: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "strategy_version": "lhb_v1_safe_top5",
+        "selection_policy": "phase18c_top5_then_eligibility_no_refill",
+        "cash_slot_count": int(phase18c_summary.get("cash_slot_count") or 0),
+    }
+
+
 def _filter_lhb_shortline_v1_lifecycle_minute_window(
     *,
     selected: pd.DataFrame,
@@ -1867,7 +1875,6 @@ def run_lhb_shortline_v1_lifecycle_from_frames(
     )
     selected = pool["selected_trades"].copy()
     _assert_lhb_contract_versions(selected, stage="full_market_selected")
-    selected_rejected = pool["selected_rejected_events"].copy()
     contract_decisions = selected.copy()
     lifecycle_minute_bars = _filter_lhb_shortline_v1_lifecycle_minute_window(
         selected=selected,
@@ -2079,9 +2086,7 @@ def run_lhb_shortline_v1_lifecycle_from_frames(
         summary.update(
             {
                 "engine_version": config.engine_version,
-                "strategy_version": "lhb_v1_safe_top5",
-                "selection_policy": "original_topn_then_eligibility_no_refill",
-                "cash_slot_count": int(len(selected_rejected)),
+                **_lhb_safe_top5_summary_metadata(baseline_summary),
                 "fresh_engine_note": "LHB Shortline DB lifecycle recompute with selectable risk profile",
                 "phase18c_strategy": strategy,
                 "phase18c_top_n": config.top_n,
