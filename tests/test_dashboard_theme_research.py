@@ -45,6 +45,7 @@ INDUSTRIAL_MACHINE_TOOLS_THEME_ID = "industrial_machine_tools_cnc_value_chain_v1
 SATELLITE_INFRASTRUCTURE_THEME_ID = (
     "satellite_manufacturing_space_infrastructure_value_chain_v1"
 )
+HIGH_END_MEDICAL_DEVICES_THEME_ID = "high_end_medical_devices_value_chain_v1"
 
 
 def test_theme_index_aggregates_validated_phase_outputs():
@@ -75,6 +76,7 @@ def test_theme_index_aggregates_validated_phase_outputs():
         MEMORY_STORAGE_THEME_ID,
         INDUSTRIAL_MACHINE_TOOLS_THEME_ID,
         SATELLITE_INFRASTRUCTURE_THEME_ID,
+        HIGH_END_MEDICAL_DEVICES_THEME_ID,
     }
     assert payload["total"] == len(expected_theme_ids)
     assert {row["theme_id"] for row in payload["items"]} == expected_theme_ids

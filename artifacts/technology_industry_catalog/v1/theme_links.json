@@ -777,6 +777,28 @@
       ],
       "unmapped_theme_node_ids":[],
       "notes":"主题研究拥有卫星平台、载荷硬件、星上系统、卫星专用地面链路、批量制造和在轨基础设施运营。运载火箭、发射场和发射服务仍归`commercial_space_launch`；通用半导体与地面网络设备只表达卫星场景集成，不重复canonical所有权；星座规划、合同、交付、发射、在轨验收和服务收入必须分阶段验证。"
+    },
+    {
+      "theme_id":"high_end_medical_devices_value_chain_v1",
+      "chain_id":"high_end_medical_devices",
+      "node_links":[
+        {"theme_node_id":"multi_specialty_device_platform_integration","catalog_node_id":"advanced_clinical_device_platforms"},
+        {"theme_node_id":"multi_specialty_device_platform_integration","catalog_node_id":"multi_specialty_device_workflow_integration"},
+        {"theme_node_id":"surgical_robot_navigation_energy_systems","catalog_node_id":"surgical_interventional_therapeutic_systems"},
+        {"theme_node_id":"surgical_robot_navigation_energy_systems","catalog_node_id":"surgical_robot_navigation_energy_systems"},
+        {"theme_node_id":"interventional_implantable_device_systems","catalog_node_id":"interventional_implantable_device_systems"},
+        {"theme_node_id":"life_support_monitoring_anesthesia_platforms","catalog_node_id":"life_support_monitoring_anesthesia_platforms"},
+        {"theme_node_id":"medical_device_core_components_integration","catalog_node_id":"medical_device_core_component_integration"},
+        {"theme_node_id":"medical_device_core_components_integration","catalog_node_id":"medical_optics_energy_motion_component_integration"},
+        {"theme_node_id":"device_specific_consumables_accessories","catalog_node_id":"recurring_consumables_installed_base_services"},
+        {"theme_node_id":"device_specific_consumables_accessories","catalog_node_id":"device_specific_consumables_accessories"},
+        {"theme_node_id":"registration_tender_hospital_entry_validation","catalog_node_id":"regulation_market_access_commercial_validation"},
+        {"theme_node_id":"registration_tender_hospital_entry_validation","catalog_node_id":"registration_tender_hospital_entry_validation"},
+        {"theme_node_id":"installed_base_procedure_consumable_service_revenue_validation","catalog_node_id":"installed_base_maintenance_software_service"},
+        {"theme_node_id":"installed_base_procedure_consumable_service_revenue_validation","catalog_node_id":"installed_base_procedure_consumable_revenue_validation"}
+      ],
+      "unmapped_theme_node_ids":["medical_imaging_ultrasound_endoscopy_dependency"],
+      "notes":"主题研究聚合手术、介入、生命支持、设备专用耗材、核心部件集成、注册准入和存量服务。医学影像、超声和内镜设备仍归`medical_imaging_diagnostic_equipment`，体外诊断仍归`in_vitro_diagnostics`；本链只记录跨专科平台和非影像高端器械角色。注册、临床、集采、进院、装机、手术/检查量、耗材消耗、服务和收入必须分阶段验证。"
     }
   ]
 }

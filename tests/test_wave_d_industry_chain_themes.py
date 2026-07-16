@@ -284,6 +284,70 @@ D4_CATALOG_LINKS = {
     },
 }
 
+D5_CHAIN_ID = "high_end_medical_devices"
+D5_THEME_ID = "high_end_medical_devices_value_chain_v1"
+D5_THEME_PATH = REPOSITORY_ROOT / f"artifacts/theme_decomposition/{D5_THEME_ID}.json"
+D5_MAPPING_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/company_mappings"
+    / "high_end_medical_devices_company_mapping_v1.json"
+)
+D5_SOURCE_PACK_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "high_end_medical_devices_source_pack_v1.json"
+)
+D5_MATRIX_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "high_end_medical_devices_node_evidence_matrix_v1.json"
+)
+
+D5_NODE_IDS = {
+    "multi_specialty_device_platform_integration",
+    "surgical_robot_navigation_energy_systems",
+    "interventional_implantable_device_systems",
+    "life_support_monitoring_anesthesia_platforms",
+    "medical_imaging_ultrasound_endoscopy_dependency",
+    "medical_device_core_components_integration",
+    "device_specific_consumables_accessories",
+    "registration_tender_hospital_entry_validation",
+    "installed_base_procedure_consumable_service_revenue_validation",
+}
+
+D5_CATALOG_LINKS = {
+    "multi_specialty_device_platform_integration": {
+        "advanced_clinical_device_platforms",
+        "multi_specialty_device_workflow_integration",
+    },
+    "surgical_robot_navigation_energy_systems": {
+        "surgical_interventional_therapeutic_systems",
+        "surgical_robot_navigation_energy_systems",
+    },
+    "interventional_implantable_device_systems": {
+        "interventional_implantable_device_systems",
+    },
+    "life_support_monitoring_anesthesia_platforms": {
+        "life_support_monitoring_anesthesia_platforms",
+    },
+    "medical_device_core_components_integration": {
+        "medical_device_core_component_integration",
+        "medical_optics_energy_motion_component_integration",
+    },
+    "device_specific_consumables_accessories": {
+        "recurring_consumables_installed_base_services",
+        "device_specific_consumables_accessories",
+    },
+    "registration_tender_hospital_entry_validation": {
+        "regulation_market_access_commercial_validation",
+        "registration_tender_hospital_entry_validation",
+    },
+    "installed_base_procedure_consumable_service_revenue_validation": {
+        "installed_base_maintenance_software_service",
+        "installed_base_procedure_consumable_revenue_validation",
+    },
+}
+
 
 def _read_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
@@ -804,3 +868,165 @@ def test_d4_readable_detail_separates_plans_delivery_launch_and_service_revenue(
     satcom = by_company["601698.SH"]
     assert satcom["mapped_node_id"] == "in_orbit_operations_service_revenue_validation"
     assert "卫星运营服务收入" in satcom["relationship_summary"]
+
+
+def test_d5_four_artifacts_exist_before_validation():
+    for path in (
+        D5_THEME_PATH,
+        D5_MAPPING_PATH,
+        D5_SOURCE_PACK_PATH,
+        D5_MATRIX_PATH,
+    ):
+        assert path.is_file(), path
+
+
+def test_d5_theme_meets_wave_d_gate_and_exact_node_scope():
+    theme = _read_json(D5_THEME_PATH)
+    mapping = _read_json(D5_MAPPING_PATH)
+    validate_theme_decomposition_artifact(theme, expected_theme_id=D5_THEME_ID)
+    validate_theme_company_mapping_artifact(mapping, theme)
+    report = VERIFIER.build_theme_batch_report(MANIFEST_PATH, wave="wave_d")
+    row = next(item for item in report["theme_results"] if item["chain_id"] == D5_CHAIN_ID)
+
+    assert {node["node_id"] for node in theme["nodes"]} == D5_NODE_IDS
+    assert len(theme["sources"]) >= 10
+    assert len(theme["claims"]) >= 12
+    assert len(
+        [item for item in mapping["company_mappings"] if item["review_status"] == "reviewed"]
+    ) >= 8
+    assert row["ready"] is True
+    assert row["checks"]["bidirectional_evidence_contract"] is True
+    assert row["checks"]["precise_mapping_locators"] is True
+
+
+def test_d5_catalog_projection_preserves_imaging_and_component_ownership():
+    catalog = load_industry_catalog()
+    link = next(row for row in catalog["theme_links"] if row["theme_id"] == D5_THEME_ID)
+    actual: dict[str, set[str]] = {}
+    for row in link["node_links"]:
+        actual.setdefault(row["theme_node_id"], set()).add(row["catalog_node_id"])
+
+    assert actual == D5_CATALOG_LINKS
+    assert set(link["unmapped_theme_node_ids"]) == {
+        "medical_imaging_ultrasound_endoscopy_dependency"
+    }
+    chain_nodes = {
+        row["node_id"]
+        for row in catalog["nodes"]
+        if row["chain_id"] == D5_CHAIN_ID
+    }
+    assert chain_nodes == set().union(*D5_CATALOG_LINKS.values())
+
+    descriptions = {
+        row["node_id"]: row["description"].lower()
+        for row in catalog["nodes"]
+        if row["chain_id"] == D5_CHAIN_ID
+    }
+    assert "medical_imaging_diagnostic_equipment ownership remains" in descriptions[
+        "multi_specialty_device_workflow_integration"
+    ]
+    assert "generic component ownership remains" in descriptions[
+        "medical_optics_energy_motion_component_integration"
+    ]
+    assert "medical_imaging_diagnostic_equipment ownership remains" in descriptions[
+        "medical_device_core_component_integration"
+    ]
+    assert "medical_imaging_diagnostic_equipment ownership remains" in descriptions[
+        "medical_optics_energy_motion_component_integration"
+    ]
+
+
+def test_d5_company_evidence_is_precise_and_does_not_use_registration_as_revenue():
+    theme = _read_json(D5_THEME_PATH)
+    mapping = _read_json(D5_MAPPING_PATH)
+    source_pack = _read_json(D5_SOURCE_PACK_PATH)
+
+    source_ids = {row["source_id"] for row in theme["sources"]}
+    assert source_ids == {row["source_id"] for row in mapping["sources"]}
+    assert source_ids == {row["source_id"] for row in source_pack["sources"]}
+    evidence_by_id = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+    for row in mapping["company_mappings"]:
+        evidence = [evidence_by_id[evidence_id] for evidence_id in row["evidence_ids"]]
+        assert len(evidence) == 3
+        assert {item["evidence_type"] for item in evidence} in (
+            {"product_relationship", "revenue_materiality", "business_stage"},
+            {"service_relationship", "revenue_materiality", "business_stage"},
+        )
+        assert len({item["excerpt_locator"] for item in evidence}) == 3
+        assert all("页" in item["excerpt_locator"] for item in evidence)
+
+    all_text = json.dumps(
+        {"theme": theme, "mapping": mapping, "source_pack": source_pack},
+        ensure_ascii=False,
+    )
+    assert "医学影像设备归`medical_imaging_diagnostic_equipment`" in all_text
+    assert "注册证、临床试验、集采中标和医院准入不得当作收入" in all_text
+
+    robot_node = next(
+        row
+        for row in theme["nodes"]
+        if row["node_id"] == "surgical_robot_navigation_energy_systems"
+    )
+    matrix = _read_json(D5_MATRIX_PATH)
+    robot_matrix = next(
+        row
+        for row in matrix["node_evidence_matrix"]
+        if row["node_id"] == "surgical_robot_navigation_energy_systems"
+    )
+    assert robot_node["node_review_status"] == "draft"
+    assert robot_node["evidence_strength"] == 2
+    assert robot_node["related_stock_codes"] == []
+    assert robot_matrix["node_review_status"] == "draft"
+    assert robot_matrix["evidence_strength_after"] == 2
+    assert robot_matrix["evidence_gap_status"] == "evidence_gap"
+    assert all(
+        row["mapped_node_id"] != "surgical_robot_navigation_energy_systems"
+        for row in mapping["company_mappings"]
+    )
+
+
+def test_d5_readable_detail_separates_access_installed_base_usage_and_revenue():
+    detail = get_theme_research_theme(D5_THEME_ID)
+    conflict = detail["research_profile"]["central_conflict"]
+    for boundary in (
+        "注册获批",
+        "临床试验",
+        "招投标",
+        "装机",
+        "手术/检查量",
+        "耗材消耗",
+        "已确认收入",
+    ):
+        assert boundary in conflict
+
+    boundary_claim = next(
+        row
+        for row in list_theme_research_claims(D5_THEME_ID)["items"]
+        if row["claim_id"] == "medical_claim_09"
+    )
+    assert "不得互相替代" in boundary_claim["claim_text"]
+
+    companies = list_theme_research_companies(D5_THEME_ID)["items"]
+    by_company = {row["company_code"]: row for row in companies}
+    assert {
+        company_code: row["beneficiary_tier"]
+        for company_code, row in by_company.items()
+    } == {
+        "300760.SZ": "core_beneficiary",
+        "688677.SH": "core_beneficiary",
+        "688029.SH": "core_beneficiary",
+        "688016.SH": "core_beneficiary",
+        "688617.SH": "core_beneficiary",
+        "688050.SH": "core_beneficiary",
+        "688271.SH": "indirect_beneficiary",
+        "300633.SZ": "indirect_beneficiary",
+        "688212.SH": "indirect_beneficiary",
+        "688301.SH": "indirect_beneficiary",
+    }
+    assert "688271.SH" in by_company
+    assert "装机" in by_company["688271.SH"]["relationship_summary"]
+    assert "服务收入" in by_company["688271.SH"]["relationship_summary"]
+    assert by_company["688301.SH"]["revenue_relevance"] == "undisclosed"
+    assert "医疗、工业和安检未拆" in by_company["688301.SH"][
+        "relationship_summary"
+    ]
