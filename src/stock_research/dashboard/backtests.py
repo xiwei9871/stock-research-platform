@@ -273,7 +273,7 @@ def _eod_summary(module: dict[str, Any]) -> dict[str, Any]:
 
 def _metrics_from_eod_summary(summary: dict[str, Any]) -> dict[str, Any]:
     metrics: dict[str, Any] = {}
-    for key in ("strategy_version", "selection_policy"):
+    for key in ("strategy_version", "selection_policy", "market_regime_policy"):
         if summary.get(key):
             metrics[key] = str(summary[key])
     if summary.get("cash_slot_count") is not None:

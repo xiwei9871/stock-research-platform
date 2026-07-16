@@ -297,6 +297,7 @@ function strategyEvidenceMetrics(strategy: StrategyCatalogItem) {
 }
 
 function strategyVersionLabel(version: string | null) {
+  if (version === 'lhb_v1_stable_safe_top5') return 'LHB V1 Stable Safe Top5';
   if (version === 'lhb_v1_safe_top5') return 'LHB V1 Safe Top5';
   return version;
 }
