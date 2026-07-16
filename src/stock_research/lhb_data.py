@@ -3167,6 +3167,7 @@ def _lhb_phase18c_select_topn(
     else:
         raise ValueError(f"Unsupported Phase18C strategy: {strategy}")
     selected = ordered.groupby("trade_date", group_keys=False).head(int(top_n)).copy()
+    selected["phase18c_selection_rank"] = selected.groupby("trade_date").cumcount() + 1
     selected["phase18c_strategy"] = strategy
     selected["phase18c_top_n"] = int(top_n)
     selected["top_n"] = int(top_n)
@@ -3188,33 +3189,74 @@ def build_lhb_phase18c_auction_enhanced_cash_account_backtest_v1(
     account_trade_frames: list[pd.DataFrame] = []
     account_curve_frames: list[pd.DataFrame] = []
     selected_frames: list[pd.DataFrame] = []
+    selected_rejected_frames: list[pd.DataFrame] = []
 
     for top_n in selected_top_ns:
         for strategy in ["baseline_original_order", "auction_enhanced_rerank"]:
-            selected = _lhb_phase18c_select_topn(
+            final_selected = _lhb_phase18c_select_topn(
                 lifecycle_trades=lifecycle_trades,
                 scored_candidates=scored_candidates,
                 top_n=top_n,
                 strategy=strategy,
             )
+            if "backtest_entry_eligible" in final_selected.columns:
+                entry_eligible = final_selected["backtest_entry_eligible"].fillna(False).astype(bool)
+            else:
+                entry_eligible = pd.Series(True, index=final_selected.index)
+            selected = final_selected[entry_eligible].copy()
+            selected_rejected = final_selected[~entry_eligible].copy()
             account_trades, account_curve = _build_lhb_phase15_cash_account_frames(
                 lifecycle_trades=selected,
                 max_positions=max_positions,
                 position_pct=position_pct,
             )
+            account_metadata_columns = [
+                column
+                for column in [
+                    "eligibility_status",
+                    "backtest_entry_eligible",
+                    "buy_signal_status",
+                    "eligibility_reason_codes",
+                    "eligibility_reason_texts",
+                    "eligibility_warning_codes",
+                    "eligibility_contract_version",
+                    "phase18c_selection_rank",
+                ]
+                if column in selected.columns
+            ]
+            if account_metadata_columns and not account_trades.empty:
+                account_metadata = selected[
+                    ["trade_date", "ts_code", *account_metadata_columns]
+                ].drop_duplicates(["trade_date", "ts_code"], keep="last")
+                account_trades = account_trades.drop(
+                    columns=account_metadata_columns,
+                    errors="ignore",
+                ).merge(
+                    account_metadata,
+                    on=["trade_date", "ts_code"],
+                    how="left",
+                    validate="many_to_one",
+                )
             summary = _build_lhb_phase15_cash_account_summary(
                 account_trades=account_trades,
                 account_curve=account_curve,
             )
-            for frame in [selected, account_trades, account_curve, summary]:
+            summary["cash_slot_count"] = int(len(selected_rejected))
+            for frame in [selected, selected_rejected, account_trades, account_curve, summary]:
                 frame["strategy"] = strategy
                 frame["top_n"] = int(top_n)
             selected_frames.append(selected)
+            selected_rejected_frames.append(selected_rejected)
             account_trade_frames.append(account_trades)
             account_curve_frames.append(account_curve)
             summary_frames.append(summary)
 
     selected_trades = pd.concat(selected_frames, ignore_index=True) if selected_frames else pd.DataFrame()
+    selected_rejected_trades = (
+        pd.concat(selected_rejected_frames, ignore_index=True)
+        if selected_rejected_frames
+        else pd.DataFrame()
+    )
     account_trades_all = pd.concat(account_trade_frames, ignore_index=True) if account_trade_frames else pd.DataFrame()
     account_curve_all = pd.concat(account_curve_frames, ignore_index=True) if account_curve_frames else pd.DataFrame()
     summary_all = pd.concat(summary_frames, ignore_index=True) if summary_frames else pd.DataFrame()
@@ -3226,6 +3268,7 @@ def build_lhb_phase18c_auction_enhanced_cash_account_backtest_v1(
     out = Path(output_dir)
     paths = {
         "selected_trades": str(out / "lhb_phase18c_selected_trades_v1.csv"),
+        "selected_rejected_trades": str(out / "lhb_phase18c_selected_rejected_trades_v1.csv"),
         "account_trades": str(out / "lhb_phase18c_account_trades_v1.csv"),
         "account_curve": str(out / "lhb_phase18c_account_curve_v1.csv"),
         "summary": str(out / "lhb_phase18c_summary_v1.csv"),
@@ -3234,6 +3277,7 @@ def build_lhb_phase18c_auction_enhanced_cash_account_backtest_v1(
     if write_outputs:
         out.mkdir(parents=True, exist_ok=True)
         selected_trades.to_csv(paths["selected_trades"], index=False)
+        selected_rejected_trades.to_csv(paths["selected_rejected_trades"], index=False)
         account_trades_all.to_csv(paths["account_trades"], index=False)
         account_curve_all.to_csv(paths["account_curve"], index=False)
         summary_all.to_csv(paths["summary"], index=False)
@@ -3256,6 +3300,7 @@ def build_lhb_phase18c_auction_enhanced_cash_account_backtest_v1(
 
     return {
         "selected_trades": selected_trades,
+        "selected_rejected_trades": selected_rejected_trades,
         "account_trades": account_trades_all,
         "account_curve": account_curve_all,
         "summary": summary_all,
