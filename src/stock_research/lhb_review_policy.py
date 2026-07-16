@@ -63,6 +63,11 @@ def apply_lhb_top5_gate(frame: pd.DataFrame, *, top_n: int = 5) -> pd.DataFrame:
     result["score_total"] = pd.to_numeric(result.get("score_total"), errors="coerce")
     result["raw_score"] = result["score_total"]
     result["asset_id"] = result.get("asset_id", "").fillna("").astype(str)
+    provided_rank = pd.to_numeric(
+        result.get("source_rank", result.get("rank", pd.Series(pd.NA, index=result.index))),
+        errors="coerce",
+    )
+    result["_provided_rank"] = provided_rank
     if "stock_name" not in result.columns:
         result["stock_name"] = ""
     if "pct_chg" not in result.columns:
@@ -91,18 +96,18 @@ def apply_lhb_top5_gate(frame: pd.DataFrame, *, top_n: int = 5) -> pd.DataFrame:
         kind="stable",
         na_position="last",
     ).reset_index(drop=True)
-    result["source_rank"] = range(1, len(result) + 1)
+    provided_rank = pd.to_numeric(result.pop("_provided_rank"), errors="coerce")
+    fallback_rank = pd.Series(range(1, len(result) + 1), index=result.index, dtype="int64")
+    result["source_rank"] = provided_rank.fillna(fallback_rank).astype(int)
 
-    eligible_rank = 0
     ranks: list[int] = []
     tiers: list[str] = []
     for row in result.to_dict("records"):
+        original_rank = int(row["source_rank"])
+        ranks.append(original_rank)
         if bool(row["top5_eligible"]):
-            eligible_rank += 1
-            ranks.append(eligible_rank)
-            tiers.append("top5_focus" if eligible_rank <= top_n else "watch")
+            tiers.append("top5_focus" if original_rank <= top_n else "watch")
         else:
-            ranks.append(int(row["source_rank"]))
             tiers.append("risk_watch")
     result["rank"] = ranks
     result["review_tier"] = tiers

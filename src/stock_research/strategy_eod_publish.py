@@ -977,6 +977,12 @@ def _review_rows_from_result(
         return review
     if strategy_id == "lhb_shortline" and "score_total" in review.columns:
         review = apply_lhb_top5_gate(review)
+        original_rank = pd.to_numeric(review["rank"], errors="coerce")
+        eligible = review["eligibility_status"].eq("eligible")
+        entry_eligible = review["backtest_entry_eligible"].fillna(False).astype(bool)
+        review = review[eligible & entry_eligible & original_rank.le(5)].copy()
+        review["review_tier"] = "top5_focus"
+        review = review.sort_values(["rank", "asset_id"], kind="stable")
         return review.reset_index(drop=True).reindex(columns=columns)
     return review.sort_values(["rank", "asset_id"], kind="stable").reset_index(drop=True)
 

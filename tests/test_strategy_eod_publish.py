@@ -36,7 +36,7 @@ def _lhb_result_for_review_test():
     }
 
 
-def test_lhb_review_resolves_names_and_downgrades_limit_down_candidate(monkeypatch):
+def test_lhb_review_publishes_original_top5_after_gate_without_refill(monkeypatch):
     lookup = {
         "CN:SZ:002463": {"score_total": 77.0, "stock_name": "沪电股份", "pct_chg": 2.0},
         "CN:SZ:000636": {"score_total": 76.3, "stock_name": "风华高科", "pct_chg": 1.0},
@@ -55,17 +55,12 @@ def test_lhb_review_resolves_names_and_downgrades_limit_down_candidate(monkeypat
     review = _review_rows_from_result(_lhb_result_for_review_test(), trade_date="2026-07-14")
 
     first = review.loc[review["asset_id"].eq("CN:SZ:002463")].iloc[0]
-    gated = review.loc[review["asset_id"].eq("CN:SZ:001399")].iloc[0]
     assert first["stock_name"] == "候选原名"
     assert first["stock_name_source"] == "strategy_candidate"
-    assert gated["stock_name"] == "惠科股份"
-    assert gated["stock_name_source"] == "lhb_top_list_daily"
-    assert gated["score_total"] == pytest.approx(69.3698)
-    assert gated["raw_score"] == pytest.approx(69.3698)
-    assert gated["review_tier"] == "risk_watch"
-    assert gated["risk_gate_code"] == "near_limit_down_followthrough_risk"
-    assert review.loc[review["review_tier"].eq("top5_focus"), "asset_id"].nunique() == 5
-    assert "CN:SZ:000001" in set(review.loc[review["review_tier"].eq("top5_focus"), "asset_id"])
+    assert review["rank"].tolist() == [1, 2, 3, 5]
+    assert "CN:SZ:001399" not in set(review["asset_id"])
+    assert "CN:SZ:000001" not in set(review["asset_id"])
+    assert review["review_tier"].eq("top5_focus").all()
     assert review.loc[review["review_tier"].eq("top5_focus"), "confirmation_state"].eq("pending_confirmation").all()
 
 
@@ -88,7 +83,7 @@ def test_lhb_confirmation_state_mapping(layer, action, fill_status, eligibility_
     ) == expected
 
 
-def test_lhb_review_preserves_upstream_eligibility_without_recomputing(monkeypatch):
+def test_lhb_review_excludes_upstream_risk_watch_from_official_rows(monkeypatch):
     result = _lhb_result_for_review_test()
     candidate = result["candidates"][3]
     candidate.pop("auction_enhanced_score")
@@ -124,12 +119,9 @@ def test_lhb_review_preserves_upstream_eligibility_without_recomputing(monkeypat
 
     review = _review_rows_from_result(result, trade_date="2026-07-14")
 
-    row = review.loc[review["asset_id"].eq("CN:SZ:001399")].iloc[0]
-    assert row["eligibility_contract_version"] == "lhb_eligibility_v2"
-    assert row["eligibility_status"] == "risk_watch"
-    assert bool(row["top5_eligible"]) is False
-    assert row["eligibility_reason_codes"] == ["near_limit_down_followthrough_risk"]
-    assert row["score_total"] == pytest.approx(69.3698)
+    assert "CN:SZ:001399" not in set(review["asset_id"])
+    assert review["eligibility_status"].eq("eligible").all()
+    assert review["backtest_entry_eligible"].astype(bool).all()
 
 
 def test_lhb_review_rejects_contradictory_upstream_eligibility(monkeypatch):
