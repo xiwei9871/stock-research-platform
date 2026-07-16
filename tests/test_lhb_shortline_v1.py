@@ -257,16 +257,37 @@ def test_lhb_lifecycle_keeps_legacy_top10_research_pool_for_top5_account():
     assert lhb_shortline_v1._lhb_shortline_v1_top_values(5) == [10]
 
 
-def test_safe_top5_summary_metadata_uses_phase18c_cash_slots_and_policy_name():
+def test_safe_top5_summary_metadata_identifies_stable_strategy_without_market_overlay():
     metadata = lhb_shortline_v1._lhb_safe_top5_summary_metadata(
         {"cash_slot_count": 45}
     )
 
     assert metadata == {
-        "strategy_version": "lhb_v1_safe_top5",
+        "strategy_version": "lhb_v1_stable_safe_top5",
         "selection_policy": "phase18c_top5_then_eligibility_no_refill",
+        "market_regime_policy": "disabled_for_stable_strategy",
         "cash_slot_count": 45,
     }
+
+
+def test_select_lhb_stable_account_returns_phase18c_outputs_unchanged():
+    summary = {"total_return": 0.918648, "max_drawdown": -0.042355}
+    trades = pd.DataFrame(
+        [{"ts_code": "000001.SZ", "account_trade_status": "filled"}]
+    )
+    curve = pd.DataFrame(
+        [{"trade_date": "2026-07-15", "equity": 1.918648}]
+    )
+
+    selected = lhb_shortline_v1._select_lhb_stable_account(
+        phase18c_summary=summary,
+        phase18c_account_trades=trades,
+        phase18c_account_curve=curve,
+    )
+
+    assert selected["summary"] == summary
+    pd.testing.assert_frame_equal(selected["account_trades"], trades)
+    pd.testing.assert_frame_equal(selected["account_curve"], curve)
 
 
 def test_minute_prefetch_uses_shared_pump_reject_threshold(monkeypatch):

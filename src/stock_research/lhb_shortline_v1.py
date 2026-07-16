@@ -1458,9 +1458,23 @@ def _lhb_shortline_v1_top_values(top_n: int) -> list[int]:
 
 def _lhb_safe_top5_summary_metadata(phase18c_summary: dict[str, Any]) -> dict[str, Any]:
     return {
-        "strategy_version": "lhb_v1_safe_top5",
+        "strategy_version": "lhb_v1_stable_safe_top5",
         "selection_policy": "phase18c_top5_then_eligibility_no_refill",
+        "market_regime_policy": "disabled_for_stable_strategy",
         "cash_slot_count": int(phase18c_summary.get("cash_slot_count") or 0),
+    }
+
+
+def _select_lhb_stable_account(
+    *,
+    phase18c_summary: dict[str, Any],
+    phase18c_account_trades: pd.DataFrame,
+    phase18c_account_curve: pd.DataFrame,
+) -> dict[str, Any]:
+    return {
+        "summary": phase18c_summary.copy(),
+        "account_trades": phase18c_account_trades.copy(),
+        "account_curve": phase18c_account_curve.copy(),
     }
 
 
@@ -2039,45 +2053,14 @@ def run_lhb_shortline_v1_lifecycle_from_frames(
         risk_profile = _normalize_lhb_shortline_risk_profile(config.risk_profile)
         profile_def = LHB_SHORTLINE_RISK_PROFILES[risk_profile]
         baseline_summary = summary_frame.iloc[0].to_dict()
-        market_regime = build_lhb_shortline_market_regime_control(frames.daily_bars, risk_profile=risk_profile)
-        if market_regime.empty:
-            summary = baseline_summary.copy()
-        else:
-            _assert_lhb_entry_eligibility_contract(account_trades, stage="market_regime_account_entry")
-            market_account = run_lhb_shortline_market_regime_account(
-                lifecycle_trades=account_trades,
-                market_regime=market_regime,
-                max_positions=config.account_max_positions,
-                base_position_pct=config.position_weight,
-                daily_bars=frames.daily_bars,
-                minute_bars=frames.minute_bars,
-                end_date=config.end_date,
-            )
-            account_trades = market_account["account_trades"].copy()
-            account_trades = _attach_lhb_contract_decisions(
-                account_trades,
-                decisions=contract_decisions,
-                stage="market_regime_account_trades",
-            )
-            account_curve = market_account["account_curve"].copy()
-            if not account_trades.empty:
-                account_trades["strategy"] = strategy
-                account_trades["top_n"] = config.top_n
-            if not account_curve.empty:
-                account_curve["strategy"] = strategy
-                account_curve["top_n"] = config.top_n
-            account_curve = _extend_lhb_shortline_account_curve_to_end_date(
-                account_curve=account_curve,
-                daily_bars=frames.daily_bars,
-                end_date=config.end_date,
-            )
-            summary = {
-                **baseline_summary,
-                **_summarize_lhb_shortline_market_regime_account(
-                    account_trades=account_trades,
-                    account_curve=account_curve,
-                ),
-            }
+        stable_account = _select_lhb_stable_account(
+            phase18c_summary=baseline_summary,
+            phase18c_account_trades=account_trades,
+            phase18c_account_curve=account_curve,
+        )
+        summary = stable_account["summary"]
+        account_trades = stable_account["account_trades"]
+        account_curve = stable_account["account_curve"]
         existing_sharpe = pd.to_numeric(
             pd.Series([summary.get("sharpe_ratio")]), errors="coerce"
         ).iloc[0]
@@ -2087,7 +2070,7 @@ def run_lhb_shortline_v1_lifecycle_from_frames(
             {
                 "engine_version": config.engine_version,
                 **_lhb_safe_top5_summary_metadata(baseline_summary),
-                "fresh_engine_note": "LHB Shortline DB lifecycle recompute with selectable risk profile",
+                "fresh_engine_note": "LHB stable Phase18C safe Top5 account without market overlay",
                 "phase18c_strategy": strategy,
                 "phase18c_top_n": config.top_n,
                 "position_pct": config.position_weight,
@@ -2097,8 +2080,8 @@ def run_lhb_shortline_v1_lifecycle_from_frames(
                 "frequency": config.rebalance_frequency,
                 "risk_profile": risk_profile,
                 "risk_profile_label": profile_def["label"],
-                "market_regime_profile": profile_def["market_regime_profile"],
-                "market_regime_note": profile_def["note"],
+                "market_regime_profile": "disabled_for_stable_strategy",
+                "market_regime_note": "稳定版不使用市场环境仓位控制；相关逻辑仅保留为独立研究实验。",
                 "baseline_phase18c_final_equity": baseline_summary.get("final_equity"),
                 "baseline_phase18c_total_return": baseline_summary.get("total_return"),
                 "baseline_phase18c_max_drawdown": baseline_summary.get("max_drawdown"),
