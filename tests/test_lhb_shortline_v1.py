@@ -186,6 +186,110 @@ def test_review_candidates_keep_t_plus_one_confirmation_without_becoming_account
     assert review.iloc[0]["phase12a_rule_layer"] == "follow_pool_core"
 
 
+def test_build_lhb_review_candidates_keeps_only_eligible_original_top5_without_refill():
+    scored = pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-07-15",
+                "ts_code": ts_code,
+                "top_n": 5,
+                "selection_rank": rank,
+                "auction_enhanced_score": 100.0 - rank,
+                "eligibility_status": "eligible",
+                "backtest_entry_eligible": True,
+            }
+            for rank, ts_code in [(1, "000001.SZ"), (3, "000003.SZ"), (5, "000005.SZ"), (6, "000006.SZ")]
+        ]
+    )
+    risk_watch = pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-07-15",
+                "ts_code": "000002.SZ",
+                "selection_rank": 2,
+                "eligibility_status": "risk_watch",
+                "backtest_entry_eligible": False,
+            }
+        ]
+    )
+
+    review = lhb_shortline_v1._build_lhb_review_candidates(
+        scored_candidates=scored,
+        risk_watch_candidates=risk_watch,
+        top_n=5,
+    )
+
+    assert review["selection_rank"].tolist() == [1, 3, 5]
+    assert review["ts_code"].tolist() == ["000001.SZ", "000003.SZ", "000005.SZ"]
+    assert review["eligibility_status"].eq("eligible").all()
+
+
+def test_build_lhb_review_candidates_uses_phase18c_final_rank_not_internal_pool_rank():
+    scored = pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-07-15",
+                "ts_code": "000007.SZ",
+                "top_n": 5,
+                "selection_rank": 7,
+                "phase18c_selection_rank": 1,
+                "auction_enhanced_score": 120.0,
+                "eligibility_status": "eligible",
+                "backtest_entry_eligible": True,
+                "buy_signal_status": "tradable",
+            }
+        ]
+    )
+
+    review = lhb_shortline_v1._build_lhb_review_candidates(
+        scored_candidates=scored,
+        risk_watch_candidates=pd.DataFrame(),
+        top_n=5,
+    )
+
+    assert review["ts_code"].tolist() == ["000007.SZ"]
+    assert review["phase18c_selection_rank"].tolist() == [1]
+    assert review["selection_rank"].tolist() == [1]
+    assert review["pool_selection_rank"].tolist() == [7]
+
+
+def test_lhb_lifecycle_keeps_legacy_top10_research_pool_for_top5_account():
+    assert lhb_shortline_v1._lhb_shortline_v1_top_values(5) == [10]
+
+
+def test_safe_top5_summary_metadata_identifies_stable_strategy_without_market_overlay():
+    metadata = lhb_shortline_v1._lhb_safe_top5_summary_metadata(
+        {"cash_slot_count": 45}
+    )
+
+    assert metadata == {
+        "strategy_version": "lhb_v1_stable_safe_top5",
+        "selection_policy": "phase18c_top5_then_eligibility_no_refill",
+        "market_regime_policy": "disabled_for_stable_strategy",
+        "cash_slot_count": 45,
+    }
+
+
+def test_select_lhb_stable_account_returns_phase18c_outputs_unchanged():
+    summary = {"total_return": 0.918648, "max_drawdown": -0.042355}
+    trades = pd.DataFrame(
+        [{"ts_code": "000001.SZ", "account_trade_status": "filled"}]
+    )
+    curve = pd.DataFrame(
+        [{"trade_date": "2026-07-15", "equity": 1.918648}]
+    )
+
+    selected = lhb_shortline_v1._select_lhb_stable_account(
+        phase18c_summary=summary,
+        phase18c_account_trades=trades,
+        phase18c_account_curve=curve,
+    )
+
+    assert selected["summary"] == summary
+    pd.testing.assert_frame_equal(selected["account_trades"], trades)
+    pd.testing.assert_frame_equal(selected["account_curve"], curve)
+
+
 def test_minute_prefetch_uses_shared_pump_reject_threshold(monkeypatch):
     monkeypatch.setattr(lhb_shortline_v1, "PUMP_REJECT_THRESHOLD", 0.80)
     features = pd.DataFrame(

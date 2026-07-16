@@ -93,3 +93,20 @@ def test_eod_equity_path_relocates_synced_local_output_root(monkeypatch, tmp_pat
     )
 
     assert metrics["latest_day_return_pct"] == 10.0
+
+
+def test_eod_summary_exposes_lhb_strategy_version_and_selection_policy():
+    metrics = backtests._metrics_from_eod_summary(
+        {
+            "total_return": 1.23,
+            "strategy_version": "lhb_v1_stable_safe_top5",
+            "selection_policy": "phase18c_top5_then_eligibility_no_refill",
+            "market_regime_policy": "disabled_for_stable_strategy",
+            "cash_slot_count": 9,
+        }
+    )
+
+    assert metrics["strategy_version"] == "lhb_v1_stable_safe_top5"
+    assert metrics["selection_policy"] == "phase18c_top5_then_eligibility_no_refill"
+    assert metrics["market_regime_policy"] == "disabled_for_stable_strategy"
+    assert metrics["cash_slot_count"] == 9

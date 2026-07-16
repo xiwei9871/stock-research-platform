@@ -28,7 +28,7 @@ def test_missing_pct_change_is_not_gated_but_is_auditable():
     assert decision.data_status == "pct_chg_missing"
 
 
-def test_gate_downgrades_limit_down_candidate_and_refills_top5():
+def test_gate_downgrades_limit_down_candidate_without_refilling_top5():
     frame = pd.DataFrame(
         [
             {
@@ -49,8 +49,9 @@ def test_gate_downgrades_limit_down_candidate_and_refills_top5():
     assert bool(gated["top5_eligible"]) is False
     assert gated["review_tier"] == "risk_watch"
     assert gated["risk_gate_code"] == "near_limit_down_followthrough_risk"
-    assert len(result.loc[result["review_tier"].eq("top5_focus")]) == 5
-    assert "CN:SZ:000006" in set(result.loc[result["review_tier"].eq("top5_focus"), "asset_id"])
+    assert len(result.loc[result["review_tier"].eq("top5_focus")]) == 4
+    assert "CN:SZ:000006" not in set(result.loc[result["review_tier"].eq("top5_focus"), "asset_id"])
+    assert result.loc[result["asset_id"].eq("CN:SZ:000005"), "rank"].iloc[0] == 5
 
 
 def test_gate_does_not_fill_top5_with_ineligible_rows():

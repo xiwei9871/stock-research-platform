@@ -63,6 +63,11 @@ def apply_lhb_top5_gate(frame: pd.DataFrame, *, top_n: int = 5) -> pd.DataFrame:
     result["score_total"] = pd.to_numeric(result.get("score_total"), errors="coerce")
     result["raw_score"] = result["score_total"]
     result["asset_id"] = result.get("asset_id", "").fillna("").astype(str)
+    provided_rank = pd.to_numeric(
+        result.get("source_rank", result.get("rank", pd.Series(pd.NA, index=result.index))),
+        errors="coerce",
+    )
+    result["_provided_rank"] = provided_rank
     if "stock_name" not in result.columns:
         result["stock_name"] = ""
     if "pct_chg" not in result.columns:
@@ -73,6 +78,7 @@ def apply_lhb_top5_gate(frame: pd.DataFrame, *, top_n: int = 5) -> pd.DataFrame:
         "eligibility_status",
         "top5_eligible",
         "backtest_entry_eligible",
+        "buy_signal_status",
         "eligibility_reason_codes",
         "eligibility_reason_texts",
         "eligibility_warning_codes",
@@ -91,18 +97,18 @@ def apply_lhb_top5_gate(frame: pd.DataFrame, *, top_n: int = 5) -> pd.DataFrame:
         kind="stable",
         na_position="last",
     ).reset_index(drop=True)
-    result["source_rank"] = range(1, len(result) + 1)
+    provided_rank = pd.to_numeric(result.pop("_provided_rank"), errors="coerce")
+    fallback_rank = pd.Series(range(1, len(result) + 1), index=result.index, dtype="int64")
+    result["source_rank"] = provided_rank.fillna(fallback_rank).astype(int)
 
-    eligible_rank = 0
     ranks: list[int] = []
     tiers: list[str] = []
     for row in result.to_dict("records"):
+        original_rank = int(row["source_rank"])
+        ranks.append(original_rank)
         if bool(row["top5_eligible"]):
-            eligible_rank += 1
-            ranks.append(eligible_rank)
-            tiers.append("top5_focus" if eligible_rank <= top_n else "watch")
+            tiers.append("top5_focus" if original_rank <= top_n else "watch")
         else:
-            ranks.append(int(row["source_rank"]))
             tiers.append("risk_watch")
     result["rank"] = ranks
     result["review_tier"] = tiers
@@ -130,6 +136,7 @@ def _lhb_review_contract_fields(row: dict[str, Any]) -> dict[str, Any]:
             "eligibility_status": status,
             "top5_eligible": top5,
             "backtest_entry_eligible": entry,
+            "buy_signal_status": row.get("buy_signal_status") or ("tradable" if entry else "research_only"),
             "eligibility_reason_codes": reason_codes,
             "eligibility_reason_texts": reason_texts,
             "eligibility_warning_codes": warning_codes,
@@ -166,6 +173,7 @@ def _lhb_review_contract_fields(row: dict[str, Any]) -> dict[str, Any]:
         "eligibility_status": decision.eligibility_status,
         "top5_eligible": decision.top5_eligible,
         "backtest_entry_eligible": decision.backtest_entry_eligible,
+        "buy_signal_status": decision.buy_signal_status,
         "eligibility_reason_codes": list(decision.reason_codes),
         "eligibility_reason_texts": list(decision.reason_texts),
         "eligibility_warning_codes": list(decision.warning_codes),

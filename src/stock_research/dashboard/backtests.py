@@ -273,6 +273,11 @@ def _eod_summary(module: dict[str, Any]) -> dict[str, Any]:
 
 def _metrics_from_eod_summary(summary: dict[str, Any]) -> dict[str, Any]:
     metrics: dict[str, Any] = {}
+    for key in ("strategy_version", "selection_policy", "market_regime_policy"):
+        if summary.get(key):
+            metrics[key] = str(summary[key])
+    if summary.get("cash_slot_count") is not None:
+        metrics["cash_slot_count"] = int(summary["cash_slot_count"])
     total_return = summary.get("total_return")
     if total_return is None and _finite_or_none(summary.get("final_equity")) is not None:
         total_return = float(summary["final_equity"]) - 1.0

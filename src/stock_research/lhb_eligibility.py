@@ -28,6 +28,7 @@ class EligibilityDecision:
     eligibility_status: str
     top5_eligible: bool
     backtest_entry_eligible: bool
+    buy_signal_status: str
     reason_codes: tuple[str, ...]
     reason_texts: tuple[str, ...]
     warning_codes: tuple[str, ...]
@@ -94,6 +95,8 @@ def evaluate_lhb_eligibility(
 ) -> EligibilityDecision:
     del trade_date, ts_code
     warnings: list[str] = []
+    if price_limit_state.is_st is True:
+        warnings.append("st_high_risk")
     if _optional_float(institution_net_buy) is None:
         warnings.append("institution_activity_unknown")
 
@@ -159,6 +162,7 @@ def evaluate_lhb_eligibility(
         eligibility_status="eligible",
         top5_eligible=True,
         backtest_entry_eligible=True,
+        buy_signal_status="tradable",
         reason_codes=(),
         reason_texts=(),
         warning_codes=tuple(warnings),
@@ -195,6 +199,7 @@ def _decision(
         eligibility_status=status,
         top5_eligible=False,
         backtest_entry_eligible=False,
+        buy_signal_status="research_only",
         reason_codes=(reason_code,),
         reason_texts=(reason_text,),
         warning_codes=tuple(warnings),
