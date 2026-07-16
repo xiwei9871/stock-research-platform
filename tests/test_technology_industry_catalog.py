@@ -340,9 +340,9 @@ def test_project_theme_to_catalog_rejects_unaccounted_source_theme_node():
     with pytest.raises(IndustryCatalogValidationError) as exc_info:
         project_theme_to_catalog("ai_power_value_capture_v1", catalog=catalog)
 
-    assert exc_info.value.code == "THEME_CATALOG_NODE_COVERAGE_INCOMPLETE"
+    assert exc_info.value.code == "THEME_CATALOG_NODE_LINK_INVALID"
     assert str(exc_info.value) == (
-        "theme catalog node coverage incomplete: grid_connection"
+        "theme_links[0] invalid: grid_connection -> <unaccounted>"
     )
 
 
@@ -401,9 +401,10 @@ def test_project_theme_to_catalog_reports_missing_source_nodes_in_sorted_order(
     with pytest.raises(IndustryCatalogValidationError) as exc_info:
         project_theme_to_catalog("ai_power_value_capture_v1", catalog=catalog)
 
-    assert exc_info.value.code == "THEME_CATALOG_NODE_COVERAGE_INCOMPLETE"
+    assert exc_info.value.code == "THEME_CATALOG_NODE_LINK_INVALID"
     assert str(exc_info.value) == (
-        "theme catalog node coverage incomplete: alpha_node, zeta_node"
+        "theme_links[0] invalid: alpha_node -> <unaccounted>, "
+        "zeta_node -> <unaccounted>"
     )
 
 
@@ -1348,6 +1349,28 @@ def test_theme_link_rejects_cross_chain_catalog_node_with_path_and_pair(
     )
 
 
+def test_theme_link_rejects_linked_unmapped_overlap_with_path_and_linked_pair(
+    tmp_path: Path,
+):
+    root = _write_catalog_package(tmp_path)
+    _write_json(
+        root / "theme_links.json",
+        {
+            "theme_links": [
+                _theme_link(unmapped_theme_node_ids=["theme_lithography"])
+            ]
+        },
+    )
+
+    error = _load_error(root)
+
+    assert error.code == "THEME_CATALOG_NODE_LINK_INVALID"
+    assert str(error) == (
+        "theme_links[0].unmapped_theme_node_ids[0] invalid: "
+        "theme_lithography -> lithography"
+    )
+
+
 def test_duplicate_theme_link_has_stable_error(tmp_path: Path):
     root = _write_catalog_package(tmp_path)
     link = _theme_link()
@@ -1366,8 +1389,26 @@ def test_project_theme_to_catalog_missing_link_has_stable_error():
     assert exc_info.value.code == "THEME_CATALOG_LINK_NOT_FOUND"
 
 
-@pytest.mark.parametrize("location", ["node_links", "unmapped_theme_node_ids"])
-def test_project_theme_to_catalog_rejects_missing_source_theme_nodes(location: str):
+@pytest.mark.parametrize(
+    ("location", "expected_path", "expected_target"),
+    [
+        (
+            "node_links",
+            "theme_links[0].node_links[0]",
+            "ai_power_grid_connection_role",
+        ),
+        (
+            "unmapped_theme_node_ids",
+            "theme_links[0].unmapped_theme_node_ids[0]",
+            "<unmapped>",
+        ),
+    ],
+)
+def test_project_theme_to_catalog_rejects_missing_source_theme_nodes(
+    location: str,
+    expected_path: str,
+    expected_target: str,
+):
     catalog = load_industry_catalog()
     link = catalog["theme_links"][0]
     if location == "node_links":
@@ -1379,6 +1420,9 @@ def test_project_theme_to_catalog_rejects_missing_source_theme_nodes(location: s
         project_theme_to_catalog("ai_power_value_capture_v1", catalog=catalog)
 
     assert exc_info.value.code == "THEME_CATALOG_NODE_LINK_INVALID"
+    assert str(exc_info.value) == (
+        f"{expected_path} invalid: missing_theme_node -> {expected_target}"
+    )
 
 
 @pytest.mark.parametrize(
