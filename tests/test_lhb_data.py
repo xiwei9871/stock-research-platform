@@ -1861,6 +1861,72 @@ def test_build_lhb_full_market_pool_backtest_v1_applies_shared_eligibility_befor
     assert "000080.SZ" in set(no_pump["eligible_candidates"]["ts_code"])
 
 
+def test_build_lhb_full_market_pool_backtest_v1_filters_after_original_topn_without_refill(tmp_path):
+    rows = []
+    for index, (ts_code, net_ratio) in enumerate(
+        [
+            ("000001.SZ", 0.60),
+            ("000002.SZ", 0.50),
+            ("000003.SZ", 0.40),
+            ("000004.SZ", 0.30),
+            ("000005.SZ", 0.20),
+            ("000006.SZ", 0.10),
+        ],
+        start=1,
+    ):
+        rows.append(
+            {
+                "trade_date": "2026-07-14",
+                "ts_code": ts_code,
+                "stock_name": f"测试{index}",
+                "lhb_reason": "日涨幅偏离值达到7%的前5只证券",
+                "lhb_net_buy_amount": 10_000.0 - index,
+                "lhb_net_buy_ratio": net_ratio,
+                "institution_net_buy": 100.0,
+                "top_seat_concentration": 0.20,
+                "repeat_on_list_count_3d": 1,
+                "repeat_on_list_count_5d": 1,
+                "lhb_after_limit_up": False,
+                "lhb_after_break_limit": False,
+                "lhb_after_reversal": False,
+                "lhb_one_day_pump_risk": 0.20,
+                "stored_is_st": False,
+                "stored_status_quality": "trusted",
+                "pct_chg": -9.99 if index == 2 else 2.0,
+                "high_to_close_drawdown": 0.02,
+            }
+        )
+    lhb_features = pd.DataFrame(rows)
+    daily_bars = pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-07-14",
+                "ts_code": row["ts_code"],
+                "close": 10.0,
+                "low": 9.8,
+            }
+            for row in rows
+        ]
+    )
+
+    result = lhb_data.build_lhb_full_market_pool_backtest_v1(
+        lhb_features=lhb_features,
+        daily_bars=daily_bars,
+        start_date="2026-07-14",
+        end_date="2026-07-14",
+        top_n_values=[5],
+        output_dir=tmp_path,
+    )
+
+    selected = result["selected_trades"]
+    selected_rejected = result["selected_rejected_events"]
+    assert selected["selection_rank"].tolist() == [1, 3, 4, 5]
+    assert "000006.SZ" not in set(selected["ts_code"])
+    assert selected_rejected["selection_rank"].tolist() == [2]
+    assert selected_rejected["ts_code"].tolist() == ["000002.SZ"]
+    assert Path(result["paths"]["selected_rejected_events"]).exists()
+
+
 def test_full_market_pool_fails_when_entire_date_has_incomplete_price_limit_data(tmp_path):
     lhb_features = pd.DataFrame(
         [
