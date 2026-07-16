@@ -183,6 +183,65 @@ def test_near_limit_down_is_research_only():
     assert "institution_activity_unknown" in decision.warning_codes
 
 
+def test_st_candidate_remains_eligible_with_high_risk_warning():
+    state = resolve_price_limit_state(
+        trade_date="2026-07-14",
+        ts_code="000078.SZ",
+        same_day_name="ST海王",
+        current_name="ST海王",
+        pct_chg=1.0,
+        stored_is_st=None,
+        stored_status_quality="untrusted_all_false",
+        list_date="1998-12-18",
+        listing_age_trading_days=1000,
+    )
+    decision = evaluate_lhb_eligibility(
+        trade_date="2026-07-14",
+        ts_code="000078.SZ",
+        lhb_reason="日涨幅偏离值达到7%的前5只证券",
+        price_limit_state=state,
+        pump_risk=0.30,
+        high_to_close_drawdown=0.02,
+        institution_net_buy=1.0,
+        security_state="ST海王",
+    )
+
+    assert decision.eligibility_status == "eligible"
+    assert decision.backtest_entry_eligible is True
+    assert decision.buy_signal_status == "tradable"
+    assert "st_high_risk" in decision.warning_codes
+
+
+def test_st_near_limit_down_is_research_only_not_a_buy_signal():
+    state = resolve_price_limit_state(
+        trade_date="2026-07-14",
+        ts_code="000078.SZ",
+        same_day_name="ST海王",
+        current_name="ST海王",
+        pct_chg=-4.8,
+        stored_is_st=None,
+        stored_status_quality="untrusted_all_false",
+        list_date="1998-12-18",
+        listing_age_trading_days=1000,
+    )
+    decision = evaluate_lhb_eligibility(
+        trade_date="2026-07-14",
+        ts_code="000078.SZ",
+        lhb_reason="日跌幅偏离值达到7%的前5只证券",
+        price_limit_state=state,
+        pump_risk=0.30,
+        high_to_close_drawdown=0.02,
+        institution_net_buy=1.0,
+        security_state="ST海王",
+    )
+
+    assert decision.eligibility_status == "risk_watch"
+    assert decision.backtest_entry_eligible is False
+    assert decision.buy_signal_status == "research_only"
+    assert "near_limit_down_followthrough_risk" in decision.reason_codes
+    assert "st_high_risk" in decision.warning_codes
+
+
 def test_missing_pump_risk_fails_closed():
     decision = evaluate_lhb_eligibility(
         trade_date="2026-07-14",
