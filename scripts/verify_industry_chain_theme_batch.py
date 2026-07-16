@@ -5,6 +5,7 @@ import argparse
 import json
 import math
 from pathlib import Path
+import re
 import sys
 from typing import Any
 
@@ -47,6 +48,24 @@ NUMERIC_GATE_KEYS = (
 SUPPORTED_SCHEMA_VERSION = "industry_chain_theme_batch_v1"
 MATRIX_COVERAGE_STATUSES = EVIDENCE_GAP_STATUSES
 MATRIX_EXPLICIT_GAP_STATUSES = {"technical_route_only", "evidence_gap"}
+DIRECT_MAPPING_EVIDENCE_TYPES = {
+    "product_relationship",
+    "service_relationship",
+    "customer_relationship",
+}
+PRECISE_PAGE_LOCATOR = re.compile(
+    r"(?:第[\d、，,\-–—]+页|pages?\s+\d+(?:[\-–—]\d+)?)",
+    re.IGNORECASE,
+)
+FUZZY_LOCATOR_PHRASES = {
+    "风险章节",
+    "收入与风险章节",
+    "经营与金融风险章节",
+    "发展与风险章节",
+    "收入分析及研发项目页",
+    "主营业务与战略章节",
+    "客户、项目和竞争风险章节",
+}
 
 
 def load_theme_batch_manifest(path: str | Path) -> dict[str, Any]:
@@ -278,6 +297,14 @@ def _validate_manifest(manifest: dict[str, Any], path: Path) -> None:
             f"Theme batch manifest {path} completion gate "
             "'require_node_evidence_matrix_coverage' must be boolean"
         )
+    for key in (
+        "require_bidirectional_evidence_contract",
+        "require_precise_mapping_locators",
+    ):
+        if key in gates and not isinstance(gates[key], bool):
+            raise ValueError(
+                f"Theme batch manifest {path} completion gate {key!r} must be boolean"
+            )
     sections = gates.get("required_readable_sections")
     if not isinstance(sections, list) or not sections:
         raise ValueError(
@@ -387,6 +414,23 @@ def _build_theme_result(
         ).stem,
     )
     errors.extend(matrix_errors)
+    bidirectional_contract_valid = True
+    if gates.get("require_bidirectional_evidence_contract", False):
+        bidirectional_contract_valid, contract_errors = (
+            _validate_bidirectional_evidence_contract(
+                theme_artifact=artifacts["theme"],
+                source_pack=artifacts["source_pack"],
+                node_evidence_matrix=artifacts["node_evidence_matrix"],
+                accepted_source_ids=set(accepted_sources),
+            )
+        )
+        errors.extend(contract_errors)
+    precise_mapping_locators = True
+    if gates.get("require_precise_mapping_locators", False):
+        precise_mapping_locators, locator_errors = (
+            _validate_precise_mapping_locators(artifacts["company_mapping"])
+        )
+        errors.extend(locator_errors)
     readable_sections = {
         section["name"]: all(
             _requirement_is_non_empty(requirement, artifacts)
@@ -421,6 +465,10 @@ def _build_theme_result(
     }
     if gates["require_node_evidence_matrix_coverage"]:
         checks["node_evidence_matrix_coverage"] = matrix_coverage
+    if gates.get("require_bidirectional_evidence_contract", False):
+        checks["bidirectional_evidence_contract"] = bidirectional_contract_valid
+    if gates.get("require_precise_mapping_locators", False):
+        checks["precise_mapping_locators"] = precise_mapping_locators
     return {
         "chain_id": chain_id,
         "theme_id": expected_theme_id,
@@ -614,6 +662,163 @@ def _validate_mappings(
         ):
             reviewed_mappings.append(mapping)
     return reviewed_mappings, True, []
+
+
+def _validate_bidirectional_evidence_contract(
+    *,
+    theme_artifact: dict[str, Any] | None,
+    source_pack: dict[str, Any] | None,
+    node_evidence_matrix: dict[str, Any] | None,
+    accepted_source_ids: set[str],
+) -> tuple[bool, list[str]]:
+    if theme_artifact is None or source_pack is None or node_evidence_matrix is None:
+        return False, ["source-claim-node contract artifacts are unavailable"]
+    claims = theme_artifact.get("claims")
+    sources = source_pack.get("sources")
+    matrix_rows = node_evidence_matrix.get("node_evidence_matrix")
+    if not isinstance(claims, list) or not isinstance(sources, list) or not isinstance(
+        matrix_rows, list
+    ):
+        return False, ["source-claim-node contract requires list artifacts"]
+
+    claim_by_id = {
+        row["claim_id"]: row
+        for row in claims
+        if isinstance(row, dict) and _is_non_empty_string(row.get("claim_id"))
+    }
+    source_by_id = {
+        row["source_id"]: row
+        for row in sources
+        if isinstance(row, dict) and _is_non_empty_string(row.get("source_id"))
+    }
+    matrix_by_node = {
+        row["node_id"]: row
+        for row in matrix_rows
+        if isinstance(row, dict) and _is_non_empty_string(row.get("node_id"))
+    }
+    errors: list[str] = []
+
+    claim_source_ids: dict[str, set[str]] = {}
+    for claim_id, claim in claim_by_id.items():
+        attached_sources = {str(claim.get("source_id") or "")}
+        supporting = claim.get("supporting_source_ids")
+        if isinstance(supporting, list):
+            attached_sources.update(str(source_id) for source_id in supporting)
+        attached_sources.discard("")
+        claim_source_ids[claim_id] = attached_sources
+
+    for source_id, source in source_by_id.items():
+        expected_claim_ids = {
+            claim_id
+            for claim_id, attached_sources in claim_source_ids.items()
+            if source_id in attached_sources
+        }
+        declared_claim_ids = set(source.get("supported_claim_ids") or [])
+        if declared_claim_ids != expected_claim_ids:
+            errors.append(
+                "source-claim-node contract claim mismatch for "
+                f"{source_id}: declared={sorted(declared_claim_ids)}, "
+                f"expected={sorted(expected_claim_ids)}"
+            )
+        expected_node_ids = {
+            node_id
+            for claim_id in expected_claim_ids
+            for node_id in claim_by_id[claim_id].get("affected_theme_nodes", [])
+        }
+        declared_node_ids = set(source.get("supported_node_ids") or [])
+        if declared_node_ids != expected_node_ids:
+            errors.append(
+                "source-claim-node contract node mismatch for "
+                f"{source_id}: declared={sorted(declared_node_ids)}, "
+                f"expected={sorted(expected_node_ids)}"
+            )
+
+    for node_id, matrix in matrix_by_node.items():
+        expected_source_ids = {
+            source_id
+            for source_id, source in source_by_id.items()
+            if source_id in accepted_source_ids
+            and node_id in set(source.get("supported_node_ids") or [])
+        }
+        declared_source_ids = set(matrix.get("accepted_source_ids") or [])
+        if declared_source_ids != expected_source_ids:
+            errors.append(
+                "source-claim-node contract matrix source mismatch for "
+                f"{node_id}: declared={sorted(declared_source_ids)}, "
+                f"expected={sorted(expected_source_ids)}"
+            )
+        expected_claim_ids = {
+            claim_id
+            for claim_id, claim in claim_by_id.items()
+            if node_id in set(claim.get("affected_theme_nodes") or [])
+            and claim_source_ids.get(claim_id, set()) & accepted_source_ids
+        }
+        declared_claim_ids = set(matrix.get("supported_claim_ids") or [])
+        if declared_claim_ids != expected_claim_ids:
+            errors.append(
+                "source-claim-node contract matrix claim mismatch for "
+                f"{node_id}: declared={sorted(declared_claim_ids)}, "
+                f"expected={sorted(expected_claim_ids)}"
+            )
+    return not errors, errors
+
+
+def _validate_precise_mapping_locators(
+    mapping_artifact: dict[str, Any] | None,
+) -> tuple[bool, list[str]]:
+    if mapping_artifact is None:
+        return False, ["mapping evidence locator contract artifact is unavailable"]
+    evidence_rows = mapping_artifact.get("evidence_items")
+    mapping_rows = mapping_artifact.get("company_mappings")
+    if not isinstance(evidence_rows, list) or not isinstance(mapping_rows, list):
+        return False, ["mapping evidence locator contract requires list artifacts"]
+    evidence_by_id = {
+        row["evidence_id"]: row
+        for row in evidence_rows
+        if isinstance(row, dict) and _is_non_empty_string(row.get("evidence_id"))
+    }
+    errors: list[str] = []
+    for mapping in mapping_rows:
+        if not isinstance(mapping, dict) or mapping.get("review_status") != "reviewed":
+            continue
+        mapping_id = str(mapping.get("mapping_id") or "<unknown>")
+        evidence = [
+            evidence_by_id[evidence_id]
+            for evidence_id in mapping.get("evidence_ids", [])
+            if evidence_id in evidence_by_id
+        ]
+        evidence_types = {row.get("evidence_type") for row in evidence}
+        locators = [str(row.get("excerpt_locator") or "") for row in evidence]
+        if len(evidence) != 3:
+            errors.append(
+                f"mapping evidence locator contract {mapping_id} requires exactly 3 evidence items"
+            )
+        if not evidence_types & DIRECT_MAPPING_EVIDENCE_TYPES:
+            errors.append(
+                f"mapping evidence locator contract {mapping_id} lacks product/service evidence"
+            )
+        if "revenue_materiality" not in evidence_types:
+            errors.append(
+                f"mapping evidence locator contract {mapping_id} lacks revenue evidence"
+            )
+        if "business_stage" not in evidence_types:
+            errors.append(
+                f"mapping evidence locator contract {mapping_id} lacks business-stage evidence"
+            )
+        if len(locators) != len(set(locators)):
+            errors.append(
+                f"mapping evidence locator contract {mapping_id} reuses a locator"
+            )
+        for locator in locators:
+            if not PRECISE_PAGE_LOCATOR.search(locator):
+                errors.append(
+                    f"mapping evidence locator contract {mapping_id} lacks page number: {locator}"
+                )
+            if any(phrase in locator for phrase in FUZZY_LOCATOR_PHRASES):
+                errors.append(
+                    f"mapping evidence locator contract {mapping_id} uses fuzzy locator: {locator}"
+                )
+    return not errors, errors
 
 
 def _validate_node_evidence_matrix(

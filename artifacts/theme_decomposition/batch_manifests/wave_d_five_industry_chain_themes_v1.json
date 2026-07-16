@@ -1,0 +1,126 @@
+{
+  "schema_version": "industry_chain_theme_batch_v1",
+  "batch_id": "wave_d_five_industry_chain_themes_v1",
+  "target_theme_count": 5,
+  "artifact_base": "../../..",
+  "primary_source_types": [
+    "company_filing",
+    "official_report",
+    "official_article"
+  ],
+  "completion_gates": {
+    "min_accepted_sources": 10,
+    "min_primary_sources": 8,
+    "min_claims": 12,
+    "min_reviewed_mappings": 8,
+    "require_node_evidence_matrix_coverage": true,
+    "require_bidirectional_evidence_contract": true,
+    "require_precise_mapping_locators": true,
+    "required_readable_sections": [
+      {
+        "name": "研究结论",
+        "non_empty": [
+          "theme:research_profile.investment_summary",
+          "theme:research_profile.industry_stage",
+          "theme:research_profile.central_conflict"
+        ]
+      },
+      {
+        "name": "价值链",
+        "non_empty": [
+          "theme:research_profile.value_flow_summary",
+          "theme:nodes"
+        ]
+      },
+      {
+        "name": "利润池与竞争壁垒",
+        "non_empty": [
+          "theme:research_profile.profit_pool_summary"
+        ]
+      },
+      {
+        "name": "催化、验证信号与风险",
+        "non_empty": [
+          "theme:research_profile.catalyst_claim_ids",
+          "theme:research_profile.risk_claim_ids",
+          "theme:research_profile.validation_signals"
+        ]
+      },
+      {
+        "name": "受益公司",
+        "non_empty": [
+          "company_mapping:company_mappings"
+        ]
+      },
+      {
+        "name": "来源证据",
+        "non_empty": [
+          "source_pack:sources"
+        ]
+      },
+      {
+        "name": "证据缺口与更新",
+        "non_empty": [
+          "theme:research_profile.evidence_gap_summary",
+          "node_evidence_matrix:node_evidence_matrix"
+        ]
+      }
+    ]
+  },
+  "waves": {
+    "wave_d": [
+      "semiconductor_eda_ip_design_services",
+      "memory_chips_storage_control",
+      "industrial_machine_tools_cnc",
+      "satellite_manufacturing_space_infrastructure",
+      "high_end_medical_devices"
+    ]
+  },
+  "themes": {
+    "semiconductor_eda_ip_design_services": {
+      "theme_id": "semiconductor_eda_ip_design_services_value_chain_v1",
+      "artifacts": {
+        "theme": "artifacts/theme_decomposition/semiconductor_eda_ip_design_services_value_chain_v1.json",
+        "company_mapping": "artifacts/theme_decomposition/company_mappings/semiconductor_eda_ip_design_services_company_mapping_v1.json",
+        "source_pack": "artifacts/theme_decomposition/source_packs/semiconductor_eda_ip_design_services_source_pack_v1.json",
+        "node_evidence_matrix": "artifacts/theme_decomposition/source_packs/semiconductor_eda_ip_design_services_node_evidence_matrix_v1.json"
+      }
+    },
+    "memory_chips_storage_control": {
+      "theme_id": "memory_chips_storage_control_value_chain_v1",
+      "artifacts": {
+        "theme": "artifacts/theme_decomposition/memory_chips_storage_control_value_chain_v1.json",
+        "company_mapping": "artifacts/theme_decomposition/company_mappings/memory_chips_storage_control_company_mapping_v1.json",
+        "source_pack": "artifacts/theme_decomposition/source_packs/memory_chips_storage_control_source_pack_v1.json",
+        "node_evidence_matrix": "artifacts/theme_decomposition/source_packs/memory_chips_storage_control_node_evidence_matrix_v1.json"
+      }
+    },
+    "industrial_machine_tools_cnc": {
+      "theme_id": "industrial_machine_tools_cnc_value_chain_v1",
+      "artifacts": {
+        "theme": "artifacts/theme_decomposition/industrial_machine_tools_cnc_value_chain_v1.json",
+        "company_mapping": "artifacts/theme_decomposition/company_mappings/industrial_machine_tools_cnc_company_mapping_v1.json",
+        "source_pack": "artifacts/theme_decomposition/source_packs/industrial_machine_tools_cnc_source_pack_v1.json",
+        "node_evidence_matrix": "artifacts/theme_decomposition/source_packs/industrial_machine_tools_cnc_node_evidence_matrix_v1.json"
+      }
+    },
+    "satellite_manufacturing_space_infrastructure": {
+      "theme_id": "satellite_manufacturing_space_infrastructure_value_chain_v1",
+      "artifacts": {
+        "theme": "artifacts/theme_decomposition/satellite_manufacturing_space_infrastructure_value_chain_v1.json",
+        "company_mapping": "artifacts/theme_decomposition/company_mappings/satellite_manufacturing_space_infrastructure_company_mapping_v1.json",
+        "source_pack": "artifacts/theme_decomposition/source_packs/satellite_manufacturing_space_infrastructure_source_pack_v1.json",
+        "node_evidence_matrix": "artifacts/theme_decomposition/source_packs/satellite_manufacturing_space_infrastructure_node_evidence_matrix_v1.json"
+      }
+    },
+    "high_end_medical_devices": {
+      "theme_id": "high_end_medical_devices_value_chain_v1",
+      "artifacts": {
+        "theme": "artifacts/theme_decomposition/high_end_medical_devices_value_chain_v1.json",
+        "company_mapping": "artifacts/theme_decomposition/company_mappings/high_end_medical_devices_company_mapping_v1.json",
+        "source_pack": "artifacts/theme_decomposition/source_packs/high_end_medical_devices_source_pack_v1.json",
+        "node_evidence_matrix": "artifacts/theme_decomposition/source_packs/high_end_medical_devices_node_evidence_matrix_v1.json"
+      }
+    }
+  }
+}

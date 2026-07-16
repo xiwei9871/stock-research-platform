@@ -1,5 +1,6 @@
 from copy import deepcopy
 
+from stock_research import industry_chain_theme_research as research
 from stock_research.industry_chain_theme_research import (
     COMPLETED_CHAIN_THEMES,
     NEXT_FIFTEEN_CHAIN_THEMES,
@@ -41,7 +42,19 @@ def test_selected_chain_registry_is_frozen():
     assert SELECTED_CHAIN_THEMES == {
         **COMPLETED_CHAIN_THEMES,
         **NEXT_FIFTEEN_CHAIN_THEMES,
+        **research.WAVE_D_CHAIN_THEMES,
     }
+
+
+def test_wave_d_chain_registry_is_frozen():
+    assert research.WAVE_D_CHAIN_THEMES == {
+        "semiconductor_eda_ip_design_services": "semiconductor_eda_ip_design_services_value_chain_v1",
+        "memory_chips_storage_control": "memory_chips_storage_control_value_chain_v1",
+        "industrial_machine_tools_cnc": "industrial_machine_tools_cnc_value_chain_v1",
+        "satellite_manufacturing_space_infrastructure": "satellite_manufacturing_space_infrastructure_value_chain_v1",
+        "high_end_medical_devices": "high_end_medical_devices_value_chain_v1",
+    }
+    assert len(SELECTED_CHAIN_THEMES) == 25
 
 
 def test_beneficiary_classifier_separates_reviewed_tiers_and_concept_associations():
@@ -92,7 +105,7 @@ def test_selected_chain_summaries_report_existing_and_missing_theme_packages():
     by_chain = {row["chain_id"]: row for row in expanded_rows}
 
     assert len(rows) == 5
-    assert len(expanded_rows) == 20
+    assert len(expanded_rows) == 25
     assert by_chain["ai_data_center_power"]["theme_id"] == "ai_power_value_capture_v1"
     assert by_chain["ai_data_center_power"]["research_status"] == "reviewed"
     assert by_chain["humanoid_robots_embodied_intelligence"]["research_status"] == "reviewed"

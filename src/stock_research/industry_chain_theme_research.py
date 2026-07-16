@@ -30,9 +30,18 @@ NEXT_FIFTEEN_CHAIN_THEMES = {
     "commercial_space_launch": "commercial_space_launch_value_chain_v1",
 }
 
+WAVE_D_CHAIN_THEMES = {
+    "semiconductor_eda_ip_design_services": "semiconductor_eda_ip_design_services_value_chain_v1",
+    "memory_chips_storage_control": "memory_chips_storage_control_value_chain_v1",
+    "industrial_machine_tools_cnc": "industrial_machine_tools_cnc_value_chain_v1",
+    "satellite_manufacturing_space_infrastructure": "satellite_manufacturing_space_infrastructure_value_chain_v1",
+    "high_end_medical_devices": "high_end_medical_devices_value_chain_v1",
+}
+
 SELECTED_CHAIN_THEMES = {
     **COMPLETED_CHAIN_THEMES,
     **NEXT_FIFTEEN_CHAIN_THEMES,
+    **WAVE_D_CHAIN_THEMES,
 }
 
 BENEFICIARY_TIERS = {

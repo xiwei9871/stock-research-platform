@@ -30,6 +30,11 @@ CANONICAL_MANIFEST = (
     / "artifacts/theme_decomposition/batch_manifests"
     / "next_fifteen_industry_chain_themes_v1.json"
 )
+WAVE_D_MANIFEST = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/batch_manifests"
+    / "wave_d_five_industry_chain_themes_v1.json"
+)
 
 NEXT_FIFTEEN = {
     "ai_logic_compute_chips": "ai_logic_compute_chips_value_chain_v1",
@@ -47,6 +52,14 @@ NEXT_FIFTEEN = {
     "intelligent_driving_smart_cockpit": "intelligent_driving_smart_cockpit_value_chain_v1",
     "automotive_electronics_chip_applications": "automotive_electronics_chip_applications_value_chain_v1",
     "commercial_space_launch": "commercial_space_launch_value_chain_v1",
+}
+
+WAVE_D = {
+    "semiconductor_eda_ip_design_services": "semiconductor_eda_ip_design_services_value_chain_v1",
+    "memory_chips_storage_control": "memory_chips_storage_control_value_chain_v1",
+    "industrial_machine_tools_cnc": "industrial_machine_tools_cnc_value_chain_v1",
+    "satellite_manufacturing_space_infrastructure": "satellite_manufacturing_space_infrastructure_value_chain_v1",
+    "high_end_medical_devices": "high_end_medical_devices_value_chain_v1",
 }
 
 WAVES = {
@@ -129,6 +142,25 @@ def test_canonical_manifest_freezes_scope_wave_order_files_and_gates():
     assert [row["name"] for row in gates["required_readable_sections"]] == REQUIRED_SECTIONS
 
 
+def test_wave_d_manifest_freezes_scope_files_and_stricter_quality_gates():
+    manifest = load_theme_batch_manifest(WAVE_D_MANIFEST)
+
+    assert manifest["batch_id"] == "wave_d_five_industry_chain_themes_v1"
+    assert manifest["target_theme_count"] == 5
+    assert manifest["waves"] == {"wave_d": list(WAVE_D)}
+    assert {
+        chain_id: metadata["theme_id"]
+        for chain_id, metadata in manifest["themes"].items()
+    } == WAVE_D
+    gates = manifest["completion_gates"]
+    assert gates["min_accepted_sources"] == 10
+    assert gates["min_primary_sources"] == 8
+    assert gates["min_claims"] == 12
+    assert gates["min_reviewed_mappings"] == 8
+    assert gates["require_bidirectional_evidence_contract"] is True
+    assert gates["require_precise_mapping_locators"] is True
+
+
 def test_ready_fixture_builds_theme_and_wave_summary(tmp_path: Path):
     manifest_path = _write_ready_batch(tmp_path)
 
@@ -146,6 +178,8 @@ def test_ready_fixture_builds_theme_and_wave_summary(tmp_path: Path):
         "reviewed_mappings": 8,
     }
     assert theme["required_sections_ready"] is True
+    assert theme["checks"]["bidirectional_evidence_contract"] is True
+    assert theme["checks"]["precise_mapping_locators"] is True
     assert all(theme["readable_sections"].values())
     assert all(theme["checks"].values())
     assert_theme_batch_ready(report)
@@ -449,6 +483,42 @@ def test_canonical_mapping_validator_blocks_provenance_and_ownership_errors(
     assert theme["counts"]["reviewed_mappings"] == 0
 
 
+def test_bidirectional_evidence_contract_rejects_broad_claim_node_attachment(
+    tmp_path: Path,
+):
+    manifest_path = _write_ready_batch(tmp_path)
+    path = tmp_path / "sample_theme.json"
+    payload = _read_json(path)
+    payload["claims"][0]["affected_theme_nodes"] = ["node_1", "node_2"]
+    _write_json(path, payload)
+
+    theme = build_theme_batch_report(manifest_path)["theme_results"][0]
+
+    assert theme["ready"] is False
+    assert theme["checks"]["bidirectional_evidence_contract"] is False
+    assert any("source-claim-node contract" in error for error in theme["errors"])
+
+
+def test_precise_mapping_locator_contract_rejects_reused_composite_locator(
+    tmp_path: Path,
+):
+    manifest_path = _write_ready_batch(tmp_path)
+    path = tmp_path / "sample_company_mapping.json"
+    payload = _read_json(path)
+    for evidence_id in payload["company_mappings"][0]["evidence_ids"]:
+        evidence = next(
+            row for row in payload["evidence_items"] if row["evidence_id"] == evidence_id
+        )
+        evidence["excerpt_locator"] = "第10页，产品、收入与风险章节"
+    _write_json(path, payload)
+
+    theme = build_theme_batch_report(manifest_path)["theme_results"][0]
+
+    assert theme["ready"] is False
+    assert theme["checks"]["precise_mapping_locators"] is False
+    assert any("mapping evidence locator contract" in error for error in theme["errors"])
+
+
 @pytest.mark.parametrize(
     "mutation", ["duplicate_id", "cross_theme", "missing_source", "invalid_type"]
 )
@@ -542,12 +612,22 @@ def test_known_nonaccepted_source_draft_claim_counts_toward_claim_gate(
             "notes": "Pending fixture source",
         }
     )
+    source_pack["sources"][9]["supported_claim_ids"] = []
+    source_pack["sources"][9]["supported_node_ids"] = []
     _write_json(source_path, source_pack)
     theme_path = tmp_path / "sample_theme.json"
     theme_payload = _read_json(theme_path)
     theme_payload["claims"][-1]["source_id"] = "pending_source"
     theme_payload["claims"][-1]["platform_use_status"] = "draft"
     _write_json(theme_path, theme_payload)
+    matrix_path = tmp_path / "sample_node_evidence_matrix.json"
+    matrix_payload = _read_json(matrix_path)
+    node_2 = next(
+        row for row in matrix_payload["node_evidence_matrix"] if row["node_id"] == "node_2"
+    )
+    node_2["accepted_source_ids"].remove("source_9")
+    node_2["supported_claim_ids"].remove("claim_9")
+    _write_json(matrix_path, matrix_payload)
 
     theme = build_theme_batch_report(manifest_path)["theme_results"][0]
 
@@ -611,7 +691,12 @@ def test_invalid_reviewed_mappings_do_not_count(tmp_path: Path, mutation: str):
     elif mutation == "irrelevant_scope":
         payload["evidence_items"][-1]["related_company_codes"] = ["999999.SZ"]
     elif mutation == "indirect_evidence":
-        payload["evidence_items"][-1]["evidence_type"] = "company_mention"
+        relationship_id = mapping["evidence_ids"][0]
+        next(
+            row
+            for row in payload["evidence_items"]
+            if row["evidence_id"] == relationship_id
+        )["evidence_type"] = "company_mention"
     elif mutation == "raw_mapping_source":
         payload["sources"][-1]["title"] = ""
     elif mutation == "raw_evidence":
@@ -881,6 +966,8 @@ def _write_ready_batch(root: Path) -> Path:
             "min_claims": 10,
             "min_reviewed_mappings": 8,
             "require_node_evidence_matrix_coverage": True,
+            "require_bidirectional_evidence_contract": True,
+            "require_precise_mapping_locators": True,
             "required_readable_sections": [
                 {
                     "name": "研究结论",
@@ -1036,7 +1123,7 @@ def _write_ready_batch(root: Path) -> Path:
                     "evidence_id": f"relationship_evidence_{index}",
                     "source_id": f"source_{index}",
                     "evidence_type": "product_relationship",
-                    "excerpt_locator": f"page {index + 1}",
+                    "excerpt_locator": f"第{index + 1}页，产品关系",
                     "evidence_summary": f"Scoped relationship {index}",
                     "related_company_codes": [f"00000{index}.SZ"],
                     "related_node_ids": [f"node_{index % 2 + 1}"],
@@ -1045,8 +1132,17 @@ def _write_ready_batch(root: Path) -> Path:
                     "evidence_id": f"revenue_evidence_{index}",
                     "source_id": f"source_{index}",
                     "evidence_type": "revenue_materiality",
-                    "excerpt_locator": f"page {index + 1}",
+                    "excerpt_locator": f"第{index + 101}页，收入构成",
                     "evidence_summary": f"Revenue materiality {index}",
+                    "related_company_codes": [f"00000{index}.SZ"],
+                    "related_node_ids": [f"node_{index % 2 + 1}"],
+                },
+                {
+                    "evidence_id": f"stage_evidence_{index}",
+                    "source_id": f"source_{index}",
+                    "evidence_type": "business_stage",
+                    "excerpt_locator": f"第{index + 201}页，商业阶段与风险",
+                    "evidence_summary": f"Business stage {index}",
                     "related_company_codes": [f"00000{index}.SZ"],
                     "related_node_ids": [f"node_{index % 2 + 1}"],
                 },
@@ -1066,6 +1162,7 @@ def _write_ready_batch(root: Path) -> Path:
                 "evidence_ids": [
                     f"relationship_evidence_{index}",
                     f"revenue_evidence_{index}",
+                    f"stage_evidence_{index}",
                 ],
                 "revenue_relevance": "meaningful",
                 "bottleneck_relevance": "core",
