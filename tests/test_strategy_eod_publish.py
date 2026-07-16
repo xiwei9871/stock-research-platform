@@ -62,6 +62,9 @@ def test_lhb_review_publishes_original_top5_after_gate_without_refill(monkeypatc
     assert "CN:SZ:000001" not in set(review["asset_id"])
     assert review["review_tier"].eq("top5_focus").all()
     assert review.loc[review["review_tier"].eq("top5_focus"), "confirmation_state"].eq("pending_confirmation").all()
+    st_row = review.loc[review["asset_id"].eq("CN:SZ:000078")].iloc[0]
+    assert st_row["buy_signal_status"] == "tradable"
+    assert "st_high_risk" in st_row["eligibility_warning_codes"]
 
 
 @pytest.mark.parametrize(

@@ -59,6 +59,29 @@ def test_strategy_lightweight_digest_labels_lhb_risk_watch_and_exposes_reason():
     ]
 
 
+def test_strategy_lightweight_digest_exposes_st_high_risk_warning():
+    digest = review_queue._strategy_lightweight_digest(
+        {
+            "asset_id": "CN:SZ:000078",
+            "stock_name": "ST海王",
+            "strategy_name": "LHB Shortline Combo",
+            "rank": 5,
+            "score_total": 66.0,
+            "review_tier": "top5_focus",
+            "buy_signal_status": "tradable",
+            "eligibility_warning_codes": ["st_high_risk"],
+        },
+        "CN:SZ:000078",
+        "2026-07-14",
+    )
+
+    assert {
+        "code": "st_high_risk",
+        "message": "ST高风险",
+        "severity": "warning",
+    } in digest["risk_flags"]
+
+
 def test_strategy_lightweight_digest_distinguishes_pending_and_confirmed_lhb_states():
     pending = review_queue._strategy_lightweight_digest(
         {

@@ -224,6 +224,35 @@ def test_build_lhb_review_candidates_keeps_only_eligible_original_top5_without_r
     assert review["eligibility_status"].eq("eligible").all()
 
 
+def test_build_lhb_review_candidates_uses_phase18c_final_rank_not_internal_pool_rank():
+    scored = pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-07-15",
+                "ts_code": "000007.SZ",
+                "top_n": 5,
+                "selection_rank": 7,
+                "phase18c_selection_rank": 1,
+                "auction_enhanced_score": 120.0,
+                "eligibility_status": "eligible",
+                "backtest_entry_eligible": True,
+                "buy_signal_status": "tradable",
+            }
+        ]
+    )
+
+    review = lhb_shortline_v1._build_lhb_review_candidates(
+        scored_candidates=scored,
+        risk_watch_candidates=pd.DataFrame(),
+        top_n=5,
+    )
+
+    assert review["ts_code"].tolist() == ["000007.SZ"]
+    assert review["phase18c_selection_rank"].tolist() == [1]
+    assert review["selection_rank"].tolist() == [1]
+    assert review["pool_selection_rank"].tolist() == [7]
+
+
 def test_lhb_lifecycle_keeps_legacy_top10_research_pool_for_top5_account():
     assert lhb_shortline_v1._lhb_shortline_v1_top_values(5) == [10]
 
