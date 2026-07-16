@@ -1,0 +1,944 @@
+{
+  "artifact_version": "theme_decomposition_v1_6",
+  "theme": {
+    "theme_id": "cloud_data_center_infrastructure_value_chain_v1",
+    "theme_name": "云数据中心基础设施价值链",
+    "theme_type": "other",
+    "summary": "覆盖设施模块化、供电与备电依赖、液冷与排热、环境约束、DCIM、设计交付、运营服务及客户利用率验证；严格保留供电、储能、电网和通用软件的跨链所有权。",
+    "status": "reviewed",
+    "created_from": "mixed",
+    "last_updated": "2026-07-16"
+  },
+  "research_profile": {
+    "catalog_chain_id": "cloud_data_center_infrastructure",
+    "research_kind": "industry_chain_deep_research",
+    "industry_stage": "AI算力密度和交付速度推动数据中心由机房级风冷向模块化、高密度液冷、智能监控和全生命周期运营升级。",
+    "central_conflict": "产品family、项目交付和宽行业收入容易被误读为液冷或AI数据中心独立收入，而实际价值兑现取决于验收、上架、利用率、SLA及跨链设备边界。",
+    "investment_summary": "优先跟踪直接液冷系统family、材料性数据中心运营收入和明确上架利用率的公司；宽温控、制冷、工程与算力网络收入按未拆分处理，供电/储能/电网/通用软件只作依赖映射。",
+    "value_flow_summary": "设施与模块化部署 -> 供电/备电依赖 -> 液冷与排热 -> 水和制冷剂约束 -> DCIM -> 设计集成EPC调试 -> 设施运营 -> 客户部署、上架和利用率验证。",
+    "profit_pool_summary": "高密度液冷系统集成、可靠排热、快速交付和高SLA运营具备较强价值捕获；标准电气设备、宽制冷产品和项目型建设受跨链所有权、验收、回款与利用率约束。",
+    "catalyst_claim_ids": [
+      "cloud_dc_claim_05_liquid_cooling",
+      "cloud_dc_claim_09_design_delivery",
+      "cloud_dc_claim_10_operations"
+    ],
+    "risk_claim_ids": [
+      "cloud_dc_claim_07_environment",
+      "cloud_dc_claim_11_utilization",
+      "cloud_dc_claim_12_revenue_stage_boundary",
+      "cloud_dc_claim_13_execution_risks"
+    ],
+    "validation_signals": [
+      "液冷冷板/CDU/快接/管路/冷却液的分产品收入与毛利",
+      "模块化设施的实际交付、验收与回款",
+      "运营容量、上架率、计费功率与SLA",
+      "客户集中度和新中心爬坡周期",
+      "WUE、PUE、制冷剂与水资源约束",
+      "供电、储能、电网与通用软件canonical链边界"
+    ],
+    "evidence_gap_summary": "11份巨潮2025年年度报告覆盖10节点和11家映射；液冷、数据中心温控、工程和算力网络的窄收入多数未拆，客户利用率披露集中在运营商，故保留elastic/indirect边界。",
+    "readable_section_claim_ids": {
+      "conclusion": [
+        "cloud_dc_claim_02_facility_modular",
+        "cloud_dc_claim_05_liquid_cooling",
+        "cloud_dc_claim_11_utilization",
+        "cloud_dc_claim_12_revenue_stage_boundary"
+      ],
+      "value_chain": [
+        "cloud_dc_claim_01_value_flow",
+        "cloud_dc_claim_02_facility_modular",
+        "cloud_dc_claim_03_power_dependency",
+        "cloud_dc_claim_04_backup_dependency",
+        "cloud_dc_claim_05_liquid_cooling",
+        "cloud_dc_claim_06_heat_rejection",
+        "cloud_dc_claim_07_environment",
+        "cloud_dc_claim_08_dcim",
+        "cloud_dc_claim_09_design_delivery",
+        "cloud_dc_claim_10_operations",
+        "cloud_dc_claim_11_utilization"
+      ],
+      "profit_pool_barriers": [
+        "cloud_dc_claim_05_liquid_cooling",
+        "cloud_dc_claim_06_heat_rejection",
+        "cloud_dc_claim_08_dcim",
+        "cloud_dc_claim_10_operations"
+      ],
+      "catalysts_validation_risks": [
+        "cloud_dc_claim_07_environment",
+        "cloud_dc_claim_09_design_delivery",
+        "cloud_dc_claim_11_utilization",
+        "cloud_dc_claim_12_revenue_stage_boundary",
+        "cloud_dc_claim_13_execution_risks"
+      ],
+      "beneficiary_companies": [
+        "cloud_dc_claim_02_facility_modular",
+        "cloud_dc_claim_05_liquid_cooling",
+        "cloud_dc_claim_09_design_delivery",
+        "cloud_dc_claim_10_operations",
+        "cloud_dc_claim_11_utilization",
+        "cloud_dc_claim_12_revenue_stage_boundary"
+      ],
+      "source_evidence": [
+        "cloud_dc_claim_01_value_flow",
+        "cloud_dc_claim_05_liquid_cooling",
+        "cloud_dc_claim_10_operations",
+        "cloud_dc_claim_12_revenue_stage_boundary"
+      ],
+      "evidence_gaps": [
+        "cloud_dc_claim_07_environment",
+        "cloud_dc_claim_11_utilization",
+        "cloud_dc_claim_12_revenue_stage_boundary",
+        "cloud_dc_claim_13_execution_risks"
+      ]
+    }
+  },
+  "nodes": [
+    {
+      "node_id": "facility_systems_modular_deployment",
+      "theme_id": "cloud_data_center_infrastructure_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "设施系统与模块化部署",
+      "node_type": "infrastructure",
+      "description": "供配电、制冷、机柜与模块化设施的系统级部署，产品family与交付stage需完整等价。",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 2,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "MW/机柜容量",
+        "模块化交付周期"
+      ],
+      "overseas_leaders": [
+        "Schneider Electric",
+        "Vertiv"
+      ],
+      "domestic_players": [
+        "英维克",
+        "申菱环境",
+        "科华数据",
+        "润泽科技",
+        "数据港"
+      ],
+      "related_stock_codes": [
+        "002837.SZ",
+        "301018.SZ",
+        "002335.SZ",
+        "300442.SZ",
+        "603881.SH"
+      ]
+    },
+    {
+      "node_id": "power_availability_electrical_architecture_dependency",
+      "theme_id": "cloud_data_center_infrastructure_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "供电可用性与电气架构依赖",
+      "node_type": "infrastructure",
+      "description": "供电容量、HVDC/UPS和配电是设施可用性依赖，所有权保留在供电链。",
+      "value_capture_score": 3,
+      "bottleneck_score": 5,
+      "localization_gap_score": 2,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "可用功率MW",
+        "供电冗余等级"
+      ],
+      "overseas_leaders": [
+        "Eaton",
+        "ABB"
+      ],
+      "domestic_players": [
+        "科华数据",
+        "中恒电气"
+      ],
+      "related_stock_codes": [
+        "002335.SZ",
+        "002364.SZ"
+      ]
+    },
+    {
+      "node_id": "backup_power_storage_resilience_dependency",
+      "theme_id": "cloud_data_center_infrastructure_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "备用电源与储能韧性依赖",
+      "node_type": "infrastructure",
+      "description": "备用电源和储能承担切换与韧性功能，电源及储能设备所有权不移入本链。",
+      "value_capture_score": 3,
+      "bottleneck_score": 5,
+      "localization_gap_score": 2,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "备电时长",
+        "切换时间"
+      ],
+      "overseas_leaders": [
+        "Eaton",
+        "Caterpillar"
+      ],
+      "domestic_players": [
+        "科华数据"
+      ],
+      "related_stock_codes": [
+        "002335.SZ"
+      ]
+    },
+    {
+      "node_id": "thermal_liquid_cooling_systems",
+      "theme_id": "cloud_data_center_infrastructure_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "热管理与液冷系统",
+      "node_type": "subsystem",
+      "description": "覆盖冷板、浸没、喷淋、CDU、快接、管路、冷却液和泄漏检测的完整液冷family。",
+      "value_capture_score": 5,
+      "bottleneck_score": 5,
+      "localization_gap_score": 2,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "单柜kW",
+        "液冷渗透率",
+        "系统PUE"
+      ],
+      "overseas_leaders": [
+        "Vertiv",
+        "CoolIT"
+      ],
+      "domestic_players": [
+        "英维克",
+        "高澜股份",
+        "申菱环境",
+        "佳力图",
+        "依米康"
+      ],
+      "related_stock_codes": [
+        "002837.SZ",
+        "300499.SZ",
+        "301018.SZ",
+        "603912.SH",
+        "300249.SZ"
+      ]
+    },
+    {
+      "node_id": "heat_rejection_chillers_pumps_recovery",
+      "theme_id": "cloud_data_center_infrastructure_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "排热冷水机泵换热与余热回收",
+      "node_type": "subsystem",
+      "description": "二次侧排热由冷水机、泵、换热器和余热回收构成，不能以宽制冷收入代替单节点收入。",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 2,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "COP",
+        "自然冷却小时",
+        "余热利用率"
+      ],
+      "overseas_leaders": [
+        "Trane",
+        "Johnson Controls"
+      ],
+      "domestic_players": [
+        "英维克",
+        "冰轮环境",
+        "佳力图"
+      ],
+      "related_stock_codes": [
+        "002837.SZ",
+        "000811.SZ",
+        "603912.SH"
+      ]
+    },
+    {
+      "node_id": "water_refrigerant_environmental_constraints",
+      "theme_id": "cloud_data_center_infrastructure_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "水、制冷剂与环境约束",
+      "node_type": "infrastructure",
+      "description": "WUE、水资源、制冷剂和环境许可约束冷却路线与选址。",
+      "value_capture_score": 3,
+      "bottleneck_score": 4,
+      "localization_gap_score": 2,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "WUE",
+        "耗水量",
+        "制冷剂GWP"
+      ],
+      "overseas_leaders": [
+        "Carrier",
+        "Daikin"
+      ],
+      "domestic_players": [
+        "申菱环境",
+        "冰轮环境"
+      ],
+      "related_stock_codes": [
+        "301018.SZ",
+        "000811.SZ"
+      ]
+    },
+    {
+      "node_id": "dcim_monitoring_energy_management",
+      "theme_id": "cloud_data_center_infrastructure_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "DCIM监控与能源管理",
+      "node_type": "software",
+      "description": "DCIM、动力环境监控和能源管理用于容量、故障与能效治理，通用工业软件所有权不移入本链。",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 2,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "PUE监控",
+        "告警闭环时间",
+        "容量利用率"
+      ],
+      "overseas_leaders": [
+        "Schneider Electric",
+        "Siemens"
+      ],
+      "domestic_players": [
+        "中恒电气",
+        "数据港"
+      ],
+      "related_stock_codes": [
+        "002364.SZ",
+        "603881.SH"
+      ]
+    },
+    {
+      "node_id": "design_integration_epc_commissioning",
+      "theme_id": "cloud_data_center_infrastructure_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "设计集成EPC与调试认证",
+      "node_type": "service",
+      "description": "从电气/制冷设计、系统集成、EPC到调试认证，订单与项目额须经交付验收后才能确认收入。",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 2,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "交付周期",
+        "验收进度",
+        "在手订单"
+      ],
+      "overseas_leaders": [
+        "AECOM",
+        "Jacobs"
+      ],
+      "domestic_players": [
+        "高澜股份",
+        "科华数据",
+        "依米康",
+        "润建股份",
+        "数据港"
+      ],
+      "related_stock_codes": [
+        "300499.SZ",
+        "002335.SZ",
+        "300249.SZ",
+        "002929.SZ",
+        "603881.SH"
+      ]
+    },
+    {
+      "node_id": "facility_operations_lifecycle_services",
+      "theme_id": "cloud_data_center_infrastructure_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "设施运营与全生命周期服务",
+      "node_type": "service",
+      "description": "365×24小时运行、托管、维护与改造服务以实际可用容量和SLA兑现价值。",
+      "value_capture_score": 5,
+      "bottleneck_score": 4,
+      "localization_gap_score": 2,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "SLA",
+        "可用率",
+        "运维毛利率"
+      ],
+      "overseas_leaders": [
+        "Equinix",
+        "Digital Realty"
+      ],
+      "domestic_players": [
+        "润泽科技",
+        "润建股份",
+        "数据港"
+      ],
+      "related_stock_codes": [
+        "300442.SZ",
+        "002929.SZ",
+        "603881.SH"
+      ]
+    },
+    {
+      "node_id": "customer_deployment_utilization_validation",
+      "theme_id": "cloud_data_center_infrastructure_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "客户部署、利用率与收入验证",
+      "node_type": "downstream_application",
+      "description": "交付容量需经过客户IT部署、上架计费与持续利用率验证，客户集中会放大波动。",
+      "value_capture_score": 4,
+      "bottleneck_score": 5,
+      "localization_gap_score": 2,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "上架率",
+        "客户集中度",
+        "计费功率"
+      ],
+      "overseas_leaders": [
+        "Equinix",
+        "Digital Realty"
+      ],
+      "domestic_players": [
+        "润泽科技",
+        "数据港"
+      ],
+      "related_stock_codes": [
+        "300442.SZ",
+        "603881.SH"
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "source_id": "cloud_dc_002837_ar2025",
+      "source_type": "company_filing",
+      "title": "深圳市英维克科技股份有限公司2025年年度报告",
+      "publisher": "深圳市英维克科技股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-21",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-21/1225131813.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第9-10页机房温控、微模块、冷板/CDU/快接与全链条液冷产品；第15-16页机房温控收入；风险章节及应收账款附注。机房温控收入混合风冷、液冷、模块化和集成，储能液冷收入不得归入数据中心液冷。"
+    },
+    {
+      "source_id": "cloud_dc_300499_ar2025",
+      "source_type": "company_filing",
+      "title": "广州高澜节能技术股份有限公司2025年年度报告",
+      "publisher": "广州高澜节能技术股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-24",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-24/1225160679.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第14页数据中心热管理业务；第24-25页冷板式/浸没式液冷、CDU、集装箱与海外液冷EPC交付；收入与风险章节。订单和项目交付不等于稳定规模收入；电力电子热管理及储能热管理不得并入数据中心液冷。"
+    },
+    {
+      "source_id": "cloud_dc_301018_ar2025",
+      "source_type": "company_filing",
+      "title": "广东申菱环境系统股份有限公司2025年年度报告",
+      "publisher": "广东申菱环境系统股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-27",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-27/1225181199.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第14-15页数据服务客户、DPC相变和液冷温控；第20、25页浸没式液冷、CDU与模块化基础设施；第15页收入构成及风险章节。数据服务行业收入包含宽温控设备、解决方案和服务；在研液冷项目不等于已形成稳定规模收入。"
+    },
+    {
+      "source_id": "cloud_dc_000811_ar2025",
+      "source_type": "company_filing",
+      "title": "冰轮环境技术股份有限公司2025年年度报告",
+      "publisher": "冰轮环境技术股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-11",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-11/1225092828.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第15、17页工业产品与工程施工收入；第20页数据中心专用磁悬浮/螺杆冷水机研发；经营与金融风险章节。工业产品销售和工程施工覆盖多行业，研发产品不能视为稳定商业化收入。"
+    },
+    {
+      "source_id": "cloud_dc_002335_ar2025",
+      "source_type": "company_filing",
+      "title": "科华数据股份有限公司2025年年度报告",
+      "publisher": "科华数据股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-27",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-27/1225194937.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第11-18页智算中心产品、IDC运营与快速交付；第20-21页数据中心产品和IDC服务收入；第32页市场、迭代与交付风险。数据中心产品包含供配电等跨链设备；UPS仍归power_electronics_power_supply_equipment。"
+    },
+    {
+      "source_id": "cloud_dc_300442_ar2025",
+      "source_type": "company_filing",
+      "title": "润泽智算科技集团股份有限公司2025年年度报告",
+      "publisher": "润泽智算科技集团股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-10",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-10/1225090821.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第6页上架率定义；第18页成熟算力中心上架率与交付；第20页IDC/AIDC收入；第35-36页客户集中、上架率与技术风险。规划或交付容量不等于已上架计费容量；新中心利用率与客户集中度影响盈利。"
+    },
+    {
+      "source_id": "cloud_dc_002364_ar2025",
+      "source_type": "company_filing",
+      "title": "杭州中恒电气股份有限公司2025年年度报告",
+      "publisher": "杭州中恒电气股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-21",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-21/1225131190.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第11-13页HVDC/Panama/配电与监测产品；第23-25页数据中心电源项目及收入；发展与风险章节。数据中心电源属于power_electronics_power_supply_equipment；通用软件仍归industrial_software。"
+    },
+    {
+      "source_id": "cloud_dc_603912_ar2025",
+      "source_type": "company_filing",
+      "title": "南京佳力图机房环境技术股份有限公司2025年年度报告",
+      "publisher": "南京佳力图机房环境技术股份有限公司",
+      "author": "",
+      "publish_date": "2026-03-24",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-24/1225026036.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第11-14页机房环境控制、精密空调和液冷配套；收入分析及研发项目页；客户、项目和竞争风险章节。精密空调、冷水机和环境控制收入不能等同于液冷或AI数据中心独立收入。"
+    },
+    {
+      "source_id": "cloud_dc_300249_ar2025",
+      "source_type": "company_filing",
+      "title": "依米康科技集团股份有限公司2025年年度报告",
+      "publisher": "依米康科技集团股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-17",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-17/1225110800.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "主营业务与战略章节的数据中心温控和全生命周期方案；第111页主营业务定义；第170页信息数据领域收入；风险章节。信息数据领域收入包含温控设备、集成、咨询与工程服务，不能归为液冷单节点收入。"
+    },
+    {
+      "source_id": "cloud_dc_002929_ar2025",
+      "source_type": "company_filing",
+      "title": "润建股份有限公司2025年年度报告",
+      "publisher": "润建股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-27",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-27/1225195099.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第20-22页算力网络、海外数据中心交付与收入构成；第35-36页竞争和大客户风险；第136页验收确认；第199页算力网络收入。订单、在手项目额和数据中心交付数量不等于经常性收入；需按验收确认且宽算力网络收入不可全归本链。"
+    },
+    {
+      "source_id": "cloud_dc_603881_ar2025",
+      "source_type": "company_filing",
+      "title": "上海数据港股份有限公司2025年年度报告",
+      "publisher": "上海数据港股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-18",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-18/1225123460.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第11页数据中心建设、托管和运维；第16页运营容量与收入；第27页客户集中风险；第110页按实际机柜确认托管收入。运营总容量不等于已使用容量；批发型客户集中度和实际机柜使用量决定收入。"
+    }
+  ],
+  "claims": [
+    {
+      "claim_id": "cloud_dc_claim_01_value_flow",
+      "theme_id": "cloud_data_center_infrastructure_value_chain_v1",
+      "source_id": "cloud_dc_002837_ar2025",
+      "claim_text": "云数据中心设施价值流从设施与模块化部署，经供电韧性、热管理排热、环境约束、DCIM、设计调试进入持续运营，最终由客户部署、上架率与利用率验证收入。",
+      "claim_type": "tech_route",
+      "confidence": 0.99,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "cloud_dc_300499_ar2025",
+        "cloud_dc_301018_ar2025",
+        "cloud_dc_000811_ar2025",
+        "cloud_dc_002335_ar2025",
+        "cloud_dc_300442_ar2025",
+        "cloud_dc_002364_ar2025",
+        "cloud_dc_603912_ar2025",
+        "cloud_dc_300249_ar2025",
+        "cloud_dc_002929_ar2025",
+        "cloud_dc_603881_ar2025"
+      ],
+      "affected_theme_nodes": [
+        "facility_systems_modular_deployment",
+        "power_availability_electrical_architecture_dependency",
+        "backup_power_storage_resilience_dependency",
+        "thermal_liquid_cooling_systems",
+        "heat_rejection_chillers_pumps_recovery",
+        "water_refrigerant_environmental_constraints",
+        "dcim_monitoring_energy_management",
+        "design_integration_epc_commissioning",
+        "facility_operations_lifecycle_services",
+        "customer_deployment_utilization_validation"
+      ]
+    },
+    {
+      "claim_id": "cloud_dc_claim_02_facility_modular",
+      "theme_id": "cloud_data_center_infrastructure_value_chain_v1",
+      "source_id": "cloud_dc_002837_ar2025",
+      "claim_text": "设施系统与模块化交付必须同时满足供配电、制冷、机柜、预制化和快速部署；仅产品family或单次项目命中不构成完整等价。",
+      "claim_type": "value_capture",
+      "confidence": 0.98,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "cloud_dc_301018_ar2025",
+        "cloud_dc_002335_ar2025",
+        "cloud_dc_300442_ar2025",
+        "cloud_dc_603881_ar2025"
+      ],
+      "affected_theme_nodes": [
+        "facility_systems_modular_deployment"
+      ]
+    },
+    {
+      "claim_id": "cloud_dc_claim_03_power_dependency",
+      "theme_id": "cloud_data_center_infrastructure_value_chain_v1",
+      "source_id": "cloud_dc_002364_ar2025",
+      "claim_text": "HVDC、UPS、精密配电与电力监控直接决定设施可用性，但其canonical所有权保留在power_electronics_power_supply_equipment和new_power_system_smart_grid。",
+      "claim_type": "bottleneck",
+      "confidence": 0.99,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "cloud_dc_002335_ar2025"
+      ],
+      "affected_theme_nodes": [
+        "power_availability_electrical_architecture_dependency"
+      ]
+    },
+    {
+      "claim_id": "cloud_dc_claim_04_backup_dependency",
+      "theme_id": "cloud_data_center_infrastructure_value_chain_v1",
+      "source_id": "cloud_dc_002335_ar2025",
+      "claim_text": "备用电源与储能提供切换和韧性，设备所有权保留在power_electronics_power_supply_equipment与new_energy_storage，不能因数据中心场景而重复归属。",
+      "claim_type": "bottleneck",
+      "confidence": 0.98,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "backup_power_storage_resilience_dependency"
+      ]
+    },
+    {
+      "claim_id": "cloud_dc_claim_05_liquid_cooling",
+      "theme_id": "cloud_data_center_infrastructure_value_chain_v1",
+      "source_id": "cloud_dc_002837_ar2025",
+      "claim_text": "液冷价值由冷板、浸没/喷淋、CDU、快接、管路、冷却液和泄漏检测形成系统family；宽温控收入不能当作液冷独立收入。",
+      "claim_type": "value_capture",
+      "confidence": 0.99,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "cloud_dc_300499_ar2025",
+        "cloud_dc_301018_ar2025",
+        "cloud_dc_603912_ar2025",
+        "cloud_dc_300249_ar2025"
+      ],
+      "affected_theme_nodes": [
+        "thermal_liquid_cooling_systems"
+      ]
+    },
+    {
+      "claim_id": "cloud_dc_claim_06_heat_rejection",
+      "theme_id": "cloud_data_center_infrastructure_value_chain_v1",
+      "source_id": "cloud_dc_002837_ar2025",
+      "claim_text": "冷水机、泵、换热器与余热回收决定二次侧排热效率，但宽工业制冷或工程施工收入不能直接归为数据中心排热收入。",
+      "claim_type": "bottleneck",
+      "confidence": 0.97,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "cloud_dc_000811_ar2025",
+        "cloud_dc_603912_ar2025"
+      ],
+      "affected_theme_nodes": [
+        "heat_rejection_chillers_pumps_recovery"
+      ]
+    },
+    {
+      "claim_id": "cloud_dc_claim_07_environment",
+      "theme_id": "cloud_data_center_infrastructure_value_chain_v1",
+      "source_id": "cloud_dc_301018_ar2025",
+      "claim_text": "水资源、WUE、制冷剂和环境许可影响冷却路线、选址与运行成本，无水或少水方案需由实际部署和能效数据验证。",
+      "claim_type": "risk",
+      "confidence": 0.95,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "cloud_dc_000811_ar2025"
+      ],
+      "affected_theme_nodes": [
+        "water_refrigerant_environmental_constraints"
+      ]
+    },
+    {
+      "claim_id": "cloud_dc_claim_08_dcim",
+      "theme_id": "cloud_data_center_infrastructure_value_chain_v1",
+      "source_id": "cloud_dc_002364_ar2025",
+      "claim_text": "DCIM、动力环境监控与能源管理支撑容量和故障治理；通用软件能力仍归industrial_software，只有数据中心基础设施管理平台建立精确链接。",
+      "claim_type": "value_capture",
+      "confidence": 0.97,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "cloud_dc_603881_ar2025"
+      ],
+      "affected_theme_nodes": [
+        "dcim_monitoring_energy_management"
+      ]
+    },
+    {
+      "claim_id": "cloud_dc_claim_09_design_delivery",
+      "theme_id": "cloud_data_center_infrastructure_value_chain_v1",
+      "source_id": "cloud_dc_300499_ar2025",
+      "claim_text": "设计、集成、EPC、调试和认证形成交付链，订单、在手项目、样品、定点或认证均不能替代客户验收后的稳定收入。",
+      "claim_type": "company_mapping",
+      "confidence": 0.99,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "cloud_dc_002335_ar2025",
+        "cloud_dc_300249_ar2025",
+        "cloud_dc_002929_ar2025",
+        "cloud_dc_603881_ar2025"
+      ],
+      "affected_theme_nodes": [
+        "design_integration_epc_commissioning"
+      ]
+    },
+    {
+      "claim_id": "cloud_dc_claim_10_operations",
+      "theme_id": "cloud_data_center_infrastructure_value_chain_v1",
+      "source_id": "cloud_dc_300442_ar2025",
+      "claim_text": "设施运营和全生命周期服务依靠SLA、持续可用容量、维护与改造获得经常性价值，建设收入和运营收入必须分开。",
+      "claim_type": "value_capture",
+      "confidence": 0.98,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "cloud_dc_002929_ar2025",
+        "cloud_dc_603881_ar2025"
+      ],
+      "affected_theme_nodes": [
+        "facility_operations_lifecycle_services"
+      ]
+    },
+    {
+      "claim_id": "cloud_dc_claim_11_utilization",
+      "theme_id": "cloud_data_center_infrastructure_value_chain_v1",
+      "source_id": "cloud_dc_300442_ar2025",
+      "claim_text": "规划或交付容量只有在客户IT设备部署、上架计费和持续利用后才转化为收入；客户集中和新中心上架率不足是直接风险。",
+      "claim_type": "risk",
+      "confidence": 0.99,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "cloud_dc_603881_ar2025"
+      ],
+      "affected_theme_nodes": [
+        "customer_deployment_utilization_validation"
+      ]
+    },
+    {
+      "claim_id": "cloud_dc_claim_12_revenue_stage_boundary",
+      "theme_id": "cloud_data_center_infrastructure_value_chain_v1",
+      "source_id": "cloud_dc_002837_ar2025",
+      "claim_text": "宽温控、制冷、数据中心、工程或算力网络收入不等于液冷或AI数据中心单节点收入；窄收入未披露时按undisclosed并保持elastic或indirect。",
+      "claim_type": "risk",
+      "confidence": 0.99,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "cloud_dc_300499_ar2025",
+        "cloud_dc_301018_ar2025",
+        "cloud_dc_000811_ar2025",
+        "cloud_dc_002335_ar2025",
+        "cloud_dc_300442_ar2025",
+        "cloud_dc_002364_ar2025",
+        "cloud_dc_603912_ar2025",
+        "cloud_dc_300249_ar2025",
+        "cloud_dc_002929_ar2025",
+        "cloud_dc_603881_ar2025"
+      ],
+      "affected_theme_nodes": [
+        "facility_systems_modular_deployment",
+        "power_availability_electrical_architecture_dependency",
+        "backup_power_storage_resilience_dependency",
+        "thermal_liquid_cooling_systems",
+        "heat_rejection_chillers_pumps_recovery",
+        "water_refrigerant_environmental_constraints",
+        "dcim_monitoring_energy_management",
+        "design_integration_epc_commissioning",
+        "facility_operations_lifecycle_services",
+        "customer_deployment_utilization_validation"
+      ]
+    },
+    {
+      "claim_id": "cloud_dc_claim_13_execution_risks",
+      "theme_id": "cloud_data_center_infrastructure_value_chain_v1",
+      "source_id": "cloud_dc_002837_ar2025",
+      "claim_text": "技术迭代、项目验收、回款、利用率、客户集中、水与能耗约束共同决定设施链收益，项目建设和产品认证不得外推为稳定规模收入。",
+      "claim_type": "risk",
+      "confidence": 0.98,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "cloud_dc_300499_ar2025",
+        "cloud_dc_301018_ar2025",
+        "cloud_dc_000811_ar2025",
+        "cloud_dc_002335_ar2025",
+        "cloud_dc_300442_ar2025",
+        "cloud_dc_002364_ar2025",
+        "cloud_dc_603912_ar2025",
+        "cloud_dc_300249_ar2025",
+        "cloud_dc_002929_ar2025",
+        "cloud_dc_603881_ar2025"
+      ],
+      "affected_theme_nodes": [
+        "facility_systems_modular_deployment",
+        "power_availability_electrical_architecture_dependency",
+        "backup_power_storage_resilience_dependency",
+        "thermal_liquid_cooling_systems",
+        "heat_rejection_chillers_pumps_recovery",
+        "water_refrigerant_environmental_constraints",
+        "dcim_monitoring_energy_management",
+        "design_integration_epc_commissioning",
+        "facility_operations_lifecycle_services",
+        "customer_deployment_utilization_validation"
+      ]
+    }
+  ],
+  "value_capture_assessments": [
+    {
+      "node_id": "facility_systems_modular_deployment",
+      "value_basis": "integration_control",
+      "assessment_text": "设施系统与模块化部署的价值判断以公司2025年报直接产品/服务、收入边界和风险证据为基础，不从宽口径外推窄节点收入。",
+      "rank": 1,
+      "evidence_ids": [
+        "cloud_dc_claim_02_facility_modular"
+      ],
+      "uncertainty": "窄产品收入、毛利、客户部署或利用率仍需后续持续披露验证。"
+    },
+    {
+      "node_id": "power_availability_electrical_architecture_dependency",
+      "value_basis": "capacity_constraint",
+      "assessment_text": "供电可用性与电气架构依赖的价值判断以公司2025年报直接产品/服务、收入边界和风险证据为基础，不从宽口径外推窄节点收入。",
+      "rank": 2,
+      "evidence_ids": [
+        "cloud_dc_claim_03_power_dependency"
+      ],
+      "uncertainty": "窄产品收入、毛利、客户部署或利用率仍需后续持续披露验证。"
+    },
+    {
+      "node_id": "backup_power_storage_resilience_dependency",
+      "value_basis": "capacity_constraint",
+      "assessment_text": "备用电源与储能韧性依赖的价值判断以公司2025年报直接产品/服务、收入边界和风险证据为基础，不从宽口径外推窄节点收入。",
+      "rank": 3,
+      "evidence_ids": [
+        "cloud_dc_claim_04_backup_dependency"
+      ],
+      "uncertainty": "窄产品收入、毛利、客户部署或利用率仍需后续持续披露验证。"
+    },
+    {
+      "node_id": "thermal_liquid_cooling_systems",
+      "value_basis": "technology_barrier",
+      "assessment_text": "热管理与液冷系统的价值判断以公司2025年报直接产品/服务、收入边界和风险证据为基础，不从宽口径外推窄节点收入。",
+      "rank": 4,
+      "evidence_ids": [
+        "cloud_dc_claim_05_liquid_cooling"
+      ],
+      "uncertainty": "窄产品收入、毛利、客户部署或利用率仍需后续持续披露验证。"
+    },
+    {
+      "node_id": "heat_rejection_chillers_pumps_recovery",
+      "value_basis": "technology_barrier",
+      "assessment_text": "排热冷水机泵换热与余热回收的价值判断以公司2025年报直接产品/服务、收入边界和风险证据为基础，不从宽口径外推窄节点收入。",
+      "rank": 5,
+      "evidence_ids": [
+        "cloud_dc_claim_06_heat_rejection"
+      ],
+      "uncertainty": "窄产品收入、毛利、客户部署或利用率仍需后续持续披露验证。"
+    },
+    {
+      "node_id": "water_refrigerant_environmental_constraints",
+      "value_basis": "scarcity",
+      "assessment_text": "水、制冷剂与环境约束的价值判断以公司2025年报直接产品/服务、收入边界和风险证据为基础，不从宽口径外推窄节点收入。",
+      "rank": 6,
+      "evidence_ids": [
+        "cloud_dc_claim_07_environment"
+      ],
+      "uncertainty": "窄产品收入、毛利、客户部署或利用率仍需后续持续披露验证。"
+    },
+    {
+      "node_id": "dcim_monitoring_energy_management",
+      "value_basis": "integration_control",
+      "assessment_text": "DCIM监控与能源管理的价值判断以公司2025年报直接产品/服务、收入边界和风险证据为基础，不从宽口径外推窄节点收入。",
+      "rank": 7,
+      "evidence_ids": [
+        "cloud_dc_claim_08_dcim"
+      ],
+      "uncertainty": "窄产品收入、毛利、客户部署或利用率仍需后续持续披露验证。"
+    },
+    {
+      "node_id": "design_integration_epc_commissioning",
+      "value_basis": "customer_certification",
+      "assessment_text": "设计集成EPC与调试认证的价值判断以公司2025年报直接产品/服务、收入边界和风险证据为基础，不从宽口径外推窄节点收入。",
+      "rank": 8,
+      "evidence_ids": [
+        "cloud_dc_claim_09_design_delivery"
+      ],
+      "uncertainty": "窄产品收入、毛利、客户部署或利用率仍需后续持续披露验证。"
+    },
+    {
+      "node_id": "facility_operations_lifecycle_services",
+      "value_basis": "integration_control",
+      "assessment_text": "设施运营与全生命周期服务的价值判断以公司2025年报直接产品/服务、收入边界和风险证据为基础，不从宽口径外推窄节点收入。",
+      "rank": 9,
+      "evidence_ids": [
+        "cloud_dc_claim_10_operations"
+      ],
+      "uncertainty": "窄产品收入、毛利、客户部署或利用率仍需后续持续披露验证。"
+    },
+    {
+      "node_id": "customer_deployment_utilization_validation",
+      "value_basis": "customer_certification",
+      "assessment_text": "客户部署、利用率与收入验证的价值判断以公司2025年报直接产品/服务、收入边界和风险证据为基础，不从宽口径外推窄节点收入。",
+      "rank": 10,
+      "evidence_ids": [
+        "cloud_dc_claim_11_utilization"
+      ],
+      "uncertainty": "窄产品收入、毛利、客户部署或利用率仍需后续持续披露验证。"
+    }
+  ]
+}

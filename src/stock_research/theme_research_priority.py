@@ -321,7 +321,17 @@ def load_company_priority_details(
             **row,
             "company_mapping": mapping_by_id[row["mapping_id"]],
             "theme_node": node_by_id[row["theme_node_id"]],
-            "crosswalk": crosswalk_by_mapping[row["mapping_id"]],
+            "crosswalk": crosswalk_by_mapping.get(
+                row["mapping_id"],
+                {
+                    "status": "theme_only",
+                    "mapping_id": row["mapping_id"],
+                    "theme_id": row["theme_id"],
+                    "company_code": row["company_code"],
+                    "integration_status": row["integration_status"],
+                    "existing_review_context": row["existing_review_context"],
+                },
+            ),
         }
         for row in priorities
     ]

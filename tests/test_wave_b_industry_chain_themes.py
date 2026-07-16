@@ -133,9 +133,9 @@ def test_advanced_packaging_artifacts_load_and_first_wave_b_row_is_ready():
 
     assert rows[CHAIN_ID]["ready"] is True
     assert all(rows[CHAIN_ID]["checks"].values())
-    assert report["wave_results"]["wave_b"]["ready"] is False
-    assert report["wave_results"]["wave_b"]["ready_theme_count"] == 4
-    assert report["wave_results"]["wave_b"]["not_ready_theme_count"] == 1
+    assert report["wave_results"]["wave_b"]["ready"] is True
+    assert report["wave_results"]["wave_b"]["ready_theme_count"] == 5
+    assert report["wave_results"]["wave_b"]["not_ready_theme_count"] == 0
     assert {chain_id for chain_id, row in rows.items() if row["ready"]} == (
         _implemented_wave_chain_ids("wave_b")
     )
@@ -351,9 +351,9 @@ def test_smart_grid_artifacts_load_and_second_wave_b_row_is_ready():
 
     assert rows[SMART_GRID_CHAIN_ID]["ready"] is True
     assert all(rows[SMART_GRID_CHAIN_ID]["checks"].values())
-    assert report["wave_results"]["wave_b"]["ready"] is False
-    assert report["wave_results"]["wave_b"]["ready_theme_count"] == 4
-    assert report["wave_results"]["wave_b"]["not_ready_theme_count"] == 1
+    assert report["wave_results"]["wave_b"]["ready"] is True
+    assert report["wave_results"]["wave_b"]["ready_theme_count"] == 5
+    assert report["wave_results"]["wave_b"]["not_ready_theme_count"] == 0
     assert {chain_id for chain_id, row in rows.items() if row["ready"]} == (
         _implemented_wave_chain_ids("wave_b")
     )
@@ -590,9 +590,9 @@ def test_core_mechanical_artifacts_load_and_third_wave_b_row_is_ready():
 
     assert rows[CORE_MECHANICAL_CHAIN_ID]["ready"] is True
     assert all(rows[CORE_MECHANICAL_CHAIN_ID]["checks"].values())
-    assert report["wave_results"]["wave_b"]["ready"] is False
-    assert report["wave_results"]["wave_b"]["ready_theme_count"] == 4
-    assert report["wave_results"]["wave_b"]["not_ready_theme_count"] == 1
+    assert report["wave_results"]["wave_b"]["ready"] is True
+    assert report["wave_results"]["wave_b"]["ready_theme_count"] == 5
+    assert report["wave_results"]["wave_b"]["not_ready_theme_count"] == 0
     assert {chain_id for chain_id, row in rows.items() if row["ready"]} == (
         _implemented_wave_chain_ids("wave_b")
     )
@@ -853,6 +853,64 @@ MACHINE_VISION_MATRIX_PATH = (
     / "artifacts/theme_decomposition/source_packs"
     / "industrial_inspection_metrology_machine_vision_node_evidence_matrix_v1.json"
 )
+CLOUD_THEME_ID = "cloud_data_center_infrastructure_value_chain_v1"
+CLOUD_CHAIN_ID = "cloud_data_center_infrastructure"
+CLOUD_THEME_PATH = REPOSITORY_ROOT / f"artifacts/theme_decomposition/{CLOUD_THEME_ID}.json"
+CLOUD_MAPPING_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/company_mappings"
+    / "cloud_data_center_infrastructure_company_mapping_v1.json"
+)
+CLOUD_SOURCE_PACK_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "cloud_data_center_infrastructure_source_pack_v1.json"
+)
+CLOUD_MATRIX_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "cloud_data_center_infrastructure_node_evidence_matrix_v1.json"
+)
+CLOUD_NODE_IDS = {
+    "facility_systems_modular_deployment",
+    "power_availability_electrical_architecture_dependency",
+    "backup_power_storage_resilience_dependency",
+    "thermal_liquid_cooling_systems",
+    "heat_rejection_chillers_pumps_recovery",
+    "water_refrigerant_environmental_constraints",
+    "dcim_monitoring_energy_management",
+    "design_integration_epc_commissioning",
+    "facility_operations_lifecycle_services",
+    "customer_deployment_utilization_validation",
+}
+CLOUD_UNMAPPED_NODE_IDS = {
+    "power_availability_electrical_architecture_dependency",
+    "backup_power_storage_resilience_dependency",
+    "water_refrigerant_environmental_constraints",
+    "customer_deployment_utilization_validation",
+}
+CLOUD_LINK_PAIRS = {
+    ("facility_systems_modular_deployment", "data_center_facility_systems_services"),
+    ("facility_systems_modular_deployment", "modular_data_center_system"),
+    ("thermal_liquid_cooling_systems", "data_center_cold_plate"),
+    ("thermal_liquid_cooling_systems", "immersion_cooling_system"),
+    ("thermal_liquid_cooling_systems", "spray_cooling_system"),
+    ("thermal_liquid_cooling_systems", "coolant_distribution_unit"),
+    ("thermal_liquid_cooling_systems", "liquid_cooling_quick_connector"),
+    ("thermal_liquid_cooling_systems", "liquid_cooling_pipe_system"),
+    ("thermal_liquid_cooling_systems", "data_center_coolant"),
+    ("thermal_liquid_cooling_systems", "liquid_cooling_leak_detection_system"),
+    ("heat_rejection_chillers_pumps_recovery", "data_center_chiller"),
+    ("heat_rejection_chillers_pumps_recovery", "liquid_cooling_pump"),
+    ("heat_rejection_chillers_pumps_recovery", "data_center_heat_exchanger"),
+    ("heat_rejection_chillers_pumps_recovery", "data_center_waste_heat_recovery_system"),
+    ("dcim_monitoring_energy_management", "data_center_infrastructure_management_platform"),
+    ("design_integration_epc_commissioning", "data_center_electrical_design_service"),
+    ("design_integration_epc_commissioning", "liquid_cooling_integration_service"),
+    ("design_integration_epc_commissioning", "data_center_epc_service"),
+    ("design_integration_epc_commissioning", "data_center_commissioning_certification_service"),
+    ("facility_operations_lifecycle_services", "data_center_facility_operations_service"),
+}
 
 
 def _assert_machine_vision_bidirectional_source_and_matrix_links() -> None:
@@ -930,9 +988,9 @@ def test_machine_vision_artifacts_load_and_fourth_wave_b_row_is_ready():
 
     assert rows[MACHINE_VISION_CHAIN_ID]["ready"] is True
     assert all(rows[MACHINE_VISION_CHAIN_ID]["checks"].values())
-    assert report["wave_results"]["wave_b"]["ready"] is False
-    assert report["wave_results"]["wave_b"]["ready_theme_count"] == 4
-    assert report["wave_results"]["wave_b"]["not_ready_theme_count"] == 1
+    assert report["wave_results"]["wave_b"]["ready"] is True
+    assert report["wave_results"]["wave_b"]["ready_theme_count"] == 5
+    assert report["wave_results"]["wave_b"]["not_ready_theme_count"] == 0
     assert {chain_id for chain_id, row in rows.items() if row["ready"]} == (
         _implemented_wave_chain_ids("wave_b")
     )
@@ -1095,3 +1153,219 @@ def test_machine_vision_scope_boundaries_block_over_attribution():
     assert "标准部件毛利" in claim_text
     assert "不跨公司估值" in claim_text
     assert mapped_codes.isdisjoint({"688112.SH", "002065.SZ", "688115.SH"})
+
+
+def _assert_cloud_bidirectional_direct_claim_links() -> None:
+    theme = _read_json(CLOUD_THEME_PATH)
+    source_pack = _read_json(CLOUD_SOURCE_PACK_PATH)
+    matrix = _read_json(CLOUD_MATRIX_PATH)
+    source_by_id = {row["source_id"]: row for row in source_pack["sources"]}
+    claim_by_id = {row["claim_id"]: row for row in theme["claims"]}
+    matrix_by_node = {row["node_id"]: row for row in matrix["node_evidence_matrix"]}
+
+    assert set(matrix_by_node) == CLOUD_NODE_IDS
+    for source in source_pack["sources"]:
+        expected_claim_ids = {
+            claim["claim_id"]
+            for claim in theme["claims"]
+            if source["source_id"]
+            in {claim["source_id"], *claim["supporting_source_ids"]}
+        }
+        assert set(source["supported_claim_ids"]) == expected_claim_ids
+        for node_id in source["supported_node_ids"]:
+            direct_claim_ids = {
+                claim_id
+                for claim_id in expected_claim_ids
+                if claim_by_id[claim_id]["affected_theme_nodes"] == [node_id]
+            }
+            assert direct_claim_ids
+            assert direct_claim_ids & set(matrix_by_node[node_id]["supported_claim_ids"])
+
+    for node_id, row in matrix_by_node.items():
+        expected_claim_ids = {
+            claim["claim_id"]
+            for claim in theme["claims"]
+            if node_id in claim["affected_theme_nodes"]
+        }
+        assert set(row["supported_claim_ids"]) == expected_claim_ids
+        assert row["accepted_source_ids"]
+        for source_id in row["accepted_source_ids"]:
+            source = source_by_id[source_id]
+            assert node_id in source["supported_node_ids"]
+            assert {
+                claim_id
+                for claim_id in source["supported_claim_ids"]
+                if claim_by_id[claim_id]["affected_theme_nodes"] == [node_id]
+            }
+        for claim_id in expected_claim_ids:
+            claim = claim_by_id[claim_id]
+            assert set(row["accepted_source_ids"]) & {
+                claim["source_id"],
+                *claim["supporting_source_ids"],
+            }
+
+
+def test_cloud_data_center_artifacts_complete_wave_b():
+    theme_package = load_theme_package()
+    mapping_package = load_theme_company_mapping_package()
+    priority_package = load_theme_research_priority_package()
+
+    assert CLOUD_THEME_ID in {row["theme_id"] for row in theme_package["themes"]}
+    assert CLOUD_THEME_ID in {
+        row["theme_id"] for row in mapping_package["company_mappings"]
+    }
+    assert CLOUD_THEME_ID in {
+        row["theme_id"] for row in priority_package["node_priorities"]
+    }
+    report = VERIFIER.build_theme_batch_report(MANIFEST_PATH, wave="wave_b")
+    rows = {row["chain_id"]: row for row in report["theme_results"]}
+
+    assert rows[CLOUD_CHAIN_ID]["ready"] is True
+    assert all(rows[CLOUD_CHAIN_ID]["checks"].values())
+    wave_result = report["wave_results"]["wave_b"]
+    assert wave_result["ready"] is True
+    assert wave_result["theme_count"] == 5
+    assert wave_result["ready_theme_count"] == 5
+    assert wave_result["not_ready_theme_count"] == 0
+    assert {chain_id for chain_id, row in rows.items() if row["ready"]} == (
+        _implemented_wave_chain_ids("wave_b")
+    )
+
+
+def test_cloud_data_center_evidence_counts_identity_and_mapping_evidence_are_exact():
+    _assert_cloud_bidirectional_direct_claim_links()
+    theme = _read_json(CLOUD_THEME_PATH)
+    mapping = _read_json(CLOUD_MAPPING_PATH)
+    source_pack = _read_json(CLOUD_SOURCE_PACK_PATH)
+    node_ids = {row["node_id"] for row in theme["nodes"]}
+    accepted = validate_theme_evidence_sources(source_pack["sources"], node_ids)
+    reviewed_mappings = [
+        row for row in mapping["company_mappings"] if row["review_status"] == "reviewed"
+    ]
+    evidence_by_id = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+    canonical_sources = {row["source_id"]: row for row in theme["sources"]}
+    mapping_sources = {row["source_id"]: row for row in mapping["sources"]}
+    pack_sources = {row["source_id"]: row for row in source_pack["sources"]}
+
+    assert node_ids == CLOUD_NODE_IDS
+    assert len(theme["claims"]) == 13
+    assert all(set(row) >= CLAIM_FIELDS for row in theme["claims"])
+    assert len([row for row in accepted.values() if row["review_status"] == "accepted"]) == 11
+    assert all(
+        row["source_type"] == "company_filing"
+        and row["reliability_level"] == "S0"
+        and row["document_status"] == "full_text_reviewed"
+        for row in source_pack["sources"]
+    )
+    assert len(reviewed_mappings) == 11
+    assert len({row["company_code"] for row in reviewed_mappings}) == 11
+    assert len({row["source_id"] for row in source_pack["sources"]}) == 11
+    assert len({row["url"] for row in source_pack["sources"]}) == 11
+    assert set(canonical_sources) == set(mapping_sources) == set(pack_sources)
+    for source_id, canonical_source in canonical_sources.items():
+        assert {
+            field: mapping_sources[source_id][field]
+            for field in ("title", "publisher", "publish_date", "url_or_ref")
+        } == {
+            field: canonical_source[field]
+            for field in ("title", "publisher", "publish_date", "url_or_ref")
+        }
+        assert {
+            "title": pack_sources[source_id]["title"],
+            "publisher": pack_sources[source_id]["publisher"],
+            "publish_date": pack_sources[source_id]["publish_date"],
+            "url_or_ref": pack_sources[source_id]["url"],
+        } == {
+            field: canonical_source[field]
+            for field in ("title", "publisher", "publish_date", "url_or_ref")
+        }
+    for row in reviewed_mappings:
+        evidence_types = {evidence_by_id[item_id]["evidence_type"] for item_id in row["evidence_ids"]}
+        assert evidence_types & {"product_relationship", "service_relationship"}
+        assert "revenue_materiality" in evidence_types
+        assert "business_stage" in evidence_types
+        stage_evidence = [
+            evidence_by_id[item_id]
+            for item_id in row["evidence_ids"]
+            if evidence_by_id[item_id]["evidence_type"] == "business_stage"
+        ]
+        assert all("风险边界" in item["evidence_summary"] for item in stage_evidence)
+    assert {
+        evidence_by_id[evidence_id]["source_id"]
+        for row in reviewed_mappings
+        for evidence_id in row["evidence_ids"]
+    } == set(pack_sources)
+
+
+def test_cloud_data_center_beneficiary_tiers_and_company_api_are_exact():
+    expected = {
+        "002837.SZ": ("elastic_beneficiary", "meaningful_segment", "undisclosed"),
+        "300499.SZ": ("elastic_beneficiary", "meaningful_segment", "undisclosed"),
+        "301018.SZ": ("elastic_beneficiary", "meaningful_segment", "undisclosed"),
+        "000811.SZ": ("elastic_beneficiary", "meaningful_segment", "undisclosed"),
+        "002335.SZ": ("indirect_beneficiary", "meaningful_segment", "material"),
+        "300442.SZ": ("core_beneficiary", "core_business", "material"),
+        "002364.SZ": ("indirect_beneficiary", "meaningful_segment", "material"),
+        "603912.SH": ("elastic_beneficiary", "meaningful_segment", "undisclosed"),
+        "300249.SZ": ("elastic_beneficiary", "meaningful_segment", "undisclosed"),
+        "002929.SZ": ("elastic_beneficiary", "meaningful_segment", "undisclosed"),
+        "603881.SH": ("core_beneficiary", "core_business", "material"),
+    }
+    read_model = list_theme_research_companies(CLOUD_THEME_ID)
+    response = TestClient(dashboard_app.create_app()).get(
+        f"/api/research/theme-decomposition/themes/{CLOUD_THEME_ID}/companies"
+    )
+
+    assert response.status_code == 200
+    for payload in (read_model, response.json()):
+        assert payload["total"] == 11
+        assert {
+            row["company_code"]: (
+                row["beneficiary_tier"],
+                row["business_materiality"],
+                row["revenue_relevance"],
+            )
+            for row in payload["items"]
+        } == expected
+
+
+def test_cloud_data_center_readable_sections_links_and_cross_chain_boundaries_are_exact():
+    theme = _read_json(CLOUD_THEME_PATH)
+    profile = theme["research_profile"]
+    claim_ids = {row["claim_id"] for row in theme["claims"]}
+    catalog = load_industry_catalog()
+    link = next(row for row in catalog["theme_links"] if row["theme_id"] == CLOUD_THEME_ID)
+
+    assert set(profile["readable_section_claim_ids"]) == {
+        "conclusion",
+        "value_chain",
+        "profit_pool_barriers",
+        "catalysts_validation_risks",
+        "beneficiary_companies",
+        "source_evidence",
+        "evidence_gaps",
+    }
+    assert all(profile["readable_section_claim_ids"].values())
+    assert all(
+        set(section_claim_ids) <= claim_ids
+        for section_claim_ids in profile["readable_section_claim_ids"].values()
+    )
+    assert set(profile["catalyst_claim_ids"] + profile["risk_claim_ids"]) <= claim_ids
+    assert {
+        (row["theme_node_id"], row["catalog_node_id"])
+        for row in link["node_links"]
+    } == CLOUD_LINK_PAIRS
+    assert len(link["node_links"]) == 20
+    assert set(link["unmapped_theme_node_ids"]) == CLOUD_UNMAPPED_NODE_IDS
+    assert "family/stage完整等价" in link["notes"]
+    assert "power_electronics_power_supply_equipment" in link["notes"]
+    assert "new_energy_storage" in link["notes"]
+    assert "new_power_system_smart_grid" in link["notes"]
+    assert "industrial_software" in link["notes"]
+    result = verify_deep_theme_coverage(
+        CLOUD_THEME_ID,
+        catalog=catalog,
+        theme_context=load_theme_research_priority_package(),
+    )
+    assert result["ready"] is True
+    assert all(result["checks"].values())

@@ -417,8 +417,95 @@
     {
       "theme_id": "cloud_data_center_infrastructure_value_chain_v1",
       "chain_id": "cloud_data_center_infrastructure",
-      "node_links": [],
-      "unmapped_theme_node_ids": []
+      "node_links": [
+        {
+          "theme_node_id": "facility_systems_modular_deployment",
+          "catalog_node_id": "data_center_facility_systems_services"
+        },
+        {
+          "theme_node_id": "facility_systems_modular_deployment",
+          "catalog_node_id": "modular_data_center_system"
+        },
+        {
+          "theme_node_id": "thermal_liquid_cooling_systems",
+          "catalog_node_id": "data_center_cold_plate"
+        },
+        {
+          "theme_node_id": "thermal_liquid_cooling_systems",
+          "catalog_node_id": "immersion_cooling_system"
+        },
+        {
+          "theme_node_id": "thermal_liquid_cooling_systems",
+          "catalog_node_id": "spray_cooling_system"
+        },
+        {
+          "theme_node_id": "thermal_liquid_cooling_systems",
+          "catalog_node_id": "coolant_distribution_unit"
+        },
+        {
+          "theme_node_id": "thermal_liquid_cooling_systems",
+          "catalog_node_id": "liquid_cooling_quick_connector"
+        },
+        {
+          "theme_node_id": "thermal_liquid_cooling_systems",
+          "catalog_node_id": "liquid_cooling_pipe_system"
+        },
+        {
+          "theme_node_id": "thermal_liquid_cooling_systems",
+          "catalog_node_id": "data_center_coolant"
+        },
+        {
+          "theme_node_id": "thermal_liquid_cooling_systems",
+          "catalog_node_id": "liquid_cooling_leak_detection_system"
+        },
+        {
+          "theme_node_id": "heat_rejection_chillers_pumps_recovery",
+          "catalog_node_id": "data_center_chiller"
+        },
+        {
+          "theme_node_id": "heat_rejection_chillers_pumps_recovery",
+          "catalog_node_id": "liquid_cooling_pump"
+        },
+        {
+          "theme_node_id": "heat_rejection_chillers_pumps_recovery",
+          "catalog_node_id": "data_center_heat_exchanger"
+        },
+        {
+          "theme_node_id": "heat_rejection_chillers_pumps_recovery",
+          "catalog_node_id": "data_center_waste_heat_recovery_system"
+        },
+        {
+          "theme_node_id": "dcim_monitoring_energy_management",
+          "catalog_node_id": "data_center_infrastructure_management_platform"
+        },
+        {
+          "theme_node_id": "design_integration_epc_commissioning",
+          "catalog_node_id": "data_center_electrical_design_service"
+        },
+        {
+          "theme_node_id": "design_integration_epc_commissioning",
+          "catalog_node_id": "liquid_cooling_integration_service"
+        },
+        {
+          "theme_node_id": "design_integration_epc_commissioning",
+          "catalog_node_id": "data_center_epc_service"
+        },
+        {
+          "theme_node_id": "design_integration_epc_commissioning",
+          "catalog_node_id": "data_center_commissioning_certification_service"
+        },
+        {
+          "theme_node_id": "facility_operations_lifecycle_services",
+          "catalog_node_id": "data_center_facility_operations_service"
+        }
+      ],
+      "unmapped_theme_node_ids": [
+        "power_availability_electrical_architecture_dependency",
+        "backup_power_storage_resilience_dependency",
+        "water_refrigerant_environmental_constraints",
+        "customer_deployment_utilization_validation"
+      ],
+      "notes": "一对多链接仅在产品family与交付stage构成family/stage完整等价时展开；facility、thermal、heat rejection、DCIM、design/EPC/commissioning与operations分别投影到本链自有canonical节点。供电、备电储能、水与环境约束、客户部署利用率保持unmapped：power_electronics_power_supply_equipment、new_energy_storage、new_power_system_smart_grid、industrial_software保留完整canonical所有权，不因数据中心场景重复归属。"
     },
     {
       "theme_id": "new_power_system_smart_grid_value_chain_v1",

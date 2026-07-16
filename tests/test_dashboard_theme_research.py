@@ -38,6 +38,7 @@ POWER_BATTERIES_THEME_ID = "power_batteries_battery_materials_value_chain_v1"
 INTELLIGENT_DRIVING_THEME_ID = "intelligent_driving_smart_cockpit_value_chain_v1"
 AUTOMOTIVE_CHIP_THEME_ID = "automotive_electronics_chip_applications_value_chain_v1"
 COMMERCIAL_SPACE_THEME_ID = "commercial_space_launch_value_chain_v1"
+CLOUD_DATA_CENTER_THEME_ID = "cloud_data_center_infrastructure_value_chain_v1"
 
 
 def test_theme_index_aggregates_validated_phase_outputs():
@@ -63,6 +64,7 @@ def test_theme_index_aggregates_validated_phase_outputs():
         INTELLIGENT_DRIVING_THEME_ID,
         AUTOMOTIVE_CHIP_THEME_ID,
         COMMERCIAL_SPACE_THEME_ID,
+        CLOUD_DATA_CENTER_THEME_ID,
     }
     assert payload["total"] == len(expected_theme_ids)
     assert {row["theme_id"] for row in payload["items"]} == expected_theme_ids
@@ -362,6 +364,35 @@ def test_commercial_space_launch_theme_is_readable_through_detail_and_company_ap
     assert company_response.json()["total"] == 8
     assert all(
         row["theme_id"] == COMMERCIAL_SPACE_THEME_ID
+        for row in company_response.json()["items"]
+    )
+
+
+def test_cloud_data_center_theme_is_readable_through_detail_and_company_api():
+    detail = get_theme_research_theme(CLOUD_DATA_CENTER_THEME_ID)
+    companies = list_theme_research_companies(CLOUD_DATA_CENTER_THEME_ID)
+    sources = list_theme_research_sources(CLOUD_DATA_CENTER_THEME_ID)
+
+    assert detail["theme"]["status"] == "reviewed"
+    assert detail["research_profile"]["catalog_chain_id"] == (
+        "cloud_data_center_infrastructure"
+    )
+    assert detail["node_summary"]["total"] == 10
+    assert detail["company_summary"]["total"] == 11
+    assert companies["total"] == 11
+    assert sources["total"] == 11
+
+    client = TestClient(dashboard_app.create_app())
+    base = f"/api/research/theme-decomposition/themes/{CLOUD_DATA_CENTER_THEME_ID}"
+    detail_response = client.get(base)
+    company_response = client.get(f"{base}/companies")
+
+    assert detail_response.status_code == 200
+    assert detail_response.json()["theme"]["theme_id"] == CLOUD_DATA_CENTER_THEME_ID
+    assert company_response.status_code == 200
+    assert company_response.json()["total"] == 11
+    assert all(
+        row["theme_id"] == CLOUD_DATA_CENTER_THEME_ID
         for row in company_response.json()["items"]
     )
 

@@ -181,6 +181,29 @@ def test_semiconductor_materials_chain_detail_exposes_reviewed_theme():
     assert payload["deep_research"]["reviewed_company_count"] == 10
 
 
+def test_cloud_data_center_chain_detail_exposes_one_to_many_reviewed_theme():
+    response = TestClient(dashboard_app.create_app()).get(
+        f"{CATALOG_PATH}/chains/cloud_data_center_infrastructure"
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["chain"]["chain_id"] == "cloud_data_center_infrastructure"
+    link = payload["theme_links"][0]
+    assert link["theme_id"] == "cloud_data_center_infrastructure_value_chain_v1"
+    assert len(link["node_links"]) == 20
+    assert len(link["unmapped_theme_node_ids"]) == 4
+    assert payload["deep_research"]["theme_id"] == (
+        "cloud_data_center_infrastructure_value_chain_v1"
+    )
+    assert payload["deep_research"]["theme_route"] == (
+        "/theme-research/cloud_data_center_infrastructure_value_chain_v1"
+    )
+    assert payload["deep_research"]["research_status"] == "reviewed"
+    assert payload["deep_research"]["source_count"] == 11
+    assert payload["deep_research"]["reviewed_company_count"] == 11
+
+
 def test_next_fifteen_catalog_theme_links_match_canonical_batch_manifest():
     catalog = load_industry_catalog()
     manifest = load_theme_batch_manifest(NEXT_FIFTEEN_MANIFEST_PATH)

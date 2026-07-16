@@ -138,11 +138,32 @@ def test_company_priority_arithmetic_and_order_are_stable():
 def test_integration_status_is_not_a_score_component():
     rows = list_company_research_priorities()
 
-    linked = next(row for row in rows if row["company_code"] == "002837.SZ")
+    linked = next(
+        row
+        for row in rows
+        if row["mapping_id"] == "ai_power_liquid_cooling_002837_v1"
+    )
+    theme_only = next(
+        row for row in rows if row["mapping_id"] == "cloud_dc_map_002837_v1"
+    )
     gap = next(row for row in rows if row["company_code"] == "300870.SZ")
     assert linked["integration_status"] == "linked_existing_universe"
+    assert theme_only["integration_status"] == "theme_only"
     assert gap["integration_status"] == "coverage_gap"
-    for row in (linked, gap):
+    envicool_rows = [row for row in rows if row["company_code"] == "002837.SZ"]
+    assert envicool_rows == sorted(
+        envicool_rows,
+        key=lambda row: (
+            -row["company_research_priority_score"],
+            row["company_code"],
+            row["mapping_id"],
+        ),
+    )
+    assert [row["mapping_id"] for row in envicool_rows] == [
+        "cloud_dc_map_002837_v1",
+        "ai_power_liquid_cooling_002837_v1",
+    ]
+    for row in (linked, theme_only, gap):
         assert "integration_status" not in row["score_components"]
         assert "integration_status" not in row["weighted_components"]
 
@@ -150,10 +171,21 @@ def test_integration_status_is_not_a_score_component():
 def test_existing_tech_bottleneck_review_state_is_context_only():
     rows = list_company_research_priorities()
 
-    linked = next(row for row in rows if row["company_code"] == "002837.SZ")
+    linked = next(
+        row
+        for row in rows
+        if row["mapping_id"] == "ai_power_liquid_cooling_002837_v1"
+    )
+    theme_only = next(
+        row for row in rows if row["mapping_id"] == "cloud_dc_map_002837_v1"
+    )
     gap = next(row for row in rows if row["company_code"] == "300870.SZ")
     assert linked["existing_review_context"] == {
         "status": "pending_review",
+        "reviewer_decision": "",
+    }
+    assert theme_only["existing_review_context"] == {
+        "status": "not_crosswalked",
         "reviewer_decision": "",
     }
     assert gap["existing_review_context"] == {
@@ -240,12 +272,33 @@ def test_outputs_do_not_expose_market_or_trading_inputs():
 def test_company_detail_resolves_priority_mapping_node_and_crosswalk():
     details = load_company_priority_details("002837.SZ")
 
-    assert len(details) == 1
-    detail = details[0]
-    assert detail["theme_node_id"] == "liquid_cooling"
-    assert detail["company_mapping"]["mapping_id"] == detail["mapping_id"]
-    assert detail["theme_node"]["node_id"] == "liquid_cooling"
-    assert detail["crosswalk"]["status"] == "linked"
+    assert len(details) == 2
+    assert [row["mapping_id"] for row in details] == [
+        "cloud_dc_map_002837_v1",
+        "ai_power_liquid_cooling_002837_v1",
+    ]
+    by_mapping = {row["mapping_id"]: row for row in details}
+    linked = by_mapping["ai_power_liquid_cooling_002837_v1"]
+    assert linked["theme_node_id"] == "liquid_cooling"
+    assert linked["company_mapping"]["mapping_id"] == linked["mapping_id"]
+    assert linked["theme_node"]["node_id"] == "liquid_cooling"
+    assert linked["crosswalk"]["status"] == "linked"
+
+    theme_only = by_mapping["cloud_dc_map_002837_v1"]
+    assert theme_only["theme_node_id"] == "thermal_liquid_cooling_systems"
+    assert theme_only["company_mapping"]["mapping_id"] == theme_only["mapping_id"]
+    assert theme_only["theme_node"]["node_id"] == "thermal_liquid_cooling_systems"
+    assert theme_only["crosswalk"] == {
+        "status": "theme_only",
+        "mapping_id": "cloud_dc_map_002837_v1",
+        "theme_id": "cloud_data_center_infrastructure_value_chain_v1",
+        "company_code": "002837.SZ",
+        "integration_status": "theme_only",
+        "existing_review_context": {
+            "status": "not_crosswalked",
+            "reviewer_decision": "",
+        },
+    }
 
 
 def test_company_lookup_respects_exchange_suffix():
@@ -369,7 +422,14 @@ def test_cli_commands_emit_structured_json(capsys):
 
     assert cli(["show-company", "--company-code", "002837.SZ"]) == 0
     company_payload = json.loads(capsys.readouterr().out)
-    assert company_payload[0]["company_research_priority_score"] == 78.8
+    assert [row["company_research_priority_score"] for row in company_payload] == [
+        84.2,
+        78.8,
+    ]
+    assert [row["integration_status"] for row in company_payload] == [
+        "theme_only",
+        "linked_existing_universe",
+    ]
 
 
 def test_cli_converts_upstream_loader_failures_to_structured_json(tmp_path: Path, capsys):

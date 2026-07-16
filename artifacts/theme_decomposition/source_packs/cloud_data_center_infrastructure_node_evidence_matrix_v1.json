@@ -1,0 +1,267 @@
+{
+  "artifact_version": "cloud_data_center_infrastructure_node_evidence_matrix_v1",
+  "theme_id": "cloud_data_center_infrastructure_value_chain_v1",
+  "as_of_date": "2026-07-16",
+  "node_evidence_matrix": [
+    {
+      "node_id": "facility_systems_modular_deployment",
+      "accepted_source_ids": [
+        "cloud_dc_002837_ar2025",
+        "cloud_dc_301018_ar2025",
+        "cloud_dc_002335_ar2025",
+        "cloud_dc_300442_ar2025",
+        "cloud_dc_603881_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "cloud_dc_claim_01_value_flow",
+        "cloud_dc_claim_02_facility_modular",
+        "cloud_dc_claim_12_revenue_stage_boundary",
+        "cloud_dc_claim_13_execution_risks"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "integration_control"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "设施系统与模块化部署由节点专属年报claim与直接产品/服务、收入边界或风险证据覆盖。",
+      "next_evidence_needed": "继续补充窄节点收入、毛利、客户验收、上架利用率和跨周期复购。"
+    },
+    {
+      "node_id": "power_availability_electrical_architecture_dependency",
+      "accepted_source_ids": [
+        "cloud_dc_002364_ar2025",
+        "cloud_dc_002335_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "cloud_dc_claim_01_value_flow",
+        "cloud_dc_claim_03_power_dependency",
+        "cloud_dc_claim_12_revenue_stage_boundary",
+        "cloud_dc_claim_13_execution_risks"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "capacity_constraint"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "供电可用性与电气架构依赖由节点专属年报claim与直接产品/服务、收入边界或风险证据覆盖。",
+      "next_evidence_needed": "继续补充窄节点收入、毛利、客户验收、上架利用率和跨周期复购。"
+    },
+    {
+      "node_id": "backup_power_storage_resilience_dependency",
+      "accepted_source_ids": [
+        "cloud_dc_002335_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "cloud_dc_claim_01_value_flow",
+        "cloud_dc_claim_04_backup_dependency",
+        "cloud_dc_claim_12_revenue_stage_boundary",
+        "cloud_dc_claim_13_execution_risks"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "capacity_constraint"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "备用电源与储能韧性依赖由节点专属年报claim与直接产品/服务、收入边界或风险证据覆盖。",
+      "next_evidence_needed": "继续补充窄节点收入、毛利、客户验收、上架利用率和跨周期复购。"
+    },
+    {
+      "node_id": "thermal_liquid_cooling_systems",
+      "accepted_source_ids": [
+        "cloud_dc_002837_ar2025",
+        "cloud_dc_300499_ar2025",
+        "cloud_dc_301018_ar2025",
+        "cloud_dc_603912_ar2025",
+        "cloud_dc_300249_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "cloud_dc_claim_01_value_flow",
+        "cloud_dc_claim_05_liquid_cooling",
+        "cloud_dc_claim_12_revenue_stage_boundary",
+        "cloud_dc_claim_13_execution_risks"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "technology_barrier"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "热管理与液冷系统由节点专属年报claim与直接产品/服务、收入边界或风险证据覆盖。",
+      "next_evidence_needed": "继续补充窄节点收入、毛利、客户验收、上架利用率和跨周期复购。"
+    },
+    {
+      "node_id": "heat_rejection_chillers_pumps_recovery",
+      "accepted_source_ids": [
+        "cloud_dc_002837_ar2025",
+        "cloud_dc_000811_ar2025",
+        "cloud_dc_603912_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "cloud_dc_claim_01_value_flow",
+        "cloud_dc_claim_06_heat_rejection",
+        "cloud_dc_claim_12_revenue_stage_boundary",
+        "cloud_dc_claim_13_execution_risks"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "technology_barrier"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "排热冷水机泵换热与余热回收由节点专属年报claim与直接产品/服务、收入边界或风险证据覆盖。",
+      "next_evidence_needed": "继续补充窄节点收入、毛利、客户验收、上架利用率和跨周期复购。"
+    },
+    {
+      "node_id": "water_refrigerant_environmental_constraints",
+      "accepted_source_ids": [
+        "cloud_dc_301018_ar2025",
+        "cloud_dc_000811_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "cloud_dc_claim_01_value_flow",
+        "cloud_dc_claim_07_environment",
+        "cloud_dc_claim_12_revenue_stage_boundary",
+        "cloud_dc_claim_13_execution_risks"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "scarcity"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "水、制冷剂与环境约束由节点专属年报claim与直接产品/服务、收入边界或风险证据覆盖。",
+      "next_evidence_needed": "继续补充窄节点收入、毛利、客户验收、上架利用率和跨周期复购。"
+    },
+    {
+      "node_id": "dcim_monitoring_energy_management",
+      "accepted_source_ids": [
+        "cloud_dc_002364_ar2025",
+        "cloud_dc_603881_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "cloud_dc_claim_01_value_flow",
+        "cloud_dc_claim_08_dcim",
+        "cloud_dc_claim_12_revenue_stage_boundary",
+        "cloud_dc_claim_13_execution_risks"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "integration_control"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "DCIM监控与能源管理由节点专属年报claim与直接产品/服务、收入边界或风险证据覆盖。",
+      "next_evidence_needed": "继续补充窄节点收入、毛利、客户验收、上架利用率和跨周期复购。"
+    },
+    {
+      "node_id": "design_integration_epc_commissioning",
+      "accepted_source_ids": [
+        "cloud_dc_300499_ar2025",
+        "cloud_dc_002335_ar2025",
+        "cloud_dc_300249_ar2025",
+        "cloud_dc_002929_ar2025",
+        "cloud_dc_603881_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "cloud_dc_claim_01_value_flow",
+        "cloud_dc_claim_09_design_delivery",
+        "cloud_dc_claim_12_revenue_stage_boundary",
+        "cloud_dc_claim_13_execution_risks"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "customer_certification"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "设计集成EPC与调试认证由节点专属年报claim与直接产品/服务、收入边界或风险证据覆盖。",
+      "next_evidence_needed": "继续补充窄节点收入、毛利、客户验收、上架利用率和跨周期复购。"
+    },
+    {
+      "node_id": "facility_operations_lifecycle_services",
+      "accepted_source_ids": [
+        "cloud_dc_300442_ar2025",
+        "cloud_dc_002929_ar2025",
+        "cloud_dc_603881_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "cloud_dc_claim_01_value_flow",
+        "cloud_dc_claim_10_operations",
+        "cloud_dc_claim_12_revenue_stage_boundary",
+        "cloud_dc_claim_13_execution_risks"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "integration_control"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "设施运营与全生命周期服务由节点专属年报claim与直接产品/服务、收入边界或风险证据覆盖。",
+      "next_evidence_needed": "继续补充窄节点收入、毛利、客户验收、上架利用率和跨周期复购。"
+    },
+    {
+      "node_id": "customer_deployment_utilization_validation",
+      "accepted_source_ids": [
+        "cloud_dc_300442_ar2025",
+        "cloud_dc_603881_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "cloud_dc_claim_01_value_flow",
+        "cloud_dc_claim_11_utilization",
+        "cloud_dc_claim_12_revenue_stage_boundary",
+        "cloud_dc_claim_13_execution_risks"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "customer_certification"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "客户部署、利用率与收入验证由节点专属年报claim与直接产品/服务、收入边界或风险证据覆盖。",
+      "next_evidence_needed": "继续补充窄节点收入、毛利、客户验收、上架利用率和跨周期复购。"
+    }
+  ]
+}

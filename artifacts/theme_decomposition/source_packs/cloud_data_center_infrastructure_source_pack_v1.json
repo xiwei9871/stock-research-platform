@@ -1,0 +1,331 @@
+{
+  "artifact_version": "cloud_data_center_infrastructure_source_pack_v1",
+  "theme_id": "cloud_data_center_infrastructure_value_chain_v1",
+  "as_of_date": "2026-07-16",
+  "sources": [
+    {
+      "source_id": "cloud_dc_002837_ar2025",
+      "source_type": "company_filing",
+      "title": "深圳市英维克科技股份有限公司2025年年度报告",
+      "publisher": "深圳市英维克科技股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-21",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-21/1225131813.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "full_text_reviewed",
+      "evidence_locator": "第9-10页机房温控、微模块、冷板/CDU/快接与全链条液冷产品；第15-16页机房温控收入；风险章节及应收账款附注",
+      "evidence_summary": "直接披露数据中心风冷、微模块与全链条液冷产品，机房温控收入材料性，但未单拆液冷收入。",
+      "supported_claim_ids": [
+        "cloud_dc_claim_01_value_flow",
+        "cloud_dc_claim_02_facility_modular",
+        "cloud_dc_claim_05_liquid_cooling",
+        "cloud_dc_claim_06_heat_rejection",
+        "cloud_dc_claim_12_revenue_stage_boundary",
+        "cloud_dc_claim_13_execution_risks"
+      ],
+      "supported_node_ids": [
+        "facility_systems_modular_deployment",
+        "thermal_liquid_cooling_systems",
+        "heat_rejection_chillers_pumps_recovery"
+      ],
+      "limitations": "机房温控收入混合风冷、液冷、模块化和集成，储能液冷收入不得归入数据中心液冷。",
+      "notes": "巨潮资讯官方2025年年度报告全文逐页核验；身份、URL、产品、收入和风险页已复核。"
+    },
+    {
+      "source_id": "cloud_dc_300499_ar2025",
+      "source_type": "company_filing",
+      "title": "广州高澜节能技术股份有限公司2025年年度报告",
+      "publisher": "广州高澜节能技术股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-24",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-24/1225160679.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "full_text_reviewed",
+      "evidence_locator": "第14页数据中心热管理业务；第24-25页冷板式/浸没式液冷、CDU、集装箱与海外液冷EPC交付；收入与风险章节",
+      "evidence_summary": "直接披露数据中心热管理、液冷CDU和EPC交付，但收入仅为公司宽口径，未单拆数据中心液冷。",
+      "supported_claim_ids": [
+        "cloud_dc_claim_01_value_flow",
+        "cloud_dc_claim_05_liquid_cooling",
+        "cloud_dc_claim_09_design_delivery",
+        "cloud_dc_claim_12_revenue_stage_boundary",
+        "cloud_dc_claim_13_execution_risks"
+      ],
+      "supported_node_ids": [
+        "thermal_liquid_cooling_systems",
+        "design_integration_epc_commissioning"
+      ],
+      "limitations": "订单和项目交付不等于稳定规模收入；电力电子热管理及储能热管理不得并入数据中心液冷。",
+      "notes": "巨潮资讯官方2025年年度报告全文逐页核验；身份、URL、产品、收入和风险页已复核。"
+    },
+    {
+      "source_id": "cloud_dc_301018_ar2025",
+      "source_type": "company_filing",
+      "title": "广东申菱环境系统股份有限公司2025年年度报告",
+      "publisher": "广东申菱环境系统股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-27",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-27/1225181199.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "full_text_reviewed",
+      "evidence_locator": "第14-15页数据服务客户、DPC相变和液冷温控；第20、25页浸没式液冷、CDU与模块化基础设施；第15页收入构成及风险章节",
+      "evidence_summary": "数据服务行业收入材料性并披露液冷温控与模块化整装研发/业务，但液冷独立收入未拆。",
+      "supported_claim_ids": [
+        "cloud_dc_claim_01_value_flow",
+        "cloud_dc_claim_02_facility_modular",
+        "cloud_dc_claim_05_liquid_cooling",
+        "cloud_dc_claim_07_environment",
+        "cloud_dc_claim_12_revenue_stage_boundary",
+        "cloud_dc_claim_13_execution_risks"
+      ],
+      "supported_node_ids": [
+        "facility_systems_modular_deployment",
+        "thermal_liquid_cooling_systems",
+        "water_refrigerant_environmental_constraints"
+      ],
+      "limitations": "数据服务行业收入包含宽温控设备、解决方案和服务；在研液冷项目不等于已形成稳定规模收入。",
+      "notes": "巨潮资讯官方2025年年度报告全文逐页核验；身份、URL、产品、收入和风险页已复核。"
+    },
+    {
+      "source_id": "cloud_dc_000811_ar2025",
+      "source_type": "company_filing",
+      "title": "冰轮环境技术股份有限公司2025年年度报告",
+      "publisher": "冰轮环境技术股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-11",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-11/1225092828.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "full_text_reviewed",
+      "evidence_locator": "第15、17页工业产品与工程施工收入；第20页数据中心专用磁悬浮/螺杆冷水机研发；经营与金融风险章节",
+      "evidence_summary": "直接披露数据中心专用冷水机研发及宽制冷设备、工程业务收入，未披露数据中心专属收入。",
+      "supported_claim_ids": [
+        "cloud_dc_claim_01_value_flow",
+        "cloud_dc_claim_06_heat_rejection",
+        "cloud_dc_claim_07_environment",
+        "cloud_dc_claim_12_revenue_stage_boundary",
+        "cloud_dc_claim_13_execution_risks"
+      ],
+      "supported_node_ids": [
+        "heat_rejection_chillers_pumps_recovery",
+        "water_refrigerant_environmental_constraints"
+      ],
+      "limitations": "工业产品销售和工程施工覆盖多行业，研发产品不能视为稳定商业化收入。",
+      "notes": "巨潮资讯官方2025年年度报告全文逐页核验；身份、URL、产品、收入和风险页已复核。"
+    },
+    {
+      "source_id": "cloud_dc_002335_ar2025",
+      "source_type": "company_filing",
+      "title": "科华数据股份有限公司2025年年度报告",
+      "publisher": "科华数据股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-27",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-27/1225194937.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "full_text_reviewed",
+      "evidence_locator": "第11-18页智算中心产品、IDC运营与快速交付；第20-21页数据中心产品和IDC服务收入；第32页市场、迭代与交付风险",
+      "evidence_summary": "数据中心产品和IDC服务收入直接披露，可支持设施与交付依赖；UPS所有权不转入本链。",
+      "supported_claim_ids": [
+        "cloud_dc_claim_01_value_flow",
+        "cloud_dc_claim_02_facility_modular",
+        "cloud_dc_claim_03_power_dependency",
+        "cloud_dc_claim_04_backup_dependency",
+        "cloud_dc_claim_09_design_delivery",
+        "cloud_dc_claim_12_revenue_stage_boundary",
+        "cloud_dc_claim_13_execution_risks"
+      ],
+      "supported_node_ids": [
+        "facility_systems_modular_deployment",
+        "power_availability_electrical_architecture_dependency",
+        "backup_power_storage_resilience_dependency",
+        "design_integration_epc_commissioning"
+      ],
+      "limitations": "数据中心产品包含供配电等跨链设备；UPS仍归power_electronics_power_supply_equipment。",
+      "notes": "巨潮资讯官方2025年年度报告全文逐页核验；身份、URL、产品、收入和风险页已复核。"
+    },
+    {
+      "source_id": "cloud_dc_300442_ar2025",
+      "source_type": "company_filing",
+      "title": "润泽智算科技集团股份有限公司2025年年度报告",
+      "publisher": "润泽智算科技集团股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-10",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-10/1225090821.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "full_text_reviewed",
+      "evidence_locator": "第6页上架率定义；第18页成熟算力中心上架率与交付；第20页IDC/AIDC收入；第35-36页客户集中、上架率与技术风险",
+      "evidence_summary": "直接披露IDC/AIDC运营收入、容量交付与成熟中心上架率，并明确客户集中和新中心上架率风险。",
+      "supported_claim_ids": [
+        "cloud_dc_claim_01_value_flow",
+        "cloud_dc_claim_02_facility_modular",
+        "cloud_dc_claim_10_operations",
+        "cloud_dc_claim_11_utilization",
+        "cloud_dc_claim_12_revenue_stage_boundary",
+        "cloud_dc_claim_13_execution_risks"
+      ],
+      "supported_node_ids": [
+        "facility_systems_modular_deployment",
+        "facility_operations_lifecycle_services",
+        "customer_deployment_utilization_validation"
+      ],
+      "limitations": "规划或交付容量不等于已上架计费容量；新中心利用率与客户集中度影响盈利。",
+      "notes": "巨潮资讯官方2025年年度报告全文逐页核验；身份、URL、产品、收入和风险页已复核。"
+    },
+    {
+      "source_id": "cloud_dc_002364_ar2025",
+      "source_type": "company_filing",
+      "title": "杭州中恒电气股份有限公司2025年年度报告",
+      "publisher": "杭州中恒电气股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-21",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-21/1225131190.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "full_text_reviewed",
+      "evidence_locator": "第11-13页HVDC/Panama/配电与监测产品；第23-25页数据中心电源项目及收入；发展与风险章节",
+      "evidence_summary": "直接披露数据中心电源收入与监测能力，只作为电气/监控依赖，不转移供电链所有权。",
+      "supported_claim_ids": [
+        "cloud_dc_claim_01_value_flow",
+        "cloud_dc_claim_03_power_dependency",
+        "cloud_dc_claim_08_dcim",
+        "cloud_dc_claim_12_revenue_stage_boundary",
+        "cloud_dc_claim_13_execution_risks"
+      ],
+      "supported_node_ids": [
+        "power_availability_electrical_architecture_dependency",
+        "dcim_monitoring_energy_management"
+      ],
+      "limitations": "数据中心电源属于power_electronics_power_supply_equipment；通用软件仍归industrial_software。",
+      "notes": "巨潮资讯官方2025年年度报告全文逐页核验；身份、URL、产品、收入和风险页已复核。"
+    },
+    {
+      "source_id": "cloud_dc_603912_ar2025",
+      "source_type": "company_filing",
+      "title": "南京佳力图机房环境技术股份有限公司2025年年度报告",
+      "publisher": "南京佳力图机房环境技术股份有限公司",
+      "author": "",
+      "publish_date": "2026-03-24",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-03-24/1225026036.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "full_text_reviewed",
+      "evidence_locator": "第11-14页机房环境控制、精密空调和液冷配套；收入分析及研发项目页；客户、项目和竞争风险章节",
+      "evidence_summary": "直接提供数据中心机房环境控制和冷却产品，但收入是宽环境控制口径，液冷未独立披露。",
+      "supported_claim_ids": [
+        "cloud_dc_claim_01_value_flow",
+        "cloud_dc_claim_05_liquid_cooling",
+        "cloud_dc_claim_06_heat_rejection",
+        "cloud_dc_claim_12_revenue_stage_boundary",
+        "cloud_dc_claim_13_execution_risks"
+      ],
+      "supported_node_ids": [
+        "thermal_liquid_cooling_systems",
+        "heat_rejection_chillers_pumps_recovery"
+      ],
+      "limitations": "精密空调、冷水机和环境控制收入不能等同于液冷或AI数据中心独立收入。",
+      "notes": "巨潮资讯官方2025年年度报告全文逐页核验；身份、URL、产品、收入和风险页已复核。"
+    },
+    {
+      "source_id": "cloud_dc_300249_ar2025",
+      "source_type": "company_filing",
+      "title": "依米康科技集团股份有限公司2025年年度报告",
+      "publisher": "依米康科技集团股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-17",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-17/1225110800.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "full_text_reviewed",
+      "evidence_locator": "主营业务与战略章节的数据中心温控和全生命周期方案；第111页主营业务定义；第170页信息数据领域收入；风险章节",
+      "evidence_summary": "主营业务围绕信息数据领域温控设备、系统集成和全生命周期方案，宽领域收入材料性但液冷未拆。",
+      "supported_claim_ids": [
+        "cloud_dc_claim_01_value_flow",
+        "cloud_dc_claim_05_liquid_cooling",
+        "cloud_dc_claim_09_design_delivery",
+        "cloud_dc_claim_12_revenue_stage_boundary",
+        "cloud_dc_claim_13_execution_risks"
+      ],
+      "supported_node_ids": [
+        "thermal_liquid_cooling_systems",
+        "design_integration_epc_commissioning"
+      ],
+      "limitations": "信息数据领域收入包含温控设备、集成、咨询与工程服务，不能归为液冷单节点收入。",
+      "notes": "巨潮资讯官方2025年年度报告全文逐页核验；身份、URL、产品、收入和风险页已复核。"
+    },
+    {
+      "source_id": "cloud_dc_002929_ar2025",
+      "source_type": "company_filing",
+      "title": "润建股份有限公司2025年年度报告",
+      "publisher": "润建股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-27",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-27/1225195099.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "full_text_reviewed",
+      "evidence_locator": "第20-22页算力网络、海外数据中心交付与收入构成；第35-36页竞争和大客户风险；第136页验收确认；第199页算力网络收入",
+      "evidence_summary": "直接提供算力网络建设、交付和管维服务并披露宽算力网络收入，但数据中心建设/运维单节点收入未拆。",
+      "supported_claim_ids": [
+        "cloud_dc_claim_01_value_flow",
+        "cloud_dc_claim_09_design_delivery",
+        "cloud_dc_claim_10_operations",
+        "cloud_dc_claim_12_revenue_stage_boundary",
+        "cloud_dc_claim_13_execution_risks"
+      ],
+      "supported_node_ids": [
+        "design_integration_epc_commissioning",
+        "facility_operations_lifecycle_services"
+      ],
+      "limitations": "订单、在手项目额和数据中心交付数量不等于经常性收入；需按验收确认且宽算力网络收入不可全归本链。",
+      "notes": "巨潮资讯官方2025年年度报告全文逐页核验；身份、URL、产品、收入和风险页已复核。"
+    },
+    {
+      "source_id": "cloud_dc_603881_ar2025",
+      "source_type": "company_filing",
+      "title": "上海数据港股份有限公司2025年年度报告",
+      "publisher": "上海数据港股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-18",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-18/1225123460.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "full_text_reviewed",
+      "evidence_locator": "第11页数据中心建设、托管和运维；第16页运营容量与收入；第27页客户集中风险；第110页按实际机柜确认托管收入",
+      "evidence_summary": "数据中心服务为核心业务，覆盖规划建设、托管运维和IDC解决方案，并明确按实际机柜确认收入与客户集中风险。",
+      "supported_claim_ids": [
+        "cloud_dc_claim_01_value_flow",
+        "cloud_dc_claim_02_facility_modular",
+        "cloud_dc_claim_08_dcim",
+        "cloud_dc_claim_09_design_delivery",
+        "cloud_dc_claim_10_operations",
+        "cloud_dc_claim_11_utilization",
+        "cloud_dc_claim_12_revenue_stage_boundary",
+        "cloud_dc_claim_13_execution_risks"
+      ],
+      "supported_node_ids": [
+        "facility_systems_modular_deployment",
+        "dcim_monitoring_energy_management",
+        "design_integration_epc_commissioning",
+        "facility_operations_lifecycle_services",
+        "customer_deployment_utilization_validation"
+      ],
+      "limitations": "运营总容量不等于已使用容量；批发型客户集中度和实际机柜使用量决定收入。",
+      "notes": "巨潮资讯官方2025年年度报告全文逐页核验；身份、URL、产品、收入和风险页已复核。"
+    }
+  ]
+}

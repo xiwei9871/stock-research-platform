@@ -1,0 +1,835 @@
+{
+  "artifact_version": "theme_company_mapping_v1",
+  "theme_id": "cloud_data_center_infrastructure_value_chain_v1",
+  "sources": [
+    {
+      "source_id": "cloud_dc_002837_ar2025",
+      "source_type": "company_filing",
+      "title": "深圳市英维克科技股份有限公司2025年年度报告",
+      "publisher": "深圳市英维克科技股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-21",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-21/1225131813.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第9-10页机房温控、微模块、冷板/CDU/快接与全链条液冷产品；第15-16页机房温控收入；风险章节及应收账款附注。机房温控收入混合风冷、液冷、模块化和集成，储能液冷收入不得归入数据中心液冷。"
+    },
+    {
+      "source_id": "cloud_dc_300499_ar2025",
+      "source_type": "company_filing",
+      "title": "广州高澜节能技术股份有限公司2025年年度报告",
+      "publisher": "广州高澜节能技术股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-24",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-24/1225160679.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第14页数据中心热管理业务；第24-25页冷板式/浸没式液冷、CDU、集装箱与海外液冷EPC交付；收入与风险章节。订单和项目交付不等于稳定规模收入；电力电子热管理及储能热管理不得并入数据中心液冷。"
+    },
+    {
+      "source_id": "cloud_dc_301018_ar2025",
+      "source_type": "company_filing",
+      "title": "广东申菱环境系统股份有限公司2025年年度报告",
+      "publisher": "广东申菱环境系统股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-27",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-27/1225181199.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第14-15页数据服务客户、DPC相变和液冷温控；第20、25页浸没式液冷、CDU与模块化基础设施；第15页收入构成及风险章节。数据服务行业收入包含宽温控设备、解决方案和服务；在研液冷项目不等于已形成稳定规模收入。"
+    },
+    {
+      "source_id": "cloud_dc_000811_ar2025",
+      "source_type": "company_filing",
+      "title": "冰轮环境技术股份有限公司2025年年度报告",
+      "publisher": "冰轮环境技术股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-11",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-11/1225092828.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第15、17页工业产品与工程施工收入；第20页数据中心专用磁悬浮/螺杆冷水机研发；经营与金融风险章节。工业产品销售和工程施工覆盖多行业，研发产品不能视为稳定商业化收入。"
+    },
+    {
+      "source_id": "cloud_dc_002335_ar2025",
+      "source_type": "company_filing",
+      "title": "科华数据股份有限公司2025年年度报告",
+      "publisher": "科华数据股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-27",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-27/1225194937.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第11-18页智算中心产品、IDC运营与快速交付；第20-21页数据中心产品和IDC服务收入；第32页市场、迭代与交付风险。数据中心产品包含供配电等跨链设备；UPS仍归power_electronics_power_supply_equipment。"
+    },
+    {
+      "source_id": "cloud_dc_300442_ar2025",
+      "source_type": "company_filing",
+      "title": "润泽智算科技集团股份有限公司2025年年度报告",
+      "publisher": "润泽智算科技集团股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-10",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-10/1225090821.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第6页上架率定义；第18页成熟算力中心上架率与交付；第20页IDC/AIDC收入；第35-36页客户集中、上架率与技术风险。规划或交付容量不等于已上架计费容量；新中心利用率与客户集中度影响盈利。"
+    },
+    {
+      "source_id": "cloud_dc_002364_ar2025",
+      "source_type": "company_filing",
+      "title": "杭州中恒电气股份有限公司2025年年度报告",
+      "publisher": "杭州中恒电气股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-21",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-21/1225131190.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第11-13页HVDC/Panama/配电与监测产品；第23-25页数据中心电源项目及收入；发展与风险章节。数据中心电源属于power_electronics_power_supply_equipment；通用软件仍归industrial_software。"
+    },
+    {
+      "source_id": "cloud_dc_603912_ar2025",
+      "source_type": "company_filing",
+      "title": "南京佳力图机房环境技术股份有限公司2025年年度报告",
+      "publisher": "南京佳力图机房环境技术股份有限公司",
+      "author": "",
+      "publish_date": "2026-03-24",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-24/1225026036.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第11-14页机房环境控制、精密空调和液冷配套；收入分析及研发项目页；客户、项目和竞争风险章节。精密空调、冷水机和环境控制收入不能等同于液冷或AI数据中心独立收入。"
+    },
+    {
+      "source_id": "cloud_dc_300249_ar2025",
+      "source_type": "company_filing",
+      "title": "依米康科技集团股份有限公司2025年年度报告",
+      "publisher": "依米康科技集团股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-17",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-17/1225110800.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "主营业务与战略章节的数据中心温控和全生命周期方案；第111页主营业务定义；第170页信息数据领域收入；风险章节。信息数据领域收入包含温控设备、集成、咨询与工程服务，不能归为液冷单节点收入。"
+    },
+    {
+      "source_id": "cloud_dc_002929_ar2025",
+      "source_type": "company_filing",
+      "title": "润建股份有限公司2025年年度报告",
+      "publisher": "润建股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-27",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-27/1225195099.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第20-22页算力网络、海外数据中心交付与收入构成；第35-36页竞争和大客户风险；第136页验收确认；第199页算力网络收入。订单、在手项目额和数据中心交付数量不等于经常性收入；需按验收确认且宽算力网络收入不可全归本链。"
+    },
+    {
+      "source_id": "cloud_dc_603881_ar2025",
+      "source_type": "company_filing",
+      "title": "上海数据港股份有限公司2025年年度报告",
+      "publisher": "上海数据港股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-18",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-18/1225123460.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第11页数据中心建设、托管和运维；第16页运营容量与收入；第27页客户集中风险；第110页按实际机柜确认托管收入。运营总容量不等于已使用容量；批发型客户集中度和实际机柜使用量决定收入。"
+    }
+  ],
+  "evidence_items": [
+    {
+      "evidence_id": "cloud_dc_ev_002837_product",
+      "source_id": "cloud_dc_002837_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "第9-10页机房温控、微模块、冷板/CDU/快接与全链条液冷产品；第15-16页机房温控收入；风险章节及应收账款附注",
+      "evidence_summary": "数据中心全链条液冷与机房温控产品为年报直接披露的产品或服务关系。",
+      "related_company_codes": [
+        "002837.SZ"
+      ],
+      "related_node_ids": [
+        "thermal_liquid_cooling_systems"
+      ]
+    },
+    {
+      "evidence_id": "cloud_dc_ev_002837_revenue",
+      "source_id": "cloud_dc_002837_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "第9-10页机房温控、微模块、冷板/CDU/快接与全链条液冷产品；第15-16页机房温控收入；风险章节及应收账款附注",
+      "evidence_summary": "直接液冷产品，机房温控收入材料性但液冷未拆。 收入口径严格按undisclosed处理。",
+      "related_company_codes": [
+        "002837.SZ"
+      ],
+      "related_node_ids": [
+        "thermal_liquid_cooling_systems"
+      ]
+    },
+    {
+      "evidence_id": "cloud_dc_ev_002837_stage",
+      "source_id": "cloud_dc_002837_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "第9-10页机房温控、微模块、冷板/CDU/快接与全链条液冷产品；第15-16页机房温控收入；风险章节及应收账款附注",
+      "evidence_summary": "年报支持primary_business；风险边界：宽机房温控收入不等于液冷收入。",
+      "related_company_codes": [
+        "002837.SZ"
+      ],
+      "related_node_ids": [
+        "thermal_liquid_cooling_systems"
+      ]
+    },
+    {
+      "evidence_id": "cloud_dc_ev_300499_product",
+      "source_id": "cloud_dc_300499_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "第14页数据中心热管理业务；第24-25页冷板式/浸没式液冷、CDU、集装箱与海外液冷EPC交付；收入与风险章节",
+      "evidence_summary": "冷板式/浸没式液冷、CDU与液冷EPC为年报直接披露的产品或服务关系。",
+      "related_company_codes": [
+        "300499.SZ"
+      ],
+      "related_node_ids": [
+        "thermal_liquid_cooling_systems"
+      ]
+    },
+    {
+      "evidence_id": "cloud_dc_ev_300499_revenue",
+      "source_id": "cloud_dc_300499_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "第14页数据中心热管理业务；第24-25页冷板式/浸没式液冷、CDU、集装箱与海外液冷EPC交付；收入与风险章节",
+      "evidence_summary": "液冷产品和项目交付直接，窄收入未拆。 收入口径严格按undisclosed处理。",
+      "related_company_codes": [
+        "300499.SZ"
+      ],
+      "related_node_ids": [
+        "thermal_liquid_cooling_systems"
+      ]
+    },
+    {
+      "evidence_id": "cloud_dc_ev_300499_stage",
+      "source_id": "cloud_dc_300499_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "第14页数据中心热管理业务；第24-25页冷板式/浸没式液冷、CDU、集装箱与海外液冷EPC交付；收入与风险章节",
+      "evidence_summary": "年报支持primary_business；风险边界：订单及项目交付不等于稳定规模收入。",
+      "related_company_codes": [
+        "300499.SZ"
+      ],
+      "related_node_ids": [
+        "thermal_liquid_cooling_systems"
+      ]
+    },
+    {
+      "evidence_id": "cloud_dc_ev_301018_product",
+      "source_id": "cloud_dc_301018_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "第14-15页数据服务客户、DPC相变和液冷温控；第20、25页浸没式液冷、CDU与模块化基础设施；第15页收入构成及风险章节",
+      "evidence_summary": "数据中心液冷温控、DPC相变和CDU为年报直接披露的产品或服务关系。",
+      "related_company_codes": [
+        "301018.SZ"
+      ],
+      "related_node_ids": [
+        "thermal_liquid_cooling_systems"
+      ]
+    },
+    {
+      "evidence_id": "cloud_dc_ev_301018_revenue",
+      "source_id": "cloud_dc_301018_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "第14-15页数据服务客户、DPC相变和液冷温控；第20、25页浸没式液冷、CDU与模块化基础设施；第15页收入构成及风险章节",
+      "evidence_summary": "数据服务收入材料性，液冷独立收入未拆。 收入口径严格按undisclosed处理。",
+      "related_company_codes": [
+        "301018.SZ"
+      ],
+      "related_node_ids": [
+        "thermal_liquid_cooling_systems"
+      ]
+    },
+    {
+      "evidence_id": "cloud_dc_ev_301018_stage",
+      "source_id": "cloud_dc_301018_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "第14-15页数据服务客户、DPC相变和液冷温控；第20、25页浸没式液冷、CDU与模块化基础设施；第15页收入构成及风险章节",
+      "evidence_summary": "年报支持primary_business；风险边界：在研产品和宽数据服务收入不外推。",
+      "related_company_codes": [
+        "301018.SZ"
+      ],
+      "related_node_ids": [
+        "thermal_liquid_cooling_systems"
+      ]
+    },
+    {
+      "evidence_id": "cloud_dc_ev_000811_product",
+      "source_id": "cloud_dc_000811_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "第15、17页工业产品与工程施工收入；第20页数据中心专用磁悬浮/螺杆冷水机研发；经营与金融风险章节",
+      "evidence_summary": "数据中心专用冷水机与工业制冷系统为年报直接披露的产品或服务关系。",
+      "related_company_codes": [
+        "000811.SZ"
+      ],
+      "related_node_ids": [
+        "heat_rejection_chillers_pumps_recovery"
+      ]
+    },
+    {
+      "evidence_id": "cloud_dc_ev_000811_revenue",
+      "source_id": "cloud_dc_000811_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "第15、17页工业产品与工程施工收入；第20页数据中心专用磁悬浮/螺杆冷水机研发；经营与金融风险章节",
+      "evidence_summary": "直接产品研发/供应，数据中心收入未拆。 收入口径严格按undisclosed处理。",
+      "related_company_codes": [
+        "000811.SZ"
+      ],
+      "related_node_ids": [
+        "heat_rejection_chillers_pumps_recovery"
+      ]
+    },
+    {
+      "evidence_id": "cloud_dc_ev_000811_stage",
+      "source_id": "cloud_dc_000811_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "第15、17页工业产品与工程施工收入；第20页数据中心专用磁悬浮/螺杆冷水机研发；经营与金融风险章节",
+      "evidence_summary": "年报支持primary_business；风险边界：宽工业产品和工程收入不等于数据中心排热收入。",
+      "related_company_codes": [
+        "000811.SZ"
+      ],
+      "related_node_ids": [
+        "heat_rejection_chillers_pumps_recovery"
+      ]
+    },
+    {
+      "evidence_id": "cloud_dc_ev_002335_product",
+      "source_id": "cloud_dc_002335_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "第11-18页智算中心产品、IDC运营与快速交付；第20-21页数据中心产品和IDC服务收入；第32页市场、迭代与交付风险",
+      "evidence_summary": "数据中心产品、IDC与快速交付设施为年报直接披露的产品或服务关系。",
+      "related_company_codes": [
+        "002335.SZ"
+      ],
+      "related_node_ids": [
+        "facility_systems_modular_deployment"
+      ]
+    },
+    {
+      "evidence_id": "cloud_dc_ev_002335_revenue",
+      "source_id": "cloud_dc_002335_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "第11-18页智算中心产品、IDC运营与快速交付；第20-21页数据中心产品和IDC服务收入；第32页市场、迭代与交付风险",
+      "evidence_summary": "数据中心产品和服务收入材料性，但含供电跨链设备。 收入口径严格按material处理。",
+      "related_company_codes": [
+        "002335.SZ"
+      ],
+      "related_node_ids": [
+        "facility_systems_modular_deployment"
+      ]
+    },
+    {
+      "evidence_id": "cloud_dc_ev_002335_stage",
+      "source_id": "cloud_dc_002335_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "第11-18页智算中心产品、IDC运营与快速交付；第20-21页数据中心产品和IDC服务收入；第32页市场、迭代与交付风险",
+      "evidence_summary": "年报支持primary_business；风险边界：UPS所有权保留在power_electronics_power_supply_equipment。",
+      "related_company_codes": [
+        "002335.SZ"
+      ],
+      "related_node_ids": [
+        "facility_systems_modular_deployment"
+      ]
+    },
+    {
+      "evidence_id": "cloud_dc_ev_300442_product",
+      "source_id": "cloud_dc_300442_ar2025",
+      "evidence_type": "service_relationship",
+      "excerpt_locator": "第6页上架率定义；第18页成熟算力中心上架率与交付；第20页IDC/AIDC收入；第35-36页客户集中、上架率与技术风险",
+      "evidence_summary": "IDC/AIDC算力中心运营服务为年报直接披露的产品或服务关系。",
+      "related_company_codes": [
+        "300442.SZ"
+      ],
+      "related_node_ids": [
+        "facility_operations_lifecycle_services"
+      ]
+    },
+    {
+      "evidence_id": "cloud_dc_ev_300442_revenue",
+      "source_id": "cloud_dc_300442_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "第6页上架率定义；第18页成熟算力中心上架率与交付；第20页IDC/AIDC收入；第35-36页客户集中、上架率与技术风险",
+      "evidence_summary": "运营收入核心且披露容量、上架率与利用率风险。 收入口径严格按material处理。",
+      "related_company_codes": [
+        "300442.SZ"
+      ],
+      "related_node_ids": [
+        "facility_operations_lifecycle_services"
+      ]
+    },
+    {
+      "evidence_id": "cloud_dc_ev_300442_stage",
+      "source_id": "cloud_dc_300442_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "第6页上架率定义；第18页成熟算力中心上架率与交付；第20页IDC/AIDC收入；第35-36页客户集中、上架率与技术风险",
+      "evidence_summary": "年报支持primary_business；风险边界：交付容量需经上架计费验证。",
+      "related_company_codes": [
+        "300442.SZ"
+      ],
+      "related_node_ids": [
+        "facility_operations_lifecycle_services"
+      ]
+    },
+    {
+      "evidence_id": "cloud_dc_ev_002364_product",
+      "source_id": "cloud_dc_002364_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "第11-13页HVDC/Panama/配电与监测产品；第23-25页数据中心电源项目及收入；发展与风险章节",
+      "evidence_summary": "HVDC/Panama/配电与动力环境监测为年报直接披露的产品或服务关系。",
+      "related_company_codes": [
+        "002364.SZ"
+      ],
+      "related_node_ids": [
+        "power_availability_electrical_architecture_dependency"
+      ]
+    },
+    {
+      "evidence_id": "cloud_dc_ev_002364_revenue",
+      "source_id": "cloud_dc_002364_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "第11-13页HVDC/Panama/配电与监测产品；第23-25页数据中心电源项目及收入；发展与风险章节",
+      "evidence_summary": "数据中心电源收入材料性，只作电气/监控依赖。 收入口径严格按material处理。",
+      "related_company_codes": [
+        "002364.SZ"
+      ],
+      "related_node_ids": [
+        "power_availability_electrical_architecture_dependency"
+      ]
+    },
+    {
+      "evidence_id": "cloud_dc_ev_002364_stage",
+      "source_id": "cloud_dc_002364_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "第11-13页HVDC/Panama/配电与监测产品；第23-25页数据中心电源项目及收入；发展与风险章节",
+      "evidence_summary": "年报支持primary_business；风险边界：所有权不移入cloud链，通用软件不重复归属。",
+      "related_company_codes": [
+        "002364.SZ"
+      ],
+      "related_node_ids": [
+        "power_availability_electrical_architecture_dependency"
+      ]
+    },
+    {
+      "evidence_id": "cloud_dc_ev_603912_product",
+      "source_id": "cloud_dc_603912_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "第11-14页机房环境控制、精密空调和液冷配套；收入分析及研发项目页；客户、项目和竞争风险章节",
+      "evidence_summary": "机房环境控制、精密空调与液冷配套为年报直接披露的产品或服务关系。",
+      "related_company_codes": [
+        "603912.SH"
+      ],
+      "related_node_ids": [
+        "thermal_liquid_cooling_systems"
+      ]
+    },
+    {
+      "evidence_id": "cloud_dc_ev_603912_revenue",
+      "source_id": "cloud_dc_603912_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "第11-14页机房环境控制、精密空调和液冷配套；收入分析及研发项目页；客户、项目和竞争风险章节",
+      "evidence_summary": "直接冷却产品，液冷独立收入未拆。 收入口径严格按undisclosed处理。",
+      "related_company_codes": [
+        "603912.SH"
+      ],
+      "related_node_ids": [
+        "thermal_liquid_cooling_systems"
+      ]
+    },
+    {
+      "evidence_id": "cloud_dc_ev_603912_stage",
+      "source_id": "cloud_dc_603912_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "第11-14页机房环境控制、精密空调和液冷配套；收入分析及研发项目页；客户、项目和竞争风险章节",
+      "evidence_summary": "年报支持primary_business；风险边界：宽环境控制收入不等于液冷收入。",
+      "related_company_codes": [
+        "603912.SH"
+      ],
+      "related_node_ids": [
+        "thermal_liquid_cooling_systems"
+      ]
+    },
+    {
+      "evidence_id": "cloud_dc_ev_300249_product",
+      "source_id": "cloud_dc_300249_ar2025",
+      "evidence_type": "service_relationship",
+      "excerpt_locator": "主营业务与战略章节的数据中心温控和全生命周期方案；第111页主营业务定义；第170页信息数据领域收入；风险章节",
+      "evidence_summary": "信息数据温控设备与全生命周期解决方案为年报直接披露的产品或服务关系。",
+      "related_company_codes": [
+        "300249.SZ"
+      ],
+      "related_node_ids": [
+        "thermal_liquid_cooling_systems"
+      ]
+    },
+    {
+      "evidence_id": "cloud_dc_ev_300249_revenue",
+      "source_id": "cloud_dc_300249_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "主营业务与战略章节的数据中心温控和全生命周期方案；第111页主营业务定义；第170页信息数据领域收入；风险章节",
+      "evidence_summary": "直接温控和集成业务，液冷收入未拆。 收入口径严格按undisclosed处理。",
+      "related_company_codes": [
+        "300249.SZ"
+      ],
+      "related_node_ids": [
+        "thermal_liquid_cooling_systems"
+      ]
+    },
+    {
+      "evidence_id": "cloud_dc_ev_300249_stage",
+      "source_id": "cloud_dc_300249_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "主营业务与战略章节的数据中心温控和全生命周期方案；第111页主营业务定义；第170页信息数据领域收入；风险章节",
+      "evidence_summary": "年报支持primary_business；风险边界：信息数据领域收入包含设备、集成和咨询。",
+      "related_company_codes": [
+        "300249.SZ"
+      ],
+      "related_node_ids": [
+        "thermal_liquid_cooling_systems"
+      ]
+    },
+    {
+      "evidence_id": "cloud_dc_ev_002929_product",
+      "source_id": "cloud_dc_002929_ar2025",
+      "evidence_type": "service_relationship",
+      "excerpt_locator": "第20-22页算力网络、海外数据中心交付与收入构成；第35-36页竞争和大客户风险；第136页验收确认；第199页算力网络收入",
+      "evidence_summary": "算力网络建设、交付与管维服务为年报直接披露的产品或服务关系。",
+      "related_company_codes": [
+        "002929.SZ"
+      ],
+      "related_node_ids": [
+        "design_integration_epc_commissioning"
+      ]
+    },
+    {
+      "evidence_id": "cloud_dc_ev_002929_revenue",
+      "source_id": "cloud_dc_002929_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "第20-22页算力网络、海外数据中心交付与收入构成；第35-36页竞争和大客户风险；第136页验收确认；第199页算力网络收入",
+      "evidence_summary": "直接交付服务，数据中心建设/运维单节点收入未拆。 收入口径严格按undisclosed处理。",
+      "related_company_codes": [
+        "002929.SZ"
+      ],
+      "related_node_ids": [
+        "design_integration_epc_commissioning"
+      ]
+    },
+    {
+      "evidence_id": "cloud_dc_ev_002929_stage",
+      "source_id": "cloud_dc_002929_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "第20-22页算力网络、海外数据中心交付与收入构成；第35-36页竞争和大客户风险；第136页验收确认；第199页算力网络收入",
+      "evidence_summary": "年报支持primary_business；风险边界：订单、项目额和交付数量不等于经常性收入。",
+      "related_company_codes": [
+        "002929.SZ"
+      ],
+      "related_node_ids": [
+        "design_integration_epc_commissioning"
+      ]
+    },
+    {
+      "evidence_id": "cloud_dc_ev_603881_product",
+      "source_id": "cloud_dc_603881_ar2025",
+      "evidence_type": "service_relationship",
+      "excerpt_locator": "第11页数据中心建设、托管和运维；第16页运营容量与收入；第27页客户集中风险；第110页按实际机柜确认托管收入",
+      "evidence_summary": "数据中心托管、运维及IDC解决方案为年报直接披露的产品或服务关系。",
+      "related_company_codes": [
+        "603881.SH"
+      ],
+      "related_node_ids": [
+        "facility_operations_lifecycle_services"
+      ]
+    },
+    {
+      "evidence_id": "cloud_dc_ev_603881_revenue",
+      "source_id": "cloud_dc_603881_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "第11页数据中心建设、托管和运维；第16页运营容量与收入；第27页客户集中风险；第110页按实际机柜确认托管收入",
+      "evidence_summary": "核心运营业务按实际使用机柜确认收入。 收入口径严格按material处理。",
+      "related_company_codes": [
+        "603881.SH"
+      ],
+      "related_node_ids": [
+        "facility_operations_lifecycle_services"
+      ]
+    },
+    {
+      "evidence_id": "cloud_dc_ev_603881_stage",
+      "source_id": "cloud_dc_603881_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "第11页数据中心建设、托管和运维；第16页运营容量与收入；第27页客户集中风险；第110页按实际机柜确认托管收入",
+      "evidence_summary": "年报支持primary_business；风险边界：客户集中与实际使用容量决定盈利。",
+      "related_company_codes": [
+        "603881.SH"
+      ],
+      "related_node_ids": [
+        "facility_operations_lifecycle_services"
+      ]
+    }
+  ],
+  "company_mappings": [
+    {
+      "mapping_id": "cloud_dc_map_002837_v1",
+      "theme_id": "cloud_data_center_infrastructure_value_chain_v1",
+      "company_code": "002837.SZ",
+      "company_name": "英维克",
+      "market": "CN",
+      "mapped_node_id": "thermal_liquid_cooling_systems",
+      "mapping_type": "equipment_supplier",
+      "business_stage": "primary_business",
+      "confidence": 0.96,
+      "evidence_ids": [
+        "cloud_dc_ev_002837_product",
+        "cloud_dc_ev_002837_revenue",
+        "cloud_dc_ev_002837_stage"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "meaningful_segment",
+      "product_or_service": "数据中心全链条液冷与机房温控产品",
+      "relationship_summary": "直接液冷产品，机房温控收入材料性但液冷未拆。",
+      "review_status": "reviewed",
+      "notes": "宽机房温控收入不等于液冷收入。"
+    },
+    {
+      "mapping_id": "cloud_dc_map_300499_v1",
+      "theme_id": "cloud_data_center_infrastructure_value_chain_v1",
+      "company_code": "300499.SZ",
+      "company_name": "高澜股份",
+      "market": "CN",
+      "mapped_node_id": "thermal_liquid_cooling_systems",
+      "mapping_type": "equipment_supplier",
+      "business_stage": "primary_business",
+      "confidence": 0.96,
+      "evidence_ids": [
+        "cloud_dc_ev_300499_product",
+        "cloud_dc_ev_300499_revenue",
+        "cloud_dc_ev_300499_stage"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "meaningful_segment",
+      "product_or_service": "冷板式/浸没式液冷、CDU与液冷EPC",
+      "relationship_summary": "液冷产品和项目交付直接，窄收入未拆。",
+      "review_status": "reviewed",
+      "notes": "订单及项目交付不等于稳定规模收入。"
+    },
+    {
+      "mapping_id": "cloud_dc_map_301018_v1",
+      "theme_id": "cloud_data_center_infrastructure_value_chain_v1",
+      "company_code": "301018.SZ",
+      "company_name": "申菱环境",
+      "market": "CN",
+      "mapped_node_id": "thermal_liquid_cooling_systems",
+      "mapping_type": "equipment_supplier",
+      "business_stage": "primary_business",
+      "confidence": 0.96,
+      "evidence_ids": [
+        "cloud_dc_ev_301018_product",
+        "cloud_dc_ev_301018_revenue",
+        "cloud_dc_ev_301018_stage"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "meaningful_segment",
+      "product_or_service": "数据中心液冷温控、DPC相变和CDU",
+      "relationship_summary": "数据服务收入材料性，液冷独立收入未拆。",
+      "review_status": "reviewed",
+      "notes": "在研产品和宽数据服务收入不外推。"
+    },
+    {
+      "mapping_id": "cloud_dc_map_000811_v1",
+      "theme_id": "cloud_data_center_infrastructure_value_chain_v1",
+      "company_code": "000811.SZ",
+      "company_name": "冰轮环境",
+      "market": "CN",
+      "mapped_node_id": "heat_rejection_chillers_pumps_recovery",
+      "mapping_type": "equipment_supplier",
+      "business_stage": "primary_business",
+      "confidence": 0.96,
+      "evidence_ids": [
+        "cloud_dc_ev_000811_product",
+        "cloud_dc_ev_000811_revenue",
+        "cloud_dc_ev_000811_stage"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "meaningful_segment",
+      "product_or_service": "数据中心专用冷水机与工业制冷系统",
+      "relationship_summary": "直接产品研发/供应，数据中心收入未拆。",
+      "review_status": "reviewed",
+      "notes": "宽工业产品和工程收入不等于数据中心排热收入。"
+    },
+    {
+      "mapping_id": "cloud_dc_map_002335_v1",
+      "theme_id": "cloud_data_center_infrastructure_value_chain_v1",
+      "company_code": "002335.SZ",
+      "company_name": "科华数据",
+      "market": "CN",
+      "mapped_node_id": "facility_systems_modular_deployment",
+      "mapping_type": "equipment_supplier",
+      "business_stage": "primary_business",
+      "confidence": 0.96,
+      "evidence_ids": [
+        "cloud_dc_ev_002335_product",
+        "cloud_dc_ev_002335_revenue",
+        "cloud_dc_ev_002335_stage"
+      ],
+      "revenue_relevance": "material",
+      "bottleneck_relevance": "adjacent",
+      "business_materiality": "meaningful_segment",
+      "product_or_service": "数据中心产品、IDC与快速交付设施",
+      "relationship_summary": "数据中心产品和服务收入材料性，但含供电跨链设备。",
+      "review_status": "reviewed",
+      "notes": "UPS所有权保留在power_electronics_power_supply_equipment。"
+    },
+    {
+      "mapping_id": "cloud_dc_map_300442_v1",
+      "theme_id": "cloud_data_center_infrastructure_value_chain_v1",
+      "company_code": "300442.SZ",
+      "company_name": "润泽科技",
+      "market": "CN",
+      "mapped_node_id": "facility_operations_lifecycle_services",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.96,
+      "evidence_ids": [
+        "cloud_dc_ev_300442_product",
+        "cloud_dc_ev_300442_revenue",
+        "cloud_dc_ev_300442_stage"
+      ],
+      "revenue_relevance": "material",
+      "bottleneck_relevance": "core",
+      "business_materiality": "core_business",
+      "product_or_service": "IDC/AIDC算力中心运营服务",
+      "relationship_summary": "运营收入核心且披露容量、上架率与利用率风险。",
+      "review_status": "reviewed",
+      "notes": "交付容量需经上架计费验证。"
+    },
+    {
+      "mapping_id": "cloud_dc_map_002364_v1",
+      "theme_id": "cloud_data_center_infrastructure_value_chain_v1",
+      "company_code": "002364.SZ",
+      "company_name": "中恒电气",
+      "market": "CN",
+      "mapped_node_id": "power_availability_electrical_architecture_dependency",
+      "mapping_type": "component_supplier",
+      "business_stage": "primary_business",
+      "confidence": 0.96,
+      "evidence_ids": [
+        "cloud_dc_ev_002364_product",
+        "cloud_dc_ev_002364_revenue",
+        "cloud_dc_ev_002364_stage"
+      ],
+      "revenue_relevance": "material",
+      "bottleneck_relevance": "adjacent",
+      "business_materiality": "meaningful_segment",
+      "product_or_service": "HVDC/Panama/配电与动力环境监测",
+      "relationship_summary": "数据中心电源收入材料性，只作电气/监控依赖。",
+      "review_status": "reviewed",
+      "notes": "所有权不移入cloud链，通用软件不重复归属。"
+    },
+    {
+      "mapping_id": "cloud_dc_map_603912_v1",
+      "theme_id": "cloud_data_center_infrastructure_value_chain_v1",
+      "company_code": "603912.SH",
+      "company_name": "佳力图",
+      "market": "CN",
+      "mapped_node_id": "thermal_liquid_cooling_systems",
+      "mapping_type": "equipment_supplier",
+      "business_stage": "primary_business",
+      "confidence": 0.96,
+      "evidence_ids": [
+        "cloud_dc_ev_603912_product",
+        "cloud_dc_ev_603912_revenue",
+        "cloud_dc_ev_603912_stage"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "meaningful_segment",
+      "product_or_service": "机房环境控制、精密空调与液冷配套",
+      "relationship_summary": "直接冷却产品，液冷独立收入未拆。",
+      "review_status": "reviewed",
+      "notes": "宽环境控制收入不等于液冷收入。"
+    },
+    {
+      "mapping_id": "cloud_dc_map_300249_v1",
+      "theme_id": "cloud_data_center_infrastructure_value_chain_v1",
+      "company_code": "300249.SZ",
+      "company_name": "依米康",
+      "market": "CN",
+      "mapped_node_id": "thermal_liquid_cooling_systems",
+      "mapping_type": "system_integrator",
+      "business_stage": "primary_business",
+      "confidence": 0.96,
+      "evidence_ids": [
+        "cloud_dc_ev_300249_product",
+        "cloud_dc_ev_300249_revenue",
+        "cloud_dc_ev_300249_stage"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "meaningful_segment",
+      "product_or_service": "信息数据温控设备与全生命周期解决方案",
+      "relationship_summary": "直接温控和集成业务，液冷收入未拆。",
+      "review_status": "reviewed",
+      "notes": "信息数据领域收入包含设备、集成和咨询。"
+    },
+    {
+      "mapping_id": "cloud_dc_map_002929_v1",
+      "theme_id": "cloud_data_center_infrastructure_value_chain_v1",
+      "company_code": "002929.SZ",
+      "company_name": "润建股份",
+      "market": "CN",
+      "mapped_node_id": "design_integration_epc_commissioning",
+      "mapping_type": "system_integrator",
+      "business_stage": "primary_business",
+      "confidence": 0.96,
+      "evidence_ids": [
+        "cloud_dc_ev_002929_product",
+        "cloud_dc_ev_002929_revenue",
+        "cloud_dc_ev_002929_stage"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "meaningful_segment",
+      "product_or_service": "算力网络建设、交付与管维服务",
+      "relationship_summary": "直接交付服务，数据中心建设/运维单节点收入未拆。",
+      "review_status": "reviewed",
+      "notes": "订单、项目额和交付数量不等于经常性收入。"
+    },
+    {
+      "mapping_id": "cloud_dc_map_603881_v1",
+      "theme_id": "cloud_data_center_infrastructure_value_chain_v1",
+      "company_code": "603881.SH",
+      "company_name": "数据港",
+      "market": "CN",
+      "mapped_node_id": "facility_operations_lifecycle_services",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.96,
+      "evidence_ids": [
+        "cloud_dc_ev_603881_product",
+        "cloud_dc_ev_603881_revenue",
+        "cloud_dc_ev_603881_stage"
+      ],
+      "revenue_relevance": "material",
+      "bottleneck_relevance": "core",
+      "business_materiality": "core_business",
+      "product_or_service": "数据中心托管、运维及IDC解决方案",
+      "relationship_summary": "核心运营业务按实际使用机柜确认收入。",
+      "review_status": "reviewed",
+      "notes": "客户集中与实际使用容量决定盈利。"
+    }
+  ]
+}
