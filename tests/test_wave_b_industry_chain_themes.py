@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -1172,6 +1173,11 @@ def _assert_cloud_bidirectional_direct_claim_links() -> None:
             in {claim["source_id"], *claim["supporting_source_ids"]}
         }
         assert set(source["supported_claim_ids"]) == expected_claim_ids
+        supported_node_ids = set(source["supported_node_ids"])
+        for claim_id in expected_claim_ids:
+            assert set(claim_by_id[claim_id]["affected_theme_nodes"]) <= (
+                supported_node_ids
+            ), (source["source_id"], claim_id)
         for node_id in source["supported_node_ids"]:
             direct_claim_ids = {
                 claim_id
@@ -1295,6 +1301,40 @@ def test_cloud_data_center_evidence_counts_identity_and_mapping_evidence_are_exa
         for row in reviewed_mappings
         for evidence_id in row["evidence_ids"]
     } == set(pack_sources)
+
+
+def test_cloud_data_center_mapping_locators_are_precise_and_role_specific():
+    mapping = _read_json(CLOUD_MAPPING_PATH)
+    evidence_by_id = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+    fuzzy_locator_phrases = {
+        "风险章节",
+        "收入与风险章节",
+        "经营与金融风险章节",
+        "发展与风险章节",
+        "收入分析及研发项目页",
+        "主营业务与战略章节",
+        "客户、项目和竞争风险章节",
+    }
+
+    for row in mapping["company_mappings"]:
+        evidence = [evidence_by_id[evidence_id] for evidence_id in row["evidence_ids"]]
+        locators = [item["excerpt_locator"] for item in evidence]
+        assert len(evidence) == 3
+        assert len(set(locators)) == 3, row["company_code"]
+        assert {
+            item["evidence_type"] for item in evidence
+        } >= {"revenue_materiality", "business_stage"}
+        assert {
+            item["evidence_type"] for item in evidence
+        } & {"product_relationship", "service_relationship"}
+        for locator in locators:
+            assert re.search(r"第[\d、,\-]+页", locator), locator
+            assert not any(phrase in locator for phrase in fuzzy_locator_phrases), locator
+
+    assert "第18页" in evidence_by_id["cloud_dc_ev_300442_stage"]["excerpt_locator"]
+    assert "客户集中" in evidence_by_id["cloud_dc_ev_300442_stage"]["excerpt_locator"]
+    assert "第36页" in evidence_by_id["cloud_dc_ev_300442_stage"]["excerpt_locator"]
+    assert "上架率" in evidence_by_id["cloud_dc_ev_300442_stage"]["excerpt_locator"]
 
 
 def test_cloud_data_center_beneficiary_tiers_and_company_api_are_exact():

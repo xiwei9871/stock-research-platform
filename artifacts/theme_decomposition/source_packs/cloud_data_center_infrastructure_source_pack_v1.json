@@ -18,12 +18,10 @@
       "evidence_locator": "第9-10页机房温控、微模块、冷板/CDU/快接与全链条液冷产品；第15-16页机房温控收入；风险章节及应收账款附注",
       "evidence_summary": "直接披露数据中心风冷、微模块与全链条液冷产品，机房温控收入材料性，但未单拆液冷收入。",
       "supported_claim_ids": [
-        "cloud_dc_claim_01_value_flow",
         "cloud_dc_claim_02_facility_modular",
         "cloud_dc_claim_05_liquid_cooling",
         "cloud_dc_claim_06_heat_rejection",
-        "cloud_dc_claim_12_revenue_stage_boundary",
-        "cloud_dc_claim_13_execution_risks"
+        "cloud_dc_claim_12_revenue_stage_boundary"
       ],
       "supported_node_ids": [
         "facility_systems_modular_deployment",
@@ -48,11 +46,9 @@
       "evidence_locator": "第14页数据中心热管理业务；第24-25页冷板式/浸没式液冷、CDU、集装箱与海外液冷EPC交付；收入与风险章节",
       "evidence_summary": "直接披露数据中心热管理、液冷CDU和EPC交付，但收入仅为公司宽口径，未单拆数据中心液冷。",
       "supported_claim_ids": [
-        "cloud_dc_claim_01_value_flow",
         "cloud_dc_claim_05_liquid_cooling",
         "cloud_dc_claim_09_design_delivery",
-        "cloud_dc_claim_12_revenue_stage_boundary",
-        "cloud_dc_claim_13_execution_risks"
+        "cloud_dc_claim_12_revenue_stage_boundary"
       ],
       "supported_node_ids": [
         "thermal_liquid_cooling_systems",
@@ -76,12 +72,10 @@
       "evidence_locator": "第14-15页数据服务客户、DPC相变和液冷温控；第20、25页浸没式液冷、CDU与模块化基础设施；第15页收入构成及风险章节",
       "evidence_summary": "数据服务行业收入材料性并披露液冷温控与模块化整装研发/业务，但液冷独立收入未拆。",
       "supported_claim_ids": [
-        "cloud_dc_claim_01_value_flow",
         "cloud_dc_claim_02_facility_modular",
         "cloud_dc_claim_05_liquid_cooling",
         "cloud_dc_claim_07_environment",
-        "cloud_dc_claim_12_revenue_stage_boundary",
-        "cloud_dc_claim_13_execution_risks"
+        "cloud_dc_claim_12_revenue_stage_boundary"
       ],
       "supported_node_ids": [
         "facility_systems_modular_deployment",
@@ -106,11 +100,8 @@
       "evidence_locator": "第15、17页工业产品与工程施工收入；第20页数据中心专用磁悬浮/螺杆冷水机研发；经营与金融风险章节",
       "evidence_summary": "直接披露数据中心专用冷水机研发及宽制冷设备、工程业务收入，未披露数据中心专属收入。",
       "supported_claim_ids": [
-        "cloud_dc_claim_01_value_flow",
         "cloud_dc_claim_06_heat_rejection",
-        "cloud_dc_claim_07_environment",
-        "cloud_dc_claim_12_revenue_stage_boundary",
-        "cloud_dc_claim_13_execution_risks"
+        "cloud_dc_claim_07_environment"
       ],
       "supported_node_ids": [
         "heat_rejection_chillers_pumps_recovery",
@@ -134,13 +125,10 @@
       "evidence_locator": "第11-18页智算中心产品、IDC运营与快速交付；第20-21页数据中心产品和IDC服务收入；第32页市场、迭代与交付风险",
       "evidence_summary": "数据中心产品和IDC服务收入直接披露，可支持设施与交付依赖；UPS所有权不转入本链。",
       "supported_claim_ids": [
-        "cloud_dc_claim_01_value_flow",
         "cloud_dc_claim_02_facility_modular",
         "cloud_dc_claim_03_power_dependency",
         "cloud_dc_claim_04_backup_dependency",
-        "cloud_dc_claim_09_design_delivery",
-        "cloud_dc_claim_12_revenue_stage_boundary",
-        "cloud_dc_claim_13_execution_risks"
+        "cloud_dc_claim_09_design_delivery"
       ],
       "supported_node_ids": [
         "facility_systems_modular_deployment",
@@ -170,7 +158,6 @@
         "cloud_dc_claim_02_facility_modular",
         "cloud_dc_claim_10_operations",
         "cloud_dc_claim_11_utilization",
-        "cloud_dc_claim_12_revenue_stage_boundary",
         "cloud_dc_claim_13_execution_risks"
       ],
       "supported_node_ids": [
@@ -196,11 +183,8 @@
       "evidence_locator": "第11-13页HVDC/Panama/配电与监测产品；第23-25页数据中心电源项目及收入；发展与风险章节",
       "evidence_summary": "直接披露数据中心电源收入与监测能力，只作为电气/监控依赖，不转移供电链所有权。",
       "supported_claim_ids": [
-        "cloud_dc_claim_01_value_flow",
         "cloud_dc_claim_03_power_dependency",
-        "cloud_dc_claim_08_dcim",
-        "cloud_dc_claim_12_revenue_stage_boundary",
-        "cloud_dc_claim_13_execution_risks"
+        "cloud_dc_claim_08_dcim"
       ],
       "supported_node_ids": [
         "power_availability_electrical_architecture_dependency",
@@ -224,11 +208,9 @@
       "evidence_locator": "第11-14页机房环境控制、精密空调和液冷配套；收入分析及研发项目页；客户、项目和竞争风险章节",
       "evidence_summary": "直接提供数据中心机房环境控制和冷却产品，但收入是宽环境控制口径，液冷未独立披露。",
       "supported_claim_ids": [
-        "cloud_dc_claim_01_value_flow",
         "cloud_dc_claim_05_liquid_cooling",
         "cloud_dc_claim_06_heat_rejection",
-        "cloud_dc_claim_12_revenue_stage_boundary",
-        "cloud_dc_claim_13_execution_risks"
+        "cloud_dc_claim_12_revenue_stage_boundary"
       ],
       "supported_node_ids": [
         "thermal_liquid_cooling_systems",
@@ -252,11 +234,9 @@
       "evidence_locator": "主营业务与战略章节的数据中心温控和全生命周期方案；第111页主营业务定义；第170页信息数据领域收入；风险章节",
       "evidence_summary": "主营业务围绕信息数据领域温控设备、系统集成和全生命周期方案，宽领域收入材料性但液冷未拆。",
       "supported_claim_ids": [
-        "cloud_dc_claim_01_value_flow",
         "cloud_dc_claim_05_liquid_cooling",
         "cloud_dc_claim_09_design_delivery",
-        "cloud_dc_claim_12_revenue_stage_boundary",
-        "cloud_dc_claim_13_execution_risks"
+        "cloud_dc_claim_12_revenue_stage_boundary"
       ],
       "supported_node_ids": [
         "thermal_liquid_cooling_systems",
@@ -280,11 +260,8 @@
       "evidence_locator": "第20-22页算力网络、海外数据中心交付与收入构成；第35-36页竞争和大客户风险；第136页验收确认；第199页算力网络收入",
       "evidence_summary": "直接提供算力网络建设、交付和管维服务并披露宽算力网络收入，但数据中心建设/运维单节点收入未拆。",
       "supported_claim_ids": [
-        "cloud_dc_claim_01_value_flow",
         "cloud_dc_claim_09_design_delivery",
-        "cloud_dc_claim_10_operations",
-        "cloud_dc_claim_12_revenue_stage_boundary",
-        "cloud_dc_claim_13_execution_risks"
+        "cloud_dc_claim_10_operations"
       ],
       "supported_node_ids": [
         "design_integration_epc_commissioning",
@@ -314,7 +291,6 @@
         "cloud_dc_claim_09_design_delivery",
         "cloud_dc_claim_10_operations",
         "cloud_dc_claim_11_utilization",
-        "cloud_dc_claim_12_revenue_stage_boundary",
         "cloud_dc_claim_13_execution_risks"
       ],
       "supported_node_ids": [

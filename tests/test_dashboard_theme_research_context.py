@@ -20,6 +20,16 @@ def _context() -> dict:
     return deepcopy(load_theme_research_priority_package())
 
 
+def _ai_power_only_context() -> dict:
+    context = _context()
+    context["mapping_package"]["company_mappings"] = [
+        row
+        for row in context["mapping_package"]["company_mappings"]
+        if row["theme_id"] == "ai_power_value_capture_v1"
+    ]
+    return context
+
+
 def test_company_code_normalization_supports_platform_asset_identifiers() -> None:
     assert normalize_theme_research_company_code("CN:SZ:300870") == "300870.SZ"
     assert normalize_theme_research_company_code("300870.SZ") == "300870.SZ"
@@ -59,18 +69,24 @@ def test_reviewed_mapping_builds_evidence_backed_research_context() -> None:
     assert payload["company_code"] == "002837.SZ"
     assert payload["status"] == "reviewed_context_available"
     assert payload["driver_assessment"] == "mixed_or_uncertain"
-    assert payload["theme_count"] == 1
-    assert payload["mapping_count"] == 1
+    assert payload["theme_count"] == 2
+    assert payload["mapping_count"] == 2
     assert payload["evidence_gap_count"] == 0
     assert payload["research_only"] is True
     assert payload["used_for_signal"] is False
     assert payload["used_for_admission"] is False
 
-    theme = payload["themes"][0]
+    theme = next(
+        row for row in payload["themes"] if row["theme_id"] == "ai_power_value_capture_v1"
+    )
     assert theme["theme_id"] == "ai_power_value_capture_v1"
     assert theme["dashboard_path"] == "/theme-research/ai_power_value_capture_v1"
 
-    mapping = payload["mappings"][0]
+    mapping = next(
+        row
+        for row in payload["mappings"]
+        if row["mapping_id"] == "ai_power_liquid_cooling_002837_v1"
+    )
     assert mapping["mapping_id"] == "ai_power_liquid_cooling_002837_v1"
     assert mapping["review_status"] == "reviewed"
     assert mapping["node"]["node_id"] == "liquid_cooling"
@@ -94,7 +110,7 @@ def test_unmapped_company_returns_valid_empty_context() -> None:
 
 
 def test_mapping_eligibility_fails_closed_with_explicit_reasons() -> None:
-    context = _context()
+    context = _ai_power_only_context()
     mapping = next(
         row
         for row in context["mapping_package"]["company_mappings"]
@@ -118,7 +134,7 @@ def test_mapping_eligibility_fails_closed_with_explicit_reasons() -> None:
 
 
 def test_draft_theme_is_excluded_even_when_mapping_node_and_evidence_are_reviewed() -> None:
-    context = _context()
+    context = _ai_power_only_context()
     theme = next(
         row
         for row in context["theme_package"]["themes"]
@@ -134,7 +150,7 @@ def test_draft_theme_is_excluded_even_when_mapping_node_and_evidence_are_reviewe
 
 
 def test_mapping_with_unaccepted_evidence_source_is_excluded() -> None:
-    context = _context()
+    context = _ai_power_only_context()
     source = next(
         row
         for row in context["mapping_package"]["sources"]

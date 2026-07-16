@@ -570,33 +570,17 @@
     {
       "claim_id": "cloud_dc_claim_01_value_flow",
       "theme_id": "cloud_data_center_infrastructure_value_chain_v1",
-      "source_id": "cloud_dc_002837_ar2025",
-      "claim_text": "云数据中心设施价值流从设施与模块化部署，经供电韧性、热管理排热、环境约束、DCIM、设计调试进入持续运营，最终由客户部署、上架率与利用率验证收入。",
+      "source_id": "cloud_dc_300442_ar2025",
+      "claim_text": "云数据中心设施价值从设施与模块化部署进入持续运营，最终由客户IT设备部署、上架计费和利用率验证收入；建设容量不能直接等同运营收入。",
       "claim_type": "tech_route",
       "confidence": 0.99,
       "evidence_status": "verified",
       "platform_use_status": "reviewed",
       "supporting_source_ids": [
-        "cloud_dc_300499_ar2025",
-        "cloud_dc_301018_ar2025",
-        "cloud_dc_000811_ar2025",
-        "cloud_dc_002335_ar2025",
-        "cloud_dc_300442_ar2025",
-        "cloud_dc_002364_ar2025",
-        "cloud_dc_603912_ar2025",
-        "cloud_dc_300249_ar2025",
-        "cloud_dc_002929_ar2025",
         "cloud_dc_603881_ar2025"
       ],
       "affected_theme_nodes": [
         "facility_systems_modular_deployment",
-        "power_availability_electrical_architecture_dependency",
-        "backup_power_storage_resilience_dependency",
-        "thermal_liquid_cooling_systems",
-        "heat_rejection_chillers_pumps_recovery",
-        "water_refrigerant_environmental_constraints",
-        "dcim_monitoring_energy_management",
-        "design_integration_epc_commissioning",
         "facility_operations_lifecycle_services",
         "customer_deployment_utilization_validation"
       ]
@@ -774,7 +758,7 @@
       "claim_id": "cloud_dc_claim_12_revenue_stage_boundary",
       "theme_id": "cloud_data_center_infrastructure_value_chain_v1",
       "source_id": "cloud_dc_002837_ar2025",
-      "claim_text": "宽温控、制冷、数据中心、工程或算力网络收入不等于液冷或AI数据中心单节点收入；窄收入未披露时按undisclosed并保持elastic或indirect。",
+      "claim_text": "宽温控和液冷产品family收入不等于液冷单节点收入；窄液冷收入未披露时按undisclosed并保持elastic。",
       "claim_type": "risk",
       "confidence": 0.99,
       "evidence_status": "verified",
@@ -782,58 +766,26 @@
       "supporting_source_ids": [
         "cloud_dc_300499_ar2025",
         "cloud_dc_301018_ar2025",
-        "cloud_dc_000811_ar2025",
-        "cloud_dc_002335_ar2025",
-        "cloud_dc_300442_ar2025",
-        "cloud_dc_002364_ar2025",
         "cloud_dc_603912_ar2025",
-        "cloud_dc_300249_ar2025",
-        "cloud_dc_002929_ar2025",
-        "cloud_dc_603881_ar2025"
+        "cloud_dc_300249_ar2025"
       ],
       "affected_theme_nodes": [
-        "facility_systems_modular_deployment",
-        "power_availability_electrical_architecture_dependency",
-        "backup_power_storage_resilience_dependency",
-        "thermal_liquid_cooling_systems",
-        "heat_rejection_chillers_pumps_recovery",
-        "water_refrigerant_environmental_constraints",
-        "dcim_monitoring_energy_management",
-        "design_integration_epc_commissioning",
-        "facility_operations_lifecycle_services",
-        "customer_deployment_utilization_validation"
+        "thermal_liquid_cooling_systems"
       ]
     },
     {
       "claim_id": "cloud_dc_claim_13_execution_risks",
       "theme_id": "cloud_data_center_infrastructure_value_chain_v1",
-      "source_id": "cloud_dc_002837_ar2025",
-      "claim_text": "技术迭代、项目验收、回款、利用率、客户集中、水与能耗约束共同决定设施链收益，项目建设和产品认证不得外推为稳定规模收入。",
+      "source_id": "cloud_dc_300442_ar2025",
+      "claim_text": "项目验收、利用率和客户集中共同决定设施运营收益；项目建设、交付容量和产品认证不得外推为稳定规模收入。",
       "claim_type": "risk",
       "confidence": 0.98,
       "evidence_status": "verified",
       "platform_use_status": "reviewed",
       "supporting_source_ids": [
-        "cloud_dc_300499_ar2025",
-        "cloud_dc_301018_ar2025",
-        "cloud_dc_000811_ar2025",
-        "cloud_dc_002335_ar2025",
-        "cloud_dc_300442_ar2025",
-        "cloud_dc_002364_ar2025",
-        "cloud_dc_603912_ar2025",
-        "cloud_dc_300249_ar2025",
-        "cloud_dc_002929_ar2025",
         "cloud_dc_603881_ar2025"
       ],
       "affected_theme_nodes": [
-        "facility_systems_modular_deployment",
-        "power_availability_electrical_architecture_dependency",
-        "backup_power_storage_resilience_dependency",
-        "thermal_liquid_cooling_systems",
-        "heat_rejection_chillers_pumps_recovery",
-        "water_refrigerant_environmental_constraints",
-        "dcim_monitoring_energy_management",
-        "design_integration_epc_commissioning",
         "facility_operations_lifecycle_services",
         "customer_deployment_utilization_validation"
       ]

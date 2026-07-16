@@ -15,9 +15,7 @@
       "pending_source_ids": [],
       "supported_claim_ids": [
         "cloud_dc_claim_01_value_flow",
-        "cloud_dc_claim_02_facility_modular",
-        "cloud_dc_claim_12_revenue_stage_boundary",
-        "cloud_dc_claim_13_execution_risks"
+        "cloud_dc_claim_02_facility_modular"
       ],
       "evidence_strength_before": 2,
       "evidence_strength_after": 4,
@@ -39,10 +37,7 @@
       ],
       "pending_source_ids": [],
       "supported_claim_ids": [
-        "cloud_dc_claim_01_value_flow",
-        "cloud_dc_claim_03_power_dependency",
-        "cloud_dc_claim_12_revenue_stage_boundary",
-        "cloud_dc_claim_13_execution_risks"
+        "cloud_dc_claim_03_power_dependency"
       ],
       "evidence_strength_before": 2,
       "evidence_strength_after": 4,
@@ -63,10 +58,7 @@
       ],
       "pending_source_ids": [],
       "supported_claim_ids": [
-        "cloud_dc_claim_01_value_flow",
-        "cloud_dc_claim_04_backup_dependency",
-        "cloud_dc_claim_12_revenue_stage_boundary",
-        "cloud_dc_claim_13_execution_risks"
+        "cloud_dc_claim_04_backup_dependency"
       ],
       "evidence_strength_before": 2,
       "evidence_strength_after": 4,
@@ -91,10 +83,8 @@
       ],
       "pending_source_ids": [],
       "supported_claim_ids": [
-        "cloud_dc_claim_01_value_flow",
         "cloud_dc_claim_05_liquid_cooling",
-        "cloud_dc_claim_12_revenue_stage_boundary",
-        "cloud_dc_claim_13_execution_risks"
+        "cloud_dc_claim_12_revenue_stage_boundary"
       ],
       "evidence_strength_before": 2,
       "evidence_strength_after": 4,
@@ -117,10 +107,7 @@
       ],
       "pending_source_ids": [],
       "supported_claim_ids": [
-        "cloud_dc_claim_01_value_flow",
-        "cloud_dc_claim_06_heat_rejection",
-        "cloud_dc_claim_12_revenue_stage_boundary",
-        "cloud_dc_claim_13_execution_risks"
+        "cloud_dc_claim_06_heat_rejection"
       ],
       "evidence_strength_before": 2,
       "evidence_strength_after": 4,
@@ -142,10 +129,7 @@
       ],
       "pending_source_ids": [],
       "supported_claim_ids": [
-        "cloud_dc_claim_01_value_flow",
-        "cloud_dc_claim_07_environment",
-        "cloud_dc_claim_12_revenue_stage_boundary",
-        "cloud_dc_claim_13_execution_risks"
+        "cloud_dc_claim_07_environment"
       ],
       "evidence_strength_before": 2,
       "evidence_strength_after": 4,
@@ -167,10 +151,7 @@
       ],
       "pending_source_ids": [],
       "supported_claim_ids": [
-        "cloud_dc_claim_01_value_flow",
-        "cloud_dc_claim_08_dcim",
-        "cloud_dc_claim_12_revenue_stage_boundary",
-        "cloud_dc_claim_13_execution_risks"
+        "cloud_dc_claim_08_dcim"
       ],
       "evidence_strength_before": 2,
       "evidence_strength_after": 4,
@@ -195,10 +176,7 @@
       ],
       "pending_source_ids": [],
       "supported_claim_ids": [
-        "cloud_dc_claim_01_value_flow",
-        "cloud_dc_claim_09_design_delivery",
-        "cloud_dc_claim_12_revenue_stage_boundary",
-        "cloud_dc_claim_13_execution_risks"
+        "cloud_dc_claim_09_design_delivery"
       ],
       "evidence_strength_before": 2,
       "evidence_strength_after": 4,
@@ -223,7 +201,6 @@
       "supported_claim_ids": [
         "cloud_dc_claim_01_value_flow",
         "cloud_dc_claim_10_operations",
-        "cloud_dc_claim_12_revenue_stage_boundary",
         "cloud_dc_claim_13_execution_risks"
       ],
       "evidence_strength_before": 2,
@@ -248,7 +225,6 @@
       "supported_claim_ids": [
         "cloud_dc_claim_01_value_flow",
         "cloud_dc_claim_11_utilization",
-        "cloud_dc_claim_12_revenue_stage_boundary",
         "cloud_dc_claim_13_execution_risks"
       ],
       "evidence_strength_before": 2,
