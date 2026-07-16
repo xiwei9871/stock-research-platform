@@ -1196,6 +1196,8 @@ def _validate_node_links(
         raise _theme_catalog_node_link_error(f"{path} must be a list")
 
     theme_node_ids: set[str] = set()
+    node_link_pairs: set[tuple[str, str]] = set()
+    catalog_node_owners: dict[str, str] = {}
     for index, node_link in enumerate(node_links):
         node_link_path = f"{path}[{index}]"
         if projection:
@@ -1213,8 +1215,14 @@ def _validate_node_links(
             code="THEME_CATALOG_NODE_LINK_INVALID",
         )
         catalog_node = nodes_by_id.get(catalog_node_id)
+        node_link_pair = (theme_node_id, catalog_node_id)
+        catalog_node_owner = catalog_node_owners.get(catalog_node_id)
         if (
-            theme_node_id in theme_node_ids
+            node_link_pair in node_link_pairs
+            or (
+                catalog_node_owner is not None
+                and catalog_node_owner != theme_node_id
+            )
             or catalog_node is None
             or catalog_node.get("level") not in NODE_LEVELS
             or catalog_node.get("chain_id") != chain_id
@@ -1223,6 +1231,8 @@ def _validate_node_links(
                 f"{node_link_path} invalid: {theme_node_id} -> {catalog_node_id}"
             )
         theme_node_ids.add(theme_node_id)
+        node_link_pairs.add(node_link_pair)
+        catalog_node_owners[catalog_node_id] = theme_node_id
     return theme_node_ids
 
 

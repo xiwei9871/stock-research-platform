@@ -279,6 +279,55 @@ def test_project_theme_to_catalog_preserves_source_data_and_is_read_only():
     assert hashlib.sha256(source_path.read_bytes()).hexdigest() == source_sha_before
 
 
+def test_project_theme_to_catalog_preserves_one_to_many_node_projections(
+    tmp_path: Path,
+    monkeypatch,
+):
+    from stock_research import theme_decomposition
+
+    root = _write_catalog_package(tmp_path)
+    node_links = [
+        {
+            "theme_node_id": "theme_lithography",
+            "catalog_node_id": "lithography",
+        },
+        {
+            "theme_node_id": "theme_lithography",
+            "catalog_node_id": "duv_lithography",
+        },
+    ]
+    _write_json(
+        root / "theme_links.json",
+        {
+            "theme_links": [
+                _theme_link(node_links=node_links, unmapped_theme_node_ids=[])
+            ]
+        },
+    )
+    catalog = load_industry_catalog(root)
+    monkeypatch.setattr(
+        theme_decomposition,
+        "load_theme",
+        lambda *_args, **_kwargs: {
+            "theme": {"theme_id": "test_theme", "status": "reviewed"},
+            "nodes": [{"node_id": "theme_lithography"}],
+        },
+    )
+
+    projection = project_theme_to_catalog("test_theme", catalog=catalog)
+
+    assert [
+        (
+            item["theme_node"]["node_id"],
+            item["catalog_node"]["node_id"],
+        )
+        for item in projection["node_projections"]
+    ] == [
+        ("theme_lithography", "lithography"),
+        ("theme_lithography", "duv_lithography"),
+    ]
+
+
 def test_project_theme_to_catalog_rejects_unaccounted_source_theme_node():
     catalog = load_industry_catalog()
     link = catalog["theme_links"][0]
@@ -1129,36 +1178,6 @@ def test_legacy_manifest_without_theme_link_file_loads_empty_links(tmp_path: Pat
         ([_theme_link(theme_id="   ")], "MISSING_REQUIRED_FIELD"),
         ([_theme_link(chain_id="missing_chain")], "THEME_LINK_CHAIN_NOT_FOUND"),
         ([_theme_link(node_links={})], "THEME_CATALOG_NODE_LINK_INVALID"),
-        (
-            [
-                _theme_link(
-                    node_links=[
-                        {
-                            "theme_node_id": "theme_lithography",
-                            "catalog_node_id": "missing_node",
-                        }
-                    ]
-                )
-            ],
-            "THEME_CATALOG_NODE_LINK_INVALID",
-        ),
-        (
-            [
-                _theme_link(
-                    node_links=[
-                        {
-                            "theme_node_id": "theme_lithography",
-                            "catalog_node_id": "lithography",
-                        },
-                        {
-                            "theme_node_id": "theme_lithography",
-                            "catalog_node_id": "duv_lithography",
-                        },
-                    ]
-                )
-            ],
-            "THEME_CATALOG_NODE_LINK_INVALID",
-        ),
         ([_theme_link(unmapped_theme_node_ids={})], "THEME_CATALOG_NODE_LINK_INVALID"),
         (
             [_theme_link(unmapped_theme_node_ids=["unmapped", "unmapped"])],
@@ -1183,6 +1202,150 @@ def test_theme_link_validation_has_stable_domain_errors(
     _write_json(root / "theme_links.json", {"theme_links": theme_links})
 
     assert _load_error(root).code == code
+
+
+def test_theme_link_allows_one_theme_node_to_map_to_multiple_catalog_nodes(
+    tmp_path: Path,
+):
+    root = _write_catalog_package(tmp_path)
+    node_links = [
+        {
+            "theme_node_id": "theme_lithography",
+            "catalog_node_id": "lithography",
+        },
+        {
+            "theme_node_id": "theme_lithography",
+            "catalog_node_id": "duv_lithography",
+        },
+    ]
+    _write_json(
+        root / "theme_links.json",
+        {
+            "theme_links": [
+                _theme_link(node_links=node_links, unmapped_theme_node_ids=[])
+            ]
+        },
+    )
+
+    catalog = load_industry_catalog(root)
+
+    assert catalog["theme_links"][0]["node_links"] == node_links
+
+
+def test_theme_link_rejects_duplicate_node_link_pair_with_path_and_pair(
+    tmp_path: Path,
+):
+    root = _write_catalog_package(tmp_path)
+    node_link = {
+        "theme_node_id": "theme_lithography",
+        "catalog_node_id": "lithography",
+    }
+    _write_json(
+        root / "theme_links.json",
+        {
+            "theme_links": [
+                _theme_link(node_links=[node_link, copy.deepcopy(node_link)])
+            ]
+        },
+    )
+
+    error = _load_error(root)
+
+    assert error.code == "THEME_CATALOG_NODE_LINK_INVALID"
+    assert str(error) == (
+        "theme_links[0].node_links[1] invalid: "
+        "theme_lithography -> lithography"
+    )
+
+
+def test_theme_link_rejects_missing_catalog_node_with_path_and_pair(
+    tmp_path: Path,
+):
+    root = _write_catalog_package(tmp_path)
+    _write_json(
+        root / "theme_links.json",
+        {
+            "theme_links": [
+                _theme_link(
+                    node_links=[
+                        {
+                            "theme_node_id": "theme_lithography",
+                            "catalog_node_id": "missing_node",
+                        }
+                    ]
+                )
+            ]
+        },
+    )
+
+    error = _load_error(root)
+
+    assert error.code == "THEME_CATALOG_NODE_LINK_INVALID"
+    assert str(error) == (
+        "theme_links[0].node_links[0] invalid: "
+        "theme_lithography -> missing_node"
+    )
+
+
+def test_theme_link_rejects_catalog_node_claimed_by_two_theme_nodes(
+    tmp_path: Path,
+):
+    root = _write_catalog_package(tmp_path)
+    _write_json(
+        root / "theme_links.json",
+        {
+            "theme_links": [
+                _theme_link(
+                    node_links=[
+                        {
+                            "theme_node_id": "theme_lithography",
+                            "catalog_node_id": "lithography",
+                        },
+                        {
+                            "theme_node_id": "theme_patterning",
+                            "catalog_node_id": "lithography",
+                        },
+                    ]
+                )
+            ]
+        },
+    )
+
+    error = _load_error(root)
+
+    assert error.code == "THEME_CATALOG_NODE_LINK_INVALID"
+    assert str(error) == (
+        "theme_links[0].node_links[1] invalid: theme_patterning -> lithography"
+    )
+
+
+def test_theme_link_rejects_cross_chain_catalog_node_with_path_and_pair(
+    tmp_path: Path,
+):
+    root = _write_catalog_package(tmp_path, include_relationships=True)
+    _write_json(
+        root / "theme_links.json",
+        {
+            "theme_links": [
+                _theme_link(
+                    node_links=[
+                        {
+                            "theme_node_id": "theme_application_stage",
+                            "catalog_node_id": "application_stage",
+                        }
+                    ]
+                )
+            ]
+        },
+    )
+
+    error = _load_error(root)
+
+    assert error.code == "THEME_CATALOG_NODE_LINK_INVALID"
+    assert str(error) == (
+        "theme_links[0].node_links[0] invalid: "
+        "theme_application_stage -> application_stage"
+    )
 
 
 def test_duplicate_theme_link_has_stable_error(tmp_path: Path):
