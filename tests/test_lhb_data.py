@@ -6247,6 +6247,57 @@ def test_build_lhb_phase18c_auction_enhanced_cash_account_backtest_v1_selects_re
     assert enhanced_first_day["ts_code"] == "B"
 
 
+def test_phase18c_filters_final_top5_for_account_without_rank6_refill():
+    lifecycle = pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-07-14",
+                "ts_code": f"00000{rank}.SZ",
+                "phase12a_rule_layer": "follow_pool_core",
+                "fill_status": "filled",
+                "entry_trade_date": "2026-07-15",
+                "exit_trade_date": "2026-07-16",
+                "realized_return": 0.01 * rank,
+                "top_n": 10,
+                "eligibility_status": "risk_watch" if rank == 2 else "eligible",
+                "backtest_entry_eligible": rank != 2,
+                "buy_signal_status": "research_only" if rank == 2 else "tradable",
+                "eligibility_contract_version": "lhb_eligibility_v2",
+            }
+            for rank in range(1, 7)
+        ]
+    )
+    scores = pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-07-14",
+                "ts_code": f"00000{rank}.SZ",
+                "auction_enhanced_score": 100.0 - rank,
+            }
+            for rank in range(1, 7)
+        ]
+    )
+
+    result = lhb_data.build_lhb_phase18c_auction_enhanced_cash_account_backtest_v1(
+        lifecycle_trades=lifecycle,
+        scored_candidates=scores,
+        output_dir="unused",
+        top_ns=[5],
+        write_outputs=False,
+    )
+
+    selected = result["selected_trades"]
+    rejected = result["selected_rejected_trades"]
+    baseline = selected[selected["strategy"].eq("baseline_original_order")]
+    assert baseline["phase18c_selection_rank"].tolist() == [1, 3, 4, 5]
+    assert 6 not in set(baseline["phase18c_selection_rank"])
+    rejected_baseline = rejected[rejected["strategy"].eq("baseline_original_order")]
+    assert rejected_baseline["phase18c_selection_rank"].tolist() == [2]
+    assert not result["account_trades"]["backtest_entry_eligible"].eq(False).any()
+    summary = result["summary"]
+    assert summary["cash_slot_count"].eq(1).all()
+
+
 def test_build_lhb_phase18f_tradable_joint_exit_replay_v1_uses_t1_5min_exit():
     account_trades = pd.DataFrame(
         [

@@ -1952,7 +1952,6 @@ def run_lhb_shortline_v1_lifecycle_from_frames(
         decisions=contract_decisions,
         stage="phase18c_scored_candidates",
     )
-    _assert_lhb_entry_eligibility_contract(scored, stage="phase18c_account_entry")
     phase18c = build_lhb_phase18c_auction_enhanced_cash_account_backtest_v1(
         lifecycle_trades=lifecycle_trades,
         scored_candidates=scored,
