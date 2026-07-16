@@ -167,6 +167,9 @@ describe('AppShell and HomeCockpit', () => {
           max_drawdown_pct: -5.3,
           latest_day_return_pct: 1.2,
           latest_day_drawdown_pct: -0.4,
+          strategy_version: 'lhb_v1_safe_top5',
+          selection_policy: 'original_topn_then_eligibility_no_refill',
+          cash_slot_count: 9,
           signal_status: 'no_position_rows',
           signal_count: null
         },
@@ -687,6 +690,7 @@ describe('AppShell and HomeCockpit', () => {
 
     const strategyPerformance = within(screen.getByRole('region', { name: '启用策略表现' }));
     expect(strategyPerformance.getByText('LHB Shortline Combo')).toBeVisible();
+    expect(strategyPerformance.getByText('LHB V1 Safe Top5')).toBeVisible();
     expect(strategyPerformance.getByText('+160.7%')).toBeVisible();
     expect(strategyPerformance.getByText('-5.3%')).toBeVisible();
     expect(strategyPerformance.getByText('+1.2%')).toBeVisible();
