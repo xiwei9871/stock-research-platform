@@ -54,7 +54,7 @@ DIRECT_MAPPING_EVIDENCE_TYPES = {
     "customer_relationship",
 }
 PRECISE_PAGE_LOCATOR = re.compile(
-    r"(?:第[\d、，,\-–—]+页|pages?\s+\d+(?:[\-–—]\d+)?)",
+    r"(?:第\d+(?:[、，,\-–—]\d+)*页|pages?\s+\d+(?:[、，,\-–—]\d+)*)",
     re.IGNORECASE,
 )
 FUZZY_LOCATOR_PHRASES = {
@@ -747,6 +747,19 @@ def _validate_bidirectional_evidence_contract(
                 f"{node_id}: declared={sorted(declared_source_ids)}, "
                 f"expected={sorted(expected_source_ids)}"
             )
+        expected_pending_source_ids = {
+            source_id
+            for source_id, source in source_by_id.items()
+            if source_id not in accepted_source_ids
+            and node_id in set(source.get("supported_node_ids") or [])
+        }
+        declared_pending_source_ids = set(matrix.get("pending_source_ids") or [])
+        if declared_pending_source_ids != expected_pending_source_ids:
+            errors.append(
+                "source-claim-node contract matrix pending source mismatch for "
+                f"{node_id}: declared={sorted(declared_pending_source_ids)}, "
+                f"expected={sorted(expected_pending_source_ids)}"
+            )
         expected_claim_ids = {
             claim_id
             for claim_id, claim in claim_by_id.items()
@@ -813,10 +826,6 @@ def _validate_precise_mapping_locators(
             if not PRECISE_PAGE_LOCATOR.search(locator):
                 errors.append(
                     f"mapping evidence locator contract {mapping_id} lacks page number: {locator}"
-                )
-            if any(phrase in locator for phrase in FUZZY_LOCATOR_PHRASES):
-                errors.append(
-                    f"mapping evidence locator contract {mapping_id} uses fuzzy locator: {locator}"
                 )
     return not errors, errors
 

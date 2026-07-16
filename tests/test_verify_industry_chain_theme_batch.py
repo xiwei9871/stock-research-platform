@@ -152,13 +152,41 @@ def test_wave_d_manifest_freezes_scope_files_and_stricter_quality_gates():
         chain_id: metadata["theme_id"]
         for chain_id, metadata in manifest["themes"].items()
     } == WAVE_D
+    assert manifest["primary_source_types"] == [
+        "company_filing",
+        "official_report",
+        "official_article",
+    ]
+    assert {
+        chain_id: metadata["artifacts"]
+        for chain_id, metadata in manifest["themes"].items()
+    } == {
+        chain_id: {
+            "theme": f"artifacts/theme_decomposition/{theme_id}.json",
+            "company_mapping": (
+                "artifacts/theme_decomposition/company_mappings/"
+                f"{chain_id}_company_mapping_v1.json"
+            ),
+            "source_pack": (
+                "artifacts/theme_decomposition/source_packs/"
+                f"{chain_id}_source_pack_v1.json"
+            ),
+            "node_evidence_matrix": (
+                "artifacts/theme_decomposition/source_packs/"
+                f"{chain_id}_node_evidence_matrix_v1.json"
+            ),
+        }
+        for chain_id, theme_id in WAVE_D.items()
+    }
     gates = manifest["completion_gates"]
     assert gates["min_accepted_sources"] == 10
     assert gates["min_primary_sources"] == 8
     assert gates["min_claims"] == 12
     assert gates["min_reviewed_mappings"] == 8
+    assert gates["require_node_evidence_matrix_coverage"] is True
     assert gates["require_bidirectional_evidence_contract"] is True
     assert gates["require_precise_mapping_locators"] is True
+    assert [row["name"] for row in gates["required_readable_sections"]] == REQUIRED_SECTIONS
 
 
 def test_ready_fixture_builds_theme_and_wave_summary(tmp_path: Path):
@@ -499,6 +527,52 @@ def test_bidirectional_evidence_contract_rejects_broad_claim_node_attachment(
     assert any("source-claim-node contract" in error for error in theme["errors"])
 
 
+def test_bidirectional_evidence_contract_rejects_pending_source_on_wrong_matrix_node(
+    tmp_path: Path,
+):
+    manifest_path = _write_ready_batch(tmp_path)
+    source_path = tmp_path / "sample_source_pack.json"
+    source_pack = _read_json(source_path)
+    source_pack["sources"].append(
+        {
+            "source_id": "pending_source",
+            "review_status": "needs_full_text",
+            "source_type": "broker_report",
+            "title": "Pending source",
+            "publisher": "Pending publisher",
+            "author": "Pending author",
+            "publish_date": "2026-07-14",
+            "url": "https://example.com/pending",
+            "access_level": "public",
+            "reliability_level": "S2",
+            "document_status": "metadata_only",
+            "evidence_locator": "第1页，待复核",
+            "evidence_summary": "Pending evidence",
+            "supported_claim_ids": ["claim_0"],
+            "supported_node_ids": ["node_1"],
+            "limitations": "Not accepted",
+            "notes": "Pending fixture source",
+        }
+    )
+    _write_json(source_path, source_pack)
+    theme_path = tmp_path / "sample_theme.json"
+    theme_payload = _read_json(theme_path)
+    theme_payload["claims"][0]["supporting_source_ids"] = ["pending_source"]
+    _write_json(theme_path, theme_payload)
+    matrix_path = tmp_path / "sample_node_evidence_matrix.json"
+    matrix_payload = _read_json(matrix_path)
+    next(
+        row for row in matrix_payload["node_evidence_matrix"] if row["node_id"] == "node_2"
+    )["pending_source_ids"] = ["pending_source"]
+    _write_json(matrix_path, matrix_payload)
+
+    theme = build_theme_batch_report(manifest_path)["theme_results"][0]
+
+    assert theme["ready"] is False
+    assert theme["checks"]["bidirectional_evidence_contract"] is False
+    assert any("matrix pending source mismatch" in error for error in theme["errors"])
+
+
 def test_precise_mapping_locator_contract_rejects_reused_composite_locator(
     tmp_path: Path,
 ):
@@ -517,6 +591,46 @@ def test_precise_mapping_locator_contract_rejects_reused_composite_locator(
     assert theme["ready"] is False
     assert theme["checks"]["precise_mapping_locators"] is False
     assert any("mapping evidence locator contract" in error for error in theme["errors"])
+
+
+def test_precise_mapping_locator_contract_rejects_page_markers_without_digits(
+    tmp_path: Path,
+):
+    manifest_path = _write_ready_batch(tmp_path)
+    path = tmp_path / "sample_company_mapping.json"
+    payload = _read_json(path)
+    invalid_locators = ["第、页，产品", "第-页，收入", "第—页，阶段"]
+    for evidence_id, locator in zip(
+        payload["company_mappings"][0]["evidence_ids"], invalid_locators
+    ):
+        next(
+            row for row in payload["evidence_items"] if row["evidence_id"] == evidence_id
+        )["excerpt_locator"] = locator
+    _write_json(path, payload)
+
+    theme = build_theme_batch_report(manifest_path)["theme_results"][0]
+
+    assert theme["ready"] is False
+    assert theme["checks"]["precise_mapping_locators"] is False
+    assert any("lacks page number" in error for error in theme["errors"])
+
+
+def test_precise_mapping_locator_contract_allows_page_numbered_section_wording(
+    tmp_path: Path,
+):
+    manifest_path = _write_ready_batch(tmp_path)
+    path = tmp_path / "sample_company_mapping.json"
+    payload = _read_json(path)
+    stage_id = payload["company_mappings"][0]["evidence_ids"][2]
+    next(
+        row for row in payload["evidence_items"] if row["evidence_id"] == stage_id
+    )["excerpt_locator"] = "第30页，风险章节"
+    _write_json(path, payload)
+
+    theme = build_theme_batch_report(manifest_path)["theme_results"][0]
+
+    assert theme["ready"] is True
+    assert theme["checks"]["precise_mapping_locators"] is True
 
 
 @pytest.mark.parametrize(
@@ -626,6 +740,7 @@ def test_known_nonaccepted_source_draft_claim_counts_toward_claim_gate(
         row for row in matrix_payload["node_evidence_matrix"] if row["node_id"] == "node_2"
     )
     node_2["accepted_source_ids"].remove("source_9")
+    node_2["pending_source_ids"] = ["pending_source"]
     node_2["supported_claim_ids"].remove("claim_9")
     _write_json(matrix_path, matrix_payload)
 
