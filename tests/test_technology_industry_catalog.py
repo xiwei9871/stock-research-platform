@@ -177,7 +177,10 @@ def test_repository_catalog_starts_with_ten_approved_sectors():
     }
     assert {row["chain_id"] for row in catalog["nodes"]} == set(
         expected_chain_ids
-    ) | {"ai_compute_infrastructure"}
+    ) | {
+        "ai_compute_infrastructure",
+        "semiconductor_eda_ip_design_services",
+    }
     nodes_by_id = {row["node_id"]: row for row in catalog["nodes"]}
     assert {
         nodes_by_id[edge[field]]["chain_id"]
@@ -205,26 +208,27 @@ def test_repository_catalog_has_exact_theme_research_links():
     implemented_theme_ids = {
         row["theme_id"] for row in load_theme_package()["themes"]
     }
+    expected_links = {
+        chain_id: theme_id
+        for chain_id, theme_id in SELECTED_CHAIN_THEMES.items()
+        if theme_id in implemented_theme_ids
+    }
 
-    assert len(catalog["theme_links"]) == len(SELECTED_CHAIN_THEMES)
+    assert len(catalog["theme_links"]) == len(expected_links)
     assert {
         chain_id: link["theme_id"] for chain_id, link in links_by_chain.items()
-    } == SELECTED_CHAIN_THEMES
+    } == expected_links
     for chain_id, theme_id in COMPLETED_CHAIN_THEMES.items():
         link = links_by_chain[chain_id]
         assert link["theme_id"] == theme_id
         assert link["node_links"]
         assert isinstance(link["unmapped_theme_node_ids"], list)
-    for chain_id, theme_id in NEXT_FIFTEEN_CHAIN_THEMES.items():
+    for chain_id, theme_id in expected_links.items():
         link = links_by_chain[chain_id]
         assert link["theme_id"] == theme_id
         assert link["chain_id"] == chain_id
         assert isinstance(link["node_links"], list)
         assert isinstance(link["unmapped_theme_node_ids"], list)
-        if theme_id not in implemented_theme_ids:
-            assert link["node_links"] == []
-            assert link["unmapped_theme_node_ids"] == []
-            continue
         theme_node_ids = {row["node_id"] for row in load_theme(theme_id)["nodes"]}
         linked_theme_node_ids = {
             row["theme_node_id"] for row in link["node_links"]

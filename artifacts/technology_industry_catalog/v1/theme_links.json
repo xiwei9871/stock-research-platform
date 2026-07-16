@@ -671,6 +671,37 @@
         "payload_orbit_delivery_interface"
       ],
       "notes": "commercial_space_launch catalog仍为L2 skeleton，尚无完整等价的自有L3/L4 canonical node，因此12个主题节点全部保持unmapped。卫星制造、星载载荷、星座和地面站归 `satellite_manufacturing_space_infrastructure`；民机、航空发动机及其材料归 `civil_aircraft_aero_engines`。通用材料、增材、锻件、功率器件与半导体只表达跨链依赖；本主题不以宽航天、军工或航空航天收入替代商业火箭收入。"
+    },
+    {
+      "theme_id": "semiconductor_eda_ip_design_services_value_chain_v1",
+      "chain_id": "semiconductor_eda_ip_design_services",
+      "node_links": [
+        {"theme_node_id": "eda_frontend_design_verification", "catalog_node_id": "eda_frontend_design_verification"},
+        {"theme_node_id": "eda_frontend_design_verification", "catalog_node_id": "rtl_synthesis_design_entry"},
+        {"theme_node_id": "eda_frontend_design_verification", "catalog_node_id": "functional_verification_formal"},
+        {"theme_node_id": "eda_frontend_design_verification", "catalog_node_id": "hardware_emulation_prototyping"},
+        {"theme_node_id": "eda_backend_physical_design_signoff", "catalog_node_id": "eda_physical_design_signoff"},
+        {"theme_node_id": "eda_backend_physical_design_signoff", "catalog_node_id": "place_route_timing_signoff"},
+        {"theme_node_id": "eda_backend_physical_design_signoff", "catalog_node_id": "power_integrity_thermal_signoff"},
+        {"theme_node_id": "eda_backend_physical_design_signoff", "catalog_node_id": "dfm_mask_data_preparation"},
+        {"theme_node_id": "analog_rf_mixed_signal_eda", "catalog_node_id": "analog_rf_mixed_signal_design_eda"},
+        {"theme_node_id": "semiconductor_ip_cores_interfaces", "catalog_node_id": "semiconductor_ip_cores_interfaces"},
+        {"theme_node_id": "semiconductor_ip_cores_interfaces", "catalog_node_id": "processor_architecture_ip_core"},
+        {"theme_node_id": "semiconductor_ip_cores_interfaces", "catalog_node_id": "high_speed_interface_ip"},
+        {"theme_node_id": "semiconductor_ip_cores_interfaces", "catalog_node_id": "analog_mixed_signal_ip"},
+        {"theme_node_id": "chiplet_package_design_enablement", "catalog_node_id": "chiplet_package_co_design"},
+        {"theme_node_id": "ic_design_services_verification_tapeout", "catalog_node_id": "chip_design_services_tapeout"},
+        {"theme_node_id": "ic_design_services_verification_tapeout", "catalog_node_id": "ic_design_customization_service"},
+        {"theme_node_id": "ic_design_services_verification_tapeout", "catalog_node_id": "functional_verification_service"},
+        {"theme_node_id": "ic_design_services_verification_tapeout", "catalog_node_id": "physical_design_tapeout_service"},
+        {"theme_node_id": "foundry_pdk_ecosystem_qualification", "catalog_node_id": "design_enablement_ecosystem"},
+        {"theme_node_id": "foundry_pdk_ecosystem_qualification", "catalog_node_id": "foundry_pdk_design_enablement"}
+      ],
+      "unmapped_theme_node_ids": [
+        "licensing_subscription_royalty_model",
+        "customer_adoption_revenue_validation"
+      ],
+      "notes": "主题研究节点按投资阅读逻辑聚合；前端EDA、后端实现签核、IP、设计服务和设计使能节点分别映射到完整L3/L4目录族。许可订阅与版税模式、客户采用与收入验证属于跨节点商业判断，不建立canonical所有权。晶圆制造能力仍归 wafer_manufacturing_specialty_processes。"
     }
   ]
 }

@@ -1,0 +1,87 @@
+{
+  "artifact_version": "semiconductor_eda_ip_design_services_source_pack_v1",
+  "theme_id": "semiconductor_eda_ip_design_services_value_chain_v1",
+  "as_of_date": "2026-07-16",
+  "sources": [
+    {
+      "source_id": "eda_ip_301269_filing", "source_type": "company_filing", "title": "华大九天2025年年度报告", "publisher": "华大九天", "author": "", "publish_date": "2026-04-28", "url": "https://static.cninfo.com.cn/finalpage/2026-04-28/1225217315.PDF", "access_level": "public", "reliability_level": "S0", "review_status": "accepted", "document_status": "primary_source_reviewed",
+      "evidence_locator": "第12-15页、第42页、第52-53页",
+      "evidence_summary": "覆盖数字、模拟/RF、制造和先进封装 EDA；EDA 软件收入10.745亿元、占81.10%，技术服务2.013亿元、占15.19%；研发、竞争和贸易风险仍可能影响商业化。",
+      "supported_claim_ids": ["eda_ip_claim_01","eda_ip_claim_02","eda_ip_claim_03","eda_ip_claim_05","eda_ip_claim_06","eda_ip_claim_07","eda_ip_claim_08","eda_ip_claim_09","eda_ip_claim_10","eda_ip_claim_11","eda_ip_claim_12"],
+      "supported_node_ids": ["eda_frontend_design_verification","eda_backend_physical_design_signoff","analog_rf_mixed_signal_eda","chiplet_package_design_enablement","ic_design_services_verification_tapeout","foundry_pdk_ecosystem_qualification","licensing_subscription_royalty_model","customer_adoption_revenue_validation"],
+      "limitations": "未披露单工具收入、客户续费率及单工艺节点收入。", "notes": "CNINFO 年报全文已复核。"
+    },
+    {
+      "source_id": "eda_ip_688206_filing", "source_type": "company_filing", "title": "概伦电子2025年年度报告", "publisher": "概伦电子", "author": "", "publish_date": "2026-04-16", "url": "https://static.cninfo.com.cn/finalpage/2026-04-16/1225108676.PDF", "access_level": "public", "reliability_level": "S0", "review_status": "accepted", "document_status": "primary_source_reviewed",
+      "evidence_locator": "第15-19页、第42-46页",
+      "evidence_summary": "制造类与设计类 EDA、测试系统和技术开发形成四类业务；EDA 授权3.139亿元、占65.91%，其中制造类1.230亿元、设计类1.910亿元。",
+      "supported_claim_ids": ["eda_ip_claim_01","eda_ip_claim_02","eda_ip_claim_03","eda_ip_claim_06","eda_ip_claim_07","eda_ip_claim_08","eda_ip_claim_09","eda_ip_claim_10","eda_ip_claim_11","eda_ip_claim_12"],
+      "supported_node_ids": ["eda_frontend_design_verification","eda_backend_physical_design_signoff","analog_rf_mixed_signal_eda","ic_design_services_verification_tapeout","foundry_pdk_ecosystem_qualification","licensing_subscription_royalty_model","customer_adoption_revenue_validation"],
+      "limitations": "固定期限授权为主，单工具、客户续约与节点级收入披露有限。", "notes": "CNINFO 年报全文已复核。"
+    },
+    {
+      "source_id": "eda_ip_301095_filing", "source_type": "company_filing", "title": "广立微2025年年度报告", "publisher": "广立微", "author": "", "publish_date": "2026-04-23", "url": "https://static.cninfo.com.cn/finalpage/2026-04-23/1225153967.PDF", "access_level": "public", "reliability_level": "S0", "review_status": "accepted", "document_status": "primary_source_reviewed",
+      "evidence_locator": "第20-24页、第30-31页、第47-48页",
+      "evidence_summary": "制造良率和数据分析 EDA、WAT 测试设备及技术服务并存；软件开发及授权2.781亿元、占37.84%，但包含项目制开发，设备收入占61.68%。",
+      "supported_claim_ids": ["eda_ip_claim_02","eda_ip_claim_06","eda_ip_claim_07","eda_ip_claim_08","eda_ip_claim_09","eda_ip_claim_10","eda_ip_claim_11","eda_ip_claim_12"],
+      "supported_node_ids": ["eda_backend_physical_design_signoff","ic_design_services_verification_tapeout","foundry_pdk_ecosystem_qualification","licensing_subscription_royalty_model","customer_adoption_revenue_validation"],
+      "limitations": "软件收入混合期限授权和项目开发，不能视作纯订阅收入。", "notes": "CNINFO 年报全文已复核。"
+    },
+    {
+      "source_id": "eda_ip_688521_filing", "source_type": "company_filing", "title": "芯原股份2025年年度报告", "publisher": "芯原股份", "author": "", "publish_date": "2026-03-31", "url": "https://static.cninfo.com.cn/finalpage/2026-03-31/1225060349.PDF", "access_level": "public", "reliability_level": "S0", "review_status": "accepted", "document_status": "primary_source_reviewed",
+      "evidence_locator": "第17-22页、第41页、第79-85页",
+      "evidence_summary": "六类处理器 IP 与1700多个混合/接口 IP 支撑一站式设计；IP许可费6.713亿元、版税1.109亿元、设计收入8.766亿元、量产收入14.897亿元。",
+      "supported_claim_ids": ["eda_ip_claim_04","eda_ip_claim_05","eda_ip_claim_06","eda_ip_claim_08","eda_ip_claim_09","eda_ip_claim_10","eda_ip_claim_11","eda_ip_claim_12"],
+      "supported_node_ids": ["semiconductor_ip_cores_interfaces","chiplet_package_design_enablement","ic_design_services_verification_tapeout","licensing_subscription_royalty_model","customer_adoption_revenue_validation"],
+      "limitations": "设计与量产业务规模较大，IP收入增长不能直接外推为公司总收入或利润增长。", "notes": "CNINFO 年报全文已复核。"
+    },
+    {
+      "source_id": "eda_ip_688691_filing", "source_type": "company_filing", "title": "灿芯股份2025年年度报告", "publisher": "灿芯股份", "author": "", "publish_date": "2026-04-17", "url": "https://static.cninfo.com.cn/finalpage/2026-04-17/1225112272.PDF", "access_level": "public", "reliability_level": "S0", "review_status": "accepted", "document_status": "primary_source_reviewed",
+      "evidence_locator": "第16-20页、第47-52页",
+      "evidence_summary": "提供全定制和工程定制、IP选型、数据校验、流片与量产服务；设计收入3.673亿元、量产收入3.571亿元，未单拆 IP 许可收入。",
+      "supported_claim_ids": ["eda_ip_claim_02","eda_ip_claim_06","eda_ip_claim_08","eda_ip_claim_09","eda_ip_claim_10","eda_ip_claim_11","eda_ip_claim_12"],
+      "supported_node_ids": ["eda_backend_physical_design_signoff","ic_design_services_verification_tapeout","licensing_subscription_royalty_model","customer_adoption_revenue_validation"],
+      "limitations": "自研 IP 主要嵌入设计服务，不能单独推定许可或版税收入。", "notes": "CNINFO 年报全文已复核。"
+    },
+    {
+      "source_id": "eda_ip_688262_filing", "source_type": "company_filing", "title": "国芯科技2025年年度报告", "publisher": "国芯科技", "author": "", "publish_date": "2026-04-24", "url": "https://static.cninfo.com.cn/finalpage/2026-04-24/1225157761.PDF", "access_level": "public", "reliability_level": "S0", "review_status": "accepted", "document_status": "primary_source_reviewed",
+      "evidence_locator": "第16-17页、第70-75页",
+      "evidence_summary": "对外提供40余款嵌入式 CPU 核、芯片定制和自主芯片；IP授权166.79万元，设计服务6165.74万元，定制量产2.145亿元。",
+      "supported_claim_ids": ["eda_ip_claim_04","eda_ip_claim_06","eda_ip_claim_08","eda_ip_claim_09","eda_ip_claim_11","eda_ip_claim_12"],
+      "supported_node_ids": ["semiconductor_ip_cores_interfaces","ic_design_services_verification_tapeout","licensing_subscription_royalty_model","customer_adoption_revenue_validation"],
+      "limitations": "IP授权直接但当前收入很小，定制量产和自主芯片收入不可归入IP收入。", "notes": "CNINFO 年报全文已复核。"
+    },
+    {
+      "source_id": "eda_ip_688259_filing", "source_type": "company_filing", "title": "创耀科技2025年年度报告", "publisher": "创耀科技", "author": "", "publish_date": "2026-04-24", "url": "https://static.cninfo.com.cn/finalpage/2026-04-24/1225171240.PDF", "access_level": "public", "reliability_level": "S0", "review_status": "accepted", "document_status": "primary_source_reviewed",
+      "evidence_locator": "第12-14页、第23-24页、第41-47页",
+      "evidence_summary": "通信芯片/IP开发、按出货量计费的量产服务和5nm-28nm版图设计并存；版图及其他技术服务收入1.214亿元，IP费用未独立分拆。",
+      "supported_claim_ids": ["eda_ip_claim_03","eda_ip_claim_06","eda_ip_claim_08","eda_ip_claim_09","eda_ip_claim_11","eda_ip_claim_12"],
+      "supported_node_ids": ["analog_rf_mixed_signal_eda","ic_design_services_verification_tapeout","licensing_subscription_royalty_model","customer_adoption_revenue_validation"],
+      "limitations": "按片量产服务费包含IP价值但不等同于纯版税，IP授权收入未单拆。", "notes": "CNINFO 年报全文已复核。"
+    },
+    {
+      "source_id": "eda_ip_688107_filing", "source_type": "company_filing", "title": "安路科技2025年年度报告", "publisher": "安路科技", "author": "", "publish_date": "2026-03-31", "url": "https://static.cninfo.com.cn/finalpage/2026-03-31/1225059258.PDF", "access_level": "public", "reliability_level": "S0", "review_status": "accepted", "document_status": "primary_source_reviewed",
+      "evidence_locator": "第13-15页、第24-25页、第30-35页",
+      "evidence_summary": "配套 TangDynasty/FutureDynasty EDA 服务自有 FPGA/FPSoC 生态；FPGA收入4.727亿元，未披露通用 EDA 对外收入。",
+      "supported_claim_ids": ["eda_ip_claim_01","eda_ip_claim_09","eda_ip_claim_11","eda_ip_claim_12"],
+      "supported_node_ids": ["eda_frontend_design_verification","licensing_subscription_royalty_model","customer_adoption_revenue_validation"],
+      "limitations": "EDA 工具主要为自用能力，因此只能作为工具链边界对照。", "notes": "CNINFO 年报全文已复核。"
+    },
+    {
+      "source_id": "eda_ip_688047_filing", "source_type": "company_filing", "title": "龙芯中科2025年年度报告", "publisher": "龙芯中科", "author": "", "publish_date": "2026-04-29", "url": "https://static.cninfo.com.cn/finalpage/2026-04-29/1225234886.PDF", "access_level": "public", "reliability_level": "S0", "review_status": "accepted", "document_status": "primary_source_reviewed",
+      "evidence_locator": "第16-21页、第33-37页",
+      "evidence_summary": "龙架构及 CPU 核可向伙伴开放授权，但收入披露集中在工控芯片、信息化芯片和解决方案，对外技术授权未单拆。",
+      "supported_claim_ids": ["eda_ip_claim_04","eda_ip_claim_09","eda_ip_claim_11","eda_ip_claim_12"],
+      "supported_node_ids": ["semiconductor_ip_cores_interfaces","licensing_subscription_royalty_model","customer_adoption_revenue_validation"],
+      "limitations": "存在对外授权能力但收入材料性未知，应列弹性受益而非核心收入线。", "notes": "CNINFO 年报全文已复核。"
+    },
+    {
+      "source_id": "eda_ip_300223_filing", "source_type": "company_filing", "title": "北京君正2025年年度报告", "publisher": "北京君正", "author": "", "publish_date": "2026-03-28", "url": "https://static.cninfo.com.cn/finalpage/2026-03-28/1225045085.PDF", "access_level": "public", "reliability_level": "S0", "review_status": "accepted", "document_status": "primary_source_reviewed",
+      "evidence_locator": "第14-17页、第23-24页、第36-38页",
+      "evidence_summary": "自研 XBurst/RISC-V CPU 核用于自有计算芯片；收入来自存储、计算、模拟互联和技术服务，未发现对外 IP 授权收入线。",
+      "supported_claim_ids": ["eda_ip_claim_09","eda_ip_claim_11","eda_ip_claim_12"],
+      "supported_node_ids": ["licensing_subscription_royalty_model","customer_adoption_revenue_validation"],
+      "limitations": "自研 CPU IP 是产品能力而非对外授权证据，只能作为收入边界对照。", "notes": "CNINFO 年报全文已复核。"
+    }
+  ]
+}

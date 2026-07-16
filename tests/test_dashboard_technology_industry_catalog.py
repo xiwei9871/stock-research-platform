@@ -60,7 +60,7 @@ def test_technology_industry_catalog_api_returns_repository_summary_and_guardrai
     }
     expected_not_started = {
         chain_id
-        for chain_id, theme_id in NEXT_FIFTEEN_CHAIN_THEMES.items()
+        for chain_id, theme_id in SELECTED_CHAIN_THEMES.items()
         if theme_id not in implemented_theme_ids
     }
     assert not_started_chain_ids == expected_not_started
@@ -81,7 +81,7 @@ def test_technology_industry_catalog_api_returns_repository_summary_and_guardrai
         row for row in payload["chains"] if row["chain_id"] == "industrial_software"
     )
     assert industrial_software["deep_research"] is None
-    assert payload["summary"]["deep_research_chain_count"] == 20
+    assert payload["summary"]["deep_research_chain_count"] == len(SELECTED_CHAIN_THEMES)
     assert {key: payload[key] for key in EXPECTED_GUARDRAILS} == EXPECTED_GUARDRAILS
 
 
