@@ -345,6 +345,50 @@ def test_provenance_validates_field_values_without_schema(valid_version, field, 
     assert check.object_ids == ("claim:primary",)
 
 
+@pytest.mark.parametrize(
+    "created_at",
+    [
+        "2026-07-17T10:00:00Z",
+        "2026-07-17t10:00:00z",
+        "2026-07-17T10:00:00.123456Z",
+        "2026-07-17T10:00:00+08:00",
+    ],
+)
+def test_provenance_accepts_strict_rfc3339_timestamps(valid_version, created_at):
+    valid_version["snapshot"]["claims"][0]["provenance"] = {
+        **PROVENANCE,
+        "created_at": created_at,
+    }
+    check = _check(
+        evaluate_gate(valid_version, "design"),
+        "DESIGN_PROVENANCE_COMPLETE",
+    )
+    assert check.status == "pass"
+
+
+@pytest.mark.parametrize(
+    "created_at",
+    [
+        "20260717T100000+0800",
+        "2026-W29-5T10:00:00+08:00",
+        "2026-07-17T10:00:00+08:00:30",
+        "2026-07-17T10:00:00",
+        "2026-02-30T10:00:00+08:00",
+    ],
+)
+def test_provenance_rejects_non_rfc3339_timestamps(valid_version, created_at):
+    valid_version["snapshot"]["claims"][0]["provenance"] = {
+        **PROVENANCE,
+        "created_at": created_at,
+    }
+    check = _check(
+        evaluate_gate(valid_version, "design"),
+        "DESIGN_PROVENANCE_COMPLETE",
+    )
+    assert check.status == "fail"
+    assert check.object_ids == ("claim:primary",)
+
+
 def test_manual_override_requires_reason(valid_version):
     valid_version["snapshot"]["router_decision"].update(manual_override=True, override_reason="")
     assert _check(evaluate_gate(valid_version, "design"), "DESIGN_ROUTER_COMPLETE").status == "fail"

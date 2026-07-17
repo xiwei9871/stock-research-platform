@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from datetime import datetime
+import re
 from typing import Any, Callable
 
 from stock_research.research_project_v2.errors import ResearchProjectV2Error
@@ -63,6 +64,10 @@ _SATISFIED_STATUSES = {
     "fully_satisfied",
     "partially_satisfied",
 }
+_RFC3339_TIMESTAMP = re.compile(
+    r"^\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}:\d{2}"
+    r"(?:\.\d+)?(?:[Zz]|[+-]\d{2}:\d{2})$"
+)
 
 
 def _non_empty(value: object) -> bool:
@@ -380,9 +385,11 @@ def _provenance(snapshot: dict[str, Any]) -> GateCheck:
 
 
 def _valid_created_at(value: object) -> bool:
-    if not _non_empty(value):
+    if not _non_empty(value) or _RFC3339_TIMESTAMP.fullmatch(value) is None:
         return False
-    timestamp = value[:-1] + "+00:00" if value.endswith("Z") else value
+    timestamp = value[:10] + "T" + value[11:]
+    if timestamp.endswith(("Z", "z")):
+        timestamp = timestamp[:-1] + "+00:00"
     try:
         parsed = datetime.fromisoformat(timestamp)
     except ValueError:
