@@ -185,6 +185,50 @@ E3_EXCLUDED_CODES = {
     "301033.SZ",  # generic neurosurgical implant ownership remains elsewhere
 }
 
+E4_CHAIN_ID = "controlled_nuclear_fusion"
+E4_THEME_ID = "controlled_nuclear_fusion_value_chain_v1"
+E4_THEME_PATH = REPOSITORY_ROOT / f"artifacts/theme_decomposition/{E4_THEME_ID}.json"
+E4_MAPPING_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/company_mappings"
+    / "controlled_nuclear_fusion_company_mapping_v1.json"
+)
+E4_SOURCE_PACK_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "controlled_nuclear_fusion_source_pack_v1.json"
+)
+E4_MATRIX_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "controlled_nuclear_fusion_node_evidence_matrix_v1.json"
+)
+
+E4_NODE_IDS = {
+    "fusion_confinement_route_system_architecture",
+    "superconducting_magnets_conductors_cryogenics",
+    "pulsed_power_heating_current_drive_control",
+    "vacuum_gas_tritium_fuel_cycle_systems",
+    "first_wall_blanket_divertor_shielding_materials",
+    "plasma_diagnostics_measurement_simulation_control",
+    "precision_manufacturing_installation_qualification",
+    "facility_integration_commissioning_operations",
+    "project_order_delivery_revenue_validation",
+}
+
+E4_RESEARCH_UNIVERSE = {
+    "688776.SH",
+    "000969.SZ",
+    "688122.SH",
+    "600363.SH",
+    "600105.SH",
+    "002639.SZ",
+    "603011.SH",
+    "002318.SZ",
+    "000962.SZ",
+    "600353.SH",
+}
+
 
 def _read_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
@@ -1289,3 +1333,184 @@ def test_brain_computer_interfaces_e3_aipeng_revenue_page_16_is_synchronized() -
     assert "34,201.75万元" in pack_sources["bci_300753_filing"][
         "evidence_summary"
     ]
+
+
+def test_controlled_nuclear_fusion_e4_four_research_artifacts_exist_before_validation() -> None:
+    for path in (
+        E4_THEME_PATH,
+        E4_MAPPING_PATH,
+        E4_SOURCE_PACK_PATH,
+        E4_MATRIX_PATH,
+    ):
+        assert path.is_file(), path
+
+
+def test_controlled_nuclear_fusion_e4_theme_meets_strict_wave_e_gate() -> None:
+    theme = _read_json(E4_THEME_PATH)
+    mapping = _read_json(E4_MAPPING_PATH)
+    validate_theme_decomposition_artifact(theme, expected_theme_id=E4_THEME_ID)
+    validate_theme_company_mapping_artifact(mapping, theme)
+    report = VERIFIER.build_theme_batch_report(MANIFEST_PATH, wave="wave_e")
+    row = next(item for item in report["theme_results"] if item["chain_id"] == E4_CHAIN_ID)
+
+    assert theme["artifact_version"] == "theme_decomposition_v1_6"
+    assert theme["theme"]["status"] == "reviewed"
+    assert theme["theme"]["created_from"] == "mixed"
+    assert theme["research_profile"]["catalog_chain_id"] == E4_CHAIN_ID
+    assert theme["research_profile"]["research_kind"] == "industry_chain_deep_research"
+    assert {node["node_id"] for node in theme["nodes"]} == E4_NODE_IDS
+    assert {item["node_id"] for item in theme["value_capture_assessments"]} == E4_NODE_IDS
+    assert len(theme["sources"]) >= 10
+    assert len(theme["claims"]) >= 12
+    reviewed = [
+        item for item in mapping["company_mappings"]
+        if item["review_status"] == "reviewed"
+    ]
+    assert len(reviewed) >= 8
+    assert {item["company_code"] for item in reviewed} <= E4_RESEARCH_UNIVERSE
+    assert row["ready"] is True
+    assert row["checks"]["bidirectional_evidence_contract"] is True
+    assert row["checks"]["precise_mapping_locators"] is True
+
+    profile_text = json.dumps(theme["research_profile"], ensure_ascii=False)
+    assert "商业聚变发电收入" in profile_text
+    assert "示范装置" in profile_text or "实验装置" in profile_text
+    assert "订单" in profile_text
+
+
+def test_controlled_nuclear_fusion_e4_catalog_frontier_route_and_exact_links() -> None:
+    catalog = load_industry_catalog()
+    chain_nodes = [row for row in catalog["nodes"] if row["chain_id"] == E4_CHAIN_ID]
+    assert {row["node_id"] for row in chain_nodes} == E4_NODE_IDS
+    assert all(row["node_kind"] == "frontier_route" for row in chain_nodes)
+    assert all(row["canonical_key"] == "" for row in chain_nodes)
+    assert {row["level"] for row in chain_nodes} == {"L3", "L4"}
+    nodes_by_id = {row["node_id"]: row for row in chain_nodes}
+    for row in chain_nodes:
+        assert row["primary_path"][1] == E4_CHAIN_ID
+        if row["level"] == "L4":
+            assert row["parent_node_id"] in nodes_by_id
+            assert nodes_by_id[row["parent_node_id"]]["level"] == "L3"
+
+    link = next(row for row in catalog["theme_links"] if row["theme_id"] == E4_THEME_ID)
+    assert link["chain_id"] == E4_CHAIN_ID
+    assert link["unmapped_theme_node_ids"] == []
+    assert len(link["node_links"]) == len(E4_NODE_IDS)
+    assert {row["theme_node_id"] for row in link["node_links"]} == E4_NODE_IDS
+    assert {row["catalog_node_id"] for row in link["node_links"]} == E4_NODE_IDS
+    assert not (
+        REPOSITORY_ROOT
+        / "artifacts/technology_industry_catalog/v1/theme_compositions"
+        / "controlled_nuclear_fusion_v1.json"
+    ).exists()
+
+
+def test_controlled_nuclear_fusion_e4_sources_claims_matrix_and_served_notes_are_synchronized() -> None:
+    theme = _read_json(E4_THEME_PATH)
+    mapping = _read_json(E4_MAPPING_PATH)
+    source_pack = _read_json(E4_SOURCE_PACK_PATH)
+    matrix = _read_json(E4_MATRIX_PATH)
+    served = list_theme_research_sources(E4_THEME_ID, read_source="artifact")
+
+    def source_identity(rows: list[dict]) -> dict[str, tuple]:
+        return {
+            row["source_id"]: (
+                row["source_type"],
+                row["title"],
+                row["publisher"],
+                row["author"],
+                row["publish_date"],
+                row.get("url_or_ref", row.get("url")),
+                row["access_level"],
+                row["reliability_level"],
+                row["review_status"],
+                row["notes"],
+            )
+            for row in rows
+        }
+
+    assert source_identity(theme["sources"]) == source_identity(mapping["sources"])
+    assert source_identity(theme["sources"]) == source_identity(source_pack["sources"])
+    assert source_identity(theme["sources"]) == source_identity(served["items"])
+
+    accepted_sources = {
+        row["source_id"] for row in source_pack["sources"]
+        if row["review_status"] == "accepted"
+    }
+    accepted_primary_sources = {
+        row["source_id"] for row in source_pack["sources"]
+        if row["review_status"] == "accepted"
+        and row["source_type"] in {"company_filing", "official_report", "official_article"}
+    }
+    assert len(accepted_sources) >= 10
+    assert len(accepted_primary_sources) >= 8
+
+    claims = {row["claim_id"]: row for row in theme["claims"]}
+    for source in source_pack["sources"]:
+        expected_claim_ids = {
+            claim_id for claim_id, claim in claims.items()
+            if claim["source_id"] == source["source_id"]
+            or source["source_id"] in claim["supporting_source_ids"]
+        }
+        assert set(source["supported_claim_ids"]) == expected_claim_ids
+        assert set(source["supported_node_ids"]) == {
+            node_id for claim_id in expected_claim_ids
+            for node_id in claims[claim_id]["affected_theme_nodes"]
+        }
+
+    matrix_by_node = {row["node_id"]: row for row in matrix["node_evidence_matrix"]}
+    assert set(matrix_by_node) == E4_NODE_IDS
+    for node_id, matrix_row in matrix_by_node.items():
+        assert set(matrix_row["supported_claim_ids"]) == {
+            claim_id for claim_id, claim in claims.items()
+            if node_id in claim["affected_theme_nodes"]
+        }
+        assert set(matrix_row["accepted_source_ids"]) <= accepted_sources
+
+
+def test_controlled_nuclear_fusion_e4_reviewed_mappings_have_three_fusion_specific_evidence_roles() -> None:
+    mapping = _read_json(E4_MAPPING_PATH)
+    evidence_by_id = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+    reviewed = [
+        row for row in mapping["company_mappings"]
+        if row["review_status"] == "reviewed"
+    ]
+    assert len(reviewed) >= 8
+
+    for row in reviewed:
+        evidence = [evidence_by_id[evidence_id] for evidence_id in row["evidence_ids"]]
+        assert len(evidence) == 3
+        assert {item["evidence_type"] for item in evidence} in (
+            {"product_relationship", "revenue_materiality", "business_stage"},
+            {"service_relationship", "revenue_materiality", "business_stage"},
+        )
+        assert len({item["excerpt_locator"] for item in evidence}) == 3
+        assert all("页" in item["excerpt_locator"] for item in evidence)
+        summaries = " ".join(item["evidence_summary"] for item in evidence)
+        assert any(
+            term in summaries for term in ("聚变", "ITER", "托卡马克", "磁约束", "等离子体")
+        )
+        assert any(
+            term in summaries
+            for term in ("产品", "设备", "材料", "部件", "项目", "合同", "中标", "交付", "验收", "收入")
+        )
+
+
+def test_controlled_nuclear_fusion_e4_preserves_strict_fission_and_stage_boundaries() -> None:
+    theme = _read_json(E4_THEME_PATH)
+    mapping = _read_json(E4_MAPPING_PATH)
+    catalog = load_industry_catalog()
+    all_text = json.dumps({"theme": theme, "mapping": mapping}, ensure_ascii=False)
+
+    assert not any(
+        token in node_id for node_id in E4_NODE_IDS
+        for token in ("fission", "nuclear_island", "reactor_pressure_vessel", "steam_generator")
+    )
+    assert any(row["chain_id"] == "nuclear_power_equipment" for row in catalog["chains"])
+    for boundary in (
+        "核电设备仍归属nuclear_power_equipment",
+        "通用超导材料产能不等于聚变订单",
+        "科研合作不等于产品交付",
+        "装置订单不等于商业聚变发电收入",
+    ):
+        assert boundary in all_text

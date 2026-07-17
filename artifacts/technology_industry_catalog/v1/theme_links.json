@@ -828,6 +828,23 @@
       "notes":"E3按frontier route表达侵入式、微创与非侵入式接口、信号采集、解码、神经调控、整机、临床注册和商业兑现；不创建canonical所有权或composition。政策、投资、联盟、实验室、专利、原型、临床、注册、交付和收入必须分阶段验证，通用康复、脑电、刺激、传感、手术及医疗器械收入不得自动计入E3。"
     },
     {
+      "theme_id":"controlled_nuclear_fusion_value_chain_v1",
+      "chain_id":"controlled_nuclear_fusion",
+      "node_links":[
+        {"theme_node_id":"fusion_confinement_route_system_architecture","catalog_node_id":"fusion_confinement_route_system_architecture"},
+        {"theme_node_id":"superconducting_magnets_conductors_cryogenics","catalog_node_id":"superconducting_magnets_conductors_cryogenics"},
+        {"theme_node_id":"pulsed_power_heating_current_drive_control","catalog_node_id":"pulsed_power_heating_current_drive_control"},
+        {"theme_node_id":"vacuum_gas_tritium_fuel_cycle_systems","catalog_node_id":"vacuum_gas_tritium_fuel_cycle_systems"},
+        {"theme_node_id":"first_wall_blanket_divertor_shielding_materials","catalog_node_id":"first_wall_blanket_divertor_shielding_materials"},
+        {"theme_node_id":"plasma_diagnostics_measurement_simulation_control","catalog_node_id":"plasma_diagnostics_measurement_simulation_control"},
+        {"theme_node_id":"precision_manufacturing_installation_qualification","catalog_node_id":"precision_manufacturing_installation_qualification"},
+        {"theme_node_id":"facility_integration_commissioning_operations","catalog_node_id":"facility_integration_commissioning_operations"},
+        {"theme_node_id":"project_order_delivery_revenue_validation","catalog_node_id":"project_order_delivery_revenue_validation"}
+      ],
+      "unmapped_theme_node_ids":[],
+      "notes":"E4按frontier route表达聚变约束路线、磁体低温、加热电源、真空氚循环、面向等离子体部件、诊断控制、制造交付和收入验证；不创建裂变节点或canonical所有权。核电设备仍归属nuclear_power_equipment，通用超导、材料、低温和核工业能力不得自动形成聚变受益映射，装置订单不得外推为商业聚变发电收入。"
+    },
+    {
       "theme_id":"high_end_medical_devices_value_chain_v1",
       "chain_id":"high_end_medical_devices",
       "node_links":[

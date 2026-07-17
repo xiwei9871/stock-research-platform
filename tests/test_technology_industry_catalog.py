@@ -190,6 +190,7 @@ def test_repository_catalog_starts_with_ten_approved_sectors():
         "cybersecurity_data_infrastructure",
         "intelligent_transport_vehicle_road_cloud",
         "brain_computer_interfaces_neural_engineering",
+        "controlled_nuclear_fusion",
     }
     nodes_by_id = {row["node_id"]: row for row in catalog["nodes"]}
     assert {
