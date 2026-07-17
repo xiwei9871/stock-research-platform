@@ -3,6 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 import json
 from pathlib import Path
+import shutil
 
 import pytest
 
@@ -54,6 +55,87 @@ EXPECTED = {
     ),
 }
 PROHIBITED = ("buy", "sell", "买入", "卖出", "推荐", "目标价")
+FORBIDDEN_PLACEHOLDERS = (
+    "待验证的trigger节点",
+    "机制尚待规格、良率、交付和经济性数据验证",
+    "to_be_established",
+)
+DOMAIN_EXPECTED = {
+    "ai_compute_pcb_value_migration": {
+        "metric": (
+            "normalized_high_speed_pcb_value_per_ai_rack",
+            "CNY_per_rack_or_normalized_index",
+            ">=",
+            "two_successive_architecture_generations",
+            "weighted_median_by_shipped_configuration",
+            "positive_change_after_normalizing_accelerator_count",
+            ">=15%",
+            "<5%",
+            "180 days",
+            "quarterly",
+        ),
+        "nodes": [
+            "architecture_upgrade",
+            "board_topology_signal_power_density",
+            "layer_material_process_complexity",
+            "yield_qualification_effective_capacity",
+            "normalized_value_migration",
+        ],
+        "node_kinds": ["trigger", "system_parameter", "mechanism", "constraint", "value_migration"],
+        "node_fragments": ("scale-up", "板卡数量面积", "背钻", "量产良率", "归一化"),
+        "invalidation": ("<=", "0%", "% normalized change", "two_architecture_generations", 2, "two observations >5%"),
+        "question_keywords": ("加速器", "背钻", "capex", "认证", "CPO", "rack BOM"),
+    },
+    "humanoid_robot_scale_up_bottlenecks": {
+        "metric": (
+            "qualified_module_first_pass_yield", "%", ">=",
+            "three_consecutive_months", "weighted_mean_by_module_shipments",
+            ">=90%", ">=90%", "<80%", "30 days", "monthly",
+        ),
+        "nodes": [
+            "production_ramp_target", "duty_cycle_tolerance_requirements",
+            "module_assembly_calibration_test", "yield_reliability_supplier_constraint",
+            "ramp_cost_delivery",
+        ],
+        "node_kinds": ["trigger", "system_parameter", "mechanism", "constraint", "outcome"],
+        "node_fragments": ("月度交付", "duty cycle", "标定", "MTBF", "单位成本"),
+        "invalidation": ("<=", 10, "% of schedule delay", "two_product_cycles", 2, ">20%"),
+        "question_keywords": ("灵巧手", "公差", "标定", "单位成本", "样件", "MTBF"),
+    },
+    "new_energy_storage_route_competition": {
+        "metric": (
+            "route_adjusted_delivered_lcos", "CNY_per_MWh", "<=",
+            "first_three_commercial_projects", "median_same_duty_cycle",
+            "at_least_10_percent_below_incumbent", "<=90% of incumbent",
+            ">95% of incumbent", "90 days", "quarterly",
+        ),
+        "nodes": [
+            "duty_cycle_revenue_rule", "delivered_efficiency_degradation_safety",
+            "integration_om_financing", "site_grid_supply_constraint",
+            "route_adoption_economics",
+        ],
+        "node_kinds": ["trigger", "system_parameter", "mechanism", "constraint", "outcome"],
+        "node_fragments": ("收益规则", "寿命退化", "delivered LCOS", "消防审批", "路线采用"),
+        "invalidation": (">=", 95, "% of incumbent LCOS", "three_commercial_projects", 3, "<=90%"),
+        "question_keywords": ("duty cycle", "系统集成", "LCOS", "消防", "回款", "调度"),
+    },
+    "high_end_medical_device_commercialization": {
+        "metric": (
+            "active_install_base_conversion_rate_12m", "%", ">=",
+            "twelve_months_after_installation_acceptance", "weighted_mean_by_installed_systems",
+            ">=60%", ">=60%", "<40%", "90 days", "quarterly",
+        ),
+        "nodes": [
+            "technical_validation_registration", "clinical_workflow_procurement_payment",
+            "training_service_installed_base_activation",
+            "hospital_access_reimbursement_supply_constraint", "recurring_revenue_scale",
+        ],
+        "node_kinds": ["trigger", "mechanism", "company_capture", "constraint", "outcome"],
+        "node_fragments": ("注册临床", "clinical workflow", "医生培训", "支付回款", "耗材服务"),
+        "invalidation": ("<", 30, "%", "four_quarters", 4, ">=50%"),
+        "question_keywords": ("clinical workflow", "注册临床", "采购支付", "培训服务", "回款", "active utilization"),
+    },
+}
 
 
 def _json(path: Path) -> dict[str, object]:
@@ -88,6 +170,7 @@ def test_four_pilot_artifacts_are_complete_research_designs():
     assert [row["project_slug"] for row in index["projects"]] == sorted(SLUGS)
     assert index["artifact_version"] == "2.0.0"
 
+    secondary_question_sets = set()
     for slug in sorted(SLUGS):
         identity = load_project(slug)
         version = load_version(slug, "0.1.0")
@@ -145,6 +228,36 @@ def test_four_pilot_artifacts_are_complete_research_designs():
         assert all(item["status"] == "planned" for item in snapshot["validation_metrics"])
         assert all(item["triggered_at"] is None for item in snapshot["invalidation_conditions"])
         assert not any(word in json.dumps(version, ensure_ascii=False).lower() for word in PROHIBITED)
+        assert not any(text in json.dumps(version, ensure_ascii=False) for text in FORBIDDEN_PLACEHOLDERS)
+        domain = DOMAIN_EXPECTED[slug]
+        metric = snapshot["validation_metrics"][0]
+        assert (
+            metric["metric_name"], metric["unit"], metric["comparison_operator"],
+            metric["observation_window"], metric["aggregation_method"],
+            metric["expected_range"], metric["confirmation_threshold"],
+            metric["warning_threshold"], metric["data_freshness_requirement"],
+            metric["observation_frequency"],
+        ) == domain["metric"]
+        assert [item["causal_node_id"].rsplit(":", 1)[-1] for item in snapshot["causal_nodes"]] == domain["nodes"]
+        assert [item["node_kind"] for item in snapshot["causal_nodes"]] == domain["node_kinds"]
+        assert all(
+            fragment in node["node_text"]
+            for fragment, node in zip(domain["node_fragments"], snapshot["causal_nodes"])
+        )
+        condition = snapshot["invalidation_conditions"][0]
+        assert (
+            condition["comparison_operator"], condition["threshold_value"],
+            condition["unit"], condition["persistence_window"],
+            condition["minimum_observations"], condition["recovery_condition"],
+        ) == domain["invalidation"]
+        secondary_text = " ".join(
+            item["question_text"] for item in questions if item["question_type"] != "primary"
+        )
+        secondary_question_sets.add(tuple(
+            item["question_text"] for item in questions if item["question_type"] != "primary"
+        ))
+        assert all(keyword in secondary_text for keyword in domain["question_keywords"])
+        assert len({item["question_text"] for item in questions}) == 7
         project_dir = ARTIFACT_ROOT / "projects" / slug
         assert (project_dir / "events/events.jsonl").read_bytes() == b""
         manifest = [json.loads(line) for line in (project_dir / "version_manifest.jsonl").read_text().splitlines()]
@@ -156,6 +269,7 @@ def test_four_pilot_artifacts_are_complete_research_designs():
             "content_hash": version["content_hash"],
             "created_at": version["created_at"],
         }]
+    assert len(secondary_question_sets) == 4
 
 
 def test_static_valid_and_invalid_fixtures_have_exact_failures():
@@ -294,8 +408,7 @@ def test_rebuild_index_is_dry_run_safe_write_idempotent_and_tamper_strict(tmp_pa
     }
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(
-        json.dumps(old_row, sort_keys=True, separators=(",", ":")) + "\n",
-        encoding="utf-8",
+        json.dumps(old_row, sort_keys=True, separators=(",", ":")), encoding="utf-8"
     )
     old_manifest_bytes = manifest_path.read_bytes()
     old_version_bytes = old_version_path.read_bytes()
@@ -307,6 +420,7 @@ def test_rebuild_index_is_dry_run_safe_write_idempotent_and_tamper_strict(tmp_pa
     rebuilt_manifest = manifest_path.read_bytes()
     assert rebuilt_manifest.startswith(old_manifest_bytes)
     assert len(rebuilt_manifest.splitlines()) == len(old_manifest_bytes.splitlines()) + 1
+    assert [json.loads(line) for line in rebuilt_manifest.splitlines()]
     index = load_index(layout=layout)
     assert index == {
         "artifact_version": "2.0.0",
@@ -337,6 +451,84 @@ def test_rebuild_index_is_dry_run_safe_write_idempotent_and_tamper_strict(tmp_pa
     error = json.loads(capsys.readouterr().out)
     assert error["error"]["code"] == "RESEARCH_PROJECT_IMMUTABILITY_VIOLATION"
     assert _bytes_under(copied_root) == before_tamper_check
+
+
+@pytest.mark.parametrize(
+    "symlink_kind",
+    ("project_dir", "versions_dir", "version_file", "manifest", "index_parent", "index_file"),
+)
+def test_rebuild_rejects_symlinked_managed_paths_without_external_io(
+    tmp_path, capsys, symlink_kind
+):
+    copied_root = tmp_path / "v2"
+    shutil.copytree(ARTIFACT_ROOT, copied_root)
+    layout = ResearchProjectLayout(copied_root)
+    slug = sorted(SLUGS)[0]
+    project_dir = layout.project_dir(slug)
+    external = tmp_path / f"external-{symlink_kind}"
+    external.mkdir()
+    marker = external / "marker.bin"
+    marker.write_bytes(b"external-must-not-change")
+    if symlink_kind == "project_dir":
+        shutil.rmtree(project_dir)
+        project_dir.symlink_to(external, target_is_directory=True)
+    elif symlink_kind == "versions_dir":
+        shutil.rmtree(project_dir / "versions")
+        (project_dir / "versions").symlink_to(external, target_is_directory=True)
+    elif symlink_kind == "version_file":
+        target = project_dir / "versions/v0.1.0.json"
+        target.unlink()
+        target.symlink_to(marker)
+    elif symlink_kind == "manifest":
+        target = project_dir / "version_manifest.jsonl"
+        target.unlink()
+        target.symlink_to(marker)
+    elif symlink_kind == "index_parent":
+        shutil.rmtree(layout.index_path.parent)
+        layout.index_path.parent.symlink_to(external, target_is_directory=True)
+    else:
+        layout.index_path.unlink()
+        layout.index_path.symlink_to(marker)
+    external_before = _bytes_under(external)
+    for command in (["rebuild-index"], ["rebuild-index", "--write"]):
+        assert cli(command, layout=layout) == 5
+        assert json.loads(capsys.readouterr().out)["error"]["code"] == (
+            "RESEARCH_PROJECT_IMMUTABILITY_VIOLATION"
+        )
+        assert _bytes_under(external) == external_before
+
+
+def test_rebuild_rolls_back_all_targets_when_middle_atomic_write_fails(
+    tmp_path, capsys, monkeypatch
+):
+    copied_root = tmp_path / "v2"
+    shutil.copytree(ARTIFACT_ROOT, copied_root)
+    layout = ResearchProjectLayout(copied_root)
+    for slug in sorted(SLUGS)[:2]:
+        version_path = layout.project_dir(slug) / "versions/v0.1.0.json"
+        version = _json(version_path)
+        version["content_hash"] = "0" * 64
+        _write_json(version_path, version)
+        (layout.project_dir(slug) / "version_manifest.jsonl").write_bytes(b"")
+    before = _bytes_under(copied_root)
+    import stock_research.research_project_v2.cli as cli_module
+
+    real_atomic_write = cli_module._atomic_write
+    calls = 0
+
+    def fail_second_write(path, data):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise OSError("injected middle write failure")
+        real_atomic_write(path, data)
+
+    monkeypatch.setattr(cli_module, "_atomic_write", fail_second_write)
+    assert cli(["rebuild-index", "--write"], layout=layout) == 10
+    assert json.loads(capsys.readouterr().out)["error"]["code"] == (
+        "RESEARCH_PROJECT_RUNTIME_ERROR"
+    )
+    assert _bytes_under(copied_root) == before
 
 
 def test_cli_acceptance_for_seeded_pilots_and_rebuild_help(capsys):

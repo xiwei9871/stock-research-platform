@@ -188,7 +188,7 @@ def _semver_key(version: str) -> tuple[int, int, int]:
     return tuple(map(int, version.split(".")))
 
 
-def _atomic_write(path: Path, data: bytes) -> None:
+def _atomic_replace_bytes(path: Path, data: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary_name = tempfile.mkstemp(
         prefix=f".{path.name}.", dir=path.parent
@@ -202,6 +202,74 @@ def _atomic_write(path: Path, data: bytes) -> None:
         os.replace(temporary_path, path)
     finally:
         temporary_path.unlink(missing_ok=True)
+
+
+def _atomic_write(path: Path, data: bytes) -> None:
+    _atomic_replace_bytes(path, data)
+
+
+def _unsafe_path_error(path: Path, layout: ResearchProjectLayout) -> ResearchProjectV2Error:
+    return ResearchProjectV2Error(
+        "Immutable research project version failed verification: unsafe managed path",
+        code="RESEARCH_PROJECT_IMMUTABILITY_VIOLATION",
+        details={"path": str(path), "root": str(layout.root), "reason": "unsafe managed path"},
+    )
+
+
+def _require_safe_managed_path(
+    path: Path,
+    layout: ResearchProjectLayout,
+    *,
+    allow_missing: bool = False,
+) -> None:
+    try:
+        relative = path.relative_to(layout.root)
+    except ValueError as exc:
+        raise _unsafe_path_error(path, layout) from exc
+    current = layout.root
+    if current.is_symlink():
+        raise _unsafe_path_error(current, layout)
+    for part in relative.parts:
+        current /= part
+        if current.is_symlink():
+            raise _unsafe_path_error(current, layout)
+    try:
+        path.resolve(strict=False).relative_to(layout.root.resolve(strict=False))
+    except ValueError as exc:
+        raise _unsafe_path_error(path, layout) from exc
+    if not allow_missing and not path.exists():
+        raise _unsafe_path_error(path, layout)
+
+
+def _preflight_layout_paths(layout: ResearchProjectLayout) -> None:
+    _require_safe_managed_path(layout.projects_dir, layout)
+    for entry in layout.projects_dir.iterdir():
+        if entry.is_symlink():
+            raise _unsafe_path_error(entry, layout)
+    _require_safe_managed_path(layout.index_path.parent, layout, allow_missing=True)
+    _require_safe_managed_path(layout.index_path, layout, allow_missing=True)
+
+
+def _commit_transaction(targets: list[tuple[Path, bytes]]) -> None:
+    originals = {
+        path: path.read_bytes() if path.exists() else None for path, _ in targets
+    }
+    attempted: list[Path] = []
+    try:
+        for path, data in targets:
+            attempted.append(path)
+            _atomic_write(path, data)
+    except Exception:
+        for path in reversed(attempted):
+            original = originals[path]
+            try:
+                if original is None:
+                    path.unlink(missing_ok=True)
+                else:
+                    _atomic_replace_bytes(path, original)
+            except Exception:
+                continue
+        raise
 
 
 def _manifest_rows(path: Path, project_slug: str) -> tuple[bytes, list[dict[str, Any]]]:
@@ -247,6 +315,7 @@ def _json_bytes(payload: dict[str, Any]) -> bytes:
 def _rebuild_index(
     args: argparse.Namespace, layout: ResearchProjectLayout
 ) -> dict[str, object]:
+    _preflight_layout_paths(layout)
     project_slugs = list_project_slugs(layout=layout)
     if not project_slugs:
         raise ResearchProjectV2Error(
@@ -263,13 +332,23 @@ def _rebuild_index(
         identity = load_project(slug, layout=layout)
         timestamps.append(identity["created_at"])
         project_dir = layout.project_dir(slug)
+        _require_safe_managed_path(project_dir, layout)
+        _require_safe_managed_path(project_dir / "project.json", layout)
+        versions_dir = project_dir / "versions"
+        _require_safe_managed_path(versions_dir, layout)
         manifest_path = project_dir / "version_manifest.jsonl"
+        _require_safe_managed_path(manifest_path, layout, allow_missing=True)
         prefix, rows = _manifest_rows(manifest_path, slug)
         manifested = {row["semantic_version"] for row in rows}
+        for entry in versions_dir.iterdir():
+            if entry.is_symlink():
+                raise _unsafe_path_error(entry, layout)
         version_paths = sorted(
-            (project_dir / "versions").glob("v*.json"),
+            versions_dir.glob("v*.json"),
             key=lambda path: _semver_key(path.stem[1:]),
         )
+        for version_path in version_paths:
+            _require_safe_managed_path(version_path, layout)
         discovered = [path.stem[1:] for path in version_paths]
         if len(discovered) != len(set(discovered)):
             raise ResearchProjectV2Error(
@@ -336,7 +415,8 @@ def _rebuild_index(
                 (json.dumps(row, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode()
                 for row in sorted(append_rows, key=lambda row: _semver_key(row["semantic_version"]))
             )
-            planned_manifests.append((manifest_path, prefix + suffix))
+            separator = b"" if not prefix or prefix.endswith(b"\n") else b"\n"
+            planned_manifests.append((manifest_path, prefix + separator + suffix))
         index_rows.append(
             {
                 "project_id": identity["project_id"],
@@ -357,13 +437,16 @@ def _rebuild_index(
     }
     validate_schema_payload("research_project_index_v2", index)
     if args.write:
-        for item in planned_versions:
-            _atomic_write(item["path"], _json_bytes(item["payload"]))
-        for path, data in planned_manifests:
-            _atomic_write(path, data)
         index_bytes = _json_bytes(index)
+        targets = [
+            (item["path"], _json_bytes(item["payload"])) for item in planned_versions
+        ]
+        targets.extend(planned_manifests)
         if not layout.index_path.is_file() or layout.index_path.read_bytes() != index_bytes:
-            _atomic_write(layout.index_path, index_bytes)
+            targets.append((layout.index_path, index_bytes))
+        for path, _ in targets:
+            _require_safe_managed_path(path, layout, allow_missing=True)
+        _commit_transaction(targets)
     return {
         "status": "written" if args.write else "planned",
         "projects": project_slugs,
