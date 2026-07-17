@@ -9,10 +9,10 @@ from stock_research.research_project_v2.layout import ResearchProjectLayout
 
 
 SCHEMA_FILES = {
-    "identity": "research_project_identity_v2.schema.json",
-    "version": "research_version_v2.schema.json",
-    "event": "research_event_v2.schema.json",
-    "index": "research_project_index_v2.schema.json",
+    "research_project_identity_v2": "research_project_identity_v2.schema.json",
+    "research_version_v2": "research_version_v2.schema.json",
+    "research_event_v2": "research_event_v2.schema.json",
+    "research_project_index_v2": "research_project_index_v2.schema.json",
 }
 
 

@@ -12,7 +12,10 @@ with warnings.catch_warnings():
         message=r"jsonschema\.RefResolver is deprecated as of v4\.18\.0.*",
         category=DeprecationWarning,
     )
-    from stock_research.research_project_v2.loader import validate_schema_payload
+    from stock_research.research_project_v2.loader import (
+        SCHEMA_FILES,
+        validate_schema_payload,
+    )
 
 
 PROVENANCE = {
@@ -320,7 +323,16 @@ def sample_event():
 
 
 def test_identity_accepts_pointer_only_payload(sample_identity):
-    validate_schema_payload("identity", sample_identity)
+    validate_schema_payload("research_project_identity_v2", sample_identity)
+
+
+def test_canonical_schema_names_are_registered():
+    assert set(SCHEMA_FILES) == {
+        "research_project_identity_v2",
+        "research_version_v2",
+        "research_event_v2",
+        "research_project_index_v2",
+    }
 
 
 def test_research_design_rejects_supported_claim(sample_version):
@@ -328,12 +340,12 @@ def test_research_design_rejects_supported_claim(sample_version):
     invalid_version["snapshot"]["claims"][0]["claim_status"] = "supported"
 
     with pytest.raises(ResearchProjectV2Error) as exc_info:
-        validate_schema_payload("version", invalid_version)
+        validate_schema_payload("research_version_v2", invalid_version)
 
     assert exc_info.value.code == "RESEARCH_PROJECT_SCHEMA_INVALID"
     assert exc_info.value.details == {
         "path": "snapshot.claims.0.claim_status",
-        "schema": "version",
+        "schema": "research_version_v2",
     }
 
 
@@ -342,10 +354,13 @@ def test_event_requires_event_id(sample_event):
     del invalid_event["event_id"]
 
     with pytest.raises(ResearchProjectV2Error) as exc_info:
-        validate_schema_payload("event", invalid_event)
+        validate_schema_payload("research_event_v2", invalid_event)
 
     assert exc_info.value.code == "RESEARCH_PROJECT_SCHEMA_INVALID"
-    assert exc_info.value.details == {"path": "", "schema": "event"}
+    assert exc_info.value.details == {
+        "path": "",
+        "schema": "research_event_v2",
+    }
 
 
 def test_unknown_schema_name_uses_stable_domain_error(sample_identity):
