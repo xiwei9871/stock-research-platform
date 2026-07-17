@@ -112,12 +112,16 @@ V2 结论不会自动改写 V1。未来如需把成熟研究沉淀为新的规�
 
 ### R1：Artifact Research Baseline
 
+状态：已完成（2026-07-17）
+
 交付：
 
 - `research_project_v2` JSON Schema；
 - 项目 identity、不可变 version、event stream 和 rebuildable index；
 - loader 和 semantic validator；
-- CLI：list、show、validate、summary、audit-references、diff、gate；
+- CLI：list、show、validate、summary、audit-references、diff、gate、rebuild-index（dry run / `--write`）；
+- 本地只读 Theme Research V1 / Technology Industry Catalog V1 reference resolver 与 drift audit；
+- Research Design Gate、稳定 ID 版本 diff、append-only manifest 和幂等 index rebuild；
 - 四个 research-design artifact；
 - valid/invalid fixtures；
 - 单元测试和文档。
@@ -129,18 +133,28 @@ V2 结论不会自动改写 V1。未来如需把成熟研究沉淀为新的规�
 - 新型储能路线竞争；
 - 高端医疗器械商业化路径。
 
-退出条件：四个项目只通过 Research Design Gate，没有虚构证据、支持性结论或投资判断。
+退出条件：已满足。四个项目均只通过 12 项 Research Design Gate；它们保持 `research_design`、`requirements_defined`、`conclusion_status=unavailable`、`investment_status=not_assessed`，没有 Evidence Assessment、公司捕获结论、支持性结论或投资判断。
 
-### R2：Reference Resolver 与 Drift Audit
+验证摘要（2026-07-17）：
+
+- V2：`230 passed, 4 warnings`；
+- 选定 V1 回归：`373 passed, 4 warnings`；
+- scope guard：指定 R1 单提交并集加 Task10 三文件共 58 个路径，`2 passed`；
+- CLI 实跑：四项目 list、四版本 validate、AI pilot show/summary/reference audit/显式 Design Gate、rebuild dry/write/second write 均 exit 0，第二次 write 无 artifact diff；
+- focused exit/diff：`6 passed, 2 warnings`；Python compile、25 个 JSON、9 个 JSONL、`git diff --check` 与 forbidden scope scan 均通过。
+
+现有 warning 为非阻塞 deprecation warning，主要来自 `jsonschema.RefResolver` 与 Python 3.14 下的 `py_mini_racer`。
+
+### R2：External / Evidence Resolver 与 Drift Audit 扩展
 
 交付：
 
-- Theme Research V1 resolver；
-- Industry Catalog V1 resolver；
+- 扩展 R1 已交付的本地 Theme Research V1 resolver；
+- 扩展 R1 已交付的本地 Industry Catalog V1 resolver；
 - evidence_artifact resolver；
 - external document/dataset reference contract；
-- content hash 和 hash scope 实现；
-- missing、hash mismatch、version mismatch、type mismatch、deprecated 和 duplicate 检查；
+- external/evidence archive 的 content hash、hash scope 与可复现解析；
+- 将 R1 本地 missing、hash mismatch、version mismatch、type mismatch、deprecated、duplicate 检查扩展到 external/evidence resolver；
 - reference drift update event。
 
 退出条件：V1 或外部证据变化不会静默改变历史 Research Version。
@@ -162,10 +176,8 @@ V2 结论不会自动改写 V1。未来如需把成熟研究沉淀为新的规�
 
 交付：
 
-- 因果节点和因果边；
-- claim relation；
-- typed validation metric；
-- typed invalidation condition；
+- 对 R1 design-only 因果节点、因果边与 claim relation 进行 evidence-backed validation；
+- 对 R1 planned typed validation metric 与 typed invalidation condition 进行实际观测和判定；
 - company capture 分阶段验证；
 - Publication Gate 基线。
 
