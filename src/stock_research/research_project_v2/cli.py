@@ -50,7 +50,7 @@ def _parser() -> argparse.ArgumentParser:
 
     gate = subparsers.add_parser("gate", help="Evaluate a research gate.")
     gate.add_argument("--project", required=True)
-    gate.add_argument("--version")
+    gate.add_argument("--version", required=True)
     gate.add_argument("--gate", choices=("design", "evidence", "publication"), required=True)
     return parser
 
@@ -102,7 +102,9 @@ def _list(layout: ResearchProjectLayout) -> dict[str, object]:
     projects = []
     for slug in list_project_slugs(layout=layout):
         identity = load_project(slug, layout=layout)
-        version = load_version(slug, layout=layout)
+        pointer = identity["current_version"]
+        semantic_version = pointer.rsplit(":", 1)[-1]
+        version = load_version(slug, semantic_version, layout=layout)
         projects.append(_identity_summary(identity, version))
     return {"projects": projects}
 
@@ -118,7 +120,14 @@ def _validate(args: argparse.Namespace, layout: ResearchProjectLayout) -> dict[s
     if args.project:
         targets.append((args.project, args.version))
     else:
-        for slug in list_project_slugs(layout=layout):
+        project_slugs = list_project_slugs(layout=layout)
+        if not project_slugs:
+            raise ResearchProjectV2Error(
+                "Research projects not found",
+                code="RESEARCH_PROJECT_NOT_FOUND",
+                details={"artifact": "projects"},
+            )
+        for slug in project_slugs:
             versions = list_versions(slug, layout=layout)
             if not versions:
                 raise ResearchProjectV2Error(
@@ -127,6 +136,13 @@ def _validate(args: argparse.Namespace, layout: ResearchProjectLayout) -> dict[s
                     details={"project": slug, "version": None},
                 )
             targets.extend((slug, version) for version in versions)
+
+    if not targets:
+        raise ResearchProjectV2Error(
+            "Research projects not found",
+            code="RESEARCH_PROJECT_NOT_FOUND",
+            details={"artifact": "projects"},
+        )
 
     validated = []
     for slug, version_number in targets:

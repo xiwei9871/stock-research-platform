@@ -223,6 +223,29 @@ def test_list_outputs_four_projects_sorted_by_slug(layout, capsys):
     assert all(item["question_count"] == 2 for item in result["projects"])
 
 
+def test_list_binds_summary_to_the_first_loaded_identity_pointer(
+    layout, capsys, monkeypatch
+):
+    import stock_research.research_project_v2.cli as cli_module
+
+    identity = _identity("demo", "0.1.0")
+    seen_versions = []
+    monkeypatch.setattr(cli_module, "list_project_slugs", lambda **kwargs: ["demo"])
+    monkeypatch.setattr(cli_module, "load_project", lambda *args, **kwargs: identity)
+
+    def load_selected_version(slug, version=None, **kwargs):
+        seen_versions.append(version)
+        return _version(slug, "0.1.0")
+
+    monkeypatch.setattr(cli_module, "load_version", load_selected_version)
+
+    assert cli(["list"], layout=layout) == 0
+    project = _payload(capsys)["projects"][0]
+    assert project["current_version"] == "research_version:demo:0.1.0"
+    assert project["semantic_version"] == "0.1.0"
+    assert seen_versions == ["0.1.0"]
+
+
 def test_show_without_version_loads_current_pointer(layout, capsys):
     newer = _version("demo", "0.2.0", parent_version_id="research_version:demo:0.1.0")
     _write_project(layout, "demo", [_version("demo"), newer], current="0.2.0")
@@ -270,8 +293,13 @@ def test_failed_design_gate_exits_four(layout, capsys):
     version["snapshot"]["scope"]["excluded_scope"] = []
     _rehash(version)
     _write_project(layout, "demo", [version])
-    assert cli(["gate", "--project", "demo", "--gate", "design"], layout=layout) == 4
+    assert cli(["gate", "--project", "demo", "--version", "0.1.0", "--gate", "design"], layout=layout) == 4
     assert _payload(capsys)["status"] == "fail"
+
+
+def test_gate_requires_explicit_version(layout, capsys):
+    assert cli(["gate", "--project", "demo", "--gate", "design"], layout=layout) == 2
+    assert "--version" in capsys.readouterr().err
 
 
 def test_invalid_diff_ancestry_exits_seven(layout, capsys):
@@ -316,8 +344,18 @@ def test_validate_all_reports_project_with_no_versions(layout, capsys):
     assert error["details"] == {"project": "empty", "version": None}
 
 
+def test_validate_empty_layout_is_not_a_vacuous_pass(tmp_path, capsys):
+    empty_layout = ResearchProjectLayout(tmp_path / "empty-research-projects")
+    assert cli(["validate"], layout=empty_layout) == 6
+    assert _payload(capsys)["error"] == {
+        "code": "RESEARCH_PROJECT_NOT_FOUND",
+        "message": "Research projects not found",
+        "details": {"artifact": "projects"},
+    }
+
+
 def test_later_gate_not_applicable_is_success(layout, capsys):
-    assert cli(["gate", "--project", "demo", "--gate", "evidence"], layout=layout) == 0
+    assert cli(["gate", "--project", "demo", "--version", "0.1.0", "--gate", "evidence"], layout=layout) == 0
     assert _payload(capsys)["status"] == "not_applicable"
 
 
@@ -334,7 +372,7 @@ def test_gate_pass_with_warnings_is_success(layout, capsys, monkeypatch):
             (GateCheck("FIXTURE_WARNING", "warning", "Review this result."),),
         ),
     )
-    assert cli(["gate", "--project", "demo", "--gate", "design"], layout=layout) == 0
+    assert cli(["gate", "--project", "demo", "--version", "0.1.0", "--gate", "design"], layout=layout) == 0
     assert _payload(capsys)["status"] == "pass_with_warnings"
 
 
