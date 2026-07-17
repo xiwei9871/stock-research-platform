@@ -33,7 +33,7 @@ Schemas define contracts; `projects/` contains the four pilots; fixtures exercis
 
 ## Immutable Versions
 
-Each `versions/vX.Y.Z.json` is a complete snapshot. Once its manifest row exists, changing its bytes or hash is an immutability violation; create a direct child version instead. `content_hash` uses `sha256-jcs-v1`: RFC 8785/JCS canonical JSON encoded to SHA-256, with the top-level `content_hash` field excluded from its own hash input. Parentage must be explicit through `parent_version_id`.
+Each `versions/vX.Y.Z.json` is a complete snapshot. Policy prohibits any byte edit after its manifest row exists; create a direct child version instead. The loader cryptographically detects changes to canonical JSON content or its declared hash. A formatting-only byte rewrite that preserves the same canonical JSON produces the same hash and therefore is not detectable by this canonical-hash enforcement, but it remains a policy violation. `content_hash` uses `sha256-jcs-v1`: RFC 8785/JCS canonical JSON encoded to SHA-256, with the top-level `content_hash` field excluded from its own hash input. Parentage must be explicit through `parent_version_id`.
 
 ## Event Stream
 
@@ -147,7 +147,14 @@ No production migration was created or executed in R1. No database schema, migra
 
 ### Scope Attribution
 
-R1 attribution must never use a broad range such as `5548068..HEAD`, because unrelated V1 user commits were interleaved during implementation. Operator verification builds `/private/tmp/research_project_v2_changed_files.txt` from the sorted unique union of `git show --pretty='' --name-only` for each approved R1 commit plus the three Task10 paths. The scope test fails clearly when this evidence file is absent.
+R1 attribution must never use a broad range such as `5548068..HEAD`, because unrelated V1 user commits were interleaved during implementation. The scope guard contains the 26 approved full commit SHAs and directly runs `git show --pretty= --name-only <sha>` for each one. It asserts the sorted unique union has exactly 58 paths, contains required package, schema, pilot, index, documentation, and test paths, and stays inside a precise allowlist. CI therefore needs complete commit history; for GitHub Actions use `fetch-depth: 0`.
+
+`/private/tmp/research_project_v2_changed_files.txt` is optional operator evidence, not a test prerequisite. When present, its contents must exactly equal the computed sorted union; a missing file is accepted, while a stale, truncated, or forged file fails. To run the hermetic check:
+
+```bash
+/Users/xiwei/stock_research/.venv/bin/pytest \
+  tests/test_research_project_v2_scope_guard.py -q
+```
 
 ### Verification Evidence
 
