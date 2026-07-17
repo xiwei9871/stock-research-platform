@@ -1461,9 +1461,17 @@ def test_controlled_nuclear_fusion_e4_sources_claims_matrix_and_served_notes_are
     matrix_by_node = {row["node_id"]: row for row in matrix["node_evidence_matrix"]}
     assert set(matrix_by_node) == E4_NODE_IDS
     for node_id, matrix_row in matrix_by_node.items():
-        assert set(matrix_row["supported_claim_ids"]) == {
+        supported_claim_ids = {
             claim_id for claim_id, claim in claims.items()
             if node_id in claim["affected_theme_nodes"]
+        }
+        assert set(matrix_row["supported_claim_ids"]) == supported_claim_ids
+        assert set(matrix_row["accepted_source_ids"]) == {
+            source_id for claim_id in supported_claim_ids
+            for source_id in (
+                claims[claim_id]["source_id"],
+                *claims[claim_id]["supporting_source_ids"],
+            )
         }
         assert set(matrix_row["accepted_source_ids"]) <= accepted_sources
 
@@ -1477,6 +1485,39 @@ def test_controlled_nuclear_fusion_e4_reviewed_mappings_have_three_fusion_specif
     ]
     assert len(reviewed) >= 8
 
+    fusion_specific_terms = (
+        "可控核聚变",
+        "核聚变",
+        "聚变专用",
+        "聚变项目",
+        "聚变装置",
+        "聚变堆",
+        "聚变磁体",
+        "聚变机构",
+        "聚变新能",
+        "聚变大科学装置",
+        "聚变特殊气体系统",
+        "聚变用",
+        "ITER",
+        "EAST",
+        "BEST",
+        "CRAFT",
+        "HL-3",
+        "托卡马克",
+        "人造太阳",
+        "星火一号",
+    )
+    explicit_broad_boundary_terms = (
+        "未拆聚变",
+        "未单列",
+        "未披露聚变",
+        "未披露具体聚变",
+        "不能认定聚变",
+        "不等于已确认收入",
+        "宽口径",
+        "包含MRI",
+        "包含广泛",
+    )
     for row in reviewed:
         evidence = [evidence_by_id[evidence_id] for evidence_id in row["evidence_ids"]]
         assert len(evidence) == 3
@@ -1486,14 +1527,103 @@ def test_controlled_nuclear_fusion_e4_reviewed_mappings_have_three_fusion_specif
         )
         assert len({item["excerpt_locator"] for item in evidence}) == 3
         assert all("页" in item["excerpt_locator"] for item in evidence)
-        summaries = " ".join(item["evidence_summary"] for item in evidence)
+        evidence_by_role = {item["evidence_type"]: item for item in evidence}
+        relationship = evidence_by_role.get(
+            "product_relationship",
+            evidence_by_role.get("service_relationship"),
+        )
+        assert relationship is not None
         assert any(
-            term in summaries for term in ("聚变", "ITER", "托卡马克", "磁约束", "等离子体")
+            term in relationship["evidence_summary"]
+            for term in fusion_specific_terms
         )
         assert any(
-            term in summaries
-            for term in ("产品", "设备", "材料", "部件", "项目", "合同", "中标", "交付", "验收", "收入")
+            term in evidence_by_role["business_stage"]["evidence_summary"]
+            for term in (*fusion_specific_terms, *explicit_broad_boundary_terms)
         )
+        assert any(
+            term in evidence_by_role["revenue_materiality"]["evidence_summary"]
+            for term in (*fusion_specific_terms, *explicit_broad_boundary_terms)
+        )
+
+
+def test_controlled_nuclear_fusion_e4_broad_amounts_are_undisclosed_not_limited() -> None:
+    mapping = _read_json(E4_MAPPING_PATH)
+    evidence = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+    reviewed = {
+        row["company_code"]: row for row in mapping["company_mappings"]
+        if row["review_status"] == "reviewed"
+    }
+
+    assert {
+        company_code: row["revenue_relevance"]
+        for company_code, row in reviewed.items()
+    } == {company_code: "undisclosed" for company_code in reviewed}
+
+    limited_codes = {
+        company_code for company_code, row in reviewed.items()
+        if row["revenue_relevance"] == "limited"
+    }
+    directly_disclosed_fusion_revenue_codes = set()
+    negative_disclosure_terms = (
+        "未拆聚变",
+        "未单列聚变",
+        "未披露聚变",
+        "不能认定聚变",
+        "不等于已确认收入",
+    )
+    for company_code, row in reviewed.items():
+        revenue = next(
+            evidence[evidence_id] for evidence_id in row["evidence_ids"]
+            if evidence[evidence_id]["evidence_type"] == "revenue_materiality"
+        )
+        summary = revenue["evidence_summary"]
+        if (
+            any(term in summary for term in ("聚变专项收入", "聚变业务收入"))
+            and not any(term in summary for term in negative_disclosure_terms)
+        ):
+            directly_disclosed_fusion_revenue_codes.add(company_code)
+    assert limited_codes == directly_disclosed_fusion_revenue_codes
+
+    broad_amount_boundaries = {
+        "688776.SH": "核工业设备及部件收入",
+        "000969.SZ": "安泰中科",
+        "688122.SH": "超导产品收入",
+        "600363.SH": "未单列高温超导或聚变磁体收入",
+        "600105.SH": "未披露聚变专项收入",
+        "603011.SH": "合同负债",
+        "600353.SH": "公司营业收入",
+        "002639.SZ": "压缩机组收入",
+    }
+    for company_code, boundary in broad_amount_boundaries.items():
+        revenue = next(
+            evidence[evidence_id] for evidence_id in reviewed[company_code]["evidence_ids"]
+            if evidence[evidence_id]["evidence_type"] == "revenue_materiality"
+        )
+        assert boundary in revenue["evidence_summary"]
+        assert reviewed[company_code]["revenue_relevance"] == "undisclosed"
+
+
+def test_controlled_nuclear_fusion_e4_business_materiality_uses_fusion_project_evidence_only() -> None:
+    mapping = _read_json(E4_MAPPING_PATH)
+    reviewed = {
+        row["company_code"]: row for row in mapping["company_mappings"]
+        if row["review_status"] == "reviewed"
+    }
+
+    assert {
+        company_code: row["business_materiality"]
+        for company_code, row in reviewed.items()
+    } == {
+        "688776.SH": "meaningful_segment",
+        "000969.SZ": "emerging_segment",
+        "688122.SH": "meaningful_segment",
+        "600363.SH": "emerging_segment",
+        "600105.SH": "emerging_segment",
+        "603011.SH": "emerging_segment",
+        "600353.SH": "emerging_segment",
+        "002639.SZ": "emerging_segment",
+    }
 
 
 def test_controlled_nuclear_fusion_e4_preserves_strict_fission_and_stage_boundaries() -> None:
@@ -1550,7 +1680,33 @@ def test_controlled_nuclear_fusion_e4_corrected_mapping_pages_and_source_notes_a
         assert _declared_locator_set(packed[source_id]["evidence_locator"]) == expected_pages
 
 
-def test_controlled_nuclear_fusion_e4_snowman_mapping_stays_limited_adjacent_without_fusion_revenue_claim() -> None:
+def test_controlled_nuclear_fusion_e4_guoguang_uses_filing_accurate_major_research_apparatus_wording() -> None:
+    theme = _read_json(E4_THEME_PATH)
+    mapping = _read_json(E4_MAPPING_PATH)
+    source_pack = _read_json(E4_SOURCE_PACK_PATH)
+    served = list_theme_research_sources(E4_THEME_ID, read_source="artifact")
+    evidence = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+    claims = {row["claim_id"]: row for row in theme["claims"]}
+    source_sets = (
+        {row["source_id"]: row for row in theme["sources"]},
+        {row["source_id"]: row for row in mapping["sources"]},
+        {row["source_id"]: row for row in served["items"]},
+    )
+    packed = {row["source_id"]: row for row in source_pack["sources"]}
+
+    synchronized_texts = [
+        evidence["fusion_ev_688776_revenue"]["evidence_summary"],
+        claims["fusion_claim_05"]["claim_text"],
+        packed["fusion_688776_ar2025"]["evidence_summary"],
+        packed["fusion_688776_ar2025"]["notes"],
+        *(rows["fusion_688776_ar2025"]["notes"] for rows in source_sets),
+    ]
+    for text in synchronized_texts:
+        assert "ITER项目及国内重大科研装置进度" in text
+        assert "ITER及国内聚变装置进度" not in text
+
+
+def test_controlled_nuclear_fusion_e4_snowman_stays_emerging_undisclosed_adjacent_with_strict_boundaries() -> None:
     mapping = _read_json(E4_MAPPING_PATH)
     snowman = next(
         row for row in mapping["company_mappings"]
@@ -1559,8 +1715,12 @@ def test_controlled_nuclear_fusion_e4_snowman_mapping_stays_limited_adjacent_wit
     evidence = {row["evidence_id"]: row for row in mapping["evidence_items"]}
 
     assert snowman["review_status"] == "reviewed"
-    assert snowman["revenue_relevance"] == "limited"
+    assert snowman["business_materiality"] == "emerging_segment"
+    assert snowman["revenue_relevance"] == "undisclosed"
     assert snowman["bottleneck_relevance"] == "adjacent"
-    assert "未披露聚变客户合同" in snowman["relationship_summary"]
+    assert "未披露具体聚变客户、合同或交付" in evidence[
+        "fusion_ev_002639_stage"
+    ]["evidence_summary"]
     assert "未披露聚变收入" in evidence["fusion_ev_002639_revenue"]["evidence_summary"]
-    assert "不能认定聚变专项收入" in json.dumps(mapping, ensure_ascii=False)
+    assert "不能认定聚变专项收入" in snowman["relationship_summary"]
+    assert "不能认定商业聚变收入" in snowman["relationship_summary"]
