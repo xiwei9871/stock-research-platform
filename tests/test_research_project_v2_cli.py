@@ -430,9 +430,18 @@ def test_domain_error_exit_mapping_uses_code_family_not_command(layout, capsys, 
 def test_help_lists_all_r1_commands(capsys):
     assert cli(["--help"]) == 0
     output = capsys.readouterr().out
-    for command in ("list", "show", "validate", "summary", "audit-references", "diff", "gate"):
+    for command in (
+        "list",
+        "show",
+        "validate",
+        "summary",
+        "audit-references",
+        "diff",
+        "gate",
+        "rebuild-index",
+    ):
         assert command in output
-    assert "rebuild-index" not in output
+    assert "Maintainer" in output
 
 
 def test_json_keeps_chinese_and_sorts_keys(layout, capsys):

@@ -1,0 +1,12 @@
+{
+  "created_at": "2026-07-17T00:00:00Z",
+  "created_by": "Codex",
+  "current_lifecycle_state": "research_ready",
+  "current_version": "research_version:high_end_medical_device_commercialization:0.1.0",
+  "latest_published_version": null,
+  "latest_reviewed_version": null,
+  "project_id": "research_project:high_end_medical_device_commercialization",
+  "project_slug": "high_end_medical_device_commercialization",
+  "purpose": "建立可证伪的研究设计。",
+  "title": "高端医疗器械商业化研究设计"
+}

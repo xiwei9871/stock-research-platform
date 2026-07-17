@@ -1,0 +1,900 @@
+{
+  "artifact_version": "2.0.0",
+  "change_reason": "初始化V2 R1 pilot。",
+  "change_summary": "建立待验证的研究设计。",
+  "content_hash": "118f8dec8aff12870fbdfd441d29a2011e863c01d82cef4417b1000f4a546ee7",
+  "created_at": "2026-07-17T00:00:00Z",
+  "created_by": "Codex",
+  "creation_stage": "research_design",
+  "incorporated_event_ids": [],
+  "parent_version_id": null,
+  "project_id": "research_project:new_energy_storage_route_competition",
+  "semantic_version": "0.1.0",
+  "snapshot": {
+    "causal_edges": [
+      {
+        "boundary_condition": "仅在研究边界内检验。",
+        "causal_edge_id": "causal_edge:new_energy_storage_route_competition:trigger:system_parameter",
+        "confidence": 0.35,
+        "effect_polarity": "conditional",
+        "feedback_loop_id": null,
+        "from_causal_node_id": "causal_node:new_energy_storage_route_competition:trigger",
+        "lifecycle_status": "active",
+        "mechanism_text": "机制尚待规格、良率、交付和经济性数据验证。",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_route_competition:0.1.0",
+          "review_status": "pending_review"
+        },
+        "relation_type": "may_cause",
+        "strength": 0.4,
+        "supporting_claim_ids": [
+          "claim:new_energy_storage_route_competition:primary"
+        ],
+        "time_lag": "to_be_established",
+        "to_causal_node_id": "causal_node:new_energy_storage_route_competition:system_parameter",
+        "validation_metric_ids": [
+          "metric:new_energy_storage_route_competition:primary"
+        ]
+      },
+      {
+        "boundary_condition": "仅在研究边界内检验。",
+        "causal_edge_id": "causal_edge:new_energy_storage_route_competition:system_parameter:mechanism",
+        "confidence": 0.35,
+        "effect_polarity": "conditional",
+        "feedback_loop_id": null,
+        "from_causal_node_id": "causal_node:new_energy_storage_route_competition:system_parameter",
+        "lifecycle_status": "active",
+        "mechanism_text": "机制尚待规格、良率、交付和经济性数据验证。",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_route_competition:0.1.0",
+          "review_status": "pending_review"
+        },
+        "relation_type": "may_cause",
+        "strength": 0.4,
+        "supporting_claim_ids": [
+          "claim:new_energy_storage_route_competition:primary"
+        ],
+        "time_lag": "to_be_established",
+        "to_causal_node_id": "causal_node:new_energy_storage_route_competition:mechanism",
+        "validation_metric_ids": [
+          "metric:new_energy_storage_route_competition:primary"
+        ]
+      },
+      {
+        "boundary_condition": "仅在研究边界内检验。",
+        "causal_edge_id": "causal_edge:new_energy_storage_route_competition:mechanism:constraint",
+        "confidence": 0.35,
+        "effect_polarity": "conditional",
+        "feedback_loop_id": null,
+        "from_causal_node_id": "causal_node:new_energy_storage_route_competition:mechanism",
+        "lifecycle_status": "active",
+        "mechanism_text": "机制尚待规格、良率、交付和经济性数据验证。",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_route_competition:0.1.0",
+          "review_status": "pending_review"
+        },
+        "relation_type": "may_cause",
+        "strength": 0.4,
+        "supporting_claim_ids": [
+          "claim:new_energy_storage_route_competition:primary"
+        ],
+        "time_lag": "to_be_established",
+        "to_causal_node_id": "causal_node:new_energy_storage_route_competition:constraint",
+        "validation_metric_ids": [
+          "metric:new_energy_storage_route_competition:primary"
+        ]
+      },
+      {
+        "boundary_condition": "仅在研究边界内检验。",
+        "causal_edge_id": "causal_edge:new_energy_storage_route_competition:constraint:outcome",
+        "confidence": 0.35,
+        "effect_polarity": "conditional",
+        "feedback_loop_id": null,
+        "from_causal_node_id": "causal_node:new_energy_storage_route_competition:constraint",
+        "lifecycle_status": "active",
+        "mechanism_text": "机制尚待规格、良率、交付和经济性数据验证。",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_route_competition:0.1.0",
+          "review_status": "pending_review"
+        },
+        "relation_type": "may_cause",
+        "strength": 0.4,
+        "supporting_claim_ids": [
+          "claim:new_energy_storage_route_competition:primary"
+        ],
+        "time_lag": "to_be_established",
+        "to_causal_node_id": "causal_node:new_energy_storage_route_competition:outcome",
+        "validation_metric_ids": [
+          "metric:new_energy_storage_route_competition:primary"
+        ]
+      }
+    ],
+    "causal_nodes": [
+      {
+        "causal_node_id": "causal_node:new_energy_storage_route_competition:trigger",
+        "lifecycle_status": "active",
+        "node_kind": "trigger",
+        "node_text": "待验证的trigger节点",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_route_competition:0.1.0",
+          "review_status": "pending_review"
+        }
+      },
+      {
+        "causal_node_id": "causal_node:new_energy_storage_route_competition:system_parameter",
+        "lifecycle_status": "active",
+        "node_kind": "system_parameter",
+        "node_text": "待验证的system_parameter节点",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_route_competition:0.1.0",
+          "review_status": "pending_review"
+        }
+      },
+      {
+        "causal_node_id": "causal_node:new_energy_storage_route_competition:mechanism",
+        "lifecycle_status": "active",
+        "node_kind": "mechanism",
+        "node_text": "待验证的mechanism节点",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_route_competition:0.1.0",
+          "review_status": "pending_review"
+        }
+      },
+      {
+        "causal_node_id": "causal_node:new_energy_storage_route_competition:constraint",
+        "lifecycle_status": "active",
+        "node_kind": "constraint",
+        "node_text": "待验证的constraint节点",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_route_competition:0.1.0",
+          "review_status": "pending_review"
+        }
+      },
+      {
+        "causal_node_id": "causal_node:new_energy_storage_route_competition:outcome",
+        "lifecycle_status": "active",
+        "node_kind": "outcome",
+        "node_text": "待验证的outcome节点",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_route_competition:0.1.0",
+          "review_status": "pending_review"
+        }
+      }
+    ],
+    "claim_relations": [
+      {
+        "created_in_version": "research_version:new_energy_storage_route_competition:0.1.0",
+        "from_claim_id": "claim:new_energy_storage_route_competition:counter",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_route_competition:0.1.0",
+          "review_status": "pending_review"
+        },
+        "relation_id": "claim_relation:new_energy_storage_route_competition:counter",
+        "relation_summary": "替代解释挑战主假设。",
+        "relation_type": "challenges",
+        "to_claim_id": "claim:new_energy_storage_route_competition:primary"
+      }
+    ],
+    "claims": [
+      {
+        "claim_id": "claim:new_energy_storage_route_competition:primary",
+        "claim_kind": "primary",
+        "claim_status": "hypothesis",
+        "claim_text": "路线胜负可能由交付LCOS、安全、寿命、制造与系统集成及场景适配共同决定，而非单体指标，尚待验证。",
+        "confidence": 0.38,
+        "context_reference_ids": [
+          "reference:new_energy_storage_route_competition:background",
+          "reference:new_energy_storage_route_competition:scope_context"
+        ],
+        "created_in_version": "research_version:new_energy_storage_route_competition:0.1.0",
+        "epistemic_type": "hypothesis",
+        "importance": 0.95,
+        "invalidation_condition_ids": [
+          "condition:new_energy_storage_route_competition:primary"
+        ],
+        "lifecycle_status": "active",
+        "linked_question_ids": [
+          "question:new_energy_storage_route_competition:primary",
+          "question:new_energy_storage_route_competition:mechanism",
+          "question:new_energy_storage_route_competition:constraint",
+          "question:new_energy_storage_route_competition:economics",
+          "question:new_energy_storage_route_competition:company_capture",
+          "question:new_energy_storage_route_competition:validation"
+        ],
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_route_competition:0.1.0",
+          "review_status": "pending_review"
+        },
+        "supersedes_claim_id": null,
+        "validation_metric_ids": [
+          "metric:new_energy_storage_route_competition:primary"
+        ]
+      },
+      {
+        "claim_id": "claim:new_energy_storage_route_competition:counter",
+        "claim_kind": "counter",
+        "claim_status": "under_test",
+        "claim_text": "调度机制、收益规则与融资可能主导路线选择。",
+        "confidence": 0.32,
+        "context_reference_ids": [
+          "reference:new_energy_storage_route_competition:background"
+        ],
+        "created_in_version": "research_version:new_energy_storage_route_competition:0.1.0",
+        "epistemic_type": "hypothesis",
+        "importance": 0.84,
+        "invalidation_condition_ids": [],
+        "lifecycle_status": "active",
+        "linked_question_ids": [
+          "question:new_energy_storage_route_competition:counterfactual"
+        ],
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_route_competition:0.1.0",
+          "review_status": "pending_review"
+        },
+        "supersedes_claim_id": null,
+        "validation_metric_ids": []
+      }
+    ],
+    "company_capture_assessments": [],
+    "conclusion_status": "unavailable",
+    "evidence_assessments": [],
+    "evidence_requirements": [
+      {
+        "collection_status": "not_started",
+        "conflict_search_required": true,
+        "minimum_coverage": 2,
+        "primary_source_required": true,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_route_competition:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_to_resolve": "新型储能的路线竞争最终由性能、制造成本、系统经济性还是基础设施约束决定？",
+        "required_freshness": "within_24_months",
+        "required_independence": "independent",
+        "required_scope": "研究边界与反例",
+        "required_source_classes": [
+          "primary_source"
+        ],
+        "requirement_id": "requirement:new_energy_storage_route_competition:question:primary",
+        "requirement_type": "validation",
+        "satisfaction_status": "unsatisfied",
+        "target_id": "question:new_energy_storage_route_competition:primary",
+        "target_type": "research_question"
+      },
+      {
+        "collection_status": "not_started",
+        "conflict_search_required": true,
+        "minimum_coverage": 2,
+        "primary_source_required": true,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_route_competition:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_to_resolve": "关键参数如何沿价值链传导？",
+        "required_freshness": "within_24_months",
+        "required_independence": "independent",
+        "required_scope": "研究边界与反例",
+        "required_source_classes": [
+          "primary_source"
+        ],
+        "requirement_id": "requirement:new_energy_storage_route_competition:question:mechanism",
+        "requirement_type": "validation",
+        "satisfaction_status": "unsatisfied",
+        "target_id": "question:new_energy_storage_route_competition:mechanism",
+        "target_type": "research_question"
+      },
+      {
+        "collection_status": "not_started",
+        "conflict_search_required": true,
+        "minimum_coverage": 2,
+        "primary_source_required": true,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_route_competition:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_to_resolve": "哪些工程约束可能成为瓶颈？",
+        "required_freshness": "within_24_months",
+        "required_independence": "independent",
+        "required_scope": "研究边界与反例",
+        "required_source_classes": [
+          "primary_source"
+        ],
+        "requirement_id": "requirement:new_energy_storage_route_competition:question:constraint",
+        "requirement_type": "validation",
+        "satisfaction_status": "unsatisfied",
+        "target_id": "question:new_energy_storage_route_competition:constraint",
+        "target_type": "research_question"
+      },
+      {
+        "collection_status": "not_started",
+        "conflict_search_required": true,
+        "minimum_coverage": 2,
+        "primary_source_required": true,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_route_competition:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_to_resolve": "系统经济性如何影响选择？",
+        "required_freshness": "within_24_months",
+        "required_independence": "independent",
+        "required_scope": "研究边界与反例",
+        "required_source_classes": [
+          "primary_source"
+        ],
+        "requirement_id": "requirement:new_energy_storage_route_competition:question:economics",
+        "requirement_type": "validation",
+        "satisfaction_status": "unsatisfied",
+        "target_id": "question:new_energy_storage_route_competition:economics",
+        "target_type": "research_question"
+      },
+      {
+        "collection_status": "not_started",
+        "conflict_search_required": true,
+        "minimum_coverage": 2,
+        "primary_source_required": true,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_route_competition:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_to_resolve": "技术位置如何可能转化为商业价值？",
+        "required_freshness": "within_24_months",
+        "required_independence": "independent",
+        "required_scope": "研究边界与反例",
+        "required_source_classes": [
+          "primary_source"
+        ],
+        "requirement_id": "requirement:new_energy_storage_route_competition:question:company_capture",
+        "requirement_type": "validation",
+        "satisfaction_status": "unsatisfied",
+        "target_id": "question:new_energy_storage_route_competition:company_capture",
+        "target_type": "research_question"
+      },
+      {
+        "collection_status": "not_started",
+        "conflict_search_required": true,
+        "minimum_coverage": 2,
+        "primary_source_required": true,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_route_competition:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_to_resolve": "哪些替代解释会削弱主假设？",
+        "required_freshness": "within_24_months",
+        "required_independence": "independent",
+        "required_scope": "研究边界与反例",
+        "required_source_classes": [
+          "primary_source"
+        ],
+        "requirement_id": "requirement:new_energy_storage_route_competition:question:counterfactual",
+        "requirement_type": "validation",
+        "satisfaction_status": "unsatisfied",
+        "target_id": "question:new_energy_storage_route_competition:counterfactual",
+        "target_type": "research_question"
+      },
+      {
+        "collection_status": "not_started",
+        "conflict_search_required": true,
+        "minimum_coverage": 2,
+        "primary_source_required": true,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_route_competition:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_to_resolve": "哪些指标与窗口可证伪主假设？",
+        "required_freshness": "within_24_months",
+        "required_independence": "independent",
+        "required_scope": "研究边界与反例",
+        "required_source_classes": [
+          "primary_source"
+        ],
+        "requirement_id": "requirement:new_energy_storage_route_competition:question:validation",
+        "requirement_type": "validation",
+        "satisfaction_status": "unsatisfied",
+        "target_id": "question:new_energy_storage_route_competition:validation",
+        "target_type": "research_question"
+      },
+      {
+        "collection_status": "not_started",
+        "conflict_search_required": true,
+        "minimum_coverage": 2,
+        "primary_source_required": true,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_route_competition:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_to_resolve": "验证主假设及边界。",
+        "required_freshness": "within_24_months",
+        "required_independence": "independent",
+        "required_scope": "研究边界与反例",
+        "required_source_classes": [
+          "primary_source"
+        ],
+        "requirement_id": "requirement:new_energy_storage_route_competition:claim:primary",
+        "requirement_type": "validation",
+        "satisfaction_status": "unsatisfied",
+        "target_id": "claim:new_energy_storage_route_competition:primary",
+        "target_type": "research_claim"
+      }
+    ],
+    "evidence_stage": "requirements_defined",
+    "invalidation_conditions": [
+      {
+        "comparison_operator": "fails_joint_confirmation",
+        "condition_id": "condition:new_energy_storage_route_competition:primary",
+        "condition_text": "采用增长未转化为合格交付、系统经济性改善或持续价值捕获时失效。",
+        "minimum_observations": 2,
+        "observable_test": "连续观察联合指标及关键约束。",
+        "persistence_window": "连续两个周期",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_route_competition:0.1.0",
+          "review_status": "pending_review"
+        },
+        "recovery_condition": null,
+        "severity": "critical",
+        "status": "planned",
+        "target_id": "claim:new_energy_storage_route_competition:primary",
+        "target_type": "research_claim",
+        "threshold_value": "to_be_established",
+        "triggered_at": null,
+        "unit": "to_be_established"
+      }
+    ],
+    "investment_status": "not_assessed",
+    "project_lifecycle_state": "research_ready",
+    "question_tree_nodes": [
+      {
+        "branch_role": "root",
+        "dependency_question_ids": [],
+        "order": 1,
+        "parent_tree_node_id": null,
+        "question_id": "question:new_energy_storage_route_competition:primary",
+        "tree_id": "research_logic_tree:new_energy_storage_route_competition",
+        "tree_node_id": "tree_node:new_energy_storage_route_competition:primary"
+      },
+      {
+        "branch_role": "mechanism",
+        "dependency_question_ids": [
+          "question:new_energy_storage_route_competition:primary"
+        ],
+        "order": 2,
+        "parent_tree_node_id": "tree_node:new_energy_storage_route_competition:primary",
+        "question_id": "question:new_energy_storage_route_competition:mechanism",
+        "tree_id": "research_logic_tree:new_energy_storage_route_competition",
+        "tree_node_id": "tree_node:new_energy_storage_route_competition:mechanism"
+      },
+      {
+        "branch_role": "constraint",
+        "dependency_question_ids": [
+          "question:new_energy_storage_route_competition:mechanism"
+        ],
+        "order": 3,
+        "parent_tree_node_id": "tree_node:new_energy_storage_route_competition:primary",
+        "question_id": "question:new_energy_storage_route_competition:constraint",
+        "tree_id": "research_logic_tree:new_energy_storage_route_competition",
+        "tree_node_id": "tree_node:new_energy_storage_route_competition:constraint"
+      },
+      {
+        "branch_role": "economics",
+        "dependency_question_ids": [
+          "question:new_energy_storage_route_competition:mechanism",
+          "question:new_energy_storage_route_competition:constraint"
+        ],
+        "order": 4,
+        "parent_tree_node_id": "tree_node:new_energy_storage_route_competition:primary",
+        "question_id": "question:new_energy_storage_route_competition:economics",
+        "tree_id": "research_logic_tree:new_energy_storage_route_competition",
+        "tree_node_id": "tree_node:new_energy_storage_route_competition:economics"
+      },
+      {
+        "branch_role": "company_capture",
+        "dependency_question_ids": [
+          "question:new_energy_storage_route_competition:economics"
+        ],
+        "order": 5,
+        "parent_tree_node_id": "tree_node:new_energy_storage_route_competition:primary",
+        "question_id": "question:new_energy_storage_route_competition:company_capture",
+        "tree_id": "research_logic_tree:new_energy_storage_route_competition",
+        "tree_node_id": "tree_node:new_energy_storage_route_competition:company_capture"
+      },
+      {
+        "branch_role": "counterfactual",
+        "dependency_question_ids": [
+          "question:new_energy_storage_route_competition:primary",
+          "question:new_energy_storage_route_competition:constraint"
+        ],
+        "order": 6,
+        "parent_tree_node_id": "tree_node:new_energy_storage_route_competition:primary",
+        "question_id": "question:new_energy_storage_route_competition:counterfactual",
+        "tree_id": "research_logic_tree:new_energy_storage_route_competition",
+        "tree_node_id": "tree_node:new_energy_storage_route_competition:counterfactual"
+      },
+      {
+        "branch_role": "validation",
+        "dependency_question_ids": [
+          "question:new_energy_storage_route_competition:mechanism",
+          "question:new_energy_storage_route_competition:constraint",
+          "question:new_energy_storage_route_competition:economics",
+          "question:new_energy_storage_route_competition:counterfactual"
+        ],
+        "order": 7,
+        "parent_tree_node_id": "tree_node:new_energy_storage_route_competition:primary",
+        "question_id": "question:new_energy_storage_route_competition:validation",
+        "tree_id": "research_logic_tree:new_energy_storage_route_competition",
+        "tree_node_id": "tree_node:new_energy_storage_route_competition:validation"
+      }
+    ],
+    "questions": [
+      {
+        "answer_status": "unanswered",
+        "lifecycle_status": "active",
+        "linked_claim_ids": [
+          "claim:new_energy_storage_route_competition:primary"
+        ],
+        "linked_requirement_ids": [
+          "requirement:new_energy_storage_route_competition:question:primary"
+        ],
+        "priority": 1,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_route_competition:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_id": "question:new_energy_storage_route_competition:primary",
+        "question_text": "新型储能的路线竞争最终由性能、制造成本、系统经济性还是基础设施约束决定？",
+        "question_type": "primary",
+        "required_for_gate": true
+      },
+      {
+        "answer_status": "unanswered",
+        "lifecycle_status": "active",
+        "linked_claim_ids": [
+          "claim:new_energy_storage_route_competition:primary"
+        ],
+        "linked_requirement_ids": [
+          "requirement:new_energy_storage_route_competition:question:mechanism"
+        ],
+        "priority": 2,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_route_competition:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_id": "question:new_energy_storage_route_competition:mechanism",
+        "question_text": "关键参数如何沿价值链传导？",
+        "question_type": "mechanism",
+        "required_for_gate": true
+      },
+      {
+        "answer_status": "unanswered",
+        "lifecycle_status": "active",
+        "linked_claim_ids": [
+          "claim:new_energy_storage_route_competition:primary"
+        ],
+        "linked_requirement_ids": [
+          "requirement:new_energy_storage_route_competition:question:constraint"
+        ],
+        "priority": 3,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_route_competition:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_id": "question:new_energy_storage_route_competition:constraint",
+        "question_text": "哪些工程约束可能成为瓶颈？",
+        "question_type": "constraint",
+        "required_for_gate": true
+      },
+      {
+        "answer_status": "unanswered",
+        "lifecycle_status": "active",
+        "linked_claim_ids": [
+          "claim:new_energy_storage_route_competition:primary"
+        ],
+        "linked_requirement_ids": [
+          "requirement:new_energy_storage_route_competition:question:economics"
+        ],
+        "priority": 4,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_route_competition:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_id": "question:new_energy_storage_route_competition:economics",
+        "question_text": "系统经济性如何影响选择？",
+        "question_type": "economics",
+        "required_for_gate": true
+      },
+      {
+        "answer_status": "unanswered",
+        "lifecycle_status": "active",
+        "linked_claim_ids": [
+          "claim:new_energy_storage_route_competition:primary"
+        ],
+        "linked_requirement_ids": [
+          "requirement:new_energy_storage_route_competition:question:company_capture"
+        ],
+        "priority": 5,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_route_competition:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_id": "question:new_energy_storage_route_competition:company_capture",
+        "question_text": "技术位置如何可能转化为商业价值？",
+        "question_type": "company_capture",
+        "required_for_gate": true
+      },
+      {
+        "answer_status": "unanswered",
+        "lifecycle_status": "active",
+        "linked_claim_ids": [
+          "claim:new_energy_storage_route_competition:counter"
+        ],
+        "linked_requirement_ids": [
+          "requirement:new_energy_storage_route_competition:question:counterfactual"
+        ],
+        "priority": 6,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_route_competition:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_id": "question:new_energy_storage_route_competition:counterfactual",
+        "question_text": "哪些替代解释会削弱主假设？",
+        "question_type": "counterfactual",
+        "required_for_gate": true
+      },
+      {
+        "answer_status": "unanswered",
+        "lifecycle_status": "active",
+        "linked_claim_ids": [
+          "claim:new_energy_storage_route_competition:primary"
+        ],
+        "linked_requirement_ids": [
+          "requirement:new_energy_storage_route_competition:question:validation"
+        ],
+        "priority": 7,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_route_competition:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_id": "question:new_energy_storage_route_competition:validation",
+        "question_text": "哪些指标与窗口可证伪主假设？",
+        "question_type": "validation",
+        "required_for_gate": false
+      }
+    ],
+    "references": [
+      {
+        "hash_scope": "entire_object",
+        "locator": null,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_route_competition:0.1.0",
+          "review_status": "pending_review"
+        },
+        "reference_content_hash": "d43c30a76a60f18a7d335c57fb79a895de68d21bdaf21a9c0ffad4147ff37a60",
+        "reference_id": "reference:new_energy_storage_route_competition:background",
+        "reference_namespace": "theme_research_v1",
+        "reference_object_id": "new_energy_storage_value_chain_v1",
+        "reference_role": "background",
+        "reference_type": "v1_theme",
+        "reference_version": "theme_decomposition_v1_6",
+        "referenced_at": "2026-07-17T00:00:00Z",
+        "resolution_status": "resolved",
+        "scope_note": "范围与背景引用，不构成结论证据。"
+      },
+      {
+        "hash_scope": "entire_object",
+        "locator": null,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_route_competition:0.1.0",
+          "review_status": "pending_review"
+        },
+        "reference_content_hash": "23c9330f5f5414bbf13299cec88ca91e37f14ccb018a0c99a56627e985b0fdfc",
+        "reference_id": "reference:new_energy_storage_route_competition:scope_context",
+        "reference_namespace": "industry_catalog_v1",
+        "reference_object_id": "new_energy_storage",
+        "reference_role": "scope_context",
+        "reference_type": "industry_catalog_chain",
+        "reference_version": "technology_industry_catalog_v1",
+        "referenced_at": "2026-07-17T00:00:00Z",
+        "resolution_status": "resolved",
+        "scope_note": "范围与背景引用，不构成结论证据。"
+      }
+    ],
+    "router_decision": {
+      "confidence": 0.82,
+      "decided_at": "2026-07-17T00:00:00Z",
+      "decided_by": "Codex",
+      "excluded_modules": [
+        "portfolio_recommendation"
+      ],
+      "manual_override": false,
+      "override_reason": null,
+      "primary_method": "technology_route",
+      "required_research_modules": [
+        "causal_mechanism",
+        "validation",
+        "invalidation"
+      ],
+      "routing_reasons": [
+        "解释系统变化的因果传导。"
+      ],
+      "secondary_methods": [
+        "infrastructure_economics"
+      ]
+    },
+    "scope": {
+      "assumptions": [
+        "公开资料可识别关键规格和里程碑。"
+      ],
+      "company_universe_boundary": "仅定义潜在价值捕获位置，不判断公司结论。",
+      "decision_context": "为证据采集与反证检验建立研究设计。",
+      "excluded_scope": [
+        "已经形成支持性判断的资本市场结论"
+      ],
+      "geography": [
+        "中国",
+        "全球可比市场"
+      ],
+      "included_scope": [
+        "系统架构、制造工程、经济性与价值捕获链"
+      ],
+      "industry_boundary": "主题与产业目录交集内的核心系统、部件、制造、交付和服务。",
+      "known_unknowns": [
+        "规格渗透、良率、认证、有效产能和项目经济性待采集。"
+      ],
+      "primary_question": "新型储能的路线竞争最终由性能、制造成本、系统经济性还是基础设施约束决定？",
+      "research_object": "新型储能路线竞争研究设计",
+      "stop_conditions": [
+        "核心指标不可观测或命题不可证伪时停止。"
+      ],
+      "time_horizon": "2026-2030"
+    },
+    "validation_metrics": [
+      {
+        "aggregation_method": "按场景分层联合判定",
+        "baseline_as_of": null,
+        "baseline_value": null,
+        "comparison_operator": ">=",
+        "confirmation_threshold": "to_be_established",
+        "data_freshness_requirement": "quarterly",
+        "data_source_plan": "采集规格、认证、产能、交付和客户采用数据。",
+        "expected_range": "to_be_established",
+        "metric_definition": "联合跟踪采用、合格交付、良率或可用率及系统经济性。",
+        "metric_id": "metric:new_energy_storage_route_competition:primary",
+        "metric_name": "主假设联合验证指标",
+        "observation_frequency": "quarterly",
+        "observation_window": "连续两个周期",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_route_competition:0.1.0",
+          "review_status": "pending_review"
+        },
+        "status": "planned",
+        "target_id": "claim:new_energy_storage_route_competition:primary",
+        "target_type": "research_claim",
+        "unit": "to_be_established",
+        "warning_threshold": "to_be_established"
+      }
+    ]
+  },
+  "version_id": "research_version:new_energy_storage_route_competition:0.1.0"
+}

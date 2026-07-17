@@ -1,0 +1,12 @@
+{
+  "created_at": "2026-07-17T00:00:00Z",
+  "created_by": "Codex",
+  "current_lifecycle_state": "research_ready",
+  "current_version": "research_version:ai_compute_pcb_value_migration:0.1.0",
+  "latest_published_version": null,
+  "latest_reviewed_version": null,
+  "project_id": "research_project:ai_compute_pcb_value_migration",
+  "project_slug": "ai_compute_pcb_value_migration",
+  "purpose": "建立可证伪的研究设计。",
+  "title": "AI算力PCB价值迁移研究设计"
+}

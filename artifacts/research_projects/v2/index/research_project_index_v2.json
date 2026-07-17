@@ -1,0 +1,46 @@
+{
+  "artifact_version": "2.0.0",
+  "generated_at": "2026-07-17T00:00:00Z",
+  "projects": [
+    {
+      "current_lifecycle_state": "research_ready",
+      "current_version": "research_version:ai_compute_pcb_value_migration:0.1.0",
+      "latest_published_version": null,
+      "latest_reviewed_version": null,
+      "project_id": "research_project:ai_compute_pcb_value_migration",
+      "project_slug": "ai_compute_pcb_value_migration",
+      "relative_path": "projects/ai_compute_pcb_value_migration/project.json",
+      "title": "AI算力PCB价值迁移研究设计"
+    },
+    {
+      "current_lifecycle_state": "research_ready",
+      "current_version": "research_version:high_end_medical_device_commercialization:0.1.0",
+      "latest_published_version": null,
+      "latest_reviewed_version": null,
+      "project_id": "research_project:high_end_medical_device_commercialization",
+      "project_slug": "high_end_medical_device_commercialization",
+      "relative_path": "projects/high_end_medical_device_commercialization/project.json",
+      "title": "高端医疗器械商业化研究设计"
+    },
+    {
+      "current_lifecycle_state": "research_ready",
+      "current_version": "research_version:humanoid_robot_scale_up_bottlenecks:0.1.0",
+      "latest_published_version": null,
+      "latest_reviewed_version": null,
+      "project_id": "research_project:humanoid_robot_scale_up_bottlenecks",
+      "project_slug": "humanoid_robot_scale_up_bottlenecks",
+      "relative_path": "projects/humanoid_robot_scale_up_bottlenecks/project.json",
+      "title": "人形机器人量产瓶颈研究设计"
+    },
+    {
+      "current_lifecycle_state": "research_ready",
+      "current_version": "research_version:new_energy_storage_route_competition:0.1.0",
+      "latest_published_version": null,
+      "latest_reviewed_version": null,
+      "project_id": "research_project:new_energy_storage_route_competition",
+      "project_slug": "new_energy_storage_route_competition",
+      "relative_path": "projects/new_energy_storage_route_competition/project.json",
+      "title": "新型储能路线竞争研究设计"
+    }
+  ]
+}

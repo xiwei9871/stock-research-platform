@@ -1,0 +1,12 @@
+{
+  "created_at": "2026-07-17T00:00:00Z",
+  "created_by": "Codex",
+  "current_lifecycle_state": "research_ready",
+  "current_version": "research_version:humanoid_robot_scale_up_bottlenecks:0.1.0",
+  "latest_published_version": null,
+  "latest_reviewed_version": null,
+  "project_id": "research_project:humanoid_robot_scale_up_bottlenecks",
+  "project_slug": "humanoid_robot_scale_up_bottlenecks",
+  "purpose": "建立可证伪的研究设计。",
+  "title": "人形机器人量产瓶颈研究设计"
+}
