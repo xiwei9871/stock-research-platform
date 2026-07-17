@@ -414,12 +414,14 @@ Required canonical compositions:
 
 ```python
 E1_COMPOSITIONS = {
-    "satellite_capacity_service_access": {"in_orbit_infrastructure_operations"},
+    "satellite_capacity_service_access": {"satellite_service_capacity_revenue_validation"},
     "satellite_ground_access_terminal_integration": {"satellite_ground_tt_c_gateway_terminal_integration"},
     "satellite_communications_service_delivery": {"satellite_service_capacity_revenue_validation"},
     "remote_sensing_data_processing_distribution": {"communication_navigation_remote_sensing_payload_hardware"},
 }
 ```
+
+`in_orbit_infrastructure_operations` is the relevant D4 L3 narrative context, but application compositions must target canonical L4 nodes. Capacity access and communications delivery therefore both compose the L4 `satellite_service_capacity_revenue_validation` without changing D4 ownership.
 
 Primary company research universe: `601698.SH` 中国卫通, `688568.SH` 中科星图, `688066.SH` 航天宏图, `300627.SZ` 华测导航, `002151.SZ` 北斗星通, `300101.SZ` 振芯科技, `002465.SZ` 海格通信, `002405.SZ` 四维图新, `600118.SH` 中国卫星. The last company is a canonical manufacturing dependency and may be indirect or concept-only unless application-service evidence exists.
 
