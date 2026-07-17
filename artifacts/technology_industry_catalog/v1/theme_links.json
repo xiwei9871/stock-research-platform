@@ -914,6 +914,23 @@
         {"theme_node_id": "certification_orders_delivery_utilization_validation", "catalog_node_id": "certification_orders_delivery_utilization_validation"}
       ],
       "unmapped_theme_node_ids": []
+    },
+    {
+      "theme_id": "mobile_communications_5g_6g_value_chain_v1",
+      "chain_id": "mobile_communications_5g_6g",
+      "node_links": [
+        {"theme_node_id": "5g_advanced_radio_access_network", "catalog_node_id": "5g_advanced_radio_access_network"},
+        {"theme_node_id": "6g_air_interface_candidate_technologies", "catalog_node_id": "6g_air_interface_candidate_technologies"},
+        {"theme_node_id": "base_station_rf_frontend_antennas", "catalog_node_id": "base_station_rf_frontend_antennas"},
+        {"theme_node_id": "mobile_core_network_cloud_native", "catalog_node_id": "mobile_core_network_cloud_native"},
+        {"theme_node_id": "mobile_backhaul_fronthaul_timing", "catalog_node_id": "mobile_backhaul_fronthaul_timing"},
+        {"theme_node_id": "carrier_network_test_measurement", "catalog_node_id": "carrier_network_test_measurement"},
+        {"theme_node_id": "mobile_terminals_modules_private_networks", "catalog_node_id": "mobile_terminals_modules_private_networks"},
+        {"theme_node_id": "spectrum_standards_trials_deployment", "catalog_node_id": "spectrum_standards_trials_deployment"},
+        {"theme_node_id": "operator_capex_orders_revenue_validation", "catalog_node_id": "operator_capex_orders_revenue_validation"}
+      ],
+      "unmapped_theme_node_ids": [],
+      "notes": "F3 owns mobile 5G/5G-A radio, mobile core and bearer roles plus mobile-specific deployment economics. 6G research, prototypes and trials remain distinct from commercial deployment, orders and revenue; satellite, generic optics, generic RF chips, cloud-edge-network and cybersecurity keep external ownership."
     }
   ]
 }

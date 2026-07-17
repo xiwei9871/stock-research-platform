@@ -204,6 +204,26 @@ def test_cloud_data_center_chain_detail_exposes_one_to_many_reviewed_theme():
     assert payload["deep_research"]["reviewed_company_count"] == 11
 
 
+def test_mobile_communications_chain_detail_exposes_catalog_first_researching_theme():
+    response = TestClient(dashboard_app.create_app()).get(
+        f"{CATALOG_PATH}/chains/mobile_communications_5g_6g"
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["chain"]["chain_id"] == "mobile_communications_5g_6g"
+    assert {row["level"] for row in payload["nodes"]} == {"L3", "L4"}
+    assert len([row for row in payload["nodes"] if row["level"] == "L3"]) == 4
+    assert len([row for row in payload["nodes"] if row["level"] == "L4"]) == 9
+    link = payload["theme_links"][0]
+    assert link["theme_id"] == "mobile_communications_5g_6g_value_chain_v1"
+    assert len(link["node_links"]) == 9
+    assert link["unmapped_theme_node_ids"] == []
+    assert payload["deep_research"]["research_status"] == "researching"
+    assert payload["deep_research"]["source_count"] == 10
+    assert payload["deep_research"]["reviewed_company_count"] == 10
+
+
 def test_next_fifteen_catalog_theme_links_match_canonical_batch_manifest():
     catalog = load_industry_catalog()
     manifest = load_theme_batch_manifest(NEXT_FIFTEEN_MANIFEST_PATH)

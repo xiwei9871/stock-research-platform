@@ -303,6 +303,14 @@
       "relationship_type": "uses",
       "notes": "Cross-chain dependency: aircraft inverters may use SiC power devices; device ownership remains with power_semiconductors and generic chip revenue does not qualify for F2.",
       "source_ids": []
+    },
+    {
+      "edge_id": "6g_air_interface_uses_satellite_ground_access_for_ntn_validation",
+      "source_node_id": "6g_air_interface_candidate_technologies",
+      "target_node_id": "satellite_ground_access_terminal_integration",
+      "relationship_type": "uses",
+      "notes": "Eligible NTN research route only: a 6G air-interface candidate may use satellite-specific ground access and terminal integration for laboratory or field validation. Satellite ownership remains with satellite_communications_navigation_remote_sensing, and this edge does not imply 6G commercial deployment or revenue.",
+      "source_ids": []
     }
   ]
 }

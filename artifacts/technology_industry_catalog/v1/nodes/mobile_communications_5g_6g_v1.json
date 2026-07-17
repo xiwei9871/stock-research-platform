@@ -1,0 +1,250 @@
+{
+  "schema_version": "technology_industry_catalog_node_file_v1",
+  "chain_id": "mobile_communications_5g_6g",
+  "nodes": [
+    {
+      "node_id": "mobile_radio_access",
+      "chain_id": "mobile_communications_5g_6g",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Mobile Radio Access",
+      "node_kind": "canonical",
+      "node_type": "network_stage",
+      "description": "Radio access infrastructure for current 5G and 5G-Advanced commercial networks and separately identified 6G air-interface research; satellite access remains externally owned.",
+      "status": "draft",
+      "primary_path": [
+        "next_generation_information_technology",
+        "mobile_communications_5g_6g",
+        "mobile_radio_access"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "mobile_core_transport",
+      "chain_id": "mobile_communications_5g_6g",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Mobile Core and Transport",
+      "node_kind": "canonical",
+      "node_type": "network_stage",
+      "description": "Cloud-native mobile core, mobile-specific fronthaul, backhaul, bearer and timing roles; generic cloud, edge, fixed optical transport and interconnect retain their owning chains.",
+      "status": "draft",
+      "primary_path": [
+        "next_generation_information_technology",
+        "mobile_communications_5g_6g",
+        "mobile_core_transport"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "mobile_devices_test_ecosystem",
+      "chain_id": "mobile_communications_5g_6g",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Mobile Devices and Test Ecosystem",
+      "node_kind": "canonical",
+      "node_type": "ecosystem_stage",
+      "description": "Carrier test and measurement plus mobile terminals, modules and private-network systems only where the mobile-network role is explicit.",
+      "status": "draft",
+      "primary_path": [
+        "next_generation_information_technology",
+        "mobile_communications_5g_6g",
+        "mobile_devices_test_ecosystem"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "mobile_standards_deployment_economics",
+      "chain_id": "mobile_communications_5g_6g",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Mobile Standards, Deployment, and Economics",
+      "node_kind": "canonical",
+      "node_type": "validation_stage",
+      "description": "Spectrum, standards, research, trials, deployment, procurement, delivery, capital expenditure and revenue validation with lifecycle stages kept distinct.",
+      "status": "draft",
+      "primary_path": [
+        "next_generation_information_technology",
+        "mobile_communications_5g_6g",
+        "mobile_standards_deployment_economics"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "5g_advanced_radio_access_network",
+      "chain_id": "mobile_communications_5g_6g",
+      "parent_node_id": "mobile_radio_access",
+      "level": "L4",
+      "node_name": "5G-Advanced Radio Access Network",
+      "node_kind": "canonical",
+      "node_type": "network_equipment",
+      "description": "Commercial 5G and 5G-Advanced baseband, radio units, AAU, small cells and operator radio-network deployment; 6G research is excluded.",
+      "status": "draft",
+      "primary_path": [
+        "next_generation_information_technology",
+        "mobile_communications_5g_6g",
+        "mobile_radio_access",
+        "5g_advanced_radio_access_network"
+      ],
+      "canonical_key": "mobile_communications:5g_advanced_ran",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "6g_air_interface_candidate_technologies",
+      "chain_id": "mobile_communications_5g_6g",
+      "parent_node_id": "mobile_radio_access",
+      "level": "L4",
+      "node_name": "6G Air-Interface Candidate Technologies",
+      "node_kind": "canonical",
+      "node_type": "research_stage",
+      "description": "Terrestrial and NTN-related 6G candidate air-interface, sensing-communication integration, ultra-massive antenna and AI-native radio research, prototypes and trials; no commercial revenue is implied.",
+      "status": "draft",
+      "primary_path": [
+        "next_generation_information_technology",
+        "mobile_communications_5g_6g",
+        "mobile_radio_access",
+        "6g_air_interface_candidate_technologies"
+      ],
+      "canonical_key": "mobile_communications:6g_air_interface_candidates",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "base_station_rf_frontend_antennas",
+      "chain_id": "mobile_communications_5g_6g",
+      "parent_node_id": "mobile_radio_access",
+      "level": "L4",
+      "node_name": "Base-Station RF Front Ends and Antennas",
+      "node_kind": "canonical",
+      "node_type": "network_subsystem",
+      "description": "Mobile-base-station-specific antennas, filters, duplexers, power-amplifier modules and radio front-end assemblies; generic analog or RF chips remain with their semiconductor owner.",
+      "status": "draft",
+      "primary_path": [
+        "next_generation_information_technology",
+        "mobile_communications_5g_6g",
+        "mobile_radio_access",
+        "base_station_rf_frontend_antennas"
+      ],
+      "canonical_key": "mobile_communications:base_station_rf_frontend_antennas",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "mobile_core_network_cloud_native",
+      "chain_id": "mobile_communications_5g_6g",
+      "parent_node_id": "mobile_core_transport",
+      "level": "L4",
+      "node_name": "Cloud-Native Mobile Core Network",
+      "node_kind": "canonical",
+      "node_type": "network_software",
+      "description": "5G/5G-A mobile core network functions, service-based architecture, network slicing and AI-native or cloud-native mobile-core operation; generic cloud and edge platforms are excluded.",
+      "status": "draft",
+      "primary_path": [
+        "next_generation_information_technology",
+        "mobile_communications_5g_6g",
+        "mobile_core_transport",
+        "mobile_core_network_cloud_native"
+      ],
+      "canonical_key": "mobile_communications:mobile_core_cloud_native",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "mobile_backhaul_fronthaul_timing",
+      "chain_id": "mobile_communications_5g_6g",
+      "parent_node_id": "mobile_core_transport",
+      "level": "L4",
+      "node_name": "Mobile Backhaul, Fronthaul, and Timing",
+      "node_kind": "canonical",
+      "node_type": "network_equipment",
+      "description": "Mobile-network-specific fronthaul, backhaul, bearer, synchronization and timing systems; generic optical modules and data-center interconnect remain externally owned.",
+      "status": "draft",
+      "primary_path": [
+        "next_generation_information_technology",
+        "mobile_communications_5g_6g",
+        "mobile_core_transport",
+        "mobile_backhaul_fronthaul_timing"
+      ],
+      "canonical_key": "mobile_communications:mobile_backhaul_fronthaul_timing",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "carrier_network_test_measurement",
+      "chain_id": "mobile_communications_5g_6g",
+      "parent_node_id": "mobile_devices_test_ecosystem",
+      "level": "L4",
+      "node_name": "Carrier Network Test and Measurement",
+      "node_kind": "canonical",
+      "node_type": "test_validation",
+      "description": "Carrier-grade radio, core, protocol, conformance, field and interoperability test systems tied to mobile-network standards or deployment.",
+      "status": "draft",
+      "primary_path": [
+        "next_generation_information_technology",
+        "mobile_communications_5g_6g",
+        "mobile_devices_test_ecosystem",
+        "carrier_network_test_measurement"
+      ],
+      "canonical_key": "mobile_communications:carrier_network_test_measurement",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "mobile_terminals_modules_private_networks",
+      "chain_id": "mobile_communications_5g_6g",
+      "parent_node_id": "mobile_devices_test_ecosystem",
+      "level": "L4",
+      "node_name": "Mobile Terminals, Modules, and Private Networks",
+      "node_kind": "canonical",
+      "node_type": "equipment_solution",
+      "description": "Mobile terminals, communication modules, CPE and enterprise private-network systems with explicit 5G/5G-A network roles; generic IoT, cloud and edge products are excluded.",
+      "status": "draft",
+      "primary_path": [
+        "next_generation_information_technology",
+        "mobile_communications_5g_6g",
+        "mobile_devices_test_ecosystem",
+        "mobile_terminals_modules_private_networks"
+      ],
+      "canonical_key": "mobile_communications:mobile_terminals_modules_private_networks",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "spectrum_standards_trials_deployment",
+      "chain_id": "mobile_communications_5g_6g",
+      "parent_node_id": "mobile_standards_deployment_economics",
+      "level": "L4",
+      "node_name": "Spectrum, Standards, Trials, and Deployment",
+      "node_kind": "canonical",
+      "node_type": "ecosystem_validation",
+      "description": "Spectrum allocation, standards work, laboratory and field trials, and commercial-network deployment tracked as distinct lifecycle stages.",
+      "status": "draft",
+      "primary_path": [
+        "next_generation_information_technology",
+        "mobile_communications_5g_6g",
+        "mobile_standards_deployment_economics",
+        "spectrum_standards_trials_deployment"
+      ],
+      "canonical_key": "mobile_communications:spectrum_standards_trials_deployment",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "operator_capex_orders_revenue_validation",
+      "chain_id": "mobile_communications_5g_6g",
+      "parent_node_id": "mobile_standards_deployment_economics",
+      "level": "L4",
+      "node_name": "Operator Capex, Orders, and Revenue Validation",
+      "node_kind": "canonical",
+      "node_type": "commercial_validation",
+      "description": "Mobile-network-specific capital expenditure, procurement, orders, delivery and recognized revenue; operator total capex or service revenue is insufficient without a mobile-network split.",
+      "status": "draft",
+      "primary_path": [
+        "next_generation_information_technology",
+        "mobile_communications_5g_6g",
+        "mobile_standards_deployment_economics",
+        "operator_capex_orders_revenue_validation"
+      ],
+      "canonical_key": "mobile_communications:operator_capex_orders_revenue_validation",
+      "canonical_node_refs": []
+    }
+  ]
+}
+

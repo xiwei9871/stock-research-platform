@@ -1,0 +1,288 @@
+{
+  "artifact_version": "mobile_communications_5g_6g_source_pack_v1",
+  "theme_id": "mobile_communications_5g_6g_value_chain_v1",
+  "as_of_date": "2026-07-17",
+  "sources": [
+    {
+      "source_id": "f3_000063_ar2025",
+      "source_type": "company_filing",
+      "title": "中兴通讯股份有限公司2025年年度报告",
+      "publisher": "中兴通讯股份有限公司",
+      "author": "",
+      "publish_date": "2026-03-07",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-03-07/1225000301.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "PDF第15、17、25-26页",
+      "evidence_summary": "5G-A无线与核心网产品、6G承载原型样机中标和运营商网络收入。",
+      "supported_claim_ids": [
+        "f3_claim_01",
+        "f3_claim_02",
+        "f3_claim_03",
+        "f3_claim_17"
+      ],
+      "supported_node_ids": [
+        "5g_advanced_radio_access_network",
+        "operator_capex_orders_revenue_validation",
+        "6g_air_interface_candidate_technologies",
+        "mobile_backhaul_fronthaul_timing",
+        "spectrum_standards_trials_deployment",
+        "mobile_core_network_cloud_native"
+      ],
+      "limitations": "运营商网络收入未拆分5G-A；6G原型样机中标不等于商用部署、交付或收入。",
+      "notes": "PDF第15、17、25-26页；5G-A无线与核心网产品、6G承载原型样机中标、运营商网络混合口径收入。；6G原型项目不等于商用部署，运营商网络收入未拆分5G-A。"
+    },
+    {
+      "source_id": "f3_600941_ar2025",
+      "source_type": "company_filing",
+      "title": "中国移动有限公司2025年年度报告",
+      "publisher": "中国移动有限公司",
+      "author": "",
+      "publish_date": "2026-03-27",
+      "url": "https://static.sse.com.cn/disclosure/listedinfo/announcement/c/new/2026-03-27/600941_20260327_EIXS.pdf",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "PDF第12-14、17、23页",
+      "evidence_summary": "277万站5G网络、5G-A核心网智能化、6G试验装置和总资本开支。",
+      "supported_claim_ids": [
+        "f3_claim_04",
+        "f3_claim_05",
+        "f3_claim_17"
+      ],
+      "supported_node_ids": [
+        "5g_advanced_radio_access_network",
+        "mobile_core_network_cloud_native",
+        "spectrum_standards_trials_deployment",
+        "operator_capex_orders_revenue_validation",
+        "6g_air_interface_candidate_technologies",
+        "carrier_network_test_measurement"
+      ],
+      "limitations": "总资本开支和通信服务收入未拆分移动网络专项；6G试验无商业收入。",
+      "notes": "PDF第12-14、17、23页；277万站5G网络、5G-A核心网智能化、6G开放众创试验装置与总资本开支。；总资本开支和通信服务收入未拆分移动网络专项，6G试验无商业收入。"
+    },
+    {
+      "source_id": "f3_600050_ar2025",
+      "source_type": "company_filing",
+      "title": "中国联合网络通信股份有限公司2025年年度报告",
+      "publisher": "中国联合网络通信股份有限公司",
+      "author": "",
+      "publish_date": "2026-03-20",
+      "url": "https://static.sse.com.cn/disclosure/listedinfo/announcement/c/new/2026-03-20/600050_20260320_R37Q.pdf",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "PDF第10-12、21、45页",
+      "evidence_summary": "330城5G-A载波聚合、共建共享和总资本开支。",
+      "supported_claim_ids": [
+        "f3_claim_06",
+        "f3_claim_07",
+        "f3_claim_17"
+      ],
+      "supported_node_ids": [
+        "5g_advanced_radio_access_network",
+        "spectrum_standards_trials_deployment",
+        "operator_capex_orders_revenue_validation",
+        "6g_air_interface_candidate_technologies"
+      ],
+      "limitations": "总资本开支未拆分5G-A；6G布局仅属研究。",
+      "notes": "PDF第10-12、21、45页；330城5G-A载波聚合、共建共享与总资本开支。；总资本开支未拆分5G-A，6G布局仅属前沿研究。"
+    },
+    {
+      "source_id": "f3_601728_ar2025",
+      "source_type": "company_filing",
+      "title": "中国电信股份有限公司2025年年度报告",
+      "publisher": "中国电信股份有限公司",
+      "author": "",
+      "publish_date": "2026-03-25",
+      "url": "https://static.sse.com.cn/disclosure/listedinfo/announcement/c/new/2026-03-25/601728_20260325_XQQ6.pdf",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "PDF第16-20、27页",
+      "evidence_summary": "11万站5G-A载波聚合、专网产品、6G验证和网络资本开支。",
+      "supported_claim_ids": [
+        "f3_claim_08",
+        "f3_claim_09",
+        "f3_claim_17"
+      ],
+      "supported_node_ids": [
+        "5g_advanced_radio_access_network",
+        "mobile_terminals_modules_private_networks",
+        "spectrum_standards_trials_deployment",
+        "operator_capex_orders_revenue_validation",
+        "6g_air_interface_candidate_technologies",
+        "carrier_network_test_measurement"
+      ],
+      "limitations": "网络资本开支包含广义网络；移动服务收入不等于网络节点收入。",
+      "notes": "PDF第16-20、27页；11万站5G-A载波聚合、专网产品、6G验证与网络基础设施资本开支。；网络资本开支包含广义网络，未拆分5G-A专项收入或支出。"
+    },
+    {
+      "source_id": "f3_600498_ar2025",
+      "source_type": "company_filing",
+      "title": "烽火通信科技股份有限公司2025年年度报告",
+      "publisher": "烽火通信科技股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-25",
+      "url": "https://static.sse.com.cn/disclosure/listedinfo/announcement/c/new/2026-04-25/600498_20260425_18VC.pdf",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "PDF第10-12、48、129页",
+      "evidence_summary": "5G承载设备研发、研发生产基地和通信系统设备收入。",
+      "supported_claim_ids": [
+        "f3_claim_10",
+        "f3_claim_18"
+      ],
+      "supported_node_ids": [
+        "mobile_backhaul_fronthaul_timing",
+        "operator_capex_orders_revenue_validation",
+        "6g_air_interface_candidate_technologies",
+        "base_station_rf_frontend_antennas",
+        "spectrum_standards_trials_deployment"
+      ],
+      "limitations": "通信系统设备收入含广义光通信；通用光模块和卫星光通信不计入F3。",
+      "notes": "PDF第10-12、48、129页；5G承载网设备研发、研发生产基地与通信系统设备收入。；通信系统设备收入包含广义光通信和数据网络产品，未单列5G承载。"
+    },
+    {
+      "source_id": "f3_688387_ar2025",
+      "source_type": "company_filing",
+      "title": "中信科移动通信技术股份有限公司2025年年度报告",
+      "publisher": "中信科移动通信技术股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-25",
+      "url": "https://static.sse.com.cn/disclosure/listedinfo/announcement/c/new/2026-04-25/688387_20260425_C6N6.pdf",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "PDF第13-18、30页",
+      "evidence_summary": "5G-A方案、运营商5G集采、6G预研测试和系统设备收入。",
+      "supported_claim_ids": [
+        "f3_claim_11",
+        "f3_claim_12",
+        "f3_claim_17"
+      ],
+      "supported_node_ids": [
+        "5g_advanced_radio_access_network",
+        "spectrum_standards_trials_deployment",
+        "operator_capex_orders_revenue_validation",
+        "6g_air_interface_candidate_technologies",
+        "carrier_network_test_measurement"
+      ],
+      "limitations": "系统设备收入未单列5G-A；6G仅研究与测试。",
+      "notes": "PDF第13-18、30页；5G-A端到端方案、运营商5G集采、6G预研测试外场与系统设备收入。；系统设备收入未单列5G-A，6G仅研究与测试。"
+    },
+    {
+      "source_id": "f3_002792_ar2025",
+      "source_type": "company_filing",
+      "title": "广东通宇通讯股份有限公司2025年年度报告",
+      "publisher": "广东通宇通讯股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-28",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-28/1225219275.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "PDF第10、12-17页",
+      "evidence_summary": "基站天线、射频器件、运营商供货及产品收入毛利。",
+      "supported_claim_ids": [
+        "f3_claim_13"
+      ],
+      "supported_node_ids": [
+        "base_station_rf_frontend_antennas",
+        "operator_capex_orders_revenue_validation"
+      ],
+      "limitations": "5G-A专项收入未单列；卫星通信产品不计入F3。",
+      "notes": "PDF第10、12-17页；基站天线、射频器件、运营商供货与分产品收入毛利。；5G-A专项收入与订单未单列，卫星产品不纳入F3。"
+    },
+    {
+      "source_id": "f3_002446_ar2025",
+      "source_type": "company_filing",
+      "title": "广东盛路通信科技股份有限公司2025年年度报告",
+      "publisher": "广东盛路通信科技股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-28",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-28/1225214263.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "PDF第10-12、21-22、36页",
+      "evidence_summary": "运营商基站天线集采、5G-A产品迭代及产品收入毛利。",
+      "supported_claim_ids": [
+        "f3_claim_14"
+      ],
+      "supported_node_ids": [
+        "base_station_rf_frontend_antennas",
+        "operator_capex_orders_revenue_validation"
+      ],
+      "limitations": "军用微波和卫星产品不计入F3；未来迭代不等于订单。",
+      "notes": "PDF第10-12、21-22、36页；运营商基站天线集采、5G-A迭代与分产品收入毛利。；军用微波和卫星产品不纳入F3，5G-A专项收入未拆分。"
+    },
+    {
+      "source_id": "f3_688182_ar2025",
+      "source_type": "company_filing",
+      "title": "江苏灿勤科技股份有限公司2025年年度报告",
+      "publisher": "江苏灿勤科技股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-21",
+      "url": "https://static.sse.com.cn/disclosure/listedinfo/announcement/c/new/2026-04-21/688182_20260421_DNLO.pdf",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "PDF第15-19、31-33页",
+      "evidence_summary": "4G/5G/5G-A基站滤波器、批量交付和滤波器收入增长。",
+      "supported_claim_ids": [
+        "f3_claim_15",
+        "f3_claim_18"
+      ],
+      "supported_node_ids": [
+        "base_station_rf_frontend_antennas",
+        "operator_capex_orders_revenue_validation",
+        "6g_air_interface_candidate_technologies",
+        "mobile_backhaul_fronthaul_timing",
+        "spectrum_standards_trials_deployment"
+      ],
+      "limitations": "收入未拆分移动基站应用；卫星应用不计入F3，6G量产未证明。",
+      "notes": "PDF第15-19、31-33页；4G/5G/5G-A基站介质滤波器、批量交付与滤波器收入增长。；滤波器同时用于其他领域，移动基站专项收入未披露，6G量产未证明。"
+    },
+    {
+      "source_id": "f3_688375_ar2025",
+      "source_type": "company_filing",
+      "title": "南京国博电子股份有限公司2025年年度报告",
+      "publisher": "南京国博电子股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-10",
+      "url": "https://static.sse.com.cn/disclosure/listedinfo/announcement/c/new/2026-04-10/688375_20260410_FAC1.pdf",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "PDF第13、17、19、27页",
+      "evidence_summary": "4G/5G基站GaN射频模块批量供货、5G-A进展和射频模块收入。",
+      "supported_claim_ids": [
+        "f3_claim_16",
+        "f3_claim_18"
+      ],
+      "supported_node_ids": [
+        "base_station_rf_frontend_antennas",
+        "6g_air_interface_candidate_technologies",
+        "operator_capex_orders_revenue_validation",
+        "mobile_backhaul_fronthaul_timing",
+        "spectrum_standards_trials_deployment"
+      ],
+      "limitations": "泛射频芯片归F4；模块收入含混合应用，6G仍处研发。",
+      "notes": "PDF第13、17、19、27页；4G/5G基站GaN射频模块批量供货、5G-A进展与射频模块收入。；只采用移动基站特定模块证据，泛射频芯片归F4；6G仍处研发，模块收入含混合应用。"
+    }
+  ]
+}
+

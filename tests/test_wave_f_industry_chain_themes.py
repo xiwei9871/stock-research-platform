@@ -537,6 +537,185 @@ F2_CLAIM_LIFECYCLE_CONTRACTS = {
     },
 }
 
+F3_CHAIN_ID = "mobile_communications_5g_6g"
+F3_THEME_ID = "mobile_communications_5g_6g_value_chain_v1"
+F3_THEME_PATH = REPOSITORY_ROOT / f"artifacts/theme_decomposition/{F3_THEME_ID}.json"
+F3_MAPPING_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/company_mappings"
+    / "mobile_communications_5g_6g_company_mapping_v1.json"
+)
+F3_SOURCE_PACK_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "mobile_communications_5g_6g_source_pack_v1.json"
+)
+F3_MATRIX_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "mobile_communications_5g_6g_node_evidence_matrix_v1.json"
+)
+F3_L3 = {
+    "mobile_radio_access",
+    "mobile_core_transport",
+    "mobile_devices_test_ecosystem",
+    "mobile_standards_deployment_economics",
+}
+F3_L4 = {
+    "5g_advanced_radio_access_network",
+    "6g_air_interface_candidate_technologies",
+    "base_station_rf_frontend_antennas",
+    "mobile_core_network_cloud_native",
+    "mobile_backhaul_fronthaul_timing",
+    "carrier_network_test_measurement",
+    "mobile_terminals_modules_private_networks",
+    "spectrum_standards_trials_deployment",
+    "operator_capex_orders_revenue_validation",
+}
+F3_INITIAL_UNIVERSE = {
+    "000063.SZ", "600941.SH", "600050.SH", "601728.SH", "600498.SH",
+    "688387.SH", "002792.SZ", "002446.SZ", "688182.SH", "688375.SH",
+}
+F3_TYPED_DEPENDENCY_EDGES = {
+    (
+        "6g_air_interface_candidate_technologies",
+        "satellite_ground_access_terminal_integration",
+        "uses",
+    ),
+}
+F3_MAPPING_CONTRACTS = {
+    "000063.SZ": {
+        "node": "5g_advanced_radio_access_network",
+        "source": "f3_000063_ar2025",
+        "revenue_relevance": "limited",
+        "business_materiality": "core_business",
+        "locators": {
+            "product_relationship": "PDF第15页，5G-A无线接入、AAU、RRU与商用创新应用",
+            "revenue_materiality": "PDF第25-26页，运营商网络收入628.57亿元但未单列5G-A或无线产品收入",
+            "business_stage": "PDF第26页，5G-A商用部署与6G技术预研分阶段披露",
+        },
+    },
+    "600941.SH": {
+        "node": "operator_capex_orders_revenue_validation",
+        "source": "f3_600941_ar2025",
+        "revenue_relevance": "undisclosed",
+        "business_materiality": "core_business",
+        "locators": {
+            "product_relationship": "PDF第13页，5G基站超277万站与5G-A核心网智能化",
+            "revenue_materiality": "PDF第12、17页，总资本开支1509亿元未单列移动网络专项支出或收入",
+            "business_stage": "PDF第13-14、23页，5G-A网络引入与6G开放众创试验装置",
+        },
+    },
+    "600050.SH": {
+        "node": "5g_advanced_radio_access_network",
+        "source": "f3_600050_ar2025",
+        "revenue_relevance": "undisclosed",
+        "business_materiality": "core_business",
+        "locators": {
+            "product_relationship": "PDF第10、12页，全国地市点亮5G-A载波聚合且覆盖超330城",
+            "revenue_materiality": "PDF第11、21页，总资本开支541.5亿元未单列移动网络专项收入或支出",
+            "business_stage": "PDF第10-12页，5G-A规模部署与6G布局分阶段披露",
+        },
+    },
+    "601728.SH": {
+        "node": "5g_advanced_radio_access_network",
+        "source": "f3_601728_ar2025",
+        "revenue_relevance": "undisclosed",
+        "business_materiality": "core_business",
+        "locators": {
+            "product_relationship": "PDF第17、19页，300多城部署5G-A载波聚合超11万站",
+            "revenue_materiality": "PDF第27页，网络基础设施资本开支407亿元未单列移动网络收入或5G-A支出",
+            "business_stage": "PDF第16-17页，5G-A规模部署与6G关键技术验证分阶段披露",
+        },
+    },
+    "600498.SH": {
+        "node": "mobile_backhaul_fronthaul_timing",
+        "source": "f3_600498_ar2025",
+        "revenue_relevance": "limited",
+        "business_materiality": "meaningful_segment",
+        "locators": {
+            "product_relationship": "PDF第48页，5G承载网设备研发及芯片研发项目",
+            "revenue_materiality": "PDF第11-12页，通信系统设备收入186.55亿元但未单列5G承载收入",
+            "business_stage": "PDF第10、129页，5G承载应用研发生产基地即将投用并形成在建投入",
+        },
+    },
+    "688387.SH": {
+        "node": "5g_advanced_radio_access_network",
+        "source": "f3_688387_ar2025",
+        "revenue_relevance": "limited",
+        "business_materiality": "core_business",
+        "locators": {
+            "product_relationship": "PDF第16-17页，端到端5G-A方案、系统设备、天馈与室分产品",
+            "revenue_materiality": "PDF第30页，系统设备收入13.65亿元但未单列5G-A收入",
+            "business_stage": "PDF第16-18页，5G系统集采与部署、6G预研测试外场分阶段披露",
+        },
+    },
+    "002792.SZ": {
+        "node": "base_station_rf_frontend_antennas",
+        "source": "f3_002792_ar2025",
+        "revenue_relevance": "material",
+        "business_materiality": "core_business",
+        "locators": {
+            "product_relationship": "PDF第10页，移动通信基站天线、射频器件与微波天线产品线",
+            "revenue_materiality": "PDF第16-17页，基站天线收入6.12亿元及产品毛利率21.33%",
+            "business_stage": "PDF第12-13页，基站天线供货与5G-A产品演进",
+        },
+    },
+    "002446.SZ": {
+        "node": "base_station_rf_frontend_antennas",
+        "source": "f3_002446_ar2025",
+        "revenue_relevance": "material",
+        "business_materiality": "meaningful_segment",
+        "locators": {
+            "product_relationship": "PDF第10-12页，移动通信基站天线与运营商天线集采项目",
+            "revenue_materiality": "PDF第21-22页，基站天线收入2.91亿元及产品毛利率22.78%",
+            "business_stage": "PDF第12、36页，运营商集采中标与5G-A基站天线持续迭代",
+        },
+    },
+    "688182.SH": {
+        "node": "base_station_rf_frontend_antennas",
+        "source": "f3_688182_ar2025",
+        "revenue_relevance": "limited",
+        "business_materiality": "core_business",
+        "locators": {
+            "product_relationship": "PDF第15-17页，4G、5G、5G-A基站陶瓷介质滤波器",
+            "revenue_materiality": "PDF第31-33页，滤波器收入增长但未单列移动基站应用收入",
+            "business_stage": "PDF第19页，5G基站介质波导滤波器批量交付移动通信客户",
+        },
+    },
+    "688375.SH": {
+        "node": "base_station_rf_frontend_antennas",
+        "source": "f3_688375_ar2025",
+        "revenue_relevance": "limited",
+        "business_materiality": "core_business",
+        "locators": {
+            "product_relationship": "PDF第13、19页，4G、5G基站GaN射频前端模块批量供货",
+            "revenue_materiality": "PDF第27页，射频模块收入21.08亿元但未拆分移动基站应用",
+            "business_stage": "PDF第17、19页，4G/5G批量供货、5G-A崭露头角与6G研发分阶段披露",
+        },
+    },
+}
+F3_COMPANY_TRANSMISSION_GAP_CONTRACTS = {
+    "000063.SZ": ("5G-A无线接入与运营商网络", "5G-A无线专项收入、订单与毛利"),
+    "600941.SH": ("277万站5G网络与5G-A核心网", "移动网络专项CAPEX、5G-A收入与6G商业收入"),
+    "600050.SH": ("330城5G-A载波聚合", "移动网络专项CAPEX、收入与6G部署"),
+    "601728.SH": ("11万站5G-A载波聚合", "5G-A专项CAPEX、收入与6G商业部署"),
+    "600498.SH": ("5G承载网设备与研发生产基地", "5G承载专项收入、订单交付与毛利"),
+    "688387.SH": ("5G-A系统设备与运营商集采", "5G-A专项收入、订单份额与6G商业收入"),
+    "002792.SZ": ("基站天线与射频器件", "5G-A产品收入、客户集中度与持续订单"),
+    "002446.SZ": ("运营商基站天线集采", "5G-A专项收入、订单份额与海外客户结构"),
+    "688182.SH": ("5G/5G-A基站介质滤波器", "移动基站专项收入、客户结构与6G量产"),
+    "688375.SH": ("4G/5G基站GaN射频模块", "移动基站收入拆分、5G-A放量与6G量产"),
+}
+F3_CLAIM_LIFECYCLE_CONTRACTS = {
+    "f3_claim_02": (("6G承载系统原型样机", "中标", "不等于商用部署", "未披露6G收入"), ("6G商用收入已确认",)),
+    "f3_claim_05": (("6G开放众创试验装置", "试验", "不构成商用部署", "6G收入未披露"), ("6G网络已商用",)),
+    "f3_claim_07": (("布局6G", "研究", "不构成6G部署或收入"), ("6G已规模部署",)),
+    "f3_claim_09": (("关键技术验证", "阶段性成果", "不构成6G商用部署或收入"), ("6G收入已实现",)),
+    "f3_claim_12": (("21项关键技术预研", "6G测试外场", "技术测试", "不等于商用网络、订单或收入"), ("6G商业交付",)),
+    "f3_claim_16": (("6G/U6G", "研发", "未证明6G商业订单或收入"), ("6G收入21.08亿元",)),
+}
+
 REQUIRED_READABLE_SECTIONS = [
     {
         "name": "研究结论",
@@ -766,8 +945,8 @@ def test_foundation_models_f1_artifacts_are_reviewed_and_wave_is_one_of_five_rea
         "accepted_source_backed_claims": 19,
         "reviewed_mappings": 10,
     }
-    assert report["ready_theme_count"] == 2
-    assert report["not_ready_theme_count"] == 3
+    assert report["ready_theme_count"] == 3
+    assert report["not_ready_theme_count"] == 2
 
 
 def test_foundation_models_f1_full_research_profile_and_boundary_ownership() -> None:
@@ -1294,8 +1473,8 @@ def test_low_altitude_f2_artifacts_are_reviewed_and_wave_is_two_of_five_ready() 
         "accepted_source_backed_claims": 16,
         "reviewed_mappings": 9,
     }
-    assert report["ready_theme_count"] == 2
-    assert report["not_ready_theme_count"] == 3
+    assert report["ready_theme_count"] == 3
+    assert report["not_ready_theme_count"] == 2
 
 
 def test_low_altitude_f2_full_profile_and_textual_unexpanded_boundaries() -> None:
@@ -1657,3 +1836,314 @@ def test_low_altitude_f2_matrix_is_calibrated_and_company_transmission_is_specif
     assert len({row["relationship_summary"] for row in reviewed}) == 9
     assert len({row["notes"] for row in reviewed}) == 9
     assert all("仍需" in row["notes"] for row in reviewed)
+
+
+def test_mobile_communications_f3_catalog_first_structure_and_link_contract() -> None:
+    assert_catalog_first_contract(F3_CHAIN_ID, F3_THEME_ID, F3_L3, F3_L4)
+    catalog = load_industry_catalog()
+    chain_nodes = [row for row in catalog["nodes"] if row["chain_id"] == F3_CHAIN_ID]
+    by_id = {row["node_id"]: row for row in chain_nodes}
+    assert {row["node_kind"] for row in chain_nodes} == {"canonical"}
+    assert all(not row["canonical_key"] for row in chain_nodes if row["level"] == "L3")
+    l4_keys = [row["canonical_key"] for row in chain_nodes if row["level"] == "L4"]
+    assert len(l4_keys) == len(set(l4_keys)) == 9
+    assert all(key.startswith("mobile_communications:") for key in l4_keys)
+    for row in chain_nodes:
+        assert row["primary_path"][1] == F3_CHAIN_ID
+        if row["level"] == "L4":
+            assert row["parent_node_id"] in F3_L3
+            assert by_id[row["parent_node_id"]]["level"] == "L3"
+
+
+def test_mobile_communications_f3_artifacts_are_reviewed_and_wave_is_three_of_five_ready() -> None:
+    theme = load_json(F3_THEME_PATH)
+    mapping = load_json(F3_MAPPING_PATH)
+    source_pack = load_json(F3_SOURCE_PACK_PATH)
+    matrix = load_json(F3_MATRIX_PATH)
+    assert theme["artifact_version"] == "theme_decomposition_v1_6"
+    assert theme["theme"]["status"] == "reviewed"
+    assert theme["theme"]["theme_id"] == F3_THEME_ID
+    assert {row["node_id"] for row in theme["nodes"]} == F3_L4
+    assert len(source_pack["sources"]) == 10
+    assert sum(
+        row["source_type"] in {"company_filing", "official_report", "official_article"}
+        for row in source_pack["sources"]
+    ) == 10
+    assert len(theme["claims"]) == 18
+    reviewed = [
+        row for row in mapping["company_mappings"]
+        if row["review_status"] == "reviewed"
+    ]
+    assert len(reviewed) == 10
+    assert {row["company_code"] for row in reviewed} == F3_INITIAL_UNIVERSE
+    assert {row["node_id"] for row in matrix["node_evidence_matrix"]} == F3_L4
+
+    report = VERIFIER.build_theme_batch_report(MANIFEST_PATH, wave="wave_f")
+    rows = {row["chain_id"]: row for row in report["theme_results"]}
+    assert rows[F3_CHAIN_ID]["ready"] is True
+    assert rows[F3_CHAIN_ID]["counts"] == {
+        "accepted_sources": 10,
+        "primary_sources": 10,
+        "claims": 18,
+        "accepted_source_backed_claims": 18,
+        "reviewed_mappings": 10,
+    }
+    assert report["ready_theme_count"] == 3
+    assert report["not_ready_theme_count"] == 2
+
+
+def test_mobile_communications_f3_full_profile_and_boundary_ownership() -> None:
+    theme = load_json(F3_THEME_PATH)
+    profile = theme["research_profile"]
+    assert profile["catalog_chain_id"] == F3_CHAIN_ID
+    for field in (
+        "industry_stage", "central_conflict", "investment_summary",
+        "value_flow_summary", "profit_pool_summary", "validation_signals",
+        "evidence_gap_summary",
+    ):
+        assert profile[field]
+    text = json.dumps(theme, ensure_ascii=False)
+    for boundary in (
+        "当前5G与5G-A商用产品、网络、资本开支、订单及收入必须与6G研究、标准和试验分开",
+        "6G论文、专利、联盟或标准参与不构成6G收入或商业部署",
+        "卫星通信保持E1卫星通信链所有权",
+        "通用光模块与互连保持光通信链所有权",
+        "通用模拟与射频芯片保持F4所有权",
+        "通用网络、边缘、云和传统网络安全保持各自链所有权",
+        "运营商总服务收入与总资本开支未拆分移动网络时不作为节点专项收入",
+        "未来计划、研究项目和试验不等于订单、交付或收入",
+    ):
+        assert boundary in text
+
+
+def test_mobile_communications_f3_sources_claims_nodes_matrix_and_served_rows_are_synchronized() -> None:
+    theme = load_json(F3_THEME_PATH)
+    mapping = load_json(F3_MAPPING_PATH)
+    source_pack = load_json(F3_SOURCE_PACK_PATH)
+    matrix = load_json(F3_MATRIX_PATH)
+    served_sources = list_theme_research_sources(F3_THEME_ID, read_source="artifact")
+    served_claims = list_theme_research_claims(F3_THEME_ID, read_source="artifact")
+    served_nodes = list_theme_research_nodes(F3_THEME_ID, read_source="artifact")
+    identity_fields = (
+        "source_id", "source_type", "title", "publisher", "author",
+        "publish_date", "url_or_ref", "access_level", "reliability_level",
+        "review_status", "notes",
+    )
+    identity = lambda rows: {
+        row["source_id"]: tuple(
+            row.get(field, row.get("url") if field == "url_or_ref" else None)
+            for field in identity_fields
+        )
+        for row in rows
+    }
+    assert identity(theme["sources"]) == identity(mapping["sources"])
+    assert identity(theme["sources"]) == identity(source_pack["sources"])
+    assert identity(theme["sources"]) == identity(served_sources["items"])
+    served_claims_by_id = {row["claim_id"]: row for row in served_claims["items"]}
+    assert set(served_claims_by_id) == {row["claim_id"] for row in theme["claims"]}
+    for claim in theme["claims"]:
+        served = served_claims_by_id[claim["claim_id"]]
+        for key, value in claim.items():
+            if key in {"supporting_source_ids", "affected_theme_nodes"}:
+                assert set(served[key]) == set(value)
+            else:
+                assert served[key] == value
+    served_nodes_by_id = {row["node_id"]: row for row in served_nodes["items"]}
+    assert set(served_nodes_by_id) == {row["node_id"] for row in theme["nodes"]}
+    for node in theme["nodes"]:
+        served = served_nodes_by_id[node["node_id"]]
+        for key, value in node.items():
+            assert served[key] == value
+
+    claims = {row["claim_id"]: row for row in theme["claims"]}
+    accepted = {row["source_id"] for row in source_pack["sources"]}
+    claim_source_union = {
+        source_id for claim in claims.values()
+        for source_id in (claim["source_id"], *claim["supporting_source_ids"])
+    }
+    matrix_source_union = {
+        source_id for row in matrix["node_evidence_matrix"]
+        for source_id in row["accepted_source_ids"]
+    }
+    assert accepted == claim_source_union == matrix_source_union
+    for row in matrix["node_evidence_matrix"]:
+        node_claims = [
+            claim for claim in claims.values()
+            if row["node_id"] in claim["affected_theme_nodes"]
+        ]
+        expected_claim_ids = {claim["claim_id"] for claim in node_claims}
+        expected_source_ids = {
+            source_id for claim in node_claims
+            for source_id in (claim["source_id"], *claim["supporting_source_ids"])
+        }
+        assert set(row["supported_claim_ids"]) == expected_claim_ids
+        assert set(row["accepted_source_ids"]) == expected_source_ids
+    for source in source_pack["sources"]:
+        source_claims = {
+            claim["claim_id"] for claim in claims.values()
+            if source["source_id"] in (claim["source_id"], *claim["supporting_source_ids"])
+        }
+        source_nodes = {
+            node_id for claim_id in source_claims
+            for node_id in claims[claim_id]["affected_theme_nodes"]
+        }
+        assert set(source["supported_claim_ids"]) == source_claims
+        assert set(source["supported_node_ids"]) == source_nodes
+
+
+def test_mobile_communications_f3_reviewed_company_mapping_contracts_are_exact() -> None:
+    mapping = load_json(F3_MAPPING_PATH)
+    evidence = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+    reviewed = {
+        row["company_code"]: row for row in mapping["company_mappings"]
+        if row["review_status"] == "reviewed"
+    }
+    assert set(reviewed) == set(F3_MAPPING_CONTRACTS)
+    for company_code, contract in F3_MAPPING_CONTRACTS.items():
+        row = reviewed[company_code]
+        assert row["mapped_node_id"] == contract["node"]
+        assert row["revenue_relevance"] == contract["revenue_relevance"]
+        assert row["business_materiality"] == contract["business_materiality"]
+        items = [evidence[evidence_id] for evidence_id in row["evidence_ids"]]
+        assert [item["evidence_type"] for item in items] == [
+            "product_relationship", "revenue_materiality", "business_stage"
+        ]
+        assert len({item["excerpt_locator"] for item in items}) == 3
+        for item in items:
+            assert item["source_id"] == contract["source"]
+            assert item["excerpt_locator"] == contract["locators"][item["evidence_type"]]
+
+
+def test_mobile_communications_f3_company_transmission_and_gaps_are_company_specific() -> None:
+    mapping = load_json(F3_MAPPING_PATH)
+    reviewed = {
+        row["company_code"]: row for row in mapping["company_mappings"]
+        if row["review_status"] == "reviewed"
+    }
+    assert set(reviewed) == set(F3_COMPANY_TRANSMISSION_GAP_CONTRACTS)
+    assert len({row["relationship_summary"] for row in reviewed.values()}) == 10
+    assert len({row["notes"] for row in reviewed.values()}) == 10
+    for company_code, (transmission, gap) in F3_COMPANY_TRANSMISSION_GAP_CONTRACTS.items():
+        assert transmission in reviewed[company_code]["relationship_summary"]
+        assert gap in reviewed[company_code]["notes"]
+    assert reviewed["688375.SH"]["product_or_service"] == "4G/5G基站GaN射频前端模块"
+    assert "泛射频芯片" in reviewed["688375.SH"]["notes"]
+    assert reviewed["688182.SH"]["product_or_service"] == "4G/5G/5G-A基站介质滤波器"
+    assert "卫星应用" in reviewed["688182.SH"]["notes"]
+
+
+def test_mobile_communications_f3_closes_initial_universe_without_padding() -> None:
+    mapping = load_json(F3_MAPPING_PATH)
+    reviewed = {
+        row["company_code"] for row in mapping["company_mappings"]
+        if row["review_status"] == "reviewed"
+    }
+    excluded = {
+        row["company_code"] for row in mapping["excluded_initial_candidates"]
+    }
+    assert reviewed | excluded == F3_INITIAL_UNIVERSE
+    assert not reviewed & excluded
+    assert reviewed == F3_INITIAL_UNIVERSE
+    assert excluded == set()
+    assert mapping["concept_only_candidates"] == []
+    assert all(
+        row["business_materiality"] not in {"concept_only", "reserve_only"}
+        for row in mapping["company_mappings"]
+    )
+
+
+def test_mobile_communications_f3_separates_5g_advanced_and_6g_lifecycle_per_claim() -> None:
+    theme = load_json(F3_THEME_PATH)
+    claims = {row["claim_id"]: row for row in theme["claims"]}
+    for claim_id, (required, forbidden) in F3_CLAIM_LIFECYCLE_CONTRACTS.items():
+        text = claims[claim_id]["claim_text"]
+        assert all(term in text for term in required)
+        assert not any(term in text for term in forbidden)
+    all_text = json.dumps(theme, ensure_ascii=False)
+    for stage in (
+        "标准研究", "技术预研", "原型样机", "实验室验证", "测试外场",
+        "技术试验", "商用部署", "中标", "交付", "确认收入",
+    ):
+        assert stage in all_text
+    assert "5G-A商用部署" in all_text
+    assert "6G收入一律保持undisclosed" in all_text
+
+
+def test_mobile_communications_f3_rejects_satellite_generic_optics_rf_chip_security_and_operator_total_false_positives() -> None:
+    mapping = load_json(F3_MAPPING_PATH)
+    theme = load_json(F3_THEME_PATH)
+    reviewed = [
+        row for row in mapping["company_mappings"]
+        if row["review_status"] == "reviewed"
+    ]
+    evidence = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+    for row in reviewed:
+        direct = evidence[row["evidence_ids"][0]]["evidence_summary"]
+        assert any(
+            term in direct
+            for term in ("5G", "5G-A", "移动通信", "基站", "移动网络", "运营商网络")
+        )
+    policy = mapping["mapping_policy"]["typed_dependency_boundaries"]
+    assert set(policy) == {
+        "satellite_communications", "generic_optics_interconnect",
+        "generic_analog_rf_chips", "generic_network_edge_cloud",
+        "generic_cybersecurity", "standards_patents_only",
+        "future_trials_plans", "operator_total_financials",
+    }
+    assert all(
+        row["revenue_relevance"] == "undisclosed"
+        for row in reviewed
+        if row["company_code"] in {"600941.SH", "600050.SH", "601728.SH"}
+    )
+    claims_text = " ".join(row["claim_text"] for row in theme["claims"])
+    for false_positive in (
+        "卫星通信收入计入F3", "通用光模块收入计入F3", "泛射频芯片收入计入F3",
+        "网络安全收入计入F3", "运营商总收入等于移动网络收入",
+        "运营商总资本开支等于5G-A资本开支", "论文专利形成6G收入",
+        "未来试验形成当前订单", "6G试验网已经确认收入",
+    ):
+        assert false_positive not in claims_text
+
+
+def test_mobile_communications_f3_has_exact_typed_external_edges_to_existing_owner() -> None:
+    catalog = load_industry_catalog()
+    nodes = {row["node_id"]: row for row in catalog["nodes"]}
+    cross_chain_edges = {
+        (row["source_node_id"], row["target_node_id"], row["relationship_type"])
+        for row in catalog["edges"]
+        if row["source_node_id"] in F3_L4
+        and nodes[row["target_node_id"]]["chain_id"] != F3_CHAIN_ID
+    }
+    assert cross_chain_edges == F3_TYPED_DEPENDENCY_EDGES
+    assert {
+        nodes[target]["chain_id"] for _, target, _ in cross_chain_edges
+    } == {"satellite_communications_navigation_remote_sensing"}
+    assert nodes["satellite_ground_access_terminal_integration"]["level"] == "L4"
+
+
+def test_mobile_communications_f3_matrix_is_calibrated_and_keeps_6g_revenue_gap_open() -> None:
+    theme = load_json(F3_THEME_PATH)
+    matrix = load_json(F3_MATRIX_PATH)
+    rows = {row["node_id"]: row for row in matrix["node_evidence_matrix"]}
+    theme_nodes = {row["node_id"]: row for row in theme["nodes"]}
+    assert set(rows) == F3_L4
+    assert {row["evidence_strength_after"] for row in rows.values()} == {3, 4, 5}
+    assert {row["evidence_gap_status"] for row in rows.values()} == {
+        "covered", "evidence_gap"
+    }
+    assert len({row["rationale"] for row in rows.values()}) == 9
+    assert all(row["next_evidence_needed"] for row in rows.values())
+    for node_id, row in rows.items():
+        assert theme_nodes[node_id]["evidence_strength"] == row["evidence_strength_after"]
+        assert row["value_bases"]
+    six_g = rows["6g_air_interface_candidate_technologies"]
+    assert six_g["evidence_strength_after"] == 3
+    assert six_g["evidence_gap_status"] == "evidence_gap"
+    assert six_g["value_capture_score_review_status"] == "provisional"
+    assert six_g["value_bases"] == ["technology_barrier"]
+    assert "研究、原型和试验" in six_g["rationale"]
+    assert "6G商业部署、订单、交付与收入" in six_g["next_evidence_needed"]
+    operator = rows["operator_capex_orders_revenue_validation"]
+    assert operator["evidence_gap_status"] == "evidence_gap"
+    assert "总资本开支" in operator["rationale"]
+    assert "移动网络专项" in operator["next_evidence_needed"]

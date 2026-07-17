@@ -1,0 +1,776 @@
+{
+  "artifact_version": "theme_company_mapping_v1",
+  "theme_id": "mobile_communications_5g_6g_value_chain_v1",
+  "as_of_date": "2026-07-17",
+  "mapping_policy": {
+    "materiality_rule": "只用移动网络特定产品、服务、项目、部署、采购、交付或收入证据；5G/5G-A商业证据与6G研究试验分开，宽口径运营商财务、泛光通信、泛射频芯片、卫星、云边网或安全收入不得替代。",
+    "typed_dependency_boundaries": {
+      "satellite_communications": "卫星通信、导航和NTN卫星侧产品保持E1所有权；只有移动地面系统特定角色可留在F3。",
+      "generic_optics_interconnect": "通用光模块、光器件和数据中心互连保持光通信链所有权。",
+      "generic_analog_rf_chips": "通用模拟与射频芯片保持F4所有权；只有明确用于移动基站系统的模块、滤波器或天线可映射F3。",
+      "generic_network_edge_cloud": "通用网络设备、边缘平台和云平台保持各自链所有权。",
+      "generic_cybersecurity": "传统网络安全或通用安全产品不得因运营商客户进入F3。",
+      "standards_patents_only": "论文、专利、联盟和标准参与只证明研究或标准阶段，不证明6G收入或部署。",
+      "future_trials_plans": "未来计划、研发项目、实验室验证和试验不得写成当前订单、交付或收入。",
+      "operator_total_financials": "运营商总服务收入和总资本开支未拆分移动网络专项时一律为undisclosed。"
+    }
+  },
+  "sources": [
+    {
+      "source_id": "f3_000063_ar2025",
+      "source_type": "company_filing",
+      "title": "中兴通讯股份有限公司2025年年度报告",
+      "publisher": "中兴通讯股份有限公司",
+      "author": "",
+      "publish_date": "2026-03-07",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-07/1225000301.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第15、17、25-26页；5G-A无线与核心网产品、6G承载原型样机中标、运营商网络混合口径收入。；6G原型项目不等于商用部署，运营商网络收入未拆分5G-A。"
+    },
+    {
+      "source_id": "f3_600941_ar2025",
+      "source_type": "company_filing",
+      "title": "中国移动有限公司2025年年度报告",
+      "publisher": "中国移动有限公司",
+      "author": "",
+      "publish_date": "2026-03-27",
+      "url_or_ref": "https://static.sse.com.cn/disclosure/listedinfo/announcement/c/new/2026-03-27/600941_20260327_EIXS.pdf",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第12-14、17、23页；277万站5G网络、5G-A核心网智能化、6G开放众创试验装置与总资本开支。；总资本开支和通信服务收入未拆分移动网络专项，6G试验无商业收入。"
+    },
+    {
+      "source_id": "f3_600050_ar2025",
+      "source_type": "company_filing",
+      "title": "中国联合网络通信股份有限公司2025年年度报告",
+      "publisher": "中国联合网络通信股份有限公司",
+      "author": "",
+      "publish_date": "2026-03-20",
+      "url_or_ref": "https://static.sse.com.cn/disclosure/listedinfo/announcement/c/new/2026-03-20/600050_20260320_R37Q.pdf",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第10-12、21、45页；330城5G-A载波聚合、共建共享与总资本开支。；总资本开支未拆分5G-A，6G布局仅属前沿研究。"
+    },
+    {
+      "source_id": "f3_601728_ar2025",
+      "source_type": "company_filing",
+      "title": "中国电信股份有限公司2025年年度报告",
+      "publisher": "中国电信股份有限公司",
+      "author": "",
+      "publish_date": "2026-03-25",
+      "url_or_ref": "https://static.sse.com.cn/disclosure/listedinfo/announcement/c/new/2026-03-25/601728_20260325_XQQ6.pdf",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第16-20、27页；11万站5G-A载波聚合、专网产品、6G验证与网络基础设施资本开支。；网络资本开支包含广义网络，未拆分5G-A专项收入或支出。"
+    },
+    {
+      "source_id": "f3_600498_ar2025",
+      "source_type": "company_filing",
+      "title": "烽火通信科技股份有限公司2025年年度报告",
+      "publisher": "烽火通信科技股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-25",
+      "url_or_ref": "https://static.sse.com.cn/disclosure/listedinfo/announcement/c/new/2026-04-25/600498_20260425_18VC.pdf",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第10-12、48、129页；5G承载网设备研发、研发生产基地与通信系统设备收入。；通信系统设备收入包含广义光通信和数据网络产品，未单列5G承载。"
+    },
+    {
+      "source_id": "f3_688387_ar2025",
+      "source_type": "company_filing",
+      "title": "中信科移动通信技术股份有限公司2025年年度报告",
+      "publisher": "中信科移动通信技术股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-25",
+      "url_or_ref": "https://static.sse.com.cn/disclosure/listedinfo/announcement/c/new/2026-04-25/688387_20260425_C6N6.pdf",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第13-18、30页；5G-A端到端方案、运营商5G集采、6G预研测试外场与系统设备收入。；系统设备收入未单列5G-A，6G仅研究与测试。"
+    },
+    {
+      "source_id": "f3_002792_ar2025",
+      "source_type": "company_filing",
+      "title": "广东通宇通讯股份有限公司2025年年度报告",
+      "publisher": "广东通宇通讯股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-28",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-28/1225219275.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第10、12-17页；基站天线、射频器件、运营商供货与分产品收入毛利。；5G-A专项收入与订单未单列，卫星产品不纳入F3。"
+    },
+    {
+      "source_id": "f3_002446_ar2025",
+      "source_type": "company_filing",
+      "title": "广东盛路通信科技股份有限公司2025年年度报告",
+      "publisher": "广东盛路通信科技股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-28",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-28/1225214263.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第10-12、21-22、36页；运营商基站天线集采、5G-A迭代与分产品收入毛利。；军用微波和卫星产品不纳入F3，5G-A专项收入未拆分。"
+    },
+    {
+      "source_id": "f3_688182_ar2025",
+      "source_type": "company_filing",
+      "title": "江苏灿勤科技股份有限公司2025年年度报告",
+      "publisher": "江苏灿勤科技股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-21",
+      "url_or_ref": "https://static.sse.com.cn/disclosure/listedinfo/announcement/c/new/2026-04-21/688182_20260421_DNLO.pdf",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第15-19、31-33页；4G/5G/5G-A基站介质滤波器、批量交付与滤波器收入增长。；滤波器同时用于其他领域，移动基站专项收入未披露，6G量产未证明。"
+    },
+    {
+      "source_id": "f3_688375_ar2025",
+      "source_type": "company_filing",
+      "title": "南京国博电子股份有限公司2025年年度报告",
+      "publisher": "南京国博电子股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-10",
+      "url_or_ref": "https://static.sse.com.cn/disclosure/listedinfo/announcement/c/new/2026-04-10/688375_20260410_FAC1.pdf",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第13、17、19、27页；4G/5G基站GaN射频模块批量供货、5G-A进展与射频模块收入。；只采用移动基站特定模块证据，泛射频芯片归F4；6G仍处研发，模块收入含混合应用。"
+    }
+  ],
+  "evidence_items": [
+    {
+      "evidence_id": "f3_ev_000063_sz_product",
+      "source_id": "f3_000063_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "PDF第15页，5G-A无线接入、AAU、RRU与商用创新应用",
+      "evidence_summary": "5G-A移动通信无线接入、AAU与RRU由年报直接披露，属于移动网络特定RAN产品和部署。",
+      "related_company_codes": [
+        "000063.SZ"
+      ],
+      "related_node_ids": [
+        "5g_advanced_radio_access_network"
+      ]
+    },
+    {
+      "evidence_id": "f3_ev_000063_sz_materiality",
+      "source_id": "f3_000063_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "PDF第25-26页，运营商网络收入628.57亿元但未单列5G-A或无线产品收入",
+      "evidence_summary": "运营商网络收入628.57亿元包含无线接入、固网、核心网、光传输和算力网络，只有limited相关性。",
+      "related_company_codes": [
+        "000063.SZ"
+      ],
+      "related_node_ids": [
+        "5g_advanced_radio_access_network"
+      ]
+    },
+    {
+      "evidence_id": "f3_ev_000063_sz_stage",
+      "source_id": "f3_000063_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "PDF第26页，5G-A商用部署与6G技术预研分阶段披露",
+      "evidence_summary": "5G-A商用部署与6G技术预研并列但分阶段披露；原型和预研不证明6G交付收入。",
+      "related_company_codes": [
+        "000063.SZ"
+      ],
+      "related_node_ids": [
+        "5g_advanced_radio_access_network"
+      ]
+    },
+    {
+      "evidence_id": "f3_ev_600941_sh_product",
+      "source_id": "f3_600941_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "PDF第13页，5G基站超277万站与5G-A核心网智能化",
+      "evidence_summary": "超过277万站5G移动网络和5G-A核心网智能化是运营商移动系统特定部署证据。",
+      "related_company_codes": [
+        "600941.SH"
+      ],
+      "related_node_ids": [
+        "operator_capex_orders_revenue_validation"
+      ]
+    },
+    {
+      "evidence_id": "f3_ev_600941_sh_materiality",
+      "source_id": "f3_600941_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "PDF第12、17页，总资本开支1509亿元未单列移动网络专项支出或收入",
+      "evidence_summary": "总资本开支1509亿元覆盖全部基础设施，未拆分移动网络专项支出或收入，故为undisclosed。",
+      "related_company_codes": [
+        "600941.SH"
+      ],
+      "related_node_ids": [
+        "operator_capex_orders_revenue_validation"
+      ]
+    },
+    {
+      "evidence_id": "f3_ev_600941_sh_stage",
+      "source_id": "f3_600941_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "PDF第13-14、23页，5G-A网络引入与6G开放众创试验装置",
+      "evidence_summary": "5G-A已引入网络，6G开放众创试验装置仅证明研究试验能力，不证明商用部署或收入。",
+      "related_company_codes": [
+        "600941.SH"
+      ],
+      "related_node_ids": [
+        "operator_capex_orders_revenue_validation"
+      ]
+    },
+    {
+      "evidence_id": "f3_ev_600050_sh_product",
+      "source_id": "f3_600050_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "PDF第10、12页，全国地市点亮5G-A载波聚合且覆盖超330城",
+      "evidence_summary": "全国地市点亮5G-A载波聚合并覆盖超330城，是移动网络特定5G-A部署证据。",
+      "related_company_codes": [
+        "600050.SH"
+      ],
+      "related_node_ids": [
+        "5g_advanced_radio_access_network"
+      ]
+    },
+    {
+      "evidence_id": "f3_ev_600050_sh_materiality",
+      "source_id": "f3_600050_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "PDF第11、21页，总资本开支541.5亿元未单列移动网络专项收入或支出",
+      "evidence_summary": "总资本开支541.5亿元未拆分移动网络或5G-A支出和收入，故保持undisclosed。",
+      "related_company_codes": [
+        "600050.SH"
+      ],
+      "related_node_ids": [
+        "5g_advanced_radio_access_network"
+      ]
+    },
+    {
+      "evidence_id": "f3_ev_600050_sh_stage",
+      "source_id": "f3_600050_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "PDF第10-12页，5G-A规模部署与6G布局分阶段披露",
+      "evidence_summary": "5G-A为规模部署，布局6G仅是研究和标准卡位，不构成6G部署或收入。",
+      "related_company_codes": [
+        "600050.SH"
+      ],
+      "related_node_ids": [
+        "5g_advanced_radio_access_network"
+      ]
+    },
+    {
+      "evidence_id": "f3_ev_601728_sh_product",
+      "source_id": "f3_601728_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "PDF第17、19页，300多城部署5G-A载波聚合超11万站",
+      "evidence_summary": "300多城超过11万站5G-A载波聚合是移动网络特定部署证据。",
+      "related_company_codes": [
+        "601728.SH"
+      ],
+      "related_node_ids": [
+        "5g_advanced_radio_access_network"
+      ]
+    },
+    {
+      "evidence_id": "f3_ev_601728_sh_materiality",
+      "source_id": "f3_601728_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "PDF第27页，网络基础设施资本开支407亿元未单列移动网络收入或5G-A支出",
+      "evidence_summary": "网络基础设施资本开支407亿元包含广义网络，未单列移动网络收入或5G-A支出，故为undisclosed。",
+      "related_company_codes": [
+        "601728.SH"
+      ],
+      "related_node_ids": [
+        "5g_advanced_radio_access_network"
+      ]
+    },
+    {
+      "evidence_id": "f3_ev_601728_sh_stage",
+      "source_id": "f3_601728_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "PDF第16-17页，5G-A规模部署与6G关键技术验证分阶段披露",
+      "evidence_summary": "5G-A进入规模部署，6G仅关键技术验证阶段，不证明商用部署或收入。",
+      "related_company_codes": [
+        "601728.SH"
+      ],
+      "related_node_ids": [
+        "5g_advanced_radio_access_network"
+      ]
+    },
+    {
+      "evidence_id": "f3_ev_600498_sh_product",
+      "source_id": "f3_600498_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "PDF第48页，5G承载网设备研发及芯片研发项目",
+      "evidence_summary": "5G承载网设备研发项目具有明确移动网络承载角色，不是通用光模块或数据中心互连。",
+      "related_company_codes": [
+        "600498.SH"
+      ],
+      "related_node_ids": [
+        "mobile_backhaul_fronthaul_timing"
+      ]
+    },
+    {
+      "evidence_id": "f3_ev_600498_sh_materiality",
+      "source_id": "f3_600498_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "PDF第11-12页，通信系统设备收入186.55亿元但未单列5G承载收入",
+      "evidence_summary": "通信系统设备收入186.55亿元包含广义光通信和数据网络产品，5G承载收入未单列，仅limited。",
+      "related_company_codes": [
+        "600498.SH"
+      ],
+      "related_node_ids": [
+        "mobile_backhaul_fronthaul_timing"
+      ]
+    },
+    {
+      "evidence_id": "f3_ev_600498_sh_stage",
+      "source_id": "f3_600498_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "PDF第10、129页，5G承载应用研发生产基地即将投用并形成在建投入",
+      "evidence_summary": "5G承载应用研发生产基地即将投用且有在建投入，未来投用不等于当前订单、交付或收入。",
+      "related_company_codes": [
+        "600498.SH"
+      ],
+      "related_node_ids": [
+        "mobile_backhaul_fronthaul_timing"
+      ]
+    },
+    {
+      "evidence_id": "f3_ev_688387_sh_product",
+      "source_id": "f3_688387_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "PDF第16-17页，端到端5G-A方案、系统设备、天馈与室分产品",
+      "evidence_summary": "端到端5G-A移动通信方案、系统设备、天馈与室分产品由年报直接披露。",
+      "related_company_codes": [
+        "688387.SH"
+      ],
+      "related_node_ids": [
+        "5g_advanced_radio_access_network"
+      ]
+    },
+    {
+      "evidence_id": "f3_ev_688387_sh_materiality",
+      "source_id": "f3_688387_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "PDF第30页，系统设备收入13.65亿元但未单列5G-A收入",
+      "evidence_summary": "系统设备收入13.65亿元包含4G/5G等设备，未单列5G-A，仅limited相关。",
+      "related_company_codes": [
+        "688387.SH"
+      ],
+      "related_node_ids": [
+        "5g_advanced_radio_access_network"
+      ]
+    },
+    {
+      "evidence_id": "f3_ev_688387_sh_stage",
+      "source_id": "f3_688387_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "PDF第16-18页，5G系统集采与部署、6G预研测试外场分阶段披露",
+      "evidence_summary": "三大运营商5G系统集采和多地5G-A部署属于商业阶段；6G预研与测试外场不等于订单或收入。",
+      "related_company_codes": [
+        "688387.SH"
+      ],
+      "related_node_ids": [
+        "5g_advanced_radio_access_network"
+      ]
+    },
+    {
+      "evidence_id": "f3_ev_002792_sz_product",
+      "source_id": "f3_002792_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "PDF第10页，移动通信基站天线、射频器件与微波天线产品线",
+      "evidence_summary": "基站天线和射频器件明确服务移动通信运营商及设备商，属于移动基站特定前端。",
+      "related_company_codes": [
+        "002792.SZ"
+      ],
+      "related_node_ids": [
+        "base_station_rf_frontend_antennas"
+      ]
+    },
+    {
+      "evidence_id": "f3_ev_002792_sz_materiality",
+      "source_id": "f3_002792_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "PDF第16-17页，基站天线收入6.12亿元及产品毛利率21.33%",
+      "evidence_summary": "基站天线收入6.12亿元、毛利率21.33%，为节点直接产品收入。",
+      "related_company_codes": [
+        "002792.SZ"
+      ],
+      "related_node_ids": [
+        "base_station_rf_frontend_antennas"
+      ]
+    },
+    {
+      "evidence_id": "f3_ev_002792_sz_stage",
+      "source_id": "f3_002792_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "PDF第12-13页，基站天线供货与5G-A产品演进",
+      "evidence_summary": "既有基站天线供货构成商业阶段，5G-A产品演进不自动形成新增订单或收入。",
+      "related_company_codes": [
+        "002792.SZ"
+      ],
+      "related_node_ids": [
+        "base_station_rf_frontend_antennas"
+      ]
+    },
+    {
+      "evidence_id": "f3_ev_002446_sz_product",
+      "source_id": "f3_002446_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "PDF第10-12页，移动通信基站天线与运营商天线集采项目",
+      "evidence_summary": "移动通信基站天线和运营商天线集采项目具有明确移动系统角色。",
+      "related_company_codes": [
+        "002446.SZ"
+      ],
+      "related_node_ids": [
+        "base_station_rf_frontend_antennas"
+      ]
+    },
+    {
+      "evidence_id": "f3_ev_002446_sz_materiality",
+      "source_id": "f3_002446_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "PDF第21-22页，基站天线收入2.91亿元及产品毛利率22.78%",
+      "evidence_summary": "基站天线收入2.91亿元、毛利率22.78%，为节点直接产品收入。",
+      "related_company_codes": [
+        "002446.SZ"
+      ],
+      "related_node_ids": [
+        "base_station_rf_frontend_antennas"
+      ]
+    },
+    {
+      "evidence_id": "f3_ev_002446_sz_stage",
+      "source_id": "f3_002446_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "PDF第12、36页，运营商集采中标与5G-A基站天线持续迭代",
+      "evidence_summary": "运营商集采中标属于订单阶段；5G-A持续迭代是产品计划，不等于未来订单和收入。",
+      "related_company_codes": [
+        "002446.SZ"
+      ],
+      "related_node_ids": [
+        "base_station_rf_frontend_antennas"
+      ]
+    },
+    {
+      "evidence_id": "f3_ev_688182_sh_product",
+      "source_id": "f3_688182_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "PDF第15-17页，4G、5G、5G-A基站陶瓷介质滤波器",
+      "evidence_summary": "陶瓷介质滤波器明确适用于4G、5G和5G-A移动通信基站，属于基站特定射频前端。",
+      "related_company_codes": [
+        "688182.SH"
+      ],
+      "related_node_ids": [
+        "base_station_rf_frontend_antennas"
+      ]
+    },
+    {
+      "evidence_id": "f3_ev_688182_sh_materiality",
+      "source_id": "f3_688182_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "PDF第31-33页，滤波器收入增长但未单列移动基站应用收入",
+      "evidence_summary": "滤波器收入增长但产品也用于其他领域，未拆分移动基站应用，故为limited。",
+      "related_company_codes": [
+        "688182.SH"
+      ],
+      "related_node_ids": [
+        "base_station_rf_frontend_antennas"
+      ]
+    },
+    {
+      "evidence_id": "f3_ev_688182_sh_stage",
+      "source_id": "f3_688182_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "PDF第19页，5G基站介质波导滤波器批量交付移动通信客户",
+      "evidence_summary": "5G基站介质波导滤波器已批量交付移动通信客户；6G兼容性或卫星应用不证明6G量产收入。",
+      "related_company_codes": [
+        "688182.SH"
+      ],
+      "related_node_ids": [
+        "base_station_rf_frontend_antennas"
+      ]
+    },
+    {
+      "evidence_id": "f3_ev_688375_sh_product",
+      "source_id": "f3_688375_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "PDF第13、19页，4G、5G基站GaN射频前端模块批量供货",
+      "evidence_summary": "GaN射频模块明确用于4G、5G移动通信基站射频前端并批量供货；不是以泛射频芯片身份映射。",
+      "related_company_codes": [
+        "688375.SH"
+      ],
+      "related_node_ids": [
+        "base_station_rf_frontend_antennas"
+      ]
+    },
+    {
+      "evidence_id": "f3_ev_688375_sh_materiality",
+      "source_id": "f3_688375_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "PDF第27页，射频模块收入21.08亿元但未拆分移动基站应用",
+      "evidence_summary": "射频模块收入21.08亿元包含移动基站、雷达等混合应用，未拆分移动基站，故为limited。",
+      "related_company_codes": [
+        "688375.SH"
+      ],
+      "related_node_ids": [
+        "base_station_rf_frontend_antennas"
+      ]
+    },
+    {
+      "evidence_id": "f3_ev_688375_sh_stage",
+      "source_id": "f3_688375_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "PDF第17、19页，4G/5G批量供货、5G-A崭露头角与6G研发分阶段披露",
+      "evidence_summary": "4G/5G已批量供货、5G-A处应用拓展；6G/U6G仅研发与布局，未证明商业订单或收入。",
+      "related_company_codes": [
+        "688375.SH"
+      ],
+      "related_node_ids": [
+        "base_station_rf_frontend_antennas"
+      ]
+    }
+  ],
+  "company_mappings": [
+    {
+      "mapping_id": "f3_map_000063_sz_v1",
+      "theme_id": "mobile_communications_5g_6g_value_chain_v1",
+      "company_code": "000063.SZ",
+      "company_name": "中兴通讯",
+      "market": "CN",
+      "mapped_node_id": "5g_advanced_radio_access_network",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.9,
+      "evidence_ids": [
+        "f3_ev_000063_sz_product",
+        "f3_ev_000063_sz_materiality",
+        "f3_ev_000063_sz_stage"
+      ],
+      "revenue_relevance": "limited",
+      "bottleneck_relevance": "core",
+      "business_materiality": "core_business",
+      "product_or_service": "5G-A无线接入网设备与方案",
+      "relationship_summary": "5G-A无线接入与运营商网络形成产品部署和收入传导，但运营商网络口径混合无线、固网、核心网与承载。",
+      "review_status": "reviewed",
+      "notes": "仍需5G-A无线专项收入、订单与毛利；6G原型样机不得计作商用收入。"
+    },
+    {
+      "mapping_id": "f3_map_600941_sh_v1",
+      "theme_id": "mobile_communications_5g_6g_value_chain_v1",
+      "company_code": "600941.SH",
+      "company_name": "中国移动",
+      "market": "CN",
+      "mapped_node_id": "operator_capex_orders_revenue_validation",
+      "mapping_type": "downstream_customer",
+      "business_stage": "primary_business",
+      "confidence": 0.9,
+      "evidence_ids": [
+        "f3_ev_600941_sh_product",
+        "f3_ev_600941_sh_materiality",
+        "f3_ev_600941_sh_stage"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "core_business",
+      "product_or_service": "运营商5G/5G-A网络建设与运营",
+      "relationship_summary": "277万站5G网络与5G-A核心网构成运营商部署传导，6G仅有开放试验装置。",
+      "review_status": "reviewed",
+      "notes": "仍需移动网络专项CAPEX、5G-A收入与6G商业收入；总服务收入和总CAPEX不得替代。"
+    },
+    {
+      "mapping_id": "f3_map_600050_sh_v1",
+      "theme_id": "mobile_communications_5g_6g_value_chain_v1",
+      "company_code": "600050.SH",
+      "company_name": "中国联通",
+      "market": "CN",
+      "mapped_node_id": "5g_advanced_radio_access_network",
+      "mapping_type": "downstream_customer",
+      "business_stage": "primary_business",
+      "confidence": 0.9,
+      "evidence_ids": [
+        "f3_ev_600050_sh_product",
+        "f3_ev_600050_sh_materiality",
+        "f3_ev_600050_sh_stage"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "core_business",
+      "product_or_service": "5G-A载波聚合网络部署",
+      "relationship_summary": "330城5G-A载波聚合把网络能力传导至移动用户与场景，但总资本开支无法归因到5G-A。",
+      "review_status": "reviewed",
+      "notes": "仍需移动网络专项CAPEX、收入与6G部署；共建共享站点不能推导6G商业化。"
+    },
+    {
+      "mapping_id": "f3_map_601728_sh_v1",
+      "theme_id": "mobile_communications_5g_6g_value_chain_v1",
+      "company_code": "601728.SH",
+      "company_name": "中国电信",
+      "market": "CN",
+      "mapped_node_id": "5g_advanced_radio_access_network",
+      "mapping_type": "downstream_customer",
+      "business_stage": "primary_business",
+      "confidence": 0.9,
+      "evidence_ids": [
+        "f3_ev_601728_sh_product",
+        "f3_ev_601728_sh_materiality",
+        "f3_ev_601728_sh_stage"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "core_business",
+      "product_or_service": "5G-A载波聚合与移动专网",
+      "relationship_summary": "11万站5G-A载波聚合和端到端专网产品形成网络部署传导，网络CAPEX仍为混合口径。",
+      "review_status": "reviewed",
+      "notes": "仍需5G-A专项CAPEX、收入与6G商业部署；移动服务收入不等于网络节点收入。"
+    },
+    {
+      "mapping_id": "f3_map_600498_sh_v1",
+      "theme_id": "mobile_communications_5g_6g_value_chain_v1",
+      "company_code": "600498.SH",
+      "company_name": "烽火通信",
+      "market": "CN",
+      "mapped_node_id": "mobile_backhaul_fronthaul_timing",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.9,
+      "evidence_ids": [
+        "f3_ev_600498_sh_product",
+        "f3_ev_600498_sh_materiality",
+        "f3_ev_600498_sh_stage"
+      ],
+      "revenue_relevance": "limited",
+      "bottleneck_relevance": "core",
+      "business_materiality": "meaningful_segment",
+      "product_or_service": "5G承载网设备与研发生产基地",
+      "relationship_summary": "5G承载网设备与研发生产基地连接移动基站和核心网，但通信系统设备收入包含广义光通信。",
+      "review_status": "reviewed",
+      "notes": "仍需5G承载专项收入、订单交付与毛利；通用光模块、光互连和卫星光通信不进入F3。"
+    },
+    {
+      "mapping_id": "f3_map_688387_sh_v1",
+      "theme_id": "mobile_communications_5g_6g_value_chain_v1",
+      "company_code": "688387.SH",
+      "company_name": "信科移动",
+      "market": "CN",
+      "mapped_node_id": "5g_advanced_radio_access_network",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.9,
+      "evidence_ids": [
+        "f3_ev_688387_sh_product",
+        "f3_ev_688387_sh_materiality",
+        "f3_ev_688387_sh_stage"
+      ],
+      "revenue_relevance": "limited",
+      "bottleneck_relevance": "core",
+      "business_materiality": "core_business",
+      "product_or_service": "5G/5G-A移动通信系统设备",
+      "relationship_summary": "5G-A系统设备与运营商集采形成设备到部署传导，系统设备收入仍未拆分5G-A。",
+      "review_status": "reviewed",
+      "notes": "仍需5G-A专项收入、订单份额与6G商业收入；6G测试外场仅属试验。"
+    },
+    {
+      "mapping_id": "f3_map_002792_sz_v1",
+      "theme_id": "mobile_communications_5g_6g_value_chain_v1",
+      "company_code": "002792.SZ",
+      "company_name": "通宇通讯",
+      "market": "CN",
+      "mapped_node_id": "base_station_rf_frontend_antennas",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.9,
+      "evidence_ids": [
+        "f3_ev_002792_sz_product",
+        "f3_ev_002792_sz_materiality",
+        "f3_ev_002792_sz_stage"
+      ],
+      "revenue_relevance": "material",
+      "bottleneck_relevance": "core",
+      "business_materiality": "core_business",
+      "product_or_service": "移动通信基站天线与射频器件",
+      "relationship_summary": "基站天线与射频器件通过运营商和设备商供货进入移动网络，产品收入与毛利可直接核验。",
+      "review_status": "reviewed",
+      "notes": "仍需5G-A产品收入、客户集中度与持续订单；卫星天线产品保持E1边界。"
+    },
+    {
+      "mapping_id": "f3_map_002446_sz_v1",
+      "theme_id": "mobile_communications_5g_6g_value_chain_v1",
+      "company_code": "002446.SZ",
+      "company_name": "盛路通信",
+      "market": "CN",
+      "mapped_node_id": "base_station_rf_frontend_antennas",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.9,
+      "evidence_ids": [
+        "f3_ev_002446_sz_product",
+        "f3_ev_002446_sz_materiality",
+        "f3_ev_002446_sz_stage"
+      ],
+      "revenue_relevance": "material",
+      "bottleneck_relevance": "core",
+      "business_materiality": "meaningful_segment",
+      "product_or_service": "运营商移动通信基站天线",
+      "relationship_summary": "运营商基站天线集采把产品传导至移动网络，分产品收入和毛利形成商业验证。",
+      "review_status": "reviewed",
+      "notes": "仍需5G-A专项收入、订单份额与海外客户结构；军用微波和卫星产品不进入F3。"
+    },
+    {
+      "mapping_id": "f3_map_688182_sh_v1",
+      "theme_id": "mobile_communications_5g_6g_value_chain_v1",
+      "company_code": "688182.SH",
+      "company_name": "灿勤科技",
+      "market": "CN",
+      "mapped_node_id": "base_station_rf_frontend_antennas",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.9,
+      "evidence_ids": [
+        "f3_ev_688182_sh_product",
+        "f3_ev_688182_sh_materiality",
+        "f3_ev_688182_sh_stage"
+      ],
+      "revenue_relevance": "limited",
+      "bottleneck_relevance": "core",
+      "business_materiality": "core_business",
+      "product_or_service": "4G/5G/5G-A基站介质滤波器",
+      "relationship_summary": "5G/5G-A基站介质滤波器通过主设备商进入基站射频前端，批量交付证明产品阶段。",
+      "review_status": "reviewed",
+      "notes": "仍需移动基站专项收入、客户结构与6G量产；卫星应用收入不得并入F3。"
+    },
+    {
+      "mapping_id": "f3_map_688375_sh_v1",
+      "theme_id": "mobile_communications_5g_6g_value_chain_v1",
+      "company_code": "688375.SH",
+      "company_name": "国博电子",
+      "market": "CN",
+      "mapped_node_id": "base_station_rf_frontend_antennas",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.9,
+      "evidence_ids": [
+        "f3_ev_688375_sh_product",
+        "f3_ev_688375_sh_materiality",
+        "f3_ev_688375_sh_stage"
+      ],
+      "revenue_relevance": "limited",
+      "bottleneck_relevance": "core",
+      "business_materiality": "core_business",
+      "product_or_service": "4G/5G基站GaN射频前端模块",
+      "relationship_summary": "4G/5G基站GaN射频模块通过主设备商批量供货进入基站射频前端，5G-A处早期放量。",
+      "review_status": "reviewed",
+      "notes": "仍需移动基站收入拆分、5G-A放量与6G量产；泛射频芯片归F4，卫星和雷达模块不并入F3。"
+    }
+  ],
+  "excluded_initial_candidates": [],
+  "concept_only_candidates": []
+}
