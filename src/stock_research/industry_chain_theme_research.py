@@ -46,11 +46,29 @@ WAVE_E_CHAIN_THEMES = {
     "quantum_computing_communication_measurement": "quantum_computing_communication_measurement_value_chain_v1",
 }
 
+WAVE_F_CHAIN_THEMES = {
+    "ai_foundation_models_application_software": "ai_foundation_models_application_software_value_chain_v1",
+    "uav_evtol_low_altitude_economy": "uav_evtol_low_altitude_economy_value_chain_v1",
+    "mobile_communications_5g_6g": "mobile_communications_5g_6g_value_chain_v1",
+    "analog_mixed_signal_rf_chips": "analog_mixed_signal_rf_chips_value_chain_v1",
+    "rare_earth_permanent_magnets_critical_minerals": "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
+}
+
+WAVE_G_CHAIN_THEMES = {
+    "mems_intelligent_sensors": "mems_intelligent_sensors_value_chain_v1",
+    "wafer_manufacturing_specialty_processes": "wafer_manufacturing_specialty_processes_value_chain_v1",
+    "civil_aircraft_aero_engines": "civil_aircraft_aero_engines_value_chain_v1",
+    "nuclear_power_equipment": "nuclear_power_equipment_value_chain_v1",
+    "scientific_instruments": "scientific_instruments_value_chain_v1",
+}
+
 SELECTED_CHAIN_THEMES = {
     **COMPLETED_CHAIN_THEMES,
     **NEXT_FIFTEEN_CHAIN_THEMES,
     **WAVE_D_CHAIN_THEMES,
     **WAVE_E_CHAIN_THEMES,
+    **WAVE_F_CHAIN_THEMES,
+    **WAVE_G_CHAIN_THEMES,
 }
 
 BENEFICIARY_TIERS = {

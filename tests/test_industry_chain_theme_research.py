@@ -6,6 +6,8 @@ from stock_research.industry_chain_theme_research import (
     SELECTED_CHAIN_THEMES,
     WAVE_D_CHAIN_THEMES,
     WAVE_E_CHAIN_THEMES,
+    WAVE_F_CHAIN_THEMES,
+    WAVE_G_CHAIN_THEMES,
     build_chain_research_summary,
     classify_beneficiary,
     list_selected_chain_research,
@@ -45,6 +47,8 @@ def test_selected_chain_registry_is_frozen():
         **NEXT_FIFTEEN_CHAIN_THEMES,
         **WAVE_D_CHAIN_THEMES,
         **WAVE_E_CHAIN_THEMES,
+        **WAVE_F_CHAIN_THEMES,
+        **WAVE_G_CHAIN_THEMES,
     }
 
 
@@ -68,7 +72,41 @@ def test_wave_e_chain_registry_and_program_counts_are_frozen():
     }
     assert len(NEXT_FIFTEEN_CHAIN_THEMES) + len(WAVE_D_CHAIN_THEMES) == 20
     assert len(WAVE_E_CHAIN_THEMES) == 5
-    assert len(SELECTED_CHAIN_THEMES) == 30
+    assert len(SELECTED_CHAIN_THEMES) == 40
+
+
+def test_wave_f_g_chain_registries_and_program_counts_are_frozen():
+    assert WAVE_F_CHAIN_THEMES == {
+        "ai_foundation_models_application_software": "ai_foundation_models_application_software_value_chain_v1",
+        "uav_evtol_low_altitude_economy": "uav_evtol_low_altitude_economy_value_chain_v1",
+        "mobile_communications_5g_6g": "mobile_communications_5g_6g_value_chain_v1",
+        "analog_mixed_signal_rf_chips": "analog_mixed_signal_rf_chips_value_chain_v1",
+        "rare_earth_permanent_magnets_critical_minerals": "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
+    }
+    assert WAVE_G_CHAIN_THEMES == {
+        "mems_intelligent_sensors": "mems_intelligent_sensors_value_chain_v1",
+        "wafer_manufacturing_specialty_processes": "wafer_manufacturing_specialty_processes_value_chain_v1",
+        "civil_aircraft_aero_engines": "civil_aircraft_aero_engines_value_chain_v1",
+        "nuclear_power_equipment": "nuclear_power_equipment_value_chain_v1",
+        "scientific_instruments": "scientific_instruments_value_chain_v1",
+    }
+    assert "synthetic_biology_biomanufacturing" not in WAVE_G_CHAIN_THEMES
+    assert len(WAVE_F_CHAIN_THEMES) == 5
+    assert len(WAVE_G_CHAIN_THEMES) == 5
+    assert len(SELECTED_CHAIN_THEMES) == 40
+
+
+def test_wave_f_g_use_only_existing_canonical_industry_chains():
+    catalog = load_industry_catalog()
+    chains_by_id = {row["chain_id"]: row for row in catalog["chains"]}
+    wave_f_g_chain_ids = set(WAVE_F_CHAIN_THEMES) | set(WAVE_G_CHAIN_THEMES)
+
+    assert len(catalog["chains"]) == 82
+    assert len(wave_f_g_chain_ids) == 10
+    assert wave_f_g_chain_ids <= set(chains_by_id)
+    assert {
+        chains_by_id[chain_id]["chain_kind"] for chain_id in wave_f_g_chain_ids
+    } == {"canonical_industry_chain"}
 
 
 def test_wave_e_uses_only_existing_application_or_frontier_chains():
@@ -134,7 +172,7 @@ def test_selected_chain_summaries_report_existing_and_missing_theme_packages():
     by_chain = {row["chain_id"]: row for row in expanded_rows}
 
     assert len(rows) == 5
-    assert len(expanded_rows) == 30
+    assert len(expanded_rows) == 40
     assert by_chain["ai_data_center_power"]["theme_id"] == "ai_power_value_capture_v1"
     assert by_chain["ai_data_center_power"]["research_status"] == "reviewed"
     assert by_chain["humanoid_robots_embodied_intelligence"]["research_status"] == "reviewed"
