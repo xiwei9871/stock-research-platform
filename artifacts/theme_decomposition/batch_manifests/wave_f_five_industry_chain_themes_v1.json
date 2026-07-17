@@ -1,0 +1,126 @@
+{
+  "schema_version": "industry_chain_theme_batch_v1",
+  "batch_id": "wave_f_five_industry_chain_themes_v1",
+  "target_theme_count": 5,
+  "artifact_base": "../../..",
+  "primary_source_types": [
+    "company_filing",
+    "official_report",
+    "official_article"
+  ],
+  "completion_gates": {
+    "min_accepted_sources": 10,
+    "min_primary_sources": 8,
+    "min_claims": 12,
+    "min_reviewed_mappings": 8,
+    "require_node_evidence_matrix_coverage": true,
+    "require_bidirectional_evidence_contract": true,
+    "require_precise_mapping_locators": true,
+    "required_readable_sections": [
+      {
+        "name": "研究结论",
+        "non_empty": [
+          "theme:research_profile.investment_summary",
+          "theme:research_profile.industry_stage",
+          "theme:research_profile.central_conflict"
+        ]
+      },
+      {
+        "name": "价值链",
+        "non_empty": [
+          "theme:research_profile.value_flow_summary",
+          "theme:nodes"
+        ]
+      },
+      {
+        "name": "利润池与竞争壁垒",
+        "non_empty": [
+          "theme:research_profile.profit_pool_summary"
+        ]
+      },
+      {
+        "name": "催化、验证信号与风险",
+        "non_empty": [
+          "theme:research_profile.catalyst_claim_ids",
+          "theme:research_profile.risk_claim_ids",
+          "theme:research_profile.validation_signals"
+        ]
+      },
+      {
+        "name": "受益公司",
+        "non_empty": [
+          "company_mapping:company_mappings"
+        ]
+      },
+      {
+        "name": "来源证据",
+        "non_empty": [
+          "source_pack:sources"
+        ]
+      },
+      {
+        "name": "证据缺口与更新",
+        "non_empty": [
+          "theme:research_profile.evidence_gap_summary",
+          "node_evidence_matrix:node_evidence_matrix"
+        ]
+      }
+    ]
+  },
+  "waves": {
+    "wave_f": [
+      "ai_foundation_models_application_software",
+      "uav_evtol_low_altitude_economy",
+      "mobile_communications_5g_6g",
+      "analog_mixed_signal_rf_chips",
+      "rare_earth_permanent_magnets_critical_minerals"
+    ]
+  },
+  "themes": {
+    "ai_foundation_models_application_software": {
+      "theme_id": "ai_foundation_models_application_software_value_chain_v1",
+      "artifacts": {
+        "theme": "artifacts/theme_decomposition/ai_foundation_models_application_software_value_chain_v1.json",
+        "company_mapping": "artifacts/theme_decomposition/company_mappings/ai_foundation_models_application_software_company_mapping_v1.json",
+        "source_pack": "artifacts/theme_decomposition/source_packs/ai_foundation_models_application_software_source_pack_v1.json",
+        "node_evidence_matrix": "artifacts/theme_decomposition/source_packs/ai_foundation_models_application_software_node_evidence_matrix_v1.json"
+      }
+    },
+    "uav_evtol_low_altitude_economy": {
+      "theme_id": "uav_evtol_low_altitude_economy_value_chain_v1",
+      "artifacts": {
+        "theme": "artifacts/theme_decomposition/uav_evtol_low_altitude_economy_value_chain_v1.json",
+        "company_mapping": "artifacts/theme_decomposition/company_mappings/uav_evtol_low_altitude_economy_company_mapping_v1.json",
+        "source_pack": "artifacts/theme_decomposition/source_packs/uav_evtol_low_altitude_economy_source_pack_v1.json",
+        "node_evidence_matrix": "artifacts/theme_decomposition/source_packs/uav_evtol_low_altitude_economy_node_evidence_matrix_v1.json"
+      }
+    },
+    "mobile_communications_5g_6g": {
+      "theme_id": "mobile_communications_5g_6g_value_chain_v1",
+      "artifacts": {
+        "theme": "artifacts/theme_decomposition/mobile_communications_5g_6g_value_chain_v1.json",
+        "company_mapping": "artifacts/theme_decomposition/company_mappings/mobile_communications_5g_6g_company_mapping_v1.json",
+        "source_pack": "artifacts/theme_decomposition/source_packs/mobile_communications_5g_6g_source_pack_v1.json",
+        "node_evidence_matrix": "artifacts/theme_decomposition/source_packs/mobile_communications_5g_6g_node_evidence_matrix_v1.json"
+      }
+    },
+    "analog_mixed_signal_rf_chips": {
+      "theme_id": "analog_mixed_signal_rf_chips_value_chain_v1",
+      "artifacts": {
+        "theme": "artifacts/theme_decomposition/analog_mixed_signal_rf_chips_value_chain_v1.json",
+        "company_mapping": "artifacts/theme_decomposition/company_mappings/analog_mixed_signal_rf_chips_company_mapping_v1.json",
+        "source_pack": "artifacts/theme_decomposition/source_packs/analog_mixed_signal_rf_chips_source_pack_v1.json",
+        "node_evidence_matrix": "artifacts/theme_decomposition/source_packs/analog_mixed_signal_rf_chips_node_evidence_matrix_v1.json"
+      }
+    },
+    "rare_earth_permanent_magnets_critical_minerals": {
+      "theme_id": "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
+      "artifacts": {
+        "theme": "artifacts/theme_decomposition/rare_earth_permanent_magnets_critical_minerals_value_chain_v1.json",
+        "company_mapping": "artifacts/theme_decomposition/company_mappings/rare_earth_permanent_magnets_critical_minerals_company_mapping_v1.json",
+        "source_pack": "artifacts/theme_decomposition/source_packs/rare_earth_permanent_magnets_critical_minerals_source_pack_v1.json",
+        "node_evidence_matrix": "artifacts/theme_decomposition/source_packs/rare_earth_permanent_magnets_critical_minerals_node_evidence_matrix_v1.json"
+      }
+    }
+  }
+}

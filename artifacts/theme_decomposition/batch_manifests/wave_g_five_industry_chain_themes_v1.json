@@ -1,0 +1,126 @@
+{
+  "schema_version": "industry_chain_theme_batch_v1",
+  "batch_id": "wave_g_five_industry_chain_themes_v1",
+  "target_theme_count": 5,
+  "artifact_base": "../../..",
+  "primary_source_types": [
+    "company_filing",
+    "official_report",
+    "official_article"
+  ],
+  "completion_gates": {
+    "min_accepted_sources": 10,
+    "min_primary_sources": 8,
+    "min_claims": 12,
+    "min_reviewed_mappings": 8,
+    "require_node_evidence_matrix_coverage": true,
+    "require_bidirectional_evidence_contract": true,
+    "require_precise_mapping_locators": true,
+    "required_readable_sections": [
+      {
+        "name": "研究结论",
+        "non_empty": [
+          "theme:research_profile.investment_summary",
+          "theme:research_profile.industry_stage",
+          "theme:research_profile.central_conflict"
+        ]
+      },
+      {
+        "name": "价值链",
+        "non_empty": [
+          "theme:research_profile.value_flow_summary",
+          "theme:nodes"
+        ]
+      },
+      {
+        "name": "利润池与竞争壁垒",
+        "non_empty": [
+          "theme:research_profile.profit_pool_summary"
+        ]
+      },
+      {
+        "name": "催化、验证信号与风险",
+        "non_empty": [
+          "theme:research_profile.catalyst_claim_ids",
+          "theme:research_profile.risk_claim_ids",
+          "theme:research_profile.validation_signals"
+        ]
+      },
+      {
+        "name": "受益公司",
+        "non_empty": [
+          "company_mapping:company_mappings"
+        ]
+      },
+      {
+        "name": "来源证据",
+        "non_empty": [
+          "source_pack:sources"
+        ]
+      },
+      {
+        "name": "证据缺口与更新",
+        "non_empty": [
+          "theme:research_profile.evidence_gap_summary",
+          "node_evidence_matrix:node_evidence_matrix"
+        ]
+      }
+    ]
+  },
+  "waves": {
+    "wave_g": [
+      "mems_intelligent_sensors",
+      "wafer_manufacturing_specialty_processes",
+      "civil_aircraft_aero_engines",
+      "nuclear_power_equipment",
+      "scientific_instruments"
+    ]
+  },
+  "themes": {
+    "mems_intelligent_sensors": {
+      "theme_id": "mems_intelligent_sensors_value_chain_v1",
+      "artifacts": {
+        "theme": "artifacts/theme_decomposition/mems_intelligent_sensors_value_chain_v1.json",
+        "company_mapping": "artifacts/theme_decomposition/company_mappings/mems_intelligent_sensors_company_mapping_v1.json",
+        "source_pack": "artifacts/theme_decomposition/source_packs/mems_intelligent_sensors_source_pack_v1.json",
+        "node_evidence_matrix": "artifacts/theme_decomposition/source_packs/mems_intelligent_sensors_node_evidence_matrix_v1.json"
+      }
+    },
+    "wafer_manufacturing_specialty_processes": {
+      "theme_id": "wafer_manufacturing_specialty_processes_value_chain_v1",
+      "artifacts": {
+        "theme": "artifacts/theme_decomposition/wafer_manufacturing_specialty_processes_value_chain_v1.json",
+        "company_mapping": "artifacts/theme_decomposition/company_mappings/wafer_manufacturing_specialty_processes_company_mapping_v1.json",
+        "source_pack": "artifacts/theme_decomposition/source_packs/wafer_manufacturing_specialty_processes_source_pack_v1.json",
+        "node_evidence_matrix": "artifacts/theme_decomposition/source_packs/wafer_manufacturing_specialty_processes_node_evidence_matrix_v1.json"
+      }
+    },
+    "civil_aircraft_aero_engines": {
+      "theme_id": "civil_aircraft_aero_engines_value_chain_v1",
+      "artifacts": {
+        "theme": "artifacts/theme_decomposition/civil_aircraft_aero_engines_value_chain_v1.json",
+        "company_mapping": "artifacts/theme_decomposition/company_mappings/civil_aircraft_aero_engines_company_mapping_v1.json",
+        "source_pack": "artifacts/theme_decomposition/source_packs/civil_aircraft_aero_engines_source_pack_v1.json",
+        "node_evidence_matrix": "artifacts/theme_decomposition/source_packs/civil_aircraft_aero_engines_node_evidence_matrix_v1.json"
+      }
+    },
+    "nuclear_power_equipment": {
+      "theme_id": "nuclear_power_equipment_value_chain_v1",
+      "artifacts": {
+        "theme": "artifacts/theme_decomposition/nuclear_power_equipment_value_chain_v1.json",
+        "company_mapping": "artifacts/theme_decomposition/company_mappings/nuclear_power_equipment_company_mapping_v1.json",
+        "source_pack": "artifacts/theme_decomposition/source_packs/nuclear_power_equipment_source_pack_v1.json",
+        "node_evidence_matrix": "artifacts/theme_decomposition/source_packs/nuclear_power_equipment_node_evidence_matrix_v1.json"
+      }
+    },
+    "scientific_instruments": {
+      "theme_id": "scientific_instruments_value_chain_v1",
+      "artifacts": {
+        "theme": "artifacts/theme_decomposition/scientific_instruments_value_chain_v1.json",
+        "company_mapping": "artifacts/theme_decomposition/company_mappings/scientific_instruments_company_mapping_v1.json",
+        "source_pack": "artifacts/theme_decomposition/source_packs/scientific_instruments_source_pack_v1.json",
+        "node_evidence_matrix": "artifacts/theme_decomposition/source_packs/scientific_instruments_node_evidence_matrix_v1.json"
+      }
+    }
+  }
+}
