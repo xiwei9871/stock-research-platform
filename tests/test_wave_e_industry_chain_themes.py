@@ -261,11 +261,11 @@ def test_satellite_communications_e1_theme_meets_strict_wave_e_gate_and_exact_no
     assert theme["research_profile"]["catalog_chain_id"] == E1_CHAIN_ID
     assert theme["research_profile"]["research_kind"] == "industry_chain_deep_research"
     assert {node["node_id"] for node in theme["nodes"]} == E1_NODE_IDS
-    assert len(theme["sources"]) >= 10
-    assert len(theme["claims"]) >= 12
+    assert len(theme["sources"]) == 10
+    assert len(theme["claims"]) == 15
     assert len(
         [item for item in mapping["company_mappings"] if item["review_status"] == "reviewed"]
-    ) >= 8
+    ) == 8
     assert {row["node_id"] for row in theme["value_capture_assessments"]} == E1_NODE_IDS
     assert row["ready"] is True
     assert row["checks"]["bidirectional_evidence_contract"] is True
@@ -474,11 +474,11 @@ def test_vehicle_road_cloud_e2_theme_meets_strict_wave_e_gate_and_exact_node_sco
     assert {node["node_id"] for node in theme["nodes"]} == E2_NODE_IDS
     assert len(theme["value_capture_assessments"]) == len(E2_NODE_IDS)
     assert {row["node_id"] for row in theme["value_capture_assessments"]} == E2_NODE_IDS
-    assert len(theme["sources"]) >= 10
-    assert len(theme["claims"]) >= 12
+    assert len(theme["sources"]) == 10
+    assert len(theme["claims"]) == 12
     assert len(
         [item for item in mapping["company_mappings"] if item["review_status"] == "reviewed"]
-    ) >= 8
+    ) == 8
     assert row["ready"] is True
     assert row["checks"]["bidirectional_evidence_contract"] is True
     assert row["checks"]["precise_mapping_locators"] is True
@@ -698,3 +698,234 @@ def test_vehicle_road_cloud_e2_project_stage_evidence_remains_partial() -> None:
     assert "正式授标" in matrix_node["next_evidence_needed"]
     assert "合同" in matrix_node["next_evidence_needed"]
     assert "回款" in matrix_node["next_evidence_needed"]
+
+
+def test_vehicle_road_cloud_e2_company_tiers_and_revenue_materiality_are_exact() -> None:
+    expected = {
+        "002373.SZ": ("elastic_beneficiary", "emerging_segment", "undisclosed"),
+        "300552.SZ": ("elastic_beneficiary", "emerging_segment", "limited"),
+        "002869.SZ": ("elastic_beneficiary", "emerging_segment", "undisclosed"),
+        "301339.SZ": ("core_beneficiary", "core_business", "material"),
+        "300212.SZ": ("elastic_beneficiary", "emerging_segment", "undisclosed"),
+        "002331.SZ": ("core_beneficiary", "core_business", "material"),
+        "002401.SZ": ("elastic_beneficiary", "emerging_segment", "undisclosed"),
+        "300807.SZ": ("core_beneficiary", "core_business", "material"),
+    }
+    payload = list_theme_research_companies(E2_THEME_ID)
+
+    assert payload["total"] == len(expected)
+    assert {
+        row["company_code"]: (
+            row["beneficiary_tier"],
+            row["business_materiality"],
+            row["revenue_relevance"],
+        )
+        for row in payload["items"]
+    } == expected
+
+    theme = _read_json(E2_THEME_PATH)
+    summary = theme["research_profile"]["investment_summary"]
+    assert "千方科技、中远海科" in summary
+    assert "弹性受益" in summary
+
+
+def test_vehicle_road_cloud_e2_toll_revenue_separates_issuance_and_service() -> None:
+    theme = _read_json(E2_THEME_PATH)
+    mapping = _read_json(E2_MAPPING_PATH)
+    source_pack = _read_json(E2_SOURCE_PACK_PATH)
+    claim = next(
+        row for row in theme["claims"]
+        if row["claim_id"] == "vehicle_road_cloud_claim_04"
+    )
+    revenue_evidence = next(
+        row for row in mapping["evidence_items"]
+        if row["evidence_id"] == "vehicle_road_cloud_301339_revenue"
+    )
+    company = next(
+        row for row in mapping["company_mappings"]
+        if row["company_code"] == "301339.SZ"
+    )
+    source = next(
+        row for row in source_pack["sources"]
+        if row["source_id"] == "vehicle_road_cloud_301339_filing"
+    )
+    matrix = next(
+        row for row in _read_json(E2_MATRIX_PATH)["node_evidence_matrix"]
+        if row["node_id"] == "fleet_dispatch_mobility_operations"
+    )
+    all_text = json.dumps(
+        {
+            "claim": claim,
+            "revenue_evidence": revenue_evidence,
+            "company": company,
+            "source": source,
+            "matrix": matrix,
+        },
+        ensure_ascii=False,
+    )
+
+    assert "运营管理系统业务收入6.405亿元" in claim["claim_text"]
+    assert "ETC发行与销售2.476亿元" in claim["claim_text"]
+    assert "电子收费服务1.463亿元" in claim["claim_text"]
+    assert "电子收费业务合计3.938亿元" in claim["claim_text"]
+    for amount in ("64,052.64万元", "24,756.81万元", "14,626.08万元"):
+        assert amount in revenue_evidence["evidence_summary"]
+    assert "6.405亿元" in company["relationship_summary"]
+    assert "1.463亿元" in company["relationship_summary"]
+    assert "14,626.08万元" in source["evidence_summary"]
+    assert "14,626.08万元" in matrix["rationale"]
+    assert "电子收费服务收入3.938亿元" not in all_text
+
+
+def test_vehicle_road_cloud_e2_four_dimensional_projects_are_acknowledged_but_excluded() -> None:
+    theme = _read_json(E2_THEME_PATH)
+    source_pack = _read_json(E2_SOURCE_PACK_PATH)
+    matrix = _read_json(E2_MATRIX_PATH)
+    mapping = _read_json(E2_MAPPING_PATH)
+    claim = next(
+        row for row in theme["claims"]
+        if row["claim_id"] == "vehicle_road_cloud_claim_10"
+    )
+    source = next(
+        row for row in source_pack["sources"]
+        if row["source_id"] == "vehicle_road_cloud_002405_boundary_filing"
+    )
+    matrix_by_node = {
+        row["node_id"]: row for row in matrix["node_evidence_matrix"]
+    }
+
+    assert "已完成北京、深圳、无锡、湖南等多地车路云项目" in claim["claim_text"]
+    for gap in ("项目具体范围", "E2收入材料性", "平台利用率", "经常性运营或续约"):
+        assert gap in claim["claim_text"]
+    assert set(claim["affected_theme_nodes"]) == {
+        "pilot_utilization_renewal_revenue_validation"
+    }
+    assert "第10-11页" in source["evidence_locator"]
+    assert "北京、深圳、无锡、湖南" in source["evidence_summary"]
+    assert set(source["supported_node_ids"]) == {
+        "pilot_utilization_renewal_revenue_validation"
+    }
+    for node_id in (
+        "vehicle_data_control_interface_role",
+        "transport_cloud_data_governance_role",
+    ):
+        assert "vehicle_road_cloud_002405_boundary_filing" not in matrix_by_node[
+            node_id
+        ]["accepted_source_ids"]
+        assert "vehicle_road_cloud_claim_10" not in matrix_by_node[node_id][
+            "supported_claim_ids"
+        ]
+    assert "vehicle_road_cloud_002405_boundary_filing" in matrix_by_node[
+        "pilot_utilization_renewal_revenue_validation"
+    ]["accepted_source_ids"]
+    assert "002405.SZ" not in {
+        row["company_code"] for row in mapping["company_mappings"]
+    }
+
+
+def test_vehicle_road_cloud_e2_node_maturity_and_boundary_evidence_are_conservative() -> None:
+    theme = _read_json(E2_THEME_PATH)
+    matrix = _read_json(E2_MATRIX_PATH)
+    theme_nodes = {row["node_id"]: row for row in theme["nodes"]}
+    matrix_nodes = {
+        row["node_id"]: row for row in matrix["node_evidence_matrix"]
+    }
+    expected = {
+        "vehicle_data_control_interface_role": (3, "needs_evidence", "evidence_gap"),
+        "v2x_connectivity_edge_network_role": (4, "reviewed", "supported"),
+        "transport_cloud_data_governance_role": (4, "reviewed", "supported"),
+        "cooperative_driving_traffic_control_applications": (4, "reviewed", "supported"),
+        "fleet_dispatch_mobility_operations": (4, "reviewed", "supported"),
+    }
+
+    for node_id, (strength, review_status, gap_status) in expected.items():
+        assert theme_nodes[node_id]["evidence_strength"] == strength
+        assert theme_nodes[node_id]["node_review_status"] == review_status
+        assert matrix_nodes[node_id]["evidence_strength_after"] == strength
+        assert matrix_nodes[node_id]["node_review_status"] == review_status
+        assert matrix_nodes[node_id]["evidence_gap_status"] == gap_status
+
+    required_gaps = {
+        "vehicle_data_control_interface_role": (
+            "独立接口授权",
+            "接入车型车辆数",
+            "接口可用率",
+        ),
+        "v2x_connectivity_edge_network_role": (
+            "活跃连接",
+            "消息量",
+            "SLA",
+        ),
+        "transport_cloud_data_governance_role": (
+            "API调用",
+            "模型推理与使用",
+            "应用治理结果",
+        ),
+        "cooperative_driving_traffic_control_applications": (
+            "处置率",
+            "效率改善",
+            "活跃用户车辆",
+            "持续使用",
+        ),
+        "fleet_dispatch_mobility_operations": (
+            "活跃用户",
+            "交易笔数",
+            "续约率",
+        ),
+    }
+    for node_id, required_terms in required_gaps.items():
+        next_evidence = matrix_nodes[node_id]["next_evidence_needed"]
+        assert all(term in next_evidence for term in required_terms)
+
+    for node_id, node in theme_nodes.items():
+        matrix_row = matrix_nodes[node_id]
+        assert node["evidence_strength"] == matrix_row["evidence_strength_after"]
+        assert node["node_review_status"] == matrix_row["node_review_status"]
+        if node["evidence_strength"] == 5 and matrix_row["evidence_gap_status"] == "covered":
+            assert not any(
+                metric in matrix_row["next_evidence_needed"]
+                for metric in node["key_metrics"]
+            )
+
+    claims = {row["claim_id"]: row for row in theme["claims"]}
+    boundary_claim_ids = {
+        claim_id for claim_id, claim in claims.items()
+        if claim["source_id"].endswith("_boundary_filing")
+    }
+    for assessment in theme["value_capture_assessments"]:
+        assert set(assessment["evidence_ids"]).isdisjoint(boundary_claim_ids)
+    for node_id, matrix_row in matrix_nodes.items():
+        if theme_nodes[node_id]["evidence_strength"] >= 4:
+            assert set(matrix_row["supported_claim_ids"]) - boundary_claim_ids
+
+
+def test_vehicle_road_cloud_e2_transport_governance_ownership_is_sharp() -> None:
+    theme = _read_json(E2_THEME_PATH)
+    catalog = load_industry_catalog()
+    theme_node = next(
+        row for row in theme["nodes"]
+        if row["node_id"] == "transport_cloud_data_governance_role"
+    )
+    role_node = next(
+        row for row in catalog["nodes"]
+        if row["node_id"] == "transport_cloud_data_governance_role"
+    )
+    canonical_node = next(
+        row for row in catalog["nodes"]
+        if row["node_id"] == "transport_data_security_governance"
+    )
+
+    assert "应用工作流与治理结果" in theme_node["description"]
+    assert "归transport_data_security_governance canonical node" in theme_node[
+        "description"
+    ]
+    assert "最小权限" not in theme_node["description"]
+    assert "审计留痕" not in theme_node["description"]
+    assert "安全监控" not in theme_node["description"]
+    assert "application workflow and governance outcomes" in role_node["description"]
+    assert "remain canonical dependencies" in role_node["description"]
+    assert "least-privilege" not in role_node["description"]
+    assert "audit trails" not in role_node["description"]
+    assert "reusable permission, audit, and security controls" in canonical_node[
+        "description"
+    ].lower()

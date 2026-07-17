@@ -120,7 +120,7 @@
       "node_name": "Transport Data Security Governance",
       "node_kind": "canonical",
       "node_type": "transport_data_security_governance",
-      "description": "Transport-specific data classification, least-privilege access, privacy protection, security monitoring, audit trails, lifecycle controls, and cross-domain exchange governance.",
+      "description": "Reusable permission, audit, and security controls for transport data, including classification, least-privilege access, privacy protection, monitoring, audit trails, and lifecycle controls.",
       "status": "skeleton",
       "primary_path": ["next_generation_information_technology", "cybersecurity_data_infrastructure", "transport_data_security_governance_family", "transport_data_security_governance"],
       "canonical_key": "cybersecurity_data_infrastructure:transport_data_security_governance",

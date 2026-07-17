@@ -50,7 +50,7 @@
       "node_name": "Transport Cloud Data and Governance Role",
       "node_kind": "application_role",
       "node_type": "transport_platform_governance_role",
-      "description": "Application-specific transport data models, cross-domain exchange, digital twins, model operations, permissions, audit, and data lifecycle governance.",
+      "description": "Application-specific transport data models, digital twins, API orchestration, and application workflow and governance outcomes; reusable permission, audit, and security controls remain canonical dependencies.",
       "status": "draft",
       "primary_path": ["intelligent_vehicles_advanced_transportation", "intelligent_transport_vehicle_road_cloud", "fleet_dispatch_mobility_operations", "transport_cloud_data_governance_role"],
       "canonical_key": "",
