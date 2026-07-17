@@ -291,6 +291,79 @@ def test_list_project_slugs_returns_empty_for_initial_repository(tmp_path):
     assert list_project_slugs(layout=ResearchProjectLayout(tmp_path)) == []
 
 
+def test_layout_root_itself_may_be_a_symlink(tmp_project_layout):
+    aliased_root = tmp_project_layout.root.parent / "research-projects-alias"
+    aliased_root.symlink_to(tmp_project_layout.root, target_is_directory=True)
+    aliased_layout = ResearchProjectLayout(aliased_root)
+
+    assert load_project("fixture", layout=aliased_layout)["project_slug"] == "fixture"
+
+
+def test_project_slug_traversal_cannot_read_outside_projects_dir(tmp_project_layout):
+    _write_json(tmp_project_layout.root / "escape/project.json", _identity("escape"))
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        load_project("../escape", layout=tmp_project_layout)
+
+    assert exc_info.value.code == "RESEARCH_PROJECT_NOT_FOUND"
+
+
+def test_list_project_slugs_skips_invalid_names_and_symlink_project(tmp_project_layout):
+    for slug in ("Bad Name", ".hidden", "a-", "a__b", "a-_b"):
+        _write_json(tmp_project_layout.projects_dir / slug / "project.json", _identity())
+    outside_project = tmp_project_layout.root / "outside-project"
+    _write_json(outside_project / "project.json", _identity("linked"))
+    (tmp_project_layout.projects_dir / "linked").symlink_to(
+        outside_project,
+        target_is_directory=True,
+    )
+
+    assert list_project_slugs(layout=tmp_project_layout) == ["fixture"]
+
+
+@pytest.mark.parametrize("project_slug", ["a-", "a__b", "a-_b"])
+def test_load_project_rejects_schema_invalid_slug_components(
+    tmp_project_layout,
+    project_slug,
+):
+    _write_json(
+        tmp_project_layout.projects_dir / project_slug / "project.json",
+        _identity(),
+    )
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        load_project(project_slug, layout=tmp_project_layout)
+
+    assert exc_info.value.code == "RESEARCH_PROJECT_NOT_FOUND"
+
+
+def test_load_project_rejects_symlink_project_directory(tmp_project_layout):
+    outside_project = tmp_project_layout.root / "outside-project"
+    _write_json(outside_project / "project.json", _identity("linked"))
+    (tmp_project_layout.projects_dir / "linked").symlink_to(
+        outside_project,
+        target_is_directory=True,
+    )
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        load_project("linked", layout=tmp_project_layout)
+
+    assert exc_info.value.code == "RESEARCH_PROJECT_NOT_FOUND"
+
+
+def test_load_project_rejects_symlink_project_json(tmp_project_layout):
+    outside_identity = tmp_project_layout.root / "outside-project.json"
+    _write_json(outside_identity, _identity("linked"))
+    linked_project_dir = tmp_project_layout.project_dir("linked")
+    linked_project_dir.mkdir()
+    (linked_project_dir / "project.json").symlink_to(outside_identity)
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        load_project("linked", layout=tmp_project_layout)
+
+    assert exc_info.value.code == "RESEARCH_PROJECT_NOT_FOUND"
+
+
 def test_load_project_index_and_events_validate_and_return_payloads(tmp_project_layout):
     assert load_project("fixture", layout=tmp_project_layout)["project_slug"] == "fixture"
     assert load_index(layout=tmp_project_layout)["artifact_version"] == "2.0.0"
@@ -333,6 +406,54 @@ def test_load_version_uses_current_pointer_and_accepts_explicit_version(tmp_proj
     explicit = load_version("fixture", "0.1.0", layout=tmp_project_layout)
     assert current == explicit
     assert current["version_id"] == "research_version:fixture:0.1.0"
+
+
+def test_load_version_rejects_non_semver_before_building_path(tmp_project_layout):
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        load_version("fixture", "x/../../../escape", layout=tmp_project_layout)
+
+    assert exc_info.value.code == "RESEARCH_PROJECT_VERSION_NOT_FOUND"
+
+
+def test_load_version_prioritizes_invalid_project_slug_error(tmp_project_layout):
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        load_version("../escape", "not-semver", layout=tmp_project_layout)
+
+    assert exc_info.value.code == "RESEARCH_PROJECT_NOT_FOUND"
+
+
+def test_load_version_rejects_symlink_version_file(tmp_project_layout):
+    version_path = tmp_project_layout.project_dir("fixture") / "versions/v0.1.0.json"
+    outside_version = tmp_project_layout.root / "outside-version.json"
+    version_path.replace(outside_version)
+    version_path.symlink_to(outside_version)
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        load_version("fixture", "0.1.0", layout=tmp_project_layout)
+
+    assert exc_info.value.code == "RESEARCH_PROJECT_VERSION_NOT_FOUND"
+
+
+def test_list_versions_does_not_follow_symlink_versions_directory(tmp_project_layout):
+    versions_dir = tmp_project_layout.project_dir("fixture") / "versions"
+    outside_versions = tmp_project_layout.root / "outside-versions"
+    versions_dir.replace(outside_versions)
+    versions_dir.symlink_to(outside_versions, target_is_directory=True)
+
+    assert list_versions("fixture", layout=tmp_project_layout) == []
+
+
+def test_load_version_rejects_symlink_manifest(tmp_project_layout):
+    manifest_path = tmp_project_layout.project_dir("fixture") / "version_manifest.jsonl"
+    outside_manifest = tmp_project_layout.root / "outside-manifest.jsonl"
+    manifest_path.replace(outside_manifest)
+    manifest_path.symlink_to(outside_manifest)
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        load_version("fixture", "0.1.0", layout=tmp_project_layout)
+
+    assert exc_info.value.code == "RESEARCH_PROJECT_IMMUTABILITY_VIOLATION"
+    assert "unsafe manifest path" in exc_info.value.details["reason"]
 
 
 def test_tampered_version_content_is_an_immutability_violation(tmp_project_layout):
@@ -465,6 +586,18 @@ def test_missing_event_file_returns_empty_list_for_existing_project(tmp_project_
     assert load_events("fixture", layout=tmp_project_layout) == []
 
 
+def test_load_events_rejects_symlink_event_file(tmp_project_layout):
+    events_path = tmp_project_layout.project_dir("fixture") / "events/events.jsonl"
+    outside_events = tmp_project_layout.root / "outside-events.jsonl"
+    events_path.replace(outside_events)
+    events_path.symlink_to(outside_events)
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        load_events("fixture", layout=tmp_project_layout)
+
+    assert exc_info.value.code == "RESEARCH_PROJECT_NOT_FOUND"
+
+
 @pytest.mark.parametrize(
     ("call", "code"),
     [
@@ -489,3 +622,14 @@ def test_missing_index_has_stable_not_found_code(tmp_project_layout):
         load_index(layout=tmp_project_layout)
     assert exc_info.value.code == "RESEARCH_PROJECT_NOT_FOUND"
     assert exc_info.value.details["artifact"] == "index"
+
+
+def test_load_index_rejects_symlink_index_file(tmp_project_layout):
+    outside_index = tmp_project_layout.root / "outside-index.json"
+    tmp_project_layout.index_path.replace(outside_index)
+    tmp_project_layout.index_path.symlink_to(outside_index)
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        load_index(layout=tmp_project_layout)
+
+    assert exc_info.value.code == "RESEARCH_PROJECT_NOT_FOUND"

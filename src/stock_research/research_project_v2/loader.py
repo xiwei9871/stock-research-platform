@@ -18,9 +18,11 @@ SCHEMA_FILES = {
     "research_project_index_v2": "research_project_index_v2.schema.json",
 }
 
-_VERSION_FILE_PATTERN = re.compile(
-    r"v((?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*))\.json"
+_PROJECT_SLUG_PATTERN = re.compile(r"[a-z0-9]+(?:[-_][a-z0-9]+)*")
+_SEMANTIC_VERSION_PATTERN = re.compile(
+    r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)"
 )
+_VERSION_FILE_PATTERN = re.compile(rf"v({_SEMANTIC_VERSION_PATTERN.pattern})\.json")
 _MANIFEST_FIELDS = {
     "version_id",
     "semantic_version",
@@ -81,6 +83,27 @@ def _layout_or_default(layout: ResearchProjectLayout | None) -> ResearchProjectL
     return ResearchProjectLayout.default() if layout is None else layout
 
 
+def _is_safe_managed_path(path: Path, layout: ResearchProjectLayout) -> bool:
+    try:
+        relative_path = path.relative_to(layout.root)
+    except ValueError:
+        return False
+
+    current_path = layout.root
+    for part in relative_path.parts:
+        if part in {".", ".."}:
+            return False
+        current_path /= part
+        if current_path.is_symlink():
+            return False
+
+    try:
+        path.resolve(strict=False).relative_to(layout.root.resolve(strict=False))
+    except ValueError:
+        return False
+    return True
+
+
 def _read_json_object(path: Path, schema_name: str) -> dict[str, Any]:
     with path.open(encoding="utf-8") as handle:
         payload = json.load(handle)
@@ -106,8 +129,10 @@ def _require_project_path(
     project_slug: str,
     layout: ResearchProjectLayout,
 ) -> Path:
+    if not _PROJECT_SLUG_PATTERN.fullmatch(project_slug):
+        raise _project_not_found(project_slug)
     project_path = layout.project_dir(project_slug) / "project.json"
-    if not project_path.is_file():
+    if not _is_safe_managed_path(project_path, layout) or not project_path.is_file():
         raise _project_not_found(project_slug)
     return project_path
 
@@ -144,12 +169,19 @@ def list_project_slugs(
     layout: ResearchProjectLayout | None = None,
 ) -> list[str]:
     selected_layout = _layout_or_default(layout)
-    if not selected_layout.projects_dir.is_dir():
+    if (
+        not _is_safe_managed_path(selected_layout.projects_dir, selected_layout)
+        or not selected_layout.projects_dir.is_dir()
+    ):
         return []
     return sorted(
         entry.name
         for entry in selected_layout.projects_dir.iterdir()
-        if entry.is_dir() and (entry / "project.json").is_file()
+        if _PROJECT_SLUG_PATTERN.fullmatch(entry.name)
+        and _is_safe_managed_path(entry, selected_layout)
+        and entry.is_dir()
+        and _is_safe_managed_path(entry / "project.json", selected_layout)
+        and (entry / "project.json").is_file()
     )
 
 
@@ -171,12 +203,15 @@ def list_versions(
     selected_layout = _layout_or_default(layout)
     _require_project_path(project_slug, selected_layout)
     versions_dir = selected_layout.project_dir(project_slug) / "versions"
-    if not versions_dir.is_dir():
+    if (
+        not _is_safe_managed_path(versions_dir, selected_layout)
+        or not versions_dir.is_dir()
+    ):
         return []
     versions = []
     for path in versions_dir.iterdir():
         match = _VERSION_FILE_PATTERN.fullmatch(path.name)
-        if path.is_file() and match:
+        if match and _is_safe_managed_path(path, selected_layout) and path.is_file():
             versions.append(match.group(1))
     return sorted(versions, key=lambda version: tuple(map(int, version.split("."))))
 
@@ -198,7 +233,10 @@ def _read_identity_for_current_version(
     if not pointer or not isinstance(pointer, str):
         raise _version_not_found(project_slug, None)
     validate_schema_payload("research_project_identity_v2", identity)
-    return identity, _semantic_version_from_pointer(pointer)
+    semantic_version = _semantic_version_from_pointer(pointer)
+    if not _SEMANTIC_VERSION_PATTERN.fullmatch(semantic_version):
+        raise _version_not_found(project_slug, semantic_version)
+    return identity, semantic_version
 
 
 def _read_manifest_rows(
@@ -298,12 +336,16 @@ def load_version(
     layout: ResearchProjectLayout | None = None,
 ) -> dict[str, Any]:
     selected_layout = _layout_or_default(layout)
+    if not _PROJECT_SLUG_PATTERN.fullmatch(project_slug):
+        raise _project_not_found(project_slug)
     if semantic_version is None:
         identity, semantic_version = _read_identity_for_current_version(
             project_slug,
             selected_layout,
         )
     else:
+        if not _SEMANTIC_VERSION_PATTERN.fullmatch(semantic_version):
+            raise _version_not_found(project_slug, semantic_version)
         identity = load_project(project_slug, layout=selected_layout)
 
     version_path = (
@@ -311,15 +353,25 @@ def load_version(
         / "versions"
         / f"v{semantic_version}.json"
     )
-    if not version_path.is_file():
+    if (
+        not _is_safe_managed_path(version_path, selected_layout)
+        or not version_path.is_file()
+    ):
         raise _version_not_found(project_slug, semantic_version)
     payload = _read_json_object(version_path, "research_version_v2")
+    manifest_path = selected_layout.project_dir(project_slug) / "version_manifest.jsonl"
+    if not _is_safe_managed_path(manifest_path, selected_layout):
+        raise _immutability_violation(
+            project_slug,
+            semantic_version,
+            "unsafe manifest path",
+        )
     _verify_version_immutability(
         project_slug,
         semantic_version,
         identity,
         payload,
-        selected_layout.project_dir(project_slug) / "version_manifest.jsonl",
+        manifest_path,
     )
     return payload
 
@@ -332,6 +384,8 @@ def load_events(
     selected_layout = _layout_or_default(layout)
     _require_project_path(project_slug, selected_layout)
     events_path = selected_layout.project_dir(project_slug) / "events/events.jsonl"
+    if not _is_safe_managed_path(events_path, selected_layout):
+        raise _project_not_found(project_slug)
     if not events_path.is_file():
         return []
 
@@ -365,7 +419,10 @@ def load_index(
     layout: ResearchProjectLayout | None = None,
 ) -> dict[str, Any]:
     selected_layout = _layout_or_default(layout)
-    if not selected_layout.index_path.is_file():
+    if (
+        not _is_safe_managed_path(selected_layout.index_path, selected_layout)
+        or not selected_layout.index_path.is_file()
+    ):
         raise ResearchProjectV2Error(
             "Research project index not found",
             code="RESEARCH_PROJECT_NOT_FOUND",
