@@ -137,21 +137,87 @@ G2_MAPPING_CONTRACTS = {
     "688981.SH": ("logic_mature_node_foundry", "g2_688981_ar2025"),
     "688347.SH": ("analog_bcd_mixed_signal_process", "g2_688347_ar2025"),
     "688249.SH": ("cmos_image_sensor_display_driver_process", "g2_688249_ar2025"),
-    "688172.SH": ("embedded_nonvolatile_memory_process", "g2_688172_ar2025"),
+    "688172.SH": ("analog_bcd_mixed_signal_process", "g2_688172_ar2025"),
     "688396.SH": ("high_voltage_power_device_process", "g2_688396_ar2025"),
-    "600460.SH": ("high_voltage_power_device_process", "g2_600460_ar2025"),
-    "688469.SH": ("cmos_image_sensor_display_driver_process", "g2_688469_ar2025"),
+    "600460.SH": ("compound_semiconductor_specialty_foundry", "g2_600460_ar2025"),
+    "688469.SH": ("mems_sensor_specialty_foundry", "g2_688469_ar2025"),
     "300456.SZ": ("mems_sensor_specialty_foundry", "g2_300456_ar2025"),
 }
 G2_REVENUE_ROLE_CONTRACTS = {
-    "688981.SH": "revenue_materiality",
+    "688981.SH": "revenue_boundary",
     "688347.SH": "revenue_materiality",
     "688249.SH": "revenue_materiality",
     "688172.SH": "revenue_boundary",
     "688396.SH": "revenue_boundary",
     "600460.SH": "revenue_boundary",
-    "688469.SH": "revenue_materiality",
+    "688469.SH": "revenue_boundary",
     "300456.SZ": "revenue_materiality",
+}
+G2_FACT_CONTRACTS = {
+    "688981.SH": {
+        "locators": (
+            "PDF printed p.13 / PDF_PAGE=13 / PDF第13页",
+            "PDF printed p.190 / PDF_PAGE=190 / PDF第190页",
+            "PDF printed p.17 / PDF_PAGE=17 / PDF第17页",
+        ),
+        "phrases": ("8英寸和12英寸晶圆代工", "集成电路晶圆代工62,794,043千元", "导入验证到稳定量产"),
+    },
+    "688347.SH": {
+        "locators": (
+            "PDF printed p.11 / PDF_PAGE=11 / PDF第11页",
+            "PDF printed p.23 / PDF_PAGE=23 / PDF第23页",
+            "PDF printed p.14 / PDF_PAGE=14 / PDF第14页",
+        ),
+        "phrases": ("模拟与电源管理特色晶圆代工", "模拟与电源管理收入4,560,483,268.12元", "90nm BCD稳定量产"),
+    },
+    "688249.SH": {
+        "locators": (
+            "PDF printed p.13 / PDF_PAGE=13 / PDF第13页",
+            "PDF printed p.16 / PDF_PAGE=16 / PDF第16页",
+            "PDF printed p.16 / PDF_PAGE=16 / PDF第16页（批量生产与订单）",
+        ),
+        "phrases": ("DDIC、CIS晶圆代工", "DDIC 58.06%、CIS 22.64%", "批量生产且订单规模稳步增加"),
+    },
+    "688172.SH": {
+        "locators": (
+            "PDF printed p.16 / PDF_PAGE=16 / PDF第16页",
+            "PDF printed p.19 / PDF_PAGE=19 / PDF第19页（制造服务收入）",
+            "PDF printed p.19 / PDF_PAGE=19 / PDF第19页（BCD稳定量产）",
+        ),
+        "phrases": ("Foundry与IDM结合且提供BCD代工", "制造服务收入81,220.54万元", "BCD工艺平台稳定量产"),
+    },
+    "688396.SH": {
+        "locators": (
+            "PDF printed p.22 / PDF_PAGE=22 / PDF第22页",
+            "PDF printed p.30 / PDF_PAGE=30 / PDF第30页",
+            "PDF printed p.23 / PDF_PAGE=23 / PDF第23页",
+        ),
+        "phrases": ("高压BCD覆盖5V-700V", "制造与服务收入4,792,782,896.97元", "建成高可靠BCD工艺线"),
+    },
+    "600460.SH": {
+        "locators": (
+            "PDF printed p.13 / PDF_PAGE=13 / PDF第13页（SiC产线）",
+            "PDF printed p.14 / PDF_PAGE=14 / PDF第14页",
+            "PDF printed p.13 / PDF_PAGE=13 / PDF第13页（量产出货）",
+        ),
+        "phrases": ("6英寸和8英寸SiC自有产线", "芯片制造子公司宽口径收入", "6英寸出货提升且8英寸通线"),
+    },
+    "688469.SH": {
+        "locators": (
+            "PDF printed p.17 / PDF_PAGE=17 / PDF第17页",
+            "PDF printed p.65 / PDF_PAGE=65 / PDF第65页",
+            "PDF printed p.14 / PDF_PAGE=14 / PDF第14页",
+        ),
+        "phrases": ("国内MEMS晶圆代工厂", "总营收81.80亿元为宽系统代工口径", "MEMS麦克风与多轴运动传感器量产"),
+    },
+    "300456.SZ": {
+        "locators": (
+            "PDF printed p.12 / PDF_PAGE=12 / PDF第12页",
+            "PDF printed p.32 / PDF_PAGE=32 / PDF第32页",
+            "PDF printed p.13-15 / PDF_PAGE=13-15 / PDF第13-15页",
+        ),
+        "phrases": ("MEMS纯代工、工艺开发与晶圆制造", "MEMS晶圆制造收入39,373.85万元", "亦庄量产线量产与试产分层"),
+    },
 }
 G2_EXPECTED_EDGES = {
     ("logic_mature_node_foundry", "krf_lithography", "depends_on"),
@@ -674,9 +740,56 @@ def test_wafer_manufacturing_g2_company_evidence_and_initial_universe_close() ->
         assert len({item["excerpt_locator"] for item in items}) == 3
         assert all(item["source_id"] == source_id for item in items)
         assert all(item["related_node_ids"] == [node_id] for item in items)
+        fact = G2_FACT_CONTRACTS[company_code]
+        assert tuple(item["excerpt_locator"] for item in items) == fact["locators"]
+        assert all(
+            phrase in item["evidence_summary"]
+            for phrase, item in zip(fact["phrases"], items)
+        )
         assert row["business_materiality"]
         assert row["notes"]
     assert mapping["concept_only_candidates"] == []
+
+
+def test_wafer_manufacturing_g2_rejects_the_two_false_process_assignments() -> None:
+    theme = load_json(G2_THEME_PATH)
+    mapping = load_json(G2_MAPPING_PATH)
+    reviewed = {
+        row["company_code"]: row for row in mapping["company_mappings"]
+        if row["review_status"] == "reviewed"
+    }
+    claims = [row for row in theme["claims"]]
+    assert reviewed["688469.SH"]["mapped_node_id"] == "mems_sensor_specialty_foundry"
+    assert reviewed["688172.SH"]["mapped_node_id"] == "analog_bcd_mixed_signal_process"
+    assert "CIS" not in reviewed["688469.SH"]["product_or_service"]
+    assert "显示驱动" not in reviewed["688469.SH"]["relationship_summary"]
+    assert "非易失" not in reviewed["688172.SH"]["product_or_service"]
+    assert "EEPROM" not in reviewed["688172.SH"]["relationship_summary"]
+    assert not any(
+        claim["source_id"] == "g2_688469_ar2025"
+        and "cmos_image_sensor_display_driver_process" in claim["affected_theme_nodes"]
+        for claim in claims
+    )
+    assert not any(
+        claim["source_id"] == "g2_688172_ar2025"
+        and "embedded_nonvolatile_memory_process" in claim["affected_theme_nodes"]
+        for claim in claims
+    )
+
+
+def test_wafer_manufacturing_g2_wide_income_stays_boundary_not_materiality() -> None:
+    mapping = load_json(G2_MAPPING_PATH)
+    reviewed = {
+        row["company_code"]: row for row in mapping["company_mappings"]
+        if row["review_status"] == "reviewed"
+    }
+    for code in ("688981.SH", "688172.SH", "688396.SH", "600460.SH", "688469.SH"):
+        row = reviewed[code]
+        assert row["revenue_relevance"] in {"limited", "undisclosed"}
+        assert G2_REVENUE_ROLE_CONTRACTS[code] == "revenue_boundary"
+    silan = reviewed["600460.SH"]
+    assert "owned-fab/captive production" in silan["relationship_summary"]
+    assert "不构成对外foundry服务" in silan["notes"]
 
 
 def test_wafer_manufacturing_g2_source_claim_matrix_union_is_direct() -> None:
@@ -791,9 +904,27 @@ def test_wafer_manufacturing_g2_matrix_calibrates_unmapped_process_gaps() -> Non
     assert all(row["next_evidence_needed"] for row in rows.values())
     for node_id, row in rows.items():
         assert nodes[node_id]["evidence_strength"] == row["evidence_strength_after"]
-    for empty_node in ("rf_soi_sige_specialty_process", "compound_semiconductor_specialty_foundry"):
+    for empty_node in ("rf_soi_sige_specialty_process", "embedded_nonvolatile_memory_process"):
         assert nodes[empty_node]["related_stock_codes"] == []
         assert nodes[empty_node]["domestic_players"] == []
         assert rows[empty_node]["node_review_status"] == "needs_evidence"
         assert rows[empty_node]["evidence_gap_status"] == "evidence_gap"
-        assert rows[empty_node]["evidence_strength_after"] <= 2
+        assert rows[empty_node]["evidence_strength_after"] == 3
+        assert rows[empty_node]["accepted_source_ids"] == ["g2_688347_ar2025"]
+    compound = rows["compound_semiconductor_specialty_foundry"]
+    assert compound["node_review_status"] == "reviewed"
+    assert compound["evidence_gap_status"] == "covered"
+    assert compound["evidence_strength_after"] == 4
+    assert nodes["compound_semiconductor_specialty_foundry"]["related_stock_codes"] == ["600460.SH"]
+    commercial = rows["customer_tapeout_qualification_revenue_validation"]
+    assert commercial["evidence_strength_after"] == 3
+    assert commercial["node_review_status"] == "needs_evidence"
+    assert commercial["evidence_gap_status"] == "evidence_gap"
+    assert commercial["value_capture_score_review_status"] == "provisional"
+    assert commercial["bottleneck_score_review_status"] == "provisional"
+    assert all(
+        phrase in commercial["next_evidence_needed"]
+        for phrase in ("qualification", "逐客户订单", "节点专项晶圆收入")
+    )
+    assert nodes["customer_tapeout_qualification_revenue_validation"]["evidence_strength"] == 3
+    assert nodes["customer_tapeout_qualification_revenue_validation"]["node_review_status"] == "needs_evidence"
