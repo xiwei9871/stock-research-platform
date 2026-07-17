@@ -21,13 +21,13 @@
         "review_status"
       ],
       "properties": {
-        "created_by": {"type": "string"},
+        "created_by": {"type": "string", "minLength": 1},
         "actor_type": {
           "enum": ["human", "codex", "automated_pipeline", "imported"]
         },
         "agent_run_id": {"type": ["string", "null"]},
         "created_at": {"type": "string", "format": "date-time"},
-        "created_in_version": {"type": "string"},
+        "created_in_version": {"type": "string", "minLength": 1},
         "review_status": {
           "enum": ["unreviewed", "pending_review", "reviewed", "rejected"]
         }
@@ -389,6 +389,12 @@
         "hash_scope": {
           "anyOf": [{"$ref": "#/$defs/hash_scope"}, {"type": "null"}]
         },
+        "hash_fields": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "minItems": 1,
+          "uniqueItems": true
+        },
         "referenced_at": {"type": "string", "format": "date-time"},
         "locator": {"type": ["string", "null"]},
         "scope_note": {"type": ["string", "null"]},
@@ -406,6 +412,15 @@
         },
         "provenance": {"$ref": "#/$defs/provenance"}
       },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"hash_scope": {"const": "selected_fields"}},
+            "required": ["hash_scope"]
+          },
+          "then": {"required": ["hash_fields"]}
+        }
+      ],
       "additionalProperties": false
     },
     "evidence_assessment": {

@@ -349,6 +349,67 @@ def test_research_design_rejects_supported_claim(sample_version):
     }
 
 
+def test_selected_fields_hash_scope_requires_hash_fields(sample_version):
+    invalid_version = deepcopy(sample_version)
+    invalid_version["snapshot"]["references"] = [
+        {
+            "reference_id": "reference:selected-fields",
+            "reference_namespace": "external_document",
+            "reference_type": "report",
+            "reference_object_id": "document:fixture",
+            "reference_role": "context",
+            "reference_version": None,
+            "reference_content_hash": "b" * 64,
+            "hash_scope": "selected_fields",
+            "referenced_at": "2026-07-17T10:00:00+08:00",
+            "locator": "fixture://document",
+            "scope_note": None,
+            "resolution_status": "resolved",
+            "provenance": PROVENANCE,
+        }
+    ]
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        validate_schema_payload("research_version_v2", invalid_version)
+
+    assert exc_info.value.code == "RESEARCH_PROJECT_SCHEMA_INVALID"
+
+
+def test_selected_fields_hash_scope_accepts_non_empty_hash_fields(sample_version):
+    valid_version = deepcopy(sample_version)
+    valid_version["snapshot"]["references"] = [
+        {
+            "reference_id": "reference:selected-fields",
+            "reference_namespace": "external_document",
+            "reference_type": "report",
+            "reference_object_id": "document:fixture",
+            "reference_role": "context",
+            "reference_version": None,
+            "reference_content_hash": "b" * 64,
+            "hash_scope": "selected_fields",
+            "hash_fields": ["$.sections[0].content"],
+            "referenced_at": "2026-07-17T10:00:00+08:00",
+            "locator": "fixture://document",
+            "scope_note": None,
+            "resolution_status": "resolved",
+            "provenance": PROVENANCE,
+        }
+    ]
+
+    validate_schema_payload("research_version_v2", valid_version)
+
+
+@pytest.mark.parametrize("field_name", ["created_by", "created_in_version"])
+def test_provenance_rejects_empty_identity_fields(sample_version, field_name):
+    invalid_version = deepcopy(sample_version)
+    invalid_version["snapshot"]["claims"][0]["provenance"][field_name] = ""
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        validate_schema_payload("research_version_v2", invalid_version)
+
+    assert exc_info.value.code == "RESEARCH_PROJECT_SCHEMA_INVALID"
+
+
 def test_event_requires_event_id(sample_event):
     invalid_event = deepcopy(sample_event)
     del invalid_event["event_id"]
