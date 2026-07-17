@@ -8,6 +8,7 @@ from stock_research.dashboard.theme_research import (
     get_theme_research_theme,
     list_theme_research_claims,
     list_theme_research_companies,
+    list_theme_research_sources,
 )
 from stock_research.technology_industry_catalog import load_industry_catalog
 from stock_research.theme_company_mapping import validate_theme_company_mapping_artifact
@@ -187,6 +188,12 @@ E3_EXCLUDED_CODES = {
 
 def _read_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _declared_locator_set(value: str) -> set[str]:
+    locator = value.split("页", 1)[0]
+    assert locator.startswith("复核第") or locator.startswith("第")
+    return set(locator.removeprefix("复核第").removeprefix("第").split("、"))
 
 
 def _paths(chain_id: str, theme_id: str) -> dict[str, str]:
@@ -1199,62 +1206,86 @@ def test_brain_computer_interfaces_e3_matrix_maturity_and_assessments_are_conser
 
 
 def test_brain_computer_interfaces_e3_weisi_stage_locator_is_page_26() -> None:
+    theme = _read_json(E3_THEME_PATH)
     mapping = _read_json(E3_MAPPING_PATH)
     source_pack = _read_json(E3_SOURCE_PACK_PATH)
+    served = list_theme_research_sources(E3_THEME_ID, read_source="artifact")
     evidence = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+    theme_sources = {row["source_id"]: row for row in theme["sources"]}
     mapping_sources = {row["source_id"]: row for row in mapping["sources"]}
     pack_sources = {row["source_id"]: row for row in source_pack["sources"]}
+    served_sources = {row["source_id"]: row for row in served["items"]}
 
-    assert evidence["bci_ev_688580_stage"]["excerpt_locator"] == (
-        "第26页，MagNeuro ONE已上市及后续脑机系统阶段"
-    )
-    assert mapping_sources["bci_688580_filing"]["notes"] == (
-        "复核第26-28、46、48页：上市MagNeuro ONE闭环神经调控、"
-        "在研脑机康复系统与磁刺激混合收入。"
-    )
-    assert pack_sources["bci_688580_filing"]["evidence_locator"] == (
-        "第26-28、46、48页"
-    )
-    assert "第25页" not in evidence["bci_ev_688580_stage"]["excerpt_locator"]
+    stage = evidence["bci_ev_688580_stage"]
+    assert stage["excerpt_locator"].startswith("第26页")
+    assert "MagNeuro ONE" in stage["excerpt_locator"]
+    assert "第25页" not in stage["excerpt_locator"]
+    for source in (theme_sources, mapping_sources, served_sources):
+        notes = source["bci_688580_filing"]["notes"]
+        assert _declared_locator_set(notes) == {"26-28", "46", "48"}
+        assert "MagNeuro ONE" in notes
+        assert "在研脑机康复系统" in notes
+    assert _declared_locator_set(
+        pack_sources["bci_688580_filing"]["evidence_locator"]
+    ) == {"26-28", "46", "48"}
 
 
 def test_brain_computer_interfaces_e3_xiangyu_noninvasive_mapping_uses_page_25() -> None:
+    theme = _read_json(E3_THEME_PATH)
     mapping = _read_json(E3_MAPPING_PATH)
     source_pack = _read_json(E3_SOURCE_PACK_PATH)
+    served = list_theme_research_sources(E3_THEME_ID, read_source="artifact")
     evidence = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+    theme_sources = {row["source_id"]: row for row in theme["sources"]}
     mapping_sources = {row["source_id"]: row for row in mapping["sources"]}
     pack_sources = {row["source_id"]: row for row in source_pack["sources"]}
+    served_sources = {row["source_id"]: row for row in served["items"]}
     product = evidence["bci_ev_688626_product"]
 
-    assert product["excerpt_locator"] == "第17页产品系列、第25页非侵入式路线与聚焦"
+    observed_pages = {
+        page
+        for page in ("第17页", "第25页")
+        if page in product["excerpt_locator"]
+    }
+    assert observed_pages == {
+        "第17页",
+        "第25页",
+    }
+    assert "第24页" not in product["excerpt_locator"]
     assert "第17页仅列脑机接口系列" in product["evidence_summary"]
     assert "第25页明确聚焦非侵入式技术" in product["evidence_summary"]
-    assert mapping_sources["bci_688626_filing"]["notes"] == (
-        "复核第17、25、50、55页：第17页仅为通用脑机接口系列，"
-        "第25页明确非侵入式康复聚焦，另覆盖脑电采集注册目标与宽口径收入。"
-    )
-    assert pack_sources["bci_688626_filing"]["evidence_locator"] == (
-        "第17、25、50、55页"
-    )
+    for source in (theme_sources, mapping_sources, served_sources):
+        notes = source["bci_688626_filing"]["notes"]
+        assert _declared_locator_set(notes) == {"17", "25", "50", "55"}
+        assert "第17页仅为通用脑机接口系列" in notes
+        assert "第25页明确非侵入式康复聚焦" in notes
+    assert _declared_locator_set(
+        pack_sources["bci_688626_filing"]["evidence_locator"]
+    ) == {"17", "25", "50", "55"}
 
 
 def test_brain_computer_interfaces_e3_aipeng_revenue_page_16_is_synchronized() -> None:
+    theme = _read_json(E3_THEME_PATH)
     mapping = _read_json(E3_MAPPING_PATH)
     source_pack = _read_json(E3_SOURCE_PACK_PATH)
+    served = list_theme_research_sources(E3_THEME_ID, read_source="artifact")
     evidence = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+    theme_sources = {row["source_id"]: row for row in theme["sources"]}
     mapping_sources = {row["source_id"]: row for row in mapping["sources"]}
     pack_sources = {row["source_id"]: row for row in source_pack["sources"]}
+    served_sources = {row["source_id"]: row for row in served["items"]}
 
-    assert evidence["bci_ev_300753_revenue"]["excerpt_locator"] == (
-        "第16页，报告期经营情况"
-    )
-    assert mapping_sources["bci_300753_filing"]["notes"] == (
-        "复核第16、18、30、37页：公司宽口径收入、ADHD脑机接口产品组件注册、"
-        "便携脑电系统及已上市状态；投资与合作不作正向公司证据。"
-    )
-    assert pack_sources["bci_300753_filing"]["evidence_locator"] == (
-        "第16、18、30、37页"
-    )
+    revenue = evidence["bci_ev_300753_revenue"]
+    assert revenue["excerpt_locator"].startswith("第16页")
+    assert "34,201.75万元" in revenue["evidence_summary"]
+    for source in (theme_sources, mapping_sources, served_sources):
+        notes = source["bci_300753_filing"]["notes"]
+        assert _declared_locator_set(notes) == {"16", "18", "30", "37"}
+        assert "公司宽口径收入" in notes
+        assert "投资与合作不作正向公司证据" in notes
+    assert _declared_locator_set(
+        pack_sources["bci_300753_filing"]["evidence_locator"]
+    ) == {"16", "18", "30", "37"}
     assert "34,201.75万元" in pack_sources["bci_300753_filing"][
         "evidence_summary"
     ]

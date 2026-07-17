@@ -50,7 +50,7 @@
       "access_level": "public",
       "reliability_level": "S0",
       "review_status": "accepted",
-      "notes": "复核第17、24-25、50、55页：脑机接口系列、非侵入式路线、脑电采集研发注册目标与康复器械宽口径收入。"
+      "notes": "复核第17、25、50、55页：第17页仅为通用脑机接口系列，第25页明确非侵入式康复聚焦，另覆盖脑电采集注册目标与宽口径收入。"
     },
     {
       "source_id": "bci_688580_filing",
@@ -63,7 +63,7 @@
       "access_level": "public",
       "reliability_level": "S0",
       "review_status": "accepted",
-      "notes": "复核第25-28、46、48页：上市MagNeuro ONE闭环神经调控、在研脑机康复系统与磁刺激混合收入。"
+      "notes": "复核第26-28、46、48页：上市MagNeuro ONE闭环神经调控、在研脑机康复系统与磁刺激混合收入。"
     },
     {
       "source_id": "bci_688273_filing",
@@ -141,7 +141,7 @@
       "access_level": "public",
       "reliability_level": "S0",
       "review_status": "accepted",
-      "notes": "复核第18、30、37页：ADHD脑机接口产品组件注册、便携脑电系统及已上市状态；投资与合作不作正向公司证据。"
+      "notes": "复核第16、18、30、37页：公司宽口径收入、ADHD脑机接口产品组件注册、便携脑电系统及已上市状态；投资与合作不作正向公司证据。"
     },
     {
       "source_id": "bci_300206_filing",
@@ -902,4 +902,3 @@
     "boundary_rule": "股权投资、战略协议、实验室、专利、项目立项、通用康复、通用脑电、通用刺激、通用传感、通用手术或通用医疗器械收入不得自动形成E3 reviewed受益映射。"
   }
 }
-
