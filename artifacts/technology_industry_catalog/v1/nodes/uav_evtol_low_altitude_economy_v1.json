@@ -1,0 +1,249 @@
+{
+  "schema_version": "technology_industry_catalog_node_file_v1",
+  "chain_id": "uav_evtol_low_altitude_economy",
+  "nodes": [
+    {
+      "node_id": "low_altitude_aircraft_platforms",
+      "chain_id": "uav_evtol_low_altitude_economy",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Low-Altitude Aircraft Platforms",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "Industrial UAV and eVTOL aircraft platforms; conventional civil aircraft and spacecraft remain outside this chain.",
+      "status": "draft",
+      "primary_path": [
+        "aerospace_low_altitude_ocean_technology",
+        "uav_evtol_low_altitude_economy",
+        "low_altitude_aircraft_platforms"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "low_altitude_critical_systems",
+      "chain_id": "uav_evtol_low_altitude_economy",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Low-Altitude Critical Systems",
+      "node_kind": "canonical",
+      "node_type": "subsystem",
+      "description": "Aircraft-specific flight control, electric propulsion, energy, airframe and precision systems; generic components remain dependencies.",
+      "status": "draft",
+      "primary_path": [
+        "aerospace_low_altitude_ocean_technology",
+        "uav_evtol_low_altitude_economy",
+        "low_altitude_critical_systems"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "low_altitude_infrastructure_operations",
+      "chain_id": "uav_evtol_low_altitude_economy",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Low-Altitude Infrastructure and Operations",
+      "node_kind": "canonical",
+      "node_type": "infrastructure",
+      "description": "Low-altitude communications, surveillance, navigation, airspace management, vertiports and flight operations.",
+      "status": "draft",
+      "primary_path": [
+        "aerospace_low_altitude_ocean_technology",
+        "uav_evtol_low_altitude_economy",
+        "low_altitude_infrastructure_operations"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "low_altitude_certification_commercialization",
+      "chain_id": "uav_evtol_low_altitude_economy",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Certification and Commercialization",
+      "node_kind": "canonical",
+      "node_type": "service",
+      "description": "Airworthiness, orders, delivery, operation, route utilization and recognized-revenue validation.",
+      "status": "draft",
+      "primary_path": [
+        "aerospace_low_altitude_ocean_technology",
+        "uav_evtol_low_altitude_economy",
+        "low_altitude_certification_commercialization"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "industrial_consumer_uav_platforms",
+      "chain_id": "uav_evtol_low_altitude_economy",
+      "parent_node_id": "low_altitude_aircraft_platforms",
+      "level": "L4",
+      "node_name": "Industrial and Consumer UAV Platforms",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "Complete UAV systems for industrial, logistics, emergency, inspection and consumer missions; military-only and satellite systems are not sufficient evidence.",
+      "status": "draft",
+      "primary_path": [
+        "aerospace_low_altitude_ocean_technology",
+        "uav_evtol_low_altitude_economy",
+        "low_altitude_aircraft_platforms",
+        "industrial_consumer_uav_platforms"
+      ],
+      "canonical_key": "low_altitude:industrial_consumer_uav_platforms",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "evtol_aircraft_platforms",
+      "chain_id": "uav_evtol_low_altitude_economy",
+      "parent_node_id": "low_altitude_aircraft_platforms",
+      "level": "L4",
+      "node_name": "eVTOL Aircraft Platforms",
+      "node_kind": "canonical",
+      "node_type": "equipment",
+      "description": "Electric vertical-takeoff-and-landing aircraft platforms, prototypes and certified products, with stage labels kept explicit.",
+      "status": "draft",
+      "primary_path": [
+        "aerospace_low_altitude_ocean_technology",
+        "uav_evtol_low_altitude_economy",
+        "low_altitude_aircraft_platforms",
+        "evtol_aircraft_platforms"
+      ],
+      "canonical_key": "low_altitude:evtol_aircraft_platforms",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "flight_control_avionics_navigation",
+      "chain_id": "uav_evtol_low_altitude_economy",
+      "parent_node_id": "low_altitude_critical_systems",
+      "level": "L4",
+      "node_name": "Flight Control, Avionics, and Navigation",
+      "node_kind": "canonical",
+      "node_type": "subsystem",
+      "description": "Aircraft-specific flight control and integrated avionics/navigation systems; generic chips or satellite products remain external dependencies.",
+      "status": "draft",
+      "primary_path": [
+        "aerospace_low_altitude_ocean_technology",
+        "uav_evtol_low_altitude_economy",
+        "low_altitude_critical_systems",
+        "flight_control_avionics_navigation"
+      ],
+      "canonical_key": "low_altitude:flight_control_avionics_navigation",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "electric_propulsion_power_energy_systems",
+      "chain_id": "uav_evtol_low_altitude_economy",
+      "parent_node_id": "low_altitude_critical_systems",
+      "level": "L4",
+      "node_name": "Electric Propulsion, Power, and Energy Systems",
+      "node_kind": "canonical",
+      "node_type": "subsystem",
+      "description": "Aircraft-specific electric or hybrid propulsion, motors, inverters, batteries, BMS and energy systems; generic automotive products do not qualify.",
+      "status": "draft",
+      "primary_path": [
+        "aerospace_low_altitude_ocean_technology",
+        "uav_evtol_low_altitude_economy",
+        "low_altitude_critical_systems",
+        "electric_propulsion_power_energy_systems"
+      ],
+      "canonical_key": "low_altitude:electric_propulsion_power_energy_systems",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "airframe_composites_precision_components",
+      "chain_id": "uav_evtol_low_altitude_economy",
+      "parent_node_id": "low_altitude_critical_systems",
+      "level": "L4",
+      "node_name": "Airframe, Composites, and Precision Components",
+      "node_kind": "canonical",
+      "node_type": "core_component",
+      "description": "Aircraft-specific airframes, composite structures and precision components; generic automotive or industrial composite revenue is excluded.",
+      "status": "draft",
+      "primary_path": [
+        "aerospace_low_altitude_ocean_technology",
+        "uav_evtol_low_altitude_economy",
+        "low_altitude_critical_systems",
+        "airframe_composites_precision_components"
+      ],
+      "canonical_key": "low_altitude:airframe_composites_precision_components",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "low_altitude_communications_surveillance_navigation",
+      "chain_id": "uav_evtol_low_altitude_economy",
+      "parent_node_id": "low_altitude_infrastructure_operations",
+      "level": "L4",
+      "node_name": "Low-Altitude Communications, Surveillance, and Navigation",
+      "node_kind": "canonical",
+      "node_type": "infrastructure",
+      "description": "Low-altitude-specific cooperative and non-cooperative surveillance, communications, navigation, weather and aircraft-network integration.",
+      "status": "draft",
+      "primary_path": [
+        "aerospace_low_altitude_ocean_technology",
+        "uav_evtol_low_altitude_economy",
+        "low_altitude_infrastructure_operations",
+        "low_altitude_communications_surveillance_navigation"
+      ],
+      "canonical_key": "low_altitude:low_altitude_communications_surveillance_navigation",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "vertiport_airspace_management_infrastructure",
+      "chain_id": "uav_evtol_low_altitude_economy",
+      "parent_node_id": "low_altitude_infrastructure_operations",
+      "level": "L4",
+      "node_name": "Vertiport and Airspace Management Infrastructure",
+      "node_kind": "canonical",
+      "node_type": "infrastructure",
+      "description": "Low-altitude flight-service platforms, airspace planning, intelligent towers, vertiports, testing bases and management infrastructure.",
+      "status": "draft",
+      "primary_path": [
+        "aerospace_low_altitude_ocean_technology",
+        "uav_evtol_low_altitude_economy",
+        "low_altitude_infrastructure_operations",
+        "vertiport_airspace_management_infrastructure"
+      ],
+      "canonical_key": "low_altitude:vertiport_airspace_management_infrastructure",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "flight_operations_maintenance_services",
+      "chain_id": "uav_evtol_low_altitude_economy",
+      "parent_node_id": "low_altitude_infrastructure_operations",
+      "level": "L4",
+      "node_name": "Flight Operations and Maintenance Services",
+      "node_kind": "canonical",
+      "node_type": "service",
+      "description": "Commercial low-altitude flight operations, route services, aircraft management, maintenance and operational support.",
+      "status": "draft",
+      "primary_path": [
+        "aerospace_low_altitude_ocean_technology",
+        "uav_evtol_low_altitude_economy",
+        "low_altitude_infrastructure_operations",
+        "flight_operations_maintenance_services"
+      ],
+      "canonical_key": "low_altitude:flight_operations_maintenance_services",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "certification_orders_delivery_utilization_validation",
+      "chain_id": "uav_evtol_low_altitude_economy",
+      "parent_node_id": "low_altitude_certification_commercialization",
+      "level": "L4",
+      "node_name": "Certification, Orders, Delivery, and Utilization Validation",
+      "node_kind": "canonical",
+      "node_type": "service",
+      "description": "Explicit ladder from prototype and certification application through TC/PC, signed order, delivery, operation, utilization and recognized revenue.",
+      "status": "draft",
+      "primary_path": [
+        "aerospace_low_altitude_ocean_technology",
+        "uav_evtol_low_altitude_economy",
+        "low_altitude_certification_commercialization",
+        "certification_orders_delivery_utilization_validation"
+      ],
+      "canonical_key": "low_altitude:certification_orders_delivery_utilization_validation",
+      "canonical_node_refs": []
+    }
+  ]
+}

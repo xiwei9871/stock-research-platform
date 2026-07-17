@@ -1,0 +1,238 @@
+{
+  "artifact_version": "uav_evtol_low_altitude_economy_node_evidence_matrix_v1",
+  "theme_id": "uav_evtol_low_altitude_economy_value_chain_v1",
+  "as_of_date": "2026-07-17",
+  "node_evidence_matrix": [
+    {
+      "node_id": "industrial_consumer_uav_platforms",
+      "accepted_source_ids": [
+        "f2_002389_ar2025",
+        "f2_688070_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "f2_claim_06",
+        "f2_claim_07",
+        "f2_claim_08"
+      ],
+      "evidence_strength_before": 1,
+      "evidence_strength_after": 5,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "customer_certification",
+        "gross_margin"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "纵横股份提供工业无人机分产品收入、产销量、重点项目与客户销售，航天彩虹补充整机和场景证据，商业化最完整。",
+      "next_evidence_needed": "补充低空民用与特种用途收入拆分、订单转交付、项目验收回款和持续服务收入。"
+    },
+    {
+      "node_id": "evtol_aircraft_platforms",
+      "accepted_source_ids": [
+        "f2_002085_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "f2_claim_01",
+        "f2_claim_02"
+      ],
+      "evidence_strength_before": 1,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "technology_barrier",
+        "customer_certification"
+      ],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "reviewed",
+      "rationale": "万丰奥威具备eVTOL资产、研发与特许飞行证证据，但仍处适航推进阶段且收入未拆分。",
+      "next_evidence_needed": "补充型号合格证（TC）、生产许可证（PC）、确定订单、交付、利用率和专项收入。"
+    },
+    {
+      "node_id": "flight_control_avionics_navigation",
+      "accepted_source_ids": [
+        "f2_000801_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "f2_claim_11"
+      ],
+      "evidence_strength_before": 1,
+      "evidence_strength_after": 3,
+      "value_capture_score_review_status": "provisional",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [
+        "customer_certification"
+      ],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "reviewed",
+      "rationale": "四川九洲披露无人机综合航电、适航测试和平台批量订货，但缺少低空航电订单金额与收入。",
+      "next_evidence_needed": "补充具体机型定点、适航验证、批量交付、订单金额和低空航电收入。"
+    },
+    {
+      "node_id": "electric_propulsion_power_energy_systems",
+      "accepted_source_ids": [
+        "f2_001696_ar2025",
+        "f2_600580_ar2025",
+        "f2_603308_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "f2_claim_05",
+        "f2_claim_09",
+        "f2_claim_10"
+      ],
+      "evidence_strength_before": 1,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "technology_barrier",
+        "customer_certification"
+      ],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "reviewed",
+      "rationale": "应流混动系统已有配飞展示，卧龙电驱有资本化eVTOL电驱研发；宗申活塞发动机被明确排除，节点证据未被泛动力污染。",
+      "next_evidence_needed": "补充电动/混动系统原型机装机、适航、签署订单、实际交付、系统效率和专项收入。"
+    },
+    {
+      "node_id": "airframe_composites_precision_components",
+      "accepted_source_ids": [
+        "f2_002085_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "f2_claim_02"
+      ],
+      "evidence_strength_before": 1,
+      "evidence_strength_after": 3,
+      "value_capture_score_review_status": "provisional",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [
+        "technology_barrier"
+      ],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "reviewed",
+      "rationale": "万丰钻石飞机披露航空器整机复合材料结构，但缺少独立低空机体部件客户、订单、交付和收入。",
+      "next_evidence_needed": "补充低空航空器特定机体/复材定点、认证、单机价值、交付与确认收入。"
+    },
+    {
+      "node_id": "low_altitude_communications_surveillance_navigation",
+      "accepted_source_ids": [
+        "f2_000801_ar2025",
+        "f2_688631_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "f2_claim_11",
+        "f2_claim_12",
+        "f2_claim_13"
+      ],
+      "evidence_strength_before": 1,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "integration_control",
+        "customer_certification"
+      ],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "reviewed",
+      "rationale": "四川九洲具备低空管控与航电产品及批量订货，莱斯信息低空智联平台在多地落地，但收入未单列。",
+      "next_evidence_needed": "补充低空通信监视导航项目合同额、设备交付、覆盖效果、验收回款和专项收入。"
+    },
+    {
+      "node_id": "vertiport_airspace_management_infrastructure",
+      "accepted_source_ids": [
+        "f2_301091_ar2025",
+        "f2_688070_ar2025",
+        "f2_688631_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "f2_claim_06",
+        "f2_claim_13",
+        "f2_claim_14",
+        "f2_claim_15"
+      ],
+      "evidence_strength_before": 1,
+      "evidence_strength_after": 5,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "integration_control",
+        "customer_certification"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "纵横智慧巴中、莱斯省市县平台与十余城落地、深城交SILAS和测试基地运营形成多公司项目闭环。",
+      "next_evidence_needed": "补充各项目确认收入、毛利、飞行计划量、平台利用、运维续费与现金流。"
+    },
+    {
+      "node_id": "flight_operations_maintenance_services",
+      "accepted_source_ids": [
+        "f2_000099_ar2025",
+        "f2_301091_ar2025",
+        "f2_603308_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "f2_claim_03",
+        "f2_claim_04",
+        "f2_claim_09",
+        "f2_claim_15"
+      ],
+      "evidence_strength_before": 1,
+      "evidence_strength_after": 5,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "customer_certification",
+        "gross_margin"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "中信海直有22.16亿元通航运输收入与飞行小时收入确认，深城交基地投入运营，应流机场取得使用许可证。",
+      "next_evidence_needed": "补充低空新场景独立收入、航线利用率、eVTOL常态运营、维修收入和运营毛利。"
+    },
+    {
+      "node_id": "certification_orders_delivery_utilization_validation",
+      "accepted_source_ids": [
+        "f2_000099_ar2025",
+        "f2_000801_ar2025",
+        "f2_002085_ar2025",
+        "f2_002389_ar2025",
+        "f2_301091_ar2025",
+        "f2_600580_ar2025",
+        "f2_688070_ar2025",
+        "f2_688631_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "f2_claim_01",
+        "f2_claim_03",
+        "f2_claim_04",
+        "f2_claim_07",
+        "f2_claim_08",
+        "f2_claim_10",
+        "f2_claim_11",
+        "f2_claim_14",
+        "f2_claim_16"
+      ],
+      "evidence_strength_before": 1,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "customer_certification"
+      ],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "reviewed",
+      "rationale": "各公司证据覆盖特许飞行、TC申请、批量订货、用户签约、交付、运营与收入，但链条尚未在同一eVTOL对象上闭环。",
+      "next_evidence_needed": "逐对象跟踪原型机、TC申请、TC、PC、签署订单、交付、投入运营、航线利用和确认收入，禁止阶段跃迁。"
+    }
+  ]
+}

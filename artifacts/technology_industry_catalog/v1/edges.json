@@ -279,6 +279,30 @@
       "relationship_type": "uses",
       "notes": "Cross-chain dependency: model adaptation workflows may submit jobs through the canonical compute cluster scheduler; the toolchain does not own compute orchestration infrastructure.",
       "source_ids": []
+    },
+    {
+      "edge_id": "low_altitude_electric_propulsion_depends_on_high_specific_energy_cell",
+      "source_node_id": "electric_propulsion_power_energy_systems",
+      "target_node_id": "battery_high_specific_energy_cell",
+      "relationship_type": "depends_on",
+      "notes": "Cross-chain dependency: aircraft electric propulsion may require high-specific-energy cells; generic battery ownership remains with power_batteries_battery_materials and does not create a direct F2 company mapping.",
+      "source_ids": []
+    },
+    {
+      "edge_id": "low_altitude_electric_propulsion_depends_on_battery_management_system",
+      "source_node_id": "electric_propulsion_power_energy_systems",
+      "target_node_id": "battery_management_system_platform",
+      "relationship_type": "depends_on",
+      "notes": "Cross-chain dependency: aircraft energy systems may use a BMS platform; generic BMS ownership remains with power_batteries_battery_materials.",
+      "source_ids": []
+    },
+    {
+      "edge_id": "low_altitude_electric_propulsion_uses_silicon_carbide_power_device",
+      "source_node_id": "electric_propulsion_power_energy_systems",
+      "target_node_id": "silicon_carbide_power_device",
+      "relationship_type": "uses",
+      "notes": "Cross-chain dependency: aircraft inverters may use SiC power devices; device ownership remains with power_semiconductors and generic chip revenue does not qualify for F2.",
+      "source_ids": []
     }
   ]
 }

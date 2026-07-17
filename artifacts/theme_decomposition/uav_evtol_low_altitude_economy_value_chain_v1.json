@@ -1,0 +1,837 @@
+{
+  "artifact_version": "theme_decomposition_v1_6",
+  "theme": {
+    "theme_id": "uav_evtol_low_altitude_economy_value_chain_v1",
+    "theme_name": "无人机、eVTOL与低空经济：航空器、系统、基础设施与商业验证",
+    "theme_type": "other",
+    "summary": "以低空航空器、关键系统、管服基础设施和运营商业化为主线，区分研发、适航、订单、交付、运营与收入。",
+    "status": "reviewed",
+    "created_from": "mixed",
+    "last_updated": "2026-07-17"
+  },
+  "research_profile": {
+    "research_kind": "industry_chain_deep_research",
+    "catalog_chain_id": "uav_evtol_low_altitude_economy",
+    "investment_summary": "低空产业已从政策和样机展示进入工业无人机规模收入、低空管服平台多城落地、传统通航运营收入与eVTOL适航验证并存阶段。利润兑现优先看已交付无人机、持续运营服务、明确平台项目与可核验收入，不把规划、意向或未来订单当收入。",
+    "industry_stage": "工业无人机已商业化；低空管服基础设施处项目复制期；eVTOL总体仍处原型机、特许飞行、型号合格证申请与场景试飞阶段。",
+    "central_conflict": "政策、项目和技术验证快速扩张，但eVTOL适航、专项订单转交付、航线利用率、低空专项收入与毛利披露滞后。",
+    "value_flow_summary": "价值从无人机/eVTOL整机需求传导至飞控航电、电推进能源、机体复材，再由通信监视导航、空域与起降场基础设施承接，最终通过飞行运营、维修、订单交付、路线利用和确认收入兑现。",
+    "profit_pool_summary": "近期可审计利润池主要在工业无人机系统与服务、通航飞行运营、可复制低空管服平台；eVTOL整机、电推进与新型起降网络的利润池仍取决于适航和规模化交付。",
+    "catalyst_claim_ids": [
+      "f2_claim_03",
+      "f2_claim_06",
+      "f2_claim_07",
+      "f2_claim_11",
+      "f2_claim_13",
+      "f2_claim_15"
+    ],
+    "risk_claim_ids": [
+      "f2_claim_01",
+      "f2_claim_05",
+      "f2_claim_10",
+      "f2_claim_12",
+      "f2_claim_14",
+      "f2_claim_16"
+    ],
+    "validation_signals": [
+      "TC/PC取得而非仅申请",
+      "签署订单转实际交付",
+      "航线飞行小时与利用率",
+      "低空专项确认收入和毛利",
+      "平台项目验收回款与持续运维"
+    ],
+    "evidence_gap_summary": "商业阶段必须区分原型机、型号合格证申请、型号合格证（TC）、生产许可证（PC）、签署订单、交付、投入运营、航线利用与确认收入。VoloXpro特许飞行证不等于型号合格证。未来订单或合作意向不作为确认收入；示范区成员或政策指定不构成公司受益证据。通用汽车电机、电池与功率器件不属于本链；通用复合材料与精密零部件不属于本链；通用机场设施不因低空概念进入本链；卫星通信、导航与遥感系统保持卫星链所有权；商业航天发射与空间基础设施不属于本链；移动通信网络与碳纤维复合材料链尚未展开L4，本链仅文本记录依赖，不虚构节点。"
+  },
+  "decomposition_templates": [
+    {
+      "template_id": "uav_evtol_low_altitude_economy_value_chain_template_v1",
+      "theme_type": "other",
+      "steps": [
+        "冻结航空器边界",
+        "拆分关键系统",
+        "核验管服基础设施",
+        "核验运营与维修",
+        "按阶段验证商业化"
+      ],
+      "required_dimensions": [
+        "aircraft",
+        "critical_systems",
+        "infrastructure",
+        "operations",
+        "certification",
+        "commercialization"
+      ],
+      "optional_dimensions": [
+        "international_comparison",
+        "valuation"
+      ],
+      "output_schema": "theme_decomposition_v1_6"
+    }
+  ],
+  "evidence_policy": {
+    "accepted_source_levels": [
+      "S0",
+      "S1"
+    ],
+    "reviewed_claim_requires_accepted_source": true,
+    "reviewed_mapping_requires_product_revenue_stage_evidence": true,
+    "income_boundary_rule": "公司总收入、航空航天收入、通航收入、空管收入和汽车业务收入未拆分低空特定对象时一律为undisclosed；未来订单或合作意向不作为确认收入。",
+    "boundary_rule": "通用汽车电机、电池与功率器件不属于本链；通用复合材料与精密零部件不属于本链；通用机场设施不因低空概念进入本链；卫星通信、导航与遥感系统保持卫星链所有权；商业航天发射与空间基础设施不属于本链；移动通信网络与碳纤维复合材料链尚未展开L4，本链仅文本记录依赖，不虚构节点。商业阶段必须区分原型机、型号合格证申请、型号合格证（TC）、生产许可证（PC）、签署订单、交付、投入运营、航线利用与确认收入。VoloXpro特许飞行证不等于型号合格证。未来订单或合作意向不作为确认收入；示范区成员或政策指定不构成公司受益证据。"
+  },
+  "sources": [
+    {
+      "source_id": "f2_002085_ar2025",
+      "source_type": "company_filing",
+      "title": "浙江万丰奥威汽轮股份有限公司2025年年度报告",
+      "publisher": "浙江万丰奥威汽轮股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-29",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-29/1225243182.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第11、15-16页；eVTOL机型、特许飞行证、研发取证以及通航飞机制造收入。；eVTOL专项收入、订单、交付与TC尚未披露。"
+    },
+    {
+      "source_id": "f2_000099_ar2025",
+      "source_type": "company_filing",
+      "title": "中信海洋直升机股份有限公司2025年年度报告",
+      "publisher": "中信海洋直升机股份有限公司",
+      "author": "",
+      "publish_date": "2026-03-17",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-17/1225012497.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第14-16、30、66页；通航运输、低空航线、eVTOL试飞、数字塔台与收入确认。；通航收入含传统海上油气业务，eVTOL试飞尚非规模化商业收入。"
+    },
+    {
+      "source_id": "f2_001696_ar2025",
+      "source_type": "company_filing",
+      "title": "重庆宗申动力机械股份有限公司2025年年度报告",
+      "publisher": "重庆宗申动力机械股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-23",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-23/1225148037.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第12、170页；航空活塞发动机产品、适航批准和宗申航发收入。；披露产品是活塞发动机，不属于本链电动推进L4，作为排除边界证据。"
+    },
+    {
+      "source_id": "f2_688070_ar2025",
+      "source_type": "company_filing",
+      "title": "成都纵横自动化技术股份有限公司2025年年度报告",
+      "publisher": "成都纵横自动化技术股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-01",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-01/1225067159.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第23、37-40页；工业无人机、无人值守云平台、智慧巴中项目与分产品收入。；CW-100仍处TC验证程序，不能写成已取得TC。"
+    },
+    {
+      "source_id": "f2_002389_ar2025",
+      "source_type": "company_filing",
+      "title": "航天彩虹无人机股份有限公司2025年年度报告",
+      "publisher": "航天彩虹无人机股份有限公司",
+      "author": "",
+      "publish_date": "2026-03-27",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-27/1225036384.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第10、18-19、30-31页；无人机平台、低空场景、交付、子公司收入及低空用户签约。；无人机收入含特种用途，未单列低空民用场景收入。"
+    },
+    {
+      "source_id": "f2_603308_ar2025",
+      "source_type": "company_filing",
+      "title": "安徽应流机电股份有限公司2025年年度报告",
+      "publisher": "安徽应流机电股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-24",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-24/1225157972.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第10-11页；YLHD-300混动系统配飞ES1000无人运输机与A1机场运营许可。；两机业务收入未单列低空动力或机场运营收入。"
+    },
+    {
+      "source_id": "f2_600580_ar2025",
+      "source_type": "company_filing",
+      "title": "卧龙电气驱动集团股份有限公司2025年年度报告",
+      "publisher": "卧龙电气驱动集团股份有限公司",
+      "author": "",
+      "publish_date": "2026-03-21",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-21/1225022163.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第12、199页；电动航空实质性突破及eVTOL电驱动系统资本化研发项目。；处研发阶段，未披露样机交付、适航、订单或收入。"
+    },
+    {
+      "source_id": "f2_000801_ar2025",
+      "source_type": "company_filing",
+      "title": "四川九洲电器股份有限公司2025年年度报告",
+      "publisher": "四川九洲电器股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-01",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-01/1225066197.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第9、23页；低空协同运行、适航测试、飞行服务站、无人机航电及批量订货。；空管子公司收入未单列低空系统收入。"
+    },
+    {
+      "source_id": "f2_688631_ar2025",
+      "source_type": "company_filing",
+      "title": "南京莱斯信息技术股份有限公司2025年年度报告",
+      "publisher": "南京莱斯信息技术股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-25",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-25/1225190073.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第15-16、31、33-34页；天牧低空飞行管理、智联平台、十余城落地和省市县项目。；公司总收入与空管大单未拆分低空收入。"
+    },
+    {
+      "source_id": "f2_301091_ar2025",
+      "source_type": "company_filing",
+      "title": "深城交科技集团股份有限公司2025年年度报告",
+      "publisher": "深城交科技集团股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-24",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-24/1225172005.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第21-24、34-35页；SILAS、低空设施、测试基地、一网统飞、投资运营与研发项目。；软件合同、运营合同和投资额为混合口径，未单列低空确认收入。"
+    }
+  ],
+  "claims": [
+    {
+      "claim_id": "f2_claim_01",
+      "theme_id": "uav_evtol_low_altitude_economy_value_chain_v1",
+      "source_id": "f2_002085_ar2025",
+      "claim_text": "万丰钻石飞机已布局eVTOL并推进部分机型适航取证；VoloXpro取得特许飞行证，但特许飞行证不等于型号合格证（TC），当前不能写成已完成商业适航。",
+      "claim_type": "tech_route",
+      "confidence": 0.9,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "evtol_aircraft_platforms",
+        "certification_orders_delivery_utilization_validation"
+      ]
+    },
+    {
+      "claim_id": "f2_claim_02",
+      "theme_id": "uav_evtol_low_altitude_economy_value_chain_v1",
+      "source_id": "f2_002085_ar2025",
+      "claim_text": "通航飞机制造2025年收入27.46亿元，但未单列eVTOL确认收入；钻石飞机整机采用碳纤维和玻璃纤维复合结构，汽车轮毂和通用镁合金业务不作为低空映射。",
+      "claim_type": "value_capture",
+      "confidence": 0.9,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "evtol_aircraft_platforms",
+        "airframe_composites_precision_components"
+      ]
+    },
+    {
+      "claim_id": "f2_claim_03",
+      "theme_id": "uav_evtol_low_altitude_economy_value_chain_v1",
+      "source_id": "f2_000099_ar2025",
+      "claim_text": "中信海直完成吨级eVTOL跨海试飞、跨城货运航线首飞，并形成低空航线、数字化塔台和有人无人协同运营能力；这些属于试飞与运营验证，不等于航空器销售。",
+      "claim_type": "company_mapping",
+      "confidence": 0.9,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "flight_operations_maintenance_services",
+        "certification_orders_delivery_utilization_validation"
+      ]
+    },
+    {
+      "claim_id": "f2_claim_04",
+      "theme_id": "uav_evtol_low_altitude_economy_value_chain_v1",
+      "source_id": "f2_000099_ar2025",
+      "claim_text": "中信海直通航运输收入22.16亿元，按固定服务或飞行小时确认收入；该口径证明运营主业收入，但不能把eVTOL试飞直接表述为规模化eVTOL收入。",
+      "claim_type": "value_capture",
+      "confidence": 0.9,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "flight_operations_maintenance_services",
+        "certification_orders_delivery_utilization_validation"
+      ]
+    },
+    {
+      "claim_id": "f2_claim_05",
+      "theme_id": "uav_evtol_low_altitude_economy_value_chain_v1",
+      "source_id": "f2_001696_ar2025",
+      "claim_text": "宗申航发CA500航空活塞发动机已获适航批准并实现商业化交付，且宗申航发收入2.33亿元；但航空活塞发动机不属于electric_propulsion_power_energy_systems，故不作F2直接映射。",
+      "claim_type": "risk",
+      "confidence": 0.9,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "electric_propulsion_power_energy_systems"
+      ]
+    },
+    {
+      "claim_id": "f2_claim_06",
+      "theme_id": "uav_evtol_low_altitude_economy_value_chain_v1",
+      "source_id": "f2_688070_ar2025",
+      "claim_text": "纵横股份形成工业无人机、无人值守机库、纵横云和AI整体方案，智慧巴中项目中标金额1.06亿元，并在多地形成可复制低空数字化应用。",
+      "claim_type": "company_mapping",
+      "confidence": 0.9,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "industrial_consumer_uav_platforms",
+        "vertiport_airspace_management_infrastructure"
+      ]
+    },
+    {
+      "claim_id": "f2_claim_07",
+      "theme_id": "uav_evtol_low_altitude_economy_value_chain_v1",
+      "source_id": "f2_688070_ar2025",
+      "claim_text": "纵横股份2025年工业无人机收入6.21亿元，其中无人机系统4.33亿元、无人机服务0.64亿元；CW-100仍为型号合格证申请和验证程序，未取得TC。",
+      "claim_type": "value_capture",
+      "confidence": 0.9,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "industrial_consumer_uav_platforms",
+        "certification_orders_delivery_utilization_validation"
+      ]
+    },
+    {
+      "claim_id": "f2_claim_08",
+      "theme_id": "uav_evtol_low_altitude_economy_value_chain_v1",
+      "source_id": "f2_002389_ar2025",
+      "claim_text": "航天彩虹以CH-3、CH-4拓展物流、应急与人工影响天气低空场景，并披露无人机交付和低空用户签约；无人机子公司收入未拆分低空民用场景，签署订单不等于确认收入。",
+      "claim_type": "company_mapping",
+      "confidence": 0.9,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "industrial_consumer_uav_platforms",
+        "certification_orders_delivery_utilization_validation"
+      ]
+    },
+    {
+      "claim_id": "f2_claim_09",
+      "theme_id": "uav_evtol_low_altitude_economy_value_chain_v1",
+      "source_id": "f2_603308_ar2025",
+      "claim_text": "应流股份YLHD-300混动系统已与ES1000大型无人运输机配飞展示，六安金安机场取得A1类通航机场使用许可证并开展试飞；低空动力与机场运营收入未单列。",
+      "claim_type": "tech_route",
+      "confidence": 0.9,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "electric_propulsion_power_energy_systems",
+        "flight_operations_maintenance_services"
+      ]
+    },
+    {
+      "claim_id": "f2_claim_10",
+      "theme_id": "uav_evtol_low_altitude_economy_value_chain_v1",
+      "source_id": "f2_600580_ar2025",
+      "claim_text": "卧龙电驱披露eVTOL电动垂直起降航空器电驱动系统研制项目，期末资本化研发支出140.84万元；该证据属于原型机/研发阶段线索，未证明TC、签署订单、交付或收入。",
+      "claim_type": "tech_route",
+      "confidence": 0.9,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "electric_propulsion_power_energy_systems",
+        "certification_orders_delivery_utilization_validation"
+      ]
+    },
+    {
+      "claim_id": "f2_claim_11",
+      "theme_id": "uav_evtol_low_altitude_economy_value_chain_v1",
+      "source_id": "f2_000801_ar2025",
+      "claim_text": "四川九洲低空产品包括协同运行管理、检测与适航测试、飞行服务站和无人机综合航电，并已进入无人机平台、取得地面询问机批量订货。",
+      "claim_type": "company_mapping",
+      "confidence": 0.9,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "flight_control_avionics_navigation",
+        "low_altitude_communications_surveillance_navigation",
+        "certification_orders_delivery_utilization_validation"
+      ]
+    },
+    {
+      "claim_id": "f2_claim_12",
+      "theme_id": "uav_evtol_low_altitude_economy_value_chain_v1",
+      "source_id": "f2_000801_ar2025",
+      "claim_text": "四川九洲空管子公司2025年收入11.56亿元，但该口径同时包含传统空管、雷达、通信导航监视系统，未单列低空特定产品确认收入。",
+      "claim_type": "risk",
+      "confidence": 0.9,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "low_altitude_communications_surveillance_navigation"
+      ]
+    },
+    {
+      "claim_id": "f2_claim_13",
+      "theme_id": "uav_evtol_low_altitude_economy_value_chain_v1",
+      "source_id": "f2_688631_ar2025",
+      "claim_text": "莱斯信息天牧-M低空飞行服务管理平台及配套方案已在全国十余座重点城市落地，并落实浙江、湖北、山西省级及南京、扬州市级平台。",
+      "claim_type": "company_mapping",
+      "confidence": 0.9,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "low_altitude_communications_surveillance_navigation",
+        "vertiport_airspace_management_infrastructure"
+      ]
+    },
+    {
+      "claim_id": "f2_claim_14",
+      "theme_id": "uav_evtol_low_altitude_economy_value_chain_v1",
+      "source_id": "f2_688631_ar2025",
+      "claim_text": "莱斯信息2025年收入12.74亿元并披露空管大单，但低空平台收入未单列；项目落实和产品落地不能替代低空专项确认收入与毛利披露。",
+      "claim_type": "risk",
+      "confidence": 0.9,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "vertiport_airspace_management_infrastructure",
+        "certification_orders_delivery_utilization_validation"
+      ]
+    },
+    {
+      "claim_id": "f2_claim_15",
+      "theme_id": "uav_evtol_low_altitude_economy_value_chain_v1",
+      "source_id": "f2_301091_ar2025",
+      "claim_text": "深城交承建SILAS、低空智能融合基础设施与大鹏无人机测试基地，自主研发一网统飞并已形成基地投入运营和多城市覆盖。",
+      "claim_type": "company_mapping",
+      "confidence": 0.9,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "vertiport_airspace_management_infrastructure",
+        "flight_operations_maintenance_services"
+      ]
+    },
+    {
+      "claim_id": "f2_claim_16",
+      "theme_id": "uav_evtol_low_altitude_economy_value_chain_v1",
+      "source_id": "f2_301091_ar2025",
+      "claim_text": "深城交披露软件平台合同、运营运维合同、低空场站投资和海外低空咨询，但均为混合口径；未来订单或合作意向不作为确认收入，低空专项收入仍需单列。",
+      "claim_type": "risk",
+      "confidence": 0.9,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "certification_orders_delivery_utilization_validation"
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "node_id": "industrial_consumer_uav_platforms",
+      "theme_id": "uav_evtol_low_altitude_economy_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "工业与消费无人机平台",
+      "node_type": "equipment",
+      "description": "Complete UAV systems for industrial, logistics, emergency, inspection and consumer missions; military-only and satellite systems are not sufficient evidence.",
+      "value_capture_score": 5,
+      "bottleneck_score": 4,
+      "localization_gap_score": 2,
+      "supply_tightness_score": 3,
+      "evidence_strength": 5,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "系统收入",
+        "交付量",
+        "无人值守占比",
+        "飞行时长"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [
+        "纵横股份",
+        "航天彩虹"
+      ],
+      "related_stock_codes": [
+        "688070.SH",
+        "002389.SZ"
+      ]
+    },
+    {
+      "node_id": "evtol_aircraft_platforms",
+      "theme_id": "uav_evtol_low_altitude_economy_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "eVTOL航空器平台",
+      "node_type": "equipment",
+      "description": "Electric vertical-takeoff-and-landing aircraft platforms, prototypes and certified products, with stage labels kept explicit.",
+      "value_capture_score": 4,
+      "bottleneck_score": 5,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "原型机",
+        "适航阶段",
+        "订单",
+        "交付"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [
+        "万丰奥威"
+      ],
+      "related_stock_codes": [
+        "002085.SZ"
+      ]
+    },
+    {
+      "node_id": "flight_control_avionics_navigation",
+      "theme_id": "uav_evtol_low_altitude_economy_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "飞控航电与机载导航",
+      "node_type": "subsystem",
+      "description": "Aircraft-specific flight control and integrated avionics/navigation systems; generic chips or satellite products remain external dependencies.",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 3,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "平台定点",
+        "批量订货",
+        "适航测试",
+        "可靠性"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [
+        "四川九洲"
+      ],
+      "related_stock_codes": [
+        "000801.SZ"
+      ]
+    },
+    {
+      "node_id": "electric_propulsion_power_energy_systems",
+      "theme_id": "uav_evtol_low_altitude_economy_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "电推进、动力与能源系统",
+      "node_type": "subsystem",
+      "description": "Aircraft-specific electric or hybrid propulsion, motors, inverters, batteries, BMS and energy systems; generic automotive products do not qualify.",
+      "value_capture_score": 4,
+      "bottleneck_score": 5,
+      "localization_gap_score": 4,
+      "supply_tightness_score": 4,
+      "evidence_strength": 4,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "功率密度",
+        "系统效率",
+        "适航",
+        "量产订单"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [
+        "应流股份",
+        "卧龙电驱"
+      ],
+      "related_stock_codes": [
+        "603308.SH",
+        "600580.SH"
+      ]
+    },
+    {
+      "node_id": "airframe_composites_precision_components",
+      "theme_id": "uav_evtol_low_altitude_economy_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "机体复材与精密部件",
+      "node_type": "core_component",
+      "description": "Aircraft-specific airframes, composite structures and precision components; generic automotive or industrial composite revenue is excluded.",
+      "value_capture_score": 3,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 3,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "航空器定点",
+        "认证",
+        "单机价值",
+        "交付"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [
+        "万丰奥威"
+      ],
+      "related_stock_codes": [
+        "002085.SZ"
+      ]
+    },
+    {
+      "node_id": "low_altitude_communications_surveillance_navigation",
+      "theme_id": "uav_evtol_low_altitude_economy_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "低空通信监视导航",
+      "node_type": "infrastructure",
+      "description": "Low-altitude-specific cooperative and non-cooperative surveillance, communications, navigation, weather and aircraft-network integration.",
+      "value_capture_score": 4,
+      "bottleneck_score": 5,
+      "localization_gap_score": 4,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "覆盖范围",
+        "目标识别",
+        "连续跟踪",
+        "项目收入"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [
+        "四川九洲",
+        "莱斯信息"
+      ],
+      "related_stock_codes": [
+        "000801.SZ",
+        "688631.SH"
+      ]
+    },
+    {
+      "node_id": "vertiport_airspace_management_infrastructure",
+      "theme_id": "uav_evtol_low_altitude_economy_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "起降场与空域管理基础设施",
+      "node_type": "infrastructure",
+      "description": "Low-altitude flight-service platforms, airspace planning, intelligent towers, vertiports, testing bases and management infrastructure.",
+      "value_capture_score": 5,
+      "bottleneck_score": 5,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 4,
+      "evidence_strength": 5,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "城市落地",
+        "平台订单",
+        "飞行计划量",
+        "运营收入"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [
+        "纵横股份",
+        "莱斯信息",
+        "深城交"
+      ],
+      "related_stock_codes": [
+        "688070.SH",
+        "688631.SH",
+        "301091.SZ"
+      ]
+    },
+    {
+      "node_id": "flight_operations_maintenance_services",
+      "theme_id": "uav_evtol_low_altitude_economy_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "飞行运营与维修服务",
+      "node_type": "service",
+      "description": "Commercial low-altitude flight operations, route services, aircraft management, maintenance and operational support.",
+      "value_capture_score": 5,
+      "bottleneck_score": 5,
+      "localization_gap_score": 2,
+      "supply_tightness_score": 4,
+      "evidence_strength": 5,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "飞行小时",
+        "航线利用",
+        "机队规模",
+        "运营收入"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [
+        "中信海直",
+        "应流股份",
+        "深城交"
+      ],
+      "related_stock_codes": [
+        "000099.SZ",
+        "603308.SH",
+        "301091.SZ"
+      ]
+    },
+    {
+      "node_id": "certification_orders_delivery_utilization_validation",
+      "theme_id": "uav_evtol_low_altitude_economy_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "适航订单交付利用验证",
+      "node_type": "service",
+      "description": "Explicit ladder from prototype and certification application through TC/PC, signed order, delivery, operation, utilization and recognized revenue.",
+      "value_capture_score": 4,
+      "bottleneck_score": 5,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 4,
+      "evidence_strength": 4,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "TC/PC",
+        "签署订单",
+        "交付",
+        "确认收入"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [
+        "万丰奥威",
+        "中信海直",
+        "纵横股份",
+        "航天彩虹",
+        "四川九洲",
+        "莱斯信息",
+        "深城交"
+      ],
+      "related_stock_codes": [
+        "002085.SZ",
+        "000099.SZ",
+        "688070.SH",
+        "002389.SZ",
+        "000801.SZ",
+        "688631.SH",
+        "301091.SZ"
+      ]
+    }
+  ],
+  "value_capture_assessments": [
+    {
+      "node_id": "industrial_consumer_uav_platforms",
+      "value_basis": "customer_certification",
+      "assessment_text": "工业与消费无人机平台的价值只在低空特定产品、项目、适航、交付、运营或收入证据闭环后确认。",
+      "rank": 1,
+      "evidence_ids": [
+        "f2_claim_06",
+        "f2_claim_07",
+        "f2_claim_08"
+      ],
+      "uncertainty": "公司披露多为混合口径，仍需专项收入、毛利、订单转化与持续利用数据。"
+    },
+    {
+      "node_id": "evtol_aircraft_platforms",
+      "value_basis": "technology_barrier",
+      "assessment_text": "eVTOL航空器平台的价值只在低空特定产品、项目、适航、交付、运营或收入证据闭环后确认。",
+      "rank": 2,
+      "evidence_ids": [
+        "f2_claim_01",
+        "f2_claim_02"
+      ],
+      "uncertainty": "公司披露多为混合口径，仍需专项收入、毛利、订单转化与持续利用数据。"
+    },
+    {
+      "node_id": "flight_control_avionics_navigation",
+      "value_basis": "customer_certification",
+      "assessment_text": "飞控航电与机载导航的价值只在低空特定产品、项目、适航、交付、运营或收入证据闭环后确认。",
+      "rank": 3,
+      "evidence_ids": [
+        "f2_claim_11"
+      ],
+      "uncertainty": "公司披露多为混合口径，仍需专项收入、毛利、订单转化与持续利用数据。"
+    },
+    {
+      "node_id": "electric_propulsion_power_energy_systems",
+      "value_basis": "technology_barrier",
+      "assessment_text": "电推进、动力与能源系统的价值只在低空特定产品、项目、适航、交付、运营或收入证据闭环后确认。",
+      "rank": 4,
+      "evidence_ids": [
+        "f2_claim_05",
+        "f2_claim_09",
+        "f2_claim_10"
+      ],
+      "uncertainty": "公司披露多为混合口径，仍需专项收入、毛利、订单转化与持续利用数据。"
+    },
+    {
+      "node_id": "airframe_composites_precision_components",
+      "value_basis": "customer_certification",
+      "assessment_text": "机体复材与精密部件的价值只在低空特定产品、项目、适航、交付、运营或收入证据闭环后确认。",
+      "rank": 5,
+      "evidence_ids": [
+        "f2_claim_02"
+      ],
+      "uncertainty": "公司披露多为混合口径，仍需专项收入、毛利、订单转化与持续利用数据。"
+    },
+    {
+      "node_id": "low_altitude_communications_surveillance_navigation",
+      "value_basis": "integration_control",
+      "assessment_text": "低空通信监视导航的价值只在低空特定产品、项目、适航、交付、运营或收入证据闭环后确认。",
+      "rank": 6,
+      "evidence_ids": [
+        "f2_claim_11",
+        "f2_claim_12",
+        "f2_claim_13"
+      ],
+      "uncertainty": "公司披露多为混合口径，仍需专项收入、毛利、订单转化与持续利用数据。"
+    },
+    {
+      "node_id": "vertiport_airspace_management_infrastructure",
+      "value_basis": "integration_control",
+      "assessment_text": "起降场与空域管理基础设施的价值只在低空特定产品、项目、适航、交付、运营或收入证据闭环后确认。",
+      "rank": 7,
+      "evidence_ids": [
+        "f2_claim_06",
+        "f2_claim_13",
+        "f2_claim_14",
+        "f2_claim_15"
+      ],
+      "uncertainty": "公司披露多为混合口径，仍需专项收入、毛利、订单转化与持续利用数据。"
+    },
+    {
+      "node_id": "flight_operations_maintenance_services",
+      "value_basis": "customer_certification",
+      "assessment_text": "飞行运营与维修服务的价值只在低空特定产品、项目、适航、交付、运营或收入证据闭环后确认。",
+      "rank": 8,
+      "evidence_ids": [
+        "f2_claim_03",
+        "f2_claim_04",
+        "f2_claim_09",
+        "f2_claim_15"
+      ],
+      "uncertainty": "公司披露多为混合口径，仍需专项收入、毛利、订单转化与持续利用数据。"
+    },
+    {
+      "node_id": "certification_orders_delivery_utilization_validation",
+      "value_basis": "customer_certification",
+      "assessment_text": "适航订单交付利用验证的价值只在低空特定产品、项目、适航、交付、运营或收入证据闭环后确认。",
+      "rank": 9,
+      "evidence_ids": [
+        "f2_claim_01",
+        "f2_claim_03",
+        "f2_claim_04",
+        "f2_claim_07",
+        "f2_claim_08",
+        "f2_claim_10",
+        "f2_claim_11",
+        "f2_claim_14",
+        "f2_claim_16"
+      ],
+      "uncertainty": "公司披露多为混合口径，仍需专项收入、毛利、订单转化与持续利用数据。"
+    }
+  ]
+}

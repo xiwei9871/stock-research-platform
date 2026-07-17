@@ -325,6 +325,164 @@ F1_MATRIX_CALIBRATION_CONTRACTS = {
     },
 }
 
+F2_CHAIN_ID = "uav_evtol_low_altitude_economy"
+F2_THEME_ID = "uav_evtol_low_altitude_economy_value_chain_v1"
+F2_THEME_PATH = REPOSITORY_ROOT / f"artifacts/theme_decomposition/{F2_THEME_ID}.json"
+F2_MAPPING_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/company_mappings"
+    / "uav_evtol_low_altitude_economy_company_mapping_v1.json"
+)
+F2_SOURCE_PACK_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "uav_evtol_low_altitude_economy_source_pack_v1.json"
+)
+F2_MATRIX_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "uav_evtol_low_altitude_economy_node_evidence_matrix_v1.json"
+)
+F2_L3 = {
+    "low_altitude_aircraft_platforms",
+    "low_altitude_critical_systems",
+    "low_altitude_infrastructure_operations",
+    "low_altitude_certification_commercialization",
+}
+F2_L4 = {
+    "industrial_consumer_uav_platforms",
+    "evtol_aircraft_platforms",
+    "flight_control_avionics_navigation",
+    "electric_propulsion_power_energy_systems",
+    "airframe_composites_precision_components",
+    "low_altitude_communications_surveillance_navigation",
+    "vertiport_airspace_management_infrastructure",
+    "flight_operations_maintenance_services",
+    "certification_orders_delivery_utilization_validation",
+}
+F2_INITIAL_UNIVERSE = {
+    "002085.SZ", "000099.SZ", "001696.SZ", "688070.SH", "002389.SZ",
+    "603308.SH", "600580.SH", "000801.SZ", "688631.SH", "301091.SZ",
+}
+F2_TYPED_DEPENDENCY_EDGES = {
+    (
+        "electric_propulsion_power_energy_systems",
+        "battery_high_specific_energy_cell",
+        "depends_on",
+    ),
+    (
+        "electric_propulsion_power_energy_systems",
+        "battery_management_system_platform",
+        "depends_on",
+    ),
+    (
+        "electric_propulsion_power_energy_systems",
+        "silicon_carbide_power_device",
+        "uses",
+    ),
+}
+F2_MAPPING_CONTRACTS = {
+    "002085.SZ": {
+        "node": "evtol_aircraft_platforms",
+        "source": "f2_002085_ar2025",
+        "revenue_relevance": "undisclosed",
+        "business_materiality": "emerging_segment",
+        "locators": {
+            "product_relationship": "第11页，eVTOL机型、特许飞行证与适航取证",
+            "revenue_materiality": "第15-16页，通航飞机制造收入27.46亿元但未单列eVTOL收入",
+            "business_stage": "第15页，收购Volocopter核心资产并推进eVTOL研发取证",
+        },
+    },
+    "000099.SZ": {
+        "node": "flight_operations_maintenance_services",
+        "source": "f2_000099_ar2025",
+        "revenue_relevance": "material",
+        "business_materiality": "core_business",
+        "locators": {
+            "product_relationship": "第14-15页，低空航线、eVTOL试飞与综合运营服务",
+            "revenue_materiality": "第16、66页，通航运输收入22.16亿元及收入确认口径",
+            "business_stage": "第30页，吨级eVTOL跨海试飞和跨城货运航线首飞",
+        },
+    },
+    "688070.SH": {
+        "node": "industrial_consumer_uav_platforms",
+        "source": "f2_688070_ar2025",
+        "revenue_relevance": "material",
+        "business_materiality": "core_business",
+        "locators": {
+            "product_relationship": "第23页，工业无人机与无人值守云平台解决方案",
+            "revenue_materiality": "第37-38页，工业无人机收入6.21亿元及分产品收入",
+            "business_stage": "第23、40页，智慧巴中项目与低空飞行服务客户销售",
+        },
+    },
+    "002389.SZ": {
+        "node": "industrial_consumer_uav_platforms",
+        "source": "f2_002389_ar2025",
+        "revenue_relevance": "undisclosed",
+        "business_materiality": "meaningful_segment",
+        "locators": {
+            "product_relationship": "第10页，CH-3和CH-4低空物流应急与人工影响天气场景",
+            "revenue_materiality": "第19、30页，无人机子公司收入但未单列低空场景收入",
+            "business_stage": "第18、31页，无人机交付与低空应用用户签约边界",
+        },
+    },
+    "603308.SH": {
+        "node": "electric_propulsion_power_energy_systems",
+        "source": "f2_603308_ar2025",
+        "revenue_relevance": "undisclosed",
+        "business_materiality": "emerging_segment",
+        "locators": {
+            "product_relationship": "第10页，YLHD-300混动系统配飞ES1000大型无人运输机",
+            "revenue_materiality": "第11页，公司两机业务收入增长但未单列低空动力收入",
+            "business_stage": "第10页，混动系统展示及A1类通航机场取得使用许可证",
+        },
+    },
+    "600580.SH": {
+        "node": "electric_propulsion_power_energy_systems",
+        "source": "f2_600580_ar2025",
+        "revenue_relevance": "undisclosed",
+        "business_materiality": "emerging_segment",
+        "locators": {
+            "product_relationship": "第199页，eVTOL电动垂直起降航空器电驱动系统研制",
+            "revenue_materiality": "第12页，电动航空取得实质性突破但未单列收入",
+            "business_stage": "第199页，电驱动系统处于资本化研发阶段",
+        },
+    },
+    "000801.SZ": {
+        "node": "low_altitude_communications_surveillance_navigation",
+        "source": "f2_000801_ar2025",
+        "revenue_relevance": "undisclosed",
+        "business_materiality": "meaningful_segment",
+        "locators": {
+            "product_relationship": "第9页，低空管控、适航测试、飞行服务站与无人机航电系统",
+            "revenue_materiality": "第23页，空管子公司收入11.56亿元但未单列低空收入",
+            "business_stage": "第9页，进入无人机平台并取得地面询问机批量订货",
+        },
+    },
+    "688631.SH": {
+        "node": "vertiport_airspace_management_infrastructure",
+        "source": "f2_688631_ar2025",
+        "revenue_relevance": "undisclosed",
+        "business_materiality": "meaningful_segment",
+        "locators": {
+            "product_relationship": "第15-16页，低空飞行管理服务平台与低空智联产品",
+            "revenue_materiality": "第33页，公司收入12.74亿元但未单列低空业务收入",
+            "business_stage": "第31、33-34页，天牧平台十余城落地及省市县项目落实",
+        },
+    },
+    "301091.SZ": {
+        "node": "vertiport_airspace_management_infrastructure",
+        "source": "f2_301091_ar2025",
+        "revenue_relevance": "undisclosed",
+        "business_materiality": "meaningful_segment",
+        "locators": {
+            "product_relationship": "第21-22页，SILAS、低空基础设施与无人机测试基地",
+            "revenue_materiality": "第23-24页，软件及运营合同未单列低空确认收入",
+            "business_stage": "第24页，低空场站投资及大鹏无人机测试基地投入运营",
+        },
+    },
+}
+
 REQUIRED_READABLE_SECTIONS = [
     {
         "name": "研究结论",
@@ -554,8 +712,8 @@ def test_foundation_models_f1_artifacts_are_reviewed_and_wave_is_one_of_five_rea
         "accepted_source_backed_claims": 19,
         "reviewed_mappings": 10,
     }
-    assert report["ready_theme_count"] == 1
-    assert report["not_ready_theme_count"] == 4
+    assert report["ready_theme_count"] == 2
+    assert report["not_ready_theme_count"] == 3
 
 
 def test_foundation_models_f1_full_research_profile_and_boundary_ownership() -> None:
@@ -1026,3 +1184,248 @@ def test_foundation_models_f1_closes_the_initial_audit_universe_without_concept_
         for row in mapping["company_mappings"]
         if row["review_status"] == "reviewed"
     )
+
+
+def test_low_altitude_f2_catalog_first_structure_and_link_contract() -> None:
+    assert_catalog_first_contract(F2_CHAIN_ID, F2_THEME_ID, F2_L3, F2_L4)
+    catalog = load_industry_catalog()
+    chain_nodes = [
+        row for row in catalog["nodes"] if row["chain_id"] == F2_CHAIN_ID
+    ]
+    by_id = {row["node_id"]: row for row in chain_nodes}
+    assert {row["node_kind"] for row in chain_nodes} == {"canonical"}
+    assert all(not row["canonical_key"] for row in chain_nodes if row["level"] == "L3")
+    l4_keys = [row["canonical_key"] for row in chain_nodes if row["level"] == "L4"]
+    assert len(l4_keys) == len(set(l4_keys)) == 9
+    assert all(key.startswith("low_altitude:") for key in l4_keys)
+    for row in chain_nodes:
+        assert row["primary_path"][1] == F2_CHAIN_ID
+        if row["level"] == "L4":
+            assert row["parent_node_id"] in F2_L3
+            assert by_id[row["parent_node_id"]]["level"] == "L3"
+
+
+def test_low_altitude_f2_artifacts_are_reviewed_and_wave_is_two_of_five_ready() -> None:
+    theme = load_json(F2_THEME_PATH)
+    mapping = load_json(F2_MAPPING_PATH)
+    source_pack = load_json(F2_SOURCE_PACK_PATH)
+    matrix = load_json(F2_MATRIX_PATH)
+    assert theme["artifact_version"] == "theme_decomposition_v1_6"
+    assert theme["theme"]["status"] == "reviewed"
+    assert theme["theme"]["theme_id"] == F2_THEME_ID
+    assert {row["node_id"] for row in theme["nodes"]} == F2_L4
+    assert len(source_pack["sources"]) >= 10
+    assert sum(
+        row["source_type"] in {"company_filing", "official_report", "official_article"}
+        for row in source_pack["sources"]
+    ) >= 8
+    assert len(theme["claims"]) >= 12
+    reviewed = [
+        row for row in mapping["company_mappings"]
+        if row["review_status"] == "reviewed"
+    ]
+    assert reviewed
+    assert len(reviewed) >= 8
+    assert len(reviewed) == 9
+    assert {row["company_code"] for row in reviewed} == set(F2_MAPPING_CONTRACTS)
+    assert {row["node_id"] for row in matrix["node_evidence_matrix"]} == F2_L4
+
+    report = VERIFIER.build_theme_batch_report(MANIFEST_PATH, wave="wave_f")
+    rows = {row["chain_id"]: row for row in report["theme_results"]}
+    assert rows[F2_CHAIN_ID]["ready"] is True
+    assert rows[F2_CHAIN_ID]["counts"] == {
+        "accepted_sources": 10,
+        "primary_sources": 10,
+        "claims": 16,
+        "accepted_source_backed_claims": 16,
+        "reviewed_mappings": 9,
+    }
+    assert report["ready_theme_count"] == 2
+    assert report["not_ready_theme_count"] == 3
+
+
+def test_low_altitude_f2_full_profile_and_textual_unexpanded_boundaries() -> None:
+    theme = load_json(F2_THEME_PATH)
+    profile = theme["research_profile"]
+    assert profile["catalog_chain_id"] == F2_CHAIN_ID
+    for field in (
+        "industry_stage", "central_conflict", "investment_summary",
+        "value_flow_summary", "profit_pool_summary", "validation_signals",
+        "evidence_gap_summary",
+    ):
+        assert profile[field]
+    text = json.dumps(theme, ensure_ascii=False)
+    for boundary in (
+        "通用汽车电机、电池与功率器件不属于本链",
+        "通用复合材料与精密零部件不属于本链",
+        "通用机场设施不因低空概念进入本链",
+        "卫星通信、导航与遥感系统保持卫星链所有权",
+        "商业航天发射与空间基础设施不属于本链",
+        "移动通信网络与碳纤维复合材料链尚未展开L4，本链仅文本记录依赖，不虚构节点",
+    ):
+        assert boundary in text
+
+
+def test_low_altitude_f2_sources_claims_matrix_and_served_sources_are_synchronized() -> None:
+    theme = load_json(F2_THEME_PATH)
+    mapping = load_json(F2_MAPPING_PATH)
+    source_pack = load_json(F2_SOURCE_PACK_PATH)
+    matrix = load_json(F2_MATRIX_PATH)
+    served = list_theme_research_sources(F2_THEME_ID, read_source="artifact")
+    identity_fields = (
+        "source_id", "source_type", "title", "publisher", "author",
+        "publish_date", "url_or_ref", "access_level", "reliability_level",
+        "review_status", "notes",
+    )
+    identity = lambda rows: {
+        row["source_id"]: tuple(
+            row.get(field, row.get("url") if field == "url_or_ref" else None)
+            for field in identity_fields
+        )
+        for row in rows
+    }
+    assert identity(theme["sources"]) == identity(mapping["sources"])
+    assert identity(theme["sources"]) == identity(source_pack["sources"])
+    assert identity(theme["sources"]) == identity(served["items"])
+    accepted = {
+        row["source_id"] for row in source_pack["sources"]
+        if row["review_status"] == "accepted"
+    }
+    claim_source_union = {
+        source_id for claim in theme["claims"]
+        for source_id in (claim["source_id"], *claim["supporting_source_ids"])
+    }
+    matrix_source_union = {
+        source_id for row in matrix["node_evidence_matrix"]
+        for source_id in row["accepted_source_ids"]
+    }
+    assert accepted == claim_source_union == matrix_source_union
+
+
+def test_low_altitude_f2_reviewed_company_mapping_contracts_are_exact() -> None:
+    mapping = load_json(F2_MAPPING_PATH)
+    evidence = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+    reviewed = {
+        row["company_code"]: row for row in mapping["company_mappings"]
+        if row["review_status"] == "reviewed"
+    }
+    assert reviewed
+    assert len(reviewed) >= 8
+    assert set(reviewed) == set(F2_MAPPING_CONTRACTS)
+    for company_code, contract in F2_MAPPING_CONTRACTS.items():
+        row = reviewed[company_code]
+        assert row["mapped_node_id"] == contract["node"]
+        assert row["revenue_relevance"] == contract["revenue_relevance"]
+        assert row["business_materiality"] == contract["business_materiality"]
+        items = [evidence[evidence_id] for evidence_id in row["evidence_ids"]]
+        assert [item["evidence_type"] for item in items] == [
+            "product_relationship", "revenue_materiality", "business_stage"
+        ]
+        assert len({item["excerpt_locator"] for item in items}) == 3
+        for item in items:
+            assert item["source_id"] == contract["source"]
+            assert item["excerpt_locator"] == contract["locators"][item["evidence_type"]]
+
+
+def test_low_altitude_f2_closes_initial_universe_and_excludes_piston_engine_boundary() -> None:
+    mapping = load_json(F2_MAPPING_PATH)
+    reviewed = {
+        row["company_code"] for row in mapping["company_mappings"]
+        if row["review_status"] == "reviewed"
+    }
+    excluded = {
+        row["company_code"] for row in mapping["excluded_initial_candidates"]
+    }
+    assert reviewed | excluded == F2_INITIAL_UNIVERSE
+    assert not reviewed & excluded
+    assert excluded == {"001696.SZ"}
+    exclusion = mapping["excluded_initial_candidates"][0]
+    assert exclusion["source_id"] == "f2_001696_ar2025"
+    assert "航空活塞发动机" in exclusion["reason"]
+    assert "electric_propulsion_power_energy_systems" in exclusion["reason"]
+    assert mapping["concept_only_candidates"] == []
+
+
+def test_low_altitude_f2_stage_language_separates_prototype_certification_orders_delivery_operation_and_revenue() -> None:
+    text = json.dumps(
+        {"theme": load_json(F2_THEME_PATH), "mapping": load_json(F2_MAPPING_PATH)},
+        ensure_ascii=False,
+    )
+    for stage in (
+        "原型机", "型号合格证申请", "型号合格证（TC）", "生产许可证（PC）",
+        "签署订单", "交付", "投入运营", "航线利用", "确认收入",
+    ):
+        assert stage in text
+    assert "VoloXpro特许飞行证不等于型号合格证" in text
+    assert "未来订单或合作意向不作为确认收入" in text
+    assert "示范区成员或政策指定不构成公司受益证据" in text
+
+
+def test_low_altitude_f2_has_exact_typed_external_edges_to_existing_owners() -> None:
+    catalog = load_industry_catalog()
+    nodes = {row["node_id"]: row for row in catalog["nodes"]}
+    cross_chain_edges = {
+        (row["source_node_id"], row["target_node_id"], row["relationship_type"])
+        for row in catalog["edges"]
+        if row["source_node_id"] in F2_L4
+        and nodes[row["target_node_id"]]["chain_id"] != F2_CHAIN_ID
+    }
+    assert cross_chain_edges == F2_TYPED_DEPENDENCY_EDGES
+    assert {
+        nodes[target]["chain_id"] for _, target, _ in cross_chain_edges
+    } == {"power_batteries_battery_materials", "power_semiconductors"}
+
+
+def test_low_altitude_f2_rejects_generic_motor_battery_composite_satellite_airport_and_space_false_positives() -> None:
+    mapping = load_json(F2_MAPPING_PATH)
+    theme = load_json(F2_THEME_PATH)
+    matrix = load_json(F2_MATRIX_PATH)
+    catalog = load_industry_catalog()
+    reviewed_text = json.dumps(
+        [row for row in mapping["company_mappings"] if row["review_status"] == "reviewed"],
+        ensure_ascii=False,
+    )
+    for forbidden in (
+        "汽车电机收入直接映射", "动力电池收入直接映射", "通用复合材料收入直接映射",
+        "卫星产品收入直接映射", "机场概念直接映射", "商业航天产品直接映射",
+    ):
+        assert forbidden not in reviewed_text
+    direct_claims = " ".join(row["claim_text"] for row in theme["claims"])
+    matrix_text = json.dumps(matrix, ensure_ascii=False)
+    edge_text = json.dumps(
+        [row for row in catalog["edges"] if row["source_node_id"] in F2_L4],
+        ensure_ascii=False,
+    )
+    for false_positive in (
+        "汽车轮毂形成低空收入", "卫星制造收入形成低空收入",
+        "火箭发射收入形成低空收入",
+    ):
+        assert false_positive not in direct_claims
+        assert false_positive not in matrix_text
+        assert false_positive not in edge_text
+
+
+def test_low_altitude_f2_matrix_is_calibrated_and_company_transmission_is_specific() -> None:
+    theme = load_json(F2_THEME_PATH)
+    mapping = load_json(F2_MAPPING_PATH)
+    matrix = load_json(F2_MATRIX_PATH)
+    rows = {row["node_id"]: row for row in matrix["node_evidence_matrix"]}
+    theme_nodes = {row["node_id"]: row for row in theme["nodes"]}
+    assert set(rows) == F2_L4
+    strengths = {row["evidence_strength_after"] for row in rows.values()}
+    assert strengths == {3, 4, 5}
+    assert {row["evidence_gap_status"] for row in rows.values()} == {
+        "covered", "evidence_gap"
+    }
+    assert len({row["rationale"] for row in rows.values()}) == 9
+    for node_id, row in rows.items():
+        assert row["node_review_status"] == "reviewed"
+        assert theme_nodes[node_id]["evidence_strength"] == row["evidence_strength_after"]
+        assert row["next_evidence_needed"]
+    reviewed = [
+        row for row in mapping["company_mappings"]
+        if row["review_status"] == "reviewed"
+    ]
+    assert len({row["relationship_summary"] for row in reviewed}) == 9
+    assert len({row["notes"] for row in reviewed}) == 9
+    assert all("仍需" in row["notes"] for row in reviewed)

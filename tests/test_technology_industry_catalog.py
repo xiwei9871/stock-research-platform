@@ -193,6 +193,7 @@ def test_repository_catalog_starts_with_ten_approved_sectors():
         "controlled_nuclear_fusion",
         "quantum_computing_communication_measurement",
         "ai_foundation_models_application_software",
+        "uav_evtol_low_altitude_economy",
     }
     nodes_by_id = {row["node_id"]: row for row in catalog["nodes"]}
     assert {
@@ -204,6 +205,8 @@ def test_repository_catalog_starts_with_ten_approved_sectors():
         "ai_foundation_models_application_software",
         "humanoid_robots_embodied_intelligence",
         "power_batteries_battery_materials",
+        "power_semiconductors",
+        "uav_evtol_low_altitude_economy",
     }
     assert len(catalog["theme_compositions"]) == 88
     assert {

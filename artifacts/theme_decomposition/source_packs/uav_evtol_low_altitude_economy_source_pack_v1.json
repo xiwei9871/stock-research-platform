@@ -1,0 +1,257 @@
+{
+  "artifact_version": "uav_evtol_low_altitude_economy_source_pack_v1",
+  "theme_id": "uav_evtol_low_altitude_economy_value_chain_v1",
+  "as_of_date": "2026-07-17",
+  "sources": [
+    {
+      "source_id": "f2_002085_ar2025",
+      "source_type": "company_filing",
+      "title": "浙江万丰奥威汽轮股份有限公司2025年年度报告",
+      "publisher": "浙江万丰奥威汽轮股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-29",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-29/1225243182.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第11、15-16页",
+      "evidence_summary": "eVTOL机型、特许飞行证、研发取证以及通航飞机制造收入。",
+      "supported_claim_ids": [
+        "f2_claim_01",
+        "f2_claim_02"
+      ],
+      "supported_node_ids": [
+        "airframe_composites_precision_components",
+        "certification_orders_delivery_utilization_validation",
+        "evtol_aircraft_platforms"
+      ],
+      "limitations": "eVTOL专项收入、订单、交付与TC尚未披露。",
+      "notes": "第11、15-16页；eVTOL机型、特许飞行证、研发取证以及通航飞机制造收入。；eVTOL专项收入、订单、交付与TC尚未披露。"
+    },
+    {
+      "source_id": "f2_000099_ar2025",
+      "source_type": "company_filing",
+      "title": "中信海洋直升机股份有限公司2025年年度报告",
+      "publisher": "中信海洋直升机股份有限公司",
+      "author": "",
+      "publish_date": "2026-03-17",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-03-17/1225012497.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第14-16、30、66页",
+      "evidence_summary": "通航运输、低空航线、eVTOL试飞、数字塔台与收入确认。",
+      "supported_claim_ids": [
+        "f2_claim_03",
+        "f2_claim_04"
+      ],
+      "supported_node_ids": [
+        "certification_orders_delivery_utilization_validation",
+        "flight_operations_maintenance_services"
+      ],
+      "limitations": "通航收入含传统海上油气业务，eVTOL试飞尚非规模化商业收入。",
+      "notes": "第14-16、30、66页；通航运输、低空航线、eVTOL试飞、数字塔台与收入确认。；通航收入含传统海上油气业务，eVTOL试飞尚非规模化商业收入。"
+    },
+    {
+      "source_id": "f2_001696_ar2025",
+      "source_type": "company_filing",
+      "title": "重庆宗申动力机械股份有限公司2025年年度报告",
+      "publisher": "重庆宗申动力机械股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-23",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-23/1225148037.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第12、170页",
+      "evidence_summary": "航空活塞发动机产品、适航批准和宗申航发收入。",
+      "supported_claim_ids": [
+        "f2_claim_05"
+      ],
+      "supported_node_ids": [
+        "electric_propulsion_power_energy_systems"
+      ],
+      "limitations": "披露产品是活塞发动机，不属于本链电动推进L4，作为排除边界证据。",
+      "notes": "第12、170页；航空活塞发动机产品、适航批准和宗申航发收入。；披露产品是活塞发动机，不属于本链电动推进L4，作为排除边界证据。"
+    },
+    {
+      "source_id": "f2_688070_ar2025",
+      "source_type": "company_filing",
+      "title": "成都纵横自动化技术股份有限公司2025年年度报告",
+      "publisher": "成都纵横自动化技术股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-01",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-01/1225067159.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第23、37-40页",
+      "evidence_summary": "工业无人机、无人值守云平台、智慧巴中项目与分产品收入。",
+      "supported_claim_ids": [
+        "f2_claim_06",
+        "f2_claim_07"
+      ],
+      "supported_node_ids": [
+        "certification_orders_delivery_utilization_validation",
+        "industrial_consumer_uav_platforms",
+        "vertiport_airspace_management_infrastructure"
+      ],
+      "limitations": "CW-100仍处TC验证程序，不能写成已取得TC。",
+      "notes": "第23、37-40页；工业无人机、无人值守云平台、智慧巴中项目与分产品收入。；CW-100仍处TC验证程序，不能写成已取得TC。"
+    },
+    {
+      "source_id": "f2_002389_ar2025",
+      "source_type": "company_filing",
+      "title": "航天彩虹无人机股份有限公司2025年年度报告",
+      "publisher": "航天彩虹无人机股份有限公司",
+      "author": "",
+      "publish_date": "2026-03-27",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-03-27/1225036384.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第10、18-19、30-31页",
+      "evidence_summary": "无人机平台、低空场景、交付、子公司收入及低空用户签约。",
+      "supported_claim_ids": [
+        "f2_claim_08"
+      ],
+      "supported_node_ids": [
+        "certification_orders_delivery_utilization_validation",
+        "industrial_consumer_uav_platforms"
+      ],
+      "limitations": "无人机收入含特种用途，未单列低空民用场景收入。",
+      "notes": "第10、18-19、30-31页；无人机平台、低空场景、交付、子公司收入及低空用户签约。；无人机收入含特种用途，未单列低空民用场景收入。"
+    },
+    {
+      "source_id": "f2_603308_ar2025",
+      "source_type": "company_filing",
+      "title": "安徽应流机电股份有限公司2025年年度报告",
+      "publisher": "安徽应流机电股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-24",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-24/1225157972.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第10-11页",
+      "evidence_summary": "YLHD-300混动系统配飞ES1000无人运输机与A1机场运营许可。",
+      "supported_claim_ids": [
+        "f2_claim_09"
+      ],
+      "supported_node_ids": [
+        "electric_propulsion_power_energy_systems",
+        "flight_operations_maintenance_services"
+      ],
+      "limitations": "两机业务收入未单列低空动力或机场运营收入。",
+      "notes": "第10-11页；YLHD-300混动系统配飞ES1000无人运输机与A1机场运营许可。；两机业务收入未单列低空动力或机场运营收入。"
+    },
+    {
+      "source_id": "f2_600580_ar2025",
+      "source_type": "company_filing",
+      "title": "卧龙电气驱动集团股份有限公司2025年年度报告",
+      "publisher": "卧龙电气驱动集团股份有限公司",
+      "author": "",
+      "publish_date": "2026-03-21",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-03-21/1225022163.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第12、199页",
+      "evidence_summary": "电动航空实质性突破及eVTOL电驱动系统资本化研发项目。",
+      "supported_claim_ids": [
+        "f2_claim_10"
+      ],
+      "supported_node_ids": [
+        "certification_orders_delivery_utilization_validation",
+        "electric_propulsion_power_energy_systems"
+      ],
+      "limitations": "处研发阶段，未披露样机交付、适航、订单或收入。",
+      "notes": "第12、199页；电动航空实质性突破及eVTOL电驱动系统资本化研发项目。；处研发阶段，未披露样机交付、适航、订单或收入。"
+    },
+    {
+      "source_id": "f2_000801_ar2025",
+      "source_type": "company_filing",
+      "title": "四川九洲电器股份有限公司2025年年度报告",
+      "publisher": "四川九洲电器股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-01",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-01/1225066197.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第9、23页",
+      "evidence_summary": "低空协同运行、适航测试、飞行服务站、无人机航电及批量订货。",
+      "supported_claim_ids": [
+        "f2_claim_11",
+        "f2_claim_12"
+      ],
+      "supported_node_ids": [
+        "certification_orders_delivery_utilization_validation",
+        "flight_control_avionics_navigation",
+        "low_altitude_communications_surveillance_navigation"
+      ],
+      "limitations": "空管子公司收入未单列低空系统收入。",
+      "notes": "第9、23页；低空协同运行、适航测试、飞行服务站、无人机航电及批量订货。；空管子公司收入未单列低空系统收入。"
+    },
+    {
+      "source_id": "f2_688631_ar2025",
+      "source_type": "company_filing",
+      "title": "南京莱斯信息技术股份有限公司2025年年度报告",
+      "publisher": "南京莱斯信息技术股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-25",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-25/1225190073.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第15-16、31、33-34页",
+      "evidence_summary": "天牧低空飞行管理、智联平台、十余城落地和省市县项目。",
+      "supported_claim_ids": [
+        "f2_claim_13",
+        "f2_claim_14"
+      ],
+      "supported_node_ids": [
+        "certification_orders_delivery_utilization_validation",
+        "low_altitude_communications_surveillance_navigation",
+        "vertiport_airspace_management_infrastructure"
+      ],
+      "limitations": "公司总收入与空管大单未拆分低空收入。",
+      "notes": "第15-16、31、33-34页；天牧低空飞行管理、智联平台、十余城落地和省市县项目。；公司总收入与空管大单未拆分低空收入。"
+    },
+    {
+      "source_id": "f2_301091_ar2025",
+      "source_type": "company_filing",
+      "title": "深城交科技集团股份有限公司2025年年度报告",
+      "publisher": "深城交科技集团股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-24",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-24/1225172005.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第21-24、34-35页",
+      "evidence_summary": "SILAS、低空设施、测试基地、一网统飞、投资运营与研发项目。",
+      "supported_claim_ids": [
+        "f2_claim_15",
+        "f2_claim_16"
+      ],
+      "supported_node_ids": [
+        "certification_orders_delivery_utilization_validation",
+        "flight_operations_maintenance_services",
+        "vertiport_airspace_management_infrastructure"
+      ],
+      "limitations": "软件合同、运营合同和投资额为混合口径，未单列低空确认收入。",
+      "notes": "第21-24、34-35页；SILAS、低空设施、测试基地、一网统飞、投资运营与研发项目。；软件合同、运营合同和投资额为混合口径，未单列低空确认收入。"
+    }
+  ]
+}

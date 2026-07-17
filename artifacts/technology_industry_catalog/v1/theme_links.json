@@ -898,6 +898,22 @@
       ],
       "unmapped_theme_node_ids":[],
       "notes":"F1 owns model platforms, adaptation toolchains, agents, AI application products, vertical delivery, monetization/adoption, and model/application governance. AI chips, servers, racks, cloud/data-center/power, OS/database/general software, generic industrial software, and generic security remain typed dependencies unless evidence identifies an AI-specific product or governance role."
+    },
+    {
+      "theme_id": "uav_evtol_low_altitude_economy_value_chain_v1",
+      "chain_id": "uav_evtol_low_altitude_economy",
+      "node_links": [
+        {"theme_node_id": "industrial_consumer_uav_platforms", "catalog_node_id": "industrial_consumer_uav_platforms"},
+        {"theme_node_id": "evtol_aircraft_platforms", "catalog_node_id": "evtol_aircraft_platforms"},
+        {"theme_node_id": "flight_control_avionics_navigation", "catalog_node_id": "flight_control_avionics_navigation"},
+        {"theme_node_id": "electric_propulsion_power_energy_systems", "catalog_node_id": "electric_propulsion_power_energy_systems"},
+        {"theme_node_id": "airframe_composites_precision_components", "catalog_node_id": "airframe_composites_precision_components"},
+        {"theme_node_id": "low_altitude_communications_surveillance_navigation", "catalog_node_id": "low_altitude_communications_surveillance_navigation"},
+        {"theme_node_id": "vertiport_airspace_management_infrastructure", "catalog_node_id": "vertiport_airspace_management_infrastructure"},
+        {"theme_node_id": "flight_operations_maintenance_services", "catalog_node_id": "flight_operations_maintenance_services"},
+        {"theme_node_id": "certification_orders_delivery_utilization_validation", "catalog_node_id": "certification_orders_delivery_utilization_validation"}
+      ],
+      "unmapped_theme_node_ids": []
     }
   ]
 }
