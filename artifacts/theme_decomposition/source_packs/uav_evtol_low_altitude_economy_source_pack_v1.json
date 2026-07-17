@@ -22,7 +22,6 @@
         "f2_claim_02"
       ],
       "supported_node_ids": [
-        "airframe_composites_precision_components",
         "certification_orders_delivery_utilization_validation",
         "evtol_aircraft_platforms"
       ],
@@ -42,7 +41,7 @@
       "review_status": "accepted",
       "document_status": "primary_source_reviewed",
       "evidence_locator": "第14-16、30、66页",
-      "evidence_summary": "通航运输、低空航线、eVTOL试飞、数字塔台与收入确认。",
+      "evidence_summary": "低空航线、eVTOL试飞与数字塔台属于低空特定运营验证；通航运输收入为含传统海上油气业务的宽口径。",
       "supported_claim_ids": [
         "f2_claim_03",
         "f2_claim_04"
@@ -51,8 +50,8 @@
         "certification_orders_delivery_utilization_validation",
         "flight_operations_maintenance_services"
       ],
-      "limitations": "通航收入含传统海上油气业务，eVTOL试飞尚非规模化商业收入。",
-      "notes": "第14-16、30、66页；通航运输、低空航线、eVTOL试飞、数字塔台与收入确认。；通航收入含传统海上油气业务，eVTOL试飞尚非规模化商业收入。"
+      "limitations": "22.16亿元通航运输收入不得作为低空专项收入；低空新业务收入、利用率与运营毛利未拆分。",
+      "notes": "第14-16、30、66页；低空航线、eVTOL试飞与数字塔台属于低空特定运营验证；22.16亿元通航运输收入主要含传统海上油气等宽口径业务，不得作为低空专项收入。"
     },
     {
       "source_id": "f2_001696_ar2025",
@@ -115,8 +114,8 @@
       "reliability_level": "S0",
       "review_status": "accepted",
       "document_status": "primary_source_reviewed",
-      "evidence_locator": "第10、18-19、30-31页",
-      "evidence_summary": "无人机平台、低空场景、交付、子公司收入及低空用户签约。",
+      "evidence_locator": "第10、19、30-31页",
+      "evidence_summary": "航空物探、应急测绘等民用无人机应用已产业化；无人机宽口径收入未拆分低空民用场景。",
       "supported_claim_ids": [
         "f2_claim_08"
       ],
@@ -124,8 +123,8 @@
         "certification_orders_delivery_utilization_validation",
         "industrial_consumer_uav_platforms"
       ],
-      "limitations": "无人机收入含特种用途，未单列低空民用场景收入。",
-      "notes": "第10、18-19、30-31页；无人机平台、低空场景、交付、子公司收入及低空用户签约。；无人机收入含特种用途，未单列低空民用场景收入。"
+      "limitations": "第18页军贸交付不属于低空交付，第31页2026年未来任务不属于当前签署订单；无人机收入含特种用途且未单列低空民用收入。",
+      "notes": "第10、19、30-31页；航空物探、应急测绘等民用应用已产业化；无人机收入含特种用途且未单列低空民用收入，第18页军贸交付和第31页2026年任务不作为当前低空交付或签署订单。"
     },
     {
       "source_id": "f2_603308_ar2025",
@@ -187,8 +186,8 @@
       "reliability_level": "S0",
       "review_status": "accepted",
       "document_status": "primary_source_reviewed",
-      "evidence_locator": "第9、23页",
-      "evidence_summary": "低空协同运行、适航测试、飞行服务站、无人机航电及批量订货。",
+      "evidence_locator": "年报第9、23页（PDF第10、24页）",
+      "evidence_summary": "低空协同运行、适航测试、飞行服务站与无人机航电证明产品可用性；防务批量订货不归因于低空。",
       "supported_claim_ids": [
         "f2_claim_11",
         "f2_claim_12"
@@ -198,8 +197,8 @@
         "flight_control_avionics_navigation",
         "low_altitude_communications_surveillance_navigation"
       ],
-      "limitations": "空管子公司收入未单列低空系统收入。",
-      "notes": "第9、23页；低空协同运行、适航测试、飞行服务站、无人机航电及批量订货。；空管子公司收入未单列低空系统收入。"
+      "limitations": "防务市场无人机平台和地面询问机批量订货不能归因于低空订单或交付；空管子公司收入未单列低空系统收入。",
+      "notes": "年报第9、23页（PDF第10、24页）；低空协同运行、适航测试、飞行服务站与无人机航电构成产品关系；防务市场无人机平台和地面询问机批量订货不能归因于低空订单或交付，空管子公司收入未单列低空系统收入。"
     },
     {
       "source_id": "f2_688631_ar2025",

@@ -38,7 +38,7 @@
       "access_level": "public",
       "reliability_level": "S0",
       "review_status": "accepted",
-      "notes": "第14-16、30、66页；通航运输、低空航线、eVTOL试飞、数字塔台与收入确认。；通航收入含传统海上油气业务，eVTOL试飞尚非规模化商业收入。"
+      "notes": "第14-16、30、66页；低空航线、eVTOL试飞与数字塔台属于低空特定运营验证；22.16亿元通航运输收入主要含传统海上油气等宽口径业务，不得作为低空专项收入。"
     },
     {
       "source_id": "f2_001696_ar2025",
@@ -77,7 +77,7 @@
       "access_level": "public",
       "reliability_level": "S0",
       "review_status": "accepted",
-      "notes": "第10、18-19、30-31页；无人机平台、低空场景、交付、子公司收入及低空用户签约。；无人机收入含特种用途，未单列低空民用场景收入。"
+      "notes": "第10、19、30-31页；航空物探、应急测绘等民用应用已产业化；无人机收入含特种用途且未单列低空民用收入，第18页军贸交付和第31页2026年任务不作为当前低空交付或签署订单。"
     },
     {
       "source_id": "f2_603308_ar2025",
@@ -116,7 +116,7 @@
       "access_level": "public",
       "reliability_level": "S0",
       "review_status": "accepted",
-      "notes": "第9、23页；低空协同运行、适航测试、飞行服务站、无人机航电及批量订货。；空管子公司收入未单列低空系统收入。"
+      "notes": "年报第9、23页（PDF第10、24页）；低空协同运行、适航测试、飞行服务站与无人机航电构成产品关系；防务市场无人机平台和地面询问机批量订货不能归因于低空订单或交付，空管子公司收入未单列低空系统收入。"
     },
     {
       "source_id": "f2_688631_ar2025",
@@ -203,7 +203,7 @@
       "source_id": "f2_000099_ar2025",
       "evidence_type": "revenue_materiality",
       "excerpt_locator": "第16、66页，通航运输收入22.16亿元及收入确认口径",
-      "evidence_summary": "公司披露低空特定服务确认收入，构成直接收入证据。",
+      "evidence_summary": "22.16亿元通航运输收入主要包含传统海上油气等通用航空业务，未单列低空新业务收入、利用率或运营毛利，因此不能作为低空专项收入证据。",
       "related_company_codes": [
         "000099.SZ"
       ],
@@ -293,8 +293,8 @@
       "evidence_id": "f2_ev_002389_sz_stage",
       "source_id": "f2_002389_ar2025",
       "evidence_type": "business_stage",
-      "excerpt_locator": "第18、31页，无人机交付与低空应用用户签约边界",
-      "evidence_summary": "CH-3/CH-4由装备平台向物流、应急和人工影响天气场景传导，但低空民用收入未拆分。 商业阶段按年报事实标注，不把未来计划写成当前收入。",
+      "excerpt_locator": "第10页，航空物探与应急测绘实现产业化及成功应用",
+      "evidence_summary": "第10页披露航空物探、应急测绘等民用无人机应用已实现产业化并取得成功应用；第18页军贸交付和第31页2026年任务不证明低空交付或当前签署订单。",
       "related_company_codes": [
         "002389.SZ"
       ],
@@ -384,7 +384,7 @@
       "evidence_id": "f2_ev_000801_sz_product",
       "source_id": "f2_000801_ar2025",
       "evidence_type": "product_relationship",
-      "excerpt_locator": "第9页，低空管控、适航测试、飞行服务站与无人机航电系统",
+      "excerpt_locator": "年报第9页（PDF第10页），低空管控、适航测试、飞行服务站与无人机航电系统",
       "evidence_summary": "低空通信监视导航与航电系统由公司年报直接披露，属于low_altitude_communications_surveillance_navigation的低空特定产品或服务关系。",
       "related_company_codes": [
         "000801.SZ"
@@ -397,7 +397,7 @@
       "evidence_id": "f2_ev_000801_sz_materiality",
       "source_id": "f2_000801_ar2025",
       "evidence_type": "revenue_materiality",
-      "excerpt_locator": "第23页，空管子公司收入11.56亿元但未单列低空收入",
+      "excerpt_locator": "年报第23页（PDF第24页），空管子公司收入11.56亿元但未单列低空收入",
       "evidence_summary": "公司宽口径收入未单列该低空特定产品或服务确认收入，材料性按未披露处理。",
       "related_company_codes": [
         "000801.SZ"
@@ -410,8 +410,8 @@
       "evidence_id": "f2_ev_000801_sz_stage",
       "source_id": "f2_000801_ar2025",
       "evidence_type": "business_stage",
-      "excerpt_locator": "第9页，进入无人机平台并取得地面询问机批量订货",
-      "evidence_summary": "低空协同运行、飞行服务站、适航测试与无人机航电进入平台和批量订货，形成设备需求传导。 商业阶段按年报事实标注，不把未来计划写成当前收入。",
+      "excerpt_locator": "年报第9页（PDF第10页），低空产品谱系已列示但订单交付归因未证明",
+      "evidence_summary": "低空产品谱系已列示，包括低空协同运行、飞行服务站、适航测试与无人机航电；同页防务市场无人机平台和地面询问机批量订货不能归因于低空订单或交付，低空阶段仅确认产品可用性。",
       "related_company_codes": [
         "000801.SZ"
       ],
@@ -537,13 +537,13 @@
         "f2_ev_000099_sz_materiality",
         "f2_ev_000099_sz_stage"
       ],
-      "revenue_relevance": "material",
+      "revenue_relevance": "undisclosed",
       "bottleneck_relevance": "core",
-      "business_materiality": "core_business",
+      "business_materiality": "emerging_segment",
       "product_or_service": "通航与低空综合运营服务",
-      "relationship_summary": "通航运输按固定服务和飞行小时收费，低空航线、eVTOL试飞和数字塔台扩展运营场景。",
+      "relationship_summary": "低空航线、eVTOL试飞和数字塔台形成低空运营验证；22.16亿元通航运输收入主要含传统海上油气业务，不代表低空收入。",
       "review_status": "reviewed",
-      "notes": "仍需eVTOL路线常态利用、低空新业务分部收入与运营毛利。"
+      "notes": "仍需低空航线常态利用、低空新业务收入与运营毛利拆分；传统海上油气和宽口径通航收入不得替代。"
     },
     {
       "mapping_id": "f2_map_688070_sh_v1",
@@ -587,9 +587,9 @@
       "bottleneck_relevance": "core",
       "business_materiality": "meaningful_segment",
       "product_or_service": "CH系列无人机低空应用",
-      "relationship_summary": "CH-3/CH-4由装备平台向物流、应急和人工影响天气场景传导，但低空民用收入未拆分。",
+      "relationship_summary": "CH系列在航空物探、应急测绘等民用场景已实现产业化应用，但军贸交付与2026年未来签约任务不构成当前低空订单交付。",
       "review_status": "reviewed",
-      "notes": "仍需低空特定订单、交付、运营与确认收入拆分。"
+      "notes": "仍需低空特定订单、交付、运营与确认收入拆分；第18页军贸交付及第31页未来任务不得混入。"
     },
     {
       "mapping_id": "f2_map_603308_sh_v1",
@@ -656,7 +656,7 @@
       "bottleneck_relevance": "core",
       "business_materiality": "meaningful_segment",
       "product_or_service": "低空通信监视导航与航电系统",
-      "relationship_summary": "低空协同运行、飞行服务站、适航测试与无人机航电进入平台和批量订货，形成设备需求传导。",
+      "relationship_summary": "低空协同运行、飞行服务站、适航测试与无人机航电证明产品可用性；防务批量订货不归因于低空订单交付。",
       "review_status": "reviewed",
       "notes": "仍需低空产品订单金额、交付、验收回款与专项收入。"
     },

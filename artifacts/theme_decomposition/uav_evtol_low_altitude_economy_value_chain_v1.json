@@ -103,7 +103,7 @@
       "access_level": "public",
       "reliability_level": "S0",
       "review_status": "accepted",
-      "notes": "第14-16、30、66页；通航运输、低空航线、eVTOL试飞、数字塔台与收入确认。；通航收入含传统海上油气业务，eVTOL试飞尚非规模化商业收入。"
+      "notes": "第14-16、30、66页；低空航线、eVTOL试飞与数字塔台属于低空特定运营验证；22.16亿元通航运输收入主要含传统海上油气等宽口径业务，不得作为低空专项收入。"
     },
     {
       "source_id": "f2_001696_ar2025",
@@ -142,7 +142,7 @@
       "access_level": "public",
       "reliability_level": "S0",
       "review_status": "accepted",
-      "notes": "第10、18-19、30-31页；无人机平台、低空场景、交付、子公司收入及低空用户签约。；无人机收入含特种用途，未单列低空民用场景收入。"
+      "notes": "第10、19、30-31页；航空物探、应急测绘等民用应用已产业化；无人机收入含特种用途且未单列低空民用收入，第18页军贸交付和第31页2026年任务不作为当前低空交付或签署订单。"
     },
     {
       "source_id": "f2_603308_ar2025",
@@ -181,7 +181,7 @@
       "access_level": "public",
       "reliability_level": "S0",
       "review_status": "accepted",
-      "notes": "第9、23页；低空协同运行、适航测试、飞行服务站、无人机航电及批量订货。；空管子公司收入未单列低空系统收入。"
+      "notes": "年报第9、23页（PDF第10、24页）；低空协同运行、适航测试、飞行服务站与无人机航电构成产品关系；防务市场无人机平台和地面询问机批量订货不能归因于低空订单或交付，空管子公司收入未单列低空系统收入。"
     },
     {
       "source_id": "f2_688631_ar2025",
@@ -230,15 +230,14 @@
       "claim_id": "f2_claim_02",
       "theme_id": "uav_evtol_low_altitude_economy_value_chain_v1",
       "source_id": "f2_002085_ar2025",
-      "claim_text": "通航飞机制造2025年收入27.46亿元，但未单列eVTOL确认收入；钻石飞机整机采用碳纤维和玻璃纤维复合结构，汽车轮毂和通用镁合金业务不作为低空映射。",
+      "claim_text": "通航飞机制造2025年收入27.46亿元，但未单列eVTOL确认收入；传统通航飞机复合材料结构和汽车轮毂、通用镁合金业务均不能证明低空航空器特定机体部件收入。",
       "claim_type": "value_capture",
       "confidence": 0.9,
       "evidence_status": "verified",
       "platform_use_status": "reviewed",
       "supporting_source_ids": [],
       "affected_theme_nodes": [
-        "evtol_aircraft_platforms",
-        "airframe_composites_precision_components"
+        "evtol_aircraft_platforms"
       ]
     },
     {
@@ -260,7 +259,7 @@
       "claim_id": "f2_claim_04",
       "theme_id": "uav_evtol_low_altitude_economy_value_chain_v1",
       "source_id": "f2_000099_ar2025",
-      "claim_text": "中信海直通航运输收入22.16亿元，按固定服务或飞行小时确认收入；该口径证明运营主业收入，但不能把eVTOL试飞直接表述为规模化eVTOL收入。",
+      "claim_text": "中信海直通航运输收入22.16亿元主要包含传统海上油气等通用航空业务，虽按固定服务或飞行小时确认，但未拆分低空新业务收入，不构成低空专项收入或毛利证据。",
       "claim_type": "value_capture",
       "confidence": 0.9,
       "evidence_status": "verified",
@@ -304,7 +303,7 @@
       "claim_id": "f2_claim_07",
       "theme_id": "uav_evtol_low_altitude_economy_value_chain_v1",
       "source_id": "f2_688070_ar2025",
-      "claim_text": "纵横股份2025年工业无人机收入6.21亿元，其中无人机系统4.33亿元、无人机服务0.64亿元；CW-100仍为型号合格证申请和验证程序，未取得TC。",
+      "claim_text": "纵横股份2025年工业无人机收入6.21亿元、工业无人机毛利率49.91%，其中无人机系统4.33亿元、无人机服务0.64亿元；CW-100仍为型号合格证申请和验证程序，未取得TC。",
       "claim_type": "value_capture",
       "confidence": 0.9,
       "evidence_status": "verified",
@@ -319,7 +318,7 @@
       "claim_id": "f2_claim_08",
       "theme_id": "uav_evtol_low_altitude_economy_value_chain_v1",
       "source_id": "f2_002389_ar2025",
-      "claim_text": "航天彩虹以CH-3、CH-4拓展物流、应急与人工影响天气低空场景，并披露无人机交付和低空用户签约；无人机子公司收入未拆分低空民用场景，签署订单不等于确认收入。",
+      "claim_text": "航天彩虹披露航空物探、应急测绘等民用无人机应用已实现产业化并取得成功应用；第18页军贸交付不作为低空交付，第31页2026年任务不作为当前签署订单，无人机收入亦未拆分低空民用场景。",
       "claim_type": "company_mapping",
       "confidence": 0.9,
       "evidence_status": "verified",
@@ -364,7 +363,7 @@
       "claim_id": "f2_claim_11",
       "theme_id": "uav_evtol_low_altitude_economy_value_chain_v1",
       "source_id": "f2_000801_ar2025",
-      "claim_text": "四川九洲低空产品包括协同运行管理、检测与适航测试、飞行服务站和无人机综合航电，并已进入无人机平台、取得地面询问机批量订货。",
+      "claim_text": "四川九洲低空产品谱系包括低空协同运行管理、检测与适航测试、飞行服务站和无人机综合航电；同页防务市场批量订货不能归因于低空订单或交付。",
       "claim_type": "company_mapping",
       "confidence": 0.9,
       "evidence_status": "verified",
@@ -394,7 +393,7 @@
       "claim_id": "f2_claim_13",
       "theme_id": "uav_evtol_low_altitude_economy_value_chain_v1",
       "source_id": "f2_688631_ar2025",
-      "claim_text": "莱斯信息天牧-M低空飞行服务管理平台及配套方案已在全国十余座重点城市落地，并落实浙江、湖北、山西省级及南京、扬州市级平台。",
+      "claim_text": "莱斯信息天牧-M低空飞行服务管理平台及配套方案已在全国十余座重点城市落地，并落实省级、市级与区县级平台，形成省市县项目布局。",
       "claim_type": "company_mapping",
       "confidence": 0.9,
       "evidence_status": "verified",
@@ -574,8 +573,8 @@
       "bottleneck_score": 4,
       "localization_gap_score": 3,
       "supply_tightness_score": 3,
-      "evidence_strength": 3,
-      "node_review_status": "reviewed",
+      "evidence_strength": 2,
+      "node_review_status": "needs_evidence",
       "key_metrics": [
         "航空器定点",
         "认证",
@@ -583,12 +582,8 @@
         "交付"
       ],
       "overseas_leaders": [],
-      "domestic_players": [
-        "万丰奥威"
-      ],
-      "related_stock_codes": [
-        "002085.SZ"
-      ]
+      "domestic_players": [],
+      "related_stock_codes": []
     },
     {
       "node_id": "low_altitude_communications_surveillance_navigation",
@@ -661,7 +656,7 @@
       "bottleneck_score": 5,
       "localization_gap_score": 2,
       "supply_tightness_score": 4,
-      "evidence_strength": 5,
+      "evidence_strength": 4,
       "node_review_status": "reviewed",
       "key_metrics": [
         "飞行小时",
@@ -747,7 +742,7 @@
     },
     {
       "node_id": "flight_control_avionics_navigation",
-      "value_basis": "customer_certification",
+      "value_basis": "integration_control",
       "assessment_text": "飞控航电与机载导航的价值只在低空特定产品、项目、适航、交付、运营或收入证据闭环后确认。",
       "rank": 3,
       "evidence_ids": [
@@ -769,13 +764,11 @@
     },
     {
       "node_id": "airframe_composites_precision_components",
-      "value_basis": "customer_certification",
+      "value_basis": "technology_barrier",
       "assessment_text": "机体复材与精密部件的价值只在低空特定产品、项目、适航、交付、运营或收入证据闭环后确认。",
       "rank": 5,
-      "evidence_ids": [
-        "f2_claim_02"
-      ],
-      "uncertainty": "公司披露多为混合口径，仍需专项收入、毛利、订单转化与持续利用数据。"
+      "evidence_ids": [],
+      "uncertainty": "传统通航飞机复合材料不能证明低空航空器特定机体部件客户、订单、交付或收入。"
     },
     {
       "node_id": "low_altitude_communications_surveillance_navigation",

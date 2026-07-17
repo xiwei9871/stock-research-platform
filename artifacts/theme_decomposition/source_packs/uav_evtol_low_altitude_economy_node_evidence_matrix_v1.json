@@ -43,8 +43,7 @@
       "value_capture_score_review_status": "supported",
       "bottleneck_score_review_status": "supported",
       "value_bases": [
-        "technology_barrier",
-        "customer_certification"
+        "technology_barrier"
       ],
       "evidence_gap_status": "evidence_gap",
       "node_review_status": "reviewed",
@@ -65,12 +64,12 @@
       "value_capture_score_review_status": "provisional",
       "bottleneck_score_review_status": "provisional",
       "value_bases": [
-        "customer_certification"
+        "integration_control"
       ],
       "evidence_gap_status": "evidence_gap",
       "node_review_status": "reviewed",
-      "rationale": "四川九洲披露无人机综合航电、适航测试和平台批量订货，但缺少低空航电订单金额与收入。",
-      "next_evidence_needed": "补充具体机型定点、适航验证、批量交付、订单金额和低空航电收入。"
+      "rationale": "四川九洲披露低空综合航电、协同运行和适航测试产品谱系，证明系统集成能力；防务批量订货不归因于低空订单。",
+      "next_evidence_needed": "补充低空具体机型定点、适航验证、订单金额、批量交付和低空航电收入。"
     },
     {
       "node_id": "electric_propulsion_power_energy_systems",
@@ -90,8 +89,7 @@
       "value_capture_score_review_status": "supported",
       "bottleneck_score_review_status": "supported",
       "value_bases": [
-        "technology_barrier",
-        "customer_certification"
+        "technology_barrier"
       ],
       "evidence_gap_status": "evidence_gap",
       "node_review_status": "reviewed",
@@ -100,24 +98,18 @@
     },
     {
       "node_id": "airframe_composites_precision_components",
-      "accepted_source_ids": [
-        "f2_002085_ar2025"
-      ],
+      "accepted_source_ids": [],
       "pending_source_ids": [],
-      "supported_claim_ids": [
-        "f2_claim_02"
-      ],
+      "supported_claim_ids": [],
       "evidence_strength_before": 1,
-      "evidence_strength_after": 3,
-      "value_capture_score_review_status": "provisional",
-      "bottleneck_score_review_status": "provisional",
-      "value_bases": [
-        "technology_barrier"
-      ],
+      "evidence_strength_after": 2,
+      "value_capture_score_review_status": "unsupported",
+      "bottleneck_score_review_status": "unsupported",
+      "value_bases": [],
       "evidence_gap_status": "evidence_gap",
-      "node_review_status": "reviewed",
-      "rationale": "万丰钻石飞机披露航空器整机复合材料结构，但缺少独立低空机体部件客户、订单、交付和收入。",
-      "next_evidence_needed": "补充低空航空器特定机体/复材定点、认证、单机价值、交付与确认收入。"
+      "node_review_status": "needs_evidence",
+      "rationale": "传统通航飞机复合材料结构不能证明低空航空器特定机体/复材客户、订单、交付或收入，本节点暂不配置价值依据。",
+      "next_evidence_needed": "补充低空航空器特定机体/复材客户定点、型号适配认证、订单、单机价值、交付与确认收入。"
     },
     {
       "node_id": "low_altitude_communications_surveillance_navigation",
@@ -141,7 +133,7 @@
       ],
       "evidence_gap_status": "evidence_gap",
       "node_review_status": "reviewed",
-      "rationale": "四川九洲具备低空管控与航电产品及批量订货，莱斯信息低空智联平台在多地落地，但收入未单列。",
+      "rationale": "四川九洲具备低空管控与航电产品谱系，莱斯信息低空智联平台在多地落地；防务批量订货不归因于低空，收入亦未单列。",
       "next_evidence_needed": "补充低空通信监视导航项目合同额、设备交付、覆盖效果、验收回款和专项收入。"
     },
     {
@@ -160,8 +152,8 @@
       ],
       "evidence_strength_before": 1,
       "evidence_strength_after": 5,
-      "value_capture_score_review_status": "supported",
-      "bottleneck_score_review_status": "supported",
+      "value_capture_score_review_status": "provisional",
+      "bottleneck_score_review_status": "provisional",
       "value_bases": [
         "integration_control",
         "customer_certification"
@@ -186,17 +178,16 @@
         "f2_claim_15"
       ],
       "evidence_strength_before": 1,
-      "evidence_strength_after": 5,
-      "value_capture_score_review_status": "supported",
-      "bottleneck_score_review_status": "supported",
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "provisional",
+      "bottleneck_score_review_status": "provisional",
       "value_bases": [
-        "customer_certification",
-        "gross_margin"
+        "customer_certification"
       ],
-      "evidence_gap_status": "covered",
+      "evidence_gap_status": "evidence_gap",
       "node_review_status": "reviewed",
-      "rationale": "中信海直有22.16亿元通航运输收入与飞行小时收入确认，深城交基地投入运营，应流机场取得使用许可证。",
-      "next_evidence_needed": "补充低空新场景独立收入、航线利用率、eVTOL常态运营、维修收入和运营毛利。"
+      "rationale": "中信海直提供低空航线与eVTOL试飞验证，深城交测试基地投入运营，应流机场取得使用许可证；22.16亿元通航运输收入含传统海上油气，不能作为低空收入或毛利依据。",
+      "next_evidence_needed": "补充低空新业务收入、航线利用率、eVTOL常态运营、维修收入与运营毛利拆分。"
     },
     {
       "node_id": "certification_orders_delivery_utilization_validation",
@@ -231,7 +222,7 @@
       ],
       "evidence_gap_status": "evidence_gap",
       "node_review_status": "reviewed",
-      "rationale": "各公司证据覆盖特许飞行、TC申请、批量订货、用户签约、交付、运营与收入，但链条尚未在同一eVTOL对象上闭环。",
+      "rationale": "证据覆盖特许飞行、TC申请、民用应用产业化和运营验证，并明确排除军贸交付、未来签约任务及防务批量订货的低空归因；商业链条尚未在同一eVTOL对象上闭环。",
       "next_evidence_needed": "逐对象跟踪原型机、TC申请、TC、PC、签署订单、交付、投入运营、航线利用和确认收入，禁止阶段跃迁。"
     }
   ]
