@@ -77,6 +77,7 @@ def test_theme_index_aggregates_validated_phase_outputs():
         INDUSTRIAL_MACHINE_TOOLS_THEME_ID,
         SATELLITE_INFRASTRUCTURE_THEME_ID,
         "satellite_communications_navigation_remote_sensing_value_chain_v1",
+        "intelligent_transport_vehicle_road_cloud_value_chain_v1",
         HIGH_END_MEDICAL_DEVICES_THEME_ID,
     }
     assert payload["total"] == len(expected_theme_ids)

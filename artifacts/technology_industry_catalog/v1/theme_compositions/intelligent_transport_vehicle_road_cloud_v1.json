@@ -1,0 +1,36 @@
+{
+  "theme_compositions": [
+    {
+      "composition_id": "vehicle_data_control_interface_role_composition",
+      "chain_id": "intelligent_transport_vehicle_road_cloud",
+      "role_node_id": "vehicle_data_control_interface_role",
+      "canonical_node_refs": ["vehicle_data_control_interface"],
+      "relationship_type": "depends_on",
+      "notes": "E2 owns application onboarding and orchestration; vehicle electronics and interfaces remain in their canonical chain."
+    },
+    {
+      "composition_id": "roadside_perception_signal_control_role_composition",
+      "chain_id": "intelligent_transport_vehicle_road_cloud",
+      "role_node_id": "roadside_perception_signal_control_role",
+      "canonical_node_refs": ["roadside_perception_signal_control_infrastructure"],
+      "relationship_type": "depends_on",
+      "notes": "E2 owns scenario orchestration and control workflow; generic installed roadside perception and signal hardware remain canonical network/IoT infrastructure."
+    },
+    {
+      "composition_id": "v2x_connectivity_edge_network_role_composition",
+      "chain_id": "intelligent_transport_vehicle_road_cloud",
+      "role_node_id": "v2x_connectivity_edge_network_role",
+      "canonical_node_refs": ["v2x_edge_network_infrastructure"],
+      "relationship_type": "depends_on",
+      "notes": "E2 owns V2X service orchestration while access, edge, gateway, and backhaul infrastructure remain canonical."
+    },
+    {
+      "composition_id": "transport_cloud_data_governance_role_composition",
+      "chain_id": "intelligent_transport_vehicle_road_cloud",
+      "role_node_id": "transport_cloud_data_governance_role",
+      "canonical_node_refs": ["transport_cloud_data_platform", "transport_data_security_governance"],
+      "relationship_type": "depends_on",
+      "notes": "E2 owns transport-specific models, applications, and cross-domain governance outcomes while cloud platform and security controls remain canonical dependencies."
+    }
+  ]
+}

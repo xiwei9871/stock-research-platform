@@ -185,6 +185,10 @@ def test_repository_catalog_starts_with_ten_approved_sectors():
         "satellite_manufacturing_space_infrastructure",
         "satellite_communications_navigation_remote_sensing",
         "high_end_medical_devices",
+        "automotive_electronics_chip_applications",
+        "network_equipment_edge_iot",
+        "cybersecurity_data_infrastructure",
+        "intelligent_transport_vehicle_road_cloud",
     }
     nodes_by_id = {row["node_id"]: row for row in catalog["nodes"]}
     assert {
@@ -195,12 +199,13 @@ def test_repository_catalog_starts_with_ten_approved_sectors():
         "humanoid_robots_embodied_intelligence",
         "power_batteries_battery_materials",
     }
-    assert len(catalog["theme_compositions"]) == 84
+    assert len(catalog["theme_compositions"]) == 88
     assert {
         row["chain_id"] for row in catalog["theme_compositions"]
     } == {
         "ai_data_center_power",
         "satellite_communications_navigation_remote_sensing",
+        "intelligent_transport_vehicle_road_cloud",
     }
     canonical_keys = [
         row["canonical_key"]

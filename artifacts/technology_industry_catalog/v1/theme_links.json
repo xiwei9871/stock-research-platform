@@ -795,6 +795,22 @@
       "notes":"E1 owns downstream application access, communications delivery, PNT augmentation, remote-sensing data processing, vertical integration, utilization, pricing, renewal and recognized service revenue. Satellite platforms, payload hardware, onboard systems, batch manufacturing, launch handoff, in-orbit infrastructure operations, gateways and terminals retain canonical ownership in `satellite_manufacturing_space_infrastructure`; hardware-only evidence cannot create an E1 reviewed beneficiary."
     },
     {
+      "theme_id":"intelligent_transport_vehicle_road_cloud_value_chain_v1",
+      "chain_id":"intelligent_transport_vehicle_road_cloud",
+      "node_links":[
+        {"theme_node_id":"vehicle_data_control_interface_role","catalog_node_id":"vehicle_data_control_interface_role"},
+        {"theme_node_id":"roadside_perception_signal_control_role","catalog_node_id":"roadside_perception_signal_control_role"},
+        {"theme_node_id":"v2x_connectivity_edge_network_role","catalog_node_id":"v2x_connectivity_edge_network_role"},
+        {"theme_node_id":"transport_cloud_data_governance_role","catalog_node_id":"transport_cloud_data_governance_role"},
+        {"theme_node_id":"cooperative_driving_traffic_control_applications","catalog_node_id":"cooperative_driving_traffic_control_applications"},
+        {"theme_node_id":"fleet_dispatch_mobility_operations","catalog_node_id":"fleet_dispatch_mobility_operations"},
+        {"theme_node_id":"project_integration_delivery_operations","catalog_node_id":"project_integration_delivery_operations"},
+        {"theme_node_id":"pilot_utilization_renewal_revenue_validation","catalog_node_id":"pilot_utilization_renewal_revenue_validation"}
+      ],
+      "unmapped_theme_node_ids":[],
+      "notes":"E2 owns cross-domain orchestration, cooperative traffic applications, mobility operations, project delivery, utilization and renewal validation. Vehicle interfaces, roadside/V2X infrastructure, cloud data platform and security governance remain canonical dependencies; generic hardware evidence cannot create an E2 reviewed beneficiary."
+    },
+    {
       "theme_id":"high_end_medical_devices_value_chain_v1",
       "chain_id":"high_end_medical_devices",
       "node_links":[
