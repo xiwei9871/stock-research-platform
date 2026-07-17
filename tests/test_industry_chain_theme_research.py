@@ -1,10 +1,11 @@
 from copy import deepcopy
 
-from stock_research import industry_chain_theme_research as research
 from stock_research.industry_chain_theme_research import (
     COMPLETED_CHAIN_THEMES,
     NEXT_FIFTEEN_CHAIN_THEMES,
     SELECTED_CHAIN_THEMES,
+    WAVE_D_CHAIN_THEMES,
+    WAVE_E_CHAIN_THEMES,
     build_chain_research_summary,
     classify_beneficiary,
     list_selected_chain_research,
@@ -42,19 +43,47 @@ def test_selected_chain_registry_is_frozen():
     assert SELECTED_CHAIN_THEMES == {
         **COMPLETED_CHAIN_THEMES,
         **NEXT_FIFTEEN_CHAIN_THEMES,
-        **research.WAVE_D_CHAIN_THEMES,
+        **WAVE_D_CHAIN_THEMES,
+        **WAVE_E_CHAIN_THEMES,
     }
 
 
 def test_wave_d_chain_registry_is_frozen():
-    assert research.WAVE_D_CHAIN_THEMES == {
+    assert WAVE_D_CHAIN_THEMES == {
         "semiconductor_eda_ip_design_services": "semiconductor_eda_ip_design_services_value_chain_v1",
         "memory_chips_storage_control": "memory_chips_storage_control_value_chain_v1",
         "industrial_machine_tools_cnc": "industrial_machine_tools_cnc_value_chain_v1",
         "satellite_manufacturing_space_infrastructure": "satellite_manufacturing_space_infrastructure_value_chain_v1",
         "high_end_medical_devices": "high_end_medical_devices_value_chain_v1",
     }
-    assert len(SELECTED_CHAIN_THEMES) == 25
+
+
+def test_wave_e_chain_registry_and_program_counts_are_frozen():
+    assert WAVE_E_CHAIN_THEMES == {
+        "satellite_communications_navigation_remote_sensing": "satellite_communications_navigation_remote_sensing_value_chain_v1",
+        "intelligent_transport_vehicle_road_cloud": "intelligent_transport_vehicle_road_cloud_value_chain_v1",
+        "brain_computer_interfaces_neural_engineering": "brain_computer_interfaces_neural_engineering_value_chain_v1",
+        "controlled_nuclear_fusion": "controlled_nuclear_fusion_value_chain_v1",
+        "quantum_computing_communication_measurement": "quantum_computing_communication_measurement_value_chain_v1",
+    }
+    assert len(NEXT_FIFTEEN_CHAIN_THEMES) + len(WAVE_D_CHAIN_THEMES) == 20
+    assert len(WAVE_E_CHAIN_THEMES) == 5
+    assert len(SELECTED_CHAIN_THEMES) == 30
+
+
+def test_wave_e_uses_only_existing_application_or_frontier_chains():
+    catalog = load_industry_catalog()
+    chains_by_id = {row["chain_id"]: row for row in catalog["chains"]}
+
+    assert len(catalog["chains"]) == 82
+    assert set(WAVE_E_CHAIN_THEMES) <= set(chains_by_id)
+    assert {
+        chains_by_id[chain_id]["chain_kind"] for chain_id in WAVE_E_CHAIN_THEMES
+    } == {"application_theme_chain", "frontier_technology_chain"}
+    assert sum(
+        chains_by_id[chain_id]["chain_kind"] == "application_theme_chain"
+        for chain_id in WAVE_E_CHAIN_THEMES
+    ) == 2
 
 
 def test_beneficiary_classifier_separates_reviewed_tiers_and_concept_associations():
@@ -105,7 +134,7 @@ def test_selected_chain_summaries_report_existing_and_missing_theme_packages():
     by_chain = {row["chain_id"]: row for row in expanded_rows}
 
     assert len(rows) == 5
-    assert len(expanded_rows) == 25
+    assert len(expanded_rows) == 30
     assert by_chain["ai_data_center_power"]["theme_id"] == "ai_power_value_capture_v1"
     assert by_chain["ai_data_center_power"]["research_status"] == "reviewed"
     assert by_chain["humanoid_robots_embodied_intelligence"]["research_status"] == "reviewed"

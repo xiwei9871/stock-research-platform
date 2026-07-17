@@ -38,10 +38,19 @@ WAVE_D_CHAIN_THEMES = {
     "high_end_medical_devices": "high_end_medical_devices_value_chain_v1",
 }
 
+WAVE_E_CHAIN_THEMES = {
+    "satellite_communications_navigation_remote_sensing": "satellite_communications_navigation_remote_sensing_value_chain_v1",
+    "intelligent_transport_vehicle_road_cloud": "intelligent_transport_vehicle_road_cloud_value_chain_v1",
+    "brain_computer_interfaces_neural_engineering": "brain_computer_interfaces_neural_engineering_value_chain_v1",
+    "controlled_nuclear_fusion": "controlled_nuclear_fusion_value_chain_v1",
+    "quantum_computing_communication_measurement": "quantum_computing_communication_measurement_value_chain_v1",
+}
+
 SELECTED_CHAIN_THEMES = {
     **COMPLETED_CHAIN_THEMES,
     **NEXT_FIFTEEN_CHAIN_THEMES,
     **WAVE_D_CHAIN_THEMES,
+    **WAVE_E_CHAIN_THEMES,
 }
 
 BENEFICIARY_TIERS = {
