@@ -1514,3 +1514,53 @@ def test_controlled_nuclear_fusion_e4_preserves_strict_fission_and_stage_boundar
         "装置订单不等于商业聚变发电收入",
     ):
         assert boundary in all_text
+
+
+def test_controlled_nuclear_fusion_e4_corrected_mapping_pages_and_source_notes_are_synchronized() -> None:
+    theme = _read_json(E4_THEME_PATH)
+    mapping = _read_json(E4_MAPPING_PATH)
+    source_pack = _read_json(E4_SOURCE_PACK_PATH)
+    served = list_theme_research_sources(E4_THEME_ID, read_source="artifact")
+    evidence = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+
+    expected_evidence_pages = {
+        "fusion_ev_688776_stage": {"23", "24"},
+        "fusion_ev_000969_stage": {"15", "16"},
+        "fusion_ev_688122_stage": {"15", "23"},
+        "fusion_ev_002639_stage": {"12", "133"},
+    }
+    for evidence_id, expected_pages in expected_evidence_pages.items():
+        assert _declared_locator_set(evidence[evidence_id]["excerpt_locator"]) == expected_pages
+
+    expected_source_pages = {
+        "fusion_688776_ar2025": {"22-24", "45-47"},
+        "fusion_000969_ar2025": {"12", "15-17", "19"},
+        "fusion_688122_ar2025": {"13-15", "23", "29"},
+        "fusion_002639_ar2025": {"12-13", "133"},
+    }
+    source_sets = (
+        {row["source_id"]: row for row in theme["sources"]},
+        {row["source_id"]: row for row in mapping["sources"]},
+        {row["source_id"]: row for row in served["items"]},
+    )
+    packed = {row["source_id"]: row for row in source_pack["sources"]}
+    for source_id, expected_pages in expected_source_pages.items():
+        for rows in source_sets:
+            assert _declared_locator_set(rows[source_id]["notes"]) == expected_pages
+        assert _declared_locator_set(packed[source_id]["evidence_locator"]) == expected_pages
+
+
+def test_controlled_nuclear_fusion_e4_snowman_mapping_stays_limited_adjacent_without_fusion_revenue_claim() -> None:
+    mapping = _read_json(E4_MAPPING_PATH)
+    snowman = next(
+        row for row in mapping["company_mappings"]
+        if row["company_code"] == "002639.SZ"
+    )
+    evidence = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+
+    assert snowman["review_status"] == "reviewed"
+    assert snowman["revenue_relevance"] == "limited"
+    assert snowman["bottleneck_relevance"] == "adjacent"
+    assert "未披露聚变客户合同" in snowman["relationship_summary"]
+    assert "未披露聚变收入" in evidence["fusion_ev_002639_revenue"]["evidence_summary"]
+    assert "不能认定聚变专项收入" in json.dumps(mapping, ensure_ascii=False)
