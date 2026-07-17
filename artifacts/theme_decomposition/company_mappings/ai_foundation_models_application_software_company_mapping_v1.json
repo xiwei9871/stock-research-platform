@@ -399,8 +399,8 @@
       "evidence_id": "f1_ev_300170_sz_stage",
       "source_id": "f1_300170_ar2025",
       "evidence_type": "business_stage",
-      "excerpt_locator": "第28页，AI智能体在长期客户群中的落地与留存",
-      "evidence_summary": "AI智能体面向公司长期企业客户落地，客户留存率超过80%。",
+      "excerpt_locator": "第28页，AI智能体客户落地及公司整体长期客户留存背景",
+      "evidence_summary": "AI智能体已在公司长期企业客户实际场景落地；公司整体长期客户留存率超过80%仅说明存量客户触达和交叉销售基础，不证明AI产品留存、续费或收入。",
       "related_company_codes": [
         "300170.SZ"
       ],
@@ -684,9 +684,9 @@
       "bottleneck_relevance": "core",
       "business_materiality": "emerging_segment",
       "product_or_service": "得灵AI应用、模型平台与咨询交付",
-      "relationship_summary": "得灵AI应用交付以灵手智能体、灵猿中台和灵炼模型平台结合咨询实施，向头部企业复杂业务流程传导AI价值。",
+      "relationship_summary": "得灵AI应用交付以灵手智能体、灵猿中台和灵炼模型平台结合咨询实施，头部客户实际场景落地支持行业交付；公司整体80%以上长期客户留存仅提供存量触达和交叉销售背景。",
       "review_status": "reviewed",
-      "notes": "仅披露收入快速增长，仍缺AI收入金额、分部结构与续费、客户扩容和项目毛利。"
+      "notes": "公司整体80%以上长期客户留存不能证明AI产品续费；仍缺AI收入金额、分部结构与续费、客户扩容和项目毛利。"
     },
     {
       "mapping_id": "f1_map_300624_sz_v1",

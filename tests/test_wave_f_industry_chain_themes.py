@@ -6,7 +6,11 @@ from pathlib import Path
 from typing import Any
 
 from stock_research.industry_chain_theme_research import WAVE_F_CHAIN_THEMES
-from stock_research.dashboard.theme_research import list_theme_research_sources
+from stock_research.dashboard.theme_research import (
+    list_theme_research_claims,
+    list_theme_research_nodes,
+    list_theme_research_sources,
+)
 from stock_research.technology_industry_catalog import load_industry_catalog
 
 
@@ -196,7 +200,7 @@ F1_MAPPING_CONTRACTS = {
         "locators": {
             "product_relationship": "第15-16页，得灵、灵手、灵猿与灵炼产品服务体系",
             "revenue_materiality": "第15页，AI智能体应用收入增长但未披露金额",
-            "business_stage": "第28页，AI智能体在长期客户群中的落地与留存",
+            "business_stage": "第28页，AI智能体客户落地及公司整体长期客户留存背景",
         },
     },
     "300624.SZ": {
@@ -245,6 +249,80 @@ F1_COMPANY_TRANSMISSION_GAP_CONTRACTS = {
     "300624.SZ": ("万兴天幕与创作Agent", "付费转化、AI专项收入与推理成本"),
     "300339.SZ": ("AI测试与AgentRUNS", "AI专项收入、续费与客户范围"),
     "300378.SZ": ("雅典娜企业智能体", "确认收入、续费率与AI业务毛利"),
+}
+F1_MATRIX_CALIBRATION_CONTRACTS = {
+    "foundation_model_training_inference_platforms": {
+        "strength": 4,
+        "gap_status": "covered",
+        "score_status": "supported",
+        "value_bases": ["technology_barrier", "customer_certification"],
+        "rationale": "科大讯飞星辰MaaS披露3.85亿元API及MaaS平台服务收入，并有开发者与Token增长；万兴天幕补充模型产品证据，平台节点具备直接收入和采用验证。",
+        "next_evidence_needed": "大模型API及MaaS平台服务收入3.85亿元已披露；仍需补充平台收入结构、毛利、续费与留存、用量及单位经济。",
+    },
+    "model_toolchain_finetuning_rag": {
+        "strength": 3,
+        "gap_status": "evidence_gap",
+        "score_status": "provisional",
+        "value_bases": ["integration_control"],
+        "rationale": "拓尔思、彩讯和汉得披露RAG、模型训练管理、知识管理及精调工具，但未披露工具链独立收入、付费客户或用量。",
+        "next_evidence_needed": "补充模型工具链独立收入、付费客户、调用用量、续费和毛利。",
+    },
+    "ai_agent_orchestration_workflow": {
+        "strength": 3,
+        "gap_status": "evidence_gap",
+        "score_status": "provisional",
+        "value_bases": ["integration_control", "customer_certification"],
+        "rationale": "多家公司披露智能体编排产品、调用或项目交付，润和仅支持Agent编排和行业交付；缺少智能体节点独立收入与续费。",
+        "next_evidence_needed": "补充智能体平台独立收入、付费客户、续费、任务成功率和单位推理成本。",
+    },
+    "enterprise_ai_application_software": {
+        "strength": 3,
+        "gap_status": "evidence_gap",
+        "score_status": "provisional",
+        "value_bases": ["customer_certification", "integration_control"],
+        "rationale": "WPS AI、YonGPT、Rich AIBox、得灵和雅典娜形成企业AI产品与采用或签约证据，但收入多为混合口径或合同额。",
+        "next_evidence_needed": "补充企业AI专项确认收入、付费席位、续费、扩容和毛利。",
+    },
+    "consumer_ai_application_services": {
+        "strength": 3,
+        "gap_status": "evidence_gap",
+        "score_status": "provisional",
+        "value_bases": ["customer_certification"],
+        "rationale": "纳米AI月访问量和万兴AI调用量证明消费端采用，未证明付费转化、产品留存或AI专项收入。",
+        "next_evidence_needed": "补充付费用户、付费转化、产品留存、AI专项收入和推理单位经济。",
+    },
+    "industry_solution_delivery_integration": {
+        "strength": 4,
+        "gap_status": "covered",
+        "score_status": "supported",
+        "value_bases": ["integration_control", "customer_certification"],
+        "rationale": "拓尔思披露26,258万元AI软件产品及服务收入和近2,000万元项目，另有多家公司AI合同及行业交付，节点具备直接收入与项目验证。",
+        "next_evidence_needed": "补充各公司AI项目确认收入、验收回款、复购、项目毛利和可复制交付占比。",
+    },
+    "subscription_usage_licensing_monetization": {
+        "strength": 4,
+        "gap_status": "covered",
+        "score_status": "supported",
+        "value_bases": ["customer_certification"],
+        "rationale": "科大讯飞披露3.85亿元API及MaaS平台服务收入，拓尔思披露AI软件产品及服务收入；合同、调用和订阅线索进一步支持变现节点。",
+        "next_evidence_needed": "补充收入构成、ARR或订阅占比、续费、毛利和单位经济。",
+    },
+    "customer_adoption_renewal_revenue_validation": {
+        "strength": 4,
+        "gap_status": "evidence_gap",
+        "score_status": "supported",
+        "value_bases": ["customer_certification"],
+        "rationale": "WPS AI月活与Token、360访问量、万兴调用、客户签约项目和两家公司直接AI收入共同验证采用与收入，但AI产品续费仍未证明。",
+        "next_evidence_needed": "补充AI产品付费转化、续费或留存、扩容、回款和客户分群收入。",
+    },
+    "data_security_model_governance_compliance": {
+        "strength": 3,
+        "gap_status": "evidence_gap",
+        "score_status": "provisional",
+        "value_bases": ["integration_control"],
+        "rationale": "金山办公审计能力、三六零安全大模型治理和鼎捷MACP与数据治理提供AI治理产品线索；润和AI测试智能体不构成治理证据，且缺少治理采用与收入。",
+        "next_evidence_needed": "补充独立模型评测、内容安全、审计或合规覆盖、治理客户和AI治理收入。",
+    },
 }
 
 REQUIRED_READABLE_SECTIONS = [
@@ -705,6 +783,146 @@ def test_foundation_models_f1_platform_matrix_gap_uses_disclosed_revenue_boundar
     for remaining_gap in ("毛利", "续费", "单位经济"):
         assert remaining_gap in gap
     assert "补充AI专项确认收入" not in gap
+
+
+def test_foundation_models_f1_runhe_supports_agents_and_delivery_not_governance() -> None:
+    theme = load_json(F1_THEME_PATH)
+    source_pack = load_json(F1_SOURCE_PACK_PATH)
+    matrix = load_json(F1_MATRIX_PATH)
+    claims = {row["claim_id"]: row for row in theme["claims"]}
+    claim = claims["f1_claim_16"]
+    assert claim["affected_theme_nodes"] == [
+        "ai_agent_orchestration_workflow",
+        "industry_solution_delivery_integration",
+    ]
+    runhe_source = next(
+        row for row in source_pack["sources"]
+        if row["source_id"] == "f1_300339_ar2025"
+    )
+    assert runhe_source["supported_node_ids"] == claim["affected_theme_nodes"]
+    governance = next(
+        row for row in matrix["node_evidence_matrix"]
+        if row["node_id"] == "data_security_model_governance_compliance"
+    )
+    assert "f1_300339_ar2025" not in governance["accepted_source_ids"]
+    assert "f1_claim_16" not in governance["supported_claim_ids"]
+    governance_node = next(
+        row for row in theme["nodes"]
+        if row["node_id"] == "data_security_model_governance_compliance"
+    )
+    assert "润和软件" not in governance_node["domestic_players"]
+    assert "300339.SZ" not in governance_node["related_stock_codes"]
+    governance_assessment = next(
+        row for row in theme["value_capture_assessments"]
+        if row["node_id"] == "data_security_model_governance_compliance"
+    )
+    assert "f1_claim_16" not in governance_assessment["evidence_ids"]
+    served_claims = {
+        row["claim_id"]: row
+        for row in list_theme_research_claims(
+            F1_THEME_ID, read_source="artifact"
+        )["items"]
+    }
+    assert served_claims["f1_claim_16"]["affected_theme_nodes"] == sorted(
+        claim["affected_theme_nodes"]
+    )
+
+
+def test_foundation_models_f1_governance_boundary_scans_claims_and_matrix() -> None:
+    theme = load_json(F1_THEME_PATH)
+    matrix = load_json(F1_MATRIX_PATH)
+    governance_node = "data_security_model_governance_compliance"
+    governance_claims = {
+        row["claim_id"]: row
+        for row in theme["claims"]
+        if governance_node in row["affected_theme_nodes"]
+    }
+    assert set(governance_claims) == {"f1_claim_04", "f1_claim_08", "f1_claim_18"}
+    governance_terms = ("治理", "安全", "审计", "合规", "评测", "护栏")
+    assert all(
+        any(term in row["claim_text"] for term in governance_terms)
+        for row in governance_claims.values()
+    )
+    governance_matrix = next(
+        row for row in matrix["node_evidence_matrix"]
+        if row["node_id"] == governance_node
+    )
+    assert set(governance_matrix["supported_claim_ids"]) == set(governance_claims)
+    assert set(governance_matrix["accepted_source_ids"]) == {
+        row["source_id"] for row in governance_claims.values()
+    }
+
+
+def test_foundation_models_f1_hande_retention_is_cross_sell_context_not_ai_renewal() -> None:
+    mapping = load_json(F1_MAPPING_PATH)
+    source_pack = load_json(F1_SOURCE_PACK_PATH)
+    evidence = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+    hande = next(
+        row for row in mapping["company_mappings"]
+        if row["company_code"] == "300170.SZ"
+    )
+    stage = evidence["f1_ev_300170_sz_stage"]
+    assert stage["excerpt_locator"] == "第28页，AI智能体客户落地及公司整体长期客户留存背景"
+    assert "AI智能体已在公司长期企业客户实际场景落地" in stage["evidence_summary"]
+    assert "公司整体长期客户留存率超过80%" in stage["evidence_summary"]
+    assert "存量客户触达和交叉销售" in stage["evidence_summary"]
+    assert "不证明AI产品留存、续费或收入" in stage["evidence_summary"]
+    assert stage["related_node_ids"] == ["industry_solution_delivery_integration"]
+    assert "头部客户实际场景落地" in hande["relationship_summary"]
+    assert "公司整体80%以上长期客户留存" in hande["relationship_summary"]
+    assert "交叉销售" in hande["relationship_summary"]
+    assert "不能证明AI产品续费" in hande["notes"]
+    assert "AI收入金额、分部结构与续费" in hande["notes"]
+    retention_items = [
+        row for row in mapping["evidence_items"]
+        if row["evidence_type"] in {"business_stage", "revenue_materiality"}
+        and ("留存率" in row["evidence_summary"] or "80%" in row["evidence_summary"])
+    ]
+    assert retention_items == [stage]
+    assert all(
+        "不证明AI产品留存、续费或收入" in row["evidence_summary"]
+        for row in retention_items
+    )
+    source = next(
+        row for row in source_pack["sources"]
+        if row["source_id"] == "f1_300170_ar2025"
+    )
+    assert "公司整体长期客户留存仅作存量触达背景" in source["evidence_summary"]
+    assert "不代表AI产品续费、留存或收入" in source["limitations"]
+
+
+def test_foundation_models_f1_matrix_calibration_is_node_specific() -> None:
+    theme = load_json(F1_THEME_PATH)
+    matrix = load_json(F1_MATRIX_PATH)
+    rows = {row["node_id"]: row for row in matrix["node_evidence_matrix"]}
+    theme_nodes = {row["node_id"]: row for row in theme["nodes"]}
+    assert set(rows) == set(F1_MATRIX_CALIBRATION_CONTRACTS)
+    assert len({contract["rationale"] for contract in F1_MATRIX_CALIBRATION_CONTRACTS.values()}) == 9
+    assert {contract["strength"] for contract in F1_MATRIX_CALIBRATION_CONTRACTS.values()} == {3, 4}
+    for node_id, contract in F1_MATRIX_CALIBRATION_CONTRACTS.items():
+        row = rows[node_id]
+        assert row["evidence_strength_after"] == contract["strength"]
+        assert theme_nodes[node_id]["evidence_strength"] == contract["strength"]
+        assert row["evidence_gap_status"] == contract["gap_status"]
+        assert row["value_capture_score_review_status"] == contract["score_status"]
+        assert row["bottleneck_score_review_status"] == contract["score_status"]
+        assert row["value_bases"] == contract["value_bases"]
+        assert row["rationale"] == contract["rationale"]
+        assert row["next_evidence_needed"] == contract["next_evidence_needed"]
+        assert row["node_review_status"] == "reviewed"
+    served_nodes = {
+        row["node_id"]: row
+        for row in list_theme_research_nodes(
+            F1_THEME_ID, read_source="artifact"
+        )["items"]
+    }
+    assert {
+        node_id: row["evidence_strength"]
+        for node_id, row in served_nodes.items()
+    } == {
+        node_id: contract["strength"]
+        for node_id, contract in F1_MATRIX_CALIBRATION_CONTRACTS.items()
+    }
 
 
 def test_foundation_models_f1_documents_unresolved_skeleton_or_non_generic_owners() -> None:

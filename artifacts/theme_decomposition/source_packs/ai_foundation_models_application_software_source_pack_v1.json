@@ -179,7 +179,7 @@
       "review_status": "accepted",
       "document_status": "primary_source_reviewed",
       "evidence_locator": "第14-16、28-29、37、42页",
-      "evidence_summary": "得灵AI产品服务体系、企业级训练管理、客户落地与收入增长表述。",
+      "evidence_summary": "得灵AI产品服务体系、企业级训练管理、AI智能体客户落地与收入增长；公司整体长期客户留存仅作存量触达背景。",
       "supported_claim_ids": [
         "f1_claim_12",
         "f1_claim_13"
@@ -191,7 +191,7 @@
         "subscription_usage_licensing_monetization",
         "customer_adoption_renewal_revenue_validation"
       ],
-      "limitations": "仅披露AI智能体应用收入快速增长，未披露绝对金额或独立分部。",
+      "limitations": "仅披露AI智能体应用收入快速增长，未披露绝对金额或独立分部；公司整体80%以上长期客户留存不代表AI产品续费、留存或收入。",
       "notes": "第14-16、28-29、37、42页；仅披露AI智能体应用收入快速增长，未披露绝对金额或独立分部。"
     },
     {
@@ -241,8 +241,7 @@
       ],
       "supported_node_ids": [
         "ai_agent_orchestration_workflow",
-        "industry_solution_delivery_integration",
-        "data_security_model_governance_compliance"
+        "industry_solution_delivery_integration"
       ],
       "limitations": "公司总收入未单列AI产品收入；HopeOS、服务器与智算底座不作为F1直接证据。",
       "notes": "第11-13、17-18、33-34、46页；公司总收入未单列AI产品收入；HopeOS、服务器与智算底座不作为F1直接证据。"

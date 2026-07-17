@@ -385,8 +385,7 @@
       "supporting_source_ids": [],
       "affected_theme_nodes": [
         "ai_agent_orchestration_workflow",
-        "industry_solution_delivery_integration",
-        "data_security_model_governance_compliance"
+        "industry_solution_delivery_integration"
       ]
     },
     {
@@ -482,7 +481,7 @@
       "bottleneck_score": 4,
       "localization_gap_score": 3,
       "supply_tightness_score": 3,
-      "evidence_strength": 4,
+      "evidence_strength": 3,
       "node_review_status": "reviewed",
       "key_metrics": [
         "微调周期",
@@ -517,7 +516,7 @@
       "bottleneck_score": 4,
       "localization_gap_score": 3,
       "supply_tightness_score": 3,
-      "evidence_strength": 4,
+      "evidence_strength": 3,
       "node_review_status": "reviewed",
       "key_metrics": [
         "任务成功率",
@@ -558,7 +557,7 @@
       "bottleneck_score": 3,
       "localization_gap_score": 2,
       "supply_tightness_score": 3,
-      "evidence_strength": 4,
+      "evidence_strength": 3,
       "node_review_status": "reviewed",
       "key_metrics": [
         "付费企业数",
@@ -595,7 +594,7 @@
       "bottleneck_score": 3,
       "localization_gap_score": 2,
       "supply_tightness_score": 3,
-      "evidence_strength": 4,
+      "evidence_strength": 3,
       "node_review_status": "reviewed",
       "key_metrics": [
         "月活用户",
@@ -749,7 +748,7 @@
       "bottleneck_score": 4,
       "localization_gap_score": 3,
       "supply_tightness_score": 3,
-      "evidence_strength": 4,
+      "evidence_strength": 3,
       "node_review_status": "reviewed",
       "key_metrics": [
         "审计覆盖",
@@ -765,13 +764,11 @@
       "domestic_players": [
         "金山办公",
         "三六零",
-        "润和软件",
         "鼎捷数智"
       ],
       "related_stock_codes": [
         "688111.SH",
         "601360.SH",
-        "300339.SZ",
         "300378.SZ"
       ]
     }
@@ -900,7 +897,6 @@
       "evidence_ids": [
         "f1_claim_04",
         "f1_claim_08",
-        "f1_claim_16",
         "f1_claim_18"
       ],
       "uncertainty": "多数公司尚未披露AI专项确认收入、毛利与续费。"

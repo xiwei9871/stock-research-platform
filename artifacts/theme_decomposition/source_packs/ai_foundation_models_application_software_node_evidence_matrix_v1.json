@@ -19,11 +19,12 @@
       "value_capture_score_review_status": "supported",
       "bottleneck_score_review_status": "supported",
       "value_bases": [
+        "technology_barrier",
         "customer_certification"
       ],
       "evidence_gap_status": "covered",
       "node_review_status": "reviewed",
-      "rationale": "基础模型训练与推理平台由至少一份已接受年报的产品、客户、使用、签约或治理证据支持。",
+      "rationale": "科大讯飞星辰MaaS披露3.85亿元API及MaaS平台服务收入，并有开发者与Token增长；万兴天幕补充模型产品证据，平台节点具备直接收入和采用验证。",
       "next_evidence_needed": "大模型API及MaaS平台服务收入3.85亿元已披露；仍需补充平台收入结构、毛利、续费与留存、用量及单位经济。"
     },
     {
@@ -40,16 +41,16 @@
         "f1_claim_12"
       ],
       "evidence_strength_before": 2,
-      "evidence_strength_after": 4,
-      "value_capture_score_review_status": "supported",
-      "bottleneck_score_review_status": "supported",
+      "evidence_strength_after": 3,
+      "value_capture_score_review_status": "provisional",
+      "bottleneck_score_review_status": "provisional",
       "value_bases": [
         "integration_control"
       ],
-      "evidence_gap_status": "covered",
+      "evidence_gap_status": "evidence_gap",
       "node_review_status": "reviewed",
-      "rationale": "模型工具链、微调与RAG由至少一份已接受年报的产品、客户、使用、签约或治理证据支持。",
-      "next_evidence_needed": "补充AI专项确认收入、毛利、续费和单位经济。"
+      "rationale": "拓尔思、彩讯和汉得披露RAG、模型训练管理、知识管理及精调工具，但未披露工具链独立收入、付费客户或用量。",
+      "next_evidence_needed": "补充模型工具链独立收入、付费客户、调用用量、续费和毛利。"
     },
     {
       "node_id": "ai_agent_orchestration_workflow",
@@ -73,16 +74,17 @@
         "f1_claim_17"
       ],
       "evidence_strength_before": 2,
-      "evidence_strength_after": 4,
-      "value_capture_score_review_status": "supported",
-      "bottleneck_score_review_status": "supported",
+      "evidence_strength_after": 3,
+      "value_capture_score_review_status": "provisional",
+      "bottleneck_score_review_status": "provisional",
       "value_bases": [
+        "integration_control",
         "customer_certification"
       ],
-      "evidence_gap_status": "covered",
+      "evidence_gap_status": "evidence_gap",
       "node_review_status": "reviewed",
-      "rationale": "AI智能体编排与工作流由至少一份已接受年报的产品、客户、使用、签约或治理证据支持。",
-      "next_evidence_needed": "补充AI专项确认收入、毛利、续费和单位经济。"
+      "rationale": "多家公司披露智能体编排产品、调用或项目交付，润和仅支持Agent编排和行业交付；缺少智能体节点独立收入与续费。",
+      "next_evidence_needed": "补充智能体平台独立收入、付费客户、续费、任务成功率和单位推理成本。"
     },
     {
       "node_id": "enterprise_ai_application_software",
@@ -102,16 +104,17 @@
         "f1_claim_17"
       ],
       "evidence_strength_before": 2,
-      "evidence_strength_after": 4,
-      "value_capture_score_review_status": "supported",
-      "bottleneck_score_review_status": "supported",
+      "evidence_strength_after": 3,
+      "value_capture_score_review_status": "provisional",
+      "bottleneck_score_review_status": "provisional",
       "value_bases": [
-        "customer_certification"
+        "customer_certification",
+        "integration_control"
       ],
-      "evidence_gap_status": "covered",
+      "evidence_gap_status": "evidence_gap",
       "node_review_status": "reviewed",
-      "rationale": "企业AI应用软件由至少一份已接受年报的产品、客户、使用、签约或治理证据支持。",
-      "next_evidence_needed": "补充AI专项确认收入、毛利、续费和单位经济。"
+      "rationale": "WPS AI、YonGPT、Rich AIBox、得灵和雅典娜形成企业AI产品与采用或签约证据，但收入多为混合口径或合同额。",
+      "next_evidence_needed": "补充企业AI专项确认收入、付费席位、续费、扩容和毛利。"
     },
     {
       "node_id": "consumer_ai_application_services",
@@ -125,16 +128,16 @@
         "f1_claim_14"
       ],
       "evidence_strength_before": 2,
-      "evidence_strength_after": 4,
-      "value_capture_score_review_status": "supported",
-      "bottleneck_score_review_status": "supported",
+      "evidence_strength_after": 3,
+      "value_capture_score_review_status": "provisional",
+      "bottleneck_score_review_status": "provisional",
       "value_bases": [
-        "integration_control"
+        "customer_certification"
       ],
-      "evidence_gap_status": "covered",
+      "evidence_gap_status": "evidence_gap",
       "node_review_status": "reviewed",
-      "rationale": "消费AI应用服务由至少一份已接受年报的产品、客户、使用、签约或治理证据支持。",
-      "next_evidence_needed": "补充AI专项确认收入、毛利、续费和单位经济。"
+      "rationale": "纳米AI月访问量和万兴AI调用量证明消费端采用，未证明付费转化、产品留存或AI专项收入。",
+      "next_evidence_needed": "补充付费用户、付费转化、产品留存、AI专项收入和推理单位经济。"
     },
     {
       "node_id": "industry_solution_delivery_integration",
@@ -160,12 +163,13 @@
       "value_capture_score_review_status": "supported",
       "bottleneck_score_review_status": "supported",
       "value_bases": [
-        "integration_control"
+        "integration_control",
+        "customer_certification"
       ],
       "evidence_gap_status": "covered",
       "node_review_status": "reviewed",
-      "rationale": "行业方案交付与集成由至少一份已接受年报的产品、客户、使用、签约或治理证据支持。",
-      "next_evidence_needed": "补充AI专项确认收入、毛利、续费和单位经济。"
+      "rationale": "拓尔思披露26,258万元AI软件产品及服务收入和近2,000万元项目，另有多家公司AI合同及行业交付，节点具备直接收入与项目验证。",
+      "next_evidence_needed": "补充各公司AI项目确认收入、验收回款、复购、项目毛利和可复制交付占比。"
     },
     {
       "node_id": "subscription_usage_licensing_monetization",
@@ -199,8 +203,8 @@
       ],
       "evidence_gap_status": "covered",
       "node_review_status": "reviewed",
-      "rationale": "订阅、用量、许可与变现由至少一份已接受年报的产品、客户、使用、签约或治理证据支持。",
-      "next_evidence_needed": "补充AI专项确认收入、毛利、续费和单位经济。"
+      "rationale": "科大讯飞披露3.85亿元API及MaaS平台服务收入，拓尔思披露AI软件产品及服务收入；合同、调用和订阅线索进一步支持变现节点。",
+      "next_evidence_needed": "补充收入构成、ARR或订阅占比、续费、毛利和单位经济。"
     },
     {
       "node_id": "customer_adoption_renewal_revenue_validation",
@@ -233,37 +237,35 @@
       "value_bases": [
         "customer_certification"
       ],
-      "evidence_gap_status": "covered",
+      "evidence_gap_status": "evidence_gap",
       "node_review_status": "reviewed",
-      "rationale": "客户采用、续费与收入验证由至少一份已接受年报的产品、客户、使用、签约或治理证据支持。",
-      "next_evidence_needed": "补充AI专项确认收入、毛利、续费和单位经济。"
+      "rationale": "WPS AI月活与Token、360访问量、万兴调用、客户签约项目和两家公司直接AI收入共同验证采用与收入，但AI产品续费仍未证明。",
+      "next_evidence_needed": "补充AI产品付费转化、续费或留存、扩容、回款和客户分群收入。"
     },
     {
       "node_id": "data_security_model_governance_compliance",
       "accepted_source_ids": [
         "f1_688111_ar2025",
         "f1_601360_ar2025",
-        "f1_300339_ar2025",
         "f1_300378_ar2025"
       ],
       "pending_source_ids": [],
       "supported_claim_ids": [
         "f1_claim_04",
         "f1_claim_08",
-        "f1_claim_16",
         "f1_claim_18"
       ],
       "evidence_strength_before": 2,
-      "evidence_strength_after": 4,
-      "value_capture_score_review_status": "supported",
-      "bottleneck_score_review_status": "supported",
+      "evidence_strength_after": 3,
+      "value_capture_score_review_status": "provisional",
+      "bottleneck_score_review_status": "provisional",
       "value_bases": [
         "integration_control"
       ],
-      "evidence_gap_status": "covered",
+      "evidence_gap_status": "evidence_gap",
       "node_review_status": "reviewed",
-      "rationale": "数据安全、模型治理与合规由至少一份已接受年报的产品、客户、使用、签约或治理证据支持。",
-      "next_evidence_needed": "补充AI专项确认收入、毛利、续费和单位经济。"
+      "rationale": "金山办公审计能力、三六零安全大模型治理和鼎捷MACP与数据治理提供AI治理产品线索；润和AI测试智能体不构成治理证据，且缺少治理采用与收入。",
+      "next_evidence_needed": "补充独立模型评测、内容安全、审计或合规覆盖、治理客户和AI治理收入。"
     }
   ]
 }
