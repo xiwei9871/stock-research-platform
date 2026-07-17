@@ -1,60 +1,819 @@
 {
-  "artifact_version":"theme_decomposition_v1_6",
-  "theme":{"theme_id":"satellite_communications_navigation_remote_sensing_value_chain_v1","theme_name":"卫星通信、导航与遥感应用：容量接入、场景运营与经常性收入","theme_type":"other","summary":"从已投运在轨容量和地面接入出发，追踪卫星通信交付、北斗PNT增强、遥感数据处理、行业应用运营、利用率定价及经常性服务收入，不重复卫星平台、载荷硬件、组批制造和在轨基础设施所有权。","status":"reviewed","created_from":"mixed","last_updated":"2026-07-17"},
-  "research_profile":{
-    "catalog_chain_id":"satellite_communications_navigation_remote_sensing","research_kind":"industry_chain_deep_research","industry_stage":"卫星通信已形成在轨容量、基础电信牌照和行业服务收入，北斗高精度定位、云增强和行业终端进入规模应用，遥感软件、数据处理与监测服务已形成收入；但多数公司仍把硬件、软件、数据、系统集成和运营服务合并披露。","central_conflict":"星座建成、卫星发射、平台交付和终端装机只能提供供给条件，应用链真正兑现取决于客户接入、活跃终端、数据调用、容量与平台利用率、服务定价、合同续约、收入确认和现金回收；这些指标与Wave D的卫星制造及在轨基础设施所有权必须分开。",
-    "investment_summary":"本链研究的是如何把在轨容量转换为服务利用与经常性收入：中国卫通以卫星运营、网络系统和综合信息服务形成可核验核心收入；华测导航、北斗星通以高精度PNT增强、位置云服务和行业解决方案形成直接应用关系；中科星图、航天宏图以遥感数据、数字地球、PIE平台和行业应用承接数据价值。振芯科技、海格通信、四维图新具备北斗或卫星互联网应用集成，但窄口径服务收入未充分拆分，列弹性受益。中国卫星仅作制造边界，不进入默认reviewed受益表。","value_flow_summary":"已投运在轨容量 -> 卫星专用地面接入与终端激活 -> 通信、PNT增强和遥感数据服务交付 -> 行业软件、云平台与场景集成 -> 活跃客户、调用量和容量/平台利用率 -> 订阅、按量或项目定价 -> 验收、续约、经常性服务收入与现金回收。","profit_pool_summary":"利润池优先位于稀缺频轨和覆盖资源转化的通信服务、可复用的PNT增强网络与位置云、遥感数据处理和行业平台、长期运维订阅及高续约客户。硬件一次性交付、宽口径项目收入和未拆分的芯片终端销售不自动等于高质量应用服务利润。","catalyst_claim_ids":["satellite_app_claim_09"],"risk_claim_ids":["satellite_app_claim_10","satellite_app_claim_11","satellite_app_claim_12","satellite_app_claim_14"],
-    "validation_signals":["已投运容量、覆盖区域、可用率和可售服务能力，而非规划或成功发射颗数","已激活终端、连接点、数据调用量、带宽或平台利用率和SLA","卫星通信、PNT增强、遥感数据与行业平台的独立收入、毛利和定价方式","项目初验、服务期间履约、合同续约、应收账款回收和经营现金流","制造、载荷、星上系统、组批AIT、发射和在轨验收继续归satellite_manufacturing_space_infrastructure或commercial_space_launch","概念合作、研制资格、样机、终端定点和宽口径收入不得替代应用服务材料性"],
-    "evidence_gap_summary":"10份2025年官方年报覆盖8个节点、14条结构化判断和8家reviewed映射。中国卫通披露卫星传输服务总收入但未拆容量利用率与各应用收入；北斗星通将芯片与数据服务合并；中科星图、海格通信和四维图新宽口径收入仍混合硬件、软件或其他业务。后续重点补充活跃终端、订阅/续约、调用量、单用户收入、分应用毛利和回款。"
+  "artifact_version": "theme_decomposition_v1_6",
+  "theme": {
+    "theme_id": "satellite_communications_navigation_remote_sensing_value_chain_v1",
+    "theme_name": "卫星通信、导航与遥感应用：容量接入、场景运营与经常性收入",
+    "theme_type": "other",
+    "summary": "从已投运在轨容量和地面接入出发，追踪卫星通信交付、北斗PNT增强、遥感数据处理、行业应用运营、利用率定价及经常性服务收入，不重复卫星平台、载荷硬件、组批制造和在轨基础设施所有权。",
+    "status": "reviewed",
+    "created_from": "mixed",
+    "last_updated": "2026-07-17"
   },
-  "sources":[
-    {"source_id":"satellite_app_601698_filing","source_type":"company_filing","title":"中国卫通2025年年度报告","publisher":"中国卫通","author":"","publish_date":"2026-04-01","url_or_ref":"https://static.cninfo.com.cn/finalpage/2026-04-01/1225067883.PDF","access_level":"public","reliability_level":"S0","review_status":"accepted","notes":"复核第10-14、20-21、97-98页，覆盖卫星运营、应用服务、收入、定价与按期确认。"},
-    {"source_id":"satellite_app_688568_filing","source_type":"company_filing","title":"中科星图2025年年度报告","publisher":"中科星图","author":"","publish_date":"2026-04-15","url_or_ref":"https://static.cninfo.com.cn/finalpage/2026-04-15/1225104733.PDF","access_level":"public","reliability_level":"S0","review_status":"accepted","notes":"复核第16-25、209-210页，覆盖数字地球、遥感数据云服务、商业航天收入与验收。"},
-    {"source_id":"satellite_app_688066_filing","source_type":"company_filing","title":"航天宏图2025年年度报告","publisher":"航天宏图","author":"","publish_date":"2026-04-30","url_or_ref":"https://static.cninfo.com.cn/finalpage/2026-04-30/1225265967.PDF","access_level":"public","reliability_level":"S0","review_status":"accepted","notes":"复核第14-18、38-39、51、54-55、211-212页，覆盖PIE平台、遥感数据服务收入和履约。"},
-    {"source_id":"satellite_app_300627_filing","source_type":"company_filing","title":"华测导航2025年年度报告","publisher":"华测导航","author":"","publish_date":"2026-04-17","url_or_ref":"https://static.cninfo.com.cn/finalpage/2026-04-17/1225114088.PDF","access_level":"public","reliability_level":"S0","review_status":"accepted","notes":"复核第12-18、25-26、138-139页，覆盖PointX、PNT行业应用、分板块收入和验收。"},
-    {"source_id":"satellite_app_002151_filing","source_type":"company_filing","title":"北斗星通2025年年度报告","publisher":"北斗星通","author":"","publish_date":"2026-03-26","url_or_ref":"https://static.cninfo.com.cn/finalpage/2026-03-26/1225030960.PDF","access_level":"public","reliability_level":"S0","review_status":"accepted","notes":"复核第11-20、80、147页，覆盖云增强、辅助定位、位置服务、服务收入和验收。"},
-    {"source_id":"satellite_app_300101_filing","source_type":"company_filing","title":"振芯科技2025年年度报告","publisher":"振芯科技","author":"","publish_date":"2026-04-28","url_or_ref":"https://static.cninfo.com.cn/finalpage/2026-04-28/1225210200.PDF","access_level":"public","reliability_level":"S0","review_status":"accepted","notes":"复核第16-18、24-25、159-162页，覆盖北斗综合应用、分业务收入和验收。"},
-    {"source_id":"satellite_app_002465_filing","source_type":"company_filing","title":"海格通信2025年年度报告","publisher":"海格通信","author":"","publish_date":"2026-03-28","url_or_ref":"https://static.cninfo.com.cn/finalpage/2026-03-28/1225044009.PDF","access_level":"public","reliability_level":"S0","review_status":"accepted","notes":"复核第18-22、69-70、104-107页，覆盖卫星互联网接入、系统运营、北斗收入和履约。"},
-    {"source_id":"satellite_app_002405_filing","source_type":"company_filing","title":"四维图新2025年年度报告","publisher":"四维图新","author":"","publish_date":"2026-04-29","url_or_ref":"https://static.cninfo.com.cn/finalpage/2026-04-29/1225236620.PDF","access_level":"public","reliability_level":"S0","review_status":"accepted","notes":"复核第11-18、29、117-118页，覆盖地图与位置数据服务、智云收入和收入确认。"},
-    {"source_id":"satellite_app_600118_filing","source_type":"company_filing","title":"中国卫星2025年年度报告","publisher":"中国卫星","author":"","publish_date":"2026-03-31","url_or_ref":"https://static.cninfo.com.cn/finalpage/2026-03-31/1225054766.PDF","access_level":"public","reliability_level":"S0","review_status":"accepted","notes":"复核第10-16、68、102-103页，仅作平台、载荷硬件、组批AIT和制造收入边界。"},
-    {"source_id":"satellite_app_300762_filing","source_type":"company_filing","title":"上海瀚讯2025年年度报告","publisher":"上海瀚讯","author":"","publish_date":"2026-04-28","url_or_ref":"https://static.cninfo.com.cn/finalpage/2026-04-28/1225205348.PDF","access_level":"public","reliability_level":"S0","review_status":"accepted","notes":"复核第13、18-24、74、117-119页，仅验证信关站、终端和星地接入对应用服务的依赖边界。"}
+  "research_profile": {
+    "catalog_chain_id": "satellite_communications_navigation_remote_sensing",
+    "research_kind": "industry_chain_deep_research",
+    "industry_stage": "卫星通信已形成在轨容量、基础电信牌照和行业服务收入，北斗高精度定位、云增强和行业终端进入规模应用，遥感软件、数据处理与监测服务已形成收入；但多数公司仍把硬件、软件、数据、系统集成和运营服务合并披露。",
+    "central_conflict": "星座建成、卫星发射、平台交付和终端装机只能提供供给条件，应用链真正兑现取决于客户接入、活跃终端、数据调用、容量与平台利用率、服务定价、合同续约、收入确认和现金回收；这些指标与Wave D的卫星制造及在轨基础设施所有权必须分开。",
+    "investment_summary": "本链研究的是如何把在轨容量转换为服务利用与经常性收入：中国卫通以卫星运营、网络系统和综合信息服务形成可核验核心收入；华测导航、北斗星通以高精度PNT增强、位置云服务和行业解决方案形成直接应用关系；中科星图、航天宏图以遥感数据、数字地球、PIE平台和行业应用承接数据价值。振芯科技、司南导航、合众思壮具备北斗行业应用集成，但硬件、系统集成与服务收入未充分拆分，列弹性受益。四维图新的通用地图或智云收入、海格通信的终端、信关站研发或试运行均不足以形成E1 reviewed映射；中国卫星仅作制造边界。",
+    "value_flow_summary": "已投运在轨容量 -> 卫星专用地面接入与终端激活 -> 通信、PNT增强和遥感数据服务交付 -> 行业软件、云平台与场景集成 -> 活跃客户、调用量和容量/平台利用率 -> 订阅、按量或项目定价 -> 验收、续约、经常性服务收入与现金回收。",
+    "profit_pool_summary": "利润池优先位于稀缺频轨和覆盖资源转化的通信服务、可复用的PNT增强网络与位置云、遥感数据处理和行业平台、长期运维订阅及高续约客户。硬件一次性交付、宽口径项目收入和未拆分的芯片终端销售不自动等于高质量应用服务利润。",
+    "catalyst_claim_ids": [
+      "satellite_app_claim_12",
+      "satellite_app_claim_13"
+    ],
+    "risk_claim_ids": [
+      "satellite_app_claim_11",
+      "satellite_app_claim_14",
+      "satellite_app_claim_15"
+    ],
+    "validation_signals": [
+      "已投运容量、覆盖区域、可用率和可售服务能力，而非规划或成功发射颗数",
+      "已激活终端、连接点、数据调用量、带宽或平台利用率和SLA",
+      "卫星通信、PNT增强、遥感数据与行业平台的独立收入、毛利和定价方式",
+      "项目初验、服务期间履约、合同续约、应收账款回收和经营现金流",
+      "制造、载荷、星上系统、组批AIT、发射和在轨验收继续归satellite_manufacturing_space_infrastructure或commercial_space_launch",
+      "概念合作、研制资格、样机、终端定点和宽口径收入不得替代应用服务材料性"
+    ],
+    "evidence_gap_summary": "10份2025年官方年报覆盖8个节点、15条结构化判断和8家reviewed映射。中国卫通披露卫星传输服务总收入但未拆容量利用率与各应用收入；北斗星通将芯片与数据服务合并；司南导航、合众思壮和振芯科技的应用口径仍混合硬件、软件或系统集成。应用运营、利用率、定价以及经常性服务收入两个节点保持draft，后续重点补充活跃终端、订阅/续约、调用量、ARPU、分应用毛利和回款。"
+  },
+  "sources": [
+    {
+      "source_id": "satellite_app_601698_filing",
+      "source_type": "company_filing",
+      "title": "中国卫通2025年年度报告",
+      "publisher": "中国卫通",
+      "author": "",
+      "publish_date": "2026-04-01",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-01/1225067883.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "复核第10-14、20-21、97-98页，覆盖卫星运营、应用服务、收入、定价与按期确认。"
+    },
+    {
+      "source_id": "satellite_app_688568_filing",
+      "source_type": "company_filing",
+      "title": "中科星图2025年年度报告",
+      "publisher": "中科星图",
+      "author": "",
+      "publish_date": "2026-04-15",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-15/1225104733.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "复核第16-25、209-210页，覆盖数字地球、遥感数据云服务、商业航天收入与验收。"
+    },
+    {
+      "source_id": "satellite_app_688066_filing",
+      "source_type": "company_filing",
+      "title": "航天宏图2025年年度报告",
+      "publisher": "航天宏图",
+      "author": "",
+      "publish_date": "2026-04-30",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-30/1225265967.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "复核第14-18、38-39、51、54-55、211-212页，覆盖PIE平台、遥感数据服务收入和履约。"
+    },
+    {
+      "source_id": "satellite_app_300627_filing",
+      "source_type": "company_filing",
+      "title": "华测导航2025年年度报告",
+      "publisher": "华测导航",
+      "author": "",
+      "publish_date": "2026-04-17",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-17/1225114088.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "复核第12-18、25-26、138-139页，覆盖PointX、PNT行业应用、分板块收入和验收。"
+    },
+    {
+      "source_id": "satellite_app_002151_filing",
+      "source_type": "company_filing",
+      "title": "北斗星通2025年年度报告",
+      "publisher": "北斗星通",
+      "author": "",
+      "publish_date": "2026-03-26",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-26/1225030960.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "复核第11-20、80、147页，覆盖云增强、辅助定位、位置服务、服务收入和验收。"
+    },
+    {
+      "source_id": "satellite_app_300101_filing",
+      "source_type": "company_filing",
+      "title": "振芯科技2025年年度报告",
+      "publisher": "振芯科技",
+      "author": "",
+      "publish_date": "2026-04-28",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-28/1225210200.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "复核第16-18、24-25、159-162页，覆盖北斗综合应用、分业务收入和验收。"
+    },
+    {
+      "source_id": "satellite_app_688592_filing",
+      "source_type": "company_filing",
+      "title": "司南导航2025年年度报告",
+      "publisher": "司南导航",
+      "author": "",
+      "publish_date": "2026-04-28",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-28/1225208650.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "复核第12-14、42-43、156-157页，覆盖数据应用及系统解决方案、独立收入和验收确认。"
+    },
+    {
+      "source_id": "satellite_app_002383_filing",
+      "source_type": "company_filing",
+      "title": "合众思壮2025年年度报告",
+      "publisher": "合众思壮",
+      "author": "",
+      "publish_date": "2026-04-23",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-23/1225151761.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "复核第10-17、79-80、131-132页，覆盖北斗行业解决方案、项目交付、分行业收入和验收履约。"
+    },
+    {
+      "source_id": "satellite_app_600118_filing",
+      "source_type": "company_filing",
+      "title": "中国卫星2025年年度报告",
+      "publisher": "中国卫星",
+      "author": "",
+      "publish_date": "2026-03-31",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-31/1225054766.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "复核第10-16、68、102-103页，仅作平台、载荷硬件、组批AIT和制造收入边界。"
+    },
+    {
+      "source_id": "satellite_app_300762_filing",
+      "source_type": "company_filing",
+      "title": "上海瀚讯2025年年度报告",
+      "publisher": "上海瀚讯",
+      "author": "",
+      "publish_date": "2026-04-28",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-28/1225205348.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "复核第13、18-24、74、117-119页，仅验证信关站、终端和星地接入对应用服务的依赖边界。"
+    }
   ],
-  "claims":[
-    {"claim_id":"satellite_app_claim_01","theme_id":"satellite_communications_navigation_remote_sensing_value_chain_v1","source_id":"satellite_app_601698_filing","claim_text":"应用价值流不是从卫星制造开始计价，而是从已投运在轨容量、地面接入和终端激活进入通信、PNT增强、遥感数据与行业平台，再以服务利用、定价、验收、续约和经常性收入完成验证。","claim_type":"tech_route","confidence":0.99,"evidence_status":"verified","platform_use_status":"reviewed","supporting_source_ids":["satellite_app_688568_filing","satellite_app_688066_filing","satellite_app_300627_filing","satellite_app_002151_filing"],"affected_theme_nodes":["satellite_capacity_service_access","satellite_ground_access_terminal_integration","satellite_communications_service_delivery","satellite_navigation_pnt_augmentation_services","remote_sensing_data_processing_distribution","satellite_vertical_application_integration","application_operations_utilization_pricing","recurring_service_revenue_validation"]},
-    {"claim_id":"satellite_app_claim_02","theme_id":"satellite_communications_navigation_remote_sensing_value_chain_v1","source_id":"satellite_app_601698_filing","claim_text":"中国卫通把在轨通信卫星、频轨和地面站网资源转化为卫星运营、网络系统集成和综合信息服务，2025年广播电视和卫星传输服务收入26.4478亿元，客户连接点、SLA和行业覆盖决定下游价值。","claim_type":"value_capture","confidence":0.99,"evidence_status":"verified","platform_use_status":"reviewed","supporting_source_ids":[],"affected_theme_nodes":["satellite_capacity_service_access","satellite_communications_service_delivery","application_operations_utilization_pricing","recurring_service_revenue_validation"]},
-    {"claim_id":"satellite_app_claim_03","theme_id":"satellite_communications_navigation_remote_sensing_value_chain_v1","source_id":"satellite_app_002465_filing","claim_text":"卫星互联网应用交付需把芯片、模组、终端、信关站、空口测试、天地融合网络和系统运营联通；海格通信与上海瀚讯证明接入链正在建设，但硬件中标、研制资格或试运行不能替代付费服务利用。","claim_type":"bottleneck","confidence":0.95,"evidence_status":"verified","platform_use_status":"reviewed","supporting_source_ids":["satellite_app_300762_filing"],"affected_theme_nodes":["satellite_ground_access_terminal_integration","satellite_communications_service_delivery"]},
-    {"claim_id":"satellite_app_claim_04","theme_id":"satellite_communications_navigation_remote_sensing_value_chain_v1","source_id":"satellite_app_300627_filing","claim_text":"PNT应用利润来自RTK、PPP-RTK、星地融合增强、云辅助、短报文和行业解决方案，而不仅是接收芯片或终端；PointX、TruePoint及北斗综合应用已进入测绘、农业、施工、机器人、智能驾驶和海洋等场景。","claim_type":"value_capture","confidence":0.98,"evidence_status":"verified","platform_use_status":"reviewed","supporting_source_ids":["satellite_app_002151_filing","satellite_app_300101_filing","satellite_app_002405_filing"],"affected_theme_nodes":["satellite_navigation_pnt_augmentation_services","satellite_vertical_application_integration","application_operations_utilization_pricing"]},
-    {"claim_id":"satellite_app_claim_05","theme_id":"satellite_communications_navigation_remote_sensing_value_chain_v1","source_id":"satellite_app_688568_filing","claim_text":"遥感应用以卫星数据接收、校正、处理、智能解译、云端分发和行业决策形成价值；中科星图的数字地球与星图云、航天宏图的PIE-Engine和数据分析服务属于下游应用，不归载荷硬件制造节点。","claim_type":"tech_route","confidence":0.99,"evidence_status":"verified","platform_use_status":"reviewed","supporting_source_ids":["satellite_app_688066_filing"],"affected_theme_nodes":["remote_sensing_data_processing_distribution","satellite_vertical_application_integration"]},
-    {"claim_id":"satellite_app_claim_06","theme_id":"satellite_communications_navigation_remote_sensing_value_chain_v1","source_id":"satellite_app_688066_filing","claim_text":"自然资源、农业、应急、交通、城市、能源、海洋和智能设备等垂直场景需要把卫星数据或PNT与软件、云平台、模型、终端和客户工作流集成，复用平台和持续运维比单次数据交付更有经营杠杆。","claim_type":"value_capture","confidence":0.96,"evidence_status":"verified","platform_use_status":"reviewed","supporting_source_ids":["satellite_app_688568_filing","satellite_app_300627_filing","satellite_app_300101_filing","satellite_app_002405_filing"],"affected_theme_nodes":["satellite_vertical_application_integration","application_operations_utilization_pricing"]},
-    {"claim_id":"satellite_app_claim_07","theme_id":"satellite_communications_navigation_remote_sensing_value_chain_v1","source_id":"satellite_app_601698_filing","claim_text":"应用运营必须跟踪连接点、活跃终端、数据调用、容量或平台利用率、服务等级、按量或订阅定价和续约；可售容量、平台上线和终端装机如果缺少真实使用，不能形成稳定利润池。","claim_type":"cost_structure","confidence":0.97,"evidence_status":"verified","platform_use_status":"reviewed","supporting_source_ids":["satellite_app_002151_filing","satellite_app_688568_filing"],"affected_theme_nodes":["application_operations_utilization_pricing","recurring_service_revenue_validation"]},
-    {"claim_id":"satellite_app_claim_08","theme_id":"satellite_communications_navigation_remote_sensing_value_chain_v1","source_id":"satellite_app_002151_filing","claim_text":"上市公司受益验证必须同时具备应用产品或服务关系、窄口径收入材料性和商业阶段证据；项目中标、平台能力、样机、芯片终端宽收入或合作公告不能单独进入默认reviewed受益表。","claim_type":"company_mapping","confidence":0.99,"evidence_status":"verified","platform_use_status":"reviewed","supporting_source_ids":["satellite_app_601698_filing","satellite_app_688568_filing","satellite_app_688066_filing","satellite_app_300627_filing","satellite_app_300101_filing","satellite_app_002465_filing","satellite_app_002405_filing"],"affected_theme_nodes":["recurring_service_revenue_validation"]},
-    {"claim_id":"satellite_app_claim_09","theme_id":"satellite_communications_navigation_remote_sensing_value_chain_v1","source_id":"satellite_app_601698_filing","claim_text":"卫星通信业务准入和大众场景扩展、连接点增长、PNT云增强规模商用、遥感平台云化与行业数据需求，是应用链催化；催化必须最终落到利用率、服务收入、续约和现金回收。","claim_type":"catalyst","confidence":0.93,"evidence_status":"verified","platform_use_status":"reviewed","supporting_source_ids":["satellite_app_688568_filing","satellite_app_002151_filing","satellite_app_300627_filing"],"affected_theme_nodes":["satellite_capacity_service_access","satellite_communications_service_delivery","satellite_navigation_pnt_augmentation_services","remote_sensing_data_processing_distribution","application_operations_utilization_pricing"]},
-    {"claim_id":"satellite_app_claim_10","theme_id":"satellite_communications_navigation_remote_sensing_value_chain_v1","source_id":"satellite_app_601698_filing","claim_text":"星链等竞争、传统广电需求下滑、容量闲置、价格下降、SLA不达标和客户集中会压低通信服务利用率；PNT与遥感平台也可能因同质化和云资源成本导致收入增长而利润不足。","claim_type":"risk","confidence":0.96,"evidence_status":"verified","platform_use_status":"reviewed","supporting_source_ids":["satellite_app_002151_filing","satellite_app_688568_filing"],"affected_theme_nodes":["application_operations_utilization_pricing","recurring_service_revenue_validation"]},
-    {"claim_id":"satellite_app_claim_11","theme_id":"satellite_communications_navigation_remote_sensing_value_chain_v1","source_id":"satellite_app_688066_filing","claim_text":"政府与大型机构项目预算、初验和付款周期会造成应收账款、合同资产和经营现金流压力；收入确认不等于现金回收，服务续约与回款必须独立验证。","claim_type":"risk","confidence":0.98,"evidence_status":"verified","platform_use_status":"reviewed","supporting_source_ids":["satellite_app_688568_filing","satellite_app_601698_filing"],"affected_theme_nodes":["recurring_service_revenue_validation"]},
-    {"claim_id":"satellite_app_claim_12","theme_id":"satellite_communications_navigation_remote_sensing_value_chain_v1","source_id":"satellite_app_600118_filing","claim_text":"卫星平台、通信导航遥感载荷硬件、星上系统、组批制造、AIT、交付发射和在轨基础设施运营继续由satellite_manufacturing_space_infrastructure拥有；E1只拥有容量接入后的服务交付、应用运营、利用率、定价和收入关系。","claim_type":"risk","confidence":0.99,"evidence_status":"verified","platform_use_status":"reviewed","supporting_source_ids":["satellite_app_300762_filing","satellite_app_002465_filing"],"affected_theme_nodes":["satellite_capacity_service_access","satellite_ground_access_terminal_integration","remote_sensing_data_processing_distribution","satellite_vertical_application_integration"]},
-    {"claim_id":"satellite_app_claim_13","theme_id":"satellite_communications_navigation_remote_sensing_value_chain_v1","source_id":"satellite_app_688568_filing","claim_text":"应用侧瓶颈集中在多源数据时效与质量、遥感智能解译、PNT增强覆盖与完好性、跨终端兼容、客户工作流适配、数据合规和云服务成本，而非单纯增加卫星或终端数量。","claim_type":"bottleneck","confidence":0.95,"evidence_status":"verified","platform_use_status":"reviewed","supporting_source_ids":["satellite_app_688066_filing","satellite_app_300627_filing","satellite_app_002151_filing"],"affected_theme_nodes":["satellite_navigation_pnt_augmentation_services","remote_sensing_data_processing_distribution","satellite_vertical_application_integration"]},
-    {"claim_id":"satellite_app_claim_14","theme_id":"satellite_communications_navigation_remote_sensing_value_chain_v1","source_id":"satellite_app_300101_filing","claim_text":"北斗综合应用、智云、无线通信、航空航天和卫星应用等宽口径收入含芯片、终端、软件、项目和非卫星业务，必须按应用服务关系与材料性拆分；中国卫星或其他硬件公司不得因平台、载荷或组批制造证据直接成为E1受益者。","claim_type":"risk","confidence":0.99,"evidence_status":"verified","platform_use_status":"reviewed","supporting_source_ids":["satellite_app_002405_filing","satellite_app_002465_filing","satellite_app_600118_filing"],"affected_theme_nodes":["satellite_vertical_application_integration","recurring_service_revenue_validation"]}
+  "claims": [
+    {
+      "claim_id": "satellite_app_claim_01",
+      "theme_id": "satellite_communications_navigation_remote_sensing_value_chain_v1",
+      "source_id": "satellite_app_601698_filing",
+      "claim_text": "中国卫通已投运通信卫星、频轨和地面站网构成应用侧可接入容量，但年报没有披露分区域容量利用率、可售带宽或连接点收入。",
+      "claim_type": "tech_route",
+      "confidence": 0.99,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "satellite_capacity_service_access"
+      ]
+    },
+    {
+      "claim_id": "satellite_app_claim_02",
+      "theme_id": "satellite_communications_navigation_remote_sensing_value_chain_v1",
+      "source_id": "satellite_app_601698_filing",
+      "claim_text": "中国卫通以卫星运营、网络系统和综合信息服务形成2025年26.4478亿元广播电视和卫星传输服务收入，直接验证通信服务已进入商业交付。",
+      "claim_type": "value_capture",
+      "confidence": 0.99,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "satellite_communications_service_delivery"
+      ]
+    },
+    {
+      "claim_id": "satellite_app_claim_03",
+      "theme_id": "satellite_communications_navigation_remote_sensing_value_chain_v1",
+      "source_id": "satellite_app_300762_filing",
+      "claim_text": "上海瀚讯披露的信关站、地基基站、测试终端和在轨验证平台只证明地面接入是应用交付依赖；硬件批交、等待发射或试运行不等于付费接入服务。",
+      "claim_type": "bottleneck",
+      "confidence": 0.98,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "satellite_ground_access_terminal_integration"
+      ]
+    },
+    {
+      "claim_id": "satellite_app_claim_04",
+      "theme_id": "satellite_communications_navigation_remote_sensing_value_chain_v1",
+      "source_id": "satellite_app_300627_filing",
+      "claim_text": "PointX与TruePoint提供RTK、PPP-RTK、星地融合增强、云辅助和位置数据服务，并已进入测绘、农业、施工、机器人、智能驾驶和海洋等场景。",
+      "claim_type": "value_capture",
+      "confidence": 0.98,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "satellite_app_002151_filing"
+      ],
+      "affected_theme_nodes": [
+        "satellite_navigation_pnt_augmentation_services"
+      ]
+    },
+    {
+      "claim_id": "satellite_app_claim_05",
+      "theme_id": "satellite_communications_navigation_remote_sensing_value_chain_v1",
+      "source_id": "satellite_app_688592_filing",
+      "claim_text": "司南导航、合众思壮和振芯科技均把北斗/GNSS能力嵌入监测、测绘建筑、交通、城市、农业或智能设备工作流，形成可验收的行业应用集成。",
+      "claim_type": "tech_route",
+      "confidence": 0.95,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "satellite_app_002383_filing",
+        "satellite_app_300101_filing"
+      ],
+      "affected_theme_nodes": [
+        "satellite_vertical_application_integration"
+      ]
+    },
+    {
+      "claim_id": "satellite_app_claim_06",
+      "theme_id": "satellite_communications_navigation_remote_sensing_value_chain_v1",
+      "source_id": "satellite_app_688568_filing",
+      "claim_text": "中科星图的数字地球与星图云、航天宏图的PIE-Engine和数据分析服务覆盖遥感数据处理、智能解译、云端分发与监测分析，属于下游数据服务而非载荷硬件。",
+      "claim_type": "tech_route",
+      "confidence": 0.99,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "satellite_app_688066_filing"
+      ],
+      "affected_theme_nodes": [
+        "remote_sensing_data_processing_distribution"
+      ]
+    },
+    {
+      "claim_id": "satellite_app_claim_07",
+      "theme_id": "satellite_communications_navigation_remote_sensing_value_chain_v1",
+      "source_id": "satellite_app_688568_filing",
+      "claim_text": "中科星图和航天宏图已把遥感数据、软件、模型和云平台交付到自然资源、农业、应急、交通、城市等客户工作流，但项目定制与平台复用收入仍需区分。",
+      "claim_type": "value_capture",
+      "confidence": 0.97,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "satellite_app_688066_filing"
+      ],
+      "affected_theme_nodes": [
+        "satellite_vertical_application_integration"
+      ]
+    },
+    {
+      "claim_id": "satellite_app_claim_08",
+      "theme_id": "satellite_communications_navigation_remote_sensing_value_chain_v1",
+      "source_id": "satellite_app_601698_filing",
+      "claim_text": "现有年报能验证服务模式、部分SLA和收入，但未直接披露活跃终端、调用量、容量或平台利用率、ARPU、价格折扣和续约，因此应用运营与定价节点只能部分验证。",
+      "claim_type": "cost_structure",
+      "confidence": 0.99,
+      "evidence_status": "partially_verified",
+      "platform_use_status": "draft",
+      "supporting_source_ids": [
+        "satellite_app_688568_filing",
+        "satellite_app_300627_filing",
+        "satellite_app_002151_filing"
+      ],
+      "affected_theme_nodes": [
+        "application_operations_utilization_pricing"
+      ]
+    },
+    {
+      "claim_id": "satellite_app_claim_09",
+      "theme_id": "satellite_communications_navigation_remote_sensing_value_chain_v1",
+      "source_id": "satellite_app_601698_filing",
+      "claim_text": "按合同期间、履约进度或项目验收确认收入可以证明商业交付，却不能单独证明订阅占比、合同续约、经常性收入质量和现金回收，经常性服务收入节点保留证据缺口。",
+      "claim_type": "cost_structure",
+      "confidence": 0.99,
+      "evidence_status": "partially_verified",
+      "platform_use_status": "draft",
+      "supporting_source_ids": [
+        "satellite_app_688066_filing",
+        "satellite_app_002151_filing"
+      ],
+      "affected_theme_nodes": [
+        "recurring_service_revenue_validation"
+      ]
+    },
+    {
+      "claim_id": "satellite_app_claim_10",
+      "theme_id": "satellite_communications_navigation_remote_sensing_value_chain_v1",
+      "source_id": "satellite_app_688592_filing",
+      "claim_text": "司南导航、合众思壮和振芯科技满足应用关系、收入材料性和商业阶段三类证据，但宽口径收入仍混合硬件或系统集成，因此只列弹性受益，不据此推断经常性服务。",
+      "claim_type": "company_mapping",
+      "confidence": 0.99,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "satellite_app_002383_filing",
+        "satellite_app_300101_filing"
+      ],
+      "affected_theme_nodes": [
+        "satellite_vertical_application_integration"
+      ]
+    },
+    {
+      "claim_id": "satellite_app_claim_11",
+      "theme_id": "satellite_communications_navigation_remote_sensing_value_chain_v1",
+      "source_id": "satellite_app_688066_filing",
+      "claim_text": "项目初验或期间履约形成的会计收入不等于现金回收；政府和大型机构项目的应收账款、合同资产与经营现金流需要单独验证。",
+      "claim_type": "risk",
+      "confidence": 0.98,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "satellite_app_601698_filing"
+      ],
+      "affected_theme_nodes": [
+        "recurring_service_revenue_validation"
+      ]
+    },
+    {
+      "claim_id": "satellite_app_claim_12",
+      "theme_id": "satellite_communications_navigation_remote_sensing_value_chain_v1",
+      "source_id": "satellite_app_601698_filing",
+      "claim_text": "通信业务准入、行业覆盖和连接点增长可推动在轨容量向服务收入转化，但催化是否兑现仍需容量利用率、分业务收入和客户续约验证。",
+      "claim_type": "catalyst",
+      "confidence": 0.95,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "satellite_capacity_service_access",
+        "satellite_communications_service_delivery"
+      ]
+    },
+    {
+      "claim_id": "satellite_app_claim_13",
+      "theme_id": "satellite_communications_navigation_remote_sensing_value_chain_v1",
+      "source_id": "satellite_app_300627_filing",
+      "claim_text": "PNT增强规模商用与北斗行业方案持续落地是导航应用催化；司南导航和合众思壮的项目交付扩展应用场景，但订阅化程度仍未披露。",
+      "claim_type": "catalyst",
+      "confidence": 0.94,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "satellite_app_002151_filing",
+        "satellite_app_688592_filing",
+        "satellite_app_002383_filing"
+      ],
+      "affected_theme_nodes": [
+        "satellite_navigation_pnt_augmentation_services",
+        "satellite_vertical_application_integration"
+      ]
+    },
+    {
+      "claim_id": "satellite_app_claim_14",
+      "theme_id": "satellite_communications_navigation_remote_sensing_value_chain_v1",
+      "source_id": "satellite_app_688568_filing",
+      "claim_text": "遥感应用的主要风险是多源数据时效与质量、智能解译精度、项目定制、云资源成本和回款，而不是单纯增加卫星或终端数量。",
+      "claim_type": "risk",
+      "confidence": 0.96,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "satellite_app_688066_filing"
+      ],
+      "affected_theme_nodes": [
+        "remote_sensing_data_processing_distribution",
+        "satellite_vertical_application_integration"
+      ]
+    },
+    {
+      "claim_id": "satellite_app_claim_15",
+      "theme_id": "satellite_communications_navigation_remote_sensing_value_chain_v1",
+      "source_id": "satellite_app_600118_filing",
+      "claim_text": "中国卫星的平台、载荷硬件、星上系统、组批制造和AIT，以及上海瀚讯的信关站与终端，只作为satellite_manufacturing_space_infrastructure所有权或接入依赖边界，不构成E1正向受益证据。",
+      "claim_type": "risk",
+      "confidence": 0.99,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "satellite_app_300762_filing"
+      ],
+      "affected_theme_nodes": [
+        "satellite_capacity_service_access",
+        "satellite_ground_access_terminal_integration"
+      ]
+    }
   ],
-  "nodes":[
-    {"node_id":"satellite_capacity_service_access","theme_id":"satellite_communications_navigation_remote_sensing_value_chain_v1","parent_node_id":"","node_name":"在轨容量与服务接入","node_type":"service","description":"面向应用客户的已投运容量、覆盖、可用率、牌照和商业接入条件；卫星平台与在轨运维仍归Wave D。","value_capture_score":5,"bottleneck_score":5,"localization_gap_score":3,"supply_tightness_score":4,"evidence_strength":5,"node_review_status":"reviewed","key_metrics":["已投运容量","覆盖与可用率","可售带宽","客户接入点"],"overseas_leaders":["SES","Viasat","Eutelsat OneWeb"],"domestic_players":["中国卫通"],"related_stock_codes":["601698.SH"]},
-    {"node_id":"satellite_ground_access_terminal_integration","theme_id":"satellite_communications_navigation_remote_sensing_value_chain_v1","parent_node_id":"","node_name":"地面接入与终端集成","node_type":"infrastructure","description":"把信关站、终端、模组、空口测试、用户开通和地面网络衔接为可用服务；硬件canonical所有权留在D4。","value_capture_score":4,"bottleneck_score":4,"localization_gap_score":3,"supply_tightness_score":3,"evidence_strength":5,"node_review_status":"reviewed","key_metrics":["激活终端数","连接点","接入验收","星地链路SLA"],"overseas_leaders":["Hughes","Viasat","Kymeta"],"domestic_players":["海格通信","上海瀚讯"],"related_stock_codes":["002465.SZ"]},
-    {"node_id":"satellite_communications_service_delivery","theme_id":"satellite_communications_navigation_remote_sensing_value_chain_v1","parent_node_id":"","node_name":"卫星通信服务交付","node_type":"service","description":"广播电视、专线、海洋航空、应急、宽带和综合信息服务的客户交付、运营与SLA。","value_capture_score":5,"bottleneck_score":5,"localization_gap_score":3,"supply_tightness_score":4,"evidence_strength":5,"node_review_status":"reviewed","key_metrics":["服务收入","连接点","单位带宽价格","客户续约"],"overseas_leaders":["SES","Intelsat","Viasat"],"domestic_players":["中国卫通","海格通信"],"related_stock_codes":["601698.SH","002465.SZ"]},
-    {"node_id":"satellite_navigation_pnt_augmentation_services","theme_id":"satellite_communications_navigation_remote_sensing_value_chain_v1","parent_node_id":"","node_name":"卫星导航、PNT与增强服务","node_type":"service","description":"RTK、PPP-RTK、云辅助、短报文、授时、位置数据与行业解决方案，区分服务价值和终端硬件。","value_capture_score":5,"bottleneck_score":5,"localization_gap_score":3,"supply_tightness_score":3,"evidence_strength":5,"node_review_status":"reviewed","key_metrics":["增强服务覆盖","订阅用户","定位完好性","服务收入"],"overseas_leaders":["Trimble","Hexagon","u-blox"],"domestic_players":["华测导航","北斗星通","振芯科技","四维图新"],"related_stock_codes":["300627.SZ","002151.SZ","300101.SZ","002405.SZ"]},
-    {"node_id":"remote_sensing_data_processing_distribution","theme_id":"satellite_communications_navigation_remote_sensing_value_chain_v1","parent_node_id":"","node_name":"遥感数据处理与分发","node_type":"software","description":"卫星数据接收、处理、智能解译、云端分发、监测分析与信息产品；载荷硬件仍归D4。","value_capture_score":5,"bottleneck_score":5,"localization_gap_score":3,"supply_tightness_score":3,"evidence_strength":5,"node_review_status":"reviewed","key_metrics":["数据处理量","更新时效","算法精度","数据服务收入"],"overseas_leaders":["Planet Labs","Maxar Intelligence","Esri"],"domestic_players":["中科星图","航天宏图"],"related_stock_codes":["688568.SH","688066.SH"]},
-    {"node_id":"satellite_vertical_application_integration","theme_id":"satellite_communications_navigation_remote_sensing_value_chain_v1","parent_node_id":"","node_name":"卫星行业应用集成","node_type":"downstream_application","description":"把通信、PNT或遥感能力嵌入农业、交通、应急、自然资源、城市、能源、海洋和智能设备工作流。","value_capture_score":5,"bottleneck_score":4,"localization_gap_score":3,"supply_tightness_score":3,"evidence_strength":5,"node_review_status":"reviewed","key_metrics":["行业项目收入","可复用平台客户","上线场景","续约运维"],"overseas_leaders":["Trimble","Esri","Spire"],"domestic_players":["中科星图","航天宏图","华测导航","北斗星通","振芯科技","海格通信","四维图新"],"related_stock_codes":["688568.SH","688066.SH","300627.SZ","002151.SZ","300101.SZ","002465.SZ","002405.SZ"]},
-    {"node_id":"application_operations_utilization_pricing","theme_id":"satellite_communications_navigation_remote_sensing_value_chain_v1","parent_node_id":"","node_name":"应用运营、利用率与定价","node_type":"service","description":"以活跃客户、调用量、带宽或平台利用率、SLA、订阅或按量价格观察真实服务使用。","value_capture_score":5,"bottleneck_score":4,"localization_gap_score":2,"supply_tightness_score":3,"evidence_strength":5,"node_review_status":"reviewed","key_metrics":["活跃客户","容量利用率","调用量","ARPU与续约率"],"overseas_leaders":["Iridium","Trimble","Planet Labs"],"domestic_players":["中国卫通","中科星图","北斗星通"],"related_stock_codes":["601698.SH","688568.SH","002151.SZ"]},
-    {"node_id":"recurring_service_revenue_validation","theme_id":"satellite_communications_navigation_remote_sensing_value_chain_v1","parent_node_id":"","node_name":"经常性服务收入验证","node_type":"service","description":"验证订阅、运营、数据、软件和运维收入的确认、续约、回款与现金流，过滤计划、样机、中标和硬件宽收入。","value_capture_score":5,"bottleneck_score":5,"localization_gap_score":2,"supply_tightness_score":3,"evidence_strength":5,"node_review_status":"reviewed","key_metrics":["经常性收入","续约率","应收账款周转","经营现金流"],"overseas_leaders":["SES","Trimble","Planet Labs"],"domestic_players":["中国卫通","中科星图","航天宏图","华测导航","北斗星通"],"related_stock_codes":["601698.SH","688568.SH","688066.SH","300627.SZ","002151.SZ","300101.SZ","002465.SZ","002405.SZ"]}
+  "nodes": [
+    {
+      "node_id": "satellite_capacity_service_access",
+      "theme_id": "satellite_communications_navigation_remote_sensing_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "在轨容量与服务接入",
+      "node_type": "service",
+      "description": "面向应用客户的已投运容量、覆盖、可用率、牌照和商业接入条件；卫星平台与在轨运维仍归Wave D。",
+      "value_capture_score": 5,
+      "bottleneck_score": 5,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 4,
+      "evidence_strength": 4,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "已投运容量",
+        "覆盖与可用率",
+        "可售带宽",
+        "客户接入点"
+      ],
+      "overseas_leaders": [
+        "SES",
+        "Viasat",
+        "Eutelsat OneWeb"
+      ],
+      "domestic_players": [
+        "中国卫通"
+      ],
+      "related_stock_codes": [
+        "601698.SH"
+      ]
+    },
+    {
+      "node_id": "satellite_ground_access_terminal_integration",
+      "theme_id": "satellite_communications_navigation_remote_sensing_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "地面接入与终端集成",
+      "node_type": "infrastructure",
+      "description": "把信关站、终端、模组、空口测试、用户开通和地面网络衔接为可用服务；现有来源仅验证硬件依赖，canonical所有权留在D4。",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 2,
+      "node_review_status": "needs_evidence",
+      "key_metrics": [
+        "激活终端数",
+        "连接点",
+        "接入验收",
+        "星地链路SLA"
+      ],
+      "overseas_leaders": [
+        "Hughes",
+        "Viasat",
+        "Kymeta"
+      ],
+      "domestic_players": [
+        "上海瀚讯（接入依赖）"
+      ],
+      "related_stock_codes": []
+    },
+    {
+      "node_id": "satellite_communications_service_delivery",
+      "theme_id": "satellite_communications_navigation_remote_sensing_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "卫星通信服务交付",
+      "node_type": "service",
+      "description": "广播电视、专线、海洋航空、应急、宽带和综合信息服务的客户交付、运营与SLA。",
+      "value_capture_score": 5,
+      "bottleneck_score": 5,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 4,
+      "evidence_strength": 4,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "服务收入",
+        "连接点",
+        "单位带宽价格",
+        "客户续约"
+      ],
+      "overseas_leaders": [
+        "SES",
+        "Intelsat",
+        "Viasat"
+      ],
+      "domestic_players": [
+        "中国卫通"
+      ],
+      "related_stock_codes": [
+        "601698.SH"
+      ]
+    },
+    {
+      "node_id": "satellite_navigation_pnt_augmentation_services",
+      "theme_id": "satellite_communications_navigation_remote_sensing_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "卫星导航、PNT与增强服务",
+      "node_type": "service",
+      "description": "RTK、PPP-RTK、云辅助、短报文、授时、位置数据与行业解决方案，区分服务价值和终端硬件。",
+      "value_capture_score": 5,
+      "bottleneck_score": 5,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "增强服务覆盖",
+        "订阅用户",
+        "定位完好性",
+        "服务收入"
+      ],
+      "overseas_leaders": [
+        "Trimble",
+        "Hexagon",
+        "u-blox"
+      ],
+      "domestic_players": [
+        "华测导航",
+        "北斗星通",
+        "司南导航",
+        "合众思壮"
+      ],
+      "related_stock_codes": [
+        "300627.SZ",
+        "002151.SZ",
+        "688592.SH",
+        "002383.SZ"
+      ]
+    },
+    {
+      "node_id": "remote_sensing_data_processing_distribution",
+      "theme_id": "satellite_communications_navigation_remote_sensing_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "遥感数据处理与分发",
+      "node_type": "software",
+      "description": "卫星数据接收、处理、智能解译、云端分发、监测分析与信息产品；载荷硬件仍归D4。",
+      "value_capture_score": 5,
+      "bottleneck_score": 5,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "数据处理量",
+        "更新时效",
+        "算法精度",
+        "数据服务收入"
+      ],
+      "overseas_leaders": [
+        "Planet Labs",
+        "Maxar Intelligence",
+        "Esri"
+      ],
+      "domestic_players": [
+        "中科星图",
+        "航天宏图"
+      ],
+      "related_stock_codes": [
+        "688568.SH",
+        "688066.SH"
+      ]
+    },
+    {
+      "node_id": "satellite_vertical_application_integration",
+      "theme_id": "satellite_communications_navigation_remote_sensing_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "卫星行业应用集成",
+      "node_type": "downstream_application",
+      "description": "把通信、PNT或遥感能力嵌入农业、交通、应急、自然资源、城市、能源、海洋和智能设备工作流。",
+      "value_capture_score": 5,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "行业项目收入",
+        "可复用平台客户",
+        "上线场景",
+        "续约运维"
+      ],
+      "overseas_leaders": [
+        "Trimble",
+        "Esri",
+        "Spire"
+      ],
+      "domestic_players": [
+        "中科星图",
+        "航天宏图",
+        "华测导航",
+        "北斗星通",
+        "振芯科技",
+        "司南导航",
+        "合众思壮"
+      ],
+      "related_stock_codes": [
+        "688568.SH",
+        "688066.SH",
+        "300627.SZ",
+        "002151.SZ",
+        "300101.SZ",
+        "688592.SH",
+        "002383.SZ"
+      ]
+    },
+    {
+      "node_id": "application_operations_utilization_pricing",
+      "theme_id": "satellite_communications_navigation_remote_sensing_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "应用运营、利用率与定价",
+      "node_type": "service",
+      "description": "以活跃客户、调用量、带宽或平台利用率、SLA、订阅或按量价格观察真实服务使用；现有年报缺少直接运营指标。",
+      "value_capture_score": 5,
+      "bottleneck_score": 4,
+      "localization_gap_score": 2,
+      "supply_tightness_score": 3,
+      "evidence_strength": 2,
+      "node_review_status": "draft",
+      "key_metrics": [
+        "活跃客户",
+        "容量利用率",
+        "调用量",
+        "ARPU与续约率"
+      ],
+      "overseas_leaders": [
+        "Iridium",
+        "Trimble",
+        "Planet Labs"
+      ],
+      "domestic_players": [
+        "中国卫通",
+        "中科星图",
+        "华测导航",
+        "北斗星通"
+      ],
+      "related_stock_codes": [
+        "601698.SH",
+        "688568.SH",
+        "300627.SZ",
+        "002151.SZ"
+      ]
+    },
+    {
+      "node_id": "recurring_service_revenue_validation",
+      "theme_id": "satellite_communications_navigation_remote_sensing_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "经常性服务收入验证",
+      "node_type": "service",
+      "description": "验证订阅、运营、数据、软件和运维收入的确认、续约、回款与现金流；现有来源能证明履约收入但不能证明经常性质量。",
+      "value_capture_score": 5,
+      "bottleneck_score": 5,
+      "localization_gap_score": 2,
+      "supply_tightness_score": 3,
+      "evidence_strength": 3,
+      "node_review_status": "draft",
+      "key_metrics": [
+        "经常性收入",
+        "续约率",
+        "应收账款周转",
+        "经营现金流"
+      ],
+      "overseas_leaders": [
+        "SES",
+        "Trimble",
+        "Planet Labs"
+      ],
+      "domestic_players": [
+        "中国卫通",
+        "航天宏图",
+        "北斗星通"
+      ],
+      "related_stock_codes": [
+        "601698.SH",
+        "688066.SH",
+        "002151.SZ"
+      ]
+    }
   ],
-  "value_capture_assessments":[
-    {"node_id":"satellite_capacity_service_access","value_basis":"scarcity","assessment_text":"已投运频轨、覆盖和可用容量是服务入口，但只有被客户购买和使用才形成应用价值。","rank":5,"evidence_ids":["satellite_app_claim_01","satellite_app_claim_02"],"uncertainty":"容量利用率和分区域价格未披露。"},
-    {"node_id":"satellite_ground_access_terminal_integration","value_basis":"integration_control","assessment_text":"终端激活、信关站接入和地面网络衔接决定服务是否可用，硬件本体价值仍归D4。","rank":4,"evidence_ids":["satellite_app_claim_03","satellite_app_claim_12"],"uncertainty":"卫星专用接入收入未单列。"},
-    {"node_id":"satellite_communications_service_delivery","value_basis":"gross_margin","assessment_text":"长期通信服务、SLA和行业客户关系可形成持续现金流，价值高于一次性设备交付。","rank":5,"evidence_ids":["satellite_app_claim_02","satellite_app_claim_03"],"uncertainty":"网络系统与综合信息服务未拆收入。"},
-    {"node_id":"satellite_navigation_pnt_augmentation_services","value_basis":"technology_barrier","assessment_text":"增强算法、参考站与云端覆盖、完好性和行业适配构成壁垒，服务复用可提升毛利。","rank":5,"evidence_ids":["satellite_app_claim_04","satellite_app_claim_13"],"uncertainty":"订阅用户和服务收入多数未单拆。"},
-    {"node_id":"remote_sensing_data_processing_distribution","value_basis":"technology_barrier","assessment_text":"数据时效、处理链、智能解译和云分发决定遥感数据能否成为可复用信息产品。","rank":5,"evidence_ids":["satellite_app_claim_05","satellite_app_claim_13"],"uncertainty":"自有数据、第三方数据和软件收入混合。"},
-    {"node_id":"satellite_vertical_application_integration","value_basis":"integration_control","assessment_text":"行业工作流、客户数据和持续运维提高迁移成本，但定制项目会限制规模化。","rank":5,"evidence_ids":["satellite_app_claim_04","satellite_app_claim_05","satellite_app_claim_06"],"uncertainty":"项目定制与平台复用收入边界披露不足。"},
-    {"node_id":"application_operations_utilization_pricing","value_basis":"gross_margin","assessment_text":"利用率、订阅或按量价格和续约决定基础容量和平台能否释放经营杠杆。","rank":5,"evidence_ids":["satellite_app_claim_07","satellite_app_claim_10"],"uncertainty":"ARPU、调用量和续约率披露有限。"},
-    {"node_id":"recurring_service_revenue_validation","value_basis":"customer_certification","assessment_text":"验收、服务期间履约、续约和回款共同验证经常性收入，避免把计划和宽收入当作兑现。","rank":5,"evidence_ids":["satellite_app_claim_08","satellite_app_claim_11","satellite_app_claim_14"],"uncertainty":"公司口径常混合硬件、项目和服务。"}
+  "value_capture_assessments": [
+    {
+      "node_id": "satellite_capacity_service_access",
+      "value_basis": "scarcity",
+      "assessment_text": "已投运频轨、覆盖和可用容量是服务入口，但只有被客户购买和使用才形成应用价值。",
+      "rank": 5,
+      "evidence_ids": [
+        "satellite_app_claim_01",
+        "satellite_app_claim_12"
+      ],
+      "uncertainty": "容量利用率和分区域价格未披露。"
+    },
+    {
+      "node_id": "satellite_ground_access_terminal_integration",
+      "value_basis": "integration_control",
+      "assessment_text": "终端激活、信关站接入和地面网络衔接决定服务是否可用，硬件本体价值仍归D4。",
+      "rank": 4,
+      "evidence_ids": [
+        "satellite_app_claim_03",
+        "satellite_app_claim_12"
+      ],
+      "uncertainty": "卫星专用接入收入未单列。"
+    },
+    {
+      "node_id": "satellite_communications_service_delivery",
+      "value_basis": "gross_margin",
+      "assessment_text": "长期通信服务、SLA和行业客户关系可形成持续现金流，价值高于一次性设备交付。",
+      "rank": 5,
+      "evidence_ids": [
+        "satellite_app_claim_02",
+        "satellite_app_claim_12"
+      ],
+      "uncertainty": "网络系统与综合信息服务未拆收入。"
+    },
+    {
+      "node_id": "satellite_navigation_pnt_augmentation_services",
+      "value_basis": "technology_barrier",
+      "assessment_text": "增强算法、参考站与云端覆盖、完好性和行业适配构成壁垒，服务复用可提升毛利。",
+      "rank": 5,
+      "evidence_ids": [
+        "satellite_app_claim_04",
+        "satellite_app_claim_13"
+      ],
+      "uncertainty": "订阅用户和服务收入多数未单拆。"
+    },
+    {
+      "node_id": "remote_sensing_data_processing_distribution",
+      "value_basis": "technology_barrier",
+      "assessment_text": "数据时效、处理链、智能解译和云分发决定遥感数据能否成为可复用信息产品。",
+      "rank": 5,
+      "evidence_ids": [
+        "satellite_app_claim_05",
+        "satellite_app_claim_13"
+      ],
+      "uncertainty": "自有数据、第三方数据和软件收入混合。"
+    },
+    {
+      "node_id": "satellite_vertical_application_integration",
+      "value_basis": "integration_control",
+      "assessment_text": "行业工作流、客户数据和持续运维提高迁移成本，但定制项目会限制规模化。",
+      "rank": 5,
+      "evidence_ids": [
+        "satellite_app_claim_05",
+        "satellite_app_claim_07",
+        "satellite_app_claim_10"
+      ],
+      "uncertainty": "项目定制与平台复用收入边界披露不足。"
+    },
+    {
+      "node_id": "application_operations_utilization_pricing",
+      "value_basis": "gross_margin",
+      "assessment_text": "利用率、订阅或按量价格和续约决定基础容量和平台能否释放经营杠杆。",
+      "rank": 5,
+      "evidence_ids": [
+        "satellite_app_claim_08"
+      ],
+      "uncertainty": "ARPU、调用量和续约率缺少直接披露。"
+    },
+    {
+      "node_id": "recurring_service_revenue_validation",
+      "value_basis": "customer_certification",
+      "assessment_text": "验收、服务期间履约、续约和回款共同验证经常性收入，避免把计划和宽收入当作兑现。",
+      "rank": 5,
+      "evidence_ids": [
+        "satellite_app_claim_09",
+        "satellite_app_claim_11"
+      ],
+      "uncertainty": "订阅占比、续约和现金回收仍缺少直接指标。"
+    }
   ],
-  "decomposition_templates":[{"template_id":"satellite_application_service_research_v1","theme_type":"other","steps":["冻结制造与应用边界","识别容量和接入条件","拆分通信、PNT、遥感与行业应用","验证利用率定价收入续约回款","映射公司并排除概念关联"],"required_dimensions":["capacity_access","service_delivery","application_utilization","revenue_materiality","manufacturing_boundary"],"optional_dimensions":["valuation","international_comparison"],"output_schema":"theme_decomposition_v1_6"}],
-  "evidence_policy":{"accepted_source_levels":["S0","S1"],"reviewed_claim_requires_accepted_source":true,"reviewed_mapping_requires_product_revenue_stage_evidence":true,"income_boundary_rule":"容量、终端、平台、项目、订阅、按量服务和现金回收必须分别表达。","boundary_rule":"平台、载荷、星上系统、AIT、发射或硬件批交证据不得单独形成E1 reviewed受益映射。"}
+  "decomposition_templates": [
+    {
+      "template_id": "satellite_application_service_research_v1",
+      "theme_type": "other",
+      "steps": [
+        "冻结制造与应用边界",
+        "识别容量和接入条件",
+        "拆分通信、PNT、遥感与行业应用",
+        "验证利用率定价收入续约回款",
+        "映射公司并排除概念关联"
+      ],
+      "required_dimensions": [
+        "capacity_access",
+        "service_delivery",
+        "application_utilization",
+        "revenue_materiality",
+        "manufacturing_boundary"
+      ],
+      "optional_dimensions": [
+        "valuation",
+        "international_comparison"
+      ],
+      "output_schema": "theme_decomposition_v1_6"
+    }
+  ],
+  "evidence_policy": {
+    "accepted_source_levels": [
+      "S0",
+      "S1"
+    ],
+    "reviewed_claim_requires_accepted_source": true,
+    "reviewed_mapping_requires_product_revenue_stage_evidence": true,
+    "income_boundary_rule": "容量、终端、平台、项目、订阅、按量服务和现金回收必须分别表达。",
+    "boundary_rule": "平台、载荷、星上系统、AIT、发射或硬件批交证据不得单独形成E1 reviewed受益映射；四维图新的通用地图或智云收入、海格通信的终端、信关站研发或试运行均不满足E1 reviewed映射门槛。"
+  }
 }

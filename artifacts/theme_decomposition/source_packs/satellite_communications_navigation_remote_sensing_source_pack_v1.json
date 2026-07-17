@@ -1,15 +1,276 @@
 {
-  "artifact_version":"satellite_communications_navigation_remote_sensing_source_pack_v1","theme_id":"satellite_communications_navigation_remote_sensing_value_chain_v1","as_of_date":"2026-07-17",
-  "sources":[
-    {"source_id":"satellite_app_601698_filing","source_type":"company_filing","title":"中国卫通2025年年度报告","publisher":"中国卫通","author":"","publish_date":"2026-04-01","url":"https://static.cninfo.com.cn/finalpage/2026-04-01/1225067883.PDF","access_level":"public","reliability_level":"S0","review_status":"accepted","document_status":"primary_source_reviewed","evidence_locator":"第10-14页、第20-21页、第97-98页","evidence_summary":"卫星运营、网络系统和综合信息服务、26.4478亿元收入、客户连接与按合同期间确认得到复核。","supported_claim_ids":["satellite_app_claim_01","satellite_app_claim_02","satellite_app_claim_07","satellite_app_claim_08","satellite_app_claim_09","satellite_app_claim_10","satellite_app_claim_11"],"supported_node_ids":["satellite_capacity_service_access","satellite_ground_access_terminal_integration","satellite_communications_service_delivery","satellite_navigation_pnt_augmentation_services","remote_sensing_data_processing_distribution","satellite_vertical_application_integration","application_operations_utilization_pricing","recurring_service_revenue_validation"],"limitations":"未拆空间段容量利用率、网络系统和综合信息服务收入；发射与投入运营不等于应用利用。","notes":"CNINFO年报全文已复核。"},
-    {"source_id":"satellite_app_688568_filing","source_type":"company_filing","title":"中科星图2025年年度报告","publisher":"中科星图","author":"","publish_date":"2026-04-15","url":"https://static.cninfo.com.cn/finalpage/2026-04-15/1225104733.PDF","access_level":"public","reliability_level":"S0","review_status":"accepted","document_status":"primary_source_reviewed","evidence_locator":"第16-25页、第209-210页","evidence_summary":"数字地球、星图云、遥感数据处理分发、商业航天和地理信息收入及验收履约得到复核。","supported_claim_ids":["satellite_app_claim_01","satellite_app_claim_05","satellite_app_claim_06","satellite_app_claim_07","satellite_app_claim_08","satellite_app_claim_09","satellite_app_claim_10","satellite_app_claim_11","satellite_app_claim_13"],"supported_node_ids":["satellite_capacity_service_access","satellite_ground_access_terminal_integration","satellite_communications_service_delivery","satellite_navigation_pnt_augmentation_services","remote_sensing_data_processing_distribution","satellite_vertical_application_integration","application_operations_utilization_pricing","recurring_service_revenue_validation"],"limitations":"商业航天收入含电子装备和测运控，地理信息含非卫星来源；订阅和调用量未披露。","notes":"CNINFO年报全文已复核。"},
-    {"source_id":"satellite_app_688066_filing","source_type":"company_filing","title":"航天宏图2025年年度报告","publisher":"航天宏图","author":"","publish_date":"2026-04-30","url":"https://static.cninfo.com.cn/finalpage/2026-04-30/1225265967.PDF","access_level":"public","reliability_level":"S0","review_status":"accepted","document_status":"primary_source_reviewed","evidence_locator":"第14-18页、第38-39页、第51页、第54-55页、第211-212页","evidence_summary":"PIE遥感云、系统设计、数据分析、软件收入、初验与期间服务确认及回款风险得到复核。","supported_claim_ids":["satellite_app_claim_01","satellite_app_claim_05","satellite_app_claim_06","satellite_app_claim_08","satellite_app_claim_11","satellite_app_claim_13"],"supported_node_ids":["satellite_capacity_service_access","satellite_ground_access_terminal_integration","satellite_communications_service_delivery","satellite_navigation_pnt_augmentation_services","remote_sensing_data_processing_distribution","satellite_vertical_application_integration","application_operations_utilization_pricing","recurring_service_revenue_validation"],"limitations":"公司存在净资产、退市风险、应收和现金流压力；卫星平台及载荷不作为E1依据。","notes":"CNINFO年报全文已复核。"},
-    {"source_id":"satellite_app_300627_filing","source_type":"company_filing","title":"华测导航2025年年度报告","publisher":"华测导航","author":"","publish_date":"2026-04-17","url":"https://static.cninfo.com.cn/finalpage/2026-04-17/1225114088.PDF","access_level":"public","reliability_level":"S0","review_status":"accepted","document_status":"primary_source_reviewed","evidence_locator":"第12-18页、第25-26页、第138-139页","evidence_summary":"PointX增强、行业PNT应用、定位装备和解决方案收入、签收及验收政策得到复核。","supported_claim_ids":["satellite_app_claim_01","satellite_app_claim_04","satellite_app_claim_06","satellite_app_claim_08","satellite_app_claim_09","satellite_app_claim_13"],"supported_node_ids":["satellite_capacity_service_access","satellite_ground_access_terminal_integration","satellite_communications_service_delivery","satellite_navigation_pnt_augmentation_services","remote_sensing_data_processing_distribution","satellite_vertical_application_integration","application_operations_utilization_pricing","recurring_service_revenue_validation"],"limitations":"增强服务订阅收入未与装备和系统解决方案拆分；终端硬件不自动归应用服务。","notes":"CNINFO年报全文已复核。"},
-    {"source_id":"satellite_app_002151_filing","source_type":"company_filing","title":"北斗星通2025年年度报告","publisher":"北斗星通","author":"","publish_date":"2026-03-26","url":"https://static.cninfo.com.cn/finalpage/2026-03-26/1225030960.PDF","access_level":"public","reliability_level":"S0","review_status":"accepted","document_status":"primary_source_reviewed","evidence_locator":"第11-20页、第80页、第147页","evidence_summary":"TruePoint云增强、辅助定位、海洋位置服务、8174.50万元服务收入、规模商用与履约得到复核。","supported_claim_ids":["satellite_app_claim_01","satellite_app_claim_04","satellite_app_claim_07","satellite_app_claim_08","satellite_app_claim_09","satellite_app_claim_10","satellite_app_claim_13"],"supported_node_ids":["satellite_capacity_service_access","satellite_ground_access_terminal_integration","satellite_communications_service_delivery","satellite_navigation_pnt_augmentation_services","remote_sensing_data_processing_distribution","satellite_vertical_application_integration","application_operations_utilization_pricing","recurring_service_revenue_validation"],"limitations":"芯片及数据服务合并披露，服务收入含多类位置服务；独立订阅客户和毛利未披露。","notes":"CNINFO年报全文已复核。"},
-    {"source_id":"satellite_app_300101_filing","source_type":"company_filing","title":"振芯科技2025年年度报告","publisher":"振芯科技","author":"","publish_date":"2026-04-28","url":"https://static.cninfo.com.cn/finalpage/2026-04-28/1225210200.PDF","access_level":"public","reliability_level":"S0","review_status":"accepted","document_status":"primary_source_reviewed","evidence_locator":"第16-18页、第24-25页、第159-162页","evidence_summary":"北斗终端系统与应用、3.4906亿元北斗综合应用收入及验收确认得到复核。","supported_claim_ids":["satellite_app_claim_04","satellite_app_claim_06","satellite_app_claim_08","satellite_app_claim_14"],"supported_node_ids":["satellite_navigation_pnt_augmentation_services","satellite_vertical_application_integration","application_operations_utilization_pricing","recurring_service_revenue_validation"],"limitations":"北斗综合应用未拆终端、系统和运营服务；星载芯片与器件属于制造边界。","notes":"CNINFO年报全文已复核。"},
-    {"source_id":"satellite_app_002465_filing","source_type":"company_filing","title":"海格通信2025年年度报告","publisher":"海格通信","author":"","publish_date":"2026-03-28","url":"https://static.cninfo.com.cn/finalpage/2026-03-28/1225044009.PDF","access_level":"public","reliability_level":"S0","review_status":"accepted","document_status":"primary_source_reviewed","evidence_locator":"第18-22页、第69-70页、第104-107页","evidence_summary":"卫星互联网终端、信关站、天地融合、系统运营、北斗宽收入和履约边界得到复核。","supported_claim_ids":["satellite_app_claim_03","satellite_app_claim_08","satellite_app_claim_12","satellite_app_claim_14"],"supported_node_ids":["satellite_capacity_service_access","satellite_ground_access_terminal_integration","satellite_communications_service_delivery","remote_sensing_data_processing_distribution","satellite_vertical_application_integration","recurring_service_revenue_validation"],"limitations":"卫星互联网服务收入未单列；无线、北斗、航空航天和服务业口径混杂。","notes":"CNINFO年报全文已复核。"},
-    {"source_id":"satellite_app_002405_filing","source_type":"company_filing","title":"四维图新2025年年度报告","publisher":"四维图新","author":"","publish_date":"2026-04-29","url":"https://static.cninfo.com.cn/finalpage/2026-04-29/1225236620.PDF","access_level":"public","reliability_level":"S0","review_status":"accepted","document_status":"primary_source_reviewed","evidence_locator":"第11-18页、第29页、第117-118页","evidence_summary":"地图与位置数据、智云服务、29.0442亿元智云收入及客户接受确认得到复核。","supported_claim_ids":["satellite_app_claim_04","satellite_app_claim_06","satellite_app_claim_08","satellite_app_claim_14"],"supported_node_ids":["satellite_navigation_pnt_augmentation_services","satellite_vertical_application_integration","application_operations_utilization_pricing","recurring_service_revenue_validation"],"limitations":"智云收入含数据运营、合规和云服务，卫星定位贡献未拆；汽车芯片和座舱不纳入。","notes":"CNINFO年报全文已复核。"},
-    {"source_id":"satellite_app_600118_filing","source_type":"company_filing","title":"中国卫星2025年年度报告","publisher":"中国卫星","author":"","publish_date":"2026-03-31","url":"https://static.cninfo.com.cn/finalpage/2026-03-31/1225054766.PDF","access_level":"public","reliability_level":"S0","review_status":"accepted","document_status":"primary_source_reviewed","evidence_locator":"第10-16页、第68页、第102-103页","evidence_summary":"平台、载荷硬件、组批AIT、交付和制造与应用宽收入边界得到复核。","supported_claim_ids":["satellite_app_claim_12","satellite_app_claim_14"],"supported_node_ids":["satellite_capacity_service_access","satellite_ground_access_terminal_integration","remote_sensing_data_processing_distribution","satellite_vertical_application_integration","recurring_service_revenue_validation"],"limitations":"没有足以支持独立下游应用服务受益映射的窄口径收入和运营证据。","notes":"accepted negative-boundary source，不进入reviewed公司映射。"},
-    {"source_id":"satellite_app_300762_filing","source_type":"company_filing","title":"上海瀚讯2025年年度报告","publisher":"上海瀚讯","author":"","publish_date":"2026-04-28","url":"https://static.cninfo.com.cn/finalpage/2026-04-28/1225205348.PDF","access_level":"public","reliability_level":"S0","review_status":"accepted","document_status":"primary_source_reviewed","evidence_locator":"第13页、第18-24页、第74页、第117-119页","evidence_summary":"信关站、地基基站、测试终端和在轨验证平台对应用接入的依赖边界得到复核。","supported_claim_ids":["satellite_app_claim_03","satellite_app_claim_12"],"supported_node_ids":["satellite_capacity_service_access","satellite_ground_access_terminal_integration","satellite_communications_service_delivery","remote_sensing_data_processing_distribution","satellite_vertical_application_integration"],"limitations":"商业航天收入未单列，传统专网占主体；硬件批交、等待发射和试运行不是应用服务收入。","notes":"accepted canonical-dependency boundary source，不进入reviewed公司映射。"}
+  "artifact_version": "satellite_communications_navigation_remote_sensing_source_pack_v1",
+  "theme_id": "satellite_communications_navigation_remote_sensing_value_chain_v1",
+  "as_of_date": "2026-07-17",
+  "sources": [
+    {
+      "source_id": "satellite_app_601698_filing",
+      "source_type": "company_filing",
+      "title": "中国卫通2025年年度报告",
+      "publisher": "中国卫通",
+      "author": "",
+      "publish_date": "2026-04-01",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-01/1225067883.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第10-14页、第20-21页、第97-98页",
+      "evidence_summary": "卫星运营、网络系统和综合信息服务、26.4478亿元收入与按合同期间确认得到复核。",
+      "supported_claim_ids": [
+        "satellite_app_claim_01",
+        "satellite_app_claim_02",
+        "satellite_app_claim_08",
+        "satellite_app_claim_09",
+        "satellite_app_claim_11",
+        "satellite_app_claim_12"
+      ],
+      "supported_node_ids": [
+        "satellite_capacity_service_access",
+        "satellite_communications_service_delivery",
+        "application_operations_utilization_pricing",
+        "recurring_service_revenue_validation"
+      ],
+      "limitations": "未拆空间段容量利用率、网络系统和综合信息服务收入，也未披露ARPU和续约。",
+      "notes": "CNINFO年报全文已复核。"
+    },
+    {
+      "source_id": "satellite_app_688568_filing",
+      "source_type": "company_filing",
+      "title": "中科星图2025年年度报告",
+      "publisher": "中科星图",
+      "author": "",
+      "publish_date": "2026-04-15",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-15/1225104733.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第16-25页、第209-210页",
+      "evidence_summary": "数字地球、星图云、遥感数据处理分发、分板块收入及验收履约得到复核。",
+      "supported_claim_ids": [
+        "satellite_app_claim_06",
+        "satellite_app_claim_07",
+        "satellite_app_claim_08",
+        "satellite_app_claim_14"
+      ],
+      "supported_node_ids": [
+        "remote_sensing_data_processing_distribution",
+        "satellite_vertical_application_integration",
+        "application_operations_utilization_pricing"
+      ],
+      "limitations": "商业航天收入含电子装备和测运控，地理信息含非卫星来源；订阅、调用量和ARPU未披露。",
+      "notes": "CNINFO年报全文已复核。"
+    },
+    {
+      "source_id": "satellite_app_688066_filing",
+      "source_type": "company_filing",
+      "title": "航天宏图2025年年度报告",
+      "publisher": "航天宏图",
+      "author": "",
+      "publish_date": "2026-04-30",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-30/1225265967.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第14-18页、第38-39页、第51页、第54-55页、第211-212页",
+      "evidence_summary": "PIE遥感云、数据分析和系统收入、初验与期间服务确认及回款风险得到复核。",
+      "supported_claim_ids": [
+        "satellite_app_claim_06",
+        "satellite_app_claim_07",
+        "satellite_app_claim_09",
+        "satellite_app_claim_11",
+        "satellite_app_claim_14"
+      ],
+      "supported_node_ids": [
+        "remote_sensing_data_processing_distribution",
+        "satellite_vertical_application_integration",
+        "recurring_service_revenue_validation"
+      ],
+      "limitations": "公司存在净资产、应收和现金流压力；卫星平台及载荷不作为E1正向依据。",
+      "notes": "CNINFO年报全文已复核。"
+    },
+    {
+      "source_id": "satellite_app_300627_filing",
+      "source_type": "company_filing",
+      "title": "华测导航2025年年度报告",
+      "publisher": "华测导航",
+      "author": "",
+      "publish_date": "2026-04-17",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-17/1225114088.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第12-18页、第25-26页、第138-139页",
+      "evidence_summary": "PointX增强、行业PNT应用、定位装备和解决方案收入、签收及验收政策得到复核。",
+      "supported_claim_ids": [
+        "satellite_app_claim_04",
+        "satellite_app_claim_08",
+        "satellite_app_claim_13"
+      ],
+      "supported_node_ids": [
+        "satellite_navigation_pnt_augmentation_services",
+        "satellite_vertical_application_integration",
+        "application_operations_utilization_pricing"
+      ],
+      "limitations": "增强服务订阅收入未与装备和系统解决方案拆分；活跃用户和续约未披露。",
+      "notes": "CNINFO年报全文已复核。"
+    },
+    {
+      "source_id": "satellite_app_002151_filing",
+      "source_type": "company_filing",
+      "title": "北斗星通2025年年度报告",
+      "publisher": "北斗星通",
+      "author": "",
+      "publish_date": "2026-03-26",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-03-26/1225030960.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第11-20页、第80页、第147页",
+      "evidence_summary": "TruePoint云增强、辅助定位、海洋位置服务、8174.50万元服务收入和规模商用得到复核。",
+      "supported_claim_ids": [
+        "satellite_app_claim_04",
+        "satellite_app_claim_08",
+        "satellite_app_claim_09",
+        "satellite_app_claim_13"
+      ],
+      "supported_node_ids": [
+        "satellite_navigation_pnt_augmentation_services",
+        "satellite_vertical_application_integration",
+        "application_operations_utilization_pricing",
+        "recurring_service_revenue_validation"
+      ],
+      "limitations": "芯片及数据服务合并披露，独立订阅客户、续约和毛利未披露。",
+      "notes": "CNINFO年报全文已复核。"
+    },
+    {
+      "source_id": "satellite_app_300101_filing",
+      "source_type": "company_filing",
+      "title": "振芯科技2025年年度报告",
+      "publisher": "振芯科技",
+      "author": "",
+      "publish_date": "2026-04-28",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-28/1225210200.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第16-18页、第24-25页、第159-162页",
+      "evidence_summary": "北斗终端系统与应用、3.4906亿元北斗综合应用收入及验收确认得到复核。",
+      "supported_claim_ids": [
+        "satellite_app_claim_05",
+        "satellite_app_claim_10"
+      ],
+      "supported_node_ids": [
+        "satellite_vertical_application_integration"
+      ],
+      "limitations": "北斗综合应用未拆终端、系统和服务；只支持弹性行业应用映射。",
+      "notes": "CNINFO年报全文已复核。"
+    },
+    {
+      "source_id": "satellite_app_688592_filing",
+      "source_type": "company_filing",
+      "title": "司南导航2025年年度报告",
+      "publisher": "司南导航",
+      "author": "",
+      "publish_date": "2026-04-28",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-28/1225208650.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第12-14页、第42-43页、第156-157页",
+      "evidence_summary": "数据应用及系统解决方案、1.8853亿元收入、35.63%主营占比和安装调试验收得到复核。",
+      "supported_claim_ids": [
+        "satellite_app_claim_05",
+        "satellite_app_claim_10",
+        "satellite_app_claim_13"
+      ],
+      "supported_node_ids": [
+        "satellite_navigation_pnt_augmentation_services",
+        "satellite_vertical_application_integration"
+      ],
+      "limitations": "解决方案收入含设备与系统集成，未拆软件、数据、维保和订阅收入。",
+      "notes": "CNINFO年报全文已复核。"
+    },
+    {
+      "source_id": "satellite_app_002383_filing",
+      "source_type": "company_filing",
+      "title": "合众思壮2025年年度报告",
+      "publisher": "合众思壮",
+      "author": "",
+      "publish_date": "2026-04-23",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-23/1225151761.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第10-17页、第79-80页、第131-132页",
+      "evidence_summary": "北斗行业方案、项目验收交付、13.6941亿元宽口径收入和系统集成运维履约得到复核。",
+      "supported_claim_ids": [
+        "satellite_app_claim_05",
+        "satellite_app_claim_10",
+        "satellite_app_claim_13"
+      ],
+      "supported_node_ids": [
+        "satellite_navigation_pnt_augmentation_services",
+        "satellite_vertical_application_integration"
+      ],
+      "limitations": "收入全部列为卫星导航系统技术及设备，硬件、集成与服务材料性未拆。",
+      "notes": "CNINFO年报全文已复核。"
+    },
+    {
+      "source_id": "satellite_app_600118_filing",
+      "source_type": "company_filing",
+      "title": "中国卫星2025年年度报告",
+      "publisher": "中国卫星",
+      "author": "",
+      "publish_date": "2026-03-31",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-03-31/1225054766.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第10-16页、第68页、第102-103页",
+      "evidence_summary": "平台、载荷硬件、组批AIT、交付和制造边界得到复核。",
+      "supported_claim_ids": [
+        "satellite_app_claim_15"
+      ],
+      "supported_node_ids": [
+        "satellite_capacity_service_access",
+        "satellite_ground_access_terminal_integration"
+      ],
+      "limitations": "仅作负向所有权边界，没有足以支持下游应用服务映射的窄口径收入和运营证据。",
+      "notes": "accepted negative-boundary source，不进入reviewed公司映射。"
+    },
+    {
+      "source_id": "satellite_app_300762_filing",
+      "source_type": "company_filing",
+      "title": "上海瀚讯2025年年度报告",
+      "publisher": "上海瀚讯",
+      "author": "",
+      "publish_date": "2026-04-28",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-28/1225205348.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第13页、第18-24页、第74页、第117-119页",
+      "evidence_summary": "信关站、地基基站、测试终端和在轨验证平台的接入依赖边界得到复核。",
+      "supported_claim_ids": [
+        "satellite_app_claim_03",
+        "satellite_app_claim_15"
+      ],
+      "supported_node_ids": [
+        "satellite_capacity_service_access",
+        "satellite_ground_access_terminal_integration"
+      ],
+      "limitations": "商业航天收入未单列，传统专网占主体；硬件批交、等待发射和试运行不是应用服务收入。",
+      "notes": "accepted canonical-dependency boundary source，不进入reviewed公司映射。"
+    }
   ]
 }

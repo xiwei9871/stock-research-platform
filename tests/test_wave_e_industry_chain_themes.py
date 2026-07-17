@@ -286,6 +286,19 @@ def test_satellite_communications_e1_company_evidence_uses_sources_roles_and_loc
         }]
     ) >= 8
     assert {row["node_id"] for row in matrix["node_evidence_matrix"]} == E1_NODE_IDS
+    assert {
+        row["company_code"] for row in mapping["company_mappings"]
+        if row["review_status"] == "reviewed"
+    } == {
+        "601698.SH",
+        "688568.SH",
+        "688066.SH",
+        "300627.SZ",
+        "002151.SZ",
+        "300101.SZ",
+        "688592.SH",
+        "002383.SZ",
+    }
 
     evidence_by_id = {row["evidence_id"]: row for row in mapping["evidence_items"]}
     for row in mapping["company_mappings"]:
@@ -314,10 +327,16 @@ def test_satellite_communications_e1_dashboard_explains_capacity_and_recurring_r
     assert any("验证" in row["claim_text"] for row in claims)
 
     companies = list_theme_research_companies(E1_THEME_ID)["items"]
-    assert len(companies) >= 8
-    assert all(row["beneficiary_tier"] in {
-        "core_beneficiary", "elastic_beneficiary"
-    } for row in companies)
+    assert {row["company_code"]: row["beneficiary_tier"] for row in companies} == {
+        "601698.SH": "core_beneficiary",
+        "688568.SH": "core_beneficiary",
+        "688066.SH": "core_beneficiary",
+        "300627.SZ": "core_beneficiary",
+        "002151.SZ": "core_beneficiary",
+        "300101.SZ": "elastic_beneficiary",
+        "688592.SH": "elastic_beneficiary",
+        "002383.SZ": "elastic_beneficiary",
+    }
 
 
 def test_satellite_communications_e1_boundary_excludes_hardware_only_beneficiaries() -> None:
@@ -330,9 +349,40 @@ def test_satellite_communications_e1_boundary_excludes_hardware_only_beneficiari
         row["company_code"] for row in mapping["company_mappings"]
         if row["review_status"] == "reviewed"
     }
+    assert {"002405.SZ", "002465.SZ"}.isdisjoint({
+        row["company_code"] for row in mapping["company_mappings"]
+        if row["review_status"] == "reviewed"
+    })
+    assert "四维图新" in all_text and "通用地图或智云收入" in all_text
+    assert "海格通信" in all_text and "终端、信关站研发或试运行" in all_text
     forbidden_mapping_types = {"component_supplier", "equipment_supplier"}
     assert not {
         row["mapping_id"] for row in mapping["company_mappings"]
         if row["mapping_type"] in forbidden_mapping_types
         and row["mapped_node_id"] == "satellite_capacity_service_access"
     }
+
+
+def test_satellite_communications_e1_strength_and_gap_statuses_are_conservative() -> None:
+    theme = _read_json(E1_THEME_PATH)
+    matrix = _read_json(E1_MATRIX_PATH)
+    theme_nodes = {row["node_id"]: row for row in theme["nodes"]}
+    matrix_nodes = {row["node_id"]: row for row in matrix["node_evidence_matrix"]}
+
+    for node_id in (
+        "application_operations_utilization_pricing",
+        "recurring_service_revenue_validation",
+    ):
+        assert theme_nodes[node_id]["node_review_status"] == "draft"
+        assert theme_nodes[node_id]["evidence_strength"] <= 3
+        assert matrix_nodes[node_id]["node_review_status"] == "draft"
+        assert matrix_nodes[node_id]["evidence_strength_after"] == theme_nodes[node_id][
+            "evidence_strength"
+        ]
+        assert matrix_nodes[node_id]["evidence_gap_status"] == "evidence_gap"
+
+    for node_id, node in theme_nodes.items():
+        matrix_row = matrix_nodes[node_id]
+        if node["evidence_strength"] == 5 and matrix_row["evidence_gap_status"] == "covered":
+            next_evidence = matrix_row["next_evidence_needed"]
+            assert not any(metric in next_evidence for metric in node["key_metrics"])
