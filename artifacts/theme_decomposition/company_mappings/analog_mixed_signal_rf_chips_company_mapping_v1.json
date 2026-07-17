@@ -66,7 +66,7 @@
       "access_level": "public",
       "reliability_level": "S0",
       "review_status": "accepted",
-      "notes": "PDF第14-16、25、47页；电源管理芯片、PMIC放量与数模混合宽口径收入。"
+      "notes": "PDF第14-16、25、47页；电源管理芯片收入1,046,981,251.36元、毛利率37.85%，LDO/PMIC等更窄子系列未拆分。"
     },
     {
       "source_id": "f4_688381_ar2025",
@@ -144,7 +144,7 @@
       "access_level": "public",
       "reliability_level": "S0",
       "review_status": "accepted",
-      "notes": "PDF第12-13、19、32-33页；电池管理、充电管理产品与集成电路宽收入。"
+      "notes": "PDF第12-13、19、32-33页；电池安全、计量、充电管理等其他芯片分产品收入与毛利率，及三类产品销量和库存。"
     }
   ],
   "evidence_items": [
@@ -282,8 +282,8 @@
       "evidence_id": "f4_ev_688798_sh_materiality",
       "source_id": "f4_688798_ar2025",
       "evidence_type": "revenue_materiality",
-      "excerpt_locator": "PDF第47页，高性能数模混合芯片收入15.05亿元",
-      "evidence_summary": "高性能数模混合芯片收入15.05亿元包含多产品，PMIC节点收入undisclosed。",
+      "excerpt_locator": "PDF第47页，电源管理芯片收入及毛利率",
+      "evidence_summary": "电源管理芯片收入1,046,981,251.36元、毛利率37.85%；LDO/PMIC等更窄子系列未拆分。",
       "related_company_codes": [
         "688798.SH"
       ],
@@ -516,8 +516,8 @@
       "evidence_id": "f4_ev_688325_sh_materiality",
       "source_id": "f4_688325_ar2025",
       "evidence_type": "revenue_materiality",
-      "excerpt_locator": "PDF第32-33页，集成电路行业收入4.89亿元",
-      "evidence_summary": "集成电路行业收入4.89亿元未拆电池管理和充电管理子品类，节点收入undisclosed。",
+      "excerpt_locator": "PDF第32-33页，三类芯片收入、毛利率、销量及库存",
+      "evidence_summary": "电池安全芯片收入222,842,085.78元、毛利率51.83%，电池计量芯片收入202,004,719.04元、毛利率60.43%，充电管理等其他芯片收入63,812,877.57元、毛利率38.64%。",
       "related_company_codes": [
         "688325.SH"
       ],
@@ -529,8 +529,8 @@
       "evidence_id": "f4_ev_688325_sh_stage",
       "source_id": "f4_688325_ar2025",
       "evidence_type": "business_stage",
-      "excerpt_locator": "PDF第19页，全品类产品迭代与市场拓展",
-      "evidence_summary": "全品类产品持续迭代和市场拓展，但独立design win、订单和客户认证未披露。",
+      "excerpt_locator": "PDF第19、33页，全品类产品迭代及三类产品销量和库存",
+      "evidence_summary": "全品类产品持续迭代和市场拓展，第33页披露电池安全、电池计量、充电管理等其他芯片销量和库存；独立design win、订单和客户认证未披露。",
       "related_company_codes": [
         "688325.SH"
       ],
@@ -624,13 +624,13 @@
         "f4_ev_688798_sh_materiality",
         "f4_ev_688798_sh_stage"
       ],
-      "revenue_relevance": "undisclosed",
+      "revenue_relevance": "material",
       "bottleneck_relevance": "core",
       "business_materiality": "meaningful_segment",
       "product_or_service": "电源管理芯片与PMIC",
-      "relationship_summary": "PMIC产品与客户放量直接关联，但宽数模混合收入无法拆到节点。",
+      "relationship_summary": "电源管理芯片收入与毛利率直接披露，PMIC产品和客户放量直接关联；仅LDO/PMIC等更窄子系列未拆分。",
       "review_status": "reviewed",
-      "notes": "仍需PMIC专项收入、毛利率、客户结构、量产型号和库存。"
+      "notes": "仍需LDO/PMIC更窄子系列收入与毛利率、客户结构、量产型号和库存。"
     },
     {
       "mapping_id": "f4_map_688381_sh_v1",
@@ -762,13 +762,13 @@
         "f4_ev_688325_sh_materiality",
         "f4_ev_688325_sh_stage"
       ],
-      "revenue_relevance": "undisclosed",
+      "revenue_relevance": "material",
       "bottleneck_relevance": "core",
       "business_materiality": "core_business",
       "product_or_service": "电池管理芯片与充电管理芯片",
-      "relationship_summary": "电池管理与充电管理芯片形成直接产品关系，收入仅为宽集成电路口径。",
+      "relationship_summary": "电池安全、电池计量和充电管理等其他芯片收入与毛利率直接披露，并有三类销量和库存支持。",
       "review_status": "reviewed",
-      "notes": "仍需子品类收入、客户认证、量产型号、毛利率和库存周转。"
+      "notes": "仍需充电管理等其他芯片内部拆分、客户认证、量产型号和库存周转。"
     }
   ],
   "concept_only_candidates": [],

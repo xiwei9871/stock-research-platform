@@ -819,13 +819,13 @@ F4_MAPPING_CONTRACTS = {
     "300661.SZ": ("precision_signal_chain_amplifiers", "f4_300661_ar2025", "undisclosed"),
     "688536.SH": ("data_converters_adc_dac", "f4_688536_ar2025", "undisclosed"),
     "688052.SH": ("interface_isolation_driver_chips", "f4_688052_ar2025", "undisclosed"),
-    "688798.SH": ("power_management_analog_chips", "f4_688798_ar2025", "undisclosed"),
+    "688798.SH": ("power_management_analog_chips", "f4_688798_ar2025", "material"),
     "688381.SH": ("interface_isolation_driver_chips", "f4_688381_ar2025", "undisclosed"),
     "300782.SZ": ("rf_front_end_pa_lna_switch", "f4_300782_ar2025", "limited"),
     "688153.SH": ("rf_front_end_pa_lna_switch", "f4_688153_ar2025", "limited"),
     "688270.SH": ("rf_transceiver_mixed_signal_chips", "f4_688270_ar2025", "limited"),
     "001270.SZ": ("rf_front_end_pa_lna_switch", "f4_001270_ar2025", "limited"),
-    "688325.SH": ("power_management_analog_chips", "f4_688325_ar2025", "undisclosed"),
+    "688325.SH": ("power_management_analog_chips", "f4_688325_ar2025", "material"),
 }
 F4_PRODUCT_FAMILY_TERMS = {
     "300661.SZ": ("运算放大器", "信号链"),
@@ -2357,6 +2357,82 @@ def test_analog_mixed_signal_f4_company_product_family_and_three_role_contracts(
     assert "自有芯片" in evidence[reviewed["688153.SH"]["evidence_ids"][0]]["evidence_summary"]
     assert reviewed["001270.SZ"]["product_or_service"] == "相控阵T/R芯片"
     assert "基站系统" not in json.dumps(reviewed["001270.SZ"], ensure_ascii=False)
+
+
+def test_analog_mixed_signal_f4_power_management_revenue_and_margin_disclosures_are_preserved() -> None:
+    theme = load_json(F4_THEME_PATH)
+    mapping = load_json(F4_MAPPING_PATH)
+    source_pack = load_json(F4_SOURCE_PACK_PATH)
+    matrix = load_json(F4_MATRIX_PATH)
+
+    claims = {row["claim_id"]: row for row in theme["claims"]}
+    aiwei_claim = claims["f4_claim_04"]["claim_text"]
+    assert "电源管理芯片收入1,046,981,251.36元" in aiwei_claim
+    assert "毛利率37.85%" in aiwei_claim
+    assert "LDO/PMIC子系列未拆分" in aiwei_claim
+    assert "PMIC专项收入未披露" not in aiwei_claim
+
+    cellwise_claim = claims["f4_claim_10"]["claim_text"]
+    for disclosure in (
+        "电池安全芯片收入222,842,085.78元、毛利率51.83%",
+        "电池计量芯片收入202,004,719.04元、毛利率60.43%",
+        "充电管理等其他芯片收入63,812,877.57元、毛利率38.64%",
+        "三类产品销量和库存",
+        "充电管理等其他芯片未进一步拆分",
+    ):
+        assert disclosure in cellwise_claim
+    assert "未按电池安全、计量和充电子族拆分" not in cellwise_claim
+
+    sources = {row["source_id"]: row for row in source_pack["sources"]}
+    aiwei_source = sources["f4_688798_ar2025"]
+    assert "1,046,981,251.36元" in aiwei_source["evidence_summary"]
+    assert "37.85%" in aiwei_source["evidence_summary"]
+    assert aiwei_source["limitations"] == "LDO/PMIC等更窄子系列收入与毛利率未拆分；客户放量需持续跟踪。"
+    cellwise_source = sources["f4_688325_ar2025"]
+    assert all(
+        value in cellwise_source["evidence_summary"]
+        for value in (
+            "222,842,085.78元",
+            "51.83%",
+            "202,004,719.04元",
+            "60.43%",
+            "63,812,877.57元",
+            "38.64%",
+            "销量和库存",
+        )
+    )
+    assert cellwise_source["limitations"] == "充电管理等其他芯片未进一步拆分；产品销量和库存不等于客户订单或认证。"
+
+    evidence = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+    assert "电源管理芯片收入1,046,981,251.36元、毛利率37.85%" in evidence[
+        "f4_ev_688798_sh_materiality"
+    ]["evidence_summary"]
+    assert all(
+        value in evidence["f4_ev_688325_sh_materiality"]["evidence_summary"]
+        for value in (
+            "222,842,085.78元",
+            "51.83%",
+            "202,004,719.04元",
+            "60.43%",
+            "63,812,877.57元",
+            "38.64%",
+        )
+    )
+    mappings = {row["company_code"]: row for row in mapping["company_mappings"]}
+    assert mappings["688798.SH"]["revenue_relevance"] == "material"
+    assert mappings["688325.SH"]["revenue_relevance"] == "material"
+
+    power_node = next(
+        row for row in matrix["node_evidence_matrix"]
+        if row["node_id"] == "power_management_analog_chips"
+    )
+    assert power_node["evidence_strength_after"] == 5
+    assert power_node["evidence_gap_status"] == "covered"
+    assert "gross_margin" in power_node["value_bases"]
+    assert "节点收入和毛利率已直接披露" in power_node["rationale"]
+    assert "LDO/PMIC子系列" in power_node["next_evidence_needed"]
+    assert "充电管理等其他芯片内部拆分" in power_node["next_evidence_needed"]
+    assert "均缺少节点子品类收入拆分" not in power_node["rationale"]
 
 
 def test_analog_mixed_signal_f4_sources_claims_and_matrix_use_direct_attribution() -> None:

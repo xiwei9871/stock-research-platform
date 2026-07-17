@@ -81,16 +81,17 @@
         "f4_claim_10"
       ],
       "evidence_strength_before": 1,
-      "evidence_strength_after": 4,
+      "evidence_strength_after": 5,
       "value_capture_score_review_status": "supported",
       "bottleneck_score_review_status": "supported",
       "value_bases": [
-        "customer_certification"
+        "customer_certification",
+        "gross_margin"
       ],
-      "evidence_gap_status": "evidence_gap",
+      "evidence_gap_status": "covered",
       "node_review_status": "reviewed",
-      "rationale": "艾为与赛微微电支持PMIC、电池及充电管理产品，但均缺少节点子品类收入拆分。",
-      "next_evidence_needed": "补充PMIC、电池管理和充电管理子品类收入、毛利率、客户认证与库存。"
+      "rationale": "艾为电源管理芯片及赛微微电电池安全、电池计量、充电管理等其他芯片的节点收入和毛利率已直接披露，并有产品放量或销量库存证据。",
+      "next_evidence_needed": "继续补充LDO/PMIC子系列收入与毛利率、充电管理等其他芯片内部拆分、客户认证和库存周转。"
     },
     {
       "node_id": "timing_clock_mixed_signal_chips",

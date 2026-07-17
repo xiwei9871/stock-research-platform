@@ -132,7 +132,7 @@
       "access_level": "public",
       "reliability_level": "S0",
       "review_status": "accepted",
-      "notes": "PDF第14-16、25、47页；电源管理芯片、PMIC放量与数模混合宽口径收入。"
+      "notes": "PDF第14-16、25、47页；电源管理芯片收入1,046,981,251.36元、毛利率37.85%，LDO/PMIC等更窄子系列未拆分。"
     },
     {
       "source_id": "f4_688381_ar2025",
@@ -210,7 +210,7 @@
       "access_level": "public",
       "reliability_level": "S0",
       "review_status": "accepted",
-      "notes": "PDF第12-13、19、32-33页；电池管理、充电管理产品与集成电路宽收入。"
+      "notes": "PDF第12-13、19、32-33页；电池安全、计量、充电管理等其他芯片分产品收入与毛利率，及三类产品销量和库存。"
     }
   ],
   "nodes": [
@@ -320,7 +320,7 @@
       "bottleneck_score": 4,
       "localization_gap_score": 3,
       "supply_tightness_score": 3,
-      "evidence_strength": 4,
+      "evidence_strength": 5,
       "node_review_status": "reviewed",
       "key_metrics": [
         "产品收入",
@@ -559,7 +559,7 @@
       "claim_id": "f4_claim_04",
       "theme_id": "analog_mixed_signal_rf_chips_value_chain_v1",
       "source_id": "f4_688798_ar2025",
-      "claim_text": "艾为电子披露电源管理芯片与LDO PMIC客户放量；高性能数模混合芯片收入为混合口径，PMIC专项收入未披露。",
+      "claim_text": "艾为电子披露电源管理芯片收入1,046,981,251.36元、毛利率37.85%，并披露LDO PMIC客户放量；LDO/PMIC子系列未拆分。",
       "claim_type": "company_mapping",
       "confidence": 0.94,
       "evidence_status": "verified",
@@ -643,7 +643,7 @@
       "claim_id": "f4_claim_10",
       "theme_id": "analog_mixed_signal_rf_chips_value_chain_v1",
       "source_id": "f4_688325_ar2025",
-      "claim_text": "赛微微电以电池管理芯片为核心并覆盖充电管理芯片；总收入4.89亿元未按电池安全、计量和充电子族拆分。",
+      "claim_text": "赛微微电披露电池安全芯片收入222,842,085.78元、毛利率51.83%，电池计量芯片收入202,004,719.04元、毛利率60.43%，充电管理等其他芯片收入63,812,877.57元、毛利率38.64%；第33页另披露三类产品销量和库存，仅充电管理等其他芯片未进一步拆分。",
       "claim_type": "company_mapping",
       "confidence": 0.94,
       "evidence_status": "verified",
@@ -773,13 +773,13 @@
     {
       "node_id": "power_management_analog_chips",
       "value_basis": "customer_certification",
-      "assessment_text": "电源管理模拟芯片只在产品族、客户阶段与收入边界直接支持时确认价值。",
+      "assessment_text": "艾为电源管理芯片与赛微微电电池安全、计量及充电管理等芯片已有分产品收入和毛利率直接支持。",
       "rank": 4,
       "evidence_ids": [
         "f4_claim_04",
         "f4_claim_10"
       ],
-      "uncertainty": "收入拆分、客户转化、毛利率和库存仍需持续验证。"
+      "uncertainty": "LDO/PMIC更窄子系列、充电管理等其他芯片内部构成、客户转化和库存周转仍需持续验证。"
     },
     {
       "node_id": "timing_clock_mixed_signal_chips",

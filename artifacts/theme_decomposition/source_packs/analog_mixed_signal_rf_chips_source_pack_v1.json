@@ -89,15 +89,15 @@
       "review_status": "accepted",
       "document_status": "primary_source_reviewed",
       "evidence_locator": "PDF第14-16、25、47页",
-      "evidence_summary": "电源管理芯片、PMIC客户放量和数模混合宽收入。",
+      "evidence_summary": "电源管理芯片收入1,046,981,251.36元、毛利率37.85%，并披露LDO PMIC客户放量。",
       "supported_claim_ids": [
         "f4_claim_04"
       ],
       "supported_node_ids": [
         "power_management_analog_chips"
       ],
-      "limitations": "数模混合收入未拆PMIC；客户放量需持续跟踪。",
-      "notes": "PDF第14-16、25、47页；电源管理芯片、PMIC放量与数模混合宽口径收入。"
+      "limitations": "LDO/PMIC等更窄子系列收入与毛利率未拆分；客户放量需持续跟踪。",
+      "notes": "PDF第14-16、25、47页；电源管理芯片收入1,046,981,251.36元、毛利率37.85%，LDO/PMIC等更窄子系列未拆分。"
     },
     {
       "source_id": "f4_688381_ar2025",
@@ -233,7 +233,7 @@
       "review_status": "accepted",
       "document_status": "primary_source_reviewed",
       "evidence_locator": "PDF第12-13、19、32-33页",
-      "evidence_summary": "电池管理与充电管理芯片、宽行业收入与产品迭代。",
+      "evidence_summary": "电池安全芯片收入222,842,085.78元、毛利率51.83%，电池计量芯片收入202,004,719.04元、毛利率60.43%，充电管理等其他芯片收入63,812,877.57元、毛利率38.64%；另披露三类产品销量和库存。",
       "supported_claim_ids": [
         "f4_claim_10",
         "f4_claim_16"
@@ -242,8 +242,8 @@
         "power_management_analog_chips",
         "design_win_customer_qualification_revenue_validation"
       ],
-      "limitations": "行业收入未拆电池管理/充电子品类；产品迭代不等于订单。",
-      "notes": "PDF第12-13、19、32-33页；电池管理、充电管理产品与集成电路宽收入。"
+      "limitations": "充电管理等其他芯片未进一步拆分；产品销量和库存不等于客户订单或认证。",
+      "notes": "PDF第12-13、19、32-33页；电池安全、计量、充电管理等其他芯片分产品收入与毛利率，及三类产品销量和库存。"
     }
   ]
 }
