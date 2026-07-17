@@ -31,6 +31,57 @@ WAVE_G_CASES = {
     "scientific_instruments": "scientific_instruments_value_chain_v1",
 }
 
+G1_CHAIN_ID = "mems_intelligent_sensors"
+G1_THEME_ID = "mems_intelligent_sensors_value_chain_v1"
+G1_THEME_PATH = REPOSITORY_ROOT / f"artifacts/theme_decomposition/{G1_THEME_ID}.json"
+G1_MAPPING_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/company_mappings"
+    / "mems_intelligent_sensors_company_mapping_v1.json"
+)
+G1_SOURCE_PACK_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "mems_intelligent_sensors_source_pack_v1.json"
+)
+G1_MATRIX_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "mems_intelligent_sensors_node_evidence_matrix_v1.json"
+)
+G1_L3 = {
+    "mems_sensor_devices",
+    "mems_fabrication_packaging",
+    "intelligent_sensor_integration",
+    "mems_commercial_validation",
+}
+G1_L4 = {
+    "mems_inertial_accelerometer_gyroscope",
+    "mems_pressure_flow_environmental_sensors",
+    "mems_acoustic_microphones",
+    "mems_rf_filters_resonators",
+    "mems_optical_micro_mirror_lidar",
+    "mems_foundry_wafer_process",
+    "mems_packaging_calibration_test",
+    "intelligent_sensor_fusion_modules",
+    "design_win_mass_production_revenue_validation",
+}
+G1_INITIAL_UNIVERSE = {
+    "002241.SZ", "688396.SH", "600460.SH", "300456.SZ", "688286.SH",
+    "688052.SH", "300007.SZ", "300667.SZ", "603662.SH", "688582.SH",
+}
+G1_EXCLUDED_INITIAL = {"688052.SH", "300667.SZ", "603662.SH"}
+G1_MAPPING_CONTRACTS = {
+    "002241.SZ": ("mems_acoustic_microphones", "g1_002241_ar2025"),
+    "688396.SH": ("mems_foundry_wafer_process", "g1_688396_ar2025"),
+    "600460.SH": ("mems_foundry_wafer_process", "g1_600460_ar2025"),
+    "300456.SZ": ("mems_foundry_wafer_process", "g1_300456_ar2025"),
+    "688286.SH": ("mems_acoustic_microphones", "g1_688286_ar2025"),
+    "300007.SZ": ("mems_pressure_flow_environmental_sensors", "g1_300007_ar2025"),
+    "688582.SH": ("mems_inertial_accelerometer_gyroscope", "g1_688582_ar2025"),
+    "603005.SH": ("mems_packaging_calibration_test", "g1_603005_ar2025"),
+}
+
 REQUIRED_READABLE_SECTIONS = [
     {
         "name": "研究结论",
@@ -210,3 +261,195 @@ def test_wave_g_registry_matches_manifest() -> None:
         chain_id: metadata["theme_id"]
         for chain_id, metadata in manifest["themes"].items()
     } == WAVE_G_CHAIN_THEMES
+
+
+def test_mems_g1_catalog_first_exact_tree_and_direct_link_contract() -> None:
+    assert_catalog_first_contract(G1_CHAIN_ID, G1_THEME_ID, G1_L3, G1_L4)
+    catalog = load_industry_catalog()
+    chain_nodes = [row for row in catalog["nodes"] if row["chain_id"] == G1_CHAIN_ID]
+    by_id = {row["node_id"]: row for row in chain_nodes}
+    assert {row["node_kind"] for row in chain_nodes} == {"canonical"}
+    assert all(not row["canonical_key"] for row in chain_nodes if row["level"] == "L3")
+    l4_keys = [row["canonical_key"] for row in chain_nodes if row["level"] == "L4"]
+    assert len(l4_keys) == len(set(l4_keys)) == 9
+    assert all(key.startswith("mems_intelligent_sensors:") for key in l4_keys)
+    for row in chain_nodes:
+        assert row["primary_path"][1] == G1_CHAIN_ID
+        if row["level"] == "L4":
+            assert row["parent_node_id"] in G1_L3
+            assert by_id[row["parent_node_id"]]["level"] == "L3"
+
+    link = next(
+        row for row in catalog["theme_links"] if row["theme_id"] == G1_THEME_ID
+    )
+    assert len(link["node_links"]) == 9
+    assert {
+        (row["theme_node_id"], row["catalog_node_id"])
+        for row in link["node_links"]
+    } == {(node_id, node_id) for node_id in G1_L4}
+
+
+def test_mems_g1_artifacts_are_reviewed_and_meet_wave_gate() -> None:
+    theme = load_json(G1_THEME_PATH)
+    mapping = load_json(G1_MAPPING_PATH)
+    source_pack = load_json(G1_SOURCE_PACK_PATH)
+    matrix = load_json(G1_MATRIX_PATH)
+    assert theme["artifact_version"] == "theme_decomposition_v1_6"
+    assert theme["theme"]["status"] == "reviewed"
+    assert {row["node_id"] for row in theme["nodes"]} == G1_L4
+    assert len(source_pack["sources"]) >= 10
+    assert sum(
+        row["source_type"] in {"company_filing", "official_report", "official_article"}
+        for row in source_pack["sources"]
+    ) >= 8
+    assert len(theme["claims"]) >= 12
+    reviewed = [
+        row for row in mapping["company_mappings"] if row["review_status"] == "reviewed"
+    ]
+    assert len(reviewed) >= 8
+    assert {row["node_id"] for row in matrix["node_evidence_matrix"]} == G1_L4
+
+    report = VERIFIER.build_theme_batch_report(MANIFEST_PATH, wave="wave_g")
+    rows = {row["chain_id"]: row for row in report["theme_results"]}
+    assert rows[G1_CHAIN_ID]["ready"] is True
+    assert rows[G1_CHAIN_ID]["counts"]["accepted_sources"] >= 10
+    assert rows[G1_CHAIN_ID]["counts"]["primary_sources"] >= 8
+    assert rows[G1_CHAIN_ID]["counts"]["claims"] >= 12
+    assert rows[G1_CHAIN_ID]["counts"]["reviewed_mappings"] >= 8
+
+
+def test_mems_g1_company_three_role_evidence_and_initial_universe_closure() -> None:
+    mapping = load_json(G1_MAPPING_PATH)
+    evidence = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+    reviewed = {
+        row["company_code"]: row for row in mapping["company_mappings"]
+        if row["review_status"] == "reviewed"
+    }
+    excluded = {
+        row["company_code"]: row for row in mapping["excluded_initial_candidates"]
+    }
+    assert set(reviewed) == set(G1_MAPPING_CONTRACTS)
+    assert set(excluded) == G1_EXCLUDED_INITIAL
+    assert (set(reviewed) & G1_INITIAL_UNIVERSE) | set(excluded) == G1_INITIAL_UNIVERSE
+    assert not set(reviewed) & set(excluded)
+    assert reviewed.keys() - G1_INITIAL_UNIVERSE == {"603005.SH"}
+    assert "补充" in reviewed["603005.SH"]["notes"]
+    for company_code, (node_id, source_id) in G1_MAPPING_CONTRACTS.items():
+        row = reviewed[company_code]
+        assert row["mapped_node_id"] == node_id
+        items = [evidence[evidence_id] for evidence_id in row["evidence_ids"]]
+        assert [item["evidence_type"] for item in items] == [
+            "product_relationship", "revenue_materiality", "business_stage"
+        ]
+        assert len({item["excerpt_locator"] for item in items}) == 3
+        assert all(item["source_id"] == source_id for item in items)
+        assert all(item["related_node_ids"] == [node_id] for item in items)
+    assert mapping["concept_only_candidates"] == []
+
+
+def test_mems_g1_source_identity_claim_union_and_matrix_are_direct() -> None:
+    theme = load_json(G1_THEME_PATH)
+    mapping = load_json(G1_MAPPING_PATH)
+    source_pack = load_json(G1_SOURCE_PACK_PATH)
+    matrix = load_json(G1_MATRIX_PATH)
+    identity_fields = (
+        "source_id", "source_type", "title", "publisher", "author",
+        "publish_date", "url_or_ref", "access_level", "reliability_level",
+        "review_status", "notes",
+    )
+    identity = lambda rows: {
+        row["source_id"]: tuple(
+            row.get(field, row.get("url") if field == "url_or_ref" else None)
+            for field in identity_fields
+        ) for row in rows
+    }
+    assert identity(theme["sources"]) == identity(mapping["sources"])
+    assert identity(theme["sources"]) == identity(source_pack["sources"])
+    assert all(row["author"] == row["publisher"] and row["author"] for row in theme["sources"])
+
+    claims = {row["claim_id"]: row for row in theme["claims"]}
+    accepted = {row["source_id"] for row in source_pack["sources"]}
+    claim_union = {
+        source_id for claim in claims.values()
+        for source_id in (claim["source_id"], *claim["supporting_source_ids"])
+    }
+    matrix_union = {
+        source_id for row in matrix["node_evidence_matrix"]
+        for source_id in row["accepted_source_ids"]
+    }
+    assert accepted == claim_union == matrix_union
+    for row in matrix["node_evidence_matrix"]:
+        node_claims = {
+            claim_id for claim_id, claim in claims.items()
+            if row["node_id"] in claim["affected_theme_nodes"]
+        }
+        assert set(row["supported_claim_ids"]) == node_claims
+        assert set(row["accepted_source_ids"]) == {
+            claims[claim_id]["source_id"] for claim_id in node_claims
+        }
+    for source in source_pack["sources"]:
+        source_claims = {
+            claim_id for claim_id, claim in claims.items()
+            if source["source_id"] in (claim["source_id"], *claim["supporting_source_ids"])
+        }
+        assert set(source["supported_claim_ids"]) == source_claims
+        assert set(source["supported_node_ids"]) == {
+            node_id for claim_id in source_claims
+            for node_id in claims[claim_id]["affected_theme_nodes"]
+        }
+
+
+def test_mems_g1_lifecycle_and_neighbor_chain_boundaries_are_explicit() -> None:
+    theme = load_json(G1_THEME_PATH)
+    mapping = load_json(G1_MAPPING_PATH)
+    text = json.dumps({"theme": theme, "policy": mapping["mapping_policy"]}, ensure_ascii=False)
+    for stage in ("研究", "样品", "design win", "量产", "订单", "收入"):
+        assert stage in text
+    for boundary in (
+        "专利或实验室原型只作research lead",
+        "产线机器视觉与工业检测系统保持工业检测链所有权",
+        "人形机器人专用集成保持人形机器人链所有权",
+        "纯模拟芯片与非MEMS传感器不得映射",
+        "通用封测与generic foundry不得映射",
+        "G2拥有晶圆制造特色工艺，G1仅拥有MEMS专用工艺",
+        "混合口径公司总营收不作为节点收入",
+    ):
+        assert boundary in text
+    excluded_by_code = {
+        row["company_code"]: row["reason"]
+        for row in mapping["excluded_initial_candidates"]
+    }
+    assert "模拟" in excluded_by_code["688052.SH"]
+    assert "非MEMS" in excluded_by_code["603662.SH"]
+    assert "自有MEMS" in excluded_by_code["300667.SZ"]
+
+
+def test_mems_g1_has_no_unproven_cross_chain_edges() -> None:
+    catalog = load_industry_catalog()
+    nodes = {row["node_id"]: row for row in catalog["nodes"]}
+    cross_chain_edges = {
+        (row["source_node_id"], row["target_node_id"], row["relationship_type"])
+        for row in catalog["edges"]
+        if row["source_node_id"] in G1_L4
+        and nodes[row["target_node_id"]]["chain_id"] != G1_CHAIN_ID
+    }
+    assert cross_chain_edges == set()
+
+
+def test_mems_g1_matrix_calibrates_unmapped_nodes_and_evidence_gaps() -> None:
+    theme = load_json(G1_THEME_PATH)
+    matrix = load_json(G1_MATRIX_PATH)
+    nodes = {row["node_id"]: row for row in theme["nodes"]}
+    rows = {row["node_id"]: row for row in matrix["node_evidence_matrix"]}
+    assert set(rows) == G1_L4
+    assert len({row["rationale"] for row in rows.values()}) == 9
+    assert all(row["next_evidence_needed"] for row in rows.values())
+    for node_id, row in rows.items():
+        assert nodes[node_id]["evidence_strength"] == row["evidence_strength_after"]
+    for empty_node in ("mems_rf_filters_resonators", "mems_optical_micro_mirror_lidar"):
+        assert rows[empty_node]["accepted_source_ids"] == []
+        assert rows[empty_node]["supported_claim_ids"] == []
+        assert rows[empty_node]["evidence_gap_status"] == "evidence_gap"
+        assert rows[empty_node]["node_review_status"] == "needs_evidence"
+        assert nodes[empty_node]["related_stock_codes"] == []
+        assert nodes[empty_node]["domestic_players"] == []

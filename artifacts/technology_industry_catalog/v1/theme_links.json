@@ -950,6 +950,23 @@
       "notes": "F4 owns analog, mixed-signal and RF chip products. MEMS sensors, discrete power switching, foundry capacity, mobile network systems, optical communications and satellite systems keep external ownership."
     },
     {
+      "theme_id": "mems_intelligent_sensors_value_chain_v1",
+      "chain_id": "mems_intelligent_sensors",
+      "node_links": [
+        {"theme_node_id":"mems_inertial_accelerometer_gyroscope","catalog_node_id":"mems_inertial_accelerometer_gyroscope"},
+        {"theme_node_id":"mems_pressure_flow_environmental_sensors","catalog_node_id":"mems_pressure_flow_environmental_sensors"},
+        {"theme_node_id":"mems_acoustic_microphones","catalog_node_id":"mems_acoustic_microphones"},
+        {"theme_node_id":"mems_rf_filters_resonators","catalog_node_id":"mems_rf_filters_resonators"},
+        {"theme_node_id":"mems_optical_micro_mirror_lidar","catalog_node_id":"mems_optical_micro_mirror_lidar"},
+        {"theme_node_id":"mems_foundry_wafer_process","catalog_node_id":"mems_foundry_wafer_process"},
+        {"theme_node_id":"mems_packaging_calibration_test","catalog_node_id":"mems_packaging_calibration_test"},
+        {"theme_node_id":"intelligent_sensor_fusion_modules","catalog_node_id":"intelligent_sensor_fusion_modules"},
+        {"theme_node_id":"design_win_mass_production_revenue_validation","catalog_node_id":"design_win_mass_production_revenue_validation"}
+      ],
+      "unmapped_theme_node_ids": [],
+      "notes": "G1 owns MEMS devices, MEMS-specific processes and packaging, direct MEMS fusion modules, and MEMS commercial validation. Generic foundry, analog chips, non-MEMS sensors, industrial inspection systems and humanoid-specific integration retain neighboring-chain ownership."
+    },
+    {
       "theme_id": "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
       "chain_id": "rare_earth_permanent_magnets_critical_minerals",
       "node_links": [

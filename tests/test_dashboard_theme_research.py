@@ -90,9 +90,10 @@ def test_theme_index_aggregates_validated_phase_outputs():
         "mobile_communications_5g_6g_value_chain_v1",
         "analog_mixed_signal_rf_chips_value_chain_v1",
         "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
+        "mems_intelligent_sensors_value_chain_v1",
     }
-    assert len(expected_theme_ids) == 35
-    assert payload["total"] == 35
+    assert len(expected_theme_ids) == 36
+    assert payload["total"] == 36
     assert {row["theme_id"] for row in payload["items"]} == expected_theme_ids
     assert [
         (row["theme_name"], row["theme_id"]) for row in payload["items"]
