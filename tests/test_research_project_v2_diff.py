@@ -45,6 +45,44 @@ def _claim(claim_id: str, text: str) -> dict:
     }
 
 
+def _requirement() -> dict:
+    return {
+        "requirement_id": "requirement:primary",
+        "target_type": "research_claim",
+        "target_id": "claim:old",
+        "question_to_resolve": "Is the original mechanism observed?",
+        "requirement_type": "validation",
+        "required_source_classes": ["primary"],
+        "required_independence": "independent",
+        "required_freshness": "within_12_months",
+        "required_scope": "global",
+        "minimum_coverage": 1,
+        "conflict_search_required": True,
+        "primary_source_required": True,
+        "collection_status": "not_started",
+        "satisfaction_status": "unsatisfied",
+        "provenance": deepcopy(PROVENANCE),
+    }
+
+
+def _reference() -> dict:
+    return {
+        "reference_id": "reference:primary",
+        "reference_namespace": "external_document",
+        "reference_type": "report",
+        "reference_object_id": "document:fixture",
+        "reference_role": "background",
+        "reference_version": None,
+        "reference_content_hash": None,
+        "hash_scope": None,
+        "referenced_at": "2026-07-17T10:00:00+08:00",
+        "locator": None,
+        "scope_note": None,
+        "resolution_status": "resolved",
+        "provenance": deepcopy(PROVENANCE),
+    }
+
+
 def _version() -> dict:
     return {
         "artifact_version": "2.0.0",
@@ -156,6 +194,19 @@ def _claim_by_id(version: dict, claim_id: str) -> dict:
     )
 
 
+def _expected_family_changes(**overrides: list[str]) -> dict[str, list[str]]:
+    expected = {
+        "added": [],
+        "removed_from_current_scope": [],
+        "modified": [],
+        "status_changed": [],
+        "superseded": [],
+        "unchanged": [],
+    }
+    expected.update(overrides)
+    return expected
+
+
 def test_version_fixtures_are_current_schema_and_semantically_valid(version_pair):
     before, after = version_pair
 
@@ -213,21 +264,24 @@ def test_status_and_text_change_is_modified(version_pair):
     assert result["changes"]["claims"]["status_changed"] == []
 
 
-def test_removed_claim_explicitly_superseded_by_new_claim_is_superseded_and_added(
+def test_retained_claim_explicitly_superseded_by_new_claim_is_superseded_and_added(
     version_pair,
 ):
     before, after = version_pair
-    after["snapshot"]["claims"] = [
-        claim for claim in after["snapshot"]["claims"] if claim["claim_id"] != "claim:old"
-    ]
     new_claim = _claim("claim:new", "The replacement mechanism creates value.")
     new_claim["supersedes_claim_id"] = "claim:old"
     after["snapshot"]["claims"].append(new_claim)
+    after["snapshot"]["questions"][0]["linked_claim_ids"].append("claim:new")
+    _claim_by_id(after, "claim:old")["claim_text"] = "A revised old claim body."
+
+    validate_schema_payload("research_version_v2", after)
+    validate_version_semantics(after)
 
     result = diff_versions(before, after)
 
     assert result["changes"]["claims"]["superseded"] == ["claim:old"]
     assert result["changes"]["claims"]["added"] == ["claim:new"]
+    assert "claim:old" not in result["changes"]["claims"]["unchanged"]
 
 
 def test_absent_non_superseded_claim_is_removed_from_current_scope(version_pair):
@@ -248,6 +302,57 @@ def test_only_provenance_review_status_change_is_status_changed(version_pair):
     result = diff_versions(before, after)
 
     assert result["changes"]["claims"]["status_changed"] == ["claim:stable"]
+
+
+def test_question_answer_status_is_a_status_only_path(version_pair):
+    before, after = version_pair
+    after["snapshot"]["questions"][0]["answer_status"] = "answered"
+
+    validate_schema_payload("research_version_v2", after)
+    validate_version_semantics(after)
+    result = diff_versions(before, after)
+
+    assert result["changes"]["questions"] == _expected_family_changes(
+        status_changed=["question:primary"]
+    )
+
+
+def test_requirement_status_fields_are_status_only_paths(version_pair):
+    before, after = version_pair
+    for version in (before, after):
+        version["snapshot"]["evidence_requirements"].append(_requirement())
+        version["snapshot"]["questions"][0]["linked_requirement_ids"].append(
+            "requirement:primary"
+        )
+    after["snapshot"]["evidence_requirements"][0]["collection_status"] = "complete"
+    after["snapshot"]["evidence_requirements"][0]["satisfaction_status"] = (
+        "satisfied"
+    )
+
+    for version in (before, after):
+        validate_schema_payload("research_version_v2", version)
+        validate_version_semantics(version)
+    result = diff_versions(before, after)
+
+    assert result["changes"]["evidence_requirements"] == _expected_family_changes(
+        status_changed=["requirement:primary"]
+    )
+
+
+def test_reference_resolution_status_is_a_status_only_path(version_pair):
+    before, after = version_pair
+    for version in (before, after):
+        version["snapshot"]["references"].append(_reference())
+    after["snapshot"]["references"][0]["resolution_status"] = "unresolvable"
+
+    for version in (before, after):
+        validate_schema_payload("research_version_v2", version)
+        validate_version_semantics(version)
+    result = diff_versions(before, after)
+
+    assert result["changes"]["references"] == _expected_family_changes(
+        status_changed=["reference:primary"]
+    )
 
 
 def test_non_status_provenance_change_is_modified(version_pair):
@@ -276,6 +381,12 @@ def test_all_families_and_categories_are_present_in_fixed_order_and_sorted(versi
     after["snapshot"]["claims"].extend(
         [_claim("claim:z", "Z"), _claim("claim:a", "A")]
     )
+    after["snapshot"]["questions"][0]["linked_claim_ids"].extend(
+        ["claim:z", "claim:a"]
+    )
+
+    validate_schema_payload("research_version_v2", after)
+    validate_version_semantics(after)
 
     result = diff_versions(before, after)
 

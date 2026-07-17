@@ -166,11 +166,11 @@ def _diff_family(
 ) -> dict[str, list[str]]:
     before_items = _index_family(before, family, id_field, "before")
     after_items = _index_family(after, family, id_field, "after")
-    superseded_ids = _explicitly_superseded_ids(family, after_items)
     changes = {category: [] for category in _CATEGORIES}
 
     before_ids = set(before_items)
     after_ids = set(after_items)
+    superseded_ids = _explicitly_superseded_ids(family, after_items) & before_ids
     changes["added"].extend(after_ids - before_ids)
 
     for object_id in before_ids - after_ids:
@@ -182,10 +182,14 @@ def _diff_family(
         changes[category].append(object_id)
 
     for object_id in before_ids & after_ids:
-        category = _classify_same_id(
-            family,
-            before_items[object_id],
-            after_items[object_id],
+        category = (
+            "superseded"
+            if object_id in superseded_ids
+            else _classify_same_id(
+                family,
+                before_items[object_id],
+                after_items[object_id],
+            )
         )
         changes[category].append(object_id)
 
