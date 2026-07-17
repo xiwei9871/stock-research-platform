@@ -10,7 +10,11 @@ with warnings.catch_warnings():
     warnings.filterwarnings("ignore", category=DeprecationWarning)
     from stock_research.research_project_v2.loader import validate_schema_payload
 
-from stock_research.research_project_v2.semantic import validate_version_semantics
+from stock_research.research_project_v2.semantic import (
+    _validate_causal_cycles,
+    _validate_parent_tree,
+    validate_version_semantics,
+)
 
 
 PROVENANCE = {
@@ -71,6 +75,61 @@ def _causal_edge(
         "lifecycle_status": "active",
         "provenance": PROVENANCE,
     }
+
+
+def _reference(reference_id="reference:evidence"):
+    return {
+        "reference_id": reference_id,
+        "reference_namespace": "external_document",
+        "reference_type": "report",
+        "reference_object_id": "document:fixture",
+        "reference_role": "supports",
+        "reference_version": None,
+        "reference_content_hash": None,
+        "hash_scope": None,
+        "referenced_at": "2026-07-17T10:00:00+08:00",
+        "locator": None,
+        "scope_note": None,
+        "resolution_status": "resolved",
+        "provenance": PROVENANCE,
+    }
+
+
+def _evidence_assessment(target_id="claim:primary"):
+    return {
+        "assessment_id": "evidence_assessment:primary",
+        "target_type": "research_claim",
+        "target_id": target_id,
+        "requirement_id": "requirement:primary",
+        "reference_id": "reference:evidence",
+        "evidence_role": "supports",
+        "locator": None,
+        "assessment_summary": "Assessment summary.",
+        "directness": "direct",
+        "strength": "strong",
+        "independence": "independent",
+        "freshness": "current",
+        "scope_match": "matched",
+        "conflict_status": "none",
+        "review_status": "unreviewed",
+        "provenance": PROVENANCE,
+    }
+
+
+class CountingString(str):
+    hash_calls = 0
+
+    def __hash__(self):
+        type(self).hash_calls += 1
+        return super().__hash__()
+
+
+class CountingList(list):
+    iteration_calls = 0
+
+    def __iter__(self):
+        type(self).iteration_calls += 1
+        return super().__iter__()
 
 
 @pytest.fixture
@@ -364,7 +423,39 @@ def test_duplicate_claim_id_is_rejected_with_details(valid_version):
     with pytest.raises(ResearchProjectV2Error) as exc_info:
         validate_version_semantics(valid_version)
     assert exc_info.value.code == "RESEARCH_PROJECT_DUPLICATE_OBJECT_ID"
-    assert exc_info.value.details == {"collection": "claims", "id": "claim:primary"}
+    assert exc_info.value.details == {
+        "first_collection": "claims",
+        "current_collection": "claims",
+        "id": "claim:primary",
+    }
+
+
+def test_object_ids_are_unique_across_collections(valid_version):
+    valid_version["snapshot"]["claim_relations"][0]["relation_id"] = "claim:primary"
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        validate_version_semantics(valid_version)
+    assert exc_info.value.code == "RESEARCH_PROJECT_DUPLICATE_OBJECT_ID"
+    assert exc_info.value.details == {
+        "first_collection": "claims",
+        "current_collection": "claim_relations",
+        "id": "claim:primary",
+    }
+
+
+def test_parent_tree_long_chain_visits_each_node_a_constant_number_of_times():
+    node_count = 5000
+    CountingString.hash_calls = 0
+    node_ids = [CountingString(f"tree_node:{index:04d}") for index in range(node_count)]
+    nodes = [
+        {
+            "tree_node_id": node_id,
+            "tree_id": "question_tree:long",
+            "parent_tree_node_id": None if index == 0 else node_ids[index - 1],
+        }
+        for index, node_id in enumerate(node_ids)
+    ]
+    _validate_parent_tree(nodes)
+    assert CountingString.hash_calls <= node_count * 20
 
 
 def test_same_marked_feedback_loop_is_accepted(valid_version):
@@ -457,6 +548,50 @@ def test_deep_causal_cycle_uses_domain_validation_without_recursion_error(valid_
         )
         for index, node_id in enumerate(node_ids)
     ]
+    validate_version_semantics(valid_version)
+
+
+def test_causal_cycle_validation_scans_edge_collection_a_constant_number_of_times():
+    node_count = 2000
+    node_ids = {f"causal_node:dag:{index:04d}" for index in range(node_count)}
+    edges = CountingList(
+        _causal_edge(
+            f"causal_edge:dag:{index:04d}",
+            f"causal_node:dag:{index:04d}",
+            f"causal_node:dag:{index + 1:04d}",
+        )
+        for index in range(node_count - 1)
+    )
+    CountingList.iteration_calls = 0
+    _validate_causal_cycles(node_ids, edges)
+    assert CountingList.iteration_calls <= 3
+
+
+def test_evidence_assessment_target_must_match_requirement_target(valid_version):
+    valid_version["creation_stage"] = "evidence_snapshot"
+    valid_version["snapshot"]["references"] = [_reference()]
+    valid_version["snapshot"]["evidence_assessments"] = [
+        _evidence_assessment(target_id="claim:counter")
+    ]
+    validate_schema_payload("research_version_v2", valid_version)
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        validate_version_semantics(valid_version)
+    assert exc_info.value.code == "RESEARCH_PROJECT_EVIDENCE_REQUIREMENT_TARGET_MISMATCH"
+    assert exc_info.value.details == {
+        "assessment_id": "evidence_assessment:primary",
+        "requirement_id": "requirement:primary",
+        "assessment_target_type": "research_claim",
+        "assessment_target_id": "claim:counter",
+        "requirement_target_type": "research_claim",
+        "requirement_target_id": "claim:primary",
+    }
+
+
+def test_evidence_assessment_accepts_matching_requirement_target(valid_version):
+    valid_version["creation_stage"] = "evidence_snapshot"
+    valid_version["snapshot"]["references"] = [_reference()]
+    valid_version["snapshot"]["evidence_assessments"] = [_evidence_assessment()]
+    validate_schema_payload("research_version_v2", valid_version)
     validate_version_semantics(valid_version)
 
 

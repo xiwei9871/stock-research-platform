@@ -40,18 +40,19 @@ def _ids(snapshot: dict[str, Any], collection: str) -> set[str]:
 
 
 def _require_unique_ids(snapshot: dict[str, Any]) -> None:
+    object_collections: dict[str, str] = {}
     for collection, id_field in _ID_FIELDS.items():
-        seen: set[str] = set()
         for item in snapshot[collection]:
             object_id = item[id_field]
-            if object_id in seen:
+            if object_id in object_collections:
                 raise _error(
                     "RESEARCH_PROJECT_DUPLICATE_OBJECT_ID",
-                    f"Duplicate object ID in {collection}: {object_id}",
-                    collection=collection,
+                    f"Duplicate object ID: {object_id}",
+                    first_collection=object_collections[object_id],
+                    current_collection=collection,
                     id=object_id,
                 )
-            seen.add(object_id)
+            object_collections[object_id] = collection
 
 
 def _require_reference(
@@ -97,19 +98,26 @@ def _validate_parent_tree(nodes: list[dict[str, Any]]) -> None:
                 parent_tree_node_id=parent_id,
             )
 
+    state = {node_id: 0 for node_id in nodes_by_id}
     for node in nodes:
-        visited: set[str] = set()
-        current_id: str | None = node["tree_node_id"]
-        while current_id is not None:
-            if current_id in visited:
-                raise _error(
-                    "RESEARCH_PROJECT_TREE_PARENT_CYCLE",
-                    f"Question tree parent cycle contains: {current_id}",
-                    collection="question_tree_nodes",
-                    id=current_id,
-                )
-            visited.add(current_id)
+        start_id = node["tree_node_id"]
+        if state[start_id] != 0:
+            continue
+        path: list[str] = []
+        current_id: str | None = start_id
+        while current_id is not None and state[current_id] == 0:
+            state[current_id] = 1
+            path.append(current_id)
             current_id = nodes_by_id[current_id]["parent_tree_node_id"]
+        if current_id is not None and state[current_id] == 1:
+            raise _error(
+                "RESEARCH_PROJECT_TREE_PARENT_CYCLE",
+                f"Question tree parent cycle contains: {current_id}",
+                collection="question_tree_nodes",
+                id=current_id,
+            )
+        for path_node_id in path:
+            state[path_node_id] = 2
 
 
 def _validate_question_dependency_dag(
@@ -279,7 +287,11 @@ def _validate_target(
 
 def _validate_evidence_targets(version: dict[str, Any]) -> None:
     snapshot = version["snapshot"]
-    requirement_ids = _ids(snapshot, "evidence_requirements")
+    requirements = {
+        requirement["requirement_id"]: requirement
+        for requirement in snapshot["evidence_requirements"]
+    }
+    requirement_ids = set(requirements)
     reference_ids = _ids(snapshot, "references")
     for requirement in snapshot["evidence_requirements"]:
         _validate_target(
@@ -305,6 +317,20 @@ def _validate_evidence_targets(version: dict[str, Any]) -> None:
             field="requirement_id",
             source_id=assessment["assessment_id"],
         )
+        requirement = requirements[assessment["requirement_id"]]
+        assessment_target = (assessment["target_type"], assessment["target_id"])
+        requirement_target = (requirement["target_type"], requirement["target_id"])
+        if assessment_target != requirement_target:
+            raise _error(
+                "RESEARCH_PROJECT_EVIDENCE_REQUIREMENT_TARGET_MISMATCH",
+                "Evidence assessment target does not match its requirement target",
+                assessment_id=assessment["assessment_id"],
+                requirement_id=requirement["requirement_id"],
+                assessment_target_type=assessment["target_type"],
+                assessment_target_id=assessment["target_id"],
+                requirement_target_type=requirement["target_type"],
+                requirement_target_id=requirement["target_id"],
+            )
         _require_reference(
             assessment["reference_id"],
             reference_ids,
@@ -399,13 +425,20 @@ def _validate_causal_cycles(
     for edge in edges:
         adjacency[edge["from_causal_node_id"]].append(edge["to_causal_node_id"])
 
-    for component in _strongly_connected_components(node_ids, adjacency):
-        internal_edges = [
-            edge
-            for edge in edges
-            if edge["from_causal_node_id"] in component
-            and edge["to_causal_node_id"] in component
-        ]
+    components = _strongly_connected_components(node_ids, adjacency)
+    component_index = {
+        node_id: index
+        for index, component in enumerate(components)
+        for node_id in component
+    }
+    internal_edges_by_component: dict[int, list[dict[str, Any]]] = defaultdict(list)
+    for edge in edges:
+        source_component = component_index[edge["from_causal_node_id"]]
+        if source_component == component_index[edge["to_causal_node_id"]]:
+            internal_edges_by_component[source_component].append(edge)
+
+    for index, component in enumerate(components):
+        internal_edges = internal_edges_by_component[index]
         is_cycle = len(component) > 1 or any(
             edge["from_causal_node_id"] == edge["to_causal_node_id"]
             for edge in internal_edges
