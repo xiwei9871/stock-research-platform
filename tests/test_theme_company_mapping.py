@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from stock_research.theme_company_mapping import (
+    REVENUE_EVIDENCE_TYPES,
     THEME_COMPANY_MAPPING_DIR,
     ThemeCompanyMappingValidationError,
     cli,
@@ -254,6 +255,79 @@ def test_reviewed_limited_revenue_claim_requires_revenue_evidence(
     assert error.code == "REVIEWED_MAPPING_REQUIRES_REVENUE_EVIDENCE"
 
 
+def test_current_evidence_contract_rejects_reviewed_undisclosed_without_revenue_role(
+    tmp_path: Path,
+):
+    artifact_dir = _copy_mapping_package(tmp_path)
+    path = artifact_dir / "ai_power_company_mapping_v1.json"
+    payload = _read_json(path)
+    payload["evidence_contract_version"] = "mapping_evidence_roles_v2"
+    mapping = payload["company_mappings"][0]
+    for other_mapping in payload["company_mappings"][1:]:
+        other_mapping["review_status"] = "draft"
+    mapping["revenue_relevance"] = "undisclosed"
+    mapping["evidence_ids"] = [mapping["evidence_ids"][0]]
+    _write_json(path, payload)
+
+    error = _load_invalid_package(artifact_dir)
+
+    assert error.code == "REVIEWED_MAPPING_REQUIRES_REVENUE_EVIDENCE"
+
+
+def test_legacy_unversioned_reviewed_undisclosed_mapping_remains_readable(
+    tmp_path: Path,
+):
+    artifact_dir = _copy_mapping_package(tmp_path)
+    path = artifact_dir / "ai_power_company_mapping_v1.json"
+    payload = _read_json(path)
+    mapping = payload["company_mappings"][0]
+    mapping["revenue_relevance"] = "undisclosed"
+    mapping["evidence_ids"] = [mapping["evidence_ids"][0]]
+    _write_json(path, payload)
+
+    package = load_theme_company_mapping_package(artifact_dir)
+
+    assert any(row["mapping_id"] == mapping["mapping_id"] for row in package["company_mappings"])
+
+
+def test_all_legacy_reviewed_undisclosed_mappings_without_revenue_roles_remain_readable():
+    package = load_theme_company_mapping_package()
+    evidence_by_id = {
+        row["evidence_id"]: row for row in package["evidence_items"]
+    }
+    legacy_mapping_ids = {
+        mapping["mapping_id"]
+        for artifact in package["artifacts"]
+        if "evidence_contract_version" not in artifact
+        for mapping in artifact["company_mappings"]
+    }
+    legacy_rows = [
+        mapping
+        for mapping in package["company_mappings"]
+        if mapping["mapping_id"] in legacy_mapping_ids
+        and mapping["review_status"] == "reviewed"
+        and mapping["revenue_relevance"] == "undisclosed"
+        and not any(
+            evidence_by_id[evidence_id]["evidence_type"] in REVENUE_EVIDENCE_TYPES
+            for evidence_id in mapping["evidence_ids"]
+        )
+    ]
+
+    assert len(legacy_rows) == 47
+
+
+def test_unknown_evidence_contract_version_is_rejected(tmp_path: Path):
+    artifact_dir = _copy_mapping_package(tmp_path)
+    path = artifact_dir / "ai_power_company_mapping_v1.json"
+    payload = _read_json(path)
+    payload["evidence_contract_version"] = "mapping_evidence_roles_v999"
+    _write_json(path, payload)
+
+    error = _load_invalid_package(artifact_dir)
+
+    assert error.code == "UNSUPPORTED_MAPPING_EVIDENCE_CONTRACT_VERSION"
+
+
 @pytest.mark.parametrize("evidence_type", ["revenue_boundary", "revenue_gap"])
 def test_reviewed_undisclosed_revenue_accepts_explicit_boundary_role(
     tmp_path: Path,
@@ -262,7 +336,10 @@ def test_reviewed_undisclosed_revenue_accepts_explicit_boundary_role(
     artifact_dir = _copy_mapping_package(tmp_path)
     path = artifact_dir / "ai_power_company_mapping_v1.json"
     payload = _read_json(path)
+    payload["evidence_contract_version"] = "mapping_evidence_roles_v2"
     mapping = payload["company_mappings"][0]
+    for other_mapping in payload["company_mappings"][1:]:
+        other_mapping["review_status"] = "draft"
     mapping["revenue_relevance"] = "undisclosed"
     revenue_id = mapping["evidence_ids"][1]
     next(

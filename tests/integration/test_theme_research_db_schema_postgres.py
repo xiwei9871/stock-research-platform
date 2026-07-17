@@ -31,10 +31,16 @@ LEGACY_CATALOG_SHA256 = "296c75c60f86b1606306d9599c04c4e25a5f06480184ec78f3cefbb
 LEGACY_MISSING = {
     "catalog:sha256",
     "constraint:ck_theme_research_claim_type",
+    "constraint:ck_theme_research_mapping_evidence_type",
     "constraint:ck_theme_research_theme_type",
 }
 PREDECESSOR_DDL_SHA256 = "ae542e49fb740ffb2e54d239c487c58b25f8d47178353161bc3ef58dba3948f6"
 PREDECESSOR_CATALOG_SHA256 = "5b21137a399c3304cb4550f7e04ce06c048fe7e37754b3cd1fc316add34b0451"
+PREDECESSOR_MISSING = {
+    "catalog:sha256",
+    "constraint:ck_theme_research_mapping_evidence_type",
+}
+CURRENT_CATALOG_SHA256 = "7baf4f23112cb893a29277f746a9d4db178315bd9ec2fcb2dccffb7f1621c478"
 
 
 class _BorrowedConnectionContext:
@@ -164,9 +170,9 @@ def test_apply_schema_migrates_immediate_predecessor_and_is_idempotent(
         ddl_sha256=PREDECESSOR_DDL_SHA256,
     )
     before = inspect_theme_research_schema(isolated_schema_conn.cursor())
-    assert before["status"] == "current"
+    assert before["status"] == "drifted"
     assert before["catalog_sha256"] == PREDECESSOR_CATALOG_SHA256
-    assert before["missing"] == []
+    assert set(before["missing"]) == PREDECESSOR_MISSING
     monkeypatch.setattr(
         schema,
         "connect",
@@ -194,6 +200,41 @@ def test_apply_schema_migrates_immediate_predecessor_and_is_idempotent(
         (schema.THEME_RESEARCH_DB_SCHEMA_VERSION,),
     ).fetchone()
     assert applied == ("predecessor-test", schema.ddl_sha256())
+
+
+def test_apply_schema_bootstraps_current_contract_and_is_idempotent(
+    isolated_schema_conn,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        schema,
+        "connect",
+        lambda service: _BorrowedConnectionContext(isolated_schema_conn),
+    )
+
+    first = schema.apply_theme_research_schema(
+        service="test",
+        actor_user_id="bootstrap-test",
+        actor_role="admin",
+    )
+    second = schema.apply_theme_research_schema(
+        service="test",
+        actor_user_id="idempotent-test",
+        actor_role="admin",
+    )
+
+    assert first == second
+    inspection = inspect_theme_research_schema(isolated_schema_conn.cursor())
+    assert inspection["status"] == "current"
+    assert inspection["catalog_sha256"] == CURRENT_CATALOG_SHA256
+    assert isolated_schema_conn.execute(
+        """
+        SELECT applied_by, ddl_sha256
+        FROM research.theme_research_schema_migration
+        WHERE schema_version = %s
+        """,
+        (schema.THEME_RESEARCH_DB_SCHEMA_VERSION,),
+    ).fetchone() == ("bootstrap-test", schema.ddl_sha256())
 
 
 def test_apply_schema_preserves_custom_type_check_and_rejects_unknown_drift(

@@ -1412,6 +1412,7 @@ REQUIRED_TABLES = {
 
 REQUIRED_CONSTRAINTS = {
     "ck_theme_research_claim_type",
+    "ck_theme_research_mapping_evidence_type",
     "ck_theme_research_source_s4_not_accepted",
     "ck_theme_research_theme_type",
     "ck_theme_research_node_reviewed_evidence",
@@ -1440,7 +1441,7 @@ REQUIRED_TRIGGERS = {
 }
 
 EXPECTED_THEME_RESEARCH_CATALOG_SHA256 = (
-    "5b21137a399c3304cb4550f7e04ce06c048fe7e37754b3cd1fc316add34b0451"
+    "7baf4f23112cb893a29277f746a9d4db178315bd9ec2fcb2dccffb7f1621c478"
 )
 
 THEME_RESEARCH_SCHEMA_MIGRATION_LOCK_KEY = 7_171_271_448_728_574_939
@@ -1463,6 +1464,7 @@ KNOWN_LEGACY_SCHEMA_CONTRACTS = (
             {
                 "catalog:sha256",
                 "constraint:ck_theme_research_claim_type",
+                "constraint:ck_theme_research_mapping_evidence_type",
                 "constraint:ck_theme_research_theme_type",
             }
         ),
@@ -1471,7 +1473,12 @@ KNOWN_LEGACY_SCHEMA_CONTRACTS = (
         version_label="9ad6360/01fae25",
         ddl_sha256="ae542e49fb740ffb2e54d239c487c58b25f8d47178353161bc3ef58dba3948f6",
         catalog_sha256="5b21137a399c3304cb4550f7e04ce06c048fe7e37754b3cd1fc316add34b0451",
-        allowed_missing=frozenset(),
+        allowed_missing=frozenset(
+            {
+                "catalog:sha256",
+                "constraint:ck_theme_research_mapping_evidence_type",
+            }
+        ),
     ),
 )
 

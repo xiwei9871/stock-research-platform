@@ -1,5 +1,6 @@
 {
   "artifact_version": "theme_company_mapping_v1",
+  "evidence_contract_version": "mapping_evidence_roles_v2",
   "theme_id": "mems_intelligent_sensors_value_chain_v1",
   "as_of_date": "2026-07-18",
   "mapping_policy": {

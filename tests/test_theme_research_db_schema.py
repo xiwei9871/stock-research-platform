@@ -37,11 +37,16 @@ LEGACY_CATALOG_SHA256 = "296c75c60f86b1606306d9599c04c4e25a5f06480184ec78f3cefbb
 LEGACY_MISSING = {
     "catalog:sha256",
     "constraint:ck_theme_research_claim_type",
+    "constraint:ck_theme_research_mapping_evidence_type",
     "constraint:ck_theme_research_theme_type",
 }
 PREDECESSOR_DDL_SHA256 = "ae542e49fb740ffb2e54d239c487c58b25f8d47178353161bc3ef58dba3948f6"
 PREDECESSOR_CATALOG_SHA256 = "5b21137a399c3304cb4550f7e04ce06c048fe7e37754b3cd1fc316add34b0451"
-PREDECESSOR_MISSING = set()
+PREDECESSOR_MISSING = {
+    "catalog:sha256",
+    "constraint:ck_theme_research_mapping_evidence_type",
+}
+CURRENT_CATALOG_SHA256 = "7baf4f23112cb893a29277f746a9d4db178315bd9ec2fcb2dccffb7f1621c478"
 
 
 class _Cursor:
@@ -120,6 +125,15 @@ def test_schema_contains_production_constraints_and_triggers() -> None:
     assert "WHERE idempotency_key <> ''" in sql
     assert "'revenue_boundary'" in sql
     assert "'revenue_gap'" in sql
+
+
+def test_current_catalog_contract_tracks_mapping_evidence_type_constraint() -> None:
+    assert "ck_theme_research_mapping_evidence_type" in schema.REQUIRED_CONSTRAINTS
+    assert schema.EXPECTED_THEME_RESEARCH_CATALOG_SHA256 == CURRENT_CATALOG_SHA256
+    assert all(
+        contract.catalog_sha256 != CURRENT_CATALOG_SHA256
+        for contract in schema.KNOWN_LEGACY_SCHEMA_CONTRACTS
+    )
 
 
 def test_schema_rebuilds_only_exact_known_legacy_theme_and_claim_type_checks() -> None:

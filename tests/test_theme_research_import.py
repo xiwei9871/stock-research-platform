@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 import copy
+import json
 from dataclasses import replace
 
 import pytest
 
 from stock_research import theme_research_import as import_module
-from stock_research.theme_company_mapping import load_theme_company_mapping_package
+from stock_research.theme_company_mapping import (
+    THEME_COMPANY_MAPPING_DIR,
+    ThemeCompanyMappingValidationError,
+    load_theme_company_mapping_package,
+)
 from stock_research.theme_decomposition import load_theme_package
 from stock_research.theme_research_db_models import ThemeResearchDomainError
 from stock_research.theme_research_import import (
@@ -33,6 +38,29 @@ def test_normalize_current_artifacts_to_relational_rows() -> None:
     assert all(row["claim_id"] and row["node_id"] for row in package.claim_nodes)
     assert all(row["assessment_id"] for row in package.assessment_evidence)
     assert all(row["mapping_id"] for row in package.company_mapping_evidence)
+
+
+def test_normalize_rejects_current_mapping_contract_without_revenue_role(
+    tmp_path,
+) -> None:
+    mapping_dir = tmp_path / "company_mappings"
+    mapping_dir.mkdir()
+    for source_path in THEME_COMPANY_MAPPING_DIR.glob("*.json"):
+        payload = json.loads(source_path.read_text(encoding="utf-8"))
+        if source_path.name == "ai_power_company_mapping_v1.json":
+            payload["evidence_contract_version"] = "mapping_evidence_roles_v2"
+            mapping = payload["company_mappings"][0]
+            mapping["revenue_relevance"] = "undisclosed"
+            mapping["evidence_ids"] = [mapping["evidence_ids"][0]]
+        (mapping_dir / source_path.name).write_text(
+            json.dumps(payload, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+    with pytest.raises(ThemeCompanyMappingValidationError) as exc_info:
+        normalize_artifact_package(company_mapping_dir=mapping_dir)
+
+    assert exc_info.value.code == "REVIEWED_MAPPING_REQUIRES_REVENUE_EVIDENCE"
 
 
 def test_normalize_current_artifacts_reuses_notes_only_duplicate_sources() -> None:

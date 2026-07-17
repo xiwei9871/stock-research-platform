@@ -24,6 +24,7 @@ THEME_COMPANY_MAPPING_DIR = (
     REPOSITORY_ROOT / "artifacts" / "theme_decomposition" / "company_mappings"
 )
 MAPPING_ARTIFACT_VERSION = "theme_company_mapping_v1"
+CURRENT_EVIDENCE_CONTRACT_VERSION = "mapping_evidence_roles_v2"
 REVIEWED_CONFIDENCE_THRESHOLD = 0.7
 
 MARKETS = {"CN", "HK", "US", "OTHER"}
@@ -350,6 +351,7 @@ def _validate_package(package: dict[str, Any]) -> None:
         node["node_id"]: node["theme_id"] for node in package["theme_nodes"]
     }
     artifact_theme_ids: set[str] = set()
+    evidence_contract_by_mapping_object: dict[int, str] = {}
     for index, artifact in enumerate(package["artifacts"]):
         path = f"artifacts[{index}]"
         _require_fields(artifact, ARTIFACT_FIELDS, path)
@@ -357,6 +359,16 @@ def _validate_package(package: dict[str, Any]) -> None:
             raise ThemeCompanyMappingValidationError(
                 f"artifacts[{index}].artifact_version must be {MAPPING_ARTIFACT_VERSION}",
                 code="UNSUPPORTED_MAPPING_ARTIFACT_VERSION",
+            )
+        evidence_contract_version = artifact.get("evidence_contract_version")
+        if evidence_contract_version is not None and (
+            not isinstance(evidence_contract_version, str)
+            or evidence_contract_version != CURRENT_EVIDENCE_CONTRACT_VERSION
+        ):
+            raise ThemeCompanyMappingValidationError(
+                f"artifacts[{index}].evidence_contract_version unsupported: "
+                f"{evidence_contract_version}",
+                code="UNSUPPORTED_MAPPING_EVIDENCE_CONTRACT_VERSION",
             )
         theme_id = str(artifact.get("theme_id") or "").strip()
         if theme_id not in canonical_theme_ids:
@@ -371,6 +383,11 @@ def _validate_package(package: dict[str, Any]) -> None:
             node_theme_by_id=node_theme_by_id,
             path=path,
         )
+        for mapping in artifact.get("company_mappings", []):
+            if isinstance(mapping, dict):
+                evidence_contract_by_mapping_object[id(mapping)] = str(
+                    evidence_contract_version or ""
+                )
 
     source_by_id = _validate_sources(package["sources"])
     evidence_by_id = _validate_evidence_items(
@@ -384,6 +401,7 @@ def _validate_package(package: dict[str, Any]) -> None:
         node_theme_by_id=node_theme_by_id,
         source_by_id=source_by_id,
         evidence_by_id=evidence_by_id,
+        evidence_contract_by_mapping_object=evidence_contract_by_mapping_object,
     )
 
 
@@ -464,6 +482,7 @@ def _validate_mappings(
     node_theme_by_id: dict[str, str],
     source_by_id: dict[str, dict[str, Any]],
     evidence_by_id: dict[str, dict[str, Any]],
+    evidence_contract_by_mapping_object: dict[int, str],
 ) -> None:
     mapping_by_id: dict[str, dict[str, Any]] = {}
     company_node_pairs: set[tuple[str, str, str]] = set()
@@ -588,6 +607,9 @@ def _validate_mappings(
                 mapping_evidence=mapping_evidence,
                 source_by_id=source_by_id,
                 path=path,
+                evidence_contract_version=evidence_contract_by_mapping_object.get(
+                    id(mapping), ""
+                ),
             )
         mapping_by_id[mapping_id] = mapping
 
@@ -598,6 +620,7 @@ def _validate_reviewed_mapping(
     mapping_evidence: list[dict[str, Any]],
     source_by_id: dict[str, dict[str, Any]],
     path: str,
+    evidence_contract_version: str,
 ) -> None:
     if not mapping_evidence:
         raise ThemeCompanyMappingValidationError(
@@ -640,11 +663,10 @@ def _validate_reviewed_mapping(
             f"{path} materiality claim requires accepted revenue evidence",
             code="REVIEWED_MAPPING_REQUIRES_MATERIALITY_EVIDENCE",
         )
-    requires_revenue_evidence = mapping["revenue_relevance"] in {
-        "material",
-        "meaningful",
-        "limited",
-    }
+    requires_revenue_evidence = (
+        evidence_contract_version == CURRENT_EVIDENCE_CONTRACT_VERSION
+        or mapping["revenue_relevance"] in {"material", "meaningful", "limited"}
+    )
     if requires_revenue_evidence and not any(
         evidence["evidence_type"] in REVENUE_EVIDENCE_TYPES
         for evidence in accepted_evidence

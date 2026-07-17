@@ -305,6 +305,7 @@ def test_mems_g1_artifacts_are_reviewed_and_meet_wave_gate() -> None:
     source_pack = load_json(G1_SOURCE_PACK_PATH)
     matrix = load_json(G1_MATRIX_PATH)
     assert theme["artifact_version"] == "theme_decomposition_v1_6"
+    assert mapping["evidence_contract_version"] == "mapping_evidence_roles_v2"
     assert theme["theme"]["status"] == "reviewed"
     assert {row["node_id"] for row in theme["nodes"]} == G1_L4
     assert len(source_pack["sources"]) >= 10
