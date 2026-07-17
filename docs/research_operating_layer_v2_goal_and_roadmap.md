@@ -137,9 +137,9 @@ V2 结论不会自动改写 V1。未来如需把成熟研究沉淀为新的规�
 
 验证摘要（2026-07-17）：
 
-- V2：`230 passed, 4 warnings`；
+- V2：`233 passed, 4 warnings`；
 - 选定 V1 回归：`373 passed, 4 warnings`；
-- scope guard：指定 R1 单提交并集加 Task10 三文件共 58 个路径，`2 passed`；
+- scope guard：测试内置 26 个 approved full SHA，逐提交直接执行 `git show`，排序去重并集为 58 个路径，`5 passed`；`/private/tmp` evidence 为可选核对，存在时必须与计算结果精确一致；
 - CLI 实跑：四项目 list、四版本 validate、AI pilot show/summary/reference audit/显式 Design Gate、rebuild dry/write/second write 均 exit 0，第二次 write 无 artifact diff；
 - focused exit/diff：`6 passed, 2 warnings`；Python compile、25 个 JSON、9 个 JSONL、`git diff --check` 与 forbidden scope scan 均通过。
 
