@@ -223,6 +223,62 @@
       "relationship_type": "uses",
       "notes": "Eligible cross-chain dependency: a humanoid robot battery pack may integrate a platform owned by the primary canonical battery_management_system_platform node; robot requirements do not transfer generic BMS ownership.",
       "source_ids": []
+    },
+    {
+      "edge_id": "foundation_model_platform_depends_on_ai_compute_accelerator_module",
+      "source_node_id": "foundation_model_training_inference_platforms",
+      "target_node_id": "ai_compute_accelerator_module",
+      "relationship_type": "depends_on",
+      "notes": "Cross-chain dependency: model training and inference platforms require accelerator modules, while chip and module ownership remains with ai_compute_infrastructure.",
+      "source_ids": []
+    },
+    {
+      "edge_id": "foundation_model_platform_depends_on_ai_compute_rack_scale_system",
+      "source_node_id": "foundation_model_training_inference_platforms",
+      "target_node_id": "ai_compute_rack_scale_system",
+      "relationship_type": "depends_on",
+      "notes": "Cross-chain dependency: large-model training and serving may require rack-scale AI systems; F1 owns the model service layer rather than servers or racks.",
+      "source_ids": []
+    },
+    {
+      "edge_id": "foundation_model_platform_depends_on_ai_compute_distributed_storage",
+      "source_node_id": "foundation_model_training_inference_platforms",
+      "target_node_id": "ai_compute_distributed_storage",
+      "relationship_type": "depends_on",
+      "notes": "Cross-chain dependency: training corpora, checkpoints, and serving artifacts require distributed AI storage owned by ai_compute_infrastructure.",
+      "source_ids": []
+    },
+    {
+      "edge_id": "foundation_model_platform_uses_ai_compute_high_speed_switching",
+      "source_node_id": "foundation_model_training_inference_platforms",
+      "target_node_id": "ai_compute_high_speed_switching",
+      "relationship_type": "uses",
+      "notes": "Cross-chain dependency: distributed model workloads use high-speed cluster switching without transferring networking ownership to F1.",
+      "source_ids": []
+    },
+    {
+      "edge_id": "foundation_model_platform_uses_ai_compute_cluster_scheduler",
+      "source_node_id": "foundation_model_training_inference_platforms",
+      "target_node_id": "ai_compute_cluster_scheduler",
+      "relationship_type": "uses",
+      "notes": "Cross-chain dependency: model jobs use cluster scheduling software owned by ai_compute_infrastructure; F1 owns model lifecycle and serving behavior.",
+      "source_ids": []
+    },
+    {
+      "edge_id": "model_toolchain_uses_ai_compute_distributed_storage",
+      "source_node_id": "model_toolchain_finetuning_rag",
+      "target_node_id": "ai_compute_distributed_storage",
+      "relationship_type": "uses",
+      "notes": "Cross-chain dependency: fine-tuning, evaluation, vector retrieval, and RAG workflows use distributed storage while storage ownership remains external.",
+      "source_ids": []
+    },
+    {
+      "edge_id": "model_toolchain_uses_ai_compute_cluster_scheduler",
+      "source_node_id": "model_toolchain_finetuning_rag",
+      "target_node_id": "ai_compute_cluster_scheduler",
+      "relationship_type": "uses",
+      "notes": "Cross-chain dependency: model adaptation workflows may submit jobs through the canonical compute cluster scheduler; the toolchain does not own compute orchestration infrastructure.",
+      "source_ids": []
     }
   ]
 }

@@ -21,7 +21,7 @@
       "access_level": "public",
       "reliability_level": "S0",
       "review_status": "accepted",
-      "notes": "第11-13、48、240、243页；PPT智能体披露营收增速但未披露绝对金额；公司宽口径收入不归因于AI。"
+      "notes": "第11-13、48、240、243页；大模型API及MaaS平台服务收入3.85亿元；平台续费、毛利与收入结构未披露。"
     },
     {
       "source_id": "f1_688111_ar2025",
@@ -73,7 +73,7 @@
       "access_level": "public",
       "reliability_level": "S0",
       "review_status": "accepted",
-      "notes": "第12-20、29-30、44-45页；新AI业务仍处试用培育，未披露规模化AI收入；传统大数据和安全收入不归因。"
+      "notes": "第12页；第27、28、30页；第44-45页；人工智能软件产品及服务营业收入26,258万元；续费、复购、毛利和试用转规模仍需验证。"
     },
     {
       "source_id": "f1_300634_ar2025",
@@ -146,7 +146,7 @@
       "claim_id": "f1_claim_01",
       "theme_id": "ai_foundation_models_application_software_value_chain_v1",
       "source_id": "f1_002230_ar2025",
-      "claim_text": "讯飞星火X1/X1.5形成从全国产算力模型训练到推理和行业模型的可运营模型平台，但底层芯片与服务器不属于F1直接价值环节。",
+      "claim_text": "讯飞星辰MaaS提供模型精调、服务发布和调用管理，AI开发者突破1000万、大模型开发者229万，三方日均Tokens同比增长4241%；大模型API及MaaS平台服务收入3.85亿元。",
       "claim_type": "tech_route",
       "confidence": 0.96,
       "evidence_status": "verified",
@@ -283,15 +283,16 @@
       "claim_id": "f1_claim_10",
       "theme_id": "ai_foundation_models_application_software_value_chain_v1",
       "source_id": "f1_300229_ar2025",
-      "claim_text": "拓尔思智能体已形成近2000万元金融项目和多行业落地，但新业务仍处试用培育且尚未规模化变现。",
-      "claim_type": "risk",
+      "claim_text": "拓尔思人工智能软件产品及服务营业收入26,258万元，约占公司营业收入51%；某国有大行近2,000万元消保智能体项目及多行业交付验证AI行业解决方案商业化。",
+      "claim_type": "value_capture",
       "confidence": 0.96,
       "evidence_status": "verified",
       "platform_use_status": "reviewed",
       "supporting_source_ids": [],
       "affected_theme_nodes": [
         "industry_solution_delivery_integration",
-        "customer_adoption_renewal_revenue_validation"
+          "customer_adoption_renewal_revenue_validation",
+          "subscription_usage_licensing_monetization"
       ]
     },
     {
@@ -418,6 +419,21 @@
         "customer_adoption_renewal_revenue_validation",
         "subscription_usage_licensing_monetization",
         "data_security_model_governance_compliance"
+      ]
+    },
+    {
+      "claim_id": "f1_claim_19",
+      "theme_id": "ai_foundation_models_application_software_value_chain_v1",
+      "source_id": "f1_300229_ar2025",
+      "claim_text": "拓尔思已披露AI专项收入，但上千个客户智能体应用仍多处于试用培育期，尚未进入规模化变现；续费、复购、毛利和试用转规模仍需持续验证。",
+      "claim_type": "risk",
+      "confidence": 0.96,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "customer_adoption_renewal_revenue_validation",
+        "subscription_usage_licensing_monetization"
       ]
     }
   ],
@@ -850,9 +866,11 @@
         "f1_claim_05",
         "f1_claim_06",
         "f1_claim_09",
+        "f1_claim_10",
         "f1_claim_13",
         "f1_claim_15",
-        "f1_claim_18"
+        "f1_claim_18",
+        "f1_claim_19"
       ],
       "uncertainty": "多数公司尚未披露AI专项确认收入、毛利与续费。"
     },
@@ -869,7 +887,8 @@
         "f1_claim_10",
         "f1_claim_13",
         "f1_claim_15",
-        "f1_claim_18"
+        "f1_claim_18",
+        "f1_claim_19"
       ],
       "uncertainty": "多数公司尚未披露AI专项确认收入、毛利与续费。"
     },
@@ -929,18 +948,19 @@
       "f1_claim_05",
       "f1_claim_06",
       "f1_claim_07",
+      "f1_claim_10",
       "f1_claim_14",
       "f1_claim_18"
     ],
     "risk_claim_ids": [
       "f1_claim_04",
       "f1_claim_08",
-      "f1_claim_10",
       "f1_claim_11",
       "f1_claim_13",
       "f1_claim_15",
       "f1_claim_16",
-      "f1_claim_18"
+      "f1_claim_18",
+      "f1_claim_19"
     ],
     "validation_signals": [
       "AI专项确认收入、毛利与ARR",
@@ -950,7 +970,7 @@
       "推理成本和任务成功率",
       "模型评测、安全事件与合规认证"
     ],
-    "evidence_gap_summary": "主要缺口是除科大讯飞智能体增速外，多数公司未披露AI专项确认收入；合同额、月活、调用量和宽口径软件收入不能相互替代。后续需补充AI产品分部收入、毛利、续费、客户扩容和单位经济。"
+    "evidence_gap_summary": "科大讯飞已披露大模型API及MaaS平台收入，拓尔思已披露人工智能软件产品及服务收入；其余多数公司仍未披露AI专项确认收入。合同额、月活、访问量和调用量不能替代付费转化、续费、毛利与单位经济。"
   },
   "evidence_policy": {
     "accepted_source_levels": [
@@ -960,6 +980,6 @@
     "reviewed_claim_requires_accepted_source": true,
     "reviewed_mapping_requires_product_revenue_stage_evidence": true,
     "income_boundary_rule": "未分拆的公司总收入、软件收入、云收入或工业软件收入一律为undisclosed；limited或material只允许直接匹配AI特定产品或服务收入。",
-    "boundary_rule": "AI芯片、服务器、机柜与智算基础设施不属于本链；云、数据中心与电力基础设施不属于本链；操作系统、数据库与通用基础软件不属于本链；通用工业软件只有形成AI特定产品或服务才属于本链；通用安全产品只有承担模型或AI应用治理才属于本链。"
+    "boundary_rule": "AI芯片、服务器、机柜与智算基础设施不属于本链：AI芯片链ai_logic_compute_chips尚无可解析L4，服务器机柜与集群依赖指向ai_compute_infrastructure。云、数据中心与电力基础设施不属于本链：cloud_data_center_infrastructure现有节点仅覆盖物理设施或交通专用平台。操作系统、数据库与通用基础软件不属于本链：foundational_software_os_database尚无L4。通用工业软件只有形成AI特定产品或服务才属于本链：industrial_software仅有能源设施软件。通用安全产品只有承担模型或AI应用治理才属于本链：cybersecurity_data_infrastructure仅有交通数据治理节点。未形成通用适用L4前保留文本边界，不创建重复节点。"
   }
 }

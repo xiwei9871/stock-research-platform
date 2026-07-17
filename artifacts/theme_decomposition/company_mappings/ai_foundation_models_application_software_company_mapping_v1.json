@@ -14,7 +14,7 @@
       "access_level": "public",
       "reliability_level": "S0",
       "review_status": "accepted",
-      "notes": "第11-13、48、240、243页；PPT智能体披露营收增速但未披露绝对金额；公司宽口径收入不归因于AI。"
+      "notes": "第11-13、48、240、243页；大模型API及MaaS平台服务收入3.85亿元；平台续费、毛利与收入结构未披露。"
     },
     {
       "source_id": "f1_688111_ar2025",
@@ -66,7 +66,7 @@
       "access_level": "public",
       "reliability_level": "S0",
       "review_status": "accepted",
-      "notes": "第12-20、29-30、44-45页；新AI业务仍处试用培育，未披露规模化AI收入；传统大数据和安全收入不归因。"
+      "notes": "第12页；第27、28、30页；第44-45页；人工智能软件产品及服务营业收入26,258万元；续费、复购、毛利和试用转规模仍需验证。"
     },
     {
       "source_id": "f1_300634_ar2025",
@@ -139,8 +139,8 @@
       "evidence_id": "f1_ev_002230_sz_product",
       "source_id": "f1_002230_ar2025",
       "evidence_type": "product_relationship",
-      "excerpt_locator": "第11页，讯飞星火X1/X1.5及全栈模型平台",
-      "evidence_summary": "讯飞星火大模型、行业模型与智能体是已运营的AI特定模型和应用产品。",
+      "excerpt_locator": "第11页，星辰MaaS训推一体工具与模型精调发布调用管理",
+      "evidence_summary": "讯飞星辰MaaS提供大模型训推一体全链路工具，覆盖模型精调、服务发布和调用管理，直接对应基础模型训练推理平台。",
       "related_company_codes": [
         "002230.SZ"
       ],
@@ -152,8 +152,8 @@
       "evidence_id": "f1_ev_002230_sz_materiality",
       "source_id": "f1_002230_ar2025",
       "evidence_type": "revenue_materiality",
-      "excerpt_locator": "第12页，PPT创作智能体线上营收同比增长186%",
-      "evidence_summary": "PPT创作智能体披露AI特定产品或服务收入同比增长186%，但未披露绝对金额。",
+      "excerpt_locator": "第11页，大模型API及MaaS平台服务收入3.85亿元",
+      "evidence_summary": "大模型API及MaaS平台服务收入3.85亿元、同比增长263%，属于AI特定产品或服务收入；相对公司总收入规模仍按limited处理。",
       "related_company_codes": [
         "002230.SZ"
       ],
@@ -165,8 +165,8 @@
       "evidence_id": "f1_ev_002230_sz_stage",
       "source_id": "f1_002230_ar2025",
       "evidence_type": "business_stage",
-      "excerpt_locator": "第13页，智能批阅机学校覆盖、日均作业量与续费模式",
-      "evidence_summary": "智能批阅机已覆盖3000余所学校并形成设备采购、服务续费和数智作业服务模式。",
+      "excerpt_locator": "第11页，开发者规模、日均Tokens与API经济运营",
+      "evidence_summary": "平台AI开发者突破1000万、大模型开发者229万，三方开发者大模型日均Tokens同比增长4241%，并运营API经济与Token经济。",
       "related_company_codes": [
         "002230.SZ"
       ],
@@ -295,39 +295,39 @@
       "evidence_id": "f1_ev_300229_sz_product",
       "source_id": "f1_300229_ar2025",
       "evidence_type": "product_relationship",
-      "excerpt_locator": "第13-14页，拓天大模型、动态本体与智能体平台",
-      "evidence_summary": "拓天大模型、动态本体、向量检索、RAG和智能体平台构成AI特定工具链。",
+      "excerpt_locator": "第12页，全栈认知智能产品体系与行业服务",
+      "evidence_summary": "拓尔思以底座、平台、应用三层全栈认知智能产品体系，为金融、政务、公安等行业提供AI应用软件产品与工程化服务。",
       "related_company_codes": [
         "300229.SZ"
       ],
       "related_node_ids": [
-        "model_toolchain_finetuning_rag"
+        "industry_solution_delivery_integration"
       ]
     },
     {
       "evidence_id": "f1_ev_300229_sz_materiality",
       "source_id": "f1_300229_ar2025",
       "evidence_type": "revenue_materiality",
-      "excerpt_locator": "第30页，新业务试用培育且尚未规模化变现",
-      "evidence_summary": "AI新业务仍处试用培育且尚未规模化变现，未单列AI确认收入。",
+      "excerpt_locator": "第28页，人工智能软件产品及服务营业收入2.6258亿元",
+      "evidence_summary": "人工智能软件产品及服务营业收入26,258万元，约占公司营业收入51%，属于AI特定产品或服务收入并支持material判断。",
       "related_company_codes": [
         "300229.SZ"
       ],
       "related_node_ids": [
-        "model_toolchain_finetuning_rag"
+        "industry_solution_delivery_integration"
       ]
     },
     {
       "evidence_id": "f1_ev_300229_sz_stage",
       "source_id": "f1_300229_ar2025",
       "evidence_type": "business_stage",
-      "excerpt_locator": "第45页，近2000万元消保智能体项目及多行业落地",
-      "evidence_summary": "金融消保智能体形成近2000万元项目，并在政务公安等行业落地。",
+      "excerpt_locator": "第27页，近2000万元消保智能体项目及多行业交付",
+      "evidence_summary": "某国有大行近2,000万元消保智能体项目及政务、公安多行业交付，验证AI行业解决方案的签约与落地阶段。",
       "related_company_codes": [
         "300229.SZ"
       ],
       "related_node_ids": [
-        "model_toolchain_finetuning_rag"
+        "industry_solution_delivery_integration"
       ]
     },
     {
@@ -545,10 +545,10 @@
       "revenue_relevance": "limited",
       "bottleneck_relevance": "core",
       "business_materiality": "meaningful_segment",
-      "product_or_service": "讯飞星火模型平台与行业智能体",
-      "relationship_summary": "讯飞星火模型平台与行业智能体已有产品和客户/使用证据；收入仅按AI专项披露边界判断。",
+      "product_or_service": "星辰MaaS与大模型API平台服务",
+      "relationship_summary": "星辰MaaS训推工具承接模型精调、发布和调用，映射MaaS/API平台；开发者与Token增长推动调用，已形成3.85亿元平台收入。",
       "review_status": "reviewed",
-      "notes": "三类证据分别锁定产品、材料性与商业阶段。"
+      "notes": "仍缺续费率、毛利率与API/MaaS收入结构，平台收入不得与智能体、教育硬件等应用收入混并。"
     },
     {
       "mapping_id": "f1_map_688111_sh_v1",
@@ -569,9 +569,9 @@
       "bottleneck_relevance": "core",
       "business_materiality": "meaningful_segment",
       "product_or_service": "WPS AI个人、企业与政务办公产品",
-      "relationship_summary": "WPS AI个人、企业与政务办公产品已有产品和客户/使用证据；收入仅按AI专项披露边界判断。",
+      "relationship_summary": "WPS AI企业办公把助手、知识库和Copilot嵌入组织工作流，映射企业AI应用；月活与Token调用验证采用，WPS 365合同承载商业化。",
       "review_status": "reviewed",
-      "notes": "三类证据分别锁定产品、材料性与商业阶段。"
+      "notes": "WPS 365仍混合文档和协作功能，AI专项收入、付费席位与续费率尚未分拆。"
     },
     {
       "mapping_id": "f1_map_600588_sh_v1",
@@ -592,9 +592,9 @@
       "bottleneck_relevance": "core",
       "business_materiality": "emerging_segment",
       "product_or_service": "YonGPT与用友BIP企业AI产品矩阵",
-      "relationship_summary": "YonGPT与用友BIP企业AI产品矩阵已有产品和客户/使用证据；收入仅按AI专项披露边界判断。",
+      "relationship_summary": "YonGPT与用友BIP将模型、数据和流程转为企业AI应用，映射企业应用软件；400余家签约客户和16.7亿元合同验证需求传导。",
       "review_status": "reviewed",
-      "notes": "三类证据分别锁定产品、材料性与商业阶段。"
+      "notes": "合同并非营业收入，仍缺确认收入、续费率与合同转化以及AI产品毛利。"
     },
     {
       "mapping_id": "f1_map_601360_sh_v1",
@@ -615,9 +615,9 @@
       "bottleneck_relevance": "core",
       "business_materiality": "emerging_segment",
       "product_or_service": "纳米AI多智能体与超级搜索智能体",
-      "relationship_summary": "纳米AI多智能体与超级搜索智能体已有产品和客户/使用证据；收入仅按AI专项披露边界判断。",
+      "relationship_summary": "纳米AI消费应用以多智能体搜索和创作服务触达C端，映射消费AI服务；月访问量4.5亿以上只验证产品采用和流量规模。",
       "review_status": "reviewed",
-      "notes": "三类证据分别锁定产品、材料性与商业阶段。"
+      "notes": "付费转化、客户留存与AI专项收入均未证明，访问量不能证明收入材料性或用户付费质量。"
     },
     {
       "mapping_id": "f1_map_300229_sz_v1",
@@ -625,8 +625,8 @@
       "company_code": "300229.SZ",
       "company_name": "拓尔思",
       "market": "CN",
-      "mapped_node_id": "model_toolchain_finetuning_rag",
-      "mapping_type": "direct_product",
+      "mapped_node_id": "industry_solution_delivery_integration",
+      "mapping_type": "system_integrator",
       "business_stage": "primary_business",
       "confidence": 0.95,
       "evidence_ids": [
@@ -634,13 +634,13 @@
         "f1_ev_300229_sz_materiality",
         "f1_ev_300229_sz_stage"
       ],
-      "revenue_relevance": "undisclosed",
+      "revenue_relevance": "material",
       "bottleneck_relevance": "core",
-      "business_materiality": "emerging_segment",
-      "product_or_service": "拓天大模型、动态本体、RAG与智能体平台",
-      "relationship_summary": "拓天大模型、动态本体、RAG与智能体平台已有产品和客户/使用证据；收入仅按AI专项披露边界判断。",
+      "business_materiality": "meaningful_segment",
+      "product_or_service": "认知智能软件产品与行业工程化交付",
+      "relationship_summary": "AI行业交付把全栈认知智能产品嵌入金融、政务和公安流程，映射行业方案集成；26,258万元AI收入与近2,000万元项目形成收入和客户验证。",
       "review_status": "reviewed",
-      "notes": "三类证据分别锁定产品、材料性与商业阶段。"
+      "notes": "直接AI收入已较重要，但仍缺续费、复购、毛利与试用转规模的持续商业化数据。"
     },
     {
       "mapping_id": "f1_map_300634_sz_v1",
@@ -661,9 +661,9 @@
       "bottleneck_relevance": "core",
       "business_materiality": "emerging_segment",
       "product_or_service": "Rich AIBox智能体开发与办公应用",
-      "relationship_summary": "Rich AIBox智能体开发与办公应用已有产品和客户/使用证据；收入仅按AI专项披露边界判断。",
+      "relationship_summary": "Rich AIBox智能体编排把模型、知识库、MCP、Skill和工作流组合为企业Agent，并通过AI邮箱和智慧渠道向大型客户传导。",
       "review_status": "reviewed",
-      "notes": "三类证据分别锁定产品、材料性与商业阶段。"
+      "notes": "协同办公和渠道收入仍是混合口径，缺AI专项收入、付费转化与续费及独立客户范围。"
     },
     {
       "mapping_id": "f1_map_300170_sz_v1",
@@ -684,9 +684,9 @@
       "bottleneck_relevance": "core",
       "business_materiality": "emerging_segment",
       "product_or_service": "得灵AI应用、模型平台与咨询交付",
-      "relationship_summary": "得灵AI应用、模型平台与咨询交付已有产品和客户/使用证据；收入仅按AI专项披露边界判断。",
+      "relationship_summary": "得灵AI应用交付以灵手智能体、灵猿中台和灵炼模型平台结合咨询实施，向头部企业复杂业务流程传导AI价值。",
       "review_status": "reviewed",
-      "notes": "三类证据分别锁定产品、材料性与商业阶段。"
+      "notes": "仅披露收入快速增长，仍缺AI收入金额、分部结构与续费、客户扩容和项目毛利。"
     },
     {
       "mapping_id": "f1_map_300624_sz_v1",
@@ -707,9 +707,9 @@
       "bottleneck_relevance": "core",
       "business_materiality": "meaningful_segment",
       "product_or_service": "万兴天幕与AI创作Agent产品",
-      "relationship_summary": "万兴天幕与AI创作Agent产品已有产品和客户/使用证据；收入仅按AI专项披露边界判断。",
+      "relationship_summary": "万兴天幕与创作Agent把音视频模型能力封装进App、Web、API和创作工具，映射消费AI服务；13亿次调用验证使用规模。",
       "review_status": "reviewed",
-      "notes": "三类证据分别锁定产品、材料性与商业阶段。"
+      "notes": "公司收入混合传统创意软件，仍缺付费转化、AI专项收入与推理成本、留存和订阅扩容。"
     },
     {
       "mapping_id": "f1_map_300339_sz_v1",
@@ -730,9 +730,9 @@
       "bottleneck_relevance": "core",
       "business_materiality": "emerging_segment",
       "product_or_service": "AI测试智能体、AgentRUNS与AIRUNS",
-      "relationship_summary": "AI测试智能体、AgentRUNS与AIRUNS已有产品和客户/使用证据；收入仅按AI专项披露边界判断。",
+      "relationship_summary": "AI测试与AgentRUNS把测试生成执行和Agent生命周期编排交付给银行证券客户，映射智能体工作流并形成金融机构落地。",
       "review_status": "reviewed",
-      "notes": "三类证据分别锁定产品、材料性与商业阶段。"
+      "notes": "仍缺AI专项收入、续费与客户范围和产品收入占比；HopeOS、服务器与智算业务不得计入本映射。"
     },
     {
       "mapping_id": "f1_map_300378_sz_v1",
@@ -753,9 +753,9 @@
       "bottleneck_relevance": "core",
       "business_materiality": "emerging_segment",
       "product_or_service": "雅典娜企业智能体平台与应用",
-      "relationship_summary": "雅典娜企业智能体平台与应用已有产品和客户/使用证据；收入仅按AI专项披露边界判断。",
+      "relationship_summary": "雅典娜企业智能体把模型平台、Agent运行和行业Know-How封装为制造财务应用，映射企业AI软件；近2亿元签约和案例验证采用。",
       "review_status": "reviewed",
-      "notes": "三类证据分别锁定产品、材料性与商业阶段。"
+      "notes": "签约不是营业收入，仍缺确认收入、续费率与AI业务毛利、客户扩容和软件分部拆分。"
     }
   ],
   "mapping_policy": {

@@ -84,6 +84,43 @@ F1_INITIAL_UNIVERSE = {
     "300339.SZ",
     "300378.SZ",
 }
+F1_TYPED_DEPENDENCY_EDGES = {
+    (
+        "foundation_model_training_inference_platforms",
+        "ai_compute_accelerator_module",
+        "depends_on",
+    ),
+    (
+        "foundation_model_training_inference_platforms",
+        "ai_compute_rack_scale_system",
+        "depends_on",
+    ),
+    (
+        "foundation_model_training_inference_platforms",
+        "ai_compute_distributed_storage",
+        "depends_on",
+    ),
+    (
+        "foundation_model_training_inference_platforms",
+        "ai_compute_high_speed_switching",
+        "uses",
+    ),
+    (
+        "foundation_model_training_inference_platforms",
+        "ai_compute_cluster_scheduler",
+        "uses",
+    ),
+    (
+        "model_toolchain_finetuning_rag",
+        "ai_compute_distributed_storage",
+        "uses",
+    ),
+    (
+        "model_toolchain_finetuning_rag",
+        "ai_compute_cluster_scheduler",
+        "uses",
+    ),
+}
 F1_MAPPING_CONTRACTS = {
     "002230.SZ": {
         "node": "foundation_model_training_inference_platforms",
@@ -91,9 +128,9 @@ F1_MAPPING_CONTRACTS = {
         "revenue_relevance": "limited",
         "business_materiality": "meaningful_segment",
         "locators": {
-            "product_relationship": "第11页，讯飞星火X1/X1.5及全栈模型平台",
-            "revenue_materiality": "第12页，PPT创作智能体线上营收同比增长186%",
-            "business_stage": "第13页，智能批阅机学校覆盖、日均作业量与续费模式",
+            "product_relationship": "第11页，星辰MaaS训推一体工具与模型精调发布调用管理",
+            "revenue_materiality": "第11页，大模型API及MaaS平台服务收入3.85亿元",
+            "business_stage": "第11页，开发者规模、日均Tokens与API经济运营",
         },
     },
     "688111.SH": {
@@ -130,14 +167,14 @@ F1_MAPPING_CONTRACTS = {
         },
     },
     "300229.SZ": {
-        "node": "model_toolchain_finetuning_rag",
+        "node": "industry_solution_delivery_integration",
         "source": "f1_300229_ar2025",
-        "revenue_relevance": "undisclosed",
-        "business_materiality": "emerging_segment",
+        "revenue_relevance": "material",
+        "business_materiality": "meaningful_segment",
         "locators": {
-            "product_relationship": "第13-14页，拓天大模型、动态本体与智能体平台",
-            "revenue_materiality": "第30页，新业务试用培育且尚未规模化变现",
-            "business_stage": "第45页，近2000万元消保智能体项目及多行业落地",
+            "product_relationship": "第12页，全栈认知智能产品体系与行业服务",
+            "revenue_materiality": "第28页，人工智能软件产品及服务营业收入2.6258亿元",
+            "business_stage": "第27页，近2000万元消保智能体项目及多行业交付",
         },
     },
     "300634.SZ": {
@@ -195,6 +232,19 @@ F1_MAPPING_CONTRACTS = {
             "business_stage": "第26页，数十个应用及多行业可复制客户案例",
         },
     },
+}
+
+F1_COMPANY_TRANSMISSION_GAP_CONTRACTS = {
+    "002230.SZ": ("MaaS/API平台", "续费率、毛利率与API/MaaS收入结构"),
+    "688111.SH": ("WPS AI企业办公", "AI专项收入、付费席位与续费率"),
+    "600588.SH": ("YonGPT与用友BIP", "确认收入、续费率与合同转化"),
+    "601360.SH": ("纳米AI消费应用", "付费转化、客户留存与AI专项收入"),
+    "300229.SZ": ("AI行业交付", "续费、复购、毛利与试用转规模"),
+    "300634.SZ": ("Rich AIBox智能体编排", "AI专项收入、付费转化与续费"),
+    "300170.SZ": ("得灵AI应用交付", "AI收入金额、分部结构与续费"),
+    "300624.SZ": ("万兴天幕与创作Agent", "付费转化、AI专项收入与推理成本"),
+    "300339.SZ": ("AI测试与AgentRUNS", "AI专项收入、续费与客户范围"),
+    "300378.SZ": ("雅典娜企业智能体", "确认收入、续费率与AI业务毛利"),
 }
 
 REQUIRED_READABLE_SECTIONS = [
@@ -422,8 +472,8 @@ def test_foundation_models_f1_artifacts_are_reviewed_and_wave_is_one_of_five_rea
     assert rows[F1_CHAIN_ID]["counts"] == {
         "accepted_sources": 10,
         "primary_sources": 10,
-        "claims": 18,
-        "accepted_source_backed_claims": 18,
+        "claims": 19,
+        "accepted_source_backed_claims": 19,
         "reviewed_mappings": 10,
     }
     assert report["ready_theme_count"] == 1
@@ -535,6 +585,150 @@ def test_foundation_models_f1_reviewed_company_mapping_contracts_are_exact() -> 
             assert any(term in materiality for term in ("未单列", "未披露确认收入", "未披露金额"))
         else:
             assert "AI特定产品或服务收入" in materiality
+
+
+def test_foundation_models_f1_iflytek_uses_three_platform_specific_evidence_roles() -> None:
+    theme = load_json(F1_THEME_PATH)
+    mapping = load_json(F1_MAPPING_PATH)
+    source_pack = load_json(F1_SOURCE_PACK_PATH)
+    row = next(
+        row for row in mapping["company_mappings"]
+        if row["company_code"] == "002230.SZ"
+    )
+    evidence = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+    items = [evidence[evidence_id] for evidence_id in row["evidence_ids"]]
+
+    assert row["mapped_node_id"] == "foundation_model_training_inference_platforms"
+    assert row["revenue_relevance"] == "limited"
+    assert all(item["related_node_ids"] == [row["mapped_node_id"]] for item in items)
+    assert "星辰MaaS" in items[0]["evidence_summary"]
+    assert "模型精调" in items[0]["evidence_summary"]
+    assert "大模型API及MaaS平台服务收入3.85亿元" in items[1]["evidence_summary"]
+    assert "AI特定产品或服务收入" in items[1]["evidence_summary"]
+    assert "开发者" in items[2]["evidence_summary"]
+    assert "Tokens" in items[2]["evidence_summary"]
+    assert not any(
+        term in json.dumps(items, ensure_ascii=False)
+        for term in ("PPT创作智能体", "智能批阅机")
+    )
+    claim = next(row for row in theme["claims"] if row["claim_id"] == "f1_claim_01")
+    assert "3.85亿元" in claim["claim_text"]
+    assert "开发者" in claim["claim_text"]
+    source = next(
+        row for row in source_pack["sources"]
+        if row["source_id"] == "f1_002230_ar2025"
+    )
+    assert "3.85亿元" in source["evidence_summary"]
+
+
+def test_foundation_models_f1_trs_uses_direct_ai_revenue_and_correct_printed_pages() -> None:
+    theme = load_json(F1_THEME_PATH)
+    mapping = load_json(F1_MAPPING_PATH)
+    source_pack = load_json(F1_SOURCE_PACK_PATH)
+    row = next(
+        row for row in mapping["company_mappings"]
+        if row["company_code"] == "300229.SZ"
+    )
+    evidence = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+    items = [evidence[evidence_id] for evidence_id in row["evidence_ids"]]
+
+    assert row["mapped_node_id"] == "industry_solution_delivery_integration"
+    assert row["revenue_relevance"] == "material"
+    assert row["business_materiality"] == "meaningful_segment"
+    assert all(item["related_node_ids"] == [row["mapped_node_id"]] for item in items)
+    assert items[0]["excerpt_locator"] == "第12页，全栈认知智能产品体系与行业服务"
+    assert items[1]["excerpt_locator"] == "第28页，人工智能软件产品及服务营业收入2.6258亿元"
+    assert items[2]["excerpt_locator"] == "第27页，近2000万元消保智能体项目及多行业交付"
+    assert "26,258万元" in items[1]["evidence_summary"]
+    assert "AI特定产品或服务收入" in items[1]["evidence_summary"]
+    assert "近2,000万元" in items[2]["evidence_summary"]
+    claims = {row["claim_id"]: row for row in theme["claims"]}
+    assert "26,258万元" in claims["f1_claim_10"]["claim_text"]
+    assert "近2,000万元" in claims["f1_claim_10"]["claim_text"]
+    assert "试用培育期" in claims["f1_claim_19"]["claim_text"]
+    source = next(
+        row for row in source_pack["sources"]
+        if row["source_id"] == "f1_300229_ar2025"
+    )
+    assert "第27、28、30页" in source["evidence_locator"]
+    assert {"f1_claim_10", "f1_claim_19"} <= set(source["supported_claim_ids"])
+
+
+def test_foundation_models_f1_has_exact_typed_compute_dependency_edges() -> None:
+    catalog = load_industry_catalog()
+    nodes = {row["node_id"]: row for row in catalog["nodes"]}
+    node_ids = [row["node_id"] for row in catalog["nodes"]]
+    assert len(node_ids) == len(set(node_ids))
+    assert not F1_L4 & {
+        row["node_id"] for row in catalog["nodes"]
+        if row["chain_id"] != F1_CHAIN_ID
+    }
+
+    cross_chain_edges = {
+        (row["source_node_id"], row["target_node_id"], row["relationship_type"])
+        for row in catalog["edges"]
+        if row["source_node_id"] in F1_L4
+        and nodes[row["target_node_id"]]["chain_id"] != F1_CHAIN_ID
+    }
+    assert cross_chain_edges == F1_TYPED_DEPENDENCY_EDGES
+    assert {
+        nodes[target]["chain_id"] for _, target, _ in cross_chain_edges
+    } == {"ai_compute_infrastructure"}
+
+
+def test_foundation_models_f1_documents_unresolved_skeleton_or_non_generic_owners() -> None:
+    catalog = load_industry_catalog()
+    nodes_by_chain: dict[str, set[str]] = {}
+    for row in catalog["nodes"]:
+        nodes_by_chain.setdefault(row["chain_id"], set()).add(row["node_id"])
+    assert nodes_by_chain.get("ai_logic_compute_chips", set()) == set()
+    assert nodes_by_chain.get("foundational_software_os_database", set()) == set()
+    assert nodes_by_chain["industrial_software"] == {
+        "industrial_energy_facility_software",
+        "electrical_power_monitoring_software",
+        "building_management_software",
+        "power_distribution_monitoring_software",
+        "thermal_control_software",
+        "power_fault_prediction_software",
+        "compute_energy_scheduling_software",
+        "carbon_energy_cost_optimization_software",
+    }
+    assert nodes_by_chain["cybersecurity_data_infrastructure"] == {
+        "transport_data_security_governance_family",
+        "transport_data_security_governance",
+    }
+    assert "generic_cloud_service_platform" not in nodes_by_chain[
+        "cloud_data_center_infrastructure"
+    ]
+    theme_text = json.dumps(load_json(F1_THEME_PATH), ensure_ascii=False)
+    for owner in (
+        "ai_logic_compute_chips",
+        "cloud_data_center_infrastructure",
+        "foundational_software_os_database",
+        "industrial_software",
+        "cybersecurity_data_infrastructure",
+    ):
+        assert owner in theme_text
+
+
+def test_foundation_models_f1_company_summaries_have_distinct_transmission_and_gaps() -> None:
+    mapping = load_json(F1_MAPPING_PATH)
+    rows = {
+        row["company_code"]: row for row in mapping["company_mappings"]
+        if row["review_status"] == "reviewed"
+    }
+    assert set(rows) == set(F1_COMPANY_TRANSMISSION_GAP_CONTRACTS)
+    assert len({row["relationship_summary"] for row in rows.values()}) == 10
+    assert len({row["notes"] for row in rows.values()}) == 10
+    for company_code, (transmission, gap) in F1_COMPANY_TRANSMISSION_GAP_CONTRACTS.items():
+        assert transmission in rows[company_code]["relationship_summary"]
+        assert gap in rows[company_code]["notes"]
+    three_sixty = rows["601360.SH"]
+    assert "月访问量4.5亿" in three_sixty["relationship_summary"]
+    assert "采用" in three_sixty["relationship_summary"]
+    assert "未证明" in three_sixty["notes"]
+    assert three_sixty["revenue_relevance"] == "undisclosed"
+    assert three_sixty["business_materiality"] == "emerging_segment"
 
 
 def test_foundation_models_f1_rejects_compute_cloud_general_software_and_generic_security_as_direct_mapping() -> None:

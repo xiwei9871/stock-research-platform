@@ -200,6 +200,8 @@ def test_repository_catalog_starts_with_ten_approved_sectors():
         for edge in catalog["edges"]
         for field in ("source_node_id", "target_node_id")
     } == {
+        "ai_compute_infrastructure",
+        "ai_foundation_models_application_software",
         "humanoid_robots_embodied_intelligence",
         "power_batteries_battery_materials",
     }

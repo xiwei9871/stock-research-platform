@@ -184,9 +184,11 @@
         "f1_claim_05",
         "f1_claim_06",
         "f1_claim_09",
+        "f1_claim_10",
         "f1_claim_13",
         "f1_claim_15",
-        "f1_claim_18"
+        "f1_claim_18",
+        "f1_claim_19"
       ],
       "evidence_strength_before": 2,
       "evidence_strength_after": 4,
@@ -221,7 +223,8 @@
         "f1_claim_10",
         "f1_claim_13",
         "f1_claim_15",
-        "f1_claim_18"
+        "f1_claim_18",
+        "f1_claim_19"
       ],
       "evidence_strength_before": 2,
       "evidence_strength_after": 4,

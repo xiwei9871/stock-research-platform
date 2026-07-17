@@ -16,7 +16,7 @@
       "review_status": "accepted",
       "document_status": "primary_source_reviewed",
       "evidence_locator": "第11-13、48、240、243页",
-      "evidence_summary": "讯飞星火模型平台、智能体产品、线上营收增速、学校覆盖、调用与续费模式。",
+      "evidence_summary": "星辰MaaS训推工具、开发者与Token运营、大模型API及MaaS平台服务收入3.85亿元，并披露智能体和教育应用采用。",
       "supported_claim_ids": [
         "f1_claim_01",
         "f1_claim_02",
@@ -29,8 +29,8 @@
         "customer_adoption_renewal_revenue_validation",
         "industry_solution_delivery_integration"
       ],
-      "limitations": "PPT智能体披露营收增速但未披露绝对金额；公司宽口径收入不归因于AI。",
-      "notes": "第11-13、48、240、243页；PPT智能体披露营收增速但未披露绝对金额；公司宽口径收入不归因于AI。"
+      "limitations": "平台续费、毛利与API/MaaS收入结构未披露；PPT智能体和批阅机属于应用节点。",
+      "notes": "第11-13、48、240、243页；大模型API及MaaS平台服务收入3.85亿元；平台续费、毛利与收入结构未披露。"
     },
     {
       "source_id": "f1_688111_ar2025",
@@ -124,11 +124,12 @@
       "reliability_level": "S0",
       "review_status": "accepted",
       "document_status": "primary_source_reviewed",
-      "evidence_locator": "第12-20、29-30、44-45页",
-      "evidence_summary": "拓天大模型、动态本体、RAG与智能体平台、金融客户和项目落地。",
+      "evidence_locator": "第12页；第27、28、30页；第44-45页",
+      "evidence_summary": "全栈认知智能产品与行业服务、人工智能软件产品及服务收入26,258万元、近2,000万元消保智能体项目，以及试用培育尚未规模变现的边界。",
       "supported_claim_ids": [
         "f1_claim_09",
-        "f1_claim_10"
+        "f1_claim_10",
+        "f1_claim_19"
       ],
       "supported_node_ids": [
         "model_toolchain_finetuning_rag",
@@ -137,8 +138,8 @@
         "industry_solution_delivery_integration",
         "customer_adoption_renewal_revenue_validation"
       ],
-      "limitations": "新AI业务仍处试用培育，未披露规模化AI收入；传统大数据和安全收入不归因。",
-      "notes": "第12-20、29-30、44-45页；新AI业务仍处试用培育，未披露规模化AI收入；传统大数据和安全收入不归因。"
+      "limitations": "已披露AI收入，但续费、复购、毛利与试用转规模仍未披露。",
+      "notes": "第12页；第27、28、30页；第44-45页；人工智能软件产品及服务营业收入26,258万元；续费、复购、毛利和试用转规模仍需验证。"
     },
     {
       "source_id": "f1_300634_ar2025",
