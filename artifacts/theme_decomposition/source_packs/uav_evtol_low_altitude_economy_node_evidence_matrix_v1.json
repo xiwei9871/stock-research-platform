@@ -93,8 +93,8 @@
       ],
       "evidence_gap_status": "evidence_gap",
       "node_review_status": "reviewed",
-      "rationale": "应流混动系统已有配飞展示，卧龙电驱有资本化eVTOL电驱研发；宗申活塞发动机被明确排除，节点证据未被泛动力污染。",
-      "next_evidence_needed": "补充电动/混动系统原型机装机、适航、签署订单、实际交付、系统效率和专项收入。"
+      "rationale": "应流YLHD-300处展示阶段、ES1000仅为拟配飞平台并接受专家检阅，卧龙电驱有资本化eVTOL电驱研发；宗申活塞发动机被明确排除。",
+      "next_evidence_needed": "补充电动/混动系统集成、原型机装机、飞行试验、适航、签署订单、实际交付、系统效率和专项收入。"
     },
     {
       "node_id": "airframe_composites_precision_components",
@@ -167,14 +167,12 @@
       "node_id": "flight_operations_maintenance_services",
       "accepted_source_ids": [
         "f2_000099_ar2025",
-        "f2_301091_ar2025",
-        "f2_603308_ar2025"
+        "f2_301091_ar2025"
       ],
       "pending_source_ids": [],
       "supported_claim_ids": [
         "f2_claim_03",
         "f2_claim_04",
-        "f2_claim_09",
         "f2_claim_15"
       ],
       "evidence_strength_before": 1,
@@ -186,7 +184,7 @@
       ],
       "evidence_gap_status": "evidence_gap",
       "node_review_status": "reviewed",
-      "rationale": "中信海直提供低空航线与eVTOL试飞验证，深城交测试基地投入运营，应流机场取得使用许可证；22.16亿元通航运输收入含传统海上油气，不能作为低空收入或毛利依据。",
+      "rationale": "中信海直提供低空航线与eVTOL试飞验证，深城交低空测试基地投入运营；22.16亿元通航运输收入含传统海上油气，不能作为低空收入或毛利依据。通用A1机场许可证不支持本节点。",
       "next_evidence_needed": "补充低空新业务收入、航线利用率、eVTOL常态运营、维修收入与运营毛利拆分。"
     },
     {
@@ -214,15 +212,13 @@
         "f2_claim_16"
       ],
       "evidence_strength_before": 1,
-      "evidence_strength_after": 4,
-      "value_capture_score_review_status": "supported",
-      "bottleneck_score_review_status": "supported",
-      "value_bases": [
-        "customer_certification"
-      ],
+      "evidence_strength_after": 3,
+      "value_capture_score_review_status": "provisional",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [],
       "evidence_gap_status": "evidence_gap",
       "node_review_status": "reviewed",
-      "rationale": "证据覆盖特许飞行、TC申请、民用应用产业化和运营验证，并明确排除军贸交付、未来签约任务及防务批量订货的低空归因；商业链条尚未在同一eVTOL对象上闭环。",
+      "rationale": "现有证据包含TC申请与未取得TC、民用应用产业化、运营验证和未来任务边界；这些负面或缺口事实不能支持已认证、已签单或已交付的价值依据，商业链条尚未在同一对象上闭环。",
       "next_evidence_needed": "逐对象跟踪原型机、TC申请、TC、PC、签署订单、交付、投入运营、航线利用和确认收入，禁止阶段跃迁。"
     }
   ]

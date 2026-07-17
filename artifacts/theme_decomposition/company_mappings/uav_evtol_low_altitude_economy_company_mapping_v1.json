@@ -90,7 +90,7 @@
       "access_level": "public",
       "reliability_level": "S0",
       "review_status": "accepted",
-      "notes": "第10-11页；YLHD-300混动系统配飞ES1000无人运输机与A1机场运营许可。；两机业务收入未单列低空动力或机场运营收入。"
+      "notes": "第10-11页；YLHD-300混动系统展示，ES1000作为拟配飞平台，二者接受民航华东局专家检阅；未披露已配飞、装机或飞行试验，A1通航机场许可证属于另一子公司且不支持本动力映射。"
     },
     {
       "source_id": "f2_600580_ar2025",
@@ -306,8 +306,8 @@
       "evidence_id": "f2_ev_603308_sh_product",
       "source_id": "f2_603308_ar2025",
       "evidence_type": "product_relationship",
-      "excerpt_locator": "第10页，YLHD-300混动系统配飞ES1000大型无人运输机",
-      "evidence_summary": "YLHD-300航空混动系统由公司年报直接披露，属于electric_propulsion_power_energy_systems的低空特定产品或服务关系。",
+      "excerpt_locator": "第10页，YLHD-300混动系统展示及ES1000拟配飞平台说明",
+      "evidence_summary": "YLHD-300混动系统在赣州低空产业园展示，ES1000被表述为拟配飞平台，二者接受民航华东局专家检阅；未披露已配飞、装机或飞行试验。",
       "related_company_codes": [
         "603308.SH"
       ],
@@ -332,8 +332,8 @@
       "evidence_id": "f2_ev_603308_sh_stage",
       "source_id": "f2_603308_ar2025",
       "evidence_type": "business_stage",
-      "excerpt_locator": "第10页，混动系统展示及A1类通航机场取得使用许可证",
-      "evidence_summary": "YLHD-300与ES1000无人运输机配飞，动力研发与机场试飞场景形成低空链条传导。 商业阶段按年报事实标注，不把未来计划写成当前收入。",
+      "excerpt_locator": "第10页，YLHD-300与ES1000接受民航华东局专家检阅",
+      "evidence_summary": "YLHD-300混动系统处产品展示阶段，ES1000仅为拟配飞平台，二者接受民航华东局专家检阅；未披露已配飞、装机、飞行试验或投入运营。",
       "related_company_codes": [
         "603308.SH"
       ],
@@ -610,9 +610,9 @@
       "bottleneck_relevance": "core",
       "business_materiality": "emerging_segment",
       "product_or_service": "YLHD-300航空混动系统",
-      "relationship_summary": "YLHD-300与ES1000无人运输机配飞，动力研发与机场试飞场景形成低空链条传导。",
+      "relationship_summary": "YLHD-300混动系统展示、ES1000拟配飞平台说明及专家检阅证明低空动力原型关系，不代表已配飞、装机或试飞。",
       "review_status": "reviewed",
-      "notes": "仍需混动系统定型、适航、客户订单、交付与专项收入。"
+      "notes": "仍需完成系统集成、装机、飞行试验、适航、客户订单、交付与专项收入；另一子公司的A1通航机场许可证不支持本动力映射。"
     },
     {
       "mapping_id": "f2_map_600580_sh_v1",

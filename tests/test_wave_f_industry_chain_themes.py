@@ -432,9 +432,9 @@ F2_MAPPING_CONTRACTS = {
         "revenue_relevance": "undisclosed",
         "business_materiality": "emerging_segment",
         "locators": {
-            "product_relationship": "第10页，YLHD-300混动系统配飞ES1000大型无人运输机",
+            "product_relationship": "第10页，YLHD-300混动系统展示及ES1000拟配飞平台说明",
             "revenue_materiality": "第11页，公司两机业务收入增长但未单列低空动力收入",
-            "business_stage": "第10页，混动系统展示及A1类通航机场取得使用许可证",
+            "business_stage": "第10页，YLHD-300与ES1000接受民航华东局专家检阅",
         },
     },
     "600580.SH": {
@@ -508,8 +508,32 @@ F2_MATRIX_VALUE_BASIS_CONTRACTS = {
     "flight_operations_maintenance_services": {
         "customer_certification": ("f2_claim_03", ("跨海试飞", "跨城货运航线首飞")),
     },
-    "certification_orders_delivery_utilization_validation": {
-        "customer_certification": ("f2_claim_07", ("型号合格证申请", "未取得TC")),
+    "certification_orders_delivery_utilization_validation": {},
+}
+F2_CLAIM_LIFECYCLE_CONTRACTS = {
+    "f2_claim_01": {
+        "required": ("特许飞行证", "不等于型号合格证"),
+        "forbidden": ("已取得型号合格证", "已商业运营"),
+    },
+    "f2_claim_07": {
+        "required": ("型号合格证申请", "未取得TC"),
+        "forbidden": ("已取得TC", "已完成交付"),
+    },
+    "f2_claim_08": {
+        "required": ("产业化", "成功应用", "军贸交付不作为低空交付", "2026年任务不作为当前签署订单"),
+        "forbidden": ("已签署低空订单", "已完成低空交付"),
+    },
+    "f2_claim_09": {
+        "required": ("展示", "拟配飞", "专家检阅"),
+        "forbidden": ("配飞展示", "完成配飞", "完成装机", "完成飞行试验", "已投入运营"),
+    },
+    "f2_claim_10": {
+        "required": ("研发阶段", "未证明TC", "未证明", "交付"),
+        "forbidden": ("已取得TC", "已签署订单", "已完成交付"),
+    },
+    "f2_claim_11": {
+        "required": ("产品谱系", "不能归因于低空订单或交付"),
+        "forbidden": ("取得低空订单", "完成低空交付"),
     },
 }
 
@@ -1431,6 +1455,90 @@ def test_low_altitude_f2_jiuzhou_product_availability_does_not_inherit_defense_o
     assert packed["evidence_locator"] == "年报第9、23页（PDF第10、24页）"
     assert "年报第9、23页（PDF第10、24页）" in packed["notes"]
     assert served_row["notes"] == packed["notes"]
+
+
+def test_low_altitude_f2_yingliu_propulsion_stage_is_display_and_intended_pairing_only() -> None:
+    theme = load_json(F2_THEME_PATH)
+    mapping = load_json(F2_MAPPING_PATH)
+    source_pack = load_json(F2_SOURCE_PACK_PATH)
+    matrix = load_json(F2_MATRIX_PATH)
+    evidence = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+    row = next(row for row in mapping["company_mappings"] if row["company_code"] == "603308.SH")
+    product = evidence["f2_ev_603308_sh_product"]
+    stage = evidence["f2_ev_603308_sh_stage"]
+    assert row["mapped_node_id"] == "electric_propulsion_power_energy_systems"
+    assert row["revenue_relevance"] == "undisclosed"
+    assert row["business_materiality"] == "emerging_segment"
+    assert product["excerpt_locator"] == "第10页，YLHD-300混动系统展示及ES1000拟配飞平台说明"
+    assert stage["excerpt_locator"] == "第10页，YLHD-300与ES1000接受民航华东局专家检阅"
+    for item in (product, stage):
+        assert "YLHD-300" in item["evidence_summary"]
+        assert "ES1000" in item["evidence_summary"]
+        assert "展示" in item["evidence_summary"]
+        assert "拟配飞" in item["evidence_summary"]
+        assert "专家检阅" in item["evidence_summary"]
+        for forbidden in ("完成配飞", "完成装机", "完成飞行试验", "已投入运营"):
+            assert forbidden not in item["evidence_summary"]
+    claim = next(row for row in theme["claims"] if row["claim_id"] == "f2_claim_09")
+    assert claim["affected_theme_nodes"] == ["electric_propulsion_power_energy_systems"]
+    for term in F2_CLAIM_LIFECYCLE_CONTRACTS["f2_claim_09"]["required"]:
+        assert term in claim["claim_text"]
+    for forbidden in F2_CLAIM_LIFECYCLE_CONTRACTS["f2_claim_09"]["forbidden"]:
+        assert forbidden not in claim["claim_text"]
+    source = next(row for row in source_pack["sources"] if row["source_id"] == "f2_603308_ar2025")
+    assert source["supported_node_ids"] == ["electric_propulsion_power_energy_systems"]
+    assert "A1类通航机场" in source["limitations"]
+    assert "不支持本动力映射" in source["limitations"]
+    operations = next(row for row in matrix["node_evidence_matrix"] if row["node_id"] == "flight_operations_maintenance_services")
+    assert "f2_603308_ar2025" not in operations["accepted_source_ids"]
+    assert "f2_claim_09" not in operations["supported_claim_ids"]
+    operations_node = next(row for row in theme["nodes"] if row["node_id"] == "flight_operations_maintenance_services")
+    assert "应流股份" not in operations_node["domestic_players"]
+    assert "603308.SH" not in operations_node["related_stock_codes"]
+    operations_assessment = next(row for row in theme["value_capture_assessments"] if row["node_id"] == "flight_operations_maintenance_services")
+    assert "f2_claim_09" not in operations_assessment["evidence_ids"]
+
+
+def test_low_altitude_f2_lifecycle_contracts_are_asserted_per_claim() -> None:
+    claims = {row["claim_id"]: row for row in load_json(F2_THEME_PATH)["claims"]}
+    assert set(F2_CLAIM_LIFECYCLE_CONTRACTS) <= set(claims)
+    for claim_id, contract in F2_CLAIM_LIFECYCLE_CONTRACTS.items():
+        claim_text = claims[claim_id]["claim_text"]
+        for required in contract["required"]:
+            assert required in claim_text, (claim_id, required)
+        for forbidden in contract["forbidden"]:
+            assert forbidden not in claim_text, (claim_id, forbidden)
+
+
+def test_low_altitude_f2_source_claim_node_contract_is_exact_per_source() -> None:
+    theme = load_json(F2_THEME_PATH)
+    source_pack = load_json(F2_SOURCE_PACK_PATH)
+    claims = {row["claim_id"]: row for row in theme["claims"]}
+    for source in source_pack["sources"]:
+        source_id = source["source_id"]
+        expected_claim_ids = {
+            claim_id for claim_id, claim in claims.items()
+            if source_id in (claim["source_id"], *claim["supporting_source_ids"])
+        }
+        assert set(source["supported_claim_ids"]) == expected_claim_ids
+        assert set(source["supported_node_ids"]) == {
+            node_id for claim_id in expected_claim_ids
+            for node_id in claims[claim_id]["affected_theme_nodes"]
+        }
+
+
+def test_low_altitude_f2_negative_lifecycle_facts_do_not_support_certification_value_capture() -> None:
+    matrix = load_json(F2_MATRIX_PATH)
+    certification = next(row for row in matrix["node_evidence_matrix"] if row["node_id"] == "certification_orders_delivery_utilization_validation")
+    assert certification["evidence_strength_after"] == 3
+    assert certification["evidence_gap_status"] == "evidence_gap"
+    assert certification["value_capture_score_review_status"] == "provisional"
+    assert certification["bottleneck_score_review_status"] == "provisional"
+    assert certification["value_bases"] == []
+    assert "TC申请" in certification["rationale"]
+    assert "未取得TC" in certification["rationale"]
+    assert "未来任务" in certification["rationale"]
+    assert "不能支持已认证、已签单或已交付的价值依据" in certification["rationale"]
 
 
 def test_low_altitude_f2_closes_initial_universe_and_excludes_piston_engine_boundary() -> None:

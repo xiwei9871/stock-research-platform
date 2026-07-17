@@ -155,7 +155,7 @@
       "access_level": "public",
       "reliability_level": "S0",
       "review_status": "accepted",
-      "notes": "第10-11页；YLHD-300混动系统配飞ES1000无人运输机与A1机场运营许可。；两机业务收入未单列低空动力或机场运营收入。"
+      "notes": "第10-11页；YLHD-300混动系统展示，ES1000作为拟配飞平台，二者接受民航华东局专家检阅；未披露已配飞、装机或飞行试验，A1通航机场许可证属于另一子公司且不支持本动力映射。"
     },
     {
       "source_id": "f2_600580_ar2025",
@@ -333,15 +333,14 @@
       "claim_id": "f2_claim_09",
       "theme_id": "uav_evtol_low_altitude_economy_value_chain_v1",
       "source_id": "f2_603308_ar2025",
-      "claim_text": "应流股份YLHD-300混动系统已与ES1000大型无人运输机配飞展示，六安金安机场取得A1类通航机场使用许可证并开展试飞；低空动力与机场运营收入未单列。",
+      "claim_text": "应流股份展示YLHD-300混动系统，ES1000大型无人运输机被描述为拟配飞平台，二者接受民航华东局专家检阅；未披露已配飞、已装机、飞行试验或投入运营，低空动力收入未单列。",
       "claim_type": "tech_route",
       "confidence": 0.9,
       "evidence_status": "verified",
       "platform_use_status": "reviewed",
       "supporting_source_ids": [],
       "affected_theme_nodes": [
-        "electric_propulsion_power_energy_systems",
-        "flight_operations_maintenance_services"
+        "electric_propulsion_power_energy_systems"
       ]
     },
     {
@@ -667,12 +666,10 @@
       "overseas_leaders": [],
       "domestic_players": [
         "中信海直",
-        "应流股份",
         "深城交"
       ],
       "related_stock_codes": [
         "000099.SZ",
-        "603308.SH",
         "301091.SZ"
       ]
     },
@@ -687,7 +684,7 @@
       "bottleneck_score": 5,
       "localization_gap_score": 3,
       "supply_tightness_score": 4,
-      "evidence_strength": 4,
+      "evidence_strength": 3,
       "node_review_status": "reviewed",
       "key_metrics": [
         "TC/PC",
@@ -803,26 +800,7 @@
       "evidence_ids": [
         "f2_claim_03",
         "f2_claim_04",
-        "f2_claim_09",
         "f2_claim_15"
-      ],
-      "uncertainty": "公司披露多为混合口径，仍需专项收入、毛利、订单转化与持续利用数据。"
-    },
-    {
-      "node_id": "certification_orders_delivery_utilization_validation",
-      "value_basis": "customer_certification",
-      "assessment_text": "适航订单交付利用验证的价值只在低空特定产品、项目、适航、交付、运营或收入证据闭环后确认。",
-      "rank": 9,
-      "evidence_ids": [
-        "f2_claim_01",
-        "f2_claim_03",
-        "f2_claim_04",
-        "f2_claim_07",
-        "f2_claim_08",
-        "f2_claim_10",
-        "f2_claim_11",
-        "f2_claim_14",
-        "f2_claim_16"
       ],
       "uncertainty": "公司披露多为混合口径，仍需专项收入、毛利、订单转化与持续利用数据。"
     }

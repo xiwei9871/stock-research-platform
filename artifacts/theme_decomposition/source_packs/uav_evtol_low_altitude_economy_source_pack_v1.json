@@ -139,16 +139,15 @@
       "review_status": "accepted",
       "document_status": "primary_source_reviewed",
       "evidence_locator": "第10-11页",
-      "evidence_summary": "YLHD-300混动系统配飞ES1000无人运输机与A1机场运营许可。",
+      "evidence_summary": "YLHD-300混动系统展示，ES1000作为拟配飞平台，二者接受民航华东局专家检阅。",
       "supported_claim_ids": [
         "f2_claim_09"
       ],
       "supported_node_ids": [
-        "electric_propulsion_power_energy_systems",
-        "flight_operations_maintenance_services"
+        "electric_propulsion_power_energy_systems"
       ],
-      "limitations": "两机业务收入未单列低空动力或机场运营收入。",
-      "notes": "第10-11页；YLHD-300混动系统配飞ES1000无人运输机与A1机场运营许可。；两机业务收入未单列低空动力或机场运营收入。"
+      "limitations": "未披露已配飞、装机、飞行试验或收入；A1类通航机场许可证属于另一子公司且为通用机场，不支持本动力映射或低空运营节点。",
+      "notes": "第10-11页；YLHD-300混动系统展示，ES1000作为拟配飞平台，二者接受民航华东局专家检阅；未披露已配飞、装机或飞行试验，A1通航机场许可证属于另一子公司且不支持本动力映射。"
     },
     {
       "source_id": "f2_600580_ar2025",
