@@ -3,7 +3,6 @@ from __future__ import annotations
 from copy import deepcopy
 import json
 from pathlib import Path
-import shutil
 
 import pytest
 
@@ -67,6 +66,20 @@ def _bytes_under(root: Path) -> dict[str, bytes]:
         for path in sorted(root.rglob("*"))
         if path.is_file()
     }
+
+
+def _write_json(path: Path, payload: dict[str, object]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _rehash(payload: dict[str, object]) -> None:
+    payload["content_hash"] = content_sha256(
+        payload, excluded_paths={("content_hash",)}
+    )
 
 
 def test_four_pilot_artifacts_are_complete_research_designs():
@@ -147,6 +160,9 @@ def test_four_pilot_artifacts_are_complete_research_designs():
 
 def test_static_valid_and_invalid_fixtures_have_exact_failures():
     valid = _json(FIXTURES / "valid/research_design_minimal_v2.json")
+    assert valid["content_hash"] == content_sha256(
+        valid, excluded_paths={("content_hash",)}
+    )
     validate_schema_payload("research_version_v2", valid)
     validate_version_semantics(valid)
     assert evaluate_gate(valid, "design").status in {"pass", "pass_with_warnings"}
@@ -157,13 +173,26 @@ def test_static_valid_and_invalid_fixtures_have_exact_failures():
         "unmarked_causal_cycle.json": "RESEARCH_PROJECT_UNMARKED_CAUSAL_CYCLE",
     }
     for name, code in semantic_failures.items():
+        invalid = _json(FIXTURES / "invalid" / name)
+        assert invalid["content_hash"] == content_sha256(
+            invalid, excluded_paths={("content_hash",)}
+        )
+        validate_schema_payload("research_version_v2", invalid)
         with pytest.raises(ResearchProjectV2Error) as exc_info:
-            validate_version_semantics(_json(FIXTURES / "invalid" / name))
+            validate_version_semantics(invalid)
         assert exc_info.value.code == code
 
     missing = _json(FIXTURES / "invalid/missing_reference.json")
+    assert missing["content_hash"] == content_sha256(
+        missing, excluded_paths={("content_hash",)}
+    )
+    validate_schema_payload("research_version_v2", missing)
+    validate_version_semantics(missing)
     assert audit_references(missing)["issues"] == [
-        {"reference_id": "reference:fixture:missing", "status": "missing"}
+        {
+            "reference_id": "reference:ai_compute_pcb_value_migration:background",
+            "status": "missing",
+        }
     ]
     mismatch = _json(FIXTURES / "invalid/hash_mismatch.json")
     assert mismatch["content_hash"] != content_sha256(mismatch, excluded_paths={("content_hash",)})
@@ -174,6 +203,9 @@ def test_static_valid_and_invalid_fixtures_have_exact_failures():
         "company_capture_in_research_design.json",
     ):
         invalid = _json(FIXTURES / "invalid" / name)
+        assert invalid["content_hash"] == content_sha256(
+            invalid, excluded_paths={("content_hash",)}
+        )
         with pytest.raises(ResearchProjectV2Error) as exc_info:
             validate_schema_payload("research_version_v2", invalid)
         assert exc_info.value.code == "RESEARCH_PROJECT_SCHEMA_INVALID"
@@ -182,6 +214,41 @@ def test_static_valid_and_invalid_fixtures_have_exact_failures():
     with pytest.raises(ResearchProjectV2Error) as exc_info:
         load_version("fixture", "0.1.0", layout=invalid_layout)
     assert exc_info.value.code == "RESEARCH_PROJECT_IMMUTABILITY_VIOLATION"
+
+
+def test_hash_mismatch_fixture_exercises_loader_and_cli_exit_five(tmp_path, capsys):
+    version = _json(FIXTURES / "invalid/hash_mismatch.json")
+    slug = version["project_id"].split(":", 1)[1]
+    layout = ResearchProjectLayout(tmp_path / "hash-mismatch-layout")
+    project_dir = layout.project_dir(slug)
+    identity = _json(ARTIFACT_ROOT / "projects" / slug / "project.json")
+    _write_json(project_dir / "project.json", identity)
+    _write_json(project_dir / "versions/v0.1.0.json", version)
+    manifest = {
+        "version_id": version["version_id"],
+        "semantic_version": version["semantic_version"],
+        "parent_version_id": version["parent_version_id"],
+        "relative_path": "versions/v0.1.0.json",
+        "content_hash": version["content_hash"],
+        "created_at": version["created_at"],
+    }
+    project_dir.mkdir(parents=True, exist_ok=True)
+    (project_dir / "version_manifest.jsonl").write_text(
+        json.dumps(manifest, sort_keys=True, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        load_version(slug, "0.1.0", layout=layout)
+    assert exc_info.value.code == "RESEARCH_PROJECT_IMMUTABILITY_VIOLATION"
+    for command in (
+        ["show", "--project", slug, "--version", "0.1.0"],
+        ["validate", "--project", slug, "--version", "0.1.0"],
+    ):
+        assert cli(command, layout=layout) == 5
+        assert json.loads(capsys.readouterr().out)["error"]["code"] == (
+            "RESEARCH_PROJECT_IMMUTABILITY_VIOLATION"
+        )
 
 
 def test_rebuild_index_is_dry_run_safe_write_idempotent_and_tamper_strict(tmp_path, capsys):
@@ -194,26 +261,77 @@ def test_rebuild_index_is_dry_run_safe_write_idempotent_and_tamper_strict(tmp_pa
     assert _bytes_under(ARTIFACT_ROOT) == before
 
     copied_root = tmp_path / "v2"
-    shutil.copytree(ARTIFACT_ROOT, copied_root)
     layout = ResearchProjectLayout(copied_root)
-    slug = sorted(SLUGS)[0]
+    slug = "ai_compute_pcb_value_migration"
+    project_dir = layout.project_dir(slug)
     manifest_path = layout.project_dir(slug) / "version_manifest.jsonl"
-    version_path = layout.project_dir(slug) / "versions/v0.1.0.json"
-    manifest_path.write_bytes(b"")
-    raw = _json(version_path)
-    raw["content_hash"] = "0" * 64
-    version_path.write_text(json.dumps(raw, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    old_version_path = project_dir / "versions/v0.0.0.json"
+    new_version_path = project_dir / "versions/v0.1.0.json"
+    identity = _json(ARTIFACT_ROOT / "projects" / slug / "project.json")
+    current = _json(ARTIFACT_ROOT / "projects" / slug / "versions/v0.1.0.json")
+    old_version = json.loads(
+        json.dumps(current, ensure_ascii=False).replace(":0.1.0", ":0.0.0")
+    )
+    old_version.update(
+        semantic_version="0.0.0",
+        parent_version_id=None,
+        created_at="2026-07-16T00:00:00Z",
+    )
+    _rehash(old_version)
+    new_version = deepcopy(current)
+    new_version["parent_version_id"] = old_version["version_id"]
+    new_version["content_hash"] = "0" * 64
+    _write_json(project_dir / "project.json", identity)
+    _write_json(old_version_path, old_version)
+    _write_json(new_version_path, new_version)
+    old_row = {
+        "version_id": old_version["version_id"],
+        "semantic_version": "0.0.0",
+        "parent_version_id": None,
+        "relative_path": "versions/v0.0.0.json",
+        "content_hash": old_version["content_hash"],
+        "created_at": old_version["created_at"],
+    }
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text(
+        json.dumps(old_row, sort_keys=True, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
+    old_manifest_bytes = manifest_path.read_bytes()
+    old_version_bytes = old_version_path.read_bytes()
     assert cli(["rebuild-index", "--write"], layout=layout) == 0
     capsys.readouterr()
     rebuilt = load_version(slug, "0.1.0", layout=layout)
     assert rebuilt["content_hash"] != "0" * 64
+    assert old_version_path.read_bytes() == old_version_bytes
+    rebuilt_manifest = manifest_path.read_bytes()
+    assert rebuilt_manifest.startswith(old_manifest_bytes)
+    assert len(rebuilt_manifest.splitlines()) == len(old_manifest_bytes.splitlines()) + 1
+    index = load_index(layout=layout)
+    assert index == {
+        "artifact_version": "2.0.0",
+        "generated_at": "2026-07-17T00:00:00Z",
+        "projects": [
+            {
+                "project_id": identity["project_id"],
+                "project_slug": slug,
+                "title": identity["title"],
+                "current_lifecycle_state": "research_ready",
+                "current_version": identity["current_version"],
+                "latest_reviewed_version": None,
+                "latest_published_version": None,
+                "relative_path": f"projects/{slug}/project.json",
+            }
+        ],
+    }
+    validate_schema_payload("research_project_index_v2", index)
     first = _bytes_under(copied_root)
     assert cli(["rebuild-index", "--write"], layout=layout) == 0
     capsys.readouterr()
     assert _bytes_under(copied_root) == first
 
-    rebuilt["change_summary"] += " tampered"
-    version_path.write_text(json.dumps(rebuilt, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    old_version["change_summary"] += " tampered"
+    _write_json(old_version_path, old_version)
     before_tamper_check = _bytes_under(copied_root)
     assert cli(["rebuild-index", "--write"], layout=layout) == 5
     error = json.loads(capsys.readouterr().out)
