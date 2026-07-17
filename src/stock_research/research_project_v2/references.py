@@ -273,9 +273,14 @@ def resolve_json_pointer(payload: Any, path: str) -> Any:
             )
             if not valid_index:
                 raise _error(_UNRESOLVABLE, f"Invalid JSON Pointer index: {path}")
-            item_index = int(token)
-            if item_index >= len(current):
+            if not current:
                 raise _error(_UNRESOLVABLE, f"JSON Pointer index out of range: {path}")
+            max_index_text = str(len(current) - 1)
+            if len(token) > len(max_index_text) or (
+                len(token) == len(max_index_text) and token > max_index_text
+            ):
+                raise _error(_UNRESOLVABLE, f"JSON Pointer index out of range: {path}")
+            item_index = int(token)
             current = current[item_index]
         else:
             raise _error(_UNRESOLVABLE, f"JSON Pointer cannot traverse value: {path}")

@@ -404,6 +404,15 @@ def test_json_pointer_rejects_invalid_paths_without_leaking_builtin_errors(path)
     assert exc_info.value.code == "RESEARCH_PROJECT_REFERENCE_UNRESOLVABLE"
 
 
+def test_json_pointer_rejects_huge_ascii_index_without_leaking_value_error():
+    path = "/items/" + "9" * 5000
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        resolve_json_pointer({"items": ["only"]}, path)
+
+    assert exc_info.value.code == "RESEARCH_PROJECT_REFERENCE_UNRESOLVABLE"
+
+
 def test_resolver_ambiguity_is_audit_unresolvable(monkeypatch):
     def ambiguous_resolver(reference):
         raise ResearchProjectV2Error(
