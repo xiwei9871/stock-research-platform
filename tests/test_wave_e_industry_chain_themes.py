@@ -644,3 +644,57 @@ def test_vehicle_road_cloud_e2_value_capture_assessments_only_use_node_claims() 
     for assessment in theme["value_capture_assessments"]:
         for claim_id in assessment["evidence_ids"]:
             assert assessment["node_id"] in claims[claim_id]["affected_theme_nodes"]
+
+
+def test_vehicle_road_cloud_e2_stage_claims_only_assert_filing_observations() -> None:
+    theme = _read_json(E2_THEME_PATH)
+    claims = {row["claim_id"]: row for row in theme["claims"]}
+    delivery_claim = claims["vehicle_road_cloud_claim_11"]
+    recognition_claim = claims["vehicle_road_cloud_claim_12"]
+
+    assert delivery_claim["source_id"] == "vehicle_road_cloud_002373_filing"
+    assert "解决方案" in delivery_claim["claim_text"]
+    assert "研发交付" in delivery_claim["claim_text"]
+    assert "智慧交通收入" in delivery_claim["claim_text"]
+    assert "证据缺口" in delivery_claim["claim_text"]
+    assert "必须逐级验证" not in delivery_claim["claim_text"]
+    assert "批复、入围、中标、合同、交付、验收、收入确认与回款" not in delivery_claim[
+        "claim_text"
+    ]
+    assert "任何前序阶段都不能替代后序商业兑现" not in delivery_claim["claim_text"]
+    assert set(delivery_claim["affected_theme_nodes"]) == {
+        "project_integration_delivery_operations",
+        "pilot_utilization_renewal_revenue_validation",
+    }
+
+    assert recognition_claim["source_id"] == "vehicle_road_cloud_301339_filing"
+    assert "客户验收后确认收入" in recognition_claim["claim_text"]
+    assert "合同执行期逐月确认" in recognition_claim["claim_text"]
+    assert "不证明试点利用率、续约或经常性运维收入" in recognition_claim["claim_text"]
+    assert "基础设施收入不等于平台利用率" not in recognition_claim["claim_text"]
+    assert set(recognition_claim["affected_theme_nodes"]) == {
+        "project_integration_delivery_operations",
+        "pilot_utilization_renewal_revenue_validation",
+    }
+
+
+def test_vehicle_road_cloud_e2_project_stage_evidence_remains_partial() -> None:
+    theme = _read_json(E2_THEME_PATH)
+    matrix = _read_json(E2_MATRIX_PATH)
+    theme_node = next(
+        row for row in theme["nodes"]
+        if row["node_id"] == "project_integration_delivery_operations"
+    )
+    matrix_node = next(
+        row for row in matrix["node_evidence_matrix"]
+        if row["node_id"] == "project_integration_delivery_operations"
+    )
+
+    assert theme_node["evidence_strength"] == 4
+    assert matrix_node["evidence_strength_after"] == 4
+    assert matrix_node["evidence_gap_status"] == "supported"
+    assert "批复" in matrix_node["next_evidence_needed"]
+    assert "入围" in matrix_node["next_evidence_needed"]
+    assert "正式授标" in matrix_node["next_evidence_needed"]
+    assert "合同" in matrix_node["next_evidence_needed"]
+    assert "回款" in matrix_node["next_evidence_needed"]
