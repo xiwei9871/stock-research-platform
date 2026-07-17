@@ -386,3 +386,12 @@ def test_satellite_communications_e1_strength_and_gap_statuses_are_conservative(
         if node["evidence_strength"] == 5 and matrix_row["evidence_gap_status"] == "covered":
             next_evidence = matrix_row["next_evidence_needed"]
             assert not any(metric in next_evidence for metric in node["key_metrics"])
+
+
+def test_satellite_communications_e1_value_capture_assessments_only_use_node_claims() -> None:
+    theme = _read_json(E1_THEME_PATH)
+    claims = {row["claim_id"]: row for row in theme["claims"]}
+
+    for assessment in theme["value_capture_assessments"]:
+        for claim_id in assessment["evidence_ids"]:
+            assert assessment["node_id"] in claims[claim_id]["affected_theme_nodes"]

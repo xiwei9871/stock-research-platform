@@ -710,7 +710,7 @@
       "rank": 4,
       "evidence_ids": [
         "satellite_app_claim_03",
-        "satellite_app_claim_12"
+        "satellite_app_claim_15"
       ],
       "uncertainty": "卫星专用接入收入未单列。"
     },
@@ -742,8 +742,8 @@
       "assessment_text": "数据时效、处理链、智能解译和云分发决定遥感数据能否成为可复用信息产品。",
       "rank": 5,
       "evidence_ids": [
-        "satellite_app_claim_05",
-        "satellite_app_claim_13"
+        "satellite_app_claim_06",
+        "satellite_app_claim_14"
       ],
       "uncertainty": "自有数据、第三方数据和软件收入混合。"
     },
