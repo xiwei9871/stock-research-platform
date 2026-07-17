@@ -1939,6 +1939,10 @@ def test_mobile_communications_f3_sources_claims_nodes_matrix_and_served_rows_ar
     assert identity(theme["sources"]) == identity(mapping["sources"])
     assert identity(theme["sources"]) == identity(source_pack["sources"])
     assert identity(theme["sources"]) == identity(served_sources["items"])
+    assert all(
+        row["author"] and row["author"] == row["publisher"]
+        for row in theme["sources"]
+    )
     served_claims_by_id = {row["claim_id"]: row for row in served_claims["items"]}
     assert set(served_claims_by_id) == {row["claim_id"] for row in theme["claims"]}
     for claim in theme["claims"]:

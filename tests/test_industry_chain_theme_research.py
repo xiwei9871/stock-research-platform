@@ -296,6 +296,51 @@ def test_coverage_verifier_accounts_for_theme_nodes_without_requiring_entire_cat
     assert result["counts"]["reviewed_claims"] == 8
 
 
+def test_coverage_verifier_counts_linked_l4_canonical_parent_as_l3_coverage():
+    context = _ready_theme_context()
+    theme_id = "new_energy_storage_value_chain_v1"
+    catalog = {
+        "chains": [{"chain_id": "new_energy_storage", "chain_name": "New Energy Storage"}],
+        "nodes": [
+            {
+                "node_id": "storage_l3",
+                "chain_id": "new_energy_storage",
+                "level": "L3",
+                "parent_node_id": None,
+                "node_kind": "canonical",
+            },
+            {
+                "node_id": "storage_l4",
+                "chain_id": "new_energy_storage",
+                "level": "L4",
+                "parent_node_id": "storage_l3",
+                "node_kind": "canonical",
+            },
+        ],
+        "theme_links": [
+            {
+                "theme_id": theme_id,
+                "chain_id": "new_energy_storage",
+                "node_links": [
+                    {"theme_node_id": "storage_l3", "catalog_node_id": "storage_l4"},
+                    {"theme_node_id": "storage_l4", "catalog_node_id": "storage_l4"},
+                ],
+                "unmapped_theme_node_ids": [],
+            }
+        ],
+    }
+
+    result = verify_deep_theme_coverage(
+        theme_id,
+        catalog=catalog,
+        theme_context=context,
+    )
+
+    assert result["ready"] is True
+    assert result["checks"]["catalog_l3_linked"] is True
+    assert result["checks"]["catalog_l4_linked"] is True
+
+
 def test_coverage_verifier_allows_catalog_skeletons_when_theme_nodes_are_accounted_for():
     context = _ready_theme_context()
     theme_id = "new_energy_storage_value_chain_v1"

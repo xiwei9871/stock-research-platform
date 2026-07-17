@@ -257,6 +257,14 @@ def verify_deep_theme_coverage(
     ]
     l3_ids = {row.get("node_id") for row in chain_nodes if row.get("level") == "L3"}
     l4_ids = {row.get("node_id") for row in chain_nodes if row.get("level") == "L4"}
+    linked_canonical_l3_parents = {
+        row.get("parent_node_id")
+        for row in chain_nodes
+        if row.get("level") == "L4"
+        and row.get("node_kind") == "canonical"
+        and row.get("node_id") in linked_catalog_nodes
+        and row.get("parent_node_id") in l3_ids
+    }
     sources = _theme_sources(theme_id, theme_context)
     accepted_source_ids = {
         row.get("source_id")
@@ -286,7 +294,8 @@ def verify_deep_theme_coverage(
         "catalog_link": link is not None,
         "all_theme_nodes_accounted_for": bool(theme_node_ids)
         and theme_node_ids <= linked_theme_nodes | explicitly_unmapped_theme_nodes,
-        "catalog_l3_linked": not l3_ids or bool(l3_ids & linked_catalog_nodes),
+        "catalog_l3_linked": not l3_ids
+        or bool(l3_ids & (linked_catalog_nodes | linked_canonical_l3_parents)),
         "catalog_l4_linked": not l4_ids or bool(l4_ids & linked_catalog_nodes),
         "accepted_source_count": len(accepted_source_ids) >= 10,
         "primary_source_count": len(
