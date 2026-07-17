@@ -280,16 +280,313 @@ E5_REVIEWED_COMPANIES = {
     "600050.SH": ("emerging_segment", "undisclosed"),
 }
 
-E5_INITIAL_UNIVERSE_EXCLUSION_SOURCES = {
-    "000555.SZ": ("quantum_000555_ar2025", "未披露量子专用产品、项目、客户、订单、交付或收入"),
-    "603019.SH": ("quantum_603019_ar2025", "通用高端计算、存储、软件和云服务"),
-    "600120.SH": ("quantum_600120_ar2025", "控股子公司名录不能替代量子专用经营证据"),
-    "688521.SH": ("quantum_688521_ar2025", "通用半导体IP和芯片设计服务"),
+E5_EXCLUSION_CLOSURE_CONTRACTS = {
+    "000555.SZ": {
+        "company_name": "神州信息",
+        "source_id": "quantum_000555_ar2025",
+        "claim_id": "quantum_claim_22",
+        "forbidden_basis": (
+            "量子安全威胁研究报告",
+            "技术开发子公司名录",
+            "未披露量子专用产品、项目、客户、订单、交付或收入",
+        ),
+    },
+    "002281.SZ": {
+        "company_name": "光迅科技",
+        "source_id": "quantum_002281_ar2025",
+        "claim_id": "quantum_claim_20",
+        "forbidden_basis": (
+            "联营企业权益法披露",
+            "股权投资或联营暴露不构成量子受益证据",
+            "通用光器件亦不自动形成量子映射",
+        ),
+    },
+    "003029.SZ": {
+        "company_name": "吉大正元",
+        "source_id": "quantum_003029_ar2025",
+        "claim_id": "quantum_claim_19",
+        "forbidden_basis": (
+            "PQC产品、迁移课题和标准",
+            "QKD仅见标准或专利语境",
+            "后量子密码不是量子通信或量子硬件",
+        ),
+    },
+    "603019.SH": {
+        "company_name": "中科曙光",
+        "source_id": "quantum_603019_ar2025",
+        "claim_id": "quantum_claim_23",
+        "forbidden_basis": (
+            "通用高端计算、存储、软件和云服务",
+            "未披露量子专用产品、项目、客户、订单、交付或收入",
+        ),
+    },
+    "600120.SH": {
+        "company_name": "浙江东方",
+        "source_id": "quantum_600120_ar2025",
+        "claim_id": "quantum_claim_24",
+        "forbidden_basis": (
+            "51%控股子公司名录",
+            "控股子公司名录不能替代量子专用经营证据",
+            "未披露量子产品、项目、客户、订单、交付或收入",
+        ),
+    },
+    "688521.SH": {
+        "company_name": "芯原股份",
+        "source_id": "quantum_688521_ar2025",
+        "claim_id": "quantum_claim_25",
+        "forbidden_basis": (
+            "通用半导体IP和芯片设计服务",
+            "未披露量子专用芯片、项目、客户、订单、交付或收入",
+        ),
+    },
+    "600487.SH": {
+        "company_name": "亨通光电",
+        "source_id": "quantum_600487_ar2025",
+        "claim_id": "quantum_claim_17",
+        "forbidden_basis": (
+            "通用多芯光纤在量子通信网络的技术应用",
+            "控股量子子公司名录",
+            "未披露量子专用产品、客户、订单、合同、交付或收入",
+            "通用光学技术应用不足以形成reviewed量子受益映射",
+        ),
+    },
 }
+
+E5_REVIEWED_MAPPING_CONTRACTS = {
+    "688027.SH": {
+        "mapping": {
+            "mapped_node_id": "quantum_processor_modalities_architecture",
+            "mapping_type": "equipment_supplier",
+            "business_stage": "primary_business",
+            "business_materiality": "core_business",
+            "revenue_relevance": "material",
+            "bottleneck_relevance": "core",
+        },
+        "evidence": {
+            "product_or_service": (
+                "quantum_ev_688027_product", "product_relationship", "quantum_688027_ar2025",
+                "第15-16页，三类量子产品与计算整机组件",
+            ),
+            "materiality": (
+                "quantum_ev_688027_revenue", "revenue_materiality", "quantum_688027_ar2025",
+                "第38页，量子计算与量子通信分产品收入",
+            ),
+            "stage": (
+                "quantum_ev_688027_stage", "business_stage", "quantum_688027_ar2025",
+                "第25、29、39页，用户业务、千比特交付与重大合同",
+            ),
+        },
+        "beneficiary_boundary": "量子计算和通信有独立收入，合同与交付明确",
+        "revenue_boundary": "量子计算产品收入11,836.92万元、量子通信产品收入9,163.36万元",
+    },
+    "601728.SH": {
+        "mapping": {
+            "mapped_node_id": "quantum_communication_qkd_network_services",
+            "mapping_type": "system_integrator",
+            "business_stage": "primary_business",
+            "business_materiality": "meaningful_segment",
+            "revenue_relevance": "limited",
+            "bottleneck_relevance": "core",
+        },
+        "evidence": {
+            "product_or_service": (
+                "quantum_ev_601728_service", "service_relationship", "quantum_601728_ar2025",
+                "第14页，量子通信用户与行业客户",
+            ),
+            "materiality": (
+                "quantum_ev_601728_revenue", "revenue_materiality", "quantum_601728_ar2025",
+                "第13页，量子收入增速披露",
+            ),
+            "stage": (
+                "quantum_ev_601728_stage", "business_stage", "quantum_601728_ar2025",
+                "第14-15页，三类应用产品化与天衍-287",
+            ),
+        },
+        "beneficiary_boundary": "量子收入仅披露增速，未披露绝对金额",
+        "revenue_boundary": "量子收入同比增长65.4%",
+    },
+    "600941.SH": {
+        "mapping": {
+            "mapped_node_id": "quantum_software_compilation_cloud_access",
+            "mapping_type": "system_integrator",
+            "business_stage": "primary_business",
+            "business_materiality": "emerging_segment",
+            "revenue_relevance": "undisclosed",
+            "bottleneck_relevance": "adjacent",
+        },
+        "evidence": {
+            "product_or_service": (
+                "quantum_ev_600941_service", "service_relationship", "quantum_600941_ar2025",
+                "第13页，多元算网智能调度与服务",
+            ),
+            "materiality": (
+                "quantum_ev_600941_revenue", "revenue_materiality", "quantum_600941_ar2025",
+                "第13页，平台规模与收入披露边界",
+            ),
+            "stage": (
+                "quantum_ev_600941_stage", "business_stage", "quantum_600941_ar2025",
+                "第13页，超过2000量子比特云平台",
+            ),
+        },
+        "beneficiary_boundary": "外部客户、合同、续费与量子专项收入未披露",
+        "revenue_boundary": "运营商宽口径收入不能计为量子专项收入",
+    },
+    "002935.SZ": {
+        "mapping": {
+            "mapped_node_id": "quantum_sensing_timing_navigation_metrology",
+            "mapping_type": "equipment_supplier",
+            "business_stage": "primary_business",
+            "business_materiality": "meaningful_segment",
+            "revenue_relevance": "undisclosed",
+            "bottleneck_relevance": "core",
+        },
+        "evidence": {
+            "product_or_service": (
+                "quantum_ev_002935_product", "product_relationship", "quantum_002935_ar2025",
+                "第10-11页，原子钟与完整时频产品线",
+            ),
+            "materiality": (
+                "quantum_ev_002935_revenue", "revenue_materiality", "quantum_002935_ar2025",
+                "第15-16页，宽口径营业收入与产品订单",
+            ),
+            "stage": (
+                "quantum_ev_002935_stage", "business_stage", "quantum_002935_ar2025",
+                "第16、24页，铯钟中标、客户推广与量子测量研发",
+            ),
+        },
+        "beneficiary_boundary": "量子测量为研发与技术路线方向，不表述为当前商业产品集",
+        "revenue_boundary": "未单列量子测量或原子钟收入",
+    },
+    "002268.SZ": {
+        "mapping": {
+            "mapped_node_id": "quantum_communication_qkd_network_services",
+            "mapping_type": "system_integrator",
+            "business_stage": "primary_business",
+            "business_materiality": "emerging_segment",
+            "revenue_relevance": "undisclosed",
+            "bottleneck_relevance": "adjacent",
+        },
+        "evidence": {
+            "product_or_service": (
+                "quantum_ev_002268_product", "product_relationship", "quantum_002268_ar2025",
+                "第11页，运营商QKD平台与量子VoLTE",
+            ),
+            "materiality": (
+                "quantum_ev_002268_revenue", "revenue_materiality", "quantum_002268_ar2025",
+                "第14页，量子新业务收入边界",
+            ),
+            "stage": (
+                "quantum_ev_002268_stage", "business_stage", "quantum_002268_ar2025",
+                "第10-11页，运营商系统研制与培育期",
+            ),
+        },
+        "beneficiary_boundary": "仍处培育期且收入低或尚未产生",
+        "revenue_boundary": "量子信息业务对主营收入贡献较低或尚未产生业务收入",
+    },
+    "300520.SZ": {
+        "mapping": {
+            "mapped_node_id": "quantum_software_compilation_cloud_access",
+            "mapping_type": "direct_product",
+            "business_stage": "primary_business",
+            "business_materiality": "emerging_segment",
+            "revenue_relevance": "undisclosed",
+            "bottleneck_relevance": "adjacent",
+        },
+        "evidence": {
+            "product_or_service": (
+                "quantum_ev_300520_product", "product_relationship", "quantum_300520_ar2025",
+                "第11、25页，星云量子云平台与全链路环境",
+            ),
+            "materiality": (
+                "quantum_ev_300520_revenue", "revenue_materiality", "quantum_300520_ar2025",
+                "第10、36页，业务口径与量子研发边界",
+            ),
+            "stage": (
+                "quantum_ev_300520_stage", "business_stage", "quantum_300520_ar2025",
+                "第25、37页，平台全链路与量子真机验证",
+            ),
+        },
+        "beneficiary_boundary": "尚无客户、合同或量子专项收入披露",
+        "revenue_boundary": "未披露量子云客户、合同或量子专项收入",
+    },
+    "003040.SZ": {
+        "mapping": {
+            "mapped_node_id": "quantum_communication_qkd_network_services",
+            "mapping_type": "component_supplier",
+            "business_stage": "primary_business",
+            "business_materiality": "emerging_segment",
+            "revenue_relevance": "undisclosed",
+            "bottleneck_relevance": "adjacent",
+        },
+        "evidence": {
+            "product_or_service": (
+                "quantum_ev_003040_product", "product_relationship", "quantum_003040_ar2025",
+                "第5、20-21页，QKD量子通信卡产品",
+            ),
+            "materiality": (
+                "quantum_ev_003040_revenue", "revenue_materiality", "quantum_003040_ar2025",
+                "第18页，嵌入式安全产品宽口径收入",
+            ),
+            "stage": (
+                "quantum_ev_003040_stage", "business_stage", "quantum_003040_ar2025",
+                "第15、20-21页，运营商项目与研发完成",
+            ),
+        },
+        "beneficiary_boundary": "嵌入式安全收入未拆量子专项",
+        "revenue_boundary": "未单列量子通信卡收入",
+    },
+    "600050.SH": {
+        "mapping": {
+            "mapped_node_id": "quantum_communication_qkd_network_services",
+            "mapping_type": "system_integrator",
+            "business_stage": "primary_business",
+            "business_materiality": "emerging_segment",
+            "revenue_relevance": "undisclosed",
+            "bottleneck_relevance": "adjacent",
+        },
+        "evidence": {
+            "product_or_service": (
+                "quantum_ev_600050_service", "service_relationship", "quantum_600050_ar2025_summary",
+                "第8页，量子通信布局与量子安全专线",
+            ),
+            "materiality": (
+                "quantum_ev_600050_revenue", "revenue_materiality", "quantum_600050_ar2025_summary",
+                "第4、8页，公司总收入与量子专线边界",
+            ),
+            "stage": (
+                "quantum_ev_600050_stage", "business_stage", "quantum_600050_ar2025_summary",
+                "第8页，量子安全专线已推出",
+            ),
+        },
+        "beneficiary_boundary": "客户、订单与专项收入未披露",
+        "revenue_boundary": "未单列量子安全专线收入",
+    },
+}
+
+E5_SOURCE_IDENTITY_FIELDS = (
+    "source_id",
+    "source_type",
+    "title",
+    "publisher",
+    "author",
+    "publish_date",
+    "url_or_ref",
+    "access_level",
+    "reliability_level",
+    "review_status",
+    "notes",
+)
 
 
 def _read_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _normalized_e5_source_identity(row: dict) -> tuple:
+    return tuple(
+        row.get("url_or_ref", row.get("url")) if field == "url_or_ref" else row[field]
+        for field in E5_SOURCE_IDENTITY_FIELDS
+    )
 
 
 def _declared_locator_set(value: str) -> set[str]:
@@ -1873,14 +2170,13 @@ def test_quantum_computing_e5_sources_claims_matrix_and_served_notes_are_synchro
     matrix = _read_json(E5_MATRIX_PATH)
     served = list_theme_research_sources(E5_THEME_ID, read_source="artifact")
 
+    assert set(E5_SOURCE_IDENTITY_FIELDS) == {
+        "source_id", "source_type", "title", "publisher", "author", "publish_date",
+        "url_or_ref", "access_level", "reliability_level", "review_status", "notes",
+    }
+
     def identity(rows: list[dict]) -> dict[str, tuple]:
-        return {
-            row["source_id"]: (
-                row["source_type"], row["title"], row["publisher"], row["publish_date"],
-                row.get("url_or_ref", row.get("url")), row["review_status"], row["notes"],
-            )
-            for row in rows
-        }
+        return {row["source_id"]: _normalized_e5_source_identity(row) for row in rows}
 
     assert identity(theme["sources"]) == identity(mapping["sources"])
     assert identity(theme["sources"]) == identity(source_pack["sources"])
@@ -1918,21 +2214,62 @@ def test_quantum_computing_e5_reviewed_mappings_have_independent_quantum_evidenc
     mapping = _read_json(E5_MAPPING_PATH)
     evidence = {row["evidence_id"]: row for row in mapping["evidence_items"]}
     reviewed = [row for row in mapping["company_mappings"] if row["review_status"] == "reviewed"]
-    assert len(reviewed) >= 8
-    quantum_terms = (
-        "量子计算", "量子通信", "QKD", "量子精密测量", "原子钟", "量子测量",
-        "量子收入", "量子信息", "量子云", "量子软件", "量子算法",
-    )
-    for row in reviewed:
-        roles = [evidence[evidence_id] for evidence_id in row["evidence_ids"]]
-        assert len(roles) == 3
-        assert {item["evidence_type"] for item in roles} in (
-            {"product_relationship", "revenue_materiality", "business_stage"},
-            {"service_relationship", "revenue_materiality", "business_stage"},
-        )
-        assert len({item["excerpt_locator"] for item in roles}) == 3
-        assert all("页" in item["excerpt_locator"] for item in roles)
-        assert all(any(term in item["evidence_summary"] for term in quantum_terms) for item in roles)
+    assert set(E5_REVIEWED_MAPPING_CONTRACTS) == set(E5_REVIEWED_COMPANIES)
+    reviewed_by_code = {row["company_code"]: row for row in reviewed}
+    assert set(reviewed_by_code) == set(E5_REVIEWED_MAPPING_CONTRACTS)
+
+    for company_code, contract in E5_REVIEWED_MAPPING_CONTRACTS.items():
+        row = reviewed_by_code[company_code]
+        for field, expected in contract["mapping"].items():
+            assert row[field] == expected, (company_code, field)
+        expected_evidence_ids = [
+            contract["evidence"][role][0]
+            for role in ("product_or_service", "materiality", "stage")
+        ]
+        assert row["evidence_ids"] == expected_evidence_ids
+        assert len(set(expected_evidence_ids)) == 3
+        for role, (evidence_id, evidence_type, source_id, locator) in contract["evidence"].items():
+            item = evidence[evidence_id]
+            assert item["evidence_type"] == evidence_type, (company_code, role)
+            assert item["source_id"] == source_id, (company_code, role)
+            assert item["excerpt_locator"] == locator, (company_code, role)
+        materiality = evidence[contract["evidence"]["materiality"][0]]
+        assert contract["beneficiary_boundary"] in row["relationship_summary"]
+        assert contract["revenue_boundary"] in materiality["evidence_summary"]
+
+        broad_revenue_terms = ("公司总收入", "营业收入", "宽口径收入")
+        if any(term in materiality["evidence_summary"] for term in broad_revenue_terms):
+            assert row["revenue_relevance"] == "undisclosed"
+            assert any(
+                boundary in materiality["evidence_summary"]
+                for boundary in ("未单列", "不得计为量子", "不能计为量子", "未披露")
+            )
+
+    guodun = reviewed_by_code["688027.SH"]
+    guodun_revenue = evidence["quantum_ev_688027_revenue"]
+    assert guodun["business_materiality"] == "core_business"
+    assert guodun["revenue_relevance"] == "material"
+    assert "量子专项收入披露" in guodun_revenue["evidence_summary"]
+
+    china_telecom = reviewed_by_code["601728.SH"]
+    telecom_revenue = evidence["quantum_ev_601728_revenue"]
+    assert china_telecom["revenue_relevance"] == "limited"
+    assert "量子收入同比增长65.4%" in telecom_revenue["evidence_summary"]
+    assert "未披露绝对金额" in telecom_revenue["evidence_summary"]
+
+    tianao_product = evidence["quantum_ev_002935_product"]
+    tianao_stage = evidence["quantum_ev_002935_stage"]
+    assert "商业产品为铷原子钟、铯原子钟和芯片原子钟" in tianao_product["evidence_summary"]
+    assert "量子测量" not in tianao_product["evidence_summary"]
+    assert "量子测量" in tianao_stage["evidence_summary"]
+    assert "攻坚" in tianao_stage["evidence_summary"]
+
+    electro_science = reviewed_by_code["002268.SZ"]
+    electro_science_revenue = evidence["quantum_ev_002268_revenue"]
+    electro_science_stage = evidence["quantum_ev_002268_stage"]
+    assert electro_science["revenue_relevance"] == "undisclosed"
+    assert "贡献较低或尚未产生业务收入" in electro_science_revenue["evidence_summary"]
+    assert "布局培育期" in electro_science_stage["evidence_summary"]
 
 
 def test_quantum_computing_e5_revenue_and_false_positive_boundaries() -> None:
@@ -1973,19 +2310,30 @@ def test_quantum_computing_e5_closes_every_initial_universe_exclusion_with_prima
     for claim in theme["claims"]:
         claims_by_source.setdefault(claim["source_id"], []).append(claim)
 
-    for company_code, (source_id, boundary_text) in E5_INITIAL_UNIVERSE_EXCLUSION_SOURCES.items():
+    assert set(E5_EXCLUSION_CLOSURE_CONTRACTS) == E5_HARD_EXCLUDED_CODES
+    reviewed_codes = {
+        row["company_code"] for row in mapping["company_mappings"]
+        if row["review_status"] == "reviewed"
+    }
+    assert not reviewed_codes & E5_HARD_EXCLUDED_CODES
+
+    for company_code, contract in E5_EXCLUSION_CLOSURE_CONTRACTS.items():
+        source_id = contract["source_id"]
         for sources in source_sets:
             source = sources[source_id]
             assert source["source_type"] == "company_filing"
             assert source["review_status"] == "accepted"
             assert source["reliability_level"] == "S0"
-        disconfirming_claims = [
+        claim = next(
             claim for claim in claims_by_source[source_id]
-            if claim["claim_type"] == "risk"
-            and "procurement_service_recurring_revenue_validation" in claim["affected_theme_nodes"]
-        ]
-        assert disconfirming_claims, company_code
-        assert any(boundary_text in claim["claim_text"] for claim in disconfirming_claims)
+            if claim["claim_id"] == contract["claim_id"]
+        )
+        assert claim["claim_type"] == "risk"
+        assert contract["company_name"] in claim["claim_text"]
+        assert "procurement_service_recurring_revenue_validation" in claim["affected_theme_nodes"]
+        for forbidden_basis in contract["forbidden_basis"]:
+            assert forbidden_basis in claim["claim_text"], (company_code, forbidden_basis)
+        assert company_code not in reviewed_codes
 
 
 def test_quantum_computing_e5_hengtong_is_not_reviewed_without_delivered_quantum_role() -> None:
