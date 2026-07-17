@@ -1,0 +1,126 @@
+{
+  "schema_version": "industry_chain_theme_batch_v1",
+  "batch_id": "wave_e_five_industry_chain_themes_v1",
+  "target_theme_count": 5,
+  "artifact_base": "../../..",
+  "primary_source_types": [
+    "company_filing",
+    "official_report",
+    "official_article"
+  ],
+  "completion_gates": {
+    "min_accepted_sources": 10,
+    "min_primary_sources": 8,
+    "min_claims": 12,
+    "min_reviewed_mappings": 8,
+    "require_node_evidence_matrix_coverage": true,
+    "require_bidirectional_evidence_contract": true,
+    "require_precise_mapping_locators": true,
+    "required_readable_sections": [
+      {
+        "name": "研究结论",
+        "non_empty": [
+          "theme:research_profile.investment_summary",
+          "theme:research_profile.industry_stage",
+          "theme:research_profile.central_conflict"
+        ]
+      },
+      {
+        "name": "价值链",
+        "non_empty": [
+          "theme:research_profile.value_flow_summary",
+          "theme:nodes"
+        ]
+      },
+      {
+        "name": "利润池与竞争壁垒",
+        "non_empty": [
+          "theme:research_profile.profit_pool_summary"
+        ]
+      },
+      {
+        "name": "催化、验证信号与风险",
+        "non_empty": [
+          "theme:research_profile.catalyst_claim_ids",
+          "theme:research_profile.risk_claim_ids",
+          "theme:research_profile.validation_signals"
+        ]
+      },
+      {
+        "name": "受益公司",
+        "non_empty": [
+          "company_mapping:company_mappings"
+        ]
+      },
+      {
+        "name": "来源证据",
+        "non_empty": [
+          "source_pack:sources"
+        ]
+      },
+      {
+        "name": "证据缺口与更新",
+        "non_empty": [
+          "theme:research_profile.evidence_gap_summary",
+          "node_evidence_matrix:node_evidence_matrix"
+        ]
+      }
+    ]
+  },
+  "waves": {
+    "wave_e": [
+      "satellite_communications_navigation_remote_sensing",
+      "intelligent_transport_vehicle_road_cloud",
+      "brain_computer_interfaces_neural_engineering",
+      "controlled_nuclear_fusion",
+      "quantum_computing_communication_measurement"
+    ]
+  },
+  "themes": {
+    "satellite_communications_navigation_remote_sensing": {
+      "theme_id": "satellite_communications_navigation_remote_sensing_value_chain_v1",
+      "artifacts": {
+        "theme": "artifacts/theme_decomposition/satellite_communications_navigation_remote_sensing_value_chain_v1.json",
+        "company_mapping": "artifacts/theme_decomposition/company_mappings/satellite_communications_navigation_remote_sensing_company_mapping_v1.json",
+        "source_pack": "artifacts/theme_decomposition/source_packs/satellite_communications_navigation_remote_sensing_source_pack_v1.json",
+        "node_evidence_matrix": "artifacts/theme_decomposition/source_packs/satellite_communications_navigation_remote_sensing_node_evidence_matrix_v1.json"
+      }
+    },
+    "intelligent_transport_vehicle_road_cloud": {
+      "theme_id": "intelligent_transport_vehicle_road_cloud_value_chain_v1",
+      "artifacts": {
+        "theme": "artifacts/theme_decomposition/intelligent_transport_vehicle_road_cloud_value_chain_v1.json",
+        "company_mapping": "artifacts/theme_decomposition/company_mappings/intelligent_transport_vehicle_road_cloud_company_mapping_v1.json",
+        "source_pack": "artifacts/theme_decomposition/source_packs/intelligent_transport_vehicle_road_cloud_source_pack_v1.json",
+        "node_evidence_matrix": "artifacts/theme_decomposition/source_packs/intelligent_transport_vehicle_road_cloud_node_evidence_matrix_v1.json"
+      }
+    },
+    "brain_computer_interfaces_neural_engineering": {
+      "theme_id": "brain_computer_interfaces_neural_engineering_value_chain_v1",
+      "artifacts": {
+        "theme": "artifacts/theme_decomposition/brain_computer_interfaces_neural_engineering_value_chain_v1.json",
+        "company_mapping": "artifacts/theme_decomposition/company_mappings/brain_computer_interfaces_neural_engineering_company_mapping_v1.json",
+        "source_pack": "artifacts/theme_decomposition/source_packs/brain_computer_interfaces_neural_engineering_source_pack_v1.json",
+        "node_evidence_matrix": "artifacts/theme_decomposition/source_packs/brain_computer_interfaces_neural_engineering_node_evidence_matrix_v1.json"
+      }
+    },
+    "controlled_nuclear_fusion": {
+      "theme_id": "controlled_nuclear_fusion_value_chain_v1",
+      "artifacts": {
+        "theme": "artifacts/theme_decomposition/controlled_nuclear_fusion_value_chain_v1.json",
+        "company_mapping": "artifacts/theme_decomposition/company_mappings/controlled_nuclear_fusion_company_mapping_v1.json",
+        "source_pack": "artifacts/theme_decomposition/source_packs/controlled_nuclear_fusion_source_pack_v1.json",
+        "node_evidence_matrix": "artifacts/theme_decomposition/source_packs/controlled_nuclear_fusion_node_evidence_matrix_v1.json"
+      }
+    },
+    "quantum_computing_communication_measurement": {
+      "theme_id": "quantum_computing_communication_measurement_value_chain_v1",
+      "artifacts": {
+        "theme": "artifacts/theme_decomposition/quantum_computing_communication_measurement_value_chain_v1.json",
+        "company_mapping": "artifacts/theme_decomposition/company_mappings/quantum_computing_communication_measurement_company_mapping_v1.json",
+        "source_pack": "artifacts/theme_decomposition/source_packs/quantum_computing_communication_measurement_source_pack_v1.json",
+        "node_evidence_matrix": "artifacts/theme_decomposition/source_packs/quantum_computing_communication_measurement_node_evidence_matrix_v1.json"
+      }
+    }
+  }
+}
