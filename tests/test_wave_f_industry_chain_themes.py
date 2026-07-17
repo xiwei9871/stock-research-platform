@@ -2676,8 +2676,8 @@ def test_rare_earth_f5_artifacts_are_reviewed_and_complete_wave_f() -> None:
     assert rows[F5_CHAIN_ID]["counts"] == {
         "accepted_sources": 10,
         "primary_sources": 10,
-        "claims": 16,
-        "accepted_source_backed_claims": 16,
+        "claims": 20,
+        "accepted_source_backed_claims": 20,
         "reviewed_mappings": 10,
     }
     assert report["ready_theme_count"] == 5
@@ -2751,7 +2751,12 @@ def test_rare_earth_f5_sources_claims_nodes_matrix_use_direct_attribution() -> N
         }
         assert set(row["supported_claim_ids"]) == node_claims
         assert set(row["accepted_source_ids"]) == {
-            claims[claim_id]["source_id"] for claim_id in node_claims
+            source_id
+            for claim_id in node_claims
+            for source_id in (
+                claims[claim_id]["source_id"],
+                *claims[claim_id]["supporting_source_ids"],
+            )
         }
     for source in source_pack["sources"]:
         source_claims = {
@@ -2834,23 +2839,90 @@ def test_rare_earth_f5_has_no_unproven_cross_chain_edges() -> None:
 
 def test_rare_earth_f5_matrix_calibrates_empty_nodes_and_gaps() -> None:
     theme = load_json(F5_THEME_PATH)
+    mapping = load_json(F5_MAPPING_PATH)
     matrix = load_json(F5_MATRIX_PATH)
     nodes = {row["node_id"]: row for row in theme["nodes"]}
     rows = {row["node_id"]: row for row in matrix["node_evidence_matrix"]}
+    mapped_nodes = {row["mapped_node_id"] for row in mapping["company_mappings"]}
     assert set(rows) == F5_L4
     assert len({row["rationale"] for row in rows.values()}) == 9
     assert all(row["next_evidence_needed"] for row in rows.values())
     for node_id, row in rows.items():
         assert nodes[node_id]["evidence_strength"] == row["evidence_strength_after"]
-    for empty_node in (
-        "rare_earth_metals_alloys", "samarium_cobalt_specialty_magnets",
-        "magnet_processing_coating_components", "rare_earth_recycling_secondary_resources",
+    for empty_mapping_node in (
+        "rare_earth_beneficiation_concentrates", "rare_earth_metals_alloys",
+        "samarium_cobalt_specialty_magnets", "magnet_processing_coating_components",
+        "rare_earth_recycling_secondary_resources",
     ):
-        assert rows[empty_node]["accepted_source_ids"] == []
-        assert rows[empty_node]["supported_claim_ids"] == []
-        assert rows[empty_node]["evidence_gap_status"] == "evidence_gap"
-        assert rows[empty_node]["node_review_status"] == "needs_evidence"
-        assert nodes[empty_node]["related_stock_codes"] == []
-        assert nodes[empty_node]["domestic_players"] == []
+        assert empty_mapping_node not in mapped_nodes
+        assert rows[empty_mapping_node]["evidence_gap_status"] == "evidence_gap"
+        assert rows[empty_mapping_node]["node_review_status"] == "needs_evidence"
+        assert nodes[empty_mapping_node]["related_stock_codes"] == []
+        assert nodes[empty_mapping_node]["domestic_players"] == []
+
+    direct_gap_sources = {
+        "rare_earth_beneficiation_concentrates": {"f5_000831_ar2025"},
+        "rare_earth_metals_alloys": {
+            "f5_600111_ar2025", "f5_600392_ar2025", "f5_600549_ar2025",
+        },
+        "samarium_cobalt_specialty_magnets": {"f5_688077_ar2025"},
+        "rare_earth_recycling_secondary_resources": {
+            "f5_600392_ar2025", "f5_688077_ar2025",
+        },
+    }
+    for node_id, source_ids in direct_gap_sources.items():
+        assert set(rows[node_id]["accepted_source_ids"]) == source_ids
+        assert rows[node_id]["supported_claim_ids"]
+        assert rows[node_id]["evidence_strength_after"] == 2
+    assert rows["magnet_processing_coating_components"]["accepted_source_ids"] == []
+    assert rows["magnet_processing_coating_components"]["supported_claim_ids"] == []
     assert "烧结钕铁硼" in rows["ndfeb_magnetic_materials"]["rationale"]
     assert "SmCo" in rows["samarium_cobalt_specialty_magnets"]["next_evidence_needed"]
+
+
+def test_rare_earth_f5_low_strength_direct_claims_do_not_create_company_mappings() -> None:
+    theme = load_json(F5_THEME_PATH)
+    mapping = load_json(F5_MAPPING_PATH)
+    claims = {row["claim_id"]: row for row in theme["claims"]}
+    mapped_nodes = {row["mapped_node_id"] for row in mapping["company_mappings"]}
+    contracts = {
+        "f5_claim_17": (
+            "rare_earth_beneficiation_concentrates",
+            "f5_000831_ar2025",
+            (),
+            ("实际采选加工", "碳酸稀土精矿", "混合稀土氧化物精矿"),
+        ),
+        "f5_claim_18": (
+            "rare_earth_metals_alloys",
+            "f5_600549_ar2025",
+            ("f5_600111_ar2025", "f5_600392_ar2025"),
+            ("稀土金属产量2,808吨", "销量3,402吨", "库存69吨"),
+        ),
+        "f5_claim_19": (
+            "samarium_cobalt_specialty_magnets",
+            "f5_688077_ar2025",
+            (),
+            ("再生钐钴", "部分牌号批量生产", "首批次新材料认定"),
+        ),
+        "f5_claim_20": (
+            "rare_earth_recycling_secondary_resources",
+            "f5_600392_ar2025",
+            ("f5_688077_ar2025",),
+            ("稀土废料回收", "回收再生"),
+        ),
+    }
+    for claim_id, (node_id, source_id, supporting_ids, terms) in contracts.items():
+        claim = claims[claim_id]
+        assert claim["affected_theme_nodes"] == [node_id]
+        assert claim["source_id"] == source_id
+        assert tuple(claim["supporting_source_ids"]) == supporting_ids
+        assert all(term in claim["claim_text"] for term in terms)
+        assert node_id not in mapped_nodes
+
+
+def test_rare_earth_f5_has_no_analog_chip_overseas_leader_template_residue() -> None:
+    theme = load_json(F5_THEME_PATH)
+    assert all(row["overseas_leaders"] == [] for row in theme["nodes"])
+    text = json.dumps(theme["nodes"], ensure_ascii=False)
+    for residual in ("Analog Devices", "Texas Instruments", "Qorvo"):
+        assert residual not in text

@@ -26,18 +26,25 @@
     },
     {
       "node_id": "rare_earth_beneficiation_concentrates",
-      "accepted_source_ids": [],
+      "accepted_source_ids": [
+        "f5_000831_ar2025"
+      ],
       "pending_source_ids": [],
-      "supported_claim_ids": [],
+      "supported_claim_ids": [
+        "f5_claim_17"
+      ],
       "evidence_strength_before": 0,
-      "evidence_strength_after": 1,
+      "evidence_strength_after": 2,
       "value_capture_score_review_status": "provisional",
       "bottleneck_score_review_status": "provisional",
-      "value_bases": [],
+      "value_bases": [
+        "scarcity",
+        "capacity_constraint"
+      ],
       "evidence_gap_status": "evidence_gap",
       "node_review_status": "needs_evidence",
-      "rationale": "本批没有可把规划矿山、参股权益或非稀土选矿写成当前自营稀土精矿产量的直接证据。",
-      "next_evidence_needed": "补充节点产品产能、产量、实现价格、成本、订单、收入、毛利、客户和库存的直接披露。"
+      "rationale": "中国稀土直接披露湖南稀土按总量指标实际采选加工并产出碳酸稀土精矿、混合氧化物精矿和氯化稀土料液，但尚不足公司三角色映射。",
+      "next_evidence_needed": "补充自营选矿独立产能、产量、精矿品位、收入、成本和客户闭环。"
     },
     {
       "node_id": "rare_earth_separation_oxides",
@@ -67,18 +74,27 @@
     },
     {
       "node_id": "rare_earth_metals_alloys",
-      "accepted_source_ids": [],
+      "accepted_source_ids": [
+        "f5_600549_ar2025",
+        "f5_600111_ar2025",
+        "f5_600392_ar2025"
+      ],
       "pending_source_ids": [],
-      "supported_claim_ids": [],
+      "supported_claim_ids": [
+        "f5_claim_18"
+      ],
       "evidence_strength_before": 0,
-      "evidence_strength_after": 1,
+      "evidence_strength_after": 2,
       "value_capture_score_review_status": "provisional",
       "bottleneck_score_review_status": "provisional",
-      "value_bases": [],
+      "value_bases": [
+        "gross_margin",
+        "capacity_constraint"
+      ],
       "evidence_gap_status": "evidence_gap",
       "node_review_status": "needs_evidence",
-      "rationale": "年报虽提到稀土金属，但本批公司主映射均缺独立金属产品三角色证据与节点收入。",
-      "next_evidence_needed": "补充节点产品产能、产量、实现价格、成本、订单、收入、毛利、客户和库存的直接披露。"
+      "rationale": "北方稀土、盛和资源和厦门钨业直接支持当前稀土金属生产，厦钨披露产量2,808吨、销量3,402吨、库存69吨，但缺独立商业闭环。",
+      "next_evidence_needed": "补充稀土金属/合金独立收入、毛利、实现价格、客户和订单闭环。"
     },
     {
       "node_id": "ndfeb_magnetic_materials",
@@ -114,18 +130,25 @@
     },
     {
       "node_id": "samarium_cobalt_specialty_magnets",
-      "accepted_source_ids": [],
+      "accepted_source_ids": [
+        "f5_688077_ar2025"
+      ],
       "pending_source_ids": [],
-      "supported_claim_ids": [],
+      "supported_claim_ids": [
+        "f5_claim_19"
+      ],
       "evidence_strength_before": 0,
-      "evidence_strength_after": 1,
+      "evidence_strength_after": 2,
       "value_capture_score_review_status": "provisional",
       "bottleneck_score_review_status": "provisional",
-      "value_bases": [],
+      "value_bases": [
+        "technology_barrier",
+        "customer_certification"
+      ],
       "evidence_gap_status": "evidence_gap",
       "node_review_status": "needs_evidence",
-      "rationale": "大地熊仅提及其他磁性制品中的钐钴采购/产品范围，缺自有SmCo生产、收入和客户认证。",
-      "next_evidence_needed": "补充SmCo自有产能、客户认证与收入。"
+      "rationale": "大地熊直接披露再生钐钴部分牌号批量生产及高性能钐钴首批次新材料认定，但不足独立公司映射。",
+      "next_evidence_needed": "补充SmCo独立产能、产量、收入、毛利、客户认证与订单闭环。"
     },
     {
       "node_id": "magnet_processing_coating_components",
@@ -144,18 +167,26 @@
     },
     {
       "node_id": "rare_earth_recycling_secondary_resources",
-      "accepted_source_ids": [],
+      "accepted_source_ids": [
+        "f5_600392_ar2025",
+        "f5_688077_ar2025"
+      ],
       "pending_source_ids": [],
-      "supported_claim_ids": [],
+      "supported_claim_ids": [
+        "f5_claim_20"
+      ],
       "evidence_strength_before": 0,
-      "evidence_strength_after": 1,
+      "evidence_strength_after": 2,
       "value_capture_score_review_status": "provisional",
       "bottleneck_score_review_status": "provisional",
-      "value_bases": [],
+      "value_bases": [
+        "scarcity",
+        "integration_control"
+      ],
       "evidence_gap_status": "evidence_gap",
       "node_review_status": "needs_evidence",
-      "rationale": "金力永磁提及稀土回收布局，但本批未形成回收业务独立收入、产能和原料闭环三角色证据。",
-      "next_evidence_needed": "补充节点产品产能、产量、实现价格、成本、订单、收入、毛利、客户和库存的直接披露。"
+      "rationale": "盛和资源将稀土废料回收列为主要业务，大地熊披露回收再生及部分再生产品批量生产，但缺独立商业闭环。",
+      "next_evidence_needed": "补充回收二次资源独立产能、原料来源、回收率、收入、客户和闭环。"
     },
     {
       "node_id": "quotas_prices_export_customer_validation",
@@ -190,5 +221,3 @@
     }
   ]
 }
-
-

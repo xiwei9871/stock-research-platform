@@ -13,7 +13,7 @@
     "research_kind": "industry_chain_deep_research",
     "catalog_chain_id": "rare_earth_permanent_magnets_critical_minerals",
     "investment_summary": "直接可读价值来自受配额约束的资源与分离能力、可量化的稀土氧化物收入，以及有产品收入、毛利、产销库存和客户认证的钕铁硼公司。",
-    "industry_stage": "稀土上游受资源和总量控制约束，中游分离与钕铁硼已规模商业化；钐钴、独立加工和二次资源在本批仍缺公司级直接证据。",
+    "industry_stage": "稀土上游受资源和总量控制约束，中游分离、金属与钕铁硼已有实际生产；选矿精矿、稀土金属、钐钴和回收节点仍缺独立收入与客户闭环，独立加工仍无直接来源。",
     "central_conflict": "稀土价格上行不自动转化为磁材加工利润；混合口径总收入、下游景气和客户认证均不能替代节点订单、实现价格、收入与毛利。",
     "value_flow_summary": "价值从采矿权、采选精矿、冶炼分离、氧化物与金属进入钕铁硼配方、烧结和交付，再由配额、实现价格、客户认证、订单、收入、毛利和库存验证。",
     "profit_pool_summary": "利润池在资源约束与高纯分离、具备配方工艺和稳定客户的高性能钕铁硼之间分配，但资源价格弹性与磁材加工毛利必须分别跟踪。",
@@ -21,13 +21,17 @@
       "f5_claim_02",
       "f5_claim_05",
       "f5_claim_11",
-      "f5_claim_13"
+      "f5_claim_13",
+      "f5_claim_17",
+      "f5_claim_18",
+      "f5_claim_19"
     ],
     "risk_claim_ids": [
       "f5_claim_12",
       "f5_claim_14",
       "f5_claim_15",
-      "f5_claim_16"
+      "f5_claim_16",
+      "f5_claim_20"
     ],
     "validation_signals": [
       "生产总量控制计划与实际产量",
@@ -35,7 +39,7 @@
       "客户认证转订单和收入",
       "产销量、库存与现金周转"
     ],
-    "evidence_gap_summary": "选矿精矿、稀土金属合金、SmCo、独立磁体加工和二次资源缺本批直接公司映射；资源公司仍缺节点收入、实现价格和成本，磁材公司需持续核验客户订单与价格传导。",
+    "evidence_gap_summary": "选矿精矿、稀土金属合金、SmCo和二次资源已有低强度直接生产或业务证据，但缺独立产能、收入、毛利、客户与闭环，故不创建公司映射；独立磁体加工仍无直接来源。",
     "boundary_rules": [
       "下游电机、机器人、风电、EV和消费电子需求不得直接映射为F5公司",
       "泛下游需求不得证明公司受益",
@@ -231,11 +235,7 @@
         "节点收入与毛利",
         "库存与客户验证"
       ],
-      "overseas_leaders": [
-        "Analog Devices",
-        "Texas Instruments",
-        "Qorvo"
-      ],
+      "overseas_leaders": [],
       "domestic_players": [
         "中稀有色"
       ],
@@ -254,7 +254,7 @@
       "bottleneck_score": 4,
       "localization_gap_score": 3,
       "supply_tightness_score": 3,
-      "evidence_strength": 1,
+      "evidence_strength": 2,
       "node_review_status": "needs_evidence",
       "key_metrics": [
         "直接产品",
@@ -262,11 +262,7 @@
         "节点收入与毛利",
         "库存与客户验证"
       ],
-      "overseas_leaders": [
-        "Analog Devices",
-        "Texas Instruments",
-        "Qorvo"
-      ],
+      "overseas_leaders": [],
       "domestic_players": [],
       "related_stock_codes": []
     },
@@ -289,11 +285,7 @@
         "节点收入与毛利",
         "库存与客户验证"
       ],
-      "overseas_leaders": [
-        "Analog Devices",
-        "Texas Instruments",
-        "Qorvo"
-      ],
+      "overseas_leaders": [],
       "domestic_players": [
         "北方稀土",
         "中国稀土",
@@ -316,7 +308,7 @@
       "bottleneck_score": 4,
       "localization_gap_score": 3,
       "supply_tightness_score": 3,
-      "evidence_strength": 1,
+      "evidence_strength": 2,
       "node_review_status": "needs_evidence",
       "key_metrics": [
         "直接产品",
@@ -324,11 +316,7 @@
         "节点收入与毛利",
         "库存与客户验证"
       ],
-      "overseas_leaders": [
-        "Analog Devices",
-        "Texas Instruments",
-        "Qorvo"
-      ],
+      "overseas_leaders": [],
       "domestic_players": [],
       "related_stock_codes": []
     },
@@ -351,11 +339,7 @@
         "节点收入与毛利",
         "库存与客户验证"
       ],
-      "overseas_leaders": [
-        "Analog Devices",
-        "Texas Instruments",
-        "Qorvo"
-      ],
+      "overseas_leaders": [],
       "domestic_players": [
         "厦门钨业",
         "金力永磁",
@@ -384,7 +368,7 @@
       "bottleneck_score": 4,
       "localization_gap_score": 3,
       "supply_tightness_score": 3,
-      "evidence_strength": 1,
+      "evidence_strength": 2,
       "node_review_status": "needs_evidence",
       "key_metrics": [
         "直接产品",
@@ -392,11 +376,7 @@
         "节点收入与毛利",
         "库存与客户验证"
       ],
-      "overseas_leaders": [
-        "Analog Devices",
-        "Texas Instruments",
-        "Qorvo"
-      ],
+      "overseas_leaders": [],
       "domestic_players": [],
       "related_stock_codes": []
     },
@@ -419,11 +399,7 @@
         "节点收入与毛利",
         "库存与客户验证"
       ],
-      "overseas_leaders": [
-        "Analog Devices",
-        "Texas Instruments",
-        "Qorvo"
-      ],
+      "overseas_leaders": [],
       "domestic_players": [],
       "related_stock_codes": []
     },
@@ -438,7 +414,7 @@
       "bottleneck_score": 3,
       "localization_gap_score": 4,
       "supply_tightness_score": 3,
-      "evidence_strength": 1,
+      "evidence_strength": 2,
       "node_review_status": "needs_evidence",
       "key_metrics": [
         "直接产品",
@@ -446,11 +422,7 @@
         "节点收入与毛利",
         "库存与客户验证"
       ],
-      "overseas_leaders": [
-        "Analog Devices",
-        "Texas Instruments",
-        "Qorvo"
-      ],
+      "overseas_leaders": [],
       "domestic_players": [],
       "related_stock_codes": []
     },
@@ -473,11 +445,7 @@
         "节点收入与毛利",
         "库存与客户验证"
       ],
-      "overseas_leaders": [
-        "Analog Devices",
-        "Texas Instruments",
-        "Qorvo"
-      ],
+      "overseas_leaders": [],
       "domestic_players": [],
       "related_stock_codes": []
     }
@@ -706,6 +674,67 @@
       ],
       "evidence_status": "verified",
       "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "f5_claim_17",
+      "theme_id": "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
+      "claim_text": "中国稀土所属湖南稀土依据生产总量控制计划指标实际采选加工离子型稀土矿，产出碳酸稀土精矿、混合稀土氧化物精矿和氯化稀土料液；仍缺选矿节点独立产能、收入、成本与客户闭环。",
+      "claim_type": "company_mapping",
+      "confidence": 0.86,
+      "source_id": "f5_000831_ar2025",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "rare_earth_beneficiation_concentrates"
+      ],
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "f5_claim_18",
+      "theme_id": "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
+      "claim_text": "北方稀土、盛和资源和厦门钨业均披露当前稀土金属生产；厦门钨业2025年稀土金属产量2,808吨、销量3,402吨、库存69吨，但三家公司均缺金属/合金节点独立收入、毛利与客户闭环。",
+      "claim_type": "company_mapping",
+      "confidence": 0.88,
+      "source_id": "f5_600549_ar2025",
+      "supporting_source_ids": [
+        "f5_600111_ar2025",
+        "f5_600392_ar2025"
+      ],
+      "affected_theme_nodes": [
+        "rare_earth_metals_alloys"
+      ],
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "f5_claim_19",
+      "theme_id": "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
+      "claim_text": "大地熊再生钐钴部分牌号批量生产，高性能钐钴产品获得安徽省首批次新材料认定；仍缺SmCo独立产能、收入、毛利与客户闭环。",
+      "claim_type": "tech_route",
+      "confidence": 0.84,
+      "source_id": "f5_688077_ar2025",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "samarium_cobalt_specialty_magnets"
+      ],
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "f5_claim_20",
+      "theme_id": "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
+      "claim_text": "盛和资源将稀土废料回收列为当前主要业务，大地熊披露稀土回收再生及部分再生产品批量生产；仍缺回收二次资源独立产能、收入、原料来源、客户与闭环。",
+      "claim_type": "tech_route",
+      "confidence": 0.82,
+      "source_id": "f5_600392_ar2025",
+      "supporting_source_ids": [
+        "f5_688077_ar2025"
+      ],
+      "affected_theme_nodes": [
+        "rare_earth_recycling_secondary_resources"
+      ],
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed"
     }
   ],
   "value_capture_assessments": [
@@ -724,8 +753,10 @@
       "value_basis": "customer_certification",
       "assessment_text": "稀土选矿与精矿仅在直接产品、产销、收入或验证证据成立时确认价值。",
       "rank": 2,
-      "evidence_ids": [],
-      "uncertainty": "需补充节点实现价格、成本、订单、收入、毛利和库存质量。"
+      "evidence_ids": [
+        "f5_claim_17"
+      ],
+      "uncertainty": "已有实际采选加工与精矿产品证据；需补独立产能、产量、收入、成本及客户闭环。"
     },
     {
       "node_id": "rare_earth_separation_oxides",
@@ -744,8 +775,10 @@
       "value_basis": "customer_certification",
       "assessment_text": "稀土金属与合金仅在直接产品、产销、收入或验证证据成立时确认价值。",
       "rank": 4,
-      "evidence_ids": [],
-      "uncertainty": "需补充节点实现价格、成本、订单、收入、毛利和库存质量。"
+      "evidence_ids": [
+        "f5_claim_18"
+      ],
+      "uncertainty": "已有当前金属生产和厦钨产销库存；需补金属/合金独立收入、毛利与客户闭环。"
     },
     {
       "node_id": "ndfeb_magnetic_materials",
@@ -767,8 +800,10 @@
       "value_basis": "customer_certification",
       "assessment_text": "钐钴特种永磁仅在直接产品、产销、收入或验证证据成立时确认价值。",
       "rank": 6,
-      "evidence_ids": [],
-      "uncertainty": "需补充节点实现价格、成本、订单、收入、毛利和库存质量。"
+      "evidence_ids": [
+        "f5_claim_19"
+      ],
+      "uncertainty": "已有部分牌号批量生产与首批次认定；需补SmCo独立产能、收入、毛利和客户认证。"
     },
     {
       "node_id": "magnet_processing_coating_components",
@@ -783,8 +818,10 @@
       "value_basis": "customer_certification",
       "assessment_text": "稀土回收与二次资源仅在直接产品、产销、收入或验证证据成立时确认价值。",
       "rank": 8,
-      "evidence_ids": [],
-      "uncertainty": "需补充节点实现价格、成本、订单、收入、毛利和库存质量。"
+      "evidence_ids": [
+        "f5_claim_20"
+      ],
+      "uncertainty": "已有废料回收业务与回收再生产品证据；需补独立产能、收入、原料来源、客户与闭环。"
     },
     {
       "node_id": "quotas_prices_export_customer_validation",

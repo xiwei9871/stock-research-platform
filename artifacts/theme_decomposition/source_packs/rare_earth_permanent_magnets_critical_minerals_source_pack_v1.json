@@ -16,14 +16,16 @@
       "review_status": "accepted",
       "document_status": "full_text_reviewed",
       "evidence_locator": "第12-13、16、22、45、99页",
-      "evidence_summary": "公司2025年报直接支持产品关系、财务口径和经营阶段；混合收入与下游需求边界已显式保留。",
+      "evidence_summary": "冶炼分离、稀土氧化物及当前稀土金属生产直接披露。",
       "supported_claim_ids": [
-        "f5_claim_01"
+        "f5_claim_01",
+        "f5_claim_18"
       ],
       "supported_node_ids": [
-        "rare_earth_separation_oxides"
+        "rare_earth_separation_oxides",
+        "rare_earth_metals_alloys"
       ],
-      "limitations": "未披露项目保持limited或undisclosed；不得将配额、客户认证、下游需求直接写成订单或收入。",
+      "limitations": "金属/合金节点独立收入、毛利和客户未披露。",
       "notes": "PDF第12-13、16、22、45、99页；正式年报全文复核。"
     },
     {
@@ -39,16 +41,18 @@
       "review_status": "accepted",
       "document_status": "full_text_reviewed",
       "evidence_locator": "第10、14-15页",
-      "evidence_summary": "公司2025年报直接支持产品关系、财务口径和经营阶段；混合收入与下游需求边界已显式保留。",
+      "evidence_summary": "实际采选加工与精矿产品、稀土氧化物收入和毛利率直接披露。",
       "supported_claim_ids": [
         "f5_claim_02",
-        "f5_claim_11"
+        "f5_claim_11",
+        "f5_claim_17"
       ],
       "supported_node_ids": [
         "rare_earth_separation_oxides",
-        "quotas_prices_export_customer_validation"
+        "quotas_prices_export_customer_validation",
+        "rare_earth_beneficiation_concentrates"
       ],
-      "limitations": "未披露项目保持limited或undisclosed；不得将配额、客户认证、下游需求直接写成订单或收入。",
+      "limitations": "选矿节点独立产能、成本与客户未披露；总量指标不等于收入。",
       "notes": "PDF第10、14-15页；正式年报全文复核。"
     },
     {
@@ -63,17 +67,21 @@
       "reliability_level": "S0",
       "review_status": "accepted",
       "document_status": "full_text_reviewed",
-      "evidence_locator": "第12、14-15、29页",
-      "evidence_summary": "公司2025年报直接支持产品关系、财务口径和经营阶段；混合收入与下游需求边界已显式保留。",
+      "evidence_locator": "第11-15、29页",
+      "evidence_summary": "当前冶炼分离、稀土金属生产和稀土废料回收主要业务直接披露。",
       "supported_claim_ids": [
         "f5_claim_03",
-        "f5_claim_16"
+        "f5_claim_16",
+        "f5_claim_18",
+        "f5_claim_20"
       ],
       "supported_node_ids": [
         "rare_earth_separation_oxides",
-        "quotas_prices_export_customer_validation"
+        "quotas_prices_export_customer_validation",
+        "rare_earth_metals_alloys",
+        "rare_earth_recycling_secondary_resources"
       ],
-      "limitations": "未披露项目保持limited或undisclosed；不得将配额、客户认证、下游需求直接写成订单或收入。",
+      "limitations": "不得把规划矿山或参股权益当自营产量；金属与回收独立收入和客户未披露。",
       "notes": "PDF第12、14-15、29页；正式年报全文复核。"
     },
     {
@@ -89,16 +97,18 @@
       "review_status": "accepted",
       "document_status": "full_text_reviewed",
       "evidence_locator": "第14-15、41、43页",
-      "evidence_summary": "公司2025年报直接支持产品关系、财务口径和经营阶段；混合收入与下游需求边界已显式保留。",
+      "evidence_summary": "磁性材料、客户认证及稀土金属产量2,808吨、销量3,402吨、库存69吨直接披露。",
       "supported_claim_ids": [
         "f5_claim_04",
-        "f5_claim_13"
+        "f5_claim_13",
+        "f5_claim_18"
       ],
       "supported_node_ids": [
         "ndfeb_magnetic_materials",
-        "quotas_prices_export_customer_validation"
+        "quotas_prices_export_customer_validation",
+        "rare_earth_metals_alloys"
       ],
-      "limitations": "未披露项目保持limited或undisclosed；不得将配额、客户认证、下游需求直接写成订单或收入。",
+      "limitations": "稀土业务收入含多个环节；金属和磁材更窄节点收入未完全拆分。",
       "notes": "PDF第14-15、41、43页；正式年报全文复核。"
     },
     {
@@ -207,17 +217,21 @@
       "reliability_level": "S0",
       "review_status": "accepted",
       "document_status": "full_text_reviewed",
-      "evidence_locator": "第12-16、28页",
-      "evidence_summary": "公司2025年报直接支持产品关系、财务口径和经营阶段；混合收入与下游需求边界已显式保留。",
+      "evidence_locator": "第12-18、28页",
+      "evidence_summary": "烧结钕铁硼、再生钐钴部分牌号批量生产、首批次认定及回收再生直接披露。",
       "supported_claim_ids": [
         "f5_claim_09",
-        "f5_claim_14"
+        "f5_claim_14",
+        "f5_claim_19",
+        "f5_claim_20"
       ],
       "supported_node_ids": [
         "ndfeb_magnetic_materials",
-        "quotas_prices_export_customer_validation"
+        "quotas_prices_export_customer_validation",
+        "samarium_cobalt_specialty_magnets",
+        "rare_earth_recycling_secondary_resources"
       ],
-      "limitations": "未披露项目保持limited或undisclosed；不得将配额、客户认证、下游需求直接写成订单或收入。",
+      "limitations": "SmCo与回收业务缺独立产能、收入、毛利、客户及原料闭环。",
       "notes": "PDF第12-16、28页；正式年报全文复核。"
     },
     {
@@ -247,4 +261,3 @@
     }
   ]
 }
-
