@@ -266,7 +266,12 @@ def resolve_json_pointer(payload: Any, path: str) -> Any:
                 raise _error(_UNRESOLVABLE, f"JSON Pointer key not found: {path}")
             current = current[token]
         elif isinstance(current, list):
-            if token == "-" or not token.isdigit():
+            valid_index = token == "0" or (
+                bool(token)
+                and token[0] in "123456789"
+                and all(character in "0123456789" for character in token[1:])
+            )
+            if not valid_index:
                 raise _error(_UNRESOLVABLE, f"Invalid JSON Pointer index: {path}")
             item_index = int(token)
             if item_index >= len(current):
@@ -306,7 +311,7 @@ def _issue(reference_id: object, status: str, **details: object) -> dict[str, An
 
 
 def audit_references(version: dict[str, Any]) -> dict[str, Any]:
-    references = version.get("references", [])
+    references = version["snapshot"]["references"]
     issues: list[dict[str, Any]] = []
     resolved_count = 0
     seen: set[tuple[object, object, object, object]] = set()

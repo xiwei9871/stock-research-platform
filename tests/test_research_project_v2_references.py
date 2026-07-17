@@ -45,7 +45,10 @@ def _reference(
 
 
 def _version(*references):
-    return {"version_id": "version-1", "references": list(references)}
+    return {
+        "version_id": "version-1",
+        "snapshot": {"references": list(references)},
+    }
 
 
 def test_real_theme_entire_object_audits_as_resolved():
@@ -59,6 +62,26 @@ def test_real_theme_entire_object_audits_as_resolved():
     )
 
     assert audit_references(_version(reference)) == {
+        "status": "pass",
+        "total": 1,
+        "resolved": 1,
+        "issues": [],
+    }
+
+
+def test_audit_reads_snapshot_references_and_ignores_top_level_decoy():
+    resolved = resolve_theme_research_v1(_reference())
+    assert resolved is not None
+    real_reference = _reference(
+        version=resolved.version,
+        content_hash=content_sha256(resolved.payload),
+    )
+    version = _version(real_reference)
+    version["references"] = [
+        _reference(reference_id="decoy", object_id="missing-theme")
+    ]
+
+    assert audit_references(version) == {
         "status": "pass",
         "total": 1,
         "resolved": 1,
@@ -361,11 +384,22 @@ def test_json_pointer_supports_dict_list_and_rfc6901_escapes():
 
 @pytest.mark.parametrize(
     "path",
-    ["", "not-a-pointer", "/bad~2escape", "/items/-", "/items/-1", "/items/2"],
+    [
+        "",
+        "not-a-pointer",
+        "/bad~2escape",
+        "/items/-",
+        "/items/-1",
+        "/items/+1",
+        "/items/01",
+        "/items/²",
+        "/items/١",
+        "/items/2",
+    ],
 )
 def test_json_pointer_rejects_invalid_paths_without_leaking_builtin_errors(path):
     with pytest.raises(ResearchProjectV2Error) as exc_info:
-        resolve_json_pointer({"items": ["only"]}, path)
+        resolve_json_pointer({"items": ["zero", "one"]}, path)
 
     assert exc_info.value.code == "RESEARCH_PROJECT_REFERENCE_UNRESOLVABLE"
 
