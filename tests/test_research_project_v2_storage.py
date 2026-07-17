@@ -18,3 +18,27 @@ def test_domain_error_exposes_stable_code_and_details():
     )
     assert error.code == "RESEARCH_PROJECT_VERSION_NOT_FOUND"
     assert error.details == {"version": "0.1.0"}
+
+
+def test_domain_error_copies_details_for_each_instance():
+    source_details = {"version": "0.1.0"}
+
+    first_error = ResearchProjectV2Error(
+        "version not found",
+        code="RESEARCH_PROJECT_VERSION_NOT_FOUND",
+        details=source_details,
+    )
+    second_error = ResearchProjectV2Error(
+        "version not found",
+        code="RESEARCH_PROJECT_VERSION_NOT_FOUND",
+        details=source_details,
+    )
+
+    assert first_error.details is not source_details
+    assert second_error.details is not source_details
+    assert first_error.details is not second_error.details
+
+    first_error.details["version"] = "0.2.0"
+
+    assert second_error.details == {"version": "0.1.0"}
+    assert source_details == {"version": "0.1.0"}

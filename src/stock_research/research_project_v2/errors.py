@@ -8,4 +8,4 @@ class ResearchProjectV2Error(ValueError):
     ) -> None:
         super().__init__(message)
         self.code = code
-        self.details = {} if details is None else details
+        self.details = {} if details is None else dict(details)
