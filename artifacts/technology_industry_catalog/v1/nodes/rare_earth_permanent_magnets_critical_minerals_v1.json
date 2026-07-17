@@ -1,0 +1,250 @@
+{
+  "schema_version": "technology_industry_catalog_nodes_v1",
+  "chain_id": "rare_earth_permanent_magnets_critical_minerals",
+  "nodes": [
+    {
+      "node_id": "rare_earth_resources_separation",
+      "chain_id": "rare_earth_permanent_magnets_critical_minerals",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "稀土资源与分离",
+      "node_kind": "canonical",
+      "node_type": "resource_stage",
+      "description": "稀土矿权、采选、精矿与冶炼分离。",
+      "status": "draft",
+      "primary_path": [
+      "advanced_materials",
+        "rare_earth_permanent_magnets_critical_minerals",
+        "rare_earth_resources_separation"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "rare_earth_metals_magnets",
+      "chain_id": "rare_earth_permanent_magnets_critical_minerals",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "稀土金属与永磁材料",
+      "node_kind": "canonical",
+      "node_type": "material_stage",
+      "description": "稀土金属、合金、钕铁硼、钐钴及磁体加工。",
+      "status": "draft",
+      "primary_path": [
+      "advanced_materials",
+        "rare_earth_permanent_magnets_critical_minerals",
+        "rare_earth_metals_magnets"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "rare_earth_recycling_supply_security",
+      "chain_id": "rare_earth_permanent_magnets_critical_minerals",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "稀土回收与供应安全",
+      "node_kind": "canonical",
+      "node_type": "supply_security_stage",
+      "description": "二次资源回收、库存与供应安全。",
+      "status": "draft",
+      "primary_path": [
+      "advanced_materials",
+        "rare_earth_permanent_magnets_critical_minerals",
+        "rare_earth_recycling_supply_security"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "rare_earth_market_revenue_validation",
+      "chain_id": "rare_earth_permanent_magnets_critical_minerals",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "配额、价格与收入验证",
+      "node_kind": "canonical",
+      "node_type": "commercialization_stage",
+      "description": "配额、价格、出口、客户、订单与收入分层验证。",
+      "status": "draft",
+      "primary_path": [
+      "advanced_materials",
+        "rare_earth_permanent_magnets_critical_minerals",
+        "rare_earth_market_revenue_validation"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "rare_earth_mining_resource_control",
+      "chain_id": "rare_earth_permanent_magnets_critical_minerals",
+      "parent_node_id": "rare_earth_resources_separation",
+      "level": "L4",
+      "node_name": "稀土矿权与资源控制",
+      "node_kind": "canonical",
+      "node_type": "resource",
+      "description": "采矿权、资源量与国家总量控制指标下的实际开采。",
+      "status": "draft",
+      "primary_path": [
+      "advanced_materials",
+        "rare_earth_permanent_magnets_critical_minerals",
+        "rare_earth_resources_separation",
+        "rare_earth_mining_resource_control"
+      ],
+      "canonical_key": "rare_earth_permanent_magnets_critical_minerals:rare_earth_mining_resource_control",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "rare_earth_beneficiation_concentrates",
+      "chain_id": "rare_earth_permanent_magnets_critical_minerals",
+      "parent_node_id": "rare_earth_resources_separation",
+      "level": "L4",
+      "node_name": "稀土选矿与精矿",
+      "node_kind": "canonical",
+      "node_type": "material",
+      "description": "稀土矿选矿、精矿品位、产能与自营产量。",
+      "status": "draft",
+      "primary_path": [
+      "advanced_materials",
+        "rare_earth_permanent_magnets_critical_minerals",
+        "rare_earth_resources_separation",
+        "rare_earth_beneficiation_concentrates"
+      ],
+      "canonical_key": "rare_earth_permanent_magnets_critical_minerals:rare_earth_beneficiation_concentrates",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "rare_earth_separation_oxides",
+      "chain_id": "rare_earth_permanent_magnets_critical_minerals",
+      "parent_node_id": "rare_earth_resources_separation",
+      "level": "L4",
+      "node_name": "稀土分离与氧化物",
+      "node_kind": "canonical",
+      "node_type": "material",
+      "description": "冶炼分离及单一、混合稀土氧化物产品。",
+      "status": "draft",
+      "primary_path": [
+      "advanced_materials",
+        "rare_earth_permanent_magnets_critical_minerals",
+        "rare_earth_resources_separation",
+        "rare_earth_separation_oxides"
+      ],
+      "canonical_key": "rare_earth_permanent_magnets_critical_minerals:rare_earth_separation_oxides",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "rare_earth_metals_alloys",
+      "chain_id": "rare_earth_permanent_magnets_critical_minerals",
+      "parent_node_id": "rare_earth_metals_magnets",
+      "level": "L4",
+      "node_name": "稀土金属与合金",
+      "node_kind": "canonical",
+      "node_type": "material",
+      "description": "镨钕、镝铽等稀土金属及合金的直接生产。",
+      "status": "draft",
+      "primary_path": [
+      "advanced_materials",
+        "rare_earth_permanent_magnets_critical_minerals",
+        "rare_earth_metals_magnets",
+        "rare_earth_metals_alloys"
+      ],
+      "canonical_key": "rare_earth_permanent_magnets_critical_minerals:rare_earth_metals_alloys",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ndfeb_magnetic_materials",
+      "chain_id": "rare_earth_permanent_magnets_critical_minerals",
+      "parent_node_id": "rare_earth_metals_magnets",
+      "level": "L4",
+      "node_name": "钕铁硼永磁材料",
+      "node_kind": "canonical",
+      "node_type": "material",
+      "description": "烧结钕铁硼、磁钢与高性能稀土永磁材料。",
+      "status": "draft",
+      "primary_path": [
+      "advanced_materials",
+        "rare_earth_permanent_magnets_critical_minerals",
+        "rare_earth_metals_magnets",
+        "ndfeb_magnetic_materials"
+      ],
+      "canonical_key": "rare_earth_permanent_magnets_critical_minerals:ndfeb_magnetic_materials",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "samarium_cobalt_specialty_magnets",
+      "chain_id": "rare_earth_permanent_magnets_critical_minerals",
+      "parent_node_id": "rare_earth_metals_magnets",
+      "level": "L4",
+      "node_name": "钐钴特种永磁",
+      "node_kind": "canonical",
+      "node_type": "material",
+      "description": "钐钴磁体的自有生产、客户认证与商业化。",
+      "status": "draft",
+      "primary_path": [
+      "advanced_materials",
+        "rare_earth_permanent_magnets_critical_minerals",
+        "rare_earth_metals_magnets",
+        "samarium_cobalt_specialty_magnets"
+      ],
+      "canonical_key": "rare_earth_permanent_magnets_critical_minerals:samarium_cobalt_specialty_magnets",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "magnet_processing_coating_components",
+      "chain_id": "rare_earth_permanent_magnets_critical_minerals",
+      "parent_node_id": "rare_earth_metals_magnets",
+      "level": "L4",
+      "node_name": "磁体加工、涂层与组件",
+      "node_kind": "canonical",
+      "node_type": "component",
+      "description": "独立磁体机加工、表面处理、涂层和磁组件业务。",
+      "status": "draft",
+      "primary_path": [
+      "advanced_materials",
+        "rare_earth_permanent_magnets_critical_minerals",
+        "rare_earth_metals_magnets",
+        "magnet_processing_coating_components"
+      ],
+      "canonical_key": "rare_earth_permanent_magnets_critical_minerals:magnet_processing_coating_components",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "rare_earth_recycling_secondary_resources",
+      "chain_id": "rare_earth_permanent_magnets_critical_minerals",
+      "parent_node_id": "rare_earth_recycling_supply_security",
+      "level": "L4",
+      "node_name": "稀土回收与二次资源",
+      "node_kind": "canonical",
+      "node_type": "recycling",
+      "description": "磁泥、废磁体及其他二次稀土资源的回收利用。",
+      "status": "draft",
+      "primary_path": [
+      "advanced_materials",
+        "rare_earth_permanent_magnets_critical_minerals",
+        "rare_earth_recycling_supply_security",
+        "rare_earth_recycling_secondary_resources"
+      ],
+      "canonical_key": "rare_earth_permanent_magnets_critical_minerals:rare_earth_recycling_secondary_resources",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "quotas_prices_export_customer_validation",
+      "chain_id": "rare_earth_permanent_magnets_critical_minerals",
+      "parent_node_id": "rare_earth_market_revenue_validation",
+      "level": "L4",
+      "node_name": "配额、价格、出口与客户验证",
+      "node_kind": "canonical",
+      "node_type": "commercialization_stage",
+      "description": "配额、报价、实现价格、出口许可、客户认证、订单、收入与毛利分层。",
+      "status": "draft",
+      "primary_path": [
+      "advanced_materials",
+        "rare_earth_permanent_magnets_critical_minerals",
+        "rare_earth_market_revenue_validation",
+        "quotas_prices_export_customer_validation"
+      ],
+      "canonical_key": "rare_earth_permanent_magnets_critical_minerals:quotas_prices_export_customer_validation",
+      "canonical_node_refs": []
+    }
+  ]
+}
+

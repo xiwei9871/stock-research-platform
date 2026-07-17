@@ -1,0 +1,250 @@
+{
+  "artifact_version": "rare_earth_permanent_magnets_critical_minerals_source_pack_v1",
+  "theme_id": "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
+  "as_of_date": "2026-07-18",
+  "sources": [
+    {
+      "source_id": "f5_600111_ar2025",
+      "source_type": "company_filing",
+      "title": "北方稀土2025年年度报告",
+      "publisher": "中国北方稀土（集团）高科技股份有限公司",
+      "author": "中国北方稀土（集团）高科技股份有限公司",
+      "publish_date": "2026-04-18",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-18/1225118607.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "full_text_reviewed",
+      "evidence_locator": "第12-13、16、22、45、99页",
+      "evidence_summary": "公司2025年报直接支持产品关系、财务口径和经营阶段；混合收入与下游需求边界已显式保留。",
+      "supported_claim_ids": [
+        "f5_claim_01"
+      ],
+      "supported_node_ids": [
+        "rare_earth_separation_oxides"
+      ],
+      "limitations": "未披露项目保持limited或undisclosed；不得将配额、客户认证、下游需求直接写成订单或收入。",
+      "notes": "PDF第12-13、16、22、45、99页；正式年报全文复核。"
+    },
+    {
+      "source_id": "f5_000831_ar2025",
+      "source_type": "company_filing",
+      "title": "中国稀土2025年年度报告",
+      "publisher": "中国稀土集团资源科技股份有限公司",
+      "author": "中国稀土集团资源科技股份有限公司",
+      "publish_date": "2026-04-28",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-28/1225218157.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "full_text_reviewed",
+      "evidence_locator": "第10、14-15页",
+      "evidence_summary": "公司2025年报直接支持产品关系、财务口径和经营阶段；混合收入与下游需求边界已显式保留。",
+      "supported_claim_ids": [
+        "f5_claim_02",
+        "f5_claim_11"
+      ],
+      "supported_node_ids": [
+        "rare_earth_separation_oxides",
+        "quotas_prices_export_customer_validation"
+      ],
+      "limitations": "未披露项目保持limited或undisclosed；不得将配额、客户认证、下游需求直接写成订单或收入。",
+      "notes": "PDF第10、14-15页；正式年报全文复核。"
+    },
+    {
+      "source_id": "f5_600392_ar2025",
+      "source_type": "company_filing",
+      "title": "盛和资源2025年年度报告",
+      "publisher": "盛和资源控股股份有限公司",
+      "author": "盛和资源控股股份有限公司",
+      "publish_date": "2026-04-30",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-30/1225258047.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "full_text_reviewed",
+      "evidence_locator": "第12、14-15、29页",
+      "evidence_summary": "公司2025年报直接支持产品关系、财务口径和经营阶段；混合收入与下游需求边界已显式保留。",
+      "supported_claim_ids": [
+        "f5_claim_03",
+        "f5_claim_16"
+      ],
+      "supported_node_ids": [
+        "rare_earth_separation_oxides",
+        "quotas_prices_export_customer_validation"
+      ],
+      "limitations": "未披露项目保持limited或undisclosed；不得将配额、客户认证、下游需求直接写成订单或收入。",
+      "notes": "PDF第12、14-15、29页；正式年报全文复核。"
+    },
+    {
+      "source_id": "f5_600549_ar2025",
+      "source_type": "company_filing",
+      "title": "厦门钨业2025年年度报告",
+      "publisher": "厦门钨业股份有限公司",
+      "author": "厦门钨业股份有限公司",
+      "publish_date": "2026-04-24",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-24/1225166560.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "full_text_reviewed",
+      "evidence_locator": "第14-15、41、43页",
+      "evidence_summary": "公司2025年报直接支持产品关系、财务口径和经营阶段；混合收入与下游需求边界已显式保留。",
+      "supported_claim_ids": [
+        "f5_claim_04",
+        "f5_claim_13"
+      ],
+      "supported_node_ids": [
+        "ndfeb_magnetic_materials",
+        "quotas_prices_export_customer_validation"
+      ],
+      "limitations": "未披露项目保持limited或undisclosed；不得将配额、客户认证、下游需求直接写成订单或收入。",
+      "notes": "PDF第14-15、41、43页；正式年报全文复核。"
+    },
+    {
+      "source_id": "f5_300748_ar2025",
+      "source_type": "company_filing",
+      "title": "金力永磁2025年年度报告",
+      "publisher": "江西金力永磁科技股份有限公司",
+      "author": "江西金力永磁科技股份有限公司",
+      "publish_date": "2026-03-26",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-03-26/1225030339.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "full_text_reviewed",
+      "evidence_locator": "第10、21-22、36页",
+      "evidence_summary": "公司2025年报直接支持产品关系、财务口径和经营阶段；混合收入与下游需求边界已显式保留。",
+      "supported_claim_ids": [
+        "f5_claim_05"
+      ],
+      "supported_node_ids": [
+        "ndfeb_magnetic_materials"
+      ],
+      "limitations": "未披露项目保持limited或undisclosed；不得将配额、客户认证、下游需求直接写成订单或收入。",
+      "notes": "PDF第10、21-22、36页；正式年报全文复核。"
+    },
+    {
+      "source_id": "f5_300224_ar2025",
+      "source_type": "company_filing",
+      "title": "正海磁材2025年年度报告",
+      "publisher": "烟台正海磁性材料股份有限公司",
+      "author": "烟台正海磁性材料股份有限公司",
+      "publish_date": "2026-03-31",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-03-31/1225060090.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "full_text_reviewed",
+      "evidence_locator": "第10-11、18-19页",
+      "evidence_summary": "公司2025年报直接支持产品关系、财务口径和经营阶段；混合收入与下游需求边界已显式保留。",
+      "supported_claim_ids": [
+        "f5_claim_06"
+      ],
+      "supported_node_ids": [
+        "ndfeb_magnetic_materials"
+      ],
+      "limitations": "未披露项目保持limited或undisclosed；不得将配额、客户认证、下游需求直接写成订单或收入。",
+      "notes": "PDF第10-11、18-19页；正式年报全文复核。"
+    },
+    {
+      "source_id": "f5_600366_ar2025",
+      "source_type": "company_filing",
+      "title": "宁波韵升2025年年度报告",
+      "publisher": "宁波韵升股份有限公司",
+      "author": "宁波韵升股份有限公司",
+      "publish_date": "2026-04-11",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-11/1225096024.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "full_text_reviewed",
+      "evidence_locator": "第10、13-14页",
+      "evidence_summary": "公司2025年报直接支持产品关系、财务口径和经营阶段；混合收入与下游需求边界已显式保留。",
+      "supported_claim_ids": [
+        "f5_claim_07"
+      ],
+      "supported_node_ids": [
+        "ndfeb_magnetic_materials"
+      ],
+      "limitations": "未披露项目保持limited或undisclosed；不得将配额、客户认证、下游需求直接写成订单或收入。",
+      "notes": "PDF第10、13-14页；正式年报全文复核。"
+    },
+    {
+      "source_id": "f5_000970_ar2025",
+      "source_type": "company_filing",
+      "title": "中科三环2025年年度报告",
+      "publisher": "北京中科三环高技术股份有限公司",
+      "author": "北京中科三环高技术股份有限公司",
+      "publish_date": "2026-03-28",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-03-28/1225043199.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "full_text_reviewed",
+      "evidence_locator": "第9-10、16-17页",
+      "evidence_summary": "公司2025年报直接支持产品关系、财务口径和经营阶段；混合收入与下游需求边界已显式保留。",
+      "supported_claim_ids": [
+        "f5_claim_08",
+        "f5_claim_15"
+      ],
+      "supported_node_ids": [
+        "ndfeb_magnetic_materials",
+        "quotas_prices_export_customer_validation"
+      ],
+      "limitations": "未披露项目保持limited或undisclosed；不得将配额、客户认证、下游需求直接写成订单或收入。",
+      "notes": "PDF第9-10、16-17页；正式年报全文复核。"
+    },
+    {
+      "source_id": "f5_688077_ar2025",
+      "source_type": "company_filing",
+      "title": "大地熊2025年年度报告",
+      "publisher": "安徽大地熊新材料股份有限公司",
+      "author": "安徽大地熊新材料股份有限公司",
+      "publish_date": "2026-03-28",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-03-28/1225046624.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "full_text_reviewed",
+      "evidence_locator": "第12-16、28页",
+      "evidence_summary": "公司2025年报直接支持产品关系、财务口径和经营阶段；混合收入与下游需求边界已显式保留。",
+      "supported_claim_ids": [
+        "f5_claim_09",
+        "f5_claim_14"
+      ],
+      "supported_node_ids": [
+        "ndfeb_magnetic_materials",
+        "quotas_prices_export_customer_validation"
+      ],
+      "limitations": "未披露项目保持limited或undisclosed；不得将配额、客户认证、下游需求直接写成订单或收入。",
+      "notes": "PDF第12-16、28页；正式年报全文复核。"
+    },
+    {
+      "source_id": "f5_600259_ar2025",
+      "source_type": "company_filing",
+      "title": "中稀有色2025年年度报告",
+      "publisher": "中稀有色金属股份有限公司",
+      "author": "中稀有色金属股份有限公司",
+      "publish_date": "2026-03-20",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-03-20/1225018116.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "full_text_reviewed",
+      "evidence_locator": "第10-12、14、16、19页",
+      "evidence_summary": "公司2025年报直接支持产品关系、财务口径和经营阶段；混合收入与下游需求边界已显式保留。",
+      "supported_claim_ids": [
+        "f5_claim_10",
+        "f5_claim_12"
+      ],
+      "supported_node_ids": [
+        "rare_earth_mining_resource_control",
+        "quotas_prices_export_customer_validation"
+      ],
+      "limitations": "未披露项目保持limited或undisclosed；不得将配额、客户认证、下游需求直接写成订单或收入。",
+      "notes": "PDF第10-12、14、16、19页；正式年报全文复核。"
+    }
+  ]
+}
+

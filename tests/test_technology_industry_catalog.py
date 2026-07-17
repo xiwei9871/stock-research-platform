@@ -196,6 +196,7 @@ def test_repository_catalog_starts_with_ten_approved_sectors():
         "uav_evtol_low_altitude_economy",
             "mobile_communications_5g_6g",
             "analog_mixed_signal_rf_chips",
+            "rare_earth_permanent_magnets_critical_minerals",
         }
     nodes_by_id = {row["node_id"]: row for row in catalog["nodes"]}
     assert {

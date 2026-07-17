@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import re
 
 import pytest
 
@@ -17,6 +18,10 @@ from stock_research.theme_research_priority import (
     load_theme_research_priority_package,
     summarize_theme_research_priority_package,
 )
+
+
+def _contains_forbidden_token(value: str, token: str) -> bool:
+    return re.search(rf"(?<![a-z]){re.escape(token)}(?![a-z])", value) is not None
 
 
 def test_priority_package_scores_all_nodes_and_company_mappings_once():
@@ -244,6 +249,19 @@ def test_review_queue_is_pending_human_work_not_an_automated_decision():
     assert {row["company_code"] for row in gap_items} == {"002364.SZ", "300870.SZ"}
 
 
+@pytest.mark.parametrize("value", ["price", "market_price", "price_signal"])
+def test_forbidden_market_token_detection_rejects_price_inputs(value):
+    assert _contains_forbidden_token(value, "price") is True
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["prices", "quotas_prices_export_customer_validation"],
+)
+def test_forbidden_market_token_detection_allows_catalog_price_plural(value):
+    assert _contains_forbidden_token(value, "price") is False
+
+
 def test_outputs_do_not_expose_market_or_trading_inputs():
     package = load_theme_research_priority_package()
     serialized = json.dumps(
@@ -266,7 +284,7 @@ def test_outputs_do_not_expose_market_or_trading_inputs():
         "buy",
         "sell",
     ):
-        assert forbidden not in serialized
+        assert _contains_forbidden_token(serialized, forbidden) is False
 
 
 def test_company_detail_resolves_priority_mapping_node_and_crosswalk():

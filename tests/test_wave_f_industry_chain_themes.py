@@ -840,6 +840,70 @@ F4_PRODUCT_FAMILY_TERMS = {
     "688325.SH": ("电池管理芯片", "充电管理芯片"),
 }
 
+F5_CHAIN_ID = "rare_earth_permanent_magnets_critical_minerals"
+F5_THEME_ID = "rare_earth_permanent_magnets_critical_minerals_value_chain_v1"
+F5_THEME_PATH = REPOSITORY_ROOT / f"artifacts/theme_decomposition/{F5_THEME_ID}.json"
+F5_MAPPING_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/company_mappings"
+    / "rare_earth_permanent_magnets_critical_minerals_company_mapping_v1.json"
+)
+F5_SOURCE_PACK_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "rare_earth_permanent_magnets_critical_minerals_source_pack_v1.json"
+)
+F5_MATRIX_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "rare_earth_permanent_magnets_critical_minerals_node_evidence_matrix_v1.json"
+)
+F5_L3 = {
+    "rare_earth_resources_separation",
+    "rare_earth_metals_magnets",
+    "rare_earth_recycling_supply_security",
+    "rare_earth_market_revenue_validation",
+}
+F5_L4 = {
+    "rare_earth_mining_resource_control",
+    "rare_earth_beneficiation_concentrates",
+    "rare_earth_separation_oxides",
+    "rare_earth_metals_alloys",
+    "ndfeb_magnetic_materials",
+    "samarium_cobalt_specialty_magnets",
+    "magnet_processing_coating_components",
+    "rare_earth_recycling_secondary_resources",
+    "quotas_prices_export_customer_validation",
+}
+F5_INITIAL_UNIVERSE = {
+    "600111.SH", "000831.SZ", "600392.SH", "600549.SH", "300748.SZ",
+    "300224.SZ", "600366.SH", "000970.SZ", "688077.SH", "600259.SH",
+}
+F5_MAPPING_CONTRACTS = {
+    "600111.SH": ("rare_earth_separation_oxides", "f5_600111_ar2025", "limited"),
+    "000831.SZ": ("rare_earth_separation_oxides", "f5_000831_ar2025", "material"),
+    "600392.SH": ("rare_earth_separation_oxides", "f5_600392_ar2025", "limited"),
+    "600549.SH": ("ndfeb_magnetic_materials", "f5_600549_ar2025", "limited"),
+    "300748.SZ": ("ndfeb_magnetic_materials", "f5_300748_ar2025", "material"),
+    "300224.SZ": ("ndfeb_magnetic_materials", "f5_300224_ar2025", "material"),
+    "600366.SH": ("ndfeb_magnetic_materials", "f5_600366_ar2025", "material"),
+    "000970.SZ": ("ndfeb_magnetic_materials", "f5_000970_ar2025", "material"),
+    "688077.SH": ("ndfeb_magnetic_materials", "f5_688077_ar2025", "material"),
+    "600259.SH": ("rare_earth_mining_resource_control", "f5_600259_ar2025", "limited"),
+}
+F5_DIRECT_PRODUCT_TERMS = {
+    "600111.SH": ("稀土氧化物", "冶炼分离"),
+    "000831.SZ": ("稀土氧化物", "冶炼分离"),
+    "600392.SH": ("稀土氧化物", "冶炼分离"),
+    "600549.SH": ("钕铁硼", "磁性材料"),
+    "300748.SZ": ("高性能稀土永磁材料", "钕铁硼"),
+    "300224.SZ": ("高性能钕铁硼", "永磁材料"),
+    "600366.SH": ("钕铁硼", "磁性材料"),
+    "000970.SZ": ("烧结钕铁硼", "稀土永磁"),
+    "688077.SH": ("烧结钕铁硼", "磁性材料"),
+    "600259.SH": ("稀土矿", "采矿"),
+}
+
 REQUIRED_READABLE_SECTIONS = [
     {
         "name": "研究结论",
@@ -1040,7 +1104,7 @@ def test_foundation_models_f1_catalog_first_structure_and_link_contract() -> Non
             assert by_id[row["parent_node_id"]]["level"] == "L3"
 
 
-def test_foundation_models_f1_artifacts_remain_reviewed_when_wave_has_four_ready() -> None:
+def test_foundation_models_f1_artifacts_remain_reviewed_after_wave_completion() -> None:
     theme = load_json(F1_THEME_PATH)
     mapping = load_json(F1_MAPPING_PATH)
     source_pack = load_json(F1_SOURCE_PACK_PATH)
@@ -1069,8 +1133,8 @@ def test_foundation_models_f1_artifacts_remain_reviewed_when_wave_has_four_ready
         "accepted_source_backed_claims": 19,
         "reviewed_mappings": 10,
     }
-    assert report["ready_theme_count"] == 4
-    assert report["not_ready_theme_count"] == 1
+    assert report["ready_theme_count"] == 5
+    assert report["not_ready_theme_count"] == 0
 
 
 def test_foundation_models_f1_full_research_profile_and_boundary_ownership() -> None:
@@ -1562,7 +1626,7 @@ def test_low_altitude_f2_catalog_first_structure_and_link_contract() -> None:
             assert by_id[row["parent_node_id"]]["level"] == "L3"
 
 
-def test_low_altitude_f2_artifacts_remain_reviewed_when_wave_has_four_ready() -> None:
+def test_low_altitude_f2_artifacts_remain_reviewed_after_wave_completion() -> None:
     theme = load_json(F2_THEME_PATH)
     mapping = load_json(F2_MAPPING_PATH)
     source_pack = load_json(F2_SOURCE_PACK_PATH)
@@ -1597,8 +1661,8 @@ def test_low_altitude_f2_artifacts_remain_reviewed_when_wave_has_four_ready() ->
         "accepted_source_backed_claims": 16,
         "reviewed_mappings": 9,
     }
-    assert report["ready_theme_count"] == 4
-    assert report["not_ready_theme_count"] == 1
+    assert report["ready_theme_count"] == 5
+    assert report["not_ready_theme_count"] == 0
 
 
 def test_low_altitude_f2_full_profile_and_textual_unexpanded_boundaries() -> None:
@@ -1979,7 +2043,7 @@ def test_mobile_communications_f3_catalog_first_structure_and_link_contract() ->
             assert by_id[row["parent_node_id"]]["level"] == "L3"
 
 
-def test_mobile_communications_f3_artifacts_remain_reviewed_when_wave_has_four_ready() -> None:
+def test_mobile_communications_f3_artifacts_remain_reviewed_after_wave_completion() -> None:
     theme = load_json(F3_THEME_PATH)
     mapping = load_json(F3_MAPPING_PATH)
     source_pack = load_json(F3_SOURCE_PACK_PATH)
@@ -2012,8 +2076,8 @@ def test_mobile_communications_f3_artifacts_remain_reviewed_when_wave_has_four_r
         "accepted_source_backed_claims": 20,
         "reviewed_mappings": 10,
     }
-    assert report["ready_theme_count"] == 4
-    assert report["not_ready_theme_count"] == 1
+    assert report["ready_theme_count"] == 5
+    assert report["not_ready_theme_count"] == 0
 
 
 def test_mobile_communications_f3_full_profile_and_boundary_ownership() -> None:
@@ -2301,7 +2365,7 @@ def test_analog_mixed_signal_f4_catalog_first_structure_and_link_contract() -> N
             assert by_id[row["parent_node_id"]]["level"] == "L3"
 
 
-def test_analog_mixed_signal_f4_artifacts_are_reviewed_and_wave_is_four_of_five_ready() -> None:
+def test_analog_mixed_signal_f4_artifacts_remain_reviewed_after_wave_completion() -> None:
     theme = load_json(F4_THEME_PATH)
     mapping = load_json(F4_MAPPING_PATH)
     source_pack = load_json(F4_SOURCE_PACK_PATH)
@@ -2327,8 +2391,8 @@ def test_analog_mixed_signal_f4_artifacts_are_reviewed_and_wave_is_four_of_five_
         "accepted_source_backed_claims": 16,
         "reviewed_mappings": 10,
     }
-    assert report["ready_theme_count"] == 4
-    assert report["not_ready_theme_count"] == 1
+    assert report["ready_theme_count"] == 5
+    assert report["not_ready_theme_count"] == 0
 
 
 def test_analog_mixed_signal_f4_company_product_family_and_three_role_contracts() -> None:
@@ -2568,3 +2632,225 @@ def test_analog_mixed_signal_f4_matrix_calibrates_empty_nodes_and_gaps() -> None
     interface = rows["interface_isolation_driver_chips"]
     assert "帝奥微仅直接支持接口子族" in interface["rationale"]
     assert "隔离/驱动" in interface["next_evidence_needed"]
+
+
+def test_rare_earth_f5_catalog_first_structure_and_link_contract() -> None:
+    assert_catalog_first_contract(F5_CHAIN_ID, F5_THEME_ID, F5_L3, F5_L4)
+    catalog = load_industry_catalog()
+    chain_nodes = [row for row in catalog["nodes"] if row["chain_id"] == F5_CHAIN_ID]
+    by_id = {row["node_id"]: row for row in chain_nodes}
+    assert {row["node_kind"] for row in chain_nodes} == {"canonical"}
+    assert all(not row["canonical_key"] for row in chain_nodes if row["level"] == "L3")
+    l4_keys = [row["canonical_key"] for row in chain_nodes if row["level"] == "L4"]
+    assert len(l4_keys) == len(set(l4_keys)) == 9
+    assert all(
+        key.startswith("rare_earth_permanent_magnets_critical_minerals:")
+        for key in l4_keys
+    )
+    for row in chain_nodes:
+        assert row["primary_path"][1] == F5_CHAIN_ID
+        if row["level"] == "L4":
+            assert row["parent_node_id"] in F5_L3
+            assert by_id[row["parent_node_id"]]["level"] == "L3"
+
+
+def test_rare_earth_f5_artifacts_are_reviewed_and_complete_wave_f() -> None:
+    theme = load_json(F5_THEME_PATH)
+    mapping = load_json(F5_MAPPING_PATH)
+    source_pack = load_json(F5_SOURCE_PACK_PATH)
+    matrix = load_json(F5_MATRIX_PATH)
+    assert theme["artifact_version"] == "theme_decomposition_v1_6"
+    assert theme["theme"]["status"] == "reviewed"
+    assert {row["node_id"] for row in theme["nodes"]} == F5_L4
+    assert len(source_pack["sources"]) == 10
+    assert sum(row["source_type"] == "company_filing" for row in source_pack["sources"]) == 10
+    assert len(theme["claims"]) >= 12
+    reviewed = [row for row in mapping["company_mappings"] if row["review_status"] == "reviewed"]
+    assert len(reviewed) == 10
+    assert {row["company_code"] for row in reviewed} == F5_INITIAL_UNIVERSE
+    assert {row["node_id"] for row in matrix["node_evidence_matrix"]} == F5_L4
+
+    report = VERIFIER.build_theme_batch_report(MANIFEST_PATH, wave="wave_f")
+    rows = {row["chain_id"]: row for row in report["theme_results"]}
+    assert rows[F5_CHAIN_ID]["ready"] is True
+    assert rows[F5_CHAIN_ID]["counts"] == {
+        "accepted_sources": 10,
+        "primary_sources": 10,
+        "claims": 16,
+        "accepted_source_backed_claims": 16,
+        "reviewed_mappings": 10,
+    }
+    assert report["ready_theme_count"] == 5
+    assert report["not_ready_theme_count"] == 0
+
+
+def test_rare_earth_f5_company_ownership_and_three_role_contracts() -> None:
+    mapping = load_json(F5_MAPPING_PATH)
+    evidence = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+    reviewed = {
+        row["company_code"]: row for row in mapping["company_mappings"]
+        if row["review_status"] == "reviewed"
+    }
+    assert set(reviewed) == set(F5_MAPPING_CONTRACTS)
+    for company_code, (node_id, source_id, revenue_relevance) in F5_MAPPING_CONTRACTS.items():
+        row = reviewed[company_code]
+        assert row["mapped_node_id"] == node_id
+        assert row["revenue_relevance"] == revenue_relevance
+        items = [evidence[evidence_id] for evidence_id in row["evidence_ids"]]
+        assert [item["evidence_type"] for item in items] == [
+            "product_relationship", "revenue_materiality", "business_stage"
+        ]
+        assert len({item["excerpt_locator"] for item in items}) == 3
+        assert all(item["source_id"] == source_id for item in items)
+        assert all(item["related_node_ids"] == [node_id] for item in items)
+        assert all(
+            term in items[0]["evidence_summary"]
+            for term in F5_DIRECT_PRODUCT_TERMS[company_code]
+        )
+    assert reviewed["688077.SH"]["mapped_node_id"] == "ndfeb_magnetic_materials"
+    assert reviewed["600259.SH"]["mapped_node_id"] == "rare_earth_mining_resource_control"
+
+
+def test_rare_earth_f5_sources_claims_nodes_matrix_use_direct_attribution() -> None:
+    theme = load_json(F5_THEME_PATH)
+    mapping = load_json(F5_MAPPING_PATH)
+    source_pack = load_json(F5_SOURCE_PACK_PATH)
+    matrix = load_json(F5_MATRIX_PATH)
+    identity_fields = (
+        "source_id", "source_type", "title", "publisher", "author",
+        "publish_date", "url_or_ref", "access_level", "reliability_level",
+        "review_status", "notes",
+    )
+    identity = lambda rows: {
+        row["source_id"]: tuple(
+            row.get(field, row.get("url") if field == "url_or_ref" else None)
+            for field in identity_fields
+        ) for row in rows
+    }
+    served = list_theme_research_sources(F5_THEME_ID, read_source="artifact")
+    assert identity(theme["sources"]) == identity(mapping["sources"])
+    assert identity(theme["sources"]) == identity(source_pack["sources"])
+    assert identity(theme["sources"]) == identity(served["items"])
+    assert all(row["author"] == row["publisher"] and row["author"] for row in theme["sources"])
+
+    claims = {row["claim_id"]: row for row in theme["claims"]}
+    accepted = {row["source_id"] for row in source_pack["sources"]}
+    claim_union = {
+        source_id for claim in claims.values()
+        for source_id in (claim["source_id"], *claim["supporting_source_ids"])
+    }
+    matrix_union = {
+        source_id for row in matrix["node_evidence_matrix"]
+        for source_id in row["accepted_source_ids"]
+    }
+    assert accepted == claim_union == matrix_union
+    for row in matrix["node_evidence_matrix"]:
+        node_claims = {
+            claim_id for claim_id, claim in claims.items()
+            if row["node_id"] in claim["affected_theme_nodes"]
+        }
+        assert set(row["supported_claim_ids"]) == node_claims
+        assert set(row["accepted_source_ids"]) == {
+            claims[claim_id]["source_id"] for claim_id in node_claims
+        }
+    for source in source_pack["sources"]:
+        source_claims = {
+            claim_id for claim_id, claim in claims.items()
+            if source["source_id"] in (claim["source_id"], *claim["supporting_source_ids"])
+        }
+        assert set(source["supported_claim_ids"]) == source_claims
+        assert set(source["supported_node_ids"]) == {
+            node_id for claim_id in source_claims
+            for node_id in claims[claim_id]["affected_theme_nodes"]
+        }
+
+
+def test_rare_earth_f5_closes_initial_universe_without_padding() -> None:
+    mapping = load_json(F5_MAPPING_PATH)
+    reviewed = {
+        row["company_code"] for row in mapping["company_mappings"]
+        if row["review_status"] == "reviewed"
+    }
+    excluded = {row["company_code"] for row in mapping["excluded_initial_candidates"]}
+    assert reviewed | excluded == F5_INITIAL_UNIVERSE
+    assert not reviewed & excluded
+    assert reviewed == F5_INITIAL_UNIVERSE
+    assert excluded == set()
+    assert mapping["concept_only_candidates"] == []
+
+
+def test_rare_earth_f5_separates_price_transmission_and_company_economics() -> None:
+    theme = load_json(F5_THEME_PATH)
+    claims = {row["claim_id"]: row for row in theme["claims"]}
+    text = json.dumps(theme, ensure_ascii=False)
+    for stage in ("配额", "产量", "销量", "报价", "实现价格", "订单", "收入", "毛利"):
+        assert stage in text
+    assert "资源价格弹性不等于磁材加工利润" in text
+    assert "下游需求不等于公司订单或收入" in text
+    assert "公司总收入或混合口径不作为节点专项收入" in text
+    quota = claims["f5_claim_11"]
+    price = claims["f5_claim_12"]
+    customer = claims["f5_claim_13"]
+    assert quota["affected_theme_nodes"] == ["quotas_prices_export_customer_validation"]
+    assert price["affected_theme_nodes"] == ["quotas_prices_export_customer_validation"]
+    assert customer["affected_theme_nodes"] == ["quotas_prices_export_customer_validation"]
+    assert "配额" in quota["claim_text"] and "不等于订单或收入" in quota["claim_text"]
+    assert "实现价格" in price["claim_text"] and "节点毛利必须分层" in price["claim_text"]
+    assert "客户认证" in customer["claim_text"] and "不等于量产订单或确认收入" in customer["claim_text"]
+
+
+def test_rare_earth_f5_rejects_neighbor_demand_and_mixed_business_false_positives() -> None:
+    theme = load_json(F5_THEME_PATH)
+    mapping = load_json(F5_MAPPING_PATH)
+    text = json.dumps({"theme": theme, "policy": mapping["mapping_policy"]}, ensure_ascii=False)
+    for boundary in (
+        "下游电机、机器人、风电、EV和消费电子需求不得直接映射为F5公司",
+        "泛下游需求不得证明公司受益",
+        "普通钨钼业务、非稀土矿和通用有色收入不得冒充稀土节点收入",
+        "资源公司只落有直接资源、选矿、分离或金属证据的节点",
+        "磁材公司只落自有磁材或独立加工证据节点",
+        "表面处理作为内部工艺不得单独落磁体加工节点",
+    ):
+        assert boundary in text
+    claim_text = " ".join(row["claim_text"] for row in theme["claims"])
+    for forbidden in (
+        "机器人需求证明公司受益", "风电需求证明公司受益", "EV需求证明公司受益",
+        "钨钼收入计入稀土", "非稀土矿收入计入稀土", "公司总营收等于节点收入",
+    ):
+        assert forbidden not in claim_text
+
+
+def test_rare_earth_f5_has_no_unproven_cross_chain_edges() -> None:
+    catalog = load_industry_catalog()
+    nodes = {row["node_id"]: row for row in catalog["nodes"]}
+    cross_chain_edges = {
+        (row["source_node_id"], row["target_node_id"], row["relationship_type"])
+        for row in catalog["edges"]
+        if row["source_node_id"] in F5_L4
+        and nodes[row["target_node_id"]]["chain_id"] != F5_CHAIN_ID
+    }
+    assert cross_chain_edges == set()
+
+
+def test_rare_earth_f5_matrix_calibrates_empty_nodes_and_gaps() -> None:
+    theme = load_json(F5_THEME_PATH)
+    matrix = load_json(F5_MATRIX_PATH)
+    nodes = {row["node_id"]: row for row in theme["nodes"]}
+    rows = {row["node_id"]: row for row in matrix["node_evidence_matrix"]}
+    assert set(rows) == F5_L4
+    assert len({row["rationale"] for row in rows.values()}) == 9
+    assert all(row["next_evidence_needed"] for row in rows.values())
+    for node_id, row in rows.items():
+        assert nodes[node_id]["evidence_strength"] == row["evidence_strength_after"]
+    for empty_node in (
+        "rare_earth_metals_alloys", "samarium_cobalt_specialty_magnets",
+        "magnet_processing_coating_components", "rare_earth_recycling_secondary_resources",
+    ):
+        assert rows[empty_node]["accepted_source_ids"] == []
+        assert rows[empty_node]["supported_claim_ids"] == []
+        assert rows[empty_node]["evidence_gap_status"] == "evidence_gap"
+        assert rows[empty_node]["node_review_status"] == "needs_evidence"
+        assert nodes[empty_node]["related_stock_codes"] == []
+        assert nodes[empty_node]["domestic_players"] == []
+    assert "烧结钕铁硼" in rows["ndfeb_magnetic_materials"]["rationale"]
+    assert "SmCo" in rows["samarium_cobalt_specialty_magnets"]["next_evidence_needed"]

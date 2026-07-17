@@ -948,6 +948,23 @@
       ],
       "unmapped_theme_node_ids": [],
       "notes": "F4 owns analog, mixed-signal and RF chip products. MEMS sensors, discrete power switching, foundry capacity, mobile network systems, optical communications and satellite systems keep external ownership."
+    },
+    {
+      "theme_id": "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
+      "chain_id": "rare_earth_permanent_magnets_critical_minerals",
+      "node_links": [
+        {"theme_node_id":"rare_earth_mining_resource_control","catalog_node_id":"rare_earth_mining_resource_control"},
+        {"theme_node_id":"rare_earth_beneficiation_concentrates","catalog_node_id":"rare_earth_beneficiation_concentrates"},
+        {"theme_node_id":"rare_earth_separation_oxides","catalog_node_id":"rare_earth_separation_oxides"},
+        {"theme_node_id":"rare_earth_metals_alloys","catalog_node_id":"rare_earth_metals_alloys"},
+        {"theme_node_id":"ndfeb_magnetic_materials","catalog_node_id":"ndfeb_magnetic_materials"},
+        {"theme_node_id":"samarium_cobalt_specialty_magnets","catalog_node_id":"samarium_cobalt_specialty_magnets"},
+        {"theme_node_id":"magnet_processing_coating_components","catalog_node_id":"magnet_processing_coating_components"},
+        {"theme_node_id":"rare_earth_recycling_secondary_resources","catalog_node_id":"rare_earth_recycling_secondary_resources"},
+        {"theme_node_id":"quotas_prices_export_customer_validation","catalog_node_id":"quotas_prices_export_customer_validation"}
+      ],
+      "unmapped_theme_node_ids": [],
+      "notes": "F5 owns direct rare-earth resource, separation, metal, permanent-magnet, recycling and market-validation roles. Downstream motor, robotics, wind, EV and electronics demand does not map companies; mixed tungsten, molybdenum, non-rare-earth mining and generic nonferrous revenue remain excluded."
     }
   ]
 }

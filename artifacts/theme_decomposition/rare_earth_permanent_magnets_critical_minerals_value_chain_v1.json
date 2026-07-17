@@ -1,0 +1,805 @@
+{
+  "artifact_version": "theme_decomposition_v1_6",
+  "theme": {
+    "theme_id": "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
+    "theme_name": "稀土、永磁与关键矿产：资源控制、磁材利润与价格传导",
+    "theme_type": "other",
+    "summary": "从稀土矿权、分离氧化物、金属磁材、回收供应与市场收入验证研究稀土永磁价值链。",
+    "status": "reviewed",
+    "created_from": "mixed",
+    "last_updated": "2026-07-18"
+  },
+  "research_profile": {
+    "research_kind": "industry_chain_deep_research",
+    "catalog_chain_id": "rare_earth_permanent_magnets_critical_minerals",
+    "investment_summary": "直接可读价值来自受配额约束的资源与分离能力、可量化的稀土氧化物收入，以及有产品收入、毛利、产销库存和客户认证的钕铁硼公司。",
+    "industry_stage": "稀土上游受资源和总量控制约束，中游分离与钕铁硼已规模商业化；钐钴、独立加工和二次资源在本批仍缺公司级直接证据。",
+    "central_conflict": "稀土价格上行不自动转化为磁材加工利润；混合口径总收入、下游景气和客户认证均不能替代节点订单、实现价格、收入与毛利。",
+    "value_flow_summary": "价值从采矿权、采选精矿、冶炼分离、氧化物与金属进入钕铁硼配方、烧结和交付，再由配额、实现价格、客户认证、订单、收入、毛利和库存验证。",
+    "profit_pool_summary": "利润池在资源约束与高纯分离、具备配方工艺和稳定客户的高性能钕铁硼之间分配，但资源价格弹性与磁材加工毛利必须分别跟踪。",
+    "catalyst_claim_ids": [
+      "f5_claim_02",
+      "f5_claim_05",
+      "f5_claim_11",
+      "f5_claim_13"
+    ],
+    "risk_claim_ids": [
+      "f5_claim_12",
+      "f5_claim_14",
+      "f5_claim_15",
+      "f5_claim_16"
+    ],
+    "validation_signals": [
+      "生产总量控制计划与实际产量",
+      "节点产品实现价格与毛利率",
+      "客户认证转订单和收入",
+      "产销量、库存与现金周转"
+    ],
+    "evidence_gap_summary": "选矿精矿、稀土金属合金、SmCo、独立磁体加工和二次资源缺本批直接公司映射；资源公司仍缺节点收入、实现价格和成本，磁材公司需持续核验客户订单与价格传导。",
+    "boundary_rules": [
+      "下游电机、机器人、风电、EV和消费电子需求不得直接映射为F5公司",
+      "泛下游需求不得证明公司受益",
+      "普通钨钼业务、非稀土矿和通用有色收入不得冒充稀土节点收入",
+      "资源公司只落有直接资源、选矿、分离或金属证据的节点",
+      "磁材公司只落自有磁材或独立加工证据节点",
+      "表面处理作为内部工艺不得单独落磁体加工节点"
+    ]
+  },
+  "decomposition_templates": [
+    {
+      "template_id": "rare_earth_permanent_magnets_critical_minerals_template_v1",
+      "theme_type": "other",
+      "steps": [
+        "冻结目录所有权",
+        "拆分资源与分离",
+        "区分金属与磁材",
+        "校验价格传导",
+        "分层商业生命周期"
+      ],
+      "required_dimensions": [
+        "resources_separation",
+        "metals_magnets",
+        "recycling_supply_security",
+        "market_revenue_validation"
+      ],
+      "optional_dimensions": [
+        "international_comparison",
+        "valuation"
+      ],
+      "output_schema": "theme_decomposition_v1_6"
+    }
+  ],
+  "evidence_policy": {
+    "accepted_source_levels": [
+      "S0",
+      "S1"
+    ],
+    "reviewed_claim_requires_accepted_source": true,
+    "reviewed_mapping_requires_product_revenue_stage_evidence": true,
+    "income_boundary_rule": "公司总收入或混合口径不作为节点专项收入；配额、产量、销量、报价、实现价格、订单、收入与毛利逐级分开。",
+    "boundary_rule": "下游电机、机器人、风电、EV和消费电子需求不得直接映射为F5公司；泛下游需求不得证明公司受益；普通钨钼业务、非稀土矿和通用有色收入不得冒充稀土节点收入；资源公司只落有直接资源、选矿、分离或金属证据的节点；磁材公司只落自有磁材或独立加工证据节点；表面处理作为内部工艺不得单独落磁体加工节点"
+  },
+  "sources": [
+    {
+      "source_id": "f5_600111_ar2025",
+      "source_type": "company_filing",
+      "title": "北方稀土2025年年度报告",
+      "publisher": "中国北方稀土（集团）高科技股份有限公司",
+      "author": "中国北方稀土（集团）高科技股份有限公司",
+      "publish_date": "2026-04-18",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-18/1225118607.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第12-13、16、22、45、99页；正式年报全文复核。"
+    },
+    {
+      "source_id": "f5_000831_ar2025",
+      "source_type": "company_filing",
+      "title": "中国稀土2025年年度报告",
+      "publisher": "中国稀土集团资源科技股份有限公司",
+      "author": "中国稀土集团资源科技股份有限公司",
+      "publish_date": "2026-04-28",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-28/1225218157.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第10、14-15页；正式年报全文复核。"
+    },
+    {
+      "source_id": "f5_600392_ar2025",
+      "source_type": "company_filing",
+      "title": "盛和资源2025年年度报告",
+      "publisher": "盛和资源控股股份有限公司",
+      "author": "盛和资源控股股份有限公司",
+      "publish_date": "2026-04-30",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-30/1225258047.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第12、14-15、29页；正式年报全文复核。"
+    },
+    {
+      "source_id": "f5_600549_ar2025",
+      "source_type": "company_filing",
+      "title": "厦门钨业2025年年度报告",
+      "publisher": "厦门钨业股份有限公司",
+      "author": "厦门钨业股份有限公司",
+      "publish_date": "2026-04-24",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-24/1225166560.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第14-15、41、43页；正式年报全文复核。"
+    },
+    {
+      "source_id": "f5_300748_ar2025",
+      "source_type": "company_filing",
+      "title": "金力永磁2025年年度报告",
+      "publisher": "江西金力永磁科技股份有限公司",
+      "author": "江西金力永磁科技股份有限公司",
+      "publish_date": "2026-03-26",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-26/1225030339.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第10、21-22、36页；正式年报全文复核。"
+    },
+    {
+      "source_id": "f5_300224_ar2025",
+      "source_type": "company_filing",
+      "title": "正海磁材2025年年度报告",
+      "publisher": "烟台正海磁性材料股份有限公司",
+      "author": "烟台正海磁性材料股份有限公司",
+      "publish_date": "2026-03-31",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-31/1225060090.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第10-11、18-19页；正式年报全文复核。"
+    },
+    {
+      "source_id": "f5_600366_ar2025",
+      "source_type": "company_filing",
+      "title": "宁波韵升2025年年度报告",
+      "publisher": "宁波韵升股份有限公司",
+      "author": "宁波韵升股份有限公司",
+      "publish_date": "2026-04-11",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-11/1225096024.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第10、13-14页；正式年报全文复核。"
+    },
+    {
+      "source_id": "f5_000970_ar2025",
+      "source_type": "company_filing",
+      "title": "中科三环2025年年度报告",
+      "publisher": "北京中科三环高技术股份有限公司",
+      "author": "北京中科三环高技术股份有限公司",
+      "publish_date": "2026-03-28",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-28/1225043199.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第9-10、16-17页；正式年报全文复核。"
+    },
+    {
+      "source_id": "f5_688077_ar2025",
+      "source_type": "company_filing",
+      "title": "大地熊2025年年度报告",
+      "publisher": "安徽大地熊新材料股份有限公司",
+      "author": "安徽大地熊新材料股份有限公司",
+      "publish_date": "2026-03-28",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-28/1225046624.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第12-16、28页；正式年报全文复核。"
+    },
+    {
+      "source_id": "f5_600259_ar2025",
+      "source_type": "company_filing",
+      "title": "中稀有色2025年年度报告",
+      "publisher": "中稀有色金属股份有限公司",
+      "author": "中稀有色金属股份有限公司",
+      "publish_date": "2026-03-20",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-20/1225018116.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第10-12、14、16、19页；正式年报全文复核。"
+    }
+  ],
+  "nodes": [
+    {
+      "node_id": "rare_earth_mining_resource_control",
+      "theme_id": "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "稀土矿权与资源控制",
+      "node_type": "core_component",
+      "description": "采矿权、资源量与国家总量控制指标下的实际开采。",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 3,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "直接产品",
+        "产量与销量",
+        "节点收入与毛利",
+        "库存与客户验证"
+      ],
+      "overseas_leaders": [
+        "Analog Devices",
+        "Texas Instruments",
+        "Qorvo"
+      ],
+      "domestic_players": [
+        "中稀有色"
+      ],
+      "related_stock_codes": [
+        "600259.SH"
+      ]
+    },
+    {
+      "node_id": "rare_earth_beneficiation_concentrates",
+      "theme_id": "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "稀土选矿与精矿",
+      "node_type": "core_component",
+      "description": "稀土矿选矿、精矿品位、产能与自营产量。",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 1,
+      "node_review_status": "needs_evidence",
+      "key_metrics": [
+        "直接产品",
+        "产量与销量",
+        "节点收入与毛利",
+        "库存与客户验证"
+      ],
+      "overseas_leaders": [
+        "Analog Devices",
+        "Texas Instruments",
+        "Qorvo"
+      ],
+      "domestic_players": [],
+      "related_stock_codes": []
+    },
+    {
+      "node_id": "rare_earth_separation_oxides",
+      "theme_id": "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "稀土分离与氧化物",
+      "node_type": "core_component",
+      "description": "冶炼分离及单一、混合稀土氧化物产品。",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 5,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "直接产品",
+        "产量与销量",
+        "节点收入与毛利",
+        "库存与客户验证"
+      ],
+      "overseas_leaders": [
+        "Analog Devices",
+        "Texas Instruments",
+        "Qorvo"
+      ],
+      "domestic_players": [
+        "北方稀土",
+        "中国稀土",
+        "盛和资源"
+      ],
+      "related_stock_codes": [
+        "600111.SH",
+        "000831.SZ",
+        "600392.SH"
+      ]
+    },
+    {
+      "node_id": "rare_earth_metals_alloys",
+      "theme_id": "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "稀土金属与合金",
+      "node_type": "core_component",
+      "description": "镨钕、镝铽等稀土金属及合金的直接生产。",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 1,
+      "node_review_status": "needs_evidence",
+      "key_metrics": [
+        "直接产品",
+        "产量与销量",
+        "节点收入与毛利",
+        "库存与客户验证"
+      ],
+      "overseas_leaders": [
+        "Analog Devices",
+        "Texas Instruments",
+        "Qorvo"
+      ],
+      "domestic_players": [],
+      "related_stock_codes": []
+    },
+    {
+      "node_id": "ndfeb_magnetic_materials",
+      "theme_id": "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "钕铁硼永磁材料",
+      "node_type": "core_component",
+      "description": "烧结钕铁硼、磁钢与高性能稀土永磁材料。",
+      "value_capture_score": 3,
+      "bottleneck_score": 3,
+      "localization_gap_score": 4,
+      "supply_tightness_score": 3,
+      "evidence_strength": 5,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "直接产品",
+        "产量与销量",
+        "节点收入与毛利",
+        "库存与客户验证"
+      ],
+      "overseas_leaders": [
+        "Analog Devices",
+        "Texas Instruments",
+        "Qorvo"
+      ],
+      "domestic_players": [
+        "厦门钨业",
+        "金力永磁",
+        "正海磁材",
+        "宁波韵升",
+        "中科三环",
+        "大地熊"
+      ],
+      "related_stock_codes": [
+        "600549.SH",
+        "300748.SZ",
+        "300224.SZ",
+        "600366.SH",
+        "000970.SZ",
+        "688077.SH"
+      ]
+    },
+    {
+      "node_id": "samarium_cobalt_specialty_magnets",
+      "theme_id": "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "钐钴特种永磁",
+      "node_type": "core_component",
+      "description": "钐钴磁体的自有生产、客户认证与商业化。",
+      "value_capture_score": 5,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 1,
+      "node_review_status": "needs_evidence",
+      "key_metrics": [
+        "直接产品",
+        "产量与销量",
+        "节点收入与毛利",
+        "库存与客户验证"
+      ],
+      "overseas_leaders": [
+        "Analog Devices",
+        "Texas Instruments",
+        "Qorvo"
+      ],
+      "domestic_players": [],
+      "related_stock_codes": []
+    },
+    {
+      "node_id": "magnet_processing_coating_components",
+      "theme_id": "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "磁体加工、涂层与组件",
+      "node_type": "core_component",
+      "description": "独立磁体机加工、表面处理、涂层和磁组件业务。",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 1,
+      "node_review_status": "needs_evidence",
+      "key_metrics": [
+        "直接产品",
+        "产量与销量",
+        "节点收入与毛利",
+        "库存与客户验证"
+      ],
+      "overseas_leaders": [
+        "Analog Devices",
+        "Texas Instruments",
+        "Qorvo"
+      ],
+      "domestic_players": [],
+      "related_stock_codes": []
+    },
+    {
+      "node_id": "rare_earth_recycling_secondary_resources",
+      "theme_id": "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "稀土回收与二次资源",
+      "node_type": "service",
+      "description": "磁泥、废磁体及其他二次稀土资源的回收利用。",
+      "value_capture_score": 3,
+      "bottleneck_score": 3,
+      "localization_gap_score": 4,
+      "supply_tightness_score": 3,
+      "evidence_strength": 1,
+      "node_review_status": "needs_evidence",
+      "key_metrics": [
+        "直接产品",
+        "产量与销量",
+        "节点收入与毛利",
+        "库存与客户验证"
+      ],
+      "overseas_leaders": [
+        "Analog Devices",
+        "Texas Instruments",
+        "Qorvo"
+      ],
+      "domestic_players": [],
+      "related_stock_codes": []
+    },
+    {
+      "node_id": "quotas_prices_export_customer_validation",
+      "theme_id": "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "配额、价格、出口与客户验证",
+      "node_type": "service",
+      "description": "配额、报价、实现价格、出口许可、客户认证、订单、收入与毛利分层。",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "直接产品",
+        "产量与销量",
+        "节点收入与毛利",
+        "库存与客户验证"
+      ],
+      "overseas_leaders": [
+        "Analog Devices",
+        "Texas Instruments",
+        "Qorvo"
+      ],
+      "domestic_players": [],
+      "related_stock_codes": []
+    }
+  ],
+  "claims": [
+    {
+      "claim_id": "f5_claim_01",
+      "theme_id": "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
+      "claim_text": "北方稀土将稀土精矿分离为氯化物、盐类和稀土氧化物，冶炼分离产量同比提升；公司425.63亿元营业收入覆盖多环节，未单列氧化物节点收入。",
+      "claim_type": "company_mapping",
+      "confidence": 0.9,
+      "source_id": "f5_600111_ar2025",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "rare_earth_separation_oxides"
+      ],
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "f5_claim_02",
+      "theme_id": "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
+      "claim_text": "中国稀土从事稀土冶炼分离并生产定制化稀土氧化物；2025年稀土氧化物收入2,374,064,352.81元、毛利率16.70%。",
+      "claim_type": "value_capture",
+      "confidence": 0.9,
+      "source_id": "f5_000831_ar2025",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "rare_earth_separation_oxides"
+      ],
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "f5_claim_03",
+      "theme_id": "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
+      "claim_text": "盛和资源现有业务包含稀土氧化物与冶炼分离技术，但收入仅按工业、商业混合披露；规划矿山与参股资源不作当前自营选矿产量。",
+      "claim_type": "company_mapping",
+      "confidence": 0.78,
+      "source_id": "f5_600392_ar2025",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "rare_earth_separation_oxides"
+      ],
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "f5_claim_04",
+      "theme_id": "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
+      "claim_text": "厦门钨业稀土业务包含高性能钕铁硼磁性材料；稀土业务收入6,001,912,809.65元含多个环节，磁性材料产量12,154吨、销量11,275吨、库存2,124吨。",
+      "claim_type": "company_mapping",
+      "confidence": 0.9,
+      "source_id": "f5_600549_ar2025",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "ndfeb_magnetic_materials"
+      ],
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "f5_claim_05",
+      "theme_id": "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
+      "claim_text": "金力永磁钕铁硼磁钢收入7,028,083,879.51元、毛利率20.92%，销量25,281.65吨、产量25,509.66吨、库存2,127.80吨。",
+      "claim_type": "value_capture",
+      "confidence": 0.9,
+      "source_id": "f5_300748_ar2025",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "ndfeb_magnetic_materials"
+      ],
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "f5_claim_06",
+      "theme_id": "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
+      "claim_text": "正海磁材钕铁硼永磁材料及组件收入7,027,068,372.47元，占营业收入99.94%，属于直接磁材收入而非下游电机需求推断。",
+      "claim_type": "value_capture",
+      "confidence": 0.9,
+      "source_id": "f5_300224_ar2025",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "ndfeb_magnetic_materials"
+      ],
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "f5_claim_07",
+      "theme_id": "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
+      "claim_text": "宁波韵升钕铁硼收入4,832,872,247.45元、毛利率18.35%，成品产量14,856吨、销量14,197吨、库存2,055吨。",
+      "claim_type": "value_capture",
+      "confidence": 0.9,
+      "source_id": "f5_600366_ar2025",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "ndfeb_magnetic_materials"
+      ],
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "f5_claim_08",
+      "theme_id": "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
+      "claim_text": "中科三环磁材产品收入6,376,980,800元、毛利率11.20%，产量13,445.56吨、销量12,609.92吨、库存2,096.01吨。",
+      "claim_type": "value_capture",
+      "confidence": 0.9,
+      "source_id": "f5_000970_ar2025",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "ndfeb_magnetic_materials"
+      ],
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "f5_claim_09",
+      "theme_id": "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
+      "claim_text": "大地熊主营高性能烧结钕铁硼永磁材料，2025年毛坯产量5,650吨；表面处理为内部工艺，不形成独立加工节点映射。",
+      "claim_type": "company_mapping",
+      "confidence": 0.9,
+      "source_id": "f5_688077_ar2025",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "ndfeb_magnetic_materials"
+      ],
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "f5_claim_10",
+      "theme_id": "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
+      "claim_text": "中稀有色拥有广东省内合法稀土采矿权和仁居、五丰、新丰等矿山；公司总收入含分离、磁材与贸易，不等于采矿节点收入。",
+      "claim_type": "company_mapping",
+      "confidence": 0.9,
+      "source_id": "f5_600259_ar2025",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "rare_earth_mining_resource_control"
+      ],
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "f5_claim_11",
+      "theme_id": "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
+      "claim_text": "中国稀土矿采选与冶炼分离按照生产总量控制计划指标组织生产；配额只证明生产约束，不等于订单或收入。",
+      "claim_type": "supply_constraint",
+      "confidence": 0.9,
+      "source_id": "f5_000831_ar2025",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "quotas_prices_export_customer_validation"
+      ],
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "f5_claim_12",
+      "theme_id": "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
+      "claim_text": "中稀有色披露主产品销售均价高于市场均价，但逐产品实现价格仍未披露；报价、销售均价和节点毛利必须分层。",
+      "claim_type": "valuation_signal",
+      "confidence": 0.78,
+      "source_id": "f5_600259_ar2025",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "quotas_prices_export_customer_validation"
+      ],
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "f5_claim_13",
+      "theme_id": "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
+      "claim_text": "厦门钨业磁性材料在人形机器人领域通过多家客户认证；客户认证不等于量产订单或确认收入。",
+      "claim_type": "catalyst",
+      "confidence": 0.9,
+      "source_id": "f5_600549_ar2025",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "quotas_prices_export_customer_validation"
+      ],
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "f5_claim_14",
+      "theme_id": "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
+      "claim_text": "大地熊面对严格出口管制仍组织订单交付；出口管制、许可、订单和收入须分别验证。",
+      "claim_type": "risk",
+      "confidence": 0.9,
+      "source_id": "f5_688077_ar2025",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "quotas_prices_export_customer_validation"
+      ],
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "f5_claim_15",
+      "theme_id": "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
+      "claim_text": "中科三环磁材库存同比增加66.30%主要因在途商品增加；产量、销量、库存、订单、收入和毛利不可相互替代。",
+      "claim_type": "risk",
+      "confidence": 0.9,
+      "source_id": "f5_000970_ar2025",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "quotas_prices_export_customer_validation"
+      ],
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "f5_claim_16",
+      "theme_id": "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
+      "claim_text": "盛和资源产品价格波动影响盈利，但资源价格弹性不等于磁材加工利润，下游需求不等于公司订单或收入。",
+      "claim_type": "risk",
+      "confidence": 0.78,
+      "source_id": "f5_600392_ar2025",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "quotas_prices_export_customer_validation"
+      ],
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed"
+    }
+  ],
+  "value_capture_assessments": [
+    {
+      "node_id": "rare_earth_mining_resource_control",
+      "value_basis": "scarcity",
+      "assessment_text": "稀土矿权与资源控制仅在直接产品、产销、收入或验证证据成立时确认价值。",
+      "rank": 1,
+      "evidence_ids": [
+        "f5_claim_10"
+      ],
+      "uncertainty": "需补充节点实现价格、成本、订单、收入、毛利和库存质量。"
+    },
+    {
+      "node_id": "rare_earth_beneficiation_concentrates",
+      "value_basis": "customer_certification",
+      "assessment_text": "稀土选矿与精矿仅在直接产品、产销、收入或验证证据成立时确认价值。",
+      "rank": 2,
+      "evidence_ids": [],
+      "uncertainty": "需补充节点实现价格、成本、订单、收入、毛利和库存质量。"
+    },
+    {
+      "node_id": "rare_earth_separation_oxides",
+      "value_basis": "scarcity",
+      "assessment_text": "稀土分离与氧化物仅在直接产品、产销、收入或验证证据成立时确认价值。",
+      "rank": 3,
+      "evidence_ids": [
+        "f5_claim_01",
+        "f5_claim_02",
+        "f5_claim_03"
+      ],
+      "uncertainty": "需补充节点实现价格、成本、订单、收入、毛利和库存质量。"
+    },
+    {
+      "node_id": "rare_earth_metals_alloys",
+      "value_basis": "customer_certification",
+      "assessment_text": "稀土金属与合金仅在直接产品、产销、收入或验证证据成立时确认价值。",
+      "rank": 4,
+      "evidence_ids": [],
+      "uncertainty": "需补充节点实现价格、成本、订单、收入、毛利和库存质量。"
+    },
+    {
+      "node_id": "ndfeb_magnetic_materials",
+      "value_basis": "gross_margin",
+      "assessment_text": "钕铁硼永磁材料仅在直接产品、产销、收入或验证证据成立时确认价值。",
+      "rank": 5,
+      "evidence_ids": [
+        "f5_claim_04",
+        "f5_claim_05",
+        "f5_claim_06",
+        "f5_claim_07",
+        "f5_claim_08",
+        "f5_claim_09"
+      ],
+      "uncertainty": "需补充节点实现价格、成本、订单、收入、毛利和库存质量。"
+    },
+    {
+      "node_id": "samarium_cobalt_specialty_magnets",
+      "value_basis": "customer_certification",
+      "assessment_text": "钐钴特种永磁仅在直接产品、产销、收入或验证证据成立时确认价值。",
+      "rank": 6,
+      "evidence_ids": [],
+      "uncertainty": "需补充节点实现价格、成本、订单、收入、毛利和库存质量。"
+    },
+    {
+      "node_id": "magnet_processing_coating_components",
+      "value_basis": "customer_certification",
+      "assessment_text": "磁体加工、涂层与组件仅在直接产品、产销、收入或验证证据成立时确认价值。",
+      "rank": 7,
+      "evidence_ids": [],
+      "uncertainty": "需补充节点实现价格、成本、订单、收入、毛利和库存质量。"
+    },
+    {
+      "node_id": "rare_earth_recycling_secondary_resources",
+      "value_basis": "customer_certification",
+      "assessment_text": "稀土回收与二次资源仅在直接产品、产销、收入或验证证据成立时确认价值。",
+      "rank": 8,
+      "evidence_ids": [],
+      "uncertainty": "需补充节点实现价格、成本、订单、收入、毛利和库存质量。"
+    },
+    {
+      "node_id": "quotas_prices_export_customer_validation",
+      "value_basis": "customer_certification",
+      "assessment_text": "配额、价格、出口与客户验证仅在直接产品、产销、收入或验证证据成立时确认价值。",
+      "rank": 9,
+      "evidence_ids": [
+        "f5_claim_11",
+        "f5_claim_12",
+        "f5_claim_13",
+        "f5_claim_14",
+        "f5_claim_15",
+        "f5_claim_16"
+      ],
+      "uncertainty": "需补充节点实现价格、成本、订单、收入、毛利和库存质量。"
+    }
+  ]
+}

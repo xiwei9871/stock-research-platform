@@ -1,0 +1,194 @@
+{
+  "artifact_version": "rare_earth_permanent_magnets_critical_minerals_node_evidence_matrix_v1",
+  "theme_id": "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
+  "as_of_date": "2026-07-18",
+  "node_evidence_matrix": [
+    {
+      "node_id": "rare_earth_mining_resource_control",
+      "accepted_source_ids": [
+        "f5_600259_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "f5_claim_10"
+      ],
+      "evidence_strength_before": 0,
+      "evidence_strength_after": 3,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "scarcity"
+      ],
+      "evidence_gap_status": "supported",
+      "node_review_status": "reviewed",
+      "rationale": "中稀有色直接披露合法采矿权与多座稀土矿山，但采矿节点收入、实现价格和成本未拆分。",
+      "next_evidence_needed": "补充节点产品产能、产量、实现价格、成本、订单、收入、毛利、客户和库存的直接披露。"
+    },
+    {
+      "node_id": "rare_earth_beneficiation_concentrates",
+      "accepted_source_ids": [],
+      "pending_source_ids": [],
+      "supported_claim_ids": [],
+      "evidence_strength_before": 0,
+      "evidence_strength_after": 1,
+      "value_capture_score_review_status": "provisional",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "needs_evidence",
+      "rationale": "本批没有可把规划矿山、参股权益或非稀土选矿写成当前自营稀土精矿产量的直接证据。",
+      "next_evidence_needed": "补充节点产品产能、产量、实现价格、成本、订单、收入、毛利、客户和库存的直接披露。"
+    },
+    {
+      "node_id": "rare_earth_separation_oxides",
+      "accepted_source_ids": [
+        "f5_600111_ar2025",
+        "f5_000831_ar2025",
+        "f5_600392_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "f5_claim_01",
+        "f5_claim_02",
+        "f5_claim_03"
+      ],
+      "evidence_strength_before": 0,
+      "evidence_strength_after": 5,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "scarcity",
+        "gross_margin"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "中国稀土直接披露稀土氧化物收入和毛利率，北方稀土与盛和资源补充冶炼分离产品和边界。",
+      "next_evidence_needed": "补充节点产品产能、产量、实现价格、成本、订单、收入、毛利、客户和库存的直接披露。"
+    },
+    {
+      "node_id": "rare_earth_metals_alloys",
+      "accepted_source_ids": [],
+      "pending_source_ids": [],
+      "supported_claim_ids": [],
+      "evidence_strength_before": 0,
+      "evidence_strength_after": 1,
+      "value_capture_score_review_status": "provisional",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "needs_evidence",
+      "rationale": "年报虽提到稀土金属，但本批公司主映射均缺独立金属产品三角色证据与节点收入。",
+      "next_evidence_needed": "补充节点产品产能、产量、实现价格、成本、订单、收入、毛利、客户和库存的直接披露。"
+    },
+    {
+      "node_id": "ndfeb_magnetic_materials",
+      "accepted_source_ids": [
+        "f5_600549_ar2025",
+        "f5_300748_ar2025",
+        "f5_300224_ar2025",
+        "f5_600366_ar2025",
+        "f5_000970_ar2025",
+        "f5_688077_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "f5_claim_04",
+        "f5_claim_05",
+        "f5_claim_06",
+        "f5_claim_07",
+        "f5_claim_08",
+        "f5_claim_09"
+      ],
+      "evidence_strength_before": 0,
+      "evidence_strength_after": 5,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "scarcity",
+        "gross_margin"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "金力永磁、正海磁材、宁波韵升、中科三环、大地熊和厦门钨业直接支持烧结钕铁硼产品、收入或产销。",
+      "next_evidence_needed": "补充节点产品产能、产量、实现价格、成本、订单、收入、毛利、客户和库存的直接披露。"
+    },
+    {
+      "node_id": "samarium_cobalt_specialty_magnets",
+      "accepted_source_ids": [],
+      "pending_source_ids": [],
+      "supported_claim_ids": [],
+      "evidence_strength_before": 0,
+      "evidence_strength_after": 1,
+      "value_capture_score_review_status": "provisional",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "needs_evidence",
+      "rationale": "大地熊仅提及其他磁性制品中的钐钴采购/产品范围，缺自有SmCo生产、收入和客户认证。",
+      "next_evidence_needed": "补充SmCo自有产能、客户认证与收入。"
+    },
+    {
+      "node_id": "magnet_processing_coating_components",
+      "accepted_source_ids": [],
+      "pending_source_ids": [],
+      "supported_claim_ids": [],
+      "evidence_strength_before": 0,
+      "evidence_strength_after": 1,
+      "value_capture_score_review_status": "provisional",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "needs_evidence",
+      "rationale": "表面处理、机加工多为磁材内部工艺，未形成独立公司级加工、涂层或组件业务证据。",
+      "next_evidence_needed": "补充节点产品产能、产量、实现价格、成本、订单、收入、毛利、客户和库存的直接披露。"
+    },
+    {
+      "node_id": "rare_earth_recycling_secondary_resources",
+      "accepted_source_ids": [],
+      "pending_source_ids": [],
+      "supported_claim_ids": [],
+      "evidence_strength_before": 0,
+      "evidence_strength_after": 1,
+      "value_capture_score_review_status": "provisional",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "needs_evidence",
+      "rationale": "金力永磁提及稀土回收布局，但本批未形成回收业务独立收入、产能和原料闭环三角色证据。",
+      "next_evidence_needed": "补充节点产品产能、产量、实现价格、成本、订单、收入、毛利、客户和库存的直接披露。"
+    },
+    {
+      "node_id": "quotas_prices_export_customer_validation",
+      "accepted_source_ids": [
+        "f5_000831_ar2025",
+        "f5_600259_ar2025",
+        "f5_600549_ar2025",
+        "f5_688077_ar2025",
+        "f5_000970_ar2025",
+        "f5_600392_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "f5_claim_11",
+        "f5_claim_12",
+        "f5_claim_13",
+        "f5_claim_14",
+        "f5_claim_15",
+        "f5_claim_16"
+      ],
+      "evidence_strength_before": 0,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "customer_certification"
+      ],
+      "evidence_gap_status": "supported",
+      "node_review_status": "reviewed",
+      "rationale": "配额、销售均价、客户认证、出口管制与库存分别有证据，但逐公司实现价格、订单转化和节点收入仍不完整。",
+      "next_evidence_needed": "补充节点产品产能、产量、实现价格、成本、订单、收入、毛利、客户和库存的直接披露。"
+    }
+  ]
+}
+
+

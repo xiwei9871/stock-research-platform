@@ -1,0 +1,776 @@
+{
+  "artifact_version": "theme_company_mapping_v1",
+  "theme_id": "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
+  "as_of_date": "2026-07-18",
+  "mapping_policy": {
+    "materiality_rule": "仅直接资源、分离、金属、磁材或独立加工证据可映射；公司总收入或混合口径保持limited/undisclosed。",
+    "typed_dependency_boundaries": {
+      "downstream_demand": "下游电机、机器人、风电、EV和消费电子需求不得直接映射为F5公司",
+      "generic_benefit": "泛下游需求不得证明公司受益",
+      "mixed_business": "普通钨钼业务、非稀土矿和通用有色收入不得冒充稀土节点收入",
+      "resource_owner": "资源公司只落有直接资源、选矿、分离或金属证据的节点",
+      "magnet_owner": "磁材公司只落自有磁材或独立加工证据节点",
+      "internal_processing": "表面处理作为内部工艺不得单独落磁体加工节点",
+      "lifecycle": "配额、产量、销量、报价、实现价格、客户认证、订单、收入与毛利必须分层"
+    }
+  },
+  "sources": [
+    {
+      "source_id": "f5_600111_ar2025",
+      "source_type": "company_filing",
+      "title": "北方稀土2025年年度报告",
+      "publisher": "中国北方稀土（集团）高科技股份有限公司",
+      "author": "中国北方稀土（集团）高科技股份有限公司",
+      "publish_date": "2026-04-18",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-18/1225118607.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第12-13、16、22、45、99页；正式年报全文复核。"
+    },
+    {
+      "source_id": "f5_000831_ar2025",
+      "source_type": "company_filing",
+      "title": "中国稀土2025年年度报告",
+      "publisher": "中国稀土集团资源科技股份有限公司",
+      "author": "中国稀土集团资源科技股份有限公司",
+      "publish_date": "2026-04-28",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-28/1225218157.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第10、14-15页；正式年报全文复核。"
+    },
+    {
+      "source_id": "f5_600392_ar2025",
+      "source_type": "company_filing",
+      "title": "盛和资源2025年年度报告",
+      "publisher": "盛和资源控股股份有限公司",
+      "author": "盛和资源控股股份有限公司",
+      "publish_date": "2026-04-30",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-30/1225258047.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第12、14-15、29页；正式年报全文复核。"
+    },
+    {
+      "source_id": "f5_600549_ar2025",
+      "source_type": "company_filing",
+      "title": "厦门钨业2025年年度报告",
+      "publisher": "厦门钨业股份有限公司",
+      "author": "厦门钨业股份有限公司",
+      "publish_date": "2026-04-24",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-24/1225166560.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第14-15、41、43页；正式年报全文复核。"
+    },
+    {
+      "source_id": "f5_300748_ar2025",
+      "source_type": "company_filing",
+      "title": "金力永磁2025年年度报告",
+      "publisher": "江西金力永磁科技股份有限公司",
+      "author": "江西金力永磁科技股份有限公司",
+      "publish_date": "2026-03-26",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-26/1225030339.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第10、21-22、36页；正式年报全文复核。"
+    },
+    {
+      "source_id": "f5_300224_ar2025",
+      "source_type": "company_filing",
+      "title": "正海磁材2025年年度报告",
+      "publisher": "烟台正海磁性材料股份有限公司",
+      "author": "烟台正海磁性材料股份有限公司",
+      "publish_date": "2026-03-31",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-31/1225060090.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第10-11、18-19页；正式年报全文复核。"
+    },
+    {
+      "source_id": "f5_600366_ar2025",
+      "source_type": "company_filing",
+      "title": "宁波韵升2025年年度报告",
+      "publisher": "宁波韵升股份有限公司",
+      "author": "宁波韵升股份有限公司",
+      "publish_date": "2026-04-11",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-11/1225096024.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第10、13-14页；正式年报全文复核。"
+    },
+    {
+      "source_id": "f5_000970_ar2025",
+      "source_type": "company_filing",
+      "title": "中科三环2025年年度报告",
+      "publisher": "北京中科三环高技术股份有限公司",
+      "author": "北京中科三环高技术股份有限公司",
+      "publish_date": "2026-03-28",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-28/1225043199.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第9-10、16-17页；正式年报全文复核。"
+    },
+    {
+      "source_id": "f5_688077_ar2025",
+      "source_type": "company_filing",
+      "title": "大地熊2025年年度报告",
+      "publisher": "安徽大地熊新材料股份有限公司",
+      "author": "安徽大地熊新材料股份有限公司",
+      "publish_date": "2026-03-28",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-28/1225046624.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第12-16、28页；正式年报全文复核。"
+    },
+    {
+      "source_id": "f5_600259_ar2025",
+      "source_type": "company_filing",
+      "title": "中稀有色2025年年度报告",
+      "publisher": "中稀有色金属股份有限公司",
+      "author": "中稀有色金属股份有限公司",
+      "publish_date": "2026-03-20",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-20/1225018116.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第10-12、14、16、19页；正式年报全文复核。"
+    }
+  ],
+  "evidence_items": [
+    {
+      "evidence_id": "f5_ev_600111_sh_product",
+      "source_id": "f5_600111_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "第12-13页",
+      "evidence_summary": "稀土氧化物、冶炼分离为公司直接产品或自营业务；公司主营覆盖稀土原料、新材料和终端应用，425.63亿元为混合口径，节点收入未单列。",
+      "related_company_codes": [
+        "600111.SH"
+      ],
+      "related_node_ids": [
+        "rare_earth_separation_oxides"
+      ]
+    },
+    {
+      "evidence_id": "f5_ev_600111_sh_materiality",
+      "source_id": "f5_600111_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "第99页",
+      "evidence_summary": "公司主营覆盖稀土原料、新材料和终端应用，425.63亿元为混合口径，节点收入未单列。",
+      "related_company_codes": [
+        "600111.SH"
+      ],
+      "related_node_ids": [
+        "rare_earth_separation_oxides"
+      ]
+    },
+    {
+      "evidence_id": "f5_ev_600111_sh_stage",
+      "source_id": "f5_600111_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "第16页",
+      "evidence_summary": "年报披露生产、产销、库存、客户或资源运营阶段；公司主营覆盖稀土原料、新材料和终端应用，425.63亿元为混合口径，节点收入未单列。",
+      "related_company_codes": [
+        "600111.SH"
+      ],
+      "related_node_ids": [
+        "rare_earth_separation_oxides"
+      ]
+    },
+    {
+      "evidence_id": "f5_ev_000831_sz_product",
+      "source_id": "f5_000831_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "第10页",
+      "evidence_summary": "稀土氧化物、冶炼分离为公司直接产品或自营业务；稀土氧化物收入23.7406亿元、毛利率16.70%，高纯定制产品产销量创新高。",
+      "related_company_codes": [
+        "000831.SZ"
+      ],
+      "related_node_ids": [
+        "rare_earth_separation_oxides"
+      ]
+    },
+    {
+      "evidence_id": "f5_ev_000831_sz_materiality",
+      "source_id": "f5_000831_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "第14-15页",
+      "evidence_summary": "稀土氧化物收入23.7406亿元、毛利率16.70%，高纯定制产品产销量创新高。",
+      "related_company_codes": [
+        "000831.SZ"
+      ],
+      "related_node_ids": [
+        "rare_earth_separation_oxides"
+      ]
+    },
+    {
+      "evidence_id": "f5_ev_000831_sz_stage",
+      "source_id": "f5_000831_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "第14页",
+      "evidence_summary": "年报披露生产、产销、库存、客户或资源运营阶段；稀土氧化物收入23.7406亿元、毛利率16.70%，高纯定制产品产销量创新高。",
+      "related_company_codes": [
+        "000831.SZ"
+      ],
+      "related_node_ids": [
+        "rare_earth_separation_oxides"
+      ]
+    },
+    {
+      "evidence_id": "f5_ev_600392_sh_product",
+      "source_id": "f5_600392_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "第14页",
+      "evidence_summary": "稀土氧化物、冶炼分离为公司直接产品或自营业务；现有业务含冶炼分离，但收入按工业/商业混合披露；规划矿山不作为当前自营选矿证据。",
+      "related_company_codes": [
+        "600392.SH"
+      ],
+      "related_node_ids": [
+        "rare_earth_separation_oxides"
+      ]
+    },
+    {
+      "evidence_id": "f5_ev_600392_sh_materiality",
+      "source_id": "f5_600392_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "第15页",
+      "evidence_summary": "现有业务含冶炼分离，但收入按工业/商业混合披露；规划矿山不作为当前自营选矿证据。",
+      "related_company_codes": [
+        "600392.SH"
+      ],
+      "related_node_ids": [
+        "rare_earth_separation_oxides"
+      ]
+    },
+    {
+      "evidence_id": "f5_ev_600392_sh_stage",
+      "source_id": "f5_600392_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "第12页",
+      "evidence_summary": "年报披露生产、产销、库存、客户或资源运营阶段；现有业务含冶炼分离，但收入按工业/商业混合披露；规划矿山不作为当前自营选矿证据。",
+      "related_company_codes": [
+        "600392.SH"
+      ],
+      "related_node_ids": [
+        "rare_earth_separation_oxides"
+      ]
+    },
+    {
+      "evidence_id": "f5_ev_600549_sh_product",
+      "source_id": "f5_600549_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "第14-15页",
+      "evidence_summary": "钕铁硼、磁性材料为公司直接产品或自营业务；稀土业务收入60.019亿元含氧化物、金属、磁材与电机；磁材产销库存另有披露。",
+      "related_company_codes": [
+        "600549.SH"
+      ],
+      "related_node_ids": [
+        "ndfeb_magnetic_materials"
+      ]
+    },
+    {
+      "evidence_id": "f5_ev_600549_sh_materiality",
+      "source_id": "f5_600549_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "第41页",
+      "evidence_summary": "稀土业务收入60.019亿元含氧化物、金属、磁材与电机；磁材产销库存另有披露。",
+      "related_company_codes": [
+        "600549.SH"
+      ],
+      "related_node_ids": [
+        "ndfeb_magnetic_materials"
+      ]
+    },
+    {
+      "evidence_id": "f5_ev_600549_sh_stage",
+      "source_id": "f5_600549_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "第43页",
+      "evidence_summary": "年报披露生产、产销、库存、客户或资源运营阶段；稀土业务收入60.019亿元含氧化物、金属、磁材与电机；磁材产销库存另有披露。",
+      "related_company_codes": [
+        "600549.SH"
+      ],
+      "related_node_ids": [
+        "ndfeb_magnetic_materials"
+      ]
+    },
+    {
+      "evidence_id": "f5_ev_300748_sz_product",
+      "source_id": "f5_300748_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "第10页",
+      "evidence_summary": "高性能稀土永磁材料、钕铁硼为公司直接产品或自营业务；钕铁硼磁钢收入70.2808亿元、毛利率20.92%，产销库存直接披露。",
+      "related_company_codes": [
+        "300748.SZ"
+      ],
+      "related_node_ids": [
+        "ndfeb_magnetic_materials"
+      ]
+    },
+    {
+      "evidence_id": "f5_ev_300748_sz_materiality",
+      "source_id": "f5_300748_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "第21-22页",
+      "evidence_summary": "钕铁硼磁钢收入70.2808亿元、毛利率20.92%，产销库存直接披露。",
+      "related_company_codes": [
+        "300748.SZ"
+      ],
+      "related_node_ids": [
+        "ndfeb_magnetic_materials"
+      ]
+    },
+    {
+      "evidence_id": "f5_ev_300748_sz_stage",
+      "source_id": "f5_300748_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "第22、36页",
+      "evidence_summary": "年报披露生产、产销、库存、客户或资源运营阶段；钕铁硼磁钢收入70.2808亿元、毛利率20.92%，产销库存直接披露。",
+      "related_company_codes": [
+        "300748.SZ"
+      ],
+      "related_node_ids": [
+        "ndfeb_magnetic_materials"
+      ]
+    },
+    {
+      "evidence_id": "f5_ev_300224_sz_product",
+      "source_id": "f5_300224_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "第10-11页",
+      "evidence_summary": "高性能钕铁硼、永磁材料为公司直接产品或自营业务；钕铁硼永磁材料及组件收入70.2707亿元，占营业收入99.94%。",
+      "related_company_codes": [
+        "300224.SZ"
+      ],
+      "related_node_ids": [
+        "ndfeb_magnetic_materials"
+      ]
+    },
+    {
+      "evidence_id": "f5_ev_300224_sz_materiality",
+      "source_id": "f5_300224_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "第18页",
+      "evidence_summary": "钕铁硼永磁材料及组件收入70.2707亿元，占营业收入99.94%。",
+      "related_company_codes": [
+        "300224.SZ"
+      ],
+      "related_node_ids": [
+        "ndfeb_magnetic_materials"
+      ]
+    },
+    {
+      "evidence_id": "f5_ev_300224_sz_stage",
+      "source_id": "f5_300224_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "第19页",
+      "evidence_summary": "年报披露生产、产销、库存、客户或资源运营阶段；钕铁硼永磁材料及组件收入70.2707亿元，占营业收入99.94%。",
+      "related_company_codes": [
+        "300224.SZ"
+      ],
+      "related_node_ids": [
+        "ndfeb_magnetic_materials"
+      ]
+    },
+    {
+      "evidence_id": "f5_ev_600366_sh_product",
+      "source_id": "f5_600366_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "第10页",
+      "evidence_summary": "钕铁硼、磁性材料为公司直接产品或自营业务；钕铁硼收入48.3287亿元、毛利率18.35%，成品产销库存直接披露。",
+      "related_company_codes": [
+        "600366.SH"
+      ],
+      "related_node_ids": [
+        "ndfeb_magnetic_materials"
+      ]
+    },
+    {
+      "evidence_id": "f5_ev_600366_sh_materiality",
+      "source_id": "f5_600366_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "第13-14页",
+      "evidence_summary": "钕铁硼收入48.3287亿元、毛利率18.35%，成品产销库存直接披露。",
+      "related_company_codes": [
+        "600366.SH"
+      ],
+      "related_node_ids": [
+        "ndfeb_magnetic_materials"
+      ]
+    },
+    {
+      "evidence_id": "f5_ev_600366_sh_stage",
+      "source_id": "f5_600366_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "第14页",
+      "evidence_summary": "年报披露生产、产销、库存、客户或资源运营阶段；钕铁硼收入48.3287亿元、毛利率18.35%，成品产销库存直接披露。",
+      "related_company_codes": [
+        "600366.SH"
+      ],
+      "related_node_ids": [
+        "ndfeb_magnetic_materials"
+      ]
+    },
+    {
+      "evidence_id": "f5_ev_000970_sz_product",
+      "source_id": "f5_000970_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "第9-10页",
+      "evidence_summary": "烧结钕铁硼、稀土永磁为公司直接产品或自营业务；磁材产品收入63.7698亿元、毛利率11.20%，产销库存直接披露。",
+      "related_company_codes": [
+        "000970.SZ"
+      ],
+      "related_node_ids": [
+        "ndfeb_magnetic_materials"
+      ]
+    },
+    {
+      "evidence_id": "f5_ev_000970_sz_materiality",
+      "source_id": "f5_000970_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "第16-17页",
+      "evidence_summary": "磁材产品收入63.7698亿元、毛利率11.20%，产销库存直接披露。",
+      "related_company_codes": [
+        "000970.SZ"
+      ],
+      "related_node_ids": [
+        "ndfeb_magnetic_materials"
+      ]
+    },
+    {
+      "evidence_id": "f5_ev_000970_sz_stage",
+      "source_id": "f5_000970_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "第17页",
+      "evidence_summary": "年报披露生产、产销、库存、客户或资源运营阶段；磁材产品收入63.7698亿元、毛利率11.20%，产销库存直接披露。",
+      "related_company_codes": [
+        "000970.SZ"
+      ],
+      "related_node_ids": [
+        "ndfeb_magnetic_materials"
+      ]
+    },
+    {
+      "evidence_id": "f5_ev_688077_sh_product",
+      "source_id": "f5_688077_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "第12-13页",
+      "evidence_summary": "烧结钕铁硼、磁性材料为公司直接产品或自营业务；主营高性能烧结钕铁硼；表面处理属于内部工艺，不单独映射加工节点。",
+      "related_company_codes": [
+        "688077.SH"
+      ],
+      "related_node_ids": [
+        "ndfeb_magnetic_materials"
+      ]
+    },
+    {
+      "evidence_id": "f5_ev_688077_sh_materiality",
+      "source_id": "f5_688077_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "第16页",
+      "evidence_summary": "主营高性能烧结钕铁硼；表面处理属于内部工艺，不单独映射加工节点。",
+      "related_company_codes": [
+        "688077.SH"
+      ],
+      "related_node_ids": [
+        "ndfeb_magnetic_materials"
+      ]
+    },
+    {
+      "evidence_id": "f5_ev_688077_sh_stage",
+      "source_id": "f5_688077_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "第28页",
+      "evidence_summary": "年报披露生产、产销、库存、客户或资源运营阶段；主营高性能烧结钕铁硼；表面处理属于内部工艺，不单独映射加工节点。",
+      "related_company_codes": [
+        "688077.SH"
+      ],
+      "related_node_ids": [
+        "ndfeb_magnetic_materials"
+      ]
+    },
+    {
+      "evidence_id": "f5_ev_600259_sh_product",
+      "source_id": "f5_600259_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "第10-11页",
+      "evidence_summary": "稀土矿、采矿为公司直接产品或自营业务；广东省内合法稀土采矿权与矿山证据直接；58.20亿元为采矿、分离、磁材和贸易混合口径。",
+      "related_company_codes": [
+        "600259.SH"
+      ],
+      "related_node_ids": [
+        "rare_earth_mining_resource_control"
+      ]
+    },
+    {
+      "evidence_id": "f5_ev_600259_sh_materiality",
+      "source_id": "f5_600259_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "第7、14页",
+      "evidence_summary": "广东省内合法稀土采矿权与矿山证据直接；58.20亿元为采矿、分离、磁材和贸易混合口径。",
+      "related_company_codes": [
+        "600259.SH"
+      ],
+      "related_node_ids": [
+        "rare_earth_mining_resource_control"
+      ]
+    },
+    {
+      "evidence_id": "f5_ev_600259_sh_stage",
+      "source_id": "f5_600259_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "第12、16页",
+      "evidence_summary": "年报披露生产、产销、库存、客户或资源运营阶段；广东省内合法稀土采矿权与矿山证据直接；58.20亿元为采矿、分离、磁材和贸易混合口径。",
+      "related_company_codes": [
+        "600259.SH"
+      ],
+      "related_node_ids": [
+        "rare_earth_mining_resource_control"
+      ]
+    }
+  ],
+  "company_mappings": [
+    {
+      "mapping_id": "f5_map_600111_sh",
+      "theme_id": "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
+      "company_code": "600111.SH",
+      "company_name": "北方稀土",
+      "market": "CN",
+      "mapped_node_id": "rare_earth_separation_oxides",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.9,
+      "evidence_ids": [
+        "f5_ev_600111_sh_product",
+        "f5_ev_600111_sh_materiality",
+        "f5_ev_600111_sh_stage"
+      ],
+      "revenue_relevance": "limited",
+      "bottleneck_relevance": "core",
+      "business_materiality": "meaningful_segment",
+      "product_or_service": "稀土氧化物与冶炼分离",
+      "relationship_summary": "公司主营覆盖稀土原料、新材料和终端应用，425.63亿元为混合口径，节点收入未单列。",
+      "review_status": "reviewed",
+      "notes": "仅映射直接L4；下游需求、混合业务和内部工艺不扩张节点。"
+    },
+    {
+      "mapping_id": "f5_map_000831_sz",
+      "theme_id": "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
+      "company_code": "000831.SZ",
+      "company_name": "中国稀土",
+      "market": "CN",
+      "mapped_node_id": "rare_earth_separation_oxides",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.96,
+      "evidence_ids": [
+        "f5_ev_000831_sz_product",
+        "f5_ev_000831_sz_materiality",
+        "f5_ev_000831_sz_stage"
+      ],
+      "revenue_relevance": "material",
+      "bottleneck_relevance": "core",
+      "business_materiality": "core_business",
+      "product_or_service": "稀土氧化物与定制分离",
+      "relationship_summary": "稀土氧化物收入23.7406亿元、毛利率16.70%，高纯定制产品产销量创新高。",
+      "review_status": "reviewed",
+      "notes": "仅映射直接L4；下游需求、混合业务和内部工艺不扩张节点。"
+    },
+    {
+      "mapping_id": "f5_map_600392_sh",
+      "theme_id": "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
+      "company_code": "600392.SH",
+      "company_name": "盛和资源",
+      "market": "CN",
+      "mapped_node_id": "rare_earth_separation_oxides",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.84,
+      "evidence_ids": [
+        "f5_ev_600392_sh_product",
+        "f5_ev_600392_sh_materiality",
+        "f5_ev_600392_sh_stage"
+      ],
+      "revenue_relevance": "limited",
+      "bottleneck_relevance": "core",
+      "business_materiality": "meaningful_segment",
+      "product_or_service": "稀土氧化物与冶炼分离",
+      "relationship_summary": "现有业务含冶炼分离，但收入按工业/商业混合披露；规划矿山不作为当前自营选矿证据。",
+      "review_status": "reviewed",
+      "notes": "仅映射直接L4；下游需求、混合业务和内部工艺不扩张节点。"
+    },
+    {
+      "mapping_id": "f5_map_600549_sh",
+      "theme_id": "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
+      "company_code": "600549.SH",
+      "company_name": "厦门钨业",
+      "market": "CN",
+      "mapped_node_id": "ndfeb_magnetic_materials",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.91,
+      "evidence_ids": [
+        "f5_ev_600549_sh_product",
+        "f5_ev_600549_sh_materiality",
+        "f5_ev_600549_sh_stage"
+      ],
+      "revenue_relevance": "limited",
+      "bottleneck_relevance": "core",
+      "business_materiality": "meaningful_segment",
+      "product_or_service": "钕铁硼磁性材料",
+      "relationship_summary": "稀土业务收入60.019亿元含氧化物、金属、磁材与电机；磁材产销库存另有披露。",
+      "review_status": "reviewed",
+      "notes": "仅映射直接L4；下游需求、混合业务和内部工艺不扩张节点。"
+    },
+    {
+      "mapping_id": "f5_map_300748_sz",
+      "theme_id": "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
+      "company_code": "300748.SZ",
+      "company_name": "金力永磁",
+      "market": "CN",
+      "mapped_node_id": "ndfeb_magnetic_materials",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.98,
+      "evidence_ids": [
+        "f5_ev_300748_sz_product",
+        "f5_ev_300748_sz_materiality",
+        "f5_ev_300748_sz_stage"
+      ],
+      "revenue_relevance": "material",
+      "bottleneck_relevance": "core",
+      "business_materiality": "core_business",
+      "product_or_service": "高性能钕铁硼磁钢",
+      "relationship_summary": "钕铁硼磁钢收入70.2808亿元、毛利率20.92%，产销库存直接披露。",
+      "review_status": "reviewed",
+      "notes": "仅映射直接L4；下游需求、混合业务和内部工艺不扩张节点。"
+    },
+    {
+      "mapping_id": "f5_map_300224_sz",
+      "theme_id": "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
+      "company_code": "300224.SZ",
+      "company_name": "正海磁材",
+      "market": "CN",
+      "mapped_node_id": "ndfeb_magnetic_materials",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.98,
+      "evidence_ids": [
+        "f5_ev_300224_sz_product",
+        "f5_ev_300224_sz_materiality",
+        "f5_ev_300224_sz_stage"
+      ],
+      "revenue_relevance": "material",
+      "bottleneck_relevance": "core",
+      "business_materiality": "core_business",
+      "product_or_service": "高性能钕铁硼永磁材料及组件",
+      "relationship_summary": "钕铁硼永磁材料及组件收入70.2707亿元，占营业收入99.94%。",
+      "review_status": "reviewed",
+      "notes": "仅映射直接L4；下游需求、混合业务和内部工艺不扩张节点。"
+    },
+    {
+      "mapping_id": "f5_map_600366_sh",
+      "theme_id": "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
+      "company_code": "600366.SH",
+      "company_name": "宁波韵升",
+      "market": "CN",
+      "mapped_node_id": "ndfeb_magnetic_materials",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.97,
+      "evidence_ids": [
+        "f5_ev_600366_sh_product",
+        "f5_ev_600366_sh_materiality",
+        "f5_ev_600366_sh_stage"
+      ],
+      "revenue_relevance": "material",
+      "bottleneck_relevance": "core",
+      "business_materiality": "core_business",
+      "product_or_service": "钕铁硼磁钢",
+      "relationship_summary": "钕铁硼收入48.3287亿元、毛利率18.35%，成品产销库存直接披露。",
+      "review_status": "reviewed",
+      "notes": "仅映射直接L4；下游需求、混合业务和内部工艺不扩张节点。"
+    },
+    {
+      "mapping_id": "f5_map_000970_sz",
+      "theme_id": "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
+      "company_code": "000970.SZ",
+      "company_name": "中科三环",
+      "market": "CN",
+      "mapped_node_id": "ndfeb_magnetic_materials",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.97,
+      "evidence_ids": [
+        "f5_ev_000970_sz_product",
+        "f5_ev_000970_sz_materiality",
+        "f5_ev_000970_sz_stage"
+      ],
+      "revenue_relevance": "material",
+      "bottleneck_relevance": "core",
+      "business_materiality": "core_business",
+      "product_or_service": "烧结钕铁硼与稀土永磁材料",
+      "relationship_summary": "磁材产品收入63.7698亿元、毛利率11.20%，产销库存直接披露。",
+      "review_status": "reviewed",
+      "notes": "仅映射直接L4；下游需求、混合业务和内部工艺不扩张节点。"
+    },
+    {
+      "mapping_id": "f5_map_688077_sh",
+      "theme_id": "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
+      "company_code": "688077.SH",
+      "company_name": "大地熊",
+      "market": "CN",
+      "mapped_node_id": "ndfeb_magnetic_materials",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.97,
+      "evidence_ids": [
+        "f5_ev_688077_sh_product",
+        "f5_ev_688077_sh_materiality",
+        "f5_ev_688077_sh_stage"
+      ],
+      "revenue_relevance": "material",
+      "bottleneck_relevance": "core",
+      "business_materiality": "core_business",
+      "product_or_service": "高性能烧结钕铁硼永磁材料",
+      "relationship_summary": "主营高性能烧结钕铁硼；表面处理属于内部工艺，不单独映射加工节点。",
+      "review_status": "reviewed",
+      "notes": "仅映射直接L4；下游需求、混合业务和内部工艺不扩张节点。"
+    },
+    {
+      "mapping_id": "f5_map_600259_sh",
+      "theme_id": "rare_earth_permanent_magnets_critical_minerals_value_chain_v1",
+      "company_code": "600259.SH",
+      "company_name": "中稀有色",
+      "market": "CN",
+      "mapped_node_id": "rare_earth_mining_resource_control",
+      "mapping_type": "material_supplier",
+      "business_stage": "primary_business",
+      "confidence": 0.89,
+      "evidence_ids": [
+        "f5_ev_600259_sh_product",
+        "f5_ev_600259_sh_materiality",
+        "f5_ev_600259_sh_stage"
+      ],
+      "revenue_relevance": "limited",
+      "bottleneck_relevance": "core",
+      "business_materiality": "meaningful_segment",
+      "product_or_service": "稀土矿权与矿山开采",
+      "relationship_summary": "广东省内合法稀土采矿权与矿山证据直接；58.20亿元为采矿、分离、磁材和贸易混合口径。",
+      "review_status": "reviewed",
+      "notes": "仅映射直接L4；下游需求、混合业务和内部工艺不扩张节点。"
+    }
+  ],
+  "concept_only_candidates": [],
+  "excluded_initial_candidates": []
+}
+
