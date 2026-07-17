@@ -779,6 +779,22 @@
       "notes":"主题研究拥有卫星平台、载荷硬件、星上系统、卫星专用地面链路、批量制造和在轨基础设施运营。运载火箭、发射场和发射服务仍归`commercial_space_launch`；通用半导体与地面网络设备只表达卫星场景集成，不重复canonical所有权；星座规划、合同、交付、发射、在轨验收和服务收入必须分阶段验证。"
     },
     {
+      "theme_id":"satellite_communications_navigation_remote_sensing_value_chain_v1",
+      "chain_id":"satellite_communications_navigation_remote_sensing",
+      "node_links":[
+        {"theme_node_id":"satellite_capacity_service_access","catalog_node_id":"satellite_capacity_service_access"},
+        {"theme_node_id":"satellite_ground_access_terminal_integration","catalog_node_id":"satellite_ground_access_terminal_integration"},
+        {"theme_node_id":"satellite_communications_service_delivery","catalog_node_id":"satellite_communications_service_delivery"},
+        {"theme_node_id":"satellite_navigation_pnt_augmentation_services","catalog_node_id":"satellite_navigation_pnt_augmentation_services"},
+        {"theme_node_id":"remote_sensing_data_processing_distribution","catalog_node_id":"remote_sensing_data_processing_distribution"},
+        {"theme_node_id":"satellite_vertical_application_integration","catalog_node_id":"satellite_vertical_application_integration"},
+        {"theme_node_id":"application_operations_utilization_pricing","catalog_node_id":"application_operations_utilization_pricing"},
+        {"theme_node_id":"recurring_service_revenue_validation","catalog_node_id":"recurring_service_revenue_validation"}
+      ],
+      "unmapped_theme_node_ids":[],
+      "notes":"E1 owns downstream application access, communications delivery, PNT augmentation, remote-sensing data processing, vertical integration, utilization, pricing, renewal and recognized service revenue. Satellite platforms, payload hardware, onboard systems, batch manufacturing, launch handoff, in-orbit infrastructure operations, gateways and terminals retain canonical ownership in `satellite_manufacturing_space_infrastructure`; hardware-only evidence cannot create an E1 reviewed beneficiary."
+    },
+    {
       "theme_id":"high_end_medical_devices_value_chain_v1",
       "chain_id":"high_end_medical_devices",
       "node_links":[

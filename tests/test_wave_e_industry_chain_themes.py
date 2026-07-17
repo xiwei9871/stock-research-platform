@@ -1,7 +1,17 @@
 from __future__ import annotations
 
 import json
+import importlib.util
 from pathlib import Path
+
+from stock_research.dashboard.theme_research import (
+    get_theme_research_theme,
+    list_theme_research_claims,
+    list_theme_research_companies,
+)
+from stock_research.technology_industry_catalog import load_industry_catalog
+from stock_research.theme_company_mapping import validate_theme_company_mapping_artifact
+from stock_research.theme_decomposition import validate_theme_decomposition_artifact
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
@@ -10,6 +20,11 @@ MANIFEST_PATH = (
     / "artifacts/theme_decomposition/batch_manifests"
     / "wave_e_five_industry_chain_themes_v1.json"
 )
+SCRIPT_PATH = REPOSITORY_ROOT / "scripts/verify_industry_chain_theme_batch.py"
+SPEC = importlib.util.spec_from_file_location("verify_wave_e_batch", SCRIPT_PATH)
+assert SPEC is not None and SPEC.loader is not None
+VERIFIER = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(VERIFIER)
 
 WAVE_E_CASES = {
     "satellite_communications_navigation_remote_sensing": (
@@ -26,6 +41,53 @@ WAVE_E_CASES = {
         "quantum_computing_communication_measurement_value_chain_v1"
     ),
 }
+
+E1_CHAIN_ID = "satellite_communications_navigation_remote_sensing"
+E1_THEME_ID = "satellite_communications_navigation_remote_sensing_value_chain_v1"
+E1_THEME_PATH = REPOSITORY_ROOT / f"artifacts/theme_decomposition/{E1_THEME_ID}.json"
+E1_MAPPING_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/company_mappings"
+    / "satellite_communications_navigation_remote_sensing_company_mapping_v1.json"
+)
+E1_SOURCE_PACK_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "satellite_communications_navigation_remote_sensing_source_pack_v1.json"
+)
+E1_MATRIX_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "satellite_communications_navigation_remote_sensing_node_evidence_matrix_v1.json"
+)
+
+E1_NODE_IDS = {
+    "satellite_capacity_service_access",
+    "satellite_ground_access_terminal_integration",
+    "satellite_communications_service_delivery",
+    "satellite_navigation_pnt_augmentation_services",
+    "remote_sensing_data_processing_distribution",
+    "satellite_vertical_application_integration",
+    "application_operations_utilization_pricing",
+    "recurring_service_revenue_validation",
+}
+
+E1_COMPOSITIONS = {
+    "satellite_capacity_service_access": "satellite_service_capacity_revenue_validation",
+    "satellite_ground_access_terminal_integration": (
+        "satellite_ground_tt_c_gateway_terminal_integration"
+    ),
+    "satellite_communications_service_delivery": (
+        "satellite_service_capacity_revenue_validation"
+    ),
+    "remote_sensing_data_processing_distribution": (
+        "communication_navigation_remote_sensing_payload_hardware"
+    ),
+}
+
+
+def _read_json(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def _paths(chain_id: str, theme_id: str) -> dict[str, str]:
@@ -123,3 +185,154 @@ def test_wave_e_manifest_freezes_research_scope() -> None:
     assert manifest["waves"] == {"wave_e": list(WAVE_E_CASES)}
     assert manifest["themes"] == expected_themes
     assert list(manifest["themes"]) == list(WAVE_E_CASES)
+
+
+def test_satellite_communications_e1_four_research_artifacts_exist_before_validation() -> None:
+    for path in (
+        E1_THEME_PATH,
+        E1_MAPPING_PATH,
+        E1_SOURCE_PACK_PATH,
+        E1_MATRIX_PATH,
+    ):
+        assert path.is_file(), path
+
+
+def test_satellite_communications_e1_theme_meets_strict_wave_e_gate_and_exact_node_scope() -> None:
+    theme = _read_json(E1_THEME_PATH)
+    mapping = _read_json(E1_MAPPING_PATH)
+    validate_theme_decomposition_artifact(theme, expected_theme_id=E1_THEME_ID)
+    validate_theme_company_mapping_artifact(mapping, theme)
+    report = VERIFIER.build_theme_batch_report(MANIFEST_PATH, wave="wave_e")
+    row = next(item for item in report["theme_results"] if item["chain_id"] == E1_CHAIN_ID)
+
+    assert theme["artifact_version"] == "theme_decomposition_v1_6"
+    assert theme["theme"]["status"] == "reviewed"
+    assert theme["theme"]["created_from"] == "mixed"
+    assert theme["research_profile"]["catalog_chain_id"] == E1_CHAIN_ID
+    assert theme["research_profile"]["research_kind"] == "industry_chain_deep_research"
+    assert {node["node_id"] for node in theme["nodes"]} == E1_NODE_IDS
+    assert len(theme["sources"]) >= 10
+    assert len(theme["claims"]) >= 12
+    assert len(
+        [item for item in mapping["company_mappings"] if item["review_status"] == "reviewed"]
+    ) >= 8
+    assert {row["node_id"] for row in theme["value_capture_assessments"]} == E1_NODE_IDS
+    assert row["ready"] is True
+    assert row["checks"]["bidirectional_evidence_contract"] is True
+    assert row["checks"]["precise_mapping_locators"] is True
+
+
+def test_satellite_communications_e1_catalog_roles_links_and_compositions_preserve_d4_ownership() -> None:
+    catalog = load_industry_catalog()
+    chain_nodes = [row for row in catalog["nodes"] if row["chain_id"] == E1_CHAIN_ID]
+    assert {row["node_id"] for row in chain_nodes} == E1_NODE_IDS
+    assert all(row["node_kind"] == "application_role" for row in chain_nodes)
+    assert all(row["canonical_key"] == "" for row in chain_nodes)
+    assert {row["level"] for row in chain_nodes} == {"L3", "L4"}
+
+    link = next(row for row in catalog["theme_links"] if row["theme_id"] == E1_THEME_ID)
+    assert link["chain_id"] == E1_CHAIN_ID
+    assert link["unmapped_theme_node_ids"] == []
+    assert {row["theme_node_id"] for row in link["node_links"]} == E1_NODE_IDS
+    assert {row["catalog_node_id"] for row in link["node_links"]} == E1_NODE_IDS
+
+    composition_path = (
+        REPOSITORY_ROOT
+        / "artifacts/technology_industry_catalog/v1/theme_compositions"
+        / "satellite_communications_navigation_remote_sensing_v1.json"
+    )
+    compositions = _read_json(composition_path)["theme_compositions"]
+    actual = {
+        row["role_node_id"]: row["canonical_node_refs"][0] for row in compositions
+    }
+    assert actual == E1_COMPOSITIONS
+    assert all(row["relationship_type"] == "depends_on" for row in compositions)
+    catalog_node_ids = {row["node_id"] for row in catalog["nodes"]}
+    assert set(E1_COMPOSITIONS.values()) <= catalog_node_ids
+
+
+def test_satellite_communications_e1_company_evidence_uses_sources_roles_and_locators() -> None:
+    theme = _read_json(E1_THEME_PATH)
+    mapping = _read_json(E1_MAPPING_PATH)
+    source_pack = _read_json(E1_SOURCE_PACK_PATH)
+    matrix = _read_json(E1_MATRIX_PATH)
+
+    theme_source_ids = {row["source_id"] for row in theme["sources"]}
+    mapping_source_ids = {row["source_id"] for row in mapping["sources"]}
+    source_pack_ids = {row["source_id"] for row in source_pack["sources"]}
+    assert theme_source_ids == mapping_source_ids == source_pack_ids
+
+    def source_identity(rows: list[dict]) -> dict[str, tuple]:
+        return {
+            row["source_id"]: (
+                row["source_type"],
+                row["title"],
+                row["publisher"],
+                row["author"],
+                row["publish_date"],
+                row.get("url_or_ref", row.get("url")),
+                row["access_level"],
+                row["reliability_level"],
+                row["review_status"],
+            )
+            for row in rows
+        }
+
+    assert source_identity(theme["sources"]) == source_identity(mapping["sources"])
+    assert source_identity(theme["sources"]) == source_identity(source_pack["sources"])
+    assert len(
+        [row for row in source_pack["sources"] if row["source_type"] in {
+            "company_filing", "official_report", "official_article"
+        }]
+    ) >= 8
+    assert {row["node_id"] for row in matrix["node_evidence_matrix"]} == E1_NODE_IDS
+
+    evidence_by_id = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+    for row in mapping["company_mappings"]:
+        evidence = [evidence_by_id[evidence_id] for evidence_id in row["evidence_ids"]]
+        assert len(evidence) == 3
+        assert {item["evidence_type"] for item in evidence} in (
+            {"product_relationship", "revenue_materiality", "business_stage"},
+            {"service_relationship", "revenue_materiality", "business_stage"},
+        )
+        assert len({item["excerpt_locator"] for item in evidence}) == 3
+        assert all("页" in item["excerpt_locator"] for item in evidence)
+
+
+def test_satellite_communications_e1_dashboard_explains_capacity_and_recurring_revenue() -> None:
+    detail = get_theme_research_theme(E1_THEME_ID)
+    summary = detail["research_profile"]["investment_summary"]
+    assert "在轨容量" in summary
+    assert "服务利用" in summary
+    assert "经常性收入" in summary
+
+    claims = list_theme_research_claims(E1_THEME_ID)["items"]
+    claim_types = {row["claim_type"] for row in claims}
+    assert {
+        "value_capture", "bottleneck", "tech_route", "catalyst", "risk", "company_mapping"
+    } <= claim_types
+    assert any("验证" in row["claim_text"] for row in claims)
+
+    companies = list_theme_research_companies(E1_THEME_ID)["items"]
+    assert len(companies) >= 8
+    assert all(row["beneficiary_tier"] in {
+        "core_beneficiary", "elastic_beneficiary"
+    } for row in companies)
+
+
+def test_satellite_communications_e1_boundary_excludes_hardware_only_beneficiaries() -> None:
+    theme = _read_json(E1_THEME_PATH)
+    mapping = _read_json(E1_MAPPING_PATH)
+    all_text = json.dumps({"theme": theme, "mapping": mapping}, ensure_ascii=False)
+    assert "satellite_manufacturing_space_infrastructure" in all_text
+    assert "平台" in all_text and "载荷硬件" in all_text and "组批制造" in all_text
+    assert "600118.SH" not in {
+        row["company_code"] for row in mapping["company_mappings"]
+        if row["review_status"] == "reviewed"
+    }
+    forbidden_mapping_types = {"component_supplier", "equipment_supplier"}
+    assert not {
+        row["mapping_id"] for row in mapping["company_mappings"]
+        if row["mapping_type"] in forbidden_mapping_types
+        and row["mapped_node_id"] == "satellite_capacity_service_access"
+    }

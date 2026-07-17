@@ -1,0 +1,159 @@
+{
+  "nodes": [
+    {
+      "node_id": "satellite_capacity_service_access",
+      "chain_id": "satellite_communications_navigation_remote_sensing",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Satellite Capacity and Service Access",
+      "node_kind": "application_role",
+      "node_type": "application_service_stage",
+      "description": "Application-side access to commissioned in-orbit capacity, service availability, coverage, quality of service, and commercial access terms. Satellite platforms, payload hardware, fleet control, and canonical in-orbit infrastructure operations remain owned by satellite_manufacturing_space_infrastructure.",
+      "status": "draft",
+      "primary_path": [
+        "aerospace_low_altitude_ocean_technology",
+        "satellite_communications_navigation_remote_sensing",
+        "satellite_capacity_service_access"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "satellite_service_capacity_revenue_validation"
+      ]
+    },
+    {
+      "node_id": "satellite_ground_access_terminal_integration",
+      "chain_id": "satellite_communications_navigation_remote_sensing",
+      "parent_node_id": "satellite_capacity_service_access",
+      "level": "L4",
+      "node_name": "Ground Access and Terminal Integration",
+      "node_kind": "application_role",
+      "node_type": "application_access_integration_role",
+      "description": "Integration of satellite-specific gateways, terminals, modems, antennas, subscriber provisioning, and terrestrial handoff into an application service. Ground-station, gateway, and terminal hardware ownership remains with satellite_manufacturing_space_infrastructure; this role owns downstream access configuration and service activation.",
+      "status": "draft",
+      "primary_path": [
+        "aerospace_low_altitude_ocean_technology",
+        "satellite_communications_navigation_remote_sensing",
+        "satellite_capacity_service_access",
+        "satellite_ground_access_terminal_integration"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "satellite_ground_tt_c_gateway_terminal_integration"
+      ]
+    },
+    {
+      "node_id": "satellite_communications_service_delivery",
+      "chain_id": "satellite_communications_navigation_remote_sensing",
+      "parent_node_id": "satellite_capacity_service_access",
+      "level": "L4",
+      "node_name": "Satellite Communications Service Delivery",
+      "node_kind": "application_role",
+      "node_type": "communications_service_role",
+      "description": "Delivery of broadcast, broadband, dedicated network, emergency communications, mobility, and integrated satellite communications services using commissioned capacity, activated terminals, service-level commitments, and customer contracts. Capacity commissioning and canonical revenue validation remain owned by the D4 infrastructure chain; E1 owns application delivery and utilization.",
+      "status": "draft",
+      "primary_path": [
+        "aerospace_low_altitude_ocean_technology",
+        "satellite_communications_navigation_remote_sensing",
+        "satellite_capacity_service_access",
+        "satellite_communications_service_delivery"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "satellite_service_capacity_revenue_validation"
+      ]
+    },
+    {
+      "node_id": "satellite_navigation_pnt_augmentation_services",
+      "chain_id": "satellite_communications_navigation_remote_sensing",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Navigation, PNT, and Augmentation Services",
+      "node_kind": "application_role",
+      "node_type": "navigation_service_role",
+      "description": "Positioning, navigation, timing, RTK, PPP-RTK, differential correction, short-message, and location-data services delivered to transport, surveying, agriculture, robotics, emergency, and other users. Navigation payloads, chips, receivers, and terminal hardware retain their canonical manufacturing ownership.",
+      "status": "draft",
+      "primary_path": [
+        "aerospace_low_altitude_ocean_technology",
+        "satellite_communications_navigation_remote_sensing",
+        "satellite_navigation_pnt_augmentation_services"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "remote_sensing_data_processing_distribution",
+      "chain_id": "satellite_communications_navigation_remote_sensing",
+      "parent_node_id": "satellite_vertical_application_integration",
+      "level": "L4",
+      "node_name": "Remote-Sensing Data Processing and Distribution",
+      "node_kind": "application_role",
+      "node_type": "remote_sensing_service_role",
+      "description": "Acquisition scheduling, reception, correction, processing, interpretation, cloud delivery, subscription, and distribution of optical, radar, and other earth-observation data products. Satellite sensors and payload electronics remain owned by satellite_manufacturing_space_infrastructure.",
+      "status": "draft",
+      "primary_path": [
+        "aerospace_low_altitude_ocean_technology",
+        "satellite_communications_navigation_remote_sensing",
+        "satellite_vertical_application_integration",
+        "remote_sensing_data_processing_distribution"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "communication_navigation_remote_sensing_payload_hardware"
+      ]
+    },
+    {
+      "node_id": "satellite_vertical_application_integration",
+      "chain_id": "satellite_communications_navigation_remote_sensing",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Satellite Vertical Application Integration",
+      "node_kind": "application_role",
+      "node_type": "vertical_application_role",
+      "description": "Application-specific integration of satellite communications, PNT, remote-sensing data, software, cloud platforms, workflows, and operations for agriculture, transport, emergency, natural resources, cities, energy, maritime, and other verticals. Generic platforms, payloads, launch, and batch manufacturing remain outside this application role.",
+      "status": "draft",
+      "primary_path": [
+        "aerospace_low_altitude_ocean_technology",
+        "satellite_communications_navigation_remote_sensing",
+        "satellite_vertical_application_integration"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "application_operations_utilization_pricing",
+      "chain_id": "satellite_communications_navigation_remote_sensing",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Application Operations, Utilization, and Pricing",
+      "node_kind": "application_role",
+      "node_type": "application_operations_role",
+      "description": "Tracks active customers, subscribed terminals, data volume, service availability, capacity or platform utilization, usage-based or subscription pricing, renewal, and application operating cost. Planned coverage, installed hardware, and delivered platforms are not substitutes for paid utilization.",
+      "status": "draft",
+      "primary_path": [
+        "aerospace_low_altitude_ocean_technology",
+        "satellite_communications_navigation_remote_sensing",
+        "application_operations_utilization_pricing"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "recurring_service_revenue_validation",
+      "chain_id": "satellite_communications_navigation_remote_sensing",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Recurring Service Revenue Validation",
+      "node_kind": "application_role",
+      "node_type": "commercial_validation_role",
+      "description": "Validates that application access and usage convert into recognized subscription, operations, data, software, or service revenue, contract renewal, receivable collection, and operating cash flow. Orders, pilots, installed terminals, delivered hardware, constellation plans, and successful launches are not recurring application revenue.",
+      "status": "draft",
+      "primary_path": [
+        "aerospace_low_altitude_ocean_technology",
+        "satellite_communications_navigation_remote_sensing",
+        "recurring_service_revenue_validation"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    }
+  ]
+}

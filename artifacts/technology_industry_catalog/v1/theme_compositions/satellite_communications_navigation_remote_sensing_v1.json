@@ -1,0 +1,44 @@
+{
+  "theme_compositions": [
+    {
+      "composition_id": "satellite_capacity_service_access_composition",
+      "chain_id": "satellite_communications_navigation_remote_sensing",
+      "role_node_id": "satellite_capacity_service_access",
+      "canonical_node_refs": [
+        "satellite_service_capacity_revenue_validation"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "The E1 application role makes the downstream access decision over commissioned service capacity, so it composes the D4 canonical L4 service-capacity validation node. The D4 L3 in_orbit_infrastructure_operations node remains the narrative operating context; fleet control, platform operations, canonical company mappings, and infrastructure evidence remain owned by satellite_manufacturing_space_infrastructure."
+    },
+    {
+      "composition_id": "satellite_ground_access_terminal_integration_composition",
+      "chain_id": "satellite_communications_navigation_remote_sensing",
+      "role_node_id": "satellite_ground_access_terminal_integration",
+      "canonical_node_refs": [
+        "satellite_ground_tt_c_gateway_terminal_integration"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "The E1 application role configures access, activation, provisioning, and terrestrial handoff around satellite-specific gateway and terminal hardware; D4 retains canonical equipment ownership and evidence."
+    },
+    {
+      "composition_id": "satellite_communications_service_delivery_composition",
+      "chain_id": "satellite_communications_navigation_remote_sensing",
+      "role_node_id": "satellite_communications_service_delivery",
+      "canonical_node_refs": [
+        "satellite_service_capacity_revenue_validation"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "The E1 application role owns downstream customer service delivery and utilization while the D4 canonical target retains commissioned-capacity and infrastructure-revenue validation ownership."
+    },
+    {
+      "composition_id": "remote_sensing_data_processing_distribution_composition",
+      "chain_id": "satellite_communications_navigation_remote_sensing",
+      "role_node_id": "remote_sensing_data_processing_distribution",
+      "canonical_node_refs": [
+        "communication_navigation_remote_sensing_payload_hardware"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "The E1 application role processes and distributes earth-observation data produced by payload hardware; satellite sensors, payload electronics, platform integration, and their company evidence remain owned by D4."
+    }
+  ]
+}
