@@ -391,7 +391,11 @@
         },
         "hash_fields": {
           "type": "array",
-          "items": {"type": "string", "minLength": 1},
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^/(?:[^~/]|~[01])*(?:/(?:[^~/]|~[01])*)*$"
+          },
           "minItems": 1,
           "uniqueItems": true
         },
