@@ -1,0 +1,279 @@
+{
+  "artifact_version": "ai_foundation_models_application_software_source_pack_v1",
+  "theme_id": "ai_foundation_models_application_software_value_chain_v1",
+  "as_of_date": "2026-07-17",
+  "sources": [
+    {
+      "source_id": "f1_002230_ar2025",
+      "source_type": "company_filing",
+      "title": "科大讯飞股份有限公司2025年年度报告",
+      "publisher": "科大讯飞股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-29",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-29/1225233581.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第11-13、48、240、243页",
+      "evidence_summary": "讯飞星火模型平台、智能体产品、线上营收增速、学校覆盖、调用与续费模式。",
+      "supported_claim_ids": [
+        "f1_claim_01",
+        "f1_claim_02",
+        "f1_claim_03"
+      ],
+      "supported_node_ids": [
+        "foundation_model_training_inference_platforms",
+        "ai_agent_orchestration_workflow",
+        "subscription_usage_licensing_monetization",
+        "customer_adoption_renewal_revenue_validation",
+        "industry_solution_delivery_integration"
+      ],
+      "limitations": "PPT智能体披露营收增速但未披露绝对金额；公司宽口径收入不归因于AI。",
+      "notes": "第11-13、48、240、243页；PPT智能体披露营收增速但未披露绝对金额；公司宽口径收入不归因于AI。"
+    },
+    {
+      "source_id": "f1_688111_ar2025",
+      "source_type": "company_filing",
+      "title": "北京金山办公软件股份有限公司2025年年度报告",
+      "publisher": "北京金山办公软件股份有限公司",
+      "author": "",
+      "publish_date": "2026-03-26",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-03-26/1225032227.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第11-18页",
+      "evidence_summary": "WPS AI个人、企业与政务产品，WPS AI月活、Token调用和WPS 365收入。",
+      "supported_claim_ids": [
+        "f1_claim_04",
+        "f1_claim_05"
+      ],
+      "supported_node_ids": [
+        "enterprise_ai_application_software",
+        "data_security_model_governance_compliance",
+        "customer_adoption_renewal_revenue_validation",
+        "subscription_usage_licensing_monetization"
+      ],
+      "limitations": "WPS 365与个人业务收入包含非AI功能，未单列AI产品收入。",
+      "notes": "第11-18页；WPS 365与个人业务收入包含非AI功能，未单列AI产品收入。"
+    },
+    {
+      "source_id": "f1_600588_ar2025",
+      "source_type": "company_filing",
+      "title": "用友网络科技股份有限公司2025年年度报告",
+      "publisher": "用友网络科技股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-18",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-18/1225120765.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第19-24页",
+      "evidence_summary": "YonGPT、用友BIP企业AI矩阵、16.7亿元AI合同及400余家签约客户。",
+      "supported_claim_ids": [
+        "f1_claim_06"
+      ],
+      "supported_node_ids": [
+        "enterprise_ai_application_software",
+        "industry_solution_delivery_integration",
+        "customer_adoption_renewal_revenue_validation",
+        "subscription_usage_licensing_monetization"
+      ],
+      "limitations": "AI签约合同不是已确认收入，云与软件宽口径收入不得外推。",
+      "notes": "第19-24页；AI签约合同不是已确认收入，云与软件宽口径收入不得外推。"
+    },
+    {
+      "source_id": "f1_601360_ar2025",
+      "source_type": "company_filing",
+      "title": "三六零安全科技股份有限公司2025年年度报告",
+      "publisher": "三六零安全科技股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-30",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-30/1225257356.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第15-23、38页",
+      "evidence_summary": "纳米AI、360AI办公、AI搜索、安全大模型治理产品与使用规模。",
+      "supported_claim_ids": [
+        "f1_claim_07",
+        "f1_claim_08"
+      ],
+      "supported_node_ids": [
+        "consumer_ai_application_services",
+        "ai_agent_orchestration_workflow",
+        "customer_adoption_renewal_revenue_validation",
+        "data_security_model_governance_compliance"
+      ],
+      "limitations": "互联网与安全业务收入未拆分纳米AI或安全大模型专项收入。",
+      "notes": "第15-23、38页；互联网与安全业务收入未拆分纳米AI或安全大模型专项收入。"
+    },
+    {
+      "source_id": "f1_300229_ar2025",
+      "source_type": "company_filing",
+      "title": "拓尔思信息技术股份有限公司2025年年度报告",
+      "publisher": "拓尔思信息技术股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-15",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-15/1225103279.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第12-20、29-30、44-45页",
+      "evidence_summary": "拓天大模型、动态本体、RAG与智能体平台、金融客户和项目落地。",
+      "supported_claim_ids": [
+        "f1_claim_09",
+        "f1_claim_10"
+      ],
+      "supported_node_ids": [
+        "model_toolchain_finetuning_rag",
+        "ai_agent_orchestration_workflow",
+        "subscription_usage_licensing_monetization",
+        "industry_solution_delivery_integration",
+        "customer_adoption_renewal_revenue_validation"
+      ],
+      "limitations": "新AI业务仍处试用培育，未披露规模化AI收入；传统大数据和安全收入不归因。",
+      "notes": "第12-20、29-30、44-45页；新AI业务仍处试用培育，未披露规模化AI收入；传统大数据和安全收入不归因。"
+    },
+    {
+      "source_id": "f1_300634_ar2025",
+      "source_type": "company_filing",
+      "title": "彩讯科技股份有限公司2025年年度报告",
+      "publisher": "彩讯科技股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-11",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-11/1225095918.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第9-15、24、37-42页",
+      "evidence_summary": "Rich AIBox、AI办公、智能体开发及企业客户应用。",
+      "supported_claim_ids": [
+        "f1_claim_11"
+      ],
+      "supported_node_ids": [
+        "ai_agent_orchestration_workflow",
+        "enterprise_ai_application_software",
+        "model_toolchain_finetuning_rag"
+      ],
+      "limitations": "协同办公、智慧渠道与智算服务收入未拆分AI应用收入，智算建设不作直接映射。",
+      "notes": "第9-15、24、37-42页；协同办公、智慧渠道与智算服务收入未拆分AI应用收入，智算建设不作直接映射。"
+    },
+    {
+      "source_id": "f1_300170_ar2025",
+      "source_type": "company_filing",
+      "title": "上海汉得信息技术股份有限公司2025年年度报告",
+      "publisher": "上海汉得信息技术股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-14",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-14/1225099001.pdf",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第14-16、28-29、37、42页",
+      "evidence_summary": "得灵AI产品服务体系、企业级训练管理、客户落地与收入增长表述。",
+      "supported_claim_ids": [
+        "f1_claim_12",
+        "f1_claim_13"
+      ],
+      "supported_node_ids": [
+        "enterprise_ai_application_software",
+        "industry_solution_delivery_integration",
+        "model_toolchain_finetuning_rag",
+        "subscription_usage_licensing_monetization",
+        "customer_adoption_renewal_revenue_validation"
+      ],
+      "limitations": "仅披露AI智能体应用收入快速增长，未披露绝对金额或独立分部。",
+      "notes": "第14-16、28-29、37、42页；仅披露AI智能体应用收入快速增长，未披露绝对金额或独立分部。"
+    },
+    {
+      "source_id": "f1_300624_ar2025",
+      "source_type": "company_filing",
+      "title": "万兴科技集团股份有限公司2025年年度报告",
+      "publisher": "万兴科技集团股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-28",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-28/1225211130.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第11-12、19-21、28-29页",
+      "evidence_summary": "万兴天幕、AI Agent创作产品、13亿次AI调用及天幕资本化项目。",
+      "supported_claim_ids": [
+        "f1_claim_14",
+        "f1_claim_15"
+      ],
+      "supported_node_ids": [
+        "foundation_model_training_inference_platforms",
+        "consumer_ai_application_services",
+        "ai_agent_orchestration_workflow",
+        "customer_adoption_renewal_revenue_validation",
+        "subscription_usage_licensing_monetization"
+      ],
+      "limitations": "公司总收入涵盖大量非AI创意软件，未单列AI产品收入。",
+      "notes": "第11-12、19-21、28-29页；公司总收入涵盖大量非AI创意软件，未单列AI产品收入。"
+    },
+    {
+      "source_id": "f1_300339_ar2025",
+      "source_type": "company_filing",
+      "title": "江苏润和软件股份有限公司2025年年度报告",
+      "publisher": "江苏润和软件股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-22",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-22/1225141883.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第11-13、17-18、33-34、46页",
+      "evidence_summary": "AI测试智能体、AgentRUNS、AIRUNS及金融机构交付。",
+      "supported_claim_ids": [
+        "f1_claim_16"
+      ],
+      "supported_node_ids": [
+        "ai_agent_orchestration_workflow",
+        "industry_solution_delivery_integration",
+        "data_security_model_governance_compliance"
+      ],
+      "limitations": "公司总收入未单列AI产品收入；HopeOS、服务器与智算底座不作为F1直接证据。",
+      "notes": "第11-13、17-18、33-34、46页；公司总收入未单列AI产品收入；HopeOS、服务器与智算底座不作为F1直接证据。"
+    },
+    {
+      "source_id": "f1_300378_ar2025",
+      "source_type": "company_filing",
+      "title": "鼎捷数智股份有限公司2025年年度报告",
+      "publisher": "鼎捷数智股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-02",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-02/1225073175.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第13-15、24-26、40-41页",
+      "evidence_summary": "鼎捷雅典娜、AI模型与智能体平台、应用矩阵、客户案例及近2亿元签约。",
+      "supported_claim_ids": [
+        "f1_claim_17",
+        "f1_claim_18"
+      ],
+      "supported_node_ids": [
+        "enterprise_ai_application_software",
+        "ai_agent_orchestration_workflow",
+        "industry_solution_delivery_integration",
+        "customer_adoption_renewal_revenue_validation",
+        "subscription_usage_licensing_monetization",
+        "data_security_model_governance_compliance"
+      ],
+      "limitations": "AI相关签约额不是确认收入，工业软件与AIoT宽口径收入不归因于AI应用。",
+      "notes": "第13-15、24-26、40-41页；AI相关签约额不是确认收入，工业软件与AIoT宽口径收入不归因于AI应用。"
+    }
+  ]
+}

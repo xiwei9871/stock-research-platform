@@ -881,6 +881,23 @@
       ],
       "unmapped_theme_node_ids":[],
       "notes":"E5按frontier route分别表达量子计算、QKD量子通信、量子精密测量、标准部署及采购服务收入；不创建canonical所有权。PQC只能作为相邻路线，股权投资、联盟或标准成员身份不构成量子受益证据，通用算力、光器件、芯片、低温和仪器产品无量子专用交付角色时不得映射，宽口径收入不得外推为量子专项收入。"
+    },
+    {
+      "theme_id":"ai_foundation_models_application_software_value_chain_v1",
+      "chain_id":"ai_foundation_models_application_software",
+      "node_links":[
+        {"theme_node_id":"foundation_model_training_inference_platforms","catalog_node_id":"foundation_model_training_inference_platforms"},
+        {"theme_node_id":"model_toolchain_finetuning_rag","catalog_node_id":"model_toolchain_finetuning_rag"},
+        {"theme_node_id":"ai_agent_orchestration_workflow","catalog_node_id":"ai_agent_orchestration_workflow"},
+        {"theme_node_id":"enterprise_ai_application_software","catalog_node_id":"enterprise_ai_application_software"},
+        {"theme_node_id":"consumer_ai_application_services","catalog_node_id":"consumer_ai_application_services"},
+        {"theme_node_id":"industry_solution_delivery_integration","catalog_node_id":"industry_solution_delivery_integration"},
+        {"theme_node_id":"subscription_usage_licensing_monetization","catalog_node_id":"subscription_usage_licensing_monetization"},
+        {"theme_node_id":"customer_adoption_renewal_revenue_validation","catalog_node_id":"customer_adoption_renewal_revenue_validation"},
+        {"theme_node_id":"data_security_model_governance_compliance","catalog_node_id":"data_security_model_governance_compliance"}
+      ],
+      "unmapped_theme_node_ids":[],
+      "notes":"F1 owns model platforms, adaptation toolchains, agents, AI application products, vertical delivery, monetization/adoption, and model/application governance. AI chips, servers, racks, cloud/data-center/power, OS/database/general software, generic industrial software, and generic security remain typed dependencies unless evidence identifies an AI-specific product or governance role."
     }
   ]
 }

@@ -1,0 +1,266 @@
+{
+  "artifact_version": "ai_foundation_models_application_software_node_evidence_matrix_v1",
+  "theme_id": "ai_foundation_models_application_software_value_chain_v1",
+  "as_of_date": "2026-07-17",
+  "node_evidence_matrix": [
+    {
+      "node_id": "foundation_model_training_inference_platforms",
+      "accepted_source_ids": [
+        "f1_002230_ar2025",
+        "f1_300624_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "f1_claim_01",
+        "f1_claim_14"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "customer_certification"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "基础模型训练与推理平台由至少一份已接受年报的产品、客户、使用、签约或治理证据支持。",
+      "next_evidence_needed": "补充AI专项确认收入、毛利、续费和单位经济。"
+    },
+    {
+      "node_id": "model_toolchain_finetuning_rag",
+      "accepted_source_ids": [
+        "f1_300229_ar2025",
+        "f1_300634_ar2025",
+        "f1_300170_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "f1_claim_09",
+        "f1_claim_11",
+        "f1_claim_12"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "integration_control"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "模型工具链、微调与RAG由至少一份已接受年报的产品、客户、使用、签约或治理证据支持。",
+      "next_evidence_needed": "补充AI专项确认收入、毛利、续费和单位经济。"
+    },
+    {
+      "node_id": "ai_agent_orchestration_workflow",
+      "accepted_source_ids": [
+        "f1_002230_ar2025",
+        "f1_601360_ar2025",
+        "f1_300229_ar2025",
+        "f1_300634_ar2025",
+        "f1_300624_ar2025",
+        "f1_300339_ar2025",
+        "f1_300378_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "f1_claim_02",
+        "f1_claim_07",
+        "f1_claim_09",
+        "f1_claim_11",
+        "f1_claim_14",
+        "f1_claim_16",
+        "f1_claim_17"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "customer_certification"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "AI智能体编排与工作流由至少一份已接受年报的产品、客户、使用、签约或治理证据支持。",
+      "next_evidence_needed": "补充AI专项确认收入、毛利、续费和单位经济。"
+    },
+    {
+      "node_id": "enterprise_ai_application_software",
+      "accepted_source_ids": [
+        "f1_688111_ar2025",
+        "f1_600588_ar2025",
+        "f1_300634_ar2025",
+        "f1_300170_ar2025",
+        "f1_300378_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "f1_claim_04",
+        "f1_claim_06",
+        "f1_claim_11",
+        "f1_claim_12",
+        "f1_claim_17"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "customer_certification"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "企业AI应用软件由至少一份已接受年报的产品、客户、使用、签约或治理证据支持。",
+      "next_evidence_needed": "补充AI专项确认收入、毛利、续费和单位经济。"
+    },
+    {
+      "node_id": "consumer_ai_application_services",
+      "accepted_source_ids": [
+        "f1_601360_ar2025",
+        "f1_300624_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "f1_claim_07",
+        "f1_claim_14"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "integration_control"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "消费AI应用服务由至少一份已接受年报的产品、客户、使用、签约或治理证据支持。",
+      "next_evidence_needed": "补充AI专项确认收入、毛利、续费和单位经济。"
+    },
+    {
+      "node_id": "industry_solution_delivery_integration",
+      "accepted_source_ids": [
+        "f1_002230_ar2025",
+        "f1_600588_ar2025",
+        "f1_300229_ar2025",
+        "f1_300170_ar2025",
+        "f1_300339_ar2025",
+        "f1_300378_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "f1_claim_03",
+        "f1_claim_06",
+        "f1_claim_10",
+        "f1_claim_12",
+        "f1_claim_16",
+        "f1_claim_17"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "integration_control"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "行业方案交付与集成由至少一份已接受年报的产品、客户、使用、签约或治理证据支持。",
+      "next_evidence_needed": "补充AI专项确认收入、毛利、续费和单位经济。"
+    },
+    {
+      "node_id": "subscription_usage_licensing_monetization",
+      "accepted_source_ids": [
+        "f1_002230_ar2025",
+        "f1_688111_ar2025",
+        "f1_600588_ar2025",
+        "f1_300229_ar2025",
+        "f1_300170_ar2025",
+        "f1_300624_ar2025",
+        "f1_300378_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "f1_claim_02",
+        "f1_claim_05",
+        "f1_claim_06",
+        "f1_claim_09",
+        "f1_claim_13",
+        "f1_claim_15",
+        "f1_claim_18"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "customer_certification"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "订阅、用量、许可与变现由至少一份已接受年报的产品、客户、使用、签约或治理证据支持。",
+      "next_evidence_needed": "补充AI专项确认收入、毛利、续费和单位经济。"
+    },
+    {
+      "node_id": "customer_adoption_renewal_revenue_validation",
+      "accepted_source_ids": [
+        "f1_002230_ar2025",
+        "f1_688111_ar2025",
+        "f1_600588_ar2025",
+        "f1_601360_ar2025",
+        "f1_300229_ar2025",
+        "f1_300170_ar2025",
+        "f1_300624_ar2025",
+        "f1_300378_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "f1_claim_03",
+        "f1_claim_05",
+        "f1_claim_06",
+        "f1_claim_07",
+        "f1_claim_10",
+        "f1_claim_13",
+        "f1_claim_15",
+        "f1_claim_18"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "customer_certification"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "客户采用、续费与收入验证由至少一份已接受年报的产品、客户、使用、签约或治理证据支持。",
+      "next_evidence_needed": "补充AI专项确认收入、毛利、续费和单位经济。"
+    },
+    {
+      "node_id": "data_security_model_governance_compliance",
+      "accepted_source_ids": [
+        "f1_688111_ar2025",
+        "f1_601360_ar2025",
+        "f1_300339_ar2025",
+        "f1_300378_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "f1_claim_04",
+        "f1_claim_08",
+        "f1_claim_16",
+        "f1_claim_18"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "integration_control"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "数据安全、模型治理与合规由至少一份已接受年报的产品、客户、使用、签约或治理证据支持。",
+      "next_evidence_needed": "补充AI专项确认收入、毛利、续费和单位经济。"
+    }
+  ]
+}

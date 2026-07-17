@@ -192,6 +192,7 @@ def test_repository_catalog_starts_with_ten_approved_sectors():
         "brain_computer_interfaces_neural_engineering",
         "controlled_nuclear_fusion",
         "quantum_computing_communication_measurement",
+        "ai_foundation_models_application_software",
     }
     nodes_by_id = {row["node_id"]: row for row in catalog["nodes"]}
     assert {

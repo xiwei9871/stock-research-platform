@@ -1,0 +1,965 @@
+{
+  "artifact_version": "theme_decomposition_v1_6",
+  "theme": {
+    "theme_id": "ai_foundation_models_application_software_value_chain_v1",
+    "theme_name": "AI基础模型与应用软件：平台、智能体、产品与商业验证",
+    "theme_type": "other",
+    "summary": "从模型平台和工具链到智能体、企业/消费应用、行业交付、变现采用与治理，严格隔离算力、云、基础软件和泛安全假阳性。",
+    "status": "reviewed",
+    "created_from": "mixed",
+    "last_updated": "2026-07-17"
+  },
+  "sources": [
+    {
+      "source_id": "f1_002230_ar2025",
+      "source_type": "company_filing",
+      "title": "科大讯飞股份有限公司2025年年度报告",
+      "publisher": "科大讯飞股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-29",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-29/1225233581.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第11-13、48、240、243页；PPT智能体披露营收增速但未披露绝对金额；公司宽口径收入不归因于AI。"
+    },
+    {
+      "source_id": "f1_688111_ar2025",
+      "source_type": "company_filing",
+      "title": "北京金山办公软件股份有限公司2025年年度报告",
+      "publisher": "北京金山办公软件股份有限公司",
+      "author": "",
+      "publish_date": "2026-03-26",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-26/1225032227.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第11-18页；WPS 365与个人业务收入包含非AI功能，未单列AI产品收入。"
+    },
+    {
+      "source_id": "f1_600588_ar2025",
+      "source_type": "company_filing",
+      "title": "用友网络科技股份有限公司2025年年度报告",
+      "publisher": "用友网络科技股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-18",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-18/1225120765.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第19-24页；AI签约合同不是已确认收入，云与软件宽口径收入不得外推。"
+    },
+    {
+      "source_id": "f1_601360_ar2025",
+      "source_type": "company_filing",
+      "title": "三六零安全科技股份有限公司2025年年度报告",
+      "publisher": "三六零安全科技股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-30",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-30/1225257356.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第15-23、38页；互联网与安全业务收入未拆分纳米AI或安全大模型专项收入。"
+    },
+    {
+      "source_id": "f1_300229_ar2025",
+      "source_type": "company_filing",
+      "title": "拓尔思信息技术股份有限公司2025年年度报告",
+      "publisher": "拓尔思信息技术股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-15",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-15/1225103279.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第12-20、29-30、44-45页；新AI业务仍处试用培育，未披露规模化AI收入；传统大数据和安全收入不归因。"
+    },
+    {
+      "source_id": "f1_300634_ar2025",
+      "source_type": "company_filing",
+      "title": "彩讯科技股份有限公司2025年年度报告",
+      "publisher": "彩讯科技股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-11",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-11/1225095918.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第9-15、24、37-42页；协同办公、智慧渠道与智算服务收入未拆分AI应用收入，智算建设不作直接映射。"
+    },
+    {
+      "source_id": "f1_300170_ar2025",
+      "source_type": "company_filing",
+      "title": "上海汉得信息技术股份有限公司2025年年度报告",
+      "publisher": "上海汉得信息技术股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-14",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-14/1225099001.pdf",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第14-16、28-29、37、42页；仅披露AI智能体应用收入快速增长，未披露绝对金额或独立分部。"
+    },
+    {
+      "source_id": "f1_300624_ar2025",
+      "source_type": "company_filing",
+      "title": "万兴科技集团股份有限公司2025年年度报告",
+      "publisher": "万兴科技集团股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-28",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-28/1225211130.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第11-12、19-21、28-29页；公司总收入涵盖大量非AI创意软件，未单列AI产品收入。"
+    },
+    {
+      "source_id": "f1_300339_ar2025",
+      "source_type": "company_filing",
+      "title": "江苏润和软件股份有限公司2025年年度报告",
+      "publisher": "江苏润和软件股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-22",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-22/1225141883.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第11-13、17-18、33-34、46页；公司总收入未单列AI产品收入；HopeOS、服务器与智算底座不作为F1直接证据。"
+    },
+    {
+      "source_id": "f1_300378_ar2025",
+      "source_type": "company_filing",
+      "title": "鼎捷数智股份有限公司2025年年度报告",
+      "publisher": "鼎捷数智股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-02",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-02/1225073175.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "第13-15、24-26、40-41页；AI相关签约额不是确认收入，工业软件与AIoT宽口径收入不归因于AI应用。"
+    }
+  ],
+  "claims": [
+    {
+      "claim_id": "f1_claim_01",
+      "theme_id": "ai_foundation_models_application_software_value_chain_v1",
+      "source_id": "f1_002230_ar2025",
+      "claim_text": "讯飞星火X1/X1.5形成从全国产算力模型训练到推理和行业模型的可运营模型平台，但底层芯片与服务器不属于F1直接价值环节。",
+      "claim_type": "tech_route",
+      "confidence": 0.96,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "foundation_model_training_inference_platforms"
+      ]
+    },
+    {
+      "claim_id": "f1_claim_02",
+      "theme_id": "ai_foundation_models_application_software_value_chain_v1",
+      "source_id": "f1_002230_ar2025",
+      "claim_text": "讯飞开放平台PPT创作智能体用户突破1000万且线上营收同比增长186%，证明AI应用可形成直接但未披露绝对额的收入。",
+      "claim_type": "value_capture",
+      "confidence": 0.96,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "ai_agent_orchestration_workflow",
+        "subscription_usage_licensing_monetization"
+      ]
+    },
+    {
+      "claim_id": "f1_claim_03",
+      "theme_id": "ai_foundation_models_application_software_value_chain_v1",
+      "source_id": "f1_002230_ar2025",
+      "claim_text": "星火智能批阅机服务3000余所学校、日均批改超360万份，并形成设备采购、服务续费和数智作业服务模式。",
+      "claim_type": "catalyst",
+      "confidence": 0.96,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "customer_adoption_renewal_revenue_validation",
+        "industry_solution_delivery_integration"
+      ]
+    },
+    {
+      "claim_id": "f1_claim_04",
+      "theme_id": "ai_foundation_models_application_software_value_chain_v1",
+      "source_id": "f1_688111_ar2025",
+      "claim_text": "WPS AI助手、企业版与政务版形成个人和组织AI办公产品，WPS AI企业版同时提供多模型接入、审计追踪与知识库。",
+      "claim_type": "company_mapping",
+      "confidence": 0.96,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "enterprise_ai_application_software",
+        "data_security_model_governance_compliance"
+      ]
+    },
+    {
+      "claim_id": "f1_claim_05",
+      "theme_id": "ai_foundation_models_application_software_value_chain_v1",
+      "source_id": "f1_688111_ar2025",
+      "claim_text": "WPS AI国内月活超过8013万、日均Token调用超过2000亿；WPS 365收入增长但未单列AI收入，使用和收入必须分开验证。",
+      "claim_type": "valuation_signal",
+      "confidence": 0.96,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "customer_adoption_renewal_revenue_validation",
+        "subscription_usage_licensing_monetization"
+      ]
+    },
+    {
+      "claim_id": "f1_claim_06",
+      "theme_id": "ai_foundation_models_application_software_value_chain_v1",
+      "source_id": "f1_600588_ar2025",
+      "claim_text": "用友BIP 5与YonGPT构成企业AI产品矩阵，AI相关合同签约16.7亿元、签约客户超过400家，但合同额不等于确认收入。",
+      "claim_type": "value_capture",
+      "confidence": 0.96,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "enterprise_ai_application_software",
+        "industry_solution_delivery_integration",
+        "customer_adoption_renewal_revenue_validation",
+        "subscription_usage_licensing_monetization"
+      ]
+    },
+    {
+      "claim_id": "f1_claim_07",
+      "theme_id": "ai_foundation_models_application_software_value_chain_v1",
+      "source_id": "f1_601360_ar2025",
+      "claim_text": "纳米AI多智能体蜂群与超级搜索智能体覆盖内容创作、研究和电商等场景，月访问量合计超过4.5亿次。",
+      "claim_type": "demand_shock",
+      "confidence": 0.96,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "consumer_ai_application_services",
+        "ai_agent_orchestration_workflow",
+        "customer_adoption_renewal_revenue_validation"
+      ]
+    },
+    {
+      "claim_id": "f1_claim_08",
+      "theme_id": "ai_foundation_models_application_software_value_chain_v1",
+      "source_id": "f1_601360_ar2025",
+      "claim_text": "360大模型卫士与安全智能体承担模型接入、内容安全评测、护栏和审计治理；通用网络安全业务不能据此整体映射F1。",
+      "claim_type": "risk",
+      "confidence": 0.96,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "data_security_model_governance_compliance"
+      ]
+    },
+    {
+      "claim_id": "f1_claim_09",
+      "theme_id": "ai_foundation_models_application_software_value_chain_v1",
+      "source_id": "f1_300229_ar2025",
+      "claim_text": "拓天大模型、动态本体、数据治理、向量检索、RAG和智能体平台形成模型适配工具链，并支持实例、Token或效果计费。",
+      "claim_type": "tech_route",
+      "confidence": 0.96,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "model_toolchain_finetuning_rag",
+        "ai_agent_orchestration_workflow",
+        "subscription_usage_licensing_monetization"
+      ]
+    },
+    {
+      "claim_id": "f1_claim_10",
+      "theme_id": "ai_foundation_models_application_software_value_chain_v1",
+      "source_id": "f1_300229_ar2025",
+      "claim_text": "拓尔思智能体已形成近2000万元金融项目和多行业落地，但新业务仍处试用培育且尚未规模化变现。",
+      "claim_type": "risk",
+      "confidence": 0.96,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "industry_solution_delivery_integration",
+        "customer_adoption_renewal_revenue_validation"
+      ]
+    },
+    {
+      "claim_id": "f1_claim_11",
+      "theme_id": "ai_foundation_models_application_software_value_chain_v1",
+      "source_id": "f1_300634_ar2025",
+      "claim_text": "Rich AIBox提供模型接入、知识管理、MCP、插件、工作流和Skill生产，AI邮箱和办公套件形成企业应用；智算建设仅是外部依赖。",
+      "claim_type": "company_mapping",
+      "confidence": 0.96,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "ai_agent_orchestration_workflow",
+        "enterprise_ai_application_software",
+        "model_toolchain_finetuning_rag"
+      ]
+    },
+    {
+      "claim_id": "f1_claim_12",
+      "theme_id": "ai_foundation_models_application_software_value_chain_v1",
+      "source_id": "f1_300170_ar2025",
+      "claim_text": "汉得得灵体系覆盖AI业务智能体、AI中台、模型训练管理、垂直模型和咨询交付，已有头部客户实际场景落地。",
+      "claim_type": "company_mapping",
+      "confidence": 0.96,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "enterprise_ai_application_software",
+        "industry_solution_delivery_integration",
+        "model_toolchain_finetuning_rag"
+      ]
+    },
+    {
+      "claim_id": "f1_claim_13",
+      "theme_id": "ai_foundation_models_application_software_value_chain_v1",
+      "source_id": "f1_300170_ar2025",
+      "claim_text": "汉得披露AI智能体应用业务收入快速增长但未披露金额，不能以公司或传统软件收入估算AI材料性。",
+      "claim_type": "risk",
+      "confidence": 0.96,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "subscription_usage_licensing_monetization",
+        "customer_adoption_renewal_revenue_validation"
+      ]
+    },
+    {
+      "claim_id": "f1_claim_14",
+      "theme_id": "ai_foundation_models_application_software_value_chain_v1",
+      "source_id": "f1_300624_ar2025",
+      "claim_text": "万兴天幕形成音视频多媒体大模型、App、Web与API，万兴超媒和万兴剧厂形成面向消费者和创作者的AI Agent产品。",
+      "claim_type": "tech_route",
+      "confidence": 0.96,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "foundation_model_training_inference_platforms",
+        "consumer_ai_application_services",
+        "ai_agent_orchestration_workflow"
+      ]
+    },
+    {
+      "claim_id": "f1_claim_15",
+      "theme_id": "ai_foundation_models_application_software_value_chain_v1",
+      "source_id": "f1_300624_ar2025",
+      "claim_text": "万兴科技AI服务器调用超过13亿次但公司总收入未单列AI产品收入，调用、付费和收入仍需继续拆分。",
+      "claim_type": "risk",
+      "confidence": 0.96,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "customer_adoption_renewal_revenue_validation",
+        "subscription_usage_licensing_monetization"
+      ]
+    },
+    {
+      "claim_id": "f1_claim_16",
+      "theme_id": "ai_foundation_models_application_software_value_chain_v1",
+      "source_id": "f1_300339_ar2025",
+      "claim_text": "润和AI测试智能体已签约交付多家金融机构，AgentRUNS与AIRUNS形成产品；HopeOS、服务器和智算中心能力不构成F1直接映射。",
+      "claim_type": "company_mapping",
+      "confidence": 0.96,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "ai_agent_orchestration_workflow",
+        "industry_solution_delivery_integration",
+        "data_security_model_governance_compliance"
+      ]
+    },
+    {
+      "claim_id": "f1_claim_17",
+      "theme_id": "ai_foundation_models_application_software_value_chain_v1",
+      "source_id": "f1_300378_ar2025",
+      "claim_text": "鼎捷雅典娜提供AI模型平台、智能体开发运行平台和多模态入口，并衍生制造、销售、财务等企业智能体应用。",
+      "claim_type": "company_mapping",
+      "confidence": 0.96,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "enterprise_ai_application_software",
+        "ai_agent_orchestration_workflow",
+        "industry_solution_delivery_integration"
+      ]
+    },
+    {
+      "claim_id": "f1_claim_18",
+      "theme_id": "ai_foundation_models_application_software_value_chain_v1",
+      "source_id": "f1_300378_ar2025",
+      "claim_text": "鼎捷AI相关业务签约近2亿元并形成多行业案例，但签约额不是确认收入；MACP和数据治理强化企业AI治理。",
+      "claim_type": "catalyst",
+      "confidence": 0.96,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "customer_adoption_renewal_revenue_validation",
+        "subscription_usage_licensing_monetization",
+        "data_security_model_governance_compliance"
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "node_id": "foundation_model_training_inference_platforms",
+      "theme_id": "ai_foundation_models_application_software_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "基础模型训练与推理平台",
+      "node_type": "infrastructure",
+      "description": "核验基础模型训练与推理平台的AI特定产品、客户、使用、合同、交付与收入，避免以通用软件、算力或概念标签替代。",
+      "value_capture_score": 5,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "训练效率",
+        "推理成本",
+        "模型调用量",
+        "模型版本"
+      ],
+      "overseas_leaders": [
+        "OpenAI",
+        "Anthropic",
+        "Google"
+      ],
+      "domestic_players": [
+        "科大讯飞",
+        "万兴科技"
+      ],
+      "related_stock_codes": [
+        "002230.SZ",
+        "300624.SZ"
+      ]
+    },
+    {
+      "node_id": "model_toolchain_finetuning_rag",
+      "theme_id": "ai_foundation_models_application_software_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "模型工具链、微调与RAG",
+      "node_type": "software",
+      "description": "核验模型工具链、微调与RAG的AI特定产品、客户、使用、合同、交付与收入，避免以通用软件、算力或概念标签替代。",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "微调周期",
+        "RAG准确率",
+        "知识库规模",
+        "评测覆盖"
+      ],
+      "overseas_leaders": [
+        "Databricks",
+        "Pinecone",
+        "Hugging Face"
+      ],
+      "domestic_players": [
+        "拓尔思",
+        "汉得信息",
+        "彩讯股份"
+      ],
+      "related_stock_codes": [
+        "300229.SZ",
+        "300170.SZ",
+        "300634.SZ"
+      ]
+    },
+    {
+      "node_id": "ai_agent_orchestration_workflow",
+      "theme_id": "ai_foundation_models_application_software_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "AI智能体编排与工作流",
+      "node_type": "software",
+      "description": "核验AI智能体编排与工作流的AI特定产品、客户、使用、合同、交付与收入，避免以通用软件、算力或概念标签替代。",
+      "value_capture_score": 5,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "任务成功率",
+        "工具调用率",
+        "工作流复用",
+        "Agent活跃量"
+      ],
+      "overseas_leaders": [
+        "Microsoft",
+        "Salesforce",
+        "ServiceNow"
+      ],
+      "domestic_players": [
+        "科大讯飞",
+        "三六零",
+        "彩讯股份",
+        "万兴科技",
+        "润和软件",
+        "鼎捷数智"
+      ],
+      "related_stock_codes": [
+        "002230.SZ",
+        "601360.SH",
+        "300634.SZ",
+        "300624.SZ",
+        "300339.SZ",
+        "300378.SZ"
+      ]
+    },
+    {
+      "node_id": "enterprise_ai_application_software",
+      "theme_id": "ai_foundation_models_application_software_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "企业AI应用软件",
+      "node_type": "software",
+      "description": "核验企业AI应用软件的AI特定产品、客户、使用、合同、交付与收入，避免以通用软件、算力或概念标签替代。",
+      "value_capture_score": 5,
+      "bottleneck_score": 3,
+      "localization_gap_score": 2,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "付费企业数",
+        "席位数",
+        "使用频次",
+        "续费率"
+      ],
+      "overseas_leaders": [
+        "Microsoft",
+        "SAP",
+        "Salesforce"
+      ],
+      "domestic_players": [
+        "金山办公",
+        "用友网络",
+        "汉得信息",
+        "鼎捷数智"
+      ],
+      "related_stock_codes": [
+        "688111.SH",
+        "600588.SH",
+        "300170.SZ",
+        "300378.SZ"
+      ]
+    },
+    {
+      "node_id": "consumer_ai_application_services",
+      "theme_id": "ai_foundation_models_application_software_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "消费AI应用服务",
+      "node_type": "downstream_application",
+      "description": "核验消费AI应用服务的AI特定产品、客户、使用、合同、交付与收入，避免以通用软件、算力或概念标签替代。",
+      "value_capture_score": 4,
+      "bottleneck_score": 3,
+      "localization_gap_score": 2,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "月活用户",
+        "付费用户",
+        "调用量",
+        "留存率"
+      ],
+      "overseas_leaders": [
+        "OpenAI",
+        "Google",
+        "Adobe"
+      ],
+      "domestic_players": [
+        "三六零",
+        "万兴科技"
+      ],
+      "related_stock_codes": [
+        "601360.SH",
+        "300624.SZ"
+      ]
+    },
+    {
+      "node_id": "industry_solution_delivery_integration",
+      "theme_id": "ai_foundation_models_application_software_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "行业方案交付与集成",
+      "node_type": "service",
+      "description": "核验行业方案交付与集成的AI特定产品、客户、使用、合同、交付与收入，避免以通用软件、算力或概念标签替代。",
+      "value_capture_score": 4,
+      "bottleneck_score": 3,
+      "localization_gap_score": 2,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "签约额",
+        "交付周期",
+        "验收数",
+        "复用率"
+      ],
+      "overseas_leaders": [
+        "Accenture",
+        "IBM Consulting"
+      ],
+      "domestic_players": [
+        "科大讯飞",
+        "用友网络",
+        "拓尔思",
+        "汉得信息",
+        "润和软件",
+        "鼎捷数智"
+      ],
+      "related_stock_codes": [
+        "002230.SZ",
+        "600588.SH",
+        "300229.SZ",
+        "300170.SZ",
+        "300339.SZ",
+        "300378.SZ"
+      ]
+    },
+    {
+      "node_id": "subscription_usage_licensing_monetization",
+      "theme_id": "ai_foundation_models_application_software_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "订阅、用量、许可与变现",
+      "node_type": "service",
+      "description": "核验订阅、用量、许可与变现的AI特定产品、客户、使用、合同、交付与收入，避免以通用软件、算力或概念标签替代。",
+      "value_capture_score": 5,
+      "bottleneck_score": 4,
+      "localization_gap_score": 2,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "AI专项收入",
+        "ARR",
+        "Token收入",
+        "付费转化"
+      ],
+      "overseas_leaders": [
+        "Microsoft",
+        "Adobe",
+        "OpenAI"
+      ],
+      "domestic_players": [
+        "科大讯飞",
+        "金山办公",
+        "用友网络",
+        "拓尔思",
+        "鼎捷数智"
+      ],
+      "related_stock_codes": [
+        "002230.SZ",
+        "688111.SH",
+        "600588.SH",
+        "300229.SZ",
+        "300378.SZ"
+      ]
+    },
+    {
+      "node_id": "customer_adoption_renewal_revenue_validation",
+      "theme_id": "ai_foundation_models_application_software_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "客户采用、续费与收入验证",
+      "node_type": "service",
+      "description": "核验客户采用、续费与收入验证的AI特定产品、客户、使用、合同、交付与收入，避免以通用软件、算力或概念标签替代。",
+      "value_capture_score": 5,
+      "bottleneck_score": 4,
+      "localization_gap_score": 2,
+      "supply_tightness_score": 4,
+      "evidence_strength": 4,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "客户数",
+        "活跃量",
+        "续费率",
+        "确认收入"
+      ],
+      "overseas_leaders": [
+        "Microsoft",
+        "Salesforce"
+      ],
+      "domestic_players": [
+        "科大讯飞",
+        "金山办公",
+        "用友网络",
+        "三六零",
+        "拓尔思",
+        "万兴科技",
+        "鼎捷数智"
+      ],
+      "related_stock_codes": [
+        "002230.SZ",
+        "688111.SH",
+        "600588.SH",
+        "601360.SH",
+        "300229.SZ",
+        "300624.SZ",
+        "300378.SZ"
+      ]
+    },
+    {
+      "node_id": "data_security_model_governance_compliance",
+      "theme_id": "ai_foundation_models_application_software_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "数据安全、模型治理与合规",
+      "node_type": "service",
+      "description": "核验数据安全、模型治理与合规的AI特定产品、客户、使用、合同、交付与收入，避免以通用软件、算力或概念标签替代。",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "审计覆盖",
+        "评测通过率",
+        "安全事件",
+        "合规认证"
+      ],
+      "overseas_leaders": [
+        "Microsoft",
+        "IBM",
+        "Palantir"
+      ],
+      "domestic_players": [
+        "金山办公",
+        "三六零",
+        "润和软件",
+        "鼎捷数智"
+      ],
+      "related_stock_codes": [
+        "688111.SH",
+        "601360.SH",
+        "300339.SZ",
+        "300378.SZ"
+      ]
+    }
+  ],
+  "value_capture_assessments": [
+    {
+      "node_id": "foundation_model_training_inference_platforms",
+      "value_basis": "technology_barrier",
+      "assessment_text": "基础模型训练与推理平台的价值只在AI特定产品、交付、使用或收入证据闭环后确认。",
+      "rank": 1,
+      "evidence_ids": [
+        "f1_claim_01",
+        "f1_claim_14"
+      ],
+      "uncertainty": "多数公司尚未披露AI专项确认收入、毛利与续费。"
+    },
+    {
+      "node_id": "model_toolchain_finetuning_rag",
+      "value_basis": "technology_barrier",
+      "assessment_text": "模型工具链、微调与RAG的价值只在AI特定产品、交付、使用或收入证据闭环后确认。",
+      "rank": 2,
+      "evidence_ids": [
+        "f1_claim_09",
+        "f1_claim_11",
+        "f1_claim_12"
+      ],
+      "uncertainty": "多数公司尚未披露AI专项确认收入、毛利与续费。"
+    },
+    {
+      "node_id": "ai_agent_orchestration_workflow",
+      "value_basis": "technology_barrier",
+      "assessment_text": "AI智能体编排与工作流的价值只在AI特定产品、交付、使用或收入证据闭环后确认。",
+      "rank": 3,
+      "evidence_ids": [
+        "f1_claim_02",
+        "f1_claim_07",
+        "f1_claim_09",
+        "f1_claim_11",
+        "f1_claim_14",
+        "f1_claim_16",
+        "f1_claim_17"
+      ],
+      "uncertainty": "多数公司尚未披露AI专项确认收入、毛利与续费。"
+    },
+    {
+      "node_id": "enterprise_ai_application_software",
+      "value_basis": "integration_control",
+      "assessment_text": "企业AI应用软件的价值只在AI特定产品、交付、使用或收入证据闭环后确认。",
+      "rank": 4,
+      "evidence_ids": [
+        "f1_claim_04",
+        "f1_claim_06",
+        "f1_claim_11",
+        "f1_claim_12",
+        "f1_claim_17"
+      ],
+      "uncertainty": "多数公司尚未披露AI专项确认收入、毛利与续费。"
+    },
+    {
+      "node_id": "consumer_ai_application_services",
+      "value_basis": "integration_control",
+      "assessment_text": "消费AI应用服务的价值只在AI特定产品、交付、使用或收入证据闭环后确认。",
+      "rank": 5,
+      "evidence_ids": [
+        "f1_claim_07",
+        "f1_claim_14"
+      ],
+      "uncertainty": "多数公司尚未披露AI专项确认收入、毛利与续费。"
+    },
+    {
+      "node_id": "industry_solution_delivery_integration",
+      "value_basis": "integration_control",
+      "assessment_text": "行业方案交付与集成的价值只在AI特定产品、交付、使用或收入证据闭环后确认。",
+      "rank": 6,
+      "evidence_ids": [
+        "f1_claim_03",
+        "f1_claim_06",
+        "f1_claim_10",
+        "f1_claim_12",
+        "f1_claim_16",
+        "f1_claim_17"
+      ],
+      "uncertainty": "多数公司尚未披露AI专项确认收入、毛利与续费。"
+    },
+    {
+      "node_id": "subscription_usage_licensing_monetization",
+      "value_basis": "customer_certification",
+      "assessment_text": "订阅、用量、许可与变现的价值只在AI特定产品、交付、使用或收入证据闭环后确认。",
+      "rank": 7,
+      "evidence_ids": [
+        "f1_claim_02",
+        "f1_claim_05",
+        "f1_claim_06",
+        "f1_claim_09",
+        "f1_claim_13",
+        "f1_claim_15",
+        "f1_claim_18"
+      ],
+      "uncertainty": "多数公司尚未披露AI专项确认收入、毛利与续费。"
+    },
+    {
+      "node_id": "customer_adoption_renewal_revenue_validation",
+      "value_basis": "customer_certification",
+      "assessment_text": "客户采用、续费与收入验证的价值只在AI特定产品、交付、使用或收入证据闭环后确认。",
+      "rank": 8,
+      "evidence_ids": [
+        "f1_claim_03",
+        "f1_claim_05",
+        "f1_claim_06",
+        "f1_claim_07",
+        "f1_claim_10",
+        "f1_claim_13",
+        "f1_claim_15",
+        "f1_claim_18"
+      ],
+      "uncertainty": "多数公司尚未披露AI专项确认收入、毛利与续费。"
+    },
+    {
+      "node_id": "data_security_model_governance_compliance",
+      "value_basis": "customer_certification",
+      "assessment_text": "数据安全、模型治理与合规的价值只在AI特定产品、交付、使用或收入证据闭环后确认。",
+      "rank": 9,
+      "evidence_ids": [
+        "f1_claim_04",
+        "f1_claim_08",
+        "f1_claim_16",
+        "f1_claim_18"
+      ],
+      "uncertainty": "多数公司尚未披露AI专项确认收入、毛利与续费。"
+    }
+  ],
+  "decomposition_templates": [
+    {
+      "template_id": "ai_foundation_models_application_software_value_chain_template_v1",
+      "theme_type": "other",
+      "steps": [
+        "冻结软件与算力边界",
+        "拆分模型工具智能体应用",
+        "核验行业交付",
+        "拆分使用合同续费收入",
+        "核验模型应用治理"
+      ],
+      "required_dimensions": [
+        "model_platform",
+        "toolchain",
+        "agent",
+        "application",
+        "delivery",
+        "monetization",
+        "adoption",
+        "governance"
+      ],
+      "optional_dimensions": [
+        "international_comparison",
+        "valuation"
+      ],
+      "output_schema": "theme_decomposition_v1_6"
+    }
+  ],
+  "research_profile": {
+    "research_kind": "industry_chain_deep_research",
+    "catalog_chain_id": "ai_foundation_models_application_software",
+    "investment_summary": "基础模型已进入模型能力持续迭代、智能体与垂直应用加速商业验证阶段。可审计利润池优先落在有付费产品、客户采用、签约交付或AI专项收入披露的模型平台、企业/消费应用与行业解决方案；算力、云、通用软件和概念合作不构成F1受益证据。",
+    "industry_stage": "基础模型训练推理从参数竞赛转向成本、可靠性和场景效果竞争；企业智能体处规模化验证早期，消费AI已出现大用户量；收入拆分、续费和单位经济仍不充分。",
+    "central_conflict": "产品发布、模型接入、月活和合同签约快速增长，但AI专项确认收入、毛利、续费和客户价值披露滞后，技术采用不能直接等同利润兑现。",
+    "value_flow_summary": "价值从基础模型训练推理流向微调/RAG工具链和智能体编排，再进入企业与消费AI应用，经行业集成交付触达客户，最终由订阅、Token、许可、服务、续费和确认收入兑现，并由数据安全、模型评测与合规治理约束。",
+    "profit_pool_summary": "近期利润池更可能出现在高频付费AI应用、可复用企业智能体平台、垂直交付与服务、以及有明确专项收入或续费的产品；纯模型研发、宽口径软件收入与算力建设在未拆分前不视为AI利润池。",
+    "catalyst_claim_ids": [
+      "f1_claim_02",
+      "f1_claim_03",
+      "f1_claim_05",
+      "f1_claim_06",
+      "f1_claim_07",
+      "f1_claim_14",
+      "f1_claim_18"
+    ],
+    "risk_claim_ids": [
+      "f1_claim_04",
+      "f1_claim_08",
+      "f1_claim_10",
+      "f1_claim_11",
+      "f1_claim_13",
+      "f1_claim_15",
+      "f1_claim_16",
+      "f1_claim_18"
+    ],
+    "validation_signals": [
+      "AI专项确认收入、毛利与ARR",
+      "付费用户、席位、Token和调用量",
+      "签约到交付、验收、回款的转化",
+      "客户续费率与扩容率",
+      "推理成本和任务成功率",
+      "模型评测、安全事件与合规认证"
+    ],
+    "evidence_gap_summary": "主要缺口是除科大讯飞智能体增速外，多数公司未披露AI专项确认收入；合同额、月活、调用量和宽口径软件收入不能相互替代。后续需补充AI产品分部收入、毛利、续费、客户扩容和单位经济。"
+  },
+  "evidence_policy": {
+    "accepted_source_levels": [
+      "S0",
+      "S1"
+    ],
+    "reviewed_claim_requires_accepted_source": true,
+    "reviewed_mapping_requires_product_revenue_stage_evidence": true,
+    "income_boundary_rule": "未分拆的公司总收入、软件收入、云收入或工业软件收入一律为undisclosed；limited或material只允许直接匹配AI特定产品或服务收入。",
+    "boundary_rule": "AI芯片、服务器、机柜与智算基础设施不属于本链；云、数据中心与电力基础设施不属于本链；操作系统、数据库与通用基础软件不属于本链；通用工业软件只有形成AI特定产品或服务才属于本链；通用安全产品只有承担模型或AI应用治理才属于本链。"
+  }
+}

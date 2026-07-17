@@ -1,0 +1,249 @@
+{
+  "schema_version": "technology_industry_catalog_node_file_v1",
+  "chain_id": "ai_foundation_models_application_software",
+  "nodes": [
+    {
+      "node_id": "ai_model_platforms",
+      "chain_id": "ai_foundation_models_application_software",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "AI Model Platforms",
+      "node_kind": "canonical",
+      "node_type": "infrastructure",
+      "description": "Foundation-model training and inference services plus model adaptation tooling; AI chips, servers, racks, cloud capacity, and data-center facilities remain typed dependencies owned by compute and cloud chains.",
+      "status": "draft",
+      "primary_path": [
+        "next_generation_information_technology",
+        "ai_foundation_models_application_software",
+        "ai_model_platforms"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ai_application_delivery",
+      "chain_id": "ai_foundation_models_application_software",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "AI Application Delivery",
+      "node_kind": "canonical",
+      "node_type": "software",
+      "description": "Agent orchestration, enterprise and consumer AI products, and AI-specific industry delivery; general software without a distinct AI product or service is excluded.",
+      "status": "draft",
+      "primary_path": [
+        "next_generation_information_technology",
+        "ai_foundation_models_application_software",
+        "ai_application_delivery"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ai_commercialization_operations",
+      "chain_id": "ai_foundation_models_application_software",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "AI Commercialization and Operations",
+      "node_kind": "canonical",
+      "node_type": "service",
+      "description": "Subscription, usage, licensing, customer adoption, renewal, and revenue validation for AI-specific products and services.",
+      "status": "draft",
+      "primary_path": [
+        "next_generation_information_technology",
+        "ai_foundation_models_application_software",
+        "ai_commercialization_operations"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ai_governance_validation",
+      "chain_id": "ai_foundation_models_application_software",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "AI Governance and Validation",
+      "node_kind": "canonical",
+      "node_type": "service",
+      "description": "Data security, model governance, auditability, evaluation, and compliance tied directly to foundation-model or AI-application operation; generic cybersecurity is excluded.",
+      "status": "draft",
+      "primary_path": [
+        "next_generation_information_technology",
+        "ai_foundation_models_application_software",
+        "ai_governance_validation"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "foundation_model_training_inference_platforms",
+      "chain_id": "ai_foundation_models_application_software",
+      "parent_node_id": "ai_model_platforms",
+      "level": "L4",
+      "node_name": "Foundation Model Training and Inference Platforms",
+      "node_kind": "canonical",
+      "node_type": "infrastructure",
+      "description": "Model training, evaluation, deployment, inference APIs, and model-serving platforms. AI chips, boards, servers, racks, cloud resource pools, data centers, and power remain external typed dependencies.",
+      "status": "draft",
+      "primary_path": [
+        "next_generation_information_technology",
+        "ai_foundation_models_application_software",
+        "ai_model_platforms",
+        "foundation_model_training_inference_platforms"
+      ],
+      "canonical_key": "ai_application:foundation_model_training_inference_platforms",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "model_toolchain_finetuning_rag",
+      "chain_id": "ai_foundation_models_application_software",
+      "parent_node_id": "ai_model_platforms",
+      "level": "L4",
+      "node_name": "Model Toolchain, Fine-Tuning, and RAG",
+      "node_kind": "canonical",
+      "node_type": "software",
+      "description": "AI-specific data preparation, fine-tuning, evaluation, vector retrieval, RAG, knowledge grounding, and model lifecycle tooling; general databases and data platforms are excluded unless the filing identifies this model role.",
+      "status": "draft",
+      "primary_path": [
+        "next_generation_information_technology",
+        "ai_foundation_models_application_software",
+        "ai_model_platforms",
+        "model_toolchain_finetuning_rag"
+      ],
+      "canonical_key": "ai_application:model_toolchain_finetuning_rag",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ai_agent_orchestration_workflow",
+      "chain_id": "ai_foundation_models_application_software",
+      "parent_node_id": "ai_application_delivery",
+      "level": "L4",
+      "node_name": "AI Agent Orchestration and Workflow",
+      "node_kind": "canonical",
+      "node_type": "software",
+      "description": "Agent builders, tool and Skill orchestration, workflow execution, multi-agent coordination, observability, and runtime management for AI applications.",
+      "status": "draft",
+      "primary_path": [
+        "next_generation_information_technology",
+        "ai_foundation_models_application_software",
+        "ai_application_delivery",
+        "ai_agent_orchestration_workflow"
+      ],
+      "canonical_key": "ai_application:ai_agent_orchestration_workflow",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "enterprise_ai_application_software",
+      "chain_id": "ai_foundation_models_application_software",
+      "parent_node_id": "ai_application_delivery",
+      "level": "L4",
+      "node_name": "Enterprise AI Application Software",
+      "node_kind": "canonical",
+      "node_type": "software",
+      "description": "Paid enterprise AI applications and digital employees embedded in office, finance, supply chain, manufacturing, marketing, or management workflows; generic ERP and industrial software remain out of scope.",
+      "status": "draft",
+      "primary_path": [
+        "next_generation_information_technology",
+        "ai_foundation_models_application_software",
+        "ai_application_delivery",
+        "enterprise_ai_application_software"
+      ],
+      "canonical_key": "ai_application:enterprise_ai_application_software",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "consumer_ai_application_services",
+      "chain_id": "ai_foundation_models_application_software",
+      "parent_node_id": "ai_application_delivery",
+      "level": "L4",
+      "node_name": "Consumer AI Application Services",
+      "node_kind": "canonical",
+      "node_type": "downstream_application",
+      "description": "Consumer-facing AI assistants, search, office, media creation, document, and other generative-AI services with an operating product and user or payment evidence.",
+      "status": "draft",
+      "primary_path": [
+        "next_generation_information_technology",
+        "ai_foundation_models_application_software",
+        "ai_application_delivery",
+        "consumer_ai_application_services"
+      ],
+      "canonical_key": "ai_application:consumer_ai_application_services",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "industry_solution_delivery_integration",
+      "chain_id": "ai_foundation_models_application_software",
+      "parent_node_id": "ai_application_delivery",
+      "level": "L4",
+      "node_name": "Industry Solution Delivery and Integration",
+      "node_kind": "canonical",
+      "node_type": "service",
+      "description": "AI-specific consulting, customization, private deployment, system integration, delivery, and acceptance for customers in regulated or vertical industries.",
+      "status": "draft",
+      "primary_path": [
+        "next_generation_information_technology",
+        "ai_foundation_models_application_software",
+        "ai_application_delivery",
+        "industry_solution_delivery_integration"
+      ],
+      "canonical_key": "ai_application:industry_solution_delivery_integration",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "subscription_usage_licensing_monetization",
+      "chain_id": "ai_foundation_models_application_software",
+      "parent_node_id": "ai_commercialization_operations",
+      "level": "L4",
+      "node_name": "Subscription, Usage, Licensing, and Monetization",
+      "node_kind": "canonical",
+      "node_type": "service",
+      "description": "AI-specific subscriptions, token or API usage, software licensing, outcome fees, and other directly disclosed monetization; broad software revenue cannot be attributed without a matching AI disclosure.",
+      "status": "draft",
+      "primary_path": [
+        "next_generation_information_technology",
+        "ai_foundation_models_application_software",
+        "ai_commercialization_operations",
+        "subscription_usage_licensing_monetization"
+      ],
+      "canonical_key": "ai_application:subscription_usage_licensing_monetization",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "customer_adoption_renewal_revenue_validation",
+      "chain_id": "ai_foundation_models_application_software",
+      "parent_node_id": "ai_commercialization_operations",
+      "level": "L4",
+      "node_name": "Customer Adoption, Renewal, and Revenue Validation",
+      "node_kind": "canonical",
+      "node_type": "service",
+      "description": "Customer count, active usage, paid conversion, renewal, contract, delivery, acceptance, and recognized AI revenue are separated to prevent commercialization overstatement.",
+      "status": "draft",
+      "primary_path": [
+        "next_generation_information_technology",
+        "ai_foundation_models_application_software",
+        "ai_commercialization_operations",
+        "customer_adoption_renewal_revenue_validation"
+      ],
+      "canonical_key": "ai_application:customer_adoption_renewal_revenue_validation",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "data_security_model_governance_compliance",
+      "chain_id": "ai_foundation_models_application_software",
+      "parent_node_id": "ai_governance_validation",
+      "level": "L4",
+      "node_name": "Data Security, Model Governance, and Compliance",
+      "node_kind": "canonical",
+      "node_type": "service",
+      "description": "AI data permissions, model evaluation, content safety, audit trails, privacy, security controls, and compliance specific to model and application operation; generic security products remain excluded.",
+      "status": "draft",
+      "primary_path": [
+        "next_generation_information_technology",
+        "ai_foundation_models_application_software",
+        "ai_governance_validation",
+        "data_security_model_governance_compliance"
+      ],
+      "canonical_key": "ai_application:data_security_model_governance_compliance",
+      "canonical_node_refs": []
+    }
+  ]
+}
