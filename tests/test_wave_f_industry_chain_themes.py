@@ -200,7 +200,7 @@ F1_MAPPING_CONTRACTS = {
         "locators": {
             "product_relationship": "第15-16页，得灵、灵手、灵猿与灵炼产品服务体系",
             "revenue_materiality": "第15页，AI智能体应用收入增长但未披露金额",
-            "business_stage": "第28页，AI智能体客户落地及公司整体长期客户留存背景",
+            "business_stage": "第16、28页",
         },
     },
     "300624.SZ": {
@@ -862,9 +862,9 @@ def test_foundation_models_f1_hande_retention_is_cross_sell_context_not_ai_renew
         if row["company_code"] == "300170.SZ"
     )
     stage = evidence["f1_ev_300170_sz_stage"]
-    assert stage["excerpt_locator"] == "第28页，AI智能体客户落地及公司整体长期客户留存背景"
-    assert "AI智能体已在公司长期企业客户实际场景落地" in stage["evidence_summary"]
-    assert "公司整体长期客户留存率超过80%" in stage["evidence_summary"]
+    assert stage["excerpt_locator"] == "第16、28页"
+    assert "第16页披露AI智能体已在公司长期企业客户实际场景落地" in stage["evidence_summary"]
+    assert "第28页披露的公司整体长期客户留存率超过80%" in stage["evidence_summary"]
     assert "存量客户触达和交叉销售" in stage["evidence_summary"]
     assert "不证明AI产品留存、续费或收入" in stage["evidence_summary"]
     assert stage["related_node_ids"] == ["industry_solution_delivery_integration"]
@@ -887,7 +887,8 @@ def test_foundation_models_f1_hande_retention_is_cross_sell_context_not_ai_renew
         row for row in source_pack["sources"]
         if row["source_id"] == "f1_300170_ar2025"
     )
-    assert "公司整体长期客户留存仅作存量触达背景" in source["evidence_summary"]
+    assert "第16页AI智能体客户场景落地" in source["evidence_summary"]
+    assert "第28页公司整体长期客户留存仅作存量触达和交叉销售背景" in source["evidence_summary"]
     assert "不代表AI产品续费、留存或收入" in source["limitations"]
 
 
