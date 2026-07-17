@@ -84,9 +84,10 @@ def test_theme_index_aggregates_validated_phase_outputs():
         HIGH_END_MEDICAL_DEVICES_THEME_ID,
         BCI_NEURAL_ENGINEERING_THEME_ID,
         "controlled_nuclear_fusion_value_chain_v1",
+        "quantum_computing_communication_measurement_value_chain_v1",
     }
-    assert len(expected_theme_ids) == 29
-    assert payload["total"] == 29
+    assert len(expected_theme_ids) == 30
+    assert payload["total"] == 30
     assert {row["theme_id"] for row in payload["items"]} == expected_theme_ids
     assert [
         (row["theme_name"], row["theme_id"]) for row in payload["items"]

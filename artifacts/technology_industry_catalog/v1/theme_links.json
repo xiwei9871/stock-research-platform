@@ -865,6 +865,22 @@
       ],
       "unmapped_theme_node_ids":["medical_imaging_ultrasound_endoscopy_dependency"],
       "notes":"主题研究聚合手术、介入、生命支持、设备专用耗材、核心部件集成、注册准入和存量服务。医学影像、超声和内镜设备仍归`medical_imaging_diagnostic_equipment`，体外诊断仍归`in_vitro_diagnostics`；本链只记录跨专科平台和非影像高端器械角色。注册、临床、集采、进院、装机、手术/检查量、耗材消耗、服务和收入必须分阶段验证。"
+    },
+    {
+      "theme_id":"quantum_computing_communication_measurement_value_chain_v1",
+      "chain_id":"quantum_computing_communication_measurement",
+      "node_links":[
+        {"theme_node_id":"quantum_processor_modalities_architecture","catalog_node_id":"quantum_processor_modalities_architecture"},
+        {"theme_node_id":"quantum_control_laser_microwave_electronics","catalog_node_id":"quantum_control_laser_microwave_electronics"},
+        {"theme_node_id":"cryogenic_packaging_interconnect_test","catalog_node_id":"cryogenic_packaging_interconnect_test"},
+        {"theme_node_id":"quantum_software_compilation_cloud_access","catalog_node_id":"quantum_software_compilation_cloud_access"},
+        {"theme_node_id":"quantum_communication_qkd_network_services","catalog_node_id":"quantum_communication_qkd_network_services"},
+        {"theme_node_id":"quantum_sensing_timing_navigation_metrology","catalog_node_id":"quantum_sensing_timing_navigation_metrology"},
+        {"theme_node_id":"standards_testing_deployment_integration","catalog_node_id":"standards_testing_deployment_integration"},
+        {"theme_node_id":"procurement_service_recurring_revenue_validation","catalog_node_id":"procurement_service_recurring_revenue_validation"}
+      ],
+      "unmapped_theme_node_ids":[],
+      "notes":"E5按frontier route分别表达量子计算、QKD量子通信、量子精密测量、标准部署及采购服务收入；不创建canonical所有权。PQC只能作为相邻路线，股权投资、联盟或标准成员身份不构成量子受益证据，通用算力、光器件、芯片、低温和仪器产品无量子专用交付角色时不得映射，宽口径收入不得外推为量子专项收入。"
     }
   ]
 }

@@ -229,6 +229,56 @@ E4_RESEARCH_UNIVERSE = {
     "600353.SH",
 }
 
+E5_CHAIN_ID = "quantum_computing_communication_measurement"
+E5_THEME_ID = "quantum_computing_communication_measurement_value_chain_v1"
+E5_THEME_PATH = REPOSITORY_ROOT / f"artifacts/theme_decomposition/{E5_THEME_ID}.json"
+E5_MAPPING_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/company_mappings"
+    / "quantum_computing_communication_measurement_company_mapping_v1.json"
+)
+E5_SOURCE_PACK_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "quantum_computing_communication_measurement_source_pack_v1.json"
+)
+E5_MATRIX_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "quantum_computing_communication_measurement_node_evidence_matrix_v1.json"
+)
+
+E5_NODE_IDS = {
+    "quantum_processor_modalities_architecture",
+    "quantum_control_laser_microwave_electronics",
+    "cryogenic_packaging_interconnect_test",
+    "quantum_software_compilation_cloud_access",
+    "quantum_communication_qkd_network_services",
+    "quantum_sensing_timing_navigation_metrology",
+    "standards_testing_deployment_integration",
+    "procurement_service_recurring_revenue_validation",
+}
+
+E5_HARD_EXCLUDED_CODES = {
+    "000555.SZ",  # subsidiary/report references without delivered quantum role
+    "002281.SZ",  # associate-company exposure only
+    "003029.SZ",  # PQC/standards work is not QKD or quantum hardware
+    "603019.SH",  # generic compute without a quantum-specific delivered role
+    "600120.SH",  # equity-investment exposure only
+    "688521.SH",  # generic chip/IP without a quantum-specific delivered role
+}
+
+E5_REVIEWED_COMPANIES = {
+    "688027.SH": ("core_business", "material"),
+    "601728.SH": ("meaningful_segment", "limited"),
+    "600941.SH": ("emerging_segment", "undisclosed"),
+    "002935.SZ": ("meaningful_segment", "undisclosed"),
+    "002268.SZ": ("emerging_segment", "undisclosed"),
+    "300520.SZ": ("emerging_segment", "undisclosed"),
+    "003040.SZ": ("emerging_segment", "undisclosed"),
+    "600487.SH": ("emerging_segment", "undisclosed"),
+}
+
 
 def _read_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
@@ -1724,3 +1774,188 @@ def test_controlled_nuclear_fusion_e4_snowman_stays_emerging_undisclosed_adjacen
     assert "未披露聚变收入" in evidence["fusion_ev_002639_revenue"]["evidence_summary"]
     assert "不能认定聚变专项收入" in snowman["relationship_summary"]
     assert "不能认定商业聚变收入" in snowman["relationship_summary"]
+
+
+def test_quantum_computing_e5_four_research_artifacts_exist_before_validation() -> None:
+    for path in (
+        E5_THEME_PATH,
+        E5_MAPPING_PATH,
+        E5_SOURCE_PACK_PATH,
+        E5_MATRIX_PATH,
+    ):
+        assert path.is_file(), path
+
+
+def test_quantum_computing_e5_theme_meets_strict_wave_e_gate_and_exact_node_scope() -> None:
+    theme = _read_json(E5_THEME_PATH)
+    mapping = _read_json(E5_MAPPING_PATH)
+    validate_theme_decomposition_artifact(theme, expected_theme_id=E5_THEME_ID)
+    validate_theme_company_mapping_artifact(mapping, theme)
+    report = VERIFIER.build_theme_batch_report(MANIFEST_PATH, wave="wave_e")
+    row = next(item for item in report["theme_results"] if item["chain_id"] == E5_CHAIN_ID)
+
+    assert theme["artifact_version"] == "theme_decomposition_v1_6"
+    assert theme["theme"]["status"] == "reviewed"
+    assert theme["theme"]["created_from"] == "mixed"
+    assert theme["research_profile"]["catalog_chain_id"] == E5_CHAIN_ID
+    assert theme["research_profile"]["research_kind"] == "industry_chain_deep_research"
+    assert {node["node_id"] for node in theme["nodes"]} == E5_NODE_IDS
+    assert {row["node_id"] for row in theme["value_capture_assessments"]} == E5_NODE_IDS
+    assert len(theme["sources"]) >= 10
+    assert len(theme["claims"]) >= 12
+    reviewed = [row for row in mapping["company_mappings"] if row["review_status"] == "reviewed"]
+    assert len(reviewed) >= 8
+    assert {
+        row["company_code"]: (row["business_materiality"], row["revenue_relevance"])
+        for row in reviewed
+    } == E5_REVIEWED_COMPANIES
+    assert not ({row["company_code"] for row in reviewed} & E5_HARD_EXCLUDED_CODES)
+    assert all(row["business_materiality"] != "concept_only" for row in reviewed)
+    assert row["ready"] is True
+    assert row["checks"]["bidirectional_evidence_contract"] is True
+    assert row["checks"]["precise_mapping_locators"] is True
+
+
+def test_quantum_computing_e5_catalog_frontier_routes_and_exact_links() -> None:
+    catalog = load_industry_catalog()
+    chain_nodes = [row for row in catalog["nodes"] if row["chain_id"] == E5_CHAIN_ID]
+    assert {row["node_id"] for row in chain_nodes} == E5_NODE_IDS
+    assert all(row["node_kind"] == "frontier_route" for row in chain_nodes)
+    assert all(row["canonical_key"] == "" for row in chain_nodes)
+    assert {row["level"] for row in chain_nodes} == {"L3", "L4"}
+    by_id = {row["node_id"]: row for row in chain_nodes}
+    for row in chain_nodes:
+        assert row["primary_path"][1] == E5_CHAIN_ID
+        if row["level"] == "L4":
+            assert row["parent_node_id"] in by_id
+            assert by_id[row["parent_node_id"]]["level"] == "L3"
+
+    link = next(row for row in catalog["theme_links"] if row["theme_id"] == E5_THEME_ID)
+    assert link["chain_id"] == E5_CHAIN_ID
+    assert link["unmapped_theme_node_ids"] == []
+    assert {row["theme_node_id"] for row in link["node_links"]} == E5_NODE_IDS
+    assert {row["catalog_node_id"] for row in link["node_links"]} == E5_NODE_IDS
+
+
+def test_quantum_computing_e5_keeps_computing_communication_and_measurement_separate() -> None:
+    theme = _read_json(E5_THEME_PATH)
+    nodes = {row["node_id"]: row for row in theme["nodes"]}
+    computing_text = json.dumps(
+        {key: nodes[key] for key in E5_NODE_IDS if key.startswith("quantum_processor") or key.startswith("quantum_software")},
+        ensure_ascii=False,
+    )
+    assert "量子处理器" in computing_text
+    assert "量子经典混合" in computing_text
+    assert "QKD" in json.dumps(nodes["quantum_communication_qkd_network_services"], ensure_ascii=False)
+    assert "量子精密测量" in json.dumps(nodes["quantum_sensing_timing_navigation_metrology"], ensure_ascii=False)
+    profile = json.dumps(theme["research_profile"], ensure_ascii=False)
+    for boundary in (
+        "后量子密码不是量子通信或量子硬件",
+        "量子通信商业化阶段",
+        "量子计算商业化阶段",
+        "量子精密测量商业化阶段",
+    ):
+        assert boundary in profile
+
+
+def test_quantum_computing_e5_sources_claims_matrix_and_served_notes_are_synchronized() -> None:
+    theme = _read_json(E5_THEME_PATH)
+    mapping = _read_json(E5_MAPPING_PATH)
+    source_pack = _read_json(E5_SOURCE_PACK_PATH)
+    matrix = _read_json(E5_MATRIX_PATH)
+    served = list_theme_research_sources(E5_THEME_ID, read_source="artifact")
+
+    def identity(rows: list[dict]) -> dict[str, tuple]:
+        return {
+            row["source_id"]: (
+                row["source_type"], row["title"], row["publisher"], row["publish_date"],
+                row.get("url_or_ref", row.get("url")), row["review_status"], row["notes"],
+            )
+            for row in rows
+        }
+
+    assert identity(theme["sources"]) == identity(mapping["sources"])
+    assert identity(theme["sources"]) == identity(source_pack["sources"])
+    assert identity(theme["sources"]) == identity(served["items"])
+    packed_sources = {row["source_id"]: row for row in source_pack["sources"]}
+    for source in served["items"]:
+        assert _declared_locator_set(source["notes"]) == _declared_locator_set(
+            packed_sources[source["source_id"]]["evidence_locator"]
+        )
+    claims = {row["claim_id"]: row for row in theme["claims"]}
+    accepted = {row["source_id"] for row in source_pack["sources"] if row["review_status"] == "accepted"}
+    for source in source_pack["sources"]:
+        claim_ids = {
+            claim_id for claim_id, claim in claims.items()
+            if source["source_id"] in (claim["source_id"], *claim["supporting_source_ids"])
+        }
+        assert set(source["supported_claim_ids"]) == claim_ids
+        assert set(source["supported_node_ids"]) == {
+            node_id for claim_id in claim_ids for node_id in claims[claim_id]["affected_theme_nodes"]
+        }
+    for matrix_row in matrix["node_evidence_matrix"]:
+        claim_ids = {
+            claim_id for claim_id, claim in claims.items()
+            if matrix_row["node_id"] in claim["affected_theme_nodes"]
+        }
+        assert set(matrix_row["supported_claim_ids"]) == claim_ids
+        assert set(matrix_row["accepted_source_ids"]) == {
+            source_id for claim_id in claim_ids
+            for source_id in (claims[claim_id]["source_id"], *claims[claim_id]["supporting_source_ids"])
+        }
+        assert set(matrix_row["accepted_source_ids"]) <= accepted
+
+
+def test_quantum_computing_e5_reviewed_mappings_have_independent_quantum_evidence_roles() -> None:
+    mapping = _read_json(E5_MAPPING_PATH)
+    evidence = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+    reviewed = [row for row in mapping["company_mappings"] if row["review_status"] == "reviewed"]
+    assert len(reviewed) >= 8
+    quantum_terms = (
+        "量子计算", "量子通信", "QKD", "量子精密测量", "原子钟", "量子测量",
+        "量子收入", "量子信息", "量子云", "量子软件", "量子算法",
+    )
+    for row in reviewed:
+        roles = [evidence[evidence_id] for evidence_id in row["evidence_ids"]]
+        assert len(roles) == 3
+        assert {item["evidence_type"] for item in roles} in (
+            {"product_relationship", "revenue_materiality", "business_stage"},
+            {"service_relationship", "revenue_materiality", "business_stage"},
+        )
+        assert len({item["excerpt_locator"] for item in roles}) == 3
+        assert all("页" in item["excerpt_locator"] for item in roles)
+        assert all(any(term in item["evidence_summary"] for term in quantum_terms) for item in roles)
+
+
+def test_quantum_computing_e5_revenue_and_false_positive_boundaries() -> None:
+    theme = _read_json(E5_THEME_PATH)
+    mapping = _read_json(E5_MAPPING_PATH)
+    evidence = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+    reviewed = [row for row in mapping["company_mappings"] if row["review_status"] == "reviewed"]
+    reviewed_codes = {row["company_code"] for row in reviewed}
+    assert not reviewed_codes & E5_HARD_EXCLUDED_CODES
+    for row in reviewed:
+        revenue = next(
+            evidence[evidence_id] for evidence_id in row["evidence_ids"]
+            if evidence[evidence_id]["evidence_type"] == "revenue_materiality"
+        )
+        if any(term in revenue["evidence_summary"] for term in ("宽口径", "未单列", "未披露量子专项")):
+            assert row["revenue_relevance"] == "undisclosed"
+    all_text = json.dumps({"theme": theme, "mapping": mapping}, ensure_ascii=False)
+    for boundary in (
+        "股权投资或联营暴露不构成量子受益证据",
+        "PQC只能作为相邻路线",
+        "通用算力、光器件、芯片或仪器不自动构成量子映射",
+    ):
+        assert boundary in all_text
+
+
+def test_quantum_computing_e5_is_ready_and_wave_e_is_five_of_five() -> None:
+    report = VERIFIER.build_theme_batch_report(MANIFEST_PATH, wave="wave_e")
+    row = next(item for item in report["theme_results"] if item["chain_id"] == E5_CHAIN_ID)
+    assert row["ready"] is True
+    assert report["evaluated_theme_count"] == 5
+    assert report["ready_theme_count"] == 5
+    assert report["not_ready_theme_count"] == 0
+    assert report["wave_results"]["wave_e"]["ready"] is True
+    assert report["completion_status"] == "ready"

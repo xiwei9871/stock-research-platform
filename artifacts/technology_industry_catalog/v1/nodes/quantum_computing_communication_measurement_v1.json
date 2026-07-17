@@ -1,0 +1,154 @@
+{
+  "schema_version": "technology_industry_catalog_node_file_v1",
+  "chain_id": "quantum_computing_communication_measurement",
+  "nodes": [
+    {
+      "node_id": "quantum_processor_modalities_architecture",
+      "chain_id": "quantum_computing_communication_measurement",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Quantum Processor Modalities and Architecture",
+      "node_kind": "frontier_route",
+      "node_type": "infrastructure",
+      "description": "超导、光量子、离子阱、原子与其他量子比特路线，区分处理器、整机和可用算力。",
+      "status": "draft",
+      "primary_path": [
+        "frontier_future_technology",
+        "quantum_computing_communication_measurement",
+        "quantum_processor_modalities_architecture"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "quantum_control_laser_microwave_electronics",
+      "chain_id": "quantum_computing_communication_measurement",
+      "parent_node_id": "quantum_processor_modalities_architecture",
+      "level": "L4",
+      "node_name": "Quantum Control, Laser, and Microwave Electronics",
+      "node_kind": "frontier_route",
+      "node_type": "core_component",
+      "description": "量子比特操控所需测控系统、激光、微波源、读出与反馈电子学。",
+      "status": "draft",
+      "primary_path": [
+        "frontier_future_technology",
+        "quantum_computing_communication_measurement",
+        "quantum_processor_modalities_architecture",
+        "quantum_control_laser_microwave_electronics"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "cryogenic_packaging_interconnect_test",
+      "chain_id": "quantum_computing_communication_measurement",
+      "parent_node_id": "quantum_processor_modalities_architecture",
+      "level": "L4",
+      "node_name": "Cryogenic Packaging, Interconnect, and Test",
+      "node_kind": "frontier_route",
+      "node_type": "subsystem",
+      "description": "稀释制冷、低温互连、封装、探测与整机测试，通用低温或仪器能力不自动形成映射。",
+      "status": "draft",
+      "primary_path": [
+        "frontier_future_technology",
+        "quantum_computing_communication_measurement",
+        "quantum_processor_modalities_architecture",
+        "cryogenic_packaging_interconnect_test"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "quantum_software_compilation_cloud_access",
+      "chain_id": "quantum_computing_communication_measurement",
+      "parent_node_id": "quantum_processor_modalities_architecture",
+      "level": "L4",
+      "node_name": "Quantum Software, Compilation, and Cloud Access",
+      "node_kind": "frontier_route",
+      "node_type": "software",
+      "description": "量子编程、编译、调度、模拟器、真机接入及量子经典混合云服务。",
+      "status": "draft",
+      "primary_path": [
+        "frontier_future_technology",
+        "quantum_computing_communication_measurement",
+        "quantum_processor_modalities_architecture",
+        "quantum_software_compilation_cloud_access"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "quantum_communication_qkd_network_services",
+      "chain_id": "quantum_computing_communication_measurement",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Quantum Communication, QKD Network, and Services",
+      "node_kind": "frontier_route",
+      "node_type": "infrastructure",
+      "description": "QKD设备、密钥管理、量子城域/骨干网络及量子密话密信等运营服务；PQC仅为相邻路线。",
+      "status": "draft",
+      "primary_path": [
+        "frontier_future_technology",
+        "quantum_computing_communication_measurement",
+        "quantum_communication_qkd_network_services"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "quantum_sensing_timing_navigation_metrology",
+      "chain_id": "quantum_computing_communication_measurement",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Quantum Sensing, Timing, Navigation, and Metrology",
+      "node_kind": "frontier_route",
+      "node_type": "equipment",
+      "description": "冷原子重力、原子钟、原子磁力、单光子探测等量子精密测量产品与服务。",
+      "status": "draft",
+      "primary_path": [
+        "frontier_future_technology",
+        "quantum_computing_communication_measurement",
+        "quantum_sensing_timing_navigation_metrology"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "standards_testing_deployment_integration",
+      "chain_id": "quantum_computing_communication_measurement",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Standards, Testing, Deployment, and Integration",
+      "node_kind": "frontier_route",
+      "node_type": "service",
+      "description": "标准合规、设备测试、网络部署、系统集成及客户验收；标准或联盟成员身份不能单独形成受益映射。",
+      "status": "draft",
+      "primary_path": [
+        "frontier_future_technology",
+        "quantum_computing_communication_measurement",
+        "standards_testing_deployment_integration"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "procurement_service_recurring_revenue_validation",
+      "chain_id": "quantum_computing_communication_measurement",
+      "parent_node_id": "standards_testing_deployment_integration",
+      "level": "L4",
+      "node_name": "Procurement, Service, and Recurring Revenue Validation",
+      "node_kind": "frontier_route",
+      "node_type": "service",
+      "description": "分别核验采购、合同、交付、用户使用、服务续费与量子专项收入，阻断宽口径收入外推。",
+      "status": "draft",
+      "primary_path": [
+        "frontier_future_technology",
+        "quantum_computing_communication_measurement",
+        "standards_testing_deployment_integration",
+        "procurement_service_recurring_revenue_validation"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    }
+  ]
+}

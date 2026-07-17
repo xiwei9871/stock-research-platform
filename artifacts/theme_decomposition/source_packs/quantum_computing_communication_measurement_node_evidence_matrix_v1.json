@@ -1,0 +1,223 @@
+{
+  "artifact_version": "quantum_computing_communication_measurement_node_evidence_matrix_v1",
+  "theme_id": "quantum_computing_communication_measurement_value_chain_v1",
+  "as_of_date": "2026-07-17",
+  "node_evidence_matrix": [
+    {
+      "node_id": "quantum_processor_modalities_architecture",
+      "accepted_source_ids": [
+        "quantum_688027_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "quantum_claim_01",
+        "quantum_claim_02"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 5,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "technology_barrier"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "量子处理器模态与系统架构由公司年报的产品、项目、服务或边界披露支持。",
+      "next_evidence_needed": "持续补充量子专项客户、合同、续费、收入与毛利。"
+    },
+    {
+      "node_id": "quantum_control_laser_microwave_electronics",
+      "accepted_source_ids": [
+        "quantum_688027_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "quantum_claim_01"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 5,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "technology_barrier"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "量子控制、激光与微波电子学由公司年报的产品、项目、服务或边界披露支持。",
+      "next_evidence_needed": "持续补充量子专项客户、合同、续费、收入与毛利。"
+    },
+    {
+      "node_id": "cryogenic_packaging_interconnect_test",
+      "accepted_source_ids": [
+        "quantum_688027_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "quantum_claim_01"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 5,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "scarcity"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "低温、封装、互连与测试由公司年报的产品、项目、服务或边界披露支持。",
+      "next_evidence_needed": "持续补充量子专项客户、合同、续费、收入与毛利。"
+    },
+    {
+      "node_id": "quantum_software_compilation_cloud_access",
+      "accepted_source_ids": [
+        "quantum_601728_ar2025",
+        "quantum_600941_ar2025",
+        "quantum_300520_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "quantum_claim_06",
+        "quantum_claim_08",
+        "quantum_claim_13"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 5,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "integration_control"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "量子软件、编译与云接入由公司年报的产品、项目、服务或边界披露支持。",
+      "next_evidence_needed": "持续补充量子专项客户、合同、续费、收入与毛利。"
+    },
+    {
+      "node_id": "quantum_communication_qkd_network_services",
+      "accepted_source_ids": [
+        "quantum_688027_ar2025",
+        "quantum_601728_ar2025",
+        "quantum_002268_ar2025",
+        "quantum_003040_ar2025",
+        "quantum_600487_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "quantum_claim_02",
+        "quantum_claim_05",
+        "quantum_claim_07",
+        "quantum_claim_11",
+        "quantum_claim_15",
+        "quantum_claim_17"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 5,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "gross_margin"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "量子通信、QKD网络与服务由公司年报的产品、项目、服务或边界披露支持。",
+      "next_evidence_needed": "持续补充量子专项客户、合同、续费、收入与毛利。"
+    },
+    {
+      "node_id": "quantum_sensing_timing_navigation_metrology",
+      "accepted_source_ids": [
+        "quantum_688027_ar2025",
+        "quantum_601728_ar2025",
+        "quantum_002935_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "quantum_claim_03",
+        "quantum_claim_06",
+        "quantum_claim_09"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 5,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "customer_certification"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "量子传感、授时、导航与计量由公司年报的产品、项目、服务或边界披露支持。",
+      "next_evidence_needed": "持续补充量子专项客户、合同、续费、收入与毛利。"
+    },
+    {
+      "node_id": "standards_testing_deployment_integration",
+      "accepted_source_ids": [
+        "quantum_688027_ar2025",
+        "quantum_601728_ar2025",
+        "quantum_002935_ar2025",
+        "quantum_002268_ar2025",
+        "quantum_003040_ar2025",
+        "quantum_003029_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "quantum_claim_04",
+        "quantum_claim_09",
+        "quantum_claim_11",
+        "quantum_claim_15",
+        "quantum_claim_19"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 5,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "integration_control"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "标准、测试、部署与集成由公司年报的产品、项目、服务或边界披露支持。",
+      "next_evidence_needed": "持续补充量子专项客户、合同、续费、收入与毛利。"
+    },
+    {
+      "node_id": "procurement_service_recurring_revenue_validation",
+      "accepted_source_ids": [
+        "quantum_688027_ar2025",
+        "quantum_601728_ar2025",
+        "quantum_600941_ar2025",
+        "quantum_002935_ar2025",
+        "quantum_002268_ar2025",
+        "quantum_300520_ar2025",
+        "quantum_003040_ar2025",
+        "quantum_600487_ar2025",
+        "quantum_003029_ar2025",
+        "quantum_002281_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "quantum_claim_02",
+        "quantum_claim_03",
+        "quantum_claim_04",
+        "quantum_claim_05",
+        "quantum_claim_07",
+        "quantum_claim_08",
+        "quantum_claim_10",
+        "quantum_claim_12",
+        "quantum_claim_14",
+        "quantum_claim_16",
+        "quantum_claim_18",
+        "quantum_claim_19",
+        "quantum_claim_20"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 5,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "gross_margin"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "采购、服务与持续收入验证由公司年报的产品、项目、服务或边界披露支持。",
+      "next_evidence_needed": "持续补充量子专项客户、合同、续费、收入与毛利。"
+    }
+  ]
+}

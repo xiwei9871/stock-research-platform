@@ -1,0 +1,896 @@
+{
+  "artifact_version": "theme_decomposition_v1_6",
+  "theme": {
+    "theme_id": "quantum_computing_communication_measurement_value_chain_v1",
+    "theme_name": "量子计算、通信与测量：产品、网络、服务与收入验证",
+    "theme_type": "other",
+    "summary": "分别拆解量子处理器、控制低温、软件云、QKD网络、量子精密测量、标准部署与持续收入，严格排除投资、PQC和通用产品假阳性。",
+    "status": "reviewed",
+    "created_from": "mixed",
+    "last_updated": "2026-07-17"
+  },
+  "research_profile": {
+    "research_kind": "industry_chain_deep_research",
+    "catalog_chain_id": "quantum_computing_communication_measurement",
+    "investment_summary": "量子通信商业化阶段已进入规模网络与用户运营，量子计算商业化阶段以整机、核心组件、真机云接入和科研教育产品为主，量子精密测量商业化阶段呈原子钟批量订单、冷原子重力和部分地质部署并存。核心判断必须分别核验产品、采购/服务和量子专项收入；后量子密码不是量子通信或量子硬件。",
+    "industry_stage": "量子通信商业化阶段由QKD设备走向城域网、密话密信和行业服务；量子计算商业化阶段仍处NISQ整机、测控低温组件和云平台早期兑现；量子精密测量商业化阶段在原子钟成熟批产、重力/磁力等产品工程化之间分化。",
+    "central_conflict": "技术里程碑、平台量子比特、标准参与和资本曝光容易被误读为商业收入；真正矛盾是专用产品交付与持续服务收入披露仍不均衡。",
+    "value_flow_summary": "价值从量子处理器模态流向控制、低温封装与测试，再由软件编译和云接入形成可用算力；量子通信沿QKD设备、密钥管理、网络部署和用户服务兑现；量子测量沿原子/光子传感器、整机、校准、部署和复购兑现，最终统一进入采购、服务、续费和收入验证。",
+    "profit_pool_summary": "近期较可验证利润池位于QKD设备与运营服务、量子计算整机/测控/低温组件、成熟原子钟和专用测量设备；云平台、通用光器件和宽口径安全/算力收入在未拆分前不能视为量子利润池。",
+    "catalyst_claim_ids": [
+      "quantum_claim_02",
+      "quantum_claim_04",
+      "quantum_claim_05",
+      "quantum_claim_09",
+      "quantum_claim_15"
+    ],
+    "risk_claim_ids": [
+      "quantum_claim_07",
+      "quantum_claim_10",
+      "quantum_claim_12",
+      "quantum_claim_14",
+      "quantum_claim_16",
+      "quantum_claim_18",
+      "quantum_claim_19",
+      "quantum_claim_20"
+    ],
+    "validation_signals": [
+      "量子专项采购合同、交付与验收金额",
+      "QKD网络节点、付费用户、续费和ARPU",
+      "量子计算真机任务、付费云用户和复购",
+      "量子测量分产品订单、收入与毛利",
+      "第三方测试、标准合规与跨厂商互操作"
+    ],
+    "evidence_gap_summary": "国盾量子披露最完整；中国电信仅披露量子收入增速而无绝对金额，其他映射多未拆量子专项收入。中国移动、科大国创、楚天龙和亨通光电须继续跟踪外部客户、合同、量子专项收入与续费。PQC只能作为相邻路线；股权投资或联营暴露不构成量子受益证据；通用算力、光器件、芯片或仪器不自动构成量子映射。"
+  },
+  "evidence_policy": {
+    "accepted_source_levels": [
+      "S0",
+      "S1"
+    ],
+    "reviewed_claim_requires_accepted_source": true,
+    "reviewed_mapping_requires_product_revenue_stage_evidence": true,
+    "income_boundary_rule": "研发、样机、标准、采购、合同、交付、验收、用户、续费和量子专项收入必须分别表达；宽口径公司或分部收入一律为undisclosed。",
+    "boundary_rule": "PQC只能作为相邻路线；股权投资或联营暴露不构成量子受益证据；通用算力、光器件、芯片、低温和仪器产品无量子专用交付角色时不得映射。"
+  },
+  "decomposition_templates": [
+    {
+      "template_id": "quantum_computing_communication_measurement_routes_v1",
+      "theme_type": "other",
+      "steps": [
+        "冻结计算、通信、测量与PQC边界",
+        "拆分处理器控制低温和软件",
+        "核验QKD网络与运营服务",
+        "核验量子测量订单部署",
+        "闭环采购交付续费收入"
+      ],
+      "required_dimensions": [
+        "computing_route",
+        "communication_route",
+        "measurement_route",
+        "deployment_integration",
+        "revenue_boundary"
+      ],
+      "optional_dimensions": [
+        "international_comparison",
+        "valuation"
+      ],
+      "output_schema": "theme_decomposition_v1_6"
+    }
+  ],
+  "nodes": [
+    {
+      "node_id": "quantum_processor_modalities_architecture",
+      "theme_id": "quantum_computing_communication_measurement_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "量子处理器模态与系统架构",
+      "node_type": "infrastructure",
+      "description": "超导、光量子、离子阱、原子与其他量子比特路线，区分处理器、整机和可用算力。",
+      "value_capture_score": 5,
+      "bottleneck_score": 5,
+      "localization_gap_score": 4,
+      "supply_tightness_score": 3,
+      "evidence_strength": 5,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "物理/逻辑量子比特",
+        "门保真度",
+        "相干时间",
+        "整机交付"
+      ],
+      "overseas_leaders": [
+        "IBM",
+        "Google Quantum AI",
+        "Quantinuum"
+      ],
+      "domestic_players": [
+        "国盾量子",
+        "本源量子"
+      ],
+      "related_stock_codes": [
+        "688027.SH"
+      ]
+    },
+    {
+      "node_id": "quantum_control_laser_microwave_electronics",
+      "theme_id": "quantum_computing_communication_measurement_value_chain_v1",
+      "parent_node_id": "quantum_processor_modalities_architecture",
+      "node_name": "量子控制、激光与微波电子学",
+      "node_type": "core_component",
+      "description": "量子比特操控所需测控系统、激光、微波源、读出与反馈电子学。",
+      "value_capture_score": 5,
+      "bottleneck_score": 5,
+      "localization_gap_score": 4,
+      "supply_tightness_score": 3,
+      "evidence_strength": 5,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "通道数",
+        "采样精度",
+        "低噪声指标",
+        "测控交付"
+      ],
+      "overseas_leaders": [
+        "Keysight",
+        "Zurich Instruments"
+      ],
+      "domestic_players": [
+        "国盾量子"
+      ],
+      "related_stock_codes": [
+        "688027.SH"
+      ]
+    },
+    {
+      "node_id": "cryogenic_packaging_interconnect_test",
+      "theme_id": "quantum_computing_communication_measurement_value_chain_v1",
+      "parent_node_id": "quantum_processor_modalities_architecture",
+      "node_name": "低温、封装、互连与测试",
+      "node_type": "subsystem",
+      "description": "稀释制冷、低温互连、封装、探测与整机测试，通用低温或仪器能力不自动形成映射。",
+      "value_capture_score": 5,
+      "bottleneck_score": 5,
+      "localization_gap_score": 4,
+      "supply_tightness_score": 3,
+      "evidence_strength": 5,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "基温",
+        "制冷功率",
+        "低温线缆损耗",
+        "整机验收"
+      ],
+      "overseas_leaders": [
+        "Bluefors",
+        "Oxford Instruments"
+      ],
+      "domestic_players": [
+        "国盾量子"
+      ],
+      "related_stock_codes": [
+        "688027.SH"
+      ]
+    },
+    {
+      "node_id": "quantum_software_compilation_cloud_access",
+      "theme_id": "quantum_computing_communication_measurement_value_chain_v1",
+      "parent_node_id": "quantum_processor_modalities_architecture",
+      "node_name": "量子软件、编译与云接入",
+      "node_type": "software",
+      "description": "量子编程、编译、调度、模拟器、真机接入及量子经典混合云服务。",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 4,
+      "supply_tightness_score": 3,
+      "evidence_strength": 5,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "真机接入",
+        "任务数",
+        "云平台量子比特",
+        "付费用户/续费"
+      ],
+      "overseas_leaders": [
+        "IBM Quantum",
+        "Amazon Braket"
+      ],
+      "domestic_players": [
+        "中国移动",
+        "科大国创",
+        "中国电信"
+      ],
+      "related_stock_codes": [
+        "600941.SH",
+        "300520.SZ",
+        "601728.SH"
+      ]
+    },
+    {
+      "node_id": "quantum_communication_qkd_network_services",
+      "theme_id": "quantum_computing_communication_measurement_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "量子通信、QKD网络与服务",
+      "node_type": "infrastructure",
+      "description": "QKD设备、密钥管理、量子城域/骨干网络及量子密话密信等运营服务；PQC仅为相邻路线。",
+      "value_capture_score": 5,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 5,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "QKD节点/链路",
+        "用户数",
+        "行业客户",
+        "服务续费"
+      ],
+      "overseas_leaders": [
+        "ID Quantique",
+        "Toshiba"
+      ],
+      "domestic_players": [
+        "国盾量子",
+        "中国电信",
+        "电科网安",
+        "楚天龙",
+        "亨通光电"
+      ],
+      "related_stock_codes": [
+        "688027.SH",
+        "601728.SH",
+        "002268.SZ",
+        "003040.SZ",
+        "600487.SH"
+      ]
+    },
+    {
+      "node_id": "quantum_sensing_timing_navigation_metrology",
+      "theme_id": "quantum_computing_communication_measurement_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "量子传感、授时、导航与计量",
+      "node_type": "equipment",
+      "description": "冷原子重力、原子钟、原子磁力、单光子探测等量子精密测量产品与服务。",
+      "value_capture_score": 5,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 5,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "灵敏度",
+        "稳定度",
+        "授时精度",
+        "订单与部署"
+      ],
+      "overseas_leaders": [
+        "AOSense",
+        "Microchip"
+      ],
+      "domestic_players": [
+        "国盾量子",
+        "中国电信",
+        "天奥电子"
+      ],
+      "related_stock_codes": [
+        "688027.SH",
+        "601728.SH",
+        "002935.SZ"
+      ]
+    },
+    {
+      "node_id": "standards_testing_deployment_integration",
+      "theme_id": "quantum_computing_communication_measurement_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "标准、测试、部署与集成",
+      "node_type": "service",
+      "description": "标准合规、设备测试、网络部署、系统集成及客户验收；标准或联盟成员身份不能单独形成受益映射。",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 5,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "标准通过",
+        "测试报告",
+        "部署节点",
+        "验收里程碑"
+      ],
+      "overseas_leaders": [
+        "ETSI",
+        "NIST"
+      ],
+      "domestic_players": [
+        "国盾量子",
+        "电科网安",
+        "天奥电子"
+      ],
+      "related_stock_codes": [
+        "688027.SH",
+        "002268.SZ",
+        "002935.SZ"
+      ]
+    },
+    {
+      "node_id": "procurement_service_recurring_revenue_validation",
+      "theme_id": "quantum_computing_communication_measurement_value_chain_v1",
+      "parent_node_id": "standards_testing_deployment_integration",
+      "node_name": "采购、服务与持续收入验证",
+      "node_type": "service",
+      "description": "分别核验采购、合同、交付、用户使用、服务续费与量子专项收入，阻断宽口径收入外推。",
+      "value_capture_score": 5,
+      "bottleneck_score": 5,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 2,
+      "evidence_strength": 5,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "采购金额",
+        "交付/验收",
+        "用户活跃",
+        "量子专项收入"
+      ],
+      "overseas_leaders": [
+        "全球运营商与云平台"
+      ],
+      "domestic_players": [
+        "国盾量子",
+        "中国电信",
+        "中国移动",
+        "天奥电子",
+        "电科网安",
+        "科大国创",
+        "楚天龙",
+        "亨通光电"
+      ],
+      "related_stock_codes": [
+        "688027.SH",
+        "601728.SH",
+        "600941.SH",
+        "002935.SZ",
+        "002268.SZ",
+        "300520.SZ",
+        "003040.SZ",
+        "600487.SH"
+      ]
+    }
+  ],
+  "value_capture_assessments": [
+    {
+      "node_id": "quantum_processor_modalities_architecture",
+      "value_basis": "technology_barrier",
+      "assessment_text": "处理器模态决定控制、低温和软件栈，当前价值集中于可交付整机和核心组件。",
+      "rank": 1,
+      "evidence_ids": [
+        "quantum_claim_01",
+        "quantum_claim_02"
+      ],
+      "uncertainty": "逻辑量子比特和通用容错时间表仍不确定。"
+    },
+    {
+      "node_id": "quantum_control_laser_microwave_electronics",
+      "value_basis": "technology_barrier",
+      "assessment_text": "高通道、低噪声测控是量子比特扩展的关键瓶颈，已出现千比特系统交付。",
+      "rank": 2,
+      "evidence_ids": [
+        "quantum_claim_01"
+      ],
+      "uncertainty": "不同模态控制栈不可直接横比。"
+    },
+    {
+      "node_id": "cryogenic_packaging_interconnect_test",
+      "value_basis": "scarcity",
+      "assessment_text": "稀释制冷、低温互连和测试影响整机可用性，专用交付证据优先于通用低温能力。",
+      "rank": 3,
+      "evidence_ids": [
+        "quantum_claim_01"
+      ],
+      "uncertainty": "国内专用组件收入拆分有限。"
+    },
+    {
+      "node_id": "quantum_software_compilation_cloud_access",
+      "value_basis": "integration_control",
+      "assessment_text": "云平台降低真机接入门槛，但平台规模不等于付费任务、续费或量子优势。",
+      "rank": 4,
+      "evidence_ids": [
+        "quantum_claim_06",
+        "quantum_claim_08",
+        "quantum_claim_13"
+      ],
+      "uncertainty": "缺少平台付费用户和续费披露。"
+    },
+    {
+      "node_id": "quantum_communication_qkd_network_services",
+      "value_basis": "gross_margin",
+      "assessment_text": "QKD网络与量子密话已具规模用户，价值从设备采购转向网络运营和服务。",
+      "rank": 5,
+      "evidence_ids": [
+        "quantum_claim_05",
+        "quantum_claim_07",
+        "quantum_claim_11",
+        "quantum_claim_15",
+        "quantum_claim_17"
+      ],
+      "uncertainty": "运营商未按QKD、PQC和传统安全拆分收入。"
+    },
+    {
+      "node_id": "quantum_sensing_timing_navigation_metrology",
+      "value_basis": "customer_certification",
+      "assessment_text": "原子钟和部分量子测量已形成订单与部署，其他传感路线仍处工程样机或早期市场。",
+      "rank": 6,
+      "evidence_ids": [
+        "quantum_claim_03",
+        "quantum_claim_06",
+        "quantum_claim_09"
+      ],
+      "uncertainty": "需要量子测量分产品收入与复购数据。"
+    },
+    {
+      "node_id": "standards_testing_deployment_integration",
+      "value_basis": "integration_control",
+      "assessment_text": "测试、标准和部署是跨路线准入环节，但成员身份或标准参与不能替代产品交付。",
+      "rank": 7,
+      "evidence_ids": [
+        "quantum_claim_04",
+        "quantum_claim_09",
+        "quantum_claim_11",
+        "quantum_claim_15",
+        "quantum_claim_19"
+      ],
+      "uncertainty": "跨厂商互操作和第三方验收数据仍少。"
+    },
+    {
+      "node_id": "procurement_service_recurring_revenue_validation",
+      "value_basis": "gross_margin",
+      "assessment_text": "只有采购、交付、使用、续费与量子专项收入形成闭环，才能确认持续商业价值。",
+      "rank": 8,
+      "evidence_ids": [
+        "quantum_claim_02",
+        "quantum_claim_04",
+        "quantum_claim_05",
+        "quantum_claim_07",
+        "quantum_claim_08",
+        "quantum_claim_10",
+        "quantum_claim_12",
+        "quantum_claim_14",
+        "quantum_claim_16",
+        "quantum_claim_18",
+        "quantum_claim_19",
+        "quantum_claim_20"
+      ],
+      "uncertainty": "多数公司未拆分量子专项收入、毛利和续费。"
+    }
+  ],
+  "sources": [
+    {
+      "source_id": "quantum_688027_ar2025",
+      "source_type": "company_filing",
+      "title": "国盾量子2025年年度报告",
+      "publisher": "科大国盾量子技术股份有限公司",
+      "author": "",
+      "publish_date": "2026-03-25",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-25/1225028050.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "复核第15-17、25-29、38-39页；量子通信、量子计算、量子精密测量产品、交付、合同及分业务收入。"
+    },
+    {
+      "source_id": "quantum_601728_ar2025",
+      "source_type": "company_filing",
+      "title": "中国电信2025年年度报告",
+      "publisher": "中国电信股份有限公司",
+      "author": "",
+      "publish_date": "2026-03-25",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-25/1225027302.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "复核第13-15、18页；量子收入增速、QKD用户与行业客户、量子计算产品化、天衍-287及精密测量部署。"
+    },
+    {
+      "source_id": "quantum_600941_ar2025",
+      "source_type": "company_filing",
+      "title": "中国移动2025年年度报告",
+      "publisher": "中国移动有限公司",
+      "author": "",
+      "publish_date": "2026-03-27",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-27/1225036280.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "复核第13页；多元算网资源智能调度与服务及超过2000量子比特的量子计算云平台。"
+    },
+    {
+      "source_id": "quantum_002935_ar2025",
+      "source_type": "company_filing",
+      "title": "天奥电子2025年年度报告",
+      "publisher": "成都天奥电子股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-25",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-25/1225187755.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "复核第10-16、24页；原子钟批量产品、量子精密时频团队、铯钟中标、原子磁力计样机与量子测量路线。"
+    },
+    {
+      "source_id": "quantum_002268_ar2025",
+      "source_type": "company_filing",
+      "title": "电科网安2025年年度报告",
+      "publisher": "中电科网络安全科技股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-18",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-18/1225122886.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "复核第10-11、14页；运营商QKD密钥管理、密码服务平台和量子VoLTE研制，量子信息业务仍处培育期且收入低或尚未产生。"
+    },
+    {
+      "source_id": "quantum_300520_ar2025",
+      "source_type": "company_filing",
+      "title": "科大国创2025年年度报告",
+      "publisher": "科大国创软件股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-28",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-28/1225208247.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "复核第10-11、25、36-37页；星云量子云平台、量子经典混合调度、全链路运行环境与量子真机验证，未披露量子专项收入。"
+    },
+    {
+      "source_id": "quantum_003040_ar2025",
+      "source_type": "company_filing",
+      "title": "楚天龙2025年年度报告",
+      "publisher": "楚天龙股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-25",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-25/1225177169.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "复核第5、15、18、20-21页；QKD量子通信卡、运营商项目、研发完成及宽口径嵌入式安全产品收入。"
+    },
+    {
+      "source_id": "quantum_600487_ar2025",
+      "source_type": "company_filing",
+      "title": "亨通光电2025年年度报告",
+      "publisher": "江苏亨通光电股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-25",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-25/1225195764.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "复核第17、34、53、275页；多芯光纤在量子通信网络的技术应用、四芯弱耦合光纤成熟应用、量子通信子公司及宽口径光通信收入。"
+    },
+    {
+      "source_id": "quantum_003029_ar2025",
+      "source_type": "company_filing",
+      "title": "吉大正元2025年年度报告",
+      "publisher": "长春吉大正元信息技术股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-03",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-03/1225075083.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "复核第6-7、17-22页；主要落地为PQC产品、迁移课题和标准工作，QKD仅见标准/专利语境，不构成量子硬件或QKD受益映射。"
+    },
+    {
+      "source_id": "quantum_002281_ar2025",
+      "source_type": "company_filing",
+      "title": "光迅科技2025年年度报告",
+      "publisher": "武汉光迅科技股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-23",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-23/1225148212.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "复核第146页；量子信息仅见联营企业权益法披露，通用光器件收入和股权投资不构成量子受益证据。"
+    }
+  ],
+  "claims": [
+    {
+      "claim_id": "quantum_claim_01",
+      "source_id": "quantum_688027_ar2025",
+      "claim_text": "国盾量子已形成超导量子计算机整机、千比特测控系统、稀释制冷机等产品并发生交付，处理器、控制和低温必须作为不同价值环节核验。",
+      "claim_type": "tech_route",
+      "confidence": 0.99,
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "quantum_processor_modalities_architecture",
+        "quantum_control_laser_microwave_electronics",
+        "cryogenic_packaging_interconnect_test"
+      ],
+      "theme_id": "quantum_computing_communication_measurement_value_chain_v1",
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "quantum_claim_02",
+      "source_id": "quantum_688027_ar2025",
+      "claim_text": "国盾量子量子计算产品收入11,836.92万元、量子通信产品收入9,163.36万元，量子计算和通信已有独立收入披露。",
+      "claim_type": "value_capture",
+      "confidence": 0.99,
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "quantum_processor_modalities_architecture",
+        "quantum_communication_qkd_network_services",
+        "procurement_service_recurring_revenue_validation"
+      ],
+      "theme_id": "quantum_computing_communication_measurement_value_chain_v1",
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "quantum_claim_03",
+      "source_id": "quantum_688027_ar2025",
+      "claim_text": "国盾量子量子精密测量产品包含冷原子重力仪、单光子探测器等，2025年销售68台，测量路线已进入产品销售阶段。",
+      "claim_type": "company_mapping",
+      "confidence": 0.99,
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "quantum_sensing_timing_navigation_metrology",
+        "procurement_service_recurring_revenue_validation"
+      ],
+      "theme_id": "quantum_computing_communication_measurement_value_chain_v1",
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "quantum_claim_04",
+      "source_id": "quantum_688027_ar2025",
+      "claim_text": "国盾量子披露中电信量子集团QKD采购及超导量子计算287/504项目合同履行，采购、交付和收入可被逐项验证。",
+      "claim_type": "catalyst",
+      "confidence": 0.99,
+      "supporting_source_ids": [
+        "quantum_601728_ar2025"
+      ],
+      "affected_theme_nodes": [
+        "standards_testing_deployment_integration",
+        "procurement_service_recurring_revenue_validation"
+      ],
+      "theme_id": "quantum_computing_communication_measurement_value_chain_v1",
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "quantum_claim_05",
+      "source_id": "quantum_601728_ar2025",
+      "claim_text": "中国电信量子通信用户超过680万户、行业客户超过5000家，量子通信已从网络建设进入规模化运营服务。",
+      "claim_type": "demand_shock",
+      "confidence": 0.99,
+      "supporting_source_ids": [
+        "quantum_688027_ar2025"
+      ],
+      "affected_theme_nodes": [
+        "quantum_communication_qkd_network_services",
+        "procurement_service_recurring_revenue_validation"
+      ],
+      "theme_id": "quantum_computing_communication_measurement_value_chain_v1",
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "quantum_claim_06",
+      "source_id": "quantum_601728_ar2025",
+      "claim_text": "中国电信实现量子计算真机部署、云平台应用、量子教育产品化，并在地质勘探部署量子精密测量，计算、通信和测量商业化阶段不同。",
+      "claim_type": "company_mapping",
+      "confidence": 0.99,
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "quantum_software_compilation_cloud_access",
+        "quantum_sensing_timing_navigation_metrology"
+      ],
+      "theme_id": "quantum_computing_communication_measurement_value_chain_v1",
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "quantum_claim_07",
+      "source_id": "quantum_601728_ar2025",
+      "claim_text": "中国电信披露2025年量子收入同比增长65.4%，但未披露量子收入绝对金额或三条路线拆分，因此收入相关性仅为limited。",
+      "claim_type": "value_capture",
+      "confidence": 0.99,
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "quantum_communication_qkd_network_services",
+        "procurement_service_recurring_revenue_validation"
+      ],
+      "theme_id": "quantum_computing_communication_measurement_value_chain_v1",
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "quantum_claim_08",
+      "source_id": "quantum_600941_ar2025",
+      "claim_text": "中国移动将量子纳入多元算网资源智能调度与服务，量子计算云平台规模超过2000量子比特，但未披露量子专项客户、合同或收入。",
+      "claim_type": "company_mapping",
+      "confidence": 0.95,
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "quantum_software_compilation_cloud_access",
+        "procurement_service_recurring_revenue_validation"
+      ],
+      "theme_id": "quantum_computing_communication_measurement_value_chain_v1",
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "quantum_claim_09",
+      "source_id": "quantum_002935_ar2025",
+      "claim_text": "天奥电子是原子钟批量生产企业，2025年中标星网地面系统和国家铁路局铯原子钟项目，并将量子精密时频和量子测量列为技术路线。",
+      "claim_type": "company_mapping",
+      "confidence": 0.99,
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "quantum_sensing_timing_navigation_metrology",
+        "standards_testing_deployment_integration"
+      ],
+      "theme_id": "quantum_computing_communication_measurement_value_chain_v1",
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "quantum_claim_10",
+      "source_id": "quantum_002935_ar2025",
+      "claim_text": "天奥电子时间频率业务包含原子钟及其他产品，年报未单列量子测量或原子钟收入，项目中标不能外推为量子专项收入。",
+      "claim_type": "risk",
+      "confidence": 0.99,
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "procurement_service_recurring_revenue_validation"
+      ],
+      "theme_id": "quantum_computing_communication_measurement_value_chain_v1",
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "quantum_claim_11",
+      "source_id": "quantum_002268_ar2025",
+      "claim_text": "电科网安参与运营商量子通信密钥管理平台、密码服务平台和量子VoLTE语音加密系统研制，形成QKD项目级产品关系。",
+      "claim_type": "company_mapping",
+      "confidence": 0.98,
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "quantum_communication_qkd_network_services",
+        "standards_testing_deployment_integration"
+      ],
+      "theme_id": "quantum_computing_communication_measurement_value_chain_v1",
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "quantum_claim_12",
+      "source_id": "quantum_002268_ar2025",
+      "claim_text": "电科网安明确量子信息业务仍在布局培育期、对主营收入贡献较低或尚未产生收入，宽口径密码及网络安全收入不得计入量子收入。",
+      "claim_type": "risk",
+      "confidence": 0.99,
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "procurement_service_recurring_revenue_validation"
+      ],
+      "theme_id": "quantum_computing_communication_measurement_value_chain_v1",
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "quantum_claim_13",
+      "source_id": "quantum_300520_ar2025",
+      "claim_text": "科大国创星云量子云平台已贯通算法开发、测试验证、任务提交、执行回传并完成量子算法真机验证，处产品平台验证阶段。",
+      "claim_type": "company_mapping",
+      "confidence": 0.96,
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "quantum_software_compilation_cloud_access"
+      ],
+      "theme_id": "quantum_computing_communication_measurement_value_chain_v1",
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "quantum_claim_14",
+      "source_id": "quantum_300520_ar2025",
+      "claim_text": "科大国创仍将量子软件列为研发和未来市场方向，未披露量子云客户、合同或专项收入，不能使用公司软件收入判断量子材料性。",
+      "claim_type": "risk",
+      "confidence": 0.99,
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "procurement_service_recurring_revenue_validation"
+      ],
+      "theme_id": "quantum_computing_communication_measurement_value_chain_v1",
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "quantum_claim_15",
+      "source_id": "quantum_003040_ar2025",
+      "claim_text": "楚天龙量子通信卡使用QKD密钥，参与运营商量子通信卡项目，支持量子密钥应用的超级SIM卡研发已完成。",
+      "claim_type": "company_mapping",
+      "confidence": 0.98,
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "quantum_communication_qkd_network_services",
+        "standards_testing_deployment_integration"
+      ],
+      "theme_id": "quantum_computing_communication_measurement_value_chain_v1",
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "quantum_claim_16",
+      "source_id": "quantum_003040_ar2025",
+      "claim_text": "楚天龙仅披露嵌入式安全产品宽口径收入，未单列量子通信卡收入，研发完成和运营商项目不等于已确认量子专项收入。",
+      "claim_type": "risk",
+      "confidence": 0.99,
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "procurement_service_recurring_revenue_validation"
+      ],
+      "theme_id": "quantum_computing_communication_measurement_value_chain_v1",
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "quantum_claim_17",
+      "source_id": "quantum_600487_ar2025",
+      "claim_text": "亨通光电多芯光纤已用于量子通信网络技术应用，四芯弱耦合光纤实现成熟应用；量子通信研发服务子公司为70%控股，不是仅联营投资。",
+      "claim_type": "company_mapping",
+      "confidence": 0.92,
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "quantum_communication_qkd_network_services"
+      ],
+      "theme_id": "quantum_computing_communication_measurement_value_chain_v1",
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "quantum_claim_18",
+      "source_id": "quantum_600487_ar2025",
+      "claim_text": "亨通光电光通信收入为宽口径，未单列量子通信网络或量子专用光纤收入，通用光纤光缆收入不得归因于量子。",
+      "claim_type": "risk",
+      "confidence": 0.99,
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "procurement_service_recurring_revenue_validation"
+      ],
+      "theme_id": "quantum_computing_communication_measurement_value_chain_v1",
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "quantum_claim_19",
+      "source_id": "quantum_003029_ar2025",
+      "claim_text": "吉大正元的可落地披露主要是PQC产品、迁移课题和标准，QKD仅见标准或专利语境；PQC只能作为相邻路线，后量子密码不是量子通信或量子硬件。",
+      "claim_type": "risk",
+      "confidence": 0.99,
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "standards_testing_deployment_integration",
+        "procurement_service_recurring_revenue_validation"
+      ],
+      "theme_id": "quantum_computing_communication_measurement_value_chain_v1",
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "quantum_claim_20",
+      "source_id": "quantum_002281_ar2025",
+      "claim_text": "光迅科技年报中的量子信息仅见联营企业权益法披露；股权投资或联营暴露不构成量子受益证据，通用光器件亦不自动形成量子映射。",
+      "claim_type": "risk",
+      "confidence": 0.99,
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "procurement_service_recurring_revenue_validation"
+      ],
+      "theme_id": "quantum_computing_communication_measurement_value_chain_v1",
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed"
+    }
+  ]
+}

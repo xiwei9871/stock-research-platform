@@ -1,0 +1,637 @@
+{
+  "artifact_version": "theme_company_mapping_v1",
+  "theme_id": "quantum_computing_communication_measurement_value_chain_v1",
+  "as_of_date": "2026-07-17",
+  "sources": [
+    {
+      "source_id": "quantum_688027_ar2025",
+      "source_type": "company_filing",
+      "title": "国盾量子2025年年度报告",
+      "publisher": "科大国盾量子技术股份有限公司",
+      "author": "",
+      "publish_date": "2026-03-25",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-25/1225028050.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "复核第15-17、25-29、38-39页；量子通信、量子计算、量子精密测量产品、交付、合同及分业务收入。"
+    },
+    {
+      "source_id": "quantum_601728_ar2025",
+      "source_type": "company_filing",
+      "title": "中国电信2025年年度报告",
+      "publisher": "中国电信股份有限公司",
+      "author": "",
+      "publish_date": "2026-03-25",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-25/1225027302.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "复核第13-15、18页；量子收入增速、QKD用户与行业客户、量子计算产品化、天衍-287及精密测量部署。"
+    },
+    {
+      "source_id": "quantum_600941_ar2025",
+      "source_type": "company_filing",
+      "title": "中国移动2025年年度报告",
+      "publisher": "中国移动有限公司",
+      "author": "",
+      "publish_date": "2026-03-27",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-27/1225036280.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "复核第13页；多元算网资源智能调度与服务及超过2000量子比特的量子计算云平台。"
+    },
+    {
+      "source_id": "quantum_002935_ar2025",
+      "source_type": "company_filing",
+      "title": "天奥电子2025年年度报告",
+      "publisher": "成都天奥电子股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-25",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-25/1225187755.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "复核第10-16、24页；原子钟批量产品、量子精密时频团队、铯钟中标、原子磁力计样机与量子测量路线。"
+    },
+    {
+      "source_id": "quantum_002268_ar2025",
+      "source_type": "company_filing",
+      "title": "电科网安2025年年度报告",
+      "publisher": "中电科网络安全科技股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-18",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-18/1225122886.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "复核第10-11、14页；运营商QKD密钥管理、密码服务平台和量子VoLTE研制，量子信息业务仍处培育期且收入低或尚未产生。"
+    },
+    {
+      "source_id": "quantum_300520_ar2025",
+      "source_type": "company_filing",
+      "title": "科大国创2025年年度报告",
+      "publisher": "科大国创软件股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-28",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-28/1225208247.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "复核第10-11、25、36-37页；星云量子云平台、量子经典混合调度、全链路运行环境与量子真机验证，未披露量子专项收入。"
+    },
+    {
+      "source_id": "quantum_003040_ar2025",
+      "source_type": "company_filing",
+      "title": "楚天龙2025年年度报告",
+      "publisher": "楚天龙股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-25",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-25/1225177169.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "复核第5、15、18、20-21页；QKD量子通信卡、运营商项目、研发完成及宽口径嵌入式安全产品收入。"
+    },
+    {
+      "source_id": "quantum_600487_ar2025",
+      "source_type": "company_filing",
+      "title": "亨通光电2025年年度报告",
+      "publisher": "江苏亨通光电股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-25",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-25/1225195764.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "复核第17、34、53、275页；多芯光纤在量子通信网络的技术应用、四芯弱耦合光纤成熟应用、量子通信子公司及宽口径光通信收入。"
+    },
+    {
+      "source_id": "quantum_003029_ar2025",
+      "source_type": "company_filing",
+      "title": "吉大正元2025年年度报告",
+      "publisher": "长春吉大正元信息技术股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-03",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-03/1225075083.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "复核第6-7、17-22页；主要落地为PQC产品、迁移课题和标准工作，QKD仅见标准/专利语境，不构成量子硬件或QKD受益映射。"
+    },
+    {
+      "source_id": "quantum_002281_ar2025",
+      "source_type": "company_filing",
+      "title": "光迅科技2025年年度报告",
+      "publisher": "武汉光迅科技股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-23",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-23/1225148212.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "复核第146页；量子信息仅见联营企业权益法披露，通用光器件收入和股权投资不构成量子受益证据。"
+    }
+  ],
+  "evidence_items": [
+    {
+      "evidence_id": "quantum_ev_688027_product",
+      "source_id": "quantum_688027_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "第15-16页，三类量子产品与计算整机组件",
+      "evidence_summary": "国盾量子直接销售量子计算整机、测控系统、稀释制冷机，并经营量子通信和量子精密测量产品。",
+      "related_company_codes": [
+        "688027.SH"
+      ],
+      "related_node_ids": [
+        "quantum_processor_modalities_architecture"
+      ]
+    },
+    {
+      "evidence_id": "quantum_ev_688027_revenue",
+      "source_id": "quantum_688027_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "第38页，量子计算与量子通信分产品收入",
+      "evidence_summary": "量子计算产品收入11,836.92万元、量子通信产品收入9,163.36万元，属于量子专项收入披露。",
+      "related_company_codes": [
+        "688027.SH"
+      ],
+      "related_node_ids": [
+        "quantum_processor_modalities_architecture"
+      ]
+    },
+    {
+      "evidence_id": "quantum_ev_688027_stage",
+      "source_id": "quantum_688027_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "第25、29、39页，用户业务、千比特交付与重大合同",
+      "evidence_summary": "量子通信业务承载超过600万用户，千比特量子测控系统已交付，QKD采购及超导量子计算287/504项目合同正在履行。",
+      "related_company_codes": [
+        "688027.SH"
+      ],
+      "related_node_ids": [
+        "quantum_processor_modalities_architecture"
+      ]
+    },
+    {
+      "evidence_id": "quantum_ev_601728_service",
+      "source_id": "quantum_601728_ar2025",
+      "evidence_type": "service_relationship",
+      "excerpt_locator": "第14页，量子通信用户与行业客户",
+      "evidence_summary": "中国电信量子通信用户超过680万、服务行业客户超过5000家，QKD网络已形成规模服务关系。",
+      "related_company_codes": [
+        "601728.SH"
+      ],
+      "related_node_ids": [
+        "quantum_communication_qkd_network_services"
+      ]
+    },
+    {
+      "evidence_id": "quantum_ev_601728_revenue",
+      "source_id": "quantum_601728_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "第13页，量子收入增速披露",
+      "evidence_summary": "中国电信量子收入同比增长65.4%，属于量子专项收入增速，但未披露绝对金额，收入相关性仅为limited。",
+      "related_company_codes": [
+        "601728.SH"
+      ],
+      "related_node_ids": [
+        "quantum_communication_qkd_network_services"
+      ]
+    },
+    {
+      "evidence_id": "quantum_ev_601728_stage",
+      "source_id": "quantum_601728_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "第14-15页，三类应用产品化与天衍-287",
+      "evidence_summary": "中国电信已实现量子计算真机、云平台、教育产品化，部署量子精密测量并建成天衍-287超导量子计算机。",
+      "related_company_codes": [
+        "601728.SH"
+      ],
+      "related_node_ids": [
+        "quantum_communication_qkd_network_services"
+      ]
+    },
+    {
+      "evidence_id": "quantum_ev_600941_service",
+      "source_id": "quantum_600941_ar2025",
+      "evidence_type": "service_relationship",
+      "excerpt_locator": "第13页，多元算网智能调度与服务",
+      "evidence_summary": "中国移动将量子计算纳入通算、智算、超算、量子多元算网资源智能调度与服务。",
+      "related_company_codes": [
+        "600941.SH"
+      ],
+      "related_node_ids": [
+        "quantum_software_compilation_cloud_access"
+      ]
+    },
+    {
+      "evidence_id": "quantum_ev_600941_revenue",
+      "source_id": "quantum_600941_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "第13页，平台规模与收入披露边界",
+      "evidence_summary": "年报未单列量子计算云收入、客户、合同或续费，运营商宽口径收入不能计为量子专项收入。",
+      "related_company_codes": [
+        "600941.SH"
+      ],
+      "related_node_ids": [
+        "quantum_software_compilation_cloud_access"
+      ]
+    },
+    {
+      "evidence_id": "quantum_ev_600941_stage",
+      "source_id": "quantum_600941_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "第13页，超过2000量子比特云平台",
+      "evidence_summary": "量子计算云平台已超过2000量子比特规模，支持量子算力云接入，但处早期服务平台阶段。",
+      "related_company_codes": [
+        "600941.SH"
+      ],
+      "related_node_ids": [
+        "quantum_software_compilation_cloud_access"
+      ]
+    },
+    {
+      "evidence_id": "quantum_ev_002935_product",
+      "source_id": "quantum_002935_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "第10-11页，原子钟与完整时频产品线",
+      "evidence_summary": "天奥电子批量生产铷原子钟、铯原子钟和芯片原子钟，属于量子测量与量子精密时频产品路线。",
+      "related_company_codes": [
+        "002935.SZ"
+      ],
+      "related_node_ids": [
+        "quantum_sensing_timing_navigation_metrology"
+      ]
+    },
+    {
+      "evidence_id": "quantum_ev_002935_revenue",
+      "source_id": "quantum_002935_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "第15-16页，宽口径营业收入与产品订单",
+      "evidence_summary": "公司营业收入98,025.21万元但未单列量子测量或原子钟收入；量子专项收入为undisclosed。",
+      "related_company_codes": [
+        "002935.SZ"
+      ],
+      "related_node_ids": [
+        "quantum_sensing_timing_navigation_metrology"
+      ]
+    },
+    {
+      "evidence_id": "quantum_ev_002935_stage",
+      "source_id": "quantum_002935_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "第16、24页，铯钟中标、客户推广与量子测量研发",
+      "evidence_summary": "星网地面系统和国家铁路局铯原子钟项目已中标，芯片原子钟向客户推广，并攻坚量子测量和量子时钟。",
+      "related_company_codes": [
+        "002935.SZ"
+      ],
+      "related_node_ids": [
+        "quantum_sensing_timing_navigation_metrology"
+      ]
+    },
+    {
+      "evidence_id": "quantum_ev_002268_product",
+      "source_id": "quantum_002268_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "第11页，运营商QKD平台与量子VoLTE",
+      "evidence_summary": "电科网安参与运营商量子通信密钥管理平台、密码服务平台和量子VoLTE语音加密系统研制，属于QKD项目产品关系。",
+      "related_company_codes": [
+        "002268.SZ"
+      ],
+      "related_node_ids": [
+        "quantum_communication_qkd_network_services"
+      ]
+    },
+    {
+      "evidence_id": "quantum_ev_002268_revenue",
+      "source_id": "quantum_002268_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "第14页，量子新业务收入边界",
+      "evidence_summary": "量子信息业务对主营收入贡献较低或尚未产生业务收入，密码和网络安全宽口径收入不得计为量子收入。",
+      "related_company_codes": [
+        "002268.SZ"
+      ],
+      "related_node_ids": [
+        "quantum_communication_qkd_network_services"
+      ]
+    },
+    {
+      "evidence_id": "quantum_ev_002268_stage",
+      "source_id": "quantum_002268_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "第10-11页，运营商系统研制与培育期",
+      "evidence_summary": "QKD密钥管理、密码服务和量子VoLTE处项目研制阶段，公司明确量子信息业务仍在布局培育期。",
+      "related_company_codes": [
+        "002268.SZ"
+      ],
+      "related_node_ids": [
+        "quantum_communication_qkd_network_services"
+      ]
+    },
+    {
+      "evidence_id": "quantum_ev_300520_product",
+      "source_id": "quantum_300520_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "第11、25页，星云量子云平台与全链路环境",
+      "evidence_summary": "科大国创星云量子云平台提供量子经典混合调度、模拟器/真机一致执行及任务回传，属于量子软件产品平台。",
+      "related_company_codes": [
+        "300520.SZ"
+      ],
+      "related_node_ids": [
+        "quantum_software_compilation_cloud_access"
+      ]
+    },
+    {
+      "evidence_id": "quantum_ev_300520_revenue",
+      "source_id": "quantum_300520_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "第10、36页，业务口径与量子研发边界",
+      "evidence_summary": "量子软件仍属研发和未来业务方向，未披露量子云客户、合同或量子专项收入，收入相关性为undisclosed。",
+      "related_company_codes": [
+        "300520.SZ"
+      ],
+      "related_node_ids": [
+        "quantum_software_compilation_cloud_access"
+      ]
+    },
+    {
+      "evidence_id": "quantum_ev_300520_stage",
+      "source_id": "quantum_300520_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "第25、37页，平台全链路与量子真机验证",
+      "evidence_summary": "平台已贯通开发、测试、提交、执行回传，并完成新能源光伏功率预测量子算法真机验证，处产品验证阶段。",
+      "related_company_codes": [
+        "300520.SZ"
+      ],
+      "related_node_ids": [
+        "quantum_software_compilation_cloud_access"
+      ]
+    },
+    {
+      "evidence_id": "quantum_ev_003040_product",
+      "source_id": "quantum_003040_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "第5、20-21页，QKD量子通信卡产品",
+      "evidence_summary": "楚天龙量子通信卡利用QKD密钥，支持量子密钥应用的超级SIM卡已形成量子加密与通信产品。",
+      "related_company_codes": [
+        "003040.SZ"
+      ],
+      "related_node_ids": [
+        "quantum_communication_qkd_network_services"
+      ]
+    },
+    {
+      "evidence_id": "quantum_ev_003040_revenue",
+      "source_id": "quantum_003040_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "第18页，嵌入式安全产品宽口径收入",
+      "evidence_summary": "嵌入式安全产品收入72,480.98万元但未单列量子通信卡收入，量子专项收入为undisclosed。",
+      "related_company_codes": [
+        "003040.SZ"
+      ],
+      "related_node_ids": [
+        "quantum_communication_qkd_network_services"
+      ]
+    },
+    {
+      "evidence_id": "quantum_ev_003040_stage",
+      "source_id": "quantum_003040_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "第15、20-21页，运营商项目与研发完成",
+      "evidence_summary": "公司参与主要运营商量子通信卡项目，支持量子密钥应用的超级SIM卡研发已完成。",
+      "related_company_codes": [
+        "003040.SZ"
+      ],
+      "related_node_ids": [
+        "quantum_communication_qkd_network_services"
+      ]
+    },
+    {
+      "evidence_id": "quantum_ev_600487_product",
+      "source_id": "quantum_600487_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "第17页，多芯光纤量子通信网络应用",
+      "evidence_summary": "亨通光电多芯光纤用于量子通信网络技术应用，四芯弱耦合光纤已实现成熟应用，具量子网络专用角色。",
+      "related_company_codes": [
+        "600487.SH"
+      ],
+      "related_node_ids": [
+        "quantum_communication_qkd_network_services"
+      ]
+    },
+    {
+      "evidence_id": "quantum_ev_600487_revenue",
+      "source_id": "quantum_600487_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "第53页，光通信宽口径收入",
+      "evidence_summary": "光通信收入560,884.73万元但未单列量子通信网络或量子专用光纤收入，量子收入相关性为undisclosed。",
+      "related_company_codes": [
+        "600487.SH"
+      ],
+      "related_node_ids": [
+        "quantum_communication_qkd_network_services"
+      ]
+    },
+    {
+      "evidence_id": "quantum_ev_600487_stage",
+      "source_id": "quantum_600487_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "第17、275页，成熟应用与控股量子子公司",
+      "evidence_summary": "四芯弱耦合光纤已在量子通信网络成熟应用，且公司持有量子通信技术开发服务子公司70%股权，不是联营投资单独成证。",
+      "related_company_codes": [
+        "600487.SH"
+      ],
+      "related_node_ids": [
+        "quantum_communication_qkd_network_services"
+      ]
+    }
+  ],
+  "company_mappings": [
+    {
+      "mapping_id": "quantum_map_688027_SH_v1",
+      "theme_id": "quantum_computing_communication_measurement_value_chain_v1",
+      "company_code": "688027.SH",
+      "company_name": "国盾量子",
+      "market": "CN",
+      "mapped_node_id": "quantum_processor_modalities_architecture",
+      "mapping_type": "equipment_supplier",
+      "business_stage": "primary_business",
+      "confidence": 0.99,
+      "evidence_ids": [
+        "quantum_ev_688027_product",
+        "quantum_ev_688027_revenue",
+        "quantum_ev_688027_stage"
+      ],
+      "revenue_relevance": "material",
+      "bottleneck_relevance": "core",
+      "business_materiality": "core_business",
+      "product_or_service": "量子计算整机、测控、稀释制冷及量子通信/测量产品",
+      "relationship_summary": "三类量子产品均有生产销售，量子计算和通信有独立收入，合同与交付明确。",
+      "review_status": "reviewed",
+      "notes": "按主映射落在处理器架构，通信和测量由同一产品证据支持。"
+    },
+    {
+      "mapping_id": "quantum_map_601728_SH_v1",
+      "theme_id": "quantum_computing_communication_measurement_value_chain_v1",
+      "company_code": "601728.SH",
+      "company_name": "中国电信",
+      "market": "CN",
+      "mapped_node_id": "quantum_communication_qkd_network_services",
+      "mapping_type": "system_integrator",
+      "business_stage": "primary_business",
+      "confidence": 0.99,
+      "evidence_ids": [
+        "quantum_ev_601728_service",
+        "quantum_ev_601728_revenue",
+        "quantum_ev_601728_stage"
+      ],
+      "revenue_relevance": "limited",
+      "bottleneck_relevance": "core",
+      "business_materiality": "meaningful_segment",
+      "product_or_service": "QKD网络、量子密话密信、量子计算云与量子测量服务",
+      "relationship_summary": "用户和行业客户已规模化，量子收入仅披露增速，未披露绝对金额。",
+      "review_status": "reviewed",
+      "notes": "QKD与PQC融合方案不把PQC误记为量子硬件。"
+    },
+    {
+      "mapping_id": "quantum_map_600941_SH_v1",
+      "theme_id": "quantum_computing_communication_measurement_value_chain_v1",
+      "company_code": "600941.SH",
+      "company_name": "中国移动",
+      "market": "CN",
+      "mapped_node_id": "quantum_software_compilation_cloud_access",
+      "mapping_type": "system_integrator",
+      "business_stage": "primary_business",
+      "confidence": 0.93,
+      "evidence_ids": [
+        "quantum_ev_600941_service",
+        "quantum_ev_600941_revenue",
+        "quantum_ev_600941_stage"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "adjacent",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "量子多元算网调度与量子计算云平台",
+      "relationship_summary": "平台规模和服务定位明确，但外部客户、合同、续费与量子专项收入未披露。",
+      "review_status": "reviewed",
+      "notes": "不使用运营商总收入或算力收入判断量子材料性。"
+    },
+    {
+      "mapping_id": "quantum_map_002935_SZ_v1",
+      "theme_id": "quantum_computing_communication_measurement_value_chain_v1",
+      "company_code": "002935.SZ",
+      "company_name": "天奥电子",
+      "market": "CN",
+      "mapped_node_id": "quantum_sensing_timing_navigation_metrology",
+      "mapping_type": "equipment_supplier",
+      "business_stage": "primary_business",
+      "confidence": 0.98,
+      "evidence_ids": [
+        "quantum_ev_002935_product",
+        "quantum_ev_002935_revenue",
+        "quantum_ev_002935_stage"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "meaningful_segment",
+      "product_or_service": "铷/铯/芯片原子钟、量子精密时频与量子测量产品",
+      "relationship_summary": "原子钟批产及铯钟项目中标支持材料性，但时频宽口径收入未拆量子专项。",
+      "review_status": "reviewed",
+      "notes": "标准或联盟成员身份不作正向证据，使用产品、订单和客户推广。"
+    },
+    {
+      "mapping_id": "quantum_map_002268_SZ_v1",
+      "theme_id": "quantum_computing_communication_measurement_value_chain_v1",
+      "company_code": "002268.SZ",
+      "company_name": "电科网安",
+      "market": "CN",
+      "mapped_node_id": "quantum_communication_qkd_network_services",
+      "mapping_type": "system_integrator",
+      "business_stage": "primary_business",
+      "confidence": 0.94,
+      "evidence_ids": [
+        "quantum_ev_002268_product",
+        "quantum_ev_002268_revenue",
+        "quantum_ev_002268_stage"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "adjacent",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "运营商QKD密钥管理、密码服务平台与量子VoLTE",
+      "relationship_summary": "QKD项目研制形成直接关系，但仍处培育期且收入低或尚未产生。",
+      "review_status": "reviewed",
+      "notes": "抗量子密码产品不计为QKD或量子硬件。"
+    },
+    {
+      "mapping_id": "quantum_map_300520_SZ_v1",
+      "theme_id": "quantum_computing_communication_measurement_value_chain_v1",
+      "company_code": "300520.SZ",
+      "company_name": "科大国创",
+      "market": "CN",
+      "mapped_node_id": "quantum_software_compilation_cloud_access",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.91,
+      "evidence_ids": [
+        "quantum_ev_300520_product",
+        "quantum_ev_300520_revenue",
+        "quantum_ev_300520_stage"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "adjacent",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "星云量子云平台、量子经典混合调度与行业算法",
+      "relationship_summary": "平台全链路和真机验证支持产品阶段，尚无客户、合同或量子专项收入披露。",
+      "review_status": "reviewed",
+      "notes": "参股九章量子不作证据，本映射只依赖自研平台。"
+    },
+    {
+      "mapping_id": "quantum_map_003040_SZ_v1",
+      "theme_id": "quantum_computing_communication_measurement_value_chain_v1",
+      "company_code": "003040.SZ",
+      "company_name": "楚天龙",
+      "market": "CN",
+      "mapped_node_id": "quantum_communication_qkd_network_services",
+      "mapping_type": "component_supplier",
+      "business_stage": "primary_business",
+      "confidence": 0.94,
+      "evidence_ids": [
+        "quantum_ev_003040_product",
+        "quantum_ev_003040_revenue",
+        "quantum_ev_003040_stage"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "adjacent",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "QKD量子通信卡与量子密钥超级SIM",
+      "relationship_summary": "运营商项目和研发完成支持量子通信卡产品阶段，嵌入式安全收入未拆量子专项。",
+      "review_status": "reviewed",
+      "notes": "后量子算法研发不计为量子通信卡证据。"
+    },
+    {
+      "mapping_id": "quantum_map_600487_SH_v1",
+      "theme_id": "quantum_computing_communication_measurement_value_chain_v1",
+      "company_code": "600487.SH",
+      "company_name": "亨通光电",
+      "market": "CN",
+      "mapped_node_id": "quantum_communication_qkd_network_services",
+      "mapping_type": "component_supplier",
+      "business_stage": "primary_business",
+      "confidence": 0.88,
+      "evidence_ids": [
+        "quantum_ev_600487_product",
+        "quantum_ev_600487_revenue",
+        "quantum_ev_600487_stage"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "adjacent",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "量子通信网络用多芯光纤及量子通信技术服务",
+      "relationship_summary": "量子网络技术应用和四芯弱耦合光纤成熟应用形成专用角色；光通信宽口径收入未拆量子专项。",
+      "review_status": "reviewed",
+      "notes": "通用光纤收入和量子子公司股权本身不作正向证据。"
+    }
+  ]
+}
