@@ -776,6 +776,70 @@ F3_DIRECT_SOURCE_NODE_CONTRACTS = {
     },
 }
 
+F4_CHAIN_ID = "analog_mixed_signal_rf_chips"
+F4_THEME_ID = "analog_mixed_signal_rf_chips_value_chain_v1"
+F4_THEME_PATH = REPOSITORY_ROOT / f"artifacts/theme_decomposition/{F4_THEME_ID}.json"
+F4_MAPPING_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/company_mappings"
+    / "analog_mixed_signal_rf_chips_company_mapping_v1.json"
+)
+F4_SOURCE_PACK_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "analog_mixed_signal_rf_chips_source_pack_v1.json"
+)
+F4_MATRIX_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "analog_mixed_signal_rf_chips_node_evidence_matrix_v1.json"
+)
+F4_L3 = {
+    "analog_signal_chain",
+    "mixed_signal_interface_timing",
+    "rf_integrated_circuits",
+    "analog_qualification_commercialization",
+}
+F4_L4 = {
+    "precision_signal_chain_amplifiers",
+    "data_converters_adc_dac",
+    "interface_isolation_driver_chips",
+    "power_management_analog_chips",
+    "timing_clock_mixed_signal_chips",
+    "rf_front_end_pa_lna_switch",
+    "rf_transceiver_mixed_signal_chips",
+    "automotive_industrial_grade_analog",
+    "design_win_customer_qualification_revenue_validation",
+}
+F4_INITIAL_UNIVERSE = {
+    "300661.SZ", "688536.SH", "688052.SH", "688798.SH", "688381.SH",
+    "300782.SZ", "688153.SH", "688270.SH", "001270.SZ", "688325.SH",
+}
+F4_MAPPING_CONTRACTS = {
+    "300661.SZ": ("precision_signal_chain_amplifiers", "f4_300661_ar2025", "undisclosed"),
+    "688536.SH": ("data_converters_adc_dac", "f4_688536_ar2025", "undisclosed"),
+    "688052.SH": ("interface_isolation_driver_chips", "f4_688052_ar2025", "undisclosed"),
+    "688798.SH": ("power_management_analog_chips", "f4_688798_ar2025", "undisclosed"),
+    "688381.SH": ("interface_isolation_driver_chips", "f4_688381_ar2025", "undisclosed"),
+    "300782.SZ": ("rf_front_end_pa_lna_switch", "f4_300782_ar2025", "limited"),
+    "688153.SH": ("rf_front_end_pa_lna_switch", "f4_688153_ar2025", "limited"),
+    "688270.SH": ("rf_transceiver_mixed_signal_chips", "f4_688270_ar2025", "limited"),
+    "001270.SZ": ("rf_front_end_pa_lna_switch", "f4_001270_ar2025", "limited"),
+    "688325.SH": ("power_management_analog_chips", "f4_688325_ar2025", "undisclosed"),
+}
+F4_PRODUCT_FAMILY_TERMS = {
+    "300661.SZ": ("运算放大器", "信号链"),
+    "688536.SH": ("ADC", "DAC"),
+    "688052.SH": ("数字隔离器", "隔离驱动"),
+    "688798.SH": ("电源管理芯片", "PMIC"),
+    "688381.SH": ("模拟开关", "电平转换"),
+    "300782.SZ": ("射频开关", "低噪声放大器"),
+    "688153.SH": ("射频功率放大器", "自有芯片"),
+    "688270.SH": ("射频收发芯片", "ADC/DAC"),
+    "001270.SZ": ("相控阵T/R芯片", "芯片"),
+    "688325.SH": ("电池管理芯片", "充电管理芯片"),
+}
+
 REQUIRED_READABLE_SECTIONS = [
     {
         "name": "研究结论",
@@ -976,7 +1040,7 @@ def test_foundation_models_f1_catalog_first_structure_and_link_contract() -> Non
             assert by_id[row["parent_node_id"]]["level"] == "L3"
 
 
-def test_foundation_models_f1_artifacts_are_reviewed_and_wave_is_one_of_five_ready() -> None:
+def test_foundation_models_f1_artifacts_remain_reviewed_when_wave_has_four_ready() -> None:
     theme = load_json(F1_THEME_PATH)
     mapping = load_json(F1_MAPPING_PATH)
     source_pack = load_json(F1_SOURCE_PACK_PATH)
@@ -1005,8 +1069,8 @@ def test_foundation_models_f1_artifacts_are_reviewed_and_wave_is_one_of_five_rea
         "accepted_source_backed_claims": 19,
         "reviewed_mappings": 10,
     }
-    assert report["ready_theme_count"] == 3
-    assert report["not_ready_theme_count"] == 2
+    assert report["ready_theme_count"] == 4
+    assert report["not_ready_theme_count"] == 1
 
 
 def test_foundation_models_f1_full_research_profile_and_boundary_ownership() -> None:
@@ -1498,7 +1562,7 @@ def test_low_altitude_f2_catalog_first_structure_and_link_contract() -> None:
             assert by_id[row["parent_node_id"]]["level"] == "L3"
 
 
-def test_low_altitude_f2_artifacts_are_reviewed_and_wave_is_two_of_five_ready() -> None:
+def test_low_altitude_f2_artifacts_remain_reviewed_when_wave_has_four_ready() -> None:
     theme = load_json(F2_THEME_PATH)
     mapping = load_json(F2_MAPPING_PATH)
     source_pack = load_json(F2_SOURCE_PACK_PATH)
@@ -1533,8 +1597,8 @@ def test_low_altitude_f2_artifacts_are_reviewed_and_wave_is_two_of_five_ready() 
         "accepted_source_backed_claims": 16,
         "reviewed_mappings": 9,
     }
-    assert report["ready_theme_count"] == 3
-    assert report["not_ready_theme_count"] == 2
+    assert report["ready_theme_count"] == 4
+    assert report["not_ready_theme_count"] == 1
 
 
 def test_low_altitude_f2_full_profile_and_textual_unexpanded_boundaries() -> None:
@@ -1915,7 +1979,7 @@ def test_mobile_communications_f3_catalog_first_structure_and_link_contract() ->
             assert by_id[row["parent_node_id"]]["level"] == "L3"
 
 
-def test_mobile_communications_f3_artifacts_are_reviewed_and_wave_is_three_of_five_ready() -> None:
+def test_mobile_communications_f3_artifacts_remain_reviewed_when_wave_has_four_ready() -> None:
     theme = load_json(F3_THEME_PATH)
     mapping = load_json(F3_MAPPING_PATH)
     source_pack = load_json(F3_SOURCE_PACK_PATH)
@@ -1948,8 +2012,8 @@ def test_mobile_communications_f3_artifacts_are_reviewed_and_wave_is_three_of_fi
         "accepted_source_backed_claims": 20,
         "reviewed_mappings": 10,
     }
-    assert report["ready_theme_count"] == 3
-    assert report["not_ready_theme_count"] == 2
+    assert report["ready_theme_count"] == 4
+    assert report["not_ready_theme_count"] == 1
 
 
 def test_mobile_communications_f3_full_profile_and_boundary_ownership() -> None:
@@ -2218,3 +2282,213 @@ def test_mobile_communications_f3_matrix_is_calibrated_and_keeps_6g_revenue_gap_
     assert operator["evidence_gap_status"] == "evidence_gap"
     assert "总资本开支" in operator["rationale"]
     assert "移动网络专项" in operator["next_evidence_needed"]
+
+
+def test_analog_mixed_signal_f4_catalog_first_structure_and_link_contract() -> None:
+    assert_catalog_first_contract(F4_CHAIN_ID, F4_THEME_ID, F4_L3, F4_L4)
+    catalog = load_industry_catalog()
+    chain_nodes = [row for row in catalog["nodes"] if row["chain_id"] == F4_CHAIN_ID]
+    by_id = {row["node_id"]: row for row in chain_nodes}
+    assert {row["node_kind"] for row in chain_nodes} == {"canonical"}
+    assert all(not row["canonical_key"] for row in chain_nodes if row["level"] == "L3")
+    l4_keys = [row["canonical_key"] for row in chain_nodes if row["level"] == "L4"]
+    assert len(l4_keys) == len(set(l4_keys)) == 9
+    assert all(key.startswith("analog_mixed_signal_rf_chips:") for key in l4_keys)
+    for row in chain_nodes:
+        assert row["primary_path"][1] == F4_CHAIN_ID
+        if row["level"] == "L4":
+            assert row["parent_node_id"] in F4_L3
+            assert by_id[row["parent_node_id"]]["level"] == "L3"
+
+
+def test_analog_mixed_signal_f4_artifacts_are_reviewed_and_wave_is_four_of_five_ready() -> None:
+    theme = load_json(F4_THEME_PATH)
+    mapping = load_json(F4_MAPPING_PATH)
+    source_pack = load_json(F4_SOURCE_PACK_PATH)
+    matrix = load_json(F4_MATRIX_PATH)
+    assert theme["artifact_version"] == "theme_decomposition_v1_6"
+    assert theme["theme"]["status"] == "reviewed"
+    assert {row["node_id"] for row in theme["nodes"]} == F4_L4
+    assert len(source_pack["sources"]) == 10
+    assert sum(row["source_type"] == "company_filing" for row in source_pack["sources"]) == 10
+    assert len(theme["claims"]) >= 12
+    reviewed = [row for row in mapping["company_mappings"] if row["review_status"] == "reviewed"]
+    assert len(reviewed) == 10
+    assert {row["company_code"] for row in reviewed} == F4_INITIAL_UNIVERSE
+    assert {row["node_id"] for row in matrix["node_evidence_matrix"]} == F4_L4
+
+    report = VERIFIER.build_theme_batch_report(MANIFEST_PATH, wave="wave_f")
+    rows = {row["chain_id"]: row for row in report["theme_results"]}
+    assert rows[F4_CHAIN_ID]["ready"] is True
+    assert rows[F4_CHAIN_ID]["counts"] == {
+        "accepted_sources": 10,
+        "primary_sources": 10,
+        "claims": 16,
+        "accepted_source_backed_claims": 16,
+        "reviewed_mappings": 10,
+    }
+    assert report["ready_theme_count"] == 4
+    assert report["not_ready_theme_count"] == 1
+
+
+def test_analog_mixed_signal_f4_company_product_family_and_three_role_contracts() -> None:
+    mapping = load_json(F4_MAPPING_PATH)
+    evidence = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+    reviewed = {
+        row["company_code"]: row for row in mapping["company_mappings"]
+        if row["review_status"] == "reviewed"
+    }
+    assert set(reviewed) == set(F4_MAPPING_CONTRACTS)
+    for company_code, (node_id, source_id, revenue_relevance) in F4_MAPPING_CONTRACTS.items():
+        row = reviewed[company_code]
+        assert row["mapped_node_id"] == node_id
+        assert row["revenue_relevance"] == revenue_relevance
+        items = [evidence[evidence_id] for evidence_id in row["evidence_ids"]]
+        assert [item["evidence_type"] for item in items] == [
+            "product_relationship", "revenue_materiality", "business_stage"
+        ]
+        assert len({item["excerpt_locator"] for item in items}) == 3
+        assert all(item["source_id"] == source_id for item in items)
+        direct = items[0]["evidence_summary"]
+        assert all(term in direct for term in F4_PRODUCT_FAMILY_TERMS[company_code])
+        assert all(item["related_node_ids"] == [node_id] for item in items)
+    assert "模拟开关" in evidence[reviewed["688381.SH"]["evidence_ids"][0]]["evidence_summary"]
+    assert "隔离芯片已量产" not in json.dumps(reviewed["688381.SH"], ensure_ascii=False)
+    assert "自有芯片" in evidence[reviewed["688153.SH"]["evidence_ids"][0]]["evidence_summary"]
+    assert reviewed["001270.SZ"]["product_or_service"] == "相控阵T/R芯片"
+    assert "基站系统" not in json.dumps(reviewed["001270.SZ"], ensure_ascii=False)
+
+
+def test_analog_mixed_signal_f4_sources_claims_and_matrix_use_direct_attribution() -> None:
+    theme = load_json(F4_THEME_PATH)
+    mapping = load_json(F4_MAPPING_PATH)
+    source_pack = load_json(F4_SOURCE_PACK_PATH)
+    matrix = load_json(F4_MATRIX_PATH)
+    identity_fields = (
+        "source_id", "source_type", "title", "publisher", "author",
+        "publish_date", "url_or_ref", "access_level", "reliability_level",
+        "review_status", "notes",
+    )
+    identity = lambda rows: {
+        row["source_id"]: tuple(
+            row.get(field, row.get("url") if field == "url_or_ref" else None)
+            for field in identity_fields
+        ) for row in rows
+    }
+    served = list_theme_research_sources(F4_THEME_ID, read_source="artifact")
+    assert identity(theme["sources"]) == identity(mapping["sources"])
+    assert identity(theme["sources"]) == identity(source_pack["sources"])
+    assert identity(theme["sources"]) == identity(served["items"])
+    assert all(row["author"] == row["publisher"] and row["author"] for row in theme["sources"])
+
+    claims = {row["claim_id"]: row for row in theme["claims"]}
+    accepted = {row["source_id"] for row in source_pack["sources"]}
+    claim_union = {
+        source_id for claim in claims.values()
+        for source_id in (claim["source_id"], *claim["supporting_source_ids"])
+    }
+    matrix_union = {
+        source_id for row in matrix["node_evidence_matrix"]
+        for source_id in row["accepted_source_ids"]
+    }
+    assert accepted == claim_union == matrix_union
+    for row in matrix["node_evidence_matrix"]:
+        node_claims = {
+            claim_id for claim_id, claim in claims.items()
+            if row["node_id"] in claim["affected_theme_nodes"]
+        }
+        assert set(row["supported_claim_ids"]) == node_claims
+        assert set(row["accepted_source_ids"]) == {
+            claims[claim_id]["source_id"] for claim_id in node_claims
+        }
+    for source in source_pack["sources"]:
+        source_claims = {
+            claim_id for claim_id, claim in claims.items()
+            if source["source_id"] in (claim["source_id"], *claim["supporting_source_ids"])
+        }
+        assert set(source["supported_claim_ids"]) == source_claims
+        assert set(source["supported_node_ids"]) == {
+            node_id for claim_id in source_claims
+            for node_id in claims[claim_id]["affected_theme_nodes"]
+        }
+
+
+def test_analog_mixed_signal_f4_closes_initial_universe_without_padding() -> None:
+    mapping = load_json(F4_MAPPING_PATH)
+    reviewed = {
+        row["company_code"] for row in mapping["company_mappings"]
+        if row["review_status"] == "reviewed"
+    }
+    excluded = {row["company_code"] for row in mapping["excluded_initial_candidates"]}
+    assert reviewed | excluded == F4_INITIAL_UNIVERSE
+    assert not reviewed & excluded
+    assert reviewed == F4_INITIAL_UNIVERSE
+    assert excluded == set()
+    assert mapping["concept_only_candidates"] == []
+
+
+def test_analog_mixed_signal_f4_lifecycle_is_claim_specific() -> None:
+    theme = load_json(F4_THEME_PATH)
+    text = json.dumps(theme, ensure_ascii=False)
+    for stage in ("设计", "流片", "送样", "认证", "design win", "量产", "订单", "收入"):
+        assert stage in text
+    assert "产品roadmap或流片本身只作reserve_only或concept_only" in text
+    assert "送样和认证不等于量产、订单或收入" in text
+    assert "design win不等于确认收入" in text
+    assert "混合口径公司总营收不作为节点专项收入" in text
+
+
+def test_analog_mixed_signal_f4_rejects_neighbor_chain_false_positives() -> None:
+    theme = load_json(F4_THEME_PATH)
+    mapping = load_json(F4_MAPPING_PATH)
+    text = json.dumps({"theme": theme, "policy": mapping["mapping_policy"]}, ensure_ascii=False)
+    for boundary in (
+        "MEMS传感器器件保持G1链所有权",
+        "IGBT、MOSFET与分立功率开关器件保持功率半导体链所有权",
+        "基站系统、天线和移动网络部署保持F3链所有权",
+        "无自有芯片产品证据的封装模组不得映射",
+        "晶圆代工产能保持晶圆制造链所有权",
+        "通用光通信芯片保持光通信链所有权",
+        "卫星通信系统保持卫星通信链所有权",
+    ):
+        assert boundary in text
+    claims_text = " ".join(row["claim_text"] for row in theme["claims"])
+    for forbidden in (
+        "MEMS收入计入F4", "IGBT收入计入F4", "MOSFET收入计入F4",
+        "基站设备收入计入F4", "代工产能计入F4", "公司总营收等于节点收入",
+    ):
+        assert forbidden not in claims_text
+
+
+def test_analog_mixed_signal_f4_has_no_unproven_cross_chain_edges() -> None:
+    catalog = load_industry_catalog()
+    nodes = {row["node_id"]: row for row in catalog["nodes"]}
+    cross_chain_edges = {
+        (row["source_node_id"], row["target_node_id"], row["relationship_type"])
+        for row in catalog["edges"]
+        if row["source_node_id"] in F4_L4
+        and nodes[row["target_node_id"]]["chain_id"] != F4_CHAIN_ID
+    }
+    assert cross_chain_edges == set()
+
+
+def test_analog_mixed_signal_f4_matrix_calibrates_empty_nodes_and_gaps() -> None:
+    theme = load_json(F4_THEME_PATH)
+    matrix = load_json(F4_MATRIX_PATH)
+    nodes = {row["node_id"]: row for row in theme["nodes"]}
+    rows = {row["node_id"]: row for row in matrix["node_evidence_matrix"]}
+    assert set(rows) == F4_L4
+    assert len({row["rationale"] for row in rows.values()}) == 9
+    assert all(row["next_evidence_needed"] for row in rows.values())
+    for node_id, row in rows.items():
+        assert nodes[node_id]["evidence_strength"] == row["evidence_strength_after"]
+    for empty_node in ("timing_clock_mixed_signal_chips", "automotive_industrial_grade_analog"):
+        assert rows[empty_node]["accepted_source_ids"] == []
+        assert rows[empty_node]["supported_claim_ids"] == []
+        assert rows[empty_node]["evidence_gap_status"] == "evidence_gap"
+        assert rows[empty_node]["node_review_status"] == "needs_evidence"
+        assert nodes[empty_node]["related_stock_codes"] == []
+        assert nodes[empty_node]["domestic_players"] == []
+    interface = rows["interface_isolation_driver_chips"]
+    assert "帝奥微仅直接支持接口子族" in interface["rationale"]
+    assert "隔离/驱动" in interface["next_evidence_needed"]

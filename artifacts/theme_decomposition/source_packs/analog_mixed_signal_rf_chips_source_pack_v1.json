@@ -1,0 +1,249 @@
+{
+  "artifact_version": "analog_mixed_signal_rf_chips_source_pack_v1",
+  "theme_id": "analog_mixed_signal_rf_chips_value_chain_v1",
+  "as_of_date": "2026-07-18",
+  "sources": [
+    {
+      "source_id": "f4_300661_ar2025",
+      "source_type": "company_filing",
+      "title": "圣邦股份2025年年度报告",
+      "publisher": "圣邦微电子（北京）股份有限公司",
+      "author": "圣邦微电子（北京）股份有限公司",
+      "publish_date": "2026-03-28",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-03-28/1225045012.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "PDF第15、21、25-26页",
+      "evidence_summary": "运算放大器信号链产品、宽产品族收入与量产/送样阶段。",
+      "supported_claim_ids": [
+        "f4_claim_01",
+        "f4_claim_11"
+      ],
+      "supported_node_ids": [
+        "precision_signal_chain_amplifiers",
+        "design_win_customer_qualification_revenue_validation"
+      ],
+      "limitations": "信号链收入未拆精密放大器；送样不等于量产或收入。",
+      "notes": "PDF第15、21、25-26页；信号链产品、分产品收入及量产/送样阶段。"
+    },
+    {
+      "source_id": "f4_688536_ar2025",
+      "source_type": "company_filing",
+      "title": "思瑞浦2025年年度报告",
+      "publisher": "思瑞浦微电子科技（苏州）股份有限公司",
+      "author": "思瑞浦微电子科技（苏州）股份有限公司",
+      "publish_date": "2026-03-31",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-03-31/1225060234.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "PDF第15-16、39、248页",
+      "evidence_summary": "ADC/DAC产品族、宽信号链收入与研发应用。",
+      "supported_claim_ids": [
+        "f4_claim_02"
+      ],
+      "supported_node_ids": [
+        "data_converters_adc_dac"
+      ],
+      "limitations": "信号链收入未拆ADC/DAC；研发应用不等于design win或收入。",
+      "notes": "PDF第15-16、39、248页；ADC/DAC产品与信号链类模拟芯片宽口径收入。"
+    },
+    {
+      "source_id": "f4_688052_ar2025",
+      "source_type": "company_filing",
+      "title": "纳芯微2025年年度报告",
+      "publisher": "苏州纳芯微电子股份有限公司",
+      "author": "苏州纳芯微电子股份有限公司",
+      "publish_date": "2026-03-31",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-03-31/1225059424.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "PDF第9-10、17、24、27页",
+      "evidence_summary": "数字隔离、隔离接口与驱动产品、规模量产和宽公司收入。",
+      "supported_claim_ids": [
+        "f4_claim_03",
+        "f4_claim_12"
+      ],
+      "supported_node_ids": [
+        "interface_isolation_driver_chips",
+        "design_win_customer_qualification_revenue_validation"
+      ],
+      "limitations": "总收入未拆隔离/驱动产品；应用规模不替代节点收入。",
+      "notes": "PDF第17、24、27、29页；数字隔离、隔离驱动、规模应用与公司宽口径收入。"
+    },
+    {
+      "source_id": "f4_688798_ar2025",
+      "source_type": "company_filing",
+      "title": "艾为电子2025年年度报告",
+      "publisher": "上海艾为电子技术股份有限公司",
+      "author": "上海艾为电子技术股份有限公司",
+      "publish_date": "2026-04-10",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-10/1225090195.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "PDF第14-16、25、47页",
+      "evidence_summary": "电源管理芯片、PMIC客户放量和数模混合宽收入。",
+      "supported_claim_ids": [
+        "f4_claim_04"
+      ],
+      "supported_node_ids": [
+        "power_management_analog_chips"
+      ],
+      "limitations": "数模混合收入未拆PMIC；客户放量需持续跟踪。",
+      "notes": "PDF第14-16、25、47页；电源管理芯片、PMIC放量与数模混合宽口径收入。"
+    },
+    {
+      "source_id": "f4_688381_ar2025",
+      "source_type": "company_filing",
+      "title": "帝奥微2025年年度报告",
+      "publisher": "江苏帝奥微电子股份有限公司",
+      "author": "江苏帝奥微电子股份有限公司",
+      "publish_date": "2026-04-23",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-23/1225154051.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "PDF第15-17、24、27、50页",
+      "evidence_summary": "模拟开关与电平转换接口子族、批量出货和宽收入。",
+      "supported_claim_ids": [
+        "f4_claim_05"
+      ],
+      "supported_node_ids": [
+        "interface_isolation_driver_chips"
+      ],
+      "limitations": "仅证明接口子族；不证明隔离/驱动芯片已量产。",
+      "notes": "PDF第15-17、24、27、50页；模拟开关、电平转换、批量出货与集成电路宽收入。"
+    },
+    {
+      "source_id": "f4_300782_ar2025",
+      "source_type": "company_filing",
+      "title": "卓胜微2025年年度报告",
+      "publisher": "江苏卓胜微电子股份有限公司",
+      "author": "江苏卓胜微电子股份有限公司",
+      "publish_date": "2026-04-28",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-28/1225220151.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "PDF第11-12、15、18、23-24页",
+      "evidence_summary": "射频开关、低噪声放大器、分立器件收入与品牌客户放量。",
+      "supported_claim_ids": [
+        "f4_claim_06",
+        "f4_claim_13"
+      ],
+      "supported_node_ids": [
+        "rf_front_end_pa_lna_switch",
+        "design_win_customer_qualification_revenue_validation"
+      ],
+      "limitations": "射频分立收入未拆开关/LNA；不包含基站系统收入。",
+      "notes": "PDF第11-12、15、18、23-24页；射频开关、LNA、分立器件收入与客户放量。"
+    },
+    {
+      "source_id": "f4_688153_ar2025",
+      "source_type": "company_filing",
+      "title": "唯捷创芯2025年年度报告",
+      "publisher": "唯捷创芯（天津）电子技术股份有限公司",
+      "author": "唯捷创芯（天津）电子技术股份有限公司",
+      "publish_date": "2026-04-28",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-28/1225210005.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "PDF第14、16-17、22、49-50页",
+      "evidence_summary": "自有PA芯片支撑射频模组、旗舰机量产与宽集成电路收入。",
+      "supported_claim_ids": [
+        "f4_claim_07",
+        "f4_claim_15"
+      ],
+      "supported_node_ids": [
+        "rf_front_end_pa_lna_switch",
+        "design_win_customer_qualification_revenue_validation"
+      ],
+      "limitations": "收入未拆自有PA芯片与模组；无自有芯片模组不得类推。",
+      "notes": "PDF第14、16-17、22、49-50页；自研射频功率放大器芯片/模组、量产与宽收入。"
+    },
+    {
+      "source_id": "f4_688270_ar2025",
+      "source_type": "company_filing",
+      "title": "臻镭科技2025年年度报告",
+      "publisher": "浙江臻镭科技股份有限公司",
+      "author": "浙江臻镭科技股份有限公司",
+      "publish_date": "2026-04-23",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-23/1225155824.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "PDF第15、24-25、45-47、99-100页",
+      "evidence_summary": "射频收发及ADC/DAC芯片、分产品收入和交付验收。",
+      "supported_claim_ids": [
+        "f4_claim_08",
+        "f4_claim_14"
+      ],
+      "supported_node_ids": [
+        "rf_transceiver_mixed_signal_chips",
+        "design_win_customer_qualification_revenue_validation"
+      ],
+      "limitations": "分产品收入仍混合多个下游；特种应用不等于卫星系统收入。",
+      "notes": "PDF第15、24-25、45-47、99-100页；射频收发、ADC/DAC、分产品收入及验收。"
+    },
+    {
+      "source_id": "f4_001270_ar2025",
+      "source_type": "company_filing",
+      "title": "铖昌科技2025年年度报告",
+      "publisher": "浙江铖昌科技股份有限公司",
+      "author": "浙江铖昌科技股份有限公司",
+      "publish_date": "2026-04-17",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-17/1225113621.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "PDF第10-12、16-17、93页",
+      "evidence_summary": "相控阵T/R芯片、直接产品收入、量产与客户验收。",
+      "supported_claim_ids": [
+        "f4_claim_09"
+      ],
+      "supported_node_ids": [
+        "rf_front_end_pa_lna_switch"
+      ],
+      "limitations": "T/R收入混合多个下游；芯片映射不延伸为基站或卫星系统。",
+      "notes": "PDF第10-12、16-17、93页；相控阵T/R芯片、收入、批量交付与验收。"
+    },
+    {
+      "source_id": "f4_688325_ar2025",
+      "source_type": "company_filing",
+      "title": "赛微微电2025年年度报告",
+      "publisher": "广东赛微微电子股份有限公司",
+      "author": "广东赛微微电子股份有限公司",
+      "publish_date": "2026-04-03",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-03/1225077308.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "PDF第12-13、19、32-33页",
+      "evidence_summary": "电池管理与充电管理芯片、宽行业收入与产品迭代。",
+      "supported_claim_ids": [
+        "f4_claim_10",
+        "f4_claim_16"
+      ],
+      "supported_node_ids": [
+        "power_management_analog_chips",
+        "design_win_customer_qualification_revenue_validation"
+      ],
+      "limitations": "行业收入未拆电池管理/充电子品类；产品迭代不等于订单。",
+      "notes": "PDF第12-13、19、32-33页；电池管理、充电管理产品与集成电路宽收入。"
+    }
+  ]
+}

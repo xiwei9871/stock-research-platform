@@ -1,0 +1,776 @@
+{
+  "artifact_version": "theme_company_mapping_v1",
+  "theme_id": "analog_mixed_signal_rf_chips_value_chain_v1",
+  "as_of_date": "2026-07-18",
+  "mapping_policy": {
+    "materiality_rule": "仅自有模拟、混合信号或射频芯片产品、客户资格、量产与收入证据可直接映射；混合口径收入保持undisclosed或limited。",
+    "typed_dependency_boundaries": {
+      "mems_sensors": "MEMS传感器器件保持G1链所有权",
+      "discrete_power_switching": "IGBT、MOSFET与分立功率开关器件保持功率半导体链所有权",
+      "mobile_network_systems": "基站系统、天线和移动网络部署保持F3链所有权",
+      "packaged_modules": "无自有芯片产品证据的封装模组不得映射",
+      "foundry_capacity": "晶圆代工产能保持晶圆制造链所有权",
+      "optical_communications": "通用光通信芯片保持光通信链所有权",
+      "satellite_systems": "卫星通信系统保持卫星通信链所有权",
+      "lifecycle": "设计、流片、送样、认证、design win、量产、订单和收入必须分层"
+    }
+  },
+  "sources": [
+    {
+      "source_id": "f4_300661_ar2025",
+      "source_type": "company_filing",
+      "title": "圣邦股份2025年年度报告",
+      "publisher": "圣邦微电子（北京）股份有限公司",
+      "author": "圣邦微电子（北京）股份有限公司",
+      "publish_date": "2026-03-28",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-28/1225045012.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第15、21、25-26页；信号链产品、分产品收入及量产/送样阶段。"
+    },
+    {
+      "source_id": "f4_688536_ar2025",
+      "source_type": "company_filing",
+      "title": "思瑞浦2025年年度报告",
+      "publisher": "思瑞浦微电子科技（苏州）股份有限公司",
+      "author": "思瑞浦微电子科技（苏州）股份有限公司",
+      "publish_date": "2026-03-31",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-31/1225060234.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第15-16、39、248页；ADC/DAC产品与信号链类模拟芯片宽口径收入。"
+    },
+    {
+      "source_id": "f4_688052_ar2025",
+      "source_type": "company_filing",
+      "title": "纳芯微2025年年度报告",
+      "publisher": "苏州纳芯微电子股份有限公司",
+      "author": "苏州纳芯微电子股份有限公司",
+      "publish_date": "2026-03-31",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-31/1225059424.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第17、24、27、29页；数字隔离、隔离驱动、规模应用与公司宽口径收入。"
+    },
+    {
+      "source_id": "f4_688798_ar2025",
+      "source_type": "company_filing",
+      "title": "艾为电子2025年年度报告",
+      "publisher": "上海艾为电子技术股份有限公司",
+      "author": "上海艾为电子技术股份有限公司",
+      "publish_date": "2026-04-10",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-10/1225090195.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第14-16、25、47页；电源管理芯片、PMIC放量与数模混合宽口径收入。"
+    },
+    {
+      "source_id": "f4_688381_ar2025",
+      "source_type": "company_filing",
+      "title": "帝奥微2025年年度报告",
+      "publisher": "江苏帝奥微电子股份有限公司",
+      "author": "江苏帝奥微电子股份有限公司",
+      "publish_date": "2026-04-23",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-23/1225154051.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第15-17、24、27、50页；模拟开关、电平转换、批量出货与集成电路宽收入。"
+    },
+    {
+      "source_id": "f4_300782_ar2025",
+      "source_type": "company_filing",
+      "title": "卓胜微2025年年度报告",
+      "publisher": "江苏卓胜微电子股份有限公司",
+      "author": "江苏卓胜微电子股份有限公司",
+      "publish_date": "2026-04-28",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-28/1225220151.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第11-12、15、18、23-24页；射频开关、LNA、分立器件收入与客户放量。"
+    },
+    {
+      "source_id": "f4_688153_ar2025",
+      "source_type": "company_filing",
+      "title": "唯捷创芯2025年年度报告",
+      "publisher": "唯捷创芯（天津）电子技术股份有限公司",
+      "author": "唯捷创芯（天津）电子技术股份有限公司",
+      "publish_date": "2026-04-28",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-28/1225210005.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第14、16-17、22、49-50页；自研射频功率放大器芯片/模组、量产与宽收入。"
+    },
+    {
+      "source_id": "f4_688270_ar2025",
+      "source_type": "company_filing",
+      "title": "臻镭科技2025年年度报告",
+      "publisher": "浙江臻镭科技股份有限公司",
+      "author": "浙江臻镭科技股份有限公司",
+      "publish_date": "2026-04-23",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-23/1225155824.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第15、24-25、45-47、99-100页；射频收发、ADC/DAC、分产品收入及验收。"
+    },
+    {
+      "source_id": "f4_001270_ar2025",
+      "source_type": "company_filing",
+      "title": "铖昌科技2025年年度报告",
+      "publisher": "浙江铖昌科技股份有限公司",
+      "author": "浙江铖昌科技股份有限公司",
+      "publish_date": "2026-04-17",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-17/1225113621.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第10-12、16-17、93页；相控阵T/R芯片、收入、批量交付与验收。"
+    },
+    {
+      "source_id": "f4_688325_ar2025",
+      "source_type": "company_filing",
+      "title": "赛微微电2025年年度报告",
+      "publisher": "广东赛微微电子股份有限公司",
+      "author": "广东赛微微电子股份有限公司",
+      "publish_date": "2026-04-03",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-03/1225077308.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第12-13、19、32-33页；电池管理、充电管理产品与集成电路宽收入。"
+    }
+  ],
+  "evidence_items": [
+    {
+      "evidence_id": "f4_ev_300661_sz_product",
+      "source_id": "f4_300661_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "PDF第15页，运算放大器、仪表放大器、比较器和ADC/DAC产品族",
+      "evidence_summary": "公司自有运算放大器等精密信号链产品；信号链产品族还包括ADC/DAC，不能全部归精密放大器。",
+      "related_company_codes": [
+        "300661.SZ"
+      ],
+      "related_node_ids": [
+        "precision_signal_chain_amplifiers"
+      ]
+    },
+    {
+      "evidence_id": "f4_ev_300661_sz_materiality",
+      "source_id": "f4_300661_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "PDF第21页，信号链产品收入14.71亿元",
+      "evidence_summary": "信号链产品收入14.71亿元，但未单列运算放大器收入，节点收入undisclosed。",
+      "related_company_codes": [
+        "300661.SZ"
+      ],
+      "related_node_ids": [
+        "precision_signal_chain_amplifiers"
+      ]
+    },
+    {
+      "evidence_id": "f4_ev_300661_sz_stage",
+      "source_id": "f4_300661_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "PDF第25-26页，量产、小批验证与送样分阶段",
+      "evidence_summary": "部分产品量产，其他产品处于小批生产验证、送样或研发阶段。",
+      "related_company_codes": [
+        "300661.SZ"
+      ],
+      "related_node_ids": [
+        "precision_signal_chain_amplifiers"
+      ]
+    },
+    {
+      "evidence_id": "f4_ev_688536_sh_product",
+      "source_id": "f4_688536_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "PDF第15-16页，多通道ADC、DAC与特定应用转换产品",
+      "evidence_summary": "公司披露ADC与DAC数据转换芯片及集成多通道ADC/DAC的特定应用产品。",
+      "related_company_codes": [
+        "688536.SH"
+      ],
+      "related_node_ids": [
+        "data_converters_adc_dac"
+      ]
+    },
+    {
+      "evidence_id": "f4_ev_688536_sh_materiality",
+      "source_id": "f4_688536_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "PDF第248页，信号链类模拟芯片收入14.10亿元",
+      "evidence_summary": "信号链类模拟芯片收入14.10亿元，未单列ADC/DAC收入，节点收入undisclosed。",
+      "related_company_codes": [
+        "688536.SH"
+      ],
+      "related_node_ids": [
+        "data_converters_adc_dac"
+      ]
+    },
+    {
+      "evidence_id": "f4_ev_688536_sh_stage",
+      "source_id": "f4_688536_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "PDF第39页，信号链与电源模拟芯片研发成果",
+      "evidence_summary": "产品族持续研发并进入汽车、工控、测试测量等客户应用，独立design win转化未披露。",
+      "related_company_codes": [
+        "688536.SH"
+      ],
+      "related_node_ids": [
+        "data_converters_adc_dac"
+      ]
+    },
+    {
+      "evidence_id": "f4_ev_688052_sh_product",
+      "source_id": "f4_688052_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "PDF第17页，数字隔离器、隔离接口、隔离电源、隔离采样和隔离驱动产品",
+      "evidence_summary": "公司自有数字隔离器、隔离接口和隔离驱动芯片，属于接口隔离驱动产品族。",
+      "related_company_codes": [
+        "688052.SH"
+      ],
+      "related_node_ids": [
+        "interface_isolation_driver_chips"
+      ]
+    },
+    {
+      "evidence_id": "f4_ev_688052_sh_materiality",
+      "source_id": "f4_688052_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "PDF第9-10页，公司营业收入33.68亿元但未拆隔离产品",
+      "evidence_summary": "公司总收入33.68亿元未单列隔离/驱动芯片收入，节点收入undisclosed。",
+      "related_company_codes": [
+        "688052.SH"
+      ],
+      "related_node_ids": [
+        "interface_isolation_driver_chips"
+      ]
+    },
+    {
+      "evidence_id": "f4_ev_688052_sh_stage",
+      "source_id": "f4_688052_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "PDF第24、27页，隔离芯片规模量产与汽车应用",
+      "evidence_summary": "数字隔离产品已有规模量产和新能源汽车应用，隔离栅极驱动亦披露量产出货。",
+      "related_company_codes": [
+        "688052.SH"
+      ],
+      "related_node_ids": [
+        "interface_isolation_driver_chips"
+      ]
+    },
+    {
+      "evidence_id": "f4_ev_688798_sh_product",
+      "source_id": "f4_688798_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "PDF第14-15页，电源管理芯片、LDO与驱动产品族",
+      "evidence_summary": "公司自有电源管理芯片和PMIC产品，并非仅封装模组；LDO PMIC在客户侧放量。",
+      "related_company_codes": [
+        "688798.SH"
+      ],
+      "related_node_ids": [
+        "power_management_analog_chips"
+      ]
+    },
+    {
+      "evidence_id": "f4_ev_688798_sh_materiality",
+      "source_id": "f4_688798_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "PDF第47页，高性能数模混合芯片收入15.05亿元",
+      "evidence_summary": "高性能数模混合芯片收入15.05亿元包含多产品，PMIC节点收入undisclosed。",
+      "related_company_codes": [
+        "688798.SH"
+      ],
+      "related_node_ids": [
+        "power_management_analog_chips"
+      ]
+    },
+    {
+      "evidence_id": "f4_ev_688798_sh_stage",
+      "source_id": "f4_688798_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "PDF第25页，LDO PMIC客户放量与项目量产",
+      "evidence_summary": "LDO PMIC加速放量，部分端口保护和显示电源产品进入项目量产。",
+      "related_company_codes": [
+        "688798.SH"
+      ],
+      "related_node_ids": [
+        "power_management_analog_chips"
+      ]
+    },
+    {
+      "evidence_id": "f4_ev_688381_sh_product",
+      "source_id": "f4_688381_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "PDF第16-17页，高性能模拟开关与电压/电平转换器",
+      "evidence_summary": "公司直接支持模拟开关与电平转换接口子族；未宣称隔离芯片或驱动芯片已量产。",
+      "related_company_codes": [
+        "688381.SH"
+      ],
+      "related_node_ids": [
+        "interface_isolation_driver_chips"
+      ]
+    },
+    {
+      "evidence_id": "f4_ev_688381_sh_materiality",
+      "source_id": "f4_688381_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "PDF第50页，集成电路收入5.62亿元",
+      "evidence_summary": "集成电路收入5.62亿元未拆模拟开关和电平转换收入，节点收入undisclosed。",
+      "related_company_codes": [
+        "688381.SH"
+      ],
+      "related_node_ids": [
+        "interface_isolation_driver_chips"
+      ]
+    },
+    {
+      "evidence_id": "f4_ev_688381_sh_stage",
+      "source_id": "f4_688381_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "PDF第27页，电平转换、I2C开关等批量出货",
+      "evidence_summary": "电平转换及I2C开关在光模块等客户批量出货，仅证明接口子族商业化。",
+      "related_company_codes": [
+        "688381.SH"
+      ],
+      "related_node_ids": [
+        "interface_isolation_driver_chips"
+      ]
+    },
+    {
+      "evidence_id": "f4_ev_300782_sz_product",
+      "source_id": "f4_300782_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "PDF第11-12页，射频开关、射频低噪声放大器及前端分立器件",
+      "evidence_summary": "公司自有射频开关和低噪声放大器芯片，并扩展射频前端产品族。",
+      "related_company_codes": [
+        "300782.SZ"
+      ],
+      "related_node_ids": [
+        "rf_front_end_pa_lna_switch"
+      ]
+    },
+    {
+      "evidence_id": "f4_ev_300782_sz_materiality",
+      "source_id": "f4_300782_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "PDF第23-24页，射频分立器件收入19.45亿元",
+      "evidence_summary": "射频分立器件收入19.45亿元，涵盖开关、LNA等多类产品，节点相关但仍需子品类拆分。",
+      "related_company_codes": [
+        "300782.SZ"
+      ],
+      "related_node_ids": [
+        "rf_front_end_pa_lna_switch"
+      ]
+    },
+    {
+      "evidence_id": "f4_ev_300782_sz_stage",
+      "source_id": "f4_300782_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "PDF第18页，多家品牌客户导入并持续放量",
+      "evidence_summary": "产品导入多家品牌客户并持续放量，验证研发到量产链路。",
+      "related_company_codes": [
+        "300782.SZ"
+      ],
+      "related_node_ids": [
+        "rf_front_end_pa_lna_switch"
+      ]
+    },
+    {
+      "evidence_id": "f4_ev_688153_sh_product",
+      "source_id": "f4_688153_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "PDF第14、22页，射频功率放大器芯片/模组研发设计与销售",
+      "evidence_summary": "公司专注自有芯片设计，自有芯片产品中的射频功率放大器构成模组核心，非无自有芯片的封装模组。",
+      "related_company_codes": [
+        "688153.SH"
+      ],
+      "related_node_ids": [
+        "rf_front_end_pa_lna_switch"
+      ]
+    },
+    {
+      "evidence_id": "f4_ev_688153_sh_materiality",
+      "source_id": "f4_688153_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "PDF第49-50页，集成电路设计业务收入23.08亿元",
+      "evidence_summary": "集成电路设计收入23.08亿元未拆PA芯片与模组，节点收入仅limited。",
+      "related_company_codes": [
+        "688153.SH"
+      ],
+      "related_node_ids": [
+        "rf_front_end_pa_lna_switch"
+      ]
+    },
+    {
+      "evidence_id": "f4_ev_688153_sh_stage",
+      "source_id": "f4_688153_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "PDF第16-17页，多家品牌手机旗舰机型量产",
+      "evidence_summary": "多款射频前端产品在品牌手机旗舰机型量产，车规方案仍需区分认证与收入。",
+      "related_company_codes": [
+        "688153.SH"
+      ],
+      "related_node_ids": [
+        "rf_front_end_pa_lna_switch"
+      ]
+    },
+    {
+      "evidence_id": "f4_ev_688270_sh_product",
+      "source_id": "f4_688270_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "PDF第15、24-25页，射频收发芯片及高速高精度ADC/DAC产品",
+      "evidence_summary": "公司自有射频收发芯片及高速高精度ADC/DAC芯片，明确区别于通用模组。",
+      "related_company_codes": [
+        "688270.SH"
+      ],
+      "related_node_ids": [
+        "rf_transceiver_mixed_signal_chips"
+      ]
+    },
+    {
+      "evidence_id": "f4_ev_688270_sh_materiality",
+      "source_id": "f4_688270_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "PDF第45-47页，射频收发与ADC/DAC分产品收入",
+      "evidence_summary": "分产品收入可审计，但无线通信、数据链、雷达等多应用未拆，节点收入仅limited。",
+      "related_company_codes": [
+        "688270.SH"
+      ],
+      "related_node_ids": [
+        "rf_transceiver_mixed_signal_chips"
+      ]
+    },
+    {
+      "evidence_id": "f4_ev_688270_sh_stage",
+      "source_id": "f4_688270_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "PDF第99-100页，产品交付并取得客户验收后确认收入",
+      "evidence_summary": "产品交付并取得客户验收单后确认收入，样品研制不等于收入。",
+      "related_company_codes": [
+        "688270.SH"
+      ],
+      "related_node_ids": [
+        "rf_transceiver_mixed_signal_chips"
+      ]
+    },
+    {
+      "evidence_id": "f4_ev_001270_sz_product",
+      "source_id": "f4_001270_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "PDF第10-11页，微波毫米波相控阵T/R芯片产品",
+      "evidence_summary": "公司自有相控阵T/R芯片是相控阵天线核心元器件；只写芯片，不写设备系统。",
+      "related_company_codes": [
+        "001270.SZ"
+      ],
+      "related_node_ids": [
+        "rf_front_end_pa_lna_switch"
+      ]
+    },
+    {
+      "evidence_id": "f4_ev_001270_sz_materiality",
+      "source_id": "f4_001270_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "PDF第17页，T/R芯片收入4.0371亿元、占99.78%",
+      "evidence_summary": "T/R芯片收入4.0371亿元，但应用含星载、机载、地面等，F4产品口径直接、下游口径混合。",
+      "related_company_codes": [
+        "001270.SZ"
+      ],
+      "related_node_ids": [
+        "rf_front_end_pa_lna_switch"
+      ]
+    },
+    {
+      "evidence_id": "f4_ev_001270_sz_stage",
+      "source_id": "f4_001270_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "PDF第16、93页，客户验收、量产与收入确认",
+      "evidence_summary": "多款芯片通过客户验收进入量产，收入需以交付检验和客户验收为边界。",
+      "related_company_codes": [
+        "001270.SZ"
+      ],
+      "related_node_ids": [
+        "rf_front_end_pa_lna_switch"
+      ]
+    },
+    {
+      "evidence_id": "f4_ev_688325_sh_product",
+      "source_id": "f4_688325_ar2025",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "PDF第12-13页，电池安全、计量和充电管理芯片产品",
+      "evidence_summary": "公司以电池管理芯片为核心并覆盖充电管理芯片，属于电源管理模拟芯片产品族。",
+      "related_company_codes": [
+        "688325.SH"
+      ],
+      "related_node_ids": [
+        "power_management_analog_chips"
+      ]
+    },
+    {
+      "evidence_id": "f4_ev_688325_sh_materiality",
+      "source_id": "f4_688325_ar2025",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "PDF第32-33页，集成电路行业收入4.89亿元",
+      "evidence_summary": "集成电路行业收入4.89亿元未拆电池管理和充电管理子品类，节点收入undisclosed。",
+      "related_company_codes": [
+        "688325.SH"
+      ],
+      "related_node_ids": [
+        "power_management_analog_chips"
+      ]
+    },
+    {
+      "evidence_id": "f4_ev_688325_sh_stage",
+      "source_id": "f4_688325_ar2025",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "PDF第19页，全品类产品迭代与市场拓展",
+      "evidence_summary": "全品类产品持续迭代和市场拓展，但独立design win、订单和客户认证未披露。",
+      "related_company_codes": [
+        "688325.SH"
+      ],
+      "related_node_ids": [
+        "power_management_analog_chips"
+      ]
+    }
+  ],
+  "company_mappings": [
+    {
+      "mapping_id": "f4_map_300661_sz_v1",
+      "theme_id": "analog_mixed_signal_rf_chips_value_chain_v1",
+      "company_code": "300661.SZ",
+      "company_name": "圣邦股份",
+      "market": "CN",
+      "mapped_node_id": "precision_signal_chain_amplifiers",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.9,
+      "evidence_ids": [
+        "f4_ev_300661_sz_product",
+        "f4_ev_300661_sz_materiality",
+        "f4_ev_300661_sz_stage"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "core_business",
+      "product_or_service": "精密运算放大器与信号链芯片",
+      "relationship_summary": "运算放大器与信号链产品形成直接产品传导，收入为混合产品族口径。",
+      "review_status": "reviewed",
+      "notes": "仍需精密放大器专项收入、毛利率、客户认证和量产份额。"
+    },
+    {
+      "mapping_id": "f4_map_688536_sh_v1",
+      "theme_id": "analog_mixed_signal_rf_chips_value_chain_v1",
+      "company_code": "688536.SH",
+      "company_name": "思瑞浦",
+      "market": "CN",
+      "mapped_node_id": "data_converters_adc_dac",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.9,
+      "evidence_ids": [
+        "f4_ev_688536_sh_product",
+        "f4_ev_688536_sh_materiality",
+        "f4_ev_688536_sh_stage"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "core_business",
+      "product_or_service": "ADC/DAC数据转换芯片",
+      "relationship_summary": "ADC/DAC产品进入多应用市场，但收入只到信号链类宽口径。",
+      "review_status": "reviewed",
+      "notes": "仍需ADC/DAC专项收入、采样性能、design win、量产客户与毛利率。"
+    },
+    {
+      "mapping_id": "f4_map_688052_sh_v1",
+      "theme_id": "analog_mixed_signal_rf_chips_value_chain_v1",
+      "company_code": "688052.SH",
+      "company_name": "纳芯微",
+      "market": "CN",
+      "mapped_node_id": "interface_isolation_driver_chips",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.9,
+      "evidence_ids": [
+        "f4_ev_688052_sh_product",
+        "f4_ev_688052_sh_materiality",
+        "f4_ev_688052_sh_stage"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "core_business",
+      "product_or_service": "数字隔离器、隔离接口与隔离驱动芯片",
+      "relationship_summary": "隔离器、接口和驱动芯片形成直接产品与规模应用传导。",
+      "review_status": "reviewed",
+      "notes": "仍需隔离/驱动分产品收入、车型定点转化、毛利率与客户集中度。"
+    },
+    {
+      "mapping_id": "f4_map_688798_sh_v1",
+      "theme_id": "analog_mixed_signal_rf_chips_value_chain_v1",
+      "company_code": "688798.SH",
+      "company_name": "艾为电子",
+      "market": "CN",
+      "mapped_node_id": "power_management_analog_chips",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.9,
+      "evidence_ids": [
+        "f4_ev_688798_sh_product",
+        "f4_ev_688798_sh_materiality",
+        "f4_ev_688798_sh_stage"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "meaningful_segment",
+      "product_or_service": "电源管理芯片与PMIC",
+      "relationship_summary": "PMIC产品与客户放量直接关联，但宽数模混合收入无法拆到节点。",
+      "review_status": "reviewed",
+      "notes": "仍需PMIC专项收入、毛利率、客户结构、量产型号和库存。"
+    },
+    {
+      "mapping_id": "f4_map_688381_sh_v1",
+      "theme_id": "analog_mixed_signal_rf_chips_value_chain_v1",
+      "company_code": "688381.SH",
+      "company_name": "帝奥微",
+      "market": "CN",
+      "mapped_node_id": "interface_isolation_driver_chips",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.9,
+      "evidence_ids": [
+        "f4_ev_688381_sh_product",
+        "f4_ev_688381_sh_materiality",
+        "f4_ev_688381_sh_stage"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "core_business",
+      "product_or_service": "模拟开关与电平转换接口芯片",
+      "relationship_summary": "模拟开关与电平转换形成接口子族直接产品和批量出货传导。",
+      "review_status": "reviewed",
+      "notes": "仍需接口子族收入、design win、客户结构；隔离/驱动产品仍是证据缺口。"
+    },
+    {
+      "mapping_id": "f4_map_300782_sz_v1",
+      "theme_id": "analog_mixed_signal_rf_chips_value_chain_v1",
+      "company_code": "300782.SZ",
+      "company_name": "卓胜微",
+      "market": "CN",
+      "mapped_node_id": "rf_front_end_pa_lna_switch",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.9,
+      "evidence_ids": [
+        "f4_ev_300782_sz_product",
+        "f4_ev_300782_sz_materiality",
+        "f4_ev_300782_sz_stage"
+      ],
+      "revenue_relevance": "limited",
+      "bottleneck_relevance": "core",
+      "business_materiality": "core_business",
+      "product_or_service": "射频开关、低噪声放大器与射频前端芯片",
+      "relationship_summary": "射频开关与低噪声放大器产品、分立收入和客户放量形成直接传导。",
+      "review_status": "reviewed",
+      "notes": "仍需开关/LNA子品类收入、客户份额、价格与毛利率。"
+    },
+    {
+      "mapping_id": "f4_map_688153_sh_v1",
+      "theme_id": "analog_mixed_signal_rf_chips_value_chain_v1",
+      "company_code": "688153.SH",
+      "company_name": "唯捷创芯",
+      "market": "CN",
+      "mapped_node_id": "rf_front_end_pa_lna_switch",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.9,
+      "evidence_ids": [
+        "f4_ev_688153_sh_product",
+        "f4_ev_688153_sh_materiality",
+        "f4_ev_688153_sh_stage"
+      ],
+      "revenue_relevance": "limited",
+      "bottleneck_relevance": "core",
+      "business_materiality": "core_business",
+      "product_or_service": "自有射频功率放大器芯片及前端模组",
+      "relationship_summary": "自有PA芯片支撑前端模组并已量产，但收入未拆裸芯片与模组。",
+      "review_status": "reviewed",
+      "notes": "仍需PA芯片/模组收入拆分、客户份额、毛利率和车规量产收入。"
+    },
+    {
+      "mapping_id": "f4_map_688270_sh_v1",
+      "theme_id": "analog_mixed_signal_rf_chips_value_chain_v1",
+      "company_code": "688270.SH",
+      "company_name": "臻镭科技",
+      "market": "CN",
+      "mapped_node_id": "rf_transceiver_mixed_signal_chips",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.9,
+      "evidence_ids": [
+        "f4_ev_688270_sh_product",
+        "f4_ev_688270_sh_materiality",
+        "f4_ev_688270_sh_stage"
+      ],
+      "revenue_relevance": "limited",
+      "bottleneck_relevance": "core",
+      "business_materiality": "core_business",
+      "product_or_service": "射频收发芯片及高速高精度ADC/DAC",
+      "relationship_summary": "射频收发和高速ADC/DAC产品通过交付验收进入收入确认。",
+      "review_status": "reviewed",
+      "notes": "仍需民用/特种应用拆分、持续订单、客户集中度和产品毛利率。"
+    },
+    {
+      "mapping_id": "f4_map_001270_sz_v1",
+      "theme_id": "analog_mixed_signal_rf_chips_value_chain_v1",
+      "company_code": "001270.SZ",
+      "company_name": "铖昌科技",
+      "market": "CN",
+      "mapped_node_id": "rf_front_end_pa_lna_switch",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.9,
+      "evidence_ids": [
+        "f4_ev_001270_sz_product",
+        "f4_ev_001270_sz_materiality",
+        "f4_ev_001270_sz_stage"
+      ],
+      "revenue_relevance": "limited",
+      "bottleneck_relevance": "core",
+      "business_materiality": "core_business",
+      "product_or_service": "相控阵T/R芯片",
+      "relationship_summary": "相控阵T/R芯片产品、收入和客户验收形成直接传导。",
+      "review_status": "reviewed",
+      "notes": "仍需民用/特种下游拆分、持续订单、客户集中度和毛利率。"
+    },
+    {
+      "mapping_id": "f4_map_688325_sh_v1",
+      "theme_id": "analog_mixed_signal_rf_chips_value_chain_v1",
+      "company_code": "688325.SH",
+      "company_name": "赛微微电",
+      "market": "CN",
+      "mapped_node_id": "power_management_analog_chips",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.9,
+      "evidence_ids": [
+        "f4_ev_688325_sh_product",
+        "f4_ev_688325_sh_materiality",
+        "f4_ev_688325_sh_stage"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "core_business",
+      "product_or_service": "电池管理芯片与充电管理芯片",
+      "relationship_summary": "电池管理与充电管理芯片形成直接产品关系，收入仅为宽集成电路口径。",
+      "review_status": "reviewed",
+      "notes": "仍需子品类收入、客户认证、量产型号、毛利率和库存周转。"
+    }
+  ],
+  "concept_only_candidates": [],
+  "excluded_initial_candidates": []
+}

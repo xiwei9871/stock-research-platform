@@ -194,8 +194,9 @@ def test_repository_catalog_starts_with_ten_approved_sectors():
         "quantum_computing_communication_measurement",
         "ai_foundation_models_application_software",
         "uav_evtol_low_altitude_economy",
-        "mobile_communications_5g_6g",
-    }
+            "mobile_communications_5g_6g",
+            "analog_mixed_signal_rf_chips",
+        }
     nodes_by_id = {row["node_id"]: row for row in catalog["nodes"]}
     assert {
         nodes_by_id[edge[field]]["chain_id"]

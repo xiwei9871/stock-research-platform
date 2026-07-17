@@ -1,0 +1,206 @@
+{
+  "artifact_version": "analog_mixed_signal_rf_chips_node_evidence_matrix_v1",
+  "theme_id": "analog_mixed_signal_rf_chips_value_chain_v1",
+  "as_of_date": "2026-07-18",
+  "node_evidence_matrix": [
+    {
+      "node_id": "precision_signal_chain_amplifiers",
+      "accepted_source_ids": [
+        "f4_300661_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "f4_claim_01"
+      ],
+      "evidence_strength_before": 1,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "technology_barrier"
+      ],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "reviewed",
+      "rationale": "圣邦股份直接支持运算放大器产品，但收入仅到宽信号链产品族，精密放大器子品类尚未拆分。",
+      "next_evidence_needed": "补充精密放大器专项收入、毛利率、客户认证、量产型号与市场份额。"
+    },
+    {
+      "node_id": "data_converters_adc_dac",
+      "accepted_source_ids": [
+        "f4_688536_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "f4_claim_02"
+      ],
+      "evidence_strength_before": 1,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "technology_barrier"
+      ],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "reviewed",
+      "rationale": "思瑞浦直接支持ADC/DAC产品，收入仍为宽信号链口径，独立design win与量产客户未披露。",
+      "next_evidence_needed": "补充ADC/DAC专项收入、精度与采样性能、量产客户、design win转化和毛利率。"
+    },
+    {
+      "node_id": "interface_isolation_driver_chips",
+      "accepted_source_ids": [
+        "f4_688052_ar2025",
+        "f4_688381_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "f4_claim_03",
+        "f4_claim_05"
+      ],
+      "evidence_strength_before": 1,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "technology_barrier",
+        "customer_certification"
+      ],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "reviewed",
+      "rationale": "纳芯微支持隔离器、接口与驱动产品；帝奥微仅直接支持接口子族，隔离/驱动收入仍未拆分。",
+      "next_evidence_needed": "补充隔离/驱动分产品收入、认证与量产客户；帝奥微补充隔离/驱动产品直接证据。"
+    },
+    {
+      "node_id": "power_management_analog_chips",
+      "accepted_source_ids": [
+        "f4_688798_ar2025",
+        "f4_688325_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "f4_claim_04",
+        "f4_claim_10"
+      ],
+      "evidence_strength_before": 1,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "customer_certification"
+      ],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "reviewed",
+      "rationale": "艾为与赛微微电支持PMIC、电池及充电管理产品，但均缺少节点子品类收入拆分。",
+      "next_evidence_needed": "补充PMIC、电池管理和充电管理子品类收入、毛利率、客户认证与库存。"
+    },
+    {
+      "node_id": "timing_clock_mixed_signal_chips",
+      "accepted_source_ids": [],
+      "pending_source_ids": [],
+      "supported_claim_ids": [],
+      "evidence_strength_before": 1,
+      "evidence_strength_after": 2,
+      "value_capture_score_review_status": "provisional",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "needs_evidence",
+      "rationale": "本批初始证据宇宙没有可直接归因到时钟生成、抖动清理或同步芯片的公司证据，不以泛混合信号披露填充。",
+      "next_evidence_needed": "补充时钟/定时芯片产品、性能、客户认证、量产和专项收入一手证据。"
+    },
+    {
+      "node_id": "rf_front_end_pa_lna_switch",
+      "accepted_source_ids": [
+        "f4_300782_ar2025",
+        "f4_688153_ar2025",
+        "f4_001270_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "f4_claim_06",
+        "f4_claim_07",
+        "f4_claim_09"
+      ],
+      "evidence_strength_before": 1,
+      "evidence_strength_after": 5,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "technology_barrier",
+        "customer_certification"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "卓胜微、唯捷创芯与铖昌科技分别支持开关/LNA、PA和T/R自有芯片，并有收入、量产或验收证据。",
+      "next_evidence_needed": "补充子品类收入、终端客户份额、价格、毛利率及民用/特种下游拆分。"
+    },
+    {
+      "node_id": "rf_transceiver_mixed_signal_chips",
+      "accepted_source_ids": [
+        "f4_688270_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "f4_claim_08"
+      ],
+      "evidence_strength_before": 1,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "technology_barrier",
+        "customer_certification"
+      ],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "reviewed",
+      "rationale": "臻镭科技直接支持射频收发及高速ADC/DAC产品、分产品收入和交付验收，但下游口径混合。",
+      "next_evidence_needed": "补充民用/特种应用收入拆分、持续订单、客户集中度和产品毛利率。"
+    },
+    {
+      "node_id": "automotive_industrial_grade_analog",
+      "accepted_source_ids": [],
+      "pending_source_ids": [],
+      "supported_claim_ids": [],
+      "evidence_strength_before": 1,
+      "evidence_strength_after": 2,
+      "value_capture_score_review_status": "provisional",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "needs_evidence",
+      "rationale": "本批未将产品应用或单项车规线索升级为独立车规工业级节点映射，避免重复计算主产品节点。",
+      "next_evidence_needed": "补充车规/工业级认证标准、定点、量产车型、失效率、专项收入和质量周期证据。"
+    },
+    {
+      "node_id": "design_win_customer_qualification_revenue_validation",
+      "accepted_source_ids": [
+        "f4_300661_ar2025",
+        "f4_688052_ar2025",
+        "f4_300782_ar2025",
+        "f4_688270_ar2025",
+        "f4_688153_ar2025",
+        "f4_688325_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "f4_claim_11",
+        "f4_claim_12",
+        "f4_claim_13",
+        "f4_claim_14",
+        "f4_claim_15",
+        "f4_claim_16"
+      ],
+      "evidence_strength_before": 1,
+      "evidence_strength_after": 5,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "customer_certification",
+        "integration_control"
+      ],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "reviewed",
+      "rationale": "多份年报共同区分研发、送样、认证、量产、验收和收入，但design win转量产率与节点收入质量仍少披露。",
+      "next_evidence_needed": "补充design win数量与转量产率、节点订单、确认收入、毛利率、库存周转和回款。"
+    }
+  ]
+}

@@ -1,0 +1,838 @@
+{
+  "artifact_version": "theme_decomposition_v1_6",
+  "theme": {
+    "theme_id": "analog_mixed_signal_rf_chips_value_chain_v1",
+    "theme_name": "模拟、混合信号与射频芯片：产品族、资格认证与收入验证",
+    "theme_type": "other",
+    "summary": "从精密信号链、接口时钟、射频芯片和资格商业化四段研究国产模拟及RF芯片价值链。",
+    "status": "reviewed",
+    "created_from": "mixed",
+    "last_updated": "2026-07-18"
+  },
+  "research_profile": {
+    "research_kind": "industry_chain_deep_research",
+    "catalog_chain_id": "analog_mixed_signal_rf_chips",
+    "investment_summary": "可读价值集中于已有自有芯片产品、客户认证、量产和分产品收入的信号链、接口、电源管理与射频芯片公司；研发热度不能替代商业证据。",
+    "industry_stage": "国产模拟与射频芯片已从单点产品进入产品族扩张和客户导入阶段，成熟品类已有量产收入，时钟与车规级独立证据仍不足。",
+    "central_conflict": "产品型号和下游应用丰富，但多数公司收入按宽产品族或公司总口径披露，节点收入、design win转量产、毛利和库存质量仍需拆分。",
+    "value_flow_summary": "价值从芯片设计、流片、封测进入送样、认证和design win，再经量产、订单、交付与确认收入兑现；晶圆代工只作供应依赖。",
+    "profit_pool_summary": "利润池偏向高性能信号链、数据转换、隔离接口、射频前端和高可靠收发芯片，前提是产品族收入、客户认证和量产证据闭环。",
+    "catalyst_claim_ids": [
+      "f4_claim_06",
+      "f4_claim_07",
+      "f4_claim_09",
+      "f4_claim_13"
+    ],
+    "risk_claim_ids": [
+      "f4_claim_11",
+      "f4_claim_12",
+      "f4_claim_14",
+      "f4_claim_15",
+      "f4_claim_16"
+    ],
+    "validation_signals": [
+      "节点分产品收入与毛利率",
+      "客户认证与design win转量产",
+      "量产型号和重点客户放量",
+      "库存周转与应收回款"
+    ],
+    "evidence_gap_summary": "时钟/定时和车规工业级独立节点缺少本批直接公司映射；其他节点普遍缺少更细分收入、毛利率、客户集中度和design win转化率。",
+    "boundary_rules": [
+      "MEMS传感器器件保持G1链所有权",
+      "IGBT、MOSFET与分立功率开关器件保持功率半导体链所有权",
+      "基站系统、天线和移动网络部署保持F3链所有权",
+      "无自有芯片产品证据的封装模组不得映射",
+      "晶圆代工产能保持晶圆制造链所有权",
+      "通用光通信芯片保持光通信链所有权",
+      "卫星通信系统保持卫星通信链所有权"
+    ]
+  },
+  "decomposition_templates": [
+    {
+      "template_id": "analog_mixed_signal_rf_chips_template_v1",
+      "theme_type": "other",
+      "steps": [
+        "冻结邻链边界",
+        "拆分产品族",
+        "核验客户资格",
+        "分层商业生命周期",
+        "映射收入与证据缺口"
+      ],
+      "required_dimensions": [
+        "signal_chain",
+        "interface_timing",
+        "rf_integrated_circuits",
+        "qualification_commercialization"
+      ],
+      "optional_dimensions": [
+        "international_comparison",
+        "valuation"
+      ],
+      "output_schema": "theme_decomposition_v1_6"
+    }
+  ],
+  "evidence_policy": {
+    "accepted_source_levels": [
+      "S0",
+      "S1"
+    ],
+    "reviewed_claim_requires_accepted_source": true,
+    "reviewed_mapping_requires_product_revenue_stage_evidence": true,
+    "income_boundary_rule": "混合口径公司总营收不作为节点专项收入；设计、流片、送样、认证、design win、量产、订单和收入逐级分开。",
+    "boundary_rule": "MEMS传感器器件保持G1链所有权；IGBT、MOSFET与分立功率开关器件保持功率半导体链所有权；基站系统、天线和移动网络部署保持F3链所有权；无自有芯片产品证据的封装模组不得映射；晶圆代工产能保持晶圆制造链所有权；通用光通信芯片保持光通信链所有权；卫星通信系统保持卫星通信链所有权"
+  },
+  "sources": [
+    {
+      "source_id": "f4_300661_ar2025",
+      "source_type": "company_filing",
+      "title": "圣邦股份2025年年度报告",
+      "publisher": "圣邦微电子（北京）股份有限公司",
+      "author": "圣邦微电子（北京）股份有限公司",
+      "publish_date": "2026-03-28",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-28/1225045012.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第15、21、25-26页；信号链产品、分产品收入及量产/送样阶段。"
+    },
+    {
+      "source_id": "f4_688536_ar2025",
+      "source_type": "company_filing",
+      "title": "思瑞浦2025年年度报告",
+      "publisher": "思瑞浦微电子科技（苏州）股份有限公司",
+      "author": "思瑞浦微电子科技（苏州）股份有限公司",
+      "publish_date": "2026-03-31",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-31/1225060234.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第15-16、39、248页；ADC/DAC产品与信号链类模拟芯片宽口径收入。"
+    },
+    {
+      "source_id": "f4_688052_ar2025",
+      "source_type": "company_filing",
+      "title": "纳芯微2025年年度报告",
+      "publisher": "苏州纳芯微电子股份有限公司",
+      "author": "苏州纳芯微电子股份有限公司",
+      "publish_date": "2026-03-31",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-31/1225059424.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第17、24、27、29页；数字隔离、隔离驱动、规模应用与公司宽口径收入。"
+    },
+    {
+      "source_id": "f4_688798_ar2025",
+      "source_type": "company_filing",
+      "title": "艾为电子2025年年度报告",
+      "publisher": "上海艾为电子技术股份有限公司",
+      "author": "上海艾为电子技术股份有限公司",
+      "publish_date": "2026-04-10",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-10/1225090195.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第14-16、25、47页；电源管理芯片、PMIC放量与数模混合宽口径收入。"
+    },
+    {
+      "source_id": "f4_688381_ar2025",
+      "source_type": "company_filing",
+      "title": "帝奥微2025年年度报告",
+      "publisher": "江苏帝奥微电子股份有限公司",
+      "author": "江苏帝奥微电子股份有限公司",
+      "publish_date": "2026-04-23",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-23/1225154051.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第15-17、24、27、50页；模拟开关、电平转换、批量出货与集成电路宽收入。"
+    },
+    {
+      "source_id": "f4_300782_ar2025",
+      "source_type": "company_filing",
+      "title": "卓胜微2025年年度报告",
+      "publisher": "江苏卓胜微电子股份有限公司",
+      "author": "江苏卓胜微电子股份有限公司",
+      "publish_date": "2026-04-28",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-28/1225220151.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第11-12、15、18、23-24页；射频开关、LNA、分立器件收入与客户放量。"
+    },
+    {
+      "source_id": "f4_688153_ar2025",
+      "source_type": "company_filing",
+      "title": "唯捷创芯2025年年度报告",
+      "publisher": "唯捷创芯（天津）电子技术股份有限公司",
+      "author": "唯捷创芯（天津）电子技术股份有限公司",
+      "publish_date": "2026-04-28",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-28/1225210005.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第14、16-17、22、49-50页；自研射频功率放大器芯片/模组、量产与宽收入。"
+    },
+    {
+      "source_id": "f4_688270_ar2025",
+      "source_type": "company_filing",
+      "title": "臻镭科技2025年年度报告",
+      "publisher": "浙江臻镭科技股份有限公司",
+      "author": "浙江臻镭科技股份有限公司",
+      "publish_date": "2026-04-23",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-23/1225155824.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第15、24-25、45-47、99-100页；射频收发、ADC/DAC、分产品收入及验收。"
+    },
+    {
+      "source_id": "f4_001270_ar2025",
+      "source_type": "company_filing",
+      "title": "铖昌科技2025年年度报告",
+      "publisher": "浙江铖昌科技股份有限公司",
+      "author": "浙江铖昌科技股份有限公司",
+      "publish_date": "2026-04-17",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-17/1225113621.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第10-12、16-17、93页；相控阵T/R芯片、收入、批量交付与验收。"
+    },
+    {
+      "source_id": "f4_688325_ar2025",
+      "source_type": "company_filing",
+      "title": "赛微微电2025年年度报告",
+      "publisher": "广东赛微微电子股份有限公司",
+      "author": "广东赛微微电子股份有限公司",
+      "publish_date": "2026-04-03",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-03/1225077308.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF第12-13、19、32-33页；电池管理、充电管理产品与集成电路宽收入。"
+    }
+  ],
+  "nodes": [
+    {
+      "node_id": "precision_signal_chain_amplifiers",
+      "theme_id": "analog_mixed_signal_rf_chips_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "精密信号链放大器",
+      "node_type": "core_component",
+      "description": "运算放大器、仪表放大器、电流检测放大器和比较器承担精密信号调理。",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "产品收入",
+        "客户认证",
+        "量产型号",
+        "毛利率"
+      ],
+      "overseas_leaders": [
+        "Analog Devices",
+        "Texas Instruments",
+        "Qorvo"
+      ],
+      "domestic_players": [
+        "圣邦股份"
+      ],
+      "related_stock_codes": [
+        "300661.SZ"
+      ]
+    },
+    {
+      "node_id": "data_converters_adc_dac",
+      "theme_id": "analog_mixed_signal_rf_chips_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "数据转换器 ADC/DAC",
+      "node_type": "core_component",
+      "description": "ADC/DAC完成模拟与数字域转换，性能由精度、采样率、噪声和功耗共同决定。",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "产品收入",
+        "客户认证",
+        "量产型号",
+        "毛利率"
+      ],
+      "overseas_leaders": [
+        "Analog Devices",
+        "Texas Instruments",
+        "Qorvo"
+      ],
+      "domestic_players": [
+        "思瑞浦"
+      ],
+      "related_stock_codes": [
+        "688536.SH"
+      ]
+    },
+    {
+      "node_id": "interface_isolation_driver_chips",
+      "theme_id": "analog_mixed_signal_rf_chips_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "接口、隔离与驱动芯片",
+      "node_type": "core_component",
+      "description": "模拟开关、电平转换、数字隔离和隔离驱动连接不同电压域与控制域；帝奥微只直接支持接口子族。",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "产品收入",
+        "客户认证",
+        "量产型号",
+        "毛利率"
+      ],
+      "overseas_leaders": [
+        "Analog Devices",
+        "Texas Instruments",
+        "Qorvo"
+      ],
+      "domestic_players": [
+        "纳芯微",
+        "帝奥微"
+      ],
+      "related_stock_codes": [
+        "688052.SH",
+        "688381.SH"
+      ]
+    },
+    {
+      "node_id": "power_management_analog_chips",
+      "theme_id": "analog_mixed_signal_rf_chips_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "电源管理模拟芯片",
+      "node_type": "core_component",
+      "description": "PMIC、电池管理、充电、LDO和DC-DC管理系统电能；不含分立功率开关器件。",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "产品收入",
+        "客户认证",
+        "量产型号",
+        "毛利率"
+      ],
+      "overseas_leaders": [
+        "Analog Devices",
+        "Texas Instruments",
+        "Qorvo"
+      ],
+      "domestic_players": [
+        "艾为电子",
+        "赛微微电"
+      ],
+      "related_stock_codes": [
+        "688798.SH",
+        "688325.SH"
+      ]
+    },
+    {
+      "node_id": "timing_clock_mixed_signal_chips",
+      "theme_id": "analog_mixed_signal_rf_chips_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "时钟与定时混合信号芯片",
+      "node_type": "core_component",
+      "description": "时钟生成、分配、抖动清理和同步是高速混合信号系统的基础功能。",
+      "value_capture_score": 3,
+      "bottleneck_score": 3,
+      "localization_gap_score": 4,
+      "supply_tightness_score": 3,
+      "evidence_strength": 2,
+      "node_review_status": "needs_evidence",
+      "key_metrics": [
+        "产品收入",
+        "客户认证",
+        "量产型号",
+        "毛利率"
+      ],
+      "overseas_leaders": [
+        "Analog Devices",
+        "Texas Instruments",
+        "Qorvo"
+      ],
+      "domestic_players": [],
+      "related_stock_codes": []
+    },
+    {
+      "node_id": "rf_front_end_pa_lna_switch",
+      "theme_id": "analog_mixed_signal_rf_chips_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "射频前端 PA/LNA/开关",
+      "node_type": "core_component",
+      "description": "射频功率放大器、低噪声放大器、开关及相控阵T/R芯片构成射频收发前端。",
+      "value_capture_score": 5,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 5,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "产品收入",
+        "客户认证",
+        "量产型号",
+        "毛利率"
+      ],
+      "overseas_leaders": [
+        "Analog Devices",
+        "Texas Instruments",
+        "Qorvo"
+      ],
+      "domestic_players": [
+        "卓胜微",
+        "唯捷创芯",
+        "铖昌科技"
+      ],
+      "related_stock_codes": [
+        "300782.SZ",
+        "688153.SH",
+        "001270.SZ"
+      ]
+    },
+    {
+      "node_id": "rf_transceiver_mixed_signal_chips",
+      "theme_id": "analog_mixed_signal_rf_chips_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "射频收发与混合信号芯片",
+      "node_type": "core_component",
+      "description": "射频收发、频率变换、滤波、增益控制及高速ADC/DAC连接基带与射频前端。",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 4,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "产品收入",
+        "客户认证",
+        "量产型号",
+        "毛利率"
+      ],
+      "overseas_leaders": [
+        "Analog Devices",
+        "Texas Instruments",
+        "Qorvo"
+      ],
+      "domestic_players": [
+        "臻镭科技"
+      ],
+      "related_stock_codes": [
+        "688270.SH"
+      ]
+    },
+    {
+      "node_id": "automotive_industrial_grade_analog",
+      "theme_id": "analog_mixed_signal_rf_chips_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "车规与工业级模拟",
+      "node_type": "service",
+      "description": "车规和工业级模拟芯片需经过可靠性、功能安全、客户定点和长周期质量验证。",
+      "value_capture_score": 3,
+      "bottleneck_score": 3,
+      "localization_gap_score": 4,
+      "supply_tightness_score": 3,
+      "evidence_strength": 2,
+      "node_review_status": "needs_evidence",
+      "key_metrics": [
+        "产品收入",
+        "客户认证",
+        "量产型号",
+        "毛利率"
+      ],
+      "overseas_leaders": [
+        "Analog Devices",
+        "Texas Instruments",
+        "Qorvo"
+      ],
+      "domestic_players": [],
+      "related_stock_codes": []
+    },
+    {
+      "node_id": "design_win_customer_qualification_revenue_validation",
+      "theme_id": "analog_mixed_signal_rf_chips_value_chain_v1",
+      "parent_node_id": "",
+      "node_name": "Design Win、客户认证与收入验证",
+      "node_type": "service",
+      "description": "设计、流片、送样、认证、design win、量产、订单和收入必须逐级验证，不能互相替代。",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 5,
+      "node_review_status": "reviewed",
+      "key_metrics": [
+        "客户认证周期",
+        "design win数量",
+        "量产收入",
+        "库存与毛利率"
+      ],
+      "overseas_leaders": [
+        "Analog Devices",
+        "Texas Instruments",
+        "Qorvo"
+      ],
+      "domestic_players": [
+        "圣邦股份",
+        "思瑞浦",
+        "纳芯微",
+        "艾为电子",
+        "帝奥微",
+        "卓胜微",
+        "唯捷创芯",
+        "臻镭科技",
+        "铖昌科技",
+        "赛微微电"
+      ],
+      "related_stock_codes": [
+        "300661.SZ",
+        "688536.SH",
+        "688052.SH",
+        "688798.SH",
+        "688381.SH",
+        "300782.SZ",
+        "688153.SH",
+        "688270.SH",
+        "001270.SZ",
+        "688325.SH"
+      ]
+    }
+  ],
+  "claims": [
+    {
+      "claim_id": "f4_claim_01",
+      "theme_id": "analog_mixed_signal_rf_chips_value_chain_v1",
+      "source_id": "f4_300661_ar2025",
+      "claim_text": "圣邦股份披露运算放大器等信号链产品，信号链产品收入14.71亿元；该收入含多类信号链芯片，不能全部归因于精密放大器。",
+      "claim_type": "company_mapping",
+      "confidence": 0.94,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "precision_signal_chain_amplifiers"
+      ]
+    },
+    {
+      "claim_id": "f4_claim_02",
+      "theme_id": "analog_mixed_signal_rf_chips_value_chain_v1",
+      "source_id": "f4_688536_ar2025",
+      "claim_text": "思瑞浦披露ADC、DAC和特定应用多通道转换产品，信号链类模拟芯片收入14.10亿元，但ADC/DAC专项收入未披露。",
+      "claim_type": "company_mapping",
+      "confidence": 0.94,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "data_converters_adc_dac"
+      ]
+    },
+    {
+      "claim_id": "f4_claim_03",
+      "theme_id": "analog_mixed_signal_rf_chips_value_chain_v1",
+      "source_id": "f4_688052_ar2025",
+      "claim_text": "纳芯微披露数字隔离器、隔离接口和隔离驱动芯片，部分产品已规模化应用；公司总收入未拆隔离/驱动节点收入。",
+      "claim_type": "company_mapping",
+      "confidence": 0.94,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "interface_isolation_driver_chips"
+      ]
+    },
+    {
+      "claim_id": "f4_claim_04",
+      "theme_id": "analog_mixed_signal_rf_chips_value_chain_v1",
+      "source_id": "f4_688798_ar2025",
+      "claim_text": "艾为电子披露电源管理芯片与LDO PMIC客户放量；高性能数模混合芯片收入为混合口径，PMIC专项收入未披露。",
+      "claim_type": "company_mapping",
+      "confidence": 0.94,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "power_management_analog_chips"
+      ]
+    },
+    {
+      "claim_id": "f4_claim_05",
+      "theme_id": "analog_mixed_signal_rf_chips_value_chain_v1",
+      "source_id": "f4_688381_ar2025",
+      "claim_text": "帝奥微直接披露高性能模拟开关和电平转换器并有批量出货，只支持接口子族，不证明隔离芯片或驱动芯片已量产。",
+      "claim_type": "company_mapping",
+      "confidence": 0.94,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "interface_isolation_driver_chips"
+      ]
+    },
+    {
+      "claim_id": "f4_claim_06",
+      "theme_id": "analog_mixed_signal_rf_chips_value_chain_v1",
+      "source_id": "f4_300782_ar2025",
+      "claim_text": "卓胜微提供射频开关、低噪声放大器等自有射频前端芯片，射频分立器件收入19.45亿元并已有品牌客户持续放量。",
+      "claim_type": "company_mapping",
+      "confidence": 0.94,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "rf_front_end_pa_lna_switch"
+      ]
+    },
+    {
+      "claim_id": "f4_claim_07",
+      "theme_id": "analog_mixed_signal_rf_chips_value_chain_v1",
+      "source_id": "f4_688153_ar2025",
+      "claim_text": "唯捷创芯专注自有射频功率放大器芯片及模组研发设计销售，多款产品在品牌手机旗舰机型量产；模组证据以自有芯片产品为前提。",
+      "claim_type": "company_mapping",
+      "confidence": 0.94,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "rf_front_end_pa_lna_switch"
+      ]
+    },
+    {
+      "claim_id": "f4_claim_08",
+      "theme_id": "analog_mixed_signal_rf_chips_value_chain_v1",
+      "source_id": "f4_688270_ar2025",
+      "claim_text": "臻镭科技披露射频收发芯片及高速高精度ADC/DAC芯片，分产品收入可审计，但多应用口径未拆到单一下游。",
+      "claim_type": "company_mapping",
+      "confidence": 0.94,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "rf_transceiver_mixed_signal_chips"
+      ]
+    },
+    {
+      "claim_id": "f4_claim_09",
+      "theme_id": "analog_mixed_signal_rf_chips_value_chain_v1",
+      "source_id": "f4_001270_ar2025",
+      "claim_text": "铖昌科技相控阵T/R芯片收入4.0371亿元、占主营99.78%，多系列批量交付；这里只映射芯片，不写成基站系统。",
+      "claim_type": "company_mapping",
+      "confidence": 0.94,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "rf_front_end_pa_lna_switch"
+      ]
+    },
+    {
+      "claim_id": "f4_claim_10",
+      "theme_id": "analog_mixed_signal_rf_chips_value_chain_v1",
+      "source_id": "f4_688325_ar2025",
+      "claim_text": "赛微微电以电池管理芯片为核心并覆盖充电管理芯片；总收入4.89亿元未按电池安全、计量和充电子族拆分。",
+      "claim_type": "company_mapping",
+      "confidence": 0.94,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "power_management_analog_chips"
+      ]
+    },
+    {
+      "claim_id": "f4_claim_11",
+      "theme_id": "analog_mixed_signal_rf_chips_value_chain_v1",
+      "source_id": "f4_300661_ar2025",
+      "claim_text": "产品roadmap或流片本身只作reserve_only或concept_only；送样和认证不等于量产、订单或收入。",
+      "claim_type": "risk",
+      "confidence": 0.94,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "design_win_customer_qualification_revenue_validation"
+      ]
+    },
+    {
+      "claim_id": "f4_claim_12",
+      "theme_id": "analog_mixed_signal_rf_chips_value_chain_v1",
+      "source_id": "f4_688052_ar2025",
+      "claim_text": "研发流程需区分设计、流片、送样、认证、试量产和量产；design win不等于确认收入。",
+      "claim_type": "tech_route",
+      "confidence": 0.94,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "design_win_customer_qualification_revenue_validation"
+      ]
+    },
+    {
+      "claim_id": "f4_claim_13",
+      "theme_id": "analog_mixed_signal_rf_chips_value_chain_v1",
+      "source_id": "f4_300782_ar2025",
+      "claim_text": "客户导入与持续放量可验证商业阶段，但库存、价格、毛利率和分产品收入仍决定价值兑现。",
+      "claim_type": "catalyst",
+      "confidence": 0.94,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "design_win_customer_qualification_revenue_validation"
+      ]
+    },
+    {
+      "claim_id": "f4_claim_14",
+      "theme_id": "analog_mixed_signal_rf_chips_value_chain_v1",
+      "source_id": "f4_688270_ar2025",
+      "claim_text": "特种芯片交付并取得客户验收后才能确认相关收入，样品研制和技术研究不等于订单或收入。",
+      "claim_type": "risk",
+      "confidence": 0.94,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "design_win_customer_qualification_revenue_validation"
+      ]
+    },
+    {
+      "claim_id": "f4_claim_15",
+      "theme_id": "analog_mixed_signal_rf_chips_value_chain_v1",
+      "source_id": "f4_688153_ar2025",
+      "claim_text": "量产机型与客户认证优于研发计划，但模组必须证明自有芯片产品，不能将无自有芯片的封装模组直接映射F4。",
+      "claim_type": "risk",
+      "confidence": 0.94,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "design_win_customer_qualification_revenue_validation"
+      ]
+    },
+    {
+      "claim_id": "f4_claim_16",
+      "theme_id": "analog_mixed_signal_rf_chips_value_chain_v1",
+      "source_id": "f4_688325_ar2025",
+      "claim_text": "混合口径公司总营收不作为节点专项收入；节点收入、毛利率、库存、订单和客户认证需要分别跟踪。",
+      "claim_type": "risk",
+      "confidence": 0.94,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "design_win_customer_qualification_revenue_validation"
+      ]
+    }
+  ],
+  "value_capture_assessments": [
+    {
+      "node_id": "precision_signal_chain_amplifiers",
+      "value_basis": "customer_certification",
+      "assessment_text": "精密信号链放大器只在产品族、客户阶段与收入边界直接支持时确认价值。",
+      "rank": 1,
+      "evidence_ids": [
+        "f4_claim_01"
+      ],
+      "uncertainty": "收入拆分、客户转化、毛利率和库存仍需持续验证。"
+    },
+    {
+      "node_id": "data_converters_adc_dac",
+      "value_basis": "customer_certification",
+      "assessment_text": "数据转换器 ADC/DAC只在产品族、客户阶段与收入边界直接支持时确认价值。",
+      "rank": 2,
+      "evidence_ids": [
+        "f4_claim_02"
+      ],
+      "uncertainty": "收入拆分、客户转化、毛利率和库存仍需持续验证。"
+    },
+    {
+      "node_id": "interface_isolation_driver_chips",
+      "value_basis": "customer_certification",
+      "assessment_text": "接口、隔离与驱动芯片只在产品族、客户阶段与收入边界直接支持时确认价值。",
+      "rank": 3,
+      "evidence_ids": [
+        "f4_claim_03",
+        "f4_claim_05"
+      ],
+      "uncertainty": "收入拆分、客户转化、毛利率和库存仍需持续验证。"
+    },
+    {
+      "node_id": "power_management_analog_chips",
+      "value_basis": "customer_certification",
+      "assessment_text": "电源管理模拟芯片只在产品族、客户阶段与收入边界直接支持时确认价值。",
+      "rank": 4,
+      "evidence_ids": [
+        "f4_claim_04",
+        "f4_claim_10"
+      ],
+      "uncertainty": "收入拆分、客户转化、毛利率和库存仍需持续验证。"
+    },
+    {
+      "node_id": "timing_clock_mixed_signal_chips",
+      "value_basis": "technology_barrier",
+      "assessment_text": "时钟与定时混合信号芯片保留可读结构与证据缺口，不因目录完整而伪造公司映射。",
+      "rank": 5,
+      "evidence_ids": [],
+      "uncertainty": "缺少本批直接一手公司证据。"
+    },
+    {
+      "node_id": "rf_front_end_pa_lna_switch",
+      "value_basis": "customer_certification",
+      "assessment_text": "射频前端 PA/LNA/开关只在产品族、客户阶段与收入边界直接支持时确认价值。",
+      "rank": 6,
+      "evidence_ids": [
+        "f4_claim_06",
+        "f4_claim_07",
+        "f4_claim_09"
+      ],
+      "uncertainty": "收入拆分、客户转化、毛利率和库存仍需持续验证。"
+    },
+    {
+      "node_id": "rf_transceiver_mixed_signal_chips",
+      "value_basis": "customer_certification",
+      "assessment_text": "射频收发与混合信号芯片只在产品族、客户阶段与收入边界直接支持时确认价值。",
+      "rank": 7,
+      "evidence_ids": [
+        "f4_claim_08"
+      ],
+      "uncertainty": "收入拆分、客户转化、毛利率和库存仍需持续验证。"
+    },
+    {
+      "node_id": "automotive_industrial_grade_analog",
+      "value_basis": "technology_barrier",
+      "assessment_text": "车规与工业级模拟保留可读结构与证据缺口，不因目录完整而伪造公司映射。",
+      "rank": 8,
+      "evidence_ids": [],
+      "uncertainty": "缺少本批直接一手公司证据。"
+    },
+    {
+      "node_id": "design_win_customer_qualification_revenue_validation",
+      "value_basis": "customer_certification",
+      "assessment_text": "Design Win、客户认证与收入验证只在产品族、客户阶段与收入边界直接支持时确认价值。",
+      "rank": 9,
+      "evidence_ids": [
+        "f4_claim_11",
+        "f4_claim_12",
+        "f4_claim_13",
+        "f4_claim_14",
+        "f4_claim_15",
+        "f4_claim_16"
+      ],
+      "uncertainty": "收入拆分、客户转化、毛利率和库存仍需持续验证。"
+    }
+  ]
+}
