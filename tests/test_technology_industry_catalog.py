@@ -198,6 +198,7 @@ def test_repository_catalog_starts_with_ten_approved_sectors():
         "analog_mixed_signal_rf_chips",
         "rare_earth_permanent_magnets_critical_minerals",
         "mems_intelligent_sensors",
+        "wafer_manufacturing_specialty_processes",
     }
     nodes_by_id = {row["node_id"]: row for row in catalog["nodes"]}
     assert {
@@ -213,6 +214,10 @@ def test_repository_catalog_starts_with_ten_approved_sectors():
         "mobile_communications_5g_6g",
         "satellite_communications_navigation_remote_sensing",
         "uav_evtol_low_altitude_economy",
+        "mems_intelligent_sensors",
+        "wafer_manufacturing_specialty_processes",
+        "semiconductor_eda_ip_design_services",
+        "semiconductor_manufacturing_equipment",
     }
     assert len(catalog["theme_compositions"]) == 88
     assert {

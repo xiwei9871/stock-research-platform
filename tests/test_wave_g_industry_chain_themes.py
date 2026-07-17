@@ -92,6 +92,75 @@ G1_REVENUE_ROLE_CONTRACTS = {
     "603005.SH": "revenue_boundary",
 }
 
+G2_CHAIN_ID = "wafer_manufacturing_specialty_processes"
+G2_THEME_ID = "wafer_manufacturing_specialty_processes_value_chain_v1"
+G2_THEME_PATH = REPOSITORY_ROOT / f"artifacts/theme_decomposition/{G2_THEME_ID}.json"
+G2_MAPPING_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/company_mappings"
+    / "wafer_manufacturing_specialty_processes_company_mapping_v1.json"
+)
+G2_SOURCE_PACK_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "wafer_manufacturing_specialty_processes_source_pack_v1.json"
+)
+G2_MATRIX_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "wafer_manufacturing_specialty_processes_node_evidence_matrix_v1.json"
+)
+G2_L3 = {
+    "wafer_foundry_platforms",
+    "specialty_process_platforms",
+    "fab_operations_economics",
+    "foundry_customer_validation",
+}
+G2_L4 = {
+    "logic_mature_node_foundry",
+    "analog_bcd_mixed_signal_process",
+    "high_voltage_power_device_process",
+    "rf_soi_sige_specialty_process",
+    "embedded_nonvolatile_memory_process",
+    "cmos_image_sensor_display_driver_process",
+    "mems_sensor_specialty_foundry",
+    "compound_semiconductor_specialty_foundry",
+    "capacity_utilization_yield_cost_control",
+    "customer_tapeout_qualification_revenue_validation",
+}
+G2_INITIAL_UNIVERSE = {
+    "688981.SH", "688347.SH", "688249.SH", "688172.SH", "688396.SH",
+    "600460.SH", "688469.SH", "300456.SZ", "600745.SH", "300373.SZ",
+}
+G2_EXCLUDED_INITIAL = {"600745.SH", "300373.SZ"}
+G2_MAPPING_CONTRACTS = {
+    "688981.SH": ("logic_mature_node_foundry", "g2_688981_ar2025"),
+    "688347.SH": ("analog_bcd_mixed_signal_process", "g2_688347_ar2025"),
+    "688249.SH": ("cmos_image_sensor_display_driver_process", "g2_688249_ar2025"),
+    "688172.SH": ("embedded_nonvolatile_memory_process", "g2_688172_ar2025"),
+    "688396.SH": ("high_voltage_power_device_process", "g2_688396_ar2025"),
+    "600460.SH": ("high_voltage_power_device_process", "g2_600460_ar2025"),
+    "688469.SH": ("cmos_image_sensor_display_driver_process", "g2_688469_ar2025"),
+    "300456.SZ": ("mems_sensor_specialty_foundry", "g2_300456_ar2025"),
+}
+G2_REVENUE_ROLE_CONTRACTS = {
+    "688981.SH": "revenue_materiality",
+    "688347.SH": "revenue_materiality",
+    "688249.SH": "revenue_materiality",
+    "688172.SH": "revenue_boundary",
+    "688396.SH": "revenue_boundary",
+    "600460.SH": "revenue_boundary",
+    "688469.SH": "revenue_materiality",
+    "300456.SZ": "revenue_materiality",
+}
+G2_EXPECTED_EDGES = {
+    ("logic_mature_node_foundry", "krf_lithography", "depends_on"),
+    ("analog_bcd_mixed_signal_process", "foundry_pdk_design_enablement", "uses"),
+    ("mems_foundry_wafer_process", "mems_sensor_specialty_foundry", "depends_on"),
+    ("power_mosfet_device", "high_voltage_power_device_process", "depends_on"),
+    ("silicon_carbide_power_device", "compound_semiconductor_specialty_foundry", "depends_on"),
+}
+
 REQUIRED_READABLE_SECTIONS = [
     {
         "name": "研究结论",
@@ -466,7 +535,7 @@ def test_mems_g1_lifecycle_and_neighbor_chain_boundaries_are_explicit() -> None:
     assert "自有MEMS" in excluded_by_code["300667.SZ"]
 
 
-def test_mems_g1_has_no_unproven_cross_chain_edges() -> None:
+def test_mems_g1_has_only_the_reviewed_g2_manufacturing_dependency() -> None:
     catalog = load_industry_catalog()
     nodes = {row["node_id"]: row for row in catalog["nodes"]}
     cross_chain_edges = {
@@ -475,7 +544,9 @@ def test_mems_g1_has_no_unproven_cross_chain_edges() -> None:
         if row["source_node_id"] in G1_L4
         and nodes[row["target_node_id"]]["chain_id"] != G1_CHAIN_ID
     }
-    assert cross_chain_edges == set()
+    assert cross_chain_edges == {
+        ("mems_foundry_wafer_process", "mems_sensor_specialty_foundry", "depends_on")
+    }
 
 
 def test_mems_g1_matrix_calibrates_unmapped_nodes_and_evidence_gaps() -> None:
@@ -512,3 +583,217 @@ def test_mems_g1_matrix_calibrates_unmapped_nodes_and_evidence_gaps() -> None:
         "intelligent_sensor_fusion_modules" in row["affected_theme_nodes"]
         for row in claims.values()
     )
+
+
+def test_wafer_manufacturing_g2_catalog_first_exact_tree_and_links() -> None:
+    assert_catalog_first_contract(G2_CHAIN_ID, G2_THEME_ID, G2_L3, G2_L4)
+    catalog = load_industry_catalog()
+    chain_nodes = [row for row in catalog["nodes"] if row["chain_id"] == G2_CHAIN_ID]
+    by_id = {row["node_id"]: row for row in chain_nodes}
+    assert {row["node_kind"] for row in chain_nodes} == {"canonical"}
+    assert all(not row["canonical_key"] for row in chain_nodes if row["level"] == "L3")
+    l4_keys = [row["canonical_key"] for row in chain_nodes if row["level"] == "L4"]
+    assert len(l4_keys) == len(set(l4_keys)) == 10
+    assert all(
+        key.startswith("wafer_manufacturing_specialty_processes:")
+        for key in l4_keys
+    )
+    for row in chain_nodes:
+        assert row["primary_path"][1] == G2_CHAIN_ID
+        if row["level"] == "L4":
+            assert row["parent_node_id"] in G2_L3
+            assert by_id[row["parent_node_id"]]["level"] == "L3"
+
+    link = next(
+        row for row in catalog["theme_links"] if row["theme_id"] == G2_THEME_ID
+    )
+    assert len(link["node_links"]) == 10
+    assert {
+        (row["theme_node_id"], row["catalog_node_id"])
+        for row in link["node_links"]
+    } == {(node_id, node_id) for node_id in G2_L4}
+
+
+def test_wafer_manufacturing_g2_artifacts_are_reviewed_and_meet_wave_gate() -> None:
+    theme = load_json(G2_THEME_PATH)
+    mapping = load_json(G2_MAPPING_PATH)
+    source_pack = load_json(G2_SOURCE_PACK_PATH)
+    matrix = load_json(G2_MATRIX_PATH)
+    assert theme["artifact_version"] == "theme_decomposition_v1_6"
+    assert mapping["evidence_contract_version"] == "mapping_evidence_roles_v2"
+    assert theme["theme"]["status"] == "reviewed"
+    assert {row["node_id"] for row in theme["nodes"]} == G2_L4
+    assert len([row for row in source_pack["sources"] if row["review_status"] == "accepted"]) >= 10
+    assert sum(
+        row["source_type"] in {"company_filing", "official_report", "official_article"}
+        and row["review_status"] == "accepted"
+        for row in source_pack["sources"]
+    ) >= 8
+    assert len(theme["claims"]) >= 12
+    reviewed = [
+        row for row in mapping["company_mappings"] if row["review_status"] == "reviewed"
+    ]
+    assert len(reviewed) >= 8
+    assert {row["node_id"] for row in matrix["node_evidence_matrix"]} == G2_L4
+
+    report = VERIFIER.build_theme_batch_report(MANIFEST_PATH, wave="wave_g")
+    rows = {row["chain_id"]: row for row in report["theme_results"]}
+    assert rows[G2_CHAIN_ID]["ready"] is True
+    assert rows[G2_CHAIN_ID]["counts"] == {
+        "accepted_sources": 10,
+        "primary_sources": 10,
+        "claims": len(theme["claims"]),
+        "accepted_source_backed_claims": len(theme["claims"]),
+        "reviewed_mappings": 8,
+    }
+
+
+def test_wafer_manufacturing_g2_company_evidence_and_initial_universe_close() -> None:
+    mapping = load_json(G2_MAPPING_PATH)
+    evidence = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+    reviewed = {
+        row["company_code"]: row for row in mapping["company_mappings"]
+        if row["review_status"] == "reviewed"
+    }
+    excluded = {
+        row["company_code"]: row for row in mapping["excluded_initial_candidates"]
+    }
+    assert set(reviewed) == set(G2_MAPPING_CONTRACTS)
+    assert set(excluded) == G2_EXCLUDED_INITIAL
+    assert set(reviewed) | set(excluded) == G2_INITIAL_UNIVERSE
+    assert not set(reviewed) & set(excluded)
+    for company_code, (node_id, source_id) in G2_MAPPING_CONTRACTS.items():
+        row = reviewed[company_code]
+        assert row["mapped_node_id"] == node_id
+        items = [evidence[evidence_id] for evidence_id in row["evidence_ids"]]
+        assert [item["evidence_type"] for item in items] == [
+            "product_relationship",
+            G2_REVENUE_ROLE_CONTRACTS[company_code],
+            "business_stage",
+        ]
+        assert len({item["excerpt_locator"] for item in items}) == 3
+        assert all(item["source_id"] == source_id for item in items)
+        assert all(item["related_node_ids"] == [node_id] for item in items)
+        assert row["business_materiality"]
+        assert row["notes"]
+    assert mapping["concept_only_candidates"] == []
+
+
+def test_wafer_manufacturing_g2_source_claim_matrix_union_is_direct() -> None:
+    theme = load_json(G2_THEME_PATH)
+    mapping = load_json(G2_MAPPING_PATH)
+    source_pack = load_json(G2_SOURCE_PACK_PATH)
+    matrix = load_json(G2_MATRIX_PATH)
+    identity_fields = (
+        "source_id", "source_type", "title", "publisher", "author",
+        "publish_date", "url_or_ref", "access_level", "reliability_level",
+        "review_status", "notes",
+    )
+    identity = lambda rows: {
+        row["source_id"]: tuple(
+            row.get(field, row.get("url") if field == "url_or_ref" else None)
+            for field in identity_fields
+        ) for row in rows
+    }
+    assert identity(theme["sources"]) == identity(mapping["sources"])
+    assert identity(theme["sources"]) == identity(source_pack["sources"])
+    assert all(row["author"] == row["publisher"] and row["author"] for row in theme["sources"])
+
+    claims = {row["claim_id"]: row for row in theme["claims"]}
+    accepted = {
+        row["source_id"] for row in source_pack["sources"]
+        if row["review_status"] == "accepted"
+    }
+    claim_union = {
+        source_id for claim in claims.values()
+        for source_id in (claim["source_id"], *claim["supporting_source_ids"])
+    }
+    matrix_union = {
+        source_id for row in matrix["node_evidence_matrix"]
+        for source_id in row["accepted_source_ids"]
+    }
+    assert accepted == claim_union == matrix_union
+    for row in matrix["node_evidence_matrix"]:
+        node_claims = {
+            claim_id for claim_id, claim in claims.items()
+            if row["node_id"] in claim["affected_theme_nodes"]
+        }
+        assert set(row["supported_claim_ids"]) == node_claims
+        assert set(row["accepted_source_ids"]) == {
+            claims[claim_id]["source_id"] for claim_id in node_claims
+        }
+    for source in source_pack["sources"]:
+        source_claims = {
+            claim_id for claim_id, claim in claims.items()
+            if source["source_id"] in (claim["source_id"], *claim["supporting_source_ids"])
+        }
+        assert set(source["supported_claim_ids"]) == source_claims
+        assert set(source["supported_node_ids"]) == {
+            node_id for claim_id in source_claims
+            for node_id in claims[claim_id]["affected_theme_nodes"]
+        }
+
+
+def test_wafer_manufacturing_g2_process_lifecycle_and_boundaries_are_explicit() -> None:
+    theme = load_json(G2_THEME_PATH)
+    mapping = load_json(G2_MAPPING_PATH)
+    text = json.dumps({"theme": theme, "policy": mapping["mapping_policy"]}, ensure_ascii=False)
+    for stage in ("工艺可用", "tapeout", "qualification", "量产", "产能利用率", "良率", "晶圆收入"):
+        assert stage in text
+    for boundary in (
+        "设备、材料、fabless设计与封装不归G2",
+        "IDM器件收入不得冒充foundry或晶圆制造收入",
+        "G1拥有MEMS器件与MEMS专用研究，G2拥有制造平台",
+        "F4拥有模拟、混合信号和RF芯片产品",
+        "功率半导体链拥有MOSFET、IGBT、SiC和GaN器件产品",
+        "process availability不等于customer tapeout",
+        "customer tapeout不等于qualification",
+        "qualification不等于mass production或收入",
+    ):
+        assert boundary in text
+    excluded = {row["company_code"]: row["reason"] for row in mapping["excluded_initial_candidates"]}
+    assert "器件" in excluded["600745.SH"] and "foundry" in excluded["600745.SH"]
+    assert "自用fab" in excluded["300373.SZ"] and "晶圆制造服务" in excluded["300373.SZ"]
+    for row in mapping["company_mappings"]:
+        if row["company_code"] in {"688396.SH", "600460.SH"}:
+            assert "器件收入不冒充" in row["notes"]
+
+
+def test_wafer_manufacturing_g2_cross_chain_edges_use_real_l4_owners() -> None:
+    catalog = load_industry_catalog()
+    nodes = {row["node_id"]: row for row in catalog["nodes"]}
+    edges = {
+        (row["source_node_id"], row["target_node_id"], row["relationship_type"]): row
+        for row in catalog["edges"]
+        if row["source_node_id"] in G2_L4 or row["target_node_id"] in G2_L4
+    }
+    assert set(edges) == G2_EXPECTED_EDGES
+    for (source_node_id, target_node_id, relationship_type), row in edges.items():
+        assert nodes[source_node_id]["level"] == "L4"
+        assert nodes[target_node_id]["level"] == "L4"
+        assert (source_node_id in G2_L4) != (target_node_id in G2_L4)
+        assert relationship_type in {"uses", "depends_on"}
+        assert "所有权" in row["notes"]
+    assert nodes["krf_lithography"]["chain_id"] == "semiconductor_manufacturing_equipment"
+    assert nodes["foundry_pdk_design_enablement"]["chain_id"] == "semiconductor_eda_ip_design_services"
+    assert nodes["mems_foundry_wafer_process"]["chain_id"] == "mems_intelligent_sensors"
+    assert nodes["power_mosfet_device"]["chain_id"] == "power_semiconductors"
+    assert nodes["silicon_carbide_power_device"]["chain_id"] == "power_semiconductors"
+
+
+def test_wafer_manufacturing_g2_matrix_calibrates_unmapped_process_gaps() -> None:
+    theme = load_json(G2_THEME_PATH)
+    matrix = load_json(G2_MATRIX_PATH)
+    nodes = {row["node_id"]: row for row in theme["nodes"]}
+    rows = {row["node_id"]: row for row in matrix["node_evidence_matrix"]}
+    assert set(rows) == G2_L4
+    assert len({row["rationale"] for row in rows.values()}) == 10
+    assert all(row["next_evidence_needed"] for row in rows.values())
+    for node_id, row in rows.items():
+        assert nodes[node_id]["evidence_strength"] == row["evidence_strength_after"]
+    for empty_node in ("rf_soi_sige_specialty_process", "compound_semiconductor_specialty_foundry"):
+        assert nodes[empty_node]["related_stock_codes"] == []
+        assert nodes[empty_node]["domestic_players"] == []
+        assert rows[empty_node]["node_review_status"] == "needs_evidence"
+        assert rows[empty_node]["evidence_gap_status"] == "evidence_gap"
+        assert rows[empty_node]["evidence_strength_after"] <= 2

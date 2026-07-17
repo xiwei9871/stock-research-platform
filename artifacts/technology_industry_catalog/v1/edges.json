@@ -311,6 +311,46 @@
       "relationship_type": "uses",
       "notes": "Eligible NTN research route only: a 6G air-interface candidate may use satellite-specific ground access and terminal integration for laboratory or field validation. Satellite ownership remains with satellite_communications_navigation_remote_sensing, and this edge does not imply 6G commercial deployment or revenue.",
       "source_ids": []
+    },
+    {
+      "edge_id": "logic_mature_node_foundry_depends_on_krf_lithography",
+      "source_node_id": "logic_mature_node_foundry",
+      "target_node_id": "krf_lithography",
+      "relationship_type": "depends_on",
+      "notes": "Eligible manufacturing dependency: mature-node foundry flows may depend on KrF lithography equipment. Equipment ownership remains with semiconductor_manufacturing_equipment; G2 ownership is limited to the wafer-manufacturing platform. Canonical ownership does not transfer（所有权不转移）.",
+      "source_ids": []
+    },
+    {
+      "edge_id": "analog_bcd_process_uses_foundry_pdk_design_enablement",
+      "source_node_id": "analog_bcd_mixed_signal_process",
+      "target_node_id": "foundry_pdk_design_enablement",
+      "relationship_type": "uses",
+      "notes": "Analog and BCD foundry processes use foundry-specific PDK and design-enablement flows. EDA, IP and PDK ownership remains with semiconductor_eda_ip_design_services; G2 does not own chip design. Canonical ownership does not transfer（所有权不转移）.",
+      "source_ids": []
+    },
+    {
+      "edge_id": "mems_foundry_process_depends_on_g2_mems_manufacturing_platform",
+      "source_node_id": "mems_foundry_wafer_process",
+      "target_node_id": "mems_sensor_specialty_foundry",
+      "relationship_type": "depends_on",
+      "notes": "G1 MEMS-specific process research may depend on the cross-product manufacturing platform represented in G2. MEMS device and MEMS-specific research ownership remains with mems_intelligent_sensors; the edge does not duplicate company ownership. Canonical ownership does not transfer（所有权不转移）.",
+      "source_ids": []
+    },
+    {
+      "edge_id": "power_mosfet_device_depends_on_high_voltage_manufacturing_process",
+      "source_node_id": "power_mosfet_device",
+      "target_node_id": "high_voltage_power_device_process",
+      "relationship_type": "depends_on",
+      "notes": "Power MOSFET devices depend on an eligible high-voltage wafer-manufacturing process. Device product and company ownership remains with power_semiconductors; G2 owns only the evidenced manufacturing-process platform. Device ownership does not transfer（器件所有权不转移）.",
+      "source_ids": []
+    },
+    {
+      "edge_id": "silicon_carbide_device_depends_on_compound_foundry_process",
+      "source_node_id": "silicon_carbide_power_device",
+      "target_node_id": "compound_semiconductor_specialty_foundry",
+      "relationship_type": "depends_on",
+      "notes": "A silicon-carbide power device depends on an eligible compound-semiconductor wafer-manufacturing process. SiC device product and company ownership remains with power_semiconductors; G2 owns only the manufacturing platform and keeps an evidence gap until direct foundry proof exists. Device ownership does not transfer（器件所有权不转移）.",
+      "source_ids": []
     }
   ]
 }

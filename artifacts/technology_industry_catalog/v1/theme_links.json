@@ -982,6 +982,24 @@
       ],
       "unmapped_theme_node_ids": [],
       "notes": "F5 owns direct rare-earth resource, separation, metal, permanent-magnet, recycling and market-validation roles. Downstream motor, robotics, wind, EV and electronics demand does not map companies; mixed tungsten, molybdenum, non-rare-earth mining and generic nonferrous revenue remain excluded."
+    },
+    {
+      "theme_id": "wafer_manufacturing_specialty_processes_value_chain_v1",
+      "chain_id": "wafer_manufacturing_specialty_processes",
+      "node_links": [
+        {"theme_node_id":"logic_mature_node_foundry","catalog_node_id":"logic_mature_node_foundry"},
+        {"theme_node_id":"analog_bcd_mixed_signal_process","catalog_node_id":"analog_bcd_mixed_signal_process"},
+        {"theme_node_id":"high_voltage_power_device_process","catalog_node_id":"high_voltage_power_device_process"},
+        {"theme_node_id":"rf_soi_sige_specialty_process","catalog_node_id":"rf_soi_sige_specialty_process"},
+        {"theme_node_id":"embedded_nonvolatile_memory_process","catalog_node_id":"embedded_nonvolatile_memory_process"},
+        {"theme_node_id":"cmos_image_sensor_display_driver_process","catalog_node_id":"cmos_image_sensor_display_driver_process"},
+        {"theme_node_id":"mems_sensor_specialty_foundry","catalog_node_id":"mems_sensor_specialty_foundry"},
+        {"theme_node_id":"compound_semiconductor_specialty_foundry","catalog_node_id":"compound_semiconductor_specialty_foundry"},
+        {"theme_node_id":"capacity_utilization_yield_cost_control","catalog_node_id":"capacity_utilization_yield_cost_control"},
+        {"theme_node_id":"customer_tapeout_qualification_revenue_validation","catalog_node_id":"customer_tapeout_qualification_revenue_validation"}
+      ],
+      "unmapped_theme_node_ids": [],
+      "notes": "G2 owns wafer-manufacturing and specialty-process platforms plus fab economics and foundry customer validation. Equipment, materials, fabless design, packaging, MEMS devices, analog/RF chips and power-device products retain neighboring-chain ownership."
     }
   ]
 }
