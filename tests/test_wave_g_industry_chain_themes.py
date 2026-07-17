@@ -368,7 +368,10 @@ def test_mems_g1_source_identity_claim_union_and_matrix_are_direct() -> None:
     assert all(row["author"] == row["publisher"] and row["author"] for row in theme["sources"])
 
     claims = {row["claim_id"]: row for row in theme["claims"]}
-    accepted = {row["source_id"] for row in source_pack["sources"]}
+    accepted = {
+        row["source_id"] for row in source_pack["sources"]
+        if row["review_status"] == "accepted"
+    }
     claim_union = {
         source_id for claim in claims.values()
         for source_id in (claim["source_id"], *claim["supporting_source_ids"])
@@ -397,6 +400,13 @@ def test_mems_g1_source_identity_claim_union_and_matrix_are_direct() -> None:
             node_id for claim_id in source_claims
             for node_id in claims[claim_id]["affected_theme_nodes"]
         }
+    bichuang = next(
+        row for row in source_pack["sources"]
+        if row["source_id"] == "g1_300667_ar2025"
+    )
+    assert bichuang["review_status"] == "rejected"
+    assert bichuang["supported_claim_ids"] == []
+    assert bichuang["supported_node_ids"] == []
 
 
 def test_mems_g1_lifecycle_and_neighbor_chain_boundaries_are_explicit() -> None:
@@ -453,3 +463,20 @@ def test_mems_g1_matrix_calibrates_unmapped_nodes_and_evidence_gaps() -> None:
         assert rows[empty_node]["node_review_status"] == "needs_evidence"
         assert nodes[empty_node]["related_stock_codes"] == []
         assert nodes[empty_node]["domestic_players"] == []
+    fusion = rows["intelligent_sensor_fusion_modules"]
+    assert fusion["evidence_strength_after"] <= 2
+    assert fusion["node_review_status"] == "needs_evidence"
+    assert fusion["evidence_gap_status"] == "evidence_gap"
+    assert fusion["accepted_source_ids"] == []
+    assert fusion["supported_claim_ids"] == []
+    assert "直接MEMS通道+融合模组量产/收入" in fusion["next_evidence_needed"]
+    assert nodes["intelligent_sensor_fusion_modules"]["node_review_status"] == "needs_evidence"
+    assert nodes["intelligent_sensor_fusion_modules"]["evidence_strength"] <= 2
+    assert nodes["intelligent_sensor_fusion_modules"]["related_stock_codes"] == []
+    assert nodes["intelligent_sensor_fusion_modules"]["domestic_players"] == []
+    claims = {row["claim_id"]: row for row in theme["claims"]}
+    assert "g1_claim_09" not in claims
+    assert not any(
+        "intelligent_sensor_fusion_modules" in row["affected_theme_nodes"]
+        for row in claims.values()
+    )
