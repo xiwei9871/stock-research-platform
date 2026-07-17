@@ -189,8 +189,121 @@ def test_missing_validation_or_invalidation_plan_fails(valid_version, collection
     assert _check(evaluate_gate(valid_version, "design"), code).status == "fail"
 
 
+@pytest.mark.parametrize(
+    ("collection", "target_type", "target_id", "code"),
+    [
+        (
+            "validation_metrics",
+            "research_question",
+            "question:primary",
+            "DESIGN_VALIDATION_PLAN_PRESENT",
+        ),
+        (
+            "validation_metrics",
+            "research_claim",
+            "claim:counter",
+            "DESIGN_VALIDATION_PLAN_PRESENT",
+        ),
+        (
+            "invalidation_conditions",
+            "research_question",
+            "question:primary",
+            "DESIGN_INVALIDATION_PLAN_PRESENT",
+        ),
+        (
+            "invalidation_conditions",
+            "research_claim",
+            "claim:counter",
+            "DESIGN_INVALIDATION_PLAN_PRESENT",
+        ),
+    ],
+)
+def test_plan_objects_must_target_the_linked_critical_claim(
+    valid_version, collection, target_type, target_id, code
+):
+    valid_version["snapshot"][collection][0].update(
+        target_type=target_type,
+        target_id=target_id,
+    )
+    check = _check(evaluate_gate(valid_version, "design"), code)
+    assert check.status == "fail"
+    assert check.object_ids == ("claim:primary",)
+
+
+def test_counter_relation_direction_cannot_be_reversed(valid_version):
+    relation = valid_version["snapshot"]["claim_relations"][0]
+    relation["from_claim_id"], relation["to_claim_id"] = (
+        relation["to_claim_id"],
+        relation["from_claim_id"],
+    )
+    check = _check(
+        evaluate_gate(valid_version, "design"),
+        "DESIGN_CRITICAL_CLAIMS_HAVE_COUNTER",
+    )
+    assert check.status == "fail"
+    assert check.object_ids == ("claim:primary",)
+
+
+def test_primary_question_must_match_scope_and_be_required(valid_version):
+    valid_version["snapshot"]["questions"][0]["required_for_gate"] = False
+    result = evaluate_gate(valid_version, "design")
+    assert result.status == "fail"
+    assert _check(result, "DESIGN_PRIMARY_QUESTION_PRESENT").status == "fail"
+
+
+def test_primary_question_matching_normalizes_surrounding_whitespace(valid_version):
+    valid_version["snapshot"]["scope"]["primary_question"] = (
+        "  Can the fixture thesis be validated?  "
+    )
+    valid_version["snapshot"]["questions"][0]["question_text"] = (
+        " Can the fixture thesis be validated? "
+    )
+    assert (
+        _check(
+            evaluate_gate(valid_version, "design"),
+            "DESIGN_PRIMARY_QUESTION_PRESENT",
+        ).status
+        == "pass"
+    )
+
+
 def test_bad_tree_cycle_fails_with_stable_object_ids(valid_version):
     valid_version["snapshot"]["question_tree_nodes"][0]["parent_tree_node_id"] = "tree:counter"
+    check = _check(evaluate_gate(valid_version, "design"), "DESIGN_QUESTION_TREE_VALID")
+    assert check.status == "fail"
+    assert check.object_ids == ("tree:counter", "tree:primary")
+
+
+def test_tree_cycle_reports_only_true_cycle_members_not_downstream_nodes(valid_version):
+    snapshot = valid_version["snapshot"]
+    snapshot["questions"].append(
+        {
+            "question_id": "question:downstream",
+            "question_type": "secondary",
+            "question_text": "What follows from the counterfactual?",
+            "priority": 3,
+            "required_for_gate": False,
+            "answer_status": "unanswered",
+            "linked_claim_ids": [],
+            "linked_requirement_ids": [],
+            "provenance": PROVENANCE,
+            "lifecycle_status": "active",
+        }
+    )
+    snapshot["question_tree_nodes"][0]["dependency_question_ids"] = [
+        "question:counter"
+    ]
+    snapshot["question_tree_nodes"].append(
+        {
+            "tree_node_id": "tree:downstream",
+            "tree_id": "tree:fixture",
+            "question_id": "question:downstream",
+            "parent_tree_node_id": "tree:counter",
+            "order": 3,
+            "branch_role": "supporting",
+            "dependency_question_ids": ["question:counter"],
+        }
+    )
     check = _check(evaluate_gate(valid_version, "design"), "DESIGN_QUESTION_TREE_VALID")
     assert check.status == "fail"
     assert check.object_ids == ("tree:counter", "tree:primary")
@@ -206,6 +319,28 @@ def test_reference_audit_failure_reports_reference_ids(valid_version):
 def test_missing_provenance_fails_with_object_id(valid_version):
     del valid_version["snapshot"]["claims"][0]["provenance"]
     check = _check(evaluate_gate(valid_version, "design"), "DESIGN_PROVENANCE_COMPLETE")
+    assert check.status == "fail"
+    assert check.object_ids == ("claim:primary",)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("agent_run_id", 42),
+        ("created_at", None),
+        ("created_at", ""),
+        ("created_at", "not-a-timestamp"),
+    ],
+)
+def test_provenance_validates_field_values_without_schema(valid_version, field, value):
+    valid_version["snapshot"]["claims"][0]["provenance"] = {
+        **PROVENANCE,
+        field: value,
+    }
+    check = _check(
+        evaluate_gate(valid_version, "design"),
+        "DESIGN_PROVENANCE_COMPLETE",
+    )
     assert check.status == "fail"
     assert check.object_ids == ("claim:primary",)
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from datetime import datetime
 from typing import Any, Callable
 
 from stock_research.research_project_v2.errors import ResearchProjectV2Error
@@ -79,8 +80,13 @@ def _check(code: str, passed: bool, message: str, ids: tuple[str, ...] = ()) -> 
 def _primary_question(snapshot: dict[str, Any]) -> GateCheck:
     scope = snapshot.get("scope", {})
     questions = snapshot.get("questions", [])
-    passed = _non_empty(scope.get("primary_question")) and any(
-        isinstance(question, dict) and question.get("required_for_gate") is True
+    primary_question = scope.get("primary_question")
+    passed = _non_empty(primary_question) and any(
+        isinstance(question, dict)
+        and question.get("question_type") == "primary"
+        and question.get("required_for_gate") is True
+        and _non_empty(question.get("question_text"))
+        and question["question_text"].strip() == primary_question.strip()
         for question in questions
     )
     return _check(
@@ -117,23 +123,50 @@ def _router(snapshot: dict[str, Any]) -> GateCheck:
 
 
 def _cyclic_ids(edges: dict[str, list[str]]) -> set[str]:
-    indegree = {node_id: 0 for node_id in edges}
     reverse: dict[str, list[str]] = {node_id: [] for node_id in edges}
     for node_id, dependencies in edges.items():
         for dependency in dependencies:
-            if dependency in indegree:
-                indegree[node_id] += 1
+            if dependency in reverse:
                 reverse[dependency].append(node_id)
-    ready = [node_id for node_id, degree in indegree.items() if degree == 0]
+
     visited: set[str] = set()
-    while ready:
-        node_id = ready.pop()
-        visited.add(node_id)
-        for dependent in reverse[node_id]:
-            indegree[dependent] -= 1
-            if indegree[dependent] == 0:
-                ready.append(dependent)
-    return set(edges) - visited
+    finish_order: list[str] = []
+    for start in edges:
+        if start in visited:
+            continue
+        visited.add(start)
+        stack: list[tuple[str, int]] = [(start, 0)]
+        while stack:
+            node_id, dependency_index = stack[-1]
+            dependencies = edges[node_id]
+            if dependency_index == len(dependencies):
+                stack.pop()
+                finish_order.append(node_id)
+                continue
+            dependency = dependencies[dependency_index]
+            stack[-1] = (node_id, dependency_index + 1)
+            if dependency in edges and dependency not in visited:
+                visited.add(dependency)
+                stack.append((dependency, 0))
+
+    cyclic: set[str] = set()
+    assigned: set[str] = set()
+    for start in reversed(finish_order):
+        if start in assigned:
+            continue
+        component: list[str] = []
+        assigned.add(start)
+        component_stack = [start]
+        while component_stack:
+            node_id = component_stack.pop()
+            component.append(node_id)
+            for dependent in reverse[node_id]:
+                if dependent not in assigned:
+                    assigned.add(dependent)
+                    component_stack.append(dependent)
+        if len(component) > 1 or component[0] in edges[component[0]]:
+            cyclic.update(component)
+    return cyclic
 
 
 def _question_tree(snapshot: dict[str, Any]) -> GateCheck:
@@ -249,8 +282,6 @@ def _counter_claims(snapshot: dict[str, Any]) -> GateCheck:
         from_id, to_id = relation.get("from_claim_id"), relation.get("to_claim_id")
         if from_id in counter_ids:
             connected.add(to_id)
-        if to_id in counter_ids:
-            connected.add(from_id)
     missing = tuple(
         sorted(
             claim["claim_id"]
@@ -267,17 +298,27 @@ def _counter_claims(snapshot: dict[str, Any]) -> GateCheck:
 
 
 def _plan(snapshot: dict[str, Any], collection: str, field: str, code: str, id_field: str) -> GateCheck:
-    object_ids = {
-        item.get(id_field)
+    objects = {
+        item[id_field]: item
         for item in snapshot.get(collection, [])
         if isinstance(item, dict) and _non_empty(item.get(id_field))
     }
     missing: set[str] = set()
     for claim in _critical_claims(snapshot):
         linked = claim.get(field)
-        if not isinstance(linked, list) or not linked or any(item not in object_ids for item in linked):
+        claim_id = claim.get("claim_id")
+        if (
+            not isinstance(linked, list)
+            or not linked
+            or any(
+                item_id not in objects
+                or objects[item_id].get("target_type") != "research_claim"
+                or objects[item_id].get("target_id") != claim_id
+                for item_id in linked
+            )
+        ):
             missing.add(claim.get("claim_id", "<unknown-claim>"))
-    passed = bool(object_ids) and not missing
+    passed = bool(objects) and not missing
     return _check(code, passed, f"Critical claims have a valid {collection} plan.", tuple(sorted(missing)))
 
 
@@ -322,6 +363,11 @@ def _provenance(snapshot: dict[str, Any]) -> GateCheck:
                 or not _non_empty(provenance.get("created_by"))
                 or not _non_empty(provenance.get("created_in_version"))
                 or provenance.get("actor_type") not in _ACTOR_TYPES
+                or not (
+                    provenance.get("agent_run_id") is None
+                    or isinstance(provenance.get("agent_run_id"), str)
+                )
+                or not _valid_created_at(provenance.get("created_at"))
                 or provenance.get("review_status") not in _REVIEW_STATUSES
             ):
                 invalid.add(stable_id)
@@ -331,6 +377,17 @@ def _provenance(snapshot: dict[str, Any]) -> GateCheck:
         "All gate-relevant objects have complete provenance.",
         tuple(sorted(invalid)),
     )
+
+
+def _valid_created_at(value: object) -> bool:
+    if not _non_empty(value):
+        return False
+    timestamp = value[:-1] + "+00:00" if value.endswith("Z") else value
+    try:
+        parsed = datetime.fromisoformat(timestamp)
+    except ValueError:
+        return False
+    return parsed.tzinfo is not None
 
 
 def _no_premature(version: dict[str, Any], snapshot: dict[str, Any]) -> GateCheck:
