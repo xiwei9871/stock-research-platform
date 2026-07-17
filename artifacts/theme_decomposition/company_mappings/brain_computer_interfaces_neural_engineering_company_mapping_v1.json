@@ -1,0 +1,651 @@
+{
+  "artifact_version": "theme_company_mapping_v1",
+  "theme_id": "brain_computer_interfaces_neural_engineering_value_chain_v1",
+  "as_of_date": "2026-07-17",
+  "sources": [
+    {
+      "source_id": "bci_688626_filing",
+      "source_type": "company_filing",
+      "title": "翔宇医疗2025年年度报告",
+      "publisher": "河南翔宇医疗设备股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-24",
+      "url_or_ref": "https://pdf.dfcfw.com/pdf/H2_AN202604231821513670_1.pdf",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "复核第17、24-25、50、55页：脑机接口系列、非侵入式路线、脑电采集研发注册目标与康复器械宽口径收入。"
+    },
+    {
+      "source_id": "bci_688580_filing",
+      "source_type": "company_filing",
+      "title": "伟思医疗2025年年度报告",
+      "publisher": "南京伟思医疗科技股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-28",
+      "url_or_ref": "https://pdf.dfcfw.com/pdf/H2_AN202604271821623687_1.pdf",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "复核第25-28、46、48页：上市MagNeuro ONE闭环神经调控、在研脑机康复系统与磁刺激混合收入。"
+    },
+    {
+      "source_id": "bci_688273_filing",
+      "source_type": "company_filing",
+      "title": "麦澜德2025年年度报告",
+      "publisher": "南京麦澜德医疗科技股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-16",
+      "url_or_ref": "https://pdf.dfcfw.com/pdf/H2_AN202604151821245537_1.pdf",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "复核第18、22、31、37页：多模态脑机接口、注册上市脑电近红外经颅磁刺激仪和运动康复宽口径收入。"
+    },
+    {
+      "source_id": "bci_300430_filing",
+      "source_type": "company_filing",
+      "title": "诚益通2025年年度报告",
+      "publisher": "北京诚益通控制技术集团股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-30",
+      "url_or_ref": "https://pdf.dfcfw.com/pdf/H2_AN202604301821788543_1.pdf",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "复核第19-20、27、36-37页：脑连科技电极、放大器、算法、样机与尚未形成规模收入。"
+    },
+    {
+      "source_id": "bci_301293_filing",
+      "source_type": "company_filing",
+      "title": "三博脑科2025年年度报告",
+      "publisher": "三博脑科医院管理集团股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-22",
+      "url_or_ref": "https://pdf.dfcfw.com/pdf/H2_AN202604211821391387_1.pdf",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "复核第10、12、25页：功能神经外科、医疗服务收入及器械临床试验机构与研究性病房。"
+    },
+    {
+      "source_id": "bci_301293_clinical",
+      "source_type": "official_article",
+      "title": "全球首例！三博参与完成介入式脑机接口实现人体患肢运动功能修复",
+      "publisher": "首都医科大学三博脑科医院",
+      "author": "",
+      "publish_date": "2025-06-24",
+      "url_or_ref": "https://www.sbnk.cn/xinwen/xinwen/20250624_14583.html",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "官方医院披露人体介入式脑机接口试验、支架电极植入、术后安全性与脑电交互控制结果。"
+    },
+    {
+      "source_id": "bci_002173_filing",
+      "source_type": "company_filing",
+      "title": "创新医疗2025年年度报告",
+      "publisher": "创新医疗管理股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-25",
+      "url_or_ref": "https://pdf.dfcfw.com/pdf/H2_AN202604241821556176_1.pdf",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "复核第12-13、16、23、92页：AC5上市销售、AM5临床与注册进度、解码闭环指标、子公司12.19万元收入及交付确认政策。"
+    },
+    {
+      "source_id": "bci_300753_filing",
+      "source_type": "company_filing",
+      "title": "爱朋医疗2025年年度报告",
+      "publisher": "江苏爱朋医疗科技股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-25",
+      "url_or_ref": "https://pdf.dfcfw.com/pdf/H2_AN202604241821564908_1.pdf",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "复核第18、30、37页：ADHD脑机接口产品组件注册、便携脑电系统及已上市状态；投资与合作不作正向公司证据。"
+    },
+    {
+      "source_id": "bci_300206_filing",
+      "source_type": "company_filing",
+      "title": "理邦仪器2025年年度报告",
+      "publisher": "深圳市理邦精密仪器股份有限公司",
+      "author": "",
+      "publish_date": "2026-03-31",
+      "url_or_ref": "https://pdf.dfcfw.com/pdf/H2_AN202603301820862523_1.pdf",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "复核第13、40、46页：脑电监护参数、病人监护宽口径收入和注册认证；不等同BCI整机或解码。"
+    },
+    {
+      "source_id": "bci_300869_filing",
+      "source_type": "company_filing",
+      "title": "康泰医学2025年年度报告",
+      "publisher": "康泰医学系统（秦皇岛）股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-28",
+      "url_or_ref": "https://pdf.dfcfw.com/pdf/H2_AN202604271821609748_1.pdf",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "复核第22、44、51-56页：数字和动态脑电采集产品、其他类混合收入及注册状态。"
+    },
+    {
+      "source_id": "bci_policy_2025",
+      "source_type": "official_report",
+      "title": "七部门关于推动脑机接口产业创新发展的实施意见",
+      "publisher": "工业和信息化部等七部门",
+      "author": "",
+      "publish_date": "2025-07-30",
+      "url_or_ref": "https://www.miit.gov.cn/zwgk/zcwj/wjfb/yj/art/2025/art_ea3ff408de194612891df352d24dd26a.html",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "政策提出2027与2030目标及电极、芯片、整机、医疗健康等任务；仅作产业催化，不证明任何公司受益。"
+    }
+  ],
+  "evidence_items": [
+    {
+      "evidence_id": "bci_ev_688626_product",
+      "source_id": "bci_688626_filing",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "第17页，脑机接口系列产品表",
+      "evidence_summary": "年度报告将脑机接口系列列入面向医院、康复机构和科研机构的产品体系，直接支持非侵入式康复系统关系。",
+      "related_company_codes": [
+        "688626.SH"
+      ],
+      "related_node_ids": [
+        "noninvasive_bci_device_systems"
+      ]
+    },
+    {
+      "evidence_id": "bci_ev_688626_revenue",
+      "source_id": "bci_688626_filing",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "第55页，主营业务分产品表",
+      "evidence_summary": "医疗器械收入为74,074.86万元且按康复理疗、训练、评定等宽类别披露，未单列BCI产品收入，因此只认定limited。",
+      "related_company_codes": [
+        "688626.SH"
+      ],
+      "related_node_ids": [
+        "noninvasive_bci_device_systems"
+      ]
+    },
+    {
+      "evidence_id": "bci_ev_688626_stage",
+      "source_id": "bci_688626_filing",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "第50页，脑电采集分析及设备驱动技术研究",
+      "evidence_summary": "项目已完成七种范式和算法融合开发，但目标仍包括获得注册证和市场准入；现有产品与在研升级必须分开。",
+      "related_company_codes": [
+        "688626.SH"
+      ],
+      "related_node_ids": [
+        "noninvasive_bci_device_systems"
+      ]
+    },
+    {
+      "evidence_id": "bci_ev_688580_product",
+      "source_id": "bci_688580_filing",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "第26页，脑电联动闭环康复板块",
+      "evidence_summary": "已上市MagNeuro ONE融合多模态信号采集与TMS，依据脑电构建个体脑功能图谱并实施靶向神经调控。",
+      "related_company_codes": [
+        "688580.SH"
+      ],
+      "related_node_ids": [
+        "neurostimulation_closed_loop_feedback"
+      ]
+    },
+    {
+      "evidence_id": "bci_ev_688580_revenue",
+      "source_id": "bci_688580_filing",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "第46页，主营业务分产品表",
+      "evidence_summary": "磁刺激类收入18,932.88万元，但包含经颅、盆底、脉冲磁场和塑形等多类产品，不能全部计为BCI。",
+      "related_company_codes": [
+        "688580.SH"
+      ],
+      "related_node_ids": [
+        "neurostimulation_closed_loop_feedback"
+      ]
+    },
+    {
+      "evidence_id": "bci_ev_688580_stage",
+      "source_id": "bci_688580_filing",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "第25页，第二代经颅磁刺激与MagNeuro ONE推广",
+      "evidence_summary": "第二代TMS和MRI机器人导航经颅磁刺激产品已上市推广；后续脑机融合系统仍在研。",
+      "related_company_codes": [
+        "688580.SH"
+      ],
+      "related_node_ids": [
+        "neurostimulation_closed_loop_feedback"
+      ]
+    },
+    {
+      "evidence_id": "bci_ev_688273_product",
+      "source_id": "bci_688273_filing",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "第18页，脑电近红外闭环经颅磁刺激仪",
+      "evidence_summary": "设备融合EEG与fNIRS实时解析并联动磁刺激，构成感知、解码、干预和反馈闭环。",
+      "related_company_codes": [
+        "688273.SH"
+      ],
+      "related_node_ids": [
+        "neurostimulation_closed_loop_feedback"
+      ]
+    },
+    {
+      "evidence_id": "bci_ev_688273_revenue",
+      "source_id": "bci_688273_filing",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "第37页，主营业务分产品表",
+      "evidence_summary": "运动康复收入875.87万元，但包括手功能、磁刺激和反馈设备，未单列BCI系统收入。",
+      "related_company_codes": [
+        "688273.SH"
+      ],
+      "related_node_ids": [
+        "neurostimulation_closed_loop_feedback"
+      ]
+    },
+    {
+      "evidence_id": "bci_ev_688273_stage",
+      "source_id": "bci_688273_filing",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "第31页，脑机接口研发项目进展",
+      "evidence_summary": "脑电近红外经颅重复磁刺激仪已取得医疗器械注册证并上市销售，其他脑机反馈系统仍处开发或上市前验证。",
+      "related_company_codes": [
+        "688273.SH"
+      ],
+      "related_node_ids": [
+        "neurostimulation_closed_loop_feedback"
+      ]
+    },
+    {
+      "evidence_id": "bci_ev_300430_product",
+      "source_id": "bci_300430_filing",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "第19-20页，脑连科技产品体系",
+      "evidence_summary": "披露凝胶、盐水和柔性干电极、多通道脑电放大器、自主信号处理解码算法及非侵入和侵入路线布局。",
+      "related_company_codes": [
+        "300430.SZ"
+      ],
+      "related_node_ids": [
+        "neural_electrodes_sensors_biocompatible_interfaces"
+      ]
+    },
+    {
+      "evidence_id": "bci_ev_300430_revenue",
+      "source_id": "bci_300430_filing",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "第27页，脑机接口板块经营情况",
+      "evidence_summary": "公司明确脑机接口板块处前期投入，暂未形成规模化收入和利润贡献。",
+      "related_company_codes": [
+        "300430.SZ"
+      ],
+      "related_node_ids": [
+        "neural_electrodes_sensors_biocompatible_interfaces"
+      ]
+    },
+    {
+      "evidence_id": "bci_ev_300430_stage",
+      "source_id": "bci_300430_filing",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "第36页，脑机接口康复平台研发项目",
+      "evidence_summary": "基础康复样机完成并展示，正在按要求准备注册；认知评估平台也是基础样机与研究阶段。",
+      "related_company_codes": [
+        "300430.SZ"
+      ],
+      "related_node_ids": [
+        "neural_electrodes_sensors_biocompatible_interfaces"
+      ]
+    },
+    {
+      "evidence_id": "bci_ev_301293_service",
+      "source_id": "bci_301293_clinical",
+      "evidence_type": "service_relationship",
+      "excerpt_locator": "网页打印版第1页，正文第1-3段",
+      "evidence_summary": "三博参与介入式脑机接口人体患肢运动功能修复试验，完成支架电极血管内植入、脑电采集和交互控制。",
+      "related_company_codes": [
+        "301293.SZ"
+      ],
+      "related_node_ids": [
+        "surgical_clinical_registration_validation"
+      ]
+    },
+    {
+      "evidence_id": "bci_ev_301293_revenue",
+      "source_id": "bci_301293_filing",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "第12页，报告期经营情况",
+      "evidence_summary": "公司营业收入172,512.53万元为神经专科医疗服务集团宽口径，未披露BCI试验或手术收入。",
+      "related_company_codes": [
+        "301293.SZ"
+      ],
+      "related_node_ids": [
+        "surgical_clinical_registration_validation"
+      ]
+    },
+    {
+      "evidence_id": "bci_ev_301293_stage",
+      "source_id": "bci_301293_clinical",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "网页打印版第2页，正文第4-6段",
+      "evidence_summary": "官方披露该项目为首次介入式脑机接口人体临床试验，术后系统稳定且未见感染、血栓等，但不是注册获批。",
+      "related_company_codes": [
+        "301293.SZ"
+      ],
+      "related_node_ids": [
+        "surgical_clinical_registration_validation"
+      ]
+    },
+    {
+      "evidence_id": "bci_ev_300753_product",
+      "source_id": "bci_300753_filing",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "第30页，多模态ADHD行为训练管理系统",
+      "evidence_summary": "系统以便携脑电图机和采集器实时捕捉脑电并通过人机交互开展注意力训练，属于非侵入式脑机产品关系。",
+      "related_company_codes": [
+        "300753.SZ"
+      ],
+      "related_node_ids": [
+        "noninvasive_bci_device_systems"
+      ]
+    },
+    {
+      "evidence_id": "bci_ev_300753_revenue",
+      "source_id": "bci_300753_filing",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "第16页，报告期经营情况",
+      "evidence_summary": "营业收入34,201.75万元主要来自疼痛和鼻腔上气道等业务，未单列BCI或ADHD产品收入。",
+      "related_company_codes": [
+        "300753.SZ"
+      ],
+      "related_node_ids": [
+        "noninvasive_bci_device_systems"
+      ]
+    },
+    {
+      "evidence_id": "bci_ev_300753_stage",
+      "source_id": "bci_300753_filing",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "第37页，儿童ADHD行为训练诊疗产品研发项目",
+      "evidence_summary": "年度报告明确该脑机接口可穿戴和认知干预产品已上市；植入式癫痫预警平台仍在设计开发。",
+      "related_company_codes": [
+        "300753.SZ"
+      ],
+      "related_node_ids": [
+        "noninvasive_bci_device_systems"
+      ]
+    },
+    {
+      "evidence_id": "bci_ev_300869_product",
+      "source_id": "bci_300869_filing",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "第22页，脑电类产品表",
+      "evidence_summary": "数字脑电地形图仪和动态脑电图仪可多导同步采集、存储和分析脑电信号，直接支持信号采集设备关系。",
+      "related_company_codes": [
+        "300869.SZ"
+      ],
+      "related_node_ids": [
+        "bci_signal_acquisition_processing_chips"
+      ]
+    },
+    {
+      "evidence_id": "bci_ev_300869_revenue",
+      "source_id": "bci_300869_filing",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "第44页，分产品营业收入",
+      "evidence_summary": "其他类产品收入5,167.10万元，除脑电外还含肌电、模拟仪、电刀和听诊等，不能计为BCI收入。",
+      "related_company_codes": [
+        "300869.SZ"
+      ],
+      "related_node_ids": [
+        "bci_signal_acquisition_processing_chips"
+      ]
+    },
+    {
+      "evidence_id": "bci_ev_300869_stage",
+      "source_id": "bci_300869_filing",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "第51-56页，脑电产品注册状态",
+      "evidence_summary": "数字脑电地形图仪和动态脑电图仪为II类注册产品，证明产品交付资格，但用途仍为临床脑电检测。",
+      "related_company_codes": [
+        "300869.SZ"
+      ],
+      "related_node_ids": [
+        "bci_signal_acquisition_processing_chips"
+      ]
+    },
+    {
+      "evidence_id": "bci_ev_002173_product",
+      "source_id": "bci_002173_filing",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "第12页，赛博灵科主动康复训练设备",
+      "evidence_summary": "AC5居家上肢运动功能辅助与增强系统于2025年四季度正式上市并实现销售收入；AM5面向医疗机构，已完成多中心临床。",
+      "related_company_codes": [
+        "002173.SZ"
+      ],
+      "related_node_ids": [
+        "noninvasive_bci_device_systems"
+      ]
+    },
+    {
+      "evidence_id": "bci_ev_002173_revenue",
+      "source_id": "bci_002173_filing",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "第23页，主要控股参股公司分析",
+      "evidence_summary": "博灵脑机作为控股子公司实现营业收入121,940.60元、净亏损9,043,521.27元，证明初始收入但材料性极低。",
+      "related_company_codes": [
+        "002173.SZ"
+      ],
+      "related_node_ids": [
+        "noninvasive_bci_device_systems"
+      ]
+    },
+    {
+      "evidence_id": "bci_ev_002173_stage",
+      "source_id": "bci_002173_filing",
+      "evidence_type": "business_stage",
+      "excerpt_locator": "第13页，产品注册与开发阶段",
+      "evidence_summary": "AM5预计2026年完成注册，AC5已上市，HC2准备上市，NB3神经信号手环和NBF柔性采集器仍处前期应用开发，阶段逐项区分。",
+      "related_company_codes": [
+        "002173.SZ"
+      ],
+      "related_node_ids": [
+        "noninvasive_bci_device_systems"
+      ]
+    }
+  ],
+  "company_mappings": [
+    {
+      "mapping_id": "bci_map_688626_SH_v1",
+      "theme_id": "brain_computer_interfaces_neural_engineering_value_chain_v1",
+      "company_code": "688626.SH",
+      "company_name": "翔宇医疗",
+      "market": "CN",
+      "mapped_node_id": "noninvasive_bci_device_systems",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.95,
+      "evidence_ids": [
+        "bci_ev_688626_product",
+        "bci_ev_688626_revenue",
+        "bci_ev_688626_stage"
+      ],
+      "revenue_relevance": "limited",
+      "bottleneck_relevance": "core",
+      "business_materiality": "meaningful_segment",
+      "product_or_service": "非侵入式脑机接口康复系列与脑电驱动康复设备",
+      "relationship_summary": "产品系列关系直接，但脑电项目仍含注册目标且74,074.86万元医疗器械收入未拆BCI，列弹性受益。",
+      "review_status": "reviewed",
+      "notes": "不把政策、实验室、奖项、通用康复或通用医疗器械收入作为BCI收入。"
+    },
+    {
+      "mapping_id": "bci_map_688580_SH_v1",
+      "theme_id": "brain_computer_interfaces_neural_engineering_value_chain_v1",
+      "company_code": "688580.SH",
+      "company_name": "伟思医疗",
+      "market": "CN",
+      "mapped_node_id": "neurostimulation_closed_loop_feedback",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.98,
+      "evidence_ids": [
+        "bci_ev_688580_product",
+        "bci_ev_688580_revenue",
+        "bci_ev_688580_stage"
+      ],
+      "revenue_relevance": "limited",
+      "bottleneck_relevance": "core",
+      "business_materiality": "meaningful_segment",
+      "product_or_service": "脑电联动MagNeuro ONE精准神经调控与闭环康复系统",
+      "relationship_summary": "上市产品和闭环关系清晰，18,932.88万元磁刺激收入为经颅、盆底和其他磁刺激混合口径，列弹性受益。",
+      "review_status": "reviewed",
+      "notes": "在研脑机融合认知、FES和机器人系统不当作已上市收入。"
+    },
+    {
+      "mapping_id": "bci_map_688273_SH_v1",
+      "theme_id": "brain_computer_interfaces_neural_engineering_value_chain_v1",
+      "company_code": "688273.SH",
+      "company_name": "麦澜德",
+      "market": "CN",
+      "mapped_node_id": "neurostimulation_closed_loop_feedback",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.97,
+      "evidence_ids": [
+        "bci_ev_688273_product",
+        "bci_ev_688273_revenue",
+        "bci_ev_688273_stage"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "EEG/fNIRS闭环经颅磁刺激与脑机康复系统",
+      "relationship_summary": "闭环产品已注册上市，运动康复收入875.87万元仍为混合口径，BCI材料性未披露，列弹性受益。",
+      "review_status": "reviewed",
+      "notes": "开发中和上市前验证产品与已注册上市产品分别表达。"
+    },
+    {
+      "mapping_id": "bci_map_300430_SZ_v1",
+      "theme_id": "brain_computer_interfaces_neural_engineering_value_chain_v1",
+      "company_code": "300430.SZ",
+      "company_name": "诚益通",
+      "market": "CN",
+      "mapped_node_id": "neural_electrodes_sensors_biocompatible_interfaces",
+      "mapping_type": "equipment_supplier",
+      "business_stage": "primary_business",
+      "confidence": 0.9,
+      "evidence_ids": [
+        "bci_ev_300430_product",
+        "bci_ev_300430_revenue",
+        "bci_ev_300430_stage"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "脑电电极、放大器、解码算法及脑机康复样机平台",
+      "relationship_summary": "产品栈和样机直接，但公司明确处前期投入、未形成规模收入利润，列弹性受益。",
+      "review_status": "reviewed",
+      "notes": "专利、样机、动物实验平台和注册准备不得写成注册产品或收入。"
+    },
+    {
+      "mapping_id": "bci_map_301293_SZ_v1",
+      "theme_id": "brain_computer_interfaces_neural_engineering_value_chain_v1",
+      "company_code": "301293.SZ",
+      "company_name": "三博脑科",
+      "market": "CN",
+      "mapped_node_id": "surgical_clinical_registration_validation",
+      "mapping_type": "system_integrator",
+      "business_stage": "primary_business",
+      "confidence": 0.94,
+      "evidence_ids": [
+        "bci_ev_301293_service",
+        "bci_ev_301293_revenue",
+        "bci_ev_301293_stage"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "介入式脑机接口人体试验手术与临床验证服务",
+      "relationship_summary": "官方披露完成人体介入式试验，医疗服务收入宽且未拆BCI；映射临床验证，不映射整机所有权，列弹性受益。",
+      "review_status": "reviewed",
+      "notes": "战略合作和实验室不作正向证据，核心证据为人体试验。"
+    },
+    {
+      "mapping_id": "bci_map_300753_SZ_v1",
+      "theme_id": "brain_computer_interfaces_neural_engineering_value_chain_v1",
+      "company_code": "300753.SZ",
+      "company_name": "爱朋医疗",
+      "market": "CN",
+      "mapped_node_id": "noninvasive_bci_device_systems",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.94,
+      "evidence_ids": [
+        "bci_ev_300753_product",
+        "bci_ev_300753_revenue",
+        "bci_ev_300753_stage"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "ADHD脑电行为训练管理系统与便携脑电组件",
+      "relationship_summary": "非侵入式产品已上市且组件注册，但34,201.75万元公司收入未拆BCI，列弹性受益。",
+      "review_status": "reviewed",
+      "notes": "股权投资、参股神经调控企业、联合实验室和战略协议不作为公司产品或收入证据。"
+    },
+    {
+      "mapping_id": "bci_map_300869_SZ_v1",
+      "theme_id": "brain_computer_interfaces_neural_engineering_value_chain_v1",
+      "company_code": "300869.SZ",
+      "company_name": "康泰医学",
+      "market": "CN",
+      "mapped_node_id": "bci_signal_acquisition_processing_chips",
+      "mapping_type": "equipment_supplier",
+      "business_stage": "primary_business",
+      "confidence": 0.84,
+      "evidence_ids": [
+        "bci_ev_300869_product",
+        "bci_ev_300869_revenue",
+        "bci_ev_300869_stage"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "adjacent",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "注册数字脑电地形图仪和动态脑电图仪",
+      "relationship_summary": "注册脑电采集产品直接，但5,167.10万元其他类收入包含多产品，仅作信号采集间接受益。",
+      "review_status": "reviewed",
+      "notes": "通用脑电诊断设备不自动等同BCI整机或收入。"
+    },
+    {
+      "mapping_id": "bci_map_002173_SZ_v1",
+      "theme_id": "brain_computer_interfaces_neural_engineering_value_chain_v1",
+      "company_code": "002173.SZ",
+      "company_name": "创新医疗",
+      "market": "CN",
+      "mapped_node_id": "noninvasive_bci_device_systems",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.96,
+      "evidence_ids": [
+        "bci_ev_002173_product",
+        "bci_ev_002173_revenue",
+        "bci_ev_002173_stage"
+      ],
+      "revenue_relevance": "limited",
+      "bottleneck_relevance": "core",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "赛博灵科AC5主动康复系统、AM5医疗康复系统及神经信号采集设备",
+      "relationship_summary": "AC5已上市并确认12.19万元子公司收入，AM5仍在注册，NB3/NBF仍处前期开发；直接产品证据成立但收入材料性极低，列弹性受益。",
+      "review_status": "reviewed",
+      "notes": "不能因股权投资、子公司并表、战略协议、实验室或专利自动认定受益；本映射只基于AC5产品、交付收入和明确阶段。"
+    }
+  ]
+}
+

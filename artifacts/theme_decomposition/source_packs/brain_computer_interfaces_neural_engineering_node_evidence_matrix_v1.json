@@ -1,0 +1,296 @@
+{
+  "artifact_version": "brain_computer_interfaces_neural_engineering_node_evidence_matrix_v1",
+  "theme_id": "brain_computer_interfaces_neural_engineering_value_chain_v1",
+  "as_of_date": "2026-07-17",
+  "node_evidence_matrix": [
+    {
+      "node_id": "invasive_minimally_invasive_noninvasive_routes",
+      "accepted_source_ids": [
+        "bci_688626_filing",
+        "bci_300430_filing",
+        "bci_301293_clinical",
+        "bci_policy_2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "bci_claim_01",
+        "bci_claim_02"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 3,
+      "value_capture_score_review_status": "provisional",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [
+        "technology_barrier"
+      ],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "needs_evidence",
+      "rationale": "侵入、介入和非侵入路线均有一手披露，但缺少可比长期安全与使用数据。",
+      "next_evidence_needed": "补充各路线长期安全、信号稳定性、手术创伤、校准负担和家庭使用时长。"
+    },
+    {
+      "node_id": "neural_electrodes_sensors_biocompatible_interfaces",
+      "accepted_source_ids": [
+        "bci_300430_filing",
+        "bci_300753_filing",
+        "bci_300206_filing",
+        "bci_300869_filing",
+        "bci_policy_2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "bci_claim_01",
+        "bci_claim_03",
+        "bci_claim_14"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 3,
+      "value_capture_score_review_status": "provisional",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [
+        "technology_barrier",
+        "customer_certification"
+      ],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "needs_evidence",
+      "rationale": "诚益通披露多类电极和动物实验平台；未见A股注册神经电极、量产或在体寿命证据。",
+      "next_evidence_needed": "补充注册神经电极、电极通道数、阻抗漂移、组织反应、封装寿命、量产与收入。"
+    },
+    {
+      "node_id": "bci_signal_acquisition_processing_chips",
+      "accepted_source_ids": [
+        "bci_300430_filing",
+        "bci_300753_filing",
+        "bci_300206_filing",
+        "bci_300869_filing",
+        "bci_policy_2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "bci_claim_01",
+        "bci_claim_03",
+        "bci_claim_04",
+        "bci_claim_12",
+        "bci_claim_14"
+      ],
+      "evidence_strength_before": 1,
+      "evidence_strength_after": 2,
+      "value_capture_score_review_status": "provisional",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [
+        "technology_barrier",
+        "BOM_share"
+      ],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "needs_evidence",
+      "rationale": "诚益通、理邦和康泰支持采集设备能力；没有专用BCI芯片流片、量产或收入。",
+      "next_evidence_needed": "补充输入噪声、采样率、通道数、功耗、无线带宽、专用芯片流片、量产客户与收入。"
+    },
+    {
+      "node_id": "neural_decoding_encoding_software_platforms",
+      "accepted_source_ids": [
+        "bci_688273_filing",
+        "bci_300430_filing",
+        "bci_002173_filing",
+        "bci_policy_2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "bci_claim_01",
+        "bci_claim_05",
+        "bci_claim_11"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 3,
+      "value_capture_score_review_status": "provisional",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [
+        "integration_control",
+        "technology_barrier"
+      ],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "needs_evidence",
+      "rationale": "麦澜德、诚益通和创新医疗披露解码与闭环算法，但在线可比性能与软件收费仍不足。",
+      "next_evidence_needed": "补充离线与在线准确率、延迟、跨日稳定性、校准时长、软件收费与经常性收入。"
+    },
+    {
+      "node_id": "neurostimulation_closed_loop_feedback",
+      "accepted_source_ids": [
+        "bci_688626_filing",
+        "bci_688580_filing",
+        "bci_688273_filing",
+        "bci_300430_filing",
+        "bci_301293_filing",
+        "bci_300753_filing",
+        "bci_300206_filing",
+        "bci_300869_filing",
+        "bci_policy_2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "bci_claim_01",
+        "bci_claim_06",
+        "bci_claim_15"
+      ],
+      "evidence_strength_before": 3,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "integration_control",
+        "customer_certification"
+      ],
+      "evidence_gap_status": "supported",
+      "node_review_status": "reviewed",
+      "rationale": "伟思和麦澜德已有注册或上市的脑电联动神经调控产品，产品化证据较强。",
+      "next_evidence_needed": "补充闭环时延、刺激定位误差、不良事件、适应症疗效、独立销量和闭环产品收入。"
+    },
+    {
+      "node_id": "implantable_bci_device_systems",
+      "accepted_source_ids": [
+        "bci_688626_filing",
+        "bci_300430_filing",
+        "bci_301293_filing",
+        "bci_301293_clinical",
+        "bci_policy_2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "bci_claim_01",
+        "bci_claim_02",
+        "bci_claim_03",
+        "bci_claim_09"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 3,
+      "value_capture_score_review_status": "provisional",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [
+        "integration_control",
+        "customer_certification"
+      ],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "needs_evidence",
+      "rationale": "三博官方披露介入式人体试验，诚益通披露侵入式实验平台；仍无A股注册整机和商业交付。",
+      "next_evidence_needed": "补充伦理与注册试验、多中心样本、长期在线率、严重不良事件、整机所有权、获批、交付与收入。"
+    },
+    {
+      "node_id": "noninvasive_bci_device_systems",
+      "accepted_source_ids": [
+        "bci_688626_filing",
+        "bci_688580_filing",
+        "bci_688273_filing",
+        "bci_300430_filing",
+        "bci_301293_filing",
+        "bci_301293_clinical",
+        "bci_002173_filing",
+        "bci_300753_filing",
+        "bci_300206_filing",
+        "bci_300869_filing",
+        "bci_policy_2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "bci_claim_01",
+        "bci_claim_02",
+        "bci_claim_06",
+        "bci_claim_07",
+        "bci_claim_08",
+        "bci_claim_10",
+        "bci_claim_11",
+        "bci_claim_14",
+        "bci_claim_15"
+      ],
+      "evidence_strength_before": 3,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "integration_control",
+        "customer_certification"
+      ],
+      "evidence_gap_status": "supported",
+      "node_review_status": "reviewed",
+      "rationale": "翔宇、伟思、麦澜德、爱朋和创新医疗支持产品或上市状态，非侵入式产品化证据较强。",
+      "next_evidence_needed": "补充有效用户、在线准确率、训练依从性、疗效增益、交付套数、独立BCI收入与复购。"
+    },
+    {
+      "node_id": "surgical_clinical_registration_validation",
+      "accepted_source_ids": [
+        "bci_688626_filing",
+        "bci_688580_filing",
+        "bci_688273_filing",
+        "bci_300430_filing",
+        "bci_301293_filing",
+        "bci_301293_clinical",
+        "bci_002173_filing",
+        "bci_300753_filing",
+        "bci_300206_filing",
+        "bci_300869_filing",
+        "bci_policy_2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "bci_claim_01",
+        "bci_claim_07",
+        "bci_claim_08",
+        "bci_claim_09",
+        "bci_claim_11",
+        "bci_claim_13",
+        "bci_claim_15"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 3,
+      "value_capture_score_review_status": "provisional",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [
+        "customer_certification"
+      ],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "needs_evidence",
+      "rationale": "已有单例人体试验、部分器械注册和明确注册进度，但临床、收费、医院准入证据未贯通。",
+      "next_evidence_needed": "补充伦理批件、临床登记号、样本量、随访、不良事件、注册证、医院准入、收费、验收和回款。"
+    },
+    {
+      "node_id": "rehabilitation_industrial_consumer_revenue_validation",
+      "accepted_source_ids": [
+        "bci_688626_filing",
+        "bci_688580_filing",
+        "bci_688273_filing",
+        "bci_300430_filing",
+        "bci_301293_filing",
+        "bci_301293_clinical",
+        "bci_002173_filing",
+        "bci_300753_filing",
+        "bci_300206_filing",
+        "bci_300869_filing",
+        "bci_policy_2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "bci_claim_01",
+        "bci_claim_07",
+        "bci_claim_08",
+        "bci_claim_10",
+        "bci_claim_11",
+        "bci_claim_12",
+        "bci_claim_13",
+        "bci_claim_14",
+        "bci_claim_15"
+      ],
+      "evidence_strength_before": 1,
+      "evidence_strength_after": 2,
+      "value_capture_score_review_status": "provisional",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [
+        "gross_margin",
+        "ASP"
+      ],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "draft",
+      "rationale": "创新医疗证明12.19万元初始BCI子公司收入，其余仍为混合康复、磁刺激、监护或其他类收入；没有材料性独立BCI收入。",
+      "next_evidence_needed": "补充BCI独立收入、产品交付套数、活跃患者、工业或消费使用、毛利、复购续约和经常性收入。"
+    }
+  ]
+}
+

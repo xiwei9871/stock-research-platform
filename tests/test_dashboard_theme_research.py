@@ -46,6 +46,9 @@ SATELLITE_INFRASTRUCTURE_THEME_ID = (
     "satellite_manufacturing_space_infrastructure_value_chain_v1"
 )
 HIGH_END_MEDICAL_DEVICES_THEME_ID = "high_end_medical_devices_value_chain_v1"
+BCI_NEURAL_ENGINEERING_THEME_ID = (
+    "brain_computer_interfaces_neural_engineering_value_chain_v1"
+)
 
 
 def test_theme_index_aggregates_validated_phase_outputs():
@@ -79,8 +82,10 @@ def test_theme_index_aggregates_validated_phase_outputs():
         "satellite_communications_navigation_remote_sensing_value_chain_v1",
         "intelligent_transport_vehicle_road_cloud_value_chain_v1",
         HIGH_END_MEDICAL_DEVICES_THEME_ID,
+        BCI_NEURAL_ENGINEERING_THEME_ID,
     }
-    assert payload["total"] == len(expected_theme_ids)
+    assert len(expected_theme_ids) == 28
+    assert payload["total"] == 28
     assert {row["theme_id"] for row in payload["items"]} == expected_theme_ids
     assert [
         (row["theme_name"], row["theme_id"]) for row in payload["items"]

@@ -135,6 +135,55 @@ E2_CANONICAL_TARGETS = {
     "transport_data_security_governance": "cybersecurity_data_infrastructure",
 }
 
+E3_CHAIN_ID = "brain_computer_interfaces_neural_engineering"
+E3_THEME_ID = "brain_computer_interfaces_neural_engineering_value_chain_v1"
+E3_THEME_PATH = REPOSITORY_ROOT / f"artifacts/theme_decomposition/{E3_THEME_ID}.json"
+E3_MAPPING_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/company_mappings"
+    / "brain_computer_interfaces_neural_engineering_company_mapping_v1.json"
+)
+E3_SOURCE_PACK_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "brain_computer_interfaces_neural_engineering_source_pack_v1.json"
+)
+E3_MATRIX_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "brain_computer_interfaces_neural_engineering_node_evidence_matrix_v1.json"
+)
+
+E3_NODE_IDS = {
+    "invasive_minimally_invasive_noninvasive_routes",
+    "neural_electrodes_sensors_biocompatible_interfaces",
+    "bci_signal_acquisition_processing_chips",
+    "neural_decoding_encoding_software_platforms",
+    "neurostimulation_closed_loop_feedback",
+    "implantable_bci_device_systems",
+    "noninvasive_bci_device_systems",
+    "surgical_clinical_registration_validation",
+    "rehabilitation_industrial_consumer_revenue_validation",
+}
+
+E3_COMPANIES = {
+    "688626.SH": ("elastic_beneficiary", "meaningful_segment", "limited"),
+    "688580.SH": ("elastic_beneficiary", "meaningful_segment", "limited"),
+    "688273.SH": ("elastic_beneficiary", "emerging_segment", "undisclosed"),
+    "300430.SZ": ("elastic_beneficiary", "emerging_segment", "undisclosed"),
+    "301293.SZ": ("elastic_beneficiary", "emerging_segment", "undisclosed"),
+    "300753.SZ": ("elastic_beneficiary", "emerging_segment", "undisclosed"),
+    "002173.SZ": ("elastic_beneficiary", "emerging_segment", "limited"),
+    "300869.SZ": ("indirect_beneficiary", "emerging_segment", "undisclosed"),
+}
+
+E3_EXCLUDED_CODES = {
+    "300206.SZ",  # generic monitoring and EEG parameter revenue
+    "300793.SZ",  # R&D, alliance, or prototype evidence without revenue proof
+    "300007.SZ",  # sensor concept without neural-interface materiality proof
+    "301033.SZ",  # generic neurosurgical implant ownership remains elsewhere
+}
+
 
 def _read_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
@@ -929,3 +978,221 @@ def test_vehicle_road_cloud_e2_transport_governance_ownership_is_sharp() -> None
     assert "reusable permission, audit, and security controls" in canonical_node[
         "description"
     ].lower()
+
+
+def test_brain_computer_interfaces_e3_four_research_artifacts_exist_before_validation() -> None:
+    for path in (
+        E3_THEME_PATH,
+        E3_MAPPING_PATH,
+        E3_SOURCE_PACK_PATH,
+        E3_MATRIX_PATH,
+    ):
+        assert path.is_file(), path
+
+
+def test_brain_computer_interfaces_e3_theme_meets_strict_wave_e_gate() -> None:
+    theme = _read_json(E3_THEME_PATH)
+    mapping = _read_json(E3_MAPPING_PATH)
+    validate_theme_decomposition_artifact(theme, expected_theme_id=E3_THEME_ID)
+    validate_theme_company_mapping_artifact(mapping, theme)
+    report = VERIFIER.build_theme_batch_report(MANIFEST_PATH, wave="wave_e")
+    row = next(item for item in report["theme_results"] if item["chain_id"] == E3_CHAIN_ID)
+
+    assert theme["artifact_version"] == "theme_decomposition_v1_6"
+    assert theme["theme"]["status"] == "reviewed"
+    assert theme["theme"]["created_from"] == "mixed"
+    assert theme["research_profile"]["catalog_chain_id"] == E3_CHAIN_ID
+    assert theme["research_profile"]["research_kind"] == "industry_chain_deep_research"
+    assert {node["node_id"] for node in theme["nodes"]} == E3_NODE_IDS
+    assert {row["node_id"] for row in theme["value_capture_assessments"]} == E3_NODE_IDS
+    assert len(theme["sources"]) >= 10
+    assert len(theme["claims"]) >= 12
+    assert len(
+        [item for item in mapping["company_mappings"] if item["review_status"] == "reviewed"]
+    ) == 8
+    assert row["ready"] is True
+    assert row["checks"]["bidirectional_evidence_contract"] is True
+    assert row["checks"]["precise_mapping_locators"] is True
+
+
+def test_brain_computer_interfaces_e3_catalog_frontier_route_and_exact_links() -> None:
+    catalog = load_industry_catalog()
+    chain_nodes = [row for row in catalog["nodes"] if row["chain_id"] == E3_CHAIN_ID]
+    assert {row["node_id"] for row in chain_nodes} == E3_NODE_IDS
+    assert all(row["node_kind"] == "frontier_route" for row in chain_nodes)
+    assert all(row["canonical_key"] == "" for row in chain_nodes)
+    assert {row["level"] for row in chain_nodes} == {"L3", "L4"}
+    nodes_by_id = {row["node_id"]: row for row in chain_nodes}
+    for row in chain_nodes:
+        if row["level"] == "L4":
+            assert row["parent_node_id"] in nodes_by_id
+            assert nodes_by_id[row["parent_node_id"]]["level"] == "L3"
+
+    link = next(row for row in catalog["theme_links"] if row["theme_id"] == E3_THEME_ID)
+    assert link["chain_id"] == E3_CHAIN_ID
+    assert link["unmapped_theme_node_ids"] == []
+    assert len(link["node_links"]) == len(E3_NODE_IDS)
+    assert {row["theme_node_id"] for row in link["node_links"]} == E3_NODE_IDS
+    assert {row["catalog_node_id"] for row in link["node_links"]} == E3_NODE_IDS
+    assert not (
+        REPOSITORY_ROOT
+        / "artifacts/technology_industry_catalog/v1/theme_compositions"
+        / "brain_computer_interfaces_neural_engineering_v1.json"
+    ).exists()
+
+
+def test_brain_computer_interfaces_e3_source_contract_roles_and_locators() -> None:
+    theme = _read_json(E3_THEME_PATH)
+    mapping = _read_json(E3_MAPPING_PATH)
+    source_pack = _read_json(E3_SOURCE_PACK_PATH)
+    matrix = _read_json(E3_MATRIX_PATH)
+
+    def source_identity(rows: list[dict]) -> dict[str, tuple]:
+        return {
+            row["source_id"]: (
+                row["source_type"],
+                row["title"],
+                row["publisher"],
+                row["author"],
+                row["publish_date"],
+                row.get("url_or_ref", row.get("url")),
+                row["access_level"],
+                row["reliability_level"],
+                row["review_status"],
+            )
+            for row in rows
+        }
+
+    assert source_identity(theme["sources"]) == source_identity(mapping["sources"])
+    assert source_identity(theme["sources"]) == source_identity(source_pack["sources"])
+    accepted_sources = {
+        row["source_id"] for row in source_pack["sources"]
+        if row["review_status"] == "accepted"
+    }
+    accepted_primary_sources = {
+        row["source_id"] for row in source_pack["sources"]
+        if row["review_status"] == "accepted"
+        and row["source_type"] in {"company_filing", "official_report", "official_article"}
+    }
+    assert len(accepted_sources) >= 10
+    assert len(accepted_primary_sources) >= 8
+
+    claims = {row["claim_id"]: row for row in theme["claims"]}
+    for source in source_pack["sources"]:
+        expected_claim_ids = {
+            claim_id for claim_id, claim in claims.items()
+            if claim["source_id"] == source["source_id"]
+            or source["source_id"] in claim["supporting_source_ids"]
+        }
+        assert set(source["supported_claim_ids"]) == expected_claim_ids
+        assert set(source["supported_node_ids"]) == {
+            node_id for claim_id in expected_claim_ids
+            for node_id in claims[claim_id]["affected_theme_nodes"]
+        }
+
+    matrix_by_node = {row["node_id"]: row for row in matrix["node_evidence_matrix"]}
+    assert set(matrix_by_node) == E3_NODE_IDS
+    for node_id, matrix_row in matrix_by_node.items():
+        assert set(matrix_row["supported_claim_ids"]) == {
+            claim_id for claim_id, claim in claims.items()
+            if node_id in claim["affected_theme_nodes"]
+        }
+        assert set(matrix_row["accepted_source_ids"]) <= accepted_sources
+
+    evidence_by_id = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+    policy_source_ids = {
+        row["source_id"] for row in source_pack["sources"]
+        if "政策" in row["title"] or "实施意见" in row["title"]
+    }
+    for company in mapping["company_mappings"]:
+        evidence = [evidence_by_id[evidence_id] for evidence_id in company["evidence_ids"]]
+        assert len(evidence) == 3
+        assert {item["evidence_type"] for item in evidence} in (
+            {"product_relationship", "revenue_materiality", "business_stage"},
+            {"service_relationship", "revenue_materiality", "business_stage"},
+        )
+        assert len({item["excerpt_locator"] for item in evidence}) == 3
+        assert all("页" in item["excerpt_locator"] for item in evidence)
+        assert {item["source_id"] for item in evidence}.isdisjoint(policy_source_ids)
+
+
+def test_brain_computer_interfaces_e3_company_universe_tiers_and_exclusions_are_exact() -> None:
+    payload = list_theme_research_companies(E3_THEME_ID)
+    assert payload["total"] == len(E3_COMPANIES)
+    assert {
+        row["company_code"]: (
+            row["beneficiary_tier"],
+            row["business_materiality"],
+            row["revenue_relevance"],
+        )
+        for row in payload["items"]
+    } == E3_COMPANIES
+    assert E3_EXCLUDED_CODES.isdisjoint({row["company_code"] for row in payload["items"]})
+
+    mapping = _read_json(E3_MAPPING_PATH)
+    all_text = json.dumps(mapping, ensure_ascii=False)
+    for boundary in (
+        "股权投资",
+        "战略协议",
+        "实验室",
+        "专利",
+        "通用康复",
+        "通用脑电",
+        "通用医疗器械收入",
+    ):
+        assert boundary in all_text
+
+
+def test_brain_computer_interfaces_e3_stage_semantics_are_not_collapsed() -> None:
+    theme = _read_json(E3_THEME_PATH)
+    mapping = _read_json(E3_MAPPING_PATH)
+    all_text = json.dumps({"theme": theme, "mapping": mapping}, ensure_ascii=False)
+    for boundary in (
+        "政策支持不等于公司受益",
+        "实验室研究不等于原型",
+        "原型不等于临床验证",
+        "临床试验不等于注册获批",
+        "注册获批不等于产品交付",
+        "产品交付不等于收入确认",
+        "收入确认不等于经常性收入",
+    ):
+        assert boundary in all_text
+
+
+def test_brain_computer_interfaces_e3_matrix_maturity_and_assessments_are_conservative() -> None:
+    theme = _read_json(E3_THEME_PATH)
+    matrix = _read_json(E3_MATRIX_PATH)
+    theme_nodes = {row["node_id"]: row for row in theme["nodes"]}
+    matrix_nodes = {row["node_id"]: row for row in matrix["node_evidence_matrix"]}
+
+    conservative_nodes = {
+        "invasive_minimally_invasive_noninvasive_routes",
+        "neural_electrodes_sensors_biocompatible_interfaces",
+        "bci_signal_acquisition_processing_chips",
+        "neural_decoding_encoding_software_platforms",
+        "implantable_bci_device_systems",
+        "surgical_clinical_registration_validation",
+        "rehabilitation_industrial_consumer_revenue_validation",
+    }
+    for node_id in conservative_nodes:
+        assert theme_nodes[node_id]["node_review_status"] in {"draft", "needs_evidence"}
+        assert theme_nodes[node_id]["evidence_strength"] <= 3
+        assert matrix_nodes[node_id]["node_review_status"] == theme_nodes[node_id][
+            "node_review_status"
+        ]
+        assert matrix_nodes[node_id]["evidence_strength_after"] == theme_nodes[node_id][
+            "evidence_strength"
+        ]
+        assert matrix_nodes[node_id]["evidence_gap_status"] == "evidence_gap"
+
+    for node_id, node in theme_nodes.items():
+        matrix_row = matrix_nodes[node_id]
+        if node["evidence_strength"] == 5 and matrix_row["evidence_gap_status"] == "covered":
+            assert not any(
+                metric in matrix_row["next_evidence_needed"] for metric in node["key_metrics"]
+            )
+
+    claims = {row["claim_id"]: row for row in theme["claims"]}
+    for assessment in theme["value_capture_assessments"]:
+        for claim_id in assessment["evidence_ids"]:
+            assert assessment["node_id"] in claims[claim_id]["affected_theme_nodes"]

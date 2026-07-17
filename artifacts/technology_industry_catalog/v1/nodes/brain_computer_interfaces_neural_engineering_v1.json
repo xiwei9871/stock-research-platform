@@ -1,0 +1,172 @@
+{
+  "nodes": [
+    {
+      "node_id": "invasive_minimally_invasive_noninvasive_routes",
+      "chain_id": "brain_computer_interfaces_neural_engineering",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Invasive, Minimally Invasive, and Noninvasive Routes",
+      "node_kind": "frontier_route",
+      "node_type": "technical_route_stage",
+      "description": "Route taxonomy separating intracortical or subdural implants, endovascular or other minimally invasive interfaces, and scalp-based noninvasive systems; route evidence does not imply clinical approval or revenue.",
+      "status": "draft",
+      "primary_path": [
+        "frontier_future_technology",
+        "brain_computer_interfaces_neural_engineering",
+        "invasive_minimally_invasive_noninvasive_routes"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "neural_electrodes_sensors_biocompatible_interfaces",
+      "chain_id": "brain_computer_interfaces_neural_engineering",
+      "parent_node_id": "invasive_minimally_invasive_noninvasive_routes",
+      "level": "L4",
+      "node_name": "Neural Electrodes, Sensors, and Biocompatible Interfaces",
+      "node_kind": "frontier_route",
+      "node_type": "neural_interface_component_route",
+      "description": "Electrodes, neural sensors, encapsulation, feedthroughs, and biocompatible interface engineering for stable signal capture or stimulation.",
+      "status": "draft",
+      "primary_path": [
+        "frontier_future_technology",
+        "brain_computer_interfaces_neural_engineering",
+        "invasive_minimally_invasive_noninvasive_routes",
+        "neural_electrodes_sensors_biocompatible_interfaces"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "bci_signal_acquisition_processing_chips",
+      "chain_id": "brain_computer_interfaces_neural_engineering",
+      "parent_node_id": "invasive_minimally_invasive_noninvasive_routes",
+      "level": "L4",
+      "node_name": "BCI Signal Acquisition and Processing Chips",
+      "node_kind": "frontier_route",
+      "node_type": "neural_signal_acquisition_route",
+      "description": "Low-noise amplification, analog front ends, digitization, artifact suppression, telemetry, and dedicated neural-signal processing; generic EEG or monitor revenue is not automatically BCI revenue.",
+      "status": "draft",
+      "primary_path": [
+        "frontier_future_technology",
+        "brain_computer_interfaces_neural_engineering",
+        "invasive_minimally_invasive_noninvasive_routes",
+        "bci_signal_acquisition_processing_chips"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "neural_decoding_encoding_software_platforms",
+      "chain_id": "brain_computer_interfaces_neural_engineering",
+      "parent_node_id": "invasive_minimally_invasive_noninvasive_routes",
+      "level": "L4",
+      "node_name": "Neural Decoding and Encoding Software Platforms",
+      "node_kind": "frontier_route",
+      "node_type": "neural_software_route",
+      "description": "Software and algorithms for neural-feature extraction, intention decoding, stimulation encoding, calibration, adaptive control, safety logging, and clinical workflow integration.",
+      "status": "draft",
+      "primary_path": [
+        "frontier_future_technology",
+        "brain_computer_interfaces_neural_engineering",
+        "invasive_minimally_invasive_noninvasive_routes",
+        "neural_decoding_encoding_software_platforms"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "implantable_bci_device_systems",
+      "chain_id": "brain_computer_interfaces_neural_engineering",
+      "parent_node_id": "invasive_minimally_invasive_noninvasive_routes",
+      "level": "L4",
+      "node_name": "Implantable BCI Device Systems",
+      "node_kind": "frontier_route",
+      "node_type": "implantable_system_route",
+      "description": "Fully implantable or minimally invasive BCI systems integrating interface, acquisition, telemetry, decoding or stimulation, and surgical workflow; animal or first-in-human work is not registration.",
+      "status": "draft",
+      "primary_path": [
+        "frontier_future_technology",
+        "brain_computer_interfaces_neural_engineering",
+        "invasive_minimally_invasive_noninvasive_routes",
+        "implantable_bci_device_systems"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "noninvasive_bci_device_systems",
+      "chain_id": "brain_computer_interfaces_neural_engineering",
+      "parent_node_id": "invasive_minimally_invasive_noninvasive_routes",
+      "level": "L4",
+      "node_name": "Noninvasive BCI Device Systems",
+      "node_kind": "frontier_route",
+      "node_type": "noninvasive_system_route",
+      "description": "Scalp EEG, fNIRS, magnetic or electrical interfaces integrated with decoding, feedback, rehabilitation, communication, or interaction devices; diagnostic EEG alone is not a BCI system.",
+      "status": "draft",
+      "primary_path": [
+        "frontier_future_technology",
+        "brain_computer_interfaces_neural_engineering",
+        "invasive_minimally_invasive_noninvasive_routes",
+        "noninvasive_bci_device_systems"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "neurostimulation_closed_loop_feedback",
+      "chain_id": "brain_computer_interfaces_neural_engineering",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Neurostimulation and Closed-Loop Feedback",
+      "node_kind": "frontier_route",
+      "node_type": "closed_loop_neurostimulation_route",
+      "description": "TMS, tES, functional electrical stimulation, neurofeedback, robotics, or other actuators whose parameters or timing are linked to measured neural state; open-loop stimulation remains a distinct stage.",
+      "status": "draft",
+      "primary_path": [
+        "frontier_future_technology",
+        "brain_computer_interfaces_neural_engineering",
+        "neurostimulation_closed_loop_feedback"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "surgical_clinical_registration_validation",
+      "chain_id": "brain_computer_interfaces_neural_engineering",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Surgical, Clinical, and Registration Validation",
+      "node_kind": "frontier_route",
+      "node_type": "clinical_validation_route",
+      "description": "Ethics, trial registration, surgical delivery, safety and efficacy follow-up, device registration, hospital access, and procedure validation, tracked as distinct gates.",
+      "status": "draft",
+      "primary_path": [
+        "frontier_future_technology",
+        "brain_computer_interfaces_neural_engineering",
+        "surgical_clinical_registration_validation"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "rehabilitation_industrial_consumer_revenue_validation",
+      "chain_id": "brain_computer_interfaces_neural_engineering",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Rehabilitation, Industrial, Consumer, and Revenue Validation",
+      "node_kind": "frontier_route",
+      "node_type": "commercial_validation_route",
+      "description": "Delivered use cases, active utilization, acceptance, recognized product or service revenue, renewal, and recurring revenue across rehabilitation, industrial, and consumer settings.",
+      "status": "draft",
+      "primary_path": [
+        "frontier_future_technology",
+        "brain_computer_interfaces_neural_engineering",
+        "rehabilitation_industrial_consumer_revenue_validation"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    }
+  ]
+}
+

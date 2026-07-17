@@ -811,6 +811,23 @@
       "notes":"E2 owns cross-domain orchestration, cooperative traffic applications, mobility operations, project delivery, utilization and renewal validation. Vehicle interfaces, roadside/V2X infrastructure, cloud data platform and security governance remain canonical dependencies; generic hardware evidence cannot create an E2 reviewed beneficiary."
     },
     {
+      "theme_id":"brain_computer_interfaces_neural_engineering_value_chain_v1",
+      "chain_id":"brain_computer_interfaces_neural_engineering",
+      "node_links":[
+        {"theme_node_id":"invasive_minimally_invasive_noninvasive_routes","catalog_node_id":"invasive_minimally_invasive_noninvasive_routes"},
+        {"theme_node_id":"neural_electrodes_sensors_biocompatible_interfaces","catalog_node_id":"neural_electrodes_sensors_biocompatible_interfaces"},
+        {"theme_node_id":"bci_signal_acquisition_processing_chips","catalog_node_id":"bci_signal_acquisition_processing_chips"},
+        {"theme_node_id":"neural_decoding_encoding_software_platforms","catalog_node_id":"neural_decoding_encoding_software_platforms"},
+        {"theme_node_id":"neurostimulation_closed_loop_feedback","catalog_node_id":"neurostimulation_closed_loop_feedback"},
+        {"theme_node_id":"implantable_bci_device_systems","catalog_node_id":"implantable_bci_device_systems"},
+        {"theme_node_id":"noninvasive_bci_device_systems","catalog_node_id":"noninvasive_bci_device_systems"},
+        {"theme_node_id":"surgical_clinical_registration_validation","catalog_node_id":"surgical_clinical_registration_validation"},
+        {"theme_node_id":"rehabilitation_industrial_consumer_revenue_validation","catalog_node_id":"rehabilitation_industrial_consumer_revenue_validation"}
+      ],
+      "unmapped_theme_node_ids":[],
+      "notes":"E3按frontier route表达侵入式、微创与非侵入式接口、信号采集、解码、神经调控、整机、临床注册和商业兑现；不创建canonical所有权或composition。政策、投资、联盟、实验室、专利、原型、临床、注册、交付和收入必须分阶段验证，通用康复、脑电、刺激、传感、手术及医疗器械收入不得自动计入E3。"
+    },
+    {
       "theme_id":"high_end_medical_devices_value_chain_v1",
       "chain_id":"high_end_medical_devices",
       "node_links":[

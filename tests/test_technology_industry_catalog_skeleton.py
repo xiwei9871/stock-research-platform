@@ -206,21 +206,7 @@ EXPECTED_CHAIN_CONTRACT = {
 }
 
 
-EXPECTED_SKELETON_APPLICATION_CANONICAL_DEFERRALS = {
-    "intelligent_transport_vehicle_road_cloud": {
-        "new_energy_vehicle_architecture_platforms",
-        "intelligent_driving_smart_cockpit",
-        "automotive_electronics_chip_applications",
-        "electric_drive_chassis_by_wire_thermal_management",
-        "network_equipment_edge_iot",
-        "cloud_data_center_infrastructure",
-    },
-    "satellite_communications_navigation_remote_sensing": {
-        "satellite_manufacturing_space_infrastructure",
-        "network_equipment_edge_iot",
-        "optical_communications_data_center_interconnect",
-    },
-}
+EXPECTED_SKELETON_APPLICATION_CANONICAL_DEFERRALS = {}
 
 REQUIRED_ALIAS_REPLACEMENTS = {
     "intelligent_transport_vehicle_road_cloud": (

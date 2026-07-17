@@ -1,0 +1,343 @@
+{
+  "artifact_version": "brain_computer_interfaces_neural_engineering_source_pack_v1",
+  "theme_id": "brain_computer_interfaces_neural_engineering_value_chain_v1",
+  "as_of_date": "2026-07-17",
+  "sources": [
+    {
+      "source_id": "bci_688626_filing",
+      "source_type": "company_filing",
+      "title": "翔宇医疗2025年年度报告",
+      "publisher": "河南翔宇医疗设备股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-24",
+      "url": "https://pdf.dfcfw.com/pdf/H2_AN202604231821513670_1.pdf",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第17、24-25、50、55页",
+      "evidence_summary": "脑机接口系列、非侵入式研发路线、脑电采集注册目标和74,074.86万元医疗器械宽口径。",
+      "supported_claim_ids": [
+        "bci_claim_02",
+        "bci_claim_07",
+        "bci_claim_10",
+        "bci_claim_15"
+      ],
+      "supported_node_ids": [
+        "invasive_minimally_invasive_noninvasive_routes",
+        "implantable_bci_device_systems",
+        "noninvasive_bci_device_systems",
+        "surgical_clinical_registration_validation",
+        "rehabilitation_industrial_consumer_revenue_validation",
+        "neurostimulation_closed_loop_feedback"
+      ],
+      "limitations": "未披露BCI独立收入、注册证清单、交付套数、活跃患者或续约。",
+      "notes": "原文已按定位复核；仅在披露边界内使用。"
+    },
+    {
+      "source_id": "bci_688580_filing",
+      "source_type": "company_filing",
+      "title": "伟思医疗2025年年度报告",
+      "publisher": "南京伟思医疗科技股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-28",
+      "url": "https://pdf.dfcfw.com/pdf/H2_AN202604271821623687_1.pdf",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第25-28、46、48页",
+      "evidence_summary": "MagNeuro ONE上市、脑电联动闭环系统和18,932.88万元磁刺激混合收入。",
+      "supported_claim_ids": [
+        "bci_claim_06",
+        "bci_claim_15"
+      ],
+      "supported_node_ids": [
+        "neurostimulation_closed_loop_feedback",
+        "noninvasive_bci_device_systems",
+        "surgical_clinical_registration_validation",
+        "rehabilitation_industrial_consumer_revenue_validation"
+      ],
+      "limitations": "磁刺激收入包含盆底、塑形和其他产品，未拆闭环BCI收入。",
+      "notes": "原文已按定位复核；仅在披露边界内使用。"
+    },
+    {
+      "source_id": "bci_688273_filing",
+      "source_type": "company_filing",
+      "title": "麦澜德2025年年度报告",
+      "publisher": "南京麦澜德医疗科技股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-16",
+      "url": "https://pdf.dfcfw.com/pdf/H2_AN202604151821245537_1.pdf",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第18、22、31、37页",
+      "evidence_summary": "EEG/fNIRS闭环TMS、已注册上市产品和875.87万元运动康复收入。",
+      "supported_claim_ids": [
+        "bci_claim_05",
+        "bci_claim_06",
+        "bci_claim_08",
+        "bci_claim_10",
+        "bci_claim_13",
+        "bci_claim_15"
+      ],
+      "supported_node_ids": [
+        "neural_decoding_encoding_software_platforms",
+        "neurostimulation_closed_loop_feedback",
+        "noninvasive_bci_device_systems",
+        "surgical_clinical_registration_validation",
+        "rehabilitation_industrial_consumer_revenue_validation"
+      ],
+      "limitations": "运动康复收入不是BCI纯收入，部分系统仍处开发或上市前验证。",
+      "notes": "原文已按定位复核；仅在披露边界内使用。"
+    },
+    {
+      "source_id": "bci_300430_filing",
+      "source_type": "company_filing",
+      "title": "诚益通2025年年度报告",
+      "publisher": "北京诚益通控制技术集团股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-30",
+      "url": "https://pdf.dfcfw.com/pdf/H2_AN202604301821788543_1.pdf",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第19-20、27、36-37页",
+      "evidence_summary": "电极、放大器、解码算法、康复与认知样机及前期投入状态。",
+      "supported_claim_ids": [
+        "bci_claim_02",
+        "bci_claim_03",
+        "bci_claim_04",
+        "bci_claim_05",
+        "bci_claim_13",
+        "bci_claim_14",
+        "bci_claim_15"
+      ],
+      "supported_node_ids": [
+        "invasive_minimally_invasive_noninvasive_routes",
+        "implantable_bci_device_systems",
+        "noninvasive_bci_device_systems",
+        "neural_electrodes_sensors_biocompatible_interfaces",
+        "bci_signal_acquisition_processing_chips",
+        "neural_decoding_encoding_software_platforms",
+        "surgical_clinical_registration_validation",
+        "rehabilitation_industrial_consumer_revenue_validation",
+        "neurostimulation_closed_loop_feedback"
+      ],
+      "limitations": "未形成规模收入利润，样机和动物平台不等于注册或商业产品。",
+      "notes": "原文已按定位复核；仅在披露边界内使用。"
+    },
+    {
+      "source_id": "bci_301293_filing",
+      "source_type": "company_filing",
+      "title": "三博脑科2025年年度报告",
+      "publisher": "三博脑科医院管理集团股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-22",
+      "url": "https://pdf.dfcfw.com/pdf/H2_AN202604211821391387_1.pdf",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第10、12、25页",
+      "evidence_summary": "功能神经外科服务、172,512.53万元集团收入、器械临床试验机构和研究病房。",
+      "supported_claim_ids": [
+        "bci_claim_09",
+        "bci_claim_15"
+      ],
+      "supported_node_ids": [
+        "implantable_bci_device_systems",
+        "surgical_clinical_registration_validation",
+        "neurostimulation_closed_loop_feedback",
+        "noninvasive_bci_device_systems",
+        "rehabilitation_industrial_consumer_revenue_validation"
+      ],
+      "limitations": "年报未单列BCI试验、手术或服务收入。",
+      "notes": "原文已按定位复核；仅在披露边界内使用。"
+    },
+    {
+      "source_id": "bci_301293_clinical",
+      "source_type": "official_article",
+      "title": "全球首例！三博参与完成介入式脑机接口实现人体患肢运动功能修复",
+      "publisher": "首都医科大学三博脑科医院",
+      "author": "",
+      "publish_date": "2025-06-24",
+      "url": "https://www.sbnk.cn/xinwen/xinwen/20250624_14583.html",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "网页正文第1-6段（打印版第1-2页）",
+      "evidence_summary": "人体介入式BCI试验、血管内支架电极、脑电采集交互与术后观察。",
+      "supported_claim_ids": [
+        "bci_claim_02",
+        "bci_claim_09",
+        "bci_claim_13"
+      ],
+      "supported_node_ids": [
+        "invasive_minimally_invasive_noninvasive_routes",
+        "implantable_bci_device_systems",
+        "noninvasive_bci_device_systems",
+        "surgical_clinical_registration_validation",
+        "rehabilitation_industrial_consumer_revenue_validation"
+      ],
+      "limitations": "单例里程碑不等于多中心注册、获批产品、交付或收入。",
+      "notes": "原文已按定位复核；仅在披露边界内使用。"
+    },
+    {
+      "source_id": "bci_002173_filing",
+      "source_type": "company_filing",
+      "title": "创新医疗2025年年度报告",
+      "publisher": "创新医疗管理股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-25",
+      "url": "https://pdf.dfcfw.com/pdf/H2_AN202604241821556176_1.pdf",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第12-13、16、23、92页",
+      "evidence_summary": "AC5上市销售、AM5临床与注册阶段、解码闭环指标、控股子公司12.19万元收入和交付确认政策。",
+      "supported_claim_ids": [
+        "bci_claim_11"
+      ],
+      "supported_node_ids": [
+        "neural_decoding_encoding_software_platforms",
+        "noninvasive_bci_device_systems",
+        "surgical_clinical_registration_validation",
+        "rehabilitation_industrial_consumer_revenue_validation"
+      ],
+      "limitations": "收入材料性极低，AM5未注册，NB3/NBF仍处前期开发，不能因股权或并表外推。",
+      "notes": "原文已按定位复核；仅在披露边界内使用。"
+    },
+    {
+      "source_id": "bci_300753_filing",
+      "source_type": "company_filing",
+      "title": "爱朋医疗2025年年度报告",
+      "publisher": "江苏爱朋医疗科技股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-25",
+      "url": "https://pdf.dfcfw.com/pdf/H2_AN202604241821564908_1.pdf",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第18、30、37页",
+      "evidence_summary": "ADHD脑机产品组件注册、便携脑电系统和已上市研发项目状态。",
+      "supported_claim_ids": [
+        "bci_claim_08",
+        "bci_claim_10",
+        "bci_claim_13",
+        "bci_claim_14",
+        "bci_claim_15"
+      ],
+      "supported_node_ids": [
+        "noninvasive_bci_device_systems",
+        "surgical_clinical_registration_validation",
+        "rehabilitation_industrial_consumer_revenue_validation",
+        "neural_electrodes_sensors_biocompatible_interfaces",
+        "bci_signal_acquisition_processing_chips",
+        "neurostimulation_closed_loop_feedback"
+      ],
+      "limitations": "公司总收入未拆BCI；参股、联合实验室和战略合作不作公司产品收入证据。",
+      "notes": "原文已按定位复核；仅在披露边界内使用。"
+    },
+    {
+      "source_id": "bci_300206_filing",
+      "source_type": "company_filing",
+      "title": "理邦仪器2025年年度报告",
+      "publisher": "深圳市理邦精密仪器股份有限公司",
+      "author": "",
+      "publish_date": "2026-03-31",
+      "url": "https://pdf.dfcfw.com/pdf/H2_AN202603301820862523_1.pdf",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第13、40、46页",
+      "evidence_summary": "脑电监护参数、60,620.56万元病人监护宽口径和注册认证。",
+      "supported_claim_ids": [
+        "bci_claim_04",
+        "bci_claim_14",
+        "bci_claim_15"
+      ],
+      "supported_node_ids": [
+        "bci_signal_acquisition_processing_chips",
+        "neural_electrodes_sensors_biocompatible_interfaces",
+        "noninvasive_bci_device_systems",
+        "rehabilitation_industrial_consumer_revenue_validation",
+        "neurostimulation_closed_loop_feedback",
+        "surgical_clinical_registration_validation"
+      ],
+      "limitations": "未披露脑电子收入，也不证明专用BCI芯片、解码或反馈整机。",
+      "notes": "原文已按定位复核；仅在披露边界内使用。"
+    },
+    {
+      "source_id": "bci_300869_filing",
+      "source_type": "company_filing",
+      "title": "康泰医学2025年年度报告",
+      "publisher": "康泰医学系统（秦皇岛）股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-28",
+      "url": "https://pdf.dfcfw.com/pdf/H2_AN202604271821609748_1.pdf",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第22、44、51-56页",
+      "evidence_summary": "数字和动态脑电产品、5,167.10万元其他类收入及II类注册。",
+      "supported_claim_ids": [
+        "bci_claim_04",
+        "bci_claim_12",
+        "bci_claim_14",
+        "bci_claim_15"
+      ],
+      "supported_node_ids": [
+        "bci_signal_acquisition_processing_chips",
+        "rehabilitation_industrial_consumer_revenue_validation",
+        "neural_electrodes_sensors_biocompatible_interfaces",
+        "noninvasive_bci_device_systems",
+        "neurostimulation_closed_loop_feedback",
+        "surgical_clinical_registration_validation"
+      ],
+      "limitations": "其他类收入包含多产品，临床脑电检测不等于BCI整机。",
+      "notes": "原文已按定位复核；仅在披露边界内使用。"
+    },
+    {
+      "source_id": "bci_policy_2025",
+      "source_type": "official_report",
+      "title": "七部门关于推动脑机接口产业创新发展的实施意见",
+      "publisher": "工业和信息化部等七部门",
+      "author": "",
+      "publish_date": "2025-07-30",
+      "url": "https://www.miit.gov.cn/zwgk/zcwj/wjfb/yj/art/2025/art_ea3ff408de194612891df352d24dd26a.html",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "全文第一至第三部分",
+      "evidence_summary": "七部门提出2027/2030路线图及电极、芯片、整机、医疗健康任务。",
+      "supported_claim_ids": [
+        "bci_claim_01",
+        "bci_claim_13"
+      ],
+      "supported_node_ids": [
+        "invasive_minimally_invasive_noninvasive_routes",
+        "neural_electrodes_sensors_biocompatible_interfaces",
+        "bci_signal_acquisition_processing_chips",
+        "neural_decoding_encoding_software_platforms",
+        "neurostimulation_closed_loop_feedback",
+        "implantable_bci_device_systems",
+        "noninvasive_bci_device_systems",
+        "surgical_clinical_registration_validation",
+        "rehabilitation_industrial_consumer_revenue_validation"
+      ],
+      "limitations": "政策只支持产业催化，不能外推任何上市公司产品、订单或收入。",
+      "notes": "原文已按定位复核；仅在披露边界内使用。"
+    }
+  ]
+}
+

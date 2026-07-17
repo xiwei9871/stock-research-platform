@@ -1027,7 +1027,8 @@
       "exclusions": [
         "Vehicle hardware and subsystems remain owned by new_energy_vehicle_architecture_platforms, intelligent_driving_smart_cockpit, automotive_electronics_chip_applications, and electric_drive_chassis_by_wire_thermal_management.",
         "Roadside and network hardware remain owned by network_equipment_edge_iot.",
-        "Cloud and data-center infrastructure remain owned by cloud_data_center_infrastructure."
+        "Cloud and data-center infrastructure remain owned by cloud_data_center_infrastructure.",
+        "Reusable cybersecurity, data-governance, permission, audit, and security controls remain owned by cybersecurity_data_infrastructure."
       ],
       "aliases": [
         "Vehicle-Road-Cloud Integration",
