@@ -263,6 +263,7 @@ E5_HARD_EXCLUDED_CODES = {
     "000555.SZ",  # subsidiary/report references without delivered quantum role
     "002281.SZ",  # associate-company exposure only
     "003029.SZ",  # PQC/standards work is not QKD or quantum hardware
+    "600487.SH",  # generic optics application without a delivered quantum role
     "603019.SH",  # generic compute without a quantum-specific delivered role
     "600120.SH",  # equity-investment exposure only
     "688521.SH",  # generic chip/IP without a quantum-specific delivered role
@@ -276,7 +277,14 @@ E5_REVIEWED_COMPANIES = {
     "002268.SZ": ("emerging_segment", "undisclosed"),
     "300520.SZ": ("emerging_segment", "undisclosed"),
     "003040.SZ": ("emerging_segment", "undisclosed"),
-    "600487.SH": ("emerging_segment", "undisclosed"),
+    "600050.SH": ("emerging_segment", "undisclosed"),
+}
+
+E5_INITIAL_UNIVERSE_EXCLUSION_SOURCES = {
+    "000555.SZ": ("quantum_000555_ar2025", "未披露量子专用产品、项目、客户、订单、交付或收入"),
+    "603019.SH": ("quantum_603019_ar2025", "通用高端计算、存储、软件和云服务"),
+    "600120.SH": ("quantum_600120_ar2025", "控股子公司名录不能替代量子专用经营证据"),
+    "688521.SH": ("quantum_688521_ar2025", "通用半导体IP和芯片设计服务"),
 }
 
 
@@ -1948,6 +1956,83 @@ def test_quantum_computing_e5_revenue_and_false_positive_boundaries() -> None:
         "通用算力、光器件、芯片或仪器不自动构成量子映射",
     ):
         assert boundary in all_text
+
+
+def test_quantum_computing_e5_closes_every_initial_universe_exclusion_with_primary_review() -> None:
+    theme = _read_json(E5_THEME_PATH)
+    mapping = _read_json(E5_MAPPING_PATH)
+    source_pack = _read_json(E5_SOURCE_PACK_PATH)
+    served = list_theme_research_sources(E5_THEME_ID, read_source="artifact")
+    source_sets = (
+        {row["source_id"]: row for row in theme["sources"]},
+        {row["source_id"]: row for row in mapping["sources"]},
+        {row["source_id"]: row for row in source_pack["sources"]},
+        {row["source_id"]: row for row in served["items"]},
+    )
+    claims_by_source: dict[str, list[dict]] = {}
+    for claim in theme["claims"]:
+        claims_by_source.setdefault(claim["source_id"], []).append(claim)
+
+    for company_code, (source_id, boundary_text) in E5_INITIAL_UNIVERSE_EXCLUSION_SOURCES.items():
+        for sources in source_sets:
+            source = sources[source_id]
+            assert source["source_type"] == "company_filing"
+            assert source["review_status"] == "accepted"
+            assert source["reliability_level"] == "S0"
+        disconfirming_claims = [
+            claim for claim in claims_by_source[source_id]
+            if claim["claim_type"] == "risk"
+            and "procurement_service_recurring_revenue_validation" in claim["affected_theme_nodes"]
+        ]
+        assert disconfirming_claims, company_code
+        assert any(boundary_text in claim["claim_text"] for claim in disconfirming_claims)
+
+
+def test_quantum_computing_e5_hengtong_is_not_reviewed_without_delivered_quantum_role() -> None:
+    theme = _read_json(E5_THEME_PATH)
+    mapping = _read_json(E5_MAPPING_PATH)
+    hengtong = [
+        row for row in mapping["company_mappings"]
+        if row["company_code"] == "600487.SH"
+    ]
+    assert not hengtong or all(row["review_status"] != "reviewed" for row in hengtong)
+    hengtong_claims = [
+        row for row in theme["claims"]
+        if row["source_id"] == "quantum_600487_ar2025"
+    ]
+    assert any(
+        "未披露量子专用产品、客户、订单、合同、交付或收入" in row["claim_text"]
+        for row in hengtong_claims
+    )
+
+
+def test_quantum_computing_e5_tianao_keeps_quantum_measurement_as_rd_direction() -> None:
+    theme = _read_json(E5_THEME_PATH)
+    mapping = _read_json(E5_MAPPING_PATH)
+    source_pack = _read_json(E5_SOURCE_PACK_PATH)
+    served = list_theme_research_sources(E5_THEME_ID, read_source="artifact")
+    tianao = next(row for row in mapping["company_mappings"] if row["company_code"] == "002935.SZ")
+    evidence = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+
+    assert tianao["product_or_service"] == "铷原子钟、铯原子钟、芯片原子钟与时间频率产品"
+    assert "量子测量产品" not in tianao["product_or_service"]
+    assert "量子测量为研发与技术路线方向" in tianao["relationship_summary"]
+    product = evidence["quantum_ev_002935_product"]
+    stage = evidence["quantum_ev_002935_stage"]
+    assert "商业产品为铷原子钟、铯原子钟和芯片原子钟" in product["evidence_summary"]
+    assert "量子测量" not in product["evidence_summary"]
+    assert "量子测量" in stage["evidence_summary"]
+    assert "研发" in stage["evidence_summary"] or "攻坚" in stage["evidence_summary"]
+
+    packed = {row["source_id"]: row for row in source_pack["sources"]}
+    source_sets = (
+        {row["source_id"]: row for row in theme["sources"]},
+        {row["source_id"]: row for row in mapping["sources"]},
+        {row["source_id"]: row for row in served["items"]},
+    )
+    for sources in source_sets:
+        assert "原子钟为商业产品，量子测量为研发方向" in sources["quantum_002935_ar2025"]["notes"]
+    assert "原子钟为商业产品，量子测量为研发方向" in packed["quantum_002935_ar2025"]["notes"]
 
 
 def test_quantum_computing_e5_is_ready_and_wave_e_is_five_of_five() -> None:

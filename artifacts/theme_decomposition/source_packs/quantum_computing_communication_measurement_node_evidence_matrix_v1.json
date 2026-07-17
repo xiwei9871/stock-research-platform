@@ -99,7 +99,8 @@
         "quantum_601728_ar2025",
         "quantum_002268_ar2025",
         "quantum_003040_ar2025",
-        "quantum_600487_ar2025"
+        "quantum_600487_ar2025",
+        "quantum_600050_ar2025_summary"
       ],
       "pending_source_ids": [],
       "supported_claim_ids": [
@@ -108,7 +109,8 @@
         "quantum_claim_07",
         "quantum_claim_11",
         "quantum_claim_15",
-        "quantum_claim_17"
+        "quantum_claim_17",
+        "quantum_claim_21"
       ],
       "evidence_strength_before": 2,
       "evidence_strength_after": 5,
@@ -189,7 +191,12 @@
         "quantum_003040_ar2025",
         "quantum_600487_ar2025",
         "quantum_003029_ar2025",
-        "quantum_002281_ar2025"
+        "quantum_002281_ar2025",
+        "quantum_600050_ar2025_summary",
+        "quantum_000555_ar2025",
+        "quantum_603019_ar2025",
+        "quantum_600120_ar2025",
+        "quantum_688521_ar2025"
       ],
       "pending_source_ids": [],
       "supported_claim_ids": [
@@ -203,9 +210,15 @@
         "quantum_claim_12",
         "quantum_claim_14",
         "quantum_claim_16",
+        "quantum_claim_17",
         "quantum_claim_18",
         "quantum_claim_19",
-        "quantum_claim_20"
+        "quantum_claim_20",
+        "quantum_claim_21",
+        "quantum_claim_22",
+        "quantum_claim_23",
+        "quantum_claim_24",
+        "quantum_claim_25"
       ],
       "evidence_strength_before": 2,
       "evidence_strength_after": 5,

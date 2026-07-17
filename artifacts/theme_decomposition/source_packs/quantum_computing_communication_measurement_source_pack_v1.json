@@ -103,7 +103,7 @@
       "review_status": "accepted",
       "document_status": "primary_source_reviewed",
       "evidence_locator": "第10-16、24页",
-      "evidence_summary": "原子钟批量产品、铯钟中标、量子精密时频与量子测量研发，收入未拆分。",
+      "evidence_summary": "铷/铯/芯片原子钟为商业产品并有铯钟中标；量子测量属于研发与技术路线方向，收入未拆分。",
       "supported_claim_ids": [
         "quantum_claim_09",
         "quantum_claim_10"
@@ -113,8 +113,8 @@
         "standards_testing_deployment_integration",
         "procurement_service_recurring_revenue_validation"
       ],
-      "limitations": "时频收入未拆原子钟和量子测量。",
-      "notes": "复核第10-16、24页；原子钟批量产品、量子精密时频团队、铯钟中标、原子磁力计样机与量子测量路线。"
+      "limitations": "时频收入未拆原子钟；量子测量研发方向不等于商业产品收入。",
+      "notes": "复核第10-16、24页；铷/铯/芯片原子钟为商业产品，量子测量为研发方向；含铯钟中标、客户推广及原子磁力计工程样机。"
     },
     {
       "source_id": "quantum_002268_ar2025",
@@ -206,7 +206,7 @@
       "review_status": "accepted",
       "document_status": "primary_source_reviewed",
       "evidence_locator": "第17、34、53、275页",
-      "evidence_summary": "多芯光纤量子通信网络成熟应用、控股量子服务子公司，宽口径光通信收入未拆分。",
+      "evidence_summary": "多芯光纤仅披露量子通信网络技术应用，未披露量子专用产品、客户、订单、合同、交付或收入。",
       "supported_claim_ids": [
         "quantum_claim_17",
         "quantum_claim_18"
@@ -215,8 +215,124 @@
         "quantum_communication_qkd_network_services",
         "procurement_service_recurring_revenue_validation"
       ],
-      "limitations": "未披露量子网络客户、合同或专项收入。",
-      "notes": "复核第17、34、53、275页；多芯光纤在量子通信网络的技术应用、四芯弱耦合光纤成熟应用、量子通信子公司及宽口径光通信收入。"
+      "limitations": "通用光学技术应用和控股子公司名录不足以形成reviewed映射。",
+      "notes": "复核第17、34、53、275页；多芯光纤仅披露量子通信网络技术应用，未披露量子专用产品、客户、订单、合同、交付或收入；控股量子子公司名录不单独成证。"
+    },
+    {
+      "source_id": "quantum_600050_ar2025_summary",
+      "source_type": "company_filing",
+      "title": "中国联通2025年年度报告摘要",
+      "publisher": "中国联合网络通信股份有限公司",
+      "author": "",
+      "publish_date": "2026-03-20",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-03-20/1225020076.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第4、8页",
+      "evidence_summary": "在量子通信布局语境下明确推出量子安全专线；未披露量子专线客户、订单或专项收入。",
+      "supported_claim_ids": [
+        "quantum_claim_21"
+      ],
+      "supported_node_ids": [
+        "quantum_communication_qkd_network_services",
+        "procurement_service_recurring_revenue_validation"
+      ],
+      "limitations": "未披露客户、订单、合同、续费或量子专线收入。",
+      "notes": "复核第4、8页；在量子通信布局语境下明确推出量子安全专线，但未披露量子专线客户、订单或专项收入。"
+    },
+    {
+      "source_id": "quantum_000555_ar2025",
+      "source_type": "company_filing",
+      "title": "神州信息2025年年度报告",
+      "publisher": "神州数码信息服务集团股份有限公司",
+      "author": "",
+      "publish_date": "2026-03-31",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-03-31/1225059842.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第13-16、20-21、123、148、199页",
+      "evidence_summary": "金融IT主营、量子安全研究报告和技术开发子公司名录共同界定无量子专用经营证据。",
+      "supported_claim_ids": [
+        "quantum_claim_22"
+      ],
+      "supported_node_ids": [
+        "procurement_service_recurring_revenue_validation"
+      ],
+      "limitations": "未披露量子专用产品、项目、客户、订单、交付或收入。",
+      "notes": "复核第13-16、20-21、123、148、199页；主营为金融IT软件与集成，量子相关仅见安全威胁研究报告和技术开发子公司名录，未披露量子专用经营关系。"
+    },
+    {
+      "source_id": "quantum_603019_ar2025",
+      "source_type": "company_filing",
+      "title": "中科曙光2025年年度报告",
+      "publisher": "曙光信息产业股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-15",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-15/1225104539.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第11-18页",
+      "evidence_summary": "产品矩阵及收入均为通用高端计算、存储、软件、云、液冷和算力服务。",
+      "supported_claim_ids": [
+        "quantum_claim_23"
+      ],
+      "supported_node_ids": [
+        "procurement_service_recurring_revenue_validation"
+      ],
+      "limitations": "未披露量子专用产品、项目、客户、订单、交付或收入。",
+      "notes": "复核第11-18页；产品与收入均为通用高端计算、存储、软件、云、液冷和算力服务，未披露量子专用产品或项目角色。"
+    },
+    {
+      "source_id": "quantum_600120_ar2025",
+      "source_type": "company_filing",
+      "title": "浙江东方2025年年度报告",
+      "publisher": "浙江东方控股集团股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-18",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-04-18/1225123630.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第17-18、214、259页",
+      "evidence_summary": "金融投资主营与51%控股量子通信子公司名录/账面项目共同界定无量子专用经营证据。",
+      "supported_claim_ids": [
+        "quantum_claim_24"
+      ],
+      "supported_node_ids": [
+        "procurement_service_recurring_revenue_validation"
+      ],
+      "limitations": "控股子公司名录不能替代量子产品、项目、客户、订单、交付或收入。",
+      "notes": "复核第17-18、214、259页；主营为金融投资，量子相关仅见51%控股子公司名录和账面项目，未披露量子专用经营关系。"
+    },
+    {
+      "source_id": "quantum_688521_ar2025",
+      "source_type": "company_filing",
+      "title": "芯原股份2025年年度报告",
+      "publisher": "芯原微电子（上海）股份有限公司",
+      "author": "",
+      "publish_date": "2026-03-31",
+      "url": "https://static.cninfo.com.cn/finalpage/2026-03-31/1225060349.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "第28、38、41、84-85页",
+      "evidence_summary": "量子仅见政策和行业前沿语境，商业披露为通用半导体IP、芯片设计及量产服务。",
+      "supported_claim_ids": [
+        "quantum_claim_25"
+      ],
+      "supported_node_ids": [
+        "procurement_service_recurring_revenue_validation"
+      ],
+      "limitations": "未披露量子专用芯片、项目、客户、订单、交付或收入。",
+      "notes": "复核第28、38、41、84-85页；量子仅见政策和行业前沿语境，商业披露为通用半导体IP、芯片设计及量产服务。"
     },
     {
       "source_id": "quantum_003029_ar2025",

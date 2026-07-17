@@ -41,7 +41,7 @@
       "量子测量分产品订单、收入与毛利",
       "第三方测试、标准合规与跨厂商互操作"
     ],
-    "evidence_gap_summary": "国盾量子披露最完整；中国电信仅披露量子收入增速而无绝对金额，其他映射多未拆量子专项收入。中国移动、科大国创、楚天龙和亨通光电须继续跟踪外部客户、合同、量子专项收入与续费。PQC只能作为相邻路线；股权投资或联营暴露不构成量子受益证据；通用算力、光器件、芯片或仪器不自动构成量子映射。"
+    "evidence_gap_summary": "国盾量子披露最完整；中国电信仅披露量子收入增速而无绝对金额，其他映射多未拆量子专项收入。中国移动、科大国创、楚天龙和中国联通须继续跟踪外部客户、合同、量子专项收入与续费。亨通光电仅披露通用多芯光纤的量子网络技术应用，未披露量子专用产品、客户、订单、合同、交付或收入，不再作为reviewed映射。PQC只能作为相邻路线；股权投资、联营或控股子公司名录不构成量子受益证据；通用算力、光器件、芯片或仪器不自动构成量子映射。"
   },
   "evidence_policy": {
     "accepted_source_levels": [
@@ -233,14 +233,14 @@
         "中国电信",
         "电科网安",
         "楚天龙",
-        "亨通光电"
+        "中国联通"
       ],
       "related_stock_codes": [
         "688027.SH",
         "601728.SH",
         "002268.SZ",
         "003040.SZ",
-        "600487.SH"
+        "600050.SH"
       ]
     },
     {
@@ -341,7 +341,7 @@
         "电科网安",
         "科大国创",
         "楚天龙",
-        "亨通光电"
+        "中国联通"
       ],
       "related_stock_codes": [
         "688027.SH",
@@ -351,7 +351,7 @@
         "002268.SZ",
         "300520.SZ",
         "003040.SZ",
-        "600487.SH"
+        "600050.SH"
       ]
     }
   ],
@@ -409,7 +409,8 @@
         "quantum_claim_07",
         "quantum_claim_11",
         "quantum_claim_15",
-        "quantum_claim_17"
+        "quantum_claim_17",
+        "quantum_claim_21"
       ],
       "uncertainty": "运营商未按QKD、PQC和传统安全拆分收入。"
     },
@@ -454,9 +455,15 @@
         "quantum_claim_12",
         "quantum_claim_14",
         "quantum_claim_16",
+        "quantum_claim_17",
         "quantum_claim_18",
         "quantum_claim_19",
-        "quantum_claim_20"
+        "quantum_claim_20",
+        "quantum_claim_21",
+        "quantum_claim_22",
+        "quantum_claim_23",
+        "quantum_claim_24",
+        "quantum_claim_25"
       ],
       "uncertainty": "多数公司未拆分量子专项收入、毛利和续费。"
     }
@@ -512,7 +519,7 @@
       "access_level": "public",
       "reliability_level": "S0",
       "review_status": "accepted",
-      "notes": "复核第10-16、24页；原子钟批量产品、量子精密时频团队、铯钟中标、原子磁力计样机与量子测量路线。"
+      "notes": "复核第10-16、24页；铷/铯/芯片原子钟为商业产品，量子测量为研发方向；含铯钟中标、客户推广及原子磁力计工程样机。"
     },
     {
       "source_id": "quantum_002268_ar2025",
@@ -564,7 +571,72 @@
       "access_level": "public",
       "reliability_level": "S0",
       "review_status": "accepted",
-      "notes": "复核第17、34、53、275页；多芯光纤在量子通信网络的技术应用、四芯弱耦合光纤成熟应用、量子通信子公司及宽口径光通信收入。"
+      "notes": "复核第17、34、53、275页；多芯光纤仅披露量子通信网络技术应用，未披露量子专用产品、客户、订单、合同、交付或收入；控股量子子公司名录不单独成证。"
+    },
+    {
+      "source_id": "quantum_600050_ar2025_summary",
+      "source_type": "company_filing",
+      "title": "中国联通2025年年度报告摘要",
+      "publisher": "中国联合网络通信股份有限公司",
+      "author": "",
+      "publish_date": "2026-03-20",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-20/1225020076.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "复核第4、8页；在量子通信布局语境下明确推出量子安全专线，但未披露量子专线客户、订单或专项收入。"
+    },
+    {
+      "source_id": "quantum_000555_ar2025",
+      "source_type": "company_filing",
+      "title": "神州信息2025年年度报告",
+      "publisher": "神州数码信息服务集团股份有限公司",
+      "author": "",
+      "publish_date": "2026-03-31",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-31/1225059842.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "复核第13-16、20-21、123、148、199页；主营为金融IT软件与集成，量子相关仅见安全威胁研究报告和技术开发子公司名录，未披露量子专用经营关系。"
+    },
+    {
+      "source_id": "quantum_603019_ar2025",
+      "source_type": "company_filing",
+      "title": "中科曙光2025年年度报告",
+      "publisher": "曙光信息产业股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-15",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-15/1225104539.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "复核第11-18页；产品与收入均为通用高端计算、存储、软件、云、液冷和算力服务，未披露量子专用产品或项目角色。"
+    },
+    {
+      "source_id": "quantum_600120_ar2025",
+      "source_type": "company_filing",
+      "title": "浙江东方2025年年度报告",
+      "publisher": "浙江东方控股集团股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-18",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-18/1225123630.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "复核第17-18、214、259页；主营为金融投资，量子相关仅见51%控股子公司名录和账面项目，未披露量子专用经营关系。"
+    },
+    {
+      "source_id": "quantum_688521_ar2025",
+      "source_type": "company_filing",
+      "title": "芯原股份2025年年度报告",
+      "publisher": "芯原微电子（上海）股份有限公司",
+      "author": "",
+      "publish_date": "2026-03-31",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-03-31/1225060349.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "复核第28、38、41、84-85页；量子仅见政策和行业前沿语境，商业披露为通用半导体IP、芯片设计及量产服务。"
     },
     {
       "source_id": "quantum_003029_ar2025",
@@ -838,12 +910,13 @@
     {
       "claim_id": "quantum_claim_17",
       "source_id": "quantum_600487_ar2025",
-      "claim_text": "亨通光电多芯光纤已用于量子通信网络技术应用，四芯弱耦合光纤实现成熟应用；量子通信研发服务子公司为70%控股，不是仅联营投资。",
-      "claim_type": "company_mapping",
-      "confidence": 0.92,
+      "claim_text": "亨通光电仅披露通用多芯光纤在量子通信网络的技术应用与控股量子子公司名录，未披露量子专用产品、客户、订单、合同、交付或收入；通用光学技术应用不足以形成reviewed量子受益映射。",
+      "claim_type": "risk",
+      "confidence": 0.99,
       "supporting_source_ids": [],
       "affected_theme_nodes": [
-        "quantum_communication_qkd_network_services"
+        "quantum_communication_qkd_network_services",
+        "procurement_service_recurring_revenue_validation"
       ],
       "theme_id": "quantum_computing_communication_measurement_value_chain_v1",
       "evidence_status": "verified",
@@ -882,6 +955,77 @@
       "claim_id": "quantum_claim_20",
       "source_id": "quantum_002281_ar2025",
       "claim_text": "光迅科技年报中的量子信息仅见联营企业权益法披露；股权投资或联营暴露不构成量子受益证据，通用光器件亦不自动形成量子映射。",
+      "claim_type": "risk",
+      "confidence": 0.99,
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "procurement_service_recurring_revenue_validation"
+      ],
+      "theme_id": "quantum_computing_communication_measurement_value_chain_v1",
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "quantum_claim_21",
+      "source_id": "quantum_600050_ar2025_summary",
+      "claim_text": "中国联通在量子通信布局语境下明确推出量子安全专线，构成量子通信专用服务产品和已推出阶段；年报摘要未披露量子专线客户、订单或专项收入。",
+      "claim_type": "company_mapping",
+      "confidence": 0.96,
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "quantum_communication_qkd_network_services",
+        "procurement_service_recurring_revenue_validation"
+      ],
+      "theme_id": "quantum_computing_communication_measurement_value_chain_v1",
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "quantum_claim_22",
+      "source_id": "quantum_000555_ar2025",
+      "claim_text": "神州信息2025年报核验的量子相关内容仅为量子安全威胁研究报告和技术开发子公司名录；主营及收入仍为金融IT软件、技术服务和系统集成，未披露量子专用产品、项目、客户、订单、交付或收入。",
+      "claim_type": "risk",
+      "confidence": 0.99,
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "procurement_service_recurring_revenue_validation"
+      ],
+      "theme_id": "quantum_computing_communication_measurement_value_chain_v1",
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "quantum_claim_23",
+      "source_id": "quantum_603019_ar2025",
+      "claim_text": "中科曙光年报产品矩阵与分产品收入均为通用高端计算、存储、软件和云服务、液冷与算力服务，未披露量子专用产品、项目、客户、订单、交付或收入。",
+      "claim_type": "risk",
+      "confidence": 0.99,
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "procurement_service_recurring_revenue_validation"
+      ],
+      "theme_id": "quantum_computing_communication_measurement_value_chain_v1",
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "quantum_claim_24",
+      "source_id": "quantum_600120_ar2025",
+      "claim_text": "浙江东方主营为金融投资，量子相关仅见51%控股子公司名录及账面项目；控股子公司名录不能替代量子专用经营证据，年报未披露量子产品、项目、客户、订单、交付或收入。",
+      "claim_type": "risk",
+      "confidence": 0.99,
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "procurement_service_recurring_revenue_validation"
+      ],
+      "theme_id": "quantum_computing_communication_measurement_value_chain_v1",
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed"
+    },
+    {
+      "claim_id": "quantum_claim_25",
+      "source_id": "quantum_688521_ar2025",
+      "claim_text": "芯原股份年报中的量子仅为政策和行业前沿描述；商业披露为通用半导体IP和芯片设计服务、量产服务，未披露量子专用芯片、项目、客户、订单、交付或收入。",
       "claim_type": "risk",
       "confidence": 0.99,
       "supporting_source_ids": [],
