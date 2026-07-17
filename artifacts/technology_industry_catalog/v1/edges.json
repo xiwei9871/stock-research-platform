@@ -229,7 +229,7 @@
       "source_node_id": "foundation_model_training_inference_platforms",
       "target_node_id": "ai_compute_accelerator_module",
       "relationship_type": "depends_on",
-      "notes": "Cross-chain dependency: model training and inference platforms require accelerator modules, while chip and module ownership remains with ai_compute_infrastructure.",
+      "notes": "Cross-chain dependency: model training and inference platforms require accelerator modules; accelerator-module ownership remains with ai_compute_infrastructure, while chip ownership remains with ai_logic_compute_chips.",
       "source_ids": []
     },
     {

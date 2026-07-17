@@ -24,7 +24,7 @@
       "evidence_gap_status": "covered",
       "node_review_status": "reviewed",
       "rationale": "基础模型训练与推理平台由至少一份已接受年报的产品、客户、使用、签约或治理证据支持。",
-      "next_evidence_needed": "补充AI专项确认收入、毛利、续费和单位经济。"
+      "next_evidence_needed": "大模型API及MaaS平台服务收入3.85亿元已披露；仍需补充平台收入结构、毛利、续费与留存、用量及单位经济。"
     },
     {
       "node_id": "model_toolchain_finetuning_rag",

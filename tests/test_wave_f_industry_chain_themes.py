@@ -674,6 +674,37 @@ def test_foundation_models_f1_has_exact_typed_compute_dependency_edges() -> None
     assert {
         nodes[target]["chain_id"] for _, target, _ in cross_chain_edges
     } == {"ai_compute_infrastructure"}
+    accelerator_edge = next(
+        row for row in catalog["edges"]
+        if row["edge_id"]
+        == "foundation_model_platform_depends_on_ai_compute_accelerator_module"
+    )
+    assert (
+        "accelerator-module ownership remains with ai_compute_infrastructure"
+        in accelerator_edge["notes"]
+    )
+    assert (
+        "chip ownership remains with ai_logic_compute_chips"
+        in accelerator_edge["notes"]
+    )
+    assert (
+        "chip and module ownership remains with ai_compute_infrastructure"
+        not in accelerator_edge["notes"]
+    )
+
+
+def test_foundation_models_f1_platform_matrix_gap_uses_disclosed_revenue_boundary() -> None:
+    matrix = load_json(F1_MATRIX_PATH)
+    platform = next(
+        row for row in matrix["node_evidence_matrix"]
+        if row["node_id"] == "foundation_model_training_inference_platforms"
+    )
+    gap = platform["next_evidence_needed"]
+    assert "大模型API及MaaS平台服务收入3.85亿元已披露" in gap
+    assert "平台收入结构" in gap
+    for remaining_gap in ("毛利", "续费", "单位经济"):
+        assert remaining_gap in gap
+    assert "补充AI专项确认收入" not in gap
 
 
 def test_foundation_models_f1_documents_unresolved_skeleton_or_non_generic_owners() -> None:
