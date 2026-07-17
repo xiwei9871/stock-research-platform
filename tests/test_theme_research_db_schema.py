@@ -118,6 +118,8 @@ def test_schema_contains_production_constraints_and_triggers() -> None:
     assert "BEFORE TRUNCATE ON research.theme_research_review_event" in sql
     assert "BEFORE TRUNCATE ON research.theme_research_object_revision" in sql
     assert "WHERE idempotency_key <> ''" in sql
+    assert "'revenue_boundary'" in sql
+    assert "'revenue_gap'" in sql
 
 
 def test_schema_rebuilds_only_exact_known_legacy_theme_and_claim_type_checks() -> None:

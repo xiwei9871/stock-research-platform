@@ -233,7 +233,7 @@ def test_reviewed_material_claim_requires_materiality_evidence(tmp_path: Path):
     assert error.code == "REVIEWED_MAPPING_REQUIRES_MATERIALITY_EVIDENCE"
 
 
-def test_reviewed_limited_revenue_claim_requires_materiality_evidence(
+def test_reviewed_limited_revenue_claim_requires_revenue_evidence(
     tmp_path: Path,
 ):
     artifact_dir = _copy_mapping_package(tmp_path)
@@ -247,6 +247,50 @@ def test_reviewed_limited_revenue_claim_requires_materiality_evidence(
             "evidence_ids": [mapping["evidence_ids"][0]],
         }
     )
+    _write_json(path, payload)
+
+    error = _load_invalid_package(artifact_dir)
+
+    assert error.code == "REVIEWED_MAPPING_REQUIRES_REVENUE_EVIDENCE"
+
+
+@pytest.mark.parametrize("evidence_type", ["revenue_boundary", "revenue_gap"])
+def test_reviewed_undisclosed_revenue_accepts_explicit_boundary_role(
+    tmp_path: Path,
+    evidence_type: str,
+):
+    artifact_dir = _copy_mapping_package(tmp_path)
+    path = artifact_dir / "ai_power_company_mapping_v1.json"
+    payload = _read_json(path)
+    mapping = payload["company_mappings"][0]
+    mapping["revenue_relevance"] = "undisclosed"
+    revenue_id = mapping["evidence_ids"][1]
+    next(
+        row for row in payload["evidence_items"]
+        if row["evidence_id"] == revenue_id
+    )["evidence_type"] = evidence_type
+    _write_json(path, payload)
+
+    package = load_theme_company_mapping_package(artifact_dir)
+
+    assert any(
+        row["evidence_id"] == revenue_id and row["evidence_type"] == evidence_type
+        for row in package["evidence_items"]
+    )
+
+
+def test_reviewed_material_revenue_rejects_boundary_only_evidence(tmp_path: Path):
+    artifact_dir = _copy_mapping_package(tmp_path)
+    path = artifact_dir / "ai_power_company_mapping_v1.json"
+    payload = _read_json(path)
+    mapping = payload["company_mappings"][0]
+    mapping["revenue_relevance"] = "material"
+    mapping["business_materiality"] = "core_business"
+    revenue_id = mapping["evidence_ids"][1]
+    next(
+        row for row in payload["evidence_items"]
+        if row["evidence_id"] == revenue_id
+    )["evidence_type"] = "revenue_boundary"
     _write_json(path, payload)
 
     error = _load_invalid_package(artifact_dir)

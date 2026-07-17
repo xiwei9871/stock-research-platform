@@ -343,9 +343,10 @@ CREATE TABLE IF NOT EXISTS research.theme_research_company_mapping (
 CREATE TABLE IF NOT EXISTS research.theme_research_mapping_evidence_item (
     evidence_id text PRIMARY KEY,
     source_id text NOT NULL REFERENCES research.theme_research_source_item(source_id),
-    evidence_type text NOT NULL CHECK (
+    evidence_type text NOT NULL CONSTRAINT ck_theme_research_mapping_evidence_type CHECK (
         evidence_type IN ('product_relationship', 'service_relationship', 'customer_relationship',
-                          'revenue_materiality', 'customer_validation', 'capacity_order',
+                          'revenue_materiality', 'revenue_boundary', 'revenue_gap',
+                          'customer_validation', 'capacity_order',
                           'business_stage', 'company_mention')
     ),
     excerpt_locator text NOT NULL,
@@ -361,6 +362,47 @@ CREATE TABLE IF NOT EXISTS research.theme_research_mapping_evidence_item (
     created_by text NOT NULL,
     updated_by text NOT NULL
 );
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'research.theme_research_mapping_evidence_item'::regclass
+          AND contype = 'c'
+          AND conname = 'theme_research_mapping_evidence_item_evidence_type_check'
+          AND pg_get_constraintdef(oid, true) =
+              $constraint$CHECK (evidence_type = ANY (ARRAY['product_relationship'::text, 'service_relationship'::text, 'customer_relationship'::text, 'revenue_materiality'::text, 'customer_validation'::text, 'capacity_order'::text, 'business_stage'::text, 'company_mention'::text]))$constraint$
+    ) THEN
+        ALTER TABLE research.theme_research_mapping_evidence_item
+            DROP CONSTRAINT theme_research_mapping_evidence_item_evidence_type_check;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'research.theme_research_mapping_evidence_item'::regclass
+          AND contype = 'c'
+          AND conname = 'ck_theme_research_mapping_evidence_type'
+    ) THEN
+        ALTER TABLE research.theme_research_mapping_evidence_item
+            ADD CONSTRAINT ck_theme_research_mapping_evidence_type CHECK (
+                evidence_type IN (
+                    'product_relationship',
+                    'service_relationship',
+                    'customer_relationship',
+                    'revenue_materiality',
+                    'revenue_boundary',
+                    'revenue_gap',
+                    'customer_validation',
+                    'capacity_order',
+                    'business_stage',
+                    'company_mention'
+                )
+            );
+    END IF;
+END;
+$$;
 
 CREATE TABLE IF NOT EXISTS research.theme_research_company_mapping_evidence (
     mapping_id text NOT NULL REFERENCES research.theme_research_company_mapping(mapping_id) ON DELETE CASCADE,

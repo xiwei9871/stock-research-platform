@@ -81,6 +81,16 @@ G1_MAPPING_CONTRACTS = {
     "688582.SH": ("mems_inertial_accelerometer_gyroscope", "g1_688582_ar2025"),
     "603005.SH": ("mems_packaging_calibration_test", "g1_603005_ar2025"),
 }
+G1_REVENUE_ROLE_CONTRACTS = {
+    "002241.SZ": "revenue_boundary",
+    "688396.SH": "revenue_boundary",
+    "600460.SH": "revenue_boundary",
+    "300456.SZ": "revenue_materiality",
+    "688286.SH": "revenue_materiality",
+    "300007.SZ": "revenue_boundary",
+    "688582.SH": "revenue_materiality",
+    "603005.SH": "revenue_boundary",
+}
 
 REQUIRED_READABLE_SECTIONS = [
     {
@@ -339,12 +349,33 @@ def test_mems_g1_company_three_role_evidence_and_initial_universe_closure() -> N
         assert row["mapped_node_id"] == node_id
         items = [evidence[evidence_id] for evidence_id in row["evidence_ids"]]
         assert [item["evidence_type"] for item in items] == [
-            "product_relationship", "revenue_materiality", "business_stage"
+            "product_relationship",
+            G1_REVENUE_ROLE_CONTRACTS[company_code],
+            "business_stage",
         ]
         assert len({item["excerpt_locator"] for item in items}) == 3
         assert all(item["source_id"] == source_id for item in items)
         assert all(item["related_node_ids"] == [node_id] for item in items)
     assert mapping["concept_only_candidates"] == []
+
+
+def test_mems_g1_commercial_validation_company_names_and_codes_are_one_to_one() -> None:
+    theme = load_json(G1_THEME_PATH)
+    commercial = next(
+        row for row in theme["nodes"]
+        if row["node_id"] == "design_win_mass_production_revenue_validation"
+    )
+    expected = {
+        "002241.SZ": "歌尔股份",
+        "688396.SH": "华润微",
+        "600460.SH": "士兰微",
+        "300456.SZ": "赛微电子",
+        "688286.SH": "敏芯股份",
+        "688582.SH": "芯动联科",
+        "603005.SH": "晶方科技",
+    }
+    assert len(commercial["related_stock_codes"]) == len(commercial["domestic_players"])
+    assert dict(zip(commercial["related_stock_codes"], commercial["domestic_players"])) == expected
 
 
 def test_mems_g1_source_identity_claim_union_and_matrix_are_direct() -> None:

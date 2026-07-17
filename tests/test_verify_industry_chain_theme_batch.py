@@ -633,6 +633,30 @@ def test_precise_mapping_locator_contract_allows_page_numbered_section_wording(
     assert theme["checks"]["precise_mapping_locators"] is True
 
 
+@pytest.mark.parametrize("evidence_type", ["revenue_boundary", "revenue_gap"])
+def test_precise_mapping_locator_contract_accepts_explicit_revenue_gap_roles(
+    tmp_path: Path,
+    evidence_type: str,
+):
+    manifest_path = _write_ready_batch(tmp_path)
+    path = tmp_path / "sample_company_mapping.json"
+    payload = _read_json(path)
+    mapping = payload["company_mappings"][0]
+    mapping["revenue_relevance"] = "undisclosed"
+    revenue_id = mapping["evidence_ids"][1]
+    next(
+        row for row in payload["evidence_items"]
+        if row["evidence_id"] == revenue_id
+    )["evidence_type"] = evidence_type
+    _write_json(path, payload)
+
+    theme = build_theme_batch_report(manifest_path)["theme_results"][0]
+
+    assert theme["ready"] is True
+    assert theme["checks"]["mapping_rows_valid"] is True
+    assert theme["checks"]["precise_mapping_locators"] is True
+
+
 @pytest.mark.parametrize(
     "mutation", ["duplicate_id", "cross_theme", "missing_source", "invalid_type"]
 )

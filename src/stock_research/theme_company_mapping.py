@@ -52,10 +52,17 @@ EVIDENCE_TYPES = {
     "service_relationship",
     "customer_relationship",
     "revenue_materiality",
+    "revenue_boundary",
+    "revenue_gap",
     "customer_validation",
     "capacity_order",
     "business_stage",
     "company_mention",
+}
+REVENUE_EVIDENCE_TYPES = {
+    "revenue_materiality",
+    "revenue_boundary",
+    "revenue_gap",
 }
 DIRECT_RELATIONSHIP_EVIDENCE_TYPES = {
     "product_relationship",
@@ -621,21 +628,30 @@ def _validate_reviewed_mapping(
             f"{path} reviewed mapping requires accepted direct relationship evidence",
             code="REVIEWED_MAPPING_REQUIRES_DIRECT_RELATIONSHIP",
         )
-    makes_materiality_claim = mapping["revenue_relevance"] in {
+    makes_positive_revenue_claim = mapping["revenue_relevance"] in {
         "material",
         "meaningful",
-        "limited",
-    } or mapping["business_materiality"] in {
-        "core_business",
-        "meaningful_segment",
     }
-    if makes_materiality_claim and not any(
+    if makes_positive_revenue_claim and not any(
         evidence["evidence_type"] == "revenue_materiality"
         for evidence in accepted_evidence
     ):
         raise ThemeCompanyMappingValidationError(
             f"{path} materiality claim requires accepted revenue evidence",
             code="REVIEWED_MAPPING_REQUIRES_MATERIALITY_EVIDENCE",
+        )
+    requires_revenue_evidence = mapping["revenue_relevance"] in {
+        "material",
+        "meaningful",
+        "limited",
+    }
+    if requires_revenue_evidence and not any(
+        evidence["evidence_type"] in REVENUE_EVIDENCE_TYPES
+        for evidence in accepted_evidence
+    ):
+        raise ThemeCompanyMappingValidationError(
+            f"{path} reviewed mapping requires accepted revenue evidence or explicit revenue boundary",
+            code="REVIEWED_MAPPING_REQUIRES_REVENUE_EVIDENCE",
         )
 
 

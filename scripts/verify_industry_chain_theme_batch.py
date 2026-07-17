@@ -20,6 +20,7 @@ from stock_research.ai_power_source_pack import (
 )
 from stock_research.industry_chain_theme_research import classify_beneficiary
 from stock_research.theme_company_mapping import (
+    REVENUE_EVIDENCE_TYPES,
     ThemeCompanyMappingValidationError,
     validate_theme_company_mapping_artifact,
 )
@@ -810,7 +811,7 @@ def _validate_precise_mapping_locators(
             errors.append(
                 f"mapping evidence locator contract {mapping_id} lacks product/service evidence"
             )
-        if "revenue_materiality" not in evidence_types:
+        if not evidence_types & REVENUE_EVIDENCE_TYPES:
             errors.append(
                 f"mapping evidence locator contract {mapping_id} lacks revenue evidence"
             )
