@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "research_project_identity_v2.schema.json",
+  "type": "object",
+  "required": [
+    "project_id",
+    "project_slug",
+    "title",
+    "purpose",
+    "created_at",
+    "created_by",
+    "current_lifecycle_state",
+    "current_version",
+    "latest_reviewed_version",
+    "latest_published_version"
+  ],
+  "properties": {
+    "project_id": {"type": "string"},
+    "project_slug": {"type": "string", "pattern": "^[a-z0-9]+(?:[-_][a-z0-9]+)*$"},
+    "title": {"type": "string"},
+    "purpose": {"type": "string"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "created_by": {"type": "string"},
+    "current_lifecycle_state": {
+      "$ref": "definitions_v2.schema.json#/$defs/project_lifecycle"
+    },
+    "current_version": {"type": "string"},
+    "latest_reviewed_version": {"type": ["string", "null"]},
+    "latest_published_version": {"type": ["string", "null"]}
+  },
+  "additionalProperties": false
+}

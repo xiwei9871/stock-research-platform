@@ -1,0 +1,182 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "research_version_v2.schema.json",
+  "type": "object",
+  "required": [
+    "artifact_version",
+    "version_id",
+    "project_id",
+    "semantic_version",
+    "parent_version_id",
+    "creation_stage",
+    "created_at",
+    "created_by",
+    "change_summary",
+    "change_reason",
+    "incorporated_event_ids",
+    "content_hash",
+    "snapshot"
+  ],
+  "properties": {
+    "artifact_version": {
+      "$ref": "definitions_v2.schema.json#/$defs/semantic_version"
+    },
+    "version_id": {"type": "string"},
+    "project_id": {"type": "string"},
+    "semantic_version": {
+      "$ref": "definitions_v2.schema.json#/$defs/semantic_version"
+    },
+    "parent_version_id": {"type": ["string", "null"]},
+    "creation_stage": {
+      "enum": [
+        "research_design",
+        "evidence_snapshot",
+        "review_candidate",
+        "publication_snapshot"
+      ]
+    },
+    "created_at": {"type": "string", "format": "date-time"},
+    "created_by": {"type": "string"},
+    "change_summary": {"type": "string"},
+    "change_reason": {"type": "string"},
+    "incorporated_event_ids": {
+      "type": "array",
+      "items": {"type": "string"},
+      "uniqueItems": true
+    },
+    "content_hash": {"$ref": "definitions_v2.schema.json#/$defs/sha256"},
+    "snapshot": {
+      "type": "object",
+      "required": [
+        "project_lifecycle_state",
+        "evidence_stage",
+        "conclusion_status",
+        "investment_status",
+        "scope",
+        "router_decision",
+        "questions",
+        "question_tree_nodes",
+        "claims",
+        "claim_relations",
+        "evidence_requirements",
+        "references",
+        "evidence_assessments",
+        "causal_nodes",
+        "causal_edges",
+        "validation_metrics",
+        "invalidation_conditions",
+        "company_capture_assessments"
+      ],
+      "properties": {
+        "project_lifecycle_state": {
+          "$ref": "definitions_v2.schema.json#/$defs/project_lifecycle"
+        },
+        "evidence_stage": {
+          "$ref": "definitions_v2.schema.json#/$defs/evidence_stage"
+        },
+        "conclusion_status": {
+          "$ref": "definitions_v2.schema.json#/$defs/conclusion_status"
+        },
+        "investment_status": {
+          "$ref": "definitions_v2.schema.json#/$defs/investment_status"
+        },
+        "scope": {"$ref": "definitions_v2.schema.json#/$defs/scope"},
+        "router_decision": {
+          "$ref": "definitions_v2.schema.json#/$defs/router_decision"
+        },
+        "questions": {
+          "type": "array",
+          "items": {"$ref": "definitions_v2.schema.json#/$defs/question"}
+        },
+        "question_tree_nodes": {
+          "type": "array",
+          "items": {
+            "$ref": "definitions_v2.schema.json#/$defs/question_tree_node"
+          }
+        },
+        "claims": {
+          "type": "array",
+          "items": {"$ref": "definitions_v2.schema.json#/$defs/claim"}
+        },
+        "claim_relations": {
+          "type": "array",
+          "items": {"$ref": "definitions_v2.schema.json#/$defs/claim_relation"}
+        },
+        "evidence_requirements": {
+          "type": "array",
+          "items": {
+            "$ref": "definitions_v2.schema.json#/$defs/evidence_requirement"
+          }
+        },
+        "references": {
+          "type": "array",
+          "items": {"$ref": "definitions_v2.schema.json#/$defs/reference"}
+        },
+        "evidence_assessments": {
+          "type": "array",
+          "items": {
+            "$ref": "definitions_v2.schema.json#/$defs/evidence_assessment"
+          }
+        },
+        "causal_nodes": {
+          "type": "array",
+          "items": {"$ref": "definitions_v2.schema.json#/$defs/causal_node"}
+        },
+        "causal_edges": {
+          "type": "array",
+          "items": {"$ref": "definitions_v2.schema.json#/$defs/causal_edge"}
+        },
+        "validation_metrics": {
+          "type": "array",
+          "items": {
+            "$ref": "definitions_v2.schema.json#/$defs/validation_metric"
+          }
+        },
+        "invalidation_conditions": {
+          "type": "array",
+          "items": {
+            "$ref": "definitions_v2.schema.json#/$defs/invalidation_condition"
+          }
+        },
+        "company_capture_assessments": {
+          "type": "array",
+          "items": {
+            "$ref": "definitions_v2.schema.json#/$defs/company_capture_assessment"
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"creation_stage": {"const": "research_design"}},
+        "required": ["creation_stage"]
+      },
+      "then": {
+        "properties": {
+          "snapshot": {
+            "properties": {
+              "project_lifecycle_state": {"const": "research_ready"},
+              "evidence_stage": {"const": "requirements_defined"},
+              "conclusion_status": {"const": "unavailable"},
+              "investment_status": {"const": "not_assessed"},
+              "evidence_assessments": {"maxItems": 0},
+              "company_capture_assessments": {"maxItems": 0},
+              "claims": {
+                "items": {
+                  "properties": {
+                    "epistemic_type": {"const": "hypothesis"},
+                    "claim_status": {"enum": ["hypothesis", "under_test"]}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "additionalProperties": false
+}

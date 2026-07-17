@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "research_event_v2.schema.json",
+  "type": "object",
+  "required": [
+    "event_id",
+    "project_id",
+    "event_type",
+    "triggered_at",
+    "trigger_source",
+    "affected_object_ids",
+    "base_version_id",
+    "proposed_action",
+    "review_status",
+    "resolution",
+    "incorporated_version_id",
+    "notes",
+    "provenance"
+  ],
+  "properties": {
+    "event_id": {"type": "string"},
+    "project_id": {"type": "string"},
+    "event_type": {"type": "string"},
+    "triggered_at": {"type": "string", "format": "date-time"},
+    "trigger_source": {"type": "string"},
+    "affected_object_ids": {
+      "type": "array",
+      "items": {"type": "string"},
+      "uniqueItems": true
+    },
+    "base_version_id": {"type": ["string", "null"]},
+    "proposed_action": {"type": "string"},
+    "review_status": {
+      "enum": ["unreviewed", "pending_review", "reviewed", "rejected"]
+    },
+    "resolution": {"type": ["string", "null"]},
+    "incorporated_version_id": {"type": ["string", "null"]},
+    "notes": {"type": ["string", "null"]},
+    "provenance": {"$ref": "definitions_v2.schema.json#/$defs/provenance"}
+  },
+  "additionalProperties": false
+}

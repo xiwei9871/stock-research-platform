@@ -1,0 +1,663 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "definitions_v2.schema.json",
+  "$defs": {
+    "semantic_version": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "provenance": {
+      "type": "object",
+      "required": [
+        "created_by",
+        "actor_type",
+        "agent_run_id",
+        "created_at",
+        "created_in_version",
+        "review_status"
+      ],
+      "properties": {
+        "created_by": {"type": "string"},
+        "actor_type": {
+          "enum": ["human", "codex", "automated_pipeline", "imported"]
+        },
+        "agent_run_id": {"type": ["string", "null"]},
+        "created_at": {"type": "string", "format": "date-time"},
+        "created_in_version": {"type": "string"},
+        "review_status": {
+          "enum": ["unreviewed", "pending_review", "reviewed", "rejected"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "object_lifecycle": {
+      "enum": ["active", "retired", "superseded", "removed_from_scope"]
+    },
+    "target_type": {
+      "enum": [
+        "research_project",
+        "research_question",
+        "research_claim",
+        "causal_edge",
+        "company_capture"
+      ]
+    },
+    "hash_scope": {
+      "enum": ["entire_object", "selected_fields", "source_content", "metadata_only"]
+    },
+    "project_lifecycle": {
+      "enum": [
+        "proposed",
+        "scoped",
+        "research_ready",
+        "active",
+        "review_ready",
+        "published",
+        "superseded",
+        "archived"
+      ]
+    },
+    "evidence_stage": {
+      "enum": [
+        "not_started",
+        "requirements_defined",
+        "collecting",
+        "partially_covered",
+        "sufficient_for_review",
+        "stale"
+      ]
+    },
+    "conclusion_status": {
+      "enum": [
+        "unavailable",
+        "provisional",
+        "review_ready",
+        "reviewed",
+        "published",
+        "withdrawn",
+        "invalidated"
+      ]
+    },
+    "investment_status": {
+      "enum": [
+        "not_assessed",
+        "research_only",
+        "watchlist_candidate",
+        "strategy_hypothesis",
+        "rejected"
+      ]
+    },
+    "string_array": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "nullable_scalar": {
+      "type": ["string", "number", "null"]
+    },
+    "scope": {
+      "type": "object",
+      "required": [
+        "primary_question",
+        "research_object",
+        "included_scope",
+        "excluded_scope",
+        "geography",
+        "time_horizon",
+        "industry_boundary",
+        "company_universe_boundary",
+        "decision_context",
+        "assumptions",
+        "known_unknowns",
+        "stop_conditions"
+      ],
+      "properties": {
+        "primary_question": {"type": "string"},
+        "research_object": {"type": "string"},
+        "included_scope": {"$ref": "#/$defs/string_array"},
+        "excluded_scope": {"$ref": "#/$defs/string_array"},
+        "geography": {"$ref": "#/$defs/string_array"},
+        "time_horizon": {"type": "string"},
+        "industry_boundary": {"type": "string"},
+        "company_universe_boundary": {"type": "string"},
+        "decision_context": {"type": "string"},
+        "assumptions": {"$ref": "#/$defs/string_array"},
+        "known_unknowns": {"$ref": "#/$defs/string_array"},
+        "stop_conditions": {"$ref": "#/$defs/string_array"}
+      },
+      "additionalProperties": false
+    },
+    "research_method": {
+      "enum": [
+        "system_architecture",
+        "manufacturing_process",
+        "complex_system",
+        "engineering_scale_up",
+        "technology_route",
+        "infrastructure_economics",
+        "lifecycle",
+        "regulation",
+        "platform_ecosystem"
+      ]
+    },
+    "router_decision": {
+      "type": "object",
+      "required": [
+        "primary_method",
+        "secondary_methods",
+        "routing_reasons",
+        "required_research_modules",
+        "excluded_modules",
+        "confidence",
+        "manual_override",
+        "override_reason",
+        "decided_by",
+        "decided_at"
+      ],
+      "properties": {
+        "primary_method": {"$ref": "#/$defs/research_method"},
+        "secondary_methods": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/research_method"}
+        },
+        "routing_reasons": {"$ref": "#/$defs/string_array"},
+        "required_research_modules": {"$ref": "#/$defs/string_array"},
+        "excluded_modules": {"$ref": "#/$defs/string_array"},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "manual_override": {"type": "boolean"},
+        "override_reason": {"type": ["string", "null"]},
+        "decided_by": {"type": "string"},
+        "decided_at": {"type": "string", "format": "date-time"}
+      },
+      "additionalProperties": false
+    },
+    "question": {
+      "type": "object",
+      "required": [
+        "question_id",
+        "question_type",
+        "question_text",
+        "priority",
+        "required_for_gate",
+        "answer_status",
+        "linked_claim_ids",
+        "linked_requirement_ids",
+        "provenance",
+        "lifecycle_status"
+      ],
+      "properties": {
+        "question_id": {"type": "string"},
+        "question_type": {"type": "string"},
+        "question_text": {"type": "string"},
+        "priority": {"type": "integer", "minimum": 0},
+        "required_for_gate": {"type": "boolean"},
+        "answer_status": {"type": "string"},
+        "linked_claim_ids": {"$ref": "#/$defs/string_array"},
+        "linked_requirement_ids": {"$ref": "#/$defs/string_array"},
+        "provenance": {"$ref": "#/$defs/provenance"},
+        "lifecycle_status": {"$ref": "#/$defs/object_lifecycle"}
+      },
+      "additionalProperties": false
+    },
+    "question_tree_node": {
+      "type": "object",
+      "required": [
+        "tree_node_id",
+        "tree_id",
+        "question_id",
+        "parent_tree_node_id",
+        "order",
+        "branch_role",
+        "dependency_question_ids"
+      ],
+      "properties": {
+        "tree_node_id": {"type": "string"},
+        "tree_id": {"type": "string"},
+        "question_id": {"type": "string"},
+        "parent_tree_node_id": {"type": ["string", "null"]},
+        "order": {"type": "integer", "minimum": 0},
+        "branch_role": {"type": "string"},
+        "dependency_question_ids": {"$ref": "#/$defs/string_array"}
+      },
+      "additionalProperties": false
+    },
+    "claim": {
+      "type": "object",
+      "required": [
+        "claim_id",
+        "claim_kind",
+        "epistemic_type",
+        "claim_text",
+        "claim_status",
+        "lifecycle_status",
+        "confidence",
+        "importance",
+        "linked_question_ids",
+        "context_reference_ids",
+        "created_in_version",
+        "supersedes_claim_id",
+        "validation_metric_ids",
+        "invalidation_condition_ids",
+        "provenance"
+      ],
+      "properties": {
+        "claim_id": {"type": "string"},
+        "claim_kind": {
+          "enum": ["primary", "supporting", "counter", "alternative", "boundary"]
+        },
+        "epistemic_type": {
+          "enum": ["fact", "interpretation", "hypothesis", "forecast"]
+        },
+        "claim_text": {"type": "string"},
+        "claim_status": {
+          "enum": [
+            "hypothesis",
+            "under_test",
+            "supported",
+            "contested",
+            "rejected",
+            "invalidated"
+          ]
+        },
+        "lifecycle_status": {"$ref": "#/$defs/object_lifecycle"},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "importance": {"type": "number", "minimum": 0, "maximum": 1},
+        "linked_question_ids": {"$ref": "#/$defs/string_array"},
+        "context_reference_ids": {"$ref": "#/$defs/string_array"},
+        "created_in_version": {"type": "string"},
+        "supersedes_claim_id": {"type": ["string", "null"]},
+        "validation_metric_ids": {"$ref": "#/$defs/string_array"},
+        "invalidation_condition_ids": {"$ref": "#/$defs/string_array"},
+        "provenance": {"$ref": "#/$defs/provenance"}
+      },
+      "additionalProperties": false
+    },
+    "claim_relation": {
+      "type": "object",
+      "required": [
+        "relation_id",
+        "from_claim_id",
+        "to_claim_id",
+        "relation_type",
+        "relation_summary",
+        "created_in_version",
+        "provenance"
+      ],
+      "properties": {
+        "relation_id": {"type": "string"},
+        "from_claim_id": {"type": "string"},
+        "to_claim_id": {"type": "string"},
+        "relation_type": {
+          "enum": [
+            "supports",
+            "challenges",
+            "contradicts",
+            "narrows",
+            "qualifies",
+            "alternative_to",
+            "depends_on",
+            "supersedes"
+          ]
+        },
+        "relation_summary": {"type": "string"},
+        "created_in_version": {"type": "string"},
+        "provenance": {"$ref": "#/$defs/provenance"}
+      },
+      "additionalProperties": false
+    },
+    "evidence_requirement": {
+      "type": "object",
+      "required": [
+        "requirement_id",
+        "target_type",
+        "target_id",
+        "question_to_resolve",
+        "requirement_type",
+        "required_source_classes",
+        "required_independence",
+        "required_freshness",
+        "required_scope",
+        "minimum_coverage",
+        "conflict_search_required",
+        "primary_source_required",
+        "collection_status",
+        "satisfaction_status",
+        "provenance"
+      ],
+      "properties": {
+        "requirement_id": {"type": "string"},
+        "target_type": {"$ref": "#/$defs/target_type"},
+        "target_id": {"type": "string"},
+        "question_to_resolve": {"type": "string"},
+        "requirement_type": {"type": "string"},
+        "required_source_classes": {"$ref": "#/$defs/string_array"},
+        "required_independence": {"type": "string"},
+        "required_freshness": {"type": "string"},
+        "required_scope": {"type": "string"},
+        "minimum_coverage": {"type": "integer", "minimum": 0},
+        "conflict_search_required": {"type": "boolean"},
+        "primary_source_required": {"type": "boolean"},
+        "collection_status": {"type": "string"},
+        "satisfaction_status": {"type": "string"},
+        "provenance": {"$ref": "#/$defs/provenance"}
+      },
+      "additionalProperties": false
+    },
+    "reference": {
+      "type": "object",
+      "required": [
+        "reference_id",
+        "reference_namespace",
+        "reference_type",
+        "reference_object_id",
+        "reference_role",
+        "reference_version",
+        "reference_content_hash",
+        "hash_scope",
+        "referenced_at",
+        "locator",
+        "scope_note",
+        "resolution_status",
+        "provenance"
+      ],
+      "properties": {
+        "reference_id": {"type": "string"},
+        "reference_namespace": {
+          "enum": [
+            "theme_research_v1",
+            "industry_catalog_v1",
+            "evidence_artifact",
+            "research_case",
+            "external_document",
+            "dataset",
+            "web_resource",
+            "company_filing",
+            "manual_interview",
+            "api_snapshot"
+          ]
+        },
+        "reference_type": {"type": "string"},
+        "reference_object_id": {"type": "string"},
+        "reference_role": {"type": "string"},
+        "reference_version": {"type": ["string", "null"]},
+        "reference_content_hash": {
+          "anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]
+        },
+        "hash_scope": {
+          "anyOf": [{"$ref": "#/$defs/hash_scope"}, {"type": "null"}]
+        },
+        "referenced_at": {"type": "string", "format": "date-time"},
+        "locator": {"type": ["string", "null"]},
+        "scope_note": {"type": ["string", "null"]},
+        "resolution_status": {
+          "enum": [
+            "resolved",
+            "missing",
+            "type_mismatch",
+            "version_mismatch",
+            "hash_mismatch",
+            "deprecated",
+            "duplicate",
+            "unresolvable"
+          ]
+        },
+        "provenance": {"$ref": "#/$defs/provenance"}
+      },
+      "additionalProperties": false
+    },
+    "evidence_assessment": {
+      "type": "object",
+      "required": [
+        "assessment_id",
+        "target_type",
+        "target_id",
+        "requirement_id",
+        "reference_id",
+        "evidence_role",
+        "locator",
+        "assessment_summary",
+        "directness",
+        "strength",
+        "independence",
+        "freshness",
+        "scope_match",
+        "conflict_status",
+        "review_status",
+        "provenance"
+      ],
+      "properties": {
+        "assessment_id": {"type": "string"},
+        "target_type": {"$ref": "#/$defs/target_type"},
+        "target_id": {"type": "string"},
+        "requirement_id": {"type": "string"},
+        "reference_id": {"type": "string"},
+        "evidence_role": {"type": "string"},
+        "locator": {"type": ["string", "null"]},
+        "assessment_summary": {"type": "string"},
+        "directness": {"type": "string"},
+        "strength": {"type": "string"},
+        "independence": {"type": "string"},
+        "freshness": {"type": "string"},
+        "scope_match": {"type": "string"},
+        "conflict_status": {"type": "string"},
+        "review_status": {
+          "enum": ["unreviewed", "pending_review", "reviewed", "rejected"]
+        },
+        "provenance": {"$ref": "#/$defs/provenance"}
+      },
+      "additionalProperties": false
+    },
+    "causal_node": {
+      "type": "object",
+      "required": [
+        "causal_node_id",
+        "node_kind",
+        "node_text",
+        "lifecycle_status",
+        "provenance"
+      ],
+      "properties": {
+        "causal_node_id": {"type": "string"},
+        "node_kind": {
+          "enum": [
+            "trigger",
+            "change",
+            "system_parameter",
+            "mechanism",
+            "constraint",
+            "demand_effect",
+            "supply_effect",
+            "price_effect",
+            "competition_effect",
+            "value_migration",
+            "company_capture",
+            "outcome"
+          ]
+        },
+        "node_text": {"type": "string"},
+        "lifecycle_status": {"$ref": "#/$defs/object_lifecycle"},
+        "provenance": {"$ref": "#/$defs/provenance"}
+      },
+      "additionalProperties": false
+    },
+    "causal_edge": {
+      "type": "object",
+      "required": [
+        "causal_edge_id",
+        "from_causal_node_id",
+        "to_causal_node_id",
+        "relation_type",
+        "mechanism_text",
+        "effect_polarity",
+        "strength",
+        "confidence",
+        "time_lag",
+        "boundary_condition",
+        "feedback_loop_id",
+        "supporting_claim_ids",
+        "validation_metric_ids",
+        "lifecycle_status",
+        "provenance"
+      ],
+      "properties": {
+        "causal_edge_id": {"type": "string"},
+        "from_causal_node_id": {"type": "string"},
+        "to_causal_node_id": {"type": "string"},
+        "relation_type": {"type": "string"},
+        "mechanism_text": {"type": "string"},
+        "effect_polarity": {
+          "enum": ["positive", "negative", "mixed", "conditional", "unknown"]
+        },
+        "strength": {"type": "number", "minimum": 0, "maximum": 1},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "time_lag": {"type": ["string", "null"]},
+        "boundary_condition": {"type": ["string", "null"]},
+        "feedback_loop_id": {"type": ["string", "null"]},
+        "supporting_claim_ids": {"$ref": "#/$defs/string_array"},
+        "validation_metric_ids": {"$ref": "#/$defs/string_array"},
+        "lifecycle_status": {"$ref": "#/$defs/object_lifecycle"},
+        "provenance": {"$ref": "#/$defs/provenance"}
+      },
+      "additionalProperties": false
+    },
+    "validation_metric": {
+      "type": "object",
+      "required": [
+        "metric_id",
+        "target_type",
+        "target_id",
+        "metric_name",
+        "metric_definition",
+        "data_source_plan",
+        "unit",
+        "baseline_value",
+        "baseline_as_of",
+        "comparison_operator",
+        "observation_window",
+        "aggregation_method",
+        "expected_range",
+        "confirmation_threshold",
+        "warning_threshold",
+        "data_freshness_requirement",
+        "observation_frequency",
+        "status",
+        "provenance"
+      ],
+      "properties": {
+        "metric_id": {"type": "string"},
+        "target_type": {"$ref": "#/$defs/target_type"},
+        "target_id": {"type": "string"},
+        "metric_name": {"type": "string"},
+        "metric_definition": {"type": "string"},
+        "data_source_plan": {"type": "string"},
+        "unit": {"type": ["string", "null"]},
+        "baseline_value": {"$ref": "#/$defs/nullable_scalar"},
+        "baseline_as_of": {
+          "anyOf": [{"type": "string", "format": "date-time"}, {"type": "null"}]
+        },
+        "comparison_operator": {"type": "string"},
+        "observation_window": {"type": "string"},
+        "aggregation_method": {"type": "string"},
+        "expected_range": {"$ref": "#/$defs/nullable_scalar"},
+        "confirmation_threshold": {"$ref": "#/$defs/nullable_scalar"},
+        "warning_threshold": {"$ref": "#/$defs/nullable_scalar"},
+        "data_freshness_requirement": {"type": "string"},
+        "observation_frequency": {"type": "string"},
+        "status": {"type": "string"},
+        "provenance": {"$ref": "#/$defs/provenance"}
+      },
+      "additionalProperties": false
+    },
+    "invalidation_condition": {
+      "type": "object",
+      "required": [
+        "condition_id",
+        "target_type",
+        "target_id",
+        "condition_text",
+        "observable_test",
+        "comparison_operator",
+        "threshold_value",
+        "unit",
+        "persistence_window",
+        "minimum_observations",
+        "recovery_condition",
+        "severity",
+        "status",
+        "triggered_at",
+        "provenance"
+      ],
+      "properties": {
+        "condition_id": {"type": "string"},
+        "target_type": {"$ref": "#/$defs/target_type"},
+        "target_id": {"type": "string"},
+        "condition_text": {"type": "string"},
+        "observable_test": {"type": "string"},
+        "comparison_operator": {"type": "string"},
+        "threshold_value": {"$ref": "#/$defs/nullable_scalar"},
+        "unit": {"type": ["string", "null"]},
+        "persistence_window": {"type": "string"},
+        "minimum_observations": {"type": "integer", "minimum": 1},
+        "recovery_condition": {"type": ["string", "null"]},
+        "severity": {"type": "string"},
+        "status": {"type": "string"},
+        "triggered_at": {
+          "anyOf": [{"type": "string", "format": "date-time"}, {"type": "null"}]
+        },
+        "provenance": {"$ref": "#/$defs/provenance"}
+      },
+      "additionalProperties": false
+    },
+    "company_capture_assessment": {
+      "type": "object",
+      "required": [
+        "assessment_id",
+        "company_reference_id",
+        "node_reference_ids",
+        "capture_stage",
+        "product_evidence_status",
+        "qualification_status",
+        "capacity_status",
+        "order_status",
+        "revenue_conversion_status",
+        "profit_conversion_status",
+        "market_pricing_status",
+        "linked_claim_ids",
+        "linked_requirement_ids",
+        "assessment_status",
+        "provenance"
+      ],
+      "properties": {
+        "assessment_id": {"type": "string"},
+        "company_reference_id": {"type": "string"},
+        "node_reference_ids": {"$ref": "#/$defs/string_array"},
+        "capture_stage": {
+          "enum": [
+            "concept_exposure",
+            "product_exists",
+            "qualification",
+            "capacity_ready",
+            "order_visibility",
+            "revenue_conversion",
+            "profit_conversion"
+          ]
+        },
+        "product_evidence_status": {"type": "string"},
+        "qualification_status": {"type": "string"},
+        "capacity_status": {"type": "string"},
+        "order_status": {"type": "string"},
+        "revenue_conversion_status": {"type": "string"},
+        "profit_conversion_status": {"type": "string"},
+        "market_pricing_status": {"type": "string"},
+        "linked_claim_ids": {"$ref": "#/$defs/string_array"},
+        "linked_requirement_ids": {"$ref": "#/$defs/string_array"},
+        "assessment_status": {"type": "string"},
+        "provenance": {"$ref": "#/$defs/provenance"}
+      },
+      "additionalProperties": false
+    }
+  }
+}
