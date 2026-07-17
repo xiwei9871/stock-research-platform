@@ -1196,3 +1196,65 @@ def test_brain_computer_interfaces_e3_matrix_maturity_and_assessments_are_conser
     for assessment in theme["value_capture_assessments"]:
         for claim_id in assessment["evidence_ids"]:
             assert assessment["node_id"] in claims[claim_id]["affected_theme_nodes"]
+
+
+def test_brain_computer_interfaces_e3_weisi_stage_locator_is_page_26() -> None:
+    mapping = _read_json(E3_MAPPING_PATH)
+    source_pack = _read_json(E3_SOURCE_PACK_PATH)
+    evidence = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+    mapping_sources = {row["source_id"]: row for row in mapping["sources"]}
+    pack_sources = {row["source_id"]: row for row in source_pack["sources"]}
+
+    assert evidence["bci_ev_688580_stage"]["excerpt_locator"] == (
+        "第26页，MagNeuro ONE已上市及后续脑机系统阶段"
+    )
+    assert mapping_sources["bci_688580_filing"]["notes"] == (
+        "复核第26-28、46、48页：上市MagNeuro ONE闭环神经调控、"
+        "在研脑机康复系统与磁刺激混合收入。"
+    )
+    assert pack_sources["bci_688580_filing"]["evidence_locator"] == (
+        "第26-28、46、48页"
+    )
+    assert "第25页" not in evidence["bci_ev_688580_stage"]["excerpt_locator"]
+
+
+def test_brain_computer_interfaces_e3_xiangyu_noninvasive_mapping_uses_page_25() -> None:
+    mapping = _read_json(E3_MAPPING_PATH)
+    source_pack = _read_json(E3_SOURCE_PACK_PATH)
+    evidence = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+    mapping_sources = {row["source_id"]: row for row in mapping["sources"]}
+    pack_sources = {row["source_id"]: row for row in source_pack["sources"]}
+    product = evidence["bci_ev_688626_product"]
+
+    assert product["excerpt_locator"] == "第17页产品系列、第25页非侵入式路线与聚焦"
+    assert "第17页仅列脑机接口系列" in product["evidence_summary"]
+    assert "第25页明确聚焦非侵入式技术" in product["evidence_summary"]
+    assert mapping_sources["bci_688626_filing"]["notes"] == (
+        "复核第17、25、50、55页：第17页仅为通用脑机接口系列，"
+        "第25页明确非侵入式康复聚焦，另覆盖脑电采集注册目标与宽口径收入。"
+    )
+    assert pack_sources["bci_688626_filing"]["evidence_locator"] == (
+        "第17、25、50、55页"
+    )
+
+
+def test_brain_computer_interfaces_e3_aipeng_revenue_page_16_is_synchronized() -> None:
+    mapping = _read_json(E3_MAPPING_PATH)
+    source_pack = _read_json(E3_SOURCE_PACK_PATH)
+    evidence = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+    mapping_sources = {row["source_id"]: row for row in mapping["sources"]}
+    pack_sources = {row["source_id"]: row for row in source_pack["sources"]}
+
+    assert evidence["bci_ev_300753_revenue"]["excerpt_locator"] == (
+        "第16页，报告期经营情况"
+    )
+    assert mapping_sources["bci_300753_filing"]["notes"] == (
+        "复核第16、18、30、37页：公司宽口径收入、ADHD脑机接口产品组件注册、"
+        "便携脑电系统及已上市状态；投资与合作不作正向公司证据。"
+    )
+    assert pack_sources["bci_300753_filing"]["evidence_locator"] == (
+        "第16、18、30、37页"
+    )
+    assert "34,201.75万元" in pack_sources["bci_300753_filing"][
+        "evidence_summary"
+    ]
