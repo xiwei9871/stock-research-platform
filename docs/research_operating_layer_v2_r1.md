@@ -68,11 +68,11 @@ CLI="${STOCK_RESEARCH_VENV:-/Users/xiwei/stock_research/.venv}/bin/stock-researc
   --project ai_compute_pcb_value_migration \
   --version 0.1.0
 
-# Use two real direct parent/child versions after a child has been created.
+# Runnable R1 error-path smoke: the pilots currently contain only v0.1.0.
 "$CLI" research-project-v2 diff \
   --project ai_compute_pcb_value_migration \
   --from 0.1.0 \
-  --to 0.2.0
+  --to 0.1.0
 
 "$CLI" research-project-v2 gate \
   --project ai_compute_pcb_value_migration \
@@ -84,7 +84,17 @@ CLI="${STOCK_RESEARCH_VENV:-/Users/xiwei/stock_research/.venv}/bin/stock-researc
 "$CLI" research-project-v2 rebuild-index --write
 ```
 
-`diff` accepts only a direct parent-child pair; the example is ready for the first `0.2.0` child and intentionally must not be used to imply that R1 already ships that version.
+`diff` accepts only a direct parent-child pair. Because every shipped R1 pilot has only `v0.1.0`, the complete command above is deliberately an error-path smoke: it exits 7 with `RESEARCH_PROJECT_DIFF_ANCESTRY_INVALID`. It does not imply that a successful pilot diff exists. Verify the CLI error path and the isolated direct-parent success semantics with:
+
+```bash
+/Users/xiwei/stock_research/.venv/bin/pytest \
+  tests/test_research_project_v2_cli.py -k diff -q
+
+/Users/xiwei/stock_research/.venv/bin/pytest \
+  tests/test_research_project_v2_diff.py::test_diff_reports_metadata_added_claim_and_unchanged_question -q
+```
+
+The other command examples in this section are normal success-path smoke commands against the shipped R1 artifacts; the `diff` command is explicitly the exception.
 
 ## Exit Codes
 
@@ -135,11 +145,11 @@ R1 does not implement a database, API route, Dashboard/UI, evidence collection, 
 
 No production migration was created or executed in R1. No database schema, migration file, production table, or API route is part of this delivery. Any artifact-to-database mapping is Future-phase design only; production migration requires a new explicit authorization after the artifact model and evidence workflow are stable.
 
-## Scope Attribution
+### Scope Attribution
 
 R1 attribution must never use a broad range such as `5548068..HEAD`, because unrelated V1 user commits were interleaved during implementation. Operator verification builds `/private/tmp/research_project_v2_changed_files.txt` from the sorted unique union of `git show --pretty='' --name-only` for each approved R1 commit plus the three Task10 paths. The scope test fails clearly when this evidence file is absent.
 
-## Verification Evidence
+### Verification Evidence
 
 Verification performed on 2026-07-17 in the R1 integration worktree produced these actual results before final documentation commit:
 
