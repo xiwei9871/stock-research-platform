@@ -33,7 +33,9 @@
       "f3_claim_09",
       "f3_claim_12",
       "f3_claim_16",
-      "f3_claim_18"
+      "f3_claim_18",
+      "f3_claim_19",
+      "f3_claim_20"
     ],
     "validation_signals": [
       "5G-A覆盖城市与站点继续增长",
@@ -752,20 +754,43 @@
       "claim_id": "f3_claim_18",
       "theme_id": "mobile_communications_5g_6g_value_chain_v1",
       "source_id": "f3_688375_ar2025",
-      "claim_text": "当前5G/5G-A移动系统与6G研究试验严格分层；卫星通信、通用光模块互连、泛模拟射频芯片、通用网络边缘云和传统网络安全保持外部所有权，只有移动系统特定角色可以直接映射。",
+      "claim_text": "国博电子4G/5G基站GaN射频模块已批量供货，6G/U6G仍处研发与布局；泛射频芯片及卫星、雷达模块保持外部链所有权，不能由射频模块混合收入推定6G商业收入。",
       "claim_type": "risk",
       "confidence": 0.9,
       "evidence_status": "verified",
       "platform_use_status": "reviewed",
-      "supporting_source_ids": [
-        "f3_688182_ar2025",
-        "f3_600498_ar2025"
-      ],
+      "supporting_source_ids": [],
       "affected_theme_nodes": [
         "6g_air_interface_candidate_technologies",
-        "base_station_rf_frontend_antennas",
-        "mobile_backhaul_fronthaul_timing",
-        "spectrum_standards_trials_deployment"
+        "base_station_rf_frontend_antennas"
+      ]
+    },
+    {
+      "claim_id": "f3_claim_19",
+      "theme_id": "mobile_communications_5g_6g_value_chain_v1",
+      "source_id": "f3_688182_ar2025",
+      "claim_text": "灿勤科技直接证据限于4G、5G与5G-A移动基站介质滤波器及其批量交付；卫星应用保持卫星链所有权，6G行业展望不能写成6G量产、订单或收入。",
+      "claim_type": "risk",
+      "confidence": 0.9,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "base_station_rf_frontend_antennas"
+      ]
+    },
+    {
+      "claim_id": "f3_claim_20",
+      "theme_id": "mobile_communications_5g_6g_value_chain_v1",
+      "source_id": "f3_600498_ar2025",
+      "claim_text": "烽火通信直接证据限于5G承载网设备研发和研发生产基地；通用光模块、数据中心互连与卫星光通信保持外部链所有权，通信系统设备混合收入不能写成5G承载专项收入。",
+      "claim_type": "risk",
+      "confidence": 0.9,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [],
+      "affected_theme_nodes": [
+        "mobile_backhaul_fronthaul_timing"
       ]
     }
   ],
@@ -810,7 +835,8 @@
         "f3_claim_14",
         "f3_claim_15",
         "f3_claim_16",
-        "f3_claim_18"
+        "f3_claim_18",
+        "f3_claim_19"
       ],
       "uncertainty": "公司披露仍存在混合收入、总资本开支或阶段归因缺口。"
     },
@@ -833,7 +859,7 @@
       "evidence_ids": [
         "f3_claim_02",
         "f3_claim_10",
-        "f3_claim_18"
+        "f3_claim_20"
       ],
       "uncertainty": "公司披露仍存在混合收入、总资本开支或阶段归因缺口。"
     },
@@ -874,8 +900,7 @@
         "f3_claim_09",
         "f3_claim_11",
         "f3_claim_12",
-        "f3_claim_17",
-        "f3_claim_18"
+        "f3_claim_17"
       ],
       "uncertainty": "公司披露仍存在混合收入、总资本开支或阶段归因缺口。"
     },

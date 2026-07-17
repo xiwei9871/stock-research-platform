@@ -25,11 +25,11 @@
       ],
       "supported_node_ids": [
         "5g_advanced_radio_access_network",
-        "operator_capex_orders_revenue_validation",
         "6g_air_interface_candidate_technologies",
+        "mobile_core_network_cloud_native",
         "mobile_backhaul_fronthaul_timing",
         "spectrum_standards_trials_deployment",
-        "mobile_core_network_cloud_native"
+        "operator_capex_orders_revenue_validation"
       ],
       "limitations": "运营商网络收入未拆分5G-A；6G原型样机中标不等于商用部署、交付或收入。",
       "notes": "PDF第15、17、25-26页；5G-A无线与核心网产品、6G承载原型样机中标、运营商网络混合口径收入。；6G原型项目不等于商用部署，运营商网络收入未拆分5G-A。"
@@ -55,11 +55,11 @@
       ],
       "supported_node_ids": [
         "5g_advanced_radio_access_network",
-        "mobile_core_network_cloud_native",
-        "spectrum_standards_trials_deployment",
-        "operator_capex_orders_revenue_validation",
         "6g_air_interface_candidate_technologies",
-        "carrier_network_test_measurement"
+        "mobile_core_network_cloud_native",
+        "carrier_network_test_measurement",
+        "spectrum_standards_trials_deployment",
+        "operator_capex_orders_revenue_validation"
       ],
       "limitations": "总资本开支和通信服务收入未拆分移动网络专项；6G试验无商业收入。",
       "notes": "PDF第12-14、17、23页；277万站5G网络、5G-A核心网智能化、6G开放众创试验装置与总资本开支。；总资本开支和通信服务收入未拆分移动网络专项，6G试验无商业收入。"
@@ -85,9 +85,9 @@
       ],
       "supported_node_ids": [
         "5g_advanced_radio_access_network",
+        "6g_air_interface_candidate_technologies",
         "spectrum_standards_trials_deployment",
-        "operator_capex_orders_revenue_validation",
-        "6g_air_interface_candidate_technologies"
+        "operator_capex_orders_revenue_validation"
       ],
       "limitations": "总资本开支未拆分5G-A；6G布局仅属研究。",
       "notes": "PDF第10-12、21、45页；330城5G-A载波聚合、共建共享与总资本开支。；总资本开支未拆分5G-A，6G布局仅属前沿研究。"
@@ -113,11 +113,11 @@
       ],
       "supported_node_ids": [
         "5g_advanced_radio_access_network",
+        "6g_air_interface_candidate_technologies",
+        "carrier_network_test_measurement",
         "mobile_terminals_modules_private_networks",
         "spectrum_standards_trials_deployment",
-        "operator_capex_orders_revenue_validation",
-        "6g_air_interface_candidate_technologies",
-        "carrier_network_test_measurement"
+        "operator_capex_orders_revenue_validation"
       ],
       "limitations": "网络资本开支包含广义网络；移动服务收入不等于网络节点收入。",
       "notes": "PDF第16-20、27页；11万站5G-A载波聚合、专网产品、6G验证与网络基础设施资本开支。；网络资本开支包含广义网络，未拆分5G-A专项收入或支出。"
@@ -138,14 +138,11 @@
       "evidence_summary": "5G承载设备研发、研发生产基地和通信系统设备收入。",
       "supported_claim_ids": [
         "f3_claim_10",
-        "f3_claim_18"
+        "f3_claim_20"
       ],
       "supported_node_ids": [
         "mobile_backhaul_fronthaul_timing",
-        "operator_capex_orders_revenue_validation",
-        "6g_air_interface_candidate_technologies",
-        "base_station_rf_frontend_antennas",
-        "spectrum_standards_trials_deployment"
+        "operator_capex_orders_revenue_validation"
       ],
       "limitations": "通信系统设备收入含广义光通信；通用光模块和卫星光通信不计入F3。",
       "notes": "PDF第10-12、48、129页；5G承载网设备研发、研发生产基地与通信系统设备收入。；通信系统设备收入包含广义光通信和数据网络产品，未单列5G承载。"
@@ -171,10 +168,10 @@
       ],
       "supported_node_ids": [
         "5g_advanced_radio_access_network",
-        "spectrum_standards_trials_deployment",
-        "operator_capex_orders_revenue_validation",
         "6g_air_interface_candidate_technologies",
-        "carrier_network_test_measurement"
+        "carrier_network_test_measurement",
+        "spectrum_standards_trials_deployment",
+        "operator_capex_orders_revenue_validation"
       ],
       "limitations": "系统设备收入未单列5G-A；6G仅研究与测试。",
       "notes": "PDF第13-18、30页；5G-A端到端方案、运营商5G集采、6G预研测试外场与系统设备收入。；系统设备收入未单列5G-A，6G仅研究与测试。"
@@ -243,14 +240,11 @@
       "evidence_summary": "4G/5G/5G-A基站滤波器、批量交付和滤波器收入增长。",
       "supported_claim_ids": [
         "f3_claim_15",
-        "f3_claim_18"
+        "f3_claim_19"
       ],
       "supported_node_ids": [
         "base_station_rf_frontend_antennas",
-        "operator_capex_orders_revenue_validation",
-        "6g_air_interface_candidate_technologies",
-        "mobile_backhaul_fronthaul_timing",
-        "spectrum_standards_trials_deployment"
+        "operator_capex_orders_revenue_validation"
       ],
       "limitations": "收入未拆分移动基站应用；卫星应用不计入F3，6G量产未证明。",
       "notes": "PDF第15-19、31-33页；4G/5G/5G-A基站介质滤波器、批量交付与滤波器收入增长。；滤波器同时用于其他领域，移动基站专项收入未披露，6G量产未证明。"
@@ -274,14 +268,13 @@
         "f3_claim_18"
       ],
       "supported_node_ids": [
-        "base_station_rf_frontend_antennas",
         "6g_air_interface_candidate_technologies",
-        "operator_capex_orders_revenue_validation",
-        "mobile_backhaul_fronthaul_timing",
-        "spectrum_standards_trials_deployment"
+        "base_station_rf_frontend_antennas",
+        "operator_capex_orders_revenue_validation"
       ],
       "limitations": "泛射频芯片归F4；模块收入含混合应用，6G仍处研发。",
       "notes": "PDF第13、17、19、27页；4G/5G基站GaN射频模块批量供货、5G-A进展与射频模块收入。；只采用移动基站特定模块证据，泛射频芯片归F4；6G仍处研发，模块收入含混合应用。"
     }
   ]
 }
+

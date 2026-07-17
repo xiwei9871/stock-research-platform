@@ -41,9 +41,7 @@
         "f3_600050_ar2025",
         "f3_601728_ar2025",
         "f3_688387_ar2025",
-        "f3_688375_ar2025",
-        "f3_688182_ar2025",
-        "f3_600498_ar2025"
+        "f3_688375_ar2025"
       ],
       "pending_source_ids": [],
       "supported_claim_ids": [
@@ -64,7 +62,7 @@
       ],
       "evidence_gap_status": "evidence_gap",
       "node_review_status": "reviewed",
-      "rationale": "多家公司披露6G标准研究、原型和试验，包括原型样机、开放试验装置、关键技术验证、21项预研及测试外场；均未形成可审计商业收入。",
+      "rationale": "中兴、三家运营商、信科移动与国博电子披露6G研究、原型和试验，包括标准研究、关键技术验证与测试外场；证据强度维持3，商业部署、订单、交付与收入缺口不变。",
       "next_evidence_needed": "补充6G商业部署、订单、交付与收入，以及正式频谱、标准冻结、商用设备采购和网络利用证据。"
     },
     {
@@ -73,8 +71,7 @@
         "f3_002792_ar2025",
         "f3_002446_ar2025",
         "f3_688182_ar2025",
-        "f3_688375_ar2025",
-        "f3_600498_ar2025"
+        "f3_688375_ar2025"
       ],
       "pending_source_ids": [],
       "supported_claim_ids": [
@@ -82,7 +79,8 @@
         "f3_claim_14",
         "f3_claim_15",
         "f3_claim_16",
-        "f3_claim_18"
+        "f3_claim_18",
+        "f3_claim_19"
       ],
       "evidence_strength_before": 1,
       "evidence_strength_after": 5,
@@ -94,7 +92,7 @@
       ],
       "evidence_gap_status": "covered",
       "node_review_status": "reviewed",
-      "rationale": "通宇与盛路披露基站天线直接收入和毛利，灿勤与国博披露移动基站滤波器或GaN射频模块批量供货，节点具备产品、客户和财务证据。",
+      "rationale": "通宇与盛路披露基站天线直接收入和毛利，灿勤与国博披露移动基站滤波器或GaN射频模块批量供货；四个直接来源支持节点，证据强度维持5。",
       "next_evidence_needed": "补充5G-A专项产品收入、客户和订单结构、移动基站应用拆分、持续毛利及6G量产验证。"
     },
     {
@@ -124,15 +122,13 @@
       "node_id": "mobile_backhaul_fronthaul_timing",
       "accepted_source_ids": [
         "f3_000063_ar2025",
-        "f3_600498_ar2025",
-        "f3_688375_ar2025",
-        "f3_688182_ar2025"
+        "f3_600498_ar2025"
       ],
       "pending_source_ids": [],
       "supported_claim_ids": [
         "f3_claim_02",
         "f3_claim_10",
-        "f3_claim_18"
+        "f3_claim_20"
       ],
       "evidence_strength_before": 1,
       "evidence_strength_after": 3,
@@ -143,7 +139,7 @@
       ],
       "evidence_gap_status": "evidence_gap",
       "node_review_status": "reviewed",
-      "rationale": "烽火披露5G承载网设备研发和生产基地，中兴披露6G承载原型样机中标；证据覆盖研发和原型采购，未覆盖移动承载专项收入与大规模交付。",
+      "rationale": "烽火披露5G承载网设备研发和生产基地，中兴披露6G承载原型样机中标；两个直接来源覆盖研发和原型采购，专项收入与规模交付缺口使强度维持3。",
       "next_evidence_needed": "补充5G/5G-A前传回传承载订单、交付验收、专项收入、端口容量、同步精度与毛利。"
     },
     {
@@ -199,10 +195,7 @@
         "f3_600941_ar2025",
         "f3_600050_ar2025",
         "f3_601728_ar2025",
-        "f3_688387_ar2025",
-        "f3_688375_ar2025",
-        "f3_688182_ar2025",
-        "f3_600498_ar2025"
+        "f3_688387_ar2025"
       ],
       "pending_source_ids": [],
       "supported_claim_ids": [
@@ -215,8 +208,7 @@
         "f3_claim_09",
         "f3_claim_11",
         "f3_claim_12",
-        "f3_claim_17",
-        "f3_claim_18"
+        "f3_claim_17"
       ],
       "evidence_strength_before": 1,
       "evidence_strength_after": 4,
@@ -228,7 +220,7 @@
       ],
       "evidence_gap_status": "evidence_gap",
       "node_review_status": "reviewed",
-      "rationale": "运营商和设备商资料覆盖标准研究、实验室验证、测试外场、技术试验与5G-A商用部署，生命周期证据丰富，但6G尚未进入商业网络。",
+      "rationale": "中兴、三家运营商和信科移动直接资料覆盖标准研究、实验室验证、测试外场、技术试验与5G-A商用部署；6G尚未进入商业网络，强度维持4且保留证据缺口。",
       "next_evidence_needed": "补充6G频谱安排、标准冻结、商用试验许可、正式网络采购、规模部署和运营指标。"
     },
     {
@@ -274,4 +266,3 @@
     }
   ]
 }
-

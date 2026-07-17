@@ -715,6 +715,66 @@ F3_CLAIM_LIFECYCLE_CONTRACTS = {
     "f3_claim_12": (("21项关键技术预研", "6G测试外场", "技术测试", "不等于商用网络、订单或收入"), ("6G商业交付",)),
     "f3_claim_16": (("6G/U6G", "研发", "未证明6G商业订单或收入"), ("6G收入21.08亿元",)),
 }
+F3_DIRECT_SOURCE_NODE_CONTRACTS = {
+    "f3_000063_ar2025": {
+        "5g_advanced_radio_access_network",
+        "6g_air_interface_candidate_technologies",
+        "mobile_core_network_cloud_native",
+        "mobile_backhaul_fronthaul_timing",
+        "spectrum_standards_trials_deployment",
+        "operator_capex_orders_revenue_validation",
+    },
+    "f3_600941_ar2025": {
+        "5g_advanced_radio_access_network",
+        "6g_air_interface_candidate_technologies",
+        "mobile_core_network_cloud_native",
+        "carrier_network_test_measurement",
+        "spectrum_standards_trials_deployment",
+        "operator_capex_orders_revenue_validation",
+    },
+    "f3_600050_ar2025": {
+        "5g_advanced_radio_access_network",
+        "6g_air_interface_candidate_technologies",
+        "spectrum_standards_trials_deployment",
+        "operator_capex_orders_revenue_validation",
+    },
+    "f3_601728_ar2025": {
+        "5g_advanced_radio_access_network",
+        "6g_air_interface_candidate_technologies",
+        "carrier_network_test_measurement",
+        "mobile_terminals_modules_private_networks",
+        "spectrum_standards_trials_deployment",
+        "operator_capex_orders_revenue_validation",
+    },
+    "f3_600498_ar2025": {
+        "mobile_backhaul_fronthaul_timing",
+        "operator_capex_orders_revenue_validation",
+    },
+    "f3_688387_ar2025": {
+        "5g_advanced_radio_access_network",
+        "6g_air_interface_candidate_technologies",
+        "carrier_network_test_measurement",
+        "spectrum_standards_trials_deployment",
+        "operator_capex_orders_revenue_validation",
+    },
+    "f3_002792_ar2025": {
+        "base_station_rf_frontend_antennas",
+        "operator_capex_orders_revenue_validation",
+    },
+    "f3_002446_ar2025": {
+        "base_station_rf_frontend_antennas",
+        "operator_capex_orders_revenue_validation",
+    },
+    "f3_688182_ar2025": {
+        "base_station_rf_frontend_antennas",
+        "operator_capex_orders_revenue_validation",
+    },
+    "f3_688375_ar2025": {
+        "6g_air_interface_candidate_technologies",
+        "base_station_rf_frontend_antennas",
+        "operator_capex_orders_revenue_validation",
+    },
+}
 
 REQUIRED_READABLE_SECTIONS = [
     {
@@ -1869,7 +1929,7 @@ def test_mobile_communications_f3_artifacts_are_reviewed_and_wave_is_three_of_fi
         row["source_type"] in {"company_filing", "official_report", "official_article"}
         for row in source_pack["sources"]
     ) == 10
-    assert len(theme["claims"]) == 18
+    assert len(theme["claims"]) == 20
     reviewed = [
         row for row in mapping["company_mappings"]
         if row["review_status"] == "reviewed"
@@ -1884,8 +1944,8 @@ def test_mobile_communications_f3_artifacts_are_reviewed_and_wave_is_three_of_fi
     assert rows[F3_CHAIN_ID]["counts"] == {
         "accepted_sources": 10,
         "primary_sources": 10,
-        "claims": 18,
-        "accepted_source_backed_claims": 18,
+        "claims": 20,
+        "accepted_source_backed_claims": 20,
         "reviewed_mappings": 10,
     }
     assert report["ready_theme_count"] == 3
@@ -1976,23 +2036,30 @@ def test_mobile_communications_f3_sources_claims_nodes_matrix_and_served_rows_ar
             if row["node_id"] in claim["affected_theme_nodes"]
         ]
         expected_claim_ids = {claim["claim_id"] for claim in node_claims}
-        expected_source_ids = {
-            source_id for claim in node_claims
-            for source_id in (claim["source_id"], *claim["supporting_source_ids"])
-        }
         assert set(row["supported_claim_ids"]) == expected_claim_ids
-        assert set(row["accepted_source_ids"]) == expected_source_ids
+        assert set(row["accepted_source_ids"]) == {
+            source_id
+            for source_id, node_ids in F3_DIRECT_SOURCE_NODE_CONTRACTS.items()
+            if row["node_id"] in node_ids
+        }
     for source in source_pack["sources"]:
         source_claims = {
             claim["claim_id"] for claim in claims.values()
             if source["source_id"] in (claim["source_id"], *claim["supporting_source_ids"])
         }
-        source_nodes = {
-            node_id for claim_id in source_claims
-            for node_id in claims[claim_id]["affected_theme_nodes"]
-        }
         assert set(source["supported_claim_ids"]) == source_claims
-        assert set(source["supported_node_ids"]) == source_nodes
+        assert set(source["supported_node_ids"]) == F3_DIRECT_SOURCE_NODE_CONTRACTS[
+            source["source_id"]
+        ]
+    assert set(F3_DIRECT_SOURCE_NODE_CONTRACTS["f3_600498_ar2025"]).isdisjoint(
+        {"6g_air_interface_candidate_technologies", "base_station_rf_frontend_antennas", "spectrum_standards_trials_deployment"}
+    )
+    assert set(F3_DIRECT_SOURCE_NODE_CONTRACTS["f3_688182_ar2025"]).isdisjoint(
+        {"6g_air_interface_candidate_technologies", "mobile_backhaul_fronthaul_timing", "spectrum_standards_trials_deployment"}
+    )
+    assert set(F3_DIRECT_SOURCE_NODE_CONTRACTS["f3_688375_ar2025"]).isdisjoint(
+        {"mobile_backhaul_fronthaul_timing", "spectrum_standards_trials_deployment"}
+    )
 
 
 def test_mobile_communications_f3_reviewed_company_mapping_contracts_are_exact() -> None:
