@@ -38,11 +38,39 @@ def _error(code: str, message: str, **details: object) -> ResearchProjectV2Error
     return ResearchProjectV2Error(message, code=code, details=details)
 
 
+def _artifact_error(path: Path, reason: str) -> ResearchProjectV2Error:
+    return _error(
+        _UNRESOLVABLE,
+        f"Invalid V1 artifact: {path}",
+        path=str(path),
+        reason=reason,
+    )
+
+
 def _read_json(path: Path) -> dict[str, Any]:
-    payload = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise _artifact_error(path, type(exc).__name__) from exc
     if not isinstance(payload, dict):
-        raise _error(_UNRESOLVABLE, f"Expected JSON object in {path}")
+        raise _artifact_error(path, "root must be an object")
     return payload
+
+
+def _required_string(payload: dict[str, Any], field: str, path: Path) -> str:
+    value = payload.get(field)
+    if not isinstance(value, str):
+        raise _artifact_error(path, f"{field} must be a string")
+    return value
+
+
+def _required_list(
+    payload: dict[str, Any], field: str, path: Path
+) -> list[Any]:
+    value = payload.get(field)
+    if not isinstance(value, list):
+        raise _artifact_error(path, f"{field} must be a list")
+    return value
 
 
 def _is_deprecated(*objects: dict[str, Any]) -> bool:
@@ -63,10 +91,17 @@ def _add_entry(
     payload: object,
     version: object,
     artifact: dict[str, Any],
+    path: Path,
+    location: str,
 ) -> None:
-    if not isinstance(payload, dict) or not isinstance(payload.get(id_field), str):
-        return
+    if not isinstance(payload, dict):
+        raise _artifact_error(path, f"{location} must be an object")
+    if not isinstance(payload.get(id_field), str):
+        raise _artifact_error(path, f"{location}.{id_field} must be a string")
     object_id = payload[id_field]
+    parent_theme = artifact.get("theme")
+    if not isinstance(parent_theme, dict):
+        parent_theme = {}
     index.setdefault((object_type, object_id), []).append(
         ResolvedReference(
             namespace=namespace,
@@ -74,7 +109,7 @@ def _add_entry(
             object_id=object_id,
             version=version if isinstance(version, str) else None,
             payload=payload,
-            deprecated=_is_deprecated(payload, artifact, artifact.get("theme", {})),
+            deprecated=_is_deprecated(payload, artifact, parent_theme),
         )
     )
 
@@ -85,9 +120,9 @@ def _theme_index() -> dict[tuple[str, str], tuple[ResolvedReference, ...]]:
     for path in sorted(THEME_ARTIFACT_DIR.glob("*.json")):
         artifact = _read_json(path)
         theme = artifact.get("theme")
-        version = artifact.get("artifact_version")
-        if not isinstance(theme, dict) or not isinstance(version, str):
-            continue
+        version = _required_string(artifact, "artifact_version", path)
+        if not isinstance(theme, dict):
+            raise _artifact_error(path, "theme must be an object")
         _add_entry(
             index,
             namespace="theme_research_v1",
@@ -96,16 +131,16 @@ def _theme_index() -> dict[tuple[str, str], tuple[ResolvedReference, ...]]:
             payload=theme,
             version=version,
             artifact=artifact,
+            path=path,
+            location="theme",
         )
         for collection, object_type, id_field in (
             ("nodes", "v1_theme_node", "node_id"),
             ("sources", "v1_source", "source_id"),
             ("claims", "v1_claim", "claim_id"),
         ):
-            values = artifact.get(collection, [])
-            if not isinstance(values, list):
-                continue
-            for payload in values:
+            values = _required_list(artifact, collection, path)
+            for entry_index, payload in enumerate(values):
                 _add_entry(
                     index,
                     namespace="theme_research_v1",
@@ -114,15 +149,15 @@ def _theme_index() -> dict[tuple[str, str], tuple[ResolvedReference, ...]]:
                     payload=payload,
                     version=version,
                     artifact=artifact,
+                    path=path,
+                    location=f"{collection}[{entry_index}]",
                 )
 
     for path in sorted(COMPANY_MAPPING_DIR.glob("*.json")):
         artifact = _read_json(path)
-        version = artifact.get("artifact_version")
-        mappings = artifact.get("company_mappings", [])
-        if not isinstance(version, str) or not isinstance(mappings, list):
-            continue
-        for payload in mappings:
+        version = _required_string(artifact, "artifact_version", path)
+        mappings = _required_list(artifact, "company_mappings", path)
+        for entry_index, payload in enumerate(mappings):
             _add_entry(
                 index,
                 namespace="theme_research_v1",
@@ -131,36 +166,39 @@ def _theme_index() -> dict[tuple[str, str], tuple[ResolvedReference, ...]]:
                 payload=payload,
                 version=version,
                 artifact=artifact,
+                path=path,
+                location=f"company_mappings[{entry_index}]",
             )
     return {key: tuple(entries) for key, entries in index.items()}
 
 
 @lru_cache(maxsize=1)
 def _catalog_index() -> dict[tuple[str, str], tuple[ResolvedReference, ...]]:
-    manifest = _read_json(INDUSTRY_CATALOG_DIR / "manifest.json")
-    version = manifest.get("artifact_version")
+    manifest_path = INDUSTRY_CATALOG_DIR / "manifest.json"
+    manifest = _read_json(manifest_path)
+    version = _required_string(manifest, "artifact_version", manifest_path)
     index: dict[tuple[str, str], list[ResolvedReference]] = {}
 
-    chains_artifact = _read_json(INDUSTRY_CATALOG_DIR / "chains.json")
-    chains = chains_artifact.get("chains", [])
-    if isinstance(chains, list):
-        for payload in chains:
-            _add_entry(
-                index,
-                namespace="industry_catalog_v1",
-                object_type="industry_catalog_chain",
-                id_field="chain_id",
-                payload=payload,
-                version=version,
-                artifact=manifest,
-            )
+    chains_path = INDUSTRY_CATALOG_DIR / "chains.json"
+    chains_artifact = _read_json(chains_path)
+    chains = _required_list(chains_artifact, "chains", chains_path)
+    for entry_index, payload in enumerate(chains):
+        _add_entry(
+            index,
+            namespace="industry_catalog_v1",
+            object_type="industry_catalog_chain",
+            id_field="chain_id",
+            payload=payload,
+            version=version,
+            artifact=manifest,
+            path=chains_path,
+            location=f"chains[{entry_index}]",
+        )
 
     for path in sorted((INDUSTRY_CATALOG_DIR / "nodes").glob("*.json")):
         nodes_artifact = _read_json(path)
-        nodes = nodes_artifact.get("nodes", [])
-        if not isinstance(nodes, list):
-            continue
-        for payload in nodes:
+        nodes = _required_list(nodes_artifact, "nodes", path)
+        for entry_index, payload in enumerate(nodes):
             _add_entry(
                 index,
                 namespace="industry_catalog_v1",
@@ -169,6 +207,8 @@ def _catalog_index() -> dict[tuple[str, str], tuple[ResolvedReference, ...]]:
                 payload=payload,
                 version=version,
                 artifact=manifest,
+                path=path,
+                location=f"nodes[{entry_index}]",
             )
     return {key: tuple(entries) for key, entries in index.items()}
 
@@ -373,11 +413,6 @@ def audit_references(version: dict[str, Any]) -> dict[str, Any]:
                 )
                 continue
 
-            hash_scope = reference.get("hash_scope")
-            scoped_payload = None
-            if hash_scope is not None:
-                scoped_payload = reference_payload(resolved.payload, reference)
-
             expected_version = reference.get("reference_version")
             if expected_version is not None and expected_version != resolved.version:
                 issues.append(
@@ -395,8 +430,8 @@ def audit_references(version: dict[str, Any]) -> dict[str, Any]:
 
             expected_hash = reference.get("reference_content_hash")
             if expected_hash is not None:
-                if scoped_payload is None:
-                    scoped_payload = reference_payload(resolved.payload, reference)
+                hash_scope = reference.get("hash_scope")
+                scoped_payload = reference_payload(resolved.payload, reference)
                 actual_hash = content_sha256(scoped_payload)
                 if expected_hash != actual_hash:
                     issues.append(

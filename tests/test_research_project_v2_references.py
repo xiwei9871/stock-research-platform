@@ -51,6 +51,26 @@ def _version(*references):
     }
 
 
+def _audit_with_temp_theme_artifact(monkeypatch, tmp_path, artifact):
+    theme_dir = tmp_path / "theme_decomposition"
+    mapping_dir = theme_dir / "company_mappings"
+    mapping_dir.mkdir(parents=True)
+    artifact_path = theme_dir / "theme.json"
+    if isinstance(artifact, bytes):
+        artifact_path.write_bytes(artifact)
+    else:
+        artifact_path.write_text(json.dumps(artifact), encoding="utf-8")
+
+    references_module._theme_index.cache_clear()
+    try:
+        with monkeypatch.context() as patch:
+            patch.setattr(references_module, "THEME_ARTIFACT_DIR", theme_dir)
+            patch.setattr(references_module, "COMPANY_MAPPING_DIR", mapping_dir)
+            return audit_references(_version(_reference(object_id="theme-1")))
+    finally:
+        references_module._theme_index.cache_clear()
+
+
 def test_real_theme_entire_object_audits_as_resolved():
     resolved = resolve_theme_research_v1(
         _reference(version=None, content_hash=None)
@@ -175,6 +195,7 @@ def test_selected_fields_hash_audits_as_resolved():
 
 def test_invalid_selected_field_pointer_is_unresolvable():
     reference = _reference(
+        content_hash="0" * 64,
         hash_scope="selected_fields",
         hash_fields=["/does-not-exist"],
     )
@@ -188,6 +209,109 @@ def test_invalid_selected_field_pointer_is_unresolvable():
             "error_code": "RESEARCH_PROJECT_REFERENCE_UNRESOLVABLE",
         }
     ]
+
+
+def test_selected_field_pointer_is_not_evaluated_without_expected_hash():
+    reference = _reference(
+        hash_scope="selected_fields",
+        hash_fields=["/does-not-exist"],
+    )
+
+    assert audit_references(_version(reference))["status"] == "pass"
+
+
+@pytest.mark.parametrize(
+    ("file_name", "contents", "reason"),
+    [
+        ("missing.json", None, "FileNotFoundError"),
+        ("unicode.json", b"\xff", "UnicodeDecodeError"),
+        ("invalid.json", b"{invalid", "JSONDecodeError"),
+    ],
+)
+def test_read_json_wraps_file_decode_and_json_errors(tmp_path, file_name, contents, reason):
+    path = tmp_path / file_name
+    if contents is not None:
+        path.write_bytes(contents)
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        references_module._read_json(path)
+
+    assert exc_info.value.code == "RESEARCH_PROJECT_REFERENCE_UNRESOLVABLE"
+    assert exc_info.value.details == {"path": str(path), "reason": reason}
+
+
+def test_bad_theme_json_audits_unresolvable_without_polluting_cache(
+    monkeypatch, tmp_path
+):
+    result = _audit_with_temp_theme_artifact(monkeypatch, tmp_path, b"{invalid")
+
+    assert result["issues"][0]["status"] == "unresolvable"
+    assert resolve_theme_research_v1(_reference()) is not None
+
+
+def test_theme_artifact_missing_version_audits_unresolvable(monkeypatch, tmp_path):
+    artifact = {
+        "theme": {"theme_id": "theme-1"},
+        "nodes": [],
+        "sources": [],
+        "claims": [],
+    }
+
+    result = _audit_with_temp_theme_artifact(monkeypatch, tmp_path, artifact)
+
+    assert result["issues"][0]["status"] == "unresolvable"
+
+
+@pytest.mark.parametrize(
+    "nodes",
+    [
+        {},
+        [None],
+        [{"node_id": 1}],
+    ],
+)
+def test_theme_artifact_invalid_collection_or_entry_audits_unresolvable(
+    monkeypatch, tmp_path, nodes
+):
+    artifact = {
+        "artifact_version": "theme-v1",
+        "theme": {"theme_id": "theme-1"},
+        "nodes": nodes,
+        "sources": [],
+        "claims": [],
+    }
+
+    result = _audit_with_temp_theme_artifact(monkeypatch, tmp_path, artifact)
+
+    assert result["issues"][0]["status"] == "unresolvable"
+
+
+def test_catalog_manifest_missing_version_audits_unresolvable(monkeypatch, tmp_path):
+    catalog_dir = tmp_path / "catalog"
+    nodes_dir = catalog_dir / "nodes"
+    nodes_dir.mkdir(parents=True)
+    (catalog_dir / "manifest.json").write_text("{}", encoding="utf-8")
+    (catalog_dir / "chains.json").write_text(
+        json.dumps({"chains": [{"chain_id": "chain-1"}]}), encoding="utf-8"
+    )
+
+    references_module._catalog_index.cache_clear()
+    try:
+        with monkeypatch.context() as patch:
+            patch.setattr(references_module, "INDUSTRY_CATALOG_DIR", catalog_dir)
+            result = audit_references(
+                _version(
+                    _reference(
+                        namespace="industry_catalog_v1",
+                        object_type="industry_catalog_chain",
+                        object_id="chain-1",
+                    )
+                )
+            )
+    finally:
+        references_module._catalog_index.cache_clear()
+
+    assert result["issues"][0]["status"] == "unresolvable"
 
 
 def test_hash_mismatch_reports_expected_and_actual_hash_details():
@@ -266,6 +390,28 @@ def test_reference_version_mismatch_reports_expected_and_actual():
     ]
 
 
+def test_version_mismatch_precedes_invalid_selected_field_pointer(monkeypatch):
+    def fake_resolver(reference):
+        return ResolvedReference(
+            namespace="theme_research_v1",
+            object_type="v1_theme",
+            object_id=reference["reference_object_id"],
+            version="current-version",
+            payload={},
+        )
+
+    monkeypatch.setitem(RESOLVERS, "theme_research_v1", fake_resolver)
+    reference = _reference(
+        version="old-version",
+        hash_scope="selected_fields",
+        hash_fields=["/missing"],
+    )
+
+    result = audit_references(_version(reference))
+
+    assert result["issues"][0]["status"] == "version_mismatch"
+
+
 def test_deprecated_resolver_result_is_reported(monkeypatch):
     payload = {"theme_id": "retired-theme"}
 
@@ -291,6 +437,29 @@ def test_deprecated_resolver_result_is_reported(monkeypatch):
     assert result["issues"] == [
         {"reference_id": "ref-1", "status": "deprecated"}
     ]
+
+
+def test_deprecated_precedes_invalid_selected_field_pointer(monkeypatch):
+    def fake_resolver(reference):
+        return ResolvedReference(
+            namespace="theme_research_v1",
+            object_type="v1_theme",
+            object_id=reference["reference_object_id"],
+            version="v1",
+            payload={},
+            deprecated=True,
+        )
+
+    monkeypatch.setitem(RESOLVERS, "theme_research_v1", fake_resolver)
+    reference = _reference(
+        version="v1",
+        hash_scope="selected_fields",
+        hash_fields=["/missing"],
+    )
+
+    result = audit_references(_version(reference))
+
+    assert result["issues"][0]["status"] == "deprecated"
 
 
 def test_theme_child_inherits_archived_theme_artifact_status(monkeypatch, tmp_path):
