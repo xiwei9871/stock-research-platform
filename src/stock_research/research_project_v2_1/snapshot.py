@@ -90,6 +90,7 @@ _PROVENANCE_FIELDS = {
 }
 _ACTOR_TYPES = {"human", "codex", "automated_pipeline", "imported"}
 _REVIEW_STATUSES = {"unreviewed", "pending_review", "reviewed", "rejected"}
+_CONTROL_FLOW_EXCEPTIONS = (KeyboardInterrupt, SystemExit, MemoryError)
 _STOCK_OPINION_CLASSES = {"stock_opinion", "equity_research"}
 _STOCK_OPINION_PHRASES = {
     "目标价", "买入评级", "卖出评级", "增持评级", "建议买入", "股票推荐",
@@ -157,9 +158,19 @@ def _canonical_ip(value: object, *, kind: str) -> ipaddress.IPv4Address | ipaddr
 def _is_denied(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None:
         return _is_denied(address.ipv4_mapped)
-    return any(
-        address.version == network.version and address in network
-        for network in DENIED_NETWORKS
+    return (
+        not address.is_global
+        or address.is_private
+        or address.is_reserved
+        or address.is_loopback
+        or address.is_link_local
+        or address.is_multicast
+        or address.is_unspecified
+        or bool(getattr(address, "is_site_local", False))
+        or any(
+            address.version == network.version and address in network
+            for network in DENIED_NETWORKS
+        )
     )
 
 
@@ -218,7 +229,10 @@ class RequestsFetchTransport:
                 timeout=timeout_seconds,
                 stream=True,
                 allow_redirects=False,
+                headers={"Accept-Encoding": "identity"},
             )
+        except _CONTROL_FLOW_EXCEPTIONS:
+            raise
         except Exception as exc:
             raise _error("FETCH_TRANSPORT_ERROR", "HTTP request failed", url=url) from exc
         try:
@@ -230,6 +244,22 @@ class RequestsFetchTransport:
             raise
         status_code = response.status_code
         headers = dict(response.headers)
+        content_encodings = [
+            value.strip().lower()
+            for key, value in headers.items()
+            if key.lower() == "content-encoding" and isinstance(value, str)
+        ]
+        encoded = any(
+            value not in {"", "identity"} for value in content_encodings
+        )
+        headers = {
+            key: value
+            for key, value in headers.items()
+            if key.lower() != "content-encoding"
+            and not (
+                encoded and key.lower() in {"content-length", "etag"}
+            )
+        }
         response_url = response.url
         if status_code in _REDIRECT_STATUSES or not 200 <= status_code <= 299:
             close = getattr(response, "close", None)
@@ -237,15 +267,7 @@ class RequestsFetchTransport:
                 close()
             chunks: Iterable[bytes] = ()
         else:
-            def streamed_chunks() -> Iterable[bytes]:
-                try:
-                    yield from response.iter_content(chunk_size=64 * 1024)
-                finally:
-                    close = getattr(response, "close", None)
-                    if callable(close):
-                        close()
-
-            chunks = streamed_chunks()
+            chunks = _RequestsChunkStream(response)
         return FetchResponse(
             status_code=status_code,
             headers=headers,
@@ -253,6 +275,26 @@ class RequestsFetchTransport:
             url=response_url,
             peer_ip=peer_ip,
         )
+
+
+class _RequestsChunkStream:
+    def __init__(self, response: object) -> None:
+        self._response = response
+        self._closed = False
+
+    def __iter__(self) -> Iterable[bytes]:
+        try:
+            yield from self._response.iter_content(chunk_size=64 * 1024)
+        finally:
+            self.close()
+
+    def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        close = getattr(self._response, "close", None)
+        if callable(close):
+            close()
 
 
 def _approved_addresses(url: str, resolver: AddressResolver) -> frozenset[str]:
@@ -265,6 +307,8 @@ def _approved_addresses(url: str, resolver: AddressResolver) -> frozenset[str]:
         try:
             raw_answers = resolver.resolve(hostname)
         except ResearchProjectV2Error:
+            raise
+        except _CONTROL_FLOW_EXCEPTIONS:
             raise
         except Exception as exc:
             raise _error("FETCH_DNS_ERROR", "address resolution failed", hostname=hostname) from exc
@@ -323,6 +367,8 @@ def _close_chunks(response: FetchResponse) -> None:
     if callable(close):
         try:
             close()
+        except _CONTROL_FLOW_EXCEPTIONS:
+            raise
         except Exception:
             pass
 
@@ -659,15 +705,23 @@ def _rollback_created_final_via_live_path(
 
 
 def _record_rollback(
-    error: ResearchProjectV2Error, outcome: str, detail: str | None
+    error: BaseException, outcome: str, detail: str | None
 ) -> None:
-    error.details["rollback"] = outcome
-    if detail is not None:
-        error.details["rollback_detail"] = detail
-
-
-def _stable_cleanup_error(reason: str, error: BaseException) -> ResearchProjectV2Error:
     if isinstance(error, ResearchProjectV2Error):
+        error.details["rollback"] = outcome
+        if detail is not None:
+            error.details["rollback_detail"] = detail
+    else:
+        error.add_note(
+            f"raw publication rollback {outcome}"
+            + (f": {detail}" if detail is not None else "")
+        )
+
+
+def _stable_cleanup_error(reason: str, error: BaseException) -> BaseException:
+    if isinstance(error, ResearchProjectV2Error):
+        return error
+    if isinstance(error, _CONTROL_FLOW_EXCEPTIONS) or not isinstance(error, Exception):
         return error
     wrapped = _storage_failed(reason, exception_type=type(error).__name__)
     wrapped.__cause__ = error
@@ -749,13 +803,23 @@ class _RawTemp:
 
 
 def _new_raw_temp(layout: LayeredResearchLayout) -> _RawTemp:
-    chain, names = _open_dir_chain(layout.evidence_raw_dir / ".tmp")
-    if not _chain_bound(chain, names):
+    chain: list[int] = []
+    try:
+        chain, names = _open_dir_chain(layout.evidence_raw_dir / ".tmp")
+        if not _chain_bound(chain, names):
+            raise _storage_error("unsafe raw temporary directory")
+        fd, name = _create_temp(chain[-1], "snapshot")
+        return _RawTemp(chain, names, chain[-1], fd, name)
+    except BaseException as primary_error:
         for descriptor in reversed(chain):
-            os.close(descriptor)
-        raise _storage_error("unsafe raw temporary directory")
-    fd, name = _create_temp(chain[-1], "snapshot")
-    return _RawTemp(chain, names, chain[-1], fd, name)
+            try:
+                os.close(descriptor)
+            except OSError as cleanup_error:
+                primary_error.add_note(
+                    "additional cleanup failure: "
+                    f"{type(cleanup_error).__name__}: {cleanup_error}"
+                )
+        raise
 
 
 def _publish_raw(temp: _RawTemp, *, layout: LayeredResearchLayout, digest: str, extension: str) -> Path:
@@ -767,7 +831,7 @@ def _publish_raw(temp: _RawTemp, *, layout: LayeredResearchLayout, digest: str, 
     created = False
     final_directory_stat: os.stat_result | None = None
     result: Path | None = None
-    primary_error: ResearchProjectV2Error | None = None
+    primary_error: BaseException | None = None
     cleanup_errors: list[BaseException] = []
     try:
         chain, names = _open_dir_chain(final_dir)
@@ -806,7 +870,7 @@ def _publish_raw(temp: _RawTemp, *, layout: LayeredResearchLayout, digest: str, 
             raise _storage_error("raw final binding changed", path=str(target))
         result = target
     except BaseException as exc:
-        if isinstance(exc, ResearchProjectV2Error):
+        if isinstance(exc, (ResearchProjectV2Error, *_CONTROL_FLOW_EXCEPTIONS)) or not isinstance(exc, Exception):
             primary_error = exc
         else:
             primary_error = _storage_error(
@@ -951,7 +1015,13 @@ def _publish_bytes(directory: Path, final_name: str, data: bytes) -> Path:
         held_fd, held = _open_regular(chain[-1], final_name)
         if created and not _same_inode(held, temp_inode):
             raise _storage_error("published metadata inode changed", path=str(target))
-        if _read_all(held_fd) != data:
+        try:
+            existing_data = _read_all(held_fd)
+        except OSError as exc:
+            raise _storage_error(
+                "metadata read failed", path=str(target)
+            ) from exc
+        if existing_data != data:
             raise _immutability("metadata path conflict", path=str(target))
         try:
             _unlink_temp_if_bound(chain[-1], temp_name, temp_inode)
@@ -993,7 +1063,7 @@ def _publish_bytes(directory: Path, final_name: str, data: bytes) -> Path:
             if primary_error is not None:
                 primary_error.add_note(
                     "cleanup failure preserved: "
-                    f"{cleanup.code}"
+                    f"{getattr(cleanup, 'code', type(cleanup).__name__)}"
                 )
             else:
                 raise cleanup
@@ -1035,6 +1105,8 @@ def snapshot_candidate(
         try:
             response = transport.get(current, timeout_seconds=float(timeout_seconds))
         except ResearchProjectV2Error:
+            raise
+        except _CONTROL_FLOW_EXCEPTIONS:
             raise
         except Exception as exc:
             raise _error("FETCH_TRANSPORT_ERROR", "HTTP request failed", url=current) from exc
@@ -1081,11 +1153,12 @@ def snapshot_candidate(
 
     assert final_response is not None
     effective_layout = LayeredResearchLayout.default() if layout is None else layout
-    raw_temp = _new_raw_temp(effective_layout)
+    raw_temp: _RawTemp | None = None
     digest = sha256()
     byte_count = 0
     primary_error: BaseException | None = None
     try:
+        raw_temp = _new_raw_temp(effective_layout)
         try:
             for chunk in final_response.chunks:
                 if not isinstance(chunk, (bytes, bytearray, memoryview)):
@@ -1102,6 +1175,8 @@ def snapshot_candidate(
                 except OSError as exc:
                     raise _storage_error("raw temporary write failed") from exc
         except ResearchProjectV2Error:
+            raise
+        except _CONTROL_FLOW_EXCEPTIONS:
             raise
         except Exception as exc:
             raise _error("FETCH_STREAM_ERROR", "response stream failed") from exc
@@ -1165,13 +1240,14 @@ def snapshot_candidate(
         raise
     finally:
         _close_chunks(final_response)
-        try:
-            raw_temp.cleanup()
-        except BaseException as cleanup_error:
-            if primary_error is not None:
-                primary_error.add_note(
-                    "cleanup failure preserved: "
-                    f"{getattr(cleanup_error, 'code', type(cleanup_error).__name__)}"
-                )
-            else:
-                raise
+        if raw_temp is not None:
+            try:
+                raw_temp.cleanup()
+            except BaseException as cleanup_error:
+                if primary_error is not None:
+                    primary_error.add_note(
+                        "cleanup failure preserved: "
+                        f"{getattr(cleanup_error, 'code', type(cleanup_error).__name__)}"
+                    )
+                else:
+                    raise

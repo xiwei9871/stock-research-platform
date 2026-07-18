@@ -1120,3 +1120,271 @@ def test_live_path_rollback_skips_replacement_or_rebound_directory(
     assert exc_info.value.code == "RESEARCH_PROJECT_V2_1_SNAPSHOT_STORAGE_FAILED"
     assert exc_info.value.details["rollback"] == "skipped"
     assert raw.read_bytes() == replacement
+
+
+class _MockRequestsResponse:
+    def __init__(
+        self,
+        *,
+        headers: dict[str, str] | None = None,
+        peer_ip: str = "93.184.216.34",
+        chunks: Iterable[bytes] | None = None,
+        iterator_error: BaseException | None = None,
+    ) -> None:
+        class Socket:
+            def getpeername(inner_self):
+                return (peer_ip, 443)
+        class Connection:
+            sock = Socket()
+        class Raw:
+            _connection = Connection()
+        self.status_code = 200
+        self.headers = (
+            {"Content-Type": "application/pdf"} if headers is None else headers
+        )
+        self.url = "https://example.com/source.pdf"
+        self.raw = Raw()
+        self.close_calls = 0
+        self._chunks = list(chunks or [b"%PDF fixture"])
+        self._iterator_error = iterator_error
+    def iter_content(self, chunk_size):
+        yield from self._chunks
+        if self._iterator_error is not None:
+            raise self._iterator_error
+    def close(self):
+        self.close_calls += 1
+
+
+@pytest.mark.parametrize(
+    "failure",
+    ["peer", "headers", "content_length", "media", "raw_temp"],
+)
+def test_requests_response_closes_even_when_stream_iteration_never_starts(
+    tmp_path: Path, monkeypatch, failure: str
+) -> None:
+    import requests
+    import stock_research.research_project_v2_1.snapshot as module
+    headers = {"Content-Type": "application/pdf"}
+    peer = "93.184.216.34"
+    kwargs = {}
+    if failure == "peer":
+        peer = "192.0.2.1"
+    elif failure == "headers":
+        headers = {}
+    elif failure == "content_length":
+        headers["Content-Length"] = "100"
+        kwargs["max_bytes"] = 5
+    elif failure == "media":
+        headers["Content-Type"] = "image/png"
+    fake = _MockRequestsResponse(headers=headers, peer_ip=peer)
+    monkeypatch.setattr(requests, "get", lambda *args, **call_kwargs: fake)
+    if failure == "raw_temp":
+        monkeypatch.setattr(
+            module,
+            "_new_raw_temp",
+            lambda *args, **call_kwargs: (_ for _ in ()).throw(
+                module._storage_error("injected raw temp failure")
+            ),
+        )
+    with pytest.raises(ResearchProjectV2Error):
+        snapshot_candidate(
+            candidate(), transport=RequestsFetchTransport(), resolver=Resolver(),
+            layout=layout(tmp_path), fetched_at=FETCHED_AT, provenance=PROVENANCE,
+            **kwargs,
+        )
+    assert fake.close_calls >= 1
+
+
+def test_requests_iterator_error_closes_response(tmp_path: Path, monkeypatch) -> None:
+    import requests
+    fake = _MockRequestsResponse(iterator_error=RuntimeError("iterator failed"))
+    monkeypatch.setattr(requests, "get", lambda *args, **kwargs: fake)
+    assert "STREAM" in error_code(lambda: snapshot_candidate(
+        candidate(), transport=RequestsFetchTransport(), resolver=Resolver(),
+        layout=layout(tmp_path), fetched_at=FETCHED_AT, provenance=PROVENANCE,
+    ))
+    assert fake.close_calls >= 1
+
+
+@pytest.mark.parametrize("encoding", ["gzip", "br", "deflate"])
+def test_encoded_requests_response_snapshots_decoded_bytes_without_representation_headers(
+    tmp_path: Path, monkeypatch, encoding: str
+) -> None:
+    import requests
+    decoded = b"decoded document body"
+    fake = _MockRequestsResponse(
+        headers={
+            "Content-Type": "text/plain; charset=utf-8",
+            "Content-Encoding": encoding,
+            "Content-Length": "999",
+            "ETag": '"compressed-etag"',
+        },
+        chunks=[decoded],
+    )
+    calls = []
+    def get(url, **kwargs):
+        calls.append(kwargs)
+        return fake
+    monkeypatch.setattr(requests, "get", get)
+    result = snapshot_candidate(
+        candidate(), transport=RequestsFetchTransport(), resolver=Resolver(),
+        layout=layout(tmp_path), fetched_at=FETCHED_AT, provenance=PROVENANCE,
+    )
+    artifact = result["artifact"]
+    assert artifact["byte_count"] == len(decoded)
+    assert artifact["content_sha256"] == hashlib.sha256(decoded).hexdigest()
+    assert artifact["response_headers"] == {
+        "content-type": "text/plain; charset=utf-8"
+    }
+    assert calls[0]["headers"] == {"Accept-Encoding": "identity"}
+    assert calls[0]["stream"] is True
+    assert calls[0]["allow_redirects"] is False
+
+
+@pytest.mark.parametrize("encoding", [None, "identity", " Identity "])
+def test_identity_requests_response_keeps_strict_content_length(
+    tmp_path: Path, monkeypatch, encoding: str | None
+) -> None:
+    import requests
+    headers = {
+        "Content-Type": "application/pdf",
+        "Content-Length": "99",
+        "ETag": '"identity-etag"',
+    }
+    if encoding is not None:
+        headers["Content-Encoding"] = encoding
+    fake = _MockRequestsResponse(headers=headers, chunks=[b"short"])
+    monkeypatch.setattr(requests, "get", lambda *args, **kwargs: fake)
+    assert "CONTENT_LENGTH" in error_code(lambda: snapshot_candidate(
+        candidate(), transport=RequestsFetchTransport(), resolver=Resolver(),
+        layout=layout(tmp_path), fetched_at=FETCHED_AT, provenance=PROVENANCE,
+    ))
+    assert fake.close_calls >= 1
+
+
+@pytest.mark.parametrize(
+    "address",
+    [
+        "192.0.0.1",
+        "198.18.0.1",
+        "240.0.0.1",
+        "2001:db8::1",
+        "fec0::1",
+        "::ffff:192.168.1.1",
+        "::ffff:198.18.0.1",
+    ],
+)
+def test_private_by_default_ssrf_denies_non_global_addresses(address: str) -> None:
+    import stock_research.research_project_v2_1.snapshot as module
+    assert module._is_denied(ipaddress.ip_address(address)) is True
+
+
+@pytest.mark.parametrize(
+    "address",
+    ["8.8.8.8", "1.1.1.1", "2606:4700:4700::1111"],
+)
+def test_private_by_default_ssrf_allows_global_addresses(address: str) -> None:
+    import stock_research.research_project_v2_1.snapshot as module
+    assert module._is_denied(ipaddress.ip_address(address)) is False
+
+
+def test_new_raw_temp_failure_closes_opened_directories_and_response(
+    tmp_path: Path, monkeypatch
+) -> None:
+    import requests
+    import stock_research.research_project_v2_1.snapshot as module
+    fake = _MockRequestsResponse()
+    monkeypatch.setattr(requests, "get", lambda *args, **kwargs: fake)
+    original_open_chain = module._open_dir_chain
+    original_close = module.os.close
+    state = {"opened": set(), "closed": set()}
+    def open_chain(path):
+        result = original_open_chain(path)
+        if path.name == ".tmp":
+            state["opened"].update(result[0])
+        return result
+    def close(descriptor):
+        state["closed"].add(descriptor)
+        return original_close(descriptor)
+    monkeypatch.setattr(module, "_open_dir_chain", open_chain)
+    monkeypatch.setattr(module.os, "close", close)
+    monkeypatch.setattr(
+        module,
+        "_create_temp",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            module._storage_error("injected temp creation failure")
+        ),
+    )
+    with pytest.raises(ResearchProjectV2Error):
+        snapshot_candidate(
+            candidate(), transport=RequestsFetchTransport(), resolver=Resolver(),
+            layout=layout(tmp_path), fetched_at=FETCHED_AT, provenance=PROVENANCE,
+        )
+    assert state["opened"] <= state["closed"]
+    assert fake.close_calls >= 1
+
+
+@pytest.mark.parametrize("exception_type", [KeyboardInterrupt, SystemExit, MemoryError])
+def test_raw_publisher_preserves_control_flow_base_exceptions(
+    tmp_path: Path, monkeypatch, exception_type
+) -> None:
+    import stock_research.research_project_v2_1.snapshot as module
+    monkeypatch.setattr(
+        module,
+        "_verify_live",
+        lambda *args, **kwargs: (_ for _ in ()).throw(exception_type()),
+    )
+    effective = layout(tmp_path)
+    with pytest.raises(exception_type):
+        snapshot_candidate(
+            candidate(), transport=Transport([response()]), resolver=Resolver(),
+            layout=effective, fetched_at=FETCHED_AT, provenance=PROVENANCE,
+        )
+    assert not list(effective.evidence_raw_dir.rglob("*.pdf"))
+    assert not [path for path in effective.root.rglob("*.tmp") if path.is_file()]
+
+
+@pytest.mark.parametrize("exception_type", [KeyboardInterrupt, SystemExit, MemoryError])
+def test_raw_temp_cleanup_preserves_control_flow_base_exceptions(
+    tmp_path: Path, monkeypatch, exception_type
+) -> None:
+    import stock_research.research_project_v2_1.snapshot as module
+    original_unlink = module._unlink_temp_if_bound
+    def unlink_then_interrupt(*args, **kwargs):
+        original_unlink(*args, **kwargs)
+        raise exception_type()
+    monkeypatch.setattr(module, "_unlink_temp_if_bound", unlink_then_interrupt)
+    effective = layout(tmp_path)
+    with pytest.raises(exception_type):
+        snapshot_candidate(
+            candidate(), transport=Transport([response()]), resolver=Resolver(),
+            layout=effective, fetched_at=FETCHED_AT, provenance=PROVENANCE,
+        )
+    assert not [path for path in effective.root.rglob("*.tmp") if path.is_file()]
+
+
+def test_existing_metadata_read_error_is_stable_storage_error(
+    tmp_path: Path, monkeypatch
+) -> None:
+    effective = layout(tmp_path)
+    snapshot_candidate(
+        candidate(), transport=Transport([response()]), resolver=Resolver(),
+        layout=effective, fetched_at=FETCHED_AT, provenance=PROVENANCE,
+    )
+    import stock_research.research_project_v2_1.snapshot as module
+    original_read_all = module._read_all
+    calls = 0
+    def fail_metadata_read(descriptor):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise OSError("injected metadata read failure")
+        return original_read_all(descriptor)
+    monkeypatch.setattr(module, "_read_all", fail_metadata_read)
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        snapshot_candidate(
+            candidate(), transport=Transport([response()]), resolver=Resolver(),
+            layout=effective, fetched_at=FETCHED_AT, provenance=PROVENANCE,
+        )
+    assert exc_info.value.code == "RESEARCH_PROJECT_V2_1_SNAPSHOT_STORAGE_ERROR"
+    assert isinstance(exc_info.value.__cause__, OSError)
