@@ -756,3 +756,146 @@ def test_cleanup_only_failure_has_stable_storage_code(
         )
     assert exc_info.value.code == "RESEARCH_PROJECT_V2_1_SNAPSHOT_STORAGE_FAILED"
     assert isinstance(exc_info.value.__cause__, OSError)
+
+
+def _inject_raw_publisher_close_failures(
+    module,
+    monkeypatch,
+    *,
+    raw_target: Path | None = None,
+    replacement: bytes | None = None,
+    fail_chain: bool = False,
+):
+    original_open_chain = module._open_dir_chain
+    original_open_regular = module._open_regular
+    original_close = module.os.close
+    state = {"chain": [], "held_fd": None, "replaced": False}
+    def open_chain(path):
+        result = original_open_chain(path)
+        if path.parent.name == "raw" and path.name != ".tmp":
+            state["chain"] = list(result[0])
+        return result
+    def open_regular(directory_fd, name):
+        result = original_open_regular(directory_fd, name)
+        if state["chain"] and directory_fd == state["chain"][-1] and name.endswith(".pdf"):
+            state["held_fd"] = result[0]
+        return result
+    def close(descriptor):
+        if descriptor == state["held_fd"]:
+            if replacement is not None and raw_target is not None and not state["replaced"]:
+                raw_target.unlink()
+                raw_target.write_bytes(replacement)
+                state["replaced"] = True
+            original_close(descriptor)
+            raise OSError("held raw close failure")
+        if fail_chain and state["chain"] and descriptor == state["chain"][0]:
+            original_close(descriptor)
+            raise OSError("raw chain close failure")
+        return original_close(descriptor)
+    monkeypatch.setattr(module, "_open_dir_chain", open_chain)
+    monkeypatch.setattr(module, "_open_regular", open_regular)
+    monkeypatch.setattr(module.os, "close", close)
+    return state
+
+
+def test_raw_primary_binding_error_survives_held_close_failure(
+    tmp_path: Path, monkeypatch
+) -> None:
+    import stock_research.research_project_v2_1.snapshot as module
+    original_verify = module._verify_live
+    monkeypatch.setattr(
+        module,
+        "_verify_live",
+        lambda path, *args: False
+        if path.parent.name == "raw"
+        else original_verify(path, *args),
+    )
+    _inject_raw_publisher_close_failures(module, monkeypatch)
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        snapshot_candidate(
+            candidate(), transport=Transport([response()]), resolver=Resolver(),
+            layout=layout(tmp_path), fetched_at=FETCHED_AT, provenance=PROVENANCE,
+        )
+    assert exc_info.value.code == "RESEARCH_PROJECT_V2_1_SNAPSHOT_STORAGE_ERROR"
+    assert any("cleanup" in note for note in getattr(exc_info.value, "__notes__", []))
+
+
+def test_successful_created_raw_close_failure_rolls_back_and_is_stable(
+    tmp_path: Path, monkeypatch
+) -> None:
+    import stock_research.research_project_v2_1.snapshot as module
+    effective = layout(tmp_path)
+    _inject_raw_publisher_close_failures(module, monkeypatch)
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        snapshot_candidate(
+            candidate(), transport=Transport([response()]), resolver=Resolver(),
+            layout=effective, fetched_at=FETCHED_AT, provenance=PROVENANCE,
+        )
+    assert exc_info.value.code == "RESEARCH_PROJECT_V2_1_SNAPSHOT_STORAGE_FAILED"
+    assert isinstance(exc_info.value.__cause__, OSError)
+    assert exc_info.value.details["rollback"] == "removed"
+    assert not list(effective.evidence_raw_dir.rglob("*.pdf"))
+    assert not [path for path in effective.root.rglob("*.tmp") if path.is_file()]
+
+
+def test_reused_raw_close_failure_preserves_existing_file(
+    tmp_path: Path, monkeypatch
+) -> None:
+    effective = layout(tmp_path)
+    first = snapshot_candidate(
+        candidate(), transport=Transport([response()]), resolver=Resolver(),
+        layout=effective, fetched_at=FETCHED_AT, provenance=PROVENANCE,
+    )
+    raw = Path(first["raw_path"])
+    import stock_research.research_project_v2_1.snapshot as module
+    _inject_raw_publisher_close_failures(module, monkeypatch)
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        snapshot_candidate(
+            candidate(), transport=Transport([response()]), resolver=Resolver(),
+            layout=effective, fetched_at=FETCHED_AT, provenance=PROVENANCE,
+        )
+    assert exc_info.value.code == "RESEARCH_PROJECT_V2_1_SNAPSHOT_STORAGE_FAILED"
+    assert raw.read_bytes() == b"%PDF fixture"
+
+
+def test_created_raw_close_failure_preserves_replacement_on_rollback(
+    tmp_path: Path, monkeypatch
+) -> None:
+    effective = layout(tmp_path)
+    digest = hashlib.sha256(b"%PDF fixture").hexdigest()
+    raw = effective.evidence_raw_dir / digest[:2] / f"{digest}.pdf"
+    replacement = b"replacement during close"
+    import stock_research.research_project_v2_1.snapshot as module
+    _inject_raw_publisher_close_failures(
+        module, monkeypatch, raw_target=raw, replacement=replacement
+    )
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        snapshot_candidate(
+            candidate(), transport=Transport([response()]), resolver=Resolver(),
+            layout=effective, fetched_at=FETCHED_AT, provenance=PROVENANCE,
+        )
+    assert exc_info.value.code == "RESEARCH_PROJECT_V2_1_SNAPSHOT_STORAGE_FAILED"
+    assert exc_info.value.details["rollback"] == "skipped"
+    assert raw.read_bytes() == replacement
+
+
+def test_multiple_raw_close_failures_keep_first_cause_and_notes(
+    tmp_path: Path, monkeypatch
+) -> None:
+    effective = layout(tmp_path)
+    first = snapshot_candidate(
+        candidate(), transport=Transport([response()]), resolver=Resolver(),
+        layout=effective, fetched_at=FETCHED_AT, provenance=PROVENANCE,
+    )
+    raw = Path(first["raw_path"])
+    import stock_research.research_project_v2_1.snapshot as module
+    _inject_raw_publisher_close_failures(module, monkeypatch, fail_chain=True)
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        snapshot_candidate(
+            candidate(), transport=Transport([response()]), resolver=Resolver(),
+            layout=effective, fetched_at=FETCHED_AT, provenance=PROVENANCE,
+        )
+    assert exc_info.value.code == "RESEARCH_PROJECT_V2_1_SNAPSHOT_STORAGE_FAILED"
+    assert "held raw close failure" in str(exc_info.value.__cause__)
+    assert any("additional cleanup failure" in note for note in exc_info.value.__notes__)
+    assert raw.read_bytes() == b"%PDF fixture"

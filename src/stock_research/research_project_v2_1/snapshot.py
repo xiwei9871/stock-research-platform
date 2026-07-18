@@ -723,6 +723,9 @@ def _publish_raw(temp: _RawTemp, *, layout: LayeredResearchLayout, digest: str, 
     chain: list[int] = []
     held_fd: int | None = None
     created = False
+    result: Path | None = None
+    primary_error: ResearchProjectV2Error | None = None
+    cleanup_errors: list[BaseException] = []
     try:
         chain, names = _open_dir_chain(final_dir)
         if not _chain_bound(chain, names) or not _chain_bound(temp.chain, temp.names):
@@ -757,26 +760,75 @@ def _publish_raw(temp: _RawTemp, *, layout: LayeredResearchLayout, digest: str, 
             final_dir, chain, final_name, held, ("sha256", digest)
         ):
             raise _storage_error("raw final binding changed", path=str(target))
-        return target
+        result = target
     except BaseException as exc:
         if isinstance(exc, ResearchProjectV2Error):
-            error = exc
+            primary_error = exc
         else:
-            error = _storage_error("raw publication failed", path=str(target))
-            error.__cause__ = exc
-        if created and temp.inode is not None and chain:
-            outcome, detail = _rollback_created_final(
-                chain[-1], final_name, temp.inode
+            primary_error = _storage_error(
+                "raw publication failed", path=str(target)
             )
-            _record_rollback(error, outcome, detail)
-        if error is exc:
-            raise
-        raise error from exc
-    finally:
-        if held_fd is not None:
+            primary_error.__cause__ = exc
+
+    if held_fd is not None:
+        try:
             os.close(held_fd)
-        for descriptor in reversed(chain):
+        except OSError as exc:
+            cleanup_errors.append(exc)
+
+    final_directory_fd = chain[-1] if chain else None
+    for descriptor in reversed(chain[:-1]):
+        try:
             os.close(descriptor)
+        except OSError as exc:
+            cleanup_errors.append(exc)
+
+    if primary_error is None and cleanup_errors:
+        primary_error = _stable_cleanup_error(
+            "raw publisher cleanup failed", cleanup_errors[0]
+        )
+
+    rollback_recorded = False
+    if (
+        primary_error is not None
+        and created
+        and temp.inode is not None
+        and final_directory_fd is not None
+    ):
+        outcome, detail = _rollback_created_final(
+            final_directory_fd, final_name, temp.inode
+        )
+        _record_rollback(primary_error, outcome, detail)
+        rollback_recorded = True
+
+    if final_directory_fd is not None:
+        try:
+            os.close(final_directory_fd)
+        except OSError as exc:
+            cleanup_errors.append(exc)
+            if primary_error is None:
+                primary_error = _stable_cleanup_error(
+                    "raw publisher cleanup failed", exc
+                )
+            if created and temp.inode is not None and not rollback_recorded:
+                outcome, detail = _rollback_created_final(
+                    final_directory_fd, final_name, temp.inode
+                )
+                _record_rollback(primary_error, outcome, detail)
+                rollback_recorded = True
+
+    if primary_error is not None:
+        for index, cleanup_error in enumerate(cleanup_errors):
+            if index == 0 and primary_error.__cause__ is cleanup_error:
+                continue
+            primary_error.add_note(
+                "additional cleanup failure: "
+                f"{type(cleanup_error).__name__}: {cleanup_error}"
+            )
+        raise primary_error
+
+    assert result is not None
+    return result
 
 
 def _publish_bytes(directory: Path, final_name: str, data: bytes) -> Path:
