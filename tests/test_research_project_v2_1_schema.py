@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 import warnings
 
-from jsonschema import Draft202012Validator
+from jsonschema import Draft202012Validator, FormatChecker
 import pytest
 
 from stock_research.research_project_v2.errors import ResearchProjectV2Error
@@ -29,6 +29,195 @@ ALL_SCHEMA_FILES = {
     "definitions_v2_1.schema.json",
     *SCHEMA_FILES.values(),
 }
+
+PROVENANCE = {
+    "created_by": "fixture-author",
+    "actor_type": "human",
+    "agent_run_id": None,
+    "created_at": "2026-07-18T10:00:00Z",
+    "created_in_version": "research_version:fixture-industry:0.1.0",
+    "review_status": "unreviewed",
+}
+
+
+def canonical_search_plan():
+    return {
+        "search_plan_id": "search_plan:requirement:fixture",
+        "project_id": "research_project:fixture-industry",
+        "version_id": "research_version:fixture-industry:0.1.0",
+        "evidence_channel": "industry",
+        "requirement_ids": ["requirement:fixture"],
+        "queries": [
+            {
+                "query_id": "query:requirement:fixture:mechanism",
+                "query_role": "mechanism",
+                "query_text": "fixture mechanism engineering",
+                "required_terms": ["fixture technology"],
+                "excluded_terms": ["target price"],
+                "source_classes": ["primary", "independent_secondary"],
+                "priority": 1,
+            },
+            {
+                "query_id": "query:requirement:fixture:counter",
+                "query_role": "counter_evidence",
+                "query_text": "fixture alternative substitution limitation",
+                "required_terms": ["fixture technology"],
+                "excluded_terms": ["buy rating"],
+                "source_classes": ["primary", "independent_secondary"],
+                "priority": 2,
+            },
+        ],
+        "languages": ["zh-CN", "en"],
+        "geography": ["CN", "global"],
+        "publication_window": "within_12_months",
+        "result_limit_per_query": 20,
+        "deduplication_policy": "normalized_url_then_content_hash",
+        "stop_conditions": [
+            "all query roles executed",
+            "counter-evidence query executed",
+        ],
+        "status": "planned",
+        "provenance": PROVENANCE,
+    }
+
+
+def canonical_normalized_document():
+    return {
+        "document_id": "normalized_document:fixture",
+        "artifact_id": "evidence_artifact:fixture",
+        "parser": "html",
+        "parser_version": "1.0.0",
+        "media_type": "text/html",
+        "title": "Fixture source",
+        "sections": [
+            {
+                "section_id": "section:evidence_artifact:fixture:0001",
+                "heading": "Mechanism",
+                "locator": "#mechanism",
+                "text": "Fixture normalized text.",
+                "page_start": None,
+                "page_end": None,
+                "section_hash": "d" * 64,
+            }
+        ],
+        "document_hash": "c" * 64,
+        "parsed_at": "2026-07-18T10:00:00Z",
+        "warnings": [],
+        "provenance": PROVENANCE,
+    }
+
+
+def canonical_industry_evidence_assessment():
+    return {
+        "assessment_id": "industry_evidence_assessment:fixture",
+        "evidence_channel": "industry",
+        "target_type": "research_claim",
+        "target_id": "claim:fixture",
+        "requirement_id": "requirement:fixture",
+        "artifact_id": "evidence_artifact:fixture",
+        "normalized_document_id": "normalized_document:fixture",
+        "evidence_role": "supports",
+        "locator": "#mechanism",
+        "assessment_summary": "Direct industry evidence.",
+        "directness": "direct",
+        "strength": "strong",
+        "independence": "independent",
+        "freshness": "fresh",
+        "scope_match": "full",
+        "conflict_status": "none",
+        "review_status": "pending_review",
+        "provenance": PROVENANCE,
+    }
+
+
+def industry_evidence_requirement(target_type="research_claim"):
+    return {
+        "requirement_id": "requirement:fixture",
+        "target_type": target_type,
+        "target_id": "claim:fixture",
+        "question_to_resolve": "Is the industry mechanism observed?",
+        "requirement_type": "validation",
+        "required_source_classes": ["primary"],
+        "required_independence": "independent",
+        "required_freshness": "within_12_months",
+        "required_scope": "global",
+        "minimum_coverage": 1,
+        "conflict_search_required": True,
+        "primary_source_required": True,
+        "collection_status": "not_started",
+        "satisfaction_status": "unsatisfied",
+        "provenance": PROVENANCE,
+    }
+
+
+def industry_causal_node(node_kind="mechanism"):
+    return {
+        "causal_node_id": "causal_node:fixture",
+        "node_kind": node_kind,
+        "node_text": "Fixture industry mechanism",
+        "lifecycle_status": "active",
+        "provenance": PROVENANCE,
+    }
+
+
+def source_candidate(evidence_channel="industry"):
+    return {
+        "source_candidate_id": "source_candidate:fixture",
+        "search_plan_id": "search_plan:requirement:fixture",
+        "query_id": "query:requirement:fixture:mechanism",
+        "evidence_channel": evidence_channel,
+        "title": "Fixture source",
+        "source_uri": "https://example.com/source.pdf",
+        "source_type": "engineering_document",
+        "publisher": "Fixture publisher",
+        "published_at": None,
+        "discovered_at": "2026-07-18T10:00:00Z",
+        "selection_status": "selected",
+        "rationale": "Primary engineering source.",
+    }
+
+
+def evidence_artifact(evidence_channel="industry"):
+    return {
+        "evidence_artifact_id": "evidence_artifact:fixture",
+        "project_id": "research_project:fixture-industry",
+        "version_id": "research_version:fixture-industry:0.1.0",
+        "evidence_channel": evidence_channel,
+        "source_candidate_id": "source_candidate:fixture",
+        "source_uri": "https://example.com/source.pdf",
+        "retrieved_at": "2026-07-18T10:00:00Z",
+        "content_hash": "b" * 64,
+        "media_type": "application/pdf",
+        "storage_path": "evidence/raw/bb/fixture.pdf",
+    }
+
+
+def upstream_research_ref(upstream_research_layer=None):
+    return {
+        "upstream_research_ref_id": "upstream_ref:fixture",
+        "upstream_research_layer": upstream_research_layer,
+        "upstream_project_id": "research_project:upstream-fixture",
+        "upstream_version_id": "research_version:upstream-fixture:0.1.0",
+        "upstream_object_type": "research_version",
+        "upstream_object_id": None,
+        "upstream_gate_result_id": None,
+        "upstream_content_hash": "e" * 64,
+        "referenced_at": "2026-07-18T10:00:00Z",
+        "scope_note": "Fixture upstream reference.",
+    }
+
+
+def conflict_summary(target_type="research_claim"):
+    return {
+        "conflict_summary_id": "conflict_summary:fixture",
+        "target_type": target_type,
+        "target_id": "claim:fixture",
+        "evidence_artifact_ids": ["evidence_artifact:fixture"],
+        "status": "open",
+        "summary": "Fixture conflict.",
+        "resolution": None,
+        "updated_at": "2026-07-18T10:00:00Z",
+    }
 
 
 @pytest.fixture
@@ -149,6 +338,200 @@ def test_valid_industry_version_passes(sample_industry_version):
 
 
 @pytest.mark.parametrize(
+    ("schema_name", "artifact_kind", "body_key", "builder_payload"),
+    [
+        (
+            "search_plan_v2_1",
+            "search_plan",
+            "search_plan",
+            canonical_search_plan(),
+        ),
+        (
+            "normalized_document_v2_1",
+            "normalized_document",
+            "normalized_document",
+            canonical_normalized_document(),
+        ),
+        (
+            "industry_evidence_assessment_v2_1",
+            "industry_evidence_assessment",
+            "industry_evidence_assessment",
+            canonical_industry_evidence_assessment(),
+        ),
+    ],
+)
+def test_builder_shaped_payload_passes_standalone_schema(
+    schema_name, artifact_kind, body_key, builder_payload
+):
+    validate_v2_1_schema_payload(
+        schema_name,
+        {
+            "schema_version": "2.1.0",
+            "artifact_kind": artifact_kind,
+            body_key: builder_payload,
+        },
+    )
+
+
+def test_builder_shaped_payloads_pass_industry_version_schema(
+    sample_industry_version,
+):
+    snapshot = sample_industry_version["snapshot"]
+    snapshot["search_plans"] = [canonical_search_plan()]
+    snapshot["normalized_documents"] = [canonical_normalized_document()]
+    snapshot["industry_evidence_assessments"] = [
+        canonical_industry_evidence_assessment()
+    ]
+    sample_industry_version["creation_stage"] = "evidence_snapshot"
+
+    validate_v2_1_schema_payload(
+        "industry_research_version_v2_1", sample_industry_version
+    )
+
+
+def test_industry_snapshot_persists_without_company_capture_assessments(
+    sample_industry_version,
+):
+    # Task 3 must inject company_capture_assessments=[] only into its temporary
+    # R1 common-semantics projection; it is never a persisted Industry field.
+    assert "company_capture_assessments" not in sample_industry_version["snapshot"]
+
+    validate_v2_1_schema_payload(
+        "industry_research_version_v2_1", sample_industry_version
+    )
+
+
+def test_industry_search_plan_rejects_stock_layer_escape(
+    sample_industry_version,
+):
+    plan = canonical_search_plan()
+    plan["research_layer"] = "stock_evaluation"
+    sample_industry_version["snapshot"]["search_plans"] = [plan]
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        validate_v2_1_schema_payload(
+            "industry_research_version_v2_1", sample_industry_version
+        )
+
+    assert exc_info.value.code == "RESEARCH_PROJECT_V2_1_SCHEMA_INVALID"
+    assert exc_info.value.details["path"] == ["snapshot", "search_plans", 0]
+
+
+def test_industry_evidence_requirement_rejects_company_target(
+    sample_industry_version,
+):
+    sample_industry_version["snapshot"]["evidence_requirements"] = [
+        industry_evidence_requirement("company_capture")
+    ]
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        validate_v2_1_schema_payload(
+            "industry_research_version_v2_1", sample_industry_version
+        )
+
+    assert exc_info.value.code == "RESEARCH_PROJECT_V2_1_SCHEMA_INVALID"
+    assert exc_info.value.details["path"] == [
+        "snapshot",
+        "evidence_requirements",
+        0,
+        "target_type",
+    ]
+
+
+def test_industry_causal_node_rejects_company_capture_kind(
+    sample_industry_version,
+):
+    sample_industry_version["snapshot"]["causal_nodes"] = [
+        industry_causal_node("company_capture")
+    ]
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        validate_v2_1_schema_payload(
+            "industry_research_version_v2_1", sample_industry_version
+        )
+
+    assert exc_info.value.code == "RESEARCH_PROJECT_V2_1_SCHEMA_INVALID"
+    assert exc_info.value.details["path"] == [
+        "snapshot",
+        "causal_nodes",
+        0,
+        "node_kind",
+    ]
+
+
+@pytest.mark.parametrize(
+    "investment_status",
+    ["watchlist_candidate", "strategy_hypothesis"],
+)
+def test_industry_snapshot_rejects_downstream_investment_status(
+    sample_industry_version, investment_status
+):
+    sample_industry_version["creation_stage"] = "evidence_snapshot"
+    sample_industry_version["snapshot"]["investment_status"] = investment_status
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        validate_v2_1_schema_payload(
+            "industry_research_version_v2_1", sample_industry_version
+        )
+
+    assert exc_info.value.code == "RESEARCH_PROJECT_V2_1_SCHEMA_INVALID"
+    assert exc_info.value.details["path"] == ["snapshot", "investment_status"]
+
+
+@pytest.mark.parametrize(
+    ("collection", "payload", "expected_path"),
+    [
+        (
+            "source_candidates",
+            source_candidate("company"),
+            ["snapshot", "source_candidates", 0, "evidence_channel"],
+        ),
+        (
+            "evidence_artifacts",
+            evidence_artifact("market"),
+            ["snapshot", "evidence_artifacts", 0, "evidence_channel"],
+        ),
+        (
+            "industry_evidence_assessments",
+            {
+                **canonical_industry_evidence_assessment(),
+                "target_type": "company_capture",
+            },
+            [
+                "snapshot",
+                "industry_evidence_assessments",
+                0,
+                "target_type",
+            ],
+        ),
+        (
+            "upstream_research_refs",
+            upstream_research_ref("stock_evaluation"),
+            ["snapshot", "upstream_research_refs", 0, "upstream_research_layer"],
+        ),
+        (
+            "conflict_summaries",
+            conflict_summary("stock_rating"),
+            ["snapshot", "conflict_summaries", 0, "target_type"],
+        ),
+    ],
+)
+def test_industry_snapshot_rejects_other_company_and_market_semantic_escapes(
+    sample_industry_version, collection, payload, expected_path
+):
+    sample_industry_version["creation_stage"] = "evidence_snapshot"
+    sample_industry_version["snapshot"][collection] = [payload]
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        validate_v2_1_schema_payload(
+            "industry_research_version_v2_1", sample_industry_version
+        )
+
+    assert exc_info.value.code == "RESEARCH_PROJECT_V2_1_SCHEMA_INVALID"
+    assert exc_info.value.details["path"] == expected_path
+
+
+@pytest.mark.parametrize(
     "forbidden_key",
     [
         "candidate_companies",
@@ -259,6 +642,26 @@ def test_common_research_layer_supports_all_three_layers():
     ]
 
 
+def test_freshness_assessment_accepts_task8_calculation_result():
+    definitions = json.loads(
+        (SCHEMA_DIR / "definitions_v2_1.schema.json").read_text()
+    )
+    validator = Draft202012Validator(
+        definitions["$defs"]["freshness_assessment"],
+        format_checker=FormatChecker(),
+    )
+
+    validator.validate(
+        {
+            "status": "fresh",
+            "publish_date": "2026-07-01",
+            "assessed_at": "2026-07-18T10:00:00Z",
+            "age_days": 17,
+            "maximum_age_days": 365,
+        }
+    )
+
+
 @pytest.mark.parametrize(
     ("field", "invalid_value"),
     [
@@ -313,25 +716,7 @@ def _standalone_payloads():
         "search_plan_v2_1": {
             "schema_version": "2.1.0",
             "artifact_kind": "search_plan",
-            "search_plan": {
-                "search_plan_id": "search_plan:fixture",
-                "project_id": "research_project:fixture-industry",
-                "version_id": "research_version:fixture-industry:0.1.0",
-                "research_layer": "industry_research",
-                "objective": "Find industry mechanism evidence.",
-                "queries": [
-                    {
-                        "query_id": "query:fixture:mechanism",
-                        "query_text": "fixture mechanism engineering",
-                        "evidence_channel": "industry",
-                        "purpose": "Validate the mechanism.",
-                        "priority": 1,
-                        "status": "planned",
-                    }
-                ],
-                "created_at": "2026-07-18T10:00:00+08:00",
-                "created_by": "fixture-author",
-            },
+            "search_plan": canonical_search_plan(),
         },
         "evidence_artifact_v2_1": {
             "schema_version": "2.1.0",
@@ -352,51 +737,12 @@ def _standalone_payloads():
         "normalized_document_v2_1": {
             "schema_version": "2.1.0",
             "artifact_kind": "normalized_document",
-            "normalized_document": {
-                "normalized_document_id": "normalized_document:fixture",
-                "evidence_artifact_id": "evidence_artifact:fixture",
-                "project_id": "research_project:fixture-industry",
-                "version_id": "research_version:fixture-industry:0.1.0",
-                "title": "Fixture source",
-                "normalized_at": "2026-07-18T10:00:00Z",
-                "content_hash": "c" * 64,
-                "sections": [
-                    {
-                        "section_id": "section:fixture:0001",
-                        "heading": "Mechanism",
-                        "ordinal": 1,
-                        "text": "Fixture normalized text.",
-                        "content_hash": "d" * 64,
-                    }
-                ],
-            },
+            "normalized_document": canonical_normalized_document(),
         },
         "industry_evidence_assessment_v2_1": {
             "schema_version": "2.1.0",
             "artifact_kind": "industry_evidence_assessment",
-            "industry_evidence_assessment": {
-                "assessment_id": "industry_evidence_assessment:fixture",
-                "project_id": "research_project:fixture-industry",
-                "version_id": "research_version:fixture-industry:0.1.0",
-                "evidence_artifact_id": "evidence_artifact:fixture",
-                "target_type": "research_claim",
-                "target_id": "claim:fixture",
-                "evidence_role": "supports",
-                "directness": "direct",
-                "strength": "strong",
-                "independence": "independent",
-                "freshness": {
-                    "assessed_at": "2026-07-18T10:00:00Z",
-                    "source_published_at": "2026-07-01T00:00:00Z",
-                    "status": "current",
-                    "rationale": "Published within the required window.",
-                },
-                "scope_match": "full",
-                "conflict_status": "none",
-                "assessment_summary": "Direct industry evidence.",
-                "assessed_at": "2026-07-18T10:00:00Z",
-                "assessed_by": "fixture-author",
-            },
+            "industry_evidence_assessment": canonical_industry_evidence_assessment(),
         },
         "research_project_index_v2_1": {
             "schema_version": "2.1.0",
@@ -434,9 +780,9 @@ def test_standalone_schema_resolves_common_refs_and_accepts_valid_payload(
         (
             "search_plan_v2_1",
             "search_plan",
-            "created_at",
-            "2026-07-18",
-            ["search_plan", "created_at"],
+            "evidence_channel",
+            "stock_evaluation",
+            ["search_plan", "evidence_channel"],
         ),
         (
             "evidence_artifact_v2_1",
@@ -448,16 +794,16 @@ def test_standalone_schema_resolves_common_refs_and_accepts_valid_payload(
         (
             "normalized_document_v2_1",
             "normalized_document",
-            "normalized_at",
+            "parsed_at",
             "not-a-date",
-            ["normalized_document", "normalized_at"],
+            ["normalized_document", "parsed_at"],
         ),
         (
             "industry_evidence_assessment_v2_1",
             "industry_evidence_assessment",
-            "assessed_at",
-            "not-a-date",
-            ["industry_evidence_assessment", "assessed_at"],
+            "freshness",
+            "company_guidance",
+            ["industry_evidence_assessment", "freshness"],
         ),
         (
             "research_project_index_v2_1",

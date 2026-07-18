@@ -93,7 +93,7 @@
           "$ref": "definitions_v2_1.schema.json#/$defs/conclusion_status"
         },
         "investment_status": {
-          "$ref": "definitions_v2_1.schema.json#/$defs/investment_status"
+          "$ref": "definitions_v2_1.schema.json#/$defs/industry_investment_status"
         },
         "scope": {"$ref": "definitions_v2_1.schema.json#/$defs/scope"},
         "router_decision": {
@@ -122,7 +122,7 @@
         "evidence_requirements": {
           "type": "array",
           "items": {
-            "$ref": "definitions_v2_1.schema.json#/$defs/evidence_requirement"
+            "$ref": "definitions_v2_1.schema.json#/$defs/industry_evidence_requirement"
           }
         },
         "references": {
@@ -132,13 +132,13 @@
         "evidence_assessments": {
           "type": "array",
           "items": {
-            "$ref": "definitions_v2_1.schema.json#/$defs/evidence_assessment"
+            "$ref": "definitions_v2_1.schema.json#/$defs/industry_common_evidence_assessment"
           }
         },
         "causal_nodes": {
           "type": "array",
           "items": {
-            "$ref": "definitions_v2_1.schema.json#/$defs/causal_node"
+            "$ref": "definitions_v2_1.schema.json#/$defs/industry_causal_node"
           }
         },
         "causal_edges": {
@@ -150,31 +150,31 @@
         "validation_metrics": {
           "type": "array",
           "items": {
-            "$ref": "definitions_v2_1.schema.json#/$defs/validation_metric"
+            "$ref": "definitions_v2_1.schema.json#/$defs/industry_validation_metric"
           }
         },
         "invalidation_conditions": {
           "type": "array",
           "items": {
-            "$ref": "definitions_v2_1.schema.json#/$defs/invalidation_condition"
+            "$ref": "definitions_v2_1.schema.json#/$defs/industry_invalidation_condition"
           }
         },
         "upstream_research_refs": {
           "type": "array",
           "items": {
-            "$ref": "definitions_v2_1.schema.json#/$defs/upstream_research_ref"
+            "$ref": "definitions_v2_1.schema.json#/$defs/industry_upstream_research_ref"
           }
         },
         "search_plans": {
           "type": "array",
           "items": {
-            "$ref": "definitions_v2_1.schema.json#/$defs/search_plan"
+            "$ref": "definitions_v2_1.schema.json#/$defs/industry_search_plan"
           }
         },
         "source_candidates": {
           "type": "array",
           "items": {
-            "$ref": "definitions_v2_1.schema.json#/$defs/source_candidate"
+            "$ref": "definitions_v2_1.schema.json#/$defs/industry_source_candidate"
           }
         },
         "source_relationships": {
@@ -186,7 +186,7 @@
         "evidence_artifacts": {
           "type": "array",
           "items": {
-            "$ref": "definitions_v2_1.schema.json#/$defs/evidence_artifact"
+            "$ref": "definitions_v2_1.schema.json#/$defs/industry_evidence_artifact"
           }
         },
         "normalized_documents": {
@@ -204,7 +204,7 @@
         "conflict_summaries": {
           "type": "array",
           "items": {
-            "$ref": "definitions_v2_1.schema.json#/$defs/conflict_summary"
+            "$ref": "definitions_v2_1.schema.json#/$defs/industry_conflict_summary"
           }
         }
       },

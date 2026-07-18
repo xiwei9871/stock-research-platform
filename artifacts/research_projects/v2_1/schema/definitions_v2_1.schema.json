@@ -727,21 +727,42 @@
       "type": "object",
       "required": [
         "query_id",
+        "query_role",
         "query_text",
-        "evidence_channel",
-        "purpose",
-        "priority",
-        "status"
+        "required_terms",
+        "excluded_terms",
+        "source_classes",
+        "priority"
       ],
       "properties": {
         "query_id": {"type": "string", "minLength": 1},
+        "query_role": {
+          "enum": [
+            "mechanism",
+            "quantification",
+            "counter_evidence",
+            "primary_engineering"
+          ]
+        },
         "query_text": {"type": "string", "minLength": 1},
-        "evidence_channel": {"$ref": "#/$defs/evidence_channel"},
-        "purpose": {"type": "string", "minLength": 1},
-        "priority": {"type": "integer", "minimum": 0},
-        "status": {
-          "enum": ["planned", "running", "completed", "cancelled"]
-        }
+        "required_terms": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "excluded_terms": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        },
+        "source_classes": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "priority": {"type": "integer", "minimum": 1}
       },
       "additionalProperties": false
     },
@@ -751,28 +772,61 @@
         "search_plan_id",
         "project_id",
         "version_id",
-        "research_layer",
-        "objective",
+        "evidence_channel",
+        "requirement_ids",
         "queries",
-        "created_at",
-        "created_by"
+        "languages",
+        "geography",
+        "publication_window",
+        "result_limit_per_query",
+        "deduplication_policy",
+        "stop_conditions",
+        "status",
+        "provenance"
       ],
       "properties": {
         "search_plan_id": {"type": "string", "minLength": 1},
         "project_id": {"type": "string", "minLength": 1},
         "version_id": {"type": "string", "minLength": 1},
-        "research_layer": {"$ref": "#/$defs/research_layer"},
-        "objective": {"type": "string", "minLength": 1},
+        "evidence_channel": {"const": "industry"},
+        "requirement_ids": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "minItems": 1,
+          "uniqueItems": true
+        },
         "queries": {
           "type": "array",
-          "items": {"$ref": "#/$defs/search_query"}
+          "items": {"$ref": "#/$defs/search_query"},
+          "minItems": 1
         },
-        "created_at": {
-          "type": "string",
-          "format": "date-time",
-          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})$"
+        "languages": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "minItems": 1,
+          "uniqueItems": true
         },
-        "created_by": {"type": "string", "minLength": 1}
+        "geography": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "publication_window": {"type": "string", "minLength": 1},
+        "result_limit_per_query": {"type": "integer", "minimum": 1},
+        "deduplication_policy": {
+          "enum": ["normalized_url_then_content_hash"]
+        },
+        "stop_conditions": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "status": {
+          "enum": ["planned", "active", "complete", "superseded", "cancelled"]
+        },
+        "provenance": {"$ref": "#/$defs/provenance"}
       },
       "additionalProperties": false
     },
@@ -880,76 +934,92 @@
       "required": [
         "section_id",
         "heading",
-        "ordinal",
+        "locator",
         "text",
-        "content_hash"
+        "page_start",
+        "page_end",
+        "section_hash"
       ],
       "properties": {
         "section_id": {"type": "string", "minLength": 1},
         "heading": {"type": ["string", "null"]},
-        "ordinal": {"type": "integer", "minimum": 0},
+        "locator": {"type": "string", "minLength": 1},
         "text": {"type": "string"},
-        "content_hash": {"$ref": "#/$defs/sha256"}
+        "page_start": {"type": ["integer", "null"], "minimum": 1},
+        "page_end": {"type": ["integer", "null"], "minimum": 1},
+        "section_hash": {"$ref": "#/$defs/sha256"}
       },
       "additionalProperties": false
     },
     "normalized_document": {
       "type": "object",
       "required": [
-        "normalized_document_id",
-        "evidence_artifact_id",
-        "project_id",
-        "version_id",
+        "document_id",
+        "artifact_id",
+        "parser",
+        "parser_version",
+        "media_type",
         "title",
-        "normalized_at",
-        "content_hash",
-        "sections"
+        "sections",
+        "document_hash",
+        "parsed_at",
+        "warnings",
+        "provenance"
       ],
       "properties": {
-        "normalized_document_id": {"type": "string", "minLength": 1},
-        "evidence_artifact_id": {"type": "string", "minLength": 1},
-        "project_id": {"type": "string", "minLength": 1},
-        "version_id": {"type": "string", "minLength": 1},
-        "title": {"type": "string", "minLength": 1},
-        "normalized_at": {
+        "document_id": {"type": "string", "minLength": 1},
+        "artifact_id": {"type": "string", "minLength": 1},
+        "parser": {"type": "string", "minLength": 1},
+        "parser_version": {"type": "string", "minLength": 1},
+        "media_type": {"type": "string", "minLength": 1},
+        "title": {"type": ["string", "null"]},
+        "sections": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/normalized_section"}
+        },
+        "document_hash": {"$ref": "#/$defs/sha256"},
+        "parsed_at": {
           "type": "string",
           "format": "date-time",
           "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})$"
         },
-        "content_hash": {"$ref": "#/$defs/sha256"},
-        "sections": {
+        "warnings": {
           "type": "array",
-          "items": {"$ref": "#/$defs/normalized_section"}
-        }
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        },
+        "provenance": {"$ref": "#/$defs/provenance"}
       },
       "additionalProperties": false
     },
     "freshness_assessment": {
       "type": "object",
       "required": [
-        "assessed_at",
-        "source_published_at",
         "status",
-        "rationale"
+        "publish_date",
+        "assessed_at",
+        "age_days",
+        "maximum_age_days"
       ],
       "properties": {
+        "status": {"enum": ["fresh", "stale", "future_dated", "unknown"]},
+        "publish_date": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date",
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+            },
+            {"type": "null"}
+          ]
+        },
         "assessed_at": {
           "type": "string",
           "format": "date-time",
           "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})$"
         },
-        "source_published_at": {
-          "anyOf": [
-            {
-              "type": "string",
-              "format": "date-time",
-              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})$"
-            },
-            {"type": "null"}
-          ]
-        },
-        "status": {"enum": ["current", "aging", "stale", "unknown"]},
-        "rationale": {"type": "string", "minLength": 1}
+        "age_days": {"type": ["integer", "null"]},
+        "maximum_age_days": {"type": "integer", "minimum": 0}
       },
       "additionalProperties": false
     },
@@ -957,43 +1027,60 @@
       "type": "object",
       "required": [
         "assessment_id",
-        "project_id",
-        "version_id",
-        "evidence_artifact_id",
+        "evidence_channel",
         "target_type",
         "target_id",
+        "requirement_id",
+        "artifact_id",
+        "normalized_document_id",
         "evidence_role",
+        "locator",
+        "assessment_summary",
         "directness",
         "strength",
         "independence",
         "freshness",
         "scope_match",
         "conflict_status",
-        "assessment_summary",
-        "assessed_at",
-        "assessed_by"
+        "review_status",
+        "provenance"
       ],
       "properties": {
         "assessment_id": {"type": "string", "minLength": 1},
-        "project_id": {"type": "string", "minLength": 1},
-        "version_id": {"type": "string", "minLength": 1},
-        "evidence_artifact_id": {"type": "string", "minLength": 1},
-        "target_type": {"type": "string", "minLength": 1},
+        "evidence_channel": {"const": "industry"},
+        "target_type": {
+          "enum": [
+            "research_project",
+            "research_question",
+            "research_claim",
+            "causal_edge"
+          ]
+        },
         "target_id": {"type": "string", "minLength": 1},
-        "evidence_role": {"type": "string", "minLength": 1},
+        "requirement_id": {"type": "string", "minLength": 1},
+        "artifact_id": {"type": "string", "minLength": 1},
+        "normalized_document_id": {"type": "string", "minLength": 1},
+        "evidence_role": {
+          "enum": [
+            "supports",
+            "opposes",
+            "quantifies",
+            "defines",
+            "boundary_evidence"
+          ]
+        },
+        "locator": {"type": "string", "minLength": 1},
+        "assessment_summary": {"type": "string", "minLength": 1},
         "directness": {"type": "string", "minLength": 1},
         "strength": {"type": "string", "minLength": 1},
         "independence": {"type": "string", "minLength": 1},
-        "freshness": {"$ref": "#/$defs/freshness_assessment"},
+        "freshness": {"enum": ["fresh", "stale", "future_dated", "unknown"]},
         "scope_match": {"type": "string", "minLength": 1},
         "conflict_status": {"type": "string", "minLength": 1},
-        "assessment_summary": {"type": "string", "minLength": 1},
-        "assessed_at": {
-          "type": "string",
-          "format": "date-time",
-          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})$"
+        "review_status": {
+          "enum": ["pending_review", "reviewed", "rejected", "superseded"]
         },
-        "assessed_by": {"type": "string", "minLength": 1}
+        "provenance": {"$ref": "#/$defs/provenance"}
       },
       "additionalProperties": false
     },
@@ -1028,6 +1115,159 @@
         }
       },
       "additionalProperties": false
+    },
+    "industry_search_plan": {
+      "$ref": "#/$defs/search_plan"
+    },
+    "industry_evidence_requirement": {
+      "allOf": [
+        {"$ref": "#/$defs/evidence_requirement"},
+        {
+          "properties": {
+            "target_type": {
+              "enum": [
+                "research_project",
+                "research_question",
+                "research_claim",
+                "causal_edge"
+              ]
+            }
+          },
+          "required": ["target_type"]
+        }
+      ]
+    },
+    "industry_causal_node": {
+      "allOf": [
+        {"$ref": "#/$defs/causal_node"},
+        {
+          "properties": {
+            "node_kind": {
+              "enum": [
+                "trigger",
+                "change",
+                "system_parameter",
+                "mechanism",
+                "constraint",
+                "demand_effect",
+                "supply_effect",
+                "price_effect",
+                "competition_effect",
+                "value_migration",
+                "outcome"
+              ]
+            }
+          },
+          "required": ["node_kind"]
+        }
+      ]
+    },
+    "industry_investment_status": {
+      "enum": ["not_assessed", "research_only"]
+    },
+    "industry_common_evidence_assessment": {
+      "allOf": [
+        {"$ref": "#/$defs/evidence_assessment"},
+        {
+          "properties": {
+            "target_type": {
+              "enum": [
+                "research_project",
+                "research_question",
+                "research_claim",
+                "causal_edge"
+              ]
+            }
+          },
+          "required": ["target_type"]
+        }
+      ]
+    },
+    "industry_validation_metric": {
+      "allOf": [
+        {"$ref": "#/$defs/validation_metric"},
+        {
+          "properties": {
+            "target_type": {
+              "enum": [
+                "research_project",
+                "research_question",
+                "research_claim",
+                "causal_edge"
+              ]
+            }
+          },
+          "required": ["target_type"]
+        }
+      ]
+    },
+    "industry_invalidation_condition": {
+      "allOf": [
+        {"$ref": "#/$defs/invalidation_condition"},
+        {
+          "properties": {
+            "target_type": {
+              "enum": [
+                "research_project",
+                "research_question",
+                "research_claim",
+                "causal_edge"
+              ]
+            }
+          },
+          "required": ["target_type"]
+        }
+      ]
+    },
+    "industry_source_candidate": {
+      "allOf": [
+        {"$ref": "#/$defs/source_candidate"},
+        {
+          "properties": {"evidence_channel": {"const": "industry"}},
+          "required": ["evidence_channel"]
+        }
+      ]
+    },
+    "industry_evidence_artifact": {
+      "allOf": [
+        {"$ref": "#/$defs/evidence_artifact"},
+        {
+          "properties": {"evidence_channel": {"const": "industry"}},
+          "required": ["evidence_channel"]
+        }
+      ]
+    },
+    "industry_upstream_research_ref": {
+      "allOf": [
+        {"$ref": "#/$defs/upstream_research_ref"},
+        {
+          "properties": {
+            "upstream_research_layer": {
+              "type": ["string", "null"],
+              "enum": ["industry_research", null]
+            }
+          },
+          "required": ["upstream_research_layer"]
+        }
+      ]
+    },
+    "industry_conflict_summary": {
+      "allOf": [
+        {"$ref": "#/$defs/conflict_summary"},
+        {
+          "properties": {
+            "target_type": {
+              "enum": [
+                "research_project",
+                "research_question",
+                "research_claim",
+                "causal_edge"
+              ]
+            }
+          },
+          "required": ["target_type"]
+        }
+      ]
     }
   }
 }
