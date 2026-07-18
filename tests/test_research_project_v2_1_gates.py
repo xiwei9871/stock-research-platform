@@ -124,6 +124,18 @@ def test_source_diversity_checks_each_query_source_contract() -> None:
     assert failed == {"INDUSTRY_SOURCE_CLASS_DIVERSITY"}
 
 
+def test_initial_design_provenance_must_bind_to_current_version() -> None:
+    identity, version = _pilot()
+    question = version["snapshot"]["questions"][0]
+    question["provenance"]["created_in_version"] = "research_version:other:0.1.0"
+
+    result = evaluate_industry_design_gate(identity, version)
+    failed = [check for check in result["checks"] if check["status"] == "fail"]
+
+    assert [check["code"] for check in failed] == ["INDUSTRY_PROVENANCE_COMPLETE"]
+    assert question["question_id"] in failed[0]["details"]["mismatched_object_ids"]
+
+
 @pytest.mark.parametrize(
     "mutation",
     [
@@ -211,6 +223,31 @@ def test_critical_claim_requirement_must_be_covered_by_a_search_plan() -> None:
     assert _failed_checks(identity, version) == {"INDUSTRY_SEARCH_PLANS_COVER_REQUIREMENTS"}
 
 
+def test_missing_counter_and_uncovered_requirement_fail_independent_checks() -> None:
+    identity, version = _pilot()
+    plans = version["snapshot"]["search_plans"]
+    plans[0]["queries"] = [
+        query for query in plans[0]["queries"] if query["query_role"] != "counter_evidence"
+    ]
+    plans.pop(1)
+    assert _failed_checks(identity, version) == {
+        "INDUSTRY_SEARCH_PLANS_COVER_REQUIREMENTS",
+        "INDUSTRY_COUNTER_SEARCH_PRESENT",
+    }
+
+
+def test_source_mismatch_and_uncovered_requirement_fail_independent_checks() -> None:
+    identity, version = _pilot()
+    plans = version["snapshot"]["search_plans"]
+    for query in plans[0]["queries"]:
+        query["source_classes"].pop()
+    plans.pop(1)
+    assert _failed_checks(identity, version) == {
+        "INDUSTRY_SEARCH_PLANS_COVER_REQUIREMENTS",
+        "INDUSTRY_SOURCE_CLASS_DIVERSITY",
+    }
+
+
 @pytest.mark.parametrize(
     "forbidden_key",
     [
@@ -271,3 +308,53 @@ def test_downstream_taxonomy_applies_background_company_subject_to_direct_output
     identity, version = _pilot()
     version["snapshot"]["background_company_references"] = [{output_key: {}}]
     assert "INDUSTRY_NO_COMPANY_OR_STOCK_OUTPUTS" in _failed_checks(identity, version)
+
+
+@pytest.mark.parametrize(
+    "forbidden_key",
+    [
+        "公司评级",
+        "个股推荐",
+        "股票推荐",
+        "股票评级",
+        "发行人排名",
+        "证券推荐",
+        "issuer_rankings",
+        "share_recommendations",
+        "ｃｏｍｐａｎｙ＿ｒａｔｉｎｇ",
+    ],
+)
+def test_downstream_taxonomy_rejects_nfkc_alias_and_chinese_outputs(
+    forbidden_key: str,
+) -> None:
+    identity, version = _pilot()
+    version["snapshot"][forbidden_key] = []
+    assert "INDUSTRY_NO_COMPANY_OR_STOCK_OUTPUTS" in _failed_checks(identity, version)
+
+
+@pytest.mark.parametrize(
+    "allowed_key",
+    [
+        "listed_company_count",
+        "company_policy",
+        "company_employment_total",
+        "stock_exchange_code",
+        "background_company_notes",
+    ],
+)
+def test_downstream_taxonomy_allows_statistics_policy_and_background_notes(
+    allowed_key: str,
+) -> None:
+    identity, version = _pilot()
+    version["snapshot"][allowed_key] = 1
+    assert "INDUSTRY_NO_COMPANY_OR_STOCK_OUTPUTS" not in _failed_checks(identity, version)
+
+
+def test_downstream_taxonomy_rejects_stock_notes_only_outside_background() -> None:
+    identity, version = _pilot()
+    version["snapshot"]["stock_notes"] = []
+    assert "INDUSTRY_NO_COMPANY_OR_STOCK_OUTPUTS" in _failed_checks(identity, version)
+
+    identity, version = _pilot()
+    version["snapshot"]["background_stock_notes"] = []
+    assert "INDUSTRY_NO_COMPANY_OR_STOCK_OUTPUTS" not in _failed_checks(identity, version)

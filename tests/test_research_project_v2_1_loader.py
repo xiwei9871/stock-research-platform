@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from copy import deepcopy
 import json
+import os
 from pathlib import Path
 import shutil
+import stat
 
 import pytest
 
@@ -231,6 +233,63 @@ def test_list_layered_project_slugs_is_sorted_safe_and_does_not_cross_scan_r1(
 
 def test_list_layered_project_slugs_returns_empty_when_projects_missing(tmp_path: Path) -> None:
     assert list_layered_project_slugs(layout=LayeredResearchLayout(tmp_path / "empty")) == []
+
+
+def test_layered_reader_creates_stable_private_lock_file(
+    layered_layout: LayeredResearchLayout,
+) -> None:
+    lock_path = layered_layout.root / ".maintenance.lock"
+    assert not lock_path.exists()
+
+    load_layered_project("fixture-industry", layout=layered_layout)
+
+    lock_stat = lock_path.lstat()
+    assert stat.S_ISREG(lock_stat.st_mode)
+    assert stat.S_IMODE(lock_stat.st_mode) == 0o600
+    assert lock_stat.st_uid == os.geteuid()
+
+
+def test_layered_reader_rejects_symlinked_lock_file(
+    layered_layout: LayeredResearchLayout,
+    tmp_path: Path,
+) -> None:
+    lock_path = layered_layout.root / ".maintenance.lock"
+    outside = tmp_path / "outside-lock"
+    outside.write_text("", encoding="utf-8")
+    lock_path.symlink_to(outside)
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        load_layered_project("fixture-industry", layout=layered_layout)
+
+    _assert_code(exc_info, "RESEARCH_PROJECT_V2_1_STORAGE_ERROR")
+    assert exc_info.value.details["reason"] == "unsafe maintenance lock"
+
+
+def test_layered_reader_detects_lock_path_rebinding_while_locked(
+    layered_layout: LayeredResearchLayout,
+    monkeypatch,
+) -> None:
+    load_layered_project("fixture-industry", layout=layered_layout)
+    lock_path = layered_layout.root / ".maintenance.lock"
+    displaced = layered_layout.root / ".maintenance.lock.displaced"
+    real_read = layered_loader._read_managed_bytes
+    swapped = False
+
+    def rebind_during_read(path: Path, layout: LayeredResearchLayout) -> bytes:
+        nonlocal swapped
+        if not swapped:
+            swapped = True
+            lock_path.replace(displaced)
+            lock_path.touch(mode=0o600)
+        return real_read(path, layout)
+
+    monkeypatch.setattr(layered_loader, "_read_managed_bytes", rebind_during_read)
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        load_layered_project("fixture-industry", layout=layered_layout)
+
+    _assert_code(exc_info, "RESEARCH_PROJECT_V2_1_STORAGE_ERROR")
+    assert exc_info.value.details["reason"] == "maintenance lock path rebound"
 
 
 def test_load_identity_current_explicit_versions_and_semver_sorting(

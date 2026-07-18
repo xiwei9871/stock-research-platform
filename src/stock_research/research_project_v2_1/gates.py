@@ -4,6 +4,7 @@ from copy import deepcopy
 from datetime import datetime
 import re
 from typing import Any
+import unicodedata
 
 from stock_research.research_project_v2.errors import ResearchProjectV2Error
 from stock_research.research_project_v2_1.loader import resolve_upstream_r1_version
@@ -182,22 +183,83 @@ def _required_questions(snapshot: dict[str, Any]) -> dict[str, Any]:
 def _search_plans(snapshot: dict[str, Any]) -> dict[str, Any]:
     requirements = snapshot.get("evidence_requirements", [])
     plans = snapshot.get("search_plans", [])
+    failures: list[dict[str, Any]] = []
+    requirement_ids: list[str] = []
+    if isinstance(requirements, list):
+        requirement_ids = [
+            item["requirement_id"]
+            for item in requirements
+            if isinstance(item, dict)
+            and isinstance(item.get("requirement_id"), str)
+            and item["requirement_id"]
+        ]
+    if len(requirement_ids) != len(requirements) or len(set(requirement_ids)) != len(
+        requirement_ids
+    ):
+        failures.append({"reason": "invalid or duplicate requirement_id"})
+    known_requirements = set(requirement_ids)
+    covered: set[str] = set()
+    seen_plan_ids: set[str] = set()
+    seen_query_ids: set[str] = set()
+    if not isinstance(plans, list):
+        failures.append({"reason": "search_plans must be a list"})
+    else:
+        for plan in plans:
+            if not isinstance(plan, dict):
+                failures.append({"reason": "search plan must be an object"})
+                continue
+            plan_id = plan.get("search_plan_id")
+            if not isinstance(plan_id, str) or not plan_id or plan_id in seen_plan_ids:
+                failures.append({"reason": "invalid or duplicate search_plan_id", "plan_id": plan_id})
+            else:
+                seen_plan_ids.add(plan_id)
+            plan_requirement_ids = plan.get("requirement_ids")
+            if not isinstance(plan_requirement_ids, list) or not plan_requirement_ids:
+                failures.append({"reason": "empty requirement_ids", "plan_id": plan_id})
+            else:
+                for requirement_id in plan_requirement_ids:
+                    if not isinstance(requirement_id, str) or requirement_id not in known_requirements:
+                        failures.append(
+                            {
+                                "reason": "unknown requirement_id",
+                                "plan_id": plan_id,
+                                "requirement_id": requirement_id,
+                            }
+                        )
+                    else:
+                        covered.add(requirement_id)
+            queries = plan.get("queries")
+            if not isinstance(queries, list) or not queries:
+                failures.append({"reason": "empty queries", "plan_id": plan_id})
+            else:
+                for query in queries:
+                    query_id = query.get("query_id") if isinstance(query, dict) else None
+                    if not isinstance(query_id, str) or not query_id or query_id in seen_query_ids:
+                        failures.append(
+                            {"reason": "invalid or duplicate query_id", "query_id": query_id}
+                        )
+                    else:
+                        seen_query_ids.add(query_id)
+    uncovered = sorted(known_requirements - covered)
+    if uncovered:
+        failures.append({"reason": "uncovered requirement_id", "requirement_ids": uncovered})
     try:
         validate_search_plans(requirements, plans)
     except (ResearchProjectV2Error, KeyError, TypeError, ValueError) as exc:
         reason = exc.details.get("reason") if isinstance(exc, ResearchProjectV2Error) else None
-        if reason in {
+        if reason not in {
             "missing counter_evidence query",
             "insufficient source classes",
             "source class contract mismatch",
         }:
-            return _result(INDUSTRY_DESIGN_CHECKS[5], True)
-        return _result(
-            INDUSTRY_DESIGN_CHECKS[5],
-            False,
-            {"reason": getattr(exc, "code", type(exc).__name__), "message": str(exc)},
-        )
-    return _result(INDUSTRY_DESIGN_CHECKS[5], True)
+            failures.append(
+                {
+                    "reason": getattr(exc, "code", type(exc).__name__),
+                    "validator_reason": reason,
+                    "message": str(exc),
+                }
+            )
+    return _result(INDUSTRY_DESIGN_CHECKS[5], not failures, {"failures": failures})
 
 
 def _counter(snapshot: dict[str, Any]) -> dict[str, Any]:
@@ -328,7 +390,7 @@ def _claim_plan(
 
 
 def _key_tokens(key: object) -> set[str]:
-    text = str(key)
+    text = unicodedata.normalize("NFKC", str(key))
     text = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", text)
     text = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", text)
     raw_tokens = re.findall(r"[a-z0-9]+", text.casefold())
@@ -374,9 +436,9 @@ def _background_tokens() -> set[str]:
 
 def _subject_groups(tokens: set[str]) -> set[str]:
     subjects: set[str] = set()
-    if tokens & {"company", "corporate", "entity"}:
+    if tokens & {"company", "corporate", "entity", "issuer"}:
         subjects.add("company")
-    if tokens & {"stock", "equity", "security"}:
+    if tokens & {"stock", "equity", "security", "share"}:
         subjects.add("stock")
     return subjects
 
@@ -386,7 +448,20 @@ def _is_downstream_output_key(
     *,
     background_subjects: frozenset[str] = frozenset(),
 ) -> bool:
-    normalized_key = str(key).casefold()
+    normalized_key = unicodedata.normalize("NFKC", str(key)).casefold()
+    compact_key = re.sub(r"[\W_]+", "", normalized_key)
+    if any(
+        phrase in compact_key
+        for phrase in (
+            "公司评级",
+            "个股推荐",
+            "股票推荐",
+            "股票评级",
+            "发行人排名",
+            "证券推荐",
+        )
+    ):
+        return True
     if normalized_key in _OUTPUT_KEYS:
         return True
     tokens = _key_tokens(key)
@@ -405,11 +480,14 @@ def _is_downstream_output_key(
     )
     if has_output:
         return True
-    if not local_subjects:
-        return False
-    return not local_subjects.issubset(background_subjects) and not bool(
-        tokens & _background_tokens()
-    )
+    if (
+        effective_subjects
+        and "notes" in tokens
+        and not background_subjects
+        and not bool(tokens & _background_tokens())
+    ):
+        return True
+    return False
 
 
 def _output_paths(
@@ -462,8 +540,12 @@ def _valid_timestamp(value: object) -> bool:
     return True
 
 
-def _provenance(snapshot: dict[str, Any]) -> dict[str, Any]:
+def _provenance(snapshot: dict[str, Any], version: dict[str, Any]) -> dict[str, Any]:
     invalid: list[str] = []
+    mismatched: list[str] = []
+    allowed_versions = {version.get("version_id")}
+    if version.get("parent_version_id") is not None:
+        allowed_versions.add(version.get("parent_version_id"))
     for collection, id_field in _PROVENANCE_COLLECTIONS.items():
         for item in snapshot.get(collection, []):
             object_id = item.get(id_field, f"<{collection}>") if isinstance(item, dict) else f"<{collection}>"
@@ -479,7 +561,16 @@ def _provenance(snapshot: dict[str, Any]) -> dict[str, Any]:
                 and provenance.get("review_status") in _REVIEW_STATUSES
             ):
                 invalid.append(str(object_id))
-    return _result(INDUSTRY_DESIGN_CHECKS[11], not invalid, {"invalid": sorted(invalid)})
+            elif provenance.get("created_in_version") not in allowed_versions:
+                mismatched.append(str(object_id))
+    return _result(
+        INDUSTRY_DESIGN_CHECKS[11],
+        not invalid and not mismatched,
+        {
+            "invalid": sorted(invalid),
+            "mismatched_object_ids": sorted(mismatched),
+        },
+    )
 
 
 def evaluate_industry_design_gate(
@@ -524,7 +615,7 @@ def evaluate_industry_design_gate(
             not _output_paths(safe_version),
             {"paths": _output_paths(safe_version)},
         ),
-        _provenance(snapshot),
+        _provenance(snapshot, safe_version),
     ]
     status = "fail" if any(check["status"] == "fail" for check in checks) else "pass"
     return {

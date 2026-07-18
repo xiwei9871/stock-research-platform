@@ -2,7 +2,7 @@
   "artifact_kind": "industry_research_version",
   "change_reason": "承接R1主题基线并定义产业层瓶颈研究。",
   "change_summary": "建立产业层证据搜索与证伪设计。",
-  "content_hash": "a8d1484658a95e9cd46458a9e8b35236828487af63cd89529cb08833b55d04b7",
+  "content_hash": "cdf90ad1864022dce76b3a84a0531f8a0e048478d664cb17c44b0ba6d7eedbba",
   "created_at": "2026-07-18T00:00:00Z",
   "created_by": "Codex",
   "creation_stage": "research_design",
@@ -24,7 +24,7 @@
         "mechanism_text": "架构代际决定交换与板卡拓扑、互连距离及信号和供电密度。",
         "provenance": {
           "actor_type": "codex",
-          "agent_run_id": "research-project-v2-r1-pilots",
+          "agent_run_id": "research-project-v2-1-r2a-pilots",
           "created_at": "2026-07-17T00:00:00Z",
           "created_by": "Codex",
           "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
@@ -52,7 +52,7 @@
         "mechanism_text": "更高信号与布线密度要求更多层数、低损耗材料、背钻和压合工序。",
         "provenance": {
           "actor_type": "codex",
-          "agent_run_id": "research-project-v2-r1-pilots",
+          "agent_run_id": "research-project-v2-1-r2a-pilots",
           "created_at": "2026-07-17T00:00:00Z",
           "created_by": "Codex",
           "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
@@ -80,7 +80,7 @@
         "mechanism_text": "工艺复杂度可能降低首轮良率并延长认证，从而压缩可交付有效产能。",
         "provenance": {
           "actor_type": "codex",
-          "agent_run_id": "research-project-v2-r1-pilots",
+          "agent_run_id": "research-project-v2-1-r2a-pilots",
           "created_at": "2026-07-17T00:00:00Z",
           "created_by": "Codex",
           "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
@@ -108,7 +108,7 @@
         "mechanism_text": "良率、认证和有效产能决定规格增值能否转化为归一化rack价值。",
         "provenance": {
           "actor_type": "codex",
-          "agent_run_id": "research-project-v2-r1-pilots",
+          "agent_run_id": "research-project-v2-1-r2a-pilots",
           "created_at": "2026-07-17T00:00:00Z",
           "created_by": "Codex",
           "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
@@ -134,7 +134,7 @@
         "node_text": "加速器数量、scale-up与scale-out拓扑及交换板卡形态升级",
         "provenance": {
           "actor_type": "codex",
-          "agent_run_id": "research-project-v2-r1-pilots",
+          "agent_run_id": "research-project-v2-1-r2a-pilots",
           "created_at": "2026-07-17T00:00:00Z",
           "created_by": "Codex",
           "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
@@ -148,7 +148,7 @@
         "node_text": "板卡数量面积、信号速率、布线密度与供电密度变化",
         "provenance": {
           "actor_type": "codex",
-          "agent_run_id": "research-project-v2-r1-pilots",
+          "agent_run_id": "research-project-v2-1-r2a-pilots",
           "created_at": "2026-07-17T00:00:00Z",
           "created_by": "Codex",
           "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
@@ -162,7 +162,7 @@
         "node_text": "PCB层数、低损耗材料、背钻、HDI和多次压合复杂度提升",
         "provenance": {
           "actor_type": "codex",
-          "agent_run_id": "research-project-v2-r1-pilots",
+          "agent_run_id": "research-project-v2-1-r2a-pilots",
           "created_at": "2026-07-17T00:00:00Z",
           "created_by": "Codex",
           "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
@@ -176,7 +176,7 @@
         "node_text": "量产良率、客户认证与高规格有效产能共同约束交付",
         "provenance": {
           "actor_type": "codex",
-          "agent_run_id": "research-project-v2-r1-pilots",
+          "agent_run_id": "research-project-v2-1-r2a-pilots",
           "created_at": "2026-07-17T00:00:00Z",
           "created_by": "Codex",
           "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
@@ -190,7 +190,7 @@
         "node_text": "按加速器数量归一化后的AI rack高速PCB价值迁移",
         "provenance": {
           "actor_type": "codex",
-          "agent_run_id": "research-project-v2-r1-pilots",
+          "agent_run_id": "research-project-v2-1-r2a-pilots",
           "created_at": "2026-07-17T00:00:00Z",
           "created_by": "Codex",
           "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
@@ -204,7 +204,7 @@
         "from_claim_id": "claim:ai_compute_pcb_industry_bottleneck:counter",
         "provenance": {
           "actor_type": "codex",
-          "agent_run_id": "research-project-v2-r1-pilots",
+          "agent_run_id": "research-project-v2-1-r2a-pilots",
           "created_at": "2026-07-17T00:00:00Z",
           "created_by": "Codex",
           "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
@@ -243,7 +243,7 @@
         ],
         "provenance": {
           "actor_type": "codex",
-          "agent_run_id": "research-project-v2-r1-pilots",
+          "agent_run_id": "research-project-v2-1-r2a-pilots",
           "created_at": "2026-07-17T00:00:00Z",
           "created_by": "Codex",
           "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
@@ -273,7 +273,7 @@
         ],
         "provenance": {
           "actor_type": "codex",
-          "agent_run_id": "research-project-v2-r1-pilots",
+          "agent_run_id": "research-project-v2-1-r2a-pilots",
           "created_at": "2026-07-17T00:00:00Z",
           "created_by": "Codex",
           "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
@@ -295,7 +295,7 @@
         "primary_source_required": true,
         "provenance": {
           "actor_type": "codex",
-          "agent_run_id": "research-project-v2-r1-pilots",
+          "agent_run_id": "research-project-v2-1-r2a-pilots",
           "created_at": "2026-07-17T00:00:00Z",
           "created_by": "Codex",
           "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
@@ -323,7 +323,7 @@
         "primary_source_required": true,
         "provenance": {
           "actor_type": "codex",
-          "agent_run_id": "research-project-v2-r1-pilots",
+          "agent_run_id": "research-project-v2-1-r2a-pilots",
           "created_at": "2026-07-17T00:00:00Z",
           "created_by": "Codex",
           "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
@@ -351,7 +351,7 @@
         "primary_source_required": true,
         "provenance": {
           "actor_type": "codex",
-          "agent_run_id": "research-project-v2-r1-pilots",
+          "agent_run_id": "research-project-v2-1-r2a-pilots",
           "created_at": "2026-07-17T00:00:00Z",
           "created_by": "Codex",
           "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
@@ -379,7 +379,7 @@
         "primary_source_required": true,
         "provenance": {
           "actor_type": "codex",
-          "agent_run_id": "research-project-v2-r1-pilots",
+          "agent_run_id": "research-project-v2-1-r2a-pilots",
           "created_at": "2026-07-17T00:00:00Z",
           "created_by": "Codex",
           "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
@@ -407,7 +407,7 @@
         "primary_source_required": true,
         "provenance": {
           "actor_type": "codex",
-          "agent_run_id": "research-project-v2-r1-pilots",
+          "agent_run_id": "research-project-v2-1-r2a-pilots",
           "created_at": "2026-07-17T00:00:00Z",
           "created_by": "Codex",
           "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
@@ -435,7 +435,7 @@
         "primary_source_required": true,
         "provenance": {
           "actor_type": "codex",
-          "agent_run_id": "research-project-v2-r1-pilots",
+          "agent_run_id": "research-project-v2-1-r2a-pilots",
           "created_at": "2026-07-17T00:00:00Z",
           "created_by": "Codex",
           "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
@@ -463,7 +463,7 @@
         "primary_source_required": true,
         "provenance": {
           "actor_type": "codex",
-          "agent_run_id": "research-project-v2-r1-pilots",
+          "agent_run_id": "research-project-v2-1-r2a-pilots",
           "created_at": "2026-07-17T00:00:00Z",
           "created_by": "Codex",
           "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
@@ -497,7 +497,7 @@
         "persistence_window": "two_architecture_generations",
         "provenance": {
           "actor_type": "codex",
-          "agent_run_id": "research-project-v2-r1-pilots",
+          "agent_run_id": "research-project-v2-1-r2a-pilots",
           "created_at": "2026-07-17T00:00:00Z",
           "created_by": "Codex",
           "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
@@ -600,7 +600,7 @@
         "priority": 1,
         "provenance": {
           "actor_type": "codex",
-          "agent_run_id": "research-project-v2-r1-pilots",
+          "agent_run_id": "research-project-v2-1-r2a-pilots",
           "created_at": "2026-07-17T00:00:00Z",
           "created_by": "Codex",
           "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
@@ -623,7 +623,7 @@
         "priority": 2,
         "provenance": {
           "actor_type": "codex",
-          "agent_run_id": "research-project-v2-r1-pilots",
+          "agent_run_id": "research-project-v2-1-r2a-pilots",
           "created_at": "2026-07-17T00:00:00Z",
           "created_by": "Codex",
           "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
@@ -646,7 +646,7 @@
         "priority": 3,
         "provenance": {
           "actor_type": "codex",
-          "agent_run_id": "research-project-v2-r1-pilots",
+          "agent_run_id": "research-project-v2-1-r2a-pilots",
           "created_at": "2026-07-17T00:00:00Z",
           "created_by": "Codex",
           "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
@@ -669,7 +669,7 @@
         "priority": 4,
         "provenance": {
           "actor_type": "codex",
-          "agent_run_id": "research-project-v2-r1-pilots",
+          "agent_run_id": "research-project-v2-1-r2a-pilots",
           "created_at": "2026-07-17T00:00:00Z",
           "created_by": "Codex",
           "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
@@ -692,7 +692,7 @@
         "priority": 6,
         "provenance": {
           "actor_type": "codex",
-          "agent_run_id": "research-project-v2-r1-pilots",
+          "agent_run_id": "research-project-v2-1-r2a-pilots",
           "created_at": "2026-07-17T00:00:00Z",
           "created_by": "Codex",
           "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
@@ -715,7 +715,7 @@
         "priority": 7,
         "provenance": {
           "actor_type": "codex",
-          "agent_run_id": "research-project-v2-r1-pilots",
+          "agent_run_id": "research-project-v2-1-r2a-pilots",
           "created_at": "2026-07-17T00:00:00Z",
           "created_by": "Codex",
           "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
@@ -733,7 +733,7 @@
         "locator": null,
         "provenance": {
           "actor_type": "codex",
-          "agent_run_id": "research-project-v2-r1-pilots",
+          "agent_run_id": "research-project-v2-1-r2a-pilots",
           "created_at": "2026-07-17T00:00:00Z",
           "created_by": "Codex",
           "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
@@ -755,7 +755,7 @@
         "locator": null,
         "provenance": {
           "actor_type": "codex",
-          "agent_run_id": "research-project-v2-r1-pilots",
+          "agent_run_id": "research-project-v2-1-r2a-pilots",
           "created_at": "2026-07-17T00:00:00Z",
           "created_by": "Codex",
           "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
@@ -842,7 +842,7 @@
         "project_id": "research_project:ai_compute_pcb_industry_bottleneck",
         "provenance": {
           "actor_type": "codex",
-          "agent_run_id": "research-project-v2-r1-pilots",
+          "agent_run_id": "research-project-v2-1-r2a-pilots",
           "created_at": "2026-07-17T00:00:00Z",
           "created_by": "Codex",
           "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
@@ -1002,7 +1002,7 @@
         "project_id": "research_project:ai_compute_pcb_industry_bottleneck",
         "provenance": {
           "actor_type": "codex",
-          "agent_run_id": "research-project-v2-r1-pilots",
+          "agent_run_id": "research-project-v2-1-r2a-pilots",
           "created_at": "2026-07-17T00:00:00Z",
           "created_by": "Codex",
           "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
@@ -1162,7 +1162,7 @@
         "project_id": "research_project:ai_compute_pcb_industry_bottleneck",
         "provenance": {
           "actor_type": "codex",
-          "agent_run_id": "research-project-v2-r1-pilots",
+          "agent_run_id": "research-project-v2-1-r2a-pilots",
           "created_at": "2026-07-17T00:00:00Z",
           "created_by": "Codex",
           "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
@@ -1322,7 +1322,7 @@
         "project_id": "research_project:ai_compute_pcb_industry_bottleneck",
         "provenance": {
           "actor_type": "codex",
-          "agent_run_id": "research-project-v2-r1-pilots",
+          "agent_run_id": "research-project-v2-1-r2a-pilots",
           "created_at": "2026-07-17T00:00:00Z",
           "created_by": "Codex",
           "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
@@ -1482,7 +1482,7 @@
         "project_id": "research_project:ai_compute_pcb_industry_bottleneck",
         "provenance": {
           "actor_type": "codex",
-          "agent_run_id": "research-project-v2-r1-pilots",
+          "agent_run_id": "research-project-v2-1-r2a-pilots",
           "created_at": "2026-07-17T00:00:00Z",
           "created_by": "Codex",
           "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
@@ -1642,7 +1642,7 @@
         "project_id": "research_project:ai_compute_pcb_industry_bottleneck",
         "provenance": {
           "actor_type": "codex",
-          "agent_run_id": "research-project-v2-r1-pilots",
+          "agent_run_id": "research-project-v2-1-r2a-pilots",
           "created_at": "2026-07-17T00:00:00Z",
           "created_by": "Codex",
           "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
@@ -1802,7 +1802,7 @@
         "project_id": "research_project:ai_compute_pcb_industry_bottleneck",
         "provenance": {
           "actor_type": "codex",
-          "agent_run_id": "research-project-v2-r1-pilots",
+          "agent_run_id": "research-project-v2-1-r2a-pilots",
           "created_at": "2026-07-17T00:00:00Z",
           "created_by": "Codex",
           "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
@@ -1982,7 +1982,7 @@
         "observation_window": "two_successive_architecture_generations",
         "provenance": {
           "actor_type": "codex",
-          "agent_run_id": "research-project-v2-r1-pilots",
+          "agent_run_id": "research-project-v2-1-r2a-pilots",
           "created_at": "2026-07-17T00:00:00Z",
           "created_by": "Codex",
           "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",

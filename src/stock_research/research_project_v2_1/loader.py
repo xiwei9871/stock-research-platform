@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from datetime import datetime
+import errno
+import fcntl
 import json
 import os
 from pathlib import Path
 import re
 import stat
+import threading
 from typing import Any
 
 from stock_research.research_project_v2.canonical import content_sha256
@@ -33,6 +37,8 @@ _MANIFEST_FIELDS = {
     "content_hash",
     "created_at",
 }
+_LOCK_NAME = ".maintenance.lock"
+_LOCK_STATE = threading.local()
 
 
 def load_r1_index() -> dict[str, Any]:
@@ -49,6 +55,118 @@ def _error(code: str, message: str, **details: object) -> ResearchProjectV2Error
 
 def _layout_or_default(layout: LayeredResearchLayout | None) -> LayeredResearchLayout:
     return LayeredResearchLayout.default() if layout is None else layout
+
+
+def _lock_error(layout: LayeredResearchLayout, reason: str) -> ResearchProjectV2Error:
+    return _error(
+        "RESEARCH_PROJECT_V2_1_STORAGE_ERROR",
+        "Unsafe layered research maintenance lock",
+        path=str(layout.root / _LOCK_NAME),
+        reason=reason,
+    )
+
+
+def _open_lock_fd(layout: LayeredResearchLayout) -> int:
+    nofollow = getattr(os, "O_NOFOLLOW", 0)
+    cloexec = getattr(os, "O_CLOEXEC", 0)
+    directory = getattr(os, "O_DIRECTORY", 0)
+    try:
+        root_fd = os.open(layout.root, os.O_RDONLY | directory | nofollow | cloexec)
+    except OSError as exc:
+        raise _lock_error(layout, "unsafe maintenance lock") from exc
+    try:
+        flags = os.O_RDWR | nofollow | cloexec
+        try:
+            lock_fd = os.open(
+                _LOCK_NAME,
+                flags | os.O_CREAT | os.O_EXCL,
+                0o600,
+                dir_fd=root_fd,
+            )
+        except OSError as exc:
+            if exc.errno != errno.EEXIST:
+                raise
+            lock_fd = os.open(_LOCK_NAME, flags, dir_fd=root_fd)
+    except OSError as exc:
+        raise _lock_error(layout, "unsafe maintenance lock") from exc
+    finally:
+        os.close(root_fd)
+    lock_stat = os.fstat(lock_fd)
+    if (
+        not stat.S_ISREG(lock_stat.st_mode)
+        or stat.S_IMODE(lock_stat.st_mode) != 0o600
+        or lock_stat.st_uid != os.geteuid()
+    ):
+        os.close(lock_fd)
+        raise _lock_error(layout, "unsafe maintenance lock")
+    return lock_fd
+
+
+def _verify_lock_binding(
+    layout: LayeredResearchLayout,
+    lock_fd: int,
+) -> None:
+    descriptor_stat = os.fstat(lock_fd)
+    try:
+        path_stat = os.lstat(layout.root / _LOCK_NAME)
+    except OSError as exc:
+        raise _lock_error(layout, "maintenance lock path rebound") from exc
+    if (
+        not stat.S_ISREG(path_stat.st_mode)
+        or path_stat.st_dev != descriptor_stat.st_dev
+        or path_stat.st_ino != descriptor_stat.st_ino
+        or stat.S_IMODE(path_stat.st_mode) != 0o600
+        or path_stat.st_uid != os.geteuid()
+    ):
+        raise _lock_error(layout, "maintenance lock path rebound")
+
+
+@contextmanager
+def layered_storage_lock(
+    layout: LayeredResearchLayout,
+    *,
+    exclusive: bool,
+):
+    """Hold a stable process/thread-reentrant lock for one layered transaction."""
+    if not layout.root.exists():
+        if exclusive:
+            raise _lock_error(layout, "layered root missing")
+        yield
+        return
+    key = str(layout.root.absolute())
+    states = getattr(_LOCK_STATE, "states", None)
+    if states is None:
+        states = {}
+        _LOCK_STATE.states = states
+    existing = states.get(key)
+    if existing is not None:
+        if exclusive and existing["mode"] != "exclusive":
+            raise _lock_error(layout, "cannot upgrade shared maintenance lock")
+        existing["depth"] += 1
+        try:
+            yield
+        finally:
+            existing["depth"] -= 1
+        return
+
+    lock_fd = _open_lock_fd(layout)
+    mode = fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH
+    try:
+        fcntl.flock(lock_fd, mode)
+        _verify_lock_binding(layout, lock_fd)
+        states[key] = {
+            "fd": lock_fd,
+            "mode": "exclusive" if exclusive else "shared",
+            "depth": 1,
+        }
+        try:
+            yield
+            _verify_lock_binding(layout, lock_fd)
+        finally:
+            states.pop(key, None)
+            fcntl.flock(lock_fd, fcntl.LOCK_UN)
+    finally:
+        os.close(lock_fd)
 
 
 def _is_safe_managed_path(path: Path, layout: LayeredResearchLayout) -> bool:
@@ -236,7 +354,7 @@ def _discover_semantic_versions(
     return sorted(versions, key=_semver_key)
 
 
-def list_layered_project_slugs(
+def _list_layered_project_slugs_unlocked(
     *, layout: LayeredResearchLayout | None = None
 ) -> list[str]:
     selected = _layout_or_default(layout)
@@ -250,7 +368,15 @@ def list_layered_project_slugs(
         return []
 
 
-def load_layered_project(
+def list_layered_project_slugs(
+    *, layout: LayeredResearchLayout | None = None
+) -> list[str]:
+    selected = _layout_or_default(layout)
+    with layered_storage_lock(selected, exclusive=False):
+        return _list_layered_project_slugs_unlocked(layout=selected)
+
+
+def _load_layered_project_unlocked(
     project_slug: str, *, layout: LayeredResearchLayout | None = None
 ) -> dict[str, Any]:
     selected = _layout_or_default(layout)
@@ -276,12 +402,21 @@ def load_layered_project(
     return identity
 
 
+def load_layered_project(
+    project_slug: str, *, layout: LayeredResearchLayout | None = None
+) -> dict[str, Any]:
+    selected = _layout_or_default(layout)
+    with layered_storage_lock(selected, exclusive=False):
+        return _load_layered_project_unlocked(project_slug, layout=selected)
+
+
 def list_layered_versions(
     project_slug: str, *, layout: LayeredResearchLayout | None = None
 ) -> list[str]:
     selected = _layout_or_default(layout)
-    load_layered_project(project_slug, layout=selected)
-    return _discover_semantic_versions(project_slug, selected)
+    with layered_storage_lock(selected, exclusive=False):
+        _load_layered_project_unlocked(project_slug, layout=selected)
+        return _discover_semantic_versions(project_slug, selected)
 
 
 def _current_semantic_version(identity: dict[str, Any], project_slug: str) -> str:
@@ -467,7 +602,7 @@ def _verify_manifest_and_hash(
             )
 
 
-def load_industry_version(
+def _load_industry_version_unlocked(
     project_slug: str,
     semantic_version: str | None = None,
     *,
@@ -476,7 +611,7 @@ def load_industry_version(
     selected = _layout_or_default(layout)
     if not _PROJECT_SLUG_PATTERN.fullmatch(project_slug):
         raise _project_not_found(project_slug)
-    identity = load_layered_project(project_slug, layout=selected)
+    identity = _load_layered_project_unlocked(project_slug, layout=selected)
     if semantic_version is None:
         semantic_version = _current_semantic_version(identity, project_slug)
     elif not _SEMANTIC_VERSION_PATTERN.fullmatch(semantic_version):
@@ -499,7 +634,22 @@ def load_industry_version(
     return version
 
 
-def load_layered_index(
+def load_industry_version(
+    project_slug: str,
+    semantic_version: str | None = None,
+    *,
+    layout: LayeredResearchLayout | None = None,
+) -> dict[str, Any]:
+    selected = _layout_or_default(layout)
+    with layered_storage_lock(selected, exclusive=False):
+        return _load_industry_version_unlocked(
+            project_slug,
+            semantic_version,
+            layout=selected,
+        )
+
+
+def _load_layered_index_unlocked(
     *, layout: LayeredResearchLayout | None = None
 ) -> dict[str, Any]:
     selected = _layout_or_default(layout)
@@ -511,6 +661,14 @@ def load_layered_index(
             artifact="index",
         )
     return _read_json_object(path, "research_project_index_v2_1", layout=selected)
+
+
+def load_layered_index(
+    *, layout: LayeredResearchLayout | None = None
+) -> dict[str, Any]:
+    selected = _layout_or_default(layout)
+    with layered_storage_lock(selected, exclusive=False):
+        return _load_layered_index_unlocked(layout=selected)
 
 
 def _upstream_invalid(reference: dict[str, Any], reason: str) -> ResearchProjectV2Error:

@@ -6,11 +6,13 @@ from pathlib import Path
 import re
 import tempfile
 from typing import Any
+from datetime import datetime
 
 from stock_research.research_project_v2.canonical import content_sha256
 from stock_research.research_project_v2.errors import ResearchProjectV2Error
 from stock_research.research_project_v2_1.layout import LayeredResearchLayout
 from stock_research.research_project_v2_1.loader import (
+    layered_storage_lock,
     list_layered_project_slugs,
     load_industry_version,
     load_layered_project,
@@ -45,6 +47,43 @@ def _semver_key(value: str) -> tuple[int, int, int]:
 
 def _json_bytes(payload: dict[str, Any]) -> bytes:
     return (json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode("utf-8")
+
+
+def _timestamp_key(value: str) -> datetime:
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except (AttributeError, ValueError) as exc:
+        raise _error("invalid RFC3339 timestamp", value=value) from exc
+    if parsed.tzinfo is None:
+        raise _error("invalid RFC3339 timestamp", value=value)
+    return parsed
+
+
+def _validate_version_identity(
+    version: dict[str, Any],
+    *,
+    slug: str,
+    semantic_version: str,
+    identity: dict[str, Any],
+    path: Path,
+) -> None:
+    expected = {
+        "semantic_version": semantic_version,
+        "version_id": f"research_version:{slug}:{semantic_version}",
+        "project_id": identity["project_id"],
+    }
+    for field, expected_value in expected.items():
+        actual = version.get(field)
+        if actual != expected_value:
+            raise _error(
+                f"version {field} mismatch",
+                path=path,
+                project=slug,
+                version=semantic_version,
+                field=field,
+                expected=expected_value,
+                actual=actual,
+            )
 
 
 def _atomic_replace_bytes(path: Path, data: bytes) -> None:
@@ -146,7 +185,10 @@ def _version_paths(slug: str, versions_dir: Path, layout: LayeredResearchLayout)
     return sorted(versions, key=lambda pair: _semver_key(pair[0]))
 
 
-def _commit(targets: list[tuple[Path, bytes]]) -> None:
+def _commit(
+    targets: list[tuple[Path, bytes]],
+    layout: LayeredResearchLayout,
+) -> None:
     originals = {path: path.read_bytes() if path.exists() else None for path, _ in targets}
     missing_directories: set[Path] = set()
     for path, _ in targets:
@@ -157,8 +199,10 @@ def _commit(targets: list[tuple[Path, bytes]]) -> None:
     attempted: list[Path] = []
     try:
         for path, data in targets:
+            _safe(path, layout, allow_missing=True)
             attempted.append(path)
             _atomic_write(path, data)
+            _safe(path, layout)
     except Exception:
         for path in reversed(attempted):
             try:
@@ -177,12 +221,24 @@ def _commit(targets: list[tuple[Path, bytes]]) -> None:
         raise
 
 
-def rebuild_layered_index(
+def _rebuild_layered_index_unlocked(
     write: bool,
-    layout: LayeredResearchLayout | None = None,
+    layout: LayeredResearchLayout,
 ) -> dict[str, object]:
     """Rebuild only the V2.1 layered index and bootstrap placeholder hashes."""
-    selected = LayeredResearchLayout.default() if layout is None else layout
+    selected = layout
+    allowed_root_entries = {
+        ".maintenance.lock",
+        "evidence",
+        "fixtures",
+        "index",
+        "projects",
+        "schema",
+    }
+    for entry in selected.root.iterdir():
+        _safe(entry, selected)
+        if entry.name not in allowed_root_entries:
+            raise _error("unexpected layered root entry", path=entry)
     _safe(selected.projects_dir, selected)
     for entry in selected.projects_dir.iterdir():
         _safe(entry, selected)
@@ -224,6 +280,13 @@ def rebuild_layered_index(
                     raise _error("invalid version JSON", path=version_path, project=slug) from exc
                 if not isinstance(version, dict):
                     raise _error("version must be an object", path=version_path, project=slug)
+                _validate_version_identity(
+                    version,
+                    slug=slug,
+                    semantic_version=semantic_version,
+                    identity=identity,
+                    path=version_path,
+                )
                 calculated_hash = content_sha256(version, excluded_paths={("content_hash",)})
                 embedded_hash = version.get("content_hash")
                 if embedded_hash not in {"0" * 64, calculated_hash}:
@@ -291,7 +354,7 @@ def rebuild_layered_index(
     index = {
         "schema_version": "2.1.0",
         "artifact_kind": "research_project_index",
-        "generated_at": max(timestamps),
+        "generated_at": max(timestamps, key=_timestamp_key),
         "projects": index_rows,
     }
     validate_v2_1_schema_payload("research_project_index_v2_1", index, layout=selected)
@@ -301,13 +364,22 @@ def rebuild_layered_index(
     for path, _ in targets:
         _safe(path, selected, allow_missing=True)
     if write:
-        _commit(targets)
+        _commit(targets, selected)
     return {
         "status": "written" if write else "planned",
         "projects": slugs,
         "versions": planned_versions,
         "index": str(selected.index_path.relative_to(selected.root)),
     }
+
+
+def rebuild_layered_index(
+    write: bool,
+    layout: LayeredResearchLayout | None = None,
+) -> dict[str, object]:
+    selected = LayeredResearchLayout.default() if layout is None else layout
+    with layered_storage_lock(selected, exclusive=True):
+        return _rebuild_layered_index_unlocked(write, selected)
 
 
 __all__ = ["rebuild_layered_index"]
