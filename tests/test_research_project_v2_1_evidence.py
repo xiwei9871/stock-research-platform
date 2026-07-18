@@ -527,6 +527,110 @@ def test_relationship_integrity_rejects_self_and_duplicate_pairs() -> None:
     assert exc.value.code == "RESEARCH_PROJECT_V2_1_EVIDENCE_ASSESSMENT_INVALID"
 
 
+@pytest.mark.parametrize(
+    ("relationship", "left_overrides", "right_overrides"),
+    [
+        ("same_document", {}, {"content_sha256": "a" * 64}),
+        (
+            "republication",
+            {"section_hashes": ["1" * 64, "2" * 64, "3" * 64, "4" * 64]},
+            {"section_hashes": ["1" * 64, "2" * 64, "3" * 64, "4" * 64, "5" * 64]},
+        ),
+        (
+            "shared_upstream_source",
+            {"upstream_source_id": "upstream:shared"},
+            {"upstream_source_id": "upstream:shared"},
+        ),
+        (
+            "same_publisher_family",
+            {"publisher_family": "publisher:shared"},
+            {"publisher_family": "publisher:shared"},
+        ),
+    ],
+)
+def test_explicit_collapsing_relationship_accepts_objective_invariant(
+    relationship: str, left_overrides: dict, right_overrides: dict
+) -> None:
+    left = _artifact("artifact:valid-left", "a" * 64, publisher_family="left")
+    right_digest = "b" * 64 if relationship != "same_document" else "a" * 64
+    right = _artifact("artifact:valid-right", right_digest, publisher_family="right")
+    left.update(left_overrides)
+    right.update(right_overrides)
+    row = {
+        "left_artifact_id": left["artifact_id"],
+        "right_artifact_id": right["artifact_id"],
+        "relationship": relationship,
+        "reasons": ["objective invariant confirmed"],
+    }
+    validate_industry_evidence_assessments(
+        [], artifacts=[left, right], source_relationships=[row]
+    )
+
+
+@pytest.mark.parametrize(
+    ("relationship", "left_overrides", "right_overrides"),
+    [
+        ("same_document", {}, {}),
+        (
+            "republication",
+            {"content_sha256": "a" * 64, "section_hashes": ["1" * 64]},
+            {"content_sha256": "a" * 64, "section_hashes": ["1" * 64]},
+        ),
+        (
+            "republication",
+            {"section_hashes": ["1" * 64]},
+            {"section_hashes": ["2" * 64]},
+        ),
+        (
+            "shared_upstream_source",
+            {"upstream_source_id": "upstream:left"},
+            {"upstream_source_id": "upstream:right"},
+        ),
+        (
+            "shared_upstream_source",
+            {"upstream_source_id": None},
+            {"upstream_source_id": None},
+        ),
+        (
+            "same_publisher_family",
+            {"publisher_family": "publisher:left"},
+            {"publisher_family": "publisher:right"},
+        ),
+        (
+            "same_publisher_family",
+            {"publisher_family": None},
+            {"publisher_family": None},
+        ),
+    ],
+)
+def test_explicit_collapsing_relationship_rejects_false_invariant_before_union(
+    relationship: str, left_overrides: dict, right_overrides: dict
+) -> None:
+    left = _artifact("artifact:invalid-left", "a" * 64, publisher_family="left")
+    right = _artifact("artifact:invalid-right", "b" * 64, publisher_family="right")
+    left.update(left_overrides)
+    right.update(right_overrides)
+    for artifact in (left, right):
+        digest = artifact["content_sha256"]
+        artifact["raw_path"] = f"evidence/raw/{digest[:2]}/{digest}.txt"
+    row = {
+        "left_artifact_id": left["artifact_id"],
+        "right_artifact_id": right["artifact_id"],
+        "relationship": relationship,
+        "reasons": ["false explicit classification"],
+    }
+    with pytest.raises(ResearchProjectV2Error) as exc:
+        validate_industry_evidence_assessments(
+            [], artifacts=[left, right], source_relationships=[row]
+        )
+    assert exc.value.code == "RESEARCH_PROJECT_V2_1_EVIDENCE_RELATIONSHIP_INVALID"
+    assert exc.value.details["pair"] == sorted(
+        [left["artifact_id"], right["artifact_id"]]
+    )
+    assert exc.value.details["expected_invariant"]
+    assert "actual" in exc.value.details
+
+
 def test_relationship_indexing_does_not_call_public_pair_assessor(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

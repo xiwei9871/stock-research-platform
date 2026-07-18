@@ -86,6 +86,27 @@ def _immutability(reason: str, **details: object) -> ResearchProjectV2Error:
     )
 
 
+def _relationship_invalid(
+    relationship: str,
+    left_artifact_id: str,
+    right_artifact_id: str,
+    *,
+    expected_invariant: str,
+    actual: dict[str, object],
+) -> ResearchProjectV2Error:
+    return ResearchProjectV2Error(
+        "Explicit evidence relationship contradicts artifact evidence",
+        code="RESEARCH_PROJECT_V2_1_EVIDENCE_RELATIONSHIP_INVALID",
+        details={
+            "reason": "explicit relationship contradiction",
+            "relationship": relationship,
+            "pair": sorted((left_artifact_id, right_artifact_id)),
+            "expected_invariant": expected_invariant,
+            "actual": actual,
+        },
+    )
+
+
 def _validate_artifact(artifact: dict[str, Any]) -> dict[str, Any]:
     copied = deepcopy(artifact)
     try:
@@ -493,6 +514,64 @@ def _dependency_indices(
     return republications
 
 
+def _validate_explicit_collapsing_relationship(
+    relationship: str,
+    left: dict[str, Any],
+    right: dict[str, Any],
+) -> None:
+    left_id, right_id = left["artifact_id"], right["artifact_id"]
+    if relationship == "same_document":
+        valid = left["content_sha256"] == right["content_sha256"]
+        expected = "content_sha256 values must match exactly"
+        actual: dict[str, object] = {
+            "left_content_sha256": left["content_sha256"],
+            "right_content_sha256": right["content_sha256"],
+        }
+    elif relationship == "republication":
+        left_sections = set(left.get("section_hashes", ()))
+        right_sections = set(right.get("section_hashes", ()))
+        combined = left_sections | right_sections
+        overlap = len(left_sections & right_sections) / len(combined) if combined else 0.0
+        hashes_differ = left["content_sha256"] != right["content_sha256"]
+        valid = hashes_differ and overlap >= 0.8
+        expected = (
+            "content_sha256 values must differ and section hash Jaccard overlap "
+            "must be at least 0.8"
+        )
+        actual = {
+            "content_hashes_differ": hashes_differ,
+            "section_hash_jaccard": overlap,
+        }
+    elif relationship == "shared_upstream_source":
+        left_upstream = left.get("upstream_source_id")
+        right_upstream = right.get("upstream_source_id")
+        valid = bool(left_upstream) and left_upstream == right_upstream
+        expected = "nonempty upstream_source_id values must match exactly"
+        actual = {
+            "left_upstream_source_id": left_upstream,
+            "right_upstream_source_id": right_upstream,
+        }
+    elif relationship == "same_publisher_family":
+        left_publisher = left.get("publisher_family")
+        right_publisher = right.get("publisher_family")
+        valid = bool(left_publisher) and left_publisher == right_publisher
+        expected = "nonempty publisher_family values must match exactly"
+        actual = {
+            "left_publisher_family": left_publisher,
+            "right_publisher_family": right_publisher,
+        }
+    else:
+        return
+    if not valid:
+        raise _relationship_invalid(
+            relationship,
+            left_id,
+            right_id,
+            expected_invariant=expected,
+            actual=actual,
+        )
+
+
 def _evidence_context(
     assessments: Iterable[dict[str, Any]],
     artifacts: Iterable[dict[str, Any]],
@@ -549,6 +628,9 @@ def _evidence_context(
             raise _invalid("duplicate source relationship pair", left=left, right=right)
         explicit_relationships[pair] = relationship
         if relationship in _COLLAPSING:
+            _validate_explicit_collapsing_relationship(
+                relationship, artifact_by_id[left], artifact_by_id[right]
+            )
             union.union(left, right)
         elif relationship == "independent":
             if (
