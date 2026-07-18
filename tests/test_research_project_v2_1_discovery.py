@@ -162,6 +162,12 @@ def assert_url_error(raw: str) -> ResearchProjectV2Error:
             "https://example.com/%e4%b8%ad?q=%e4%b8%ad",
             "https://example.com/%E4%B8%AD?q=%E4%B8%AD",
         ),
+        ("https://example.com/%7euser", "https://example.com/~user"),
+        ("https://example.com/a/../b", "https://example.com/b"),
+        ("https://example.com/./a", "https://example.com/a"),
+        ("https://example.com/a/%2e%2E/b", "https://example.com/b"),
+        ("https://example.com/a//b", "https://example.com/a//b"),
+        ("https://example.com/a%2fb", "https://example.com/a%2Fb"),
     ],
 )
 def test_normalize_url_canonicalizes_supported_web_urls(raw: str, expected: str) -> None:
@@ -201,6 +207,27 @@ def test_normalize_url_canonicalizes_supported_web_urls(raw: str, expected: str)
 )
 def test_normalize_url_rejects_unsupported_or_malformed_urls(raw: str) -> None:
     assert_url_error(raw)
+
+
+@pytest.mark.parametrize(
+    ("left", "right"),
+    [
+        ("https://example.com/%7Euser", "https://example.com/~user"),
+        ("https://example.com/a/../b", "https://example.com/b"),
+        ("https://example.com/%2E/a", "https://example.com/a"),
+    ],
+)
+def test_normalize_url_collapses_rfc3986_path_aliases(left: str, right: str) -> None:
+    assert normalize_url(left) == normalize_url(right)
+
+
+def test_normalize_url_preserves_encoded_reserved_path_slash_identity() -> None:
+    assert normalize_url("https://example.com/a%2fb") == (
+        "https://example.com/a%2Fb"
+    )
+    assert normalize_url("https://example.com/a%2Fb") != normalize_url(
+        "https://example.com/a/b"
+    )
 
 
 def test_candidate_id_is_deterministic_and_uses_trimmed_title() -> None:
@@ -1121,6 +1148,112 @@ def test_writer_detects_batch_rebind_after_readback_before_return(
     )
     assert list(outside.iterdir()) == []
     assert list(detached.iterdir()) == []
+
+
+def test_writer_detects_regular_file_replacement_after_readback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    batch = discover_sources(
+        search_plan(),
+        StaticProvider({}),
+        provider_name="static",
+        discovered_at=DISCOVERED_AT,
+        provenance=PROVENANCE,
+    )
+    target = (
+        layout.evidence_discovery_dir
+        / batch["search_plan_id"]
+        / f"{batch['content_hash']}.json"
+    )
+    original_verify = discovery_module._final_entry_is_regular_at
+    replaced = False
+
+    def replace_then_verify(directory_fd: int, name: str):
+        nonlocal replaced
+        if not replaced:
+            replaced = True
+            discovery_module.os.unlink(name, dir_fd=directory_fd)
+            descriptor = discovery_module.os.open(
+                name,
+                discovery_module.os.O_WRONLY
+                | discovery_module.os.O_CREAT
+                | discovery_module.os.O_EXCL
+                | discovery_module.os.O_NOFOLLOW,
+                0o600,
+                dir_fd=directory_fd,
+            )
+            try:
+                discovery_module.os.write(descriptor, b"evil")
+            finally:
+                discovery_module.os.close(descriptor)
+        return original_verify(directory_fd, name)
+
+    monkeypatch.setattr(
+        discovery_module, "_final_entry_is_regular_at", replace_then_verify
+    )
+
+    assert_discovery_error(
+        lambda: write_discovery_batch(batch, layout=layout),
+        reason="unsafe managed path",
+    )
+    assert target.read_bytes() == b"evil"
+
+
+def test_writer_binds_created_inode_before_final_name_can_be_replaced(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    batch = discover_sources(
+        search_plan(),
+        StaticProvider({}),
+        provider_name="static",
+        discovered_at=DISCOVERED_AT,
+        provenance=PROVENANCE,
+    )
+    expected = canonical_bytes(batch)
+    final_name = f"{batch['content_hash']}.json"
+    target = layout.evidence_discovery_dir / batch["search_plan_id"] / final_name
+    original_link = discovery_module.os.link
+    original_stat = discovery_module.os.stat
+    linked = False
+    replaced = False
+
+    def record_link(source: str, target_name: str, **kwargs: object) -> None:
+        nonlocal linked
+        original_link(source, target_name, **kwargs)
+        linked = True
+
+    def replace_before_stat(
+        path: str, *, dir_fd: int | None = None, follow_symlinks: bool = True
+    ):
+        nonlocal replaced
+        if linked and path == final_name and not replaced and dir_fd is not None:
+            replaced = True
+            discovery_module.os.unlink(path, dir_fd=dir_fd)
+            descriptor = discovery_module.os.open(
+                path,
+                discovery_module.os.O_WRONLY
+                | discovery_module.os.O_CREAT
+                | discovery_module.os.O_EXCL
+                | discovery_module.os.O_NOFOLLOW,
+                0o600,
+                dir_fd=dir_fd,
+            )
+            try:
+                discovery_module.os.write(descriptor, expected)
+            finally:
+                discovery_module.os.close(descriptor)
+        return original_stat(path, dir_fd=dir_fd, follow_symlinks=follow_symlinks)
+
+    monkeypatch.setattr(discovery_module.os, "link", record_link)
+    monkeypatch.setattr(discovery_module.os, "stat", replace_before_stat)
+
+    assert_discovery_error(
+        lambda: write_discovery_batch(batch, layout=layout),
+        reason="unsafe managed path",
+    )
+    assert target.read_bytes() == expected
 
 
 def test_writer_fsyncs_parent_mkdirs_and_batch_after_temp_unlink(
