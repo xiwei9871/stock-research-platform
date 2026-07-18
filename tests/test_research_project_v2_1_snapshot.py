@@ -1513,3 +1513,63 @@ def test_requests_transport_close_only_failure_is_stable(monkeypatch) -> None:
     assert exc_info.value.code == "RESEARCH_PROJECT_V2_1_FETCH_TRANSPORT_ERROR"
     assert isinstance(exc_info.value.__cause__, RuntimeError)
     assert fake.close_calls == 1
+
+
+def test_fetch_response_construction_memory_error_keeps_guard_ownership(
+    monkeypatch,
+) -> None:
+    import requests
+    import stock_research.research_project_v2_1.snapshot as module
+    fake = _MockRequestsResponse()
+    monkeypatch.setattr(requests, "get", lambda *args, **kwargs: fake)
+    monkeypatch.setattr(
+        module,
+        "FetchResponse",
+        lambda *args, **kwargs: (_ for _ in ()).throw(MemoryError()),
+    )
+    with pytest.raises(MemoryError):
+        RequestsFetchTransport().get(
+            "https://example.com/source.pdf", timeout_seconds=3.0
+        )
+    assert fake.close_calls == 1
+
+
+def test_fetch_response_construction_error_is_wrapped_and_closes(monkeypatch) -> None:
+    import requests
+    import stock_research.research_project_v2_1.snapshot as module
+    fake = _MockRequestsResponse()
+    monkeypatch.setattr(requests, "get", lambda *args, **kwargs: fake)
+    monkeypatch.setattr(
+        module,
+        "FetchResponse",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            RuntimeError("construction failed")
+        ),
+    )
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        RequestsFetchTransport().get(
+            "https://example.com/source.pdf", timeout_seconds=3.0
+        )
+    assert exc_info.value.code == "RESEARCH_PROJECT_V2_1_FETCH_TRANSPORT_ERROR"
+    assert isinstance(exc_info.value.__cause__, RuntimeError)
+    assert fake.close_calls == 1
+
+
+def test_fetch_response_construction_primary_is_not_masked_by_close_failure(
+    monkeypatch,
+) -> None:
+    import requests
+    import stock_research.research_project_v2_1.snapshot as module
+    fake = _MockRequestsResponse(close_error=RuntimeError("close failed"))
+    monkeypatch.setattr(requests, "get", lambda *args, **kwargs: fake)
+    monkeypatch.setattr(
+        module,
+        "FetchResponse",
+        lambda *args, **kwargs: (_ for _ in ()).throw(MemoryError()),
+    )
+    with pytest.raises(MemoryError) as exc_info:
+        RequestsFetchTransport().get(
+            "https://example.com/source.pdf", timeout_seconds=3.0
+        )
+    assert any("close failed" in note for note in exc_info.value.__notes__)
+    assert fake.close_calls == 1

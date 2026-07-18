@@ -310,16 +310,17 @@ class RequestsFetchTransport:
 
             if 200 <= status_code <= 299:
                 chunks: Iterable[bytes] = _RequestsChunkStream(response)
-                transferred = True
             else:
                 chunks = ()
-            return FetchResponse(
+            result = FetchResponse(
                 status_code=status_code,
                 headers=headers,
                 chunks=chunks,
                 url=response_url,
                 peer_ip=peer_ip,
             )
+            transferred = 200 <= status_code <= 299
+            return result
         except (ResearchProjectV2Error, *_CONTROL_FLOW_EXCEPTIONS) as exc:
             primary_error = exc
             raise
