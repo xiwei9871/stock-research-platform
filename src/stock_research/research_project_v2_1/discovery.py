@@ -1020,20 +1020,6 @@ def _same_inode(left: os.stat_result, right: os.stat_result) -> bool:
     return left.st_dev == right.st_dev and left.st_ino == right.st_ino
 
 
-def _unlink_created_final_if_still_bound(
-    directory_fd: int, name: str, created: os.stat_result | None
-) -> bool:
-    if created is None:
-        return False
-    try:
-        current = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
-    except OSError:
-        return False
-    if not stat.S_ISREG(current.st_mode) or not _same_inode(current, created):
-        return False
-    return _unlink_and_sync(directory_fd, name)
-
-
 def _verify_live_final_binding(
     directory_fds: list[int],
     component_names: list[str],
@@ -1134,7 +1120,12 @@ def _complete_directory_binding_is_valid(
 def write_discovery_batch(
     batch: dict[str, Any], *, layout: LayeredResearchLayout | None = None
 ) -> Path:
-    """Write a validated immutable discovery batch beneath managed storage."""
+    """Write an immutable batch without deleting a final name once published.
+
+    A failure after the hard-link publication may leave a complete canonical
+    final artifact. Cleanup is limited to the private temporary name so a
+    concurrent replacement can never be deleted by a non-atomic stat/unlink.
+    """
     raw_plan_id = batch.get("search_plan_id") if isinstance(batch, dict) else None
     if not isinstance(raw_plan_id, str) or _SAFE_PLAN_ID.fullmatch(raw_plan_id) is None:
         raise _invalid("unsafe search_plan_id", search_plan_id=raw_plan_id)
@@ -1184,6 +1175,7 @@ def write_discovery_batch(
             )
             final_created = True
             created_final_stat = temporary_stat
+            os.fsync(batch_fd)
         except FileExistsError:
             existing = _read_regular_file_at(batch_fd, final_name)
             if existing != data:
@@ -1195,11 +1187,6 @@ def write_discovery_batch(
         if not _complete_directory_binding_is_valid(
             directory_fds, component_names, discovery_fd, plan_id, batch_fd
         ):
-            if final_created:
-                _unlink_created_final_if_still_bound(
-                    batch_fd, final_name, created_final_stat
-                )
-                final_created = False
             raise _invalid("unsafe managed path", path=str(batch_dir))
         os.fsync(batch_fd)
         verified = _read_regular_file_at(batch_fd, final_name)
@@ -1210,11 +1197,6 @@ def write_discovery_batch(
         _unlink_and_sync(batch_fd, temporary_name)
         temporary_name = None
         if not _final_entry_is_regular_at(batch_fd, final_name):
-            if final_created:
-                _unlink_created_final_if_still_bound(
-                    batch_fd, final_name, created_final_stat
-                )
-                final_created = False
             raise _invalid("unsafe managed path", path=str(target))
         try:
             held_final_fd, held_final_stat = _open_verified_final_at(
@@ -1224,11 +1206,6 @@ def write_discovery_batch(
                 created_final_stat if final_created else None,
             )
         except ResearchProjectV2Error:
-            if final_created:
-                _unlink_created_final_if_still_bound(
-                    batch_fd, final_name, created_final_stat
-                )
-                final_created = False
             raise
         if not _verify_live_final_binding(
             directory_fds,
@@ -1239,11 +1216,6 @@ def write_discovery_batch(
             held_final_stat,
             data,
         ):
-            if final_created:
-                _unlink_created_final_if_still_bound(
-                    batch_fd, final_name, created_final_stat
-                )
-                final_created = False
             raise _invalid("unsafe managed path", path=str(target))
         return target
     finally:

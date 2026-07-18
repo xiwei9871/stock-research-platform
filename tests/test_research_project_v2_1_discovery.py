@@ -1257,7 +1257,10 @@ def test_writer_detects_batch_rebind_after_readback_before_return(
         reason="unsafe managed path",
     )
     assert list(outside.iterdir()) == []
-    assert list(detached.iterdir()) == []
+    detached_files = list(detached.iterdir())
+    assert len(detached_files) == 1
+    assert detached_files[0].read_bytes() == canonical_bytes(batch)
+    assert not detached_files[0].name.endswith(".tmp")
 
 
 def test_writer_detects_regular_file_replacement_after_readback(
@@ -1421,6 +1424,109 @@ def test_writer_early_binding_failure_does_not_unlink_replacement_file(
         reason="unsafe managed path",
     )
     assert target.read_bytes() == b"evil"
+
+
+def test_writer_never_attempts_final_name_unlink_after_publication(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    batch = discover_sources(
+        search_plan(),
+        StaticProvider({}),
+        provider_name="static",
+        discovered_at=DISCOVERED_AT,
+        provenance=PROVENANCE,
+    )
+    final_name = f"{batch['content_hash']}.json"
+    target = layout.evidence_discovery_dir / batch["search_plan_id"] / final_name
+    original_binding = discovery_module._complete_directory_binding_is_valid
+    original_unlink_sync = discovery_module._unlink_and_sync
+    binding_calls = 0
+    final_unlink_attempted = False
+
+    def fail_second_binding(*args: object, **kwargs: object) -> bool:
+        nonlocal binding_calls
+        binding_calls += 1
+        if binding_calls == 2:
+            return False
+        return original_binding(*args, **kwargs)
+
+    def replace_on_final_unlink(directory_fd: int, name: str) -> bool:
+        nonlocal final_unlink_attempted
+        if name == final_name:
+            final_unlink_attempted = True
+            discovery_module.os.unlink(name, dir_fd=directory_fd)
+            descriptor = discovery_module.os.open(
+                name,
+                discovery_module.os.O_WRONLY
+                | discovery_module.os.O_CREAT
+                | discovery_module.os.O_EXCL
+                | discovery_module.os.O_NOFOLLOW,
+                0o600,
+                dir_fd=dir_fd,
+            )
+            try:
+                discovery_module.os.write(descriptor, b"evil")
+            finally:
+                discovery_module.os.close(descriptor)
+        return original_unlink_sync(directory_fd, name)
+
+    monkeypatch.setattr(
+        discovery_module,
+        "_complete_directory_binding_is_valid",
+        fail_second_binding,
+    )
+    monkeypatch.setattr(discovery_module, "_unlink_and_sync", replace_on_final_unlink)
+
+    assert_discovery_error(
+        lambda: write_discovery_batch(batch, layout=layout),
+        reason="unsafe managed path",
+    )
+    assert final_unlink_attempted is False
+    assert target.read_bytes() == canonical_bytes(batch)
+    assert not any(path.name.endswith(".tmp") for path in target.parent.iterdir())
+
+
+def test_writer_post_link_failure_keeps_complete_canonical_orphan_without_temp(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    batch = discover_sources(
+        search_plan(),
+        StaticProvider({}),
+        provider_name="static",
+        discovered_at=DISCOVERED_AT,
+        provenance=PROVENANCE,
+    )
+    target = (
+        layout.evidence_discovery_dir
+        / batch["search_plan_id"]
+        / f"{batch['content_hash']}.json"
+    )
+    original_binding = discovery_module._complete_directory_binding_is_valid
+    binding_calls = 0
+
+    def fail_second_binding(*args: object, **kwargs: object) -> bool:
+        nonlocal binding_calls
+        binding_calls += 1
+        if binding_calls == 2:
+            return False
+        return original_binding(*args, **kwargs)
+
+    monkeypatch.setattr(
+        discovery_module,
+        "_complete_directory_binding_is_valid",
+        fail_second_binding,
+    )
+
+    assert_discovery_error(
+        lambda: write_discovery_batch(batch, layout=layout),
+        reason="unsafe managed path",
+    )
+    assert target.read_bytes() == canonical_bytes(batch)
+    expected_hash = content_sha256(batch, excluded_paths={("content_hash",)})
+    assert target.name == f"{expected_hash}.json"
+    assert not any(path.name.endswith(".tmp") for path in target.parent.iterdir())
 
 
 def test_writer_fsyncs_parent_mkdirs_and_batch_after_temp_unlink(
