@@ -350,6 +350,82 @@ def test_unknown_sources_never_inflate_coverage_or_material_conflict() -> None:
     assert "Independent" not in summary["summary"]
 
 
+@pytest.mark.parametrize(
+    ("role", "count_field"),
+    [
+        ("supports", "supporting_source_count"),
+        ("opposes", "opposing_source_count"),
+        ("quantifies", "quantitative_source_count"),
+    ],
+)
+@pytest.mark.parametrize(
+    ("mode", "expected_count"),
+    [("unknown", 1), ("explicit_independent", 2), ("same_publisher", 1)],
+)
+def test_conflict_role_counts_are_conservative(
+    role: str, count_field: str, mode: str, expected_count: int
+) -> None:
+    publisher_left = "shared" if mode == "same_publisher" else None
+    publisher_right = "shared" if mode == "same_publisher" else None
+    left = _artifact(
+        f"artifact:{mode}:{role}:a",
+        "a" * 64,
+        publisher_family=publisher_left,
+    )
+    right = _artifact(
+        f"artifact:{mode}:{role}:b",
+        "b" * 64,
+        publisher_family=publisher_right,
+    )
+    relationships = []
+    if mode == "explicit_independent":
+        relationships = [
+            {
+                "left_artifact_id": left["artifact_id"],
+                "right_artifact_id": right["artifact_id"],
+                "relationship": "independent",
+                "reasons": ["independence manually confirmed"],
+            }
+        ]
+    summary = build_conflict_summaries(
+        [_assessment(left, role=role), _assessment(right, role=role)],
+        artifacts=[left, right],
+        source_relationships=relationships,
+        assessed_at="2026-07-18T10:00:00Z",
+        provenance=_provenance(),
+    )[0]
+    assert summary[count_field] == expected_count
+
+
+def test_total_independent_count_is_not_smaller_than_role_subset_count() -> None:
+    artifacts = [
+        _artifact(f"artifact:{name}", digest * 64, publisher_family=None)
+        for name, digest in zip("abcd", "abcd", strict=True)
+    ]
+    assessments = [
+        _assessment(artifacts[0], role="quantifies"),
+        *[_assessment(artifact, role="supports") for artifact in artifacts[1:]],
+    ]
+    relationships = [
+        {
+            "left_artifact_id": artifacts[left]["artifact_id"],
+            "right_artifact_id": artifacts[right]["artifact_id"],
+            "relationship": "independent",
+            "reasons": ["independence manually confirmed"],
+        }
+        for left, right in [(0, 1), (1, 2), (1, 3), (2, 3)]
+    ]
+    summary = build_conflict_summaries(
+        assessments,
+        artifacts=artifacts,
+        source_relationships=relationships,
+        assessed_at="2026-07-18T10:00:00Z",
+        provenance=_provenance(),
+    )[0]
+    assert summary["supporting_source_count"] == 3
+    assert summary["independent_source_family_count"] >= summary["supporting_source_count"]
+
+
 def test_dependency_transitivity_downgrades_weak_auto_independence() -> None:
     left = _artifact("artifact:left", "a" * 64, publisher_family="publisher:x")
     bridge = _artifact("artifact:bridge", "a" * 64, publisher_family="publisher:y")

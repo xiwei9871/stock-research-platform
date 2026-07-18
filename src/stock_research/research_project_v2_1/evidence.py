@@ -676,6 +676,13 @@ def build_conflict_summaries(
         else:
             status, summary = "limited", "No confirmed-independent support and opposition pair was established."
         families = {context.root(row["artifact_id"]) for row in rows}
+        role_counts = {
+            role: context.conservative_count(role_family_set)
+            for role, role_family_set in role_families.items()
+        }
+        independent_family_count = max(
+            context.conservative_count(families), *role_counts.values()
+        )
         digest = sha256(f"{target_type}\n{target_id}".encode()).hexdigest()[:24]
         result = {
             "conflict_summary_id": f"conflict_summary:{digest}",
@@ -683,10 +690,10 @@ def build_conflict_summaries(
             "target_type": target_type,
             "target_id": target_id,
             "conflict_status": status,
-            "supporting_source_count": len(support),
-            "opposing_source_count": len(oppose),
-            "quantitative_source_count": len(role_families["quantifies"]),
-            "independent_source_family_count": context.conservative_count(families),
+            "supporting_source_count": role_counts["supports"],
+            "opposing_source_count": role_counts["opposes"],
+            "quantitative_source_count": role_counts["quantifies"],
+            "independent_source_family_count": independent_family_count,
             "assessment_ids": sorted(row["assessment_id"] for row in rows),
             "summary": summary,
             "assessed_at": assessed_at,
