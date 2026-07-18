@@ -85,9 +85,11 @@ artifacts/research_projects/v2_1/
 ├── schema/
 ├── projects/
 ├── evidence/
+│   ├── discovery/
 │   ├── raw/
 │   ├── metadata/
-│   └── normalized/
+│   ├── normalized/
+│   └── assessments/
 ├── index/research_project_index_v2_1.json
 └── fixtures/
 ```
