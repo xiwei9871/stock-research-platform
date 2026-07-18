@@ -200,6 +200,7 @@ def test_repository_catalog_starts_with_ten_approved_sectors():
         "mems_intelligent_sensors",
         "wafer_manufacturing_specialty_processes",
         "civil_aircraft_aero_engines",
+        "nuclear_power_equipment",
     }
     nodes_by_id = {row["node_id"]: row for row in catalog["nodes"]}
     assert {
@@ -221,6 +222,7 @@ def test_repository_catalog_starts_with_ten_approved_sectors():
         "semiconductor_manufacturing_equipment",
         "civil_aircraft_aero_engines",
         "industrial_machine_tools_cnc",
+        "nuclear_power_equipment",
     }
     assert len(catalog["theme_compositions"]) == 88
     assert {

@@ -367,6 +367,22 @@
       "relationship_type": "uses",
       "notes": "Civil-aircraft composite structures may use multi-axis composite machining centers. Machine-tool ownership remains with industrial_machine_tools_cnc; the edge does not transfer generic material, equipment, company or revenue ownership（所有权不转移）.",
       "source_ids": []
+    },
+    {
+      "edge_id": "nuclear_rpv_steam_generator_uses_metal_cutting_grinding_machine_tools",
+      "source_node_id": "reactor_pressure_vessel_steam_generator",
+      "target_node_id": "metal_cutting_grinding_machine_tools",
+      "relationship_type": "uses",
+      "notes": "Commercial-fission reactor pressure vessels, steam generators and directly evidenced nuclear pressure-boundary equipment use large metal-cutting and grinding machine tools. Machine-tool ownership remains with industrial_machine_tools_cnc; equipment, company and revenue ownership does not transfer（所有权不转移）.",
+      "source_ids": []
+    },
+    {
+      "edge_id": "nuclear_grade_components_use_metal_cutting_grinding_machine_tools",
+      "source_node_id": "nuclear_grade_materials_forgings_components",
+      "target_node_id": "metal_cutting_grinding_machine_tools",
+      "relationship_type": "uses",
+      "notes": "Nuclear-qualified forgings, castings, pipes and components use high-end metal-cutting and grinding equipment. Nuclear component ownership remains with nuclear_power_equipment and machine-tool ownership remains with industrial_machine_tools_cnc（所有权不转移）.",
+      "source_ids": []
     }
   ]
 }

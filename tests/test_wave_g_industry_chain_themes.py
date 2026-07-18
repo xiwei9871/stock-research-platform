@@ -288,6 +288,82 @@ G3_EXPECTED_EDGES = {
     ),
 }
 
+G4_CHAIN_ID = "nuclear_power_equipment"
+G4_THEME_ID = "nuclear_power_equipment_value_chain_v1"
+G4_THEME_PATH = REPOSITORY_ROOT / f"artifacts/theme_decomposition/{G4_THEME_ID}.json"
+G4_MAPPING_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/company_mappings"
+    / "nuclear_power_equipment_company_mapping_v1.json"
+)
+G4_SOURCE_PACK_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "nuclear_power_equipment_source_pack_v1.json"
+)
+G4_MATRIX_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "nuclear_power_equipment_node_evidence_matrix_v1.json"
+)
+G4_L3 = {
+    "nuclear_island_equipment",
+    "conventional_island_balance_plant",
+    "nuclear_control_fuel_services",
+    "nuclear_project_lifecycle",
+}
+G4_L4 = {
+    "reactor_pressure_vessel_steam_generator",
+    "primary_pumps_nuclear_valves_piping",
+    "nuclear_grade_materials_forgings_components",
+    "turbine_generator_conventional_island",
+    "nuclear_instrumentation_control_electrical",
+    "nuclear_fuel_cycle_handling_services",
+    "engineering_construction_commissioning",
+    "maintenance_inspection_life_extension",
+    "project_approval_orders_delivery_revenue_validation",
+}
+G4_INITIAL_UNIVERSE = {
+    "600875.SH", "601727.SH", "601106.SH", "603308.SH", "000922.SZ",
+    "002438.SZ", "000777.SZ", "002255.SZ", "603169.SH", "002318.SZ",
+}
+G4_MAPPING_CONTRACTS = {
+    "600875.SH": ("turbine_generator_conventional_island", "g4_600875_ar2025"),
+    "601727.SH": ("reactor_pressure_vessel_steam_generator", "g4_601727_ar2025"),
+    "601106.SH": ("reactor_pressure_vessel_steam_generator", "g4_601106_ar2025"),
+    "603308.SH": ("nuclear_grade_materials_forgings_components", "g4_603308_ar2025"),
+    "000922.SZ": ("nuclear_instrumentation_control_electrical", "g4_000922_ar2025"),
+    "002438.SZ": ("primary_pumps_nuclear_valves_piping", "g4_002438_ar2025"),
+    "000777.SZ": ("primary_pumps_nuclear_valves_piping", "g4_000777_ar2025"),
+    "002255.SZ": ("reactor_pressure_vessel_steam_generator", "g4_002255_ar2025"),
+    "603169.SH": ("reactor_pressure_vessel_steam_generator", "g4_603169_ar2025"),
+    "002318.SZ": ("nuclear_grade_materials_forgings_components", "g4_002318_ar2025"),
+}
+G4_REVENUE_ROLE_CONTRACTS = {
+    "600875.SH": "revenue_boundary",
+    "601727.SH": "revenue_boundary",
+    "601106.SH": "revenue_materiality",
+    "603308.SH": "revenue_boundary",
+    "000922.SZ": "revenue_materiality",
+    "002438.SZ": "revenue_materiality",
+    "000777.SZ": "revenue_materiality",
+    "002255.SZ": "revenue_materiality",
+    "603169.SH": "revenue_boundary",
+    "002318.SZ": "revenue_boundary",
+}
+G4_EXPECTED_EDGES = {
+    (
+        "reactor_pressure_vessel_steam_generator",
+        "metal_cutting_grinding_machine_tools",
+        "uses",
+    ),
+    (
+        "nuclear_grade_materials_forgings_components",
+        "metal_cutting_grinding_machine_tools",
+        "uses",
+    ),
+}
+
 REQUIRED_READABLE_SECTIONS = [
     {
         "name": "研究结论",
@@ -1274,3 +1350,223 @@ def test_civil_aircraft_g3_matrix_calibrates_empty_nodes_and_evidence_gaps() -> 
     assert hot["node_review_status"] == "needs_evidence"
     assert hot["evidence_gap_status"] == "evidence_gap"
     assert "逐公司" in hot["next_evidence_needed"]
+
+
+def test_nuclear_power_equipment_g4_catalog_first_exact_tree_and_links() -> None:
+    assert_catalog_first_contract(G4_CHAIN_ID, G4_THEME_ID, G4_L3, G4_L4)
+    catalog = load_industry_catalog()
+    chain_nodes = [row for row in catalog["nodes"] if row["chain_id"] == G4_CHAIN_ID]
+    by_id = {row["node_id"]: row for row in chain_nodes}
+    assert len(chain_nodes) == 13
+    assert all(not row["canonical_key"] for row in chain_nodes if row["level"] == "L3")
+    l4_keys = [row["canonical_key"] for row in chain_nodes if row["level"] == "L4"]
+    assert len(l4_keys) == len(set(l4_keys)) == 9
+    assert all(key.startswith("nuclear_power_equipment:") for key in l4_keys)
+    for row in chain_nodes:
+        assert row["primary_path"][1] == G4_CHAIN_ID
+        if row["level"] == "L4":
+            assert row["parent_node_id"] in G4_L3
+            assert by_id[row["parent_node_id"]]["level"] == "L3"
+    link = next(
+        row for row in catalog["theme_links"] if row["theme_id"] == G4_THEME_ID
+    )
+    assert len(link["node_links"]) == 9
+    assert {
+        (row["theme_node_id"], row["catalog_node_id"])
+        for row in link["node_links"]
+    } == {(node_id, node_id) for node_id in G4_L4}
+    assert link["unmapped_theme_node_ids"] == []
+
+
+def test_nuclear_power_equipment_g4_artifacts_are_reviewed_and_meet_wave_gate() -> None:
+    theme = load_json(G4_THEME_PATH)
+    mapping = load_json(G4_MAPPING_PATH)
+    source_pack = load_json(G4_SOURCE_PACK_PATH)
+    matrix = load_json(G4_MATRIX_PATH)
+    assert theme["artifact_version"] == "theme_decomposition_v1_6"
+    assert mapping["evidence_contract_version"] == "mapping_evidence_roles_v2"
+    assert theme["theme"]["status"] == "reviewed"
+    assert {row["node_id"] for row in theme["nodes"]} == G4_L4
+    assert len([row for row in source_pack["sources"] if row["review_status"] == "accepted"]) == 10
+    assert all(
+        row["source_type"] == "company_filing"
+        and row["reliability_level"] == "S0"
+        for row in source_pack["sources"]
+    )
+    assert len(theme["claims"]) >= 12
+    reviewed = [
+        row for row in mapping["company_mappings"] if row["review_status"] == "reviewed"
+    ]
+    assert len(reviewed) == 10
+    assert {row["node_id"] for row in matrix["node_evidence_matrix"]} == G4_L4
+    report = VERIFIER.build_theme_batch_report(MANIFEST_PATH, wave="wave_g")
+    row = next(row for row in report["theme_results"] if row["chain_id"] == G4_CHAIN_ID)
+    assert row["ready"] is True
+    assert row["counts"] == {
+        "accepted_sources": 10,
+        "primary_sources": 10,
+        "claims": len(theme["claims"]),
+        "accepted_source_backed_claims": len(theme["claims"]),
+        "reviewed_mappings": 10,
+    }
+
+
+def test_nuclear_power_equipment_g4_company_evidence_and_initial_universe_close() -> None:
+    mapping = load_json(G4_MAPPING_PATH)
+    evidence = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+    reviewed = {
+        row["company_code"]: row for row in mapping["company_mappings"]
+        if row["review_status"] == "reviewed"
+    }
+    assert set(reviewed) == G4_INITIAL_UNIVERSE == set(G4_MAPPING_CONTRACTS)
+    assert mapping["excluded_initial_candidates"] == []
+    assert mapping["concept_only_candidates"] == []
+    for company_code, (node_id, source_id) in G4_MAPPING_CONTRACTS.items():
+        row = reviewed[company_code]
+        assert row["mapped_node_id"] == node_id
+        assert row["business_stage"] == "primary_business"
+        items = [evidence[evidence_id] for evidence_id in row["evidence_ids"]]
+        assert [item["evidence_type"] for item in items] == [
+            "product_relationship",
+            G4_REVENUE_ROLE_CONTRACTS[company_code],
+            "business_stage",
+        ]
+        assert len({item["excerpt_locator"] for item in items}) == 3
+        assert all(item["source_id"] == source_id for item in items)
+        assert all(item["related_node_ids"] == [node_id] for item in items)
+        assert row["notes"]
+
+
+def test_nuclear_power_equipment_g4_rejects_fusion_generic_nuclear_and_revenue_false_positives() -> None:
+    theme = load_json(G4_THEME_PATH)
+    mapping = load_json(G4_MAPPING_PATH)
+    text = json.dumps(
+        {"theme": theme, "mapping_policy": mapping["mapping_policy"]},
+        ensure_ascii=False,
+    )
+    for stage in (
+        "项目核准", "采购", "订单", "制造", "交付", "验收", "维护", "确认收入",
+    ):
+        assert stage in text
+    for boundary in (
+        "所有聚变claim、项目与订单保持controlled_nuclear_fusion所有权",
+        "泛核政策不得映射",
+        "无裂变产品或项目关系的材料与通用能力不得映射",
+        "普通阀门、电机、钢管、容器和化工设备收入不得冒充核电收入",
+        "项目核准不等于采购或订单",
+        "订单不等于制造、交付或验收",
+        "交付或验收不等于确认收入",
+    ):
+        assert boundary in text
+    reviewed = {row["company_code"]: row for row in mapping["company_mappings"]}
+    assert "宽能源收入" in reviewed["601727.SH"]["notes"]
+    assert "核岛主设备" in reviewed["601727.SH"]["product_or_service"]
+    assert "普通电机" in reviewed["000922.SZ"]["notes"]
+    assert "普通阀门" in reviewed["002438.SZ"]["notes"]
+    assert "普通阀门" in reviewed["000777.SZ"]["notes"]
+    assert "普通容器" in reviewed["002255.SZ"]["notes"]
+    assert "炼化设备" in reviewed["603169.SH"]["notes"]
+    assert "普通工业钢管" in reviewed["002318.SZ"]["notes"]
+    assert "聚变" in reviewed["603308.SH"]["notes"]
+
+
+def test_nuclear_power_equipment_g4_source_claim_matrix_union_is_direct() -> None:
+    theme = load_json(G4_THEME_PATH)
+    mapping = load_json(G4_MAPPING_PATH)
+    source_pack = load_json(G4_SOURCE_PACK_PATH)
+    matrix = load_json(G4_MATRIX_PATH)
+    identity_fields = (
+        "source_id", "source_type", "title", "publisher", "author",
+        "publish_date", "url_or_ref", "access_level", "reliability_level",
+        "review_status", "notes",
+    )
+    identity = lambda rows: {
+        row["source_id"]: tuple(
+            row.get(field, row.get("url") if field == "url_or_ref" else None)
+            for field in identity_fields
+        ) for row in rows
+    }
+    assert identity(theme["sources"]) == identity(mapping["sources"])
+    assert identity(theme["sources"]) == identity(source_pack["sources"])
+    assert all(row["author"] == row["publisher"] and row["author"] for row in theme["sources"])
+    claims = {row["claim_id"]: row for row in theme["claims"]}
+    accepted = {
+        row["source_id"] for row in source_pack["sources"]
+        if row["review_status"] == "accepted"
+    }
+    claim_union = {
+        source_id for claim in claims.values()
+        for source_id in (claim["source_id"], *claim["supporting_source_ids"])
+    }
+    matrix_union = {
+        source_id for row in matrix["node_evidence_matrix"]
+        for source_id in row["accepted_source_ids"]
+    }
+    assert accepted == claim_union == matrix_union
+    for row in matrix["node_evidence_matrix"]:
+        node_claims = {
+            claim_id for claim_id, claim in claims.items()
+            if row["node_id"] in claim["affected_theme_nodes"]
+        }
+        assert set(row["supported_claim_ids"]) == node_claims
+        assert set(row["accepted_source_ids"]) == {
+            claims[claim_id]["source_id"] for claim_id in node_claims
+        }
+    for source in source_pack["sources"]:
+        source_claims = {
+            claim_id for claim_id, claim in claims.items()
+            if source["source_id"] in (claim["source_id"], *claim["supporting_source_ids"])
+        }
+        assert set(source["supported_claim_ids"]) == source_claims
+        assert set(source["supported_node_ids"]) == {
+            node_id for claim_id in source_claims
+            for node_id in claims[claim_id]["affected_theme_nodes"]
+        }
+
+
+def test_nuclear_power_equipment_g4_cross_chain_edges_use_real_l4_owners() -> None:
+    catalog = load_industry_catalog()
+    nodes = {row["node_id"]: row for row in catalog["nodes"]}
+    edges = {
+        (row["source_node_id"], row["target_node_id"], row["relationship_type"]): row
+        for row in catalog["edges"]
+        if row["source_node_id"] in G4_L4 or row["target_node_id"] in G4_L4
+    }
+    assert set(edges) == G4_EXPECTED_EDGES
+    for (source_node_id, target_node_id, relationship_type), row in edges.items():
+        assert nodes[source_node_id]["level"] == "L4"
+        assert nodes[target_node_id]["level"] == "L4"
+        assert (source_node_id in G4_L4) != (target_node_id in G4_L4)
+        assert relationship_type == "uses"
+        assert "所有权" in row["notes"]
+    assert nodes["metal_cutting_grinding_machine_tools"]["chain_id"] == (
+        "industrial_machine_tools_cnc"
+    )
+
+
+def test_nuclear_power_equipment_g4_matrix_keeps_empty_service_nodes_readable() -> None:
+    theme = load_json(G4_THEME_PATH)
+    matrix = load_json(G4_MATRIX_PATH)
+    nodes = {row["node_id"]: row for row in theme["nodes"]}
+    rows = {row["node_id"]: row for row in matrix["node_evidence_matrix"]}
+    assert set(rows) == G4_L4
+    assert len({row["rationale"] for row in rows.values()}) == 9
+    assert all(row["next_evidence_needed"] for row in rows.values())
+    for node_id, row in rows.items():
+        assert nodes[node_id]["evidence_strength"] == row["evidence_strength_after"]
+    for empty_node in (
+        "nuclear_fuel_cycle_handling_services",
+        "engineering_construction_commissioning",
+        "maintenance_inspection_life_extension",
+    ):
+        assert nodes[empty_node]["related_stock_codes"] == []
+        assert nodes[empty_node]["domestic_players"] == []
+        assert rows[empty_node]["node_review_status"] == "needs_evidence"
+        assert rows[empty_node]["evidence_gap_status"] == "evidence_gap"
+        assert rows[empty_node]["evidence_strength_after"] <= 2
+    validation = rows["project_approval_orders_delivery_revenue_validation"]
+    assert validation["accepted_source_ids"]
+    assert validation["supported_claim_ids"]
+    assert validation["node_review_status"] == "reviewed"
+    assert "项目核准" in validation["rationale"]
+    assert "确认收入" in validation["next_evidence_needed"]

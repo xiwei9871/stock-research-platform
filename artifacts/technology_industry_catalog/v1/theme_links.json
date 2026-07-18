@@ -1017,6 +1017,23 @@
       ],
       "unmapped_theme_node_ids": [],
       "notes": "G3 owns conventional civil-airliner structures, civil aero-engine systems, civil-aircraft subsystems and the airworthiness-to-installed-base lifecycle. Military-only aircraft, helicopters, low-altitude/eVTOL/UAV, commercial space and generic advanced materials retain neighboring-chain ownership."
+    },
+    {
+      "theme_id": "nuclear_power_equipment_value_chain_v1",
+      "chain_id": "nuclear_power_equipment",
+      "node_links": [
+        {"theme_node_id":"reactor_pressure_vessel_steam_generator","catalog_node_id":"reactor_pressure_vessel_steam_generator"},
+        {"theme_node_id":"primary_pumps_nuclear_valves_piping","catalog_node_id":"primary_pumps_nuclear_valves_piping"},
+        {"theme_node_id":"nuclear_grade_materials_forgings_components","catalog_node_id":"nuclear_grade_materials_forgings_components"},
+        {"theme_node_id":"turbine_generator_conventional_island","catalog_node_id":"turbine_generator_conventional_island"},
+        {"theme_node_id":"nuclear_instrumentation_control_electrical","catalog_node_id":"nuclear_instrumentation_control_electrical"},
+        {"theme_node_id":"nuclear_fuel_cycle_handling_services","catalog_node_id":"nuclear_fuel_cycle_handling_services"},
+        {"theme_node_id":"engineering_construction_commissioning","catalog_node_id":"engineering_construction_commissioning"},
+        {"theme_node_id":"maintenance_inspection_life_extension","catalog_node_id":"maintenance_inspection_life_extension"},
+        {"theme_node_id":"project_approval_orders_delivery_revenue_validation","catalog_node_id":"project_approval_orders_delivery_revenue_validation"}
+      ],
+      "unmapped_theme_node_ids": [],
+      "notes": "G4 owns commercial-fission nuclear-island, conventional-island, nuclear control and lifecycle equipment roles. Controlled fusion, generic nuclear policy, ordinary industrial valves, motors, pipes, vessels, chemical equipment and broad energy revenue retain their own ownership or remain excluded."
     }
   ]
 }
