@@ -18,6 +18,7 @@ from stock_research.research_project_v2_1.evidence import (
     build_conflict_summaries,
     build_industry_evidence_assessment,
     count_independent_coverage,
+    validate_industry_evidence_assessments,
     write_industry_evidence_assessment,
 )
 from stock_research.research_project_v2_1.layout import LayeredResearchLayout
@@ -100,7 +101,38 @@ def _requirement(minimum_coverage: int = 1) -> dict:
         "requirement_id": "requirement:test",
         "target_type": "research_claim",
         "target_id": "claim:test",
+        "question_to_resolve": "Is the claim supported?",
+        "requirement_type": "validation",
+        "required_source_classes": ["primary"],
+        "required_independence": "independent",
+        "required_freshness": "within_12_months",
+        "required_scope": "global",
         "minimum_coverage": minimum_coverage,
+        "conflict_search_required": True,
+        "primary_source_required": True,
+        "collection_status": "not_started",
+        "satisfaction_status": "unsatisfied",
+        "provenance": _provenance(),
+    }
+
+
+def _claim(claim_id: str = "claim:test") -> dict:
+    return {
+        "claim_id": claim_id,
+        "claim_kind": "primary",
+        "epistemic_type": "hypothesis",
+        "claim_text": "Test claim",
+        "claim_status": "hypothesis",
+        "lifecycle_status": "active",
+        "confidence": 0.2,
+        "importance": 0.8,
+        "linked_question_ids": [],
+        "context_reference_ids": [],
+        "created_in_version": "2.1.0",
+        "supersedes_claim_id": None,
+        "validation_metric_ids": [],
+        "invalidation_condition_ids": [],
+        "provenance": _provenance(),
     }
 
 
@@ -110,7 +142,7 @@ def _assessment(
     document = _document(artifact["artifact_id"], locator=locator)
     result = build_industry_evidence_assessment(
         requirement=_requirement(),
-        target={"target_type": "research_claim", "target_id": "claim:test", "claim_status": "draft", "confidence": 0.2},
+        target=_claim(),
         artifact=artifact,
         normalized_document=document,
         locator=locator,
@@ -169,11 +201,10 @@ def test_freshness_rejects_invalid_inputs_stably(publish_date, assessed_at, maxi
         assess_freshness(publish_date, assessed_at=assessed_at, maximum_age_days=maximum)
     assert exc.value.code == "RESEARCH_PROJECT_V2_1_EVIDENCE_ASSESSMENT_INVALID"
 
-
 def test_build_assessment_validates_cross_references_locator_and_does_not_mutate() -> None:
     artifact = _artifact("artifact:filing", "a" * 64, publisher_family="issuer")
     document = _document(artifact["artifact_id"], locator="")
-    target = {"target_type": "research_claim", "target_id": "claim:test", "claim_status": "draft", "confidence": 0.2}
+    target = _claim()
     originals = deepcopy((_requirement(), target, artifact, document, _provenance()))
     result = build_industry_evidence_assessment(
         requirement=originals[0], target=target, artifact=artifact, normalized_document=document,
@@ -185,13 +216,12 @@ def test_build_assessment_validates_cross_references_locator_and_does_not_mutate
     assert result["assessment_id"] == f"industry_evidence_assessment:{expected}"
     assert result["assessment_summary"] == "Direct filing evidence."
     assert (target, artifact, document, originals[4]) == (originals[1], originals[2], originals[3], originals[4])
-    assert target["claim_status"] == "draft" and target["confidence"] == 0.2
+    assert target["claim_status"] == "hypothesis" and target["confidence"] == 0.2
 
     bad_requirement = {**_requirement(), "target_type": "company_capture"}
     with pytest.raises(ResearchProjectV2Error) as exc:
         build_industry_evidence_assessment(requirement=bad_requirement, target={"target_type": "company_capture", "target_id": "claim:test"}, artifact=artifact, normalized_document=document, locator="", evidence_role="supports", assessment_summary="x", directness="direct", strength="strong", independence="independent", freshness="fresh", scope_match="full", conflict_status="none", provenance=_provenance())
     assert exc.value.code == "RESEARCH_PROJECT_V2_1_EVIDENCE_ASSESSMENT_INVALID"
-
 
 def test_build_assessment_rejects_dangling_document_and_locator() -> None:
     artifact = _artifact("artifact:a", "a" * 64, publisher_family="issuer")
@@ -199,6 +229,75 @@ def test_build_assessment_rejects_dangling_document_and_locator() -> None:
     kwargs = dict(requirement=_requirement(), target={"target_type": "research_claim", "target_id": "claim:test"}, artifact=artifact, normalized_document=document, locator="missing", evidence_role="supports", assessment_summary="x", directness="direct", strength="strong", independence="independent", freshness="fresh", scope_match="full", conflict_status="none", provenance=_provenance())
     with pytest.raises(ResearchProjectV2Error) as exc:
         build_industry_evidence_assessment(**kwargs)
+    assert exc.value.code == "RESEARCH_PROJECT_V2_1_EVIDENCE_ASSESSMENT_INVALID"
+
+
+def test_build_assessment_requires_canonical_requirement_and_target_identity() -> None:
+    artifact = _artifact("artifact:canonical", "a" * 64, publisher_family="issuer")
+    document = _document(artifact["artifact_id"])
+    common = dict(
+        artifact=artifact,
+        normalized_document=document,
+        locator="section:1",
+        evidence_role="supports",
+        assessment_summary="evidence",
+        directness="direct",
+        strength="strong",
+        independence="independent",
+        freshness="fresh",
+        scope_match="full",
+        conflict_status="none",
+        provenance=_provenance(),
+    )
+    with pytest.raises(ResearchProjectV2Error) as exc:
+        build_industry_evidence_assessment(
+            requirement={
+                "requirement_id": "requirement:test",
+                "target_type": "research_claim",
+                "target_id": "claim:test",
+            },
+            target=_claim(),
+            **common,
+        )
+    assert exc.value.code == "RESEARCH_PROJECT_V2_1_EVIDENCE_ASSESSMENT_INVALID"
+
+    spoofed = {
+        **_claim("claim:actual"),
+        "target_type": "research_claim",
+        "target_id": "claim:claimed",
+    }
+    requirement = {**_requirement(), "target_id": "claim:claimed"}
+    with pytest.raises(ResearchProjectV2Error) as exc:
+        build_industry_evidence_assessment(
+            requirement=requirement, target=spoofed, **common
+        )
+    assert exc.value.code == "RESEARCH_PROJECT_V2_1_EVIDENCE_ASSESSMENT_INVALID"
+
+
+def test_build_assessment_rejects_partial_research_project_target() -> None:
+    artifact = _artifact("artifact:project-target", "a" * 64, publisher_family="issuer")
+    requirement = {
+        **_requirement(),
+        "target_type": "research_project",
+        "target_id": "research_project:test",
+    }
+    with pytest.raises(ResearchProjectV2Error) as exc:
+        build_industry_evidence_assessment(
+            requirement=requirement,
+            target={"project_id": "research_project:test"},
+            artifact=artifact,
+            normalized_document=_document(artifact["artifact_id"]),
+            locator="section:1",
+            evidence_role="supports",
+            assessment_summary="evidence",
+            directness="direct",
+            strength="strong",
+            independence="independent",
+            freshness="fresh",
+            scope_match="full",
+            conflict_status="none",
+            provenance=_provenance(),
+        )
     assert exc.value.code == "RESEARCH_PROJECT_V2_1_EVIDENCE_ASSESSMENT_INVALID"
 
 
@@ -222,6 +321,168 @@ def test_independent_coverage_collapses_mirrors_and_duplicate_artifact_roles() -
     mirror = _artifact("artifact:mirror", "b" * 64, publisher_family="issuer")
     assessments = [_assessment(source, role="supports"), _assessment(source, role="quantifies", locator="section:2"), _assessment(mirror, role="supports")]
     assert count_independent_coverage([row["assessment_id"] for row in assessments], assessments=assessments, artifacts=[source, mirror], source_relationships=[]) == 1
+
+
+def test_unknown_sources_never_inflate_coverage_or_material_conflict() -> None:
+    left = _artifact("artifact:unknown-a", "a" * 64, publisher_family=None)
+    right = _artifact("artifact:unknown-b", "b" * 64, publisher_family=None)
+    assessments = [
+        _assessment(left, role="supports"),
+        _assessment(right, role="opposes"),
+        _assessment(right, role="quantifies", locator="section:2"),
+    ]
+    ids = [row["assessment_id"] for row in assessments]
+    assert count_independent_coverage(
+        ids,
+        assessments=assessments,
+        artifacts=[left, right],
+        source_relationships=[],
+    ) == 1
+    summary = build_conflict_summaries(
+        assessments,
+        artifacts=[left, right],
+        source_relationships=[],
+        assessed_at="2026-07-18T10:00:00Z",
+        provenance=_provenance(),
+    )[0]
+    assert summary["conflict_status"] == "limited"
+    assert summary["independent_source_family_count"] == 1
+    assert "Independent" not in summary["summary"]
+
+
+def test_dependency_transitivity_downgrades_weak_auto_independence() -> None:
+    left = _artifact("artifact:left", "a" * 64, publisher_family="publisher:x")
+    bridge = _artifact("artifact:bridge", "a" * 64, publisher_family="publisher:y")
+    right = _artifact("artifact:right", "b" * 64, publisher_family="publisher:y")
+    assessments = [_assessment(left, role="supports"), _assessment(right, role="supports")]
+    assert count_independent_coverage(
+        [row["assessment_id"] for row in assessments],
+        assessments=assessments,
+        artifacts=[left, bridge, right],
+        source_relationships=[],
+    ) == 1
+
+
+def test_explicit_independent_enriches_auto_unknown() -> None:
+    left = _artifact("artifact:explicit-a", "a" * 64, publisher_family=None)
+    right = _artifact("artifact:explicit-b", "b" * 64, publisher_family=None)
+    assessments = [_assessment(left, role="supports"), _assessment(right, role="opposes")]
+    relationship = {
+        "left_artifact_id": left["artifact_id"],
+        "right_artifact_id": right["artifact_id"],
+        "relationship": "independent",
+        "reasons": ["independence was manually confirmed"],
+    }
+    assert count_independent_coverage(
+        [row["assessment_id"] for row in assessments],
+        assessments=assessments,
+        artifacts=[left, right],
+        source_relationships=[relationship],
+    ) == 2
+    summary = build_conflict_summaries(
+        assessments,
+        artifacts=[left, right],
+        source_relationships=[relationship],
+        assessed_at="2026-07-18T10:00:00Z",
+        provenance=_provenance(),
+    )[0]
+    assert summary["conflict_status"] == "material_conflict"
+
+
+def test_explicit_unknown_vetoes_publisher_independence_inference() -> None:
+    left = _artifact("artifact:veto-a", "a" * 64, publisher_family="publisher:a")
+    right = _artifact("artifact:veto-b", "b" * 64, publisher_family="publisher:b")
+    assessments = [_assessment(left, role="supports"), _assessment(right, role="opposes")]
+    relationship = {
+        "left_artifact_id": left["artifact_id"],
+        "right_artifact_id": right["artifact_id"],
+        "relationship": "unknown",
+        "reasons": ["publisher provenance is insufficient for confirmation"],
+    }
+    ids = [row["assessment_id"] for row in assessments]
+    assert count_independent_coverage(
+        ids,
+        assessments=assessments,
+        artifacts=[left, right],
+        source_relationships=[relationship],
+    ) == 1
+    summary = build_conflict_summaries(
+        assessments,
+        artifacts=[left, right],
+        source_relationships=[relationship],
+        assessed_at="2026-07-18T10:00:00Z",
+        provenance=_provenance(),
+    )[0]
+    assert summary["conflict_status"] == "limited"
+
+
+def test_explicit_independent_rejects_objective_dependency_evidence() -> None:
+    left = _artifact("artifact:objective-a", "a" * 64, publisher_family="left")
+    right = _artifact("artifact:objective-b", "a" * 64, publisher_family="right")
+    relationship = {
+        "left_artifact_id": left["artifact_id"],
+        "right_artifact_id": right["artifact_id"],
+        "relationship": "independent",
+        "reasons": ["incorrect manual classification"],
+    }
+    with pytest.raises(ResearchProjectV2Error) as exc:
+        validate_industry_evidence_assessments(
+            [], artifacts=[left, right], source_relationships=[relationship]
+        )
+    assert exc.value.code == "RESEARCH_PROJECT_V2_1_EVIDENCE_ASSESSMENT_INVALID"
+
+
+def test_relationship_integrity_rejects_self_and_duplicate_pairs() -> None:
+    artifact = _artifact("artifact:self", "a" * 64, publisher_family="publisher")
+    with pytest.raises(ResearchProjectV2Error):
+        assess_source_relationship(artifact, artifact)
+
+    other = _artifact("artifact:other", "b" * 64, publisher_family="other")
+    relationship = assess_source_relationship(artifact, other)
+    reverse = {
+        **relationship,
+        "left_artifact_id": relationship["right_artifact_id"],
+        "right_artifact_id": relationship["left_artifact_id"],
+    }
+    with pytest.raises(ResearchProjectV2Error) as exc:
+        validate_industry_evidence_assessments(
+            [], artifacts=[artifact, other], source_relationships=[relationship, reverse]
+        )
+    assert exc.value.code == "RESEARCH_PROJECT_V2_1_EVIDENCE_ASSESSMENT_INVALID"
+
+
+def test_relationship_indexing_does_not_call_public_pair_assessor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    artifacts = [
+        _artifact(
+            f"artifact:scale-{index}",
+            f"{index + 1:064x}",
+            publisher_family=f"publisher:{index}",
+        )
+        for index in range(100)
+    ]
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("public pair assessor must not be used by indexing")
+
+    original_validate = evidence_module.validate_v2_1_schema_payload
+    artifact_validations = 0
+
+    def count_validations(schema_name, payload, **kwargs):
+        nonlocal artifact_validations
+        if schema_name == "evidence_artifact_v2_1":
+            artifact_validations += 1
+        return original_validate(schema_name, payload, **kwargs)
+
+    monkeypatch.setattr(evidence_module, "assess_source_relationship", forbidden)
+    monkeypatch.setattr(
+        evidence_module, "validate_v2_1_schema_payload", count_validations
+    )
+    validate_industry_evidence_assessments(
+        [], artifacts=artifacts, source_relationships=[]
+    )
+    assert artifact_validations == len(artifacts)
 
 
 def test_write_assessment_is_canonical_hashed_idempotent_and_immutable(tmp_path: Path) -> None:
@@ -302,3 +563,77 @@ def test_writer_opens_existing_final_nonblocking(
     monkeypatch.setattr(evidence_module.os, "open", require_nonblocking)
     write_industry_evidence_assessment(assessment, layout=layout)
     assert checked
+
+
+def test_writer_preserves_primary_error_and_reports_retire_cleanup_failure(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    artifact = _artifact("artifact:cleanup-primary", "a" * 64, publisher_family="issuer")
+    assessment = _assessment(artifact, role="supports", reviewed=False)
+    write_industry_evidence_assessment(assessment, layout=layout)
+    changed = deepcopy(assessment)
+    changed["assessment_summary"] = "immutable conflict"
+
+    def fail_retire(*args, **kwargs):
+        raise OSError("retire cleanup failed")
+
+    monkeypatch.setattr(evidence_module, "_retire_temporary", fail_retire)
+    with pytest.raises(ResearchProjectV2Error) as exc:
+        write_industry_evidence_assessment(changed, layout=layout)
+    assert exc.value.code == "RESEARCH_PROJECT_V2_1_IMMUTABILITY_VIOLATION"
+    assert exc.value.details["cleanup_errors"]
+    assert any("cleanup" in note.lower() for note in exc.value.__notes__)
+
+
+def test_writer_reports_pure_retire_cleanup_failure_as_storage_error(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    artifact = _artifact("artifact:cleanup-only", "a" * 64, publisher_family="issuer")
+    assessment = _assessment(artifact, role="supports", reviewed=False)
+
+    def fail_retire(*args, **kwargs):
+        raise OSError("retire cleanup failed")
+
+    monkeypatch.setattr(evidence_module, "_retire_temporary", fail_retire)
+    with pytest.raises(ResearchProjectV2Error) as exc:
+        write_industry_evidence_assessment(assessment, layout=layout)
+    assert exc.value.code == "RESEARCH_PROJECT_V2_1_EVIDENCE_STORAGE_FAILED"
+    assert exc.value.details["cleanup_errors"]
+    assert exc.value.__cause__ is not None
+
+
+def test_writer_continues_closing_live_descriptors_after_close_failure(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    artifact = _artifact("artifact:close-loop", "a" * 64, publisher_family="issuer")
+    assessment = _assessment(artifact, role="supports", reviewed=False)
+    original_open_directory = evidence_module._open_directory
+    original_close = evidence_module.os.close
+    open_calls = 0
+    live_descriptors: list[int] = []
+    close_attempts: list[int] = []
+
+    def capture_live(path):
+        nonlocal open_calls, live_descriptors
+        open_calls += 1
+        result = original_open_directory(path)
+        if open_calls == 2:
+            live_descriptors = list(result[0])
+        return result
+
+    def fail_first_live_close(descriptor):
+        close_attempts.append(descriptor)
+        if live_descriptors and descriptor == live_descriptors[-1]:
+            raise OSError("live close failed")
+        return original_close(descriptor)
+
+    monkeypatch.setattr(evidence_module, "_open_directory", capture_live)
+    monkeypatch.setattr(evidence_module.os, "close", fail_first_live_close)
+    with pytest.raises(ResearchProjectV2Error) as exc:
+        write_industry_evidence_assessment(assessment, layout=layout)
+    assert exc.value.code == "RESEARCH_PROJECT_V2_1_EVIDENCE_STORAGE_FAILED"
+    assert exc.value.details["cleanup_errors"]
+    assert live_descriptors[-2] in close_attempts

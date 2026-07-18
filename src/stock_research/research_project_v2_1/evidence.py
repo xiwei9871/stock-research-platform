@@ -6,8 +6,11 @@ import os
 import re
 import secrets
 import stat
+import sys
 from copy import deepcopy
+from dataclasses import dataclass, field
 from datetime import date, datetime
+from functools import lru_cache
 from hashlib import sha256
 from itertools import combinations
 from pathlib import Path
@@ -43,7 +46,6 @@ _COLLAPSING = frozenset(
         "shared_upstream_source",
     }
 )
-_RELATIONSHIPS = _COLLAPSING | {"independent", "unknown"}
 _DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
 _FILE_FLAGS = (
     os.O_RDONLY
@@ -109,12 +111,13 @@ def _validate_artifact(artifact: dict[str, Any]) -> dict[str, Any]:
     return copied
 
 
-def _validate_definition(name: str, payload: dict[str, Any]) -> None:
+@lru_cache(maxsize=None)
+def _definition_validator(name: str) -> Draft202012Validator:
     schema_dir = LayeredResearchLayout.default().schema_dir
     with (schema_dir / "definitions_v2_1.schema.json").open(encoding="utf-8") as handle:
         definitions = json.load(handle)
     schema = definitions["$defs"][name]
-    validator = Draft202012Validator(
+    return Draft202012Validator(
         schema,
         resolver=RefResolver.from_schema(
             definitions,
@@ -122,6 +125,10 @@ def _validate_definition(name: str, payload: dict[str, Any]) -> None:
         ),
         format_checker=FormatChecker(),
     )
+
+
+def _validate_definition(name: str, payload: dict[str, Any]) -> None:
+    validator = _definition_validator(name)
     errors = sorted(
         validator.iter_errors(payload),
         key=lambda error: (tuple(str(part) for part in error.absolute_path), error.message),
@@ -137,11 +144,8 @@ def assess_source_relationship(
 ) -> dict[str, Any]:
     left_copy = _validate_artifact(left)
     right_copy = _validate_artifact(right)
-    if (
-        left_copy["artifact_id"] == right_copy["artifact_id"]
-        and left_copy != right_copy
-    ):
-        raise _invalid("one artifact_id cannot describe different artifacts")
+    if left_copy["artifact_id"] == right_copy["artifact_id"]:
+        raise _invalid("source relationship cannot compare an artifact to itself")
     left_sections = set(left_copy.get("section_hashes", ()))
     right_sections = set(right_copy.get("section_hashes", ()))
     union = left_sections | right_sections
@@ -234,17 +238,43 @@ def assess_freshness(
     return result
 
 
-def _target_identity(target: dict[str, Any]) -> tuple[Any, Any]:
-    if "target_type" in target or "target_id" in target:
-        return target.get("target_type"), target.get("target_id")
+def _canonical_target_id(target_type: str, target: dict[str, Any]) -> str:
     mappings = {
-        "research_project": "project_id",
-        "research_question": "question_id",
-        "research_claim": "claim_id",
-        "causal_edge": "causal_edge_id",
+        "research_project": ("project_id", None),
+        "research_question": ("question_id", "question"),
+        "research_claim": ("claim_id", "claim"),
+        "causal_edge": ("causal_edge_id", "causal_edge"),
     }
-    found = [(kind, target[key]) for kind, key in mappings.items() if key in target]
-    return found[0] if len(found) == 1 else (None, None)
+    if not isinstance(target, dict):
+        raise _invalid("target must be an object")
+    id_field, definition = mappings[target_type]
+    actual_id = target.get(id_field)
+    if not isinstance(actual_id, str) or not actual_id:
+        raise _invalid("target canonical ID is missing", field=id_field)
+    has_generic_type = "target_type" in target
+    has_generic_id = "target_id" in target
+    if has_generic_type != has_generic_id:
+        raise _invalid("generic target identity is incomplete")
+    if has_generic_type and (
+        target["target_type"] != target_type or target["target_id"] != actual_id
+    ):
+        raise _invalid("generic target identity contradicts canonical target")
+    canonical = deepcopy(target)
+    canonical.pop("target_type", None)
+    canonical.pop("target_id", None)
+    if target_type == "research_project":
+        try:
+            validate_v2_1_schema_payload(
+                "research_project_identity_v2_1", canonical
+            )
+        except ResearchProjectV2Error as exc:
+            raise _invalid(
+                "research_project target is not canonical",
+                target_path=exc.details.get("path"),
+            ) from exc
+    elif definition is not None:
+        _validate_definition(definition, canonical)
+    return actual_id
 
 
 def build_industry_evidence_assessment(
@@ -270,6 +300,7 @@ def build_industry_evidence_assessment(
         artifact_copy = _validate_artifact(artifact)
         document_copy, _ = _validated_document(normalized_document)
         provenance_copy = deepcopy(provenance)
+        _validate_definition("evidence_requirement", requirement_copy)
         target_type = requirement_copy["target_type"]
         target_id = requirement_copy["target_id"]
         requirement_id = requirement_copy["requirement_id"]
@@ -281,7 +312,7 @@ def build_industry_evidence_assessment(
         raise _invalid("required input field is missing") from exc
     if target_type not in _TARGET_TYPES:
         raise _invalid("target_type is outside the industry layer", target_type=target_type)
-    if _target_identity(target_copy) != (target_type, target_id):
+    if _canonical_target_id(target_type, target_copy) != target_id:
         raise _invalid("requirement target does not match target object")
     if document_copy.get("artifact_id") != artifact_copy["artifact_id"]:
         raise _invalid("normalized document does not belong to artifact")
@@ -369,11 +400,104 @@ class _UnionFind:
             self.parent[second] = first
 
 
+@dataclass
+class _EvidenceContext:
+    assessment_by_id: dict[str, dict[str, Any]]
+    artifact_by_id: dict[str, dict[str, Any]]
+    union: _UnionFind
+    explicit_independent_components: set[frozenset[str]]
+    explicit_unknown_components: set[frozenset[str]]
+    component_publishers: dict[str, frozenset[str]]
+    component_publishers_complete: dict[str, bool]
+    independence_cache: dict[tuple[str, str], bool] = field(default_factory=dict)
+
+    def root(self, artifact_id: str) -> str:
+        return self.union.find(artifact_id)
+
+    def confirmed_independent(self, left: str, right: str) -> bool:
+        left_root, right_root = self.root(left), self.root(right)
+        if left_root == right_root:
+            return False
+        key = tuple(sorted((left_root, right_root)))
+        cached = self.independence_cache.get(key)
+        if cached is not None:
+            return cached
+        pair = frozenset(key)
+        explicit = pair in self.explicit_independent_components
+        explicit_unknown = pair in self.explicit_unknown_components
+        publisher_confirmed = (
+            self.component_publishers_complete[left_root]
+            and self.component_publishers_complete[right_root]
+            and self.component_publishers[left_root].isdisjoint(
+                self.component_publishers[right_root]
+            )
+        )
+        result = explicit or (not explicit_unknown and publisher_confirmed)
+        self.independence_cache[key] = result
+        return result
+
+    def conservative_count(self, roots: Iterable[str]) -> int:
+        candidates = sorted(set(roots))
+        selected: list[str] = []
+        for candidate in candidates:
+            if not selected or all(
+                self.confirmed_independent(candidate, existing)
+                for existing in selected
+            ):
+                selected.append(candidate)
+        return len(selected)
+
+
+def _union_groups(union: _UnionFind, groups: dict[str, list[str]]) -> None:
+    for members in groups.values():
+        if len(members) > 1:
+            first = members[0]
+            for member in members[1:]:
+                union.union(first, member)
+
+
+def _dependency_indices(
+    artifact_by_id: dict[str, dict[str, Any]], union: _UnionFind
+) -> set[frozenset[str]]:
+    content_groups: dict[str, list[str]] = {}
+    upstream_groups: dict[str, list[str]] = {}
+    publisher_groups: dict[str, list[str]] = {}
+    section_index: dict[str, list[str]] = {}
+    for artifact_id, artifact in artifact_by_id.items():
+        content_groups.setdefault(artifact["content_sha256"], []).append(artifact_id)
+        upstream = artifact.get("upstream_source_id")
+        if upstream:
+            upstream_groups.setdefault(upstream, []).append(artifact_id)
+        publisher = artifact.get("publisher_family")
+        if publisher:
+            publisher_groups.setdefault(publisher, []).append(artifact_id)
+        for section_hash in artifact.get("section_hashes", ()):
+            section_index.setdefault(section_hash, []).append(artifact_id)
+    _union_groups(union, content_groups)
+    _union_groups(union, upstream_groups)
+    _union_groups(union, publisher_groups)
+    republication_candidates: set[frozenset[str]] = set()
+    for members in section_index.values():
+        for left, right in combinations(sorted(set(members)), 2):
+            republication_candidates.add(frozenset((left, right)))
+    republications: set[frozenset[str]] = set()
+    for pair in republication_candidates:
+        left, right = sorted(pair)
+        left_sections = set(artifact_by_id[left].get("section_hashes", ()))
+        right_sections = set(artifact_by_id[right].get("section_hashes", ()))
+        combined = left_sections | right_sections
+        overlap = len(left_sections & right_sections) / len(combined)
+        if overlap >= 0.8:
+            republications.add(pair)
+            union.union(left, right)
+    return republications
+
+
 def _evidence_context(
     assessments: Iterable[dict[str, Any]],
     artifacts: Iterable[dict[str, Any]],
     source_relationships: Iterable[dict[str, Any]],
-) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]], _UnionFind]:
+) -> _EvidenceContext:
     try:
         assessment_rows = deepcopy(list(assessments))
         artifact_rows = list(artifacts)
@@ -402,8 +526,14 @@ def _evidence_context(
             raise _invalid("artifact IDs must be unique", artifact_id=artifact_id)
         artifact_by_id[artifact_id] = copied
     union = _UnionFind(artifact_by_id)
-    pair_relationships: dict[frozenset[str], str] = {}
+    republications = _dependency_indices(artifact_by_id, union)
+    explicit_relationships: dict[frozenset[str], str] = {}
+    explicit_independent_artifacts: list[frozenset[str]] = []
+    explicit_unknown_artifacts: list[frozenset[str]] = []
     for row in relationships:
+        if not isinstance(row, dict):
+            raise _invalid("source relationship rows must be objects")
+        _validate_definition("source_relationship", row)
         try:
             left, right, relationship = (
                 row["left_artifact_id"], row["right_artifact_id"], row["relationship"]
@@ -412,45 +542,68 @@ def _evidence_context(
             raise _invalid("source relationship is malformed") from exc
         if left not in artifact_by_id or right not in artifact_by_id:
             raise _invalid("source relationship references a missing artifact")
-        if relationship not in _RELATIONSHIPS:
-            raise _invalid("source relationship enum is invalid")
-        reasons = row.get("reasons")
-        if not isinstance(reasons, list) or not reasons or any(
-            not isinstance(reason, str) or not reason for reason in reasons
-        ):
-            raise _invalid("source relationship reasons are invalid")
+        if left == right:
+            raise _invalid("source relationship cannot be a self pair")
         pair = frozenset((left, right))
-        previous = pair_relationships.get(pair)
-        if previous is not None and previous != relationship:
-            raise _invalid("source relationship contradiction", left=left, right=right)
-        pair_relationships[pair] = relationship
+        if pair in explicit_relationships:
+            raise _invalid("duplicate source relationship pair", left=left, right=right)
+        explicit_relationships[pair] = relationship
         if relationship in _COLLAPSING:
             union.union(left, right)
-    independent_pairs = [pair for pair, rel in pair_relationships.items() if rel == "independent"]
-    for left, right in combinations(sorted(artifact_by_id), 2):
-        inferred = assess_source_relationship(
-            artifact_by_id[left], artifact_by_id[right]
-        )["relationship"]
-        pair = frozenset((left, right))
-        explicit = pair_relationships.get(pair)
-        if explicit is not None and explicit != inferred:
+        elif relationship == "independent":
+            if (
+                artifact_by_id[left]["content_sha256"]
+                == artifact_by_id[right]["content_sha256"]
+                or pair in republications
+            ):
+                raise _invalid(
+                    "explicit independence contradicts objective dependency evidence",
+                    left=left,
+                    right=right,
+                )
+            explicit_independent_artifacts.append(pair)
+        elif relationship == "unknown":
+            explicit_unknown_artifacts.append(pair)
+    explicit_independent_components: set[frozenset[str]] = set()
+    for pair in explicit_independent_artifacts:
+        left, right = sorted(pair)
+        left_root, right_root = union.find(left), union.find(right)
+        if left_root == right_root:
             raise _invalid(
                 "source relationship contradiction", left=left, right=right
             )
-        if explicit is None:
-            pair_relationships[pair] = inferred
-            if inferred in _COLLAPSING:
-                union.union(left, right)
-            elif inferred == "independent":
-                independent_pairs.append(pair)
-    for pair in independent_pairs:
-        values = list(pair)
-        if len(values) < 2 or union.find(values[0]) == union.find(values[1]):
-            raise _invalid("source relationship contradiction")
+        explicit_independent_components.add(frozenset((left_root, right_root)))
+    explicit_unknown_components: set[frozenset[str]] = set()
+    for pair in explicit_unknown_artifacts:
+        left, right = sorted(pair)
+        left_root, right_root = union.find(left), union.find(right)
+        if left_root != right_root:
+            explicit_unknown_components.add(frozenset((left_root, right_root)))
     for assessment in assessment_by_id.values():
         if assessment.get("artifact_id") not in artifact_by_id:
             raise _invalid("assessment references a missing artifact")
-    return assessment_by_id, artifact_by_id, union
+    component_publishers: dict[str, set[str]] = {}
+    component_publishers_complete: dict[str, bool] = {}
+    for artifact_id, artifact in artifact_by_id.items():
+        root = union.find(artifact_id)
+        component_publishers.setdefault(root, set())
+        component_publishers_complete.setdefault(root, True)
+        publisher = artifact.get("publisher_family")
+        if publisher:
+            component_publishers[root].add(publisher)
+        else:
+            component_publishers_complete[root] = False
+    return _EvidenceContext(
+        assessment_by_id=assessment_by_id,
+        artifact_by_id=artifact_by_id,
+        union=union,
+        explicit_independent_components=explicit_independent_components,
+        explicit_unknown_components=explicit_unknown_components,
+        component_publishers={
+            root: frozenset(values) for root, values in component_publishers.items()
+        },
+        component_publishers_complete=component_publishers_complete,
+    )
 
 
 def count_independent_coverage(
@@ -460,7 +613,7 @@ def count_independent_coverage(
     artifacts: Iterable[dict[str, Any]],
     source_relationships: Iterable[dict[str, Any]],
 ) -> int:
-    assessment_by_id, _, union = _evidence_context(
+    context = _evidence_context(
         assessments, artifacts, source_relationships
     )
     try:
@@ -472,12 +625,12 @@ def count_independent_coverage(
     families: set[str] = set()
     for assessment_id in requested:
         try:
-            assessment = assessment_by_id[assessment_id]
+            assessment = context.assessment_by_id[assessment_id]
         except KeyError as exc:
             raise _invalid("assessment_ids reference a missing assessment") from exc
         if assessment.get("review_status") == "reviewed":
-            families.add(union.find(assessment["artifact_id"]))
-    return len(families)
+            families.add(context.root(assessment["artifact_id"]))
+    return context.conservative_count(families)
 
 
 def build_conflict_summaries(
@@ -489,11 +642,11 @@ def build_conflict_summaries(
     provenance: dict[str, Any],
 ) -> list[dict[str, Any]]:
     _parse_assessed_at(assessed_at)
-    assessment_by_id, _, union = _evidence_context(
+    context = _evidence_context(
         assessments, artifacts, source_relationships
     )
     groups: dict[tuple[str, str], list[dict[str, Any]]] = {}
-    for assessment in assessment_by_id.values():
+    for assessment in context.assessment_by_id.values():
         if assessment.get("review_status") != "reviewed":
             continue
         target = (assessment.get("target_type"), assessment.get("target_id"))
@@ -507,18 +660,22 @@ def build_conflict_summaries(
             role = row.get("evidence_role")
             if role not in _ROLES:
                 raise _invalid("assessment evidence_role is invalid")
-            role_families[role].add(union.find(row["artifact_id"]))
+            role_families[role].add(context.root(row["artifact_id"]))
         support = role_families["supports"]
         oppose = role_families["opposes"]
         if not oppose:
             status, summary = "none", "No reviewed opposing source family was identified."
         elif not support:
             status, summary = "unresolved", "Reviewed opposition has no reviewed supporting source family."
-        elif any(left != right for left in support for right in oppose):
+        elif any(
+            context.confirmed_independent(left, right)
+            for left in support
+            for right in oppose
+        ):
             status, summary = "material_conflict", "Independent reviewed source families materially disagree."
         else:
-            status, summary = "limited", "Support and opposition are confined to the same source family."
-        families = {union.find(row["artifact_id"]) for row in rows}
+            status, summary = "limited", "No confirmed-independent support and opposition pair was established."
+        families = {context.root(row["artifact_id"]) for row in rows}
         digest = sha256(f"{target_type}\n{target_id}".encode()).hexdigest()[:24]
         result = {
             "conflict_summary_id": f"conflict_summary:{digest}",
@@ -529,7 +686,7 @@ def build_conflict_summaries(
             "supporting_source_count": len(support),
             "opposing_source_count": len(oppose),
             "quantitative_source_count": len(role_families["quantifies"]),
-            "independent_source_family_count": len(families),
+            "independent_source_family_count": context.conservative_count(families),
             "assessment_ids": sorted(row["assessment_id"] for row in rows),
             "summary": summary,
             "assessed_at": assessed_at,
@@ -552,6 +709,8 @@ def _validated_wrapper(assessment: dict[str, Any]) -> tuple[dict[str, Any], byte
         "artifact_kind": "industry_evidence_assessment",
         "industry_evidence_assessment": copied,
     }
+    # R2A establishes the pre-production v2.1 standalone-wrapper baseline with
+    # a self-excluding content hash; no persisted assessment migration exists.
     wrapper["content_hash"] = content_sha256(wrapper)
     try:
         validate_v2_1_schema_payload("industry_evidence_assessment_v2_1", wrapper)
@@ -699,6 +858,7 @@ def write_industry_evidence_assessment(
     temporary_stat: os.stat_result | None = None
     retired_fd: int | None = None
     held_fd: int | None = None
+    live_descriptors: list[int] = []
     try:
         descriptors, names = _open_directory(directory)
         directory_fd = descriptors[-1]
@@ -771,31 +931,35 @@ def write_industry_evidence_assessment(
         ):
             raise _storage("held assessment changed", path=str(target))
         live_descriptors, live_names = _open_directory(directory)
-        try:
-            if not _chain_bound(live_descriptors, live_names):
-                raise _storage("live assessment directory is unsafe")
-            for old, live in zip(descriptors, live_descriptors, strict=True):
-                if not _same_inode(os.fstat(old), os.fstat(live)):
-                    raise _storage("live assessment directory was rebound")
-            live_data, live_stat = _read_regular(live_descriptors[-1], final_name)
-            if (
-                live_data != data
-                or not _same_inode(live_stat, held_after)
-            ):
-                raise _storage("live assessment was replaced", path=str(target))
-        finally:
-            for descriptor in reversed(live_descriptors):
-                os.close(descriptor)
+        if not _chain_bound(live_descriptors, live_names):
+            raise _storage("live assessment directory is unsafe")
+        for old, live in zip(descriptors, live_descriptors, strict=True):
+            if not _same_inode(os.fstat(old), os.fstat(live)):
+                raise _storage("live assessment directory was rebound")
+        live_data, live_stat = _read_regular(live_descriptors[-1], final_name)
+        if live_data != data or not _same_inode(live_stat, held_after):
+            raise _storage("live assessment was replaced", path=str(target))
         return target
     except ResearchProjectV2Error:
         raise
     except OSError as exc:
         raise _storage("assessment write failed", path=str(target)) from exc
     finally:
+        primary_error = sys.exception()
+        cleanup_errors: list[str] = []
+        cleanup_causes: list[OSError] = []
         if held_fd is not None:
-            os.close(held_fd)
+            try:
+                os.close(held_fd)
+            except OSError as exc:
+                cleanup_errors.append(f"held final fd close failed: {exc}")
+                cleanup_causes.append(exc)
         if temporary_fd is not None:
-            os.close(temporary_fd)
+            try:
+                os.close(temporary_fd)
+            except OSError as exc:
+                cleanup_errors.append(f"temporary fd close failed: {exc}")
+                cleanup_causes.append(exc)
         if (
             temporary_name is not None
             and temporary_stat is not None
@@ -803,15 +967,52 @@ def write_industry_evidence_assessment(
             and retired_fd is not None
         ):
             try:
-                _retire_temporary(
+                retired = _retire_temporary(
                     descriptors[-1], retired_fd, temporary_name, temporary_stat
                 )
-            except OSError:
-                pass
+                if not retired:
+                    cleanup_errors.append(
+                        f"temporary cleanup left residual name {temporary_name}"
+                    )
+            except OSError as exc:
+                cleanup_errors.append(
+                    f"temporary cleanup failed for {temporary_name}: {exc}"
+                )
+                cleanup_causes.append(exc)
         if retired_fd is not None:
-            os.close(retired_fd)
+            try:
+                os.close(retired_fd)
+            except OSError as exc:
+                cleanup_errors.append(f"retired fd close failed: {exc}")
+                cleanup_causes.append(exc)
+        for descriptor in reversed(live_descriptors):
+            try:
+                os.close(descriptor)
+            except OSError as exc:
+                cleanup_errors.append(f"live directory fd close failed: {exc}")
+                cleanup_causes.append(exc)
         for descriptor in reversed(descriptors):
-            os.close(descriptor)
+            try:
+                os.close(descriptor)
+            except OSError as exc:
+                cleanup_errors.append(f"directory fd close failed: {exc}")
+                cleanup_causes.append(exc)
+        if cleanup_errors:
+            note = "Evidence cleanup failed: " + "; ".join(cleanup_errors)
+            if primary_error is not None:
+                primary_error.add_note(note)
+                if isinstance(primary_error, ResearchProjectV2Error):
+                    primary_error.details["cleanup_errors"] = cleanup_errors
+            else:
+                cleanup_error = _storage(
+                    "assessment cleanup failed",
+                    path=str(target),
+                    cleanup_errors=cleanup_errors,
+                )
+                cleanup_error.add_note(note)
+                if cleanup_causes:
+                    raise cleanup_error from cleanup_causes[0]
+                raise cleanup_error
 
 
 def validate_industry_evidence_assessments(
