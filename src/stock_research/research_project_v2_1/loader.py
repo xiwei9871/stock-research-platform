@@ -280,7 +280,7 @@ def list_layered_versions(
     project_slug: str, *, layout: LayeredResearchLayout | None = None
 ) -> list[str]:
     selected = _layout_or_default(layout)
-    _require_identity_path(project_slug, selected)
+    load_layered_project(project_slug, layout=selected)
     return _discover_semantic_versions(project_slug, selected)
 
 

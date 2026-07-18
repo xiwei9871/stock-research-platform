@@ -313,6 +313,34 @@ def test_version_id_must_be_canonically_bound_to_slug_and_semver(
     assert exc_info.value.details["actual"] == version["version_id"]
 
 
+def test_list_versions_validates_identity_canonical_binding(
+    layered_layout: LayeredResearchLayout,
+) -> None:
+    identity = _identity()
+    identity["project_slug"] = "other-industry"
+    _write_json(
+        layered_layout.project_dir("fixture-industry") / "project.json", identity
+    )
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        list_layered_versions("fixture-industry", layout=layered_layout)
+    _assert_code(exc_info, "RESEARCH_PROJECT_V2_1_IDENTITY_INVALID")
+
+
+def test_list_versions_validates_identity_schema(
+    layered_layout: LayeredResearchLayout,
+) -> None:
+    identity = _identity()
+    identity["schema_version"] = "2.0.0"
+    _write_json(
+        layered_layout.project_dir("fixture-industry") / "project.json", identity
+    )
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        list_layered_versions("fixture-industry", layout=layered_layout)
+    _assert_code(exc_info, "RESEARCH_PROJECT_V2_1_SCHEMA_INVALID")
+
+
 def test_manifest_version_id_mismatch_reports_expected_and_actual(
     layered_layout: LayeredResearchLayout,
 ) -> None:
