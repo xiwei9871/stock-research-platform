@@ -125,7 +125,8 @@ def test_compile_search_plan_builds_canonical_industry_queries_and_schema_payloa
     assert len(plan["stop_conditions"]) == 3
     assert all(plan["stop_conditions"])
     assert plan["status"] == "planned"
-    assert plan["provenance"] is PROVENANCE
+    assert plan["provenance"] == PROVENANCE
+    assert plan["provenance"] is not PROVENANCE
     assert set(plan) == {
         "search_plan_id",
         "project_id",
@@ -178,6 +179,42 @@ def test_compile_is_deterministic_and_does_not_mutate_inputs():
     )
     assert item == original_item
     assert terms == original_terms
+
+
+def test_compile_deep_copies_provenance_and_all_mutable_query_inputs():
+    item = requirement()
+    item["provenance"] = {
+        **deepcopy(PROVENANCE),
+        "metadata": {"source": {"kind": "fixture"}},
+    }
+    terms = ["high-layer PCB", "low-loss laminate"]
+
+    plan = compile_search_plan(
+        item,
+        project_id="research_project:pcb",
+        version_id="research_version:pcb:0.1.0",
+        domain_terms=terms,
+    )
+
+    assert plan["provenance"] == item["provenance"]
+    assert plan["provenance"] is not item["provenance"]
+    assert plan["provenance"]["metadata"] is not item["provenance"]["metadata"]
+    assert plan["provenance"]["metadata"]["source"] is not (
+        item["provenance"]["metadata"]["source"]
+    )
+
+    plan["provenance"]["metadata"]["source"]["kind"] = "changed"
+    plan["queries"][0]["required_terms"].append("changed-term")
+    plan["queries"][0]["source_classes"].append("changed-class")
+
+    assert item["provenance"]["metadata"]["source"]["kind"] == "fixture"
+    assert terms == ["high-layer PCB", "low-loss laminate"]
+    assert item["required_source_classes"] == [
+        "technical_standard",
+        "independent_secondary",
+    ]
+    assert "changed-term" not in plan["queries"][1]["required_terms"]
+    assert "changed-class" not in plan["queries"][1]["source_classes"]
 
 
 @pytest.mark.parametrize(
@@ -274,6 +311,40 @@ def test_compile_does_not_false_positive_on_ordinary_engineering_terms():
     )
 
     assert plan["status"] == "planned"
+
+
+def test_compile_allows_english_prefix_that_is_not_a_complete_forbidden_token():
+    plan = compile_search_plan(
+        requirement(question="How does top stockpile engineering affect capacity?"),
+        project_id="research_project:pcb",
+        version_id="research_version:pcb:0.1.0",
+        domain_terms=["low-loss laminate"],
+    )
+
+    assert plan["status"] == "planned"
+
+
+@pytest.mark.parametrize(
+    "forbidden_variant",
+    [
+        "target-price",
+        "company-ranking",
+        "TARGET\u3000PRICE",
+        "目-标-价",
+    ],
+)
+def test_compile_rejects_unicode_separator_forbidden_term_variants(
+    forbidden_variant,
+):
+    assert_invalid(
+        lambda: compile_search_plan(
+            requirement(question=f"Engineering review of {forbidden_variant}"),
+            project_id="research_project:pcb",
+            version_id="research_version:pcb:0.1.0",
+            domain_terms=["low-loss laminate"],
+        ),
+        reason="forbidden industry search term",
+    )
 
 
 def test_validate_search_plans_allows_duplicate_coverage_and_single_primary_standard():
@@ -384,6 +455,120 @@ def test_compile_and_validate_reject_nonstandard_single_source_class():
         lambda: validate_search_plans([item], [plan]),
         reason="insufficient source classes",
     )
+
+
+def test_validate_rejects_replacement_source_classes_with_contract_details():
+    item = requirement()
+    plan = compiled_plan()
+    for query in plan["queries"]:
+        query["source_classes"] = ["social_media", "anonymous_blog"]
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        validate_search_plans([item], [plan])
+
+    assert exc_info.value.details == {
+        "reason": "source class contract mismatch",
+        "plan_id": plan["search_plan_id"],
+        "expected_source_classes": [
+            "independent_secondary",
+            "technical_standard",
+        ],
+        "actual_source_classes": ["anonymous_blog", "social_media"],
+    }
+
+
+def test_validate_allows_required_source_classes_split_across_queries():
+    item = requirement()
+    plan = compiled_plan()
+    plan["queries"][0]["source_classes"] = ["technical_standard"]
+    plan["queries"][1]["source_classes"] = ["independent_secondary"]
+    plan["queries"][2]["source_classes"] = ["technical_standard"]
+    plan["queries"][3]["source_classes"] = ["independent_secondary"]
+
+    validate_search_plans([item], [plan])
+
+
+def test_validate_rejects_extra_source_class_beyond_requirement_contract():
+    item = requirement()
+    plan = compiled_plan()
+    plan["queries"][0]["source_classes"].append("social_media")
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        validate_search_plans([item], [plan])
+
+    assert exc_info.value.details["reason"] == "source class contract mismatch"
+    assert exc_info.value.details["plan_id"] == plan["search_plan_id"]
+    assert exc_info.value.details["expected_source_classes"] == [
+        "independent_secondary",
+        "technical_standard",
+    ]
+    assert exc_info.value.details["actual_source_classes"] == [
+        "independent_secondary",
+        "social_media",
+        "technical_standard",
+    ]
+
+
+def test_validate_uses_union_of_multiple_requirement_source_contracts():
+    standard = requirement(
+        "requirement:industry:standard", source_classes=["technical_standard"]
+    )
+    secondary = requirement(
+        "requirement:industry:secondary",
+        source_classes=["independent_secondary"],
+    )
+    plan = compile_search_plan(
+        standard,
+        project_id="research_project:pcb",
+        version_id="research_version:pcb:0.1.0",
+        domain_terms=["low-loss laminate"],
+    )
+    plan["requirement_ids"] = [
+        standard["requirement_id"],
+        secondary["requirement_id"],
+    ]
+    plan["queries"][0]["source_classes"] = ["technical_standard"]
+    plan["queries"][1]["source_classes"] = ["independent_secondary"]
+    plan["queries"][2]["source_classes"] = ["technical_standard"]
+    plan["queries"][3]["source_classes"] = ["independent_secondary"]
+
+    validate_search_plans([standard, secondary], [plan])
+
+
+def test_validate_rejects_nonstandard_single_class_at_plan_level():
+    item = requirement(source_classes=["primary"])
+    plan = compiled_plan()
+    for query in plan["queries"]:
+        query["source_classes"] = ["primary"]
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        validate_search_plans([item], [plan])
+
+    assert exc_info.value.details == {
+        "reason": "insufficient source classes",
+        "plan_id": plan["search_plan_id"],
+        "expected_source_classes": ["primary"],
+        "actual_source_classes": ["primary"],
+    }
+
+
+def test_compile_and_validate_reject_duplicate_required_source_classes():
+    item = requirement(
+        source_classes=["technical_standard", "technical_standard"]
+    )
+    assert_invalid(
+        lambda: compile_search_plan(
+            item,
+            project_id="research_project:pcb",
+            version_id="research_version:pcb:0.1.0",
+            domain_terms=["low-loss laminate"],
+        ),
+        reason="duplicate required_source_classes",
+    )
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        validate_search_plans([item], [compiled_plan()])
+    assert exc_info.value.details["reason"] == "duplicate required_source_classes"
 
 
 def test_validate_search_plans_rejects_forbidden_generated_query_substrings():
@@ -549,3 +734,17 @@ def test_validate_search_plans_does_not_mask_schema_registry_errors(monkeypatch)
         validate_search_plans([requirement()], [compiled_plan()])
 
     assert exc_info.value is registry_error
+
+
+def test_schema_extra_fields_prioritize_downstream_field_deterministically():
+    plan = compiled_plan()
+    plan["aaa"] = "ordinary extra"
+    plan["candidate_companies"] = []
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        validate_search_plans([requirement()], [plan])
+
+    error = exc_info.value
+    assert error.details["reason"] == "downstream field"
+    assert error.details["field_path"] == ["candidate_companies"]
+    assert error.details["offending_fields"] == ["aaa", "candidate_companies"]

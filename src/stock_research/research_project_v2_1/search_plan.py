@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from copy import deepcopy
 import re
 from typing import Any
+import unicodedata
 
 from stock_research.research_project_v2.errors import ResearchProjectV2Error
 from stock_research.research_project_v2_1.schema import validate_v2_1_schema_payload
@@ -78,6 +80,7 @@ def _trimmed_unique_strings(
     *,
     field: str,
     owner: str,
+    reject_duplicates: bool = False,
     **details: object,
 ) -> list[str]:
     if not isinstance(values, list) or not values:
@@ -92,16 +95,51 @@ def _trimmed_unique_strings(
                 f"blank {field}", field=field, owner=owner, **details
             )
         trimmed = value.strip()
-        if trimmed not in seen:
-            seen.add(trimmed)
-            normalized.append(trimmed)
+        if trimmed in seen:
+            if reject_duplicates:
+                raise _invalid(
+                    f"duplicate {field}", field=field, owner=owner, **details
+                )
+            continue
+        seen.add(trimmed)
+        normalized.append(trimmed)
     return normalized
 
 
+def _normalized_tokens(text: str) -> tuple[str, ...]:
+    normalized = unicodedata.normalize("NFKC", text).casefold()
+    token_text = "".join(
+        character if character.isalnum() else " " for character in normalized
+    )
+    return tuple(token_text.split())
+
+
+def _contains_token_sequence(
+    tokens: tuple[str, ...], phrase: tuple[str, ...]
+) -> bool:
+    if not phrase or len(phrase) > len(tokens):
+        return False
+    width = len(phrase)
+    return any(
+        tokens[index : index + width] == phrase
+        for index in range(len(tokens) - width + 1)
+    )
+
+
+def _contains_cjk(text: str) -> bool:
+    return any("\u3400" <= character <= "\u9fff" for character in text)
+
+
 def _find_forbidden_term(text: str) -> str | None:
-    normalized = text.casefold()
+    tokens = _normalized_tokens(text)
+    compact_tokens = "".join(tokens)
     for term in sorted(FORBIDDEN_INDUSTRY_SEARCH_TERMS, key=str.casefold):
-        if term.casefold() in normalized:
+        term_tokens = _normalized_tokens(term)
+        if _contains_cjk(term):
+            matched = "".join(term_tokens) in compact_tokens
+        else:
+            matched = _contains_token_sequence(tokens, term_tokens)
+        if matched:
             return term
     return None
 
@@ -149,6 +187,7 @@ def compile_search_plan(
             requirement.get("required_source_classes"),
             field="required_source_classes",
             owner=requirement_id,
+            reject_duplicates=True,
             requirement_id=requirement_id,
         )
         terms = _trimmed_unique_strings(
@@ -168,7 +207,7 @@ def compile_search_plan(
             field="required_freshness",
             owner=requirement_id,
         )
-        provenance = requirement["provenance"]
+        provenance = deepcopy(requirement["provenance"])
     except (KeyError, TypeError, AttributeError) as exc:
         raise _invalid(
             "invalid requirement structure",
@@ -258,18 +297,22 @@ def _reject_downstream_fields(value: object, *, plan_id: object) -> None:
             _reject_downstream_fields(child, plan_id=plan_id)
 
 
-def _schema_error_field_path(exc: ResearchProjectV2Error) -> list[object]:
+def _schema_error_context(
+    exc: ResearchProjectV2Error,
+) -> tuple[list[object], list[str]]:
     raw_path = exc.details.get("path", [])
     path = list(raw_path) if isinstance(raw_path, list) else []
     if path and path[0] == "search_plan":
         path = path[1:]
+    fields: list[str] = []
     if str(exc).endswith("is a required property") or str(exc).startswith(
         "Additional properties are not allowed"
     ):
         fields = sorted(set(re.findall(r"'([^']+)'", str(exc))))
         if fields:
-            path.append(fields[0])
-    return path
+            downstream_fields = sorted(set(fields) & _DOWNSTREAM_FIELDS)
+            path.append(downstream_fields[0] if downstream_fields else fields[0])
+    return path, fields
 
 
 def _query_id_for_schema_path(plan: object, path: list[object]) -> object:
@@ -311,12 +354,13 @@ def _validate_plan_schema(plan: object) -> None:
     except ResearchProjectV2Error as exc:
         if exc.code != "RESEARCH_PROJECT_V2_1_SCHEMA_INVALID":
             raise
-        field_path = _schema_error_field_path(exc)
+        field_path, offending_fields = _schema_error_context(exc)
         raise _invalid(
             _schema_error_reason(field_path),
             plan_id=plan_id,
             query_id=_query_id_for_schema_path(plan, field_path),
             field_path=field_path,
+            offending_fields=offending_fields,
             original_message=str(exc),
         ) from exc
 
@@ -339,6 +383,7 @@ def validate_search_plans(
             _validate_plan_schema(plan)
 
         requirement_by_id: dict[str, dict[str, Any]] = {}
+        requirement_source_classes: dict[str, set[str]] = {}
         for requirement in requirements:
             location = {}
             requirement_id = _trimmed(
@@ -362,13 +407,17 @@ def validate_search_plans(
                 field="question_to_resolve",
                 requirement_id=requirement_id,
             )
-            _trimmed_unique_strings(
+            normalized_source_classes = _trimmed_unique_strings(
                 requirement["required_source_classes"],
                 field="required_source_classes",
                 owner=requirement_id,
+                reject_duplicates=True,
                 requirement_id=requirement_id,
             )
             requirement_by_id[requirement_id] = requirement
+            requirement_source_classes[requirement_id] = set(
+                normalized_source_classes
+            )
 
         seen_plan_ids: set[str] = set()
         seen_query_ids: set[str] = set()
@@ -403,7 +452,7 @@ def validate_search_plans(
                 owner=plan_id,
                 plan_id=plan_id,
             )
-            referenced_requirements: list[dict[str, Any]] = []
+            expected_source_classes: set[str] = set()
             for requirement_id in requirement_ids:
                 if requirement_id not in requirement_by_id:
                     raise _invalid(
@@ -411,13 +460,16 @@ def validate_search_plans(
                         plan_id=plan_id,
                         requirement_id=requirement_id,
                     )
-                referenced_requirements.append(requirement_by_id[requirement_id])
+                expected_source_classes.update(
+                    requirement_source_classes[requirement_id]
+                )
                 covered_requirement_ids.add(requirement_id)
 
             queries = plan["queries"]
             if not isinstance(queries, list) or not queries:
                 raise _invalid("empty queries", plan_id=plan_id)
             roles: set[str] = set()
+            actual_source_classes: set[str] = set()
             for query in queries:
                 location = {"plan_id": plan_id}
                 query_id = _trimmed(
@@ -471,26 +523,30 @@ def validate_search_plans(
                     query["source_classes"],
                     field="source_classes",
                     owner=query_id,
+                    reject_duplicates=True,
                     plan_id=plan_id,
                     query_id=query_id,
                 )
-                single_standard_allowed = _single_standard_exception(source_classes)
-                if single_standard_allowed:
-                    single_standard_allowed = all(
-                        _trimmed_unique_strings(
-                            requirement["required_source_classes"],
-                            field="required_source_classes",
-                            owner=requirement["requirement_id"],
-                        )
-                        == source_classes
-                        for requirement in referenced_requirements
-                    )
-                if len(source_classes) < 2 and not single_standard_allowed:
-                    raise _invalid(
-                        "insufficient source classes",
-                        plan_id=plan_id,
-                        query_id=query_id,
-                    )
+                actual_source_classes.update(source_classes)
+
+            expected_sorted = sorted(expected_source_classes)
+            actual_sorted = sorted(actual_source_classes)
+            if len(expected_source_classes) == 1 and not _single_standard_exception(
+                expected_sorted
+            ):
+                raise _invalid(
+                    "insufficient source classes",
+                    plan_id=plan_id,
+                    expected_source_classes=expected_sorted,
+                    actual_source_classes=actual_sorted,
+                )
+            if actual_source_classes != expected_source_classes:
+                raise _invalid(
+                    "source class contract mismatch",
+                    plan_id=plan_id,
+                    expected_source_classes=expected_sorted,
+                    actual_source_classes=actual_sorted,
+                )
 
             if "counter_evidence" not in roles:
                 raise _invalid("missing counter_evidence query", plan_id=plan_id)
