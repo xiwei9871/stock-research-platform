@@ -1046,7 +1046,7 @@ def test_civil_aircraft_g3_artifacts_are_reviewed_and_meet_wave_gate() -> None:
     assert rows[G3_CHAIN_ID]["counts"]["accepted_sources"] >= 10
     assert rows[G3_CHAIN_ID]["counts"]["primary_sources"] >= 8
     assert rows[G3_CHAIN_ID]["counts"]["claims"] >= 12
-    assert rows[G3_CHAIN_ID]["counts"]["reviewed_mappings"] == 9
+    assert rows[G3_CHAIN_ID]["counts"]["reviewed_mappings"] == 8
 
 
 def test_civil_aircraft_g3_company_evidence_and_initial_universe_close() -> None:
@@ -1071,7 +1071,7 @@ def test_civil_aircraft_g3_company_evidence_and_initial_universe_close() -> None
         items = [evidence[evidence_id] for evidence_id in row["evidence_ids"]]
         assert [item["evidence_type"] for item in items] == [
             "product_relationship",
-            "revenue_boundary" if company_code in {"600893.SH", "000738.SZ", "600391.SH", "600862.SH", "300696.SZ", "300900.SZ", "688239.SH", "603308.SH"} else "revenue_materiality",
+            "revenue_boundary" if company_code in {"600893.SH", "000738.SZ", "600391.SH", "600765.SH", "600862.SH", "300696.SZ", "300900.SZ", "688239.SH", "603308.SH"} else "revenue_materiality",
             "business_stage",
         ]
         assert len({item["excerpt_locator"] for item in items}) == 3
@@ -1125,6 +1125,47 @@ def test_civil_aircraft_g3_rejects_non_civil_and_lifecycle_false_positives() -> 
     assert "商用航空发动机锻铸" in reviewed["600765.SH"]["product_or_service"]
     assert "热端部件" in reviewed["688239.SH"]["product_or_service"]
     assert "高压涡轮机匣" in reviewed["688239.SH"]["relationship_summary"]
+    assert reviewed["688239.SH"]["business_stage"] == "primary_business"
+    assert reviewed["688239.SH"]["bottleneck_relevance"] == "core"
+    assert reviewed["600391.SH"]["bottleneck_relevance"] == "adjacent"
+    assert reviewed["600391.SH"]["confidence"] <= 0.88
+    assert "未证明商发交付对应叶片" in reviewed["600391.SH"]["notes"]
+    assert reviewed["600765.SH"]["business_stage"] == "reserve_stage"
+    assert reviewed["600765.SH"]["business_materiality"] == "reserve_only"
+    assert "未定位至叶片、盘或热端" in reviewed["600765.SH"]["notes"]
+    assert reviewed["603308.SH"]["bottleneck_relevance"] == "adjacent"
+    assert reviewed["603308.SH"]["confidence"] <= 0.9
+    assert "不能称为民机热端" in reviewed["603308.SH"]["notes"]
+
+
+def test_civil_aircraft_g3_visible_stock_pool_excludes_reserve_mappings() -> None:
+    theme = load_json(G3_THEME_PATH)
+    mapping = load_json(G3_MAPPING_PATH)
+    effective = {
+        row["company_code"]: row
+        for row in mapping["company_mappings"]
+        if row["review_status"] == "reviewed"
+        and row["business_stage"] == "primary_business"
+        and row["business_materiality"] not in {"reserve_only", "concept_only"}
+    }
+    assert set(effective) == {
+        "000768.SZ", "600893.SH", "000738.SZ", "600391.SH",
+        "600862.SH", "300696.SZ", "688239.SH", "603308.SH",
+    }
+    nodes = {row["node_id"]: row for row in theme["nodes"]}
+    visible_codes = {
+        code for node in nodes.values() for code in node["related_stock_codes"]
+    }
+    assert visible_codes == set(effective)
+    for node in nodes.values():
+        expected = {
+            code for code, row in effective.items()
+            if row["mapped_node_id"] == node["node_id"]
+        }
+        assert set(node["related_stock_codes"]) == expected
+        assert len(node["domestic_players"]) == len(node["related_stock_codes"])
+    assert "300900.SZ" not in visible_codes
+    assert "600765.SH" not in visible_codes
 
 
 def test_civil_aircraft_g3_source_claim_matrix_union_is_direct() -> None:
@@ -1225,3 +1266,11 @@ def test_civil_aircraft_g3_matrix_calibrates_empty_nodes_and_evidence_gaps() -> 
         assert rows[empty_node]["evidence_strength_after"] <= 3
     assert rows["airworthiness_certification_production_ramp"]["value_capture_score_review_status"] == "provisional"
     assert rows["mro_spares_installed_base_services"]["value_capture_score_review_status"] == "provisional"
+    landing = rows["landing_gear_wheels_brakes_systems"]
+    assert landing["evidence_strength_after"] <= 2
+    assert "零组件" in landing["rationale"]
+    hot = rows["engine_hot_section_blades_disks"]
+    assert hot["evidence_strength_after"] == 4
+    assert hot["node_review_status"] == "needs_evidence"
+    assert hot["evidence_gap_status"] == "evidence_gap"
+    assert "逐公司" in hot["next_evidence_needed"]
