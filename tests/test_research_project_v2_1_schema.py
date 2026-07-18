@@ -6,6 +6,7 @@ import warnings
 from jsonschema import Draft202012Validator, FormatChecker
 import pytest
 
+from stock_research.research_project_v2.canonical import content_sha256
 from stock_research.research_project_v2.errors import ResearchProjectV2Error
 
 
@@ -408,13 +409,16 @@ def test_valid_industry_version_passes(sample_industry_version):
 def test_builder_shaped_payload_passes_standalone_schema(
     schema_name, artifact_kind, body_key, builder_payload
 ):
+    payload = {
+        "schema_version": "2.1.0",
+        "artifact_kind": artifact_kind,
+        body_key: builder_payload,
+    }
+    if schema_name == "industry_evidence_assessment_v2_1":
+        payload["content_hash"] = content_sha256(payload)
     validate_v2_1_schema_payload(
         schema_name,
-        {
-            "schema_version": "2.1.0",
-            "artifact_kind": artifact_kind,
-            body_key: builder_payload,
-        },
+        payload,
     )
 
 
@@ -1050,6 +1054,7 @@ def _standalone_payloads():
             "schema_version": "2.1.0",
             "artifact_kind": "industry_evidence_assessment",
             "industry_evidence_assessment": canonical_industry_evidence_assessment(),
+            "content_hash": "a" * 64,
         },
         "research_project_index_v2_1": {
             "schema_version": "2.1.0",
@@ -1091,6 +1096,32 @@ def test_standalone_industry_assessment_accepts_empty_root_locator():
     payload = deepcopy(_standalone_payloads()["industry_evidence_assessment_v2_1"])
     payload["industry_evidence_assessment"]["locator"] = ""
     validate_v2_1_schema_payload("industry_evidence_assessment_v2_1", payload)
+
+
+def test_standalone_industry_assessment_accepts_self_excluding_content_hash_shape():
+    payload = deepcopy(_standalone_payloads()["industry_evidence_assessment_v2_1"])
+    payload["content_hash"] = content_sha256(
+        payload, excluded_paths={("content_hash",)}
+    )
+    validate_v2_1_schema_payload("industry_evidence_assessment_v2_1", payload)
+
+
+@pytest.mark.parametrize("mutation", ["missing", "uppercase", "short"])
+def test_standalone_industry_assessment_requires_lowercase_sha256_content_hash(
+    mutation,
+):
+    payload = deepcopy(_standalone_payloads()["industry_evidence_assessment_v2_1"])
+    if mutation == "missing":
+        payload.pop("content_hash")
+    elif mutation == "uppercase":
+        payload["content_hash"] = "A" * 64
+    else:
+        payload["content_hash"] = "a" * 63
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        validate_v2_1_schema_payload("industry_evidence_assessment_v2_1", payload)
+
+    assert exc_info.value.code == "RESEARCH_PROJECT_V2_1_SCHEMA_INVALID"
 
 
 @pytest.mark.parametrize("evidence_channel", ["company", "market"])
