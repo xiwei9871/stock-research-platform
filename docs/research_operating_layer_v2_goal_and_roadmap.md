@@ -1,6 +1,6 @@
 # Research Operating Layer V2：项目总目标与路线图
 
-更新日期：2026-07-17
+更新日期：2026-07-18
 
 ## 项目定位
 
@@ -27,13 +27,14 @@
 → 定向证据采集
 → 正反证据评价
 → 因果建模
-→ 约束与价值迁移判断
-→ 公司价值捕获验证
-→ 结论与置信度
-→ 验证指标与失效条件
-→ 人工审核
-→ 版本发布
-→ 事件与指标触发更新
+→ 产业瓶颈与价值迁移判断
+→ Bottleneck Readiness Gate
+→ 公司解决能力与价值捕获验证
+→ Company Value Capture Gate
+→ 股票估值、预期和时间窗口评价
+→ 分层结论、置信度与失效条件
+→ 人工审核与版本发布
+→ 事件与指标触发分层更新
 → 传导到下游研究和决策工作流
 ```
 
@@ -63,11 +64,23 @@ V2 负责记录围绕具体问题展开的研究过程：
 - 证据需求和证据评价；
 - 因果节点和因果边；
 - 验证指标和失效条件；
-- 公司价值捕获验证；
+- typed industry bottleneck 与 Bottleneck Readiness Gate；
+- 公司解决能力和价值捕获验证；
+- 与公司产业能力分离的股票投资评价；
 - 不可变研究版本；
 - 项目级更新事件。
 
 V2 对 V1 采用 `additive-only`、`reference-only`、`no-rewrite` 原则。
+
+V2 后续使用三个一等 `research_layer`：
+
+```text
+industry_research
+→ company_capture
+→ stock_evaluation
+```
+
+三层共享研究内核，但使用独立证据通道、结论对象和质量门槛。下游只能引用已审核的上游 version 和 Gate result，不能回写上游历史版本。
 
 ### Future Promotion：成熟知识沉淀
 
@@ -85,6 +98,9 @@ V2 结论不会自动改写 V1。未来如需把成熟研究沉淀为新的规�
 8. 公司映射不等于价值捕获，产品、认证、产能、订单、收入和利润必须分阶段验证。
 9. 质量门槛分为 Research Design、Evidence Readiness 和 Publication 三个 Gate，不使用单一总分代替结构性检查。
 10. Artifact 基线不依赖数据库、Dashboard、research_case 或下游策略系统运行。
+11. 产业研究、公司能力研究和股票评价是三个独立研究层，不能在一次 agent run 中混合完成。
+12. 只有通过 Bottleneck Readiness Gate 的产业瓶颈，才能启动 Company Capture Research。
+13. Company Industrial Capability Rating 与 Stock Investment Attractiveness Rating 必须分离。
 
 ## 非目标
 
@@ -96,6 +112,8 @@ V2 结论不会自动改写 V1。未来如需把成熟研究沉淀为新的规�
 - 不在当前阶段修改现有 Theme Research API 或 Dashboard。
 - 不自动生成股票买卖建议。
 - 不把首批研究设计 artifact 描述为完整产业报告。
+- 不在产业研究阶段生成公司排名、股票池、company rating 或 stock rating。
+- 不允许用热门股票名单反向决定产业边界和产业链结构。
 
 ## 分阶段路线图
 
@@ -145,47 +163,78 @@ V2 结论不会自动改写 V1。未来如需把成熟研究沉淀为新的规�
 
 现有 warning 为非阻塞 deprecation warning，主要来自 `jsonschema.RefResolver` 与 Python 3.14 下的 `py_mini_racer`。
 
-### R2：External / Evidence Resolver 与 Drift Audit 扩展
+### R2A：Industry Evidence Acquisition Baseline
 
 交付：
 
-- 扩展 R1 已交付的本地 Theme Research V1 resolver；
-- 扩展 R1 已交付的本地 Industry Catalog V1 resolver；
-- evidence_artifact resolver；
-- external document/dataset reference contract；
-- external/evidence archive 的 content hash、hash scope 与可复现解析；
-- 将 R1 本地 missing、hash mismatch、version mismatch、type mismatch、deprecated、duplicate 检查扩展到 external/evidence resolver；
-- reference drift update event。
+- `research_layer=industry_research` 的兼容 artifact contract；
+- Industry Evidence Requirement 和 Search Plan；
+- 来源发现、抓取、下载与不可变快照；
+- PDF、网页和数据集解析与标准化；
+- evidence_artifact、external document 和 dataset resolver；
+- 来源独立性、新鲜度、转载循环和冲突检测；
+- 命题级 Industry Evidence Assessment；
+- reference drift update event；
+- 四个新 Industry Project 对 R1 pilot version 的不可变引用。
 
-退出条件：V1 或外部证据变化不会静默改变历史 Research Version。
+退出条件：四个 Industry Project 能从 Evidence Requirement 生成定向 Search Plan，外部资料能够被快照、解析、评价和审计；本阶段不生成公司或股票评级。
 
-### R3：Evidence Workflow Baseline
-
-交付：
-
-- Evidence Requirement 工作流；
-- Evidence Assessment；
-- 正反证据与冲突检索；
-- freshness 和 independence 检查；
-- Evidence Readiness Gate；
-- 至少两个项目进入证据采集阶段。
-
-退出条件：来源链接不能绕过 assessment，关键命题的覆盖状态可审计。
-
-### R4：Causal And Company Capture Validation
+### R2B：Industry Chain And Bottleneck Research
 
 交付：
 
-- 对 R1 design-only 因果节点、因果边与 claim relation 进行 evidence-backed validation；
-- 对 R1 planned typed validation metric 与 typed invalidation condition 进行实际观测和判定；
-- company capture 分阶段验证；
-- Publication Gate 基线。
+- 系统架构、制造流程或技术路线模型；
+- 标准产业节点和节点依赖；
+- typed `industry_bottleneck`；
+- 系统、技术、工艺、材料设备、供给产能、认证生态和经济性七类瓶颈；
+- 瓶颈机制、严重程度、持续时间、替代路线和缓解条件；
+- 价值迁移、验证指标、反方命题和失效条件；
+- Industry Evidence Readiness Gate；
+- Bottleneck Readiness Gate。
 
-退出条件：研究能说明价值为何迁移、通过什么机制迁移、公司是否真正兑现以及如何被后续指标推翻。
+退出条件：至少两个 pilot 的核心瓶颈通过 Bottleneck Readiness Gate；未通过 Gate 的瓶颈不得进入公司筛选。
 
-### R5：Database Shadow Mapping
+### R3：Company Solution Mapping
 
-前提：R1-R4 artifact 结构稳定且经过人工审核。
+交付：
+
+- 从已审核 bottleneck 推导 required capability；
+- 技术解决路线和候选公司发现；
+- 产品、规格、专利、送样和认证验证；
+- 有效产能、良率、交付和供应能力验证；
+- 订单、收入和利润转化验证；
+- 七级 Company Capability Stage；
+- 公司证据通道与独立交叉验证。
+
+退出条件：候选公司必须绑定已通过 Gate 的 bottleneck；公司研究不得读取股价、估值或交易拥挤度。
+
+### R4：Company Value Capture Assessment
+
+交付：
+
+- Company Industrial Capability Rating；
+- bottleneck match、技术壁垒、商业化阶段和市场份额评价；
+- qualification、effective capacity、订单、收入和利润证据；
+- 业务重要性、利润弹性、持续性和替代风险；
+- Company Value Capture Gate。
+
+退出条件：能够回答公司是否真正解决产业问题并捕获产业价值，但不回答股票当前是否值得投资。
+
+### R5：Stock Investment Rating And Strategy Transmission
+
+交付：
+
+- 与公司产业能力评分分离的 Stock Investment Attractiveness Rating；
+- 当前价格、估值、市场预期和预期差；
+- 催化、兑现周期、上下行情景和失效条件；
+- 流动性、波动、交易拥挤度和组合约束；
+- watchlist、strategy hypothesis 和下游策略传导。
+
+退出条件：股票评价绑定明确 company assessment、评价时点、价格来源和时间窗口；不能用股票表现反向证明公司能力。
+
+### R6：Database Shadow Mapping
+
+前提：R1-R5 artifact 结构稳定且经过人工审核。
 
 交付：
 
@@ -198,7 +247,7 @@ V2 结论不会自动改写 V1。未来如需把成熟研究沉淀为新的规�
 
 本阶段开始前必须重新取得生产 migration 授权。
 
-### R6：API、Research Workbench 与下游适配
+### R7：API、Research Workbench 与下游适配
 
 交付顺序：
 
@@ -224,4 +273,8 @@ Research Operating Layer V2 成功的标志不是主题数量增加，而是：
 - 引用漂移能够被发现；
 - 结论具备验证指标和失效条件；
 - 研究过程可以跨主题且不会污染 V1；
+- 产业研究能够在不生成公司或股票排名的前提下识别和验证 typed bottleneck；
+- 未通过 Bottleneck Readiness Gate 的瓶颈不能启动公司映射；
+- 公司产业能力评价不读取股价和估值，股票投资评价不能绕过公司价值捕获验证；
+- 公司产业能力评分和股票投资吸引力评分可以同时存在且不会相互覆盖；
 - AI 自动化与人工审核边界明确。
