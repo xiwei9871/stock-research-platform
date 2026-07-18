@@ -149,6 +149,7 @@ def assert_url_error(raw: str) -> ResearchProjectV2Error:
         ("https://例子.测试/路径", "https://xn--fsqu00a.xn--0zwm56d/路径"),
         ("https://faß.de/a", "https://xn--fa-hia.de/a"),
         ("https://fass.de/a", "https://fass.de/a"),
+        ("https://ｅｘａｍｐｌｅ．ｃｏｍ/a", "https://example.com/a"),
         ("https://Example.COM./a", "https://example.com/a"),
         ("https://192.0.2.1/a", "https://192.0.2.1/a"),
         ("https://[2001:db8::1]:443/a", "https://[2001:db8::1]/a"),
@@ -187,6 +188,7 @@ def test_normalize_url_canonicalizes_supported_web_urls(raw: str, expected: str)
         "https://bad_name.example/a",
         "https://999.1.1.1/a",
         "https://192.168.001.1/a",
+        "https://１９２。１６８。００１。１/a",
         "https://[fe80::1%eth0]/a",
         "https://[fe80::1%25eth0]/a",
         "https://example.com/%ZZ",
@@ -987,17 +989,25 @@ def test_writer_detects_final_symlink_swap_after_atomic_link(
     outside = tmp_path / "outside-final.json"
     outside.write_text("external", encoding="utf-8")
     original_fsync = discovery_module.os.fsync
-    calls = 0
+    original_link = discovery_module.os.link
+    linked = False
+    swapped = False
 
     def swap_on_directory_fsync(descriptor: int) -> None:
-        nonlocal calls
-        calls += 1
-        if calls == 2:
+        nonlocal swapped
+        if linked and not swapped:
+            swapped = True
             target.unlink()
             target.symlink_to(outside)
         original_fsync(descriptor)
 
+    def record_link(source: str, target_name: str, **kwargs: object) -> None:
+        nonlocal linked
+        original_link(source, target_name, **kwargs)
+        linked = True
+
     monkeypatch.setattr(discovery_module.os, "fsync", swap_on_directory_fsync)
+    monkeypatch.setattr(discovery_module.os, "link", record_link)
 
     assert_discovery_error(
         lambda: write_discovery_batch(batch, layout=layout),
@@ -1074,6 +1084,111 @@ def test_writer_detects_discovery_directory_symlink_swap_without_false_success(
         reason="unsafe managed path",
     )
     assert list(outside.iterdir()) == []
+
+
+def test_writer_detects_batch_rebind_after_readback_before_return(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    batch = discover_sources(
+        search_plan(),
+        StaticProvider({}),
+        provider_name="static",
+        discovered_at=DISCOVERED_AT,
+        provenance=PROVENANCE,
+    )
+    batch_dir = layout.evidence_discovery_dir / batch["search_plan_id"]
+    detached = batch_dir.with_name(f"{batch_dir.name}-detached-after-read")
+    outside = tmp_path / "outside-after-read"
+    outside.mkdir()
+    original_read = discovery_module._read_regular_file_at
+    swapped = False
+
+    def read_then_swap(directory_fd: int, name: str) -> bytes:
+        nonlocal swapped
+        data = original_read(directory_fd, name)
+        if not swapped:
+            swapped = True
+            batch_dir.rename(detached)
+            batch_dir.symlink_to(outside, target_is_directory=True)
+        return data
+
+    monkeypatch.setattr(discovery_module, "_read_regular_file_at", read_then_swap)
+
+    assert_discovery_error(
+        lambda: write_discovery_batch(batch, layout=layout),
+        reason="unsafe managed path",
+    )
+    assert list(outside.iterdir()) == []
+    assert list(detached.iterdir()) == []
+
+
+def test_writer_fsyncs_parent_mkdirs_and_batch_after_temp_unlink(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    batch = discover_sources(
+        search_plan(),
+        StaticProvider({}),
+        provider_name="static",
+        discovered_at=DISCOVERED_AT,
+        provenance=PROVENANCE,
+    )
+    events: list[tuple[object, ...]] = []
+    original_mkdir = discovery_module.os.mkdir
+    original_open = discovery_module.os.open
+    original_fsync = discovery_module.os.fsync
+    original_link = discovery_module.os.link
+    original_unlink = discovery_module.os.unlink
+
+    def record_mkdir(name: str, mode: int = 0o777, *, dir_fd: int | None = None) -> None:
+        original_mkdir(name, mode, dir_fd=dir_fd)
+        events.append(("mkdir", name, dir_fd))
+
+    def record_open(name: str, flags: int, mode: int = 0o777, *, dir_fd: int | None = None) -> int:
+        events.append(("open", name, dir_fd))
+        return original_open(name, flags, mode, dir_fd=dir_fd)
+
+    def record_fsync(descriptor: int) -> None:
+        events.append(("fsync", descriptor))
+        original_fsync(descriptor)
+
+    def record_link(source: str, target: str, **kwargs: object) -> None:
+        events.append(("link", source, target, kwargs.get("dst_dir_fd")))
+        original_link(source, target, **kwargs)
+
+    def record_unlink(name: str, *, dir_fd: int | None = None) -> None:
+        events.append(("unlink", name, dir_fd))
+        original_unlink(name, dir_fd=dir_fd)
+
+    monkeypatch.setattr(discovery_module.os, "mkdir", record_mkdir)
+    monkeypatch.setattr(discovery_module.os, "open", record_open)
+    monkeypatch.setattr(discovery_module.os, "fsync", record_fsync)
+    monkeypatch.setattr(discovery_module.os, "link", record_link)
+    monkeypatch.setattr(discovery_module.os, "unlink", record_unlink)
+
+    write_discovery_batch(batch, layout=layout)
+
+    mkdir_events = [event for event in events if event[0] == "mkdir"]
+    assert mkdir_events
+    for mkdir_event in mkdir_events:
+        mkdir_index = events.index(mkdir_event)
+        open_index = next(
+            index
+            for index in range(mkdir_index + 1, len(events))
+            if events[index][:3] == ("open", mkdir_event[1], mkdir_event[2])
+        )
+        assert ("fsync", mkdir_event[2]) in events[mkdir_index + 1 : open_index]
+
+    link_index = next(index for index, event in enumerate(events) if event[0] == "link")
+    temp_unlink_index = next(
+        index
+        for index, event in enumerate(events)
+        if event[0] == "unlink" and str(event[1]).endswith(".tmp")
+    )
+    batch_fd = events[temp_unlink_index][2]
+    assert link_index < temp_unlink_index
+    assert ("fsync", batch_fd) in events[temp_unlink_index + 1 :]
 
 
 def test_writer_fails_closed_without_required_posix_flags(

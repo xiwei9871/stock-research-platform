@@ -210,15 +210,15 @@ def normalize_url(url: str) -> str:
             dns_input = hostname[:-1] if hostname.endswith(".") else hostname
             if not dns_input:
                 raise ValueError("invalid host")
-            if all(character.isdigit() or character == "." for character in dns_input):
-                host = str(ipaddress.IPv4Address(dns_input))
+            ascii_host = idna.encode(
+                dns_input,
+                uts46=True,
+                transitional=False,
+                std3_rules=True,
+            ).decode("ascii").lower()
+            if all(character.isdigit() or character == "." for character in ascii_host):
+                host = str(ipaddress.IPv4Address(ascii_host))
             else:
-                ascii_host = idna.encode(
-                    dns_input,
-                    uts46=True,
-                    transitional=False,
-                    std3_rules=True,
-                ).decode("ascii").lower()
                 if len(ascii_host) > 253:
                     raise ValueError("DNS host exceeds 253 characters")
                 labels = ascii_host.split(".")
@@ -810,12 +810,19 @@ def _directory_flags() -> int:
 
 
 def _open_or_create_directory(parent_fd: int, name: str) -> int:
+    created = False
     try:
         os.mkdir(name, mode=0o700, dir_fd=parent_fd)
+        created = True
     except FileExistsError:
         pass
     except OSError as exc:
         raise _invalid("unsafe managed path", component=name) from exc
+    if created:
+        try:
+            os.fsync(parent_fd)
+        except OSError as exc:
+            raise _invalid("discovery batch write failed", component=name) from exc
     try:
         child_fd = os.open(name, _directory_flags(), dir_fd=parent_fd)
         if not stat.S_ISDIR(os.fstat(child_fd).st_mode):
@@ -893,6 +900,36 @@ def _read_regular_file_at(directory_fd: int, name: str) -> bytes:
         os.close(descriptor)
 
 
+def _final_entry_is_regular_at(directory_fd: int, name: str) -> bool:
+    flags = os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
+    try:
+        descriptor = os.open(name, flags, dir_fd=directory_fd)
+    except OSError:
+        return False
+    try:
+        opened = os.fstat(descriptor)
+        entry = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+        return (
+            stat.S_ISREG(opened.st_mode)
+            and stat.S_ISREG(entry.st_mode)
+            and opened.st_dev == entry.st_dev
+            and opened.st_ino == entry.st_ino
+        )
+    except OSError:
+        return False
+    finally:
+        os.close(descriptor)
+
+
+def _unlink_and_sync(directory_fd: int, name: str) -> bool:
+    try:
+        os.unlink(name, dir_fd=directory_fd)
+    except FileNotFoundError:
+        return False
+    os.fsync(directory_fd)
+    return True
+
+
 def _create_temp_file(directory_fd: int, final_name: str) -> tuple[int, str]:
     flags = (
         os.O_WRONLY
@@ -920,6 +957,19 @@ def _write_all(descriptor: int, data: bytes) -> None:
             raise OSError(errno.EIO, "short discovery batch write")
         offset += written
     os.fsync(descriptor)
+
+
+def _complete_directory_binding_is_valid(
+    directory_fds: list[int],
+    component_names: list[str],
+    discovery_fd: int,
+    plan_id: str,
+    batch_fd: int,
+) -> bool:
+    return (
+        _directory_chain_is_bound(directory_fds, component_names)
+        and _entry_matches_directory(discovery_fd, plan_id, batch_fd)
+    )
 
 
 def write_discovery_batch(
@@ -953,9 +1003,8 @@ def write_discovery_batch(
         directory_fds, component_names = _open_absolute_directory(discovery_dir)
         discovery_fd = directory_fds[-1]
         batch_fd = _open_or_create_directory(discovery_fd, plan_id)
-        if (
-            not _directory_chain_is_bound(directory_fds, component_names)
-            or not _entry_matches_directory(discovery_fd, plan_id, batch_fd)
+        if not _complete_directory_binding_is_valid(
+            directory_fds, component_names, discovery_fd, plan_id, batch_fd
         ):
             raise _invalid("unsafe managed path", path=str(batch_dir))
         temporary_fd, temporary_name = _create_temp_file(batch_fd, final_name)
@@ -979,9 +1028,8 @@ def write_discovery_batch(
                 )
         except OSError as exc:
             raise _invalid("discovery batch write failed", path=str(target)) from exc
-        if (
-            not _directory_chain_is_bound(directory_fds, component_names)
-            or not _entry_matches_directory(discovery_fd, plan_id, batch_fd)
+        if not _complete_directory_binding_is_valid(
+            directory_fds, component_names, discovery_fd, plan_id, batch_fd
         ):
             if final_created:
                 os.unlink(final_name, dir_fd=batch_fd)
@@ -993,13 +1041,27 @@ def write_discovery_batch(
             raise _immutability_error(
                 "immutable batch path conflict", path=str(target)
             )
+        _unlink_and_sync(batch_fd, temporary_name)
+        temporary_name = None
+        if not _final_entry_is_regular_at(batch_fd, final_name):
+            if final_created:
+                _unlink_and_sync(batch_fd, final_name)
+                final_created = False
+            raise _invalid("unsafe managed path", path=str(target))
+        if not _complete_directory_binding_is_valid(
+            directory_fds, component_names, discovery_fd, plan_id, batch_fd
+        ):
+            if final_created:
+                _unlink_and_sync(batch_fd, final_name)
+                final_created = False
+            raise _invalid("unsafe managed path", path=str(batch_dir))
         return target
     finally:
         if temporary_fd is not None:
             os.close(temporary_fd)
         if temporary_name is not None and batch_fd is not None:
             try:
-                os.unlink(temporary_name, dir_fd=batch_fd)
+                _unlink_and_sync(batch_fd, temporary_name)
             except FileNotFoundError:
                 pass
         if batch_fd is not None:
