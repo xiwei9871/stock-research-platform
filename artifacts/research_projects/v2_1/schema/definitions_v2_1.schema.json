@@ -922,32 +922,92 @@
     "evidence_artifact": {
       "type": "object",
       "required": [
-        "evidence_artifact_id",
-        "project_id",
-        "version_id",
+        "artifact_id",
+        "candidate_id",
         "evidence_channel",
-        "source_candidate_id",
-        "source_uri",
-        "retrieved_at",
-        "content_hash",
+        "original_url",
+        "final_url",
+        "redirect_chain",
+        "status_code",
+        "response_headers",
         "media_type",
-        "storage_path"
+        "byte_count",
+        "content_sha256",
+        "fetched_at",
+        "raw_path",
+        "provenance"
       ],
       "properties": {
-        "evidence_artifact_id": {"type": "string", "minLength": 1},
-        "project_id": {"type": "string", "minLength": 1},
-        "version_id": {"type": "string", "minLength": 1},
+        "artifact_id": {"type": "string", "minLength": 1},
+        "candidate_id": {"type": "string", "minLength": 1},
         "evidence_channel": {"$ref": "#/$defs/evidence_channel"},
-        "source_candidate_id": {"type": ["string", "null"]},
-        "source_uri": {"type": "string", "minLength": 1},
-        "retrieved_at": {
+        "original_url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https?://"
+        },
+        "final_url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https?://"
+        },
+        "redirect_chain": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri",
+            "pattern": "^https?://"
+          }
+        },
+        "status_code": {"type": "integer", "minimum": 100, "maximum": 599},
+        "response_headers": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[!#$%&'*+.^_`|~0-9A-Za-z-]+$",
+            "not": {
+              "pattern": "^(?:[Ss][Ee][Tt]-[Cc][Oo][Oo][Kk][Ii][Ee]|[Cc][Oo][Oo][Kk][Ii][Ee]|[Aa][Uu][Tt][Hh][Oo][Rr][Ii][Zz][Aa][Tt][Ii][Oo][Nn]|[Pp][Rr][Oo][Xx][Yy]-[Aa][Uu][Tt][Hh][Oo][Rr][Ii][Zz][Aa][Tt][Ii][Oo][Nn])$"
+            }
+          },
+          "patternProperties": {
+            ".*": {"type": "string"}
+          },
+          "additionalProperties": false
+        },
+        "media_type": {
+          "enum": [
+            "application/pdf",
+            "text/html",
+            "text/plain",
+            "application/json",
+            "text/csv"
+          ]
+        },
+        "byte_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 26214400
+        },
+        "content_sha256": {"$ref": "#/$defs/sha256"},
+        "fetched_at": {
           "type": "string",
           "format": "date-time",
           "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})$"
         },
-        "content_hash": {"$ref": "#/$defs/sha256"},
-        "media_type": {"type": "string", "minLength": 1},
-        "storage_path": {"type": "string", "minLength": 1}
+        "raw_path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!\\.(?:/|$))(?!.*\\/\\.(?:\\/|$))(?!\\.\\.(?:/|$))(?!.*\\/\\.\\.(?:\\/|$)).+$"
+        },
+        "provenance": {"$ref": "#/$defs/provenance"},
+        "publisher_family": {"type": ["string", "null"]},
+        "upstream_source_id": {"type": ["string", "null"]},
+        "section_hashes": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/sha256"},
+          "uniqueItems": true
+        }
       },
       "additionalProperties": false
     },

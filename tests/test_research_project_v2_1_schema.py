@@ -175,6 +175,31 @@ def evidence_artifact(evidence_channel="industry"):
     }
 
 
+def canonical_evidence_artifact(evidence_channel="industry"):
+    return {
+        "artifact_id": "evidence_artifact:fixture",
+        "candidate_id": "source_candidate:fixture",
+        "evidence_channel": evidence_channel,
+        "original_url": "https://example.com/original.pdf",
+        "final_url": "https://cdn.example.com/final.pdf",
+        "redirect_chain": ["https://example.com/redirect"],
+        "status_code": 200,
+        "response_headers": {
+            "content-type": "application/pdf",
+            "content-length": "1024",
+        },
+        "media_type": "application/pdf",
+        "byte_count": 1024,
+        "content_sha256": "b" * 64,
+        "fetched_at": "2026-07-18T10:00:00Z",
+        "raw_path": "evidence/raw/bb/" + "b" * 64 + ".pdf",
+        "provenance": PROVENANCE,
+        "publisher_family": "fixture-publisher-family",
+        "upstream_source_id": None,
+        "section_hashes": ["c" * 64],
+    }
+
+
 def upstream_research_ref(upstream_research_layer=None):
     return {
         "upstream_research_ref_id": "upstream_ref:fixture",
@@ -422,6 +447,110 @@ def test_task5_builder_shaped_source_candidate_passes_industry_version(
     )
 
 
+def test_task6_builder_shaped_artifact_passes_standalone_and_industry_version(
+    sample_industry_version,
+):
+    artifact = canonical_evidence_artifact()
+    standalone = {
+        "schema_version": "2.1.0",
+        "artifact_kind": "evidence_artifact",
+        "evidence_artifact": artifact,
+    }
+
+    validate_v2_1_schema_payload("evidence_artifact_v2_1", standalone)
+
+    sample_industry_version["creation_stage"] = "evidence_snapshot"
+    snapshot = sample_industry_version["snapshot"]
+    snapshot["evidence_artifacts"] = [artifact]
+    document = canonical_normalized_document()
+    assessment = canonical_industry_evidence_assessment()
+    document["artifact_id"] = artifact["artifact_id"]
+    assessment["artifact_id"] = artifact["artifact_id"]
+    snapshot["normalized_documents"] = [document]
+    snapshot["industry_evidence_assessments"] = [assessment]
+
+    assert document["artifact_id"] == artifact["artifact_id"]
+    assert assessment["artifact_id"] == artifact["artifact_id"]
+    validate_v2_1_schema_payload(
+        "industry_research_version_v2_1", sample_industry_version
+    )
+
+
+def test_evidence_artifact_rejects_legacy_field_shape():
+    payload = {
+        "schema_version": "2.1.0",
+        "artifact_kind": "evidence_artifact",
+        "evidence_artifact": evidence_artifact(),
+    }
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        validate_v2_1_schema_payload("evidence_artifact_v2_1", payload)
+
+    assert exc_info.value.code == "RESEARCH_PROJECT_V2_1_SCHEMA_INVALID"
+    assert exc_info.value.details["path"] == ["evidence_artifact"]
+
+
+@pytest.mark.parametrize(
+    ("field", "invalid_value", "expected_path"),
+    [
+        ("content_sha256", "B" * 64, ["evidence_artifact", "content_sha256"]),
+        ("raw_path", "/tmp/raw.pdf", ["evidence_artifact", "raw_path"]),
+        ("raw_path", "C:\\tmp\\raw.pdf", ["evidence_artifact", "raw_path"]),
+        ("raw_path", "C:/tmp/raw.pdf", ["evidence_artifact", "raw_path"]),
+        ("raw_path", "C:raw.pdf", ["evidence_artifact", "raw_path"]),
+        ("raw_path", "./raw.pdf", ["evidence_artifact", "raw_path"]),
+        ("raw_path", "evidence/./raw.pdf", ["evidence_artifact", "raw_path"]),
+        ("raw_path", "../raw.pdf", ["evidence_artifact", "raw_path"]),
+        (
+            "raw_path",
+            "evidence/raw/../metadata.json",
+            ["evidence_artifact", "raw_path"],
+        ),
+        (
+            "response_headers",
+            {"set-cookie": "secret=1"},
+            ["evidence_artifact", "response_headers"],
+        ),
+        (
+            "response_headers",
+            {"Authorization": "Bearer secret"},
+            ["evidence_artifact", "response_headers"],
+        ),
+        (
+            "response_headers",
+            {"Authorization ": "Bearer secret"},
+            ["evidence_artifact", "response_headers"],
+        ),
+        (
+            "response_headers",
+            {" authorization": "Bearer secret"},
+            ["evidence_artifact", "response_headers"],
+        ),
+        (
+            "response_headers",
+            {"content-length": 1024},
+            ["evidence_artifact", "response_headers", "content-length"],
+        ),
+    ],
+)
+def test_evidence_artifact_rejects_invalid_hash_path_and_headers(
+    field, invalid_value, expected_path
+):
+    artifact = canonical_evidence_artifact()
+    artifact[field] = invalid_value
+    payload = {
+        "schema_version": "2.1.0",
+        "artifact_kind": "evidence_artifact",
+        "evidence_artifact": artifact,
+    }
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        validate_v2_1_schema_payload("evidence_artifact_v2_1", payload)
+
+    assert exc_info.value.code == "RESEARCH_PROJECT_V2_1_SCHEMA_INVALID"
+    assert exc_info.value.details["path"] == expected_path
+
+
 def test_source_candidate_rejects_unknown_field(sample_industry_version):
     candidate = canonical_source_candidate()
     candidate["discovered_at"] = "2026-07-18T10:00:00Z"
@@ -623,7 +752,7 @@ def test_industry_snapshot_rejects_downstream_investment_status(
         ),
         (
             "evidence_artifacts",
-            evidence_artifact("market"),
+            canonical_evidence_artifact("market"),
             ["snapshot", "evidence_artifacts", 0, "evidence_channel"],
         ),
         (
@@ -856,18 +985,7 @@ def _standalone_payloads():
         "evidence_artifact_v2_1": {
             "schema_version": "2.1.0",
             "artifact_kind": "evidence_artifact",
-            "evidence_artifact": {
-                "evidence_artifact_id": "evidence_artifact:fixture",
-                "project_id": "research_project:fixture-industry",
-                "version_id": "research_version:fixture-industry:0.1.0",
-                "evidence_channel": "industry",
-                "source_candidate_id": "source_candidate:fixture",
-                "source_uri": "https://example.com/source.pdf",
-                "retrieved_at": "2026-07-18T10:00:00Z",
-                "content_hash": "b" * 64,
-                "media_type": "application/pdf",
-                "storage_path": "evidence/raw/bb/fixture.pdf",
-            },
+            "evidence_artifact": canonical_evidence_artifact(),
         },
         "normalized_document_v2_1": {
             "schema_version": "2.1.0",
@@ -939,9 +1057,9 @@ def test_standalone_evidence_artifact_rejects_non_industry_channels(
         (
             "evidence_artifact_v2_1",
             "evidence_artifact",
-            "content_hash",
+            "content_sha256",
             "B" * 64,
-            ["evidence_artifact", "content_hash"],
+            ["evidence_artifact", "content_sha256"],
         ),
         (
             "normalized_document_v2_1",
