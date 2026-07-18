@@ -71,6 +71,34 @@ _REVIEW_STATUSES = {"unreviewed", "pending_review", "reviewed", "rejected"}
 _RFC3339 = re.compile(
     r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$"
 )
+_CHINESE_DOWNSTREAM_SUBJECTS = (
+    "公司",
+    "企业",
+    "发行人",
+    "个股",
+    "股票",
+    "证券",
+    "股权",
+)
+_CHINESE_DOWNSTREAM_ACTIONS = (
+    "推荐",
+    "评级",
+    "排名",
+    "筛选",
+    "画像",
+    "能力",
+    "观察名单",
+    "策略",
+    "估值",
+    "候选",
+    "映射",
+    "评估",
+    "输出",
+    "清单",
+    "名单",
+    "集合",
+    "收集",
+)
 
 
 def _result(code: str, passed: bool, details: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -443,6 +471,22 @@ def _subject_groups(tokens: set[str]) -> set[str]:
     return subjects
 
 
+def _chinese_subject_groups(compact_key: str) -> set[str]:
+    subjects: set[str] = set()
+    if any(subject in compact_key for subject in ("公司", "企业", "发行人")):
+        subjects.add("company")
+    if any(subject in compact_key for subject in ("个股", "股票", "证券", "股权")):
+        subjects.add("stock")
+    return subjects
+
+
+def _has_background_marker(tokens: set[str], compact_key: str) -> bool:
+    return bool(tokens & _background_tokens()) or any(
+        marker in compact_key
+        for marker in ("背景", "参考", "上下文", "范围", "边界", "案例", "示例", "工程", "资料")
+    )
+
+
 def _is_downstream_output_key(
     key: object,
     *,
@@ -450,23 +494,20 @@ def _is_downstream_output_key(
 ) -> bool:
     normalized_key = unicodedata.normalize("NFKC", str(key)).casefold()
     compact_key = re.sub(r"[\W_]+", "", normalized_key)
-    if any(
-        phrase in compact_key
-        for phrase in (
-            "公司评级",
-            "个股推荐",
-            "股票推荐",
-            "股票评级",
-            "发行人排名",
-            "证券推荐",
-        )
+    if (
+        any(subject in compact_key for subject in _CHINESE_DOWNSTREAM_SUBJECTS)
+        and any(action in compact_key for action in _CHINESE_DOWNSTREAM_ACTIONS)
     ):
         return True
     if normalized_key in _OUTPUT_KEYS:
         return True
     tokens = _key_tokens(key)
-    local_subjects = _subject_groups(tokens)
+    local_subjects = _subject_groups(tokens) | _chinese_subject_groups(compact_key)
     effective_subjects = local_subjects | set(background_subjects)
+    if effective_subjects and any(
+        action in compact_key for action in _CHINESE_DOWNSTREAM_ACTIONS
+    ):
+        return True
     company_outputs = {
         "assessment", "candidate", "capability", "capture", "collection", "list", "map",
         "mapping", "output", "profile", "ranking", "rating", "screen",
@@ -506,10 +547,17 @@ def _output_paths(
             ):
                 found.append(list(child_path))
             key_tokens = _key_tokens(key)
+            compact_key = re.sub(
+                r"[\W_]+",
+                "",
+                unicodedata.normalize("NFKC", str(key)).casefold(),
+            )
             child_background_subjects = background_subjects
-            if key_tokens & _background_tokens():
+            if _has_background_marker(key_tokens, compact_key):
                 child_background_subjects = frozenset(
-                    set(background_subjects) | _subject_groups(key_tokens)
+                    set(background_subjects)
+                    | _subject_groups(key_tokens)
+                    | _chinese_subject_groups(compact_key)
                 )
             found.extend(
                 _output_paths(

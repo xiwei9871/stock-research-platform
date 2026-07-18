@@ -358,3 +358,58 @@ def test_downstream_taxonomy_rejects_stock_notes_only_outside_background() -> No
     identity, version = _pilot()
     version["snapshot"]["background_stock_notes"] = []
     assert "INDUSTRY_NO_COMPANY_OR_STOCK_OUTPUTS" not in _failed_checks(identity, version)
+
+
+@pytest.mark.parametrize(
+    "forbidden_key",
+    [
+        "公司推荐",
+        "个股评级",
+        "公司排名",
+        "个股排名",
+        "企业画像",
+        "发行人筛选",
+        "证券估值",
+        "股票观察名单",
+    ],
+)
+def test_downstream_taxonomy_rejects_chinese_subject_action_matrix(
+    forbidden_key: str,
+) -> None:
+    identity, version = _pilot()
+    version["snapshot"][forbidden_key] = []
+    assert "INDUSTRY_NO_COMPANY_OR_STOCK_OUTPUTS" in _failed_checks(identity, version)
+
+
+@pytest.mark.parametrize(
+    "allowed_key",
+    [
+        "上市公司数量",
+        "公司政策背景",
+        "公司就业总量",
+        "股票交易所代码",
+        "工程公司案例参考",
+    ],
+)
+def test_downstream_taxonomy_allows_chinese_statistics_and_background_fields(
+    allowed_key: str,
+) -> None:
+    identity, version = _pilot()
+    version["snapshot"][allowed_key] = 1
+    assert "INDUSTRY_NO_COMPANY_OR_STOCK_OUTPUTS" not in _failed_checks(identity, version)
+
+
+@pytest.mark.parametrize(
+    "nested_output",
+    [
+        {"公司背景参考": {"评级": []}},
+        {"工程公司案例参考": {"画像": {}}},
+        {"股票背景资料": {"推荐": []}},
+    ],
+)
+def test_downstream_taxonomy_propagates_chinese_subject_to_nested_action(
+    nested_output: dict,
+) -> None:
+    identity, version = _pilot()
+    version["snapshot"]["nested"] = nested_output
+    assert "INDUSTRY_NO_COMPANY_OR_STOCK_OUTPUTS" in _failed_checks(identity, version)
