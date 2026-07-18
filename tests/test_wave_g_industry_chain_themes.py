@@ -342,6 +342,7 @@ G4_MAPPING_CONTRACTS = {
 G4_BUSINESS_STAGE_CONTRACTS = {
     company_code: "primary_business" for company_code in G4_MAPPING_CONTRACTS
 }
+G4_BUSINESS_STAGE_CONTRACTS["002255.SZ"] = "reserve_stage"
 G4_BUSINESS_STAGE_CONTRACTS["002318.SZ"] = "reserve_stage"
 G4_FACT_LOCATOR_CONTRACTS = {
     "600875.SH": (
@@ -360,9 +361,9 @@ G4_FACT_LOCATOR_CONTRACTS = {
         "PDF printed p.16 / PDF_PAGE=16 / PDF第16页（订单与首件制造）",
     ),
     "002318.SZ": (
-        "PDF printed p.11 / PDF_PAGE=11 / PDF第11页（核电应用与客户）",
-        "PDF printed p.15 / PDF_PAGE=15 / PDF第15页（多用途电力设备收入）",
-        "PDF printed p.12 / PDF_PAGE=12 / PDF第12页（报告期核电取证）",
+        "PDF printed p.10 / PDF_PAGE=11 / PDF第10页（核电应用与客户）",
+        "PDF printed p.14 / PDF_PAGE=15 / PDF第14页（多用途电力设备收入）",
+        "PDF printed p.11 / PDF_PAGE=12 / PDF第11页（报告期核电取证）",
     ),
 }
 G4_REVENUE_ROLE_CONTRACTS = {
@@ -373,7 +374,7 @@ G4_REVENUE_ROLE_CONTRACTS = {
     "000922.SZ": "revenue_materiality",
     "002438.SZ": "revenue_materiality",
     "000777.SZ": "revenue_materiality",
-    "002255.SZ": "revenue_materiality",
+    "002255.SZ": "revenue_boundary",
     "603169.SH": "revenue_boundary",
     "002318.SZ": "revenue_boundary",
 }
@@ -1433,7 +1434,7 @@ def test_nuclear_power_equipment_g4_artifacts_are_reviewed_and_meet_wave_gate() 
         "primary_sources": 10,
         "claims": len(theme["claims"]),
         "accepted_source_backed_claims": len(theme["claims"]),
-        "reviewed_mappings": 9,
+        "reviewed_mappings": 8,
     }
 
 
@@ -1493,7 +1494,7 @@ def test_nuclear_power_equipment_g4_uses_direct_pages_not_generic_or_future_plan
         assert all(value not in locator for value in forbidden)
 
 
-def test_nuclear_power_equipment_g4_visible_pool_excludes_reserve_and_empty_n04() -> None:
+def test_nuclear_power_equipment_g4_visible_pool_excludes_reserves_and_calibrates_n01() -> None:
     theme = load_json(G4_THEME_PATH)
     mapping = load_json(G4_MAPPING_PATH)
     effective = {
@@ -1503,8 +1504,8 @@ def test_nuclear_power_equipment_g4_visible_pool_excludes_reserve_and_empty_n04(
         and row["business_stage"] == "primary_business"
         and row["business_materiality"] not in {"reserve_only", "concept_only"}
     }
-    assert len(effective) == 9
-    assert "002318.SZ" not in effective
+    assert len(effective) == 8
+    assert {"002255.SZ", "002318.SZ"}.isdisjoint(effective)
     nodes = {row["node_id"]: row for row in theme["nodes"]}
     visible_codes = {
         code for node in nodes.values() for code in node["related_stock_codes"]
@@ -1515,6 +1516,22 @@ def test_nuclear_power_equipment_g4_visible_pool_excludes_reserve_and_empty_n04(
     assert conventional["domestic_players"] == []
     assert conventional["node_review_status"] == "needs_evidence"
     assert conventional["evidence_strength"] == 1
+    nuclear_island = nodes["reactor_pressure_vessel_steam_generator"]
+    assert set(nuclear_island["related_stock_codes"]) == {
+        "600875.SH", "601727.SH", "601106.SH", "603169.SH",
+    }
+    core_n01 = {
+        code for code, row in effective.items()
+        if row["mapped_node_id"] == "reactor_pressure_vessel_steam_generator"
+        and row["bottleneck_relevance"] == "core"
+    }
+    assert core_n01 == {"600875.SH", "601727.SH", "601106.SH"}
+    assert effective["603169.SH"]["bottleneck_relevance"] == "adjacent"
+    assert effective["603169.SH"]["confidence"] <= 0.85
+    assert "非反应堆压力容器或蒸汽发生器直证" in effective["603169.SH"]["notes"]
+    all_by_code = {row["company_code"]: row for row in mapping["company_mappings"]}
+    assert "research lead" in all_by_code["002255.SZ"]["notes"]
+    assert "海陆重工堆内构件仅作research lead" in nuclear_island["description"]
 
 
 def test_nuclear_power_equipment_g4_rejects_fusion_generic_nuclear_and_revenue_false_positives() -> None:
@@ -1629,6 +1646,7 @@ def test_nuclear_power_equipment_g4_matrix_keeps_empty_service_nodes_readable() 
     matrix = load_json(G4_MATRIX_PATH)
     nodes = {row["node_id"]: row for row in theme["nodes"]}
     rows = {row["node_id"]: row for row in matrix["node_evidence_matrix"]}
+    claims = {row["claim_id"]: row for row in theme["claims"]}
     assert set(rows) == G4_L4
     assert len({row["rationale"] for row in rows.values()}) == 9
     assert all(row["next_evidence_needed"] for row in rows.values())
@@ -1648,6 +1666,26 @@ def test_nuclear_power_equipment_g4_matrix_keeps_empty_service_nodes_readable() 
     validation = rows["project_approval_orders_delivery_revenue_validation"]
     assert validation["accepted_source_ids"]
     assert validation["supported_claim_ids"]
-    assert validation["node_review_status"] == "reviewed"
-    assert "项目核准" in validation["rationale"]
-    assert "确认收入" in validation["next_evidence_needed"]
+    assert validation["evidence_strength_after"] == 4
+    assert validation["node_review_status"] == "needs_evidence"
+    assert validation["evidence_gap_status"] == "evidence_gap"
+    assert validation["value_capture_score_review_status"] == "provisional"
+    assert validation["bottleneck_score_review_status"] == "provisional"
+    assert "跨公司" in validation["rationale"]
+    assert "完整闭环" not in validation["rationale"]
+    for stage in ("订单", "制造", "交付", "验收", "收入"):
+        assert stage in "".join(
+            claims[claim_id]["claim_text"]
+            for claim_id in validation["supported_claim_ids"]
+        )
+    for gap in ("单一项目", "项目核准", "维护", "验收", "确认收入"):
+        assert gap in validation["next_evidence_needed"]
+
+    nuclear_island = rows["reactor_pressure_vessel_steam_generator"]
+    assert nuclear_island["evidence_strength_after"] == 4
+    assert nuclear_island["node_review_status"] == "needs_evidence"
+    assert nuclear_island["evidence_gap_status"] == "evidence_gap"
+    assert nuclear_island["value_capture_score_review_status"] == "provisional"
+    assert nuclear_island["bottleneck_score_review_status"] == "provisional"
+    assert "海陆" in nuclear_island["rationale"]
+    assert "兰石" in nuclear_island["rationale"]
