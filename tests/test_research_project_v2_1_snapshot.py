@@ -596,3 +596,163 @@ def test_raw_live_verification_detects_same_inode_content_mutation(
         candidate(), transport=Transport([response()]), resolver=Resolver(),
         layout=layout(tmp_path), fetched_at=FETCHED_AT, provenance=PROVENANCE,
     ))
+
+
+def test_raw_final_dir_fsync_failure_rolls_back_created_final(
+    tmp_path: Path, monkeypatch
+) -> None:
+    import stock_research.research_project_v2_1.snapshot as module
+    original_link = module.os.link
+    original_fsync = module.os.fsync
+    state = {"raw_final_fd": None, "failed": False}
+    def link(*args, **kwargs):
+        result = original_link(*args, **kwargs)
+        if str(args[1]).endswith(".pdf"):
+            state["raw_final_fd"] = kwargs["dst_dir_fd"]
+        return result
+    def fsync(descriptor):
+        if descriptor == state["raw_final_fd"] and not state["failed"]:
+            state["failed"] = True
+            raise OSError("injected raw final-dir fsync failure")
+        return original_fsync(descriptor)
+    monkeypatch.setattr(module.os, "link", link)
+    monkeypatch.setattr(module.os, "fsync", fsync)
+    effective = layout(tmp_path)
+    assert "STORAGE" in error_code(lambda: snapshot_candidate(
+        candidate(), transport=Transport([response()]), resolver=Resolver(),
+        layout=effective, fetched_at=FETCHED_AT, provenance=PROVENANCE,
+    ))
+    assert not list(effective.evidence_raw_dir.rglob("*.pdf"))
+    assert not [path for path in effective.root.rglob("*.tmp") if path.is_file()]
+
+
+def test_raw_binding_failure_rolls_back_only_a_created_final(
+    tmp_path: Path, monkeypatch
+) -> None:
+    import stock_research.research_project_v2_1.snapshot as module
+    original = module._verify_live
+    monkeypatch.setattr(
+        module,
+        "_verify_live",
+        lambda path, *args: False if path.parent.name == "raw" else original(path, *args),
+    )
+    effective = layout(tmp_path)
+    assert "STORAGE" in error_code(lambda: snapshot_candidate(
+        candidate(), transport=Transport([response()]), resolver=Resolver(),
+        layout=effective, fetched_at=FETCHED_AT, provenance=PROVENANCE,
+    ))
+    assert not list(effective.evidence_raw_dir.rglob("*.pdf"))
+
+
+def test_raw_binding_failure_never_deletes_reused_existing_raw(
+    tmp_path: Path, monkeypatch
+) -> None:
+    effective = layout(tmp_path)
+    first = snapshot_candidate(
+        candidate(), transport=Transport([response()]), resolver=Resolver(),
+        layout=effective, fetched_at=FETCHED_AT, provenance=PROVENANCE,
+    )
+    raw = Path(first["raw_path"])
+    import stock_research.research_project_v2_1.snapshot as module
+    original = module._verify_live
+    monkeypatch.setattr(
+        module,
+        "_verify_live",
+        lambda path, *args: False if path.parent.name == "raw" else original(path, *args),
+    )
+    assert "STORAGE" in error_code(lambda: snapshot_candidate(
+        candidate(), transport=Transport([response()]), resolver=Resolver(),
+        layout=effective, fetched_at=FETCHED_AT, provenance=PROVENANCE,
+    ))
+    assert raw.read_bytes() == b"%PDF fixture"
+
+
+def test_raw_rollback_skips_and_preserves_a_replacement(
+    tmp_path: Path, monkeypatch
+) -> None:
+    import stock_research.research_project_v2_1.snapshot as module
+    replacement = b"concurrent replacement"
+    def replace_then_fail(path, held_chain, final_name, held_final, expected):
+        if path.parent.name == "raw":
+            target = path / final_name
+            target.unlink()
+            target.write_bytes(replacement)
+            return False
+        return True
+    monkeypatch.setattr(module, "_verify_live", replace_then_fail)
+    effective = layout(tmp_path)
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        snapshot_candidate(
+            candidate(), transport=Transport([response()]), resolver=Resolver(),
+            layout=effective, fetched_at=FETCHED_AT, provenance=PROVENANCE,
+        )
+    assert exc_info.value.details["rollback"] == "skipped"
+    assert next(effective.evidence_raw_dir.rglob("*.pdf")).read_bytes() == replacement
+
+
+def test_metadata_failure_keeps_complete_published_raw(
+    tmp_path: Path, monkeypatch
+) -> None:
+    import stock_research.research_project_v2_1.snapshot as module
+    monkeypatch.setattr(
+        module,
+        "_publish_bytes",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            module._storage_error("injected metadata failure")
+        ),
+    )
+    effective = layout(tmp_path)
+    assert "STORAGE" in error_code(lambda: snapshot_candidate(
+        candidate(), transport=Transport([response()]), resolver=Resolver(),
+        layout=effective, fetched_at=FETCHED_AT, provenance=PROVENANCE,
+    ))
+    raw = next(effective.evidence_raw_dir.rglob("*.pdf"))
+    assert raw.read_bytes() == b"%PDF fixture"
+    assert not [path for path in effective.root.rglob("*.tmp") if path.is_file()]
+
+
+def _inject_raw_temp_cleanup_fsync_failure(module, monkeypatch) -> None:
+    original_unlink = module.os.unlink
+    original_fsync = module.os.fsync
+    state = {"cleanup_fd": None, "failed": False}
+    def unlink(name, *args, **kwargs):
+        result = original_unlink(name, *args, **kwargs)
+        if ".snapshot." in str(name):
+            state["cleanup_fd"] = kwargs.get("dir_fd")
+        return result
+    def fsync(descriptor):
+        if descriptor == state["cleanup_fd"] and not state["failed"]:
+            state["failed"] = True
+            raise OSError("injected cleanup fsync failure")
+        return original_fsync(descriptor)
+    monkeypatch.setattr(module.os, "unlink", unlink)
+    monkeypatch.setattr(module.os, "fsync", fsync)
+
+
+def test_cleanup_failure_does_not_mask_primary_fetch_error(
+    tmp_path: Path, monkeypatch
+) -> None:
+    import stock_research.research_project_v2_1.snapshot as module
+    _inject_raw_temp_cleanup_fsync_failure(module, monkeypatch)
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        snapshot_candidate(
+            candidate(), transport=Transport([response(body=b"abcdef")]),
+            resolver=Resolver(), layout=layout(tmp_path), fetched_at=FETCHED_AT,
+            provenance=PROVENANCE, max_bytes=5,
+        )
+    assert exc_info.value.code == "RESEARCH_PROJECT_V2_1_FETCH_TOO_LARGE"
+    assert any("cleanup" in note for note in getattr(exc_info.value, "__notes__", []))
+
+
+def test_cleanup_only_failure_has_stable_storage_code(
+    tmp_path: Path, monkeypatch
+) -> None:
+    import stock_research.research_project_v2_1.snapshot as module
+    _inject_raw_temp_cleanup_fsync_failure(module, monkeypatch)
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        snapshot_candidate(
+            candidate(), transport=Transport([response()]), resolver=Resolver(),
+            layout=layout(tmp_path), fetched_at=FETCHED_AT, provenance=PROVENANCE,
+        )
+    assert exc_info.value.code == "RESEARCH_PROJECT_V2_1_SNAPSHOT_STORAGE_FAILED"
+    assert isinstance(exc_info.value.__cause__, OSError)

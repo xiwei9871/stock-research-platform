@@ -137,6 +137,10 @@ def _storage_error(reason: str, **details: object) -> ResearchProjectV2Error:
     return _error("SNAPSHOT_STORAGE_ERROR", reason, **details)
 
 
+def _storage_failed(reason: str, **details: object) -> ResearchProjectV2Error:
+    return _error("SNAPSHOT_STORAGE_FAILED", reason, **details)
+
+
 def _immutability(reason: str, **details: object) -> ResearchProjectV2Error:
     return _error("SNAPSHOT_IMMUTABILITY_VIOLATION", reason, **details)
 
@@ -593,6 +597,41 @@ def _unlink_temp_if_bound(directory_fd: int, name: str, expected: os.stat_result
         pass
 
 
+def _rollback_created_final(
+    directory_fd: int, name: str, expected: os.stat_result
+) -> tuple[str, str | None]:
+    try:
+        entry = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+    except FileNotFoundError:
+        return "skipped", "final name already absent"
+    except OSError as exc:
+        return "failed", type(exc).__name__
+    if not stat.S_ISREG(entry.st_mode) or not _same_inode(entry, expected):
+        return "skipped", "final name no longer matches created inode"
+    try:
+        os.unlink(name, dir_fd=directory_fd)
+        os.fsync(directory_fd)
+        return "removed", None
+    except OSError as exc:
+        return "failed", type(exc).__name__
+
+
+def _record_rollback(
+    error: ResearchProjectV2Error, outcome: str, detail: str | None
+) -> None:
+    error.details["rollback"] = outcome
+    if detail is not None:
+        error.details["rollback_detail"] = detail
+
+
+def _stable_cleanup_error(reason: str, error: BaseException) -> ResearchProjectV2Error:
+    if isinstance(error, ResearchProjectV2Error):
+        return error
+    wrapped = _storage_failed(reason, exception_type=type(error).__name__)
+    wrapped.__cause__ = error
+    return wrapped
+
+
 def _verify_live(
     path: Path,
     held_chain: list[int],
@@ -640,14 +679,31 @@ class _RawTemp:
     inode: os.stat_result | None = None
 
     def cleanup(self) -> None:
+        cleanup_errors: list[BaseException] = []
         try:
             if self.inode is None:
                 self.inode = os.fstat(self.fd)
             _unlink_temp_if_bound(self.directory_fd, self.name, self.inode)
-        finally:
+        except BaseException as exc:
+            cleanup_errors.append(exc)
+        try:
             os.close(self.fd)
-            for descriptor in reversed(self.chain):
+        except OSError as exc:
+            cleanup_errors.append(exc)
+        for descriptor in reversed(self.chain):
+            try:
                 os.close(descriptor)
+            except OSError as exc:
+                cleanup_errors.append(exc)
+        if cleanup_errors:
+            error = _stable_cleanup_error(
+                "raw temporary cleanup failed", cleanup_errors[0]
+            )
+            for additional in cleanup_errors[1:]:
+                error.add_note(
+                    f"additional cleanup failure: {type(additional).__name__}"
+                )
+            raise error
 
 
 def _new_raw_temp(layout: LayeredResearchLayout) -> _RawTemp:
@@ -666,6 +722,7 @@ def _publish_raw(temp: _RawTemp, *, layout: LayeredResearchLayout, digest: str, 
     target = final_dir / final_name
     chain: list[int] = []
     held_fd: int | None = None
+    created = False
     try:
         chain, names = _open_dir_chain(final_dir)
         if not _chain_bound(chain, names) or not _chain_bound(temp.chain, temp.names):
@@ -674,7 +731,6 @@ def _publish_raw(temp: _RawTemp, *, layout: LayeredResearchLayout, digest: str, 
         entry = os.stat(temp.name, dir_fd=temp.directory_fd, follow_symlinks=False)
         if not stat.S_ISREG(temp.inode.st_mode) or not _same_inode(temp.inode, entry):
             raise _storage_error("raw temporary binding changed")
-        created = False
         try:
             os.link(temp.name, final_name, src_dir_fd=temp.directory_fd, dst_dir_fd=chain[-1], follow_symlinks=False)
             created = True
@@ -702,6 +758,20 @@ def _publish_raw(temp: _RawTemp, *, layout: LayeredResearchLayout, digest: str, 
         ):
             raise _storage_error("raw final binding changed", path=str(target))
         return target
+    except BaseException as exc:
+        if isinstance(exc, ResearchProjectV2Error):
+            error = exc
+        else:
+            error = _storage_error("raw publication failed", path=str(target))
+            error.__cause__ = exc
+        if created and temp.inode is not None and chain:
+            outcome, detail = _rollback_created_final(
+                chain[-1], final_name, temp.inode
+            )
+            _record_rollback(error, outcome, detail)
+        if error is exc:
+            raise
+        raise error from exc
     finally:
         if held_fd is not None:
             os.close(held_fd)
@@ -716,6 +786,7 @@ def _publish_bytes(directory: Path, final_name: str, data: bytes) -> Path:
     temp_name: str | None = None
     temp_inode: os.stat_result | None = None
     held_fd: int | None = None
+    primary_error: BaseException | None = None
     try:
         chain, names = _open_dir_chain(directory)
         if not _chain_bound(chain, names):
@@ -740,20 +811,50 @@ def _publish_bytes(directory: Path, final_name: str, data: bytes) -> Path:
             raise _storage_error("published metadata inode changed", path=str(target))
         if _read_all(held_fd) != data:
             raise _immutability("metadata path conflict", path=str(target))
-        _unlink_temp_if_bound(chain[-1], temp_name, temp_inode)
+        try:
+            _unlink_temp_if_bound(chain[-1], temp_name, temp_inode)
+        except OSError as exc:
+            raise _storage_failed("metadata temporary cleanup failed") from exc
         temp_name = None
         if not _chain_bound(chain, names) or not _verify_live(directory, chain, final_name, held, data):
             raise _storage_error("metadata final binding changed", path=str(target))
         return target
+    except BaseException as exc:
+        primary_error = exc
+        raise
     finally:
+        cleanup_errors: list[BaseException] = []
         if held_fd is not None:
-            os.close(held_fd)
+            try:
+                os.close(held_fd)
+            except OSError as exc:
+                cleanup_errors.append(exc)
         if temp_fd is not None:
-            os.close(temp_fd)
+            try:
+                os.close(temp_fd)
+            except OSError as exc:
+                cleanup_errors.append(exc)
         if temp_name is not None and temp_inode is not None and chain:
-            _unlink_temp_if_bound(chain[-1], temp_name, temp_inode)
+            try:
+                _unlink_temp_if_bound(chain[-1], temp_name, temp_inode)
+            except BaseException as exc:
+                cleanup_errors.append(exc)
         for descriptor in reversed(chain):
-            os.close(descriptor)
+            try:
+                os.close(descriptor)
+            except OSError as exc:
+                cleanup_errors.append(exc)
+        if cleanup_errors:
+            cleanup = _stable_cleanup_error(
+                "metadata temporary cleanup failed", cleanup_errors[0]
+            )
+            if primary_error is not None:
+                primary_error.add_note(
+                    "cleanup failure preserved: "
+                    f"{cleanup.code}"
+                )
+            else:
+                raise cleanup
 
 
 def snapshot_candidate(
@@ -841,6 +942,7 @@ def snapshot_candidate(
     raw_temp = _new_raw_temp(effective_layout)
     digest = sha256()
     byte_count = 0
+    primary_error: BaseException | None = None
     try:
         try:
             for chunk in final_response.chunks:
@@ -916,6 +1018,18 @@ def snapshot_candidate(
             "raw_path": raw_target,
             "metadata_path": metadata_target,
         }
+    except BaseException as exc:
+        primary_error = exc
+        raise
     finally:
         _close_chunks(final_response)
-        raw_temp.cleanup()
+        try:
+            raw_temp.cleanup()
+        except BaseException as cleanup_error:
+            if primary_error is not None:
+                primary_error.add_note(
+                    "cleanup failure preserved: "
+                    f"{getattr(cleanup_error, 'code', type(cleanup_error).__name__)}"
+                )
+            else:
+                raise
