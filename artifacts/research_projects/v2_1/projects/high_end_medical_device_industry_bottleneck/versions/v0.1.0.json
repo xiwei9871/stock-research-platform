@@ -1,0 +1,2001 @@
+{
+  "artifact_kind": "industry_research_version",
+  "change_reason": "承接R1主题基线并定义产业层瓶颈研究。",
+  "change_summary": "建立产业层证据搜索与证伪设计。",
+  "content_hash": "cd951087ef2ed349cf06d4cf0b398b9cbc4eb3445c6f894bd07d86713390f6e3",
+  "created_at": "2026-07-18T00:00:00Z",
+  "created_by": "Codex",
+  "creation_stage": "research_design",
+  "incorporated_event_ids": [],
+  "parent_version_id": null,
+  "project_id": "research_project:high_end_medical_device_industry_bottleneck",
+  "schema_version": "2.1.0",
+  "semantic_version": "0.1.0",
+  "snapshot": {
+    "causal_edges": [
+      {
+        "boundary_condition": "目标适应证和监管路径明确。",
+        "causal_edge_id": "causal_edge:high_end_medical_device_industry_bottleneck:technical_validation_registration_to_clinical_workflow_procurement_payment",
+        "confidence": 0.35,
+        "effect_polarity": "positive",
+        "feedback_loop_id": null,
+        "from_causal_node_id": "causal_node:high_end_medical_device_industry_bottleneck:technical_validation_registration",
+        "lifecycle_status": "active",
+        "mechanism_text": "技术性能必须形成注册临床证据并满足监管要求才能进入医院流程。",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:high_end_medical_device_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "relation_type": "may_cause",
+        "strength": 0.4,
+        "supporting_claim_ids": [
+          "claim:high_end_medical_device_industry_bottleneck:primary"
+        ],
+        "time_lag": "one_registration_cycle",
+        "to_causal_node_id": "causal_node:high_end_medical_device_industry_bottleneck:clinical_workflow_procurement_payment",
+        "validation_metric_ids": [
+          "metric:high_end_medical_device_industry_bottleneck:primary"
+        ]
+      },
+      {
+        "boundary_condition": "医院采购与支付政策保持可识别。",
+        "causal_edge_id": "causal_edge:high_end_medical_device_industry_bottleneck:clinical_workflow_procurement_payment_to_training_service_installed_base_activation",
+        "confidence": 0.35,
+        "effect_polarity": "positive",
+        "feedback_loop_id": null,
+        "from_causal_node_id": "causal_node:high_end_medical_device_industry_bottleneck:clinical_workflow_procurement_payment",
+        "lifecycle_status": "active",
+        "mechanism_text": "获批后的临床workflow适配影响招采、支付和科室采用。",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:high_end_medical_device_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "relation_type": "may_cause",
+        "strength": 0.4,
+        "supporting_claim_ids": [
+          "claim:high_end_medical_device_industry_bottleneck:primary"
+        ],
+        "time_lag": "two_to_four_quarters_after_approval",
+        "to_causal_node_id": "causal_node:high_end_medical_device_industry_bottleneck:training_service_installed_base_activation",
+        "validation_metric_ids": [
+          "metric:high_end_medical_device_industry_bottleneck:primary"
+        ]
+      },
+      {
+        "boundary_condition": "按安装验收设备跟踪使用。",
+        "causal_edge_id": "causal_edge:high_end_medical_device_industry_bottleneck:training_service_installed_base_activation_to_hospital_access_reimbursement_supply_constraint",
+        "confidence": 0.35,
+        "effect_polarity": "positive",
+        "feedback_loop_id": null,
+        "from_causal_node_id": "causal_node:high_end_medical_device_industry_bottleneck:training_service_installed_base_activation",
+        "lifecycle_status": "active",
+        "mechanism_text": "中标和安装只有配合培训服务才能转化为活跃装机。",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:high_end_medical_device_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "relation_type": "may_cause",
+        "strength": 0.4,
+        "supporting_claim_ids": [
+          "claim:high_end_medical_device_industry_bottleneck:primary"
+        ],
+        "time_lag": "twelve_months_after_installation_acceptance",
+        "to_causal_node_id": "causal_node:high_end_medical_device_industry_bottleneck:hospital_access_reimbursement_supply_constraint",
+        "validation_metric_ids": [
+          "metric:high_end_medical_device_industry_bottleneck:primary"
+        ]
+      },
+      {
+        "boundary_condition": "排除一次性备货且以回款和复购确认。",
+        "causal_edge_id": "causal_edge:high_end_medical_device_industry_bottleneck:hospital_access_reimbursement_supply_constraint_to_recurring_revenue_scale",
+        "confidence": 0.35,
+        "effect_polarity": "conditional",
+        "feedback_loop_id": null,
+        "from_causal_node_id": "causal_node:high_end_medical_device_industry_bottleneck:hospital_access_reimbursement_supply_constraint",
+        "lifecycle_status": "active",
+        "mechanism_text": "准入、支付、供应链和服务响应决定活跃装机能否形成持续收入。",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:high_end_medical_device_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "relation_type": "may_cause",
+        "strength": 0.4,
+        "supporting_claim_ids": [
+          "claim:high_end_medical_device_industry_bottleneck:primary"
+        ],
+        "time_lag": "four_quarters",
+        "to_causal_node_id": "causal_node:high_end_medical_device_industry_bottleneck:recurring_revenue_scale",
+        "validation_metric_ids": [
+          "metric:high_end_medical_device_industry_bottleneck:primary"
+        ]
+      }
+    ],
+    "causal_nodes": [
+      {
+        "causal_node_id": "causal_node:high_end_medical_device_industry_bottleneck:technical_validation_registration",
+        "lifecycle_status": "active",
+        "node_kind": "trigger",
+        "node_text": "产品技术验证、注册临床证据与监管获批",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:high_end_medical_device_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        }
+      },
+      {
+        "causal_node_id": "causal_node:high_end_medical_device_industry_bottleneck:clinical_workflow_procurement_payment",
+        "lifecycle_status": "active",
+        "node_kind": "mechanism",
+        "node_text": "clinical workflow采用、医院准入、招采与支付路径",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:high_end_medical_device_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        }
+      },
+      {
+        "causal_node_id": "causal_node:high_end_medical_device_industry_bottleneck:training_service_installed_base_activation",
+        "lifecycle_status": "active",
+        "node_kind": "outcome",
+        "node_text": "安装验收、医生培训、服务覆盖与装机激活",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:high_end_medical_device_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        }
+      },
+      {
+        "causal_node_id": "causal_node:high_end_medical_device_industry_bottleneck:hospital_access_reimbursement_supply_constraint",
+        "lifecycle_status": "active",
+        "node_kind": "constraint",
+        "node_text": "医院准入、支付回款、供应链与服务响应约束",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:high_end_medical_device_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        }
+      },
+      {
+        "causal_node_id": "causal_node:high_end_medical_device_industry_bottleneck:recurring_revenue_scale",
+        "lifecycle_status": "active",
+        "node_kind": "outcome",
+        "node_text": "活跃装机、耗材服务复购与持续收入规模化",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:high_end_medical_device_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        }
+      }
+    ],
+    "claim_relations": [
+      {
+        "created_in_version": "research_version:high_end_medical_device_industry_bottleneck:0.1.0",
+        "from_claim_id": "claim:high_end_medical_device_industry_bottleneck:counter",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:high_end_medical_device_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "relation_id": "claim_relation:high_end_medical_device_industry_bottleneck:counter",
+        "relation_summary": "替代解释挑战主假设。",
+        "relation_type": "challenges",
+        "to_claim_id": "claim:high_end_medical_device_industry_bottleneck:primary"
+      }
+    ],
+    "claims": [
+      {
+        "claim_id": "claim:high_end_medical_device_industry_bottleneck:primary",
+        "claim_kind": "primary",
+        "claim_status": "hypothesis",
+        "claim_text": "价值捕获可能依赖注册、医院准入、活跃装机或手术检查量、耗材服务与回款链，而非获批本身，尚待验证。",
+        "confidence": 0.38,
+        "context_reference_ids": [
+          "reference:high_end_medical_device_industry_bottleneck:background",
+          "reference:high_end_medical_device_industry_bottleneck:scope_context"
+        ],
+        "created_in_version": "research_version:high_end_medical_device_industry_bottleneck:0.1.0",
+        "epistemic_type": "hypothesis",
+        "importance": 0.95,
+        "invalidation_condition_ids": [
+          "condition:high_end_medical_device_industry_bottleneck:primary"
+        ],
+        "lifecycle_status": "active",
+        "linked_question_ids": [
+          "question:high_end_medical_device_industry_bottleneck:primary",
+          "question:high_end_medical_device_industry_bottleneck:mechanism",
+          "question:high_end_medical_device_industry_bottleneck:constraint",
+          "question:high_end_medical_device_industry_bottleneck:economics",
+          "question:high_end_medical_device_industry_bottleneck:validation"
+        ],
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:high_end_medical_device_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "supersedes_claim_id": null,
+        "validation_metric_ids": [
+          "metric:high_end_medical_device_industry_bottleneck:primary"
+        ]
+      },
+      {
+        "claim_id": "claim:high_end_medical_device_industry_bottleneck:counter",
+        "claim_kind": "counter",
+        "claim_status": "under_test",
+        "claim_text": "临床优势可能被采购支付、培训服务与供应链约束阻断。",
+        "confidence": 0.32,
+        "context_reference_ids": [
+          "reference:high_end_medical_device_industry_bottleneck:background"
+        ],
+        "created_in_version": "research_version:high_end_medical_device_industry_bottleneck:0.1.0",
+        "epistemic_type": "hypothesis",
+        "importance": 0.84,
+        "invalidation_condition_ids": [],
+        "lifecycle_status": "active",
+        "linked_question_ids": [
+          "question:high_end_medical_device_industry_bottleneck:counterfactual"
+        ],
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:high_end_medical_device_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "supersedes_claim_id": null,
+        "validation_metric_ids": []
+      }
+    ],
+    "conclusion_status": "unavailable",
+    "conflict_summaries": [],
+    "evidence_artifacts": [],
+    "evidence_assessments": [],
+    "evidence_requirements": [
+      {
+        "collection_status": "not_started",
+        "conflict_search_required": true,
+        "minimum_coverage": 2,
+        "primary_source_required": true,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:high_end_medical_device_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_to_resolve": "high_end_medical_device_industry_bottleneck::primary::高端医疗器械从技术验证走向规模商业化，关键瓶颈在产品性能、监管准入、临床采用还是供应链与服务能力？",
+        "required_freshness": "within_24_months",
+        "required_independence": "independent",
+        "required_scope": "高端医疗器械从技术性能、注册临床到医院采购支付和clinical workflow采用。",
+        "required_source_classes": [
+          "technical_standard",
+          "engineering_document",
+          "independent_secondary"
+        ],
+        "requirement_id": "requirement:high_end_medical_device_industry_bottleneck:question:primary",
+        "requirement_type": "validation",
+        "satisfaction_status": "unsatisfied",
+        "target_id": "question:high_end_medical_device_industry_bottleneck:primary",
+        "target_type": "research_question"
+      },
+      {
+        "collection_status": "not_started",
+        "conflict_search_required": true,
+        "minimum_coverage": 2,
+        "primary_source_required": true,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:high_end_medical_device_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_to_resolve": "high_end_medical_device_industry_bottleneck::mechanism::产品性能与clinical workflow优势如何转化为注册临床证据、医生使用效率和患者结局？",
+        "required_freshness": "within_24_months",
+        "required_independence": "independent",
+        "required_scope": "高端医疗器械从技术性能、注册临床到医院采购支付和clinical workflow采用。",
+        "required_source_classes": [
+          "technical_standard",
+          "engineering_document",
+          "independent_secondary"
+        ],
+        "requirement_id": "requirement:high_end_medical_device_industry_bottleneck:question:mechanism",
+        "requirement_type": "validation",
+        "satisfaction_status": "unsatisfied",
+        "target_id": "question:high_end_medical_device_industry_bottleneck:mechanism",
+        "target_type": "research_question"
+      },
+      {
+        "collection_status": "not_started",
+        "conflict_search_required": true,
+        "minimum_coverage": 2,
+        "primary_source_required": true,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:high_end_medical_device_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_to_resolve": "high_end_medical_device_industry_bottleneck::constraint::注册临床、监管审评、医院准入、招采支付、培训服务与供应链中哪一环节限制商业化？",
+        "required_freshness": "within_24_months",
+        "required_independence": "independent",
+        "required_scope": "高端医疗器械从技术性能、注册临床到医院采购支付和clinical workflow采用。",
+        "required_source_classes": [
+          "technical_standard",
+          "engineering_document",
+          "independent_secondary"
+        ],
+        "requirement_id": "requirement:high_end_medical_device_industry_bottleneck:question:constraint",
+        "requirement_type": "validation",
+        "satisfaction_status": "unsatisfied",
+        "target_id": "question:high_end_medical_device_industry_bottleneck:constraint",
+        "target_type": "research_question"
+      },
+      {
+        "collection_status": "not_started",
+        "conflict_search_required": true,
+        "minimum_coverage": 2,
+        "primary_source_required": true,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:high_end_medical_device_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_to_resolve": "high_end_medical_device_industry_bottleneck::economics::医院采购支付、设备利用率、耗材服务收入和回款周期如何决定商业模型？",
+        "required_freshness": "within_24_months",
+        "required_independence": "independent",
+        "required_scope": "高端医疗器械从技术性能、注册临床到医院采购支付和clinical workflow采用。",
+        "required_source_classes": [
+          "technical_standard",
+          "engineering_document",
+          "independent_secondary"
+        ],
+        "requirement_id": "requirement:high_end_medical_device_industry_bottleneck:question:economics",
+        "requirement_type": "validation",
+        "satisfaction_status": "unsatisfied",
+        "target_id": "question:high_end_medical_device_industry_bottleneck:economics",
+        "target_type": "research_question"
+      },
+      {
+        "collection_status": "not_started",
+        "conflict_search_required": true,
+        "minimum_coverage": 2,
+        "primary_source_required": true,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:high_end_medical_device_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_to_resolve": "high_end_medical_device_industry_bottleneck::counterfactual::临床优势是否会被采购支付、培训服务、医院流程或供应链能力阻断？",
+        "required_freshness": "within_24_months",
+        "required_independence": "independent",
+        "required_scope": "高端医疗器械从技术性能、注册临床到医院采购支付和clinical workflow采用。",
+        "required_source_classes": [
+          "technical_standard",
+          "engineering_document",
+          "independent_secondary"
+        ],
+        "requirement_id": "requirement:high_end_medical_device_industry_bottleneck:question:counterfactual",
+        "requirement_type": "validation",
+        "satisfaction_status": "unsatisfied",
+        "target_id": "question:high_end_medical_device_industry_bottleneck:counterfactual",
+        "target_type": "research_question"
+      },
+      {
+        "collection_status": "not_started",
+        "conflict_search_required": true,
+        "minimum_coverage": 2,
+        "primary_source_required": true,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:high_end_medical_device_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_to_resolve": "high_end_medical_device_industry_bottleneck::validation::应如何跟踪approval→tender→installation acceptance→active utilization→recurring revenue转化漏斗？",
+        "required_freshness": "within_24_months",
+        "required_independence": "independent",
+        "required_scope": "高端医疗器械从技术性能、注册临床到医院采购支付和clinical workflow采用。",
+        "required_source_classes": [
+          "technical_standard",
+          "engineering_document",
+          "independent_secondary"
+        ],
+        "requirement_id": "requirement:high_end_medical_device_industry_bottleneck:question:validation",
+        "requirement_type": "validation",
+        "satisfaction_status": "unsatisfied",
+        "target_id": "question:high_end_medical_device_industry_bottleneck:validation",
+        "target_type": "research_question"
+      },
+      {
+        "collection_status": "not_started",
+        "conflict_search_required": true,
+        "minimum_coverage": 2,
+        "primary_source_required": true,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:high_end_medical_device_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_to_resolve": "high_end_medical_device_industry_bottleneck主假设的关键机制、反例与失效条件是否同时可观察？",
+        "required_freshness": "within_24_months",
+        "required_independence": "independent",
+        "required_scope": "安装验收、active installed base、培训服务、耗材服务、供应链和回款链。",
+        "required_source_classes": [
+          "technical_standard",
+          "engineering_document",
+          "independent_secondary"
+        ],
+        "requirement_id": "requirement:high_end_medical_device_industry_bottleneck:claim:primary",
+        "requirement_type": "validation",
+        "satisfaction_status": "unsatisfied",
+        "target_id": "claim:high_end_medical_device_industry_bottleneck:primary",
+        "target_type": "research_claim"
+      }
+    ],
+    "evidence_stage": "requirements_defined",
+    "industry_evidence_assessments": [],
+    "invalidation_conditions": [
+      {
+        "comparison_operator": "<",
+        "condition_id": "condition:high_end_medical_device_industry_bottleneck:primary",
+        "condition_text": "若安装验收后十二个月的活跃装机转化率低于30%，则获批到规模商业化链条失效。",
+        "minimum_observations": 4,
+        "observable_test": "按four_quarters观察30阈值并检查恢复条件>=50%。",
+        "persistence_window": "four_quarters",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:high_end_medical_device_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "recovery_condition": ">=50%",
+        "severity": "critical",
+        "status": "planned",
+        "target_id": "claim:high_end_medical_device_industry_bottleneck:primary",
+        "target_type": "research_claim",
+        "threshold_value": 30,
+        "triggered_at": null,
+        "unit": "%"
+      }
+    ],
+    "investment_status": "not_assessed",
+    "normalized_documents": [],
+    "project_lifecycle_state": "research_ready",
+    "question_tree_nodes": [
+      {
+        "branch_role": "root",
+        "dependency_question_ids": [],
+        "order": 1,
+        "parent_tree_node_id": null,
+        "question_id": "question:high_end_medical_device_industry_bottleneck:primary",
+        "tree_id": "research_logic_tree:high_end_medical_device_industry_bottleneck",
+        "tree_node_id": "tree_node:high_end_medical_device_industry_bottleneck:primary"
+      },
+      {
+        "branch_role": "mechanism",
+        "dependency_question_ids": [
+          "question:high_end_medical_device_industry_bottleneck:primary"
+        ],
+        "order": 2,
+        "parent_tree_node_id": "tree_node:high_end_medical_device_industry_bottleneck:primary",
+        "question_id": "question:high_end_medical_device_industry_bottleneck:mechanism",
+        "tree_id": "research_logic_tree:high_end_medical_device_industry_bottleneck",
+        "tree_node_id": "tree_node:high_end_medical_device_industry_bottleneck:mechanism"
+      },
+      {
+        "branch_role": "constraint",
+        "dependency_question_ids": [
+          "question:high_end_medical_device_industry_bottleneck:mechanism"
+        ],
+        "order": 3,
+        "parent_tree_node_id": "tree_node:high_end_medical_device_industry_bottleneck:primary",
+        "question_id": "question:high_end_medical_device_industry_bottleneck:constraint",
+        "tree_id": "research_logic_tree:high_end_medical_device_industry_bottleneck",
+        "tree_node_id": "tree_node:high_end_medical_device_industry_bottleneck:constraint"
+      },
+      {
+        "branch_role": "economics",
+        "dependency_question_ids": [
+          "question:high_end_medical_device_industry_bottleneck:mechanism",
+          "question:high_end_medical_device_industry_bottleneck:constraint"
+        ],
+        "order": 4,
+        "parent_tree_node_id": "tree_node:high_end_medical_device_industry_bottleneck:primary",
+        "question_id": "question:high_end_medical_device_industry_bottleneck:economics",
+        "tree_id": "research_logic_tree:high_end_medical_device_industry_bottleneck",
+        "tree_node_id": "tree_node:high_end_medical_device_industry_bottleneck:economics"
+      },
+      {
+        "branch_role": "counterfactual",
+        "dependency_question_ids": [
+          "question:high_end_medical_device_industry_bottleneck:primary",
+          "question:high_end_medical_device_industry_bottleneck:constraint"
+        ],
+        "order": 6,
+        "parent_tree_node_id": "tree_node:high_end_medical_device_industry_bottleneck:primary",
+        "question_id": "question:high_end_medical_device_industry_bottleneck:counterfactual",
+        "tree_id": "research_logic_tree:high_end_medical_device_industry_bottleneck",
+        "tree_node_id": "tree_node:high_end_medical_device_industry_bottleneck:counterfactual"
+      },
+      {
+        "branch_role": "validation",
+        "dependency_question_ids": [
+          "question:high_end_medical_device_industry_bottleneck:mechanism",
+          "question:high_end_medical_device_industry_bottleneck:constraint",
+          "question:high_end_medical_device_industry_bottleneck:economics",
+          "question:high_end_medical_device_industry_bottleneck:counterfactual"
+        ],
+        "order": 7,
+        "parent_tree_node_id": "tree_node:high_end_medical_device_industry_bottleneck:primary",
+        "question_id": "question:high_end_medical_device_industry_bottleneck:validation",
+        "tree_id": "research_logic_tree:high_end_medical_device_industry_bottleneck",
+        "tree_node_id": "tree_node:high_end_medical_device_industry_bottleneck:validation"
+      }
+    ],
+    "questions": [
+      {
+        "answer_status": "unanswered",
+        "lifecycle_status": "active",
+        "linked_claim_ids": [
+          "claim:high_end_medical_device_industry_bottleneck:primary"
+        ],
+        "linked_requirement_ids": [
+          "requirement:high_end_medical_device_industry_bottleneck:question:primary"
+        ],
+        "priority": 1,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:high_end_medical_device_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_id": "question:high_end_medical_device_industry_bottleneck:primary",
+        "question_text": "高端医疗器械从技术验证走向规模商业化，关键瓶颈在产品性能、监管准入、临床采用还是供应链与服务能力？",
+        "question_type": "primary",
+        "required_for_gate": true
+      },
+      {
+        "answer_status": "unanswered",
+        "lifecycle_status": "active",
+        "linked_claim_ids": [
+          "claim:high_end_medical_device_industry_bottleneck:primary"
+        ],
+        "linked_requirement_ids": [
+          "requirement:high_end_medical_device_industry_bottleneck:question:mechanism"
+        ],
+        "priority": 2,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:high_end_medical_device_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_id": "question:high_end_medical_device_industry_bottleneck:mechanism",
+        "question_text": "产品性能与clinical workflow优势如何转化为注册临床证据、医生使用效率和患者结局？",
+        "question_type": "mechanism",
+        "required_for_gate": true
+      },
+      {
+        "answer_status": "unanswered",
+        "lifecycle_status": "active",
+        "linked_claim_ids": [
+          "claim:high_end_medical_device_industry_bottleneck:primary"
+        ],
+        "linked_requirement_ids": [
+          "requirement:high_end_medical_device_industry_bottleneck:question:constraint"
+        ],
+        "priority": 3,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:high_end_medical_device_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_id": "question:high_end_medical_device_industry_bottleneck:constraint",
+        "question_text": "注册临床、监管审评、医院准入、招采支付、培训服务与供应链中哪一环节限制商业化？",
+        "question_type": "constraint",
+        "required_for_gate": true
+      },
+      {
+        "answer_status": "unanswered",
+        "lifecycle_status": "active",
+        "linked_claim_ids": [
+          "claim:high_end_medical_device_industry_bottleneck:primary"
+        ],
+        "linked_requirement_ids": [
+          "requirement:high_end_medical_device_industry_bottleneck:question:economics"
+        ],
+        "priority": 4,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:high_end_medical_device_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_id": "question:high_end_medical_device_industry_bottleneck:economics",
+        "question_text": "医院采购支付、设备利用率、耗材服务收入和回款周期如何决定商业模型？",
+        "question_type": "economics",
+        "required_for_gate": true
+      },
+      {
+        "answer_status": "unanswered",
+        "lifecycle_status": "active",
+        "linked_claim_ids": [
+          "claim:high_end_medical_device_industry_bottleneck:counter"
+        ],
+        "linked_requirement_ids": [
+          "requirement:high_end_medical_device_industry_bottleneck:question:counterfactual"
+        ],
+        "priority": 6,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:high_end_medical_device_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_id": "question:high_end_medical_device_industry_bottleneck:counterfactual",
+        "question_text": "临床优势是否会被采购支付、培训服务、医院流程或供应链能力阻断？",
+        "question_type": "counterfactual",
+        "required_for_gate": true
+      },
+      {
+        "answer_status": "unanswered",
+        "lifecycle_status": "active",
+        "linked_claim_ids": [
+          "claim:high_end_medical_device_industry_bottleneck:primary"
+        ],
+        "linked_requirement_ids": [
+          "requirement:high_end_medical_device_industry_bottleneck:question:validation"
+        ],
+        "priority": 7,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:high_end_medical_device_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_id": "question:high_end_medical_device_industry_bottleneck:validation",
+        "question_text": "应如何跟踪approval→tender→installation acceptance→active utilization→recurring revenue转化漏斗？",
+        "question_type": "validation",
+        "required_for_gate": false
+      }
+    ],
+    "references": [
+      {
+        "hash_scope": "entire_object",
+        "locator": null,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:high_end_medical_device_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "reference_content_hash": "5b9ba747d521f1674fd69074948b005a026dc4865f31155b562bb7c1e0bb9a96",
+        "reference_id": "reference:high_end_medical_device_industry_bottleneck:background",
+        "reference_namespace": "theme_research_v1",
+        "reference_object_id": "high_end_medical_devices_value_chain_v1",
+        "reference_role": "background",
+        "reference_type": "v1_theme",
+        "reference_version": "theme_decomposition_v1_6",
+        "referenced_at": "2026-07-17T00:00:00Z",
+        "resolution_status": "resolved",
+        "scope_note": "范围与背景引用，不构成结论证据。"
+      },
+      {
+        "hash_scope": "entire_object",
+        "locator": null,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:high_end_medical_device_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "reference_content_hash": "7397f7785ec53d2224171f276d64fa6d7a94cf7d4438a8da8307bfebe87c6ca4",
+        "reference_id": "reference:high_end_medical_device_industry_bottleneck:scope_context",
+        "reference_namespace": "industry_catalog_v1",
+        "reference_object_id": "high_end_medical_devices",
+        "reference_role": "scope_context",
+        "reference_type": "industry_catalog_chain",
+        "reference_version": "technology_industry_catalog_v1",
+        "referenced_at": "2026-07-17T00:00:00Z",
+        "resolution_status": "resolved",
+        "scope_note": "范围与背景引用，不构成结论证据。"
+      }
+    ],
+    "research_layer": "industry_research",
+    "router_decision": {
+      "confidence": 0.82,
+      "decided_at": "2026-07-17T00:00:00Z",
+      "decided_by": "Codex",
+      "excluded_modules": [
+        "portfolio_recommendation"
+      ],
+      "manual_override": false,
+      "override_reason": null,
+      "primary_method": "lifecycle",
+      "required_research_modules": [
+        "causal_mechanism",
+        "validation",
+        "invalidation"
+      ],
+      "routing_reasons": [
+        "解释系统变化的因果传导。"
+      ],
+      "secondary_methods": [
+        "regulation",
+        "system_architecture"
+      ]
+    },
+    "scope": {
+      "assumptions": [
+        "商业项目、量产或临床使用记录可按一致口径追踪。"
+      ],
+      "company_universe_boundary": "本层不形成公司清单、公司评级、股票评级或股票建议。",
+      "decision_context": "建立主题具体、可证伪的研究设计并规划后续证据采集。",
+      "excluded_scope": [
+        "公司清单、公司能力评级与公司排名",
+        "股票评级、个股推荐、目标价与投资建议",
+        "已形成支持性判断的资本市场结论"
+      ],
+      "geography": [
+        "中国",
+        "全球可比商业项目"
+      ],
+      "included_scope": [
+        "高端医疗器械从技术性能、注册临床到医院采购支付和clinical workflow采用。",
+        "安装验收、active installed base、培训服务、耗材服务、供应链和回款链。"
+      ],
+      "industry_boundary": "高端医疗器械从技术性能、注册临床到医院采购支付和clinical workflow采用。",
+      "known_unknowns": [
+        "医院安装后十二个月的active utilization与临床科室采用数据有限。",
+        "招采支付、培训服务覆盖、耗材复购和回款周期存在医院差异。"
+      ],
+      "primary_question": "高端医疗器械从技术验证走向规模商业化，关键瓶颈在产品性能、监管准入、临床采用还是供应链与服务能力？",
+      "research_object": "高端医疗器械从技术验证走向规模商业化，关键瓶颈在产品性能、监管准入、临床采用还是供应链与服务能力？",
+      "stop_conditions": [
+        "连续四个季度无法取得安装验收、活跃使用和持续收入转化数据时停止。"
+      ],
+      "time_horizon": "2026-2030 with defined validation windows"
+    },
+    "search_plans": [
+      {
+        "deduplication_policy": "normalized_url_then_content_hash",
+        "evidence_channel": "industry",
+        "geography": [
+          "CN",
+          "global"
+        ],
+        "languages": [
+          "zh-CN",
+          "en"
+        ],
+        "project_id": "research_project:high_end_medical_device_industry_bottleneck",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:high_end_medical_device_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "publication_window": "within_24_months",
+        "queries": [
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 1,
+            "query_id": "query:requirement:high_end_medical_device_industry_bottleneck:question:primary:mechanism",
+            "query_role": "mechanism",
+            "query_text": "high end medical device industry bottleneck industry bottleneck high_end_medical_device_industry_bottleneck::primary::高端医疗器械从技术验证走向规模商业化，关键瓶颈在产品性能、监管准入、临床采用还是供应链与服务能力？ mechanism engineering",
+            "required_terms": [
+              "high end medical device industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 2,
+            "query_id": "query:requirement:high_end_medical_device_industry_bottleneck:question:primary:quantification",
+            "query_role": "quantification",
+            "query_text": "high end medical device industry bottleneck industry bottleneck high_end_medical_device_industry_bottleneck::primary::高端医疗器械从技术验证走向规模商业化，关键瓶颈在产品性能、监管准入、临床采用还是供应链与服务能力？ capacity yield price data",
+            "required_terms": [
+              "high end medical device industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 3,
+            "query_id": "query:requirement:high_end_medical_device_industry_bottleneck:question:primary:counter_evidence",
+            "query_role": "counter_evidence",
+            "query_text": "high end medical device industry bottleneck industry bottleneck high_end_medical_device_industry_bottleneck::primary::高端医疗器械从技术验证走向规模商业化，关键瓶颈在产品性能、监管准入、临床采用还是供应链与服务能力？ alternative substitution limitation",
+            "required_terms": [
+              "high end medical device industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 4,
+            "query_id": "query:requirement:high_end_medical_device_industry_bottleneck:question:primary:primary_engineering",
+            "query_role": "primary_engineering",
+            "query_text": "high end medical device industry bottleneck industry bottleneck standard specification technical document",
+            "required_terms": [
+              "high end medical device industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          }
+        ],
+        "requirement_ids": [
+          "requirement:high_end_medical_device_industry_bottleneck:question:primary"
+        ],
+        "result_limit_per_query": 20,
+        "search_plan_id": "search_plan:requirement:high_end_medical_device_industry_bottleneck:question:primary",
+        "status": "planned",
+        "stop_conditions": [
+          "all four industry query roles executed",
+          "counter-evidence query executed and reviewed",
+          "required source-class coverage reached"
+        ],
+        "version_id": "research_version:high_end_medical_device_industry_bottleneck:0.1.0"
+      },
+      {
+        "deduplication_policy": "normalized_url_then_content_hash",
+        "evidence_channel": "industry",
+        "geography": [
+          "CN",
+          "global"
+        ],
+        "languages": [
+          "zh-CN",
+          "en"
+        ],
+        "project_id": "research_project:high_end_medical_device_industry_bottleneck",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:high_end_medical_device_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "publication_window": "within_24_months",
+        "queries": [
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 1,
+            "query_id": "query:requirement:high_end_medical_device_industry_bottleneck:question:mechanism:mechanism",
+            "query_role": "mechanism",
+            "query_text": "high end medical device industry bottleneck industry bottleneck high_end_medical_device_industry_bottleneck::mechanism::产品性能与clinical workflow优势如何转化为注册临床证据、医生使用效率和患者结局？ mechanism engineering",
+            "required_terms": [
+              "high end medical device industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 2,
+            "query_id": "query:requirement:high_end_medical_device_industry_bottleneck:question:mechanism:quantification",
+            "query_role": "quantification",
+            "query_text": "high end medical device industry bottleneck industry bottleneck high_end_medical_device_industry_bottleneck::mechanism::产品性能与clinical workflow优势如何转化为注册临床证据、医生使用效率和患者结局？ capacity yield price data",
+            "required_terms": [
+              "high end medical device industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 3,
+            "query_id": "query:requirement:high_end_medical_device_industry_bottleneck:question:mechanism:counter_evidence",
+            "query_role": "counter_evidence",
+            "query_text": "high end medical device industry bottleneck industry bottleneck high_end_medical_device_industry_bottleneck::mechanism::产品性能与clinical workflow优势如何转化为注册临床证据、医生使用效率和患者结局？ alternative substitution limitation",
+            "required_terms": [
+              "high end medical device industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 4,
+            "query_id": "query:requirement:high_end_medical_device_industry_bottleneck:question:mechanism:primary_engineering",
+            "query_role": "primary_engineering",
+            "query_text": "high end medical device industry bottleneck industry bottleneck standard specification technical document",
+            "required_terms": [
+              "high end medical device industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          }
+        ],
+        "requirement_ids": [
+          "requirement:high_end_medical_device_industry_bottleneck:question:mechanism"
+        ],
+        "result_limit_per_query": 20,
+        "search_plan_id": "search_plan:requirement:high_end_medical_device_industry_bottleneck:question:mechanism",
+        "status": "planned",
+        "stop_conditions": [
+          "all four industry query roles executed",
+          "counter-evidence query executed and reviewed",
+          "required source-class coverage reached"
+        ],
+        "version_id": "research_version:high_end_medical_device_industry_bottleneck:0.1.0"
+      },
+      {
+        "deduplication_policy": "normalized_url_then_content_hash",
+        "evidence_channel": "industry",
+        "geography": [
+          "CN",
+          "global"
+        ],
+        "languages": [
+          "zh-CN",
+          "en"
+        ],
+        "project_id": "research_project:high_end_medical_device_industry_bottleneck",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:high_end_medical_device_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "publication_window": "within_24_months",
+        "queries": [
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 1,
+            "query_id": "query:requirement:high_end_medical_device_industry_bottleneck:question:constraint:mechanism",
+            "query_role": "mechanism",
+            "query_text": "high end medical device industry bottleneck industry bottleneck high_end_medical_device_industry_bottleneck::constraint::注册临床、监管审评、医院准入、招采支付、培训服务与供应链中哪一环节限制商业化？ mechanism engineering",
+            "required_terms": [
+              "high end medical device industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 2,
+            "query_id": "query:requirement:high_end_medical_device_industry_bottleneck:question:constraint:quantification",
+            "query_role": "quantification",
+            "query_text": "high end medical device industry bottleneck industry bottleneck high_end_medical_device_industry_bottleneck::constraint::注册临床、监管审评、医院准入、招采支付、培训服务与供应链中哪一环节限制商业化？ capacity yield price data",
+            "required_terms": [
+              "high end medical device industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 3,
+            "query_id": "query:requirement:high_end_medical_device_industry_bottleneck:question:constraint:counter_evidence",
+            "query_role": "counter_evidence",
+            "query_text": "high end medical device industry bottleneck industry bottleneck high_end_medical_device_industry_bottleneck::constraint::注册临床、监管审评、医院准入、招采支付、培训服务与供应链中哪一环节限制商业化？ alternative substitution limitation",
+            "required_terms": [
+              "high end medical device industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 4,
+            "query_id": "query:requirement:high_end_medical_device_industry_bottleneck:question:constraint:primary_engineering",
+            "query_role": "primary_engineering",
+            "query_text": "high end medical device industry bottleneck industry bottleneck standard specification technical document",
+            "required_terms": [
+              "high end medical device industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          }
+        ],
+        "requirement_ids": [
+          "requirement:high_end_medical_device_industry_bottleneck:question:constraint"
+        ],
+        "result_limit_per_query": 20,
+        "search_plan_id": "search_plan:requirement:high_end_medical_device_industry_bottleneck:question:constraint",
+        "status": "planned",
+        "stop_conditions": [
+          "all four industry query roles executed",
+          "counter-evidence query executed and reviewed",
+          "required source-class coverage reached"
+        ],
+        "version_id": "research_version:high_end_medical_device_industry_bottleneck:0.1.0"
+      },
+      {
+        "deduplication_policy": "normalized_url_then_content_hash",
+        "evidence_channel": "industry",
+        "geography": [
+          "CN",
+          "global"
+        ],
+        "languages": [
+          "zh-CN",
+          "en"
+        ],
+        "project_id": "research_project:high_end_medical_device_industry_bottleneck",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:high_end_medical_device_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "publication_window": "within_24_months",
+        "queries": [
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 1,
+            "query_id": "query:requirement:high_end_medical_device_industry_bottleneck:question:economics:mechanism",
+            "query_role": "mechanism",
+            "query_text": "high end medical device industry bottleneck industry bottleneck high_end_medical_device_industry_bottleneck::economics::医院采购支付、设备利用率、耗材服务收入和回款周期如何决定商业模型？ mechanism engineering",
+            "required_terms": [
+              "high end medical device industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 2,
+            "query_id": "query:requirement:high_end_medical_device_industry_bottleneck:question:economics:quantification",
+            "query_role": "quantification",
+            "query_text": "high end medical device industry bottleneck industry bottleneck high_end_medical_device_industry_bottleneck::economics::医院采购支付、设备利用率、耗材服务收入和回款周期如何决定商业模型？ capacity yield price data",
+            "required_terms": [
+              "high end medical device industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 3,
+            "query_id": "query:requirement:high_end_medical_device_industry_bottleneck:question:economics:counter_evidence",
+            "query_role": "counter_evidence",
+            "query_text": "high end medical device industry bottleneck industry bottleneck high_end_medical_device_industry_bottleneck::economics::医院采购支付、设备利用率、耗材服务收入和回款周期如何决定商业模型？ alternative substitution limitation",
+            "required_terms": [
+              "high end medical device industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 4,
+            "query_id": "query:requirement:high_end_medical_device_industry_bottleneck:question:economics:primary_engineering",
+            "query_role": "primary_engineering",
+            "query_text": "high end medical device industry bottleneck industry bottleneck standard specification technical document",
+            "required_terms": [
+              "high end medical device industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          }
+        ],
+        "requirement_ids": [
+          "requirement:high_end_medical_device_industry_bottleneck:question:economics"
+        ],
+        "result_limit_per_query": 20,
+        "search_plan_id": "search_plan:requirement:high_end_medical_device_industry_bottleneck:question:economics",
+        "status": "planned",
+        "stop_conditions": [
+          "all four industry query roles executed",
+          "counter-evidence query executed and reviewed",
+          "required source-class coverage reached"
+        ],
+        "version_id": "research_version:high_end_medical_device_industry_bottleneck:0.1.0"
+      },
+      {
+        "deduplication_policy": "normalized_url_then_content_hash",
+        "evidence_channel": "industry",
+        "geography": [
+          "CN",
+          "global"
+        ],
+        "languages": [
+          "zh-CN",
+          "en"
+        ],
+        "project_id": "research_project:high_end_medical_device_industry_bottleneck",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:high_end_medical_device_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "publication_window": "within_24_months",
+        "queries": [
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 1,
+            "query_id": "query:requirement:high_end_medical_device_industry_bottleneck:question:counterfactual:mechanism",
+            "query_role": "mechanism",
+            "query_text": "high end medical device industry bottleneck industry bottleneck high_end_medical_device_industry_bottleneck::counterfactual::临床优势是否会被采购支付、培训服务、医院流程或供应链能力阻断？ mechanism engineering",
+            "required_terms": [
+              "high end medical device industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 2,
+            "query_id": "query:requirement:high_end_medical_device_industry_bottleneck:question:counterfactual:quantification",
+            "query_role": "quantification",
+            "query_text": "high end medical device industry bottleneck industry bottleneck high_end_medical_device_industry_bottleneck::counterfactual::临床优势是否会被采购支付、培训服务、医院流程或供应链能力阻断？ capacity yield price data",
+            "required_terms": [
+              "high end medical device industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 3,
+            "query_id": "query:requirement:high_end_medical_device_industry_bottleneck:question:counterfactual:counter_evidence",
+            "query_role": "counter_evidence",
+            "query_text": "high end medical device industry bottleneck industry bottleneck high_end_medical_device_industry_bottleneck::counterfactual::临床优势是否会被采购支付、培训服务、医院流程或供应链能力阻断？ alternative substitution limitation",
+            "required_terms": [
+              "high end medical device industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 4,
+            "query_id": "query:requirement:high_end_medical_device_industry_bottleneck:question:counterfactual:primary_engineering",
+            "query_role": "primary_engineering",
+            "query_text": "high end medical device industry bottleneck industry bottleneck standard specification technical document",
+            "required_terms": [
+              "high end medical device industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          }
+        ],
+        "requirement_ids": [
+          "requirement:high_end_medical_device_industry_bottleneck:question:counterfactual"
+        ],
+        "result_limit_per_query": 20,
+        "search_plan_id": "search_plan:requirement:high_end_medical_device_industry_bottleneck:question:counterfactual",
+        "status": "planned",
+        "stop_conditions": [
+          "all four industry query roles executed",
+          "counter-evidence query executed and reviewed",
+          "required source-class coverage reached"
+        ],
+        "version_id": "research_version:high_end_medical_device_industry_bottleneck:0.1.0"
+      },
+      {
+        "deduplication_policy": "normalized_url_then_content_hash",
+        "evidence_channel": "industry",
+        "geography": [
+          "CN",
+          "global"
+        ],
+        "languages": [
+          "zh-CN",
+          "en"
+        ],
+        "project_id": "research_project:high_end_medical_device_industry_bottleneck",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:high_end_medical_device_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "publication_window": "within_24_months",
+        "queries": [
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 1,
+            "query_id": "query:requirement:high_end_medical_device_industry_bottleneck:question:validation:mechanism",
+            "query_role": "mechanism",
+            "query_text": "high end medical device industry bottleneck industry bottleneck high_end_medical_device_industry_bottleneck::validation::应如何跟踪approval→tender→installation acceptance→active utilization→recurring revenue转化漏斗？ mechanism engineering",
+            "required_terms": [
+              "high end medical device industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 2,
+            "query_id": "query:requirement:high_end_medical_device_industry_bottleneck:question:validation:quantification",
+            "query_role": "quantification",
+            "query_text": "high end medical device industry bottleneck industry bottleneck high_end_medical_device_industry_bottleneck::validation::应如何跟踪approval→tender→installation acceptance→active utilization→recurring revenue转化漏斗？ capacity yield price data",
+            "required_terms": [
+              "high end medical device industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 3,
+            "query_id": "query:requirement:high_end_medical_device_industry_bottleneck:question:validation:counter_evidence",
+            "query_role": "counter_evidence",
+            "query_text": "high end medical device industry bottleneck industry bottleneck high_end_medical_device_industry_bottleneck::validation::应如何跟踪approval→tender→installation acceptance→active utilization→recurring revenue转化漏斗？ alternative substitution limitation",
+            "required_terms": [
+              "high end medical device industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 4,
+            "query_id": "query:requirement:high_end_medical_device_industry_bottleneck:question:validation:primary_engineering",
+            "query_role": "primary_engineering",
+            "query_text": "high end medical device industry bottleneck industry bottleneck standard specification technical document",
+            "required_terms": [
+              "high end medical device industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          }
+        ],
+        "requirement_ids": [
+          "requirement:high_end_medical_device_industry_bottleneck:question:validation"
+        ],
+        "result_limit_per_query": 20,
+        "search_plan_id": "search_plan:requirement:high_end_medical_device_industry_bottleneck:question:validation",
+        "status": "planned",
+        "stop_conditions": [
+          "all four industry query roles executed",
+          "counter-evidence query executed and reviewed",
+          "required source-class coverage reached"
+        ],
+        "version_id": "research_version:high_end_medical_device_industry_bottleneck:0.1.0"
+      },
+      {
+        "deduplication_policy": "normalized_url_then_content_hash",
+        "evidence_channel": "industry",
+        "geography": [
+          "CN",
+          "global"
+        ],
+        "languages": [
+          "zh-CN",
+          "en"
+        ],
+        "project_id": "research_project:high_end_medical_device_industry_bottleneck",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:high_end_medical_device_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "publication_window": "within_24_months",
+        "queries": [
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 1,
+            "query_id": "query:requirement:high_end_medical_device_industry_bottleneck:claim:primary:mechanism",
+            "query_role": "mechanism",
+            "query_text": "high end medical device industry bottleneck industry bottleneck high_end_medical_device_industry_bottleneck主假设的关键机制、反例与失效条件是否同时可观察？ mechanism engineering",
+            "required_terms": [
+              "high end medical device industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 2,
+            "query_id": "query:requirement:high_end_medical_device_industry_bottleneck:claim:primary:quantification",
+            "query_role": "quantification",
+            "query_text": "high end medical device industry bottleneck industry bottleneck high_end_medical_device_industry_bottleneck主假设的关键机制、反例与失效条件是否同时可观察？ capacity yield price data",
+            "required_terms": [
+              "high end medical device industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 3,
+            "query_id": "query:requirement:high_end_medical_device_industry_bottleneck:claim:primary:counter_evidence",
+            "query_role": "counter_evidence",
+            "query_text": "high end medical device industry bottleneck industry bottleneck high_end_medical_device_industry_bottleneck主假设的关键机制、反例与失效条件是否同时可观察？ alternative substitution limitation",
+            "required_terms": [
+              "high end medical device industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 4,
+            "query_id": "query:requirement:high_end_medical_device_industry_bottleneck:claim:primary:primary_engineering",
+            "query_role": "primary_engineering",
+            "query_text": "high end medical device industry bottleneck industry bottleneck standard specification technical document",
+            "required_terms": [
+              "high end medical device industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          }
+        ],
+        "requirement_ids": [
+          "requirement:high_end_medical_device_industry_bottleneck:claim:primary"
+        ],
+        "result_limit_per_query": 20,
+        "search_plan_id": "search_plan:requirement:high_end_medical_device_industry_bottleneck:claim:primary",
+        "status": "planned",
+        "stop_conditions": [
+          "all four industry query roles executed",
+          "counter-evidence query executed and reviewed",
+          "required source-class coverage reached"
+        ],
+        "version_id": "research_version:high_end_medical_device_industry_bottleneck:0.1.0"
+      }
+    ],
+    "source_candidates": [],
+    "source_relationships": [],
+    "upstream_research_refs": [
+      {
+        "referenced_at": "2026-07-18T00:00:00Z",
+        "scope_note": "承接已通过R1设计语义验证的上游主题基线，仅用于产业层问题收敛。",
+        "upstream_content_hash": "814250100f603c30758da487ffdd7ec121cc74a782f986101147b467b4a458f6",
+        "upstream_gate_result_id": null,
+        "upstream_object_id": "research_version:high_end_medical_device_commercialization:0.1.0",
+        "upstream_object_type": "research_version",
+        "upstream_project_id": "research_project:high_end_medical_device_commercialization",
+        "upstream_research_layer": null,
+        "upstream_research_ref_id": "upstream_ref:high_end_medical_device_industry_bottleneck:r1_baseline",
+        "upstream_version_id": "research_version:high_end_medical_device_commercialization:0.1.0"
+      }
+    ],
+    "validation_metrics": [
+      {
+        "aggregation_method": "weighted_mean_by_installed_systems",
+        "baseline_as_of": null,
+        "baseline_value": null,
+        "comparison_operator": ">=",
+        "confirmation_threshold": ">=60%",
+        "data_freshness_requirement": "90 days",
+        "data_source_plan": "regulatory_and_tender_record；installation_utilization_log；service_consumable_cash_collection",
+        "expected_range": ">=60%",
+        "metric_definition": "active_install_base_conversion_rate_12m主题具体验证指标。",
+        "metric_id": "metric:high_end_medical_device_industry_bottleneck:primary",
+        "metric_name": "active_install_base_conversion_rate_12m",
+        "observation_frequency": "quarterly",
+        "observation_window": "twelve_months_after_installation_acceptance",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:high_end_medical_device_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "status": "planned",
+        "target_id": "claim:high_end_medical_device_industry_bottleneck:primary",
+        "target_type": "research_claim",
+        "unit": "%",
+        "warning_threshold": "<40%"
+      }
+    ]
+  },
+  "version_id": "research_version:high_end_medical_device_industry_bottleneck:0.1.0"
+}

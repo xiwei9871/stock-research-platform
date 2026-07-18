@@ -1,0 +1,1969 @@
+{
+  "artifact_kind": "industry_research_version",
+  "change_reason": "承接R1主题基线并定义产业层瓶颈研究。",
+  "change_summary": "建立产业层证据搜索与证伪设计。",
+  "content_hash": "efd7485fae92ba144c8d02475d6cf62053cf785398515a3017c4fa443b8051a4",
+  "created_at": "2026-07-18T00:00:00Z",
+  "created_by": "Codex",
+  "creation_stage": "research_design",
+  "incorporated_event_ids": [],
+  "parent_version_id": null,
+  "project_id": "research_project:ai_compute_pcb_industry_bottleneck",
+  "schema_version": "2.1.0",
+  "semantic_version": "0.1.0",
+  "snapshot": {
+    "causal_edges": [
+      {
+        "boundary_condition": "仅比较已出货且加速器数量可归一化的配置。",
+        "causal_edge_id": "causal_edge:ai_compute_pcb_industry_bottleneck:architecture_upgrade_to_board_topology_signal_power_density",
+        "confidence": 0.35,
+        "effect_polarity": "positive",
+        "feedback_loop_id": null,
+        "from_causal_node_id": "causal_node:ai_compute_pcb_industry_bottleneck:architecture_upgrade",
+        "lifecycle_status": "active",
+        "mechanism_text": "架构代际决定交换与板卡拓扑、互连距离及信号和供电密度。",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "relation_type": "may_cause",
+        "strength": 0.4,
+        "supporting_claim_ids": [
+          "claim:ai_compute_pcb_industry_bottleneck:primary"
+        ],
+        "time_lag": "one_architecture_generation",
+        "to_causal_node_id": "causal_node:ai_compute_pcb_industry_bottleneck:board_topology_signal_power_density",
+        "validation_metric_ids": [
+          "metric:ai_compute_pcb_industry_bottleneck:primary"
+        ]
+      },
+      {
+        "boundary_condition": "板卡没有被CPO或系统集成显著简化。",
+        "causal_edge_id": "causal_edge:ai_compute_pcb_industry_bottleneck:board_topology_signal_power_density_to_layer_material_process_complexity",
+        "confidence": 0.35,
+        "effect_polarity": "positive",
+        "feedback_loop_id": null,
+        "from_causal_node_id": "causal_node:ai_compute_pcb_industry_bottleneck:board_topology_signal_power_density",
+        "lifecycle_status": "active",
+        "mechanism_text": "更高信号与布线密度要求更多层数、低损耗材料、背钻和压合工序。",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "relation_type": "may_cause",
+        "strength": 0.4,
+        "supporting_claim_ids": [
+          "claim:ai_compute_pcb_industry_bottleneck:primary"
+        ],
+        "time_lag": "one_design_and_qualification_cycle",
+        "to_causal_node_id": "causal_node:ai_compute_pcb_industry_bottleneck:layer_material_process_complexity",
+        "validation_metric_ids": [
+          "metric:ai_compute_pcb_industry_bottleneck:primary"
+        ]
+      },
+      {
+        "boundary_condition": "以量产良率而非名义产能衡量约束。",
+        "causal_edge_id": "causal_edge:ai_compute_pcb_industry_bottleneck:layer_material_process_complexity_to_yield_qualification_effective_capacity",
+        "confidence": 0.35,
+        "effect_polarity": "negative",
+        "feedback_loop_id": null,
+        "from_causal_node_id": "causal_node:ai_compute_pcb_industry_bottleneck:layer_material_process_complexity",
+        "lifecycle_status": "active",
+        "mechanism_text": "工艺复杂度可能降低首轮良率并延长认证，从而压缩可交付有效产能。",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "relation_type": "may_cause",
+        "strength": 0.4,
+        "supporting_claim_ids": [
+          "claim:ai_compute_pcb_industry_bottleneck:primary"
+        ],
+        "time_lag": "two_to_four_quarters",
+        "to_causal_node_id": "causal_node:ai_compute_pcb_industry_bottleneck:yield_qualification_effective_capacity",
+        "validation_metric_ids": [
+          "metric:ai_compute_pcb_industry_bottleneck:primary"
+        ]
+      },
+      {
+        "boundary_condition": "剔除加速器数量与整机出货量变化。",
+        "causal_edge_id": "causal_edge:ai_compute_pcb_industry_bottleneck:yield_qualification_effective_capacity_to_normalized_value_migration",
+        "confidence": 0.35,
+        "effect_polarity": "conditional",
+        "feedback_loop_id": null,
+        "from_causal_node_id": "causal_node:ai_compute_pcb_industry_bottleneck:yield_qualification_effective_capacity",
+        "lifecycle_status": "active",
+        "mechanism_text": "良率、认证和有效产能决定规格增值能否转化为归一化rack价值。",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "relation_type": "may_cause",
+        "strength": 0.4,
+        "supporting_claim_ids": [
+          "claim:ai_compute_pcb_industry_bottleneck:primary"
+        ],
+        "time_lag": "two_successive_architecture_generations",
+        "to_causal_node_id": "causal_node:ai_compute_pcb_industry_bottleneck:normalized_value_migration",
+        "validation_metric_ids": [
+          "metric:ai_compute_pcb_industry_bottleneck:primary"
+        ]
+      }
+    ],
+    "causal_nodes": [
+      {
+        "causal_node_id": "causal_node:ai_compute_pcb_industry_bottleneck:architecture_upgrade",
+        "lifecycle_status": "active",
+        "node_kind": "trigger",
+        "node_text": "加速器数量、scale-up与scale-out拓扑及交换板卡形态升级",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        }
+      },
+      {
+        "causal_node_id": "causal_node:ai_compute_pcb_industry_bottleneck:board_topology_signal_power_density",
+        "lifecycle_status": "active",
+        "node_kind": "system_parameter",
+        "node_text": "板卡数量面积、信号速率、布线密度与供电密度变化",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        }
+      },
+      {
+        "causal_node_id": "causal_node:ai_compute_pcb_industry_bottleneck:layer_material_process_complexity",
+        "lifecycle_status": "active",
+        "node_kind": "mechanism",
+        "node_text": "PCB层数、低损耗材料、背钻、HDI和多次压合复杂度提升",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        }
+      },
+      {
+        "causal_node_id": "causal_node:ai_compute_pcb_industry_bottleneck:yield_qualification_effective_capacity",
+        "lifecycle_status": "active",
+        "node_kind": "constraint",
+        "node_text": "量产良率、客户认证与高规格有效产能共同约束交付",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        }
+      },
+      {
+        "causal_node_id": "causal_node:ai_compute_pcb_industry_bottleneck:normalized_value_migration",
+        "lifecycle_status": "active",
+        "node_kind": "value_migration",
+        "node_text": "按加速器数量归一化后的AI rack高速PCB价值迁移",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        }
+      }
+    ],
+    "claim_relations": [
+      {
+        "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
+        "from_claim_id": "claim:ai_compute_pcb_industry_bottleneck:counter",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "relation_id": "claim_relation:ai_compute_pcb_industry_bottleneck:counter",
+        "relation_summary": "替代解释挑战主假设。",
+        "relation_type": "challenges",
+        "to_claim_id": "claim:ai_compute_pcb_industry_bottleneck:primary"
+      }
+    ],
+    "claims": [
+      {
+        "claim_id": "claim:ai_compute_pcb_industry_bottleneck:primary",
+        "claim_kind": "primary",
+        "claim_status": "hypothesis",
+        "claim_text": "AI服务器架构升级可能把价值迁移到高层高速PCB和低损耗材料，但取决于板卡与拓扑、规格、良率、认证和有效产能，尚待验证。",
+        "confidence": 0.38,
+        "context_reference_ids": [
+          "reference:ai_compute_pcb_industry_bottleneck:background",
+          "reference:ai_compute_pcb_industry_bottleneck:scope_context"
+        ],
+        "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
+        "epistemic_type": "hypothesis",
+        "importance": 0.95,
+        "invalidation_condition_ids": [
+          "condition:ai_compute_pcb_industry_bottleneck:primary"
+        ],
+        "lifecycle_status": "active",
+        "linked_question_ids": [
+          "question:ai_compute_pcb_industry_bottleneck:primary",
+          "question:ai_compute_pcb_industry_bottleneck:mechanism",
+          "question:ai_compute_pcb_industry_bottleneck:constraint",
+          "question:ai_compute_pcb_industry_bottleneck:economics",
+          "question:ai_compute_pcb_industry_bottleneck:validation"
+        ],
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "supersedes_claim_id": null,
+        "validation_metric_ids": [
+          "metric:ai_compute_pcb_industry_bottleneck:primary"
+        ]
+      },
+      {
+        "claim_id": "claim:ai_compute_pcb_industry_bottleneck:counter",
+        "claim_kind": "counter",
+        "claim_status": "under_test",
+        "claim_text": "系统集成、板卡简化及扩产可能抵消单位价值提升。",
+        "confidence": 0.32,
+        "context_reference_ids": [
+          "reference:ai_compute_pcb_industry_bottleneck:background"
+        ],
+        "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
+        "epistemic_type": "hypothesis",
+        "importance": 0.84,
+        "invalidation_condition_ids": [],
+        "lifecycle_status": "active",
+        "linked_question_ids": [
+          "question:ai_compute_pcb_industry_bottleneck:counterfactual"
+        ],
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "supersedes_claim_id": null,
+        "validation_metric_ids": []
+      }
+    ],
+    "conclusion_status": "unavailable",
+    "conflict_summaries": [],
+    "evidence_artifacts": [],
+    "evidence_assessments": [],
+    "evidence_requirements": [
+      {
+        "collection_status": "not_started",
+        "conflict_search_required": true,
+        "minimum_coverage": 2,
+        "primary_source_required": true,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_to_resolve": "ai_compute_pcb_industry_bottleneck::primary::AI服务器架构升级如何改变PCB及上游材料的价值分配？",
+        "required_freshness": "within_24_months",
+        "required_independence": "independent",
+        "required_scope": "AI服务器rack内加速器、交换、板卡、PCB、覆铜板与低损耗材料的架构和制造传导。",
+        "required_source_classes": [
+          "technical_standard",
+          "engineering_document",
+          "independent_secondary"
+        ],
+        "requirement_id": "requirement:ai_compute_pcb_industry_bottleneck:question:primary",
+        "requirement_type": "validation",
+        "satisfaction_status": "unsatisfied",
+        "target_id": "question:ai_compute_pcb_industry_bottleneck:primary",
+        "target_type": "research_question"
+      },
+      {
+        "collection_status": "not_started",
+        "conflict_search_required": true,
+        "minimum_coverage": 2,
+        "primary_source_required": true,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_to_resolve": "ai_compute_pcb_industry_bottleneck::mechanism::加速器数量、scale-up与scale-out拓扑、交换架构和板卡形态的代际变化，如何改变PCB数量、面积、层数、信号速率与材料组合？",
+        "required_freshness": "within_24_months",
+        "required_independence": "independent",
+        "required_scope": "AI服务器rack内加速器、交换、板卡、PCB、覆铜板与低损耗材料的架构和制造传导。",
+        "required_source_classes": [
+          "technical_standard",
+          "engineering_document",
+          "independent_secondary"
+        ],
+        "requirement_id": "requirement:ai_compute_pcb_industry_bottleneck:question:mechanism",
+        "requirement_type": "validation",
+        "satisfaction_status": "unsatisfied",
+        "target_id": "question:ai_compute_pcb_industry_bottleneck:mechanism",
+        "target_type": "research_question"
+      },
+      {
+        "collection_status": "not_started",
+        "conflict_search_required": true,
+        "minimum_coverage": 2,
+        "primary_source_required": true,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_to_resolve": "ai_compute_pcb_industry_bottleneck::constraint::高层板良率、背钻、HDI与多次压合能力、低损耗材料供应、客户认证和有效产能中，哪一项最可能限制交付？",
+        "required_freshness": "within_24_months",
+        "required_independence": "independent",
+        "required_scope": "AI服务器rack内加速器、交换、板卡、PCB、覆铜板与低损耗材料的架构和制造传导。",
+        "required_source_classes": [
+          "technical_standard",
+          "engineering_document",
+          "independent_secondary"
+        ],
+        "requirement_id": "requirement:ai_compute_pcb_industry_bottleneck:question:constraint",
+        "requirement_type": "validation",
+        "satisfaction_status": "unsatisfied",
+        "target_id": "question:ai_compute_pcb_industry_bottleneck:constraint",
+        "target_type": "research_question"
+      },
+      {
+        "collection_status": "not_started",
+        "conflict_search_required": true,
+        "minimum_coverage": 2,
+        "primary_source_required": true,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_to_resolve": "ai_compute_pcb_industry_bottleneck::economics::规格升级带来的单位增值能否覆盖良率损失、capex摊销、认证成本与价格竞争？",
+        "required_freshness": "within_24_months",
+        "required_independence": "independent",
+        "required_scope": "AI服务器rack内加速器、交换、板卡、PCB、覆铜板与低损耗材料的架构和制造传导。",
+        "required_source_classes": [
+          "technical_standard",
+          "engineering_document",
+          "independent_secondary"
+        ],
+        "requirement_id": "requirement:ai_compute_pcb_industry_bottleneck:question:economics",
+        "requirement_type": "validation",
+        "satisfaction_status": "unsatisfied",
+        "target_id": "question:ai_compute_pcb_industry_bottleneck:economics",
+        "target_type": "research_question"
+      },
+      {
+        "collection_status": "not_started",
+        "conflict_search_required": true,
+        "minimum_coverage": 2,
+        "primary_source_required": true,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_to_resolve": "ai_compute_pcb_industry_bottleneck::counterfactual::CPO、系统集成、板卡简化或行业扩产是否会抵消高层高速PCB与材料的单位价值迁移？",
+        "required_freshness": "within_24_months",
+        "required_independence": "independent",
+        "required_scope": "AI服务器rack内加速器、交换、板卡、PCB、覆铜板与低损耗材料的架构和制造传导。",
+        "required_source_classes": [
+          "technical_standard",
+          "engineering_document",
+          "independent_secondary"
+        ],
+        "requirement_id": "requirement:ai_compute_pcb_industry_bottleneck:question:counterfactual",
+        "requirement_type": "validation",
+        "satisfaction_status": "unsatisfied",
+        "target_id": "question:ai_compute_pcb_industry_bottleneck:counterfactual",
+        "target_type": "research_question"
+      },
+      {
+        "collection_status": "not_started",
+        "conflict_search_required": true,
+        "minimum_coverage": 2,
+        "primary_source_required": true,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_to_resolve": "ai_compute_pcb_industry_bottleneck::validation::应如何用服务器与rack BOM、layer/material mix、yield、effective capacity和price数据验证归一化价值迁移？",
+        "required_freshness": "within_24_months",
+        "required_independence": "independent",
+        "required_scope": "AI服务器rack内加速器、交换、板卡、PCB、覆铜板与低损耗材料的架构和制造传导。",
+        "required_source_classes": [
+          "technical_standard",
+          "engineering_document",
+          "independent_secondary"
+        ],
+        "requirement_id": "requirement:ai_compute_pcb_industry_bottleneck:question:validation",
+        "requirement_type": "validation",
+        "satisfaction_status": "unsatisfied",
+        "target_id": "question:ai_compute_pcb_industry_bottleneck:validation",
+        "target_type": "research_question"
+      },
+      {
+        "collection_status": "not_started",
+        "conflict_search_required": true,
+        "minimum_coverage": 2,
+        "primary_source_required": true,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_to_resolve": "ai_compute_pcb_industry_bottleneck主假设的关键机制、反例与失效条件是否同时可观察？",
+        "required_freshness": "within_24_months",
+        "required_independence": "independent",
+        "required_scope": "按已出货配置归一化加速器数量后的PCB价值变化。",
+        "required_source_classes": [
+          "technical_standard",
+          "engineering_document",
+          "independent_secondary"
+        ],
+        "requirement_id": "requirement:ai_compute_pcb_industry_bottleneck:claim:primary",
+        "requirement_type": "validation",
+        "satisfaction_status": "unsatisfied",
+        "target_id": "claim:ai_compute_pcb_industry_bottleneck:primary",
+        "target_type": "research_claim"
+      }
+    ],
+    "evidence_stage": "requirements_defined",
+    "industry_evidence_assessments": [],
+    "invalidation_conditions": [
+      {
+        "comparison_operator": "<=",
+        "condition_id": "condition:ai_compute_pcb_industry_bottleneck:primary",
+        "condition_text": "归一化高速PCB价值变化未高于零，说明架构升级未形成单位价值迁移。",
+        "minimum_observations": 2,
+        "observable_test": "按two_architecture_generations观察0%阈值并检查恢复条件two observations >5%。",
+        "persistence_window": "two_architecture_generations",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "recovery_condition": "two observations >5%",
+        "severity": "critical",
+        "status": "planned",
+        "target_id": "claim:ai_compute_pcb_industry_bottleneck:primary",
+        "target_type": "research_claim",
+        "threshold_value": "0%",
+        "triggered_at": null,
+        "unit": "% normalized change"
+      }
+    ],
+    "investment_status": "not_assessed",
+    "normalized_documents": [],
+    "project_lifecycle_state": "research_ready",
+    "question_tree_nodes": [
+      {
+        "branch_role": "root",
+        "dependency_question_ids": [],
+        "order": 1,
+        "parent_tree_node_id": null,
+        "question_id": "question:ai_compute_pcb_industry_bottleneck:primary",
+        "tree_id": "research_logic_tree:ai_compute_pcb_industry_bottleneck",
+        "tree_node_id": "tree_node:ai_compute_pcb_industry_bottleneck:primary"
+      },
+      {
+        "branch_role": "mechanism",
+        "dependency_question_ids": [
+          "question:ai_compute_pcb_industry_bottleneck:primary"
+        ],
+        "order": 2,
+        "parent_tree_node_id": "tree_node:ai_compute_pcb_industry_bottleneck:primary",
+        "question_id": "question:ai_compute_pcb_industry_bottleneck:mechanism",
+        "tree_id": "research_logic_tree:ai_compute_pcb_industry_bottleneck",
+        "tree_node_id": "tree_node:ai_compute_pcb_industry_bottleneck:mechanism"
+      },
+      {
+        "branch_role": "constraint",
+        "dependency_question_ids": [
+          "question:ai_compute_pcb_industry_bottleneck:mechanism"
+        ],
+        "order": 3,
+        "parent_tree_node_id": "tree_node:ai_compute_pcb_industry_bottleneck:primary",
+        "question_id": "question:ai_compute_pcb_industry_bottleneck:constraint",
+        "tree_id": "research_logic_tree:ai_compute_pcb_industry_bottleneck",
+        "tree_node_id": "tree_node:ai_compute_pcb_industry_bottleneck:constraint"
+      },
+      {
+        "branch_role": "economics",
+        "dependency_question_ids": [
+          "question:ai_compute_pcb_industry_bottleneck:mechanism",
+          "question:ai_compute_pcb_industry_bottleneck:constraint"
+        ],
+        "order": 4,
+        "parent_tree_node_id": "tree_node:ai_compute_pcb_industry_bottleneck:primary",
+        "question_id": "question:ai_compute_pcb_industry_bottleneck:economics",
+        "tree_id": "research_logic_tree:ai_compute_pcb_industry_bottleneck",
+        "tree_node_id": "tree_node:ai_compute_pcb_industry_bottleneck:economics"
+      },
+      {
+        "branch_role": "counterfactual",
+        "dependency_question_ids": [
+          "question:ai_compute_pcb_industry_bottleneck:primary",
+          "question:ai_compute_pcb_industry_bottleneck:constraint"
+        ],
+        "order": 6,
+        "parent_tree_node_id": "tree_node:ai_compute_pcb_industry_bottleneck:primary",
+        "question_id": "question:ai_compute_pcb_industry_bottleneck:counterfactual",
+        "tree_id": "research_logic_tree:ai_compute_pcb_industry_bottleneck",
+        "tree_node_id": "tree_node:ai_compute_pcb_industry_bottleneck:counterfactual"
+      },
+      {
+        "branch_role": "validation",
+        "dependency_question_ids": [
+          "question:ai_compute_pcb_industry_bottleneck:mechanism",
+          "question:ai_compute_pcb_industry_bottleneck:constraint",
+          "question:ai_compute_pcb_industry_bottleneck:economics",
+          "question:ai_compute_pcb_industry_bottleneck:counterfactual"
+        ],
+        "order": 7,
+        "parent_tree_node_id": "tree_node:ai_compute_pcb_industry_bottleneck:primary",
+        "question_id": "question:ai_compute_pcb_industry_bottleneck:validation",
+        "tree_id": "research_logic_tree:ai_compute_pcb_industry_bottleneck",
+        "tree_node_id": "tree_node:ai_compute_pcb_industry_bottleneck:validation"
+      }
+    ],
+    "questions": [
+      {
+        "answer_status": "unanswered",
+        "lifecycle_status": "active",
+        "linked_claim_ids": [
+          "claim:ai_compute_pcb_industry_bottleneck:primary"
+        ],
+        "linked_requirement_ids": [
+          "requirement:ai_compute_pcb_industry_bottleneck:question:primary"
+        ],
+        "priority": 1,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_id": "question:ai_compute_pcb_industry_bottleneck:primary",
+        "question_text": "AI服务器架构升级如何改变PCB及上游材料的价值分配？",
+        "question_type": "primary",
+        "required_for_gate": true
+      },
+      {
+        "answer_status": "unanswered",
+        "lifecycle_status": "active",
+        "linked_claim_ids": [
+          "claim:ai_compute_pcb_industry_bottleneck:primary"
+        ],
+        "linked_requirement_ids": [
+          "requirement:ai_compute_pcb_industry_bottleneck:question:mechanism"
+        ],
+        "priority": 2,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_id": "question:ai_compute_pcb_industry_bottleneck:mechanism",
+        "question_text": "加速器数量、scale-up与scale-out拓扑、交换架构和板卡形态的代际变化，如何改变PCB数量、面积、层数、信号速率与材料组合？",
+        "question_type": "mechanism",
+        "required_for_gate": true
+      },
+      {
+        "answer_status": "unanswered",
+        "lifecycle_status": "active",
+        "linked_claim_ids": [
+          "claim:ai_compute_pcb_industry_bottleneck:primary"
+        ],
+        "linked_requirement_ids": [
+          "requirement:ai_compute_pcb_industry_bottleneck:question:constraint"
+        ],
+        "priority": 3,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_id": "question:ai_compute_pcb_industry_bottleneck:constraint",
+        "question_text": "高层板良率、背钻、HDI与多次压合能力、低损耗材料供应、客户认证和有效产能中，哪一项最可能限制交付？",
+        "question_type": "constraint",
+        "required_for_gate": true
+      },
+      {
+        "answer_status": "unanswered",
+        "lifecycle_status": "active",
+        "linked_claim_ids": [
+          "claim:ai_compute_pcb_industry_bottleneck:primary"
+        ],
+        "linked_requirement_ids": [
+          "requirement:ai_compute_pcb_industry_bottleneck:question:economics"
+        ],
+        "priority": 4,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_id": "question:ai_compute_pcb_industry_bottleneck:economics",
+        "question_text": "规格升级带来的单位增值能否覆盖良率损失、capex摊销、认证成本与价格竞争？",
+        "question_type": "economics",
+        "required_for_gate": true
+      },
+      {
+        "answer_status": "unanswered",
+        "lifecycle_status": "active",
+        "linked_claim_ids": [
+          "claim:ai_compute_pcb_industry_bottleneck:counter"
+        ],
+        "linked_requirement_ids": [
+          "requirement:ai_compute_pcb_industry_bottleneck:question:counterfactual"
+        ],
+        "priority": 6,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_id": "question:ai_compute_pcb_industry_bottleneck:counterfactual",
+        "question_text": "CPO、系统集成、板卡简化或行业扩产是否会抵消高层高速PCB与材料的单位价值迁移？",
+        "question_type": "counterfactual",
+        "required_for_gate": true
+      },
+      {
+        "answer_status": "unanswered",
+        "lifecycle_status": "active",
+        "linked_claim_ids": [
+          "claim:ai_compute_pcb_industry_bottleneck:primary"
+        ],
+        "linked_requirement_ids": [
+          "requirement:ai_compute_pcb_industry_bottleneck:question:validation"
+        ],
+        "priority": 7,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_id": "question:ai_compute_pcb_industry_bottleneck:validation",
+        "question_text": "应如何用服务器与rack BOM、layer/material mix、yield、effective capacity和price数据验证归一化价值迁移？",
+        "question_type": "validation",
+        "required_for_gate": false
+      }
+    ],
+    "references": [
+      {
+        "hash_scope": "entire_object",
+        "locator": null,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "reference_content_hash": "e19efa27e29f720268d2e436cce5bdbf94642117160837c57b6d32f61cc120dc",
+        "reference_id": "reference:ai_compute_pcb_industry_bottleneck:background",
+        "reference_namespace": "theme_research_v1",
+        "reference_object_id": "ai_compute_infrastructure_value_chain_v1",
+        "reference_role": "background",
+        "reference_type": "v1_theme",
+        "reference_version": "theme_decomposition_v1_6",
+        "referenced_at": "2026-07-17T00:00:00Z",
+        "resolution_status": "resolved",
+        "scope_note": "范围与背景引用，不构成结论证据。"
+      },
+      {
+        "hash_scope": "entire_object",
+        "locator": null,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "reference_content_hash": "d3b45dad7940de335a835f769853bcb3cb910539535ae5da89738299ea5c2b1e",
+        "reference_id": "reference:ai_compute_pcb_industry_bottleneck:scope_context",
+        "reference_namespace": "industry_catalog_v1",
+        "reference_object_id": "ai_compute_infrastructure",
+        "reference_role": "scope_context",
+        "reference_type": "industry_catalog_chain",
+        "reference_version": "technology_industry_catalog_v1",
+        "referenced_at": "2026-07-17T00:00:00Z",
+        "resolution_status": "resolved",
+        "scope_note": "范围与背景引用，不构成结论证据。"
+      }
+    ],
+    "research_layer": "industry_research",
+    "router_decision": {
+      "confidence": 0.82,
+      "decided_at": "2026-07-17T00:00:00Z",
+      "decided_by": "Codex",
+      "excluded_modules": [
+        "portfolio_recommendation"
+      ],
+      "manual_override": false,
+      "override_reason": null,
+      "primary_method": "system_architecture",
+      "required_research_modules": [
+        "causal_mechanism",
+        "validation",
+        "invalidation"
+      ],
+      "routing_reasons": [
+        "解释系统变化的因果传导。"
+      ],
+      "secondary_methods": [
+        "manufacturing_process"
+      ]
+    },
+    "scope": {
+      "assumptions": [
+        "商业项目、量产或临床使用记录可按一致口径追踪。"
+      ],
+      "company_universe_boundary": "本层不形成公司清单、公司评级、股票评级或股票建议。",
+      "decision_context": "建立主题具体、可证伪的研究设计并规划后续证据采集。",
+      "excluded_scope": [
+        "公司清单、公司能力评级与公司排名",
+        "股票评级、个股推荐、目标价与投资建议",
+        "已形成支持性判断的资本市场结论"
+      ],
+      "geography": [
+        "中国",
+        "全球可比商业项目"
+      ],
+      "included_scope": [
+        "AI服务器rack内加速器、交换、板卡、PCB、覆铜板与低损耗材料的架构和制造传导。",
+        "按已出货配置归一化加速器数量后的PCB价值变化。"
+      ],
+      "industry_boundary": "AI服务器rack内加速器、交换、板卡、PCB、覆铜板与低损耗材料的架构和制造传导。",
+      "known_unknowns": [
+        "下一代scale-up与scale-out拓扑及板卡形态尚未稳定。",
+        "高层高速板量产良率、认证节奏和可用有效产能缺少一致口径。"
+      ],
+      "primary_question": "AI服务器架构升级如何改变PCB及上游材料的价值分配？",
+      "research_object": "AI服务器架构升级如何改变PCB及上游材料的价值分配？",
+      "stop_conditions": [
+        "连续两个架构代际无法取得可比rack BOM与出货配置时停止。"
+      ],
+      "time_horizon": "2026-2030 with defined validation windows"
+    },
+    "search_plans": [
+      {
+        "deduplication_policy": "normalized_url_then_content_hash",
+        "evidence_channel": "industry",
+        "geography": [
+          "CN",
+          "global"
+        ],
+        "languages": [
+          "zh-CN",
+          "en"
+        ],
+        "project_id": "research_project:ai_compute_pcb_industry_bottleneck",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "publication_window": "within_24_months",
+        "queries": [
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 1,
+            "query_id": "query:requirement:ai_compute_pcb_industry_bottleneck:question:primary:mechanism",
+            "query_role": "mechanism",
+            "query_text": "ai compute pcb industry bottleneck industry bottleneck ai_compute_pcb_industry_bottleneck::primary::AI服务器架构升级如何改变PCB及上游材料的价值分配？ mechanism engineering",
+            "required_terms": [
+              "ai compute pcb industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 2,
+            "query_id": "query:requirement:ai_compute_pcb_industry_bottleneck:question:primary:quantification",
+            "query_role": "quantification",
+            "query_text": "ai compute pcb industry bottleneck industry bottleneck ai_compute_pcb_industry_bottleneck::primary::AI服务器架构升级如何改变PCB及上游材料的价值分配？ capacity yield price data",
+            "required_terms": [
+              "ai compute pcb industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 4,
+            "query_id": "query:requirement:ai_compute_pcb_industry_bottleneck:question:primary:primary_engineering",
+            "query_role": "primary_engineering",
+            "query_text": "ai compute pcb industry bottleneck industry bottleneck standard specification technical document",
+            "required_terms": [
+              "ai compute pcb industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          }
+        ],
+        "requirement_ids": [
+          "requirement:ai_compute_pcb_industry_bottleneck:question:primary"
+        ],
+        "result_limit_per_query": 20,
+        "search_plan_id": "search_plan:requirement:ai_compute_pcb_industry_bottleneck:question:primary",
+        "status": "planned",
+        "stop_conditions": [
+          "all four industry query roles executed",
+          "counter-evidence query executed and reviewed",
+          "required source-class coverage reached"
+        ],
+        "version_id": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0"
+      },
+      {
+        "deduplication_policy": "normalized_url_then_content_hash",
+        "evidence_channel": "industry",
+        "geography": [
+          "CN",
+          "global"
+        ],
+        "languages": [
+          "zh-CN",
+          "en"
+        ],
+        "project_id": "research_project:ai_compute_pcb_industry_bottleneck",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "publication_window": "within_24_months",
+        "queries": [
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 1,
+            "query_id": "query:requirement:ai_compute_pcb_industry_bottleneck:question:mechanism:mechanism",
+            "query_role": "mechanism",
+            "query_text": "ai compute pcb industry bottleneck industry bottleneck ai_compute_pcb_industry_bottleneck::mechanism::加速器数量、scale-up与scale-out拓扑、交换架构和板卡形态的代际变化，如何改变PCB数量、面积、层数、信号速率与材料组合？ mechanism engineering",
+            "required_terms": [
+              "ai compute pcb industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 2,
+            "query_id": "query:requirement:ai_compute_pcb_industry_bottleneck:question:mechanism:quantification",
+            "query_role": "quantification",
+            "query_text": "ai compute pcb industry bottleneck industry bottleneck ai_compute_pcb_industry_bottleneck::mechanism::加速器数量、scale-up与scale-out拓扑、交换架构和板卡形态的代际变化，如何改变PCB数量、面积、层数、信号速率与材料组合？ capacity yield price data",
+            "required_terms": [
+              "ai compute pcb industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 3,
+            "query_id": "query:requirement:ai_compute_pcb_industry_bottleneck:question:mechanism:counter_evidence",
+            "query_role": "counter_evidence",
+            "query_text": "ai compute pcb industry bottleneck industry bottleneck ai_compute_pcb_industry_bottleneck::mechanism::加速器数量、scale-up与scale-out拓扑、交换架构和板卡形态的代际变化，如何改变PCB数量、面积、层数、信号速率与材料组合？ alternative substitution limitation",
+            "required_terms": [
+              "ai compute pcb industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 4,
+            "query_id": "query:requirement:ai_compute_pcb_industry_bottleneck:question:mechanism:primary_engineering",
+            "query_role": "primary_engineering",
+            "query_text": "ai compute pcb industry bottleneck industry bottleneck standard specification technical document",
+            "required_terms": [
+              "ai compute pcb industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          }
+        ],
+        "requirement_ids": [
+          "requirement:ai_compute_pcb_industry_bottleneck:question:mechanism"
+        ],
+        "result_limit_per_query": 20,
+        "search_plan_id": "search_plan:requirement:ai_compute_pcb_industry_bottleneck:question:mechanism",
+        "status": "planned",
+        "stop_conditions": [
+          "all four industry query roles executed",
+          "counter-evidence query executed and reviewed",
+          "required source-class coverage reached"
+        ],
+        "version_id": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0"
+      },
+      {
+        "deduplication_policy": "normalized_url_then_content_hash",
+        "evidence_channel": "industry",
+        "geography": [
+          "CN",
+          "global"
+        ],
+        "languages": [
+          "zh-CN",
+          "en"
+        ],
+        "project_id": "research_project:ai_compute_pcb_industry_bottleneck",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "publication_window": "within_24_months",
+        "queries": [
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 1,
+            "query_id": "query:requirement:ai_compute_pcb_industry_bottleneck:question:constraint:mechanism",
+            "query_role": "mechanism",
+            "query_text": "ai compute pcb industry bottleneck industry bottleneck ai_compute_pcb_industry_bottleneck::constraint::高层板良率、背钻、HDI与多次压合能力、低损耗材料供应、客户认证和有效产能中，哪一项最可能限制交付？ mechanism engineering",
+            "required_terms": [
+              "ai compute pcb industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 2,
+            "query_id": "query:requirement:ai_compute_pcb_industry_bottleneck:question:constraint:quantification",
+            "query_role": "quantification",
+            "query_text": "ai compute pcb industry bottleneck industry bottleneck ai_compute_pcb_industry_bottleneck::constraint::高层板良率、背钻、HDI与多次压合能力、低损耗材料供应、客户认证和有效产能中，哪一项最可能限制交付？ capacity yield price data",
+            "required_terms": [
+              "ai compute pcb industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 3,
+            "query_id": "query:requirement:ai_compute_pcb_industry_bottleneck:question:constraint:counter_evidence",
+            "query_role": "counter_evidence",
+            "query_text": "ai compute pcb industry bottleneck industry bottleneck ai_compute_pcb_industry_bottleneck::constraint::高层板良率、背钻、HDI与多次压合能力、低损耗材料供应、客户认证和有效产能中，哪一项最可能限制交付？ alternative substitution limitation",
+            "required_terms": [
+              "ai compute pcb industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 4,
+            "query_id": "query:requirement:ai_compute_pcb_industry_bottleneck:question:constraint:primary_engineering",
+            "query_role": "primary_engineering",
+            "query_text": "ai compute pcb industry bottleneck industry bottleneck standard specification technical document",
+            "required_terms": [
+              "ai compute pcb industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          }
+        ],
+        "requirement_ids": [
+          "requirement:ai_compute_pcb_industry_bottleneck:question:constraint"
+        ],
+        "result_limit_per_query": 20,
+        "search_plan_id": "search_plan:requirement:ai_compute_pcb_industry_bottleneck:question:constraint",
+        "status": "planned",
+        "stop_conditions": [
+          "all four industry query roles executed",
+          "counter-evidence query executed and reviewed",
+          "required source-class coverage reached"
+        ],
+        "version_id": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0"
+      },
+      {
+        "deduplication_policy": "normalized_url_then_content_hash",
+        "evidence_channel": "industry",
+        "geography": [
+          "CN",
+          "global"
+        ],
+        "languages": [
+          "zh-CN",
+          "en"
+        ],
+        "project_id": "research_project:ai_compute_pcb_industry_bottleneck",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "publication_window": "within_24_months",
+        "queries": [
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 1,
+            "query_id": "query:requirement:ai_compute_pcb_industry_bottleneck:question:economics:mechanism",
+            "query_role": "mechanism",
+            "query_text": "ai compute pcb industry bottleneck industry bottleneck ai_compute_pcb_industry_bottleneck::economics::规格升级带来的单位增值能否覆盖良率损失、capex摊销、认证成本与价格竞争？ mechanism engineering",
+            "required_terms": [
+              "ai compute pcb industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 2,
+            "query_id": "query:requirement:ai_compute_pcb_industry_bottleneck:question:economics:quantification",
+            "query_role": "quantification",
+            "query_text": "ai compute pcb industry bottleneck industry bottleneck ai_compute_pcb_industry_bottleneck::economics::规格升级带来的单位增值能否覆盖良率损失、capex摊销、认证成本与价格竞争？ capacity yield price data",
+            "required_terms": [
+              "ai compute pcb industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 3,
+            "query_id": "query:requirement:ai_compute_pcb_industry_bottleneck:question:economics:counter_evidence",
+            "query_role": "counter_evidence",
+            "query_text": "ai compute pcb industry bottleneck industry bottleneck ai_compute_pcb_industry_bottleneck::economics::规格升级带来的单位增值能否覆盖良率损失、capex摊销、认证成本与价格竞争？ alternative substitution limitation",
+            "required_terms": [
+              "ai compute pcb industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 4,
+            "query_id": "query:requirement:ai_compute_pcb_industry_bottleneck:question:economics:primary_engineering",
+            "query_role": "primary_engineering",
+            "query_text": "ai compute pcb industry bottleneck industry bottleneck standard specification technical document",
+            "required_terms": [
+              "ai compute pcb industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          }
+        ],
+        "requirement_ids": [
+          "requirement:ai_compute_pcb_industry_bottleneck:question:economics"
+        ],
+        "result_limit_per_query": 20,
+        "search_plan_id": "search_plan:requirement:ai_compute_pcb_industry_bottleneck:question:economics",
+        "status": "planned",
+        "stop_conditions": [
+          "all four industry query roles executed",
+          "counter-evidence query executed and reviewed",
+          "required source-class coverage reached"
+        ],
+        "version_id": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0"
+      },
+      {
+        "deduplication_policy": "normalized_url_then_content_hash",
+        "evidence_channel": "industry",
+        "geography": [
+          "CN",
+          "global"
+        ],
+        "languages": [
+          "zh-CN",
+          "en"
+        ],
+        "project_id": "research_project:ai_compute_pcb_industry_bottleneck",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "publication_window": "within_24_months",
+        "queries": [
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 1,
+            "query_id": "query:requirement:ai_compute_pcb_industry_bottleneck:question:counterfactual:mechanism",
+            "query_role": "mechanism",
+            "query_text": "ai compute pcb industry bottleneck industry bottleneck ai_compute_pcb_industry_bottleneck::counterfactual::CPO、系统集成、板卡简化或行业扩产是否会抵消高层高速PCB与材料的单位价值迁移？ mechanism engineering",
+            "required_terms": [
+              "ai compute pcb industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 2,
+            "query_id": "query:requirement:ai_compute_pcb_industry_bottleneck:question:counterfactual:quantification",
+            "query_role": "quantification",
+            "query_text": "ai compute pcb industry bottleneck industry bottleneck ai_compute_pcb_industry_bottleneck::counterfactual::CPO、系统集成、板卡简化或行业扩产是否会抵消高层高速PCB与材料的单位价值迁移？ capacity yield price data",
+            "required_terms": [
+              "ai compute pcb industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 3,
+            "query_id": "query:requirement:ai_compute_pcb_industry_bottleneck:question:counterfactual:counter_evidence",
+            "query_role": "counter_evidence",
+            "query_text": "ai compute pcb industry bottleneck industry bottleneck ai_compute_pcb_industry_bottleneck::counterfactual::CPO、系统集成、板卡简化或行业扩产是否会抵消高层高速PCB与材料的单位价值迁移？ alternative substitution limitation",
+            "required_terms": [
+              "ai compute pcb industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 4,
+            "query_id": "query:requirement:ai_compute_pcb_industry_bottleneck:question:counterfactual:primary_engineering",
+            "query_role": "primary_engineering",
+            "query_text": "ai compute pcb industry bottleneck industry bottleneck standard specification technical document",
+            "required_terms": [
+              "ai compute pcb industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          }
+        ],
+        "requirement_ids": [
+          "requirement:ai_compute_pcb_industry_bottleneck:question:counterfactual"
+        ],
+        "result_limit_per_query": 20,
+        "search_plan_id": "search_plan:requirement:ai_compute_pcb_industry_bottleneck:question:counterfactual",
+        "status": "planned",
+        "stop_conditions": [
+          "all four industry query roles executed",
+          "counter-evidence query executed and reviewed",
+          "required source-class coverage reached"
+        ],
+        "version_id": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0"
+      },
+      {
+        "deduplication_policy": "normalized_url_then_content_hash",
+        "evidence_channel": "industry",
+        "geography": [
+          "CN",
+          "global"
+        ],
+        "languages": [
+          "zh-CN",
+          "en"
+        ],
+        "project_id": "research_project:ai_compute_pcb_industry_bottleneck",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "publication_window": "within_24_months",
+        "queries": [
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 1,
+            "query_id": "query:requirement:ai_compute_pcb_industry_bottleneck:question:validation:mechanism",
+            "query_role": "mechanism",
+            "query_text": "ai compute pcb industry bottleneck industry bottleneck ai_compute_pcb_industry_bottleneck::validation::应如何用服务器与rack BOM、layer/material mix、yield、effective capacity和price数据验证归一化价值迁移？ mechanism engineering",
+            "required_terms": [
+              "ai compute pcb industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 2,
+            "query_id": "query:requirement:ai_compute_pcb_industry_bottleneck:question:validation:quantification",
+            "query_role": "quantification",
+            "query_text": "ai compute pcb industry bottleneck industry bottleneck ai_compute_pcb_industry_bottleneck::validation::应如何用服务器与rack BOM、layer/material mix、yield、effective capacity和price数据验证归一化价值迁移？ capacity yield price data",
+            "required_terms": [
+              "ai compute pcb industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 3,
+            "query_id": "query:requirement:ai_compute_pcb_industry_bottleneck:question:validation:counter_evidence",
+            "query_role": "counter_evidence",
+            "query_text": "ai compute pcb industry bottleneck industry bottleneck ai_compute_pcb_industry_bottleneck::validation::应如何用服务器与rack BOM、layer/material mix、yield、effective capacity和price数据验证归一化价值迁移？ alternative substitution limitation",
+            "required_terms": [
+              "ai compute pcb industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 4,
+            "query_id": "query:requirement:ai_compute_pcb_industry_bottleneck:question:validation:primary_engineering",
+            "query_role": "primary_engineering",
+            "query_text": "ai compute pcb industry bottleneck industry bottleneck standard specification technical document",
+            "required_terms": [
+              "ai compute pcb industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          }
+        ],
+        "requirement_ids": [
+          "requirement:ai_compute_pcb_industry_bottleneck:question:validation"
+        ],
+        "result_limit_per_query": 20,
+        "search_plan_id": "search_plan:requirement:ai_compute_pcb_industry_bottleneck:question:validation",
+        "status": "planned",
+        "stop_conditions": [
+          "all four industry query roles executed",
+          "counter-evidence query executed and reviewed",
+          "required source-class coverage reached"
+        ],
+        "version_id": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0"
+      },
+      {
+        "deduplication_policy": "normalized_url_then_content_hash",
+        "evidence_channel": "industry",
+        "geography": [
+          "CN",
+          "global"
+        ],
+        "languages": [
+          "zh-CN",
+          "en"
+        ],
+        "project_id": "research_project:ai_compute_pcb_industry_bottleneck",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "publication_window": "within_24_months",
+        "queries": [
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 1,
+            "query_id": "query:requirement:ai_compute_pcb_industry_bottleneck:claim:primary:mechanism",
+            "query_role": "mechanism",
+            "query_text": "ai compute pcb industry bottleneck industry bottleneck ai_compute_pcb_industry_bottleneck主假设的关键机制、反例与失效条件是否同时可观察？ mechanism engineering",
+            "required_terms": [
+              "ai compute pcb industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 2,
+            "query_id": "query:requirement:ai_compute_pcb_industry_bottleneck:claim:primary:quantification",
+            "query_role": "quantification",
+            "query_text": "ai compute pcb industry bottleneck industry bottleneck ai_compute_pcb_industry_bottleneck主假设的关键机制、反例与失效条件是否同时可观察？ capacity yield price data",
+            "required_terms": [
+              "ai compute pcb industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 3,
+            "query_id": "query:requirement:ai_compute_pcb_industry_bottleneck:claim:primary:counter_evidence",
+            "query_role": "counter_evidence",
+            "query_text": "ai compute pcb industry bottleneck industry bottleneck ai_compute_pcb_industry_bottleneck主假设的关键机制、反例与失效条件是否同时可观察？ alternative substitution limitation",
+            "required_terms": [
+              "ai compute pcb industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 4,
+            "query_id": "query:requirement:ai_compute_pcb_industry_bottleneck:claim:primary:primary_engineering",
+            "query_role": "primary_engineering",
+            "query_text": "ai compute pcb industry bottleneck industry bottleneck standard specification technical document",
+            "required_terms": [
+              "ai compute pcb industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          }
+        ],
+        "requirement_ids": [
+          "requirement:ai_compute_pcb_industry_bottleneck:claim:primary"
+        ],
+        "result_limit_per_query": 20,
+        "search_plan_id": "search_plan:requirement:ai_compute_pcb_industry_bottleneck:claim:primary",
+        "status": "planned",
+        "stop_conditions": [
+          "all four industry query roles executed",
+          "counter-evidence query executed and reviewed",
+          "required source-class coverage reached"
+        ],
+        "version_id": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0"
+      }
+    ],
+    "source_candidates": [],
+    "source_relationships": [],
+    "upstream_research_refs": [
+      {
+        "referenced_at": "2026-07-18T00:00:00Z",
+        "scope_note": "承接已通过R1设计语义验证的上游主题基线，仅用于产业层问题收敛。",
+        "upstream_content_hash": "56a3200a56e9c6bd21c3571436c22431b3de5731662660f9c72c1d8413e172d3",
+        "upstream_gate_result_id": null,
+        "upstream_object_id": "research_version:ai_compute_pcb_value_migration:0.1.0",
+        "upstream_object_type": "research_version",
+        "upstream_project_id": "research_project:ai_compute_pcb_value_migration",
+        "upstream_research_layer": null,
+        "upstream_research_ref_id": "upstream_ref:ai_compute_pcb_industry_bottleneck:r1_baseline",
+        "upstream_version_id": "research_version:ai_compute_pcb_value_migration:0.1.0"
+      }
+    ],
+    "validation_metrics": [
+      {
+        "aggregation_method": "weighted_median_by_shipped_configuration",
+        "baseline_as_of": null,
+        "baseline_value": null,
+        "comparison_operator": ">=",
+        "confirmation_threshold": ">=15%",
+        "data_freshness_requirement": "180 days",
+        "data_source_plan": "server_rack_bom；pcb_supplier_qualification；shipment_configuration",
+        "expected_range": "positive_change_after_normalizing_accelerator_count",
+        "metric_definition": "normalized_high_speed_pcb_value_per_ai_rack主题具体验证指标。",
+        "metric_id": "metric:ai_compute_pcb_industry_bottleneck:primary",
+        "metric_name": "normalized_high_speed_pcb_value_per_ai_rack",
+        "observation_frequency": "quarterly",
+        "observation_window": "two_successive_architecture_generations",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "status": "planned",
+        "target_id": "claim:ai_compute_pcb_industry_bottleneck:primary",
+        "target_type": "research_claim",
+        "unit": "CNY_per_rack_or_normalized_index",
+        "warning_threshold": "<5%"
+      }
+    ]
+  },
+  "version_id": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0"
+}

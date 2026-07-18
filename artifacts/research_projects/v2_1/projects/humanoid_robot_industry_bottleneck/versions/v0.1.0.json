@@ -1,0 +1,2000 @@
+{
+  "artifact_kind": "industry_research_version",
+  "change_reason": "承接R1主题基线并定义产业层瓶颈研究。",
+  "change_summary": "建立产业层证据搜索与证伪设计。",
+  "content_hash": "481ae7608f677faa78ab87184b7d1995bfc52616ff133c2c04dd2891ff594142",
+  "created_at": "2026-07-18T00:00:00Z",
+  "created_by": "Codex",
+  "creation_stage": "research_design",
+  "incorporated_event_ids": [],
+  "parent_version_id": null,
+  "project_id": "research_project:humanoid_robot_industry_bottleneck",
+  "schema_version": "2.1.0",
+  "semantic_version": "0.1.0",
+  "snapshot": {
+    "causal_edges": [
+      {
+        "boundary_condition": "目标订单与产品定义已冻结。",
+        "causal_edge_id": "causal_edge:humanoid_robot_industry_bottleneck:production_ramp_target_to_duty_cycle_tolerance_requirements",
+        "confidence": 0.35,
+        "effect_polarity": "positive",
+        "feedback_loop_id": null,
+        "from_causal_node_id": "causal_node:humanoid_robot_industry_bottleneck:production_ramp_target",
+        "lifecycle_status": "active",
+        "mechanism_text": "量产目标把样机性能要求转化为连续duty cycle、公差和寿命门槛。",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:humanoid_robot_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "relation_type": "may_cause",
+        "strength": 0.4,
+        "supporting_claim_ids": [
+          "claim:humanoid_robot_industry_bottleneck:primary"
+        ],
+        "time_lag": "one_product_definition_cycle",
+        "to_causal_node_id": "causal_node:humanoid_robot_industry_bottleneck:duty_cycle_tolerance_requirements",
+        "validation_metric_ids": [
+          "metric:humanoid_robot_industry_bottleneck:primary"
+        ]
+      },
+      {
+        "boundary_condition": "模块设计与测试规范保持可比。",
+        "causal_edge_id": "causal_edge:humanoid_robot_industry_bottleneck:duty_cycle_tolerance_requirements_to_module_assembly_calibration_test",
+        "confidence": 0.35,
+        "effect_polarity": "positive",
+        "feedback_loop_id": null,
+        "from_causal_node_id": "causal_node:humanoid_robot_industry_bottleneck:duty_cycle_tolerance_requirements",
+        "lifecycle_status": "active",
+        "mechanism_text": "可靠性与公差要求决定装配、标定、测试覆盖率和工时。",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:humanoid_robot_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "relation_type": "may_cause",
+        "strength": 0.4,
+        "supporting_claim_ids": [
+          "claim:humanoid_robot_industry_bottleneck:primary"
+        ],
+        "time_lag": "one_engineering_ramp_cycle",
+        "to_causal_node_id": "causal_node:humanoid_robot_industry_bottleneck:module_assembly_calibration_test",
+        "validation_metric_ids": [
+          "metric:humanoid_robot_industry_bottleneck:primary"
+        ]
+      },
+      {
+        "boundary_condition": "按合格模块出货量加权。",
+        "causal_edge_id": "causal_edge:humanoid_robot_industry_bottleneck:module_assembly_calibration_test_to_yield_reliability_supplier_constraint",
+        "confidence": 0.35,
+        "effect_polarity": "negative",
+        "feedback_loop_id": null,
+        "from_causal_node_id": "causal_node:humanoid_robot_industry_bottleneck:module_assembly_calibration_test",
+        "lifecycle_status": "active",
+        "mechanism_text": "装配标定复杂度影响首轮良率、返工、MTBF和供应商放量能力。",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:humanoid_robot_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "relation_type": "may_cause",
+        "strength": 0.4,
+        "supporting_claim_ids": [
+          "claim:humanoid_robot_industry_bottleneck:primary"
+        ],
+        "time_lag": "three_consecutive_months",
+        "to_causal_node_id": "causal_node:humanoid_robot_industry_bottleneck:yield_reliability_supplier_constraint",
+        "validation_metric_ids": [
+          "metric:humanoid_robot_industry_bottleneck:primary"
+        ]
+      },
+      {
+        "boundary_condition": "软件、安全与真实订单不构成更早约束。",
+        "causal_edge_id": "causal_edge:humanoid_robot_industry_bottleneck:yield_reliability_supplier_constraint_to_ramp_cost_delivery",
+        "confidence": 0.35,
+        "effect_polarity": "conditional",
+        "feedback_loop_id": null,
+        "from_causal_node_id": "causal_node:humanoid_robot_industry_bottleneck:yield_reliability_supplier_constraint",
+        "lifecycle_status": "active",
+        "mechanism_text": "良率可靠性约束决定takt、单位成本与交付爬坡能否达成。",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:humanoid_robot_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "relation_type": "may_cause",
+        "strength": 0.4,
+        "supporting_claim_ids": [
+          "claim:humanoid_robot_industry_bottleneck:primary"
+        ],
+        "time_lag": "two_product_cycles",
+        "to_causal_node_id": "causal_node:humanoid_robot_industry_bottleneck:ramp_cost_delivery",
+        "validation_metric_ids": [
+          "metric:humanoid_robot_industry_bottleneck:primary"
+        ]
+      }
+    ],
+    "causal_nodes": [
+      {
+        "causal_node_id": "causal_node:humanoid_robot_industry_bottleneck:production_ramp_target",
+        "lifecycle_status": "active",
+        "node_kind": "trigger",
+        "node_text": "机器人量产目标、月度交付节拍与单位成本下降要求",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:humanoid_robot_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        }
+      },
+      {
+        "causal_node_id": "causal_node:humanoid_robot_industry_bottleneck:duty_cycle_tolerance_requirements",
+        "lifecycle_status": "active",
+        "node_kind": "system_parameter",
+        "node_text": "关节、灵巧手、传感器、线束和热管理的duty cycle可靠性与公差要求",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:humanoid_robot_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        }
+      },
+      {
+        "causal_node_id": "causal_node:humanoid_robot_industry_bottleneck:module_assembly_calibration_test",
+        "lifecycle_status": "active",
+        "node_kind": "mechanism",
+        "node_text": "模块装配、标定、功能测试与整机联调流程",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:humanoid_robot_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        }
+      },
+      {
+        "causal_node_id": "causal_node:humanoid_robot_industry_bottleneck:yield_reliability_supplier_constraint",
+        "lifecycle_status": "active",
+        "node_kind": "constraint",
+        "node_text": "首轮良率、返工、MTBF与供应商批次一致性约束",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:humanoid_robot_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        }
+      },
+      {
+        "causal_node_id": "causal_node:humanoid_robot_industry_bottleneck:ramp_cost_delivery",
+        "lifecycle_status": "active",
+        "node_kind": "outcome",
+        "node_text": "量产ramp的单位成本、takt达成和合格交付结果",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:humanoid_robot_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        }
+      }
+    ],
+    "claim_relations": [
+      {
+        "created_in_version": "research_version:humanoid_robot_industry_bottleneck:0.1.0",
+        "from_claim_id": "claim:humanoid_robot_industry_bottleneck:counter",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:humanoid_robot_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "relation_id": "claim_relation:humanoid_robot_industry_bottleneck:counter",
+        "relation_summary": "替代解释挑战主假设。",
+        "relation_type": "challenges",
+        "to_claim_id": "claim:humanoid_robot_industry_bottleneck:primary"
+      }
+    ],
+    "claims": [
+      {
+        "claim_id": "claim:humanoid_robot_industry_bottleneck:primary",
+        "claim_kind": "primary",
+        "claim_status": "hypothesis",
+        "claim_text": "量产瓶颈可能从样机部件可得性迁移到执行器、灵巧手、传感器的可靠性、良率、装配测试和认证，尚待验证。",
+        "confidence": 0.38,
+        "context_reference_ids": [
+          "reference:humanoid_robot_industry_bottleneck:background",
+          "reference:humanoid_robot_industry_bottleneck:scope_context"
+        ],
+        "created_in_version": "research_version:humanoid_robot_industry_bottleneck:0.1.0",
+        "epistemic_type": "hypothesis",
+        "importance": 0.95,
+        "invalidation_condition_ids": [
+          "condition:humanoid_robot_industry_bottleneck:primary"
+        ],
+        "lifecycle_status": "active",
+        "linked_question_ids": [
+          "question:humanoid_robot_industry_bottleneck:primary",
+          "question:humanoid_robot_industry_bottleneck:mechanism",
+          "question:humanoid_robot_industry_bottleneck:constraint",
+          "question:humanoid_robot_industry_bottleneck:economics",
+          "question:humanoid_robot_industry_bottleneck:validation"
+        ],
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:humanoid_robot_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "supersedes_claim_id": null,
+        "validation_metric_ids": [
+          "metric:humanoid_robot_industry_bottleneck:primary"
+        ]
+      },
+      {
+        "claim_id": "claim:humanoid_robot_industry_bottleneck:counter",
+        "claim_kind": "counter",
+        "claim_status": "under_test",
+        "claim_text": "需求节奏、软件数据与安全可能比硬件先形成约束。",
+        "confidence": 0.32,
+        "context_reference_ids": [
+          "reference:humanoid_robot_industry_bottleneck:background"
+        ],
+        "created_in_version": "research_version:humanoid_robot_industry_bottleneck:0.1.0",
+        "epistemic_type": "hypothesis",
+        "importance": 0.84,
+        "invalidation_condition_ids": [],
+        "lifecycle_status": "active",
+        "linked_question_ids": [
+          "question:humanoid_robot_industry_bottleneck:counterfactual"
+        ],
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:humanoid_robot_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "supersedes_claim_id": null,
+        "validation_metric_ids": []
+      }
+    ],
+    "conclusion_status": "unavailable",
+    "conflict_summaries": [],
+    "evidence_artifacts": [],
+    "evidence_assessments": [],
+    "evidence_requirements": [
+      {
+        "collection_status": "not_started",
+        "conflict_search_required": true,
+        "minimum_coverage": 2,
+        "primary_source_required": true,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:humanoid_robot_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_to_resolve": "humanoid_robot_industry_bottleneck::primary::人形机器人从样机走向量产，首先受限于哪些部件与工程化环节？",
+        "required_freshness": "within_24_months",
+        "required_independence": "independent",
+        "required_scope": "人形机器人关节执行器、灵巧手、传感器、线束热管理及模块装配标定测试。",
+        "required_source_classes": [
+          "technical_standard",
+          "engineering_document",
+          "independent_secondary"
+        ],
+        "requirement_id": "requirement:humanoid_robot_industry_bottleneck:question:primary",
+        "requirement_type": "validation",
+        "satisfaction_status": "unsatisfied",
+        "target_id": "question:humanoid_robot_industry_bottleneck:primary",
+        "target_type": "research_question"
+      },
+      {
+        "collection_status": "not_started",
+        "conflict_search_required": true,
+        "minimum_coverage": 2,
+        "primary_source_required": true,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:humanoid_robot_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_to_resolve": "humanoid_robot_industry_bottleneck::mechanism::关节执行器、灵巧手、传感器、线束与热管理在真实duty cycle下的可靠性和公差如何转化为量产要求？",
+        "required_freshness": "within_24_months",
+        "required_independence": "independent",
+        "required_scope": "人形机器人关节执行器、灵巧手、传感器、线束热管理及模块装配标定测试。",
+        "required_source_classes": [
+          "technical_standard",
+          "engineering_document",
+          "independent_secondary"
+        ],
+        "requirement_id": "requirement:humanoid_robot_industry_bottleneck:question:mechanism",
+        "requirement_type": "validation",
+        "satisfaction_status": "unsatisfied",
+        "target_id": "question:humanoid_robot_industry_bottleneck:mechanism",
+        "target_type": "research_question"
+      },
+      {
+        "collection_status": "not_started",
+        "conflict_search_required": true,
+        "minimum_coverage": 2,
+        "primary_source_required": true,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:humanoid_robot_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_to_resolve": "humanoid_robot_industry_bottleneck::constraint::模块装配、标定、测试、首轮良率、返工和供应商一致性中，哪一环节首先限制量产爬坡？",
+        "required_freshness": "within_24_months",
+        "required_independence": "independent",
+        "required_scope": "人形机器人关节执行器、灵巧手、传感器、线束热管理及模块装配标定测试。",
+        "required_source_classes": [
+          "technical_standard",
+          "engineering_document",
+          "independent_secondary"
+        ],
+        "requirement_id": "requirement:humanoid_robot_industry_bottleneck:question:constraint",
+        "requirement_type": "validation",
+        "satisfaction_status": "unsatisfied",
+        "target_id": "question:humanoid_robot_industry_bottleneck:constraint",
+        "target_type": "research_question"
+      },
+      {
+        "collection_status": "not_started",
+        "conflict_search_required": true,
+        "minimum_coverage": 2,
+        "primary_source_required": true,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:humanoid_robot_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_to_resolve": "humanoid_robot_industry_bottleneck::economics::单位成本、BOM、返工成本、测试工时与ramp capex能否在目标takt和交付节奏下收敛？",
+        "required_freshness": "within_24_months",
+        "required_independence": "independent",
+        "required_scope": "人形机器人关节执行器、灵巧手、传感器、线束热管理及模块装配标定测试。",
+        "required_source_classes": [
+          "technical_standard",
+          "engineering_document",
+          "independent_secondary"
+        ],
+        "requirement_id": "requirement:humanoid_robot_industry_bottleneck:question:economics",
+        "requirement_type": "validation",
+        "satisfaction_status": "unsatisfied",
+        "target_id": "question:humanoid_robot_industry_bottleneck:economics",
+        "target_type": "research_question"
+      },
+      {
+        "collection_status": "not_started",
+        "conflict_search_required": true,
+        "minimum_coverage": 2,
+        "primary_source_required": true,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:humanoid_robot_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_to_resolve": "humanoid_robot_industry_bottleneck::counterfactual::软件数据、安全验证、真实订单和需求节奏是否会先于硬件可靠性成为规模化约束？",
+        "required_freshness": "within_24_months",
+        "required_independence": "independent",
+        "required_scope": "人形机器人关节执行器、灵巧手、传感器、线束热管理及模块装配标定测试。",
+        "required_source_classes": [
+          "technical_standard",
+          "engineering_document",
+          "independent_secondary"
+        ],
+        "requirement_id": "requirement:humanoid_robot_industry_bottleneck:question:counterfactual",
+        "requirement_type": "validation",
+        "satisfaction_status": "unsatisfied",
+        "target_id": "question:humanoid_robot_industry_bottleneck:counterfactual",
+        "target_type": "research_question"
+      },
+      {
+        "collection_status": "not_started",
+        "conflict_search_required": true,
+        "minimum_coverage": 2,
+        "primary_source_required": true,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:humanoid_robot_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_to_resolve": "humanoid_robot_industry_bottleneck::validation::应如何用first-pass yield、rework、MTBF、takt、BOM和delivery数据识别首要量产瓶颈？",
+        "required_freshness": "within_24_months",
+        "required_independence": "independent",
+        "required_scope": "人形机器人关节执行器、灵巧手、传感器、线束热管理及模块装配标定测试。",
+        "required_source_classes": [
+          "technical_standard",
+          "engineering_document",
+          "independent_secondary"
+        ],
+        "requirement_id": "requirement:humanoid_robot_industry_bottleneck:question:validation",
+        "requirement_type": "validation",
+        "satisfaction_status": "unsatisfied",
+        "target_id": "question:humanoid_robot_industry_bottleneck:validation",
+        "target_type": "research_question"
+      },
+      {
+        "collection_status": "not_started",
+        "conflict_search_required": true,
+        "minimum_coverage": 2,
+        "primary_source_required": true,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:humanoid_robot_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_to_resolve": "humanoid_robot_industry_bottleneck主假设的关键机制、反例与失效条件是否同时可观察？",
+        "required_freshness": "within_24_months",
+        "required_independence": "independent",
+        "required_scope": "从样件到量产认证、稳定供货和单位成本爬坡的工程链条。",
+        "required_source_classes": [
+          "technical_standard",
+          "engineering_document",
+          "independent_secondary"
+        ],
+        "requirement_id": "requirement:humanoid_robot_industry_bottleneck:claim:primary",
+        "requirement_type": "validation",
+        "satisfaction_status": "unsatisfied",
+        "target_id": "claim:humanoid_robot_industry_bottleneck:primary",
+        "target_type": "research_claim"
+      }
+    ],
+    "evidence_stage": "requirements_defined",
+    "industry_evidence_assessments": [],
+    "invalidation_conditions": [
+      {
+        "comparison_operator": "<=",
+        "condition_id": "condition:humanoid_robot_industry_bottleneck:primary",
+        "condition_text": "若硬件瓶颈造成的交付延期占比不超过10%，则硬件不是首要量产约束。",
+        "minimum_observations": 2,
+        "observable_test": "按two_product_cycles观察10阈值并检查恢复条件>20%。",
+        "persistence_window": "two_product_cycles",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:humanoid_robot_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "recovery_condition": ">20%",
+        "severity": "critical",
+        "status": "planned",
+        "target_id": "claim:humanoid_robot_industry_bottleneck:primary",
+        "target_type": "research_claim",
+        "threshold_value": 10,
+        "triggered_at": null,
+        "unit": "% of schedule delay"
+      }
+    ],
+    "investment_status": "not_assessed",
+    "normalized_documents": [],
+    "project_lifecycle_state": "research_ready",
+    "question_tree_nodes": [
+      {
+        "branch_role": "root",
+        "dependency_question_ids": [],
+        "order": 1,
+        "parent_tree_node_id": null,
+        "question_id": "question:humanoid_robot_industry_bottleneck:primary",
+        "tree_id": "research_logic_tree:humanoid_robot_industry_bottleneck",
+        "tree_node_id": "tree_node:humanoid_robot_industry_bottleneck:primary"
+      },
+      {
+        "branch_role": "mechanism",
+        "dependency_question_ids": [
+          "question:humanoid_robot_industry_bottleneck:primary"
+        ],
+        "order": 2,
+        "parent_tree_node_id": "tree_node:humanoid_robot_industry_bottleneck:primary",
+        "question_id": "question:humanoid_robot_industry_bottleneck:mechanism",
+        "tree_id": "research_logic_tree:humanoid_robot_industry_bottleneck",
+        "tree_node_id": "tree_node:humanoid_robot_industry_bottleneck:mechanism"
+      },
+      {
+        "branch_role": "constraint",
+        "dependency_question_ids": [
+          "question:humanoid_robot_industry_bottleneck:mechanism"
+        ],
+        "order": 3,
+        "parent_tree_node_id": "tree_node:humanoid_robot_industry_bottleneck:primary",
+        "question_id": "question:humanoid_robot_industry_bottleneck:constraint",
+        "tree_id": "research_logic_tree:humanoid_robot_industry_bottleneck",
+        "tree_node_id": "tree_node:humanoid_robot_industry_bottleneck:constraint"
+      },
+      {
+        "branch_role": "economics",
+        "dependency_question_ids": [
+          "question:humanoid_robot_industry_bottleneck:mechanism",
+          "question:humanoid_robot_industry_bottleneck:constraint"
+        ],
+        "order": 4,
+        "parent_tree_node_id": "tree_node:humanoid_robot_industry_bottleneck:primary",
+        "question_id": "question:humanoid_robot_industry_bottleneck:economics",
+        "tree_id": "research_logic_tree:humanoid_robot_industry_bottleneck",
+        "tree_node_id": "tree_node:humanoid_robot_industry_bottleneck:economics"
+      },
+      {
+        "branch_role": "counterfactual",
+        "dependency_question_ids": [
+          "question:humanoid_robot_industry_bottleneck:primary",
+          "question:humanoid_robot_industry_bottleneck:constraint"
+        ],
+        "order": 6,
+        "parent_tree_node_id": "tree_node:humanoid_robot_industry_bottleneck:primary",
+        "question_id": "question:humanoid_robot_industry_bottleneck:counterfactual",
+        "tree_id": "research_logic_tree:humanoid_robot_industry_bottleneck",
+        "tree_node_id": "tree_node:humanoid_robot_industry_bottleneck:counterfactual"
+      },
+      {
+        "branch_role": "validation",
+        "dependency_question_ids": [
+          "question:humanoid_robot_industry_bottleneck:mechanism",
+          "question:humanoid_robot_industry_bottleneck:constraint",
+          "question:humanoid_robot_industry_bottleneck:economics",
+          "question:humanoid_robot_industry_bottleneck:counterfactual"
+        ],
+        "order": 7,
+        "parent_tree_node_id": "tree_node:humanoid_robot_industry_bottleneck:primary",
+        "question_id": "question:humanoid_robot_industry_bottleneck:validation",
+        "tree_id": "research_logic_tree:humanoid_robot_industry_bottleneck",
+        "tree_node_id": "tree_node:humanoid_robot_industry_bottleneck:validation"
+      }
+    ],
+    "questions": [
+      {
+        "answer_status": "unanswered",
+        "lifecycle_status": "active",
+        "linked_claim_ids": [
+          "claim:humanoid_robot_industry_bottleneck:primary"
+        ],
+        "linked_requirement_ids": [
+          "requirement:humanoid_robot_industry_bottleneck:question:primary"
+        ],
+        "priority": 1,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:humanoid_robot_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_id": "question:humanoid_robot_industry_bottleneck:primary",
+        "question_text": "人形机器人从样机走向量产，首先受限于哪些部件与工程化环节？",
+        "question_type": "primary",
+        "required_for_gate": true
+      },
+      {
+        "answer_status": "unanswered",
+        "lifecycle_status": "active",
+        "linked_claim_ids": [
+          "claim:humanoid_robot_industry_bottleneck:primary"
+        ],
+        "linked_requirement_ids": [
+          "requirement:humanoid_robot_industry_bottleneck:question:mechanism"
+        ],
+        "priority": 2,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:humanoid_robot_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_id": "question:humanoid_robot_industry_bottleneck:mechanism",
+        "question_text": "关节执行器、灵巧手、传感器、线束与热管理在真实duty cycle下的可靠性和公差如何转化为量产要求？",
+        "question_type": "mechanism",
+        "required_for_gate": true
+      },
+      {
+        "answer_status": "unanswered",
+        "lifecycle_status": "active",
+        "linked_claim_ids": [
+          "claim:humanoid_robot_industry_bottleneck:primary"
+        ],
+        "linked_requirement_ids": [
+          "requirement:humanoid_robot_industry_bottleneck:question:constraint"
+        ],
+        "priority": 3,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:humanoid_robot_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_id": "question:humanoid_robot_industry_bottleneck:constraint",
+        "question_text": "模块装配、标定、测试、首轮良率、返工和供应商一致性中，哪一环节首先限制量产爬坡？",
+        "question_type": "constraint",
+        "required_for_gate": true
+      },
+      {
+        "answer_status": "unanswered",
+        "lifecycle_status": "active",
+        "linked_claim_ids": [
+          "claim:humanoid_robot_industry_bottleneck:primary"
+        ],
+        "linked_requirement_ids": [
+          "requirement:humanoid_robot_industry_bottleneck:question:economics"
+        ],
+        "priority": 4,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:humanoid_robot_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_id": "question:humanoid_robot_industry_bottleneck:economics",
+        "question_text": "单位成本、BOM、返工成本、测试工时与ramp capex能否在目标takt和交付节奏下收敛？",
+        "question_type": "economics",
+        "required_for_gate": true
+      },
+      {
+        "answer_status": "unanswered",
+        "lifecycle_status": "active",
+        "linked_claim_ids": [
+          "claim:humanoid_robot_industry_bottleneck:counter"
+        ],
+        "linked_requirement_ids": [
+          "requirement:humanoid_robot_industry_bottleneck:question:counterfactual"
+        ],
+        "priority": 6,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:humanoid_robot_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_id": "question:humanoid_robot_industry_bottleneck:counterfactual",
+        "question_text": "软件数据、安全验证、真实订单和需求节奏是否会先于硬件可靠性成为规模化约束？",
+        "question_type": "counterfactual",
+        "required_for_gate": true
+      },
+      {
+        "answer_status": "unanswered",
+        "lifecycle_status": "active",
+        "linked_claim_ids": [
+          "claim:humanoid_robot_industry_bottleneck:primary"
+        ],
+        "linked_requirement_ids": [
+          "requirement:humanoid_robot_industry_bottleneck:question:validation"
+        ],
+        "priority": 7,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:humanoid_robot_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_id": "question:humanoid_robot_industry_bottleneck:validation",
+        "question_text": "应如何用first-pass yield、rework、MTBF、takt、BOM和delivery数据识别首要量产瓶颈？",
+        "question_type": "validation",
+        "required_for_gate": false
+      }
+    ],
+    "references": [
+      {
+        "hash_scope": "entire_object",
+        "locator": null,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:humanoid_robot_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "reference_content_hash": "977036323b03dfae3c7cae9801d6dedb4a4031d2efc4369fece1bb846853cfa1",
+        "reference_id": "reference:humanoid_robot_industry_bottleneck:background",
+        "reference_namespace": "theme_research_v1",
+        "reference_object_id": "humanoid_robotics_head_to_toe_v1",
+        "reference_role": "background",
+        "reference_type": "v1_theme",
+        "reference_version": "theme_decomposition_v1_6",
+        "referenced_at": "2026-07-17T00:00:00Z",
+        "resolution_status": "resolved",
+        "scope_note": "范围与背景引用，不构成结论证据。"
+      },
+      {
+        "hash_scope": "entire_object",
+        "locator": null,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:humanoid_robot_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "reference_content_hash": "7e2665900576f76f363586d4d95acd7475cb2b94ba36b40464bd01074c88f11f",
+        "reference_id": "reference:humanoid_robot_industry_bottleneck:scope_context",
+        "reference_namespace": "industry_catalog_v1",
+        "reference_object_id": "humanoid_robots_embodied_intelligence",
+        "reference_role": "scope_context",
+        "reference_type": "industry_catalog_chain",
+        "reference_version": "technology_industry_catalog_v1",
+        "referenced_at": "2026-07-17T00:00:00Z",
+        "resolution_status": "resolved",
+        "scope_note": "范围与背景引用，不构成结论证据。"
+      }
+    ],
+    "research_layer": "industry_research",
+    "router_decision": {
+      "confidence": 0.82,
+      "decided_at": "2026-07-17T00:00:00Z",
+      "decided_by": "Codex",
+      "excluded_modules": [
+        "portfolio_recommendation"
+      ],
+      "manual_override": false,
+      "override_reason": null,
+      "primary_method": "complex_system",
+      "required_research_modules": [
+        "causal_mechanism",
+        "validation",
+        "invalidation"
+      ],
+      "routing_reasons": [
+        "解释系统变化的因果传导。"
+      ],
+      "secondary_methods": [
+        "engineering_scale_up"
+      ]
+    },
+    "scope": {
+      "assumptions": [
+        "商业项目、量产或临床使用记录可按一致口径追踪。"
+      ],
+      "company_universe_boundary": "本层不形成公司清单、公司评级、股票评级或股票建议。",
+      "decision_context": "建立主题具体、可证伪的研究设计并规划后续证据采集。",
+      "excluded_scope": [
+        "公司清单、公司能力评级与公司排名",
+        "股票评级、个股推荐、目标价与投资建议",
+        "已形成支持性判断的资本市场结论"
+      ],
+      "geography": [
+        "中国",
+        "全球可比商业项目"
+      ],
+      "included_scope": [
+        "人形机器人关节执行器、灵巧手、传感器、线束热管理及模块装配标定测试。",
+        "从样件到量产认证、稳定供货和单位成本爬坡的工程链条。"
+      ],
+      "industry_boundary": "人形机器人关节执行器、灵巧手、传感器、线束热管理及模块装配标定测试。",
+      "known_unknowns": [
+        "真实duty cycle下的MTBF、公差漂移与热衰减数据有限。",
+        "模块首轮良率、返工工时、takt和供应商批次一致性缺少公开连续数据。"
+      ],
+      "primary_question": "人形机器人从样机走向量产，首先受限于哪些部件与工程化环节？",
+      "research_object": "人形机器人从样机走向量产，首先受限于哪些部件与工程化环节？",
+      "stop_conditions": [
+        "连续三个量产月份无法取得模块出货、首轮良率与返工口径时停止。"
+      ],
+      "time_horizon": "2026-2030 with defined validation windows"
+    },
+    "search_plans": [
+      {
+        "deduplication_policy": "normalized_url_then_content_hash",
+        "evidence_channel": "industry",
+        "geography": [
+          "CN",
+          "global"
+        ],
+        "languages": [
+          "zh-CN",
+          "en"
+        ],
+        "project_id": "research_project:humanoid_robot_industry_bottleneck",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:humanoid_robot_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "publication_window": "within_24_months",
+        "queries": [
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 1,
+            "query_id": "query:requirement:humanoid_robot_industry_bottleneck:question:primary:mechanism",
+            "query_role": "mechanism",
+            "query_text": "humanoid robot industry bottleneck industry bottleneck humanoid_robot_industry_bottleneck::primary::人形机器人从样机走向量产，首先受限于哪些部件与工程化环节？ mechanism engineering",
+            "required_terms": [
+              "humanoid robot industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 2,
+            "query_id": "query:requirement:humanoid_robot_industry_bottleneck:question:primary:quantification",
+            "query_role": "quantification",
+            "query_text": "humanoid robot industry bottleneck industry bottleneck humanoid_robot_industry_bottleneck::primary::人形机器人从样机走向量产，首先受限于哪些部件与工程化环节？ capacity yield price data",
+            "required_terms": [
+              "humanoid robot industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 3,
+            "query_id": "query:requirement:humanoid_robot_industry_bottleneck:question:primary:counter_evidence",
+            "query_role": "counter_evidence",
+            "query_text": "humanoid robot industry bottleneck industry bottleneck humanoid_robot_industry_bottleneck::primary::人形机器人从样机走向量产，首先受限于哪些部件与工程化环节？ alternative substitution limitation",
+            "required_terms": [
+              "humanoid robot industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 4,
+            "query_id": "query:requirement:humanoid_robot_industry_bottleneck:question:primary:primary_engineering",
+            "query_role": "primary_engineering",
+            "query_text": "humanoid robot industry bottleneck industry bottleneck standard specification technical document",
+            "required_terms": [
+              "humanoid robot industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          }
+        ],
+        "requirement_ids": [
+          "requirement:humanoid_robot_industry_bottleneck:question:primary"
+        ],
+        "result_limit_per_query": 20,
+        "search_plan_id": "search_plan:requirement:humanoid_robot_industry_bottleneck:question:primary",
+        "status": "planned",
+        "stop_conditions": [
+          "all four industry query roles executed",
+          "counter-evidence query executed and reviewed",
+          "required source-class coverage reached"
+        ],
+        "version_id": "research_version:humanoid_robot_industry_bottleneck:0.1.0"
+      },
+      {
+        "deduplication_policy": "normalized_url_then_content_hash",
+        "evidence_channel": "industry",
+        "geography": [
+          "CN",
+          "global"
+        ],
+        "languages": [
+          "zh-CN",
+          "en"
+        ],
+        "project_id": "research_project:humanoid_robot_industry_bottleneck",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:humanoid_robot_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "publication_window": "within_24_months",
+        "queries": [
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 1,
+            "query_id": "query:requirement:humanoid_robot_industry_bottleneck:question:mechanism:mechanism",
+            "query_role": "mechanism",
+            "query_text": "humanoid robot industry bottleneck industry bottleneck humanoid_robot_industry_bottleneck::mechanism::关节执行器、灵巧手、传感器、线束与热管理在真实duty cycle下的可靠性和公差如何转化为量产要求？ mechanism engineering",
+            "required_terms": [
+              "humanoid robot industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 2,
+            "query_id": "query:requirement:humanoid_robot_industry_bottleneck:question:mechanism:quantification",
+            "query_role": "quantification",
+            "query_text": "humanoid robot industry bottleneck industry bottleneck humanoid_robot_industry_bottleneck::mechanism::关节执行器、灵巧手、传感器、线束与热管理在真实duty cycle下的可靠性和公差如何转化为量产要求？ capacity yield price data",
+            "required_terms": [
+              "humanoid robot industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 3,
+            "query_id": "query:requirement:humanoid_robot_industry_bottleneck:question:mechanism:counter_evidence",
+            "query_role": "counter_evidence",
+            "query_text": "humanoid robot industry bottleneck industry bottleneck humanoid_robot_industry_bottleneck::mechanism::关节执行器、灵巧手、传感器、线束与热管理在真实duty cycle下的可靠性和公差如何转化为量产要求？ alternative substitution limitation",
+            "required_terms": [
+              "humanoid robot industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 4,
+            "query_id": "query:requirement:humanoid_robot_industry_bottleneck:question:mechanism:primary_engineering",
+            "query_role": "primary_engineering",
+            "query_text": "humanoid robot industry bottleneck industry bottleneck standard specification technical document",
+            "required_terms": [
+              "humanoid robot industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          }
+        ],
+        "requirement_ids": [
+          "requirement:humanoid_robot_industry_bottleneck:question:mechanism"
+        ],
+        "result_limit_per_query": 20,
+        "search_plan_id": "search_plan:requirement:humanoid_robot_industry_bottleneck:question:mechanism",
+        "status": "planned",
+        "stop_conditions": [
+          "all four industry query roles executed",
+          "counter-evidence query executed and reviewed",
+          "required source-class coverage reached"
+        ],
+        "version_id": "research_version:humanoid_robot_industry_bottleneck:0.1.0"
+      },
+      {
+        "deduplication_policy": "normalized_url_then_content_hash",
+        "evidence_channel": "industry",
+        "geography": [
+          "CN",
+          "global"
+        ],
+        "languages": [
+          "zh-CN",
+          "en"
+        ],
+        "project_id": "research_project:humanoid_robot_industry_bottleneck",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:humanoid_robot_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "publication_window": "within_24_months",
+        "queries": [
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 1,
+            "query_id": "query:requirement:humanoid_robot_industry_bottleneck:question:constraint:mechanism",
+            "query_role": "mechanism",
+            "query_text": "humanoid robot industry bottleneck industry bottleneck humanoid_robot_industry_bottleneck::constraint::模块装配、标定、测试、首轮良率、返工和供应商一致性中，哪一环节首先限制量产爬坡？ mechanism engineering",
+            "required_terms": [
+              "humanoid robot industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 2,
+            "query_id": "query:requirement:humanoid_robot_industry_bottleneck:question:constraint:quantification",
+            "query_role": "quantification",
+            "query_text": "humanoid robot industry bottleneck industry bottleneck humanoid_robot_industry_bottleneck::constraint::模块装配、标定、测试、首轮良率、返工和供应商一致性中，哪一环节首先限制量产爬坡？ capacity yield price data",
+            "required_terms": [
+              "humanoid robot industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 3,
+            "query_id": "query:requirement:humanoid_robot_industry_bottleneck:question:constraint:counter_evidence",
+            "query_role": "counter_evidence",
+            "query_text": "humanoid robot industry bottleneck industry bottleneck humanoid_robot_industry_bottleneck::constraint::模块装配、标定、测试、首轮良率、返工和供应商一致性中，哪一环节首先限制量产爬坡？ alternative substitution limitation",
+            "required_terms": [
+              "humanoid robot industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 4,
+            "query_id": "query:requirement:humanoid_robot_industry_bottleneck:question:constraint:primary_engineering",
+            "query_role": "primary_engineering",
+            "query_text": "humanoid robot industry bottleneck industry bottleneck standard specification technical document",
+            "required_terms": [
+              "humanoid robot industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          }
+        ],
+        "requirement_ids": [
+          "requirement:humanoid_robot_industry_bottleneck:question:constraint"
+        ],
+        "result_limit_per_query": 20,
+        "search_plan_id": "search_plan:requirement:humanoid_robot_industry_bottleneck:question:constraint",
+        "status": "planned",
+        "stop_conditions": [
+          "all four industry query roles executed",
+          "counter-evidence query executed and reviewed",
+          "required source-class coverage reached"
+        ],
+        "version_id": "research_version:humanoid_robot_industry_bottleneck:0.1.0"
+      },
+      {
+        "deduplication_policy": "normalized_url_then_content_hash",
+        "evidence_channel": "industry",
+        "geography": [
+          "CN",
+          "global"
+        ],
+        "languages": [
+          "zh-CN",
+          "en"
+        ],
+        "project_id": "research_project:humanoid_robot_industry_bottleneck",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:humanoid_robot_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "publication_window": "within_24_months",
+        "queries": [
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 1,
+            "query_id": "query:requirement:humanoid_robot_industry_bottleneck:question:economics:mechanism",
+            "query_role": "mechanism",
+            "query_text": "humanoid robot industry bottleneck industry bottleneck humanoid_robot_industry_bottleneck::economics::单位成本、BOM、返工成本、测试工时与ramp capex能否在目标takt和交付节奏下收敛？ mechanism engineering",
+            "required_terms": [
+              "humanoid robot industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 2,
+            "query_id": "query:requirement:humanoid_robot_industry_bottleneck:question:economics:quantification",
+            "query_role": "quantification",
+            "query_text": "humanoid robot industry bottleneck industry bottleneck humanoid_robot_industry_bottleneck::economics::单位成本、BOM、返工成本、测试工时与ramp capex能否在目标takt和交付节奏下收敛？ capacity yield price data",
+            "required_terms": [
+              "humanoid robot industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 3,
+            "query_id": "query:requirement:humanoid_robot_industry_bottleneck:question:economics:counter_evidence",
+            "query_role": "counter_evidence",
+            "query_text": "humanoid robot industry bottleneck industry bottleneck humanoid_robot_industry_bottleneck::economics::单位成本、BOM、返工成本、测试工时与ramp capex能否在目标takt和交付节奏下收敛？ alternative substitution limitation",
+            "required_terms": [
+              "humanoid robot industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 4,
+            "query_id": "query:requirement:humanoid_robot_industry_bottleneck:question:economics:primary_engineering",
+            "query_role": "primary_engineering",
+            "query_text": "humanoid robot industry bottleneck industry bottleneck standard specification technical document",
+            "required_terms": [
+              "humanoid robot industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          }
+        ],
+        "requirement_ids": [
+          "requirement:humanoid_robot_industry_bottleneck:question:economics"
+        ],
+        "result_limit_per_query": 20,
+        "search_plan_id": "search_plan:requirement:humanoid_robot_industry_bottleneck:question:economics",
+        "status": "planned",
+        "stop_conditions": [
+          "all four industry query roles executed",
+          "counter-evidence query executed and reviewed",
+          "required source-class coverage reached"
+        ],
+        "version_id": "research_version:humanoid_robot_industry_bottleneck:0.1.0"
+      },
+      {
+        "deduplication_policy": "normalized_url_then_content_hash",
+        "evidence_channel": "industry",
+        "geography": [
+          "CN",
+          "global"
+        ],
+        "languages": [
+          "zh-CN",
+          "en"
+        ],
+        "project_id": "research_project:humanoid_robot_industry_bottleneck",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:humanoid_robot_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "publication_window": "within_24_months",
+        "queries": [
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 1,
+            "query_id": "query:requirement:humanoid_robot_industry_bottleneck:question:counterfactual:mechanism",
+            "query_role": "mechanism",
+            "query_text": "humanoid robot industry bottleneck industry bottleneck humanoid_robot_industry_bottleneck::counterfactual::软件数据、安全验证、真实订单和需求节奏是否会先于硬件可靠性成为规模化约束？ mechanism engineering",
+            "required_terms": [
+              "humanoid robot industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 2,
+            "query_id": "query:requirement:humanoid_robot_industry_bottleneck:question:counterfactual:quantification",
+            "query_role": "quantification",
+            "query_text": "humanoid robot industry bottleneck industry bottleneck humanoid_robot_industry_bottleneck::counterfactual::软件数据、安全验证、真实订单和需求节奏是否会先于硬件可靠性成为规模化约束？ capacity yield price data",
+            "required_terms": [
+              "humanoid robot industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 3,
+            "query_id": "query:requirement:humanoid_robot_industry_bottleneck:question:counterfactual:counter_evidence",
+            "query_role": "counter_evidence",
+            "query_text": "humanoid robot industry bottleneck industry bottleneck humanoid_robot_industry_bottleneck::counterfactual::软件数据、安全验证、真实订单和需求节奏是否会先于硬件可靠性成为规模化约束？ alternative substitution limitation",
+            "required_terms": [
+              "humanoid robot industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 4,
+            "query_id": "query:requirement:humanoid_robot_industry_bottleneck:question:counterfactual:primary_engineering",
+            "query_role": "primary_engineering",
+            "query_text": "humanoid robot industry bottleneck industry bottleneck standard specification technical document",
+            "required_terms": [
+              "humanoid robot industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          }
+        ],
+        "requirement_ids": [
+          "requirement:humanoid_robot_industry_bottleneck:question:counterfactual"
+        ],
+        "result_limit_per_query": 20,
+        "search_plan_id": "search_plan:requirement:humanoid_robot_industry_bottleneck:question:counterfactual",
+        "status": "planned",
+        "stop_conditions": [
+          "all four industry query roles executed",
+          "counter-evidence query executed and reviewed",
+          "required source-class coverage reached"
+        ],
+        "version_id": "research_version:humanoid_robot_industry_bottleneck:0.1.0"
+      },
+      {
+        "deduplication_policy": "normalized_url_then_content_hash",
+        "evidence_channel": "industry",
+        "geography": [
+          "CN",
+          "global"
+        ],
+        "languages": [
+          "zh-CN",
+          "en"
+        ],
+        "project_id": "research_project:humanoid_robot_industry_bottleneck",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:humanoid_robot_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "publication_window": "within_24_months",
+        "queries": [
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 1,
+            "query_id": "query:requirement:humanoid_robot_industry_bottleneck:question:validation:mechanism",
+            "query_role": "mechanism",
+            "query_text": "humanoid robot industry bottleneck industry bottleneck humanoid_robot_industry_bottleneck::validation::应如何用first-pass yield、rework、MTBF、takt、BOM和delivery数据识别首要量产瓶颈？ mechanism engineering",
+            "required_terms": [
+              "humanoid robot industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 2,
+            "query_id": "query:requirement:humanoid_robot_industry_bottleneck:question:validation:quantification",
+            "query_role": "quantification",
+            "query_text": "humanoid robot industry bottleneck industry bottleneck humanoid_robot_industry_bottleneck::validation::应如何用first-pass yield、rework、MTBF、takt、BOM和delivery数据识别首要量产瓶颈？ capacity yield price data",
+            "required_terms": [
+              "humanoid robot industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 3,
+            "query_id": "query:requirement:humanoid_robot_industry_bottleneck:question:validation:counter_evidence",
+            "query_role": "counter_evidence",
+            "query_text": "humanoid robot industry bottleneck industry bottleneck humanoid_robot_industry_bottleneck::validation::应如何用first-pass yield、rework、MTBF、takt、BOM和delivery数据识别首要量产瓶颈？ alternative substitution limitation",
+            "required_terms": [
+              "humanoid robot industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 4,
+            "query_id": "query:requirement:humanoid_robot_industry_bottleneck:question:validation:primary_engineering",
+            "query_role": "primary_engineering",
+            "query_text": "humanoid robot industry bottleneck industry bottleneck standard specification technical document",
+            "required_terms": [
+              "humanoid robot industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          }
+        ],
+        "requirement_ids": [
+          "requirement:humanoid_robot_industry_bottleneck:question:validation"
+        ],
+        "result_limit_per_query": 20,
+        "search_plan_id": "search_plan:requirement:humanoid_robot_industry_bottleneck:question:validation",
+        "status": "planned",
+        "stop_conditions": [
+          "all four industry query roles executed",
+          "counter-evidence query executed and reviewed",
+          "required source-class coverage reached"
+        ],
+        "version_id": "research_version:humanoid_robot_industry_bottleneck:0.1.0"
+      },
+      {
+        "deduplication_policy": "normalized_url_then_content_hash",
+        "evidence_channel": "industry",
+        "geography": [
+          "CN",
+          "global"
+        ],
+        "languages": [
+          "zh-CN",
+          "en"
+        ],
+        "project_id": "research_project:humanoid_robot_industry_bottleneck",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:humanoid_robot_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "publication_window": "within_24_months",
+        "queries": [
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 1,
+            "query_id": "query:requirement:humanoid_robot_industry_bottleneck:claim:primary:mechanism",
+            "query_role": "mechanism",
+            "query_text": "humanoid robot industry bottleneck industry bottleneck humanoid_robot_industry_bottleneck主假设的关键机制、反例与失效条件是否同时可观察？ mechanism engineering",
+            "required_terms": [
+              "humanoid robot industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 2,
+            "query_id": "query:requirement:humanoid_robot_industry_bottleneck:claim:primary:quantification",
+            "query_role": "quantification",
+            "query_text": "humanoid robot industry bottleneck industry bottleneck humanoid_robot_industry_bottleneck主假设的关键机制、反例与失效条件是否同时可观察？ capacity yield price data",
+            "required_terms": [
+              "humanoid robot industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 3,
+            "query_id": "query:requirement:humanoid_robot_industry_bottleneck:claim:primary:counter_evidence",
+            "query_role": "counter_evidence",
+            "query_text": "humanoid robot industry bottleneck industry bottleneck humanoid_robot_industry_bottleneck主假设的关键机制、反例与失效条件是否同时可观察？ alternative substitution limitation",
+            "required_terms": [
+              "humanoid robot industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 4,
+            "query_id": "query:requirement:humanoid_robot_industry_bottleneck:claim:primary:primary_engineering",
+            "query_role": "primary_engineering",
+            "query_text": "humanoid robot industry bottleneck industry bottleneck standard specification technical document",
+            "required_terms": [
+              "humanoid robot industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          }
+        ],
+        "requirement_ids": [
+          "requirement:humanoid_robot_industry_bottleneck:claim:primary"
+        ],
+        "result_limit_per_query": 20,
+        "search_plan_id": "search_plan:requirement:humanoid_robot_industry_bottleneck:claim:primary",
+        "status": "planned",
+        "stop_conditions": [
+          "all four industry query roles executed",
+          "counter-evidence query executed and reviewed",
+          "required source-class coverage reached"
+        ],
+        "version_id": "research_version:humanoid_robot_industry_bottleneck:0.1.0"
+      }
+    ],
+    "source_candidates": [],
+    "source_relationships": [],
+    "upstream_research_refs": [
+      {
+        "referenced_at": "2026-07-18T00:00:00Z",
+        "scope_note": "承接已通过R1设计语义验证的上游主题基线，仅用于产业层问题收敛。",
+        "upstream_content_hash": "c4d7bdad5a7859669762a5ae8cb054a6b1475f4bb95d65a8fadad314d5b1feb8",
+        "upstream_gate_result_id": null,
+        "upstream_object_id": "research_version:humanoid_robot_scale_up_bottlenecks:0.1.0",
+        "upstream_object_type": "research_version",
+        "upstream_project_id": "research_project:humanoid_robot_scale_up_bottlenecks",
+        "upstream_research_layer": null,
+        "upstream_research_ref_id": "upstream_ref:humanoid_robot_industry_bottleneck:r1_baseline",
+        "upstream_version_id": "research_version:humanoid_robot_scale_up_bottlenecks:0.1.0"
+      }
+    ],
+    "validation_metrics": [
+      {
+        "aggregation_method": "weighted_mean_by_module_shipments",
+        "baseline_as_of": null,
+        "baseline_value": null,
+        "comparison_operator": ">=",
+        "confirmation_threshold": ">=90%",
+        "data_freshness_requirement": "30 days",
+        "data_source_plan": "module_yield_log；rework_and_test_record；qualified_shipments",
+        "expected_range": ">=90%",
+        "metric_definition": "qualified_module_first_pass_yield主题具体验证指标。",
+        "metric_id": "metric:humanoid_robot_industry_bottleneck:primary",
+        "metric_name": "qualified_module_first_pass_yield",
+        "observation_frequency": "monthly",
+        "observation_window": "three_consecutive_months",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:humanoid_robot_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "status": "planned",
+        "target_id": "claim:humanoid_robot_industry_bottleneck:primary",
+        "target_type": "research_claim",
+        "unit": "%",
+        "warning_threshold": "<80%"
+      }
+    ]
+  },
+  "version_id": "research_version:humanoid_robot_industry_bottleneck:0.1.0"
+}

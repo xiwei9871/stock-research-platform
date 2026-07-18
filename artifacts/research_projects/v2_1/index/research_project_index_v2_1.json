@@ -1,0 +1,59 @@
+{
+  "artifact_kind": "research_project_index",
+  "generated_at": "2026-07-18T00:00:00Z",
+  "projects": [
+    {
+      "conclusion_status": "unavailable",
+      "current_lifecycle_state": "research_ready",
+      "current_version": "research_version:ai_compute_pcb_industry_bottleneck:0.1.0",
+      "evidence_stage": "requirements_defined",
+      "latest_published_version": null,
+      "latest_reviewed_version": null,
+      "project_id": "research_project:ai_compute_pcb_industry_bottleneck",
+      "project_slug": "ai_compute_pcb_industry_bottleneck",
+      "relative_path": "projects/ai_compute_pcb_industry_bottleneck/project.json",
+      "research_layer": "industry_research",
+      "title": "AI算力PCB产业瓶颈研究设计"
+    },
+    {
+      "conclusion_status": "unavailable",
+      "current_lifecycle_state": "research_ready",
+      "current_version": "research_version:high_end_medical_device_industry_bottleneck:0.1.0",
+      "evidence_stage": "requirements_defined",
+      "latest_published_version": null,
+      "latest_reviewed_version": null,
+      "project_id": "research_project:high_end_medical_device_industry_bottleneck",
+      "project_slug": "high_end_medical_device_industry_bottleneck",
+      "relative_path": "projects/high_end_medical_device_industry_bottleneck/project.json",
+      "research_layer": "industry_research",
+      "title": "高端医疗器械产业瓶颈研究设计"
+    },
+    {
+      "conclusion_status": "unavailable",
+      "current_lifecycle_state": "research_ready",
+      "current_version": "research_version:humanoid_robot_industry_bottleneck:0.1.0",
+      "evidence_stage": "requirements_defined",
+      "latest_published_version": null,
+      "latest_reviewed_version": null,
+      "project_id": "research_project:humanoid_robot_industry_bottleneck",
+      "project_slug": "humanoid_robot_industry_bottleneck",
+      "relative_path": "projects/humanoid_robot_industry_bottleneck/project.json",
+      "research_layer": "industry_research",
+      "title": "人形机器人产业瓶颈研究设计"
+    },
+    {
+      "conclusion_status": "unavailable",
+      "current_lifecycle_state": "research_ready",
+      "current_version": "research_version:new_energy_storage_industry_bottleneck:0.1.0",
+      "evidence_stage": "requirements_defined",
+      "latest_published_version": null,
+      "latest_reviewed_version": null,
+      "project_id": "research_project:new_energy_storage_industry_bottleneck",
+      "project_slug": "new_energy_storage_industry_bottleneck",
+      "relative_path": "projects/new_energy_storage_industry_bottleneck/project.json",
+      "research_layer": "industry_research",
+      "title": "新型储能产业瓶颈研究设计"
+    }
+  ],
+  "schema_version": "2.1.0"
+}

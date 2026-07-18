@@ -1,0 +1,2000 @@
+{
+  "artifact_kind": "industry_research_version",
+  "change_reason": "承接R1主题基线并定义产业层瓶颈研究。",
+  "change_summary": "建立产业层证据搜索与证伪设计。",
+  "content_hash": "64fe9a5528462eb0767af3f0c92c895f600a7da05e058e9994c7697781b317c8",
+  "created_at": "2026-07-18T00:00:00Z",
+  "created_by": "Codex",
+  "creation_stage": "research_design",
+  "incorporated_event_ids": [],
+  "parent_version_id": null,
+  "project_id": "research_project:new_energy_storage_industry_bottleneck",
+  "schema_version": "2.1.0",
+  "semantic_version": "0.1.0",
+  "snapshot": {
+    "causal_edges": [
+      {
+        "boundary_condition": "比较相同应用场景和调度责任。",
+        "causal_edge_id": "causal_edge:new_energy_storage_industry_bottleneck:duty_cycle_revenue_rule_to_delivered_efficiency_degradation_safety",
+        "confidence": 0.35,
+        "effect_polarity": "conditional",
+        "feedback_loop_id": null,
+        "from_causal_node_id": "causal_node:new_energy_storage_industry_bottleneck:duty_cycle_revenue_rule",
+        "lifecycle_status": "active",
+        "mechanism_text": "duty cycle和收益规则决定循环深度、时长、频率及可获得收入。",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "relation_type": "may_cause",
+        "strength": 0.4,
+        "supporting_claim_ids": [
+          "claim:new_energy_storage_industry_bottleneck:primary"
+        ],
+        "time_lag": "one_project_design_cycle",
+        "to_causal_node_id": "causal_node:new_energy_storage_industry_bottleneck:delivered_efficiency_degradation_safety",
+        "validation_metric_ids": [
+          "metric:new_energy_storage_industry_bottleneck:primary"
+        ]
+      },
+      {
+        "boundary_condition": "采用商业项目交付而非实验室单体指标。",
+        "causal_edge_id": "causal_edge:new_energy_storage_industry_bottleneck:delivered_efficiency_degradation_safety_to_integration_om_financing",
+        "confidence": 0.35,
+        "effect_polarity": "conditional",
+        "feedback_loop_id": null,
+        "from_causal_node_id": "causal_node:new_energy_storage_industry_bottleneck:delivered_efficiency_degradation_safety",
+        "lifecycle_status": "active",
+        "mechanism_text": "实际循环工况映射到效率、退化、安全和可用率。",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "relation_type": "may_cause",
+        "strength": 0.4,
+        "supporting_claim_ids": [
+          "claim:new_energy_storage_industry_bottleneck:primary"
+        ],
+        "time_lag": "first_operating_year",
+        "to_causal_node_id": "causal_node:new_energy_storage_industry_bottleneck:integration_om_financing",
+        "validation_metric_ids": [
+          "metric:new_energy_storage_industry_bottleneck:primary"
+        ]
+      },
+      {
+        "boundary_condition": "EPC与O&M边界口径一致。",
+        "causal_edge_id": "causal_edge:new_energy_storage_industry_bottleneck:integration_om_financing_to_site_grid_supply_constraint",
+        "confidence": 0.35,
+        "effect_polarity": "negative",
+        "feedback_loop_id": null,
+        "from_causal_node_id": "causal_node:new_energy_storage_industry_bottleneck:integration_om_financing",
+        "lifecycle_status": "active",
+        "mechanism_text": "交付性能决定集成冗余、运维准备和融资风险溢价。",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "relation_type": "may_cause",
+        "strength": 0.4,
+        "supporting_claim_ids": [
+          "claim:new_energy_storage_industry_bottleneck:primary"
+        ],
+        "time_lag": "first_three_commercial_projects",
+        "to_causal_node_id": "causal_node:new_energy_storage_industry_bottleneck:site_grid_supply_constraint",
+        "validation_metric_ids": [
+          "metric:new_energy_storage_industry_bottleneck:primary"
+        ]
+      },
+      {
+        "boundary_condition": "按同duty cycle与融资口径比较。",
+        "causal_edge_id": "causal_edge:new_energy_storage_industry_bottleneck:site_grid_supply_constraint_to_route_adoption_economics",
+        "confidence": 0.35,
+        "effect_polarity": "conditional",
+        "feedback_loop_id": null,
+        "from_causal_node_id": "causal_node:new_energy_storage_industry_bottleneck:site_grid_supply_constraint",
+        "lifecycle_status": "active",
+        "mechanism_text": "场站、电网、消防与供应链约束共同决定路线采用和最终LCOS。",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "relation_type": "may_cause",
+        "strength": 0.4,
+        "supporting_claim_ids": [
+          "claim:new_energy_storage_industry_bottleneck:primary"
+        ],
+        "time_lag": "three_commercial_projects",
+        "to_causal_node_id": "causal_node:new_energy_storage_industry_bottleneck:route_adoption_economics",
+        "validation_metric_ids": [
+          "metric:new_energy_storage_industry_bottleneck:primary"
+        ]
+      }
+    ],
+    "causal_nodes": [
+      {
+        "causal_node_id": "causal_node:new_energy_storage_industry_bottleneck:duty_cycle_revenue_rule",
+        "lifecycle_status": "active",
+        "node_kind": "trigger",
+        "node_text": "目标duty cycle、调度方式与项目收益规则",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        }
+      },
+      {
+        "causal_node_id": "causal_node:new_energy_storage_industry_bottleneck:delivered_efficiency_degradation_safety",
+        "lifecycle_status": "active",
+        "node_kind": "system_parameter",
+        "node_text": "交付效率、寿命退化、安全事件与系统availability",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        }
+      },
+      {
+        "causal_node_id": "causal_node:new_energy_storage_industry_bottleneck:integration_om_financing",
+        "lifecycle_status": "active",
+        "node_kind": "mechanism",
+        "node_text": "系统集成、EPC、O&M与融资成本共同形成delivered LCOS",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        }
+      },
+      {
+        "causal_node_id": "causal_node:new_energy_storage_industry_bottleneck:site_grid_supply_constraint",
+        "lifecycle_status": "active",
+        "node_kind": "constraint",
+        "node_text": "场站条件、电网接入、消防审批与供应链交付约束",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        }
+      },
+      {
+        "causal_node_id": "causal_node:new_energy_storage_industry_bottleneck:route_adoption_economics",
+        "lifecycle_status": "active",
+        "node_kind": "outcome",
+        "node_text": "同场景路线采用、项目经济性与回款结果",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        }
+      }
+    ],
+    "claim_relations": [
+      {
+        "created_in_version": "research_version:new_energy_storage_industry_bottleneck:0.1.0",
+        "from_claim_id": "claim:new_energy_storage_industry_bottleneck:counter",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "relation_id": "claim_relation:new_energy_storage_industry_bottleneck:counter",
+        "relation_summary": "替代解释挑战主假设。",
+        "relation_type": "challenges",
+        "to_claim_id": "claim:new_energy_storage_industry_bottleneck:primary"
+      }
+    ],
+    "claims": [
+      {
+        "claim_id": "claim:new_energy_storage_industry_bottleneck:primary",
+        "claim_kind": "primary",
+        "claim_status": "hypothesis",
+        "claim_text": "路线胜负可能由交付LCOS、安全、寿命、制造与系统集成及场景适配共同决定，而非单体指标，尚待验证。",
+        "confidence": 0.38,
+        "context_reference_ids": [
+          "reference:new_energy_storage_industry_bottleneck:background",
+          "reference:new_energy_storage_industry_bottleneck:scope_context"
+        ],
+        "created_in_version": "research_version:new_energy_storage_industry_bottleneck:0.1.0",
+        "epistemic_type": "hypothesis",
+        "importance": 0.95,
+        "invalidation_condition_ids": [
+          "condition:new_energy_storage_industry_bottleneck:primary"
+        ],
+        "lifecycle_status": "active",
+        "linked_question_ids": [
+          "question:new_energy_storage_industry_bottleneck:primary",
+          "question:new_energy_storage_industry_bottleneck:mechanism",
+          "question:new_energy_storage_industry_bottleneck:constraint",
+          "question:new_energy_storage_industry_bottleneck:economics",
+          "question:new_energy_storage_industry_bottleneck:validation"
+        ],
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "supersedes_claim_id": null,
+        "validation_metric_ids": [
+          "metric:new_energy_storage_industry_bottleneck:primary"
+        ]
+      },
+      {
+        "claim_id": "claim:new_energy_storage_industry_bottleneck:counter",
+        "claim_kind": "counter",
+        "claim_status": "under_test",
+        "claim_text": "调度机制、收益规则与融资可能主导路线选择。",
+        "confidence": 0.32,
+        "context_reference_ids": [
+          "reference:new_energy_storage_industry_bottleneck:background"
+        ],
+        "created_in_version": "research_version:new_energy_storage_industry_bottleneck:0.1.0",
+        "epistemic_type": "hypothesis",
+        "importance": 0.84,
+        "invalidation_condition_ids": [],
+        "lifecycle_status": "active",
+        "linked_question_ids": [
+          "question:new_energy_storage_industry_bottleneck:counterfactual"
+        ],
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "supersedes_claim_id": null,
+        "validation_metric_ids": []
+      }
+    ],
+    "conclusion_status": "unavailable",
+    "conflict_summaries": [],
+    "evidence_artifacts": [],
+    "evidence_assessments": [],
+    "evidence_requirements": [
+      {
+        "collection_status": "not_started",
+        "conflict_search_required": true,
+        "minimum_coverage": 2,
+        "primary_source_required": true,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_to_resolve": "new_energy_storage_industry_bottleneck::primary::新型储能的路线竞争最终由性能、制造成本、系统经济性还是基础设施约束决定？",
+        "required_freshness": "within_24_months",
+        "required_independence": "independent",
+        "required_scope": "同一duty cycle下新型储能路线的效率、寿命、安全、系统集成和交付经济性。",
+        "required_source_classes": [
+          "technical_standard",
+          "engineering_document",
+          "independent_secondary"
+        ],
+        "requirement_id": "requirement:new_energy_storage_industry_bottleneck:question:primary",
+        "requirement_type": "validation",
+        "satisfaction_status": "unsatisfied",
+        "target_id": "question:new_energy_storage_industry_bottleneck:primary",
+        "target_type": "research_question"
+      },
+      {
+        "collection_status": "not_started",
+        "conflict_search_required": true,
+        "minimum_coverage": 2,
+        "primary_source_required": true,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_to_resolve": "new_energy_storage_industry_bottleneck::mechanism::在同一duty cycle下，不同储能路线的效率、衰减寿命与安全表现如何共同决定可交付性能？",
+        "required_freshness": "within_24_months",
+        "required_independence": "independent",
+        "required_scope": "同一duty cycle下新型储能路线的效率、寿命、安全、系统集成和交付经济性。",
+        "required_source_classes": [
+          "technical_standard",
+          "engineering_document",
+          "independent_secondary"
+        ],
+        "requirement_id": "requirement:new_energy_storage_industry_bottleneck:question:mechanism",
+        "requirement_type": "validation",
+        "satisfaction_status": "unsatisfied",
+        "target_id": "question:new_energy_storage_industry_bottleneck:mechanism",
+        "target_type": "research_question"
+      },
+      {
+        "collection_status": "not_started",
+        "conflict_search_required": true,
+        "minimum_coverage": 2,
+        "primary_source_required": true,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_to_resolve": "new_energy_storage_industry_bottleneck::constraint::制造、系统集成、EPC、O&M、场站、电网接入、消防与供应链约束如何改变路线可用性？",
+        "required_freshness": "within_24_months",
+        "required_independence": "independent",
+        "required_scope": "同一duty cycle下新型储能路线的效率、寿命、安全、系统集成和交付经济性。",
+        "required_source_classes": [
+          "technical_standard",
+          "engineering_document",
+          "independent_secondary"
+        ],
+        "requirement_id": "requirement:new_energy_storage_industry_bottleneck:question:constraint",
+        "requirement_type": "validation",
+        "satisfaction_status": "unsatisfied",
+        "target_id": "question:new_energy_storage_industry_bottleneck:constraint",
+        "target_type": "research_question"
+      },
+      {
+        "collection_status": "not_started",
+        "conflict_search_required": true,
+        "minimum_coverage": 2,
+        "primary_source_required": true,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_to_resolve": "new_energy_storage_industry_bottleneck::economics::delivered LCOS如何受利用率、运维、融资成本、退化与收益规则共同影响？",
+        "required_freshness": "within_24_months",
+        "required_independence": "independent",
+        "required_scope": "同一duty cycle下新型储能路线的效率、寿命、安全、系统集成和交付经济性。",
+        "required_source_classes": [
+          "technical_standard",
+          "engineering_document",
+          "independent_secondary"
+        ],
+        "requirement_id": "requirement:new_energy_storage_industry_bottleneck:question:economics",
+        "requirement_type": "validation",
+        "satisfaction_status": "unsatisfied",
+        "target_id": "question:new_energy_storage_industry_bottleneck:economics",
+        "target_type": "research_question"
+      },
+      {
+        "collection_status": "not_started",
+        "conflict_search_required": true,
+        "minimum_coverage": 2,
+        "primary_source_required": true,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_to_resolve": "new_energy_storage_industry_bottleneck::counterfactual::调度机制、收益规则与融资条件是否会压过技术路线本身并主导项目选择？",
+        "required_freshness": "within_24_months",
+        "required_independence": "independent",
+        "required_scope": "同一duty cycle下新型储能路线的效率、寿命、安全、系统集成和交付经济性。",
+        "required_source_classes": [
+          "technical_standard",
+          "engineering_document",
+          "independent_secondary"
+        ],
+        "requirement_id": "requirement:new_energy_storage_industry_bottleneck:question:counterfactual",
+        "requirement_type": "validation",
+        "satisfaction_status": "unsatisfied",
+        "target_id": "question:new_energy_storage_industry_bottleneck:counterfactual",
+        "target_type": "research_question"
+      },
+      {
+        "collection_status": "not_started",
+        "conflict_search_required": true,
+        "minimum_coverage": 2,
+        "primary_source_required": true,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_to_resolve": "new_energy_storage_industry_bottleneck::validation::应如何用delivered LCOS、availability、degradation、safety events、EPC与O&M数据比较同一场景路线？",
+        "required_freshness": "within_24_months",
+        "required_independence": "independent",
+        "required_scope": "同一duty cycle下新型储能路线的效率、寿命、安全、系统集成和交付经济性。",
+        "required_source_classes": [
+          "technical_standard",
+          "engineering_document",
+          "independent_secondary"
+        ],
+        "requirement_id": "requirement:new_energy_storage_industry_bottleneck:question:validation",
+        "requirement_type": "validation",
+        "satisfaction_status": "unsatisfied",
+        "target_id": "question:new_energy_storage_industry_bottleneck:validation",
+        "target_type": "research_question"
+      },
+      {
+        "collection_status": "not_started",
+        "conflict_search_required": true,
+        "minimum_coverage": 2,
+        "primary_source_required": true,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_to_resolve": "new_energy_storage_industry_bottleneck主假设的关键机制、反例与失效条件是否同时可观察？",
+        "required_freshness": "within_24_months",
+        "required_independence": "independent",
+        "required_scope": "项目从EPC交付、并网验收、运营利用到融资和回款的全链条。",
+        "required_source_classes": [
+          "technical_standard",
+          "engineering_document",
+          "independent_secondary"
+        ],
+        "requirement_id": "requirement:new_energy_storage_industry_bottleneck:claim:primary",
+        "requirement_type": "validation",
+        "satisfaction_status": "unsatisfied",
+        "target_id": "claim:new_energy_storage_industry_bottleneck:primary",
+        "target_type": "research_claim"
+      }
+    ],
+    "evidence_stage": "requirements_defined",
+    "industry_evidence_assessments": [],
+    "invalidation_conditions": [
+      {
+        "comparison_operator": ">=",
+        "condition_id": "condition:new_energy_storage_industry_bottleneck:primary",
+        "condition_text": "若路线LCOS优势未能维持，达到或超过在位路线LCOS的95%，则主假设失效。",
+        "minimum_observations": 3,
+        "observable_test": "按three_commercial_projects观察95阈值并检查恢复条件<=90%。",
+        "persistence_window": "three_commercial_projects",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "recovery_condition": "<=90%",
+        "severity": "critical",
+        "status": "planned",
+        "target_id": "claim:new_energy_storage_industry_bottleneck:primary",
+        "target_type": "research_claim",
+        "threshold_value": 95,
+        "triggered_at": null,
+        "unit": "% of incumbent LCOS"
+      }
+    ],
+    "investment_status": "not_assessed",
+    "normalized_documents": [],
+    "project_lifecycle_state": "research_ready",
+    "question_tree_nodes": [
+      {
+        "branch_role": "root",
+        "dependency_question_ids": [],
+        "order": 1,
+        "parent_tree_node_id": null,
+        "question_id": "question:new_energy_storage_industry_bottleneck:primary",
+        "tree_id": "research_logic_tree:new_energy_storage_industry_bottleneck",
+        "tree_node_id": "tree_node:new_energy_storage_industry_bottleneck:primary"
+      },
+      {
+        "branch_role": "mechanism",
+        "dependency_question_ids": [
+          "question:new_energy_storage_industry_bottleneck:primary"
+        ],
+        "order": 2,
+        "parent_tree_node_id": "tree_node:new_energy_storage_industry_bottleneck:primary",
+        "question_id": "question:new_energy_storage_industry_bottleneck:mechanism",
+        "tree_id": "research_logic_tree:new_energy_storage_industry_bottleneck",
+        "tree_node_id": "tree_node:new_energy_storage_industry_bottleneck:mechanism"
+      },
+      {
+        "branch_role": "constraint",
+        "dependency_question_ids": [
+          "question:new_energy_storage_industry_bottleneck:mechanism"
+        ],
+        "order": 3,
+        "parent_tree_node_id": "tree_node:new_energy_storage_industry_bottleneck:primary",
+        "question_id": "question:new_energy_storage_industry_bottleneck:constraint",
+        "tree_id": "research_logic_tree:new_energy_storage_industry_bottleneck",
+        "tree_node_id": "tree_node:new_energy_storage_industry_bottleneck:constraint"
+      },
+      {
+        "branch_role": "economics",
+        "dependency_question_ids": [
+          "question:new_energy_storage_industry_bottleneck:mechanism",
+          "question:new_energy_storage_industry_bottleneck:constraint"
+        ],
+        "order": 4,
+        "parent_tree_node_id": "tree_node:new_energy_storage_industry_bottleneck:primary",
+        "question_id": "question:new_energy_storage_industry_bottleneck:economics",
+        "tree_id": "research_logic_tree:new_energy_storage_industry_bottleneck",
+        "tree_node_id": "tree_node:new_energy_storage_industry_bottleneck:economics"
+      },
+      {
+        "branch_role": "counterfactual",
+        "dependency_question_ids": [
+          "question:new_energy_storage_industry_bottleneck:primary",
+          "question:new_energy_storage_industry_bottleneck:constraint"
+        ],
+        "order": 6,
+        "parent_tree_node_id": "tree_node:new_energy_storage_industry_bottleneck:primary",
+        "question_id": "question:new_energy_storage_industry_bottleneck:counterfactual",
+        "tree_id": "research_logic_tree:new_energy_storage_industry_bottleneck",
+        "tree_node_id": "tree_node:new_energy_storage_industry_bottleneck:counterfactual"
+      },
+      {
+        "branch_role": "validation",
+        "dependency_question_ids": [
+          "question:new_energy_storage_industry_bottleneck:mechanism",
+          "question:new_energy_storage_industry_bottleneck:constraint",
+          "question:new_energy_storage_industry_bottleneck:economics",
+          "question:new_energy_storage_industry_bottleneck:counterfactual"
+        ],
+        "order": 7,
+        "parent_tree_node_id": "tree_node:new_energy_storage_industry_bottleneck:primary",
+        "question_id": "question:new_energy_storage_industry_bottleneck:validation",
+        "tree_id": "research_logic_tree:new_energy_storage_industry_bottleneck",
+        "tree_node_id": "tree_node:new_energy_storage_industry_bottleneck:validation"
+      }
+    ],
+    "questions": [
+      {
+        "answer_status": "unanswered",
+        "lifecycle_status": "active",
+        "linked_claim_ids": [
+          "claim:new_energy_storage_industry_bottleneck:primary"
+        ],
+        "linked_requirement_ids": [
+          "requirement:new_energy_storage_industry_bottleneck:question:primary"
+        ],
+        "priority": 1,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_id": "question:new_energy_storage_industry_bottleneck:primary",
+        "question_text": "新型储能的路线竞争最终由性能、制造成本、系统经济性还是基础设施约束决定？",
+        "question_type": "primary",
+        "required_for_gate": true
+      },
+      {
+        "answer_status": "unanswered",
+        "lifecycle_status": "active",
+        "linked_claim_ids": [
+          "claim:new_energy_storage_industry_bottleneck:primary"
+        ],
+        "linked_requirement_ids": [
+          "requirement:new_energy_storage_industry_bottleneck:question:mechanism"
+        ],
+        "priority": 2,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_id": "question:new_energy_storage_industry_bottleneck:mechanism",
+        "question_text": "在同一duty cycle下，不同储能路线的效率、衰减寿命与安全表现如何共同决定可交付性能？",
+        "question_type": "mechanism",
+        "required_for_gate": true
+      },
+      {
+        "answer_status": "unanswered",
+        "lifecycle_status": "active",
+        "linked_claim_ids": [
+          "claim:new_energy_storage_industry_bottleneck:primary"
+        ],
+        "linked_requirement_ids": [
+          "requirement:new_energy_storage_industry_bottleneck:question:constraint"
+        ],
+        "priority": 3,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_id": "question:new_energy_storage_industry_bottleneck:constraint",
+        "question_text": "制造、系统集成、EPC、O&M、场站、电网接入、消防与供应链约束如何改变路线可用性？",
+        "question_type": "constraint",
+        "required_for_gate": true
+      },
+      {
+        "answer_status": "unanswered",
+        "lifecycle_status": "active",
+        "linked_claim_ids": [
+          "claim:new_energy_storage_industry_bottleneck:primary"
+        ],
+        "linked_requirement_ids": [
+          "requirement:new_energy_storage_industry_bottleneck:question:economics"
+        ],
+        "priority": 4,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_id": "question:new_energy_storage_industry_bottleneck:economics",
+        "question_text": "delivered LCOS如何受利用率、运维、融资成本、退化与收益规则共同影响？",
+        "question_type": "economics",
+        "required_for_gate": true
+      },
+      {
+        "answer_status": "unanswered",
+        "lifecycle_status": "active",
+        "linked_claim_ids": [
+          "claim:new_energy_storage_industry_bottleneck:counter"
+        ],
+        "linked_requirement_ids": [
+          "requirement:new_energy_storage_industry_bottleneck:question:counterfactual"
+        ],
+        "priority": 6,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_id": "question:new_energy_storage_industry_bottleneck:counterfactual",
+        "question_text": "调度机制、收益规则与融资条件是否会压过技术路线本身并主导项目选择？",
+        "question_type": "counterfactual",
+        "required_for_gate": true
+      },
+      {
+        "answer_status": "unanswered",
+        "lifecycle_status": "active",
+        "linked_claim_ids": [
+          "claim:new_energy_storage_industry_bottleneck:primary"
+        ],
+        "linked_requirement_ids": [
+          "requirement:new_energy_storage_industry_bottleneck:question:validation"
+        ],
+        "priority": 7,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "question_id": "question:new_energy_storage_industry_bottleneck:validation",
+        "question_text": "应如何用delivered LCOS、availability、degradation、safety events、EPC与O&M数据比较同一场景路线？",
+        "question_type": "validation",
+        "required_for_gate": false
+      }
+    ],
+    "references": [
+      {
+        "hash_scope": "entire_object",
+        "locator": null,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "reference_content_hash": "d43c30a76a60f18a7d335c57fb79a895de68d21bdaf21a9c0ffad4147ff37a60",
+        "reference_id": "reference:new_energy_storage_industry_bottleneck:background",
+        "reference_namespace": "theme_research_v1",
+        "reference_object_id": "new_energy_storage_value_chain_v1",
+        "reference_role": "background",
+        "reference_type": "v1_theme",
+        "reference_version": "theme_decomposition_v1_6",
+        "referenced_at": "2026-07-17T00:00:00Z",
+        "resolution_status": "resolved",
+        "scope_note": "范围与背景引用，不构成结论证据。"
+      },
+      {
+        "hash_scope": "entire_object",
+        "locator": null,
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "reference_content_hash": "23c9330f5f5414bbf13299cec88ca91e37f14ccb018a0c99a56627e985b0fdfc",
+        "reference_id": "reference:new_energy_storage_industry_bottleneck:scope_context",
+        "reference_namespace": "industry_catalog_v1",
+        "reference_object_id": "new_energy_storage",
+        "reference_role": "scope_context",
+        "reference_type": "industry_catalog_chain",
+        "reference_version": "technology_industry_catalog_v1",
+        "referenced_at": "2026-07-17T00:00:00Z",
+        "resolution_status": "resolved",
+        "scope_note": "范围与背景引用，不构成结论证据。"
+      }
+    ],
+    "research_layer": "industry_research",
+    "router_decision": {
+      "confidence": 0.82,
+      "decided_at": "2026-07-17T00:00:00Z",
+      "decided_by": "Codex",
+      "excluded_modules": [
+        "portfolio_recommendation"
+      ],
+      "manual_override": false,
+      "override_reason": null,
+      "primary_method": "technology_route",
+      "required_research_modules": [
+        "causal_mechanism",
+        "validation",
+        "invalidation"
+      ],
+      "routing_reasons": [
+        "解释系统变化的因果传导。"
+      ],
+      "secondary_methods": [
+        "infrastructure_economics"
+      ]
+    },
+    "scope": {
+      "assumptions": [
+        "商业项目、量产或临床使用记录可按一致口径追踪。"
+      ],
+      "company_universe_boundary": "本层不形成公司清单、公司评级、股票评级或股票建议。",
+      "decision_context": "建立主题具体、可证伪的研究设计并规划后续证据采集。",
+      "excluded_scope": [
+        "公司清单、公司能力评级与公司排名",
+        "股票评级、个股推荐、目标价与投资建议",
+        "已形成支持性判断的资本市场结论"
+      ],
+      "geography": [
+        "中国",
+        "全球可比商业项目"
+      ],
+      "included_scope": [
+        "同一duty cycle下新型储能路线的效率、寿命、安全、系统集成和交付经济性。",
+        "项目从EPC交付、并网验收、运营利用到融资和回款的全链条。"
+      ],
+      "industry_boundary": "同一duty cycle下新型储能路线的效率、寿命、安全、系统集成和交付经济性。",
+      "known_unknowns": [
+        "不同路线商业项目的同口径delivered LCOS与退化数据不足。",
+        "调度收益、消防并网限制、融资条款与场站利用率高度场景化。"
+      ],
+      "primary_question": "新型储能的路线竞争最终由性能、制造成本、系统经济性还是基础设施约束决定？",
+      "research_object": "新型储能的路线竞争最终由性能、制造成本、系统经济性还是基础设施约束决定？",
+      "stop_conditions": [
+        "首三个商业项目无法获得同duty cycle的LCOS、availability和degradation时停止。"
+      ],
+      "time_horizon": "2026-2030 with defined validation windows"
+    },
+    "search_plans": [
+      {
+        "deduplication_policy": "normalized_url_then_content_hash",
+        "evidence_channel": "industry",
+        "geography": [
+          "CN",
+          "global"
+        ],
+        "languages": [
+          "zh-CN",
+          "en"
+        ],
+        "project_id": "research_project:new_energy_storage_industry_bottleneck",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "publication_window": "within_24_months",
+        "queries": [
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 1,
+            "query_id": "query:requirement:new_energy_storage_industry_bottleneck:question:primary:mechanism",
+            "query_role": "mechanism",
+            "query_text": "new energy storage industry bottleneck industry bottleneck new_energy_storage_industry_bottleneck::primary::新型储能的路线竞争最终由性能、制造成本、系统经济性还是基础设施约束决定？ mechanism engineering",
+            "required_terms": [
+              "new energy storage industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 2,
+            "query_id": "query:requirement:new_energy_storage_industry_bottleneck:question:primary:quantification",
+            "query_role": "quantification",
+            "query_text": "new energy storage industry bottleneck industry bottleneck new_energy_storage_industry_bottleneck::primary::新型储能的路线竞争最终由性能、制造成本、系统经济性还是基础设施约束决定？ capacity yield price data",
+            "required_terms": [
+              "new energy storage industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 3,
+            "query_id": "query:requirement:new_energy_storage_industry_bottleneck:question:primary:counter_evidence",
+            "query_role": "counter_evidence",
+            "query_text": "new energy storage industry bottleneck industry bottleneck new_energy_storage_industry_bottleneck::primary::新型储能的路线竞争最终由性能、制造成本、系统经济性还是基础设施约束决定？ alternative substitution limitation",
+            "required_terms": [
+              "new energy storage industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 4,
+            "query_id": "query:requirement:new_energy_storage_industry_bottleneck:question:primary:primary_engineering",
+            "query_role": "primary_engineering",
+            "query_text": "new energy storage industry bottleneck industry bottleneck standard specification technical document",
+            "required_terms": [
+              "new energy storage industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          }
+        ],
+        "requirement_ids": [
+          "requirement:new_energy_storage_industry_bottleneck:question:primary"
+        ],
+        "result_limit_per_query": 20,
+        "search_plan_id": "search_plan:requirement:new_energy_storage_industry_bottleneck:question:primary",
+        "status": "planned",
+        "stop_conditions": [
+          "all four industry query roles executed",
+          "counter-evidence query executed and reviewed",
+          "required source-class coverage reached"
+        ],
+        "version_id": "research_version:new_energy_storage_industry_bottleneck:0.1.0"
+      },
+      {
+        "deduplication_policy": "normalized_url_then_content_hash",
+        "evidence_channel": "industry",
+        "geography": [
+          "CN",
+          "global"
+        ],
+        "languages": [
+          "zh-CN",
+          "en"
+        ],
+        "project_id": "research_project:new_energy_storage_industry_bottleneck",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "publication_window": "within_24_months",
+        "queries": [
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 1,
+            "query_id": "query:requirement:new_energy_storage_industry_bottleneck:question:mechanism:mechanism",
+            "query_role": "mechanism",
+            "query_text": "new energy storage industry bottleneck industry bottleneck new_energy_storage_industry_bottleneck::mechanism::在同一duty cycle下，不同储能路线的效率、衰减寿命与安全表现如何共同决定可交付性能？ mechanism engineering",
+            "required_terms": [
+              "new energy storage industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 2,
+            "query_id": "query:requirement:new_energy_storage_industry_bottleneck:question:mechanism:quantification",
+            "query_role": "quantification",
+            "query_text": "new energy storage industry bottleneck industry bottleneck new_energy_storage_industry_bottleneck::mechanism::在同一duty cycle下，不同储能路线的效率、衰减寿命与安全表现如何共同决定可交付性能？ capacity yield price data",
+            "required_terms": [
+              "new energy storage industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 3,
+            "query_id": "query:requirement:new_energy_storage_industry_bottleneck:question:mechanism:counter_evidence",
+            "query_role": "counter_evidence",
+            "query_text": "new energy storage industry bottleneck industry bottleneck new_energy_storage_industry_bottleneck::mechanism::在同一duty cycle下，不同储能路线的效率、衰减寿命与安全表现如何共同决定可交付性能？ alternative substitution limitation",
+            "required_terms": [
+              "new energy storage industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 4,
+            "query_id": "query:requirement:new_energy_storage_industry_bottleneck:question:mechanism:primary_engineering",
+            "query_role": "primary_engineering",
+            "query_text": "new energy storage industry bottleneck industry bottleneck standard specification technical document",
+            "required_terms": [
+              "new energy storage industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          }
+        ],
+        "requirement_ids": [
+          "requirement:new_energy_storage_industry_bottleneck:question:mechanism"
+        ],
+        "result_limit_per_query": 20,
+        "search_plan_id": "search_plan:requirement:new_energy_storage_industry_bottleneck:question:mechanism",
+        "status": "planned",
+        "stop_conditions": [
+          "all four industry query roles executed",
+          "counter-evidence query executed and reviewed",
+          "required source-class coverage reached"
+        ],
+        "version_id": "research_version:new_energy_storage_industry_bottleneck:0.1.0"
+      },
+      {
+        "deduplication_policy": "normalized_url_then_content_hash",
+        "evidence_channel": "industry",
+        "geography": [
+          "CN",
+          "global"
+        ],
+        "languages": [
+          "zh-CN",
+          "en"
+        ],
+        "project_id": "research_project:new_energy_storage_industry_bottleneck",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "publication_window": "within_24_months",
+        "queries": [
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 1,
+            "query_id": "query:requirement:new_energy_storage_industry_bottleneck:question:constraint:mechanism",
+            "query_role": "mechanism",
+            "query_text": "new energy storage industry bottleneck industry bottleneck new_energy_storage_industry_bottleneck::constraint::制造、系统集成、EPC、O&M、场站、电网接入、消防与供应链约束如何改变路线可用性？ mechanism engineering",
+            "required_terms": [
+              "new energy storage industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 2,
+            "query_id": "query:requirement:new_energy_storage_industry_bottleneck:question:constraint:quantification",
+            "query_role": "quantification",
+            "query_text": "new energy storage industry bottleneck industry bottleneck new_energy_storage_industry_bottleneck::constraint::制造、系统集成、EPC、O&M、场站、电网接入、消防与供应链约束如何改变路线可用性？ capacity yield price data",
+            "required_terms": [
+              "new energy storage industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 3,
+            "query_id": "query:requirement:new_energy_storage_industry_bottleneck:question:constraint:counter_evidence",
+            "query_role": "counter_evidence",
+            "query_text": "new energy storage industry bottleneck industry bottleneck new_energy_storage_industry_bottleneck::constraint::制造、系统集成、EPC、O&M、场站、电网接入、消防与供应链约束如何改变路线可用性？ alternative substitution limitation",
+            "required_terms": [
+              "new energy storage industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 4,
+            "query_id": "query:requirement:new_energy_storage_industry_bottleneck:question:constraint:primary_engineering",
+            "query_role": "primary_engineering",
+            "query_text": "new energy storage industry bottleneck industry bottleneck standard specification technical document",
+            "required_terms": [
+              "new energy storage industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          }
+        ],
+        "requirement_ids": [
+          "requirement:new_energy_storage_industry_bottleneck:question:constraint"
+        ],
+        "result_limit_per_query": 20,
+        "search_plan_id": "search_plan:requirement:new_energy_storage_industry_bottleneck:question:constraint",
+        "status": "planned",
+        "stop_conditions": [
+          "all four industry query roles executed",
+          "counter-evidence query executed and reviewed",
+          "required source-class coverage reached"
+        ],
+        "version_id": "research_version:new_energy_storage_industry_bottleneck:0.1.0"
+      },
+      {
+        "deduplication_policy": "normalized_url_then_content_hash",
+        "evidence_channel": "industry",
+        "geography": [
+          "CN",
+          "global"
+        ],
+        "languages": [
+          "zh-CN",
+          "en"
+        ],
+        "project_id": "research_project:new_energy_storage_industry_bottleneck",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "publication_window": "within_24_months",
+        "queries": [
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 1,
+            "query_id": "query:requirement:new_energy_storage_industry_bottleneck:question:economics:mechanism",
+            "query_role": "mechanism",
+            "query_text": "new energy storage industry bottleneck industry bottleneck new_energy_storage_industry_bottleneck::economics::delivered LCOS如何受利用率、运维、融资成本、退化与收益规则共同影响？ mechanism engineering",
+            "required_terms": [
+              "new energy storage industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 2,
+            "query_id": "query:requirement:new_energy_storage_industry_bottleneck:question:economics:quantification",
+            "query_role": "quantification",
+            "query_text": "new energy storage industry bottleneck industry bottleneck new_energy_storage_industry_bottleneck::economics::delivered LCOS如何受利用率、运维、融资成本、退化与收益规则共同影响？ capacity yield price data",
+            "required_terms": [
+              "new energy storage industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 3,
+            "query_id": "query:requirement:new_energy_storage_industry_bottleneck:question:economics:counter_evidence",
+            "query_role": "counter_evidence",
+            "query_text": "new energy storage industry bottleneck industry bottleneck new_energy_storage_industry_bottleneck::economics::delivered LCOS如何受利用率、运维、融资成本、退化与收益规则共同影响？ alternative substitution limitation",
+            "required_terms": [
+              "new energy storage industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 4,
+            "query_id": "query:requirement:new_energy_storage_industry_bottleneck:question:economics:primary_engineering",
+            "query_role": "primary_engineering",
+            "query_text": "new energy storage industry bottleneck industry bottleneck standard specification technical document",
+            "required_terms": [
+              "new energy storage industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          }
+        ],
+        "requirement_ids": [
+          "requirement:new_energy_storage_industry_bottleneck:question:economics"
+        ],
+        "result_limit_per_query": 20,
+        "search_plan_id": "search_plan:requirement:new_energy_storage_industry_bottleneck:question:economics",
+        "status": "planned",
+        "stop_conditions": [
+          "all four industry query roles executed",
+          "counter-evidence query executed and reviewed",
+          "required source-class coverage reached"
+        ],
+        "version_id": "research_version:new_energy_storage_industry_bottleneck:0.1.0"
+      },
+      {
+        "deduplication_policy": "normalized_url_then_content_hash",
+        "evidence_channel": "industry",
+        "geography": [
+          "CN",
+          "global"
+        ],
+        "languages": [
+          "zh-CN",
+          "en"
+        ],
+        "project_id": "research_project:new_energy_storage_industry_bottleneck",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "publication_window": "within_24_months",
+        "queries": [
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 1,
+            "query_id": "query:requirement:new_energy_storage_industry_bottleneck:question:counterfactual:mechanism",
+            "query_role": "mechanism",
+            "query_text": "new energy storage industry bottleneck industry bottleneck new_energy_storage_industry_bottleneck::counterfactual::调度机制、收益规则与融资条件是否会压过技术路线本身并主导项目选择？ mechanism engineering",
+            "required_terms": [
+              "new energy storage industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 2,
+            "query_id": "query:requirement:new_energy_storage_industry_bottleneck:question:counterfactual:quantification",
+            "query_role": "quantification",
+            "query_text": "new energy storage industry bottleneck industry bottleneck new_energy_storage_industry_bottleneck::counterfactual::调度机制、收益规则与融资条件是否会压过技术路线本身并主导项目选择？ capacity yield price data",
+            "required_terms": [
+              "new energy storage industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 3,
+            "query_id": "query:requirement:new_energy_storage_industry_bottleneck:question:counterfactual:counter_evidence",
+            "query_role": "counter_evidence",
+            "query_text": "new energy storage industry bottleneck industry bottleneck new_energy_storage_industry_bottleneck::counterfactual::调度机制、收益规则与融资条件是否会压过技术路线本身并主导项目选择？ alternative substitution limitation",
+            "required_terms": [
+              "new energy storage industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 4,
+            "query_id": "query:requirement:new_energy_storage_industry_bottleneck:question:counterfactual:primary_engineering",
+            "query_role": "primary_engineering",
+            "query_text": "new energy storage industry bottleneck industry bottleneck standard specification technical document",
+            "required_terms": [
+              "new energy storage industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          }
+        ],
+        "requirement_ids": [
+          "requirement:new_energy_storage_industry_bottleneck:question:counterfactual"
+        ],
+        "result_limit_per_query": 20,
+        "search_plan_id": "search_plan:requirement:new_energy_storage_industry_bottleneck:question:counterfactual",
+        "status": "planned",
+        "stop_conditions": [
+          "all four industry query roles executed",
+          "counter-evidence query executed and reviewed",
+          "required source-class coverage reached"
+        ],
+        "version_id": "research_version:new_energy_storage_industry_bottleneck:0.1.0"
+      },
+      {
+        "deduplication_policy": "normalized_url_then_content_hash",
+        "evidence_channel": "industry",
+        "geography": [
+          "CN",
+          "global"
+        ],
+        "languages": [
+          "zh-CN",
+          "en"
+        ],
+        "project_id": "research_project:new_energy_storage_industry_bottleneck",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "publication_window": "within_24_months",
+        "queries": [
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 1,
+            "query_id": "query:requirement:new_energy_storage_industry_bottleneck:question:validation:mechanism",
+            "query_role": "mechanism",
+            "query_text": "new energy storage industry bottleneck industry bottleneck new_energy_storage_industry_bottleneck::validation::应如何用delivered LCOS、availability、degradation、safety events、EPC与O&M数据比较同一场景路线？ mechanism engineering",
+            "required_terms": [
+              "new energy storage industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 2,
+            "query_id": "query:requirement:new_energy_storage_industry_bottleneck:question:validation:quantification",
+            "query_role": "quantification",
+            "query_text": "new energy storage industry bottleneck industry bottleneck new_energy_storage_industry_bottleneck::validation::应如何用delivered LCOS、availability、degradation、safety events、EPC与O&M数据比较同一场景路线？ capacity yield price data",
+            "required_terms": [
+              "new energy storage industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 3,
+            "query_id": "query:requirement:new_energy_storage_industry_bottleneck:question:validation:counter_evidence",
+            "query_role": "counter_evidence",
+            "query_text": "new energy storage industry bottleneck industry bottleneck new_energy_storage_industry_bottleneck::validation::应如何用delivered LCOS、availability、degradation、safety events、EPC与O&M数据比较同一场景路线？ alternative substitution limitation",
+            "required_terms": [
+              "new energy storage industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 4,
+            "query_id": "query:requirement:new_energy_storage_industry_bottleneck:question:validation:primary_engineering",
+            "query_role": "primary_engineering",
+            "query_text": "new energy storage industry bottleneck industry bottleneck standard specification technical document",
+            "required_terms": [
+              "new energy storage industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          }
+        ],
+        "requirement_ids": [
+          "requirement:new_energy_storage_industry_bottleneck:question:validation"
+        ],
+        "result_limit_per_query": 20,
+        "search_plan_id": "search_plan:requirement:new_energy_storage_industry_bottleneck:question:validation",
+        "status": "planned",
+        "stop_conditions": [
+          "all four industry query roles executed",
+          "counter-evidence query executed and reviewed",
+          "required source-class coverage reached"
+        ],
+        "version_id": "research_version:new_energy_storage_industry_bottleneck:0.1.0"
+      },
+      {
+        "deduplication_policy": "normalized_url_then_content_hash",
+        "evidence_channel": "industry",
+        "geography": [
+          "CN",
+          "global"
+        ],
+        "languages": [
+          "zh-CN",
+          "en"
+        ],
+        "project_id": "research_project:new_energy_storage_industry_bottleneck",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "publication_window": "within_24_months",
+        "queries": [
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 1,
+            "query_id": "query:requirement:new_energy_storage_industry_bottleneck:claim:primary:mechanism",
+            "query_role": "mechanism",
+            "query_text": "new energy storage industry bottleneck industry bottleneck new_energy_storage_industry_bottleneck主假设的关键机制、反例与失效条件是否同时可观察？ mechanism engineering",
+            "required_terms": [
+              "new energy storage industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 2,
+            "query_id": "query:requirement:new_energy_storage_industry_bottleneck:claim:primary:quantification",
+            "query_role": "quantification",
+            "query_text": "new energy storage industry bottleneck industry bottleneck new_energy_storage_industry_bottleneck主假设的关键机制、反例与失效条件是否同时可观察？ capacity yield price data",
+            "required_terms": [
+              "new energy storage industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 3,
+            "query_id": "query:requirement:new_energy_storage_industry_bottleneck:claim:primary:counter_evidence",
+            "query_role": "counter_evidence",
+            "query_text": "new energy storage industry bottleneck industry bottleneck new_energy_storage_industry_bottleneck主假设的关键机制、反例与失效条件是否同时可观察？ alternative substitution limitation",
+            "required_terms": [
+              "new energy storage industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          },
+          {
+            "excluded_terms": [
+              "buy rating",
+              "candidate companies",
+              "company ranking",
+              "sell rating",
+              "target price",
+              "top stock",
+              "上市公司排名",
+              "买入",
+              "估值最低",
+              "卖出",
+              "受益标的",
+              "最强龙头",
+              "目标价",
+              "股票推荐"
+            ],
+            "priority": 4,
+            "query_id": "query:requirement:new_energy_storage_industry_bottleneck:claim:primary:primary_engineering",
+            "query_role": "primary_engineering",
+            "query_text": "new energy storage industry bottleneck industry bottleneck standard specification technical document",
+            "required_terms": [
+              "new energy storage industry bottleneck",
+              "industry bottleneck"
+            ],
+            "source_classes": [
+              "technical_standard",
+              "engineering_document",
+              "independent_secondary"
+            ]
+          }
+        ],
+        "requirement_ids": [
+          "requirement:new_energy_storage_industry_bottleneck:claim:primary"
+        ],
+        "result_limit_per_query": 20,
+        "search_plan_id": "search_plan:requirement:new_energy_storage_industry_bottleneck:claim:primary",
+        "status": "planned",
+        "stop_conditions": [
+          "all four industry query roles executed",
+          "counter-evidence query executed and reviewed",
+          "required source-class coverage reached"
+        ],
+        "version_id": "research_version:new_energy_storage_industry_bottleneck:0.1.0"
+      }
+    ],
+    "source_candidates": [],
+    "source_relationships": [],
+    "upstream_research_refs": [
+      {
+        "referenced_at": "2026-07-18T00:00:00Z",
+        "scope_note": "承接已通过R1设计语义验证的上游主题基线，仅用于产业层问题收敛。",
+        "upstream_content_hash": "64a5257414688d4213eca14b6662388414373ce7f63f06d878175e41d859eabc",
+        "upstream_gate_result_id": null,
+        "upstream_object_id": "research_version:new_energy_storage_route_competition:0.1.0",
+        "upstream_object_type": "research_version",
+        "upstream_project_id": "research_project:new_energy_storage_route_competition",
+        "upstream_research_layer": null,
+        "upstream_research_ref_id": "upstream_ref:new_energy_storage_industry_bottleneck:r1_baseline",
+        "upstream_version_id": "research_version:new_energy_storage_route_competition:0.1.0"
+      }
+    ],
+    "validation_metrics": [
+      {
+        "aggregation_method": "median_same_duty_cycle",
+        "baseline_as_of": null,
+        "baseline_value": null,
+        "comparison_operator": "<=",
+        "confirmation_threshold": "<=90% of incumbent",
+        "data_freshness_requirement": "90 days",
+        "data_source_plan": "commercial_project_lcos；dispatch_and_availability；epc_om_financing",
+        "expected_range": "at_least_10_percent_below_incumbent",
+        "metric_definition": "route_adjusted_delivered_lcos主题具体验证指标。",
+        "metric_id": "metric:new_energy_storage_industry_bottleneck:primary",
+        "metric_name": "route_adjusted_delivered_lcos",
+        "observation_frequency": "quarterly",
+        "observation_window": "first_three_commercial_projects",
+        "provenance": {
+          "actor_type": "codex",
+          "agent_run_id": "research-project-v2-r1-pilots",
+          "created_at": "2026-07-17T00:00:00Z",
+          "created_by": "Codex",
+          "created_in_version": "research_version:new_energy_storage_industry_bottleneck:0.1.0",
+          "review_status": "pending_review"
+        },
+        "status": "planned",
+        "target_id": "claim:new_energy_storage_industry_bottleneck:primary",
+        "target_type": "research_claim",
+        "unit": "CNY_per_MWh",
+        "warning_threshold": ">95% of incumbent"
+      }
+    ]
+  },
+  "version_id": "research_version:new_energy_storage_industry_bottleneck:0.1.0"
+}
