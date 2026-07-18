@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import stat
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from hashlib import sha256
@@ -122,6 +123,33 @@ def test_html_implicitly_closes_paragraphs_and_list_items_in_source_order() -> N
     assert [section.text for section in paragraphs.sections] == ["A", "B"]
     items = parse_document_bytes(b"<ul><li>A<li>B</ul>", media_type="text/html")
     assert [section.text for section in items.sections] == ["A", "B"]
+
+
+@pytest.mark.parametrize(
+    ("payload", "expected"),
+    [
+        (b"<p>A<h2>H</h2><p>B", ["A", "H", "B"]),
+        (b"<p>A<div>D</div><p>B", ["A", "D", "B"]),
+        (b"<h1>A<h2>B", ["A", "B"]),
+        (b"<p>A<h1>H<h2>I", ["A", "H", "I"]),
+    ],
+)
+def test_html_block_starts_close_paragraphs_and_headings_in_dom_order(
+    payload: bytes, expected: list[str]
+) -> None:
+    parsed = parse_document_bytes(payload, media_type="text/html")
+    assert [section.text for section in parsed.sections] == expected
+
+
+def test_html_implicit_heading_close_cannot_cross_hidden_ancestor() -> None:
+    parsed = parse_document_bytes(
+        b"<h1>Visible<div hidden><h2>SECRET</h2></div><p>shown</p>",
+        media_type="text/html",
+    )
+    combined = "\n".join(section.text for section in parsed.sections)
+    assert "SECRET" not in combined
+    assert "Visible" in combined
+    assert "shown" in combined
 
 
 def test_pdf_parser_emits_one_section_per_page_and_rejects_encryption() -> None:
@@ -370,6 +398,48 @@ def test_write_normalized_document_is_immutable_idempotent_and_concurrent(tmp_pa
         write_normalized_document(changed, layout=layout)
     assert exc.value.code == "RESEARCH_PROJECT_V2_1_NORMALIZE_IMMUTABILITY_VIOLATION"
     assert not list(layout.evidence_normalized_dir.glob(".tmp-*"))
+    retired = layout.evidence_normalized_dir / ".retired"
+    assert retired.is_dir()
+    assert stat.S_IMODE(retired.stat().st_mode) & 0o077 == 0
+    assert not list(retired.iterdir())
+
+
+@pytest.mark.parametrize("mode", [0o755, 0o777])
+def test_write_rejects_group_or_other_accessible_normalized_directory(
+    tmp_path: Path, mode: int
+) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    artifact = _artifact(layout, b"permissions", "text/plain", "txt")
+    document = normalize_artifact(
+        artifact,
+        layout=layout,
+        parsed_at="2026-07-18T00:00:00Z",
+        provenance=_provenance("permissions"),
+    )
+    layout.evidence_normalized_dir.mkdir(parents=True, mode=0o700)
+    layout.evidence_normalized_dir.chmod(mode)
+    with pytest.raises(ResearchProjectV2Error) as exc:
+        write_normalized_document(document, layout=layout)
+    assert exc.value.code == "RESEARCH_PROJECT_V2_1_NORMALIZE_STORAGE_FAILED"
+
+
+def test_write_rejects_symlinked_retired_directory_before_publication(tmp_path: Path) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    artifact = _artifact(layout, b"retired symlink", "text/plain", "txt")
+    document = normalize_artifact(
+        artifact,
+        layout=layout,
+        parsed_at="2026-07-18T00:00:00Z",
+        provenance=_provenance("retired-symlink"),
+    )
+    layout.evidence_normalized_dir.mkdir(parents=True, mode=0o700)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (layout.evidence_normalized_dir / ".retired").symlink_to(outside)
+    with pytest.raises(ResearchProjectV2Error) as exc:
+        write_normalized_document(document, layout=layout)
+    assert exc.value.code == "RESEARCH_PROJECT_V2_1_NORMALIZE_STORAGE_FAILED"
+    assert not (layout.evidence_normalized_dir / f"{document['document_id']}.json").exists()
 
 
 def test_parse_byte_limit_is_checked_before_decoding() -> None:
@@ -618,7 +688,7 @@ def test_temp_cleanup_isolates_name_replacement_before_deletion(
     monkeypatch.setattr(normalize_module.os, "rename", replace_during_isolation)
     with pytest.raises(ResearchProjectV2Error):
         write_normalized_document(document, layout=layout)
-    retired = list(layout.evidence_normalized_dir.glob(".retired-*"))
+    retired = list((layout.evidence_normalized_dir / ".retired").iterdir())
     assert len(retired) == 1
     assert retired[0].read_bytes() == b"cleanup-attacker"
 

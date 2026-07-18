@@ -15,7 +15,16 @@ from stock_research.research_project_v2.errors import ResearchProjectV2Error
 
 
 _SPACE = re.compile(r"\s+")
-_SEMANTIC_TAGS = frozenset({"h1", "h2", "h3", "h4", "h5", "h6", "p", "li", "th", "td"})
+_HEADING_TAGS = frozenset({"h1", "h2", "h3", "h4", "h5", "h6"})
+_P_CLOSING_START_TAGS = frozenset(
+    {
+        "address", "article", "aside", "blockquote", "div", "dl", "fieldset",
+        "figcaption", "figure", "footer", "form", "h1", "h2", "h3", "h4",
+        "h5", "h6", "header", "hr", "main", "menu", "nav", "ol", "p",
+        "pre", "section", "table", "ul",
+    }
+)
+_SEMANTIC_TAGS = frozenset({*_HEADING_TAGS, "div", "p", "li", "th", "td"})
 _ALWAYS_HIDDEN = frozenset({"script", "style", "nav", "noscript", "template", "svg"})
 _VOID_TAGS = frozenset({"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"})
 
@@ -150,6 +159,16 @@ class _VisibleHTMLParser(HTMLParser):
                 parent.chunks.append(" ")
 
     def _implicitly_close_before_start(self, tag: str) -> None:
+        if tag in _P_CLOSING_START_TAGS:
+            for element in reversed(self._elements):
+                if element.tag == "p":
+                    self.handle_endtag("p")
+                    break
+        if tag in _HEADING_TAGS:
+            for element in reversed(self._elements):
+                if element.tag in _HEADING_TAGS:
+                    self.handle_endtag(element.tag)
+                    break
         candidates = (
             {"td", "th"}
             if tag in {"td", "th"}
@@ -184,11 +203,11 @@ class _VisibleHTMLParser(HTMLParser):
             or "display:none" in style
             or "visibility:hidden" in style
         )
-        parent_hidden = self.hidden
-        hidden = parent_hidden or own_hidden
+        inherited_hidden = self.hidden
+        if not inherited_hidden:
+            self._implicitly_close_before_start(tag)
         if tag in _VOID_TAGS:
             return
-        self._implicitly_close_before_start(tag)
         parent_hidden = self.hidden
         hidden = parent_hidden or own_hidden
         table_context: _TableContext | None = None

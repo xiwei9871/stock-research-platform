@@ -338,6 +338,47 @@ def _chain_bound(descriptors: list[int], names: list[str]) -> bool:
         return False
 
 
+def _require_private_directory(descriptor: int, *, component: str) -> None:
+    opened = os.fstat(descriptor)
+    mode = stat.S_IMODE(opened.st_mode)
+    if (
+        not stat.S_ISDIR(opened.st_mode)
+        or opened.st_uid != os.geteuid()
+        or mode & 0o700 != 0o700
+        or mode & 0o077 != 0
+    ):
+        raise _storage(
+            "managed directory is not owner-only",
+            component=component,
+            mode=oct(mode),
+        )
+
+
+def _open_private_retired_directory(directory_fd: int) -> int:
+    try:
+        os.mkdir(".retired", mode=0o700, dir_fd=directory_fd)
+        os.fsync(directory_fd)
+    except FileExistsError:
+        pass
+    except OSError as exc:
+        raise _storage("retired directory cannot be created safely") from exc
+    try:
+        descriptor = os.open(".retired", _DIR_FLAGS, dir_fd=directory_fd)
+        _require_private_directory(descriptor, component=".retired")
+        entry = os.stat(".retired", dir_fd=directory_fd, follow_symlinks=False)
+        if not _same_inode(os.fstat(descriptor), entry):
+            raise OSError(errno.EIO, "retired directory binding mismatch")
+        return descriptor
+    except ResearchProjectV2Error:
+        if "descriptor" in locals():
+            os.close(descriptor)
+        raise
+    except OSError as exc:
+        if "descriptor" in locals():
+            os.close(descriptor)
+        raise _storage("retired directory cannot be opened safely") from exc
+
+
 def _read_named_regular(directory_fd: int, name: str) -> tuple[bytes, os.stat_result]:
     descriptor = os.open(name, _FILE_FLAGS, dir_fd=directory_fd)
     try:
@@ -380,20 +421,27 @@ def _name_matches_inode(directory_fd: int, name: str, expected: os.stat_result) 
         return False
 
 
-def _unlink_if_inode(directory_fd: int, name: str, expected: os.stat_result) -> bool:
+def _unlink_if_inode(
+    directory_fd: int,
+    retired_fd: int,
+    name: str,
+    expected: os.stat_result,
+) -> bool:
     if not _name_matches_inode(directory_fd, name, expected):
         return False
-    retired = f".retired-{secrets.token_hex(16)}"
+    retired = f"entry-{secrets.token_hex(16)}"
     os.rename(
         name,
         retired,
         src_dir_fd=directory_fd,
-        dst_dir_fd=directory_fd,
+        dst_dir_fd=retired_fd,
     )
-    if not _name_matches_inode(directory_fd, retired, expected):
-        return False
-    os.unlink(retired, dir_fd=directory_fd)
     os.fsync(directory_fd)
+    os.fsync(retired_fd)
+    if not _name_matches_inode(retired_fd, retired, expected):
+        return False
+    os.unlink(retired, dir_fd=retired_fd)
+    os.fsync(retired_fd)
     return True
 
 
@@ -411,6 +459,7 @@ def write_normalized_document(
     temporary_name: str | None = None
     temporary_stat: os.stat_result | None = None
     held_final_fd: int | None = None
+    retired_fd: int | None = None
     try:
         try:
             descriptors, names = _open_absolute_directory(directory)
@@ -421,6 +470,8 @@ def write_normalized_document(
         if not _chain_bound(descriptors, names):
             raise _storage("normalized directory binding changed", path=str(directory))
         directory_fd = descriptors[-1]
+        _require_private_directory(directory_fd, component="normalized")
+        retired_fd = _open_private_retired_directory(directory_fd)
         for _ in range(128):
             temporary_name = f".tmp-{secrets.token_hex(16)}"
             try:
@@ -465,7 +516,9 @@ def write_normalized_document(
             raise _storage("published normalized document cannot be verified", path=str(target)) from exc
         if verified != data or (created_stat is not None and not _same_inode(final_stat, created_stat)):
             raise _immutability("published normalized document changed", path=str(target))
-        if not _unlink_if_inode(directory_fd, temporary_name, temporary_stat):
+        if not _unlink_if_inode(
+            directory_fd, retired_fd, temporary_name, temporary_stat
+        ):
             raise _storage("temporary normalized document binding changed during cleanup")
         temporary_name = None
         os.close(temporary_fd)
@@ -500,6 +553,9 @@ def write_normalized_document(
         try:
             if not _chain_bound(live_descriptors, live_names):
                 raise _storage("live normalized directory is unsafe", path=str(directory))
+            _require_private_directory(
+                live_descriptors[-1], component="normalized"
+            )
             for old, live in zip(descriptors, live_descriptors, strict=True):
                 if not _same_inode(os.fstat(old), os.fstat(live)):
                     raise _storage("live normalized directory was rebound", path=str(directory))
@@ -538,10 +594,19 @@ def write_normalized_document(
             os.close(held_final_fd)
         if temporary_fd is not None:
             os.close(temporary_fd)
-        if temporary_name is not None and temporary_stat is not None and descriptors:
+        if (
+            temporary_name is not None
+            and temporary_stat is not None
+            and descriptors
+            and retired_fd is not None
+        ):
             try:
-                _unlink_if_inode(descriptors[-1], temporary_name, temporary_stat)
+                _unlink_if_inode(
+                    descriptors[-1], retired_fd, temporary_name, temporary_stat
+                )
             except OSError:
                 pass
+        if retired_fd is not None:
+            os.close(retired_fd)
         for descriptor in reversed(descriptors):
             os.close(descriptor)
