@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import FrozenInstanceError
 from datetime import datetime
 import json
@@ -43,15 +44,54 @@ PROVENANCE = {
 def search_plan() -> dict[str, Any]:
     return {
         "search_plan_id": "search_plan:pcb-industry",
+        "project_id": "research_project:pcb",
+        "version_id": "research_version:pcb:0.1.0",
+        "evidence_channel": "industry",
+        "requirement_ids": ["requirement:industry:pcb"],
         "queries": [
-            {"query_id": "query:mechanism", "priority": 1, "query_text": "mechanism"},
+            {
+                "query_id": "query:mechanism",
+                "query_role": "mechanism",
+                "query_text": "mechanism",
+                "required_terms": ["PCB"],
+                "excluded_terms": [],
+                "source_classes": [
+                    "technical_standard",
+                    "primary_standard",
+                    "stock_opinion",
+                    "equity_research",
+                    "independent_secondary",
+                    "direct_url",
+                ],
+                "priority": 1,
+            },
             {
                 "query_id": "query:quantification",
+                "query_role": "quantification",
                 "priority": 2,
                 "query_text": "quantification",
+                "required_terms": ["PCB"],
+                "excluded_terms": [],
+                "source_classes": ["technical_standard"],
             },
-            {"query_id": "query:counter", "priority": 3, "query_text": "counter"},
+            {
+                "query_id": "query:counter",
+                "query_role": "counter_evidence",
+                "query_text": "counter",
+                "required_terms": ["PCB"],
+                "excluded_terms": [],
+                "source_classes": ["company_engineering_document"],
+                "priority": 3,
+            },
         ],
+        "languages": ["en"],
+        "geography": ["global"],
+        "publication_window": "within_12_months",
+        "result_limit_per_query": 20,
+        "deduplication_policy": "normalized_url_then_content_hash",
+        "stop_conditions": ["all planned queries executed"],
+        "status": "planned",
+        "provenance": deepcopy(PROVENANCE),
     }
 
 
@@ -107,6 +147,8 @@ def assert_url_error(raw: str) -> ResearchProjectV2Error:
         ("http://EXAMPLE.com:80/a", "http://example.com/a"),
         ("https://EXAMPLE.com:8443/a", "https://example.com:8443/a"),
         ("https://例子.测试/路径", "https://xn--fsqu00a.xn--0zwm56d/路径"),
+        ("https://faß.de/a", "https://xn--fa-hia.de/a"),
+        ("https://fass.de/a", "https://fass.de/a"),
         ("https://Example.COM./a", "https://example.com/a"),
         ("https://192.0.2.1/a", "https://192.0.2.1/a"),
         ("https://[2001:db8::1]:443/a", "https://[2001:db8::1]/a"),
@@ -115,6 +157,10 @@ def assert_url_error(raw: str) -> ResearchProjectV2Error:
             "https://[2001:db8::1]/a",
         ),
         ("https://example.com/p?z=2&z=1&a=", "https://example.com/p?a=&z=1&z=2"),
+        (
+            "https://example.com/%e4%b8%ad?q=%e4%b8%ad",
+            "https://example.com/%E4%B8%AD?q=%E4%B8%AD",
+        ),
     ],
 )
 def test_normalize_url_canonicalizes_supported_web_urls(raw: str, expected: str) -> None:
@@ -128,15 +174,24 @@ def test_normalize_url_canonicalizes_supported_web_urls(raw: str, expected: str)
         "https:///missing-host",
         "https://user:password@example.com/a",
         "https://example.com:invalid/a",
+        "https://example.com:/a",
         "https://\ud800.example/a",
         "https://exa mple.com/a",
         "https://example.com\\evil/a",
+        "https://example.com/a\\evil",
+        "https://example.com/a b",
+        "https://example.com/a?q=bad\tvalue",
         "https://exam\nple.com/a",
         "https://-bad.example/a",
         "https://bad-.example/a",
         "https://bad_name.example/a",
         "https://999.1.1.1/a",
         "https://192.168.001.1/a",
+        "https://[fe80::1%eth0]/a",
+        "https://[fe80::1%25eth0]/a",
+        "https://example.com/%ZZ",
+        "https://example.com/%FF",
+        "https://example.com/a?q=%FF",
         f"https://{'a' * 64}.example/a",
         f"https://{'a' * 63}.{'b' * 63}.{'c' * 63}.{'d' * 63}/a",
         "not a url",
@@ -195,9 +250,10 @@ def test_imported_provider_wraps_non_utf8_input_as_stable_discovery_error(
 
 
 def test_direct_url_provider_is_offline_and_converts_query_specs_to_results() -> None:
-    query = {
-        "query_id": "query:mechanism",
-        "direct_urls": [
+    query = search_plan()["queries"][0]
+    provider = DirectUrlDiscoveryProvider(
+        {
+            "query:mechanism": [
             "https://standards.example.org/direct.pdf",
             {
                 "url": "https://engineering.example.org/doc",
@@ -207,10 +263,11 @@ def test_direct_url_provider_is_offline_and_converts_query_specs_to_results() ->
                 "publish_date": None,
                 "source_class": "company_engineering_document",
             },
-        ],
-    }
+            ]
+        }
+    )
 
-    results = DirectUrlDiscoveryProvider().search(query)
+    results = provider.search(query)
 
     assert [item.rank for item in results] == [1, 2]
     assert results[0] == result(
@@ -224,6 +281,126 @@ def test_direct_url_provider_is_offline_and_converts_query_specs_to_results() ->
     )
     assert results[1].query_id == "query:mechanism"
     assert results[1].title == "Engineering memo"
+    assert "direct_urls" not in query
+
+
+def test_discover_rejects_schema_invalid_search_plan_with_stable_path() -> None:
+    plan = search_plan()
+    plan.pop("result_limit_per_query")
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        discover_sources(
+            plan,
+            StaticProvider({}),
+            provider_name="static",
+            discovered_at=DISCOVERED_AT,
+            provenance=PROVENANCE,
+        )
+
+    assert exc_info.value.code == "RESEARCH_PROJECT_V2_1_DISCOVERY_PLAN_INVALID"
+    assert exc_info.value.details["path"] == ["search_plan", "result_limit_per_query"]
+
+
+def test_discover_applies_result_limit_after_rank_and_stable_tie_sorting() -> None:
+    plan = search_plan()
+    plan["result_limit_per_query"] = 2
+    provider = StaticProvider(
+        {
+            "query:mechanism": [
+                result(url="https://example.com/rank-3", title="rank 3", rank=3),
+                result(url="https://example.com/rank-2-z", title="Z", rank=2),
+                result(url="https://example.com/rank-1", title="rank 1", rank=1),
+                result(url="https://example.com/rank-2-a", title="A", rank=2),
+            ]
+        }
+    )
+
+    batch = discover_sources(
+        plan,
+        provider,
+        provider_name="static",
+        discovered_at=DISCOVERED_AT,
+        provenance=PROVENANCE,
+    )
+
+    assert [item["rank"] for item in batch["candidates"]] == [1, 2]
+    assert [item["title"] for item in batch["candidates"]] == ["rank 1", "A"]
+
+
+def test_discover_rejects_result_source_class_outside_query_contract() -> None:
+    provider = StaticProvider(
+        {
+            "query:quantification": [
+                result(
+                    query_id="query:quantification",
+                    source_class="company_engineering_document",
+                )
+            ]
+        }
+    )
+
+    assert_discovery_error(
+        lambda: discover_sources(
+            search_plan(),
+            provider,
+            provider_name="static",
+            discovered_at=DISCOVERED_AT,
+            provenance=PROVENANCE,
+        ),
+        reason="source_class not allowed for query",
+    )
+
+
+def test_provider_failures_are_wrapped_but_discovery_and_fatal_errors_propagate() -> None:
+    class FailingProvider:
+        def __init__(self, failure: BaseException) -> None:
+            self.failure = failure
+
+        def search(self, query: dict[str, Any]) -> list[DiscoveryResult]:
+            raise self.failure
+
+    for failure in [
+        OSError("offline"),
+        UnicodeError("decode"),
+        ValueError("invalid"),
+        TypeError("bad"),
+        json.JSONDecodeError("json", "{", 0),
+    ]:
+        with pytest.raises(ResearchProjectV2Error) as exc_info:
+            discover_sources(
+                search_plan(),
+                FailingProvider(failure),
+                provider_name="failing",
+                discovered_at=DISCOVERED_AT,
+                provenance=PROVENANCE,
+            )
+        assert exc_info.value.code == "RESEARCH_PROJECT_V2_1_DISCOVERY_PROVIDER_FAILED"
+        assert exc_info.value.details == {
+            "provider": "failing",
+            "query_id": "query:mechanism",
+            "exception_type": type(failure).__name__,
+        }
+        assert exc_info.value.__cause__ is failure
+
+    discovery_failure = ResearchProjectV2Error("stop", code="CUSTOM", details={})
+    with pytest.raises(ResearchProjectV2Error) as discovery_exc:
+        discover_sources(
+            search_plan(),
+            FailingProvider(discovery_failure),
+            provider_name="failing",
+            discovered_at=DISCOVERED_AT,
+            provenance=PROVENANCE,
+        )
+    assert discovery_exc.value is discovery_failure
+
+    with pytest.raises(MemoryError):
+        discover_sources(
+            search_plan(),
+            FailingProvider(MemoryError()),
+            provider_name="failing",
+            discovered_at=DISCOVERED_AT,
+            provenance=PROVENANCE,
+        )
 
 
 def test_discover_normalizes_deduplicates_excludes_policy_and_is_deterministic() -> None:
@@ -361,7 +538,7 @@ def test_title_phrase_policy_exclusion_does_not_depend_on_source_class() -> None
     assert batch["policy_excluded_results"][0]["exclusion_status"] == "excluded_by_policy"
 
 
-def test_deduplication_is_global_and_winner_policy_controls_the_single_result() -> None:
+def test_deduplication_prefers_included_alias_over_higher_priority_policy_alias() -> None:
     provider = StaticProvider(
         {
             "query:mechanism": [
@@ -390,9 +567,111 @@ def test_deduplication_is_global_and_winner_policy_controls_the_single_result() 
         provenance=PROVENANCE,
     )
 
+    assert len(batch["candidates"]) == 1
+    assert batch["candidates"][0]["query_id"] == "query:quantification"
+    assert batch["policy_excluded_results"] == []
+
+
+def test_deduplication_keeps_one_excluded_winner_when_all_aliases_are_policy_results() -> None:
+    provider = StaticProvider(
+        {
+            "query:mechanism": [
+                result(title="Top stock picks", source_class="stock_opinion", rank=2),
+                result(title="Buy rating", source_class="equity_research", rank=1),
+            ]
+        }
+    )
+
+    batch = discover_sources(
+        search_plan(),
+        provider,
+        provider_name="static",
+        discovered_at=DISCOVERED_AT,
+        provenance=PROVENANCE,
+    )
+
     assert batch["candidates"] == []
     assert len(batch["policy_excluded_results"]) == 1
-    assert batch["policy_excluded_results"][0]["query_id"] == "query:mechanism"
+    assert batch["policy_excluded_results"][0]["title"] == "Buy rating"
+
+
+@pytest.mark.parametrize(
+    "investment_text",
+    [
+        "target price raised",
+        "new price target",
+        "buy rating",
+        "sell rating",
+        "strong buy",
+        "top stock picks",
+        "company ranking",
+        "目标价上调",
+        "股票推荐名单",
+        "买入评级",
+        "卖出评级",
+        "增持评级",
+        "建议买入",
+        "受益标的",
+        "最强龙头",
+        "估值最低",
+    ],
+)
+def test_policy_taxonomy_excludes_investment_opinion_text(investment_text: str) -> None:
+    batch = discover_sources(
+        search_plan(),
+        StaticProvider(
+            {
+                "query:mechanism": [
+                    result(
+                        title=investment_text,
+                        snippet="Market commentary",
+                        source_class="independent_secondary",
+                    )
+                ]
+            }
+        ),
+        provider_name="static",
+        discovered_at=DISCOVERED_AT,
+        provenance=PROVENANCE,
+    )
+
+    assert batch["candidates"] == []
+    assert len(batch["policy_excluded_results"]) == 1
+
+
+def test_policy_taxonomy_keeps_inventory_stock_and_company_engineering_context() -> None:
+    batch = discover_sources(
+        search_plan(),
+        StaticProvider(
+            {
+                "query:mechanism": [
+                    result(
+                        url="https://example.com/warehouse",
+                        title="Top stock levels in warehouse",
+                        snippet="Inventory availability for production",
+                        source_class="independent_secondary",
+                    )
+                ],
+                "query:counter": [
+                    result(
+                        url="https://engineering.example.com/process",
+                        title="Company engineering process notes",
+                        source_class="company_engineering_document",
+                        query_id="query:counter",
+                    )
+                ],
+            }
+        ),
+        provider_name="static",
+        discovered_at=DISCOVERED_AT,
+        provenance=PROVENANCE,
+    )
+
+    assert {item["title"] for item in batch["candidates"]} == {
+        "Top stock levels in warehouse",
+        "Company engineering process notes",
+    }
+    assert batch["policy_excluded_results"] == []
 
 
 @pytest.mark.parametrize(
@@ -476,10 +755,8 @@ def test_discover_rejects_search_plan_query_ids_with_whitespace(
 
 def test_discover_rejects_trimmed_equivalent_plan_query_ids_stably() -> None:
     plan = search_plan()
-    plan["queries"] = [
-        {"query_id": "q", "priority": 1},
-        {"query_id": " q ", "priority": 2},
-    ]
+    plan["queries"][0]["query_id"] = "q"
+    plan["queries"][1]["query_id"] = " q "
 
     exc = assert_discovery_error(
         lambda: discover_sources(
@@ -610,10 +887,10 @@ def test_writer_failure_is_stable_and_leaves_no_partial_file(
         provenance=PROVENANCE,
     )
 
-    def fail_replace(source: Path, target: Path) -> None:
-        raise OSError("injected replace failure")
+    def fail_link(source: str, target: str, **kwargs: object) -> None:
+        raise OSError("injected link failure")
 
-    monkeypatch.setattr(discovery_module.os, "replace", fail_replace)
+    monkeypatch.setattr(discovery_module.os, "link", fail_link)
 
     assert_discovery_error(
         lambda: write_discovery_batch(batch, layout=layout),
@@ -638,6 +915,200 @@ def test_writer_rejects_non_directory_managed_parent_with_stable_error(tmp_path:
     assert_discovery_error(
         lambda: write_discovery_batch(batch, layout=layout),
         reason="unsafe managed path",
+    )
+
+
+def test_writer_concurrent_fresh_root_is_idempotent_and_never_overwrites(
+    tmp_path: Path,
+) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    batch = discover_sources(
+        search_plan(),
+        StaticProvider({"query:mechanism": [result()]}),
+        provider_name="static",
+        discovered_at=DISCOVERED_AT,
+        provenance=PROVENANCE,
+    )
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        paths = list(
+            executor.map(
+                lambda _: write_discovery_batch(deepcopy(batch), layout=layout),
+                range(16),
+            )
+        )
+
+    assert len(set(paths)) == 1
+    assert paths[0].read_bytes() == canonical_bytes(batch)
+    assert list(paths[0].parent.iterdir()) == [paths[0]]
+
+
+def test_writer_rejects_final_symlink_without_reading_or_writing_external_file(
+    tmp_path: Path,
+) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    batch = discover_sources(
+        search_plan(),
+        StaticProvider({}),
+        provider_name="static",
+        discovered_at=DISCOVERED_AT,
+        provenance=PROVENANCE,
+    )
+    batch_dir = layout.evidence_discovery_dir / batch["search_plan_id"]
+    batch_dir.mkdir(parents=True)
+    outside = tmp_path / "outside.json"
+    outside.write_text("external", encoding="utf-8")
+    target = batch_dir / f"{batch['content_hash']}.json"
+    target.symlink_to(outside)
+
+    assert_discovery_error(
+        lambda: write_discovery_batch(batch, layout=layout),
+        reason="unsafe managed path",
+    )
+    assert outside.read_text(encoding="utf-8") == "external"
+
+
+def test_writer_detects_final_symlink_swap_after_atomic_link(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    batch = discover_sources(
+        search_plan(),
+        StaticProvider({}),
+        provider_name="static",
+        discovered_at=DISCOVERED_AT,
+        provenance=PROVENANCE,
+    )
+    target = (
+        layout.evidence_discovery_dir
+        / batch["search_plan_id"]
+        / f"{batch['content_hash']}.json"
+    )
+    outside = tmp_path / "outside-final.json"
+    outside.write_text("external", encoding="utf-8")
+    original_fsync = discovery_module.os.fsync
+    calls = 0
+
+    def swap_on_directory_fsync(descriptor: int) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            target.unlink()
+            target.symlink_to(outside)
+        original_fsync(descriptor)
+
+    monkeypatch.setattr(discovery_module.os, "fsync", swap_on_directory_fsync)
+
+    assert_discovery_error(
+        lambda: write_discovery_batch(batch, layout=layout),
+        reason="unsafe managed path",
+    )
+    assert outside.read_text(encoding="utf-8") == "external"
+
+
+def test_writer_detects_batch_directory_symlink_swap_without_escape(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    batch = discover_sources(
+        search_plan(),
+        StaticProvider({}),
+        provider_name="static",
+        discovered_at=DISCOVERED_AT,
+        provenance=PROVENANCE,
+    )
+    batch_dir = layout.evidence_discovery_dir / batch["search_plan_id"]
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    original_link = discovery_module.os.link
+    swapped = False
+
+    def swap_then_link(source: str, target: str, **kwargs: object) -> None:
+        nonlocal swapped
+        if not swapped:
+            swapped = True
+            backup = batch_dir.with_name(f"{batch_dir.name}-detached")
+            batch_dir.rename(backup)
+            batch_dir.symlink_to(outside, target_is_directory=True)
+        original_link(source, target, **kwargs)
+
+    monkeypatch.setattr(discovery_module.os, "link", swap_then_link)
+
+    assert_discovery_error(
+        lambda: write_discovery_batch(batch, layout=layout),
+        reason="unsafe managed path",
+    )
+    assert list(outside.iterdir()) == []
+
+
+def test_writer_detects_discovery_directory_symlink_swap_without_false_success(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    batch = discover_sources(
+        search_plan(),
+        StaticProvider({}),
+        provider_name="static",
+        discovered_at=DISCOVERED_AT,
+        provenance=PROVENANCE,
+    )
+    discovery_dir = layout.evidence_discovery_dir
+    outside = tmp_path / "outside-discovery"
+    outside.mkdir()
+    original_link = discovery_module.os.link
+    swapped = False
+
+    def swap_then_link(source: str, target: str, **kwargs: object) -> None:
+        nonlocal swapped
+        if not swapped:
+            swapped = True
+            backup = discovery_dir.with_name("discovery-detached")
+            discovery_dir.rename(backup)
+            discovery_dir.symlink_to(outside, target_is_directory=True)
+        original_link(source, target, **kwargs)
+
+    monkeypatch.setattr(discovery_module.os, "link", swap_then_link)
+
+    assert_discovery_error(
+        lambda: write_discovery_batch(batch, layout=layout),
+        reason="unsafe managed path",
+    )
+    assert list(outside.iterdir()) == []
+
+
+def test_writer_fails_closed_without_required_posix_flags(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    batch = discover_sources(
+        search_plan(),
+        StaticProvider({}),
+        provider_name="static",
+        discovered_at=DISCOVERED_AT,
+        provenance=PROVENANCE,
+    )
+    monkeypatch.setattr(discovery_module.os, "O_NOFOLLOW", 0)
+
+    assert_discovery_error(
+        lambda: write_discovery_batch(batch, layout=layout),
+        reason="secure dir-fd storage unavailable",
+    )
+    assert not layout.root.exists()
+
+
+def test_writer_requires_absolute_managed_discovery_path() -> None:
+    layout = LayeredResearchLayout(Path("relative-v2_1"))
+    batch = discover_sources(
+        search_plan(),
+        StaticProvider({}),
+        provider_name="static",
+        discovered_at=DISCOVERED_AT,
+        provenance=PROVENANCE,
+    )
+
+    assert_discovery_error(
+        lambda: write_discovery_batch(batch, layout=layout),
+        reason="managed discovery path must be absolute",
     )
 
 
@@ -716,6 +1187,67 @@ def test_writer_rejects_cross_field_inconsistency_and_noncanonical_order(tmp_pat
         assert_discovery_error(lambda invalid=invalid: write_discovery_batch(invalid, layout=layout))
 
     assert not any(tmp_path.rglob("*.json"))
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda batch: batch.update(provider=" static "),
+        lambda batch: batch.update(discovered_at="2026-07-18 10:30:00+08:00"),
+        lambda batch: batch["candidates"][0].update(title=" Engineering document "),
+        lambda batch: batch["candidates"][0]["provenance"].update(
+            created_by=" fixture-importer "
+        ),
+        lambda batch: batch["candidates"][0]["provenance"].update(
+            created_at="2026-07-18 02:30:00+00:00"
+        ),
+    ],
+)
+def test_writer_rejects_semantically_equivalent_noncanonical_batch_strings(
+    tmp_path: Path, mutate
+) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    batch = discover_sources(
+        search_plan(),
+        StaticProvider({"query:mechanism": [result()]}),
+        provider_name="static",
+        discovered_at=DISCOVERED_AT,
+        provenance=PROVENANCE,
+    )
+    mutate(batch)
+    batch["content_hash"] = content_sha256(batch, excluded_paths={("content_hash",)})
+
+    assert_discovery_error(lambda: write_discovery_batch(batch, layout=layout))
+    assert not any(tmp_path.rglob("*.json"))
+
+
+@pytest.mark.parametrize(
+    ("provider_name", "provenance_mutation"),
+    [
+        (" static ", None),
+        ("static", lambda value: value.update(created_by=" fixture-importer ")),
+        (
+            "static",
+            lambda value: value.update(created_at="2026-07-18 02:30:00+00:00"),
+        ),
+    ],
+)
+def test_producer_rejects_noncanonical_provider_and_provenance_strings(
+    provider_name: str, provenance_mutation
+) -> None:
+    provenance = deepcopy(PROVENANCE)
+    if provenance_mutation is not None:
+        provenance_mutation(provenance)
+
+    assert_discovery_error(
+        lambda: discover_sources(
+            search_plan(),
+            StaticProvider({}),
+            provider_name=provider_name,
+            discovered_at=DISCOVERED_AT,
+            provenance=provenance,
+        )
+    )
 
 
 def test_discover_requires_explicit_valid_discovered_at_and_provider_name() -> None:
