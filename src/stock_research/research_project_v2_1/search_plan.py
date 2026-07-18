@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from stock_research.research_project_v2.errors import ResearchProjectV2Error
+from stock_research.research_project_v2_1.schema import validate_v2_1_schema_payload
 
 
 FORBIDDEN_INDUSTRY_SEARCH_TERMS = {
@@ -256,6 +258,69 @@ def _reject_downstream_fields(value: object, *, plan_id: object) -> None:
             _reject_downstream_fields(child, plan_id=plan_id)
 
 
+def _schema_error_field_path(exc: ResearchProjectV2Error) -> list[object]:
+    raw_path = exc.details.get("path", [])
+    path = list(raw_path) if isinstance(raw_path, list) else []
+    if path and path[0] == "search_plan":
+        path = path[1:]
+    if str(exc).endswith("is a required property") or str(exc).startswith(
+        "Additional properties are not allowed"
+    ):
+        fields = sorted(set(re.findall(r"'([^']+)'", str(exc))))
+        if fields:
+            path.append(fields[0])
+    return path
+
+
+def _query_id_for_schema_path(plan: object, path: list[object]) -> object:
+    if (
+        isinstance(plan, dict)
+        and len(path) >= 2
+        and path[0] == "queries"
+        and isinstance(path[1], int)
+    ):
+        queries = plan.get("queries")
+        if isinstance(queries, list) and 0 <= path[1] < len(queries):
+            query = queries[path[1]]
+            if isinstance(query, dict):
+                return query.get("query_id")
+    return None
+
+
+def _schema_error_reason(path: list[object]) -> str:
+    if path == ["status"]:
+        return "invalid status"
+    if path == ["evidence_channel"]:
+        return "invalid evidence_channel"
+    if path and path[-1] in _DOWNSTREAM_FIELDS:
+        return "downstream field"
+    return "invalid search plan structure"
+
+
+def _validate_plan_schema(plan: object) -> None:
+    plan_id = plan.get("search_plan_id") if isinstance(plan, dict) else None
+    try:
+        validate_v2_1_schema_payload(
+            "search_plan_v2_1",
+            {
+                "schema_version": "2.1.0",
+                "artifact_kind": "search_plan",
+                "search_plan": plan,
+            },
+        )
+    except ResearchProjectV2Error as exc:
+        if exc.code != "RESEARCH_PROJECT_V2_1_SCHEMA_INVALID":
+            raise
+        field_path = _schema_error_field_path(exc)
+        raise _invalid(
+            _schema_error_reason(field_path),
+            plan_id=plan_id,
+            query_id=_query_id_for_schema_path(plan, field_path),
+            field_path=field_path,
+            original_message=str(exc),
+        ) from exc
+
+
 def validate_search_plans(
     requirements: list[dict[str, Any]], plans: list[dict[str, Any]]
 ) -> None:
@@ -269,6 +334,9 @@ def validate_search_plans(
     try:
         if not isinstance(requirements, list) or not isinstance(plans, list):
             raise TypeError("requirements and plans must be lists")
+
+        for plan in plans:
+            _validate_plan_schema(plan)
 
         requirement_by_id: dict[str, dict[str, Any]] = {}
         for requirement in requirements:

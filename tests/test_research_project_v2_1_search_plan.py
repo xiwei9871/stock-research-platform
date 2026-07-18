@@ -5,6 +5,7 @@ import json
 
 import pytest
 
+import stock_research.research_project_v2_1.search_plan as search_plan_module
 from stock_research.research_project_v2.errors import ResearchProjectV2Error
 from stock_research.research_project_v2_1.schema import validate_v2_1_schema_payload
 from stock_research.research_project_v2_1.search_plan import (
@@ -438,3 +439,113 @@ def test_errors_locate_requirement_plan_and_query_objects():
         validate_search_plans([requirement()], [plan])
     assert validate_exc.value.details["plan_id"] == plan["search_plan_id"]
     assert validate_exc.value.details["query_id"] == plan["queries"][0]["query_id"]
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "project_id",
+        "version_id",
+        "languages",
+        "geography",
+        "publication_window",
+        "result_limit_per_query",
+        "deduplication_policy",
+        "stop_conditions",
+        "provenance",
+    ],
+)
+def test_validate_search_plans_reuses_schema_for_missing_plan_fields(field):
+    plan = compiled_plan()
+    del plan[field]
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        validate_search_plans([requirement()], [plan])
+
+    error = exc_info.value
+    assert error.code == "RESEARCH_PROJECT_V2_1_SEARCH_PLAN_INVALID"
+    assert error.details["reason"] == "invalid search plan structure"
+    assert error.details["plan_id"] == plan["search_plan_id"]
+    assert error.details["query_id"] is None
+    assert error.details["field_path"] == [field]
+    assert error.details["original_message"]
+    assert error.__cause__.code == "RESEARCH_PROJECT_V2_1_SCHEMA_INVALID"
+
+
+@pytest.mark.parametrize("field", ["excluded_terms", "priority"])
+def test_validate_search_plans_reuses_schema_for_missing_query_fields(field):
+    plan = compiled_plan()
+    query = plan["queries"][0]
+    del query[field]
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        validate_search_plans([requirement()], [plan])
+
+    error = exc_info.value
+    assert error.code == "RESEARCH_PROJECT_V2_1_SEARCH_PLAN_INVALID"
+    assert error.details["plan_id"] == plan["search_plan_id"]
+    assert error.details["query_id"] == query["query_id"]
+    assert error.details["field_path"] == ["queries", 0, field]
+    assert error.__cause__.code == "RESEARCH_PROJECT_V2_1_SCHEMA_INVALID"
+
+
+@pytest.mark.parametrize(
+    ("mutation", "field_path", "query_index"),
+    [
+        (lambda plan: plan.update(languages="zh-CN"), ["languages"], None),
+        (lambda plan: plan.update(unexpected="value"), ["unexpected"], None),
+        (
+            lambda plan: plan["queries"][0].update(priority="1"),
+            ["queries", 0, "priority"],
+            0,
+        ),
+        (
+            lambda plan: plan["queries"][0].update(unexpected="value"),
+            ["queries", 0, "unexpected"],
+            0,
+        ),
+    ],
+)
+def test_validate_search_plans_reuses_schema_for_types_and_extra_fields(
+    mutation, field_path, query_index
+):
+    plan = compiled_plan()
+    mutation(plan)
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        validate_search_plans([requirement()], [plan])
+
+    error = exc_info.value
+    assert error.code == "RESEARCH_PROJECT_V2_1_SEARCH_PLAN_INVALID"
+    assert error.details["plan_id"] == plan["search_plan_id"]
+    expected_query_id = (
+        plan["queries"][query_index]["query_id"]
+        if query_index is not None
+        else None
+    )
+    assert error.details["query_id"] == expected_query_id
+    assert error.details["field_path"] == field_path
+    assert error.__cause__.code == "RESEARCH_PROJECT_V2_1_SCHEMA_INVALID"
+
+
+def test_validate_search_plans_does_not_mask_schema_registry_errors(monkeypatch):
+    registry_error = ResearchProjectV2Error(
+        "registry unavailable",
+        code="RESEARCH_PROJECT_V2_1_SCHEMA_NOT_FOUND",
+        details={"schema": "search_plan_v2_1"},
+    )
+
+    def fail_registry(schema_name, payload):
+        raise registry_error
+
+    monkeypatch.setattr(
+        search_plan_module,
+        "validate_v2_1_schema_payload",
+        fail_registry,
+        raising=False,
+    )
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        validate_search_plans([requirement()], [compiled_plan()])
+
+    assert exc_info.value is registry_error
