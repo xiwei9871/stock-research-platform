@@ -1,0 +1,564 @@
+from __future__ import annotations
+
+import json
+import os
+from concurrent.futures import ThreadPoolExecutor
+from copy import deepcopy
+from hashlib import sha256
+from pathlib import Path
+
+import pytest
+from pypdf import PdfWriter
+
+import stock_research.research_project_v2_1.normalize as normalize_module
+from stock_research.research_project_v2.canonical import canonical_bytes, content_sha256
+from stock_research.research_project_v2.errors import ResearchProjectV2Error
+from stock_research.research_project_v2_1.layout import LayeredResearchLayout
+from stock_research.research_project_v2_1.normalize import (
+    normalize_artifact,
+    normalize_text,
+    write_normalized_document,
+)
+from stock_research.research_project_v2_1.parsers import ParserLimits, parse_document_bytes
+from stock_research.research_project_v2_1.schema import validate_v2_1_schema_payload
+
+
+FIXTURES = Path("artifacts/research_projects/v2_1/fixtures/documents")
+
+
+def _provenance(record: str = "record-1") -> dict:
+    return {
+        "created_by": "test",
+        "actor_type": "automated_pipeline",
+        "agent_run_id": record,
+        "created_at": "2026-07-18T00:00:00Z",
+        "created_in_version": "2.1.0",
+        "review_status": "unreviewed",
+    }
+
+
+def _error_code(exc: pytest.ExceptionInfo[ResearchProjectV2Error]) -> str:
+    return exc.value.code
+
+
+def test_html_parser_keeps_visible_semantic_content_without_parent_duplicates() -> None:
+    parsed = parse_document_bytes(
+        (FIXTURES / "sample_engineering.html").read_bytes(), media_type="text/html"
+    )
+    assert parsed.title == "Engineering Capacity"
+    assert [section.locator for section in parsed.sections] == [
+        "html:h1:0001",
+        "html:p:0001",
+        "html:li:0001",
+        "html:li:0002",
+        "html:table:0001:row:0001:cell:0001",
+        "html:table:0001:row:0001:cell:0002",
+        "html:table:0001:row:0002:cell:0001",
+        "html:table:0001:row:0002:cell:0002",
+    ]
+    combined = "\n".join(section.text for section in parsed.sections)
+    assert "Navigation noise" not in combined
+    assert "Hidden" not in combined
+    assert "not evidence" not in combined
+
+
+@pytest.mark.parametrize("payload", [b"\xff", b"<html><body></body></html>"])
+def test_html_parser_wraps_invalid_or_empty_documents(payload: bytes) -> None:
+    with pytest.raises(ResearchProjectV2Error) as exc:
+        parse_document_bytes(payload, media_type="text/html")
+    assert _error_code(exc) == "RESEARCH_PROJECT_V2_1_PARSE_INVALID"
+
+
+def test_html_hidden_void_element_does_not_hide_following_content() -> None:
+    parsed = parse_document_bytes(
+        b"<html><body><input hidden><p>Visible after input</p></body></html>",
+        media_type="text/html",
+    )
+    assert [section.text for section in parsed.sections] == ["Visible after input"]
+
+
+def test_html_hidden_attributes_accept_html_and_css_whitespace() -> None:
+    parsed = parse_document_bytes(
+        b'<html><body><p style="display:\tnone">css hidden</p><p aria-hidden=" true ">aria hidden</p><p>visible</p></body></html>',
+        media_type="text/html",
+    )
+    assert [section.text for section in parsed.sections] == ["visible"]
+
+
+def test_pdf_parser_emits_one_section_per_page_and_rejects_encryption() -> None:
+    writer = PdfWriter()
+    writer.add_blank_page(width=72, height=72)
+    writer.add_blank_page(width=72, height=72)
+    writer.add_metadata({"/Title": "Metadata title"})
+    plain = bytearray()
+    from io import BytesIO
+
+    handle = BytesIO()
+    writer.write(handle)
+    parsed = parse_document_bytes(
+        handle.getvalue(), media_type="application/pdf", title_hint="Hint title"
+    )
+    assert parsed.title == "Hint title"
+    assert [(s.locator, s.page_start, s.page_end) for s in parsed.sections] == [
+        ("page:1", 1, 1),
+        ("page:2", 2, 2),
+    ]
+
+    encrypted = PdfWriter()
+    encrypted.add_blank_page(width=72, height=72)
+    encrypted.encrypt("")
+    encrypted_handle = BytesIO()
+    encrypted.write(encrypted_handle)
+    with pytest.raises(ResearchProjectV2Error) as exc:
+        parse_document_bytes(encrypted_handle.getvalue(), media_type="application/pdf")
+    assert _error_code(exc) == "RESEARCH_PROJECT_V2_1_PARSE_INVALID"
+
+
+def test_pdf_parser_wraps_corruption_and_limits_pages() -> None:
+    with pytest.raises(ResearchProjectV2Error) as corrupt:
+        parse_document_bytes(b"not a pdf", media_type="application/pdf")
+    assert _error_code(corrupt) == "RESEARCH_PROJECT_V2_1_PARSE_INVALID"
+    writer = PdfWriter()
+    writer.add_blank_page(width=72, height=72)
+    from io import BytesIO
+
+    handle = BytesIO()
+    writer.write(handle)
+    with pytest.raises(ResearchProjectV2Error) as limited:
+        parse_document_bytes(
+            handle.getvalue(),
+            media_type="application/pdf",
+            limits=ParserLimits(max_sections=0),
+        )
+    assert _error_code(limited) == "RESEARCH_PROJECT_V2_1_PARSE_LIMIT_EXCEEDED"
+
+
+def test_csv_parser_preserves_headers_and_strings_deterministically() -> None:
+    parsed = parse_document_bytes(
+        (FIXTURES / "sample_capacity.csv").read_bytes(), media_type="text/csv"
+    )
+    assert [section.locator for section in parsed.sections] == ["csv:row:1", "csv:row:2"]
+    assert json.loads(parsed.sections[0].text) == {
+        "facility": "Shanghai",
+        "product": "Module A",
+        "annual_capacity": "120000",
+    }
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [b"a,a\n1,2\n", b"a,\n1,2\n", b"a,b\n1\n", b'a,b\n"unterminated,2\n'],
+)
+def test_csv_parser_rejects_bad_headers_and_rows(payload: bytes) -> None:
+    with pytest.raises(ResearchProjectV2Error) as exc:
+        parse_document_bytes(payload, media_type="text/csv")
+    assert _error_code(exc) == "RESEARCH_PROJECT_V2_1_PARSE_INVALID"
+
+
+def test_csv_parser_enforces_cell_and_row_limits() -> None:
+    with pytest.raises(ResearchProjectV2Error) as cell:
+        parse_document_bytes(
+            b"a,b\n123,4\n", media_type="text/csv", limits=ParserLimits(max_cell_chars=2)
+        )
+    assert _error_code(cell) == "RESEARCH_PROJECT_V2_1_PARSE_LIMIT_EXCEEDED"
+    with pytest.raises(ResearchProjectV2Error) as rows:
+        parse_document_bytes(
+            b"a\n1\n2\n", media_type="text/csv", limits=ParserLimits(max_rows=1)
+        )
+    assert _error_code(rows) == "RESEARCH_PROJECT_V2_1_PARSE_LIMIT_EXCEEDED"
+
+
+def test_json_parser_sorts_keys_and_uses_json_pointer_leaf_locators() -> None:
+    parsed = parse_document_bytes(
+        (FIXTURES / "sample_standard.json").read_bytes(), media_type="application/json"
+    )
+    assert [section.locator for section in parsed.sections] == [
+        "/items/0/name",
+        "/items/0/status",
+        "/items/1/name",
+        "/items/1/status",
+        "/standard",
+        "/version",
+    ]
+    escaped = parse_document_bytes(b'{"a/b":{"~key":1}}', media_type="application/json")
+    assert escaped.sections[0].locator == "/a~1b/~0key"
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        b'{"a":1,"a":2}',
+        b'{"x":NaN}',
+        b'{"x":Infinity}',
+        b'{"x":"\\ud800"}',
+        b'{"x":9007199254740992}',
+        b"\xff",
+    ],
+)
+def test_json_parser_rejects_duplicates_nonfinite_and_bad_utf8(payload: bytes) -> None:
+    with pytest.raises(ResearchProjectV2Error) as exc:
+        parse_document_bytes(payload, media_type="application/json")
+    assert _error_code(exc) == "RESEARCH_PROJECT_V2_1_PARSE_INVALID"
+
+
+def test_json_parser_enforces_depth_nodes_and_strings() -> None:
+    cases = [
+        (b'{"a":{"b":1}}', ParserLimits(max_depth=1)),
+        (b'{"a":1,"b":2}', ParserLimits(max_nodes=2)),
+        (b'{"a":"long"}', ParserLimits(max_string_chars=3)),
+    ]
+    for payload, limits in cases:
+        with pytest.raises(ResearchProjectV2Error) as exc:
+            parse_document_bytes(payload, media_type="application/json", limits=limits)
+        assert _error_code(exc) == "RESEARCH_PROJECT_V2_1_PARSE_LIMIT_EXCEEDED"
+
+
+def test_json_parser_wraps_decoder_recursion_as_depth_limit() -> None:
+    payload = ("[" * 2_000 + "0" + "]" * 2_000).encode()
+    with pytest.raises(ResearchProjectV2Error) as exc:
+        parse_document_bytes(payload, media_type="application/json", limits=ParserLimits(max_depth=20))
+    assert exc.value.code == "RESEARCH_PROJECT_V2_1_PARSE_LIMIT_EXCEEDED"
+    quoted = parse_document_bytes(b'{"brackets":"[[[{{{"}', media_type="application/json", limits=ParserLimits(max_depth=1))
+    assert quoted.sections[0].text == '"[[[{{{"'
+
+
+def test_plain_text_and_unsupported_media_have_stable_behavior() -> None:
+    parsed = parse_document_bytes(b"first\nline\n\nsecond", media_type="text/plain")
+    assert [section.text for section in parsed.sections] == ["first line", "second"]
+    with pytest.raises(ResearchProjectV2Error) as exc:
+        parse_document_bytes(b"x", media_type="image/png")
+    assert _error_code(exc) == "RESEARCH_PROJECT_V2_1_PARSE_UNSUPPORTED_MEDIA"
+
+
+def _artifact(layout: LayeredResearchLayout, data: bytes, media_type: str, suffix: str) -> dict:
+    digest = sha256(data).hexdigest()
+    relative = f"evidence/raw/{digest[:2]}/{digest}.{suffix}"
+    target = layout.root / relative
+    target.parent.mkdir(parents=True, mode=0o700)
+    target.write_bytes(data)
+    return {
+        "artifact_id": "evidence_artifact:test",
+        "candidate_id": "source_candidate:test",
+        "evidence_channel": "industry",
+        "original_url": "https://example.com/a",
+        "final_url": "https://example.com/a",
+        "redirect_chain": [],
+        "status_code": 200,
+        "response_headers": {},
+        "media_type": media_type,
+        "byte_count": len(data),
+        "content_sha256": digest,
+        "fetched_at": "2026-07-18T00:00:00Z",
+        "raw_path": relative,
+        "provenance": _provenance(),
+    }
+
+
+def test_normalize_artifact_is_deterministic_schema_valid_and_does_not_mutate(tmp_path: Path) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    artifact = _artifact(layout, "A\u030A  capacity\n\n  10".encode(), "text/plain", "txt")
+    original = deepcopy(artifact)
+    provenance = _provenance("run-1")
+    document = normalize_artifact(
+        artifact,
+        layout=layout,
+        parsed_at="2026-07-18T01:02:03Z",
+        provenance=provenance,
+        warnings=["z", "a", "z"],
+    )
+    assert artifact == original
+    assert normalize_text("A\u030A   capacity") == "Å capacity"
+    assert document["warnings"] == ["a", "z"]
+    assert document["sections"][0]["section_id"] == "section:evidence_artifact:test:0001"
+    core = {key: value for key, value in document.items() if key not in {"document_id", "document_hash", "parsed_at", "provenance"}}
+    assert document["document_hash"] == content_sha256(core)
+    assert document["document_id"].startswith("normalized_document:")
+    validate_v2_1_schema_payload(
+        "normalized_document_v2_1",
+        {"schema_version": "2.1.0", "artifact_kind": "normalized_document", "normalized_document": document},
+    )
+
+
+def test_normalize_rejects_raw_path_hash_size_extension_and_symlink_without_output(tmp_path: Path) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    artifact = _artifact(layout, b"valid", "text/plain", "txt")
+    bad_cases = []
+    wrong_hash = deepcopy(artifact)
+    wrong_hash["content_sha256"] = "0" * 64
+    bad_cases.append(wrong_hash)
+    wrong_size = deepcopy(artifact)
+    wrong_size["byte_count"] += 1
+    bad_cases.append(wrong_size)
+    wrong_ext = deepcopy(artifact)
+    wrong_ext["raw_path"] = wrong_ext["raw_path"][:-3] + "csv"
+    bad_cases.append(wrong_ext)
+    for bad in bad_cases:
+        with pytest.raises(ResearchProjectV2Error):
+            normalize_artifact(bad, layout=layout, parsed_at="2026-07-18T00:00:00Z", provenance=_provenance("x"))
+    raw = layout.root / artifact["raw_path"]
+    original = raw.with_suffix(".original")
+    raw.rename(original)
+    raw.symlink_to(original)
+    with pytest.raises(ResearchProjectV2Error):
+        normalize_artifact(artifact, layout=layout, parsed_at="2026-07-18T00:00:00Z", provenance=_provenance("x"))
+    assert not layout.evidence_normalized_dir.exists()
+
+
+def test_write_normalized_document_is_immutable_idempotent_and_concurrent(tmp_path: Path) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    artifact = _artifact(layout, b"one paragraph", "text/plain", "txt")
+    document = normalize_artifact(artifact, layout=layout, parsed_at="2026-07-18T00:00:00Z", provenance=_provenance("x"))
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        paths = list(pool.map(lambda _: write_normalized_document(document, layout=layout), range(8)))
+    assert len(set(paths)) == 1
+    wrapper = json.loads(paths[0].read_text(encoding="utf-8"))
+    assert paths[0].read_bytes() == canonical_bytes(wrapper)
+    changed = deepcopy(document)
+    changed["title"] = "tampered"
+    with pytest.raises(ResearchProjectV2Error) as exc:
+        write_normalized_document(changed, layout=layout)
+    assert exc.value.code == "RESEARCH_PROJECT_V2_1_NORMALIZE_IMMUTABILITY_VIOLATION"
+    assert not list(layout.evidence_normalized_dir.glob(".tmp-*"))
+
+
+def test_parse_byte_limit_is_checked_before_decoding() -> None:
+    with pytest.raises(ResearchProjectV2Error) as exc:
+        parse_document_bytes(b"123", media_type="text/plain", limits=ParserLimits(max_bytes=2))
+    assert _error_code(exc) == "RESEARCH_PROJECT_V2_1_PARSE_LIMIT_EXCEEDED"
+
+
+def test_normalize_preserves_parse_limit_error_and_publishes_nothing(tmp_path: Path) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    artifact = _artifact(layout, b"a\n123\n", "text/csv", "csv")
+    with pytest.raises(ResearchProjectV2Error) as exc:
+        normalize_artifact(
+            artifact,
+            layout=layout,
+            parsed_at="2026-07-18T00:00:00Z",
+            provenance=_provenance("limit"),
+            limits=ParserLimits(max_bytes=2, max_cell_chars=2),
+        )
+    assert exc.value.code == "RESEARCH_PROJECT_V2_1_PARSE_LIMIT_EXCEEDED"
+    assert not layout.evidence_normalized_dir.exists()
+
+
+def test_normalize_rejects_oversized_raw_before_reading(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    artifact = _artifact(layout, b"large", "text/plain", "txt")
+
+    def forbidden_read(*args: object, **kwargs: object) -> bytes:
+        raise AssertionError("oversized raw must not be read")
+
+    monkeypatch.setattr(normalize_module.os, "read", forbidden_read)
+    with pytest.raises(ResearchProjectV2Error) as exc:
+        normalize_artifact(
+            artifact,
+            layout=layout,
+            parsed_at="2026-07-18T00:00:00Z",
+            provenance=_provenance("oversized"),
+            limits=ParserLimits(max_bytes=2),
+        )
+    assert exc.value.code == "RESEARCH_PROJECT_V2_1_PARSE_LIMIT_EXCEEDED"
+
+
+def test_normalize_rejects_raw_intermediate_directory_rebind(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    artifact = _artifact(layout, b"bound raw", "text/plain", "txt")
+    raw_dir = layout.evidence_raw_dir
+    moved = layout.root / "evidence/raw-old"
+    original_read = normalize_module._read_fd
+
+    def rebind_after_read(
+        descriptor: int, *, max_bytes: int | None = None, digest: object | None = None
+    ) -> bytes:
+        data = original_read(descriptor, max_bytes=max_bytes, digest=digest)
+        raw_dir.rename(moved)
+        raw_dir.mkdir(mode=0o700)
+        return data
+
+    monkeypatch.setattr(normalize_module, "_read_fd", rebind_after_read)
+    with pytest.raises(ResearchProjectV2Error) as exc:
+        normalize_artifact(
+            artifact,
+            layout=layout,
+            parsed_at="2026-07-18T00:00:00Z",
+            provenance=_provenance("rebind"),
+        )
+    assert exc.value.code == "RESEARCH_PROJECT_V2_1_NORMALIZE_INVALID"
+
+
+def test_normalize_caps_raw_that_grows_during_streaming(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    data = b"x" * 70_000
+    artifact = _artifact(layout, data, "text/plain", "txt")
+    raw = layout.root / artifact["raw_path"]
+    original_read = normalize_module.os.read
+    grew = False
+
+    def growing_read(descriptor: int, amount: int) -> bytes:
+        nonlocal grew
+        chunk = original_read(descriptor, amount)
+        if chunk and not grew:
+            grew = True
+            with raw.open("ab") as handle:
+                handle.write(b"growth")
+        return chunk
+
+    monkeypatch.setattr(normalize_module.os, "read", growing_read)
+    with pytest.raises(ResearchProjectV2Error) as exc:
+        normalize_artifact(
+            artifact,
+            layout=layout,
+            parsed_at="2026-07-18T00:00:00Z",
+            provenance=_provenance("growth"),
+            limits=ParserLimits(max_bytes=len(data)),
+        )
+    assert exc.value.code == "RESEARCH_PROJECT_V2_1_PARSE_LIMIT_EXCEEDED"
+    assert not layout.evidence_normalized_dir.exists()
+
+
+def test_normalize_rejects_raw_final_replacement_during_live_reread(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    artifact = _artifact(layout, b"live raw", "text/plain", "txt")
+    raw = layout.root / artifact["raw_path"]
+    original_read = normalize_module._read_fd
+    calls = 0
+
+    def replace_during_live_read(
+        descriptor: int, *, max_bytes: int | None = None, digest: object | None = None
+    ) -> bytes:
+        nonlocal calls
+        calls += 1
+        data = original_read(descriptor, max_bytes=max_bytes, digest=digest)
+        if calls == 2:
+            old = raw.with_suffix(".old")
+            raw.rename(old)
+            raw.write_bytes(b"replacement")
+        return data
+
+    monkeypatch.setattr(normalize_module, "_read_fd", replace_during_live_read)
+    with pytest.raises(ResearchProjectV2Error) as exc:
+        normalize_artifact(
+            artifact,
+            layout=layout,
+            parsed_at="2026-07-18T00:00:00Z",
+            provenance=_provenance("live-final"),
+        )
+    assert exc.value.code == "RESEARCH_PROJECT_V2_1_NORMALIZE_INVALID"
+    assert not layout.evidence_normalized_dir.exists()
+
+
+def test_normalize_preserves_exact_json_pointer_locators(tmp_path: Path) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    artifact = _artifact(layout, b'{"a b":1,"a\\tb":2}', "application/json", "json")
+    document = normalize_artifact(
+        artifact,
+        layout=layout,
+        parsed_at="2026-07-18T00:00:00Z",
+        provenance=_provenance("pointers"),
+    )
+    assert [section["locator"] for section in document["sections"]] == ["/a\tb", "/a b"]
+
+
+def test_write_rejects_replaced_temp_without_publishing_or_deleting_attacker(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    artifact = _artifact(layout, b"one paragraph", "text/plain", "txt")
+    document = normalize_artifact(
+        artifact,
+        layout=layout,
+        parsed_at="2026-07-18T00:00:00Z",
+        provenance=_provenance("temp-race"),
+    )
+    original_write = normalize_module._write_all
+    attacker_path: Path | None = None
+
+    def replace_temp(descriptor: int, data: bytes) -> None:
+        nonlocal attacker_path
+        original_write(descriptor, data)
+        temp_names = list(layout.evidence_normalized_dir.glob(".tmp-*"))
+        assert len(temp_names) == 1
+        attacker_path = temp_names[0]
+        attacker_path.unlink()
+        attacker_path.write_bytes(b"attacker")
+
+    monkeypatch.setattr(normalize_module, "_write_all", replace_temp)
+    with pytest.raises(ResearchProjectV2Error):
+        write_normalized_document(document, layout=layout)
+    assert not (layout.evidence_normalized_dir / f"{document['document_id']}.json").exists()
+    assert attacker_path is not None and attacker_path.read_bytes() == b"attacker"
+
+
+def test_write_detects_temp_replacement_at_link_boundary_without_name_cleanup(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    artifact = _artifact(layout, b"link race", "text/plain", "txt")
+    document = normalize_artifact(
+        artifact, layout=layout, parsed_at="2026-07-18T00:00:00Z", provenance=_provenance("link-race")
+    )
+    original_link = normalize_module.os.link
+    attacker_temp: Path | None = None
+
+    def replace_inside_link(src: str, dst: str, **kwargs: object) -> None:
+        nonlocal attacker_temp
+        attacker_temp = layout.evidence_normalized_dir / src
+        attacker_temp.unlink()
+        attacker_temp.write_bytes(b"link-boundary-attacker")
+        original_link(src, dst, **kwargs)
+
+    monkeypatch.setattr(normalize_module.os, "link", replace_inside_link)
+    with pytest.raises(ResearchProjectV2Error):
+        write_normalized_document(document, layout=layout)
+    final = layout.evidence_normalized_dir / f"{document['document_id']}.json"
+    assert final.read_bytes() == b"link-boundary-attacker"
+    assert attacker_temp is not None and attacker_temp.read_bytes() == b"link-boundary-attacker"
+
+
+def test_write_detects_final_replacement_without_deleting_replacement(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    artifact = _artifact(layout, b"final race", "text/plain", "txt")
+    document = normalize_artifact(
+        artifact, layout=layout, parsed_at="2026-07-18T00:00:00Z", provenance=_provenance("final-race")
+    )
+    original_link = normalize_module.os.link
+
+    def replace_final(*args: object, **kwargs: object) -> None:
+        original_link(*args, **kwargs)
+        final = layout.evidence_normalized_dir / f"{document['document_id']}.json"
+        final.unlink()
+        final.write_bytes(b"replacement")
+
+    monkeypatch.setattr(normalize_module.os, "link", replace_final)
+    with pytest.raises(ResearchProjectV2Error):
+        write_normalized_document(document, layout=layout)
+    final = layout.evidence_normalized_dir / f"{document['document_id']}.json"
+    assert final.read_bytes() == b"replacement"
+
+
+def test_write_detects_normalized_directory_rebind_without_deleting_published_inode(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    artifact = _artifact(layout, b"directory race", "text/plain", "txt")
+    document = normalize_artifact(
+        artifact, layout=layout, parsed_at="2026-07-18T00:00:00Z", provenance=_provenance("dir-race")
+    )
+    moved = layout.root / "evidence/normalized-old"
+    original_link = normalize_module.os.link
+
+    def rebind_directory(*args: object, **kwargs: object) -> None:
+        original_link(*args, **kwargs)
+        layout.evidence_normalized_dir.rename(moved)
+        layout.evidence_normalized_dir.mkdir(mode=0o700)
+
+    monkeypatch.setattr(normalize_module.os, "link", rebind_directory)
+    with pytest.raises(ResearchProjectV2Error):
+        write_normalized_document(document, layout=layout)
+    assert not (layout.evidence_normalized_dir / f"{document['document_id']}.json").exists()
+    assert (moved / f"{document['document_id']}.json").is_file()
