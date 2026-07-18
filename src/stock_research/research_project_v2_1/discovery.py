@@ -677,17 +677,21 @@ def discover_sources(
                 expected_query_id=query_id,
             )
             source_class = validated_result[-1]
-            if source_class not in query["source_classes"]:
+            candidate = _candidate_from_result(
+                validated_result,
+                search_plan_id=plan_id,
+                provenance=provenance,
+            )
+            if (
+                candidate["exclusion_status"] == "included"
+                and source_class not in query["source_classes"]
+            ):
                 raise _invalid(
                     "source_class not allowed for query",
                     query_id=query_id,
                     source_class=source_class,
                 )
-            query_candidates.append(_candidate_from_result(
-                validated_result,
-                search_plan_id=plan_id,
-                provenance=provenance,
-            ))
+            query_candidates.append(candidate)
         query_candidates.sort(
             key=lambda candidate: (
                 candidate["rank"],
@@ -1192,7 +1196,9 @@ def write_discovery_batch(
             directory_fds, component_names, discovery_fd, plan_id, batch_fd
         ):
             if final_created:
-                os.unlink(final_name, dir_fd=batch_fd)
+                _unlink_created_final_if_still_bound(
+                    batch_fd, final_name, created_final_stat
+                )
                 final_created = False
             raise _invalid("unsafe managed path", path=str(batch_dir))
         os.fsync(batch_fd)

@@ -25,6 +25,7 @@ from stock_research.research_project_v2_1.discovery import (
     write_discovery_batch,
 )
 from stock_research.research_project_v2_1.layout import LayeredResearchLayout
+from stock_research.research_project_v2_1.search_plan import compile_search_plan
 
 
 FIXTURE_PATH = Path(
@@ -58,8 +59,6 @@ def search_plan() -> dict[str, Any]:
                 "source_classes": [
                     "technical_standard",
                     "primary_standard",
-                    "stock_opinion",
-                    "equity_research",
                     "independent_secondary",
                     "direct_url",
                 ],
@@ -371,6 +370,117 @@ def test_discover_rejects_result_source_class_outside_query_contract() -> None:
     assert_discovery_error(
         lambda: discover_sources(
             search_plan(),
+            provider,
+            provider_name="static",
+            discovered_at=DISCOVERED_AT,
+            provenance=PROVENANCE,
+        ),
+        reason="source_class not allowed for query",
+    )
+
+
+def compiled_real_search_plan() -> dict[str, Any]:
+    requirement = {
+        "requirement_id": "requirement:industry:discovery-integration",
+        "target_type": "research_claim",
+        "target_id": "claim:industry:discovery-integration",
+        "question_to_resolve": "What engineering constraints determine scale-up?",
+        "requirement_type": "validation",
+        "required_source_classes": [
+            "technical_standard",
+            "independent_secondary",
+        ],
+        "required_independence": "independent",
+        "required_freshness": "within_12_months",
+        "required_scope": "global",
+        "minimum_coverage": 2,
+        "conflict_search_required": True,
+        "primary_source_required": True,
+        "collection_status": "not_started",
+        "satisfaction_status": "unsatisfied",
+        "provenance": deepcopy(PROVENANCE),
+    }
+    return compile_search_plan(
+        requirement,
+        project_id="research_project:pcb",
+        version_id="research_version:pcb:0.1.0",
+        domain_terms=["high-layer PCB", "low-loss laminate"],
+    )
+
+
+def test_real_compiled_plan_collects_forbidden_source_classes_as_policy_exclusions() -> None:
+    plan = compiled_real_search_plan()
+    mechanism = next(
+        query for query in plan["queries"] if query["query_role"] == "mechanism"
+    )
+    query_id = mechanism["query_id"]
+    provider = StaticProvider(
+        {
+            query_id: [
+                result(
+                    url="https://markets.example.com/opinion",
+                    title="Top stock picks",
+                    source_class="stock_opinion",
+                    query_id=query_id,
+                    rank=1,
+                ),
+                result(
+                    url="https://broker.example.com/research",
+                    title="Neutral engineering title",
+                    source_class="equity_research",
+                    query_id=query_id,
+                    rank=2,
+                ),
+                result(
+                    url="https://standards.example.com/process",
+                    title="PCB process engineering standard",
+                    source_class="technical_standard",
+                    query_id=query_id,
+                    rank=3,
+                ),
+            ]
+        }
+    )
+
+    batch = discover_sources(
+        plan,
+        provider,
+        provider_name="static",
+        discovered_at=DISCOVERED_AT,
+        provenance=PROVENANCE,
+    )
+
+    assert [item["source_class"] for item in batch["candidates"]] == [
+        "technical_standard"
+    ]
+    assert {item["source_class"] for item in batch["policy_excluded_results"]} == {
+        "stock_opinion",
+        "equity_research",
+    }
+
+
+def test_real_compiled_plan_rejects_nonpolicy_source_class_outside_contract() -> None:
+    plan = compiled_real_search_plan()
+    mechanism = next(
+        query for query in plan["queries"] if query["query_role"] == "mechanism"
+    )
+    query_id = mechanism["query_id"]
+    provider = StaticProvider(
+        {
+            query_id: [
+                result(
+                    title="Engineering discussion",
+                    snippet="Process measurements and constraints",
+                    source_class="social_media",
+                    query_id=query_id,
+                )
+            ]
+        }
+    )
+
+    assert_discovery_error(
+        lambda: discover_sources(
+            plan,
             provider,
             provider_name="static",
             discovered_at=DISCOVERED_AT,
@@ -1254,6 +1364,63 @@ def test_writer_binds_created_inode_before_final_name_can_be_replaced(
         reason="unsafe managed path",
     )
     assert target.read_bytes() == expected
+
+
+def test_writer_early_binding_failure_does_not_unlink_replacement_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    batch = discover_sources(
+        search_plan(),
+        StaticProvider({}),
+        provider_name="static",
+        discovered_at=DISCOVERED_AT,
+        provenance=PROVENANCE,
+    )
+    final_name = f"{batch['content_hash']}.json"
+    target = layout.evidence_discovery_dir / batch["search_plan_id"] / final_name
+    original_link = discovery_module.os.link
+    original_binding = discovery_module._complete_directory_binding_is_valid
+    binding_calls = 0
+
+    def replace_after_link(source: str, target_name: str, **kwargs: object) -> None:
+        original_link(source, target_name, **kwargs)
+        directory_fd = kwargs["dst_dir_fd"]
+        assert isinstance(directory_fd, int)
+        discovery_module.os.unlink(target_name, dir_fd=directory_fd)
+        descriptor = discovery_module.os.open(
+            target_name,
+            discovery_module.os.O_WRONLY
+            | discovery_module.os.O_CREAT
+            | discovery_module.os.O_EXCL
+            | discovery_module.os.O_NOFOLLOW,
+            0o600,
+            dir_fd=directory_fd,
+        )
+        try:
+            discovery_module.os.write(descriptor, b"evil")
+        finally:
+            discovery_module.os.close(descriptor)
+
+    def fail_second_binding(*args: object, **kwargs: object) -> bool:
+        nonlocal binding_calls
+        binding_calls += 1
+        if binding_calls == 2:
+            return False
+        return original_binding(*args, **kwargs)
+
+    monkeypatch.setattr(discovery_module.os, "link", replace_after_link)
+    monkeypatch.setattr(
+        discovery_module,
+        "_complete_directory_binding_is_valid",
+        fail_second_binding,
+    )
+
+    assert_discovery_error(
+        lambda: write_discovery_batch(batch, layout=layout),
+        reason="unsafe managed path",
+    )
+    assert target.read_bytes() == b"evil"
 
 
 def test_writer_fsyncs_parent_mkdirs_and_batch_after_temp_unlink(
