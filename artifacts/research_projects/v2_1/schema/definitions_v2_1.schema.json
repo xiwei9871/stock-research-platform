@@ -1023,7 +1023,7 @@
       "properties": {
         "section_id": {"type": "string", "minLength": 1},
         "heading": {"type": ["string", "null"]},
-        "locator": {"type": "string", "minLength": 1},
+        "locator": {"type": "string"},
         "text": {"type": "string"},
         "page_start": {"type": ["integer", "null"], "minimum": 1},
         "page_end": {"type": ["integer", "null"], "minimum": 1},
@@ -1149,7 +1149,7 @@
             "boundary_evidence"
           ]
         },
-        "locator": {"type": "string", "minLength": 1},
+        "locator": {"type": "string"},
         "assessment_summary": {"type": "string", "minLength": 1},
         "directness": {"type": "string", "minLength": 1},
         "strength": {"type": "string", "minLength": 1},

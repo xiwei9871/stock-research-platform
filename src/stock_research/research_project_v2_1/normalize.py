@@ -220,7 +220,7 @@ def normalize_artifact(
         heading = normalize_text(section.heading) if section.heading is not None else None
         text = normalize_text(section.text)
         locator = section.locator
-        if not isinstance(locator, str) or not locator or locator in seen_locators:
+        if not isinstance(locator, str) or locator in seen_locators:
             raise _error("parser emitted an invalid or duplicate locator", locator=locator)
         seen_locators.add(locator)
         section_core = {"heading": heading, "locator": locator, "text": text}
@@ -245,14 +245,17 @@ def normalize_artifact(
         "sections": sections,
         "warnings": normalized_warnings,
     }
-    document_hash = content_sha256(core)
+    hash_payload = {
+        **core,
+        "parsed_at": parsed_at,
+        "provenance": deepcopy(provenance),
+    }
+    document_hash = content_sha256(hash_payload)
     identity = sha256(f"{artifact_id}\n{document_hash}".encode("utf-8")).hexdigest()[:24]
     document = {
         "document_id": f"normalized_document:{identity}",
-        **core,
+        **hash_payload,
         "document_hash": document_hash,
-        "parsed_at": parsed_at,
-        "provenance": deepcopy(provenance),
     }
     validate_v2_1_schema_payload(
         "normalized_document_v2_1",
@@ -270,11 +273,21 @@ def _validated_document(document: dict[str, Any]) -> tuple[dict[str, Any], bytes
     raw_id = copied.get("document_id") if isinstance(copied, dict) else None
     if not isinstance(raw_id, str) or _DOCUMENT_ID.fullmatch(raw_id) is None:
         raise _error("unsafe document_id", document_id=raw_id)
-    core = {
+    hash_payload = {
         key: deepcopy(copied.get(key))
-        for key in ("artifact_id", "parser", "parser_version", "media_type", "title", "sections", "warnings")
+        for key in (
+            "artifact_id",
+            "parser",
+            "parser_version",
+            "media_type",
+            "title",
+            "sections",
+            "warnings",
+            "parsed_at",
+            "provenance",
+        )
     }
-    expected_hash = content_sha256(core)
+    expected_hash = content_sha256(hash_payload)
     if copied.get("document_hash") != expected_hash:
         raise _immutability("document_hash mismatch")
     expected_identity = sha256(f"{copied.get('artifact_id')}\n{expected_hash}".encode("utf-8")).hexdigest()[:24]
@@ -328,11 +341,23 @@ def _chain_bound(descriptors: list[int], names: list[str]) -> bool:
 def _read_named_regular(directory_fd: int, name: str) -> tuple[bytes, os.stat_result]:
     descriptor = os.open(name, _FILE_FLAGS, dir_fd=directory_fd)
     try:
-        opened = os.fstat(descriptor)
-        entry = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
-        if not stat.S_ISREG(opened.st_mode) or not _same_inode(opened, entry):
+        before = os.fstat(descriptor)
+        entry_before = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+        if not stat.S_ISREG(before.st_mode) or not _same_inode(before, entry_before):
             raise OSError(errno.EIO, "unbound final normalized document")
-        return _read_fd(descriptor), opened
+        data = _read_fd(descriptor)
+        after = os.fstat(descriptor)
+        entry_after = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+        if (
+            not stat.S_ISREG(after.st_mode)
+            or not _same_inode(before, after)
+            or not _same_inode(after, entry_after)
+            or before.st_size != after.st_size
+            or before.st_mtime_ns != after.st_mtime_ns
+            or after.st_size != len(data)
+        ):
+            raise OSError(errno.EIO, "final normalized document changed during read")
+        return data, after
     finally:
         os.close(descriptor)
 
@@ -358,7 +383,16 @@ def _name_matches_inode(directory_fd: int, name: str, expected: os.stat_result) 
 def _unlink_if_inode(directory_fd: int, name: str, expected: os.stat_result) -> bool:
     if not _name_matches_inode(directory_fd, name, expected):
         return False
-    os.unlink(name, dir_fd=directory_fd)
+    retired = f".retired-{secrets.token_hex(16)}"
+    os.rename(
+        name,
+        retired,
+        src_dir_fd=directory_fd,
+        dst_dir_fd=directory_fd,
+    )
+    if not _name_matches_inode(directory_fd, retired, expected):
+        return False
+    os.unlink(retired, dir_fd=directory_fd)
     os.fsync(directory_fd)
     return True
 
@@ -437,8 +471,30 @@ def write_normalized_document(
         os.close(temporary_fd)
         temporary_fd = None
         held_final_fd = os.open(final_name, _FILE_FLAGS, dir_fd=directory_fd)
+        held_before = os.fstat(held_final_fd)
+        held_entry_before = os.stat(
+            final_name, dir_fd=directory_fd, follow_symlinks=False
+        )
+        if (
+            not stat.S_ISREG(held_before.st_mode)
+            or not _same_inode(held_before, final_stat)
+            or not _same_inode(held_before, held_entry_before)
+        ):
+            raise _storage("held normalized document changed", path=str(target))
+        held_data = _read_fd(held_final_fd)
         held = os.fstat(held_final_fd)
-        if not _same_inode(held, final_stat) or _read_fd(held_final_fd) != data:
+        held_entry_after = os.stat(
+            final_name, dir_fd=directory_fd, follow_symlinks=False
+        )
+        if (
+            held_data != data
+            or not stat.S_ISREG(held.st_mode)
+            or not _same_inode(held_before, held)
+            or not _same_inode(held, held_entry_after)
+            or held_before.st_size != held.st_size
+            or held_before.st_mtime_ns != held.st_mtime_ns
+            or held.st_size != len(held_data)
+        ):
             raise _storage("held normalized document changed", path=str(target))
         live_descriptors, live_names = _open_absolute_directory(directory)
         try:
@@ -450,6 +506,25 @@ def write_normalized_document(
             live_data, live_stat = _read_named_regular(live_descriptors[-1], final_name)
             if live_data != data or not _same_inode(live_stat, held):
                 raise _storage("live normalized document was replaced", path=str(target))
+            live_entry = os.stat(
+                final_name,
+                dir_fd=live_descriptors[-1],
+                follow_symlinks=False,
+            )
+            if (
+                not _chain_bound(live_descriptors, live_names)
+                or not stat.S_ISREG(live_stat.st_mode)
+                or not _same_inode(live_stat, live_entry)
+                or live_stat.st_size != len(live_data)
+            ):
+                raise _storage(
+                    "live normalized document changed before return", path=str(target)
+                )
+            for old, live in zip(descriptors, live_descriptors, strict=True):
+                if not _same_inode(os.fstat(old), os.fstat(live)):
+                    raise _storage(
+                        "live normalized directory was rebound", path=str(directory)
+                    )
         finally:
             for descriptor in reversed(live_descriptors):
                 os.close(descriptor)

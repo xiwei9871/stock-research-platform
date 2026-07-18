@@ -92,23 +92,86 @@ class _HtmlCapture:
     chunks: list[str]
 
 
+@dataclass
+class _TableContext:
+    table_id: int
+    row_count: int = 0
+    current_row: int = 0
+    cell_count: int = 0
+
+
+@dataclass
+class _HtmlElement:
+    tag: str
+    hidden: bool
+    capture: _HtmlCapture | None = None
+    table: _TableContext | None = None
+
+
 class _VisibleHTMLParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self.sections: list[ParsedSection] = []
         self.title_chunks: list[str] = []
-        self._title_depth = 0
-        self._hidden_stack: list[bool] = []
-        self._captures: list[_HtmlCapture] = []
+        self._elements: list[_HtmlElement] = []
         self._counts: dict[str, int] = {}
         self._current_heading: str | None = None
-        self._table = 0
-        self._row = 0
-        self._cell = 0
+        self._table_count = 0
+        self._tables: list[_TableContext] = []
 
     @property
     def hidden(self) -> bool:
-        return any(self._hidden_stack)
+        return bool(self._elements and self._elements[-1].hidden)
+
+    def _active_capture(self) -> _HtmlCapture | None:
+        for element in reversed(self._elements):
+            if element.capture is not None:
+                return element.capture
+        return None
+
+    def _close_element(self, element: _HtmlElement) -> None:
+        if element.capture is not None:
+            text = _clean("".join(element.capture.chunks))
+            if text:
+                if element.tag.startswith("h"):
+                    self._current_heading = text
+                self.sections.append(
+                    ParsedSection(
+                        element.capture.heading,
+                        element.capture.locator,
+                        text,
+                    )
+                )
+        if element.table is not None:
+            if self._tables and self._tables[-1] is element.table:
+                self._tables.pop()
+            parent = self._active_capture()
+            if parent is not None:
+                parent.chunks.append(" ")
+
+    def _implicitly_close_before_start(self, tag: str) -> None:
+        candidates = (
+            {"td", "th"}
+            if tag in {"td", "th"}
+            else {"tr"}
+            if tag == "tr"
+            else {tag}
+            if tag in {"p", "li"}
+            else set()
+        )
+        if not candidates:
+            return
+        boundaries = {"table"} if tag in {"td", "th", "tr"} else {"ul", "ol"} if tag == "li" else set()
+        for element in reversed(self._elements):
+            if element.tag in boundaries:
+                return
+            if element.tag in candidates:
+                self.handle_endtag(element.tag)
+                return
+
+    def finish(self) -> None:
+        while self._elements:
+            self._close_element(self._elements.pop())
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         tag = tag.lower()
@@ -122,31 +185,51 @@ class _VisibleHTMLParser(HTMLParser):
             or "visibility:hidden" in style
         )
         parent_hidden = self.hidden
-        self._hidden_stack.append(parent_hidden or own_hidden)
-        if self.hidden:
-            if tag in _VOID_TAGS:
-                self._hidden_stack.pop()
+        hidden = parent_hidden or own_hidden
+        if tag in _VOID_TAGS:
             return
-        if tag == "title":
-            self._title_depth += 1
+        self._implicitly_close_before_start(tag)
+        parent_hidden = self.hidden
+        hidden = parent_hidden or own_hidden
+        table_context: _TableContext | None = None
+        if not hidden and tag == "table":
+            parent = self._active_capture()
+            if parent is not None:
+                parent.chunks.append(" ")
+            self._table_count += 1
+            table_context = _TableContext(self._table_count)
+            self._tables.append(table_context)
+        capture: _HtmlCapture | None = None
+        self._elements.append(_HtmlElement(tag, hidden, table=table_context))
+        if hidden:
+            return
         if tag == "table":
-            self._table += 1
-            self._row = 0
+            pass
         elif tag == "tr":
-            self._row += 1
-            self._cell = 0
+            if self._tables:
+                table = self._tables[-1]
+                table.row_count += 1
+                table.current_row = table.row_count
+                table.cell_count = 0
         if tag not in _SEMANTIC_TAGS:
-            if tag in _VOID_TAGS:
-                self._hidden_stack.pop()
             return
         if tag in {"th", "td"}:
-            self._cell += 1
-            locator = f"html:table:{self._table:04d}:row:{self._row:04d}:cell:{self._cell:04d}"
+            if not self._tables:
+                self._table_count += 1
+                table = _TableContext(self._table_count, row_count=1, current_row=1)
+                self._tables.append(table)
+            table = self._tables[-1]
+            table.cell_count += 1
+            locator = (
+                f"html:table:{table.table_id:04d}:row:{table.current_row:04d}:"
+                f"cell:{table.cell_count:04d}"
+            )
         else:
             self._counts[tag] = self._counts.get(tag, 0) + 1
             locator = f"html:{tag}:{self._counts[tag]:04d}"
         heading = None if tag.startswith("h") else self._current_heading
-        self._captures.append(_HtmlCapture(tag, locator, heading, []))
+        capture = _HtmlCapture(tag, locator, heading, [])
+        self._elements[-1].capture = capture
 
     def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         self.handle_starttag(tag, attrs)
@@ -156,26 +239,30 @@ class _VisibleHTMLParser(HTMLParser):
     def handle_data(self, data: str) -> None:
         if self.hidden:
             return
-        if self._title_depth:
+        if any(element.tag == "title" for element in self._elements):
             self.title_chunks.append(data)
-        if self._captures:
-            self._captures[-1].chunks.append(data)
+        capture = self._active_capture()
+        if capture is not None:
+            capture.chunks.append(data)
 
     def handle_endtag(self, tag: str) -> None:
         tag = tag.lower()
-        was_hidden = self.hidden
-        if not was_hidden:
-            if tag == "title" and self._title_depth:
-                self._title_depth -= 1
-            if self._captures and self._captures[-1].tag == tag:
-                capture = self._captures.pop()
-                text = _clean("".join(capture.chunks))
-                if text:
-                    if tag.startswith("h"):
-                        self._current_heading = text
-                    self.sections.append(ParsedSection(capture.heading, capture.locator, text))
-        if self._hidden_stack:
-            self._hidden_stack.pop()
+        if tag in _VOID_TAGS:
+            return
+        match = next(
+            (
+                index
+                for index in range(len(self._elements) - 1, -1, -1)
+                if self._elements[index].tag == tag
+            ),
+            None,
+        )
+        if match is None:
+            return
+        closing = self._elements[match:]
+        del self._elements[match:]
+        for element in reversed(closing):
+            self._close_element(element)
 
 
 def _parse_html(data: bytes, title_hint: str | None, limits: ParserLimits) -> ParsedDocument:
@@ -183,6 +270,7 @@ def _parse_html(data: bytes, title_hint: str | None, limits: ParserLimits) -> Pa
     try:
         parser.feed(_decode(data))
         parser.close()
+        parser.finish()
     except ResearchProjectV2Error:
         raise
     except Exception as exc:
@@ -266,6 +354,13 @@ def _pointer_part(value: str) -> str:
     return value.replace("~", "~0").replace("/", "~1")
 
 
+def _validate_json_string(value: str) -> None:
+    try:
+        value.encode("utf-8", errors="strict")
+    except UnicodeEncodeError as exc:
+        raise _invalid("JSON string contains a non-Unicode-scalar value") from exc
+
+
 def _check_json_lexical_depth(text: str, limits: ParserLimits) -> None:
     depth = 0
     in_string = False
@@ -312,16 +407,19 @@ def _parse_json(data: bytes, title_hint: str | None, limits: ParserLimits) -> Pa
             raise _limit("JSON depth", max_depth=limits.max_depth)
         if isinstance(value, str) and len(value) > limits.max_string_chars:
             raise _limit("JSON string characters", max_string_chars=limits.max_string_chars)
+        if isinstance(value, str):
+            _validate_json_string(value)
         if isinstance(value, dict):
             for key in sorted(value):
                 if len(key) > limits.max_string_chars:
                     raise _limit("JSON string characters", max_string_chars=limits.max_string_chars)
+                _validate_json_string(key)
                 visit(value[key], f"{pointer}/{_pointer_part(key)}", depth + 1)
         elif isinstance(value, list):
             for index, child in enumerate(value):
                 visit(child, f"{pointer}/{index}", depth + 1)
         else:
-            sections.append(ParsedSection(None, pointer or "/", canonical_bytes(value).decode("utf-8")))
+            sections.append(ParsedSection(None, pointer, canonical_bytes(value).decode("utf-8")))
 
     try:
         visit(root, "", 0)

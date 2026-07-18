@@ -85,6 +85,45 @@ def test_html_hidden_attributes_accept_html_and_css_whitespace() -> None:
     assert [section.text for section in parsed.sections] == ["visible"]
 
 
+def test_html_malformed_void_end_tag_cannot_pop_hidden_ancestor() -> None:
+    parsed = parse_document_bytes(
+        b"<div hidden><br></br><p>hidden leak</p></div><p>visible</p>",
+        media_type="text/html",
+    )
+    assert [section.text for section in parsed.sections] == ["visible"]
+
+
+def test_html_nested_tables_restore_outer_table_context_without_text_duplicates() -> None:
+    parsed = parse_document_bytes(
+        b"<table><tr><td>outer before<table><tr><td>inner</td></tr></table>outer after</td></tr><tr><td>outer row two</td></tr></table>",
+        media_type="text/html",
+    )
+    assert [(section.locator, section.text) for section in parsed.sections] == [
+        ("html:table:0002:row:0001:cell:0001", "inner"),
+        ("html:table:0001:row:0001:cell:0001", "outer before outer after"),
+        ("html:table:0001:row:0002:cell:0001", "outer row two"),
+    ]
+
+
+def test_html_implicitly_closes_table_cells_in_start_order_and_flushes_eof() -> None:
+    table = parse_document_bytes(
+        b"<table><tr><td>A<td>B</tr></table>", media_type="text/html"
+    )
+    assert [(section.locator, section.text) for section in table.sections] == [
+        ("html:table:0001:row:0001:cell:0001", "A"),
+        ("html:table:0001:row:0001:cell:0002", "B"),
+    ]
+    paragraph = parse_document_bytes(b"<p>visible", media_type="text/html")
+    assert [section.text for section in paragraph.sections] == ["visible"]
+
+
+def test_html_implicitly_closes_paragraphs_and_list_items_in_source_order() -> None:
+    paragraphs = parse_document_bytes(b"<p>A<p>B", media_type="text/html")
+    assert [section.text for section in paragraphs.sections] == ["A", "B"]
+    items = parse_document_bytes(b"<ul><li>A<li>B</ul>", media_type="text/html")
+    assert [section.text for section in items.sections] == ["A", "B"]
+
+
 def test_pdf_parser_emits_one_section_per_page_and_rejects_encryption() -> None:
     writer = PdfWriter()
     writer.add_blank_page(width=72, height=72)
@@ -184,6 +223,13 @@ def test_json_parser_sorts_keys_and_uses_json_pointer_leaf_locators() -> None:
     assert escaped.sections[0].locator == "/a~1b/~0key"
 
 
+def test_json_root_scalar_and_empty_key_have_distinct_rfc6901_pointers() -> None:
+    root = parse_document_bytes(b"7", media_type="application/json")
+    empty_key = parse_document_bytes(b'{"":7}', media_type="application/json")
+    assert root.sections[0].locator == ""
+    assert empty_key.sections[0].locator == "/"
+
+
 @pytest.mark.parametrize(
     "payload",
     [
@@ -191,6 +237,7 @@ def test_json_parser_sorts_keys_and_uses_json_pointer_leaf_locators() -> None:
         b'{"x":NaN}',
         b'{"x":Infinity}',
         b'{"x":"\\ud800"}',
+        b'{"\\ud800":1}',
         b'{"x":9007199254740992}',
         b"\xff",
     ],
@@ -270,7 +317,11 @@ def test_normalize_artifact_is_deterministic_schema_valid_and_does_not_mutate(tm
     assert normalize_text("A\u030A   capacity") == "Å capacity"
     assert document["warnings"] == ["a", "z"]
     assert document["sections"][0]["section_id"] == "section:evidence_artifact:test:0001"
-    core = {key: value for key, value in document.items() if key not in {"document_id", "document_hash", "parsed_at", "provenance"}}
+    core = {
+        key: value
+        for key, value in document.items()
+        if key not in {"document_id", "document_hash"}
+    }
     assert document["document_hash"] == content_sha256(core)
     assert document["document_id"].startswith("normalized_document:")
     validate_v2_1_schema_payload(
@@ -462,6 +513,22 @@ def test_normalize_preserves_exact_json_pointer_locators(tmp_path: Path) -> None
     assert [section["locator"] for section in document["sections"]] == ["/a\tb", "/a b"]
 
 
+def test_normalize_accepts_exact_empty_root_locator_and_hashes_it(tmp_path: Path) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    artifact = _artifact(layout, b"7", "application/json", "json")
+    document = normalize_artifact(
+        artifact,
+        layout=layout,
+        parsed_at="2026-07-18T00:00:00Z",
+        provenance=_provenance("root-scalar"),
+    )
+    section = document["sections"][0]
+    assert section["locator"] == ""
+    assert section["section_hash"] == content_sha256(
+        {"heading": None, "locator": "", "text": "7"}
+    )
+
+
 def test_write_rejects_replaced_temp_without_publishing_or_deleting_attacker(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -518,6 +585,44 @@ def test_write_detects_temp_replacement_at_link_boundary_without_name_cleanup(
     assert attacker_temp is not None and attacker_temp.read_bytes() == b"link-boundary-attacker"
 
 
+def test_temp_cleanup_isolates_name_replacement_before_deletion(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    artifact = _artifact(layout, b"cleanup race", "text/plain", "txt")
+    document = normalize_artifact(
+        artifact,
+        layout=layout,
+        parsed_at="2026-07-18T00:00:00Z",
+        provenance=_provenance("cleanup-race"),
+    )
+    original_rename = normalize_module.os.rename
+    attacked = False
+
+    def replace_during_isolation(src: str, dst: str, **kwargs: object) -> None:
+        nonlocal attacked
+        if isinstance(src, str) and src.startswith(".tmp-") and not attacked:
+            attacked = True
+            directory_fd = kwargs["src_dir_fd"]
+            os.unlink(src, dir_fd=directory_fd)
+            attacker_fd = os.open(
+                src,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                0o600,
+                dir_fd=directory_fd,
+            )
+            os.write(attacker_fd, b"cleanup-attacker")
+            os.close(attacker_fd)
+        original_rename(src, dst, **kwargs)
+
+    monkeypatch.setattr(normalize_module.os, "rename", replace_during_isolation)
+    with pytest.raises(ResearchProjectV2Error):
+        write_normalized_document(document, layout=layout)
+    retired = list(layout.evidence_normalized_dir.glob(".retired-*"))
+    assert len(retired) == 1
+    assert retired[0].read_bytes() == b"cleanup-attacker"
+
+
 def test_write_detects_final_replacement_without_deleting_replacement(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -541,6 +646,39 @@ def test_write_detects_final_replacement_without_deleting_replacement(
     assert final.read_bytes() == b"replacement"
 
 
+def test_write_detects_replacement_during_last_live_final_read(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    artifact = _artifact(layout, b"last read race", "text/plain", "txt")
+    document = normalize_artifact(
+        artifact,
+        layout=layout,
+        parsed_at="2026-07-18T00:00:00Z",
+        provenance=_provenance("last-read-race"),
+    )
+    final = layout.evidence_normalized_dir / f"{document['document_id']}.json"
+    original_read = normalize_module._read_fd
+    calls = 0
+
+    def replace_after_last_read(
+        descriptor: int, *, max_bytes: int | None = None, digest: object | None = None
+    ) -> bytes:
+        nonlocal calls
+        calls += 1
+        data = original_read(descriptor, max_bytes=max_bytes, digest=digest)
+        if calls == 3:
+            old = final.with_suffix(".old")
+            final.rename(old)
+            final.write_bytes(b"last-read-replacement")
+        return data
+
+    monkeypatch.setattr(normalize_module, "_read_fd", replace_after_last_read)
+    with pytest.raises(ResearchProjectV2Error):
+        write_normalized_document(document, layout=layout)
+    assert final.read_bytes() == b"last-read-replacement"
+
+
 def test_write_detects_normalized_directory_rebind_without_deleting_published_inode(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -562,3 +700,40 @@ def test_write_detects_normalized_directory_rebind_without_deleting_published_in
         write_normalized_document(document, layout=layout)
     assert not (layout.evidence_normalized_dir / f"{document['document_id']}.json").exists()
     assert (moved / f"{document['document_id']}.json").is_file()
+
+
+def test_document_identity_includes_parsed_at_and_full_provenance(tmp_path: Path) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    artifact = _artifact(layout, b"identity", "text/plain", "txt")
+    common = {
+        "artifact": artifact,
+        "layout": layout,
+        "parsed_at": "2026-07-18T00:00:00Z",
+        "provenance": _provenance("identity-a"),
+        "warnings": ["warning"],
+    }
+    first = normalize_artifact(**common)
+    same = normalize_artifact(**deepcopy(common))
+    later = normalize_artifact(**{**common, "parsed_at": "2026-07-18T00:00:01Z"})
+    other_provenance = normalize_artifact(
+        **{**common, "provenance": _provenance("identity-b")}
+    )
+    assert (first["document_hash"], first["document_id"]) == (
+        same["document_hash"],
+        same["document_id"],
+    )
+    assert len(
+        {
+            first["document_id"],
+            later["document_id"],
+            other_provenance["document_id"],
+        }
+    ) == 3
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        paths = list(
+            pool.map(
+                lambda document: write_normalized_document(document, layout=layout),
+                (later, other_provenance),
+            )
+        )
+    assert len(set(paths)) == 2

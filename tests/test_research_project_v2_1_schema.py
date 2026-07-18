@@ -1081,6 +1081,18 @@ def test_standalone_schema_resolves_common_refs_and_accepts_valid_payload(
     validate_v2_1_schema_payload(schema_name, _standalone_payloads()[schema_name])
 
 
+def test_standalone_normalized_document_accepts_empty_root_locator():
+    payload = deepcopy(_standalone_payloads()["normalized_document_v2_1"])
+    payload["normalized_document"]["sections"][0]["locator"] = ""
+    validate_v2_1_schema_payload("normalized_document_v2_1", payload)
+
+
+def test_standalone_industry_assessment_accepts_empty_root_locator():
+    payload = deepcopy(_standalone_payloads()["industry_evidence_assessment_v2_1"])
+    payload["industry_evidence_assessment"]["locator"] = ""
+    validate_v2_1_schema_payload("industry_evidence_assessment_v2_1", payload)
+
+
 @pytest.mark.parametrize("evidence_channel", ["company", "market"])
 def test_standalone_evidence_artifact_rejects_non_industry_channels(
     evidence_channel,
