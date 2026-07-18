@@ -833,67 +833,89 @@
     "source_candidate": {
       "type": "object",
       "required": [
-        "source_candidate_id",
+        "candidate_id",
         "search_plan_id",
         "query_id",
-        "evidence_channel",
+        "normalized_url",
+        "original_url",
         "title",
-        "source_uri",
-        "source_type",
+        "snippet",
         "publisher",
-        "published_at",
-        "discovered_at",
-        "selection_status",
-        "rationale"
+        "publish_date",
+        "source_class",
+        "rank",
+        "exclusion_status",
+        "exclusion_reasons",
+        "dedup_key",
+        "provenance"
       ],
       "properties": {
-        "source_candidate_id": {"type": "string", "minLength": 1},
+        "candidate_id": {"type": "string", "minLength": 1},
         "search_plan_id": {"type": "string", "minLength": 1},
         "query_id": {"type": "string", "minLength": 1},
-        "evidence_channel": {"$ref": "#/$defs/evidence_channel"},
+        "normalized_url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https?://"
+        },
+        "original_url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https?://"
+        },
         "title": {"type": "string", "minLength": 1},
-        "source_uri": {"type": "string", "minLength": 1},
-        "source_type": {"type": "string", "minLength": 1},
-        "publisher": {"type": "string", "minLength": 1},
-        "published_at": {
+        "snippet": {"type": "string"},
+        "publisher": {"type": ["string", "null"]},
+        "publish_date": {
           "anyOf": [
             {
               "type": "string",
-              "format": "date-time",
-              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})$"
+              "format": "date",
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
             },
             {"type": "null"}
           ]
         },
-        "discovered_at": {
-          "type": "string",
-          "format": "date-time",
-          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})$"
+        "source_class": {"type": "string", "minLength": 1},
+        "rank": {"type": "integer", "minimum": 1},
+        "exclusion_status": {
+          "enum": ["included", "excluded_by_policy"]
         },
-        "selection_status": {
-          "enum": ["candidate", "selected", "rejected", "duplicate"]
+        "exclusion_reasons": {
+          "type": "array",
+          "items": {"type": "string"}
         },
-        "rationale": {"type": "string", "minLength": 1}
+        "dedup_key": {"type": "string", "minLength": 1},
+        "provenance": {"$ref": "#/$defs/provenance"}
       },
       "additionalProperties": false
     },
     "source_relationship": {
       "type": "object",
       "required": [
-        "source_relationship_id",
-        "from_source_candidate_id",
-        "to_source_candidate_id",
-        "relationship_type",
-        "summary"
+        "left_artifact_id",
+        "right_artifact_id",
+        "relationship",
+        "reasons"
       ],
       "properties": {
-        "source_relationship_id": {"type": "string", "minLength": 1},
-        "from_source_candidate_id": {"type": "string", "minLength": 1},
-        "to_source_candidate_id": {"type": "string", "minLength": 1},
-        "relationship_type": {
-          "enum": ["duplicates", "cites", "updates", "contradicts", "corroborates"]
+        "left_artifact_id": {"type": "string", "minLength": 1},
+        "right_artifact_id": {"type": "string", "minLength": 1},
+        "relationship": {
+          "enum": [
+            "same_document",
+            "republication",
+            "same_publisher_family",
+            "shared_upstream_source",
+            "independent",
+            "unknown"
+          ]
         },
-        "summary": {"type": "string", "minLength": 1}
+        "reasons": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "minItems": 1
+        }
       },
       "additionalProperties": false
     },
@@ -1088,31 +1110,53 @@
       "type": "object",
       "required": [
         "conflict_summary_id",
+        "evidence_channel",
         "target_type",
         "target_id",
-        "evidence_artifact_ids",
-        "status",
+        "conflict_status",
+        "supporting_source_count",
+        "opposing_source_count",
+        "quantitative_source_count",
+        "independent_source_family_count",
+        "assessment_ids",
         "summary",
-        "resolution",
-        "updated_at"
+        "assessed_at",
+        "provenance"
       ],
       "properties": {
         "conflict_summary_id": {"type": "string", "minLength": 1},
-        "target_type": {"type": "string", "minLength": 1},
+        "evidence_channel": {"const": "industry"},
+        "target_type": {
+          "enum": [
+            "research_project",
+            "research_question",
+            "research_claim",
+            "causal_edge"
+          ]
+        },
         "target_id": {"type": "string", "minLength": 1},
-        "evidence_artifact_ids": {
+        "conflict_status": {
+          "enum": ["none", "limited", "material_conflict", "unresolved"]
+        },
+        "supporting_source_count": {"type": "integer", "minimum": 0},
+        "opposing_source_count": {"type": "integer", "minimum": 0},
+        "quantitative_source_count": {"type": "integer", "minimum": 0},
+        "independent_source_family_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "assessment_ids": {
           "type": "array",
           "items": {"type": "string", "minLength": 1},
           "uniqueItems": true
         },
-        "status": {"enum": ["open", "resolved", "accepted_uncertainty"]},
         "summary": {"type": "string", "minLength": 1},
-        "resolution": {"type": ["string", "null"]},
-        "updated_at": {
+        "assessed_at": {
           "type": "string",
           "format": "date-time",
           "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})$"
-        }
+        },
+        "provenance": {"$ref": "#/$defs/provenance"}
       },
       "additionalProperties": false
     },
@@ -1220,13 +1264,7 @@
       ]
     },
     "industry_source_candidate": {
-      "allOf": [
-        {"$ref": "#/$defs/source_candidate"},
-        {
-          "properties": {"evidence_channel": {"const": "industry"}},
-          "required": ["evidence_channel"]
-        }
-      ]
+      "$ref": "#/$defs/source_candidate"
     },
     "industry_evidence_artifact": {
       "allOf": [
@@ -1252,22 +1290,7 @@
       ]
     },
     "industry_conflict_summary": {
-      "allOf": [
-        {"$ref": "#/$defs/conflict_summary"},
-        {
-          "properties": {
-            "target_type": {
-              "enum": [
-                "research_project",
-                "research_question",
-                "research_claim",
-                "causal_edge"
-              ]
-            }
-          },
-          "required": ["target_type"]
-        }
-      ]
+      "$ref": "#/$defs/conflict_summary"
     }
   }
 }

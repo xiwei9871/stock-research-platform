@@ -7,7 +7,7 @@
     "schema_version": {"const": "2.1.0"},
     "artifact_kind": {"const": "evidence_artifact"},
     "evidence_artifact": {
-      "$ref": "definitions_v2_1.schema.json#/$defs/evidence_artifact"
+      "$ref": "definitions_v2_1.schema.json#/$defs/industry_evidence_artifact"
     }
   },
   "additionalProperties": false

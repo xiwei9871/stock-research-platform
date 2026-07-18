@@ -160,23 +160,6 @@ def industry_causal_node(node_kind="mechanism"):
     }
 
 
-def source_candidate(evidence_channel="industry"):
-    return {
-        "source_candidate_id": "source_candidate:fixture",
-        "search_plan_id": "search_plan:requirement:fixture",
-        "query_id": "query:requirement:fixture:mechanism",
-        "evidence_channel": evidence_channel,
-        "title": "Fixture source",
-        "source_uri": "https://example.com/source.pdf",
-        "source_type": "engineering_document",
-        "publisher": "Fixture publisher",
-        "published_at": None,
-        "discovered_at": "2026-07-18T10:00:00Z",
-        "selection_status": "selected",
-        "rationale": "Primary engineering source.",
-    }
-
-
 def evidence_artifact(evidence_channel="industry"):
     return {
         "evidence_artifact_id": "evidence_artifact:fixture",
@@ -207,16 +190,53 @@ def upstream_research_ref(upstream_research_layer=None):
     }
 
 
-def conflict_summary(target_type="research_claim"):
+def canonical_source_candidate():
     return {
-        "conflict_summary_id": "conflict_summary:fixture",
-        "target_type": target_type,
+        "candidate_id": "source_candidate:fixture",
+        "search_plan_id": "search_plan:requirement:fixture",
+        "query_id": "query:requirement:fixture:mechanism",
+        "normalized_url": "https://example.com/source.pdf?a=1&b=2",
+        "original_url": "https://EXAMPLE.com/source.pdf?b=2&a=1&utm_source=test",
+        "title": "Fixture engineering source",
+        "snippet": "Fixture mechanism and qualification evidence.",
+        "publisher": "Fixture publisher",
+        "publish_date": "2026-07-01",
+        "source_class": "primary",
+        "rank": 1,
+        "exclusion_status": "included",
+        "exclusion_reasons": [],
+        "dedup_key": "https://example.com/source.pdf?a=1&b=2",
+        "provenance": PROVENANCE,
+    }
+
+
+def canonical_source_relationship():
+    return {
+        "left_artifact_id": "evidence_artifact:left",
+        "right_artifact_id": "evidence_artifact:right",
+        "relationship": "independent",
+        "reasons": ["publisher families and content hashes differ"],
+    }
+
+
+def canonical_conflict_summary():
+    return {
+        "conflict_summary_id": "conflict_summary:claim:fixture",
+        "evidence_channel": "industry",
+        "target_type": "research_claim",
         "target_id": "claim:fixture",
-        "evidence_artifact_ids": ["evidence_artifact:fixture"],
-        "status": "open",
-        "summary": "Fixture conflict.",
-        "resolution": None,
-        "updated_at": "2026-07-18T10:00:00Z",
+        "conflict_status": "material_conflict",
+        "supporting_source_count": 2,
+        "opposing_source_count": 1,
+        "quantitative_source_count": 1,
+        "independent_source_family_count": 3,
+        "assessment_ids": [
+            "industry_evidence_assessment:support",
+            "industry_evidence_assessment:oppose",
+        ],
+        "summary": "Independent sources materially disagree.",
+        "assessed_at": "2026-07-18T10:00:00Z",
+        "provenance": PROVENANCE,
     }
 
 
@@ -389,6 +409,121 @@ def test_builder_shaped_payloads_pass_industry_version_schema(
     )
 
 
+def test_task5_builder_shaped_source_candidate_passes_industry_version(
+    sample_industry_version,
+):
+    sample_industry_version["creation_stage"] = "evidence_snapshot"
+    sample_industry_version["snapshot"]["source_candidates"] = [
+        canonical_source_candidate()
+    ]
+
+    validate_v2_1_schema_payload(
+        "industry_research_version_v2_1", sample_industry_version
+    )
+
+
+def test_source_candidate_rejects_unknown_field(sample_industry_version):
+    candidate = canonical_source_candidate()
+    candidate["discovered_at"] = "2026-07-18T10:00:00Z"
+    sample_industry_version["snapshot"]["source_candidates"] = [candidate]
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        validate_v2_1_schema_payload(
+            "industry_research_version_v2_1", sample_industry_version
+        )
+
+    assert exc_info.value.code == "RESEARCH_PROJECT_V2_1_SCHEMA_INVALID"
+    assert exc_info.value.details["path"] == ["snapshot", "source_candidates", 0]
+
+
+def test_task8_builder_shaped_source_relationship_passes_industry_version(
+    sample_industry_version,
+):
+    sample_industry_version["creation_stage"] = "evidence_snapshot"
+    sample_industry_version["snapshot"]["source_relationships"] = [
+        canonical_source_relationship()
+    ]
+
+    validate_v2_1_schema_payload(
+        "industry_research_version_v2_1", sample_industry_version
+    )
+
+
+@pytest.mark.parametrize(
+    ("field", "invalid_value", "expected_path"),
+    [
+        ("relationship", "same_domain", ["snapshot", "source_relationships", 0, "relationship"]),
+        ("relationship_id", "relationship:extra", ["snapshot", "source_relationships", 0]),
+    ],
+)
+def test_source_relationship_rejects_invalid_enum_and_unknown_field(
+    sample_industry_version, field, invalid_value, expected_path
+):
+    relationship = canonical_source_relationship()
+    relationship[field] = invalid_value
+    sample_industry_version["snapshot"]["source_relationships"] = [relationship]
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        validate_v2_1_schema_payload(
+            "industry_research_version_v2_1", sample_industry_version
+        )
+
+    assert exc_info.value.code == "RESEARCH_PROJECT_V2_1_SCHEMA_INVALID"
+    assert exc_info.value.details["path"] == expected_path
+
+
+def test_task8_material_conflict_summary_passes_industry_version(
+    sample_industry_version,
+):
+    sample_industry_version["creation_stage"] = "evidence_snapshot"
+    sample_industry_version["snapshot"]["conflict_summaries"] = [
+        canonical_conflict_summary()
+    ]
+
+    validate_v2_1_schema_payload(
+        "industry_research_version_v2_1", sample_industry_version
+    )
+
+
+@pytest.mark.parametrize(
+    "invalid_status",
+    ["open", "resolved", "accepted_uncertainty", "unknown_status"],
+)
+def test_conflict_summary_rejects_legacy_and_unknown_statuses(
+    sample_industry_version, invalid_status
+):
+    summary = canonical_conflict_summary()
+    summary["conflict_status"] = invalid_status
+    sample_industry_version["snapshot"]["conflict_summaries"] = [summary]
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        validate_v2_1_schema_payload(
+            "industry_research_version_v2_1", sample_industry_version
+        )
+
+    assert exc_info.value.code == "RESEARCH_PROJECT_V2_1_SCHEMA_INVALID"
+    assert exc_info.value.details["path"] == [
+        "snapshot",
+        "conflict_summaries",
+        0,
+        "conflict_status",
+    ]
+
+
+def test_conflict_summary_rejects_unknown_field(sample_industry_version):
+    summary = canonical_conflict_summary()
+    summary["resolution"] = "legacy field"
+    sample_industry_version["snapshot"]["conflict_summaries"] = [summary]
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        validate_v2_1_schema_payload(
+            "industry_research_version_v2_1", sample_industry_version
+        )
+
+    assert exc_info.value.code == "RESEARCH_PROJECT_V2_1_SCHEMA_INVALID"
+    assert exc_info.value.details["path"] == ["snapshot", "conflict_summaries", 0]
+
+
 def test_industry_snapshot_persists_without_company_capture_assessments(
     sample_industry_version,
 ):
@@ -483,8 +618,8 @@ def test_industry_snapshot_rejects_downstream_investment_status(
     [
         (
             "source_candidates",
-            source_candidate("company"),
-            ["snapshot", "source_candidates", 0, "evidence_channel"],
+            {**canonical_source_candidate(), "evidence_channel": "company"},
+            ["snapshot", "source_candidates", 0],
         ),
         (
             "evidence_artifacts",
@@ -511,7 +646,7 @@ def test_industry_snapshot_rejects_downstream_investment_status(
         ),
         (
             "conflict_summaries",
-            conflict_summary("stock_rating"),
+            {**canonical_conflict_summary(), "target_type": "stock_rating"},
             ["snapshot", "conflict_summaries", 0, "target_type"],
         ),
     ],
@@ -772,6 +907,23 @@ def test_standalone_schema_resolves_common_refs_and_accepts_valid_payload(
     schema_name,
 ):
     validate_v2_1_schema_payload(schema_name, _standalone_payloads()[schema_name])
+
+
+@pytest.mark.parametrize("evidence_channel", ["company", "market"])
+def test_standalone_evidence_artifact_rejects_non_industry_channels(
+    evidence_channel,
+):
+    payload = deepcopy(_standalone_payloads()["evidence_artifact_v2_1"])
+    payload["evidence_artifact"]["evidence_channel"] = evidence_channel
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        validate_v2_1_schema_payload("evidence_artifact_v2_1", payload)
+
+    assert exc_info.value.code == "RESEARCH_PROJECT_V2_1_SCHEMA_INVALID"
+    assert exc_info.value.details["path"] == [
+        "evidence_artifact",
+        "evidence_channel",
+    ]
 
 
 @pytest.mark.parametrize(
