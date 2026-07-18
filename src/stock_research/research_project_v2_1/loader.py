@@ -237,6 +237,7 @@ def _read_manifest_rows(
             project_slug, semantic_version, "version manifest is missing or unreadable"
         ) from exc
     rows: list[dict[str, Any]] = []
+    seen_semantic_versions: set[object] = set()
     for line_number, line in enumerate(lines, start=1):
         if not line.strip():
             continue
@@ -250,6 +251,28 @@ def _read_manifest_rows(
             raise _immutability_violation(
                 project_slug, semantic_version, f"manifest row {line_number} is not an object"
             )
+        if set(row) != _MANIFEST_FIELDS:
+            raise _immutability_violation(
+                project_slug,
+                semantic_version,
+                f"manifest fields mismatch at row {line_number}",
+            )
+        row_semantic_version = row["semantic_version"]
+        try:
+            duplicate = row_semantic_version in seen_semantic_versions
+        except TypeError as exc:
+            raise _immutability_violation(
+                project_slug,
+                semantic_version,
+                f"manifest semantic_version is invalid at row {line_number}",
+            ) from exc
+        if duplicate:
+            raise _immutability_violation(
+                project_slug,
+                semantic_version,
+                f"duplicate manifest semantic_version at row {line_number}",
+            )
+        seen_semantic_versions.add(row_semantic_version)
         rows.append(row)
     return rows
 
@@ -280,8 +303,6 @@ def _verify_manifest_and_hash(
             f"expected exactly one manifest row, found {len(matching)}",
         )
     row = matching[0]
-    if set(row) != _MANIFEST_FIELDS:
-        raise _immutability_violation(project_slug, semantic_version, "manifest fields mismatch")
     expected = {
         "version_id": version.get("version_id"),
         "semantic_version": semantic_version,

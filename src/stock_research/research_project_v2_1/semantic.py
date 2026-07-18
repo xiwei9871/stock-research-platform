@@ -69,6 +69,14 @@ def _error(message: str, **details: object) -> ResearchProjectV2Error:
     )
 
 
+def _structural_error(exc: KeyError | TypeError | IndexError) -> ResearchProjectV2Error:
+    return _error(
+        "Layered research version has an invalid semantic structure",
+        reason=str(exc),
+        exception_type=type(exc).__name__,
+    )
+
+
 def _require_reference(
     referenced_id: object,
     known_ids: set[str],
@@ -88,21 +96,16 @@ def _require_reference(
 
 
 def common_r1_projection(version: dict[str, Any]) -> dict[str, Any]:
-    projected = deepcopy(version)
-    projected["schema_version"] = "2.0.0"
-    projected["artifact_kind"] = "research_version"
-    snapshot = projected["snapshot"]
-    for field in R2A_SNAPSHOT_FIELDS:
-        snapshot.pop(field, None)
-    snapshot["company_capture_assessments"] = []
     try:
+        projected = deepcopy(version)
+        projected["artifact_version"] = "2.0.0"
+        snapshot = projected["snapshot"]
+        for field in R2A_SNAPSHOT_FIELDS:
+            snapshot.pop(field, None)
+        snapshot["company_capture_assessments"] = []
         validate_r1_version_semantics(projected)
-    except ResearchProjectV2Error as exc:
-        raise _error(
-            "Layered research version violates common R1 semantics",
-            reason=exc.code,
-            common_details=exc.details,
-        ) from exc
+    except (KeyError, TypeError, IndexError) as exc:
+        raise _structural_error(exc) from exc
     return projected
 
 
@@ -412,9 +415,14 @@ def _validate_relationships(version: dict[str, Any], snapshot: dict[str, Any]) -
 
 
 def validate_industry_version_semantics(version: dict[str, Any]) -> None:
-    common_r1_projection(version)
-    snapshot = version["snapshot"]
-    _require_industry_boundaries(snapshot)
-    _require_unique_ids(snapshot)
-    _validate_upstream_references(snapshot)
-    _validate_relationships(version, snapshot)
+    try:
+        common_r1_projection(version)
+        snapshot = version["snapshot"]
+        _require_industry_boundaries(snapshot)
+        _require_unique_ids(snapshot)
+        _validate_upstream_references(snapshot)
+        _validate_relationships(version, snapshot)
+    except ResearchProjectV2Error:
+        raise
+    except (KeyError, TypeError, IndexError) as exc:
+        raise _structural_error(exc) from exc

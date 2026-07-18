@@ -353,6 +353,48 @@ def test_manifest_requires_exactly_one_matching_row(
     _assert_code(exc_info, "RESEARCH_PROJECT_V2_1_IMMUTABILITY_VIOLATION")
 
 
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        lambda row: row.update(extra="forbidden"),
+        lambda row: row.pop("content_hash"),
+    ],
+)
+def test_every_manifest_row_requires_exact_fields_even_for_other_versions(
+    layered_layout: LayeredResearchLayout, mutation
+) -> None:
+    target_row = _manifest_row(_version())
+    other_row = _manifest_row(_version(semantic_version="9.9.9"))
+    mutation(other_row)
+    _write_jsonl(
+        layered_layout.project_dir("fixture-industry") / "version_manifest.jsonl",
+        [target_row, other_row],
+    )
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        load_industry_version("fixture-industry", layout=layered_layout)
+    _assert_code(exc_info, "RESEARCH_PROJECT_V2_1_IMMUTABILITY_VIOLATION")
+    assert "manifest fields mismatch" in str(exc_info.value.details["reason"])
+
+
+def test_manifest_rejects_duplicate_rows_for_other_versions(
+    layered_layout: LayeredResearchLayout,
+) -> None:
+    target_row = _manifest_row(_version())
+    other_row = _manifest_row(_version(semantic_version="9.9.9"))
+    _write_jsonl(
+        layered_layout.project_dir("fixture-industry") / "version_manifest.jsonl",
+        [target_row, other_row, deepcopy(other_row)],
+    )
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        load_industry_version("fixture-industry", layout=layered_layout)
+    _assert_code(exc_info, "RESEARCH_PROJECT_V2_1_IMMUTABILITY_VIOLATION")
+    assert "duplicate manifest semantic_version" in str(
+        exc_info.value.details["reason"]
+    )
+
+
 def test_load_layered_index_validates_v2_1_schema(layered_layout: LayeredResearchLayout) -> None:
     assert load_layered_index(layout=layered_layout)["schema_version"] == "2.1.0"
     invalid = _index()
@@ -675,8 +717,8 @@ def test_common_projection_is_deep_copy_and_only_adapts_r1_contract(monkeypatch)
 
     assert version == original
     assert projected is observed[0]
-    assert projected["schema_version"] == "2.0.0"
-    assert projected["artifact_kind"] == "research_version"
+    assert projected["artifact_version"] == "2.0.0"
+    assert projected["schema_version"] == "2.1.0"
     projected_snapshot = projected["snapshot"]
     assert isinstance(projected_snapshot, dict)
     assert projected_snapshot["company_capture_assessments"] == []
@@ -688,6 +730,39 @@ def test_empty_industry_snapshot_passes_common_and_industry_semantics() -> None:
     version = _version()
     validate_industry_version_semantics(version)
     assert "company_capture_assessments" not in version["snapshot"]
+
+
+@pytest.mark.parametrize("malformed", [{"snapshot": {}}, {"snapshot": []}])
+def test_semantic_entrypoint_wraps_structural_errors(
+    malformed: dict[str, object],
+) -> None:
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        validate_industry_version_semantics(malformed)
+    _assert_code(exc_info, "RESEARCH_PROJECT_V2_1_SEMANTIC_INVALID")
+    assert exc_info.value.details["exception_type"] in {
+        "KeyError",
+        "TypeError",
+        "IndexError",
+    }
+    assert exc_info.value.__cause__ is not None
+
+
+def test_semantic_entrypoint_preserves_existing_research_project_errors(
+    monkeypatch,
+) -> None:
+    original = ResearchProjectV2Error(
+        "existing semantic failure",
+        code="RESEARCH_PROJECT_EXISTING_SEMANTIC_FAILURE",
+        details={"path": "snapshot.claims"},
+    )
+    monkeypatch.setattr(
+        "stock_research.research_project_v2_1.semantic.validate_r1_version_semantics",
+        lambda _projected: (_ for _ in ()).throw(original),
+    )
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        validate_industry_version_semantics(_version())
+    assert exc_info.value is original
 
 
 def test_complete_industry_relationship_graph_passes() -> None:
