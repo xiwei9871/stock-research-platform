@@ -616,6 +616,48 @@ def _rollback_created_final(
         return "failed", type(exc).__name__
 
 
+def _rollback_created_final_via_live_path(
+    directory: Path,
+    expected_directory: os.stat_result,
+    name: str,
+    expected_final: os.stat_result,
+) -> tuple[str, str | None, list[BaseException]]:
+    descriptors: list[int] = []
+    cleanup_errors: list[BaseException] = []
+    outcome = "failed"
+    detail: str | None = "live rollback path was not opened"
+    try:
+        descriptors.append(os.open("/", _directory_flags()))
+        for component in directory.parts[1:]:
+            descriptors.append(
+                os.open(component, _directory_flags(), dir_fd=descriptors[-1])
+            )
+        live_directory = os.fstat(descriptors[-1])
+        if not stat.S_ISDIR(live_directory.st_mode) or not _same_inode(
+            live_directory, expected_directory
+        ):
+            outcome = "skipped"
+            detail = "live final directory no longer matches created directory"
+        else:
+            outcome, detail = _rollback_created_final(
+                descriptors[-1], name, expected_final
+            )
+    except OSError as exc:
+        if exc.errno in {errno.ENOENT, errno.ENOTDIR, errno.ELOOP}:
+            outcome = "skipped"
+            detail = "live final directory is absent or rebound"
+        else:
+            outcome = "failed"
+            detail = type(exc).__name__
+    finally:
+        for descriptor in reversed(descriptors):
+            try:
+                os.close(descriptor)
+            except OSError as exc:
+                cleanup_errors.append(exc)
+    return outcome, detail, cleanup_errors
+
+
 def _record_rollback(
     error: ResearchProjectV2Error, outcome: str, detail: str | None
 ) -> None:
@@ -723,11 +765,13 @@ def _publish_raw(temp: _RawTemp, *, layout: LayeredResearchLayout, digest: str, 
     chain: list[int] = []
     held_fd: int | None = None
     created = False
+    final_directory_stat: os.stat_result | None = None
     result: Path | None = None
     primary_error: ResearchProjectV2Error | None = None
     cleanup_errors: list[BaseException] = []
     try:
         chain, names = _open_dir_chain(final_dir)
+        final_directory_stat = os.fstat(chain[-1])
         if not _chain_bound(chain, names) or not _chain_bound(temp.chain, temp.names):
             raise _storage_error("unsafe raw directory binding")
         temp.inode = os.fstat(temp.fd)
@@ -845,10 +889,21 @@ def _publish_raw(temp: _RawTemp, *, layout: LayeredResearchLayout, digest: str, 
                 primary_error = _stable_cleanup_error(
                     "raw publisher cleanup failed", exc
                 )
-            if created and temp.inode is not None and not rollback_recorded:
-                outcome, detail = _rollback_created_final(
-                    rollback_fd, final_name, temp.inode
+            if (
+                created
+                and temp.inode is not None
+                and final_directory_stat is not None
+                and not rollback_recorded
+            ):
+                outcome, detail, recovery_errors = (
+                    _rollback_created_final_via_live_path(
+                        final_dir,
+                        final_directory_stat,
+                        final_name,
+                        temp.inode,
+                    )
                 )
+                cleanup_errors.extend(recovery_errors)
                 _record_rollback(primary_error, outcome, detail)
                 rollback_recorded = True
 

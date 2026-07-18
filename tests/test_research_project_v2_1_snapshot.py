@@ -1040,3 +1040,83 @@ def test_existing_raw_never_duplicates_rollback_fd_or_deletes_on_close_failure(
     assert exc_info.value.code == "RESEARCH_PROJECT_V2_1_SNAPSHOT_STORAGE_FAILED"
     assert dup_calls == 0
     assert raw.read_bytes() == b"%PDF fixture"
+
+
+def test_rollback_fd_close_side_effect_recovers_created_raw_via_live_path(
+    tmp_path: Path, monkeypatch
+) -> None:
+    import stock_research.research_project_v2_1.snapshot as module
+    state = _track_raw_final_directory(module, monkeypatch)
+    original_dup = module.os.dup
+    original_close = module.os.close
+    state["rollback_fd"] = None
+    failed = False
+    def dup(descriptor):
+        duplicated = original_dup(descriptor)
+        if descriptor == state["final_fd"]:
+            state["rollback_fd"] = duplicated
+        return duplicated
+    def close(descriptor):
+        nonlocal failed
+        if descriptor == state["rollback_fd"] and not failed:
+            failed = True
+            original_close(descriptor)
+            raise OSError("rollback fd closed then raised")
+        return original_close(descriptor)
+    monkeypatch.setattr(module.os, "dup", dup)
+    monkeypatch.setattr(module.os, "close", close)
+    effective = layout(tmp_path)
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        snapshot_candidate(
+            candidate(), transport=Transport([response()]), resolver=Resolver(),
+            layout=effective, fetched_at=FETCHED_AT, provenance=PROVENANCE,
+        )
+    assert exc_info.value.code == "RESEARCH_PROJECT_V2_1_SNAPSHOT_STORAGE_FAILED"
+    assert exc_info.value.details["rollback"] == "removed"
+    assert not list(effective.evidence_raw_dir.rglob("*.pdf"))
+
+
+@pytest.mark.parametrize("mutation", ["replacement", "directory_rebind"])
+def test_live_path_rollback_skips_replacement_or_rebound_directory(
+    tmp_path: Path, monkeypatch, mutation: str
+) -> None:
+    effective = layout(tmp_path)
+    digest = hashlib.sha256(b"%PDF fixture").hexdigest()
+    raw = effective.evidence_raw_dir / digest[:2] / f"{digest}.pdf"
+    replacement = b"live path replacement"
+    import stock_research.research_project_v2_1.snapshot as module
+    state = _track_raw_final_directory(module, monkeypatch)
+    original_dup = module.os.dup
+    original_close = module.os.close
+    state["rollback_fd"] = None
+    failed = False
+    def dup(descriptor):
+        duplicated = original_dup(descriptor)
+        if descriptor == state["final_fd"]:
+            state["rollback_fd"] = duplicated
+        return duplicated
+    def close(descriptor):
+        nonlocal failed
+        if descriptor == state["rollback_fd"] and not failed:
+            failed = True
+            if mutation == "replacement":
+                raw.unlink()
+                raw.write_bytes(replacement)
+            else:
+                rebound = raw.parent.with_name(raw.parent.name + ".detached")
+                raw.parent.rename(rebound)
+                raw.parent.mkdir(mode=0o700)
+                raw.write_bytes(replacement)
+            original_close(descriptor)
+            raise OSError("rollback fd closed after live mutation")
+        return original_close(descriptor)
+    monkeypatch.setattr(module.os, "dup", dup)
+    monkeypatch.setattr(module.os, "close", close)
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        snapshot_candidate(
+            candidate(), transport=Transport([response()]), resolver=Resolver(),
+            layout=effective, fetched_at=FETCHED_AT, provenance=PROVENANCE,
+        )
+    assert exc_info.value.code == "RESEARCH_PROJECT_V2_1_SNAPSHOT_STORAGE_FAILED"
+    assert exc_info.value.details["rollback"] == "skipped"
+    assert raw.read_bytes() == replacement
