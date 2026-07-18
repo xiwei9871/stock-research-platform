@@ -14,7 +14,11 @@ from typing import Any
 from stock_research.research_project_v2.canonical import canonical_bytes, content_sha256
 from stock_research.research_project_v2.errors import ResearchProjectV2Error
 from stock_research.research_project_v2_1.layout import LayeredResearchLayout
-from stock_research.research_project_v2_1.parsers import ParserLimits, parse_document_bytes
+from stock_research.research_project_v2_1.parsers import (
+    ParserLimits,
+    parse_document_bytes,
+    validate_parser_limits,
+)
 from stock_research.research_project_v2_1.schema import validate_v2_1_schema_payload
 
 
@@ -206,7 +210,9 @@ def normalize_artifact(
     }
     validate_v2_1_schema_payload("evidence_artifact_v2_1", wrapper)
     effective_layout = LayeredResearchLayout.default() if layout is None else layout
-    effective_limits = ParserLimits() if limits is None else limits
+    effective_limits = validate_parser_limits(
+        ParserLimits() if limits is None else limits
+    )
     data = _read_raw(copied, effective_layout, effective_limits)
     parsed = parse_document_bytes(
         data,
@@ -273,6 +279,55 @@ def _validated_document(document: dict[str, Any]) -> tuple[dict[str, Any], bytes
     raw_id = copied.get("document_id") if isinstance(copied, dict) else None
     if not isinstance(raw_id, str) or _DOCUMENT_ID.fullmatch(raw_id) is None:
         raise _error("unsafe document_id", document_id=raw_id)
+    artifact_id = copied.get("artifact_id")
+    sections = copied.get("sections")
+    if not isinstance(artifact_id, str) or not isinstance(sections, list):
+        raise _error("document sections cannot be validated")
+    seen_locators: set[str] = set()
+    for index, section in enumerate(sections, start=1):
+        section_id = section.get("section_id") if isinstance(section, dict) else None
+
+        def section_error(field: str, reason: str) -> ResearchProjectV2Error:
+            return _error(
+                reason,
+                section_index=index,
+                section_id=section_id,
+                field=field,
+            )
+
+        if not isinstance(section, dict):
+            raise section_error("section", "normalized section must be an object")
+        expected_id = f"section:{artifact_id}:{index:04d}"
+        if section_id != expected_id:
+            raise section_error("section_id", "normalized section_id is not derived")
+        locator = section.get("locator")
+        if not isinstance(locator, str) or locator in seen_locators:
+            raise section_error("locator", "normalized section locator is invalid or duplicate")
+        seen_locators.add(locator)
+        text = section.get("text")
+        if not isinstance(text, str) or text != normalize_text(text):
+            raise section_error("text", "normalized section text is not canonical")
+        heading = section.get("heading")
+        if heading is not None and (
+            not isinstance(heading, str) or heading != normalize_text(heading)
+        ):
+            raise section_error("heading", "normalized section heading is not canonical")
+        expected_section_hash = content_sha256(
+            {"heading": heading, "locator": locator, "text": text}
+        )
+        if section.get("section_hash") != expected_section_hash:
+            raise section_error("section_hash", "normalized section_hash mismatch")
+        page_start = section.get("page_start")
+        page_end = section.get("page_end")
+        for field, value in (("page_start", page_start), ("page_end", page_end)):
+            if value is not None and (
+                not isinstance(value, int) or isinstance(value, bool) or value < 1
+            ):
+                raise section_error(field, "normalized section page is invalid")
+        if (page_start is None) != (page_end is None):
+            raise section_error("page_start", "normalized section page range is incomplete")
+        if page_start is not None and page_end is not None and page_start > page_end:
+            raise section_error("page_end", "normalized section page range is reversed")
     hash_payload = {
         key: deepcopy(copied.get(key))
         for key in (

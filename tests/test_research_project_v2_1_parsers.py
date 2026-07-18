@@ -6,6 +6,7 @@ import stat
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from hashlib import sha256
+from io import BytesIO
 from pathlib import Path
 
 import pytest
@@ -94,15 +95,74 @@ def test_html_malformed_void_end_tag_cannot_pop_hidden_ancestor() -> None:
     assert [section.text for section in parsed.sections] == ["visible"]
 
 
-def test_html_nested_tables_restore_outer_table_context_without_text_duplicates() -> None:
+def test_html_nested_tables_restore_outer_context_with_element_evidence_text() -> None:
     parsed = parse_document_bytes(
         b"<table><tr><td>outer before<table><tr><td>inner</td></tr></table>outer after</td></tr><tr><td>outer row two</td></tr></table>",
         media_type="text/html",
     )
     assert [(section.locator, section.text) for section in parsed.sections] == [
+        (
+            "html:table:0001:row:0001:cell:0001",
+            "outer before inner outer after",
+        ),
         ("html:table:0002:row:0001:cell:0001", "inner"),
-        ("html:table:0001:row:0001:cell:0001", "outer before outer after"),
         ("html:table:0001:row:0002:cell:0001", "outer row two"),
+    ]
+
+
+def test_html_mixed_content_uses_dom_start_order_and_word_boundaries() -> None:
+    parsed = parse_document_bytes(
+        b"<div>before<p>inside</p>after</div>", media_type="text/html"
+    )
+    assert [(section.locator, section.text) for section in parsed.sections] == [
+        ("html:div:0001", "before inside after"),
+        ("html:p:0001", "inside"),
+    ]
+
+
+def test_html_inline_elements_do_not_insert_false_word_boundaries() -> None:
+    parsed = parse_document_bytes(
+        b"<p>inter<span>net</span> 12<code>34</code></p>",
+        media_type="text/html",
+    )
+    assert parsed.sections[0].text == "internet 1234"
+
+
+@pytest.mark.parametrize(
+    ("payload", "expected"),
+    [
+        (b"<p>alpha<br>beta</p>", "alpha beta"),
+        (b"<div>one<hr>two</div>", "one two"),
+    ],
+)
+def test_html_break_void_tags_insert_budgeted_text_boundaries(
+    payload: bytes, expected: str
+) -> None:
+    parsed = parse_document_bytes(payload, media_type="text/html")
+    assert parsed.sections[0].text == expected
+
+
+def test_html_table_cell_aggregates_descendants_and_implicit_row_is_one_based() -> None:
+    parsed = parse_document_bytes(
+        b"<table><td>before<p>inside</p>after</td><tr><td>next</td></tr></table>",
+        media_type="text/html",
+    )
+    assert [(section.locator, section.text) for section in parsed.sections] == [
+        ("html:table:0001:row:0001:cell:0001", "before inside after"),
+        ("html:p:0001", "inside"),
+        ("html:table:0001:row:0002:cell:0001", "next"),
+    ]
+    assert all(":row:0000:" not in section.locator for section in parsed.sections)
+
+
+def test_html_nested_list_parent_and_child_follow_element_evidence_order() -> None:
+    parsed = parse_document_bytes(
+        b"<ul><li>before<ul><li>inside</li></ul>after</li></ul>",
+        media_type="text/html",
+    )
+    assert [(section.locator, section.text) for section in parsed.sections] == [
+        ("html:li:0001", "before inside after"),
+        ("html:li:0002", "inside"),
     ]
 
 
@@ -197,7 +257,44 @@ def test_pdf_parser_wraps_corruption_and_limits_pages() -> None:
             media_type="application/pdf",
             limits=ParserLimits(max_sections=0),
         )
-    assert _error_code(limited) == "RESEARCH_PROJECT_V2_1_PARSE_LIMIT_EXCEEDED"
+    assert _error_code(limited) == "RESEARCH_PROJECT_V2_1_PARSE_INVALID"
+
+
+def test_pdf_text_limit_stops_real_text_extraction() -> None:
+    from pypdf import PdfReader
+    from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
+
+    writer = PdfWriter()
+    page = writer.add_blank_page(width=200, height=200)
+    font = DictionaryObject(
+        {
+            NameObject("/Type"): NameObject("/Font"),
+            NameObject("/Subtype"): NameObject("/Type1"),
+            NameObject("/BaseFont"): NameObject("/Helvetica"),
+        }
+    )
+    page[NameObject("/Resources")] = DictionaryObject(
+        {
+            NameObject("/Font"): DictionaryObject(
+                {NameObject("/F1"): writer._add_object(font)}
+            )
+        }
+    )
+    contents = DecodedStreamObject()
+    contents.set_data(b"BT /F1 12 Tf 10 100 Td (capacity expansion) Tj ET")
+    page[NameObject("/Contents")] = writer._add_object(contents)
+    handle = BytesIO()
+    writer.write(handle)
+    assert "capacity expansion" in (
+        PdfReader(BytesIO(handle.getvalue())).pages[0].extract_text() or ""
+    )
+    with pytest.raises(ResearchProjectV2Error) as exc:
+        parse_document_bytes(
+            handle.getvalue(),
+            media_type="application/pdf",
+            limits=ParserLimits(max_text_chars=5),
+        )
+    assert exc.value.code == "RESEARCH_PROJECT_V2_1_PARSE_LIMIT_EXCEEDED"
 
 
 def test_csv_parser_preserves_headers_and_strings_deterministically() -> None:
@@ -442,10 +539,178 @@ def test_write_rejects_symlinked_retired_directory_before_publication(tmp_path: 
     assert not (layout.evidence_normalized_dir / f"{document['document_id']}.json").exists()
 
 
+def _rehash_document(document: dict) -> None:
+    payload = {
+        key: deepcopy(document[key])
+        for key in (
+            "artifact_id",
+            "parser",
+            "parser_version",
+            "media_type",
+            "title",
+            "sections",
+            "warnings",
+            "parsed_at",
+            "provenance",
+        )
+    }
+    document["document_hash"] = content_sha256(payload)
+    identity = sha256(
+        f"{document['artifact_id']}\n{document['document_hash']}".encode()
+    ).hexdigest()[:24]
+    document["document_id"] = f"normalized_document:{identity}"
+
+
+@pytest.mark.parametrize(
+    ("mutation", "field"),
+    [
+        (lambda section: section.__setitem__("section_hash", "0" * 64), "section_hash"),
+        (lambda section: section.__setitem__("section_id", "section:wrong:0001"), "section_id"),
+        (lambda section: section.__setitem__("text", "  noncanonical  text "), "text"),
+        (lambda section: section.__setitem__("heading", "  noncanonical  heading "), "heading"),
+    ],
+)
+def test_writer_rejects_invalid_derived_section_fields_even_with_rehashed_document(
+    tmp_path: Path, mutation: object, field: str
+) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    artifact = _artifact(layout, b"section validation", "text/plain", "txt")
+    document = normalize_artifact(
+        artifact,
+        layout=layout,
+        parsed_at="2026-07-18T00:00:00Z",
+        provenance=_provenance("sections"),
+    )
+    mutation(document["sections"][0])
+    _rehash_document(document)
+    with pytest.raises(ResearchProjectV2Error) as exc:
+        write_normalized_document(document, layout=layout)
+    assert exc.value.code == "RESEARCH_PROJECT_V2_1_NORMALIZE_INVALID"
+    assert exc.value.details["section_index"] == 1
+    assert exc.value.details["field"] == field
+
+
+def test_writer_rejects_duplicate_section_locator_after_all_hashes_are_recomputed(
+    tmp_path: Path,
+) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    artifact = _artifact(layout, b"first\n\nsecond", "text/plain", "txt")
+    document = normalize_artifact(
+        artifact,
+        layout=layout,
+        parsed_at="2026-07-18T00:00:00Z",
+        provenance=_provenance("duplicate-locator"),
+    )
+    second = document["sections"][1]
+    second["locator"] = document["sections"][0]["locator"]
+    second["section_hash"] = content_sha256(
+        {"heading": second["heading"], "locator": second["locator"], "text": second["text"]}
+    )
+    _rehash_document(document)
+    with pytest.raises(ResearchProjectV2Error) as exc:
+        write_normalized_document(document, layout=layout)
+    assert exc.value.code == "RESEARCH_PROJECT_V2_1_NORMALIZE_INVALID"
+    assert exc.value.details["field"] == "locator"
+
+
+@pytest.mark.parametrize(
+    ("page_start", "page_end", "field"),
+    [(True, True, "page_start"), (1, None, "page_start"), (2, 1, "page_end")],
+)
+def test_writer_rejects_invalid_section_page_ranges(
+    tmp_path: Path, page_start: object, page_end: object, field: str
+) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    artifact = _artifact(layout, b"page range", "text/plain", "txt")
+    document = normalize_artifact(
+        artifact,
+        layout=layout,
+        parsed_at="2026-07-18T00:00:00Z",
+        provenance=_provenance("page-range"),
+    )
+    section = document["sections"][0]
+    section["page_start"] = page_start
+    section["page_end"] = page_end
+    _rehash_document(document)
+    with pytest.raises(ResearchProjectV2Error) as exc:
+        write_normalized_document(document, layout=layout)
+    assert exc.value.code == "RESEARCH_PROJECT_V2_1_NORMALIZE_INVALID"
+    assert exc.value.details["field"] == field
+
+
 def test_parse_byte_limit_is_checked_before_decoding() -> None:
     with pytest.raises(ResearchProjectV2Error) as exc:
         parse_document_bytes(b"123", media_type="text/plain", limits=ParserLimits(max_bytes=2))
     assert _error_code(exc) == "RESEARCH_PROJECT_V2_1_PARSE_LIMIT_EXCEEDED"
+
+
+@pytest.mark.parametrize(
+    "limits",
+    [
+        ParserLimits(max_bytes=0),
+        ParserLimits(max_sections=-1),
+        ParserLimits(max_text_chars=True),
+        ParserLimits(max_depth="10"),
+    ],
+)
+def test_parser_limits_reject_nonpositive_bool_and_noninteger_values(limits: ParserLimits) -> None:
+    with pytest.raises(ResearchProjectV2Error) as exc:
+        parse_document_bytes(b"text", media_type="text/plain", limits=limits)
+    assert exc.value.code == "RESEARCH_PROJECT_V2_1_PARSE_INVALID"
+
+
+def test_html_limits_stop_before_later_text_and_section_creation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen: list[str] = []
+    from stock_research.research_project_v2_1 import parsers as parsers_module
+
+    original_handle_data = parsers_module._VisibleHTMLParser.handle_data
+
+    def record(self: object, data: str) -> None:
+        seen.append(data)
+        original_handle_data(self, data)
+
+    monkeypatch.setattr(parsers_module._VisibleHTMLParser, "handle_data", record)
+    with pytest.raises(ResearchProjectV2Error) as text_limit:
+        parse_document_bytes(
+            b"<p>12345</p><p>SENTINEL</p>",
+            media_type="text/html",
+            limits=ParserLimits(max_text_chars=3),
+        )
+    assert text_limit.value.code == "RESEARCH_PROJECT_V2_1_PARSE_LIMIT_EXCEEDED"
+    assert "SENTINEL" not in seen
+    with pytest.raises(ResearchProjectV2Error) as section_limit:
+        parse_document_bytes(
+            b"<p>one</p><p>two</p>",
+            media_type="text/html",
+            limits=ParserLimits(max_sections=1),
+        )
+    assert section_limit.value.code == "RESEARCH_PROJECT_V2_1_PARSE_LIMIT_EXCEEDED"
+
+
+def test_html_aggregation_writes_are_incrementally_budgeted_before_later_data(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from stock_research.research_project_v2_1 import parsers as parsers_module
+
+    seen: list[str] = []
+    original_handle_data = parsers_module._VisibleHTMLParser.handle_data
+
+    def record(self: object, data: str) -> None:
+        seen.append(data)
+        original_handle_data(self, data)
+
+    monkeypatch.setattr(parsers_module._VisibleHTMLParser, "handle_data", record)
+    payload = b"<div><div><div><div>x</div></div></div></div><p>SENTINEL</p>"
+    with pytest.raises(ResearchProjectV2Error) as exc:
+        parse_document_bytes(
+            payload,
+            media_type="text/html",
+            limits=ParserLimits(max_text_chars=5),
+        )
+    assert exc.value.code == "RESEARCH_PROJECT_V2_1_PARSE_LIMIT_EXCEEDED"
+    assert "SENTINEL" not in seen
 
 
 def test_normalize_preserves_parse_limit_error_and_publishes_nothing(tmp_path: Path) -> None:

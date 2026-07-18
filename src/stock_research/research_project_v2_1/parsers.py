@@ -4,7 +4,7 @@ import csv
 import io
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from html.parser import HTMLParser
 from typing import Any
 
@@ -24,9 +24,13 @@ _P_CLOSING_START_TAGS = frozenset(
         "pre", "section", "table", "ul",
     }
 )
+_BLOCK_BOUNDARY_TAGS = frozenset(
+    {*_P_CLOSING_START_TAGS, "li", "td", "th", "tr", "tbody", "thead", "tfoot"}
+)
 _SEMANTIC_TAGS = frozenset({*_HEADING_TAGS, "div", "p", "li", "th", "td"})
 _ALWAYS_HIDDEN = frozenset({"script", "style", "nav", "noscript", "template", "svg"})
 _VOID_TAGS = frozenset({"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"})
+_VOID_BOUNDARY_TAGS = frozenset({"br", "hr"})
 
 
 @dataclass(frozen=True)
@@ -56,6 +60,19 @@ class ParserLimits:
     max_cell_chars: int = 1_000_000
     max_string_chars: int = 1_000_000
     max_depth: int = 100
+
+
+def validate_parser_limits(limits: ParserLimits) -> ParserLimits:
+    if not isinstance(limits, ParserLimits):
+        raise _invalid("limits must be ParserLimits")
+    for field in fields(ParserLimits):
+        value = getattr(limits, field.name)
+        if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+            raise _invalid(
+                "parser limit must be a positive integer",
+                field=field.name,
+            )
+    return limits
 
 
 def _invalid(reason: str, **details: object) -> ResearchProjectV2Error:
@@ -99,6 +116,7 @@ class _HtmlCapture:
     locator: str
     heading: str | None
     chunks: list[str]
+    start_order: int
 
 
 @dataclass
@@ -118,15 +136,19 @@ class _HtmlElement:
 
 
 class _VisibleHTMLParser(HTMLParser):
-    def __init__(self) -> None:
+    def __init__(self, limits: ParserLimits) -> None:
         super().__init__(convert_charrefs=True)
-        self.sections: list[ParsedSection] = []
+        self.sections: list[tuple[int, ParsedSection]] = []
         self.title_chunks: list[str] = []
         self._elements: list[_HtmlElement] = []
         self._counts: dict[str, int] = {}
         self._current_heading: str | None = None
         self._table_count = 0
         self._tables: list[_TableContext] = []
+        self._limits = limits
+        self._capture_count = 0
+        self._visible_text_chars = 0
+        self._captured_text_chars = 0
 
     @property
     def hidden(self) -> bool:
@@ -145,18 +167,18 @@ class _VisibleHTMLParser(HTMLParser):
                 if element.tag.startswith("h"):
                     self._current_heading = text
                 self.sections.append(
-                    ParsedSection(
-                        element.capture.heading,
-                        element.capture.locator,
-                        text,
+                    (
+                        element.capture.start_order,
+                        ParsedSection(
+                            element.capture.heading,
+                            element.capture.locator,
+                            text,
+                        ),
                     )
                 )
         if element.table is not None:
             if self._tables and self._tables[-1] is element.table:
                 self._tables.pop()
-            parent = self._active_capture()
-            if parent is not None:
-                parent.chunks.append(" ")
 
     def _implicitly_close_before_start(self, tag: str) -> None:
         if tag in _P_CLOSING_START_TAGS:
@@ -192,6 +214,19 @@ class _VisibleHTMLParser(HTMLParser):
         while self._elements:
             self._close_element(self._elements.pop())
 
+    def _append_to_capture(self, capture: _HtmlCapture, value: str) -> None:
+        self._captured_text_chars += len(value)
+        if self._captured_text_chars > self._limits.max_text_chars:
+            raise _limit(
+                "text characters", max_text_chars=self._limits.max_text_chars
+            )
+        capture.chunks.append(value)
+
+    def _append_boundary(self) -> None:
+        for element in self._elements:
+            if element.capture is not None:
+                self._append_to_capture(element.capture, " ")
+
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         tag = tag.lower()
         attr = {key.lower(): value for key, value in attrs}
@@ -207,14 +242,15 @@ class _VisibleHTMLParser(HTMLParser):
         if not inherited_hidden:
             self._implicitly_close_before_start(tag)
         if tag in _VOID_TAGS:
+            if not inherited_hidden and tag in _VOID_BOUNDARY_TAGS:
+                self._append_boundary()
             return
         parent_hidden = self.hidden
         hidden = parent_hidden or own_hidden
+        if not hidden and tag in _BLOCK_BOUNDARY_TAGS:
+            self._append_boundary()
         table_context: _TableContext | None = None
         if not hidden and tag == "table":
-            parent = self._active_capture()
-            if parent is not None:
-                parent.chunks.append(" ")
             self._table_count += 1
             table_context = _TableContext(self._table_count)
             self._tables.append(table_context)
@@ -232,12 +268,21 @@ class _VisibleHTMLParser(HTMLParser):
                 table.cell_count = 0
         if tag not in _SEMANTIC_TAGS:
             return
+        self._capture_count += 1
+        if self._capture_count > self._limits.max_sections:
+            raise _limit(
+                "section count", max_sections=self._limits.max_sections
+            )
         if tag in {"th", "td"}:
             if not self._tables:
                 self._table_count += 1
                 table = _TableContext(self._table_count, row_count=1, current_row=1)
                 self._tables.append(table)
             table = self._tables[-1]
+            if table.current_row == 0:
+                table.row_count += 1
+                table.current_row = table.row_count
+                table.cell_count = 0
             table.cell_count += 1
             locator = (
                 f"html:table:{table.table_id:04d}:row:{table.current_row:04d}:"
@@ -247,7 +292,13 @@ class _VisibleHTMLParser(HTMLParser):
             self._counts[tag] = self._counts.get(tag, 0) + 1
             locator = f"html:{tag}:{self._counts[tag]:04d}"
         heading = None if tag.startswith("h") else self._current_heading
-        capture = _HtmlCapture(tag, locator, heading, [])
+        capture = _HtmlCapture(
+            tag,
+            locator,
+            heading,
+            [],
+            self._capture_count,
+        )
         self._elements[-1].capture = capture
 
     def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
@@ -258,11 +309,21 @@ class _VisibleHTMLParser(HTMLParser):
     def handle_data(self, data: str) -> None:
         if self.hidden:
             return
+        self._visible_text_chars += len(data)
+        if self._visible_text_chars > self._limits.max_text_chars:
+            raise _limit(
+                "text characters", max_text_chars=self._limits.max_text_chars
+            )
         if any(element.tag == "title" for element in self._elements):
             self.title_chunks.append(data)
-        capture = self._active_capture()
-        if capture is not None:
-            capture.chunks.append(data)
+        captures = [
+            element.capture
+            for element in self._elements
+            if element.capture is not None
+        ]
+        for index, capture in enumerate(captures):
+            if capture.tag in {"div", "li", "td", "th"} or index == len(captures) - 1:
+                self._append_to_capture(capture, data)
 
     def handle_endtag(self, tag: str) -> None:
         tag = tag.lower()
@@ -282,10 +343,12 @@ class _VisibleHTMLParser(HTMLParser):
         del self._elements[match:]
         for element in reversed(closing):
             self._close_element(element)
+        if not self.hidden and tag in _BLOCK_BOUNDARY_TAGS:
+            self._append_boundary()
 
 
 def _parse_html(data: bytes, title_hint: str | None, limits: ParserLimits) -> ParsedDocument:
-    parser = _VisibleHTMLParser()
+    parser = _VisibleHTMLParser(limits)
     try:
         parser.feed(_decode(data))
         parser.close()
@@ -296,9 +359,14 @@ def _parse_html(data: bytes, title_hint: str | None, limits: ParserLimits) -> Pa
         raise _invalid("unreadable HTML") from exc
     if not parser.sections:
         raise _invalid("HTML has no visible semantic content")
-    _check_totals(parser.sections, limits)
+    sections = [section for _, section in sorted(parser.sections, key=lambda item: item[0])]
+    _check_totals(sections, limits)
     title = _clean(title_hint) if title_hint else _clean("".join(parser.title_chunks)) or None
-    return ParsedDocument("stdlib.html.parser", "text/html", title, tuple(parser.sections))
+    return ParsedDocument("stdlib.html.parser", "text/html", title, tuple(sections))
+
+
+class _PdfTextLimit(Exception):
+    pass
 
 
 def _parse_pdf(data: bytes, title_hint: str | None, limits: ParserLimits) -> ParsedDocument:
@@ -309,9 +377,38 @@ def _parse_pdf(data: bytes, title_hint: str | None, limits: ParserLimits) -> Par
         if len(reader.pages) > limits.max_sections:
             raise _limit("PDF page count", max_sections=limits.max_sections)
         sections = []
+        total_text_chars = 0
         for index, page in enumerate(reader.pages, start=1):
-            extracted = page.extract_text() or ""
-            sections.append(ParsedSection(None, f"page:{index}", _clean(extracted), index, index))
+            chunks: list[str] = []
+
+            def visitor(
+                text: str,
+                _cm: object,
+                _tm: object,
+                _font: object,
+                _size: object,
+            ) -> None:
+                nonlocal total_text_chars
+                total_text_chars += len(text)
+                if total_text_chars > limits.max_text_chars:
+                    raise _PdfTextLimit
+                chunks.append(text)
+
+            try:
+                page.extract_text(visitor_text=visitor)
+            except _PdfTextLimit as exc:
+                raise _limit(
+                    "text characters", max_text_chars=limits.max_text_chars
+                ) from exc
+            sections.append(
+                ParsedSection(
+                    None,
+                    f"page:{index}",
+                    _clean("".join(chunks)),
+                    index,
+                    index,
+                )
+            )
         metadata_title = None
         if reader.metadata is not None:
             raw_title = getattr(reader.metadata, "title", None)
@@ -475,6 +572,7 @@ def parse_document_bytes(
     if not isinstance(data, bytes):
         raise _invalid("document data must be bytes")
     effective = ParserLimits() if limits is None else limits
+    validate_parser_limits(effective)
     if len(data) > effective.max_bytes:
         raise _limit("document bytes", max_bytes=effective.max_bytes)
     parsers = {
