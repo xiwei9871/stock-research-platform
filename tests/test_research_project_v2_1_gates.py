@@ -38,6 +38,11 @@ def _pilot() -> tuple[dict, dict]:
     )
 
 
+def _failed_checks(identity: dict, version: dict) -> set[str]:
+    result = evaluate_industry_design_gate(identity, version)
+    return {check["code"] for check in result["checks"] if check["status"] == "fail"}
+
+
 def test_industry_gate_exports_fixed_check_order() -> None:
     assert INDUSTRY_DESIGN_CHECKS == EXPECTED_CHECKS
 
@@ -117,3 +122,152 @@ def test_source_diversity_checks_each_query_source_contract() -> None:
     result = evaluate_industry_design_gate(identity, version)
     failed = {check["code"] for check in result["checks"] if check["status"] == "fail"}
     assert failed == {"INDUSTRY_SOURCE_CLASS_DIVERSITY"}
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        lambda snapshot, claim: claim.update(validation_metric_ids=[]),
+        lambda snapshot, claim: claim.update(validation_metric_ids=claim["validation_metric_ids"] * 2),
+        lambda snapshot, claim: claim.update(validation_metric_ids=["metric:missing"]),
+        lambda snapshot, claim: snapshot["validation_metrics"][0].update(target_id="claim:other"),
+        lambda snapshot, claim: snapshot["validation_metrics"][0].update(status="complete"),
+        lambda snapshot, claim: (
+            claim.update(validation_metric_ids=[]),
+            snapshot["validation_metrics"].append(
+                {
+                    **deepcopy(snapshot["validation_metrics"][0]),
+                    "metric_id": "metric:unlinked:stray",
+                    "target_id": claim["claim_id"],
+                }
+            ),
+        ),
+    ],
+)
+def test_validation_plan_follows_critical_claim_metric_links(mutation) -> None:
+    identity, version = _pilot()
+    snapshot = version["snapshot"]
+    critical = next(claim for claim in snapshot["claims"] if claim["claim_kind"] == "primary")
+    mutation(snapshot, critical)
+    assert _failed_checks(identity, version) == {"INDUSTRY_VALIDATION_PLAN_PRESENT"}
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        lambda snapshot, claim: claim.update(invalidation_condition_ids=[]),
+        lambda snapshot, claim: claim.update(
+            invalidation_condition_ids=claim["invalidation_condition_ids"] * 2
+        ),
+        lambda snapshot, claim: claim.update(invalidation_condition_ids=["condition:missing"]),
+        lambda snapshot, claim: snapshot["invalidation_conditions"][0].update(
+            target_type="research_question"
+        ),
+        lambda snapshot, claim: snapshot["invalidation_conditions"][0].update(status="triggered"),
+    ],
+)
+def test_invalidation_plan_follows_critical_claim_condition_links(mutation) -> None:
+    identity, version = _pilot()
+    snapshot = version["snapshot"]
+    critical = next(claim for claim in snapshot["claims"] if claim["claim_kind"] == "primary")
+    mutation(snapshot, critical)
+    assert _failed_checks(identity, version) == {"INDUSTRY_INVALIDATION_PLAN_PRESENT"}
+
+
+def test_critical_claim_requires_a_direct_evidence_requirement() -> None:
+    identity, version = _pilot()
+    snapshot = version["snapshot"]
+    critical_id = next(
+        claim["claim_id"] for claim in snapshot["claims"] if claim["claim_kind"] == "primary"
+    )
+    removed_ids = {
+        requirement["requirement_id"]
+        for requirement in snapshot["evidence_requirements"]
+        if requirement["target_type"] == "research_claim" and requirement["target_id"] == critical_id
+    }
+    snapshot["evidence_requirements"] = [
+        requirement for requirement in snapshot["evidence_requirements"]
+        if requirement["requirement_id"] not in removed_ids
+    ]
+    snapshot["search_plans"] = [
+        plan for plan in snapshot["search_plans"]
+        if not removed_ids.intersection(plan["requirement_ids"])
+    ]
+    assert _failed_checks(identity, version) == {"INDUSTRY_REQUIRED_QUESTIONS_COVERED"}
+
+
+def test_critical_claim_requirement_must_be_covered_by_a_search_plan() -> None:
+    identity, version = _pilot()
+    snapshot = version["snapshot"]
+    claim_requirement_ids = {
+        requirement["requirement_id"]
+        for requirement in snapshot["evidence_requirements"]
+        if requirement["target_type"] == "research_claim"
+    }
+    snapshot["search_plans"] = [
+        plan for plan in snapshot["search_plans"]
+        if not claim_requirement_ids.intersection(plan["requirement_ids"])
+    ]
+    assert _failed_checks(identity, version) == {"INDUSTRY_SEARCH_PLANS_COVER_REQUIREMENTS"}
+
+
+@pytest.mark.parametrize(
+    "forbidden_key",
+    [
+        "companyCapabilityCollection",
+        "company_profiles",
+        "stock_screen",
+        "background_company_ratings",
+    ],
+)
+def test_downstream_taxonomy_rejects_company_and_stock_output_keys(forbidden_key: str) -> None:
+    identity, version = _pilot()
+    version["snapshot"][forbidden_key] = []
+    assert "INDUSTRY_NO_COMPANY_OR_STOCK_OUTPUTS" in _failed_checks(identity, version)
+
+
+def test_downstream_taxonomy_rejects_nested_camel_case_stock_recommendations() -> None:
+    identity, version = _pilot()
+    version["snapshot"]["nested"] = [{"stockRecommendations": []}]
+    assert "INDUSTRY_NO_COMPANY_OR_STOCK_OUTPUTS" in _failed_checks(identity, version)
+
+
+def test_downstream_taxonomy_rejects_non_background_company_metadata() -> None:
+    identity, version = _pilot()
+    version["snapshot"]["company_notes"] = []
+    assert "INDUSTRY_NO_COMPANY_OR_STOCK_OUTPUTS" in _failed_checks(identity, version)
+
+
+@pytest.mark.parametrize(
+    "background_key",
+    ["background_company_references", "engineering_company_case_reference"],
+)
+def test_downstream_taxonomy_allows_background_company_reference_keys(background_key: str) -> None:
+    identity, version = _pilot()
+    version["snapshot"][background_key] = {"role": "background"}
+    assert "INDUSTRY_NO_COMPANY_OR_STOCK_OUTPUTS" not in _failed_checks(identity, version)
+
+
+def test_downstream_taxonomy_propagates_background_context_to_non_output_metadata() -> None:
+    identity, version = _pilot()
+    version["snapshot"]["background_company_references"] = [
+        {"company_name": "Example Co", "source_url": "https://example.com"}
+    ]
+    assert "INDUSTRY_NO_COMPANY_OR_STOCK_OUTPUTS" not in _failed_checks(identity, version)
+
+
+def test_downstream_taxonomy_does_not_hide_outputs_inside_background_context() -> None:
+    identity, version = _pilot()
+    version["snapshot"]["background_company_references"] = [
+        {"company_profile": {"rating": "A"}}
+    ]
+    assert "INDUSTRY_NO_COMPANY_OR_STOCK_OUTPUTS" in _failed_checks(identity, version)
+
+
+@pytest.mark.parametrize("output_key", ["rating", "profile"])
+def test_downstream_taxonomy_applies_background_company_subject_to_direct_outputs(
+    output_key: str,
+) -> None:
+    identity, version = _pilot()
+    version["snapshot"]["background_company_references"] = [{output_key: {}}]
+    assert "INDUSTRY_NO_COMPANY_OR_STOCK_OUTPUTS" in _failed_checks(identity, version)

@@ -31,9 +31,7 @@ _OUTPUT_KEYS = {
     "company_capture_assessments",
     "company_capability_collection",
     "company_capabilities",
-    "company",
     "company_list",
-    "companies",
     "stock_candidates",
     "stock_outputs",
     "stock_rating",
@@ -160,8 +158,25 @@ def _required_questions(snapshot: dict[str, Any]) -> dict[str, Any]:
         and item.get("target_type") == "research_question"
         and item.get("collection_status") not in {"invalid", "cancelled", "rejected"}
     }
-    missing = sorted(item for item in required - covered if isinstance(item, str))
-    return _result(INDUSTRY_DESIGN_CHECKS[4], bool(required) and not missing, {"missing": missing})
+    missing_questions = sorted(item for item in required - covered if isinstance(item, str))
+    critical_claim_ids = _critical_claim_ids(snapshot)
+    covered_claims = {
+        item.get("target_id")
+        for item in snapshot.get("evidence_requirements", [])
+        if isinstance(item, dict)
+        and item.get("target_type") == "research_claim"
+        and item.get("collection_status") not in {"invalid", "cancelled", "rejected"}
+    }
+    missing_claims = sorted(critical_claim_ids - covered_claims)
+    return _result(
+        INDUSTRY_DESIGN_CHECKS[4],
+        bool(required) and not missing_questions and bool(critical_claim_ids) and not missing_claims,
+        {
+            "missing": missing_questions,
+            "missing_required_question_ids": missing_questions,
+            "missing_critical_claim_ids": missing_claims,
+        },
+    )
 
 
 def _search_plans(snapshot: dict[str, Any]) -> dict[str, Any]:
@@ -246,42 +261,194 @@ def _critical_claim_ids(snapshot: dict[str, Any]) -> set[str]:
     }
 
 
-def _claim_plan(snapshot: dict[str, Any], collection: str, code: str) -> dict[str, Any]:
-    critical = _critical_claim_ids(snapshot)
-    covered = {
-        item.get("target_id")
-        for item in snapshot.get(collection, [])
-        if isinstance(item, dict)
-        and item.get("target_type") == "research_claim"
-        and item.get("status") == "planned"
+def _claim_plan(
+    snapshot: dict[str, Any],
+    collection: str,
+    code: str,
+    *,
+    object_id_field: str,
+    claim_link_field: str,
+) -> dict[str, Any]:
+    objects_by_id: dict[str, list[dict[str, Any]]] = {}
+    for item in snapshot.get(collection, []):
+        if isinstance(item, dict) and isinstance(item.get(object_id_field), str):
+            objects_by_id.setdefault(item[object_id_field], []).append(item)
+
+    claim_issues: list[dict[str, Any]] = []
+    critical_claims = [
+        claim
+        for claim in snapshot.get("claims", [])
+        if isinstance(claim, dict) and claim.get("claim_id") in _critical_claim_ids(snapshot)
+    ]
+    for claim in critical_claims:
+        claim_id = claim["claim_id"]
+        raw_links = claim.get(claim_link_field)
+        links = [item for item in raw_links if isinstance(item, str)] if isinstance(raw_links, list) else []
+        duplicate_ids = sorted({item for item in links if links.count(item) > 1})
+        missing_ids: list[str] = []
+        mismatched_ids: list[str] = []
+        if not links:
+            missing_ids.append(f"<{claim_link_field}>")
+        for object_id in dict.fromkeys(links):
+            matches = objects_by_id.get(object_id, [])
+            if not matches:
+                missing_ids.append(object_id)
+                continue
+            if len(matches) != 1 or any(
+                item.get("target_type") != "research_claim"
+                or item.get("target_id") != claim_id
+                or item.get("status") != "planned"
+                for item in matches
+            ):
+                mismatched_ids.append(object_id)
+        if duplicate_ids or missing_ids or mismatched_ids:
+            claim_issues.append(
+                {
+                    "claim_id": claim_id,
+                    "missing_ids": sorted(missing_ids),
+                    "duplicate_ids": duplicate_ids,
+                    "mismatched_ids": sorted(mismatched_ids),
+                }
+            )
+    return _result(
+        code,
+        bool(critical_claims) and not claim_issues,
+        {
+            "claims": claim_issues,
+            "missing_claim_ids": sorted(
+                issue["claim_id"] for issue in claim_issues if issue["missing_ids"]
+            ),
+            "mismatched_claim_ids": sorted(
+                issue["claim_id"]
+                for issue in claim_issues
+                if issue["duplicate_ids"] or issue["mismatched_ids"]
+            ),
+        },
+    )
+
+
+def _key_tokens(key: object) -> set[str]:
+    text = str(key)
+    text = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", text)
+    text = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", text)
+    raw_tokens = re.findall(r"[a-z0-9]+", text.casefold())
+    canonical = {
+        "companies": "company",
+        "corporations": "corporate",
+        "entities": "entity",
+        "equities": "equity",
+        "securities": "security",
+        "stocks": "stock",
+        "assessments": "assessment",
+        "boundaries": "boundary",
+        "candidates": "candidate",
+        "capabilities": "capability",
+        "cases": "case",
+        "collections": "collection",
+        "contexts": "context",
+        "examples": "example",
+        "lists": "list",
+        "mappings": "mapping",
+        "maps": "map",
+        "outputs": "output",
+        "profiles": "profile",
+        "rankings": "ranking",
+        "ratings": "rating",
+        "recommendations": "recommendation",
+        "references": "reference",
+        "screens": "screen",
+        "scopes": "scope",
+        "strategies": "strategy",
+        "valuations": "valuation",
+        "watchlists": "watchlist",
     }
-    missing = sorted(critical - covered)
-    return _result(code, bool(critical) and not missing, {"missing": missing})
+    return {canonical.get(token, token) for token in raw_tokens}
 
 
-def _output_paths(value: object, path: tuple[object, ...] = ()) -> list[list[object]]:
+def _background_tokens() -> set[str]:
+    return {
+        "background", "boundary", "case", "context", "engineering", "example",
+        "reference", "scope", "universe",
+    }
+
+
+def _subject_groups(tokens: set[str]) -> set[str]:
+    subjects: set[str] = set()
+    if tokens & {"company", "corporate", "entity"}:
+        subjects.add("company")
+    if tokens & {"stock", "equity", "security"}:
+        subjects.add("stock")
+    return subjects
+
+
+def _is_downstream_output_key(
+    key: object,
+    *,
+    background_subjects: frozenset[str] = frozenset(),
+) -> bool:
+    normalized_key = str(key).casefold()
+    if normalized_key in _OUTPUT_KEYS:
+        return True
+    tokens = _key_tokens(key)
+    local_subjects = _subject_groups(tokens)
+    effective_subjects = local_subjects | set(background_subjects)
+    company_outputs = {
+        "assessment", "candidate", "capability", "capture", "collection", "list", "map",
+        "mapping", "output", "profile", "ranking", "rating", "screen",
+    }
+    stock_outputs = {
+        "candidate", "list", "map", "output", "ranking", "rating",
+        "recommendation", "screen", "strategy", "valuation", "watchlist",
+    }
+    has_output = ("company" in effective_subjects and bool(tokens & company_outputs)) or (
+        "stock" in effective_subjects and bool(tokens & stock_outputs)
+    )
+    if has_output:
+        return True
+    if not local_subjects:
+        return False
+    return not local_subjects.issubset(background_subjects) and not bool(
+        tokens & _background_tokens()
+    )
+
+
+def _output_paths(
+    value: object,
+    path: tuple[object, ...] = (),
+    *,
+    background_subjects: frozenset[str] = frozenset(),
+) -> list[list[object]]:
     found: list[list[object]] = []
     if isinstance(value, dict):
         for key, child in value.items():
             child_path = (*path, key)
-            normalized_key = str(key).casefold()
-            key_tokens = set(re.split(r"[^a-z0-9]+", normalized_key))
-            downstream_subject = bool(key_tokens & {"company", "companies", "stock", "stocks"})
-            output_marker = bool(
-                key_tokens
-                & {
-                    "assessment", "assessments", "candidate", "candidates",
-                    "capability", "capabilities", "capture", "collection",
-                    "list", "output", "outputs", "ranking", "rankings", "rating",
-                    "ratings", "recommendation", "recommendations",
-                }
-            )
-            if normalized_key in _OUTPUT_KEYS or (downstream_subject and output_marker):
+            if _is_downstream_output_key(
+                key,
+                background_subjects=background_subjects,
+            ):
                 found.append(list(child_path))
-            found.extend(_output_paths(child, child_path))
+            key_tokens = _key_tokens(key)
+            child_background_subjects = background_subjects
+            if key_tokens & _background_tokens():
+                child_background_subjects = frozenset(
+                    set(background_subjects) | _subject_groups(key_tokens)
+                )
+            found.extend(
+                _output_paths(
+                    child,
+                    child_path,
+                    background_subjects=child_background_subjects,
+                )
+            )
     elif isinstance(value, list):
         for index, child in enumerate(value):
-            found.extend(_output_paths(child, (*path, index)))
+            found.extend(
+                _output_paths(
+                    child,
+                    (*path, index),
+                    background_subjects=background_subjects,
+                )
+            )
     return found
 
 
@@ -338,8 +505,20 @@ def evaluate_industry_design_gate(
         _search_plans(snapshot),
         _counter(snapshot),
         _source_diversity(snapshot),
-        _claim_plan(snapshot, "validation_metrics", INDUSTRY_DESIGN_CHECKS[8]),
-        _claim_plan(snapshot, "invalidation_conditions", INDUSTRY_DESIGN_CHECKS[9]),
+        _claim_plan(
+            snapshot,
+            "validation_metrics",
+            INDUSTRY_DESIGN_CHECKS[8],
+            object_id_field="metric_id",
+            claim_link_field="validation_metric_ids",
+        ),
+        _claim_plan(
+            snapshot,
+            "invalidation_conditions",
+            INDUSTRY_DESIGN_CHECKS[9],
+            object_id_field="condition_id",
+            claim_link_field="invalidation_condition_ids",
+        ),
         _result(
             INDUSTRY_DESIGN_CHECKS[10],
             not _output_paths(safe_version),
