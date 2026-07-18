@@ -73,6 +73,7 @@ _STOCK_OPINION_PHRASES = {
     "top stock",
     "stock pick",
 }
+_DNS_LABEL = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?")
 
 
 def _invalid(reason: str, **details: object) -> ResearchProjectV2Error:
@@ -91,10 +92,24 @@ def _immutability_error(reason: str, **details: object) -> ResearchProjectV2Erro
     )
 
 
+def _url_invalid(url: object, reason: str) -> ResearchProjectV2Error:
+    return ResearchProjectV2Error(
+        f"Invalid discovery URL: {reason}",
+        code="RESEARCH_PROJECT_V2_1_DISCOVERY_URL_INVALID",
+        details={"url": url, "reason": reason},
+    )
+
+
 def _trimmed_string(value: object, *, field: str, reason: str | None = None) -> str:
     if not isinstance(value, str) or not value.strip():
         raise _invalid(reason or f"blank {field}", field=field)
     return value.strip()
+
+
+def _strict_query_id(value: object) -> str:
+    if not isinstance(value, str) or not value or value != value.strip():
+        raise _invalid("invalid query_id", query_id=value)
+    return value
 
 
 def _parse_datetime(value: object, *, field: str) -> str:
@@ -113,9 +128,19 @@ def _parse_datetime(value: object, *, field: str) -> str:
 def normalize_url(url: str) -> str:
     """Return a deterministic HTTP(S) URL without tracking parameters."""
     if not isinstance(url, str) or not url.strip():
-        raise _invalid("invalid URL", field="url")
+        raise _url_invalid(url, "blank URL")
     raw = url.strip()
     try:
+        scheme_separator = raw.find("://")
+        if scheme_separator >= 0:
+            authority = re.split(r"[/\?#]", raw[scheme_separator + 3 :], maxsplit=1)[0]
+            if any(
+                character == "\\"
+                or character.isspace()
+                or unicodedata.category(character) == "Cc"
+                for character in authority
+            ):
+                raise ValueError("invalid authority")
         parsed = urlsplit(raw)
         scheme = parsed.scheme.lower()
         if scheme not in {"http", "https"}:
@@ -127,15 +152,28 @@ def normalize_url(url: str) -> str:
             raise ValueError("missing host")
         port = parsed.port
 
-        try:
-            ipv6 = ipaddress.IPv6Address(hostname)
-        except ValueError:
-            ascii_host = hostname.encode("idna").decode("ascii").lower()
-            if not ascii_host or any(not label for label in ascii_host.split(".")):
-                raise ValueError("invalid host")
-            host = ascii_host
+        if ":" in hostname:
+            address = ipaddress.ip_address(hostname)
+            if not isinstance(address, ipaddress.IPv6Address):
+                raise ValueError("invalid IPv6 host")
+            host = f"[{address.compressed}]"
         else:
-            host = f"[{ipv6.compressed}]"
+            dns_input = hostname[:-1] if hostname.endswith(".") else hostname
+            if not dns_input:
+                raise ValueError("invalid host")
+            if all(character.isdigit() or character == "." for character in dns_input):
+                host = str(ipaddress.IPv4Address(dns_input))
+            else:
+                ascii_host = dns_input.encode("idna").decode("ascii").lower()
+                if len(ascii_host) > 253:
+                    raise ValueError("DNS host exceeds 253 characters")
+                labels = ascii_host.split(".")
+                if any(
+                    _DNS_LABEL.fullmatch(label) is None
+                    for label in labels
+                ):
+                    raise ValueError("invalid DNS label")
+                host = ascii_host
 
         if port is not None and not (
             (scheme == "http" and port == 80) or (scheme == "https" and port == 443)
@@ -154,7 +192,8 @@ def normalize_url(url: str) -> str:
         path = parsed.path or "/"
         return urlunsplit((scheme, host, path, urlencode(query_pairs), ""))
     except (UnicodeError, ValueError) as exc:
-        raise _invalid("invalid URL", field="url") from exc
+        reason = str(exc).strip() or "malformed URL"
+        raise _url_invalid(url, reason) from exc
 
 
 def source_candidate_id(normalized_url: str, title: str) -> str:
@@ -196,7 +235,7 @@ class ImportedJsonDiscoveryProvider:
                     raise TypeError("result is not an object")
                 item = DiscoveryResult(**raw)
                 grouped.setdefault(item.query_id, []).append(item)
-        except (OSError, json.JSONDecodeError, KeyError, TypeError) as exc:
+        except (OSError, UnicodeError, json.JSONDecodeError, KeyError, TypeError) as exc:
             raise _invalid(
                 "invalid imported discovery JSON", path=str(self.path)
             ) from exc
@@ -205,9 +244,7 @@ class ImportedJsonDiscoveryProvider:
         }
 
     def search(self, query: dict[str, Any]) -> list[DiscoveryResult]:
-        query_id = query.get("query_id")
-        if not isinstance(query_id, str):
-            raise _invalid("invalid query_id", field="query_id")
+        query_id = _strict_query_id(query.get("query_id"))
         return list(self.results_by_query.get(query_id, []))
 
 
@@ -215,7 +252,7 @@ class DirectUrlDiscoveryProvider:
     """Convert direct URL query specs into results without network access."""
 
     def search(self, query: dict[str, Any]) -> list[DiscoveryResult]:
-        query_id = _trimmed_string(query.get("query_id"), field="query_id")
+        query_id = _strict_query_id(query.get("query_id"))
         raw_specs = query.get("direct_urls", [])
         if not isinstance(raw_specs, list):
             raise _invalid("invalid direct_urls", field="direct_urls")
@@ -311,7 +348,7 @@ def _validated_result(
 ) -> tuple[DiscoveryResult, str, str, str, str | None, str | None, str]:
     if not isinstance(item, DiscoveryResult):
         raise _invalid("invalid provider result type")
-    query_id = _trimmed_string(item.query_id, field="query_id")
+    query_id = _strict_query_id(item.query_id)
     if query_id not in known_query_ids:
         raise _invalid("unknown query_id", query_id=query_id)
     if query_id != expected_query_id:
@@ -354,7 +391,7 @@ def _candidate_from_result(
     return {
         "candidate_id": source_candidate_id(normalized_url, title),
         "search_plan_id": search_plan_id,
-        "query_id": item.query_id.strip(),
+        "query_id": item.query_id,
         "normalized_url": normalized_url,
         "original_url": original_url,
         "title": title,
@@ -417,7 +454,7 @@ def _validated_plan(search_plan: object) -> tuple[str, list[dict[str, Any]], dic
     for raw_query in queries:
         if not isinstance(raw_query, dict):
             raise _invalid("invalid query", field="queries")
-        query_id = _trimmed_string(raw_query.get("query_id"), field="query_id")
+        query_id = _strict_query_id(raw_query.get("query_id"))
         priority = raw_query.get("priority")
         if isinstance(priority, bool) or not isinstance(priority, int) or priority <= 0:
             raise _invalid("invalid query priority", query_id=query_id)

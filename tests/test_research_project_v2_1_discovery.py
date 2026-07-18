@@ -87,6 +87,16 @@ def assert_discovery_error(call, *, reason: str | None = None) -> ResearchProjec
     return exc_info.value
 
 
+def assert_url_error(raw: str) -> ResearchProjectV2Error:
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        normalize_url(raw)
+    assert exc_info.value.code == "RESEARCH_PROJECT_V2_1_DISCOVERY_URL_INVALID"
+    assert exc_info.value.details["url"] == raw
+    assert isinstance(exc_info.value.details["reason"], str)
+    assert exc_info.value.details["reason"]
+    return exc_info.value
+
+
 @pytest.mark.parametrize(
     ("raw", "expected"),
     [
@@ -97,7 +107,13 @@ def assert_discovery_error(call, *, reason: str | None = None) -> ResearchProjec
         ("http://EXAMPLE.com:80/a", "http://example.com/a"),
         ("https://EXAMPLE.com:8443/a", "https://example.com:8443/a"),
         ("https://例子.测试/路径", "https://xn--fsqu00a.xn--0zwm56d/路径"),
+        ("https://Example.COM./a", "https://example.com/a"),
+        ("https://192.0.2.1/a", "https://192.0.2.1/a"),
         ("https://[2001:db8::1]:443/a", "https://[2001:db8::1]/a"),
+        (
+            "https://[2001:0db8:0000:0000:0000:0000:0000:0001]/a",
+            "https://[2001:db8::1]/a",
+        ),
         ("https://example.com/p?z=2&z=1&a=", "https://example.com/p?a=&z=1&z=2"),
     ],
 )
@@ -113,11 +129,21 @@ def test_normalize_url_canonicalizes_supported_web_urls(raw: str, expected: str)
         "https://user:password@example.com/a",
         "https://example.com:invalid/a",
         "https://\ud800.example/a",
+        "https://exa mple.com/a",
+        "https://example.com\\evil/a",
+        "https://exam\nple.com/a",
+        "https://-bad.example/a",
+        "https://bad-.example/a",
+        "https://bad_name.example/a",
+        "https://999.1.1.1/a",
+        "https://192.168.001.1/a",
+        f"https://{'a' * 64}.example/a",
+        f"https://{'a' * 63}.{'b' * 63}.{'c' * 63}.{'d' * 63}/a",
         "not a url",
     ],
 )
 def test_normalize_url_rejects_unsupported_or_malformed_urls(raw: str) -> None:
-    assert_discovery_error(lambda: normalize_url(raw), reason="invalid URL")
+    assert_url_error(raw)
 
 
 def test_candidate_id_is_deterministic_and_uses_trimmed_title() -> None:
@@ -151,6 +177,21 @@ def test_imported_provider_reads_fixture_and_returns_only_requested_query() -> N
     assert len(quantification) == 1
     assert quantification[0].title.startswith("A differently titled")
     assert provider.search({"query_id": "query:missing"}) == []
+
+
+def test_imported_provider_wraps_non_utf8_input_as_stable_discovery_error(
+    tmp_path: Path,
+) -> None:
+    invalid = tmp_path / "invalid-utf8.json"
+    invalid.write_bytes(b'{"results": ["\xff"]}')
+
+    exc = assert_discovery_error(
+        lambda: ImportedJsonDiscoveryProvider(invalid),
+        reason="invalid imported discovery JSON",
+    )
+
+    assert exc.details["path"] == str(invalid)
+    assert isinstance(exc.__cause__, UnicodeError)
 
 
 def test_direct_url_provider_is_offline_and_converts_query_specs_to_results() -> None:
@@ -410,6 +451,68 @@ def test_discover_rejects_non_results_and_invalid_plan_or_batch_inputs() -> None
         ),
         reason="duplicate query priority",
     )
+
+
+@pytest.mark.parametrize("bad_query_id", [" query:mechanism", "query:mechanism ", "  "])
+def test_discover_rejects_search_plan_query_ids_with_whitespace(
+    bad_query_id: str,
+) -> None:
+    plan = search_plan()
+    plan["queries"][0]["query_id"] = bad_query_id
+
+    exc = assert_discovery_error(
+        lambda: discover_sources(
+            plan,
+            StaticProvider({}),
+            provider_name="static",
+            discovered_at=DISCOVERED_AT,
+            provenance=PROVENANCE,
+        ),
+        reason="invalid query_id",
+    )
+
+    assert exc.details["query_id"] == bad_query_id
+
+
+def test_discover_rejects_trimmed_equivalent_plan_query_ids_stably() -> None:
+    plan = search_plan()
+    plan["queries"] = [
+        {"query_id": "q", "priority": 1},
+        {"query_id": " q ", "priority": 2},
+    ]
+
+    exc = assert_discovery_error(
+        lambda: discover_sources(
+            plan,
+            StaticProvider({}),
+            provider_name="static",
+            discovered_at=DISCOVERED_AT,
+            provenance=PROVENANCE,
+        ),
+        reason="invalid query_id",
+    )
+
+    assert exc.details["query_id"] == " q "
+
+
+@pytest.mark.parametrize("bad_query_id", [" query:mechanism", "query:mechanism "])
+def test_discover_rejects_provider_result_query_id_whitespace(
+    bad_query_id: str,
+) -> None:
+    provider = StaticProvider({"query:mechanism": [result(query_id=bad_query_id)]})
+
+    exc = assert_discovery_error(
+        lambda: discover_sources(
+            search_plan(),
+            provider,
+            provider_name="static",
+            discovered_at=DISCOVERED_AT,
+            provenance=PROVENANCE,
+        ),
+        reason="invalid query_id",
+    )
+
+    assert exc.details["query_id"] == bad_query_id
 
 
 def test_write_batch_is_canonical_hashed_atomic_idempotent_and_immutable(tmp_path: Path) -> None:
