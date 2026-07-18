@@ -962,16 +962,15 @@
         "status_code": {"type": "integer", "minimum": 100, "maximum": 599},
         "response_headers": {
           "type": "object",
-          "propertyNames": {
-            "type": "string",
-            "minLength": 1,
-            "pattern": "^[!#$%&'*+.^_`|~0-9A-Za-z-]+$",
-            "not": {
-              "pattern": "^(?:[Ss][Ee][Tt]-[Cc][Oo][Oo][Kk][Ii][Ee]|[Cc][Oo][Oo][Kk][Ii][Ee]|[Aa][Uu][Tt][Hh][Oo][Rr][Ii][Zz][Aa][Tt][Ii][Oo][Nn]|[Pp][Rr][Oo][Xx][Yy]-[Aa][Uu][Tt][Hh][Oo][Rr][Ii][Zz][Aa][Tt][Ii][Oo][Nn])$"
-            }
-          },
-          "patternProperties": {
-            ".*": {"type": "string"}
+          "properties": {
+            "content-type": {"type": "string"},
+            "content-length": {"type": "string"},
+            "content-disposition": {"type": "string"},
+            "etag": {"type": "string"},
+            "last-modified": {"type": "string"},
+            "cache-control": {"type": "string"},
+            "expires": {"type": "string"},
+            "date": {"type": "string"}
           },
           "additionalProperties": false
         },
@@ -997,8 +996,7 @@
         },
         "raw_path": {
           "type": "string",
-          "minLength": 1,
-          "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!\\.(?:/|$))(?!.*\\/\\.(?:\\/|$))(?!\\.\\.(?:/|$))(?!.*\\/\\.\\.(?:\\/|$)).+$"
+          "pattern": "^evidence/raw/[a-f0-9]{2}/[a-f0-9]{64}\\.(?:pdf|html|txt|json|csv)$"
         },
         "provenance": {"$ref": "#/$defs/provenance"},
         "publisher_family": {"type": ["string", "null"]},

@@ -451,6 +451,16 @@ def test_task6_builder_shaped_artifact_passes_standalone_and_industry_version(
     sample_industry_version,
 ):
     artifact = canonical_evidence_artifact()
+    artifact["response_headers"] = {
+        "content-type": "application/pdf",
+        "content-length": "1024",
+        "content-disposition": "inline; filename=fixture.pdf",
+        "etag": '"fixture-etag"',
+        "last-modified": "Fri, 18 Jul 2026 02:00:00 GMT",
+        "cache-control": "public, max-age=3600",
+        "expires": "Fri, 18 Jul 2026 03:00:00 GMT",
+        "date": "Fri, 18 Jul 2026 02:00:00 GMT",
+    }
     standalone = {
         "schema_version": "2.1.0",
         "artifact_kind": "evidence_artifact",
@@ -471,6 +481,9 @@ def test_task6_builder_shaped_artifact_passes_standalone_and_industry_version(
 
     assert document["artifact_id"] == artifact["artifact_id"]
     assert assessment["artifact_id"] == artifact["artifact_id"]
+    # Task 6 semantic validation must additionally prove that raw_path's
+    # directory equals content_sha256[:2] and its filename hash equals
+    # content_sha256; JSON Schema can only validate the canonical shape.
     validate_v2_1_schema_payload(
         "industry_research_version_v2_1", sample_industry_version
     )
@@ -501,6 +514,37 @@ def test_evidence_artifact_rejects_legacy_field_shape():
         ("raw_path", "./raw.pdf", ["evidence_artifact", "raw_path"]),
         ("raw_path", "evidence/./raw.pdf", ["evidence_artifact", "raw_path"]),
         ("raw_path", "../raw.pdf", ["evidence_artifact", "raw_path"]),
+        ("raw_path", "foo.txt", ["evidence_artifact", "raw_path"]),
+        (
+            "raw_path",
+            "metadata/not-content-addressed.json",
+            ["evidence_artifact", "raw_path"],
+        ),
+        (
+            "raw_path",
+            "https://example.com/raw.pdf",
+            ["evidence_artifact", "raw_path"],
+        ),
+        (
+            "raw_path",
+            "evidence/raw/BB/" + "b" * 64 + ".pdf",
+            ["evidence_artifact", "raw_path"],
+        ),
+        (
+            "raw_path",
+            "evidence/raw/bb/" + "b" * 63 + ".pdf",
+            ["evidence_artifact", "raw_path"],
+        ),
+        (
+            "raw_path",
+            "evidence/raw/bb/" + "B" * 64 + ".pdf",
+            ["evidence_artifact", "raw_path"],
+        ),
+        (
+            "raw_path",
+            "evidence/raw/bb/" + "b" * 64 + ".exe",
+            ["evidence_artifact", "raw_path"],
+        ),
         (
             "raw_path",
             "evidence/raw/../metadata.json",
@@ -524,6 +568,16 @@ def test_evidence_artifact_rejects_legacy_field_shape():
         (
             "response_headers",
             {" authorization": "Bearer secret"},
+            ["evidence_artifact", "response_headers"],
+        ),
+        (
+            "response_headers",
+            {"server": "private-origin"},
+            ["evidence_artifact", "response_headers"],
+        ),
+        (
+            "response_headers",
+            {"x-arbitrary-private-metadata": "private"},
             ["evidence_artifact", "response_headers"],
         ),
         (
