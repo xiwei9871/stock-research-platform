@@ -899,3 +899,144 @@ def test_multiple_raw_close_failures_keep_first_cause_and_notes(
     assert "held raw close failure" in str(exc_info.value.__cause__)
     assert any("additional cleanup failure" in note for note in exc_info.value.__notes__)
     assert raw.read_bytes() == b"%PDF fixture"
+
+
+def _track_raw_final_directory(module, monkeypatch):
+    original_open_chain = module._open_dir_chain
+    state = {"final_fd": None}
+    def open_chain(path):
+        result = original_open_chain(path)
+        if path.parent.name == "raw" and path.name != ".tmp":
+            state["final_fd"] = result[0][-1]
+        return result
+    monkeypatch.setattr(module, "_open_dir_chain", open_chain)
+    return state
+
+
+def test_original_final_dir_close_side_effect_still_rolls_back_created_raw(
+    tmp_path: Path, monkeypatch
+) -> None:
+    import stock_research.research_project_v2_1.snapshot as module
+    state = _track_raw_final_directory(module, monkeypatch)
+    original_close = module.os.close
+    failed = False
+    def close(descriptor):
+        nonlocal failed
+        if descriptor == state["final_fd"] and not failed:
+            failed = True
+            original_close(descriptor)
+            raise OSError("original final dir closed then raised")
+        return original_close(descriptor)
+    monkeypatch.setattr(module.os, "close", close)
+    effective = layout(tmp_path)
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        snapshot_candidate(
+            candidate(), transport=Transport([response()]), resolver=Resolver(),
+            layout=effective, fetched_at=FETCHED_AT, provenance=PROVENANCE,
+        )
+    assert exc_info.value.code == "RESEARCH_PROJECT_V2_1_SNAPSHOT_STORAGE_FAILED"
+    assert exc_info.value.details["rollback"] == "removed"
+    assert not list(effective.evidence_raw_dir.rglob("*.pdf"))
+    assert not [path for path in effective.root.rglob("*.tmp") if path.is_file()]
+
+
+def test_rollback_fd_close_failure_is_not_masking_and_does_not_restore_raw(
+    tmp_path: Path, monkeypatch
+) -> None:
+    import stock_research.research_project_v2_1.snapshot as module
+    state = _track_raw_final_directory(module, monkeypatch)
+    original_dup = module.os.dup
+    original_close = module.os.close
+    state["rollback_fd"] = None
+    original_failed = False
+    rollback_failed = False
+    def dup(descriptor):
+        duplicated = original_dup(descriptor)
+        if descriptor == state["final_fd"]:
+            state["rollback_fd"] = duplicated
+        return duplicated
+    def close(descriptor):
+        nonlocal original_failed, rollback_failed
+        if descriptor == state["final_fd"] and not original_failed:
+            original_failed = True
+            original_close(descriptor)
+            raise OSError("original final close failure")
+        if descriptor == state["rollback_fd"] and not rollback_failed:
+            rollback_failed = True
+            original_close(descriptor)
+            raise OSError("rollback fd close failure")
+        return original_close(descriptor)
+    monkeypatch.setattr(module.os, "dup", dup)
+    monkeypatch.setattr(module.os, "close", close)
+    effective = layout(tmp_path)
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        snapshot_candidate(
+            candidate(), transport=Transport([response()]), resolver=Resolver(),
+            layout=effective, fetched_at=FETCHED_AT, provenance=PROVENANCE,
+        )
+    assert exc_info.value.details["rollback"] == "removed"
+    assert "original final close failure" in str(exc_info.value.__cause__)
+    assert any("rollback fd close failure" in note for note in exc_info.value.__notes__)
+    assert not list(effective.evidence_raw_dir.rglob("*.pdf"))
+
+
+def test_rollback_fd_dup_failure_uses_original_fd_to_remove_created_raw(
+    tmp_path: Path, monkeypatch
+) -> None:
+    import stock_research.research_project_v2_1.snapshot as module
+    state = _track_raw_final_directory(module, monkeypatch)
+    original_dup = module.os.dup
+    def dup(descriptor):
+        if descriptor == state["final_fd"]:
+            raise OSError("rollback dup failure")
+        return original_dup(descriptor)
+    monkeypatch.setattr(module.os, "dup", dup)
+    effective = layout(tmp_path)
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        snapshot_candidate(
+            candidate(), transport=Transport([response()]), resolver=Resolver(),
+            layout=effective, fetched_at=FETCHED_AT, provenance=PROVENANCE,
+        )
+    assert exc_info.value.code == "RESEARCH_PROJECT_V2_1_SNAPSHOT_STORAGE_FAILED"
+    assert "rollback dup failure" in str(exc_info.value.__cause__)
+    assert exc_info.value.details["rollback"] == "removed"
+    assert not list(effective.evidence_raw_dir.rglob("*.pdf"))
+
+
+def test_existing_raw_never_duplicates_rollback_fd_or_deletes_on_close_failure(
+    tmp_path: Path, monkeypatch
+) -> None:
+    effective = layout(tmp_path)
+    first = snapshot_candidate(
+        candidate(), transport=Transport([response()]), resolver=Resolver(),
+        layout=effective, fetched_at=FETCHED_AT, provenance=PROVENANCE,
+    )
+    raw = Path(first["raw_path"])
+    import stock_research.research_project_v2_1.snapshot as module
+    state = _track_raw_final_directory(module, monkeypatch)
+    original_dup = module.os.dup
+    original_close = module.os.close
+    dup_calls = 0
+    failed = False
+    def dup(descriptor):
+        nonlocal dup_calls
+        if descriptor == state["final_fd"]:
+            dup_calls += 1
+        return original_dup(descriptor)
+    def close(descriptor):
+        nonlocal failed
+        if descriptor == state["final_fd"] and not failed:
+            failed = True
+            original_close(descriptor)
+            raise OSError("existing final close failure")
+        return original_close(descriptor)
+    monkeypatch.setattr(module.os, "dup", dup)
+    monkeypatch.setattr(module.os, "close", close)
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        snapshot_candidate(
+            candidate(), transport=Transport([response()]), resolver=Resolver(),
+            layout=effective, fetched_at=FETCHED_AT, provenance=PROVENANCE,
+        )
+    assert exc_info.value.code == "RESEARCH_PROJECT_V2_1_SNAPSHOT_STORAGE_FAILED"
+    assert dup_calls == 0
+    assert raw.read_bytes() == b"%PDF fixture"

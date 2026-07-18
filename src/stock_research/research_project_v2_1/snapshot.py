@@ -770,13 +770,28 @@ def _publish_raw(temp: _RawTemp, *, layout: LayeredResearchLayout, digest: str, 
             )
             primary_error.__cause__ = exc
 
+    final_directory_fd = chain[-1] if chain else None
+    rollback_fd: int | None = None
+    if created and final_directory_fd is not None:
+        try:
+            rollback_fd = os.dup(final_directory_fd)
+            if not stat.S_ISDIR(os.fstat(rollback_fd).st_mode):
+                raise OSError(errno.ENOTDIR, "rollback descriptor is not a directory")
+        except OSError as exc:
+            cleanup_errors.append(exc)
+            if rollback_fd is not None:
+                try:
+                    os.close(rollback_fd)
+                except OSError as close_exc:
+                    cleanup_errors.append(close_exc)
+                rollback_fd = None
+
     if held_fd is not None:
         try:
             os.close(held_fd)
         except OSError as exc:
             cleanup_errors.append(exc)
 
-    final_directory_fd = chain[-1] if chain else None
     for descriptor in reversed(chain[:-1]):
         try:
             os.close(descriptor)
@@ -796,7 +811,9 @@ def _publish_raw(temp: _RawTemp, *, layout: LayeredResearchLayout, digest: str, 
         and final_directory_fd is not None
     ):
         outcome, detail = _rollback_created_final(
-            final_directory_fd, final_name, temp.inode
+            rollback_fd if rollback_fd is not None else final_directory_fd,
+            final_name,
+            temp.inode,
         )
         _record_rollback(primary_error, outcome, detail)
         rollback_recorded = True
@@ -812,7 +829,25 @@ def _publish_raw(temp: _RawTemp, *, layout: LayeredResearchLayout, digest: str, 
                 )
             if created and temp.inode is not None and not rollback_recorded:
                 outcome, detail = _rollback_created_final(
-                    final_directory_fd, final_name, temp.inode
+                    rollback_fd if rollback_fd is not None else final_directory_fd,
+                    final_name,
+                    temp.inode,
+                )
+                _record_rollback(primary_error, outcome, detail)
+                rollback_recorded = True
+
+    if rollback_fd is not None:
+        try:
+            os.close(rollback_fd)
+        except OSError as exc:
+            cleanup_errors.append(exc)
+            if primary_error is None:
+                primary_error = _stable_cleanup_error(
+                    "raw publisher cleanup failed", exc
+                )
+            if created and temp.inode is not None and not rollback_recorded:
+                outcome, detail = _rollback_created_final(
+                    rollback_fd, final_name, temp.inode
                 )
                 _record_rollback(primary_error, outcome, detail)
                 rollback_recorded = True
