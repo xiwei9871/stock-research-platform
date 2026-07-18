@@ -1130,6 +1130,7 @@ class _MockRequestsResponse:
         peer_ip: str = "93.184.216.34",
         chunks: Iterable[bytes] | None = None,
         iterator_error: BaseException | None = None,
+        close_error: BaseException | None = None,
     ) -> None:
         class Socket:
             def getpeername(inner_self):
@@ -1147,12 +1148,15 @@ class _MockRequestsResponse:
         self.close_calls = 0
         self._chunks = list(chunks or [b"%PDF fixture"])
         self._iterator_error = iterator_error
+        self._close_error = close_error
     def iter_content(self, chunk_size):
         yield from self._chunks
         if self._iterator_error is not None:
             raise self._iterator_error
     def close(self):
         self.close_calls += 1
+        if self._close_error is not None:
+            raise self._close_error
 
 
 @pytest.mark.parametrize(
@@ -1388,3 +1392,124 @@ def test_existing_metadata_read_error_is_stable_storage_error(
         )
     assert exc_info.value.code == "RESEARCH_PROJECT_V2_1_SNAPSHOT_STORAGE_ERROR"
     assert isinstance(exc_info.value.__cause__, OSError)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("status_code", True),
+        ("status_code", "200"),
+        ("status_code", 99),
+        ("status_code", 600),
+        ("headers", {1: "value"}),
+        ("headers", {"Content-Type": 1}),
+        ("headers", {"Content-Type": "text/plain", "Content-Encoding": 1}),
+        ("url", ""),
+        ("url", None),
+        ("url", 123),
+        ("url", "https://example.com/%zz"),
+    ],
+)
+def test_requests_transport_validation_failures_close_owned_response_once(
+    monkeypatch, field: str, value: object
+) -> None:
+    import requests
+    fake = _MockRequestsResponse()
+    setattr(fake, field, value)
+    monkeypatch.setattr(requests, "get", lambda *args, **kwargs: fake)
+    assert "FETCH" in error_code(lambda: RequestsFetchTransport().get(
+        "https://example.com/source.pdf", timeout_seconds=3.0
+    ))
+    assert fake.close_calls == 1
+
+
+def test_requests_transport_peer_extraction_failure_closes_once(monkeypatch) -> None:
+    import requests
+    fake = _MockRequestsResponse()
+    fake.raw = object()
+    monkeypatch.setattr(requests, "get", lambda *args, **kwargs: fake)
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        RequestsFetchTransport().get(
+            "https://example.com/source.pdf", timeout_seconds=3.0
+        )
+    assert exc_info.value.code == "RESEARCH_PROJECT_V2_1_FETCH_PEER_UNAVAILABLE"
+    assert fake.close_calls == 1
+
+
+def test_requests_transport_rejects_duplicate_lowercase_headers_and_closes(
+    monkeypatch,
+) -> None:
+    import requests
+    from collections.abc import Mapping
+    class DuplicateHeaders(Mapping):
+        def __iter__(self):
+            return iter(["Content-Type", "content-type"])
+        def __len__(self):
+            return 2
+        def __getitem__(self, key):
+            return "text/plain"
+        def items(self):
+            return [
+                ("Content-Type", "text/plain"),
+                ("content-type", "application/pdf"),
+            ]
+    fake = _MockRequestsResponse()
+    fake.headers = DuplicateHeaders()
+    monkeypatch.setattr(requests, "get", lambda *args, **kwargs: fake)
+    assert "TRANSPORT" in error_code(lambda: RequestsFetchTransport().get(
+        "https://example.com/source.pdf", timeout_seconds=3.0
+    ))
+    assert fake.close_calls == 1
+
+
+@pytest.mark.parametrize("failure", ["peer", "status"])
+def test_requests_transport_close_error_does_not_mask_primary_validation_error(
+    monkeypatch, failure: str
+) -> None:
+    import requests
+    fake = _MockRequestsResponse(close_error=RuntimeError("close failed"))
+    if failure == "peer":
+        fake.raw = object()
+    else:
+        fake.status_code = True
+    monkeypatch.setattr(requests, "get", lambda *args, **kwargs: fake)
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        RequestsFetchTransport().get(
+            "https://example.com/source.pdf", timeout_seconds=3.0
+        )
+    expected = (
+        "RESEARCH_PROJECT_V2_1_FETCH_PEER_UNAVAILABLE"
+        if failure == "peer"
+        else "RESEARCH_PROJECT_V2_1_FETCH_TRANSPORT_ERROR"
+    )
+    assert exc_info.value.code == expected
+    assert any("close failed" in note for note in exc_info.value.__notes__)
+    assert fake.close_calls == 1
+
+
+def test_requests_transport_transfers_successful_response_to_chunk_stream(
+    monkeypatch,
+) -> None:
+    import requests
+    fake = _MockRequestsResponse()
+    monkeypatch.setattr(requests, "get", lambda *args, **kwargs: fake)
+    fetched = RequestsFetchTransport().get(
+        "https://example.com/source.pdf", timeout_seconds=3.0
+    )
+    assert fake.close_calls == 0
+    fetched.chunks.close()
+    assert fake.close_calls == 1
+
+
+def test_requests_transport_close_only_failure_is_stable(monkeypatch) -> None:
+    import requests
+    fake = _MockRequestsResponse(close_error=RuntimeError("close-only failure"))
+    fake.status_code = 404
+    monkeypatch.setattr(requests, "get", lambda *args, **kwargs: fake)
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        RequestsFetchTransport().get(
+            "https://example.com/source.pdf", timeout_seconds=3.0
+        )
+    assert exc_info.value.code == "RESEARCH_PROJECT_V2_1_FETCH_TRANSPORT_ERROR"
+    assert isinstance(exc_info.value.__cause__, RuntimeError)
+    assert fake.close_calls == 1

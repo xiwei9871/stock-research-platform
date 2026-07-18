@@ -235,46 +235,121 @@ class RequestsFetchTransport:
             raise
         except Exception as exc:
             raise _error("FETCH_TRANSPORT_ERROR", "HTTP request failed", url=url) from exc
+        transferred = False
+        primary_error: BaseException | None = None
         try:
+            status_code = response.status_code
+            if (
+                isinstance(status_code, bool)
+                or not isinstance(status_code, int)
+                or not 100 <= status_code <= 599
+            ):
+                raise _error(
+                    "FETCH_TRANSPORT_ERROR",
+                    "transport returned an invalid HTTP status",
+                )
+
+            raw_headers = response.headers
+            if not isinstance(raw_headers, Mapping):
+                raise _error(
+                    "FETCH_TRANSPORT_ERROR",
+                    "transport returned invalid response headers",
+                )
+            headers: dict[str, str] = {}
+            lowered_headers: set[str] = set()
+            for key, value in raw_headers.items():
+                if not isinstance(key, str) or not isinstance(value, str):
+                    raise _error(
+                        "FETCH_TRANSPORT_ERROR",
+                        "transport returned a non-string response header",
+                    )
+                lowered = key.lower()
+                if lowered in lowered_headers:
+                    raise _error(
+                        "FETCH_TRANSPORT_ERROR",
+                        "transport returned duplicate response headers",
+                        header=lowered,
+                    )
+                lowered_headers.add(lowered)
+                headers[key] = value
+
+            response_url = response.url
+            if not isinstance(response_url, str) or not response_url.strip():
+                raise _error(
+                    "FETCH_TRANSPORT_ERROR",
+                    "transport returned an invalid response URL",
+                )
+            try:
+                canonical_response_url = normalize_url(response_url)
+            except ResearchProjectV2Error as exc:
+                raise _error(
+                    "FETCH_TRANSPORT_ERROR",
+                    "transport returned an invalid response URL",
+                ) from exc
+            if canonical_response_url != response_url:
+                raise _error(
+                    "FETCH_TRANSPORT_ERROR",
+                    "transport returned a non-canonical response URL",
+                )
+
             peer_ip = _peer_from_requests_response(response)
-        except BaseException:
-            close = getattr(response, "close", None)
-            if callable(close):
-                close()
-            raise
-        status_code = response.status_code
-        headers = dict(response.headers)
-        content_encodings = [
-            value.strip().lower()
-            for key, value in headers.items()
-            if key.lower() == "content-encoding" and isinstance(value, str)
-        ]
-        encoded = any(
-            value not in {"", "identity"} for value in content_encodings
-        )
-        headers = {
-            key: value
-            for key, value in headers.items()
-            if key.lower() != "content-encoding"
-            and not (
-                encoded and key.lower() in {"content-length", "etag"}
+            encoding = ""
+            for key, value in headers.items():
+                if key.lower() == "content-encoding":
+                    encoding = unicodedata.normalize("NFKC", value).strip().casefold()
+                    break
+            encoded = encoding not in {"", "identity"}
+            headers = {
+                key: value
+                for key, value in headers.items()
+                if key.lower() != "content-encoding"
+                and not (
+                    encoded and key.lower() in {"content-length", "etag"}
+                )
+            }
+
+            if 200 <= status_code <= 299:
+                chunks: Iterable[bytes] = _RequestsChunkStream(response)
+                transferred = True
+            else:
+                chunks = ()
+            return FetchResponse(
+                status_code=status_code,
+                headers=headers,
+                chunks=chunks,
+                url=response_url,
+                peer_ip=peer_ip,
             )
-        }
-        response_url = response.url
-        if status_code in _REDIRECT_STATUSES or not 200 <= status_code <= 299:
-            close = getattr(response, "close", None)
-            if callable(close):
-                close()
-            chunks: Iterable[bytes] = ()
-        else:
-            chunks = _RequestsChunkStream(response)
-        return FetchResponse(
-            status_code=status_code,
-            headers=headers,
-            chunks=chunks,
-            url=response_url,
-            peer_ip=peer_ip,
-        )
+        except (ResearchProjectV2Error, *_CONTROL_FLOW_EXCEPTIONS) as exc:
+            primary_error = exc
+            raise
+        except Exception as exc:
+            primary_error = _error(
+                "FETCH_TRANSPORT_ERROR",
+                "transport response validation failed",
+                url=url,
+            )
+            raise primary_error from exc
+        finally:
+            if not transferred:
+                close = getattr(response, "close", None)
+                if callable(close):
+                    try:
+                        close()
+                    except BaseException as close_error:
+                        if primary_error is not None:
+                            primary_error.add_note(
+                                "response close failure preserved: "
+                                f"{type(close_error).__name__}: {close_error}"
+                            )
+                        elif isinstance(close_error, _CONTROL_FLOW_EXCEPTIONS):
+                            raise
+                        else:
+                            raise _error(
+                                "FETCH_TRANSPORT_ERROR",
+                                "HTTP response close failed",
+                                url=url,
+                            ) from close_error
 
 
 class _RequestsChunkStream:
