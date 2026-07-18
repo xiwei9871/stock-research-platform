@@ -167,7 +167,7 @@ V2 结论不会自动改写 V1。未来如需把成熟研究沉淀为新的规�
 
 交付：
 
-- `research_layer=industry_research` 的兼容 artifact contract；
+- 独立 `artifacts/research_projects/v2_1/` root 与 `research_layer=industry_research` 的兼容 artifact contract；
 - Industry Evidence Requirement 和 Search Plan；
 - 来源发现、抓取、下载与不可变快照；
 - PDF、网页和数据集解析与标准化；

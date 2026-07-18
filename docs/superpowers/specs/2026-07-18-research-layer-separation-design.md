@@ -78,7 +78,21 @@ research_project_index_v2_1.schema.json
 
 R2 identity 和 version 必须包含 `research_layer`。Loader 先读取顶层 `artifact_version`，再分派到 2.0 或 2.1 schema；不得用修改 R1 schema 的方式让旧 artifact 被新字段隐式解释。
 
-R1 index 保持不变。R2 新建 `research_project_index_v2_1.json`，只索引 layered projects。CLI 可以在读取时合并两个 index 的摘要，但不能把推断出的 `research_layer` 写入 R1 index。
+R2 使用独立 artifact root，避免 R1 的四项目目录、index 和 rebuild 行为发生变化：
+
+```text
+artifacts/research_projects/v2_1/
+├── schema/
+├── projects/
+├── evidence/
+│   ├── raw/
+│   ├── metadata/
+│   └── normalized/
+├── index/research_project_index_v2_1.json
+└── fixtures/
+```
+
+R1 index 保持不变。R2 的 `research_project_index_v2_1.json` 只索引 layered projects。CLI 可以在读取时合并两个 index 的摘要，但不能把推断出的 `research_layer` 写入 R1 index，也不能让 R1 `rebuild-index` 扫描 `v2_1` 项目。
 
 R2 layered project 使用统一的上游引用对象：
 
