@@ -142,6 +142,22 @@ def test_html_break_void_tags_insert_budgeted_text_boundaries(
     assert parsed.sections[0].text == expected
 
 
+@pytest.mark.parametrize(
+    "attribute",
+    ["hidden", 'aria-hidden="true"', 'style="display:none"', 'style="visibility: hidden"'],
+)
+def test_html_hidden_break_void_tags_do_not_insert_boundaries_or_spend_budget(
+    attribute: str,
+) -> None:
+    payload = f"<p>alpha<br {attribute}>beta</p>".encode()
+    parsed = parse_document_bytes(
+        payload,
+        media_type="text/html",
+        limits=ParserLimits(max_text_chars=len("alphabeta")),
+    )
+    assert parsed.sections[0].text == "alphabeta"
+
+
 def test_html_table_cell_aggregates_descendants_and_implicit_row_is_one_based() -> None:
     parsed = parse_document_bytes(
         b"<table><td>before<p>inside</p>after</td><tr><td>next</td></tr></table>",
@@ -293,6 +309,73 @@ def test_pdf_text_limit_stops_real_text_extraction() -> None:
             handle.getvalue(),
             media_type="application/pdf",
             limits=ParserLimits(max_text_chars=5),
+        )
+    assert exc.value.code == "RESEARCH_PROJECT_V2_1_PARSE_LIMIT_EXCEEDED"
+
+
+def _pdf_bytes(*, title: str | None = None, text: str | None = None) -> bytes:
+    from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
+
+    writer = PdfWriter()
+    page = writer.add_blank_page(width=200, height=200)
+    if title is not None:
+        writer.add_metadata({"/Title": title})
+    if text is not None:
+        font = DictionaryObject(
+            {
+                NameObject("/Type"): NameObject("/Font"),
+                NameObject("/Subtype"): NameObject("/Type1"),
+                NameObject("/BaseFont"): NameObject("/Helvetica"),
+            }
+        )
+        page[NameObject("/Resources")] = DictionaryObject(
+            {
+                NameObject("/Font"): DictionaryObject(
+                    {NameObject("/F1"): writer._add_object(font)}
+                )
+            }
+        )
+        contents = DecodedStreamObject()
+        contents.set_data(f"BT /F1 12 Tf 10 100 Td ({text}) Tj ET".encode())
+        page[NameObject("/Contents")] = writer._add_object(contents)
+    handle = BytesIO()
+    writer.write(handle)
+    return handle.getvalue()
+
+
+def test_pdf_metadata_title_and_hint_share_only_effective_title_budget() -> None:
+    with pytest.raises(ResearchProjectV2Error) as metadata_limit:
+        parse_document_bytes(
+            _pdf_bytes(title="metadata title too long"),
+            media_type="application/pdf",
+            limits=ParserLimits(max_text_chars=5),
+        )
+    assert metadata_limit.value.code == "RESEARCH_PROJECT_V2_1_PARSE_LIMIT_EXCEEDED"
+
+    with pytest.raises(ResearchProjectV2Error) as hint_limit:
+        parse_document_bytes(
+            _pdf_bytes(title="short"),
+            media_type="application/pdf",
+            title_hint="hint title too long",
+            limits=ParserLimits(max_text_chars=5),
+        )
+    assert hint_limit.value.code == "RESEARCH_PROJECT_V2_1_PARSE_LIMIT_EXCEEDED"
+
+    parsed = parse_document_bytes(
+        _pdf_bytes(title="metadata title too long"),
+        media_type="application/pdf",
+        title_hint="hint",
+        limits=ParserLimits(max_text_chars=4),
+    )
+    assert parsed.title == "hint"
+
+
+def test_pdf_short_title_plus_body_uses_combined_text_budget() -> None:
+    with pytest.raises(ResearchProjectV2Error) as exc:
+        parse_document_bytes(
+            _pdf_bytes(title="title", text="body"),
+            media_type="application/pdf",
+            limits=ParserLimits(max_text_chars=8),
         )
     assert exc.value.code == "RESEARCH_PROJECT_V2_1_PARSE_LIMIT_EXCEEDED"
 

@@ -242,7 +242,11 @@ class _VisibleHTMLParser(HTMLParser):
         if not inherited_hidden:
             self._implicitly_close_before_start(tag)
         if tag in _VOID_TAGS:
-            if not inherited_hidden and tag in _VOID_BOUNDARY_TAGS:
+            if (
+                not inherited_hidden
+                and not own_hidden
+                and tag in _VOID_BOUNDARY_TAGS
+            ):
                 self._append_boundary()
             return
         parent_hidden = self.hidden
@@ -419,7 +423,12 @@ def _parse_pdf(data: bytes, title_hint: str | None, limits: ParserLimits) -> Par
     except Exception as exc:
         raise _invalid("unreadable PDF") from exc
     _check_totals(sections, limits)
-    title = _clean(title_hint) if title_hint else metadata_title
+    if title_hint is not None and not isinstance(title_hint, str):
+        raise _invalid("title_hint must be a string or null")
+    normalized_hint = _clean(title_hint) if title_hint is not None else ""
+    title = normalized_hint or metadata_title
+    if total_text_chars + len(title or "") > limits.max_text_chars:
+        raise _limit("text characters", max_text_chars=limits.max_text_chars)
     return ParsedDocument("pypdf", "application/pdf", title or None, tuple(sections))
 
 
