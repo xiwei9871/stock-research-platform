@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "research_project_index_v2_1.schema.json",
+  "type": "object",
+  "required": ["schema_version", "artifact_kind", "generated_at", "projects"],
+  "properties": {
+    "schema_version": {"const": "2.1.0"},
+    "artifact_kind": {"const": "research_project_index"},
+    "generated_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})$"
+    },
+    "projects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "project_id",
+          "project_slug",
+          "title",
+          "research_layer",
+          "current_lifecycle_state",
+          "evidence_stage",
+          "conclusion_status",
+          "current_version",
+          "latest_reviewed_version",
+          "latest_published_version",
+          "relative_path"
+        ],
+        "properties": {
+          "project_id": {"type": "string", "minLength": 1},
+          "project_slug": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:[-_][a-z0-9]+)*$"
+          },
+          "title": {"type": "string", "minLength": 1},
+          "research_layer": {"const": "industry_research"},
+          "current_lifecycle_state": {
+            "$ref": "definitions_v2_1.schema.json#/$defs/project_lifecycle"
+          },
+          "evidence_stage": {
+            "$ref": "definitions_v2_1.schema.json#/$defs/evidence_stage"
+          },
+          "conclusion_status": {
+            "$ref": "definitions_v2_1.schema.json#/$defs/conclusion_status"
+          },
+          "current_version": {"type": "string", "minLength": 1},
+          "latest_reviewed_version": {"type": ["string", "null"]},
+          "latest_published_version": {"type": ["string", "null"]},
+          "relative_path": {"type": "string", "minLength": 1}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

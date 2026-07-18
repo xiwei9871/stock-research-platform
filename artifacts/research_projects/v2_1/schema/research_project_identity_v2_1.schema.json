@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "research_project_identity_v2_1.schema.json",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "artifact_kind",
+    "project_id",
+    "project_slug",
+    "title",
+    "purpose",
+    "research_layer",
+    "created_at",
+    "created_by",
+    "current_lifecycle_state",
+    "current_version",
+    "latest_reviewed_version",
+    "latest_published_version"
+  ],
+  "properties": {
+    "schema_version": {"const": "2.1.0"},
+    "artifact_kind": {"const": "research_project_identity"},
+    "project_id": {"type": "string", "minLength": 1},
+    "project_slug": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:[-_][a-z0-9]+)*$"
+    },
+    "title": {"type": "string", "minLength": 1},
+    "purpose": {"type": "string", "minLength": 1},
+    "research_layer": {"const": "industry_research"},
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})$"
+    },
+    "created_by": {"type": "string", "minLength": 1},
+    "current_lifecycle_state": {
+      "$ref": "definitions_v2_1.schema.json#/$defs/project_lifecycle"
+    },
+    "current_version": {"type": "string", "minLength": 1},
+    "latest_reviewed_version": {"type": ["string", "null"]},
+    "latest_published_version": {"type": ["string", "null"]}
+  },
+  "additionalProperties": false
+}
