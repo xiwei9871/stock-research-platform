@@ -7,6 +7,8 @@ import shutil
 
 import pytest
 
+import stock_research.research_project_v2_1.loader as layered_loader
+import stock_research.research_project_v2_1.semantic as layered_semantic
 from stock_research.research_project_v2.canonical import content_sha256
 from stock_research.research_project_v2.errors import ResearchProjectV2Error
 from stock_research.research_project_v2_1.layout import LayeredResearchLayout
@@ -251,6 +253,84 @@ def test_load_identity_current_explicit_versions_and_semver_sorting(
     ]
 
 
+@pytest.mark.parametrize(
+    ("field", "actual", "expected"),
+    [
+        ("project_slug", "other-industry", "fixture-industry"),
+        (
+            "project_id",
+            "research_project:other-industry",
+            "research_project:fixture-industry",
+        ),
+    ],
+)
+def test_identity_must_be_canonically_bound_to_requested_slug(
+    layered_layout: LayeredResearchLayout,
+    field: str,
+    actual: str,
+    expected: str,
+) -> None:
+    identity = _identity()
+    identity[field] = actual
+    _write_json(
+        layered_layout.project_dir("fixture-industry") / "project.json", identity
+    )
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        load_layered_project("fixture-industry", layout=layered_layout)
+    _assert_code(exc_info, "RESEARCH_PROJECT_V2_1_IDENTITY_INVALID")
+    assert exc_info.value.details == {
+        "project": "fixture-industry",
+        "field": field,
+        "expected": expected,
+        "actual": actual,
+    }
+
+
+def test_version_id_must_be_canonically_bound_to_slug_and_semver(
+    layered_layout: LayeredResearchLayout,
+) -> None:
+    version = _version()
+    version["version_id"] = "research_version:other-industry:0.1.0"
+    version["content_hash"] = content_sha256(
+        version, excluded_paths={("content_hash",)}
+    )
+    _write_json(
+        layered_layout.project_dir("fixture-industry") / "versions/v0.1.0.json",
+        version,
+    )
+    _write_jsonl(
+        layered_layout.project_dir("fixture-industry") / "version_manifest.jsonl",
+        [_manifest_row(version)],
+    )
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        load_industry_version("fixture-industry", layout=layered_layout)
+    _assert_code(exc_info, "RESEARCH_PROJECT_V2_1_IMMUTABILITY_VIOLATION")
+    assert exc_info.value.details["expected"] == (
+        "research_version:fixture-industry:0.1.0"
+    )
+    assert exc_info.value.details["actual"] == version["version_id"]
+
+
+def test_manifest_version_id_mismatch_reports_expected_and_actual(
+    layered_layout: LayeredResearchLayout,
+) -> None:
+    version = _version()
+    row = _manifest_row(version)
+    row["version_id"] = "research_version:other-industry:0.1.0"
+    _write_jsonl(
+        layered_layout.project_dir("fixture-industry") / "version_manifest.jsonl",
+        [row],
+    )
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        load_industry_version("fixture-industry", layout=layered_layout)
+    _assert_code(exc_info, "RESEARCH_PROJECT_V2_1_IMMUTABILITY_VIOLATION")
+    assert exc_info.value.details["expected"] == version["version_id"]
+    assert exc_info.value.details["actual"] == row["version_id"]
+
+
 @pytest.mark.parametrize("slug", ["../fixture-industry", "/tmp/fixture-industry", "bad.slug"])
 def test_project_slug_traversal_absolute_and_invalid_are_rejected(
     layered_layout: LayeredResearchLayout, slug: str
@@ -293,6 +373,95 @@ def test_symlinked_managed_paths_are_rejected(
 
     with pytest.raises(ResearchProjectV2Error) as exc_info:
         action()
+    assert exc_info.value.code.startswith("RESEARCH_PROJECT_V2_1_")
+
+
+def test_managed_reads_do_not_reopen_paths_after_safety_checks(
+    layered_layout: LayeredResearchLayout, monkeypatch
+) -> None:
+    original_open = Path.open
+    original_read_text = Path.read_text
+
+    def guarded_open(path: Path, *args, **kwargs):
+        if path == layered_layout.index_path or path.is_relative_to(
+            layered_layout.projects_dir
+        ):
+            raise AssertionError("managed JSON path was reopened by pathname")
+        return original_open(path, *args, **kwargs)
+
+    def guarded_read_text(path: Path, *args, **kwargs):
+        if path.is_relative_to(layered_layout.projects_dir):
+            raise AssertionError("managed manifest path was reopened by pathname")
+        return original_read_text(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", guarded_open)
+    monkeypatch.setattr(Path, "read_text", guarded_read_text)
+
+    assert load_layered_project("fixture-industry", layout=layered_layout)[
+        "project_slug"
+    ] == "fixture-industry"
+    assert load_industry_version("fixture-industry", layout=layered_layout)[
+        "semantic_version"
+    ] == "0.1.0"
+    assert load_layered_index(layout=layered_layout)["schema_version"] == "2.1.0"
+
+
+def test_final_symlink_swap_after_check_cannot_return_external_version(
+    layered_layout: LayeredResearchLayout, tmp_path: Path, monkeypatch
+) -> None:
+    version_path = (
+        layered_layout.project_dir("fixture-industry") / "versions/v0.1.0.json"
+    )
+    outside = tmp_path / "outside-version.json"
+    original_safe = layered_loader._is_safe_managed_path
+    swapped = False
+
+    def swap_after_check(path: Path, layout: LayeredResearchLayout) -> bool:
+        nonlocal swapped
+        if path == version_path and swapped:
+            return True
+        safe = original_safe(path, layout)
+        if path == version_path and not swapped:
+            version_path.replace(outside)
+            version_path.symlink_to(outside)
+            swapped = True
+        return safe
+
+    monkeypatch.setattr(layered_loader, "_is_safe_managed_path", swap_after_check)
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        load_industry_version("fixture-industry", layout=layered_layout)
+    assert exc_info.value.code.startswith("RESEARCH_PROJECT_V2_1_")
+
+
+def test_intermediate_symlink_swap_after_check_cannot_return_external_version(
+    layered_layout: LayeredResearchLayout, tmp_path: Path, monkeypatch
+) -> None:
+    versions_dir = layered_layout.project_dir("fixture-industry") / "versions"
+    version_path = versions_dir / "v0.1.0.json"
+    outside = tmp_path / "outside-versions"
+    original_safe = layered_loader._is_safe_managed_path
+    swapped = False
+
+    def swap_parent_after_check(
+        path: Path, layout: LayeredResearchLayout
+    ) -> bool:
+        nonlocal swapped
+        if path == version_path and swapped:
+            return True
+        safe = original_safe(path, layout)
+        if path == version_path and not swapped:
+            versions_dir.replace(outside)
+            versions_dir.symlink_to(outside, target_is_directory=True)
+            swapped = True
+        return safe
+
+    monkeypatch.setattr(
+        layered_loader, "_is_safe_managed_path", swap_parent_after_check
+    )
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        load_industry_version("fixture-industry", layout=layered_layout)
     assert exc_info.value.code.startswith("RESEARCH_PROJECT_V2_1_")
 
 
@@ -395,6 +564,34 @@ def test_manifest_rejects_duplicate_rows_for_other_versions(
     )
 
 
+@pytest.mark.parametrize(
+    ("field", "invalid"),
+    [
+        ("semantic_version", "09.9.9"),
+        ("version_id", 9),
+        ("parent_version_id", 9),
+        ("relative_path", "../v9.9.9.json"),
+        ("content_hash", "not-a-hash"),
+        ("created_at", "not-a-date"),
+    ],
+)
+def test_every_manifest_row_validates_field_values_for_other_versions(
+    layered_layout: LayeredResearchLayout, field: str, invalid: object
+) -> None:
+    target_row = _manifest_row(_version())
+    other_row = _manifest_row(_version(semantic_version="9.9.9"))
+    other_row[field] = invalid
+    _write_jsonl(
+        layered_layout.project_dir("fixture-industry") / "version_manifest.jsonl",
+        [target_row, other_row],
+    )
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        load_industry_version("fixture-industry", layout=layered_layout)
+    _assert_code(exc_info, "RESEARCH_PROJECT_V2_1_IMMUTABILITY_VIOLATION")
+    assert field in str(exc_info.value.details["reason"])
+
+
 def test_load_layered_index_validates_v2_1_schema(layered_layout: LayeredResearchLayout) -> None:
     assert load_layered_index(layout=layered_layout)["schema_version"] == "2.1.0"
     invalid = _index()
@@ -487,6 +684,16 @@ def test_invalid_upstream_reference_is_wrapped_with_reason(
     _assert_code(exc_info, "RESEARCH_PROJECT_V2_1_UPSTREAM_REFERENCE_INVALID")
     assert exc_info.value.details["reference"] == "upstream_ref:fixture"
     assert reason in str(exc_info.value.details["reason"])
+
+
+def test_unexpected_runtime_error_from_r1_loader_is_not_wrapped(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "stock_research.research_project_v2_1.loader.load_r1_index",
+        lambda: (_ for _ in ()).throw(RuntimeError("unexpected bug")),
+    )
+
+    with pytest.raises(RuntimeError, match="unexpected bug"):
+        resolve_upstream_r1_version(_upstream_reference())
 
 
 def _question() -> dict[str, object]:
@@ -767,6 +974,51 @@ def test_semantic_entrypoint_preserves_existing_research_project_errors(
 
 def test_complete_industry_relationship_graph_passes() -> None:
     validate_industry_version_semantics(_semantic_version())
+
+
+def test_document_media_type_must_match_artifact() -> None:
+    version = _semantic_version()
+    snapshot = version["snapshot"]
+    assert isinstance(snapshot, dict)
+    snapshot["normalized_documents"][0]["media_type"] = "text/html"
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        validate_industry_version_semantics(version)
+    _assert_code(exc_info, "RESEARCH_PROJECT_V2_1_SEMANTIC_INVALID")
+    assert exc_info.value.details["reason"] == "document media_type mismatch"
+
+
+@pytest.mark.parametrize("field", ["locator", "section_id"])
+def test_document_section_identity_and_locator_must_be_unique(field: str) -> None:
+    version = _semantic_version()
+    snapshot = version["snapshot"]
+    assert isinstance(snapshot, dict)
+    section = deepcopy(snapshot["normalized_documents"][0]["sections"][0])
+    if field == "locator":
+        section["section_id"] = "section:other"
+    else:
+        section["locator"] = "p.2"
+    snapshot["normalized_documents"][0]["sections"].append(section)
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        validate_industry_version_semantics(version)
+    _assert_code(exc_info, "RESEARCH_PROJECT_V2_1_SEMANTIC_INVALID")
+    assert exc_info.value.details["field"] == field
+
+
+def test_validation_context_indexes_are_built_once(monkeypatch) -> None:
+    original = layered_semantic._build_validation_context
+    calls = 0
+
+    def counted(version: dict[str, object], snapshot: dict[str, object]):
+        nonlocal calls
+        calls += 1
+        return original(version, snapshot)
+
+    monkeypatch.setattr(layered_semantic, "_build_validation_context", counted)
+
+    validate_industry_version_semantics(_semantic_version())
+    assert calls == 1
 
 
 @pytest.mark.parametrize(

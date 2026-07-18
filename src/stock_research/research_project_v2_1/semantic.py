@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import dataclass
 from pathlib import PurePosixPath
-from typing import Any
+from typing import Any, Container
 
 from stock_research.research_project_v2.errors import ResearchProjectV2Error
 from stock_research.research_project_v2.semantic import (
@@ -79,7 +80,7 @@ def _structural_error(exc: KeyError | TypeError | IndexError) -> ResearchProject
 
 def _require_reference(
     referenced_id: object,
-    known_ids: set[str],
+    known_ids: Container[str],
     *,
     collection: str,
     field: str,
@@ -201,14 +202,91 @@ def _validate_upstream_references(snapshot: dict[str, Any]) -> None:
             resolve_upstream_r1_version(reference)
 
 
-def _target_ids(version: dict[str, Any], snapshot: dict[str, Any], target_type: str) -> set[str]:
-    if target_type == "research_project":
-        return {version["project_id"]}
-    try:
-        collection, id_field = _TARGET_COLLECTIONS[target_type]
-    except KeyError:
-        return set()
-    return {item[id_field] for item in snapshot[collection]}
+@dataclass(frozen=True)
+class _ValidationContext:
+    requirement_by_id: dict[str, dict[str, Any]]
+    target_ids_by_type: dict[str, set[str]]
+    plan_by_id: dict[str, dict[str, Any]]
+    query_ids_by_plan: dict[str, set[str]]
+    candidate_by_id: dict[str, dict[str, Any]]
+    artifact_by_id: dict[str, dict[str, Any]]
+    document_by_id: dict[str, dict[str, Any]]
+    locators_by_document: dict[str, dict[str, dict[str, Any]]]
+    assessment_by_id: dict[str, dict[str, Any]]
+
+
+def _build_validation_context(
+    version: dict[str, Any], snapshot: dict[str, Any]
+) -> _ValidationContext:
+    requirement_by_id = {
+        item["requirement_id"]: item for item in snapshot["evidence_requirements"]
+    }
+    plan_by_id = {
+        item["search_plan_id"]: item for item in snapshot["search_plans"]
+    }
+    query_ids_by_plan = {
+        plan_id: {query["query_id"] for query in plan["queries"]}
+        for plan_id, plan in plan_by_id.items()
+    }
+    candidate_by_id = {
+        item["candidate_id"]: item for item in snapshot["source_candidates"]
+    }
+    artifact_by_id = {
+        item["artifact_id"]: item for item in snapshot["evidence_artifacts"]
+    }
+    document_by_id = {
+        item["document_id"]: item for item in snapshot["normalized_documents"]
+    }
+    assessment_by_id = {
+        item["assessment_id"]: item
+        for item in snapshot["industry_evidence_assessments"]
+    }
+    target_ids_by_type = {"research_project": {version["project_id"]}}
+    for target_type, (collection, id_field) in _TARGET_COLLECTIONS.items():
+        target_ids_by_type[target_type] = {
+            item[id_field] for item in snapshot[collection]
+        }
+
+    locators_by_document: dict[str, dict[str, dict[str, Any]]] = {}
+    for document_id, document in document_by_id.items():
+        section_ids: set[str] = set()
+        locators: dict[str, dict[str, Any]] = {}
+        for section in document["sections"]:
+            section_id = section["section_id"]
+            if section_id in section_ids:
+                raise _error(
+                    "Normalized document contains a duplicate section_id",
+                    collection="normalized_documents",
+                    id=document_id,
+                    field="section_id",
+                    value=section_id,
+                    reason="duplicate document section_id",
+                )
+            section_ids.add(section_id)
+            locator = section["locator"]
+            if locator in locators:
+                raise _error(
+                    "Normalized document contains a duplicate locator",
+                    collection="normalized_documents",
+                    id=document_id,
+                    field="locator",
+                    value=locator,
+                    reason="duplicate document locator",
+                )
+            locators[locator] = section
+        locators_by_document[document_id] = locators
+
+    return _ValidationContext(
+        requirement_by_id=requirement_by_id,
+        target_ids_by_type=target_ids_by_type,
+        plan_by_id=plan_by_id,
+        query_ids_by_plan=query_ids_by_plan,
+        candidate_by_id=candidate_by_id,
+        artifact_by_id=artifact_by_id,
+        document_by_id=document_by_id,
+        locators_by_document=locators_by_document,
+        assessment_by_id=assessment_by_id,
+    )
 
 
 def _validate_artifact_path(artifact: dict[str, Any]) -> None:
@@ -232,20 +310,11 @@ def _validate_artifact_path(artifact: dict[str, Any]) -> None:
         )
 
 
-def _validate_relationships(version: dict[str, Any], snapshot: dict[str, Any]) -> None:
-    requirements = {
-        item["requirement_id"]: item for item in snapshot["evidence_requirements"]
-    }
-    requirement_ids = set(requirements)
-    candidate_ids = {item["candidate_id"] for item in snapshot["source_candidates"]}
-    artifact_ids = {item["artifact_id"] for item in snapshot["evidence_artifacts"]}
-    documents = {item["document_id"]: item for item in snapshot["normalized_documents"]}
-    assessments = {
-        item["assessment_id"]: item for item in snapshot["industry_evidence_assessments"]
-    }
-    assessment_ids = set(assessments)
-    plans = {item["search_plan_id"]: item for item in snapshot["search_plans"]}
-
+def _validate_plans_and_candidates(
+    version: dict[str, Any],
+    snapshot: dict[str, Any],
+    context: _ValidationContext,
+) -> None:
     for plan in snapshot["search_plans"]:
         if plan["project_id"] != version["project_id"]:
             raise _error(
@@ -266,7 +335,7 @@ def _validate_relationships(version: dict[str, Any], snapshot: dict[str, Any]) -
         for requirement_id in plan["requirement_ids"]:
             _require_reference(
                 requirement_id,
-                requirement_ids,
+                context.requirement_by_id,
                 collection="search_plans",
                 field="requirement_ids",
                 source_id=plan["search_plan_id"],
@@ -276,70 +345,88 @@ def _validate_relationships(version: dict[str, Any], snapshot: dict[str, Any]) -
         plan_id = candidate["search_plan_id"]
         _require_reference(
             plan_id,
-            set(plans),
+            context.plan_by_id,
             collection="source_candidates",
             field="search_plan_id",
             source_id=candidate["candidate_id"],
         )
-        query_ids = {query["query_id"] for query in plans[plan_id]["queries"]}
         _require_reference(
             candidate["query_id"],
-            query_ids,
+            context.query_ids_by_plan[plan_id],
             collection="source_candidates",
             field="query_id",
             source_id=candidate["candidate_id"],
         )
 
-    for artifact in snapshot["evidence_artifacts"]:
+
+
+def _validate_artifacts_and_documents(context: _ValidationContext) -> None:
+    for artifact in context.artifact_by_id.values():
         _require_reference(
             artifact["candidate_id"],
-            candidate_ids,
+            context.candidate_by_id,
             collection="evidence_artifacts",
             field="candidate_id",
             source_id=artifact["artifact_id"],
         )
         _validate_artifact_path(artifact)
 
-    for document in snapshot["normalized_documents"]:
+    for document in context.document_by_id.values():
         _require_reference(
             document["artifact_id"],
-            artifact_ids,
+            context.artifact_by_id,
             collection="normalized_documents",
             field="artifact_id",
             source_id=document["document_id"],
         )
+        artifact = context.artifact_by_id[document["artifact_id"]]
+        if document["media_type"] != artifact["media_type"]:
+            raise _error(
+                "Normalized document media_type does not match its artifact",
+                collection="normalized_documents",
+                id=document["document_id"],
+                field="media_type",
+                expected=artifact["media_type"],
+                actual=document["media_type"],
+                reason="document media_type mismatch",
+            )
 
+
+def _validate_assessments_relationships_and_conflicts(
+    snapshot: dict[str, Any],
+    context: _ValidationContext,
+) -> None:
     for assessment in snapshot["industry_evidence_assessments"]:
         source_id = assessment["assessment_id"]
         _require_reference(
             assessment["requirement_id"],
-            requirement_ids,
+            context.requirement_by_id,
             collection="industry_evidence_assessments",
             field="requirement_id",
             source_id=source_id,
         )
         _require_reference(
             assessment["artifact_id"],
-            artifact_ids,
+            context.artifact_by_id,
             collection="industry_evidence_assessments",
             field="artifact_id",
             source_id=source_id,
         )
         _require_reference(
             assessment["normalized_document_id"],
-            set(documents),
+            context.document_by_id,
             collection="industry_evidence_assessments",
             field="normalized_document_id",
             source_id=source_id,
         )
         _require_reference(
             assessment["target_id"],
-            _target_ids(version, snapshot, assessment["target_type"]),
+            context.target_ids_by_type[assessment["target_type"]],
             collection="industry_evidence_assessments",
             field="target_id",
             source_id=source_id,
         )
-        requirement = requirements[assessment["requirement_id"]]
+        requirement = context.requirement_by_id[assessment["requirement_id"]]
         if (
             assessment["target_type"],
             assessment["target_id"],
@@ -354,7 +441,7 @@ def _validate_relationships(version: dict[str, Any], snapshot: dict[str, Any]) -
                 requirement_id=assessment["requirement_id"],
                 reason="assessment target does not match requirement target",
             )
-        document = documents[assessment["normalized_document_id"]]
+        document = context.document_by_id[assessment["normalized_document_id"]]
         if document["artifact_id"] != assessment["artifact_id"]:
             raise _error(
                 "Assessment document does not belong to its evidence artifact",
@@ -363,10 +450,9 @@ def _validate_relationships(version: dict[str, Any], snapshot: dict[str, Any]) -
                 id=source_id,
                 referenced_id=assessment["artifact_id"],
             )
-        locators = {section["locator"] for section in document["sections"]}
         _require_reference(
             assessment["locator"],
-            locators,
+            context.locators_by_document[assessment["normalized_document_id"]],
             collection="industry_evidence_assessments",
             field="locator",
             source_id=source_id,
@@ -376,7 +462,7 @@ def _validate_relationships(version: dict[str, Any], snapshot: dict[str, Any]) -
         for field in ("left_artifact_id", "right_artifact_id"):
             _require_reference(
                 relationship[field],
-                artifact_ids,
+                context.artifact_by_id,
                 collection="source_relationships",
                 field=field,
                 source_id=f"{relationship['left_artifact_id']}:{relationship['right_artifact_id']}",
@@ -386,21 +472,21 @@ def _validate_relationships(version: dict[str, Any], snapshot: dict[str, Any]) -
         for assessment_id in conflict["assessment_ids"]:
             _require_reference(
                 assessment_id,
-                assessment_ids,
+                context.assessment_by_id,
                 collection="conflict_summaries",
                 field="assessment_ids",
                 source_id=conflict["conflict_summary_id"],
             )
         _require_reference(
             conflict["target_id"],
-            _target_ids(version, snapshot, conflict["target_type"]),
+            context.target_ids_by_type[conflict["target_type"]],
             collection="conflict_summaries",
             field="target_id",
             source_id=conflict["conflict_summary_id"],
         )
         conflict_target = (conflict["target_type"], conflict["target_id"])
         for assessment_id in conflict["assessment_ids"]:
-            assessment = assessments[assessment_id]
+            assessment = context.assessment_by_id[assessment_id]
             if conflict_target != (
                 assessment["target_type"],
                 assessment["target_id"],
@@ -421,7 +507,12 @@ def validate_industry_version_semantics(version: dict[str, Any]) -> None:
         _require_industry_boundaries(snapshot)
         _require_unique_ids(snapshot)
         _validate_upstream_references(snapshot)
-        _validate_relationships(version, snapshot)
+        context = _build_validation_context(version, snapshot)
+        _validate_plans_and_candidates(version, snapshot, context)
+        _validate_artifacts_and_documents(context)
+        _validate_assessments_relationships_and_conflicts(
+            snapshot, context
+        )
     except ResearchProjectV2Error:
         raise
     except (KeyError, TypeError, IndexError) as exc:

@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from datetime import datetime
 import json
+import os
 from pathlib import Path
 import re
+import stat
 from typing import Any
 
 from stock_research.research_project_v2.canonical import content_sha256
@@ -17,6 +20,11 @@ _SEMANTIC_VERSION_PATTERN = re.compile(
     r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)"
 )
 _VERSION_FILE_PATTERN = re.compile(rf"v({_SEMANTIC_VERSION_PATTERN.pattern})\.json")
+_SHA256_PATTERN = re.compile(r"[a-f0-9]{64}")
+_RFC3339_PATTERN = re.compile(
+    r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}"
+    r"(?:\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})"
+)
 _MANIFEST_FIELDS = {
     "version_id",
     "semantic_version",
@@ -114,7 +122,10 @@ def _version_not_found(
 
 
 def _immutability_violation(
-    project_slug: str, semantic_version: str, reason: str
+    project_slug: str,
+    semantic_version: str,
+    reason: str,
+    **details: object,
 ) -> ResearchProjectV2Error:
     return _error(
         "RESEARCH_PROJECT_V2_1_IMMUTABILITY_VIOLATION",
@@ -122,7 +133,47 @@ def _immutability_violation(
         project=project_slug,
         version=semantic_version,
         reason=reason,
+        **details,
     )
+
+
+def _read_managed_bytes(path: Path, layout: LayeredResearchLayout) -> bytes:
+    try:
+        relative = path.relative_to(layout.root)
+    except ValueError as exc:
+        raise OSError("managed path is outside the trusted root") from exc
+    parts = relative.parts
+    if not parts or any(part in {"", ".", ".."} for part in parts):
+        raise OSError("managed path contains an invalid component")
+
+    nofollow = getattr(os, "O_NOFOLLOW", 0)
+    cloexec = getattr(os, "O_CLOEXEC", 0)
+    directory = getattr(os, "O_DIRECTORY", 0)
+    directory_flags = os.O_RDONLY | directory | nofollow | cloexec
+    file_flags = os.O_RDONLY | nofollow | cloexec
+    opened_fds: list[int] = []
+    final_fd: int | None = None
+    try:
+        parent_fd = os.open(layout.root, directory_flags)
+        opened_fds.append(parent_fd)
+        for component in parts[:-1]:
+            child_fd = os.open(component, directory_flags, dir_fd=parent_fd)
+            if not stat.S_ISDIR(os.fstat(child_fd).st_mode):
+                os.close(child_fd)
+                raise OSError("managed path component is not a directory")
+            opened_fds.append(child_fd)
+            parent_fd = child_fd
+        final_fd = os.open(parts[-1], file_flags, dir_fd=parent_fd)
+        if not stat.S_ISREG(os.fstat(final_fd).st_mode):
+            raise OSError("managed path target is not a regular file")
+        with os.fdopen(final_fd, "rb") as handle:
+            final_fd = None
+            return handle.read()
+    finally:
+        if final_fd is not None:
+            os.close(final_fd)
+        for fd in reversed(opened_fds):
+            os.close(fd)
 
 
 def _read_json_object(
@@ -139,8 +190,7 @@ def _read_json_object(
             reason="unsafe managed path",
         )
     try:
-        with path.open(encoding="utf-8") as handle:
-            payload = json.load(handle)
+        payload = json.loads(_read_managed_bytes(path, layout).decode("utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise _error(
             "RESEARCH_PROJECT_V2_1_READ_ERROR",
@@ -205,7 +255,25 @@ def load_layered_project(
 ) -> dict[str, Any]:
     selected = _layout_or_default(layout)
     path = _require_identity_path(project_slug, selected)
-    return _read_json_object(path, "research_project_identity_v2_1", layout=selected)
+    identity = _read_json_object(
+        path, "research_project_identity_v2_1", layout=selected
+    )
+    expected_values = {
+        "project_slug": project_slug,
+        "project_id": f"research_project:{project_slug}",
+    }
+    for field, expected in expected_values.items():
+        actual = identity.get(field)
+        if actual != expected:
+            raise _error(
+                "RESEARCH_PROJECT_V2_1_IDENTITY_INVALID",
+                f"Layered research identity {field} is not canonically bound",
+                project=project_slug,
+                field=field,
+                expected=expected,
+                actual=actual,
+            )
+    return identity
 
 
 def list_layered_versions(
@@ -228,10 +296,13 @@ def _current_semantic_version(identity: dict[str, Any], project_slug: str) -> st
 
 
 def _read_manifest_rows(
-    project_slug: str, semantic_version: str, path: Path
+    project_slug: str,
+    semantic_version: str,
+    path: Path,
+    layout: LayeredResearchLayout,
 ) -> list[dict[str, Any]]:
     try:
-        lines = path.read_text(encoding="utf-8").splitlines()
+        lines = _read_managed_bytes(path, layout).decode("utf-8").splitlines()
     except (OSError, UnicodeError) as exc:
         raise _immutability_violation(
             project_slug, semantic_version, "version manifest is missing or unreadable"
@@ -258,21 +329,78 @@ def _read_manifest_rows(
                 f"manifest fields mismatch at row {line_number}",
             )
         row_semantic_version = row["semantic_version"]
-        try:
-            duplicate = row_semantic_version in seen_semantic_versions
-        except TypeError as exc:
+        if (
+            not isinstance(row_semantic_version, str)
+            or not _SEMANTIC_VERSION_PATTERN.fullmatch(row_semantic_version)
+        ):
             raise _immutability_violation(
                 project_slug,
                 semantic_version,
                 f"manifest semantic_version is invalid at row {line_number}",
-            ) from exc
-        if duplicate:
+            )
+        if row_semantic_version in seen_semantic_versions:
             raise _immutability_violation(
                 project_slug,
                 semantic_version,
                 f"duplicate manifest semantic_version at row {line_number}",
             )
         seen_semantic_versions.add(row_semantic_version)
+        expected_version_id = (
+            f"research_version:{project_slug}:{row_semantic_version}"
+        )
+        if (
+            not isinstance(row["version_id"], str)
+            or row["version_id"] != expected_version_id
+        ):
+            raise _immutability_violation(
+                project_slug,
+                semantic_version,
+                f"manifest version_id mismatch at row {line_number}",
+                expected=expected_version_id,
+                actual=row["version_id"],
+            )
+        if row["parent_version_id"] is not None and not isinstance(
+            row["parent_version_id"], str
+        ):
+            raise _immutability_violation(
+                project_slug,
+                semantic_version,
+                f"manifest parent_version_id is invalid at row {line_number}",
+            )
+        expected_relative_path = f"versions/v{row_semantic_version}.json"
+        if row["relative_path"] != expected_relative_path:
+            raise _immutability_violation(
+                project_slug,
+                semantic_version,
+                f"manifest relative_path mismatch at row {line_number}",
+                expected=expected_relative_path,
+                actual=row["relative_path"],
+            )
+        if not isinstance(row["content_hash"], str) or not _SHA256_PATTERN.fullmatch(
+            row["content_hash"]
+        ):
+            raise _immutability_violation(
+                project_slug,
+                semantic_version,
+                f"manifest content_hash is invalid at row {line_number}",
+            )
+        created_at = row["created_at"]
+        if not isinstance(created_at, str) or not _RFC3339_PATTERN.fullmatch(
+            created_at
+        ):
+            raise _immutability_violation(
+                project_slug,
+                semantic_version,
+                f"manifest created_at is invalid at row {line_number}",
+            )
+        try:
+            datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise _immutability_violation(
+                project_slug,
+                semantic_version,
+                f"manifest created_at is invalid at row {line_number}",
+            ) from exc
         rows.append(row)
     return rows
 
@@ -286,7 +414,22 @@ def _verify_manifest_and_hash(
     layout: LayeredResearchLayout,
 ) -> None:
     if version.get("project_id") != identity.get("project_id"):
-        raise _immutability_violation(project_slug, semantic_version, "project_id mismatch")
+        raise _immutability_violation(
+            project_slug,
+            semantic_version,
+            "project_id mismatch",
+            expected=identity.get("project_id"),
+            actual=version.get("project_id"),
+        )
+    expected_version_id = f"research_version:{project_slug}:{semantic_version}"
+    if version.get("version_id") != expected_version_id:
+        raise _immutability_violation(
+            project_slug,
+            semantic_version,
+            "version_id mismatch",
+            expected=expected_version_id,
+            actual=version.get("version_id"),
+        )
     if version.get("semantic_version") != semantic_version:
         raise _immutability_violation(project_slug, semantic_version, "semantic_version mismatch")
     expected_hash = content_sha256(version, excluded_paths={("content_hash",)})
@@ -294,7 +437,9 @@ def _verify_manifest_and_hash(
         raise _immutability_violation(project_slug, semantic_version, "embedded content_hash mismatch")
     if not _is_safe_managed_path(manifest_path, layout):
         raise _immutability_violation(project_slug, semantic_version, "unsafe manifest path")
-    rows = _read_manifest_rows(project_slug, semantic_version, manifest_path)
+    rows = _read_manifest_rows(
+        project_slug, semantic_version, manifest_path, layout
+    )
     matching = [row for row in rows if row.get("semantic_version") == semantic_version]
     if len(matching) != 1:
         raise _immutability_violation(
@@ -314,7 +459,11 @@ def _verify_manifest_and_hash(
     for field, value in expected.items():
         if row[field] != value:
             raise _immutability_violation(
-                project_slug, semantic_version, f"manifest {field} mismatch"
+                project_slug,
+                semantic_version,
+                f"manifest {field} mismatch",
+                expected=value,
+                actual=row[field],
             )
 
 
@@ -399,7 +548,7 @@ def resolve_upstream_r1_version(reference: dict[str, Any]) -> dict[str, Any]:
         if exc.code == "RESEARCH_PROJECT_V2_1_UPSTREAM_REFERENCE_INVALID":
             raise
         raise _upstream_invalid(reference, f"version could not be loaded: {exc.code}") from exc
-    except Exception as exc:
+    except (OSError, KeyError, TypeError, ValueError) as exc:
         raise _upstream_invalid(reference, f"version could not be loaded: {type(exc).__name__}") from exc
     if version.get("version_id") != version_id:
         raise _upstream_invalid(reference, "version_id mismatch")
