@@ -227,6 +227,67 @@ G2_EXPECTED_EDGES = {
     ("silicon_carbide_power_device", "compound_semiconductor_specialty_foundry", "depends_on"),
 }
 
+G3_CHAIN_ID = "civil_aircraft_aero_engines"
+G3_THEME_ID = "civil_aircraft_aero_engines_value_chain_v1"
+G3_THEME_PATH = REPOSITORY_ROOT / f"artifacts/theme_decomposition/{G3_THEME_ID}.json"
+G3_MAPPING_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/company_mappings"
+    / "civil_aircraft_aero_engines_company_mapping_v1.json"
+)
+G3_SOURCE_PACK_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "civil_aircraft_aero_engines_source_pack_v1.json"
+)
+G3_MATRIX_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "civil_aircraft_aero_engines_node_evidence_matrix_v1.json"
+)
+G3_L3 = {
+    "civil_aircraft_platforms",
+    "aero_engine_systems",
+    "aviation_components_subsystems",
+    "aviation_certification_lifecycle",
+}
+G3_L4 = {
+    "civil_aircraft_airframe_final_assembly",
+    "aero_engine_complete_machine",
+    "engine_hot_section_blades_disks",
+    "engine_control_fuel_systems",
+    "airborne_avionics_electromechanical_systems",
+    "aviation_structures_composites_fasteners",
+    "landing_gear_wheels_brakes_systems",
+    "airworthiness_certification_production_ramp",
+    "mro_spares_installed_base_services",
+}
+G3_INITIAL_UNIVERSE = {
+    "000768.SZ", "600893.SH", "000738.SZ", "600391.SH", "600765.SH",
+    "600862.SH", "300696.SZ", "300900.SZ", "688239.SH", "600038.SH",
+}
+G3_EXCLUDED_INITIAL = {"600038.SH"}
+G3_MAPPING_CONTRACTS = {
+    "000768.SZ": ("aviation_structures_composites_fasteners", "g3_000768_ar2025"),
+    "600893.SH": ("aero_engine_complete_machine", "g3_600893_ar2025"),
+    "000738.SZ": ("engine_control_fuel_systems", "g3_000738_ar2025"),
+    "600391.SH": ("engine_hot_section_blades_disks", "g3_600391_ar2025"),
+    "600765.SH": ("engine_hot_section_blades_disks", "g3_600765_ar2025"),
+    "600862.SH": ("aviation_structures_composites_fasteners", "g3_600862_ar2025"),
+    "300696.SZ": ("aviation_structures_composites_fasteners", "g3_300696_ar2025"),
+    "300900.SZ": ("aviation_structures_composites_fasteners", "g3_300900_ar2025"),
+    "688239.SH": ("engine_hot_section_blades_disks", "g3_688239_ar2025"),
+    "603308.SH": ("engine_hot_section_blades_disks", "g3_603308_ar2025"),
+}
+G3_EXPECTED_EDGES = {
+    ("engine_hot_section_blades_disks", "metal_cutting_grinding_machine_tools", "uses"),
+    (
+        "aviation_structures_composites_fasteners",
+        "multi_axis_composite_machining_centers",
+        "uses",
+    ),
+}
+
 REQUIRED_READABLE_SECTIONS = [
     {
         "name": "研究结论",
@@ -928,3 +989,239 @@ def test_wafer_manufacturing_g2_matrix_calibrates_unmapped_process_gaps() -> Non
     )
     assert nodes["customer_tapeout_qualification_revenue_validation"]["evidence_strength"] == 3
     assert nodes["customer_tapeout_qualification_revenue_validation"]["node_review_status"] == "needs_evidence"
+
+
+def test_civil_aircraft_g3_catalog_first_exact_tree_and_links() -> None:
+    assert_catalog_first_contract(G3_CHAIN_ID, G3_THEME_ID, G3_L3, G3_L4)
+    catalog = load_industry_catalog()
+    chain_nodes = [row for row in catalog["nodes"] if row["chain_id"] == G3_CHAIN_ID]
+    by_id = {row["node_id"]: row for row in chain_nodes}
+    assert {row["node_kind"] for row in chain_nodes} == {"canonical"}
+    assert all(not row["canonical_key"] for row in chain_nodes if row["level"] == "L3")
+    l4_keys = [row["canonical_key"] for row in chain_nodes if row["level"] == "L4"]
+    assert len(l4_keys) == len(set(l4_keys)) == 9
+    assert all(key.startswith("civil_aircraft_aero_engines:") for key in l4_keys)
+    for row in chain_nodes:
+        assert row["primary_path"][1] == G3_CHAIN_ID
+        if row["level"] == "L4":
+            assert row["parent_node_id"] in G3_L3
+            assert by_id[row["parent_node_id"]]["level"] == "L3"
+
+    link = next(
+        row for row in catalog["theme_links"] if row["theme_id"] == G3_THEME_ID
+    )
+    assert len(link["node_links"]) == 9
+    assert {
+        (row["theme_node_id"], row["catalog_node_id"])
+        for row in link["node_links"]
+    } == {(node_id, node_id) for node_id in G3_L4}
+    assert link["unmapped_theme_node_ids"] == []
+
+
+def test_civil_aircraft_g3_artifacts_are_reviewed_and_meet_wave_gate() -> None:
+    theme = load_json(G3_THEME_PATH)
+    mapping = load_json(G3_MAPPING_PATH)
+    source_pack = load_json(G3_SOURCE_PACK_PATH)
+    matrix = load_json(G3_MATRIX_PATH)
+    assert theme["artifact_version"] == "theme_decomposition_v1_6"
+    assert mapping["evidence_contract_version"] == "mapping_evidence_roles_v2"
+    assert theme["theme"]["status"] == "reviewed"
+    assert {row["node_id"] for row in theme["nodes"]} == G3_L4
+    assert len([row for row in source_pack["sources"] if row["review_status"] == "accepted"]) >= 10
+    assert sum(
+        row["source_type"] in {"company_filing", "official_report", "official_article"}
+        and row["review_status"] == "accepted"
+        for row in source_pack["sources"]
+    ) >= 8
+    assert len(theme["claims"]) >= 12
+    reviewed = [
+        row for row in mapping["company_mappings"] if row["review_status"] == "reviewed"
+    ]
+    assert len(reviewed) >= 8
+    assert {row["node_id"] for row in matrix["node_evidence_matrix"]} == G3_L4
+
+    report = VERIFIER.build_theme_batch_report(MANIFEST_PATH, wave="wave_g")
+    rows = {row["chain_id"]: row for row in report["theme_results"]}
+    assert rows[G3_CHAIN_ID]["ready"] is True
+    assert rows[G3_CHAIN_ID]["counts"]["accepted_sources"] >= 10
+    assert rows[G3_CHAIN_ID]["counts"]["primary_sources"] >= 8
+    assert rows[G3_CHAIN_ID]["counts"]["claims"] >= 12
+    assert rows[G3_CHAIN_ID]["counts"]["reviewed_mappings"] == 9
+
+
+def test_civil_aircraft_g3_company_evidence_and_initial_universe_close() -> None:
+    mapping = load_json(G3_MAPPING_PATH)
+    evidence = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+    reviewed = {
+        row["company_code"]: row for row in mapping["company_mappings"]
+        if row["review_status"] == "reviewed"
+    }
+    excluded = {
+        row["company_code"]: row for row in mapping["excluded_initial_candidates"]
+    }
+    assert set(reviewed) == set(G3_MAPPING_CONTRACTS)
+    assert set(excluded) == G3_EXCLUDED_INITIAL
+    assert (set(reviewed) & G3_INITIAL_UNIVERSE) | set(excluded) == G3_INITIAL_UNIVERSE
+    assert not set(reviewed) & set(excluded)
+    assert set(reviewed) - G3_INITIAL_UNIVERSE == {"603308.SH"}
+    assert "补充" in reviewed["603308.SH"]["notes"]
+    for company_code, (node_id, source_id) in G3_MAPPING_CONTRACTS.items():
+        row = reviewed[company_code]
+        assert row["mapped_node_id"] == node_id
+        items = [evidence[evidence_id] for evidence_id in row["evidence_ids"]]
+        assert [item["evidence_type"] for item in items] == [
+            "product_relationship",
+            "revenue_boundary" if company_code in {"600893.SH", "000738.SZ", "600391.SH", "600862.SH", "300696.SZ", "300900.SZ", "688239.SH", "603308.SH"} else "revenue_materiality",
+            "business_stage",
+        ]
+        assert len({item["excerpt_locator"] for item in items}) == 3
+        assert all(item["source_id"] == source_id for item in items)
+        assert all(item["related_node_ids"] == [node_id] for item in items)
+        assert row["business_materiality"]
+        assert row["notes"]
+    assert mapping["concept_only_candidates"] == []
+
+
+def test_civil_aircraft_g3_rejects_non_civil_and_lifecycle_false_positives() -> None:
+    theme = load_json(G3_THEME_PATH)
+    mapping = load_json(G3_MAPPING_PATH)
+    text = json.dumps({"theme": theme, "policy": mapping["mapping_policy"]}, ensure_ascii=False)
+    for stage in (
+        "供应商资格",
+        "适航认证",
+        "批量生产",
+        "订单",
+        "交付",
+        "装机保有量",
+        "备件/MRO",
+        "确认收入",
+    ):
+        assert stage in text
+    for boundary in (
+        "军用-only aircraft不得映射",
+        "商业航天保持商业航天链所有权",
+        "低空、eVTOL、UAV保持低空链所有权",
+        "泛先进材料不得映射",
+        "公司总营收与军品收入不得冒充民机节点收入",
+        "供应商资格不等于适航认证",
+        "适航认证不等于批量生产",
+        "批量生产不等于交付或确认收入",
+    ):
+        assert boundary in text
+    excluded = {
+        row["company_code"]: row["reason"]
+        for row in mapping["excluded_initial_candidates"]
+    }
+    assert "直升机" in excluded["600038.SH"]
+    assert "低空" in excluded["600038.SH"]
+    reviewed = {row["company_code"]: row for row in mapping["company_mappings"]}
+    assert reviewed["000768.SZ"]["mapped_node_id"] != "civil_aircraft_airframe_final_assembly"
+    assert "非总装" in reviewed["000768.SZ"]["notes"]
+    assert "军民混合" in reviewed["600893.SH"]["notes"]
+    assert "集团" in reviewed["600893.SH"]["notes"]
+    assert "军民混合" in reviewed["000738.SZ"]["notes"]
+    assert "叶片" in reviewed["600391.SH"]["product_or_service"]
+    assert "机匣或环件本身不足以映射hot-section" in reviewed["600391.SH"]["notes"]
+    assert "商用航空发动机锻铸" in reviewed["600765.SH"]["product_or_service"]
+    assert "热端部件" in reviewed["688239.SH"]["product_or_service"]
+    assert "高压涡轮机匣" in reviewed["688239.SH"]["relationship_summary"]
+
+
+def test_civil_aircraft_g3_source_claim_matrix_union_is_direct() -> None:
+    theme = load_json(G3_THEME_PATH)
+    mapping = load_json(G3_MAPPING_PATH)
+    source_pack = load_json(G3_SOURCE_PACK_PATH)
+    matrix = load_json(G3_MATRIX_PATH)
+    identity_fields = (
+        "source_id", "source_type", "title", "publisher", "author",
+        "publish_date", "url_or_ref", "access_level", "reliability_level",
+        "review_status", "notes",
+    )
+    identity = lambda rows: {
+        row["source_id"]: tuple(
+            row.get(field, row.get("url") if field == "url_or_ref" else None)
+            for field in identity_fields
+        ) for row in rows
+    }
+    assert identity(theme["sources"]) == identity(mapping["sources"])
+    assert identity(theme["sources"]) == identity(source_pack["sources"])
+    assert all(row["author"] == row["publisher"] and row["author"] for row in theme["sources"])
+
+    claims = {row["claim_id"]: row for row in theme["claims"]}
+    accepted = {
+        row["source_id"] for row in source_pack["sources"]
+        if row["review_status"] == "accepted"
+    }
+    claim_union = {
+        source_id for claim in claims.values()
+        for source_id in (claim["source_id"], *claim["supporting_source_ids"])
+    }
+    matrix_union = {
+        source_id for row in matrix["node_evidence_matrix"]
+        for source_id in row["accepted_source_ids"]
+    }
+    assert accepted == claim_union == matrix_union
+    for row in matrix["node_evidence_matrix"]:
+        node_claims = {
+            claim_id for claim_id, claim in claims.items()
+            if row["node_id"] in claim["affected_theme_nodes"]
+        }
+        assert set(row["supported_claim_ids"]) == node_claims
+        assert set(row["accepted_source_ids"]) == {
+            claims[claim_id]["source_id"] for claim_id in node_claims
+        }
+    for source in source_pack["sources"]:
+        source_claims = {
+            claim_id for claim_id, claim in claims.items()
+            if source["source_id"] in (claim["source_id"], *claim["supporting_source_ids"])
+        }
+        assert set(source["supported_claim_ids"]) == source_claims
+        assert set(source["supported_node_ids"]) == {
+            node_id for claim_id in source_claims
+            for node_id in claims[claim_id]["affected_theme_nodes"]
+        }
+
+
+def test_civil_aircraft_g3_cross_chain_edges_use_real_l4_owners() -> None:
+    catalog = load_industry_catalog()
+    nodes = {row["node_id"]: row for row in catalog["nodes"]}
+    edges = {
+        (row["source_node_id"], row["target_node_id"], row["relationship_type"]): row
+        for row in catalog["edges"]
+        if row["source_node_id"] in G3_L4 or row["target_node_id"] in G3_L4
+    }
+    assert set(edges) == G3_EXPECTED_EDGES
+    for (source_node_id, target_node_id, relationship_type), row in edges.items():
+        assert nodes[source_node_id]["level"] == "L4"
+        assert nodes[target_node_id]["level"] == "L4"
+        assert (source_node_id in G3_L4) != (target_node_id in G3_L4)
+        assert relationship_type in {"uses", "depends_on"}
+        assert "所有权" in row["notes"]
+    assert nodes["metal_cutting_grinding_machine_tools"]["chain_id"] == "industrial_machine_tools_cnc"
+    assert nodes["multi_axis_composite_machining_centers"]["chain_id"] == "industrial_machine_tools_cnc"
+
+
+def test_civil_aircraft_g3_matrix_calibrates_empty_nodes_and_evidence_gaps() -> None:
+    theme = load_json(G3_THEME_PATH)
+    matrix = load_json(G3_MATRIX_PATH)
+    nodes = {row["node_id"]: row for row in theme["nodes"]}
+    rows = {row["node_id"]: row for row in matrix["node_evidence_matrix"]}
+    assert set(rows) == G3_L4
+    assert len({row["rationale"] for row in rows.values()}) == 9
+    assert all(row["next_evidence_needed"] for row in rows.values())
+    for node_id, row in rows.items():
+        assert nodes[node_id]["evidence_strength"] == row["evidence_strength_after"]
+    for empty_node in (
+        "civil_aircraft_airframe_final_assembly",
+        "airborne_avionics_electromechanical_systems",
+        "landing_gear_wheels_brakes_systems",
+        "airworthiness_certification_production_ramp",
+        "mro_spares_installed_base_services",
+    ):
+        assert nodes[empty_node]["related_stock_codes"] == []
+        assert nodes[empty_node]["domestic_players"] == []
+        assert rows[empty_node]["node_review_status"] == "needs_evidence"
+        assert rows[empty_node]["evidence_gap_status"] == "evidence_gap"
+        assert rows[empty_node]["evidence_strength_after"] <= 3
+    assert rows["airworthiness_certification_production_ramp"]["value_capture_score_review_status"] == "provisional"
+    assert rows["mro_spares_installed_base_services"]["value_capture_score_review_status"] == "provisional"

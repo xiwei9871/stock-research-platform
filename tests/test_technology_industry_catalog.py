@@ -199,6 +199,7 @@ def test_repository_catalog_starts_with_ten_approved_sectors():
         "rare_earth_permanent_magnets_critical_minerals",
         "mems_intelligent_sensors",
         "wafer_manufacturing_specialty_processes",
+        "civil_aircraft_aero_engines",
     }
     nodes_by_id = {row["node_id"]: row for row in catalog["nodes"]}
     assert {
@@ -218,6 +219,8 @@ def test_repository_catalog_starts_with_ten_approved_sectors():
         "wafer_manufacturing_specialty_processes",
         "semiconductor_eda_ip_design_services",
         "semiconductor_manufacturing_equipment",
+        "civil_aircraft_aero_engines",
+        "industrial_machine_tools_cnc",
     }
     assert len(catalog["theme_compositions"]) == 88
     assert {

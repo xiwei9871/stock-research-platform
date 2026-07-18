@@ -1000,6 +1000,23 @@
       ],
       "unmapped_theme_node_ids": [],
       "notes": "G2 owns wafer-manufacturing and specialty-process platforms plus fab economics and foundry customer validation. Equipment, materials, fabless design, packaging, MEMS devices, analog/RF chips and power-device products retain neighboring-chain ownership."
+    },
+    {
+      "theme_id": "civil_aircraft_aero_engines_value_chain_v1",
+      "chain_id": "civil_aircraft_aero_engines",
+      "node_links": [
+        {"theme_node_id":"civil_aircraft_airframe_final_assembly","catalog_node_id":"civil_aircraft_airframe_final_assembly"},
+        {"theme_node_id":"aero_engine_complete_machine","catalog_node_id":"aero_engine_complete_machine"},
+        {"theme_node_id":"engine_hot_section_blades_disks","catalog_node_id":"engine_hot_section_blades_disks"},
+        {"theme_node_id":"engine_control_fuel_systems","catalog_node_id":"engine_control_fuel_systems"},
+        {"theme_node_id":"airborne_avionics_electromechanical_systems","catalog_node_id":"airborne_avionics_electromechanical_systems"},
+        {"theme_node_id":"aviation_structures_composites_fasteners","catalog_node_id":"aviation_structures_composites_fasteners"},
+        {"theme_node_id":"landing_gear_wheels_brakes_systems","catalog_node_id":"landing_gear_wheels_brakes_systems"},
+        {"theme_node_id":"airworthiness_certification_production_ramp","catalog_node_id":"airworthiness_certification_production_ramp"},
+        {"theme_node_id":"mro_spares_installed_base_services","catalog_node_id":"mro_spares_installed_base_services"}
+      ],
+      "unmapped_theme_node_ids": [],
+      "notes": "G3 owns conventional civil-airliner structures, civil aero-engine systems, civil-aircraft subsystems and the airworthiness-to-installed-base lifecycle. Military-only aircraft, helicopters, low-altitude/eVTOL/UAV, commercial space and generic advanced materials retain neighboring-chain ownership."
     }
   ]
 }

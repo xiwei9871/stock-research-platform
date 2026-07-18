@@ -351,6 +351,22 @@
       "relationship_type": "depends_on",
       "notes": "A silicon-carbide power device depends on an eligible compound-semiconductor wafer-manufacturing process. SiC device product and company ownership remains with power_semiconductors; G2 owns only the manufacturing platform and keeps an evidence gap until direct foundry proof exists. Device ownership does not transfer（器件所有权不转移）.",
       "source_ids": []
+    },
+    {
+      "edge_id": "civil_engine_hot_section_uses_metal_cutting_grinding_machine_tools",
+      "source_node_id": "engine_hot_section_blades_disks",
+      "target_node_id": "metal_cutting_grinding_machine_tools",
+      "relationship_type": "uses",
+      "notes": "Civil aero-engine blades, disks, rings and hot-section casings use high-end metal-cutting and grinding equipment. Machine-tool ownership remains with industrial_machine_tools_cnc; this dependency does not transfer company or revenue ownership（所有权不转移）.",
+      "source_ids": []
+    },
+    {
+      "edge_id": "civil_aircraft_structures_use_multi_axis_composite_machining_centers",
+      "source_node_id": "aviation_structures_composites_fasteners",
+      "target_node_id": "multi_axis_composite_machining_centers",
+      "relationship_type": "uses",
+      "notes": "Civil-aircraft composite structures may use multi-axis composite machining centers. Machine-tool ownership remains with industrial_machine_tools_cnc; the edge does not transfer generic material, equipment, company or revenue ownership（所有权不转移）.",
+      "source_ids": []
     }
   ]
 }
