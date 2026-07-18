@@ -383,6 +383,22 @@
       "relationship_type": "uses",
       "notes": "Nuclear-qualified forgings, castings, pipes and components use high-end metal-cutting and grinding equipment. Nuclear component ownership remains with nuclear_power_equipment and machine-tool ownership remains with industrial_machine_tools_cnc（所有权不转移）.",
       "source_ids": []
+    },
+    {
+      "edge_id": "scientific_instrument_core_uses_precision_signal_chain_amplifiers",
+      "source_node_id": "instrument_core_sources_detectors_optics",
+      "target_node_id": "precision_signal_chain_amplifiers",
+      "relationship_type": "uses",
+      "notes": "Scientific-instrument sources, detectors and optics may use precision signal-chain amplifiers. Amplifier product, company and revenue ownership remains with analog_mixed_signal_rf_chips; the dependency does not transfer ownership（所有权不转移）.",
+      "source_ids": []
+    },
+    {
+      "edge_id": "scientific_instrument_core_uses_data_converters_adc_dac",
+      "source_node_id": "instrument_core_sources_detectors_optics",
+      "target_node_id": "data_converters_adc_dac",
+      "relationship_type": "uses",
+      "notes": "Scientific-instrument detectors and signal paths may use ADC or DAC components. Converter product, company and revenue ownership remains with analog_mixed_signal_rf_chips; the dependency does not transfer ownership（所有权不转移）.",
+      "source_ids": []
     }
   ]
 }

@@ -1034,6 +1034,24 @@
       ],
       "unmapped_theme_node_ids": [],
       "notes": "G4 owns commercial-fission nuclear-island, conventional-island, nuclear control and lifecycle equipment roles. Controlled fusion, generic nuclear policy, ordinary industrial valves, motors, pipes, vessels, chemical equipment and broad energy revenue retain their own ownership or remain excluded."
+    },
+    {
+      "theme_id": "scientific_instruments_value_chain_v1",
+      "chain_id": "scientific_instruments",
+      "node_links": [
+        {"theme_node_id":"mass_spectrometry_instruments","catalog_node_id":"mass_spectrometry_instruments"},
+        {"theme_node_id":"chromatography_separation_instruments","catalog_node_id":"chromatography_separation_instruments"},
+        {"theme_node_id":"molecular_atomic_spectroscopy_instruments","catalog_node_id":"molecular_atomic_spectroscopy_instruments"},
+        {"theme_node_id":"electron_optical_microscopy_instruments","catalog_node_id":"electron_optical_microscopy_instruments"},
+        {"theme_node_id":"xray_diffraction_fluorescence_instruments","catalog_node_id":"xray_diffraction_fluorescence_instruments"},
+        {"theme_node_id":"electrochemical_thermal_analysis_instruments","catalog_node_id":"electrochemical_thermal_analysis_instruments"},
+        {"theme_node_id":"general_lab_automation_sample_prep","catalog_node_id":"general_lab_automation_sample_prep"},
+        {"theme_node_id":"instrument_core_sources_detectors_optics","catalog_node_id":"instrument_core_sources_detectors_optics"},
+        {"theme_node_id":"scientific_instrument_software_consumables_service","catalog_node_id":"scientific_instrument_software_consumables_service"},
+        {"theme_node_id":"certification_tender_installed_base_revenue_validation","catalog_node_id":"certification_tender_installed_base_revenue_validation"}
+      ],
+      "unmapped_theme_node_ids": [],
+      "notes": "G5 owns scientific analytical instruments, laboratory sample-preparation and thermal-analysis instruments, instrument-specific subsystems, and commercialization evidence. Generic electronic test equipment, production-line machine vision and metrology, medical imaging, generic consumables, distributor-only relationships, and generic analog components retain neighboring-chain ownership."
     }
   ]
 }

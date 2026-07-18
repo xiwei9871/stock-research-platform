@@ -1,0 +1,239 @@
+{
+  "artifact_version": "scientific_instruments_node_evidence_matrix_v1",
+  "theme_id": "scientific_instruments_value_chain_v1",
+  "as_of_date": "2026-07-18",
+  "node_evidence_matrix": [
+    {
+      "node_id": "mass_spectrometry_instruments",
+      "accepted_source_ids": [
+        "g5_300203_ar2025",
+        "g5_688622_ar2025",
+        "g5_688600_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "g5_claim_01",
+        "g5_claim_05",
+        "g5_claim_07"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 5,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "technology_barrier",
+        "customer_certification"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "聚光、禾信与皖仪直接覆盖实验室或科学质谱整机、批量销售和收入边界；工业在线质谱与工业检漏明确排除。",
+      "next_evidence_needed": "补充单型号质谱订单、交付、装机、耗材服务和专项收入。"
+    },
+    {
+      "node_id": "chromatography_separation_instruments",
+      "accepted_source_ids": [
+        "g5_430476_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "g5_claim_13"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 5,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "customer_certification",
+        "technology_barrier"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "海能技术高效液相色谱与GC-IMS形成直接产品、用户验证和色谱光谱收入，证券代码兼容不改变公司身份。",
+      "next_evidence_needed": "补充更多国产色谱整机公司、分型号销量、装机和工作站服务收入。"
+    },
+    {
+      "node_id": "molecular_atomic_spectroscopy_instruments",
+      "accepted_source_ids": [
+        "g5_300797_ar2025",
+        "g5_300667_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "g5_claim_11",
+        "g5_claim_15"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 5,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "technology_barrier",
+        "integration_control"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "钢研纳克和必创科技直接覆盖直读、火花、ICP、荧光、拉曼等光谱仪器与收入；产线机器视觉保持相邻链所有权。",
+      "next_evidence_needed": "补充分子与原子光谱分品类装机、海外替代和专项毛利。"
+    },
+    {
+      "node_id": "electron_optical_microscopy_instruments",
+      "accepted_source_ids": [],
+      "pending_source_ids": [],
+      "supported_claim_ids": [],
+      "evidence_strength_before": 1,
+      "evidence_strength_after": 1,
+      "value_capture_score_review_status": "provisional",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [
+        "technology_barrier",
+        "customer_certification"
+      ],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "needs_evidence",
+      "rationale": "本批没有成熟电子显微或高级光学显微整机、客户验收和收入直证，医疗影像不能补位。",
+      "next_evidence_needed": "补充扫描/透射电子显微镜与高级光学显微整机型号、验收、装机和收入。"
+    },
+    {
+      "node_id": "xray_diffraction_fluorescence_instruments",
+      "accepted_source_ids": [
+        "g5_300165_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "g5_claim_09"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 5,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "customer_certification",
+        "technology_barrier"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "天瑞仪器直接覆盖X射线荧光光谱仪与镀层测厚产品，并有实验分析仪器收入和销售量；XRF单品收入仍未拆分。",
+      "next_evidence_needed": "补充XRF单型号收入、XRD整机公司直证及客户装机。"
+    },
+    {
+      "node_id": "electrochemical_thermal_analysis_instruments",
+      "accepted_source_ids": [
+        "g5_300515_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "g5_claim_18"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 5,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "customer_certification",
+        "technology_barrier"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "三德科技量热仪属于直接实验室热分析产品，分析仪器收入和长期商业化明确；配套外购仪器排除。",
+      "next_evidence_needed": "补充电化学工作站、热重差热等其他热分析仪器公司和单品收入。"
+    },
+    {
+      "node_id": "general_lab_automation_sample_prep",
+      "accepted_source_ids": [
+        "g5_688056_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "g5_claim_03"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 5,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "integration_control",
+        "customer_certification"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "莱伯泰科自研样品前处理产品线完整，核心产品、客户和实验分析仪器收入形成闭环；实验室工程与代理仪器排除。",
+      "next_evidence_needed": "补充分产品销量、自动化联机装机量和样品前处理专项收入。"
+    },
+    {
+      "node_id": "instrument_core_sources_detectors_optics",
+      "accepted_source_ids": [
+        "g5_002338_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "g5_claim_17"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "supported",
+      "bottleneck_score_review_status": "supported",
+      "value_bases": [
+        "technology_barrier",
+        "customer_certification"
+      ],
+      "evidence_gap_status": "covered",
+      "node_review_status": "reviewed",
+      "rationale": "奥普光电提供重大科研仪器用光栅光学测量部件、客户验证和光栅传感收入的窄映射；通用工业用途与模拟芯片所有权不转移。",
+      "next_evidence_needed": "补充光谱仪专用光栅、探测器、光源和真空子系统的直接产品及收入。"
+    },
+    {
+      "node_id": "scientific_instrument_software_consumables_service",
+      "accepted_source_ids": [],
+      "pending_source_ids": [],
+      "supported_claim_ids": [],
+      "evidence_strength_before": 1,
+      "evidence_strength_after": 1,
+      "value_capture_score_review_status": "provisional",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [
+        "integration_control",
+        "customer_certification"
+      ],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "needs_evidence",
+      "rationale": "本批虽披露工作站、耗材和服务，但未形成仪器专用软件订阅、耗材复购、校准维护与装机服务的独立收入闭环。",
+      "next_evidence_needed": "补充装机保有量、软件许可、耗材复购、校准维护合同和服务收入。"
+    },
+    {
+      "node_id": "certification_tender_installed_base_revenue_validation",
+      "accepted_source_ids": [
+        "g5_300203_ar2025",
+        "g5_688056_ar2025",
+        "g5_688622_ar2025",
+        "g5_688600_ar2025",
+        "g5_300165_ar2025",
+        "g5_300797_ar2025",
+        "g5_430476_ar2025",
+        "g5_300667_ar2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "g5_claim_02",
+        "g5_claim_04",
+        "g5_claim_06",
+        "g5_claim_08",
+        "g5_claim_10",
+        "g5_claim_12",
+        "g5_claim_14",
+        "g5_claim_16"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 4,
+      "value_capture_score_review_status": "provisional",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [
+        "customer_certification",
+        "integration_control"
+      ],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "needs_evidence",
+      "rationale": "八份年报形成跨公司招投标、首台套、用户验证、批量销售与收入样本，但尚未形成单一型号认证到装机和持续服务的完整闭环。",
+      "next_evidence_needed": "补充单一型号从标准认证、招投标、交付验收到装机保有量、耗材服务及确认收入的连续事实表。"
+    }
+  ]
+}

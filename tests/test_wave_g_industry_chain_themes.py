@@ -391,6 +391,85 @@ G4_EXPECTED_EDGES = {
     ),
 }
 
+G5_CHAIN_ID = "scientific_instruments"
+G5_THEME_ID = "scientific_instruments_value_chain_v1"
+G5_THEME_PATH = REPOSITORY_ROOT / f"artifacts/theme_decomposition/{G5_THEME_ID}.json"
+G5_MAPPING_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/company_mappings"
+    / "scientific_instruments_company_mapping_v1.json"
+)
+G5_SOURCE_PACK_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "scientific_instruments_source_pack_v1.json"
+)
+G5_MATRIX_PATH = (
+    REPOSITORY_ROOT
+    / "artifacts/theme_decomposition/source_packs"
+    / "scientific_instruments_node_evidence_matrix_v1.json"
+)
+G5_L3 = {
+    "analytical_instrument_platforms",
+    "laboratory_precision_instruments",
+    "instrument_core_subsystems",
+    "instrument_lifecycle_commercialization",
+}
+G5_L4 = {
+    "mass_spectrometry_instruments",
+    "chromatography_separation_instruments",
+    "molecular_atomic_spectroscopy_instruments",
+    "electron_optical_microscopy_instruments",
+    "xray_diffraction_fluorescence_instruments",
+    "electrochemical_thermal_analysis_instruments",
+    "general_lab_automation_sample_prep",
+    "instrument_core_sources_detectors_optics",
+    "scientific_instrument_software_consumables_service",
+    "certification_tender_installed_base_revenue_validation",
+}
+G5_INITIAL_UNIVERSE = {
+    "300203.SZ", "688056.SH", "688622.SH", "688600.SH", "300165.SZ",
+    "300797.SZ", "430476.BJ", "688337.SH", "688112.SH", "688628.SH",
+}
+G5_EXCLUDED_INITIAL = {"688337.SH", "688112.SH", "688628.SH"}
+G5_SUPPLEMENTAL = {"300667.SZ", "002338.SZ", "300515.SZ"}
+G5_MAPPING_CONTRACTS = {
+    "300203.SZ": ("mass_spectrometry_instruments", "g5_300203_ar2025"),
+    "688056.SH": ("general_lab_automation_sample_prep", "g5_688056_ar2025"),
+    "688622.SH": ("mass_spectrometry_instruments", "g5_688622_ar2025"),
+    "688600.SH": ("mass_spectrometry_instruments", "g5_688600_ar2025"),
+    "300165.SZ": ("xray_diffraction_fluorescence_instruments", "g5_300165_ar2025"),
+    "300797.SZ": ("molecular_atomic_spectroscopy_instruments", "g5_300797_ar2025"),
+    "430476.BJ": ("chromatography_separation_instruments", "g5_430476_ar2025"),
+    "300667.SZ": ("molecular_atomic_spectroscopy_instruments", "g5_300667_ar2025"),
+    "002338.SZ": ("instrument_core_sources_detectors_optics", "g5_002338_ar2025"),
+    "300515.SZ": ("electrochemical_thermal_analysis_instruments", "g5_300515_ar2025"),
+}
+G5_PRODUCT_TERMS = {
+    "300203.SZ": ("质谱",),
+    "688056.SH": ("样品前处理",),
+    "688622.SH": ("质谱仪",),
+    "688600.SH": ("质谱", "分析仪器"),
+    "300165.SZ": ("X射线荧光",),
+    "300797.SZ": ("光谱仪",),
+    "430476.BJ": ("色谱仪",),
+    "300667.SZ": ("光谱仪系统",),
+    "002338.SZ": ("光栅", "光学"),
+    "300515.SZ": ("量热仪",),
+}
+G5_EXPECTED_EDGES = {
+    (
+        "instrument_core_sources_detectors_optics",
+        "precision_signal_chain_amplifiers",
+        "uses",
+    ),
+    (
+        "instrument_core_sources_detectors_optics",
+        "data_converters_adc_dac",
+        "uses",
+    ),
+}
+
 REQUIRED_READABLE_SECTIONS = [
     {
         "name": "研究结论",
@@ -1689,3 +1768,202 @@ def test_nuclear_power_equipment_g4_matrix_keeps_empty_service_nodes_readable() 
     assert nuclear_island["bottleneck_score_review_status"] == "provisional"
     assert "海陆" in nuclear_island["rationale"]
     assert "兰石" in nuclear_island["rationale"]
+
+
+def test_scientific_instruments_g5_catalog_first_exact_tree_links_and_edges() -> None:
+    assert_catalog_first_contract(G5_CHAIN_ID, G5_THEME_ID, G5_L3, G5_L4)
+    catalog = load_industry_catalog()
+    chain_nodes = [row for row in catalog["nodes"] if row["chain_id"] == G5_CHAIN_ID]
+    by_id = {row["node_id"]: row for row in chain_nodes}
+    assert len(chain_nodes) == 14
+    assert all(not row["canonical_key"] for row in chain_nodes if row["level"] == "L3")
+    l4_keys = [row["canonical_key"] for row in chain_nodes if row["level"] == "L4"]
+    assert len(l4_keys) == len(set(l4_keys)) == 10
+    assert all(key.startswith("scientific_instruments:") for key in l4_keys)
+    for row in chain_nodes:
+        assert row["primary_path"][1] == G5_CHAIN_ID
+        if row["level"] == "L4":
+            assert row["parent_node_id"] in G5_L3
+            assert by_id[row["parent_node_id"]]["level"] == "L3"
+    link = next(row for row in catalog["theme_links"] if row["theme_id"] == G5_THEME_ID)
+    assert len(link["node_links"]) == 10
+    assert {(row["theme_node_id"], row["catalog_node_id"]) for row in link["node_links"]} == {
+        (node_id, node_id) for node_id in G5_L4
+    }
+    nodes = {row["node_id"]: row for row in catalog["nodes"]}
+    edges = {
+        (row["source_node_id"], row["target_node_id"], row["relationship_type"]): row
+        for row in catalog["edges"]
+        if row["source_node_id"] in G5_L4 or row["target_node_id"] in G5_L4
+    }
+    assert set(edges) == G5_EXPECTED_EDGES
+    for (source_node_id, target_node_id, relationship_type), row in edges.items():
+        assert source_node_id == "instrument_core_sources_detectors_optics"
+        assert nodes[target_node_id]["chain_id"] == "analog_mixed_signal_rf_chips"
+        assert relationship_type == "uses"
+        assert "所有权" in row["notes"]
+
+
+def test_scientific_instruments_g5_artifacts_complete_wave_g() -> None:
+    theme = load_json(G5_THEME_PATH)
+    mapping = load_json(G5_MAPPING_PATH)
+    source_pack = load_json(G5_SOURCE_PACK_PATH)
+    matrix = load_json(G5_MATRIX_PATH)
+    assert theme["artifact_version"] == "theme_decomposition_v1_6"
+    assert mapping["evidence_contract_version"] == "mapping_evidence_roles_v2"
+    assert theme["theme"]["status"] == "reviewed"
+    assert {row["node_id"] for row in theme["nodes"]} == G5_L4
+    accepted = [row for row in source_pack["sources"] if row["review_status"] == "accepted"]
+    assert len(accepted) == 10
+    assert all(row["source_type"] == "company_filing" for row in accepted)
+    assert len(theme["claims"]) == 18
+    reviewed = [row for row in mapping["company_mappings"] if row["review_status"] == "reviewed"]
+    assert len(reviewed) == 10
+    assert {row["node_id"] for row in matrix["node_evidence_matrix"]} == G5_L4
+    report = VERIFIER.build_theme_batch_report(MANIFEST_PATH, wave="wave_g")
+    row = next(row for row in report["theme_results"] if row["chain_id"] == G5_CHAIN_ID)
+    assert row["ready"] is True
+    assert row["counts"] == {
+        "accepted_sources": 10,
+        "primary_sources": 10,
+        "claims": 18,
+        "accepted_source_backed_claims": 18,
+        "reviewed_mappings": 10,
+    }
+    assert report["ready_theme_count"] == 5
+    assert report["not_ready_theme_count"] == 0
+
+
+def test_scientific_instruments_g5_initial_universe_closes_and_supplements_are_real() -> None:
+    mapping = load_json(G5_MAPPING_PATH)
+    evidence = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+    reviewed = {
+        row["company_code"]: row for row in mapping["company_mappings"]
+        if row["review_status"] == "reviewed"
+    }
+    excluded = {row["company_code"]: row for row in mapping["excluded_initial_candidates"]}
+    assert set(reviewed) == set(G5_MAPPING_CONTRACTS)
+    assert set(excluded) == G5_EXCLUDED_INITIAL
+    assert (set(reviewed) & G5_INITIAL_UNIVERSE) | set(excluded) == G5_INITIAL_UNIVERSE
+    assert reviewed.keys() - G5_INITIAL_UNIVERSE == G5_SUPPLEMENTAL
+    assert mapping["concept_only_candidates"] == []
+    for company_code, (node_id, source_id) in G5_MAPPING_CONTRACTS.items():
+        row = reviewed[company_code]
+        assert row["mapped_node_id"] == node_id
+        items = [evidence[evidence_id] for evidence_id in row["evidence_ids"]]
+        assert [item["evidence_type"] for item in items] == [
+            "product_relationship", "revenue_materiality", "business_stage",
+        ]
+        assert len({item["excerpt_locator"] for item in items}) == 3
+        assert all("PDF_PAGE=" in item["excerpt_locator"] for item in items)
+        assert all("PDF第" in item["excerpt_locator"] for item in items)
+        assert all(item["source_id"] == source_id for item in items)
+        assert all(item["related_node_ids"] == [node_id] for item in items)
+        direct = items[0]["evidence_summary"]
+        assert all(term in direct for term in G5_PRODUCT_TERMS[company_code])
+
+
+def test_scientific_instruments_g5_rejects_electronic_test_machine_vision_medical_and_distribution_padding() -> None:
+    theme = load_json(G5_THEME_PATH)
+    mapping = load_json(G5_MAPPING_PATH)
+    text = json.dumps({"theme": theme, "policy": mapping["mapping_policy"]}, ensure_ascii=False)
+    for boundary in (
+        "产线机器视觉与工业计量保持industrial_inspection_metrology_machine_vision所有权",
+        "医疗影像与诊断系统保持medical_imaging_diagnostic_equipment所有权",
+        "示波器、信号源、万用表和通用电子测试仪器不得泛化为科学分析仪器",
+        "泛耗材不得映射为科学仪器耗材服务",
+        "仅代理分销不得映射",
+        "工业检漏仪和工业在线质谱不得冒充实验室分析质谱",
+    ):
+        assert boundary in text
+    excluded = {row["company_code"]: row for row in mapping["excluded_initial_candidates"]}
+    assert all("精确L4" in row["reason"] for row in excluded.values())
+    assert "示波器" in excluded["688337.SH"]["reason"]
+    assert "示波器" in excluded["688112.SH"]["reason"]
+    assert "万用表" in excluded["688628.SH"]["reason"]
+    reviewed = {row["company_code"]: row for row in mapping["company_mappings"]}
+    assert "工业检漏" in reviewed["688600.SH"]["notes"]
+    assert "产线机器视觉" in reviewed["300667.SZ"]["notes"]
+    assert reviewed["430476.BJ"]["mapped_node_id"] in {
+        "chromatography_separation_instruments",
+        "electrochemical_thermal_analysis_instruments",
+    }
+
+
+def test_scientific_instruments_g5_source_claim_matrix_union_is_direct() -> None:
+    theme = load_json(G5_THEME_PATH)
+    mapping = load_json(G5_MAPPING_PATH)
+    source_pack = load_json(G5_SOURCE_PACK_PATH)
+    matrix = load_json(G5_MATRIX_PATH)
+    identity_fields = (
+        "source_id", "source_type", "title", "publisher", "author",
+        "publish_date", "url_or_ref", "access_level", "reliability_level",
+        "review_status", "notes",
+    )
+    identity = lambda rows: {
+        row["source_id"]: tuple(
+            row.get(field, row.get("url") if field == "url_or_ref" else None)
+            for field in identity_fields
+        ) for row in rows
+    }
+    assert identity(theme["sources"]) == identity(mapping["sources"])
+    assert identity(theme["sources"]) == identity(source_pack["sources"])
+    claims = {row["claim_id"]: row for row in theme["claims"]}
+    accepted = {
+        row["source_id"] for row in source_pack["sources"]
+        if row["review_status"] == "accepted"
+    }
+    claim_union = {
+        source_id for claim in claims.values()
+        for source_id in (claim["source_id"], *claim["supporting_source_ids"])
+    }
+    matrix_union = {
+        source_id for row in matrix["node_evidence_matrix"]
+        for source_id in row["accepted_source_ids"]
+    }
+    assert accepted == claim_union == matrix_union
+    for row in matrix["node_evidence_matrix"]:
+        node_claims = {
+            claim_id for claim_id, claim in claims.items()
+            if row["node_id"] in claim["affected_theme_nodes"]
+        }
+        assert set(row["supported_claim_ids"]) == node_claims
+        assert set(row["accepted_source_ids"]) == {
+            claims[claim_id]["source_id"] for claim_id in node_claims
+        }
+    for source in source_pack["sources"]:
+        source_claims = {
+            claim_id for claim_id, claim in claims.items()
+            if source["source_id"] in (claim["source_id"], *claim["supporting_source_ids"])
+        }
+        assert set(source["supported_claim_ids"]) == source_claims
+        assert set(source["supported_node_ids"]) == {
+            node_id for claim_id in source_claims
+            for node_id in claims[claim_id]["affected_theme_nodes"]
+        }
+
+
+def test_scientific_instruments_g5_matrix_keeps_unmapped_nodes_readable() -> None:
+    theme = load_json(G5_THEME_PATH)
+    matrix = load_json(G5_MATRIX_PATH)
+    nodes = {row["node_id"]: row for row in theme["nodes"]}
+    rows = {row["node_id"]: row for row in matrix["node_evidence_matrix"]}
+    assert set(rows) == G5_L4
+    assert len({row["rationale"] for row in rows.values()}) == 10
+    assert all(row["next_evidence_needed"] for row in rows.values())
+    for node_id, row in rows.items():
+        assert nodes[node_id]["evidence_strength"] == row["evidence_strength_after"]
+    for empty_node in (
+        "electron_optical_microscopy_instruments",
+        "scientific_instrument_software_consumables_service",
+    ):
+        assert nodes[empty_node]["related_stock_codes"] == []
+        assert nodes[empty_node]["domestic_players"] == []
+        assert rows[empty_node]["node_review_status"] == "needs_evidence"
+        assert rows[empty_node]["evidence_gap_status"] == "evidence_gap"
+    validation = rows["certification_tender_installed_base_revenue_validation"]
+    assert validation["accepted_source_ids"]
+    assert validation["supported_claim_ids"]
+    assert validation["evidence_strength_after"] == 4
+    assert "招投标" in validation["rationale"]
+    assert "装机" in validation["next_evidence_needed"]

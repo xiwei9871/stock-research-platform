@@ -1,0 +1,310 @@
+{
+  "artifact_version": "scientific_instruments_source_pack_v1",
+  "theme_id": "scientific_instruments_value_chain_v1",
+  "as_of_date": "2026-07-18",
+  "sources": [
+    {
+      "source_id": "g5_300203_ar2025",
+      "source_type": "company_filing",
+      "title": "聚光科技（杭州）股份有限公司2025年年度报告",
+      "publisher": "聚光科技（杭州）股份有限公司",
+      "author": "聚光科技（杭州）股份有限公司",
+      "publish_date": "2026-04-20",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF printed p.12、24、32 / PDF_PAGE=12、24、32；质谱批量销售与应用、累计交付及海关中标，仪器相关软件及耗材收入；工业在线质谱只作边界。",
+      "url": "https://www.cninfo.com.cn/new/disclosure/stock?stockCode=300203",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "PDF printed p.12、24、32 / PDF_PAGE=12、24、32",
+      "evidence_summary": "质谱批量销售、累计交付、招投标与仪器收入。",
+      "supported_claim_ids": [
+        "g5_claim_01",
+        "g5_claim_02"
+      ],
+      "supported_node_ids": [
+        "mass_spectrometry_instruments",
+        "certification_tender_installed_base_revenue_validation"
+      ],
+      "limitations": "仪器收入包含相关软件及耗材，工业在线质谱不作为实验室质谱。"
+    },
+    {
+      "source_id": "g5_688056_ar2025",
+      "source_type": "company_filing",
+      "title": "北京莱伯泰科仪器股份有限公司2025年年度报告",
+      "publisher": "北京莱伯泰科仪器股份有限公司",
+      "author": "北京莱伯泰科仪器股份有限公司",
+      "publish_date": "2026-04-27",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF printed p.14、21、42 / PDF_PAGE=14、21、42；样品前处理产品线、核心产品与客户、实验分析仪器收入占比。",
+      "url": "https://www.sse.com.cn/assortment/stock/list/info/announcement/index.shtml?productId=688056",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "PDF printed p.14、21、42 / PDF_PAGE=14、21、42",
+      "evidence_summary": "样品前处理直接产品、客户与实验分析仪器收入。",
+      "supported_claim_ids": [
+        "g5_claim_03",
+        "g5_claim_04"
+      ],
+      "supported_node_ids": [
+        "general_lab_automation_sample_prep",
+        "certification_tender_installed_base_revenue_validation"
+      ],
+      "limitations": "实验分析仪器收入未单独拆出样品前处理，代理仪器排除。"
+    },
+    {
+      "source_id": "g5_688622_ar2025",
+      "source_type": "company_filing",
+      "title": "广州禾信仪器股份有限公司2025年年度报告",
+      "publisher": "广州禾信仪器股份有限公司",
+      "author": "广州禾信仪器股份有限公司",
+      "publish_date": "2026-04-28",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF printed p.8、14、36 / PDF_PAGE=8、14、36；质谱仪研发生产销售与技术服务、实验室及在线质谱产品、政府采购周期与收入风险。",
+      "url": "https://www.sse.com.cn/assortment/stock/list/info/announcement/index.shtml?productId=688622",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "PDF printed p.8、14、36 / PDF_PAGE=8、14、36",
+      "evidence_summary": "质谱主营、实验室产品与采购周期收入风险。",
+      "supported_claim_ids": [
+        "g5_claim_05",
+        "g5_claim_06"
+      ],
+      "supported_node_ids": [
+        "mass_spectrometry_instruments",
+        "certification_tender_installed_base_revenue_validation"
+      ],
+      "limitations": "新产品收入不足且订单下滑，不能推断装机增长。"
+    },
+    {
+      "source_id": "g5_688600_ar2025",
+      "source_type": "company_filing",
+      "title": "安徽皖仪科技股份有限公司2025年年度报告",
+      "publisher": "安徽皖仪科技股份有限公司",
+      "author": "安徽皖仪科技股份有限公司",
+      "publish_date": "2026-04-24",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF printed p.11、12、25、212 / PDF_PAGE=11、12、25、212；实验室色谱质谱产品、小批试制与实验室分析仪器收入；氦质谱检漏保持工业检测边界。",
+      "url": "https://www.sse.com.cn/assortment/stock/list/info/announcement/index.shtml?productId=688600",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "PDF printed p.11、12、25、212 / PDF_PAGE=11、12、25、212",
+      "evidence_summary": "实验室质谱产品、小批试制与实验室分析收入。",
+      "supported_claim_ids": [
+        "g5_claim_07",
+        "g5_claim_08"
+      ],
+      "supported_node_ids": [
+        "mass_spectrometry_instruments",
+        "certification_tender_installed_base_revenue_validation"
+      ],
+      "limitations": "工业检漏质谱收入与实验室分析质谱严格分开。"
+    },
+    {
+      "source_id": "g5_300165_ar2025",
+      "source_type": "company_filing",
+      "title": "江苏天瑞仪器股份有限公司2025年年度报告",
+      "publisher": "江苏天瑞仪器股份有限公司",
+      "author": "江苏天瑞仪器股份有限公司",
+      "publish_date": "2026-04-27",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF printed p.11、48、49 / PDF_PAGE=11、48、49；X射线荧光光谱仪直接产品、实验分析仪器及系统收入、仪器销售生产量。",
+      "url": "https://www.cninfo.com.cn/new/disclosure/stock?stockCode=300165",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "PDF printed p.11、48、49 / PDF_PAGE=11、48、49",
+      "evidence_summary": "XRF产品、实验分析仪器收入与仪器销量。",
+      "supported_claim_ids": [
+        "g5_claim_09",
+        "g5_claim_10"
+      ],
+      "supported_node_ids": [
+        "xray_diffraction_fluorescence_instruments",
+        "certification_tender_installed_base_revenue_validation"
+      ],
+      "limitations": "收入和销量均为宽口径，XRF单型号未拆分。"
+    },
+    {
+      "source_id": "g5_300797_ar2025",
+      "source_type": "company_filing",
+      "title": "钢研纳克检测技术股份有限公司2025年年度报告",
+      "publisher": "钢研纳克检测技术股份有限公司",
+      "author": "钢研纳克检测技术股份有限公司",
+      "publish_date": "2026-04-23",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF printed p.14、15、23 / PDF_PAGE=14、15、23；直读、火花、ICP等光谱仪销售与转产，检测分析仪器收入及子公司商业化。",
+      "url": "https://www.cninfo.com.cn/new/disclosure/stock?stockCode=300797",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "PDF printed p.14、15、23 / PDF_PAGE=14、15、23",
+      "evidence_summary": "光谱产品、检测分析仪器收入与商业化。",
+      "supported_claim_ids": [
+        "g5_claim_11",
+        "g5_claim_12"
+      ],
+      "supported_node_ids": [
+        "molecular_atomic_spectroscopy_instruments",
+        "certification_tender_installed_base_revenue_validation"
+      ],
+      "limitations": "扫描电镜仍缺成熟整机收入。"
+    },
+    {
+      "source_id": "g5_430476_ar2025",
+      "source_type": "company_filing",
+      "title": "海能未来技术集团股份有限公司2025年年度报告",
+      "publisher": "海能未来技术集团股份有限公司",
+      "author": "海能未来技术集团股份有限公司",
+      "publish_date": "2026-03-16",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF printed p.6、11、17、22、33 / PDF_PAGE=6、11、17、22、33；报告证券代码已变更为920476，高效液相色谱仪产品、用户验证与色谱光谱收入；平台路由保留既有430476.BJ兼容代码。",
+      "url": "https://www.bse.cn/disclosure/announcement.html?stockcode=920476",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "PDF printed p.6、11、17、22、33 / PDF_PAGE=6、11、17、22、33",
+      "evidence_summary": "液相色谱产品、用户验证、色谱光谱收入与代码变更。",
+      "supported_claim_ids": [
+        "g5_claim_13",
+        "g5_claim_14"
+      ],
+      "supported_node_ids": [
+        "chromatography_separation_instruments",
+        "certification_tender_installed_base_revenue_validation"
+      ],
+      "limitations": "色谱光谱为系列收入；920476为报告代码，430476.BJ仅作平台兼容路由。"
+    },
+    {
+      "source_id": "g5_300667_ar2025",
+      "source_type": "company_filing",
+      "title": "北京必创科技股份有限公司2025年年度报告",
+      "publisher": "北京必创科技股份有限公司",
+      "author": "北京必创科技股份有限公司",
+      "publish_date": "2026-04-21",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF printed p.13、33、34 / PDF_PAGE=13、33、34；光谱仪系统、标准产品直接销售、光谱仪器收入；产线机器视觉不归入本链。",
+      "url": "https://www.cninfo.com.cn/new/disclosure/stock?stockCode=300667",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "PDF printed p.13、33、34 / PDF_PAGE=13、33、34",
+      "evidence_summary": "光谱仪系统、直接销售与光谱仪器收入。",
+      "supported_claim_ids": [
+        "g5_claim_15",
+        "g5_claim_16"
+      ],
+      "supported_node_ids": [
+        "molecular_atomic_spectroscopy_instruments",
+        "certification_tender_installed_base_revenue_validation"
+      ],
+      "limitations": "产线机器视觉和工业计量排除。"
+    },
+    {
+      "source_id": "g5_002338_ar2025",
+      "source_type": "company_filing",
+      "title": "长春奥普光电技术股份有限公司2025年年度报告",
+      "publisher": "长春奥普光电技术股份有限公司",
+      "author": "长春奥普光电技术股份有限公司",
+      "publish_date": "2026-04-20",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF printed p.10、16、17 / PDF_PAGE=10、16、17；光栅传感器对重大科研仪器的关键部件关系、客户验证与光栅传感器收入；通用工业测量用途不转移所有权。",
+      "url": "https://www.cninfo.com.cn/new/disclosure/stock?stockCode=002338",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "PDF printed p.10、16、17 / PDF_PAGE=10、16、17",
+      "evidence_summary": "光栅光学科研仪器部件、客户验证与收入。",
+      "supported_claim_ids": [
+        "g5_claim_17"
+      ],
+      "supported_node_ids": [
+        "instrument_core_sources_detectors_optics"
+      ],
+      "limitations": "通用工业测量用途不转移到科学仪器整机。"
+    },
+    {
+      "source_id": "g5_300515_ar2025",
+      "source_type": "company_filing",
+      "title": "湖南三德科技股份有限公司2025年年度报告",
+      "publisher": "湖南三德科技股份有限公司",
+      "author": "湖南三德科技股份有限公司",
+      "publish_date": "2026-04-20",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "PDF printed p.10、24、26 / PDF_PAGE=10、24、26；量热仪等实验室分析仪器、业务稳健增长与分析仪器收入；配套外购仪器不计公司产品。",
+      "url": "https://www.cninfo.com.cn/new/disclosure/stock?stockCode=300515",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "PDF printed p.10、24、26 / PDF_PAGE=10、24、26",
+      "evidence_summary": "量热仪产品、分析仪器收入与商业阶段。",
+      "supported_claim_ids": [
+        "g5_claim_18"
+      ],
+      "supported_node_ids": [
+        "electrochemical_thermal_analysis_instruments"
+      ],
+      "limitations": "配套外购仪器不属于公司自有产品。"
+    },
+    {
+      "source_id": "g5_688337_ar2025",
+      "source_type": "company_filing",
+      "title": "普源精电科技股份有限公司2025年年度报告",
+      "publisher": "普源精电科技股份有限公司",
+      "author": "普源精电科技股份有限公司",
+      "publish_date": "2026-03-25",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "rejected",
+      "notes": "PDF printed p.11-15 / PDF_PAGE=11-15；主营数字示波器、信号发生器、万用表等通用电子测试测量仪器，不满足科学分析仪器精确L4。",
+      "url": "https://www.sse.com.cn/assortment/stock/list/info/announcement/index.shtml?productId=688337",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "PDF printed p.11-15 / PDF_PAGE=11-15",
+      "evidence_summary": "通用电子测试测量边界排除。",
+      "supported_claim_ids": [],
+      "supported_node_ids": [],
+      "limitations": "示波器、信号发生器与万用表不属于科学分析仪器精确L4。"
+    },
+    {
+      "source_id": "g5_688112_ar2025",
+      "source_type": "company_filing",
+      "title": "深圳市鼎阳科技股份有限公司2025年年度报告",
+      "publisher": "深圳市鼎阳科技股份有限公司",
+      "author": "深圳市鼎阳科技股份有限公司",
+      "publish_date": "2026-03-24",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "rejected",
+      "notes": "PDF printed p.12 / PDF_PAGE=12；主营数字示波器、信号发生器、频谱分析仪、矢量网络分析仪、万用表等通用电子测试测量仪器，不满足科学分析仪器精确L4。",
+      "url": "https://www.sse.com.cn/assortment/stock/list/info/announcement/index.shtml?productId=688112",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "PDF printed p.12 / PDF_PAGE=12",
+      "evidence_summary": "通用电子测试测量边界排除。",
+      "supported_claim_ids": [],
+      "supported_node_ids": [],
+      "limitations": "示波器、信号发生器、频谱仪与万用表不属于科学分析仪器精确L4。"
+    },
+    {
+      "source_id": "g5_688628_ar2025",
+      "source_type": "company_filing",
+      "title": "优利德科技（中国）股份有限公司2025年年度报告",
+      "publisher": "优利德科技（中国）股份有限公司",
+      "author": "优利德科技（中国）股份有限公司",
+      "publish_date": "2026-04-24",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "rejected",
+      "notes": "PDF printed p.11、16 / PDF_PAGE=11、16；主营万用表、钳形表、示波器、信号源等电子电工与通用电子测试仪器，不满足科学分析仪器精确L4。",
+      "url": "https://www.sse.com.cn/assortment/stock/list/info/announcement/index.shtml?productId=688628",
+      "document_status": "primary_source_reviewed",
+      "evidence_locator": "PDF printed p.11、16 / PDF_PAGE=11、16",
+      "evidence_summary": "电子电工与通用电子测试边界排除。",
+      "supported_claim_ids": [],
+      "supported_node_ids": [],
+      "limitations": "万用表、钳形表、示波器与信号源不属于科学分析仪器精确L4。"
+    }
+  ]
+}
