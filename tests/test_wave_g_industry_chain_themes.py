@@ -328,7 +328,7 @@ G4_INITIAL_UNIVERSE = {
     "002438.SZ", "000777.SZ", "002255.SZ", "603169.SH", "002318.SZ",
 }
 G4_MAPPING_CONTRACTS = {
-    "600875.SH": ("turbine_generator_conventional_island", "g4_600875_ar2025"),
+    "600875.SH": ("reactor_pressure_vessel_steam_generator", "g4_600875_ar2025"),
     "601727.SH": ("reactor_pressure_vessel_steam_generator", "g4_601727_ar2025"),
     "601106.SH": ("reactor_pressure_vessel_steam_generator", "g4_601106_ar2025"),
     "603308.SH": ("nuclear_grade_materials_forgings_components", "g4_603308_ar2025"),
@@ -338,6 +338,32 @@ G4_MAPPING_CONTRACTS = {
     "002255.SZ": ("reactor_pressure_vessel_steam_generator", "g4_002255_ar2025"),
     "603169.SH": ("reactor_pressure_vessel_steam_generator", "g4_603169_ar2025"),
     "002318.SZ": ("nuclear_grade_materials_forgings_components", "g4_002318_ar2025"),
+}
+G4_BUSINESS_STAGE_CONTRACTS = {
+    company_code: "primary_business" for company_code in G4_MAPPING_CONTRACTS
+}
+G4_BUSINESS_STAGE_CONTRACTS["002318.SZ"] = "reserve_stage"
+G4_FACT_LOCATOR_CONTRACTS = {
+    "600875.SH": (
+        "PDF printed p.10 / PDF_PAGE=10 / PDF第10页（核岛主设备）",
+        "PDF printed p.207 / PDF_PAGE=207 / PDF第207页（核能收入边界）",
+        "PDF printed p.10 / PDF_PAGE=10 / PDF第10页（研制交付）",
+    ),
+    "000777.SZ": (
+        "PDF printed p.13 / PDF_PAGE=13 / PDF第13页（核级阀门）",
+        "PDF printed p.15 / PDF_PAGE=15 / PDF第15页（核工程阀门收入）",
+        "PDF printed p.12 / PDF_PAGE=12 / PDF第12页（生产销售与核电站服务）",
+    ),
+    "002255.SZ": (
+        "PDF printed p.16 / PDF_PAGE=16 / PDF第16页（裂变核级组件）",
+        "PDF printed p.18 / PDF_PAGE=18 / PDF第18页（核电产品收入）",
+        "PDF printed p.16 / PDF_PAGE=16 / PDF第16页（订单与首件制造）",
+    ),
+    "002318.SZ": (
+        "PDF printed p.11 / PDF_PAGE=11 / PDF第11页（核电应用与客户）",
+        "PDF printed p.15 / PDF_PAGE=15 / PDF第15页（多用途电力设备收入）",
+        "PDF printed p.12 / PDF_PAGE=12 / PDF第12页（报告期核电取证）",
+    ),
 }
 G4_REVENUE_ROLE_CONTRACTS = {
     "600875.SH": "revenue_boundary",
@@ -1407,7 +1433,7 @@ def test_nuclear_power_equipment_g4_artifacts_are_reviewed_and_meet_wave_gate() 
         "primary_sources": 10,
         "claims": len(theme["claims"]),
         "accepted_source_backed_claims": len(theme["claims"]),
-        "reviewed_mappings": 10,
+        "reviewed_mappings": 9,
     }
 
 
@@ -1424,7 +1450,7 @@ def test_nuclear_power_equipment_g4_company_evidence_and_initial_universe_close(
     for company_code, (node_id, source_id) in G4_MAPPING_CONTRACTS.items():
         row = reviewed[company_code]
         assert row["mapped_node_id"] == node_id
-        assert row["business_stage"] == "primary_business"
+        assert row["business_stage"] == G4_BUSINESS_STAGE_CONTRACTS[company_code]
         items = [evidence[evidence_id] for evidence_id in row["evidence_ids"]]
         assert [item["evidence_type"] for item in items] == [
             "product_relationship",
@@ -1435,6 +1461,60 @@ def test_nuclear_power_equipment_g4_company_evidence_and_initial_universe_close(
         assert all(item["source_id"] == source_id for item in items)
         assert all(item["related_node_ids"] == [node_id] for item in items)
         assert row["notes"]
+
+
+def test_nuclear_power_equipment_g4_uses_direct_pages_not_generic_or_future_plans() -> None:
+    theme = load_json(G4_THEME_PATH)
+    mapping = load_json(G4_MAPPING_PATH)
+    evidence = {row["evidence_id"]: row for row in mapping["evidence_items"]}
+    reviewed = {row["company_code"]: row for row in mapping["company_mappings"]}
+    for company_code, locators in G4_FACT_LOCATOR_CONTRACTS.items():
+        row = reviewed[company_code]
+        assert tuple(evidence[evidence_id]["excerpt_locator"] for evidence_id in row["evidence_ids"]) == locators
+
+    dongfang = reviewed["600875.SH"]
+    assert dongfang["mapped_node_id"] == "reactor_pressure_vessel_steam_generator"
+    assert "蒸汽发生器" in dongfang["product_or_service"]
+    assert not any(
+        "turbine_generator_conventional_island" in claim["affected_theme_nodes"]
+        for claim in theme["claims"]
+    )
+    assert "p.9-10 / PDF_PAGE=9-10" in evidence["g4_ev_603308_product"]["excerpt_locator"]
+
+    forbidden_locators = {
+        "g4_ev_000777_product": ("p.12", "PDF_PAGE=12"),
+        "g4_ev_000777_stage": ("p.14", "PDF_PAGE=14"),
+        "g4_ev_002255_stage": ("p.33", "PDF_PAGE=33"),
+        "g4_ev_002318_product": ("p.9", "PDF_PAGE=9"),
+        "g4_ev_002318_stage": ("p.27", "PDF_PAGE=27"),
+    }
+    for evidence_id, forbidden in forbidden_locators.items():
+        locator = evidence[evidence_id]["excerpt_locator"]
+        assert all(value not in locator for value in forbidden)
+
+
+def test_nuclear_power_equipment_g4_visible_pool_excludes_reserve_and_empty_n04() -> None:
+    theme = load_json(G4_THEME_PATH)
+    mapping = load_json(G4_MAPPING_PATH)
+    effective = {
+        row["company_code"]: row
+        for row in mapping["company_mappings"]
+        if row["review_status"] == "reviewed"
+        and row["business_stage"] == "primary_business"
+        and row["business_materiality"] not in {"reserve_only", "concept_only"}
+    }
+    assert len(effective) == 9
+    assert "002318.SZ" not in effective
+    nodes = {row["node_id"]: row for row in theme["nodes"]}
+    visible_codes = {
+        code for node in nodes.values() for code in node["related_stock_codes"]
+    }
+    assert visible_codes == set(effective)
+    conventional = nodes["turbine_generator_conventional_island"]
+    assert conventional["related_stock_codes"] == []
+    assert conventional["domestic_players"] == []
+    assert conventional["node_review_status"] == "needs_evidence"
+    assert conventional["evidence_strength"] == 1
 
 
 def test_nuclear_power_equipment_g4_rejects_fusion_generic_nuclear_and_revenue_false_positives() -> None:
@@ -1555,6 +1635,7 @@ def test_nuclear_power_equipment_g4_matrix_keeps_empty_service_nodes_readable() 
     for node_id, row in rows.items():
         assert nodes[node_id]["evidence_strength"] == row["evidence_strength_after"]
     for empty_node in (
+        "turbine_generator_conventional_island",
         "nuclear_fuel_cycle_handling_services",
         "engineering_construction_commissioning",
         "maintenance_inspection_life_extension",
