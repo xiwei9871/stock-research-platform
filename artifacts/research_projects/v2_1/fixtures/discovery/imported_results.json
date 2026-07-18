@@ -1,0 +1,54 @@
+{
+  "results": [
+    {
+      "url": "HTTPS://Example.COM:443/standards/pcb?utm_source=feed&b=2&a=1#scope",
+      "title": "PCB fabrication standard overview",
+      "snippet": "A standards body overview of fabrication constraints.",
+      "publisher": "Example Standards",
+      "publish_date": "2026-04-01",
+      "source_class": "technical_standard",
+      "query_id": "query:mechanism",
+      "rank": 2
+    },
+    {
+      "url": "https://example.com/standards/pcb?a=1&b=2&SPM=tracking",
+      "title": "A differently titled duplicate standards result",
+      "snippet": "Duplicate URL returned by another query.",
+      "publisher": "Example Standards",
+      "publish_date": "2026-04-01",
+      "source_class": "technical_standard",
+      "query_id": "query:quantification",
+      "rank": 1
+    },
+    {
+      "url": "https://standards.example.org/files/pcb-process.pdf?from=search",
+      "title": "PCB Process Standard PDF",
+      "snippet": "Direct PDF specification for process tolerances.",
+      "publisher": "Standards Institute",
+      "publish_date": null,
+      "source_class": "primary_standard",
+      "query_id": "query:mechanism",
+      "rank": 1
+    },
+    {
+      "url": "https://engineering.example.com/docs/laminate-stackup?ref=home",
+      "title": "Engineering stack-up design notes",
+      "snippet": "Company engineering documentation describing low-loss laminate trade-offs.",
+      "publisher": "Example Engineering",
+      "publish_date": "2026-03-15",
+      "source_class": "company_engineering_document",
+      "query_id": "query:counter",
+      "rank": 1
+    },
+    {
+      "url": "https://markets.example.net/ideas/pcb-winner?source=newsletter",
+      "title": "Top stock for PCB growth: buy rating and target price",
+      "snippet": "Investment opinion naming the best listed company.",
+      "publisher": "Markets Weekly",
+      "publish_date": "2026-05-20",
+      "source_class": "stock_opinion",
+      "query_id": "query:mechanism",
+      "rank": 3
+    }
+  ]
+}
