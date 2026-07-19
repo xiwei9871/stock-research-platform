@@ -14,6 +14,7 @@ from typing import Any
 from stock_research.research_project_v2.canonical import canonical_bytes, content_sha256
 from stock_research.research_project_v2.errors import ResearchProjectV2Error
 from stock_research.research_project_v2_1.layout import LayeredResearchLayout
+from stock_research.research_project_v2_1.path_policy import is_path_structure_error
 from stock_research.research_project_v2_1.parsers import (
     ParserLimits,
     parse_document_bytes,
@@ -182,7 +183,7 @@ def _read_raw(artifact: dict[str, Any], layout: LayeredResearchLayout, limits: P
     except ResearchProjectV2Error:
         raise
     except OSError as exc:
-        if exc.errno in {errno.ELOOP, errno.ENOTDIR}:
+        if is_path_structure_error(exc):
             raise _path_violation("raw artifact cannot be read safely", raw_path=raw_value) from exc
         raise _storage("raw artifact read failed", raw_path=raw_value) from exc
     finally:
@@ -405,8 +406,10 @@ def _chain_bound(descriptors: list[int], names: list[str]) -> bool:
             )
             for index, name in enumerate(names)
         )
-    except OSError:
-        return False
+    except OSError as exc:
+        if is_path_structure_error(exc):
+            return False
+        raise
 
 
 def _require_private_directory(descriptor: int, *, component: str) -> None:
@@ -418,7 +421,7 @@ def _require_private_directory(descriptor: int, *, component: str) -> None:
         or mode & 0o700 != 0o700
         or mode & 0o077 != 0
     ):
-        raise _storage(
+        raise _path_violation(
             "managed directory is not owner-only",
             component=component,
             mode=oct(mode),
@@ -438,7 +441,7 @@ def _open_private_retired_directory(directory_fd: int) -> int:
         _require_private_directory(descriptor, component=".retired")
         entry = os.stat(".retired", dir_fd=directory_fd, follow_symlinks=False)
         if not _same_inode(os.fstat(descriptor), entry):
-            raise OSError(errno.EIO, "retired directory binding mismatch")
+            raise _path_violation("retired directory binding mismatch")
         return descriptor
     except ResearchProjectV2Error:
         if "descriptor" in locals():
@@ -447,7 +450,9 @@ def _open_private_retired_directory(directory_fd: int) -> int:
     except OSError as exc:
         if "descriptor" in locals():
             os.close(descriptor)
-        raise _path_violation("retired directory cannot be opened safely") from exc
+        if is_path_structure_error(exc):
+            raise _path_violation("retired directory cannot be opened safely") from exc
+        raise _storage("retired directory open failed") from exc
 
 
 def _read_named_regular(directory_fd: int, name: str) -> tuple[bytes, os.stat_result]:
@@ -456,7 +461,7 @@ def _read_named_regular(directory_fd: int, name: str) -> tuple[bytes, os.stat_re
         before = os.fstat(descriptor)
         entry_before = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
         if not stat.S_ISREG(before.st_mode) or not _same_inode(before, entry_before):
-            raise OSError(errno.EIO, "unbound final normalized document")
+            raise _path_violation("unbound final normalized document", name=name)
         data = _read_fd(descriptor)
         after = os.fstat(descriptor)
         entry_after = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
@@ -468,7 +473,9 @@ def _read_named_regular(directory_fd: int, name: str) -> tuple[bytes, os.stat_re
             or before.st_mtime_ns != after.st_mtime_ns
             or after.st_size != len(data)
         ):
-            raise OSError(errno.EIO, "final normalized document changed during read")
+            raise _path_violation(
+                "final normalized document changed during read", name=name
+            )
         return data, after
     finally:
         os.close(descriptor)
@@ -537,7 +544,9 @@ def write_normalized_document(
         except ResearchProjectV2Error:
             raise
         except OSError as exc:
-            raise _path_violation("unsafe normalized directory", path=str(directory)) from exc
+            if is_path_structure_error(exc):
+                raise _path_violation("unsafe normalized directory", path=str(directory)) from exc
+            raise _storage("normalized directory open failed", path=str(directory)) from exc
         if not _chain_bound(descriptors, names):
             raise _path_violation("normalized directory binding changed", path=str(directory))
         directory_fd = descriptors[-1]
@@ -576,7 +585,9 @@ def write_normalized_document(
             try:
                 existing, _ = _read_named_regular(directory_fd, final_name)
             except OSError as exc:
-                raise _path_violation("unsafe existing normalized document", path=str(target)) from exc
+                if is_path_structure_error(exc):
+                    raise _path_violation("unsafe existing normalized document", path=str(target)) from exc
+                raise _storage("existing normalized document read failed", path=str(target)) from exc
             if existing != data:
                 raise _immutability("immutable normalized path conflict", path=str(target))
         if not _chain_bound(descriptors, names):

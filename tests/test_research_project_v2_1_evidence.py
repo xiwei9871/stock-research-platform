@@ -754,6 +754,21 @@ def test_writer_rejects_symlinked_retired_directory_as_path_violation(
     assert list(outside.iterdir()) == []
 
 
+def test_writer_rejects_group_accessible_assessment_directory_as_path_violation(
+    tmp_path: Path,
+) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    layout.evidence_assessments_dir.mkdir(parents=True, mode=0o700)
+    layout.evidence_assessments_dir.chmod(0o755)
+    artifact = _artifact("artifact:permissions", "a" * 64, publisher_family="issuer")
+    assessment = _assessment(artifact, role="supports", reviewed=False)
+
+    with pytest.raises(ResearchProjectV2Error) as exc:
+        write_industry_evidence_assessment(assessment, layout=layout)
+
+    assert exc.value.code == "RESEARCH_PROJECT_V2_1_EVIDENCE_PATH_VIOLATION"
+
+
 @pytest.mark.parametrize(
     "kwargs",
     [

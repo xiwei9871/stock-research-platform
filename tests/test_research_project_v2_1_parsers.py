@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import errno
 import json
 import os
 import stat
@@ -607,6 +608,31 @@ def test_write_rejects_group_or_other_accessible_normalized_directory(
     layout.evidence_normalized_dir.chmod(mode)
     with pytest.raises(ResearchProjectV2Error) as exc:
         write_normalized_document(document, layout=layout)
+    assert exc.value.code == "RESEARCH_PROJECT_V2_1_NORMALIZE_PATH_VIOLATION"
+
+
+def test_write_classifies_enospc_directory_creation_as_storage_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    artifact = _artifact(layout, b"no space", "text/plain", "txt")
+    document = normalize_artifact(
+        artifact,
+        layout=layout,
+        parsed_at="2026-07-18T00:00:00Z",
+        provenance=_provenance("no-space"),
+    )
+    monkeypatch.setattr(
+        normalize_module.os,
+        "mkdir",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            OSError(errno.ENOSPC, "injected no space")
+        ),
+    )
+
+    with pytest.raises(ResearchProjectV2Error) as exc:
+        write_normalized_document(document, layout=layout)
+
     assert exc.value.code == "RESEARCH_PROJECT_V2_1_NORMALIZE_STORAGE_FAILED"
 
 

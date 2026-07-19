@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+import errno
 import hashlib
 import ipaddress
 import json
@@ -649,6 +650,32 @@ def test_failed_raw_write_leaves_no_temporary_or_final_files(tmp_path: Path, mon
         fetched_at=FETCHED_AT, provenance=PROVENANCE,
     ))
     assert not [path for path in effective.root.rglob("*") if path.is_file()]
+
+
+def test_enospc_directory_creation_is_storage_not_path_violation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import stock_research.research_project_v2_1.snapshot as module
+
+    monkeypatch.setattr(
+        module.os,
+        "mkdir",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            OSError(errno.ENOSPC, "injected no space")
+        ),
+    )
+
+    with pytest.raises(ResearchProjectV2Error) as exc:
+        snapshot_candidate(
+            candidate(),
+            transport=Transport([response()]),
+            resolver=Resolver(),
+            layout=layout(tmp_path),
+            fetched_at=FETCHED_AT,
+            provenance=PROVENANCE,
+        )
+
+    assert exc.value.code == "RESEARCH_PROJECT_V2_1_SNAPSHOT_STORAGE_ERROR"
 
 
 @pytest.mark.parametrize("failure", ["peer", "headers", "too_large"])

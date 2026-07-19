@@ -21,6 +21,7 @@ import idna
 from stock_research.research_project_v2.canonical import canonical_bytes, content_sha256
 from stock_research.research_project_v2.errors import ResearchProjectV2Error
 from stock_research.research_project_v2_1.layout import LayeredResearchLayout
+from stock_research.research_project_v2_1.path_policy import is_path_structure_error
 from stock_research.research_project_v2_1.schema import validate_v2_1_schema_payload
 
 
@@ -880,7 +881,9 @@ def _open_or_create_directory(parent_fd: int, name: str) -> int:
     except FileExistsError:
         pass
     except OSError as exc:
-        raise _path_violation("unsafe managed path", component=name) from exc
+        if is_path_structure_error(exc):
+            raise _path_violation("unsafe managed path", component=name) from exc
+        raise _invalid("discovery batch write failed", component=name) from exc
     if created:
         try:
             os.fsync(parent_fd)
@@ -893,7 +896,9 @@ def _open_or_create_directory(parent_fd: int, name: str) -> int:
             raise OSError(errno.ENOTDIR, "managed component is not a directory")
         return child_fd
     except OSError as exc:
-        raise _path_violation("unsafe managed path", component=name) from exc
+        if is_path_structure_error(exc):
+            raise _path_violation("unsafe managed path", component=name) from exc
+        raise _invalid("discovery batch write failed", component=name) from exc
 
 
 def _open_absolute_directory(path: Path) -> tuple[list[int], list[str]]:
@@ -902,7 +907,9 @@ def _open_absolute_directory(path: Path) -> tuple[list[int], list[str]]:
     try:
         directory_fds = [os.open("/", _directory_flags())]
     except OSError as exc:
-        raise _path_violation("unsafe managed path", path="/") from exc
+        if is_path_structure_error(exc):
+            raise _path_violation("unsafe managed path", path="/") from exc
+        raise _invalid("discovery batch write failed", path="/") from exc
     component_names: list[str] = []
     try:
         for component in path.parts[1:]:
@@ -921,9 +928,11 @@ def _open_absolute_directory(path: Path) -> tuple[list[int], list[str]]:
 def _entry_matches_directory(parent_fd: int, name: str, directory_fd: int) -> bool:
     try:
         entry = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
-    except OSError:
-        return False
-    opened = os.fstat(directory_fd)
+        opened = os.fstat(directory_fd)
+    except OSError as exc:
+        if is_path_structure_error(exc):
+            return False
+        raise
     return (
         stat.S_ISDIR(entry.st_mode)
         and entry.st_dev == opened.st_dev
@@ -949,7 +958,9 @@ def _read_regular_file_at(directory_fd: int, name: str) -> bytes:
     try:
         descriptor = os.open(name, flags, dir_fd=directory_fd)
     except OSError as exc:
-        raise _path_violation("unsafe managed path", target=name) from exc
+        if is_path_structure_error(exc):
+            raise _path_violation("unsafe managed path", target=name) from exc
+        raise _invalid("discovery batch read failed", target=name) from exc
     try:
         if not stat.S_ISREG(os.fstat(descriptor).st_mode):
             raise _path_violation("unsafe managed path", target=name)
@@ -967,8 +978,10 @@ def _final_entry_is_regular_at(directory_fd: int, name: str) -> bool:
     flags = os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
     try:
         descriptor = os.open(name, flags, dir_fd=directory_fd)
-    except OSError:
-        return False
+    except OSError as exc:
+        if is_path_structure_error(exc):
+            return False
+        raise
     try:
         opened = os.fstat(descriptor)
         entry = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
@@ -978,8 +991,10 @@ def _final_entry_is_regular_at(directory_fd: int, name: str) -> bool:
             and opened.st_dev == entry.st_dev
             and opened.st_ino == entry.st_ino
         )
-    except OSError:
-        return False
+    except OSError as exc:
+        if is_path_structure_error(exc):
+            return False
+        raise
     finally:
         os.close(descriptor)
 
@@ -1003,6 +1018,11 @@ def _open_verified_final_at(
     flags = os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
     try:
         descriptor = os.open(name, flags, dir_fd=directory_fd)
+    except OSError as exc:
+        if is_path_structure_error(exc):
+            raise _path_violation("unsafe managed path", target=name) from exc
+        raise _invalid("discovery batch read failed", target=name) from exc
+    try:
         opened = os.fstat(descriptor)
         entry = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
         if (
@@ -1016,12 +1036,16 @@ def _open_verified_final_at(
             )
             or _read_descriptor_bytes(descriptor) != expected
         ):
-            raise OSError(errno.EIO, "final discovery artifact binding mismatch")
+            raise _path_violation("unsafe managed path", target=name)
         return descriptor, opened
+    except ResearchProjectV2Error:
+        os.close(descriptor)
+        raise
     except OSError as exc:
-        if "descriptor" in locals():
-            os.close(descriptor)
-        raise _path_violation("unsafe managed path", target=name) from exc
+        os.close(descriptor)
+        if is_path_structure_error(exc):
+            raise _path_violation("unsafe managed path", target=name) from exc
+        raise _invalid("discovery batch read failed", target=name) from exc
 
 
 def _same_inode(left: os.stat_result, right: os.stat_result) -> bool:
@@ -1065,8 +1089,10 @@ def _verify_live_final_binding(
             and _same_inode(live_final, held_final)
             and _read_descriptor_bytes(live_final_fd) == expected
         )
-    except OSError:
-        return False
+    except OSError as exc:
+        if is_path_structure_error(exc):
+            return False
+        raise
     finally:
         if live_final_fd is not None:
             os.close(live_final_fd)
@@ -1226,6 +1252,8 @@ def write_discovery_batch(
         ):
             raise _path_violation("unsafe managed path", path=str(target))
         return target
+    except OSError as exc:
+        raise _invalid("discovery batch write failed", path=str(target)) from exc
     finally:
         if held_final_fd is not None:
             os.close(held_final_fd)

@@ -4,6 +4,7 @@ from copy import deepcopy
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import FrozenInstanceError
 from datetime import datetime
+import errno
 import json
 from pathlib import Path
 from typing import Any
@@ -1039,6 +1040,33 @@ def test_writer_failure_is_stable_and_leaves_no_partial_file(
     assert error.code == "RESEARCH_PROJECT_V2_1_DISCOVERY_INVALID"
     batch_dir = layout.evidence_discovery_dir / batch["search_plan_id"]
     assert list(batch_dir.iterdir()) == []
+
+
+def test_writer_classifies_enospc_directory_creation_as_runtime_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    batch = discover_sources(
+        search_plan(),
+        StaticProvider({}),
+        provider_name="static",
+        discovered_at=DISCOVERED_AT,
+        provenance=PROVENANCE,
+    )
+
+    monkeypatch.setattr(
+        discovery_module.os,
+        "mkdir",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            OSError(errno.ENOSPC, "injected no space")
+        ),
+    )
+
+    error = assert_discovery_error(
+        lambda: write_discovery_batch(batch, layout=layout),
+        reason="discovery batch write failed",
+    )
+    assert error.code == "RESEARCH_PROJECT_V2_1_DISCOVERY_INVALID"
 
 
 def test_writer_rejects_non_directory_managed_parent_with_stable_error(tmp_path: Path) -> None:

@@ -20,6 +20,7 @@ from stock_research.research_project_v2.canonical import canonical_bytes
 from stock_research.research_project_v2.errors import ResearchProjectV2Error
 from stock_research.research_project_v2_1.discovery import normalize_url, source_candidate_id
 from stock_research.research_project_v2_1.layout import LayeredResearchLayout
+from stock_research.research_project_v2_1.path_policy import is_path_structure_error
 from stock_research.research_project_v2_1.schema import validate_v2_1_schema_payload
 
 
@@ -596,7 +597,9 @@ def _open_or_create_dir(parent_fd: int, name: str) -> int:
     except FileExistsError:
         pass
     except OSError as exc:
-        raise _path_violation("unsafe managed path", component=name) from exc
+        if is_path_structure_error(exc):
+            raise _path_violation("unsafe managed path", component=name) from exc
+        raise _storage_error("directory creation failed", component=name) from exc
     if created:
         try:
             os.fsync(parent_fd)
@@ -610,7 +613,9 @@ def _open_or_create_dir(parent_fd: int, name: str) -> int:
     except OSError as exc:
         if "descriptor" in locals():
             os.close(descriptor)
-        raise _path_violation("unsafe managed path", component=name) from exc
+        if is_path_structure_error(exc):
+            raise _path_violation("unsafe managed path", component=name) from exc
+        raise _storage_error("directory open failed", component=name) from exc
 
 
 def _open_dir_chain(path: Path) -> tuple[list[int], list[str]]:
@@ -641,8 +646,10 @@ def _chain_bound(fds: list[int], names: list[str]) -> bool:
             and _same_inode(entry, os.fstat(fds[index + 1]))
             for index, name in enumerate(names)
         )
-    except OSError:
-        return False
+    except OSError as exc:
+        if is_path_structure_error(exc):
+            return False
+        raise
 
 
 def _create_temp(directory_fd: int, stem: str) -> tuple[int, str]:
@@ -702,15 +709,24 @@ def _descriptor_sha256(descriptor: int) -> str:
 def _open_regular(directory_fd: int, name: str) -> tuple[int, os.stat_result]:
     try:
         descriptor = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0), dir_fd=directory_fd)
+    except OSError as exc:
+        if is_path_structure_error(exc):
+            raise _path_violation("unsafe managed file", target=name) from exc
+        raise _storage_error("managed file open failed", target=name) from exc
+    try:
         opened = os.fstat(descriptor)
         entry = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
         if not stat.S_ISREG(opened.st_mode) or not stat.S_ISREG(entry.st_mode) or not _same_inode(opened, entry):
-            raise OSError(errno.EIO, "regular file binding mismatch")
+            raise _path_violation("unsafe managed file", target=name)
         return descriptor, opened
+    except ResearchProjectV2Error:
+        os.close(descriptor)
+        raise
     except OSError as exc:
-        if "descriptor" in locals():
-            os.close(descriptor)
-        raise _path_violation("unsafe managed file", target=name) from exc
+        os.close(descriptor)
+        if is_path_structure_error(exc):
+            raise _path_violation("unsafe managed file", target=name) from exc
+        raise _storage_error("managed file stat failed", target=name) from exc
 
 
 def _unlink_temp_if_bound(directory_fd: int, name: str, expected: os.stat_result) -> None:

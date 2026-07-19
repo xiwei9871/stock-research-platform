@@ -22,6 +22,7 @@ from stock_research.research_project_v2.canonical import canonical_bytes, conten
 from stock_research.research_project_v2.errors import ResearchProjectV2Error
 from stock_research.research_project_v2_1.layout import LayeredResearchLayout
 from stock_research.research_project_v2_1.normalize import _validated_document
+from stock_research.research_project_v2_1.path_policy import is_path_structure_error
 from stock_research.research_project_v2_1.schema import validate_v2_1_schema_payload
 
 
@@ -848,8 +849,10 @@ def _chain_bound(descriptors: list[int], names: list[str]) -> bool:
             )
             for index, name in enumerate(names)
         )
-    except OSError:
-        return False
+    except OSError as exc:
+        if is_path_structure_error(exc):
+            return False
+        raise
 
 
 def _open_directory(path: Path) -> tuple[list[int], list[str]]:
@@ -869,7 +872,7 @@ def _open_directory(path: Path) -> tuple[list[int], list[str]]:
             try:
                 descriptor = os.open(component, _DIR_FLAGS, dir_fd=descriptors[-1])
             except OSError as exc:
-                if exc.errno in {errno.ELOOP, errno.ENOTDIR}:
+                if is_path_structure_error(exc):
                     raise _path_violation(
                         "unsafe assessment directory component", component=component
                     ) from exc
@@ -887,7 +890,7 @@ def _require_private(descriptor: int) -> None:
     opened = os.fstat(descriptor)
     mode = stat.S_IMODE(opened.st_mode)
     if not stat.S_ISDIR(opened.st_mode) or opened.st_uid != os.geteuid() or mode & 0o077:
-        raise _storage("managed assessment directory is not owner-only", mode=oct(mode))
+        raise _path_violation("managed assessment directory is not owner-only", mode=oct(mode))
 
 
 def _read_fd(descriptor: int) -> bytes:
@@ -898,7 +901,12 @@ def _read_fd(descriptor: int) -> bytes:
 
 
 def _read_regular(directory_fd: int, name: str) -> tuple[bytes, os.stat_result]:
-    descriptor = os.open(name, _FILE_FLAGS, dir_fd=directory_fd)
+    try:
+        descriptor = os.open(name, _FILE_FLAGS, dir_fd=directory_fd)
+    except OSError as exc:
+        if is_path_structure_error(exc):
+            raise _path_violation("unsafe assessment file", name=name) from exc
+        raise
     try:
         before = os.fstat(descriptor)
         entry = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
@@ -993,7 +1001,7 @@ def write_industry_evidence_assessment(
         try:
             retired_fd = os.open(".retired", _DIR_FLAGS, dir_fd=directory_fd)
         except OSError as exc:
-            if exc.errno in {errno.ELOOP, errno.ENOTDIR}:
+            if is_path_structure_error(exc):
                 raise _path_violation("retired directory cannot be opened safely") from exc
             raise
         _require_private(retired_fd)
