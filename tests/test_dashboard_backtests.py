@@ -1,5 +1,6 @@
 import copy
 from types import SimpleNamespace
+from typing import Any
 
 import pandas as pd
 import pytest
@@ -8,7 +9,7 @@ from stock_research.dashboard import backtests
 from stock_research.strategy_publication_contracts import build_publication_identity, get_publication_contract
 
 
-def _official_result(strategy_id: str) -> dict:
+def _official_result(strategy_id: str) -> dict[str, Any]:
     contract = get_publication_contract(strategy_id)
     summary = {
         "engine_version": contract.engine_version,
@@ -54,6 +55,44 @@ def test_attach_publication_identity_succeeds_for_mid_and_lhb_with_detached_copi
         attached["publication_identity"]["publication_policy"]["changed"] = True
         assert "changed" not in attached["summary"]["publication_identity"]["publication_policy"]
         assert attached["payload"] == {"preserve": True}
+
+
+def test_attach_publication_identity_succeeds_for_tech_bottleneck():
+    attached = backtests.attach_publication_identity(
+        _official_result("tech_bottleneck"),
+        profile="balanced",
+    )
+
+    assert attached["publication_identity"] == build_publication_identity(
+        get_publication_contract("tech_bottleneck")
+    )
+
+
+@pytest.mark.parametrize("missing_location", ["result", "summary"])
+def test_validate_official_strategy_result_requires_attached_identities(missing_location):
+    attached = backtests.attach_publication_identity(
+        _official_result("mid_trend"),
+        profile="balanced",
+    )
+    if missing_location == "result":
+        del attached["publication_identity"]
+    else:
+        del attached["summary"]["publication_identity"]
+
+    with pytest.raises(ValueError, match="publication identity missing"):
+        backtests.validate_official_strategy_result(attached, profile="balanced")
+
+
+def test_validate_official_strategy_result_accepts_attached_identity():
+    attached = backtests.attach_publication_identity(
+        _official_result("mid_trend"),
+        profile="balanced",
+    )
+
+    assert backtests.validate_official_strategy_result(
+        attached,
+        profile="balanced",
+    ) is attached
 
 
 def test_attach_publication_identity_rejects_wrong_lhb_policy():
@@ -164,53 +203,77 @@ def test_official_fresh_path_attaches_identity_after_contract_config(monkeypatch
     assert attached["summary"]["publication_identity"] == attached["publication_identity"]
 
 
-def test_official_replay_path_attaches_identity_after_contract_config(monkeypatch):
-    result = _official_result("lhb_shortline")
-    params = SimpleNamespace(start_date="2026-01-01", end_date="2026-01-02")
-    contract = get_publication_contract("lhb_shortline")
-    run_config = {
+@pytest.mark.parametrize(
+    ("strategy_id", "specific_defaults"),
+    [
+        ("lhb_shortline", {"risk_profile": "balanced"}),
+        (
+            "mid_trend",
+            {
+                "benchmark_variant": (
+                    "top5_weekly_max2_selective_trend_holding_protection_v1"
+                )
+            },
+        ),
+        (
+            "tech_bottleneck",
+            {
+                "protection_name": "rank_exit_top10_1d",
+                "universe": "strict_153_st_only_financial_state",
+            },
+        ),
+    ],
+)
+def test_official_replay_minimal_request_passes_official_defaults_to_adapter(
+    monkeypatch,
+    strategy_id,
+    specific_defaults,
+):
+    received: dict[str, Any] = {}
+
+    def run_replay(params, config):
+        received.update(config)
+        return copy.deepcopy(_official_result(strategy_id))
+
+    monkeypatch.setitem(
+        backtests.STRATEGY_BACKTEST_REGISTRY,
+        strategy_id,
+        SimpleNamespace(run_replay=run_replay),
+    )
+
+    attached = backtests.run_replay_backtest(
+        {
+            "strategy_id": strategy_id,
+            "start_date": "2026-01-01",
+            "end_date": "2026-01-02",
+        }
+    )
+
+    contract = get_publication_contract(strategy_id)
+    assert received == {
+        "score_version": "manual_v1",
         "top_n": 5,
-        "rebalance_frequency": "daily",
+        "rebalance_frequency": contract.normalized_run_config["rebalance_frequency"],
         "transaction_cost_bps": 10.0,
+        "max_positions": None,
+        "max_position_weight": 0.2,
+        "risk_profile": "balanced",
         "adjust_type": "hfq",
         "contract_id": contract.contract_id,
         "contract_profile": "balanced",
         "contract_variant": contract.variant,
+        **specific_defaults,
     }
-    adapter = SimpleNamespace(run_replay=lambda params, config: copy.deepcopy(result))
-    monkeypatch.setattr(backtests, "_parse_backtest_request", lambda payload: ("lhb_shortline", params, run_config, None))
-    monkeypatch.setattr(backtests, "_apply_strategy_contract_run_config", lambda strategy_id, config, payload: config)
-    monkeypatch.setitem(backtests.STRATEGY_BACKTEST_REGISTRY, "lhb_shortline", adapter)
-
-    attached = backtests.run_replay_backtest({"strategy_id": "lhb_shortline", "start_date": "2026-01-01", "end_date": "2026-01-02"})
-
-    assert attached["publication_identity"]["strategy_id"] == "lhb_shortline"
-    assert attached["summary"]["publication_identity"] == attached["publication_identity"]
+    assert attached["publication_identity"]["strategy_id"] == strategy_id
 
 
-def test_official_replay_preserves_raw_adapter_config_and_rejects_nonofficial_result(monkeypatch):
-    params = SimpleNamespace(start_date="2026-01-01", end_date="2026-01-02")
-    raw_config = {
-        "top_n": 20,
-        "rebalance_frequency": "weekly",
-        "transaction_cost_bps": 0.0,
-        "max_position_weight": None,
-        "adjust_type": "hfq",
-        "benchmark_variant": get_publication_contract("mid_trend").variant,
-    }
-    received = {}
+def test_official_replay_preserves_explicit_conflict_and_rejects_result(monkeypatch):
+    received: dict[str, Any] = {}
 
     def run_replay(params, config):
         received.update(config)
-        result = _official_result("mid_trend")
-        result["config"].update(config)
-        return result
+        return _official_result("mid_trend")
 
-    monkeypatch.setattr(
-        backtests,
-        "_parse_backtest_request",
-        lambda payload: ("mid_trend", params, raw_config, None),
-    )
     monkeypatch.setitem(
         backtests.STRATEGY_BACKTEST_REGISTRY,
         "mid_trend",
@@ -223,10 +286,70 @@ def test_official_replay_preserves_raw_adapter_config_and_rejects_nonofficial_re
                 "strategy_id": "mid_trend",
                 "start_date": "2026-01-01",
                 "end_date": "2026-01-02",
+                "top_n": 7,
             }
         )
 
-    assert received == raw_config
+    assert received == {}
+
+
+@pytest.mark.parametrize(
+    ("strategy_id", "field", "value"),
+    [
+        ("lhb_shortline", "rebalance_frequency", "weekly"),
+        ("mid_trend", "benchmark_variant", "legacy_variant"),
+        ("tech_bottleneck", "protection_name", "legacy_protection"),
+        ("tech_bottleneck", "universe", "legacy_universe"),
+    ],
+)
+def test_official_replay_preserves_strategy_specific_conflicts(
+    monkeypatch,
+    strategy_id,
+    field,
+    value,
+):
+    received: dict[str, Any] = {}
+
+    def run_replay(params, config):
+        received.update(config)
+        return _official_result(strategy_id)
+
+    monkeypatch.setitem(
+        backtests.STRATEGY_BACKTEST_REGISTRY,
+        strategy_id,
+        SimpleNamespace(run_replay=run_replay),
+    )
+
+    with pytest.raises(ValueError, match="official config mismatch"):
+        backtests.run_replay_backtest(
+            {
+                "strategy_id": strategy_id,
+                "start_date": "2026-01-01",
+                "end_date": "2026-01-02",
+                field: value,
+            }
+        )
+
+    assert received == {}
+
+
+def test_nonofficial_parse_ignores_official_strategy_fields():
+    _strategy_id, _params, run_config, _vector_config = backtests._parse_backtest_request(
+        {
+            "strategy_id": "manual_v1_topn_rotation",
+            "start_date": "2026-01-01",
+            "end_date": "2026-01-02",
+            "rebalance_frequency": "daily",
+            "benchmark_variant": "legacy_variant",
+            "protection_name": "legacy_protection",
+            "universe": "legacy_universe",
+        }
+    )
+
+    assert run_config["rebalance_frequency"] == "weekly"
+    assert "benchmark_variant" not in run_config
+    assert "protection_name" not in run_config
+    assert "universe" not in run_config
 
 
 def test_latest_eod_strategy_module_uses_recent_manifest_by_module(monkeypatch):

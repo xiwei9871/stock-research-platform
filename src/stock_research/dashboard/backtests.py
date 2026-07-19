@@ -4,7 +4,7 @@ from copy import deepcopy
 from datetime import datetime, timezone
 from numbers import Integral, Real
 from pathlib import Path
-from typing import Any, Mapping
+from typing import TYPE_CHECKING, Any, Mapping
 
 import pandas as pd
 
@@ -27,6 +27,9 @@ from stock_research.vectorized_topn_backtest import (
     VectorizedTopNConfig,
     run_vectorized_topn_backtest,
 )
+
+if TYPE_CHECKING:
+    from stock_research.strategy_publication_contracts import StrategyPublicationContract
 
 BACKTEST_LAB_STRATEGY_IDS = {
     "lhb_shortline",
@@ -65,10 +68,27 @@ def validate_official_strategy_result(
     *,
     profile: str,
 ) -> dict[str, Any]:
+    publication_contract, summary, config = _validate_official_strategy_evidence(
+        result,
+        profile=profile,
+    )
+    _validate_publication_identity_declarations(
+        result,
+        summary,
+        config,
+        publication_contract,
+        required_locations={"result", "summary"},
+    )
+    return result
+
+
+def _validate_official_strategy_evidence(
+    result: dict[str, Any],
+    *,
+    profile: str,
+) -> tuple["StrategyPublicationContract", dict[str, Any], dict[str, Any]]:
     from stock_research.strategy_publication_contracts import (
-        build_publication_identity,
         get_publication_contract,
-        validate_publication_identity,
     )
 
     strategy_id = _official_result_strategy_id(result)
@@ -110,14 +130,31 @@ def validate_official_strategy_result(
     validation = validate_strategy_summary_against_contract(effective_summary, parameter_contract)
     if validation.status != "success":
         raise ValueError(f"official strategy contract mismatch: {validation.reason}")
+    return publication_contract, summary, config
 
-    expected_identity = build_publication_identity(publication_contract)
+
+def _validate_publication_identity_declarations(
+    result: Mapping[str, Any],
+    summary: Mapping[str, Any],
+    config: Mapping[str, Any],
+    contract: "StrategyPublicationContract",
+    *,
+    required_locations: set[str],
+) -> None:
+    from stock_research.strategy_publication_contracts import (
+        build_publication_identity,
+        validate_publication_identity,
+    )
+
+    expected_identity = build_publication_identity(contract)
     for container_name, container in (
         ("result", result),
         ("summary", summary),
         ("config", config),
     ):
         if "publication_identity" not in container:
+            if container_name in required_locations:
+                raise ValueError(f"publication identity missing in {container_name}")
             continue
         actual_identity = container["publication_identity"]
         if not isinstance(actual_identity, Mapping):
@@ -129,7 +166,6 @@ def validate_official_strategy_result(
             raise ValueError(
                 f"publication identity mismatch in {container_name}: {mismatches}"
             )
-    return result
 
 
 def attach_publication_identity(
@@ -139,19 +175,25 @@ def attach_publication_identity(
 ) -> dict[str, Any]:
     from stock_research.strategy_publication_contracts import (
         build_publication_identity,
-        get_publication_contract,
     )
 
-    validate_official_strategy_result(result, profile=profile)
-    strategy_id = _official_result_strategy_id(result)
-    identity = build_publication_identity(
-        get_publication_contract(strategy_id, profile=profile)
+    publication_contract, summary, config = _validate_official_strategy_evidence(
+        result,
+        profile=profile,
     )
+    _validate_publication_identity_declarations(
+        result,
+        summary,
+        config,
+        publication_contract,
+        required_locations=set(),
+    )
+    identity = build_publication_identity(publication_contract)
     next_result = dict(result)
     next_result["publication_identity"] = deepcopy(identity)
-    summary = dict(result.get("summary") or {})
-    summary["publication_identity"] = deepcopy(identity)
-    next_result["summary"] = summary
+    next_summary = dict(summary)
+    next_summary["publication_identity"] = deepcopy(identity)
+    next_result["summary"] = next_summary
     return next_result
 
 
@@ -175,7 +217,7 @@ def _official_result_strategy_id(result: Mapping[str, Any]) -> str:
 
 def _validate_declared_official_config(
     actual: Mapping[str, Any],
-    contract: Any,
+    contract: "StrategyPublicationContract",
     *,
     location: str,
 ) -> None:
@@ -190,10 +232,27 @@ def _validate_declared_official_config(
                 )
 
 
+def _validate_official_run_config(
+    strategy_id: str,
+    run_config: Mapping[str, Any],
+    *,
+    profile: str,
+) -> None:
+    from stock_research.strategy_publication_contracts import get_publication_contract
+
+    contract = get_publication_contract(strategy_id, profile=profile)
+    _validate_declared_official_config(
+        run_config,
+        contract,
+        location="run config",
+    )
+    _require_official_config_evidence({}, run_config, contract)
+
+
 def _require_official_config_evidence(
     summary: Mapping[str, Any],
     config: Mapping[str, Any],
-    contract: Any,
+    contract: "StrategyPublicationContract",
 ) -> None:
     missing: list[str] = []
     for field in contract.normalized_run_config:
@@ -212,7 +271,7 @@ def _validate_contract_identity_declarations(
     result: Mapping[str, Any],
     summary: Mapping[str, Any],
     config: Mapping[str, Any],
-    contract: Any,
+    contract: "StrategyPublicationContract",
 ) -> None:
     checks = (
         ("result", result, "contract_id", contract.contract_id),
@@ -814,6 +873,14 @@ def _parse_backtest_request(
     max_position_weight = _optional_position_weight(payload.get("max_position_weight"))
     risk_profile = _optional_text(payload.get("risk_profile"), "balanced")
     rebalance_frequency = _default_rebalance_frequency(strategy_id)
+    if strategy_id in BACKTEST_LAB_STRATEGY_IDS and not _payload_missing(
+        payload,
+        "rebalance_frequency",
+    ):
+        rebalance_frequency = _optional_text(
+            payload.get("rebalance_frequency"),
+            rebalance_frequency,
+        )
     transaction_cost_bps = _finite_float(
         payload.get("transaction_cost_bps"),
         "transaction_cost_bps",
@@ -836,6 +903,10 @@ def _parse_backtest_request(
         "risk_profile": risk_profile,
         "adjust_type": adjust_type,
     }
+    if strategy_id in BACKTEST_LAB_STRATEGY_IDS:
+        for field in ("benchmark_variant", "protection_name", "universe"):
+            if not _payload_missing(payload, field):
+                run_config[field] = str(payload[field])
     vector_config = VectorizedTopNConfig(
         start_date=start_date,
         end_date=end_date,
@@ -874,6 +945,9 @@ def run_replay_backtest(payload: dict[str, Any]) -> dict[str, Any]:
     started = time.perf_counter()
     started_at = datetime.now(timezone.utc).isoformat()
     strategy_id, params, run_config, _vector_config = _parse_backtest_request(payload)
+    if strategy_id in BACKTEST_LAB_STRATEGY_IDS:
+        run_config = _apply_strategy_contract_run_config(strategy_id, run_config, payload)
+        _validate_official_run_config(strategy_id, run_config, profile="balanced")
     adapter = STRATEGY_BACKTEST_REGISTRY.get(strategy_id)
     if adapter is None:
         raise ValueError(f"unsupported strategy: {strategy_id}")
@@ -1021,6 +1095,16 @@ def _apply_strategy_contract_run_config(
     for key, value in contract_config.items():
         if key.startswith("contract_") or _payload_missing(payload, key):
             merged[key] = value
+    try:
+        from stock_research.strategy_publication_contracts import get_publication_contract
+
+        publication_contract = get_publication_contract(strategy_id, profile="balanced")
+    except KeyError:
+        publication_contract = None
+    if publication_contract is not None:
+        for key, value in publication_contract.normalized_run_config.items():
+            if _payload_missing(payload, key):
+                merged[key] = value
     return merged
 
 
