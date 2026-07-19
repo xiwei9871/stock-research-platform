@@ -413,3 +413,28 @@ def test_downstream_taxonomy_propagates_chinese_subject_to_nested_action(
     identity, version = _pilot()
     version["snapshot"]["nested"] = nested_output
     assert "INDUSTRY_NO_COMPANY_OR_STOCK_OUTPUTS" in _failed_checks(identity, version)
+
+
+@pytest.mark.parametrize(
+    "nested_output",
+    [
+        {"公司": {"评级": []}},
+        {"股票": {"推荐": []}},
+        {"company": {"rating": []}},
+        {"stock": {"recommendation": []}},
+    ],
+)
+def test_downstream_taxonomy_always_propagates_path_subjects(
+    nested_output: dict,
+) -> None:
+    identity, version = _pilot()
+    version["snapshot"]["nested"] = nested_output
+    assert "INDUSTRY_NO_COMPANY_OR_STOCK_OUTPUTS" in _failed_checks(identity, version)
+
+
+def test_downstream_taxonomy_background_only_exempts_legal_metadata() -> None:
+    identity, version = _pilot()
+    version["snapshot"]["nested"] = {
+        "公司背景参考": {"notes": [], "公司名称": "Example Co", "source_url": "https://example.com"}
+    }
+    assert "INDUSTRY_NO_COMPANY_OR_STOCK_OUTPUTS" not in _failed_checks(identity, version)

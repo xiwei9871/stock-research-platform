@@ -490,7 +490,8 @@ def _has_background_marker(tokens: set[str], compact_key: str) -> bool:
 def _is_downstream_output_key(
     key: object,
     *,
-    background_subjects: frozenset[str] = frozenset(),
+    path_subjects: frozenset[str] = frozenset(),
+    background_context: bool = False,
 ) -> bool:
     normalized_key = unicodedata.normalize("NFKC", str(key)).casefold()
     compact_key = re.sub(r"[\W_]+", "", normalized_key)
@@ -503,7 +504,7 @@ def _is_downstream_output_key(
         return True
     tokens = _key_tokens(key)
     local_subjects = _subject_groups(tokens) | _chinese_subject_groups(compact_key)
-    effective_subjects = local_subjects | set(background_subjects)
+    effective_subjects = local_subjects | set(path_subjects)
     if effective_subjects and any(
         action in compact_key for action in _CHINESE_DOWNSTREAM_ACTIONS
     ):
@@ -524,8 +525,8 @@ def _is_downstream_output_key(
     if (
         effective_subjects
         and "notes" in tokens
-        and not background_subjects
-        and not bool(tokens & _background_tokens())
+        and not background_context
+        and not _has_background_marker(tokens, compact_key)
     ):
         return True
     return False
@@ -535,7 +536,8 @@ def _output_paths(
     value: object,
     path: tuple[object, ...] = (),
     *,
-    background_subjects: frozenset[str] = frozenset(),
+    path_subjects: frozenset[str] = frozenset(),
+    background_context: bool = False,
 ) -> list[list[object]]:
     found: list[list[object]] = []
     if isinstance(value, dict):
@@ -543,7 +545,8 @@ def _output_paths(
             child_path = (*path, key)
             if _is_downstream_output_key(
                 key,
-                background_subjects=background_subjects,
+                path_subjects=path_subjects,
+                background_context=background_context,
             ):
                 found.append(list(child_path))
             key_tokens = _key_tokens(key)
@@ -552,18 +555,21 @@ def _output_paths(
                 "",
                 unicodedata.normalize("NFKC", str(key)).casefold(),
             )
-            child_background_subjects = background_subjects
-            if _has_background_marker(key_tokens, compact_key):
-                child_background_subjects = frozenset(
-                    set(background_subjects)
-                    | _subject_groups(key_tokens)
-                    | _chinese_subject_groups(compact_key)
-                )
+            child_path_subjects = frozenset(
+                set(path_subjects)
+                | _subject_groups(key_tokens)
+                | _chinese_subject_groups(compact_key)
+            )
+            child_background_context = background_context or _has_background_marker(
+                key_tokens,
+                compact_key,
+            )
             found.extend(
                 _output_paths(
                     child,
                     child_path,
-                    background_subjects=child_background_subjects,
+                    path_subjects=child_path_subjects,
+                    background_context=child_background_context,
                 )
             )
     elif isinstance(value, list):
@@ -572,7 +578,8 @@ def _output_paths(
                 _output_paths(
                     child,
                     (*path, index),
-                    background_subjects=background_subjects,
+                    path_subjects=path_subjects,
+                    background_context=background_context,
                 )
             )
     return found
