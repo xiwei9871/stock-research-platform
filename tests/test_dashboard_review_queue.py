@@ -435,6 +435,10 @@ def _v1_versioned_manifest(tmp_path):
     identity = build_publication_identity(get_publication_contract("mid_trend"))
     return {
         "module": "strategy_mid_trend",
+        "status": "success",
+        "trade_date": "2026-07-18",
+        "latest_trade_date": "2026-07-18",
+        "run_id": "r1",
         "artifact_path": str(paths["review_path"]),
         "metadata": {
             "identity_schema_version": "strategy_publication_identity_v1",
@@ -450,6 +454,78 @@ def _v1_versioned_manifest(tmp_path):
             "summary": {"publication_identity": identity},
         },
     }
+
+
+def _replace_manifest_path_root(module, source_root, declared_root):
+    metadata = module["metadata"]
+    path_keys = (
+        "equity_path",
+        "positions_path",
+        "trades_path",
+        "review_path",
+        "summary_path",
+        "publication_manifest_path",
+    )
+    module["artifact_path"] = str(
+        declared_root / Path(module["artifact_path"]).relative_to(source_root)
+    )
+    for container in (metadata, metadata["output_paths"]):
+        for key in path_keys:
+            if key in container:
+                container[key] = str(
+                    declared_root / Path(container[key]).relative_to(source_root)
+                )
+
+
+def test_v1_manifest_rejects_complete_version_from_different_trade_date(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(review_queue, "SETTINGS", SimpleNamespace(output_root=tmp_path))
+    module = _v1_versioned_manifest(tmp_path)
+    module["trade_date"] = "2026-07-17"
+    module["latest_trade_date"] = "2026-07-17"
+    monkeypatch.setattr(review_queue, "load_latest_data_run_manifest", lambda trade_date: [module])
+    monkeypatch.setattr(review_queue, "_manifest_strategy_contract_valid", lambda candidate: True)
+
+    assert review_queue._manifest_strategy_artifact_path_valid(module) is False
+
+    rows, blocked = review_queue._load_strategy_manifest_snapshot(
+        trade_date="2026-07-17",
+        limit=50,
+    )
+
+    assert rows == []
+    assert blocked == {"mid_trend"}
+
+
+@pytest.mark.parametrize("trade_date", ("2026-7-18", "../2026-07-18", "not-a-date", ""))
+def test_v1_manifest_rejects_malformed_trade_date(trade_date, tmp_path, monkeypatch):
+    monkeypatch.setattr(review_queue, "SETTINGS", SimpleNamespace(output_root=tmp_path))
+    module = _v1_versioned_manifest(tmp_path)
+    module["trade_date"] = trade_date
+    module["latest_trade_date"] = trade_date
+
+    assert review_queue._manifest_strategy_artifact_path_valid(module) is False
+
+
+def test_v1_manifest_does_not_relocate_arbitrary_outputs_prefix(tmp_path, monkeypatch):
+    monkeypatch.setattr(review_queue, "SETTINGS", SimpleNamespace(output_root=tmp_path))
+    module = _v1_versioned_manifest(tmp_path)
+    _replace_manifest_path_root(module, tmp_path, Path("/evil/outputs"))
+
+    assert review_queue._manifest_strategy_artifact_path_valid(module) is False
+
+
+def test_v1_manifest_relocates_approved_internal_synced_output_root(tmp_path, monkeypatch):
+    monkeypatch.setattr(review_queue, "SETTINGS", SimpleNamespace(output_root=tmp_path))
+    module = _v1_versioned_manifest(tmp_path)
+    _replace_manifest_path_root(
+        module,
+        tmp_path,
+        Path("/mnt/internal/stock_research/outputs"),
+    )
+
+    assert review_queue._manifest_strategy_artifact_path_valid(module) is True
 
 
 @pytest.mark.parametrize(

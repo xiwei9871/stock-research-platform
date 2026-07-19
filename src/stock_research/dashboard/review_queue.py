@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from datetime import date
 from pathlib import Path
 from urllib.parse import urlencode
 from typing import Any
@@ -28,6 +29,10 @@ BUCKET_LABELS = {
 }
 RESEARCH_OUTPUT_ROOT = Path("/Users/xiwei/stock_research/outputs/research")
 _OFFICIAL_STRATEGY_IDS = frozenset({"lhb_shortline", "mid_trend", "tech_bottleneck"})
+_APPROVED_SYNCED_OUTPUT_ROOTS = (
+    Path("/Users/xiwei/stock_research/outputs"),
+    Path("/mnt/internal/stock_research/outputs"),
+)
 
 
 def load_strategy_contracts(*, profile: str = "balanced") -> dict[str, Any]:
@@ -415,7 +420,7 @@ def _manifest_strategy_artifact_path_valid(module: dict[str, Any]) -> bool:
     output_paths = metadata.get("output_paths") if isinstance(metadata.get("output_paths"), dict) else {}
     publish_id = str(metadata.get("publish_id") or "")
     artifact_version = str(metadata.get("artifact_version") or "")
-    artifact_path = _resolve_synced_strategy_output_path(module.get("artifact_path"))
+    artifact_path = _resolve_v1_strategy_output_path(module.get("artifact_path"))
     if (
         not strategy_id
         or not _safe_publish_id(publish_id)
@@ -427,12 +432,24 @@ def _manifest_strategy_artifact_path_valid(module: dict[str, Any]) -> bool:
     if not _regular_publication_file(artifact_path):
         return False
     trusted_root = _trusted_strategy_output_root()
+    manifest_trade_date = _manifest_trade_date(module)
+    if manifest_trade_date is None:
+        return False
     version_dir = artifact_path.parent
     if not _trusted_version_path(artifact_path, trusted_root=trusted_root):
         return False
     if version_dir.name != publish_id:
         return False
     if version_dir.parent.name != strategy_id or version_dir.parent.parent.name != "strategy_runs":
+        return False
+    expected_version_dir = (
+        trusted_root
+        / manifest_trade_date
+        / "strategy_runs"
+        / strategy_id
+        / publish_id
+    )
+    if version_dir != expected_version_dir:
         return False
     expected_files = {
         "equity_path": "equity.csv",
@@ -449,7 +466,7 @@ def _manifest_strategy_artifact_path_valid(module: dict[str, Any]) -> bool:
             declared = container.get(key)
             if declared in (None, ""):
                 continue
-            declared_path = _resolve_synced_strategy_output_path(declared)
+            declared_path = _resolve_v1_strategy_output_path(declared)
             if (
                 declared_path.name != expected_name
                 or declared_path.parent != version_dir
@@ -457,7 +474,7 @@ def _manifest_strategy_artifact_path_valid(module: dict[str, Any]) -> bool:
                 or not _trusted_version_path(declared_path, trusted_root=trusted_root)
             ):
                 return False
-    if _resolve_synced_strategy_output_path(output_paths["review_path"]) != artifact_path:
+    if _resolve_v1_strategy_output_path(output_paths["review_path"]) != artifact_path:
         return False
     return True
 
@@ -474,6 +491,25 @@ def _regular_publication_file(path: Path) -> bool:
     return path.exists() and path.is_file() and not path.is_symlink()
 
 
+def _manifest_trade_date(module: dict[str, Any]) -> str | None:
+    values: list[str] = []
+    for key in ("trade_date", "latest_trade_date"):
+        if key not in module:
+            continue
+        value = str(module.get(key) or "")
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+            return None
+        try:
+            if date.fromisoformat(value).isoformat() != value:
+                return None
+        except ValueError:
+            return None
+        values.append(value)
+    if not values or len(set(values)) != 1:
+        return None
+    return values[0]
+
+
 def _trusted_strategy_output_root() -> Path:
     return Path(
         os.path.abspath(
@@ -484,7 +520,26 @@ def _trusted_strategy_output_root() -> Path:
     )
 
 
-def _resolve_synced_strategy_output_path(value: Any) -> Path:
+def _resolve_v1_strategy_output_path(value: Any) -> Path:
+    declared = Path(str(value or ""))
+    current_output_root = Path(
+        os.path.abspath(Path(getattr(SETTINGS, "output_root", "outputs")))
+    )
+    if not declared.is_absolute():
+        return Path(os.path.abspath(declared))
+    declared = Path(os.path.abspath(declared))
+    approved_roots = (current_output_root, *_APPROVED_SYNCED_OUTPUT_ROOTS)
+    for source_root in approved_roots:
+        normalized_source = Path(os.path.abspath(source_root))
+        try:
+            relative = declared.relative_to(normalized_source)
+        except ValueError:
+            continue
+        return current_output_root / relative
+    return declared
+
+
+def _resolve_legacy_synced_strategy_output_path(value: Any) -> Path:
     path = Path(str(value or ""))
     if not path.exists() and "outputs" in path.parts:
         output_index = path.parts.index("outputs")
@@ -522,7 +577,9 @@ def _manifest_review_artifact_path(module: dict[str, Any]) -> Path:
     metadata = module.get("metadata") if isinstance(module.get("metadata"), dict) else {}
     output_paths = metadata.get("output_paths") if isinstance(metadata.get("output_paths"), dict) else {}
     value = output_paths.get("review_path") or module.get("artifact_path")
-    return _resolve_synced_strategy_output_path(value)
+    if _manifest_has_publication_declaration(module):
+        return _resolve_v1_strategy_output_path(value)
+    return _resolve_legacy_synced_strategy_output_path(value)
 
 
 def _read_manifest_strategy_artifact(
