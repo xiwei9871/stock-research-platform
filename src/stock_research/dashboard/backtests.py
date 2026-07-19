@@ -88,6 +88,7 @@ def validate_official_strategy_result(
 
     _validate_declared_official_config(summary, publication_contract, location="summary")
     _validate_declared_official_config(config, publication_contract, location="config")
+    _require_official_config_evidence(summary, config, publication_contract)
     _validate_contract_identity_declarations(result, summary, config, publication_contract)
 
     for field, expected in publication_contract.publication_policy.items():
@@ -105,14 +106,17 @@ def validate_official_strategy_result(
         result,
         summary,
         config,
-        publication_contract,
     )
     validation = validate_strategy_summary_against_contract(effective_summary, parameter_contract)
     if validation.status != "success":
         raise ValueError(f"official strategy contract mismatch: {validation.reason}")
 
     expected_identity = build_publication_identity(publication_contract)
-    for container_name, container in (("result", result), ("summary", summary)):
+    for container_name, container in (
+        ("result", result),
+        ("summary", summary),
+        ("config", config),
+    ):
         if "publication_identity" not in container:
             continue
         actual_identity = container["publication_identity"]
@@ -186,6 +190,24 @@ def _validate_declared_official_config(
                 )
 
 
+def _require_official_config_evidence(
+    summary: Mapping[str, Any],
+    config: Mapping[str, Any],
+    contract: Any,
+) -> None:
+    missing: list[str] = []
+    for field in contract.normalized_run_config:
+        keys = (field, "frequency") if field == "rebalance_frequency" else (field,)
+        if not any(
+            container.get(key) not in (None, "")
+            for container in (summary, config)
+            for key in keys
+        ):
+            missing.append(field)
+    if missing:
+        raise ValueError(f"official config evidence missing: {', '.join(missing)}")
+
+
 def _validate_contract_identity_declarations(
     result: Mapping[str, Any],
     summary: Mapping[str, Any],
@@ -218,36 +240,28 @@ def _effective_official_summary(
     result: Mapping[str, Any],
     summary: Mapping[str, Any],
     config: Mapping[str, Any],
-    contract: Any,
 ) -> dict[str, Any]:
     effective = dict(summary)
-    defaults = contract.normalized_run_config
     fields = {
-        "engine_version": (config.get("engine_version"), result.get("source_kind"), contract.engine_version),
-        "top_n": (config.get("top_n"), defaults.get("top_n")),
-        "transaction_cost_bps": (
-            config.get("transaction_cost_bps"),
-            defaults.get("transaction_cost_bps"),
+        "engine_version": (
+            config.get("engine_version"),
+            config.get("engine"),
+            result.get("source_kind"),
         ),
-        "adjust_type": (config.get("adjust_type"), defaults.get("adjust_type")),
+        "variant": (config.get("variant"), config.get("variant_name")),
+        "top_n": (config.get("top_n"),),
+        "transaction_cost_bps": (config.get("transaction_cost_bps"),),
+        "adjust_type": (config.get("adjust_type"),),
         "frequency": (
             config.get("frequency"),
             config.get("rebalance_frequency"),
-            defaults.get("rebalance_frequency"),
         ),
-        "risk_profile": (config.get("risk_profile"), defaults.get("risk_profile")),
-        "benchmark_variant": (
-            config.get("benchmark_variant"),
-            defaults.get("benchmark_variant"),
-        ),
-        "universe": (config.get("universe"), defaults.get("universe")),
-        "protection_name": (
-            config.get("protection_name"),
-            defaults.get("protection_name"),
-        ),
+        "risk_profile": (config.get("risk_profile"),),
+        "benchmark_variant": (config.get("benchmark_variant"),),
+        "universe": (config.get("universe"),),
+        "protection_name": (config.get("protection_name"),),
+        "phase18c_strategy": (config.get("phase18c_strategy"),),
     }
-    if contract.strategy_id == "lhb_shortline":
-        fields["phase18c_strategy"] = (contract.variant.split(":", 1)[0],)
     for field, candidates in fields.items():
         if effective.get(field) not in (None, ""):
             continue
@@ -472,6 +486,7 @@ def _eod_summary(module: dict[str, Any]) -> dict[str, Any]:
 def _metrics_from_eod_summary(summary: dict[str, Any]) -> dict[str, Any]:
     metrics: dict[str, Any] = {}
     publication_identity = summary.get("publication_identity")
+    publication_policy: Mapping[str, Any] = {}
     if isinstance(publication_identity, Mapping):
         for key in (
             "contract_id",
@@ -481,11 +496,14 @@ def _metrics_from_eod_summary(summary: dict[str, Any]) -> dict[str, Any]:
         ):
             if key in publication_identity:
                 metrics[key] = deepcopy(publication_identity[key])
+        if isinstance(publication_identity.get("publication_policy"), Mapping):
+            publication_policy = publication_identity["publication_policy"]
     if summary.get("artifact_version") is not None:
         metrics["artifact_version"] = deepcopy(summary["artifact_version"])
     for key in ("strategy_version", "selection_policy", "market_regime_policy"):
-        if summary.get(key):
-            metrics[key] = str(summary[key])
+        value = summary.get(key) or publication_policy.get(key)
+        if value:
+            metrics[key] = str(value)
     if summary.get("cash_slot_count") is not None:
         metrics["cash_slot_count"] = int(summary["cash_slot_count"])
     total_return = summary.get("total_return")
@@ -856,8 +874,6 @@ def run_replay_backtest(payload: dict[str, Any]) -> dict[str, Any]:
     started = time.perf_counter()
     started_at = datetime.now(timezone.utc).isoformat()
     strategy_id, params, run_config, _vector_config = _parse_backtest_request(payload)
-    if strategy_id in BACKTEST_LAB_STRATEGY_IDS:
-        run_config = _apply_strategy_contract_run_config(strategy_id, run_config, payload)
     adapter = STRATEGY_BACKTEST_REGISTRY.get(strategy_id)
     if adapter is None:
         raise ValueError(f"unsupported strategy: {strategy_id}")

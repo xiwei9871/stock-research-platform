@@ -103,6 +103,45 @@ def test_attach_publication_identity_rejects_predeclared_identity_mismatch():
         backtests.attach_publication_identity(result, profile="balanced")
 
 
+def test_attach_publication_identity_rejects_config_identity_mismatch():
+    result = _official_result("mid_trend")
+    result["config"]["publication_identity"] = {
+        **build_publication_identity(get_publication_contract("mid_trend")),
+        "config_fingerprint": "legacy-fingerprint",
+    }
+
+    with pytest.raises(ValueError, match="publication identity mismatch"):
+        backtests.attach_publication_identity(result, profile="balanced")
+
+
+def test_validate_official_strategy_result_rejects_missing_engine_evidence():
+    result = _official_result("mid_trend")
+    del result["summary"]["engine_version"]
+
+    with pytest.raises(ValueError, match="engine"):
+        backtests.validate_official_strategy_result(result, profile="balanced")
+
+
+def test_validate_official_strategy_result_rejects_empty_official_config_evidence():
+    contract = get_publication_contract("mid_trend")
+    result = {
+        "strategy_id": "mid_trend",
+        "config": {},
+        "summary": {"benchmark_variant": contract.variant},
+    }
+
+    with pytest.raises(ValueError, match="official config evidence"):
+        backtests.validate_official_strategy_result(result, profile="balanced")
+
+
+def test_validate_official_strategy_result_rejects_partial_normalized_config_evidence():
+    result = _official_result("mid_trend")
+    del result["config"]["max_position_weight"]
+
+    with pytest.raises(ValueError, match="max_position_weight"):
+        backtests.validate_official_strategy_result(result, profile="balanced")
+
+
 def test_official_fresh_path_attaches_identity_after_contract_config(monkeypatch):
     result = _official_result("mid_trend")
     params = SimpleNamespace(start_date="2026-01-01", end_date="2026-01-02")
@@ -147,6 +186,47 @@ def test_official_replay_path_attaches_identity_after_contract_config(monkeypatc
 
     assert attached["publication_identity"]["strategy_id"] == "lhb_shortline"
     assert attached["summary"]["publication_identity"] == attached["publication_identity"]
+
+
+def test_official_replay_preserves_raw_adapter_config_and_rejects_nonofficial_result(monkeypatch):
+    params = SimpleNamespace(start_date="2026-01-01", end_date="2026-01-02")
+    raw_config = {
+        "top_n": 20,
+        "rebalance_frequency": "weekly",
+        "transaction_cost_bps": 0.0,
+        "max_position_weight": None,
+        "adjust_type": "hfq",
+        "benchmark_variant": get_publication_contract("mid_trend").variant,
+    }
+    received = {}
+
+    def run_replay(params, config):
+        received.update(config)
+        result = _official_result("mid_trend")
+        result["config"].update(config)
+        return result
+
+    monkeypatch.setattr(
+        backtests,
+        "_parse_backtest_request",
+        lambda payload: ("mid_trend", params, raw_config, None),
+    )
+    monkeypatch.setitem(
+        backtests.STRATEGY_BACKTEST_REGISTRY,
+        "mid_trend",
+        SimpleNamespace(run_replay=run_replay),
+    )
+
+    with pytest.raises(ValueError, match="official config mismatch"):
+        backtests.run_replay_backtest(
+            {
+                "strategy_id": "mid_trend",
+                "start_date": "2026-01-01",
+                "end_date": "2026-01-02",
+            }
+        )
+
+    assert received == raw_config
 
 
 def test_latest_eod_strategy_module_uses_recent_manifest_by_module(monkeypatch):
@@ -277,3 +357,20 @@ def test_eod_summary_projects_generic_publication_identity_fields_and_artifact_v
         "publication_policy": {"benchmark_variant": "v1"},
         "artifact_version": "artifact_v2",
     }
+
+
+def test_eod_summary_projects_lhb_metrics_from_generic_publication_policy():
+    policy = {
+        "strategy_version": "lhb_v1_stable_safe_top5",
+        "selection_policy": "phase18c_top5_then_eligibility_no_refill",
+        "market_regime_policy": "disabled_for_stable_strategy",
+    }
+
+    metrics = backtests._metrics_from_eod_summary(
+        {"publication_identity": {"publication_policy": policy}}
+    )
+
+    assert metrics["publication_policy"] == policy
+    assert metrics["strategy_version"] == policy["strategy_version"]
+    assert metrics["selection_policy"] == policy["selection_policy"]
+    assert metrics["market_regime_policy"] == policy["market_regime_policy"]
