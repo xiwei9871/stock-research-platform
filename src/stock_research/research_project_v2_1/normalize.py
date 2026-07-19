@@ -455,8 +455,23 @@ def _open_private_retired_directory(directory_fd: int) -> int:
         raise _storage("retired directory open failed") from exc
 
 
-def _read_named_regular(directory_fd: int, name: str) -> tuple[bytes, os.stat_result]:
-    descriptor = os.open(name, _FILE_FLAGS, dir_fd=directory_fd)
+def _open_named_file(
+    directory_fd: int, name: str, *, expected_exists: bool = False
+) -> int:
+    try:
+        return os.open(name, _FILE_FLAGS, dir_fd=directory_fd)
+    except OSError as exc:
+        if (expected_exists and exc.errno == errno.ENOENT) or is_path_structure_error(exc):
+            raise _path_violation("expected normalized document is unavailable", name=name) from exc
+        raise
+
+
+def _read_named_regular(
+    directory_fd: int, name: str, *, expected_exists: bool = False
+) -> tuple[bytes, os.stat_result]:
+    descriptor = _open_named_file(
+        directory_fd, name, expected_exists=expected_exists
+    )
     try:
         before = os.fstat(descriptor)
         entry_before = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
@@ -477,6 +492,12 @@ def _read_named_regular(directory_fd: int, name: str) -> tuple[bytes, os.stat_re
                 "final normalized document changed during read", name=name
             )
         return data, after
+    except OSError as exc:
+        if expected_exists and exc.errno == errno.ENOENT:
+            raise _path_violation(
+                "expected normalized document disappeared", name=name
+            ) from exc
+        raise
     finally:
         os.close(descriptor)
 
@@ -583,7 +604,9 @@ def write_normalized_document(
         except FileExistsError:
             created_stat = None
             try:
-                existing, _ = _read_named_regular(directory_fd, final_name)
+                existing, _ = _read_named_regular(
+                    directory_fd, final_name, expected_exists=True
+                )
             except OSError as exc:
                 if is_path_structure_error(exc):
                     raise _path_violation("unsafe existing normalized document", path=str(target)) from exc
@@ -593,7 +616,9 @@ def write_normalized_document(
         if not _chain_bound(descriptors, names):
             raise _path_violation("normalized directory binding changed", path=str(directory))
         try:
-            verified, final_stat = _read_named_regular(directory_fd, final_name)
+            verified, final_stat = _read_named_regular(
+                directory_fd, final_name, expected_exists=True
+            )
         except OSError as exc:
             raise _storage("published normalized document cannot be verified", path=str(target)) from exc
         if verified != data or (created_stat is not None and not _same_inode(final_stat, created_stat)):
@@ -605,11 +630,18 @@ def write_normalized_document(
         temporary_name = None
         os.close(temporary_fd)
         temporary_fd = None
-        held_final_fd = os.open(final_name, _FILE_FLAGS, dir_fd=directory_fd)
-        held_before = os.fstat(held_final_fd)
-        held_entry_before = os.stat(
-            final_name, dir_fd=directory_fd, follow_symlinks=False
+        held_final_fd = _open_named_file(
+            directory_fd, final_name, expected_exists=True
         )
+        held_before = os.fstat(held_final_fd)
+        try:
+            held_entry_before = os.stat(
+                final_name, dir_fd=directory_fd, follow_symlinks=False
+            )
+        except FileNotFoundError as exc:
+            raise _path_violation(
+                "held normalized document disappeared", path=str(target)
+            ) from exc
         if (
             not stat.S_ISREG(held_before.st_mode)
             or not _same_inode(held_before, final_stat)
@@ -618,9 +650,14 @@ def write_normalized_document(
             raise _path_violation("held normalized document changed", path=str(target))
         held_data = _read_fd(held_final_fd)
         held = os.fstat(held_final_fd)
-        held_entry_after = os.stat(
-            final_name, dir_fd=directory_fd, follow_symlinks=False
-        )
+        try:
+            held_entry_after = os.stat(
+                final_name, dir_fd=directory_fd, follow_symlinks=False
+            )
+        except FileNotFoundError as exc:
+            raise _path_violation(
+                "held normalized document disappeared", path=str(target)
+            ) from exc
         if (
             held_data != data
             or not stat.S_ISREG(held.st_mode)
@@ -643,7 +680,7 @@ def write_normalized_document(
                     raise _path_violation("live normalized directory was rebound", path=str(directory))
             try:
                 live_data, live_stat = _read_named_regular(
-                    live_descriptors[-1], final_name
+                    live_descriptors[-1], final_name, expected_exists=True
                 )
             except FileNotFoundError as exc:
                 raise _path_violation(

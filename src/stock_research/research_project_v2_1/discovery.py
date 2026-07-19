@@ -961,12 +961,14 @@ def _directory_chain_is_bound(
     )
 
 
-def _read_regular_file_at(directory_fd: int, name: str) -> bytes:
+def _read_regular_file_at(
+    directory_fd: int, name: str, *, expected_exists: bool = False
+) -> bytes:
     flags = os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
     try:
         descriptor = os.open(name, flags, dir_fd=directory_fd)
     except OSError as exc:
-        if is_path_structure_error(exc):
+        if (expected_exists and exc.errno == errno.ENOENT) or is_path_structure_error(exc):
             raise _path_violation("unsafe managed path", target=name) from exc
         raise _storage("discovery batch read failed", target=name) from exc
     try:
@@ -982,11 +984,15 @@ def _read_regular_file_at(directory_fd: int, name: str) -> bytes:
         os.close(descriptor)
 
 
-def _final_entry_is_regular_at(directory_fd: int, name: str) -> bool:
+def _final_entry_is_regular_at(
+    directory_fd: int, name: str, *, expected_exists: bool = False
+) -> bool:
     flags = os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
     try:
         descriptor = os.open(name, flags, dir_fd=directory_fd)
     except OSError as exc:
+        if expected_exists and exc.errno == errno.ENOENT:
+            raise _path_violation("unsafe managed path", target=name) from exc
         if is_path_structure_error(exc):
             return False
         raise
@@ -1000,6 +1006,8 @@ def _final_entry_is_regular_at(directory_fd: int, name: str) -> bool:
             and opened.st_ino == entry.st_ino
         )
     except OSError as exc:
+        if expected_exists and exc.errno == errno.ENOENT:
+            raise _path_violation("unsafe managed path", target=name) from exc
         if is_path_structure_error(exc):
             return False
         raise
@@ -1022,12 +1030,14 @@ def _open_verified_final_at(
     name: str,
     expected: bytes,
     expected_inode: os.stat_result | None,
+    *,
+    expected_exists: bool = False,
 ) -> tuple[int, os.stat_result]:
     flags = os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
     try:
         descriptor = os.open(name, flags, dir_fd=directory_fd)
     except OSError as exc:
-        if is_path_structure_error(exc):
+        if (expected_exists and exc.errno == errno.ENOENT) or is_path_structure_error(exc):
             raise _path_violation("unsafe managed path", target=name) from exc
         raise _storage("discovery batch read failed", target=name) from exc
     try:
@@ -1051,7 +1061,7 @@ def _open_verified_final_at(
         raise
     except OSError as exc:
         os.close(descriptor)
-        if is_path_structure_error(exc):
+        if (expected_exists and exc.errno == errno.ENOENT) or is_path_structure_error(exc):
             raise _path_violation("unsafe managed path", target=name) from exc
         raise _storage("discovery batch read failed", target=name) from exc
 
@@ -1219,7 +1229,9 @@ def write_discovery_batch(
             created_final_stat = temporary_stat
             os.fsync(batch_fd)
         except FileExistsError:
-            existing = _read_regular_file_at(batch_fd, final_name)
+            existing = _read_regular_file_at(
+                batch_fd, final_name, expected_exists=True
+            )
             if existing != data:
                 raise _immutability_error(
                     "immutable batch path conflict", path=str(target)
@@ -1231,14 +1243,18 @@ def write_discovery_batch(
         ):
             raise _path_violation("unsafe managed path", path=str(batch_dir))
         os.fsync(batch_fd)
-        verified = _read_regular_file_at(batch_fd, final_name)
+        verified = _read_regular_file_at(
+            batch_fd, final_name, expected_exists=True
+        )
         if verified != data:
             raise _immutability_error(
                 "immutable batch path conflict", path=str(target)
             )
         _unlink_and_sync(batch_fd, temporary_name)
         temporary_name = None
-        if not _final_entry_is_regular_at(batch_fd, final_name):
+        if not _final_entry_is_regular_at(
+            batch_fd, final_name, expected_exists=True
+        ):
             raise _path_violation("unsafe managed path", path=str(target))
         try:
             held_final_fd, held_final_stat = _open_verified_final_at(
@@ -1246,6 +1262,7 @@ def write_discovery_batch(
                 final_name,
                 data,
                 created_final_stat if final_created else None,
+                expected_exists=True,
             )
         except ResearchProjectV2Error:
             raise

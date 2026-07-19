@@ -1080,6 +1080,66 @@ def test_writer_classifies_post_publish_unlink_as_path_violation(
     assert list(batch_dir.iterdir()) == []
 
 
+def test_writer_classifies_immediate_post_link_unlink_as_path_violation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    batch = discover_sources(
+        search_plan(), StaticProvider({}), provider_name="static",
+        discovered_at=DISCOVERED_AT, provenance=PROVENANCE,
+    )
+    original_link = discovery_module.os.link
+
+    def link_then_unlink(source, target, **kwargs):
+        original_link(source, target, **kwargs)
+        discovery_module.os.unlink(target, dir_fd=kwargs["dst_dir_fd"])
+
+    monkeypatch.setattr(discovery_module.os, "link", link_then_unlink)
+    error = assert_discovery_error(
+        lambda: write_discovery_batch(batch, layout=layout),
+        reason="unsafe managed path",
+    )
+    assert error.code == "RESEARCH_PROJECT_V2_1_DISCOVERY_PATH_VIOLATION"
+
+
+@pytest.mark.parametrize("window", ["final_entry", "held_open"])
+def test_writer_classifies_later_post_link_unlink_windows_as_path_violation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, window: str
+) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    batch = discover_sources(
+        search_plan(), StaticProvider({}), provider_name="static",
+        discovered_at=DISCOVERED_AT, provenance=PROVENANCE,
+    )
+    if window == "final_entry":
+        original_cleanup = discovery_module._unlink_and_sync
+
+        def cleanup_then_unlink(directory_fd, name):
+            result = original_cleanup(directory_fd, name)
+            final_name = f"{batch['content_hash']}.json"
+            discovery_module.os.unlink(final_name, dir_fd=directory_fd)
+            return result
+
+        monkeypatch.setattr(discovery_module, "_unlink_and_sync", cleanup_then_unlink)
+    else:
+        original_check = discovery_module._final_entry_is_regular_at
+
+        def check_then_unlink(directory_fd, name, **kwargs):
+            result = original_check(directory_fd, name, **kwargs)
+            discovery_module.os.unlink(name, dir_fd=directory_fd)
+            return result
+
+        monkeypatch.setattr(
+            discovery_module, "_final_entry_is_regular_at", check_then_unlink
+        )
+
+    error = assert_discovery_error(
+        lambda: write_discovery_batch(batch, layout=layout),
+        reason="unsafe managed path",
+    )
+    assert error.code == "RESEARCH_PROJECT_V2_1_DISCOVERY_PATH_VIOLATION"
+
+
 def test_writer_classifies_enospc_directory_creation_as_runtime_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1309,9 +1369,11 @@ def test_writer_detects_batch_rebind_after_readback_before_return(
     original_read = discovery_module._read_regular_file_at
     swapped = False
 
-    def read_then_swap(directory_fd: int, name: str) -> bytes:
+    def read_then_swap(
+        directory_fd: int, name: str, **kwargs: object
+    ) -> bytes:
         nonlocal swapped
-        data = original_read(directory_fd, name)
+        data = original_read(directory_fd, name, **kwargs)
         if not swapped:
             swapped = True
             batch_dir.rename(detached)
@@ -1350,7 +1412,7 @@ def test_writer_detects_regular_file_replacement_after_readback(
     original_verify = discovery_module._final_entry_is_regular_at
     replaced = False
 
-    def replace_then_verify(directory_fd: int, name: str):
+    def replace_then_verify(directory_fd: int, name: str, **kwargs: object):
         nonlocal replaced
         if not replaced:
             replaced = True
@@ -1368,7 +1430,7 @@ def test_writer_detects_regular_file_replacement_after_readback(
                 discovery_module.os.write(descriptor, b"evil")
             finally:
                 discovery_module.os.close(descriptor)
-        return original_verify(directory_fd, name)
+        return original_verify(directory_fd, name, **kwargs)
 
     monkeypatch.setattr(
         discovery_module, "_final_entry_is_regular_at", replace_then_verify

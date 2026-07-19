@@ -792,6 +792,37 @@ def test_writer_classifies_post_publish_unlink_as_path_violation(
     assert exc.value.code == "RESEARCH_PROJECT_V2_1_EVIDENCE_PATH_VIOLATION"
 
 
+@pytest.mark.parametrize("window", ["first_verification", "held_open"])
+def test_writer_classifies_earlier_post_link_unlink_windows_as_path_violation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, window: str
+) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    artifact = _artifact("artifact:early-unlink", "a" * 64, publisher_family="issuer")
+    assessment = _assessment(artifact, role="supports", reviewed=False)
+    final_name = f"{assessment['assessment_id']}.json"
+    if window == "first_verification":
+        original_link = evidence_module.os.link
+
+        def link_then_unlink(source, target, **kwargs):
+            original_link(source, target, **kwargs)
+            evidence_module.os.unlink(target, dir_fd=kwargs["dst_dir_fd"])
+
+        monkeypatch.setattr(evidence_module.os, "link", link_then_unlink)
+    else:
+        original_cleanup = evidence_module._retire_temporary
+
+        def cleanup_then_unlink(directory_fd, retired_fd, name, expected):
+            result = original_cleanup(directory_fd, retired_fd, name, expected)
+            evidence_module.os.unlink(final_name, dir_fd=directory_fd)
+            return result
+
+        monkeypatch.setattr(evidence_module, "_retire_temporary", cleanup_then_unlink)
+
+    with pytest.raises(ResearchProjectV2Error) as exc:
+        write_industry_evidence_assessment(assessment, layout=layout)
+    assert exc.value.code == "RESEARCH_PROJECT_V2_1_EVIDENCE_PATH_VIOLATION"
+
+
 @pytest.mark.parametrize(
     "kwargs",
     [

@@ -900,13 +900,23 @@ def _read_fd(descriptor: int) -> bytes:
     return b"".join(chunks)
 
 
-def _read_regular(directory_fd: int, name: str) -> tuple[bytes, os.stat_result]:
+def _open_assessment_file(
+    directory_fd: int, name: str, *, expected_exists: bool = False
+) -> int:
     try:
-        descriptor = os.open(name, _FILE_FLAGS, dir_fd=directory_fd)
+        return os.open(name, _FILE_FLAGS, dir_fd=directory_fd)
     except OSError as exc:
-        if is_path_structure_error(exc):
+        if (expected_exists and exc.errno == errno.ENOENT) or is_path_structure_error(exc):
             raise _path_violation("unsafe assessment file", name=name) from exc
         raise
+
+
+def _read_regular(
+    directory_fd: int, name: str, *, expected_exists: bool = False
+) -> tuple[bytes, os.stat_result]:
+    descriptor = _open_assessment_file(
+        directory_fd, name, expected_exists=expected_exists
+    )
     try:
         before = os.fstat(descriptor)
         entry = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
@@ -924,6 +934,12 @@ def _read_regular(directory_fd: int, name: str) -> tuple[bytes, os.stat_result]:
         ):
             raise _path_violation("unbound assessment file", name=name)
         return data, after
+    except OSError as exc:
+        if expected_exists and exc.errno == errno.ENOENT:
+            raise _path_violation(
+                "expected assessment disappeared", name=name
+            ) from exc
+        raise
     finally:
         os.close(descriptor)
 
@@ -1039,10 +1055,14 @@ def write_industry_evidence_assessment(
             os.fsync(directory_fd)
         except FileExistsError:
             created = None
-            existing, _ = _read_regular(directory_fd, final_name)
+            existing, _ = _read_regular(
+                directory_fd, final_name, expected_exists=True
+            )
             if existing != data:
                 raise _immutability("immutable assessment path conflict", path=str(target))
-        verified, final_stat = _read_regular(directory_fd, final_name)
+        verified, final_stat = _read_regular(
+            directory_fd, final_name, expected_exists=True
+        )
         if verified != data or (created is not None and not _same_inode(created, final_stat)):
             raise _immutability("published assessment changed", path=str(target))
         if not _retire_temporary(
@@ -1052,11 +1072,20 @@ def write_industry_evidence_assessment(
         temporary_name = None
         os.close(temporary_fd)
         temporary_fd = None
-        held_fd = os.open(final_name, _FILE_FLAGS, dir_fd=directory_fd)
+        held_fd = _open_assessment_file(
+            directory_fd, final_name, expected_exists=True
+        )
         held_before = os.fstat(held_fd)
         held_data = _read_fd(held_fd)
         held_after = os.fstat(held_fd)
-        held_entry = os.stat(final_name, dir_fd=directory_fd, follow_symlinks=False)
+        try:
+            held_entry = os.stat(
+                final_name, dir_fd=directory_fd, follow_symlinks=False
+            )
+        except FileNotFoundError as exc:
+            raise _path_violation(
+                "held assessment disappeared", path=str(target)
+            ) from exc
         if (
             held_data != data
             or not _same_inode(held_before, held_after)
@@ -1071,7 +1100,7 @@ def write_industry_evidence_assessment(
                 raise _path_violation("live assessment directory was rebound")
         try:
             live_data, live_stat = _read_regular(
-                live_descriptors[-1], final_name
+                live_descriptors[-1], final_name, expected_exists=True
             )
         except FileNotFoundError as exc:
             raise _path_violation(

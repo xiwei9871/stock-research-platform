@@ -666,6 +666,40 @@ def test_write_classifies_post_publish_unlink_as_path_violation(
     assert exc.value.code == "RESEARCH_PROJECT_V2_1_NORMALIZE_PATH_VIOLATION"
 
 
+@pytest.mark.parametrize("window", ["first_verification", "held_open"])
+def test_write_classifies_earlier_post_link_unlink_windows_as_path_violation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, window: str
+) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    artifact = _artifact(layout, b"early unlink", "text/plain", "txt")
+    document = normalize_artifact(
+        artifact, layout=layout, parsed_at="2026-07-18T00:00:00Z",
+        provenance=_provenance("early-unlink"),
+    )
+    final_name = f"{document['document_id']}.json"
+    if window == "first_verification":
+        original_link = normalize_module.os.link
+
+        def link_then_unlink(source, target, **kwargs):
+            original_link(source, target, **kwargs)
+            normalize_module.os.unlink(target, dir_fd=kwargs["dst_dir_fd"])
+
+        monkeypatch.setattr(normalize_module.os, "link", link_then_unlink)
+    else:
+        original_cleanup = normalize_module._unlink_if_inode
+
+        def cleanup_then_unlink(directory_fd, retired_fd, name, expected):
+            result = original_cleanup(directory_fd, retired_fd, name, expected)
+            normalize_module.os.unlink(final_name, dir_fd=directory_fd)
+            return result
+
+        monkeypatch.setattr(normalize_module, "_unlink_if_inode", cleanup_then_unlink)
+
+    with pytest.raises(ResearchProjectV2Error) as exc:
+        write_normalized_document(document, layout=layout)
+    assert exc.value.code == "RESEARCH_PROJECT_V2_1_NORMALIZE_PATH_VIOLATION"
+
+
 def test_write_rejects_symlinked_retired_directory_before_publication(tmp_path: Path) -> None:
     layout = LayeredResearchLayout(tmp_path / "v2_1")
     artifact = _artifact(layout, b"retired symlink", "text/plain", "txt")
