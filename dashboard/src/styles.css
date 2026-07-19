@@ -6344,6 +6344,19 @@ table.data-table td {
   width: 13%;
 }
 
+.theme-research-company-row {
+  cursor: pointer;
+}
+
+.theme-research-company-row:hover td {
+  background: #f8fbff;
+}
+
+.theme-research-company-row:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: -2px;
+}
+
 .theme-research-primary-link {
   width: 100%;
   min-width: 0;

@@ -387,9 +387,11 @@ describe('ThemeResearchWorkspace', () => {
     );
 
     expect(await screen.findByRole('heading', { name: '公司映射' })).toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: '操作' })).not.toBeInTheDocument();
     const olluRow = screen.getByRole('row', { name: /欧陆通/ });
     expect(within(olluRow).getByText('覆盖缺口')).toBeInTheDocument();
-    fireEvent.click(within(olluRow).getByRole('button', { name: '打开欧陆通个股工作台' }));
+    expect(within(olluRow).queryByRole('button', { name: '打开欧陆通个股工作台' })).not.toBeInTheDocument();
+    fireEvent.click(olluRow);
 
     expect(openStock).toHaveBeenCalledWith('/tech-bottleneck/stock/300870.SZ?source=theme_research');
   });

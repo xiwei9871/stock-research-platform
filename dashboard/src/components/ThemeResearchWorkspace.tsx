@@ -614,10 +614,26 @@ function SourcesView({ sources, claims }: { sources: ThemeResearchSource[]; clai
 }
 
 function CompaniesView({ companies, onOpenStock }: { companies: ThemeResearchCompany[]; onOpenStock: (path: string) => void }) {
+  const handleCompanyActivate = (path: string) => {
+    onOpenStock(path);
+  };
+
   return (
     <div className="theme-research-view">
       <header className="theme-research-view-header"><h2>公司映射</h2><span>{companies.length} 家公司</span></header>
-      {companies.length ? <div className="theme-research-table-wrap"><table className="theme-research-table theme-research-company-table"><thead><tr><th>公司</th><th>节点</th><th>映射</th><th>相关度</th><th>业务重要性</th><th>证据</th><th>研究优先级</th><th>复盘库</th><th>操作</th></tr></thead><tbody>{companies.map((company) => <tr key={company.mapping_id}><td><strong>{company.company_name}</strong><small>{company.company_code}</small></td><td>{nodeLabel(company.mapped_node.node_id, company.mapped_node.node_name)}</td><td>{readableStatus(company.mapping_type)}</td><td><Score value={company.company_relevance_score} /></td><td>{readableStatus(company.business_materiality)}</td><td><Score value={company.mapped_node.evidence_strength} /></td><td><Score value={company.company_research_priority_score} /><small>{readableStatus(company.recommended_action)}</small></td><td><StatusBadge value={company.integration_status} /><small>{readableStatus(company.existing_review_context.status)}</small></td><td><button className="icon-button" type="button" onClick={() => onOpenStock(company.tech_bottleneck_stock_path)} aria-label={`打开${company.company_name}个股工作台`} title="打开个股工作台"><ExternalLink size={16} aria-hidden="true" /></button></td></tr>)}</tbody></table></div> : <div className="theme-research-empty">当前主题还没有公司映射。</div>}
+      {companies.length ? <div className="theme-research-table-wrap"><table className="theme-research-table theme-research-company-table"><thead><tr><th>公司</th><th>节点</th><th>映射</th><th>相关度</th><th>业务重要性</th><th>证据</th><th>研究优先级</th><th>复盘库</th></tr></thead><tbody>{companies.map((company) => <tr
+        key={company.mapping_id}
+        className="theme-research-company-row"
+        tabIndex={0}
+        onClick={() => handleCompanyActivate(company.tech_bottleneck_stock_path)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            handleCompanyActivate(company.tech_bottleneck_stock_path);
+          }
+        }}
+        title={`打开${company.company_name}个股工作台`}
+      ><td><strong>{company.company_name}</strong><small>{company.company_code}</small></td><td>{nodeLabel(company.mapped_node.node_id, company.mapped_node.node_name)}</td><td>{readableStatus(company.mapping_type)}</td><td><Score value={company.company_relevance_score} /></td><td>{readableStatus(company.business_materiality)}</td><td><Score value={company.mapped_node.evidence_strength} /></td><td><Score value={company.company_research_priority_score} /><small>{readableStatus(company.recommended_action)}</small></td><td><StatusBadge value={company.integration_status} /><small>{readableStatus(company.existing_review_context.status)}</small></td></tr>)}</tbody></table></div> : <div className="theme-research-empty">当前主题还没有公司映射。</div>}
     </div>
   );
 }
