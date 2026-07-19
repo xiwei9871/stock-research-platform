@@ -45,6 +45,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--baseline-path", default=str(DEFAULT_BASELINE_PATH))
     parser.add_argument("--output")
     parser.add_argument("--emit-candidates")
+    parser.add_argument("--start-date")
+    parser.add_argument("--end-date")
     return parser
 
 
@@ -195,64 +197,125 @@ def build_candidate(
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
-        baselines = load_baselines(args.baseline_path)
-        by_key = {(row["strategy_id"], row["profile"]): row for row in baselines}
-        contracts = [
-            contract
-            for contract in iter_publication_contracts()
-            if contract.profile == args.profile
-            and (args.all or contract.strategy_id == args.strategy_id)
-        ]
-        if not contracts:
-            raise ValueError(f"no registered strategy selected for profile {args.profile!r}")
-
-        reports: list[dict[str, Any]] = []
-        candidates: list[dict[str, Any]] = []
-        with tempfile.TemporaryDirectory(prefix="strategy-publication-acceptance-") as temp_root:
-            for contract in contracts:
-                key = (contract.strategy_id, contract.profile)
-                baseline = by_key.get(key)
-                if baseline is None:
-                    raise ValueError(f"approved baseline missing: {key[0]}/{key[1]}")
-                result = run_fresh_backtest(_fresh_payload(contract, baseline))
-                prepared = materialize_result_artifacts(
-                    result,
-                    template=baseline,
-                    output_dir=Path(temp_root) / contract.strategy_id / contract.profile,
-                )
-                if args.emit_candidates:
-                    candidates.append(build_candidate(prepared, template=baseline))
-                else:
-                    reports.append(validate_result(prepared, baseline=baseline))
-
-        if args.emit_candidates:
-            _write_json_exclusive(
-                Path(args.emit_candidates),
-                {"schema_version": BASELINE_SCHEMA_VERSION, "baselines": candidates},
-            )
-            reports = [
-                {
-                    "status": "candidate_emitted",
-                    "strategy_id": row["strategy_id"],
-                    "profile": row["profile"],
-                }
-                for row in candidates
-            ]
-        report = {"status": "success", "validated_count": len(reports), "items": reports}
-        if args.output:
-            _write_json(Path(args.output), report)
-        print(json.dumps(report, ensure_ascii=False, sort_keys=True))
-        return 0
-    except (KeyError, OSError, RuntimeError, TypeError, ValueError) as exc:
+        report = _run_cli(args)
+        exit_code = 0
+    except Exception as exc:
         report = {
             "status": "failed",
             "error": str(exc),
             "error_type": type(exc).__name__,
         }
-        if args.output:
-            _write_json(Path(args.output), report)
-        print(json.dumps(report, ensure_ascii=False, sort_keys=True))
-        return 1
+        exit_code = 1
+    return _emit_cli_report(report, output=args.output, exit_code=exit_code)
+
+
+def _run_cli(args: argparse.Namespace) -> dict[str, Any]:
+    contracts = [
+        contract
+        for contract in iter_publication_contracts()
+        if contract.profile == args.profile
+        and (args.all or contract.strategy_id == args.strategy_id)
+    ]
+    if not contracts:
+        raise ValueError(f"no registered strategy selected for profile {args.profile!r}")
+    bootstrap = bool(
+        args.emit_candidates
+        and args.strategy_id
+        and args.start_date
+        and args.end_date
+    )
+    if bool(args.start_date) != bool(args.end_date):
+        raise ValueError("--start-date and --end-date must be provided together")
+    if (args.start_date or args.end_date) and not bootstrap:
+        raise ValueError("explicit replay dates are only supported for selected candidate emission")
+    if bootstrap:
+        if len(contracts) != 1:
+            raise ValueError("candidate bootstrap requires exactly one registered strategy/profile")
+        contract = contracts[0]
+        by_key = {
+            (contract.strategy_id, contract.profile): _candidate_replay_template(
+                contract,
+                start_date=args.start_date,
+                end_date=args.end_date,
+            )
+        }
+    else:
+        baselines = load_baselines(args.baseline_path)
+        by_key = {(row["strategy_id"], row["profile"]): row for row in baselines}
+
+    reports: list[dict[str, Any]] = []
+    candidates: list[dict[str, Any]] = []
+    with tempfile.TemporaryDirectory(prefix="strategy-publication-acceptance-") as temp_root:
+        for contract in contracts:
+            key = (contract.strategy_id, contract.profile)
+            baseline = by_key.get(key)
+            if baseline is None:
+                raise ValueError(f"approved baseline missing: {key[0]}/{key[1]}")
+            result = run_fresh_backtest(_fresh_payload(contract, baseline))
+            prepared = materialize_result_artifacts(
+                result,
+                template=baseline,
+                output_dir=Path(temp_root) / contract.strategy_id / contract.profile,
+            )
+            if args.emit_candidates:
+                candidates.append(build_candidate(prepared, template=baseline))
+            else:
+                reports.append(validate_result(prepared, baseline=baseline))
+
+    if args.emit_candidates:
+        _write_json_exclusive(
+            Path(args.emit_candidates),
+            {"schema_version": BASELINE_SCHEMA_VERSION, "baselines": candidates},
+        )
+        reports = [
+            {
+                "status": "candidate_emitted",
+                "strategy_id": row["strategy_id"],
+                "profile": row["profile"],
+            }
+            for row in candidates
+        ]
+    return {"status": "success", "validated_count": len(reports), "items": reports}
+
+
+def _candidate_replay_template(
+    contract: Any,
+    *,
+    start_date: str,
+    end_date: str,
+) -> dict[str, Any]:
+    start = _parse_date(start_date, "--start-date")
+    end = _parse_date(end_date, "--end-date")
+    if start > end:
+        raise ValueError("--start-date must be on or before --end-date")
+    return {
+        "strategy_id": contract.strategy_id,
+        "profile": contract.profile,
+        "baseline_start_date": start.isoformat(),
+        "baseline_end_date": end.isoformat(),
+    }
+
+
+def _emit_cli_report(
+    report: dict[str, Any],
+    *,
+    output: str | None,
+    exit_code: int,
+) -> int:
+    final_report = report
+    final_exit_code = exit_code
+    if output:
+        try:
+            _write_json(Path(output), report)
+        except Exception as exc:
+            final_report = {
+                "status": "failed",
+                "error": str(exc),
+                "error_type": type(exc).__name__,
+            }
+            final_exit_code = 1
+    print(json.dumps(final_report, ensure_ascii=False, sort_keys=True))
+    return final_exit_code
 
 
 def materialize_result_artifacts(
@@ -263,7 +326,7 @@ def materialize_result_artifacts(
 ) -> dict[str, Any]:
     """Persist authoritative in-memory collections for byte-level acceptance auditing."""
 
-    output = Path(output_dir)
+    output = Path(output_dir).resolve()
     output.mkdir(parents=True, exist_ok=True)
     artifact_files: dict[str, str] = {}
     materialized_records: dict[str, list[dict[str, Any]]] = {}
@@ -299,6 +362,7 @@ def materialize_result_artifacts(
     summary.setdefault("actual_start_date", actual_start)
     summary.setdefault("actual_end_date", actual_end)
     prepared["summary"] = summary
+    prepared["artifact_root"] = str(output)
     prepared["artifact_files"] = artifact_files
     return prepared
 
@@ -340,7 +404,11 @@ def _load_lhb_rejected_top5(
         if not isinstance(row, Mapping):
             raise ValueError(f"LHB rejected Top5 artifact malformed row {index}")
         try:
-            trade_date = _parse_date(row.get("trade_date"), "LHB rejected trade_date")
+            trade_date = _extract_canonical_date(
+                row,
+                ("trade_date",),
+                "LHB rejected trade_date",
+            )
             top_n = int(str(row.get("top_n") or ""))
         except (TypeError, ValueError) as exc:
             raise ValueError(f"LHB rejected Top5 artifact malformed row {index}: {exc}") from exc
@@ -403,6 +471,20 @@ def _audit_artifact_files(
     if not isinstance(artifact_files, Mapping) or not artifact_files:
         failures.append("artifact files missing; declared artifact_evidence is not authoritative")
         return [], {}
+    raw_root = result.get("artifact_root")
+    if not isinstance(raw_root, str) or not raw_root:
+        failures.append("trusted artifact_root missing or malformed")
+        return [], {}
+    root_path = Path(raw_root)
+    try:
+        if _first_symlink_component(root_path) is not None:
+            raise ValueError("symlink component in artifact_root")
+        trusted_root = root_path.resolve(strict=True)
+        if not trusted_root.is_dir():
+            raise ValueError("artifact_root is not a directory")
+    except (OSError, ValueError) as exc:
+        failures.append(f"trusted artifact_root invalid: {exc}")
+        return [], {}
     expected_names = (
         {str(row.get("name")) for row in expected if isinstance(row, Mapping)}
         if isinstance(expected, list)
@@ -423,9 +505,14 @@ def _audit_artifact_files(
             continue
         path = Path(raw_path)
         try:
+            symlink = _first_symlink_component(path)
+            if symlink is not None:
+                raise ValueError(f"symlink component in artifact path: {symlink}")
             resolved = path.resolve(strict=True)
-            if resolved in resolved_paths or not resolved.is_file() or path.is_symlink():
-                raise ValueError("path is duplicate, non-regular, or symlinked")
+            if not resolved.is_relative_to(trusted_root):
+                raise ValueError("outside trusted artifact_root")
+            if resolved in resolved_paths or not resolved.is_file():
+                raise ValueError("path is duplicate or non-regular")
             content = resolved.read_bytes()
             payload = json.loads(content)
             records = _require_record_collection(payload, name)
@@ -441,11 +528,27 @@ def _audit_artifact_files(
                 "record_count": len(records),
             }
         )
-    if expected is not None and evidence != expected:
+    normalized_expected = (
+        sorted((dict(row) for row in expected), key=lambda row: str(row.get("name")))
+        if isinstance(expected, list)
+        else expected
+    )
+    if normalized_expected is not None and evidence != normalized_expected:
         failures.append(
-            f"acceptance mismatch for artifact_evidence: expected {expected!r}, got {evidence!r}"
+            "acceptance mismatch for artifact_evidence: expected "
+            f"{normalized_expected!r}, got {evidence!r}"
         )
     return evidence, records_by_name
+
+
+def _first_symlink_component(path: Path) -> Path | None:
+    absolute = path.absolute()
+    current = Path(absolute.anchor)
+    for part in absolute.parts[1:]:
+        current = current / part
+        if current.is_symlink():
+            return current
+    return None
 
 
 def _with_audited_records(
@@ -687,9 +790,14 @@ def _curve_boundaries(
         if not isinstance(row, Mapping):
             failures.append(f"equity curve row {index} malformed")
             continue
-        raw_date = row.get("trade_date") or row.get("date")
         try:
-            parsed_dates.append(_parse_date(raw_date, f"equity curve row {index} date"))
+            parsed_dates.append(
+                _extract_canonical_date(
+                    row,
+                    ("trade_date", "date"),
+                    f"equity curve row {index} date",
+                )
+            )
         except ValueError as exc:
             failures.append(str(exc))
     if len(parsed_dates) != len(equity_curve):
@@ -706,6 +814,22 @@ def _parse_date(value: Any, field: str) -> date:
         return date.fromisoformat(value)
     except ValueError as exc:
         raise ValueError(f"{field} must be parseable ISO date") from exc
+
+
+def _extract_canonical_date(
+    row: Mapping[str, Any],
+    aliases: Sequence[str],
+    field: str,
+) -> date:
+    present = [(alias, row.get(alias)) for alias in aliases if row.get(alias) not in (None, "")]
+    if not present:
+        raise ValueError(f"{field} must be present and parseable")
+    parsed = [(alias, _parse_date(value, f"{field}.{alias}")) for alias, value in present]
+    distinct = {value for _alias, value in parsed}
+    if len(distinct) != 1:
+        declarations = {alias: value.isoformat() for alias, value in parsed}
+        raise ValueError(f"{field} aliases disagree: {declarations!r}")
+    return parsed[0][1]
 
 
 def _observed_summary(result: Mapping[str, Any], failures: list[str]) -> dict[str, Any]:
@@ -730,24 +854,41 @@ def _count_filled_trades(
     summary: Mapping[str, Any],
     failures: list[str],
 ) -> int:
-    declared = summary.get("filled_trade_count")
-    if declared is not None:
-        return _non_negative_int(declared, "filled_trade_count", failures)
     trades = result.get("trades")
     if not isinstance(trades, list):
         failures.append("trades missing or malformed")
         return 0
     status_fields = ("account_trade_status", "fill_status", "status")
-    statuses = [
-        str(row[field]).lower()
-        for row in trades
-        if isinstance(row, Mapping)
-        for field in status_fields
-        if row.get(field) is not None
-    ]
-    if statuses:
-        return sum(status == "filled" for status in statuses)
-    return len(trades)
+    derived = 0
+    for index, row in enumerate(trades):
+        if not isinstance(row, Mapping):
+            failures.append(f"trades row {index} must be an object")
+            continue
+        declarations = [
+            (field, str(row[field]).strip().lower())
+            for field in status_fields
+            if row.get(field) not in (None, "")
+        ]
+        distinct = {value for _field, value in declarations}
+        if len(distinct) > 1:
+            failures.append(
+                f"conflicting trade status aliases at trades row {index}: "
+                f"{dict(declarations)!r}"
+            )
+            continue
+        chosen = declarations[0][1] if declarations else None
+        if chosen in (None, "filled"):
+            derived += 1
+
+    declared = summary.get("filled_trade_count")
+    if declared is not None:
+        declared_count = _non_negative_int(declared, "filled_trade_count", failures)
+        if declared_count != derived:
+            failures.append(
+                "acceptance mismatch for filled_trade_count: "
+                f"declared={declared_count}, derived={derived}"
+            )
+    return derived
 
 
 def _count_cash_slots(
@@ -918,29 +1059,25 @@ def _validate_evidence_date_bounds(
             if not isinstance(row, Mapping):
                 failures.append(f"{collection} row {index} malformed for replay date bounds")
                 continue
-            present_fields = [field for field in date_fields if row.get(field) not in (None, "")]
-            if not present_fields:
-                failures.append(f"{collection} row {index} action date missing")
+            try:
+                action_date = _extract_canonical_date(
+                    row,
+                    date_fields,
+                    f"{collection} row {index} date",
+                )
+            except ValueError as exc:
+                failures.append(str(exc))
                 continue
-            for field in present_fields:
-                try:
-                    action_date = _parse_date(
-                        row.get(field),
-                        f"{collection} row {index} {field}",
-                    )
-                except ValueError as exc:
-                    failures.append(str(exc))
-                    continue
-                if not requested_start <= action_date <= requested_end:
-                    failures.append(
-                        f"{collection} row {index} {field} outside requested replay window: "
-                        f"{action_date.isoformat()}"
-                    )
-                if action_date > actual_end:
-                    failures.append(
-                        f"{collection} row {index} {field} is later than actual curve end: "
-                        f"{action_date.isoformat()}"
-                    )
+            if not requested_start <= action_date <= requested_end:
+                failures.append(
+                    f"{collection} row {index} date outside requested replay window: "
+                    f"{action_date.isoformat()}"
+                )
+            if action_date > actual_end:
+                failures.append(
+                    f"{collection} row {index} date is later than actual curve end: "
+                    f"{action_date.isoformat()}"
+                )
 
 
 def _validate_holdings_reconciliation(
@@ -959,7 +1096,11 @@ def _validate_holdings_reconciliation(
     trade_events: dict[date, list[Mapping[str, Any]]] = {}
     for index, row in enumerate(trades):
         try:
-            event_date = _parse_date(row.get("trade_date"), f"trades row {index} trade_date")
+            event_date = _extract_canonical_date(
+                row,
+                ("trade_date",),
+                f"trades row {index} date",
+            )
             asset_id = str(row.get("asset_id") or "")
             target_weight = _finite_number(row.get("target_weight"), f"trades row {index} target_weight")
             if not asset_id or target_weight < 0:
@@ -971,9 +1112,12 @@ def _validate_holdings_reconciliation(
 
     position_snapshots: dict[date, set[str]] = {}
     for index, row in enumerate(positions):
-        raw_date = row.get("rebalance_date") or row.get("trade_date")
         try:
-            snapshot_date = _parse_date(raw_date, f"positions row {index} date")
+            snapshot_date = _extract_canonical_date(
+                row,
+                ("rebalance_date", "trade_date", "date"),
+                f"positions row {index} date",
+            )
             asset_id = str(row.get("asset_id") or "")
             weight = _finite_number(row.get("weight"), f"positions row {index} weight")
             if not asset_id or weight <= 0:
@@ -987,9 +1131,12 @@ def _validate_holdings_reconciliation(
     state: dict[str, float] = {}
     action_index = 0
     for curve_index, row in enumerate(equity):
-        raw_date = row.get("trade_date") or row.get("date")
         try:
-            curve_date = _parse_date(raw_date, f"equity row {curve_index} date")
+            curve_date = _extract_canonical_date(
+                row,
+                ("trade_date", "date"),
+                f"equity row {curve_index} date",
+            )
         except ValueError as exc:
             failures.append(f"holdings reconciliation: {exc}")
             continue

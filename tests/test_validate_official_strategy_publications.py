@@ -9,6 +9,7 @@ from copy import deepcopy
 from pathlib import Path
 
 import pytest
+from psycopg import OperationalError
 
 from stock_research.strategy_publication_contracts import (
     build_publication_identity,
@@ -168,6 +169,7 @@ def _raw_result(tmp_path: Path, *, strategy_id: str = "mid_trend") -> dict:
                 "data_coverage": {"candidate_snapshot_latest_date": "2026-06-16"},
             }
         )
+        result["positions"][0].pop("rebalance_date", None)
         result["positions"][0]["trade_date"] = "2026-01-01"
         result["trades"][0]["trade_date"] = "2026-01-01"
     return result
@@ -318,6 +320,28 @@ def test_validator_requires_parseable_actual_dates_and_curve_boundaries(tmp_path
         validator.validate_result(result, baseline=baseline)
 
 
+def test_candidate_rejects_conflicting_equity_date_aliases(tmp_path):
+    result = _raw_result(tmp_path)
+    result["equity_curve"][0]["date"] = "2026-01-03"
+
+    with pytest.raises(ValueError, match="equity curve row 0 date aliases disagree"):
+        validator.materialize_result_artifacts(
+            result,
+            template=_template(),
+            output_dir=tmp_path / "conflicting-equity-date",
+        )
+
+
+def test_validator_rejects_conflicting_position_date_aliases(tmp_path):
+    baseline, result = _approved_pair(tmp_path)
+    positions = deepcopy(result["positions"])
+    positions[0]["trade_date"] = "2026-01-03"
+    _rewrite_artifact_and_approve(result, baseline, name="positions.json", rows=positions)
+
+    with pytest.raises(ValueError, match="positions row 0 date aliases disagree"):
+        validator.validate_result(result, baseline=baseline)
+
+
 def test_materializer_derives_missing_actual_dates_from_authoritative_curve(tmp_path):
     result = _raw_result(tmp_path, strategy_id="tech_bottleneck")
     result["summary"].pop("actual_start_date")
@@ -371,6 +395,38 @@ def test_validator_fails_closed_for_missing_mixed_or_malformed_artifact_evidence
     malformed["artifact_evidence"][0]["sha256"] = "bad"
     with pytest.raises(ValueError, match="malformed.*sha256"):
         validator.validate_result(prepared, baseline=malformed)
+
+
+def test_artifact_evidence_order_is_semantically_irrelevant(tmp_path):
+    baseline, result = _approved_pair(tmp_path)
+    baseline["artifact_evidence"] = list(reversed(baseline["artifact_evidence"]))
+
+    assert validator.validate_result(result, baseline=baseline)["status"] == "success"
+
+
+def test_artifact_audit_rejects_file_outside_declared_trusted_root(tmp_path):
+    baseline, result = _approved_pair(tmp_path)
+    outside = tmp_path / "outside-equity.json"
+    outside.write_bytes(Path(result["artifact_files"]["equity_curve.json"]).read_bytes())
+    result["artifact_files"]["equity_curve.json"] = str(outside)
+
+    with pytest.raises(ValueError, match="outside trusted artifact_root"):
+        validator.validate_result(result, baseline=baseline)
+
+
+def test_artifact_audit_rejects_symlinked_parent_component(tmp_path):
+    baseline, result = _approved_pair(tmp_path)
+    root = Path(result["artifact_root"])
+    external = tmp_path / "external"
+    external.mkdir()
+    target = external / "equity_curve.json"
+    target.write_bytes(Path(result["artifact_files"]["equity_curve.json"]).read_bytes())
+    link = root / "linked-parent"
+    link.symlink_to(external, target_is_directory=True)
+    result["artifact_files"]["equity_curve.json"] = str(link / "equity_curve.json")
+
+    with pytest.raises(ValueError, match="symlink.*artifact path"):
+        validator.validate_result(result, baseline=baseline)
 
 
 def test_lhb_rejected_top5_evidence_reconciles_cash_slots_and_research_only_semantics(tmp_path):
@@ -525,6 +581,38 @@ def test_every_registered_strategy_has_a_specific_acceptance_callback():
 
     assert set(callbacks) == {"lhb_shortline", "mid_trend", "tech_bottleneck"}
     assert all(callable(callback) for callback in callbacks.values())
+
+
+def test_filled_trade_count_uses_one_precedence_status_per_row(tmp_path):
+    result = _raw_result(tmp_path)
+    result["summary"].pop("filled_trade_count")
+    result["trades"][0].update(
+        {"account_trade_status": "filled", "fill_status": "filled", "status": "filled"}
+    )
+    prepared = validator.materialize_result_artifacts(
+        result,
+        template=_template(),
+        output_dir=tmp_path / "same-statuses",
+    )
+
+    candidate = validator.build_candidate(prepared, template=_template())
+    assert candidate["summary"]["filled_trade_count"] == 1
+
+
+def test_filled_trade_count_rejects_conflicting_status_aliases(tmp_path):
+    result = _raw_result(tmp_path)
+    result["summary"].pop("filled_trade_count")
+    result["trades"][0].update(
+        {"account_trade_status": "filled", "fill_status": "rejected"}
+    )
+    prepared = validator.materialize_result_artifacts(
+        result,
+        template=_template(),
+        output_dir=tmp_path / "conflicting-statuses",
+    )
+
+    with pytest.raises(ValueError, match="conflicting trade status aliases"):
+        validator.build_candidate(prepared, template=_template())
 
 
 def test_lhb_acceptance_requires_safe_top5_eligible_filled_evidence(tmp_path):
@@ -723,6 +811,128 @@ def test_cli_expected_failure_emits_compact_json_and_returns_nonzero(
         "error": "authoritative replay failed",
         "error_type": "ValueError",
     }
+
+
+def test_cli_converts_psycopg_operational_error_to_compact_json(
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    contract = get_publication_contract("mid_trend")
+    monkeypatch.setattr(validator, "iter_publication_contracts", lambda: (contract,))
+    monkeypatch.setattr(validator, "load_baselines", lambda _path: [_template()])
+    monkeypatch.setattr(
+        validator,
+        "run_fresh_backtest",
+        lambda _payload: (_ for _ in ()).throw(OperationalError("database unavailable")),
+    )
+
+    exit_code = validator.main(
+        ["--strategy-id", "mid_trend", "--baseline-path", str(tmp_path / "ignored")]
+    )
+
+    assert exit_code == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["status"] == "failed"
+    assert payload["error_type"] == "OperationalError"
+
+
+def test_cli_does_not_catch_keyboard_interrupt(tmp_path, monkeypatch):
+    contract = get_publication_contract("mid_trend")
+    monkeypatch.setattr(validator, "iter_publication_contracts", lambda: (contract,))
+    monkeypatch.setattr(validator, "load_baselines", lambda _path: [_template()])
+    monkeypatch.setattr(
+        validator,
+        "run_fresh_backtest",
+        lambda _payload: (_ for _ in ()).throw(KeyboardInterrupt()),
+    )
+
+    with pytest.raises(KeyboardInterrupt):
+        validator.main(
+            ["--strategy-id", "mid_trend", "--baseline-path", str(tmp_path / "ignored")]
+        )
+
+
+def test_cli_output_write_failure_is_attempted_once_and_reported_to_stdout(
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    contract = get_publication_contract("mid_trend")
+    monkeypatch.setattr(validator, "iter_publication_contracts", lambda: (contract,))
+    monkeypatch.setattr(validator, "load_baselines", lambda _path: [_template()])
+    monkeypatch.setattr(
+        validator,
+        "run_fresh_backtest",
+        lambda _payload: (_ for _ in ()).throw(ValueError("primary failure")),
+    )
+    writes = []
+
+    def fail_write(path, payload):
+        writes.append((path, payload))
+        raise OSError("output unavailable")
+
+    monkeypatch.setattr(validator, "_write_json", fail_write)
+
+    exit_code = validator.main(
+        [
+            "--strategy-id",
+            "mid_trend",
+            "--baseline-path",
+            str(tmp_path / "ignored"),
+            "--output",
+            str(tmp_path / "report.json"),
+        ]
+    )
+
+    assert exit_code == 1
+    assert len(writes) == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["status"] == "failed"
+    assert payload["error_type"] == "OSError"
+    assert payload["error"] == "output unavailable"
+
+
+def test_selected_candidate_bootstrap_does_not_require_approved_fixture(
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    contract = get_publication_contract("mid_trend")
+    monkeypatch.setattr(validator, "iter_publication_contracts", lambda: (contract,))
+    monkeypatch.setattr(
+        validator,
+        "load_baselines",
+        lambda _path: (_ for _ in ()).throw(AssertionError("fixture must not be loaded")),
+    )
+    monkeypatch.setattr(
+        validator,
+        "run_fresh_backtest",
+        lambda _payload: _raw_result(tmp_path),
+    )
+    output = tmp_path / "bootstrap-candidate.json"
+
+    exit_code = validator.main(
+        [
+            "--strategy-id",
+            "mid_trend",
+            "--start-date",
+            "2026-01-01",
+            "--end-date",
+            "2026-06-17",
+            "--emit-candidates",
+            str(output),
+            "--baseline-path",
+            str(tmp_path / "absent.json"),
+        ]
+    )
+
+    assert exit_code == 0
+    assert json.loads(capsys.readouterr().out)["status"] == "success"
+    candidate = json.loads(output.read_text(encoding="utf-8"))["baselines"][0]
+    assert candidate["strategy_id"] == "mid_trend"
+    assert candidate["baseline_start_date"] == "2026-01-01"
+    assert candidate["baseline_end_date"] == "2026-06-17"
 
 
 def test_script_entrypoint_has_success_and_compact_failure_protocol(tmp_path):
