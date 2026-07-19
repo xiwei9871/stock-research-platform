@@ -6,6 +6,8 @@
       "profile": "balanced",
       "baseline_start_date": "2026-01-01",
       "baseline_end_date": "2026-07-15",
+      "actual_start_date": "2026-01-06",
+      "actual_end_date": "2026-07-15",
       "summary": {
         "total_return": 0.918648063982811,
         "max_drawdown": -0.042355025316131334,
@@ -29,6 +31,7 @@
       },
       "artifact_evidence": [
         {"name": "equity_curve.json", "sha256": "fc8ff53dda97ede8d86700d3f634dcda122ac6f92b175cfaa5bfbb22cc668c48", "record_count": 118},
+        {"name": "lhb_rejected_top5.json", "sha256": "6b1dfae36000938075e5be69ff8dd9dbb85865a3947d7d300231c2aeee638fab", "record_count": 45},
         {"name": "positions.json", "sha256": "0c0a31db69f07d54afe7cf090b9a596ef5d7e257210028478bf16211b659ed82", "record_count": 186},
         {"name": "trades.json", "sha256": "0c0a31db69f07d54afe7cf090b9a596ef5d7e257210028478bf16211b659ed82", "record_count": 186}
       ]
@@ -38,6 +41,8 @@
       "profile": "balanced",
       "baseline_start_date": "2026-01-01",
       "baseline_end_date": "2026-07-15",
+      "actual_start_date": "2026-01-05",
+      "actual_end_date": "2026-07-15",
       "summary": {
         "total_return": 0.4912125414919939,
         "max_drawdown": -0.15950544649015808,
@@ -68,6 +73,8 @@
       "profile": "balanced",
       "baseline_start_date": "2026-01-01",
       "baseline_end_date": "2026-07-15",
+      "actual_start_date": "2026-01-01",
+      "actual_end_date": "2026-07-15",
       "summary": {
         "total_return": 0.704975670561941,
         "max_drawdown": -0.12600220340748958,

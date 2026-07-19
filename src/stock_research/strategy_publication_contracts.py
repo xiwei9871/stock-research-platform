@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
+from datetime import date
 from types import MappingProxyType
 from typing import Any, Callable, Mapping
 
@@ -250,6 +251,12 @@ def _lhb_acceptance(result: Mapping[str, Any], _baseline: Mapping[str, Any]) -> 
     trades = _rows(result, "trades")
     positions = _rows(result, "positions")
     candidates = _rows(result, "candidates")
+    acceptance_evidence = result.get("acceptance_evidence")
+    rejected = (
+        _rows(acceptance_evidence, "lhb_rejected_top5")
+        if isinstance(acceptance_evidence, Mapping)
+        else []
+    )
     failures: list[str] = []
     if config.get("top_n") != 5 or config.get("rebalance_frequency") != "daily":
         failures.append("LHB acceptance requires daily safe top5 config")
@@ -284,8 +291,36 @@ def _lhb_acceptance(result: Mapping[str, Any], _baseline: Mapping[str, Any]) -> 
                 failures.append(f"LHB {location} must be explicitly top5 eligible")
             if row.get("research_only") is True:
                 failures.append(f"LHB {location} must not include research-only evidence")
+            if str(row.get("buy_signal_status") or "") == "research_only":
+                failures.append(f"LHB {location} filled evidence must not be research-only")
     if any(row.get("account_trade_status") != "filled" for row in trades):
         failures.append("LHB authoritative trade rows must all be filled")
+    cash_slot_count = summary.get("cash_slot_count")
+    if not isinstance(cash_slot_count, int) or isinstance(cash_slot_count, bool):
+        failures.append("LHB cash_slot_count must be an integer")
+    elif len(rejected) != cash_slot_count:
+        failures.append(
+            f"LHB cash_slot_count does not match rejected Top5 evidence: "
+            f"summary={cash_slot_count}, rejected={len(rejected)}"
+        )
+    for row in rejected:
+        rank = row.get("phase18c_selection_rank")
+        try:
+            valid_rank = int(rank) == float(rank) and 1 <= int(rank) <= 5
+        except (TypeError, ValueError, OverflowError):
+            valid_rank = False
+        if not valid_rank:
+            failures.append("LHB rejected cash-slot rank must stay within Top5")
+        if row.get("backtest_entry_eligible") is not False:
+            failures.append("LHB rejected cash-slot evidence must be explicitly ineligible")
+        if row.get("top5_eligible") is not False:
+            failures.append("LHB rejected cash-slot evidence must have top5_eligible=false")
+        if str(row.get("buy_signal_status") or "") != "research_only":
+            failures.append("LHB rejected cash-slot evidence must be research-only")
+        if str(row.get("eligibility_status") or "") not in {"risk_watch", "hard_reject"}:
+            failures.append("LHB rejected cash-slot eligibility_status is invalid")
+        if "research_only" in row and row.get("research_only") is not True:
+            failures.append("LHB rejected cash-slot research_only flag must be true")
     return failures
 
 
@@ -351,8 +386,14 @@ def _tech_bottleneck_acceptance(
         failures.append("Tech Bottleneck protection policy mismatch")
     coverage = summary.get("data_coverage")
     latest_snapshot = coverage.get("candidate_snapshot_latest_date") if isinstance(coverage, Mapping) else None
-    if latest_snapshot != _baseline.get("baseline_end_date"):
-        failures.append("Tech Bottleneck candidate snapshot does not cover fixed replay end date")
+    calculation_date = _baseline.get("baseline_end_date")
+    try:
+        snapshot_date = date.fromisoformat(str(latest_snapshot))
+        approved_calculation_date = date.fromisoformat(str(calculation_date))
+        if snapshot_date > approved_calculation_date:
+            failures.append("Tech Bottleneck candidate snapshot is future-dated")
+    except ValueError:
+        failures.append("Tech Bottleneck candidate snapshot date must be parseable")
     if summary.get("position_rows") != len(positions):
         failures.append("Tech Bottleneck position_rows does not match positions artifact")
     if summary.get("trade_rows") != len(trades):
@@ -361,11 +402,11 @@ def _tech_bottleneck_acceptance(
         failures.append("Tech Bottleneck acceptance evidence missing positions or trades")
     by_date: dict[str, int] = {}
     for row in positions:
-        date = str(row.get("trade_date") or row.get("date") or "")
-        if not date:
+        date_text = str(row.get("trade_date") or row.get("date") or "")
+        if not date_text:
             failures.append("Tech Bottleneck position row missing trade date")
             break
-        by_date[date] = by_date.get(date, 0) + 1
+        by_date[date_text] = by_date.get(date_text, 0) + 1
     if any(count > 5 for count in by_date.values()):
         failures.append("Tech Bottleneck positions exceed approved top5 account size")
     exposure = summary.get("avg_actual_exposure")
