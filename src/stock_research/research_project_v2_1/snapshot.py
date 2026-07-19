@@ -1145,6 +1145,29 @@ def _publish_bytes(directory: Path, final_name: str, data: bytes) -> Path:
                 raise cleanup
 
 
+_FETCH_EVENT_IDENTITY_FIELDS = (
+    "candidate_id",
+    "content_sha256",
+    "byte_count",
+    "final_url",
+    "redirect_chain",
+    "status_code",
+    "response_headers",
+    "media_type",
+    "fetched_at",
+    "provenance",
+)
+
+
+def evidence_artifact_id_for_event(event: Mapping[str, Any]) -> str:
+    """Derive an artifact ID from one immutable, normalized fetch event."""
+    preimage = {
+        field: deepcopy(event[field]) for field in _FETCH_EVENT_IDENTITY_FIELDS
+    }
+    digest = sha256(canonical_bytes(preimage)).hexdigest()[:24]
+    return f"evidence_artifact:{digest}"
+
+
 def validate_evidence_artifact(artifact: dict[str, Any]) -> dict[str, Any]:
     """Validate standalone evidence metadata and its derived identity."""
     copied = deepcopy(artifact)
@@ -1155,10 +1178,7 @@ def validate_evidence_artifact(artifact: dict[str, Any]) -> dict[str, Any]:
     }
     validate_v2_1_schema_payload("evidence_artifact_v2_1", wrapper)
     digest = copied["content_sha256"]
-    expected_identity = sha256(
-        f"{copied['candidate_id']}\n{digest}".encode("utf-8")
-    ).hexdigest()[:24]
-    if copied["artifact_id"] != f"evidence_artifact:{expected_identity}":
+    if copied["artifact_id"] != evidence_artifact_id_for_event(copied):
         raise _immutability("artifact_id mismatch")
     expected_path = (
         f"evidence/raw/{digest[:2]}/{digest}."
@@ -1294,11 +1314,7 @@ def snapshot_candidate(
         content_digest = digest.hexdigest()
         extension = _MEDIA_EXTENSIONS[media_type]
         raw_relative = f"evidence/raw/{content_digest[:2]}/{content_digest}.{extension}"
-        artifact_digest = sha256(
-            f"{copied['candidate_id']}\n{content_digest}".encode("utf-8")
-        ).hexdigest()
-        artifact = {
-            "artifact_id": f"evidence_artifact:{artifact_digest[:24]}",
+        artifact_event = {
             "candidate_id": copied["candidate_id"],
             "evidence_channel": "industry",
             "original_url": copied["original_url"],
@@ -1312,6 +1328,10 @@ def snapshot_candidate(
             "fetched_at": fetched_at,
             "raw_path": raw_relative,
             "provenance": deepcopy(provenance),
+        }
+        artifact = {
+            "artifact_id": evidence_artifact_id_for_event(artifact_event),
+            **artifact_event,
         }
         wrapper = {
             "schema_version": "2.1.0",

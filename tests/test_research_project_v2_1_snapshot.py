@@ -19,6 +19,7 @@ from stock_research.research_project_v2_1.snapshot import (
     FetchResponse,
     RequestsFetchTransport,
     SystemAddressResolver,
+    evidence_artifact_id_for_event,
     snapshot_candidate,
     validate_evidence_artifact,
 )
@@ -126,6 +127,7 @@ def test_snapshots_canonical_artifact_and_metadata(tmp_path: Path) -> None:
     digest = hashlib.sha256(b"%PDF fixture").hexdigest()
     assert artifact["content_sha256"] == digest
     assert artifact["raw_path"] == f"evidence/raw/{digest[:2]}/{digest}.pdf"
+    assert artifact["artifact_id"] == evidence_artifact_id_for_event(artifact)
     assert artifact["response_headers"] == {
         "content-type": "Application/PDF; charset=binary",
         "etag": '"abc"',
@@ -144,6 +146,17 @@ def test_snapshots_canonical_artifact_and_metadata(tmp_path: Path) -> None:
     with pytest.raises(ResearchProjectV2Error) as exc_info:
         validate_evidence_artifact(drifted)
     assert "IMMUTABILITY" in exc_info.value.code
+
+
+def test_fetch_event_artifact_fixture_matches_schema_and_identity() -> None:
+    payload = json.loads(
+        Path(
+            "artifacts/research_projects/v2_1/fixtures/valid/fetch_event_artifact.json"
+        ).read_text(encoding="utf-8")
+    )
+    validate_v2_1_schema_payload("evidence_artifact_v2_1", payload)
+    artifact = payload["evidence_artifact"]
+    assert validate_evidence_artifact(artifact) == artifact
 
 
 @pytest.mark.parametrize(
@@ -365,7 +378,19 @@ def test_existing_raw_or_metadata_conflict_is_immutable(tmp_path: Path) -> None:
         fetched_at=FETCHED_AT, provenance=PROVENANCE,
     ))
     raw.write_bytes(b"%PDF fixture")
-    artifact_id = f"evidence_artifact:{hashlib.sha256((candidate()['candidate_id'] + chr(10) + digest).encode()).hexdigest()[:24]}"
+    event = {
+        "candidate_id": candidate()["candidate_id"],
+        "content_sha256": digest,
+        "byte_count": len(b"%PDF fixture"),
+        "final_url": candidate()["normalized_url"],
+        "redirect_chain": [],
+        "status_code": 200,
+        "response_headers": {"content-type": "application/pdf"},
+        "media_type": "application/pdf",
+        "fetched_at": FETCHED_AT,
+        "provenance": PROVENANCE,
+    }
+    artifact_id = evidence_artifact_id_for_event(event)
     metadata = effective.evidence_metadata_dir / f"{artifact_id}.json"
     metadata.parent.mkdir(parents=True)
     metadata.write_bytes(b"{}")
@@ -373,6 +398,37 @@ def test_existing_raw_or_metadata_conflict_is_immutable(tmp_path: Path) -> None:
         candidate(), transport=Transport([response()]), resolver=Resolver(), layout=effective,
         fetched_at=FETCHED_AT, provenance=PROVENANCE,
     ))
+
+
+def test_same_bytes_from_distinct_fetch_events_get_distinct_metadata(tmp_path: Path) -> None:
+    effective = layout(tmp_path)
+    first = snapshot_candidate(
+        candidate(),
+        transport=Transport([response()]),
+        resolver=Resolver(),
+        layout=effective,
+        fetched_at="2026-07-18T02:00:00Z",
+        provenance=PROVENANCE,
+    )
+    later_provenance = dict(
+        PROVENANCE,
+        agent_run_id="run:snapshot-later",
+        created_at="2026-07-18T03:00:00Z",
+    )
+    second = snapshot_candidate(
+        candidate(),
+        transport=Transport([response()]),
+        resolver=Resolver(),
+        layout=effective,
+        fetched_at="2026-07-18T03:00:00Z",
+        provenance=later_provenance,
+    )
+    assert first["raw_path"] == second["raw_path"]
+    assert first["artifact"]["content_sha256"] == second["artifact"]["content_sha256"]
+    assert first["artifact"]["artifact_id"] != second["artifact"]["artifact_id"]
+    assert first["metadata_path"] != second["metadata_path"]
+    assert Path(first["metadata_path"]).is_file()
+    assert Path(second["metadata_path"]).is_file()
 
 
 @pytest.mark.parametrize("fetched_at", ["", "2026-07-18", "2026-07-18T02:00:00"])

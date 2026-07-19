@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from hashlib import sha256
 import json
 from pathlib import Path
+import shutil
 
 import pytest
 
@@ -15,6 +16,7 @@ from stock_research.research_project_v2.canonical import content_sha256
 from stock_research.research_project_v2_1 import cli
 from stock_research.research_project_v2_1.discovery import source_candidate_id
 from stock_research.research_project_v2_1.snapshot import FetchResponse
+from stock_research.research_project_v2_1.snapshot import evidence_artifact_id_for_event
 
 
 PROJECT = "ai_compute_pcb_industry_bottleneck"
@@ -35,9 +37,7 @@ def _stored_provenance() -> dict:
 def _stored_artifact(raw: bytes = b"x") -> dict:
     digest = sha256(raw).hexdigest()
     candidate_id = "source_candidate:" + "a" * 24
-    identity = sha256(f"{candidate_id}\n{digest}".encode()).hexdigest()[:24]
-    return {
-        "artifact_id": f"evidence_artifact:{identity}",
+    artifact = {
         "candidate_id": candidate_id,
         "evidence_channel": "industry",
         "original_url": "https://example.com/source.txt",
@@ -52,6 +52,7 @@ def _stored_artifact(raw: bytes = b"x") -> dict:
         "raw_path": f"evidence/raw/{digest[:2]}/{digest}.txt",
         "provenance": _stored_provenance(),
     }
+    return {"artifact_id": evidence_artifact_id_for_event(artifact), **artifact}
 
 
 def _stored_document(artifact_id: str, locator: str) -> dict:
@@ -508,6 +509,83 @@ def test_snapshot_cli_wires_transport_resolver_and_closes_response_stream(
     assert result["status"] == "pass"
     assert result["written"] is False
     assert closed is True
+
+
+def test_snapshot_cli_write_preserves_two_fetch_events_for_same_bytes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    url = "https://example.com/source.txt"
+    title = "Industry source"
+    candidate = {
+        "candidate_id": source_candidate_id(url, title),
+        "search_plan_id": "search_plan:test",
+        "query_id": "query:test",
+        "normalized_url": url,
+        "original_url": url,
+        "title": title,
+        "snippet": "evidence",
+        "publisher": "Example",
+        "publish_date": "2026-07-19",
+        "source_class": "primary",
+        "rank": 1,
+        "exclusion_status": "included",
+        "exclusion_reasons": [],
+        "dedup_key": url,
+        "provenance": _stored_provenance(),
+    }
+    candidate_path = tmp_path / "candidate.json"
+    candidate_path.write_text(json.dumps(candidate), encoding="utf-8")
+
+    class FakeTransport:
+        def get(self, requested_url: str, *, timeout_seconds: float):
+            return FetchResponse(
+                200,
+                {"Content-Type": "text/plain"},
+                [b"evidence"],
+                requested_url,
+                "93.184.216.34",
+            )
+
+    class FakeResolver:
+        def resolve(self, _hostname: str):
+            return ("93.184.216.34",)
+
+    effective = cli.LayeredResearchLayout((tmp_path / "managed").resolve())
+    shutil.copytree(
+        cli.LayeredResearchLayout.default().schema_dir,
+        effective.schema_dir,
+    )
+    monkeypatch.setattr(
+        cli.LayeredResearchLayout,
+        "default",
+        classmethod(lambda _cls: effective),
+    )
+    monkeypatch.setattr(cli, "RequestsFetchTransport", FakeTransport)
+    monkeypatch.setattr(cli, "SystemAddressResolver", FakeResolver)
+    first = cli._snapshot(
+        argparse.Namespace(
+            candidate=str(candidate_path),
+            write=True,
+            fetched_at="2026-07-19T12:00:00Z",
+            agent_run_id="fetch:first",
+        ),
+        clock=lambda: datetime.now(timezone.utc),
+    )
+    second = cli._snapshot(
+        argparse.Namespace(
+            candidate=str(candidate_path),
+            write=True,
+            fetched_at="2026-07-19T13:00:00Z",
+            agent_run_id="fetch:second",
+        ),
+        clock=lambda: datetime.now(timezone.utc),
+    )
+    assert first["artifact"]["artifact_id"] != second["artifact"]["artifact_id"]
+    assert first["raw_path"] == second["raw_path"]
+    assert first["metadata_path"] != second["metadata_path"]
+    assert len(list(effective.evidence_metadata_dir.glob("*.json"))) == 2
+    assert len(list(effective.evidence_raw_dir.rglob("*.txt"))) == 1
 
 
 def test_invalid_assessment_is_semantic_validation_exit_two(
