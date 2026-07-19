@@ -197,6 +197,7 @@ def test_manifest_strategy_rows_use_versioned_artifact_not_stale_root_mirror(tmp
         "frequency": "weekly",
         "benchmark_variant": "top5_weekly_max2_selective_trend_holding_protection_v1",
         "publication_identity": identity,
+        "performance_effective_date": "2026-07-18",
     }
     monkeypatch.setattr(
         review_queue,
@@ -452,7 +453,10 @@ def _v1_versioned_manifest(tmp_path):
                 **{key: str(path) for key, path in paths.items()},
                 "publication_manifest_path": str(version_dir / "publication_manifest.json"),
             },
-            "summary": {"publication_identity": identity},
+            "summary": {
+                "publication_identity": identity,
+                "performance_effective_date": "2026-07-18",
+            },
         },
     }
 
@@ -531,6 +535,7 @@ def test_v1_manifest_rows_expose_generic_publication_evidence(tmp_path, monkeypa
     assert item["publication_manifest_path"].endswith(
         "/strategy_runs/mid_trend/publish-1/publication_manifest.json"
     )
+    assert item["performance_as_of_date"] == "2026-07-18"
     assert item["contract_status"] == "success"
 
     rows, blocked = review_queue._load_strategy_manifest_snapshot(
@@ -540,6 +545,105 @@ def test_v1_manifest_rows_expose_generic_publication_evidence(tmp_path, monkeypa
 
     assert rows == []
     assert blocked == {"mid_trend"}
+
+
+@pytest.mark.parametrize(
+    "extra_row",
+    [
+        "2026-07-18,CN:SH:600003,2,tech_bottleneck\n",
+        (
+            "2026-07-18,CN:SH:600003,2,mid_trend,mid_trend:balanced:legacy\n"
+        ),
+    ],
+)
+def test_manifest_rejects_entire_mixed_strategy_artifact(extra_row, tmp_path, monkeypatch):
+    monkeypatch.setattr(review_queue, "SETTINGS", SimpleNamespace(output_root=tmp_path))
+    module = _v1_versioned_manifest(tmp_path)
+    review_path = Path(module["artifact_path"])
+    if "legacy" in extra_row:
+        review_path.write_text(
+            "trade_date,asset_id,rank,strategy_id,contract_id\n"
+            "2026-07-18,CN:SH:600002,1,mid_trend,"
+            f"{module['metadata']['publication_identity']['contract_id']}\n"
+            + extra_row,
+            encoding="utf-8",
+        )
+    else:
+        review_path.write_text(
+            "trade_date,asset_id,rank,strategy_id\n"
+            "2026-07-18,CN:SH:600002,1,mid_trend\n"
+            + extra_row,
+            encoding="utf-8",
+        )
+    module["metadata"]["summary"].update(
+        {
+            "engine_version": "mid_trend_v1",
+            "top_n": 5,
+            "transaction_cost_bps": 10.0,
+            "max_position_weight": 0.2,
+            "adjust_type": "hfq",
+            "frequency": "weekly",
+            "benchmark_variant": "top5_weekly_max2_selective_trend_holding_protection_v1",
+        }
+    )
+    monkeypatch.setattr(
+        review_queue, "load_latest_data_run_manifest", lambda trade_date: [module]
+    )
+
+    rows, blocked = review_queue._load_strategy_manifest_snapshot(
+        trade_date="2026-07-18", limit=50
+    )
+
+    assert rows == []
+    assert blocked == {"mid_trend"}
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("performance_as_of_date", "2026-07-17"),
+        ("contract_id", "mid_trend:balanced:legacy"),
+        ("artifact_version", "strategy_artifact_v999"),
+        (
+            "publication_manifest_path",
+            "/srv/strategy_runs/tech_bottleneck/publish-1/publication_manifest.json",
+        ),
+    ],
+)
+def test_persisted_strategy_snapshot_fails_closed_for_stale_or_mixed_contract(
+    field, value, monkeypatch
+):
+    from stock_research import review_evidence_snapshots
+
+    identity = build_publication_identity(get_publication_contract("mid_trend"))
+    payload = {
+        "score_version": "strategy_topn",
+        "trade_date": "2026-07-18",
+        "asset_id": "CN:SH:600002",
+        "strategy_id": "mid_trend",
+        "rank": 1,
+        "contract_id": identity["contract_id"],
+        "identity_schema_version": identity["identity_schema_version"],
+        "config_fingerprint": identity["config_fingerprint"],
+        "publication_policy": identity["publication_policy"],
+        "artifact_version": "strategy_artifact_v1",
+        "publication_manifest_path": (
+            "/srv/strategy_daily_eod/2026-07-18/strategy_runs/"
+            "mid_trend/publish-1/publication_manifest.json"
+        ),
+        "performance_as_of_date": "2026-07-18",
+        "contract_status": "success",
+    }
+    payload[field] = value
+    monkeypatch.setattr(
+        review_evidence_snapshots,
+        "list_review_item_snapshots",
+        lambda **kwargs: [{"review_item_payload": payload}],
+    )
+
+    assert review_queue._load_strategy_snapshot_rows(
+        trade_date="2026-07-18", limit=50
+    ) == []
 
 
 @pytest.mark.parametrize("trade_date", ("2026-7-18", "../2026-07-18", "not-a-date", ""))

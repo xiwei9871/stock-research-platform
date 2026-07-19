@@ -51,6 +51,7 @@ function makeQueue(overrides: Partial<ReviewQueueResponse> = {}): ReviewQueueRes
             artifact_version: 'strategy_artifact_v1',
             publication_manifest_path:
               '/srv/strategy_runs/mid_trend/publish-1/publication_manifest.json',
+            performance_as_of_date: '2026-06-08',
             contract_status: 'success',
             review_tier: 'top5_focus',
             digest_key: '2026-06-08:strategy_topn:000001.SZ',
@@ -182,6 +183,7 @@ describe('ReviewQueueWorkspace', () => {
       )
     ).toBeVisible();
     expect(within(preview).getByText('strategy_artifact_v1')).toBeVisible();
+    expect(within(preview).getByText('2026-06-08')).toBeVisible();
     expect(within(preview).getByText('通过')).toBeVisible();
   });
 

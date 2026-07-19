@@ -412,6 +412,10 @@ export function ReviewQueueWorkspace({
                           : '未校验'}
                     </strong>
                   </div>
+                  <div>
+                    <span>表现日期</span>
+                    <strong>{selectedItem.performance_as_of_date ?? '-'}</strong>
+                  </div>
                 </div>
 
                 {selectedItem.source_kinds.length > 0 ? (

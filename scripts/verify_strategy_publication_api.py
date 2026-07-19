@@ -98,19 +98,25 @@ def verify_payload(payload: Any) -> dict[str, Any]:
     if not isinstance(items, list):
         items = []
     grouped: dict[str, list[Mapping[str, Any]]] = {strategy_id: [] for strategy_id in strategy_ids}
-    for item in items:
+    extra_failures: list[str] = []
+    for index, item in enumerate(items):
         if not isinstance(item, Mapping):
+            extra_failures.append(f"item[{index}]: contract_mismatch")
             continue
         strategy_id = str(item.get("strategy_id") or "")
         if strategy_id in grouped:
             grouped[strategy_id].append(item)
+        else:
+            extra_failures.append(
+                f"{strategy_id or f'item[{index}]'}: contract_mismatch"
+            )
 
     failures = [
         f"{strategy_id}: contract_mismatch"
         for strategy_id in strategy_ids
         if len(grouped[strategy_id]) != 1
         or not _item_valid(grouped[strategy_id][0], strategy_id)
-    ]
+    ] + extra_failures
     return {
         "status": "failed" if failures else "success",
         "checked": strategy_ids,

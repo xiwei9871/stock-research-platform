@@ -126,3 +126,19 @@ def test_verify_payload_rejects_missing_and_duplicate_registered_items():
     assert MODULE.verify_payload(duplicate)["failures"] == [
         "lhb_shortline: contract_mismatch"
     ]
+
+
+def test_verify_payload_rejects_unknown_and_non_mapping_items():
+    unknown = _payload()
+    unknown["items"].append(
+        {"strategy_id": "unknown_strategy", "status": "runnable", "latest_metrics": {}}
+    )
+    malformed = _payload()
+    malformed["items"].append("not-an-item")
+
+    assert MODULE.verify_payload(unknown)["failures"] == [
+        "unknown_strategy: contract_mismatch"
+    ]
+    assert MODULE.verify_payload(malformed)["failures"] == [
+        "item[3]: contract_mismatch"
+    ]

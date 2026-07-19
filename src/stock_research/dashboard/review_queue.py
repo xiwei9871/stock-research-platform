@@ -223,6 +223,7 @@ def _load_strategy_snapshot_rows(*, trade_date: str, limit: int) -> list[dict[st
         return []
 
     rows: list[dict[str, Any]] = []
+    blocked_strategy_ids: set[str] = set()
     for snapshot in snapshots:
         payload = snapshot.get("review_item_payload")
         if not isinstance(payload, dict):
@@ -230,6 +231,11 @@ def _load_strategy_snapshot_rows(*, trade_date: str, limit: int) -> list[dict[st
         if str(payload.get("score_version") or "") != "strategy_topn":
             continue
         row = dict(payload)
+        strategy_id = str(row.get("strategy_id") or "")
+        if not _snapshot_publication_contract_valid(row, trade_date=trade_date):
+            if strategy_id in _OFFICIAL_STRATEGY_IDS:
+                blocked_strategy_ids.add(strategy_id)
+            continue
         row.setdefault("trade_date", str(snapshot.get("trade_date") or trade_date)[:10])
         row.setdefault("latest_trade_date", str(snapshot.get("latest_trade_date") or row.get("trade_date") or trade_date)[:10])
         row.setdefault("asset_id", str(snapshot.get("stock_code") or snapshot.get("asset_id") or row.get("asset_id") or ""))
@@ -243,7 +249,65 @@ def _load_strategy_snapshot_rows(*, trade_date: str, limit: int) -> list[dict[st
         row.setdefault("rank", row.get("topn_rank") or row.get("source_rank"))
         row.setdefault("score_total", snapshot.get("score") if snapshot.get("score") is not None else row.get("score_total") or row.get("score"))
         rows.append(row)
+    if blocked_strategy_ids:
+        rows = _without_strategy_rows(rows, blocked_strategy_ids)
     return _select_latest_strategy_sources(artifact_rows=rows, db_rows=[])
+
+
+def _snapshot_publication_contract_valid(
+    row: dict[str, Any], *, trade_date: str
+) -> bool:
+    from stock_research.strategy_publication_contracts import (
+        build_publication_identity,
+        get_publication_contract,
+    )
+
+    strategy_id = str(row.get("strategy_id") or "")
+    if strategy_id not in _OFFICIAL_STRATEGY_IDS:
+        return False
+    try:
+        expected = build_publication_identity(
+            get_publication_contract(strategy_id, profile="balanced")
+        )
+    except Exception:
+        return False
+    if row.get("contract_status") != "success":
+        return False
+    for field in (
+        "contract_id",
+        "identity_schema_version",
+        "config_fingerprint",
+        "publication_policy",
+    ):
+        if row.get(field) != expected[field]:
+            return False
+    if row.get("artifact_version") != ARTIFACT_VERSION:
+        return False
+    if str(row.get("trade_date") or "") != trade_date:
+        return False
+    if str(row.get("performance_as_of_date") or "") != trade_date:
+        return False
+    return _snapshot_manifest_path_valid(
+        row.get("publication_manifest_path"), strategy_id
+    )
+
+
+def _snapshot_manifest_path_valid(value: Any, strategy_id: str) -> bool:
+    text = str(value or "")
+    if not text.startswith("/") or "\\" in text or "?" in text or "#" in text:
+        return False
+    parts = text.split("/")[1:]
+    if not parts or any(part in {"", ".", ".."} for part in parts):
+        return False
+    if parts.count("strategy_runs") != 1:
+        return False
+    index = parts.index("strategy_runs")
+    return bool(
+        len(parts) == index + 4
+        and parts[index + 1] == strategy_id
+        and _safe_publish_id(parts[index + 2])
+        and parts[index + 3] == "publication_manifest.json"
+    )
 
 
 def _load_manifest_strategy_rows(*, trade_date: str, limit: int) -> list[dict[str, Any]]:
@@ -595,6 +659,10 @@ def _read_manifest_strategy_artifact(
     frame = _read_artifact_frame(artifact_path)
     if frame is None or "trade_date" not in frame.columns:
         return []
+    if _manifest_has_publication_declaration(manifest) and not _artifact_rows_match_manifest(
+        frame, manifest
+    ):
+        return []
     rows = _rows_for_latest_date(frame, trade_date=trade_date, date_col="trade_date")
     if rows is None:
         return []
@@ -611,6 +679,7 @@ def _read_manifest_strategy_artifact(
         "publication_policy": dict(publication_identity.get("publication_policy") or {}),
         "artifact_version": metadata.get("artifact_version"),
         "publication_manifest_path": metadata.get("publication_manifest_path"),
+        "performance_as_of_date": _manifest_performance_as_of_date(manifest),
         "contract_status": "success",
     }
     normalized: list[dict[str, Any]] = []
@@ -665,6 +734,88 @@ def _read_manifest_strategy_artifact(
             }
         )
     return normalized
+
+
+def _manifest_performance_as_of_date(manifest: dict[str, Any]) -> str:
+    metadata = manifest.get("metadata") if isinstance(manifest.get("metadata"), dict) else {}
+    summary = metadata.get("summary") if isinstance(metadata.get("summary"), dict) else {}
+    return str(
+        summary.get("performance_effective_date")
+        or summary.get("actual_end_date")
+        or summary.get("equity_latest_date")
+        or summary.get("end_date")
+        or ""
+    )[:10]
+
+
+def _artifact_rows_match_manifest(frame: Any, manifest: dict[str, Any]) -> bool:
+    from stock_research.strategy_publication_contracts import (
+        build_publication_identity,
+        get_publication_contract,
+        validate_publication_identity,
+    )
+
+    strategy_id = _manifest_strategy_id(manifest)
+    if not strategy_id or "strategy_id" not in frame.columns:
+        return False
+    metadata = manifest.get("metadata") if isinstance(manifest.get("metadata"), dict) else {}
+    try:
+        expected = build_publication_identity(
+            get_publication_contract(strategy_id, profile="balanced")
+        )
+    except Exception:
+        return False
+    performance_as_of_date = _manifest_performance_as_of_date(manifest)
+    if not _valid_iso_date(performance_as_of_date):
+        return False
+    expected_fields: dict[str, Any] = {
+        "contract_id": expected["contract_id"],
+        "identity_schema_version": expected["identity_schema_version"],
+        "config_fingerprint": expected["config_fingerprint"],
+        "publication_policy": expected["publication_policy"],
+        "artifact_version": ARTIFACT_VERSION,
+        "publication_manifest_path": str(metadata.get("publication_manifest_path") or ""),
+        "performance_as_of_date": performance_as_of_date,
+    }
+    for row in frame.to_dict("records"):
+        if str(row.get("strategy_id") or "") != strategy_id:
+            return False
+        if _declared_row_value(row.get("publication_identity")) is not None:
+            actual_identity = _declared_row_value(row.get("publication_identity"))
+            if not isinstance(actual_identity, dict) or validate_publication_identity(
+                actual_identity, expected
+            ):
+                return False
+        for field, expected_value in expected_fields.items():
+            actual_value = _declared_row_value(row.get(field))
+            if actual_value is None:
+                continue
+            if field == "publication_policy" and not isinstance(actual_value, dict):
+                return False
+            if actual_value != expected_value:
+                return False
+    return True
+
+
+def _declared_row_value(value: Any) -> Any:
+    if value is None or str(value).strip() in {"", "nan", "None"}:
+        return None
+    if isinstance(value, str) and value.lstrip().startswith(("{", "[")):
+        try:
+            return json.loads(value)
+        except json.JSONDecodeError:
+            return value
+    return value
+
+
+def _valid_iso_date(value: Any) -> bool:
+    text = str(value or "")
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", text):
+        return False
+    try:
+        return date.fromisoformat(text).isoformat() == text
+    except ValueError:
+        return False
 
 
 def _manifest_strategy_score(row: dict[str, Any], *, strategy_id: str, rank: int) -> tuple[float | None, str | None, str | None]:
@@ -1353,6 +1504,7 @@ def _queue_item(
         "publication_policy": dict(row.get("publication_policy") or {}),
         "artifact_version": _optional_text(row.get("artifact_version")),
         "publication_manifest_path": _optional_text(row.get("publication_manifest_path")),
+        "performance_as_of_date": _optional_text(row.get("performance_as_of_date")),
         "contract_status": _optional_text(row.get("contract_status")),
         "review_tier": _optional_text(row.get("review_tier")),
         "confirmation_state": _optional_text(row.get("confirmation_state")),

@@ -383,10 +383,12 @@ def _with_latest_eod_strategy_metrics(strategy: dict[str, Any]) -> dict[str, Any
         next_strategy = dict(strategy)
         next_strategy["latest_metrics"] = {
             "as_of_date": previous_metrics.get("as_of_date"),
+            "performance_as_of_date": previous_metrics.get("as_of_date"),
             "signal_status": "contract_mismatch",
             "signal_count": 0,
             "contract_status": "contract_mismatch",
             "contract_reason": "versioned official publication missing",
+            **_expected_publication_metrics(strategy_id),
         }
         next_strategy["latest_evidence"] = "策略缺少可校验的版本化正式产物。"
         return next_strategy
@@ -428,7 +430,7 @@ def _with_latest_eod_strategy_metrics(strategy: dict[str, Any]) -> dict[str, Any
             "signal_count": signal_count,
             "contract_status": status,
             "contract_reason": reason,
-            **publication_metrics,
+            **_expected_publication_metrics(str(strategy["strategy_id"])),
         }
         next_strategy["latest_evidence"] = f"策略产物未通过正式身份合同校验：{reason}"
         return next_strategy
@@ -479,9 +481,13 @@ def _with_failed_eod_strategy_metrics(
     next_strategy = dict(strategy)
     next_strategy["latest_metrics"] = {
         "as_of_date": latest_trade_date or str(module.get("trade_date") or ""),
-        "signal_status": "strategy_failed",
+        "performance_as_of_date": latest_trade_date or str(module.get("trade_date") or ""),
+        "signal_status": "contract_mismatch",
         "signal_count": 0,
         "error_message": error_message,
+        "contract_status": "contract_mismatch",
+        "contract_reason": "official publication status failed",
+        **_expected_publication_metrics(str(strategy.get("strategy_id") or "")),
     }
     strategy_name = str(strategy.get("strategy_name") or strategy.get("strategy_id") or "策略")
     next_strategy["latest_evidence"] = (
@@ -624,6 +630,35 @@ def _publication_metadata_metrics(
             "market_regime_policy",
         )
         if key in metrics
+    }
+
+
+def _expected_publication_metrics(strategy_id: str) -> dict[str, Any]:
+    from stock_research.strategy_publication_contracts import (
+        build_publication_identity,
+        get_publication_contract,
+    )
+
+    try:
+        identity = build_publication_identity(
+            get_publication_contract(strategy_id, profile="balanced")
+        )
+    except Exception:
+        return {
+            "contract_id": None,
+            "identity_schema_version": None,
+            "config_fingerprint": None,
+            "publication_policy": None,
+            "artifact_version": None,
+            "publication_manifest_path": None,
+        }
+    return {
+        "contract_id": identity["contract_id"],
+        "identity_schema_version": identity["identity_schema_version"],
+        "config_fingerprint": identity["config_fingerprint"],
+        "publication_policy": deepcopy(identity["publication_policy"]),
+        "artifact_version": None,
+        "publication_manifest_path": None,
     }
 
 

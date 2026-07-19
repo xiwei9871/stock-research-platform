@@ -467,12 +467,55 @@ def test_registered_strategy_without_versioned_eod_evidence_fails_closed(monkeyp
         }
     )
 
+    expected = build_publication_identity(get_publication_contract("mid_trend"))
     assert strategy["latest_metrics"] == {
         "as_of_date": "2026-07-18",
+        "performance_as_of_date": "2026-07-18",
         "signal_status": "contract_mismatch",
         "signal_count": 0,
         "contract_status": "contract_mismatch",
         "contract_reason": "versioned official publication missing",
+        "contract_id": expected["contract_id"],
+        "identity_schema_version": expected["identity_schema_version"],
+        "config_fingerprint": expected["config_fingerprint"],
+        "publication_policy": expected["publication_policy"],
+        "artifact_version": None,
+        "publication_manifest_path": None,
+    }
+
+
+def test_failed_official_eod_has_complete_fail_closed_contract_shape(monkeypatch):
+    monkeypatch.setattr(
+        backtests,
+        "_latest_eod_strategy_module",
+        lambda strategy_id: {
+            "module": "strategy_tech_bottleneck",
+            "status": "failed",
+            "trade_date": "2026-07-18",
+            "latest_trade_date": "2026-07-18",
+            "error_message": "publisher failed",
+        },
+    )
+    expected = build_publication_identity(get_publication_contract("tech_bottleneck"))
+
+    result = backtests._with_latest_eod_strategy_metrics(
+        {"strategy_id": "tech_bottleneck", "strategy_name": "Tech", "latest_metrics": {}}
+    )
+
+    assert result["latest_metrics"] == {
+        "as_of_date": "2026-07-18",
+        "performance_as_of_date": "2026-07-18",
+        "signal_status": "contract_mismatch",
+        "signal_count": 0,
+        "error_message": "publisher failed",
+        "contract_status": "contract_mismatch",
+        "contract_reason": "official publication status failed",
+        "contract_id": expected["contract_id"],
+        "identity_schema_version": expected["identity_schema_version"],
+        "config_fingerprint": expected["config_fingerprint"],
+        "publication_policy": expected["publication_policy"],
+        "artifact_version": None,
+        "publication_manifest_path": None,
     }
 
 

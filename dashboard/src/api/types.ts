@@ -2296,6 +2296,7 @@ export type ReviewQueueItem = {
   publication_policy?: Record<string, unknown> | null;
   artifact_version?: string | null;
   publication_manifest_path?: string | null;
+  performance_as_of_date?: string | null;
   contract_status?: 'success' | 'contract_mismatch' | string | null;
   review_tier?: 'top5_focus' | 'top10_watch' | string | null;
   weight?: number | null;
