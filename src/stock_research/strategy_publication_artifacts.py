@@ -9,9 +9,10 @@ import re
 import shutil
 import tempfile
 import uuid
+from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Iterable, Mapping
 
 import numpy as np
 import pandas as pd
@@ -19,6 +20,120 @@ import pandas as pd
 
 ARTIFACT_VERSION = "strategy_artifact_v1"
 _FRAME_NAMES = ("equity", "positions", "trades", "review")
+DEFAULT_APPROVED_PUBLICATION_RESEARCH_ROOTS = (
+    Path("/Users/xiwei/stock_research/outputs/research"),
+    Path("/mnt/internal/stock_research/outputs/research"),
+    Path("/srv/outputs/research"),
+)
+
+
+@dataclass(frozen=True)
+class ParsedPublicationManifestPath:
+    path: Path
+    research_root: Path
+    trade_date: str
+    strategy_id: str
+    publish_id: str
+
+
+def parse_publication_manifest_path(
+    value: Any,
+    *,
+    expected_strategy_id: str | None = None,
+    expected_trade_date: str | None = None,
+    approved_research_roots: Iterable[str | Path] = (),
+) -> ParsedPublicationManifestPath:
+    """Parse one canonical immutable strategy publication manifest path."""
+
+    text = str(value or "")
+    if (
+        not text
+        or text != text.strip()
+        or not text.startswith("/")
+        or "\\" in text
+        or "%" in text
+        or "?" in text
+        or "#" in text
+        or any(ord(character) < 32 for character in text)
+    ):
+        raise ValueError("unsafe publication manifest path")
+    parts = text.split("/")[1:]
+    if not parts or any(part in {"", ".", ".."} for part in parts):
+        raise ValueError("unsafe publication manifest path components")
+    if parts.count("strategy_daily_eod") != 1 or parts.count("strategy_runs") != 1:
+        raise ValueError("publication manifest path layout mismatch")
+    root_index = parts.index("strategy_daily_eod")
+    if (
+        root_index < 2
+        or len(parts) != root_index + 6
+        or parts[root_index + 2] != "strategy_runs"
+        or parts[root_index + 5] != "publication_manifest.json"
+    ):
+        raise ValueError("publication manifest path layout mismatch")
+    trade_date = parts[root_index + 1]
+    if not is_exact_iso_date(trade_date):
+        raise ValueError("publication manifest trade date invalid")
+    strategy_id = parts[root_index + 3]
+    publish_id = parts[root_index + 4]
+    if not _safe_path_component(strategy_id) or not _safe_path_component(publish_id):
+        raise ValueError("publication manifest identity path component invalid")
+    if expected_strategy_id is not None and strategy_id != expected_strategy_id:
+        raise ValueError("publication manifest strategy mismatch")
+    if expected_trade_date is not None and trade_date != expected_trade_date:
+        raise ValueError("publication manifest trade date mismatch")
+
+    research_root = Path("/", *parts[:root_index])
+    configured_roots = tuple(approved_research_roots)
+    approved = (
+        tuple(Path(os.path.abspath(Path(root))) for root in configured_roots)
+        if configured_roots
+        else DEFAULT_APPROVED_PUBLICATION_RESEARCH_ROOTS
+    )
+    if research_root not in approved:
+        raise ValueError("publication manifest research root unapproved")
+    return ParsedPublicationManifestPath(
+        path=Path(text),
+        research_root=research_root,
+        trade_date=trade_date,
+        strategy_id=strategy_id,
+        publish_id=publish_id,
+    )
+
+
+def publication_manifest_trade_date(module: Mapping[str, Any]) -> str | None:
+    values = [
+        str(module.get(field) or "")
+        for field in ("trade_date", "latest_trade_date")
+    ]
+    if len(set(values)) != 1 or not is_exact_iso_date(values[0]):
+        return None
+    return values[0]
+
+
+def publication_performance_as_of_date(summary: Mapping[str, Any]) -> str:
+    return str(
+        summary.get("performance_effective_date")
+        or summary.get("actual_end_date")
+        or summary.get("equity_latest_date")
+        or summary.get("end_date")
+        or ""
+    )
+
+
+def is_exact_iso_date(value: str) -> bool:
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+        return False
+    try:
+        return date.fromisoformat(value).isoformat() == value
+    except ValueError:
+        return False
+
+
+def _safe_path_component(value: str) -> bool:
+    return bool(
+        value not in {"", ".", ".."}
+        and re.fullmatch(r"[A-Za-z0-9._-]+", value)
+    )
 
 
 def write_strategy_publication_artifacts(

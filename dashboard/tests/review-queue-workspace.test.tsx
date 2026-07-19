@@ -50,7 +50,7 @@ function makeQueue(overrides: Partial<ReviewQueueResponse> = {}): ReviewQueueRes
             },
             artifact_version: 'strategy_artifact_v1',
             publication_manifest_path:
-              '/srv/strategy_runs/mid_trend/publish-1/publication_manifest.json',
+              '/srv/outputs/research/strategy_daily_eod/2026-06-08/strategy_runs/mid_trend/publish-1/publication_manifest.json',
             performance_as_of_date: '2026-06-08',
             contract_status: 'success',
             review_tier: 'top5_focus',

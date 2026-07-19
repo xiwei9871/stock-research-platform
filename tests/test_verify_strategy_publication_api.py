@@ -31,9 +31,10 @@ def _valid_item(strategy_id: str) -> dict:
             "publication_policy": identity["publication_policy"],
             "artifact_version": ARTIFACT_VERSION,
             "publication_manifest_path": (
-                f"/srv/outputs/strategy_daily_eod/2026-07-18/strategy_runs/"
+                f"/srv/outputs/research/strategy_daily_eod/2026-07-18/strategy_runs/"
                 f"{strategy_id}/publish-1/publication_manifest.json"
             ),
+            "signal_as_of_date": "2026-07-18",
             "performance_as_of_date": "2026-07-18",
             "total_return_pct": 12.3,
         },
@@ -86,11 +87,18 @@ def test_verify_payload_isolates_one_contract_mismatch():
         lambda payload: payload["items"][1]["latest_metrics"].update(
             {"performance_as_of_date": ""}
         ),
+        lambda payload: payload["items"][1]["latest_metrics"].update(
+            {"signal_as_of_date": "not-a-date"}
+        ),
+        lambda payload: payload["items"][1]["latest_metrics"].update(
+            {"performance_as_of_date": "2026-07-19"}
+        ),
         lambda payload: payload["items"][1].update({"status": "replay_only"}),
         lambda payload: payload["items"][1]["latest_metrics"].update(
             {
                 "publication_manifest_path": (
-                    "/srv/outputs/strategy_runs/lhb_shortline/publish-1/"
+                    "/srv/outputs/research/strategy_daily_eod/2026-07-18/strategy_runs/"
+                    "lhb_shortline/publish-1/"
                     "publication_manifest.json"
                 )
             }
@@ -98,8 +106,33 @@ def test_verify_payload_isolates_one_contract_mismatch():
         lambda payload: payload["items"][1]["latest_metrics"].update(
             {
                 "publication_manifest_path": (
-                    "/srv/outputs/strategy_runs/mid_trend/../tech_bottleneck/"
+                    "/srv/outputs/research/strategy_daily_eod/2026-07-18/strategy_runs/"
+                    "mid_trend/../tech_bottleneck/"
                     "publication_manifest.json"
+                )
+            }
+        ),
+        lambda payload: payload["items"][1]["latest_metrics"].update(
+            {
+                "publication_manifest_path": (
+                    "/evil/outputs/research/strategy_daily_eod/2026-07-18/strategy_runs/"
+                    "mid_trend/publish-1/publication_manifest.json"
+                )
+            }
+        ),
+        lambda payload: payload["items"][1]["latest_metrics"].update(
+            {
+                "publication_manifest_path": (
+                    "/srv/outputs/research/strategy_daily_eod/2026-07-17/strategy_runs/"
+                    "mid_trend/publish-1/publication_manifest.json"
+                )
+            }
+        ),
+        lambda payload: payload["items"][1]["latest_metrics"].update(
+            {
+                "publication_manifest_path": (
+                    "/srv/outputs/research/strategy_daily_eod/2026-07-18/strategy_runs/"
+                    "mid_trend/%2e%2e/publication_manifest.json"
                 )
             }
         ),

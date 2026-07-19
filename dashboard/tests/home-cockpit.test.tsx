@@ -180,7 +180,8 @@ describe('AppShell and HomeCockpit', () => {
             market_regime_policy: 'disabled_for_stable_strategy'
           },
           artifact_version: 'strategy_artifact_v1',
-          publication_manifest_path: '/srv/strategy_runs/lhb_shortline/publish-1/publication_manifest.json',
+          publication_manifest_path:
+            '/srv/outputs/research/strategy_daily_eod/2026-06-08/strategy_runs/lhb_shortline/publish-1/publication_manifest.json',
           performance_as_of_date: '2026-06-08',
           signal_status: 'no_position_rows',
           signal_count: null
@@ -210,7 +211,8 @@ describe('AppShell and HomeCockpit', () => {
             benchmark_variant: 'top5_weekly_max2_selective_trend_holding_protection_v1'
           },
           artifact_version: 'strategy_artifact_v1',
-          publication_manifest_path: '/srv/strategy_runs/mid_trend/publish-1/publication_manifest.json',
+          publication_manifest_path:
+            '/srv/outputs/research/strategy_daily_eod/2026-06-02/strategy_runs/mid_trend/publish-1/publication_manifest.json',
           performance_as_of_date: '2026-06-02',
           signal_status: 'connected',
           signal_count: 5
@@ -242,7 +244,8 @@ describe('AppShell and HomeCockpit', () => {
             protection_name: 'rank_exit_top10_1d'
           },
           artifact_version: 'strategy_artifact_v1',
-          publication_manifest_path: '/srv/strategy_runs/tech_bottleneck/publish-1/publication_manifest.json',
+          publication_manifest_path:
+            '/srv/outputs/research/strategy_daily_eod/2026-06-08/strategy_runs/tech_bottleneck/publish-1/publication_manifest.json',
           performance_as_of_date: '2026-06-08',
           signal_status: 'connected',
           signal_count: 5
@@ -1431,7 +1434,7 @@ describe('AppShell and HomeCockpit', () => {
           },
           artifact_version: 'strategy_artifact_v1',
           publication_manifest_path:
-            '/srv/strategy_runs/lhb_shortline/publish-1/publication_manifest.json'
+            '/srv/outputs/research/strategy_daily_eod/2026-07-18/strategy_runs/lhb_shortline/publish-1/publication_manifest.json'
         },
         primary_action: 'Run backtest'
       },

@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import sys
 from datetime import date
 from pathlib import Path
@@ -13,7 +12,11 @@ from typing import Any, Mapping
 from urllib.request import Request, urlopen
 
 from stock_research.dashboard.strategy_catalog import list_strategy_catalog
-from stock_research.strategy_publication_artifacts import ARTIFACT_VERSION
+from stock_research.strategy_publication_artifacts import (
+    ARTIFACT_VERSION,
+    is_exact_iso_date,
+    parse_publication_manifest_path,
+)
 from stock_research.strategy_publication_contracts import (
     OFFICIAL_STRATEGY_IDS,
     build_publication_identity,
@@ -27,37 +30,6 @@ def _runnable_official_strategy_ids() -> list[str]:
         for item in list_strategy_catalog()
         if item.get("status") == "runnable"
         and str(item.get("strategy_id") or "") in OFFICIAL_STRATEGY_IDS
-    )
-
-
-def _valid_date(value: Any) -> bool:
-    text = str(value or "")
-    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", text):
-        return False
-    try:
-        return date.fromisoformat(text).isoformat() == text
-    except ValueError:
-        return False
-
-
-def _valid_manifest_path(value: Any, strategy_id: str) -> bool:
-    text = str(value or "")
-    if not text.startswith("/") or "\\" in text or "?" in text or "#" in text:
-        return False
-    parts = text.split("/")[1:]
-    if not parts or any(part in {"", ".", ".."} for part in parts):
-        return False
-    if parts.count("strategy_runs") != 1:
-        return False
-    index = parts.index("strategy_runs")
-    if len(parts) != index + 4:
-        return False
-    publish_id = parts[index + 2]
-    return bool(
-        parts[index + 1] == strategy_id
-        and re.fullmatch(r"[A-Za-z0-9._-]+", publish_id)
-        and publish_id not in {".", ".."}
-        and parts[index + 3] == "publication_manifest.json"
     )
 
 
@@ -87,9 +59,26 @@ def _item_valid(item: Mapping[str, Any], strategy_id: str) -> bool:
         return False
     if metrics.get("artifact_version") != ARTIFACT_VERSION:
         return False
-    if not _valid_date(metrics.get("performance_as_of_date")):
+    manifest_date = str(
+        metrics.get("signal_as_of_date") or metrics.get("as_of_date") or ""
+    )
+    performance_as_of_date = str(metrics.get("performance_as_of_date") or "")
+    if (
+        not is_exact_iso_date(manifest_date)
+        or not is_exact_iso_date(performance_as_of_date)
+        or date.fromisoformat(performance_as_of_date)
+        > date.fromisoformat(manifest_date)
+    ):
         return False
-    return _valid_manifest_path(metrics.get("publication_manifest_path"), strategy_id)
+    try:
+        parse_publication_manifest_path(
+            metrics.get("publication_manifest_path"),
+            expected_strategy_id=strategy_id,
+            expected_trade_date=manifest_date,
+        )
+    except ValueError:
+        return False
+    return True
 
 
 def verify_payload(payload: Any) -> dict[str, Any]:

@@ -471,6 +471,7 @@ def test_registered_strategy_without_versioned_eod_evidence_fails_closed(monkeyp
     assert strategy["latest_metrics"] == {
         "as_of_date": "2026-07-18",
         "performance_as_of_date": "2026-07-18",
+        "signal_as_of_date": "2026-07-18",
         "signal_status": "contract_mismatch",
         "signal_count": 0,
         "contract_status": "contract_mismatch",
@@ -505,6 +506,7 @@ def test_failed_official_eod_has_complete_fail_closed_contract_shape(monkeypatch
     assert result["latest_metrics"] == {
         "as_of_date": "2026-07-18",
         "performance_as_of_date": "2026-07-18",
+        "signal_as_of_date": "2026-07-18",
         "signal_status": "contract_mismatch",
         "signal_count": 0,
         "error_message": "publisher failed",
@@ -538,12 +540,12 @@ def test_lhb_stale_performance_does_not_publish_latest_day_zero_return(monkeypat
                 "identity_schema_version": "strategy_publication_identity_v1",
                 "artifact_version": "strategy_artifact_v1",
                 "publication_manifest_path": (
-                    "/srv/strategy_daily_eod/2026-06-29/strategy_runs/"
+                    "/srv/outputs/research/strategy_daily_eod/2026-06-29/strategy_runs/"
                     "lhb_shortline/publish-1/publication_manifest.json"
                 ),
                 "output_paths": {
                     "publication_manifest_path": (
-                        "/srv/strategy_daily_eod/2026-06-29/strategy_runs/"
+                        "/srv/outputs/research/strategy_daily_eod/2026-06-29/strategy_runs/"
                         "lhb_shortline/publish-1/publication_manifest.json"
                     )
                 },
@@ -773,3 +775,30 @@ def test_latest_eod_metrics_fail_closed_per_strategy_for_publication_identity(tm
     assert backtests._validate_eod_publication_contract(
         "mid_trend", mixed_identity, mixed_identity["metadata"]["summary"]
     )[0] == "contract_mismatch"
+
+    malformed_trade_date = copy.deepcopy(modules["mid_trend"])
+    malformed_trade_date["trade_date"] = "2026-7-18"
+    assert backtests._validate_eod_publication_contract(
+        "mid_trend",
+        malformed_trade_date,
+        malformed_trade_date["metadata"]["summary"],
+    )[0] == "contract_mismatch"
+
+    mismatched_trade_dates = copy.deepcopy(modules["mid_trend"])
+    mismatched_trade_dates["latest_trade_date"] = "2026-07-17"
+    assert backtests._validate_eod_publication_contract(
+        "mid_trend",
+        mismatched_trade_dates,
+        mismatched_trade_dates["metadata"]["summary"],
+    )[0] == "contract_mismatch"
+
+    for performance_date in ("not-a-date", "2026-07-19"):
+        invalid_performance_date = copy.deepcopy(modules["mid_trend"])
+        invalid_performance_date["metadata"]["summary"][
+            "performance_effective_date"
+        ] = performance_date
+        assert backtests._validate_eod_publication_contract(
+            "mid_trend",
+            invalid_performance_date,
+            invalid_performance_date["metadata"]["summary"],
+        )[0] == "contract_mismatch"

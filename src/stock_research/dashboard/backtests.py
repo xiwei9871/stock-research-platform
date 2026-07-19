@@ -1,8 +1,7 @@
 import math
-import re
 import time
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from numbers import Integral, Real
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Mapping
@@ -24,7 +23,14 @@ from stock_research.tech_bottleneck_v1 import (
     TECH_BOTTLENECK_V1_CANDIDATES_PATH,
     run_tech_bottleneck_v1_backtest_for_dashboard,
 )
-from stock_research.strategy_publication_artifacts import ARTIFACT_VERSION
+from stock_research.strategy_publication_artifacts import (
+    ARTIFACT_VERSION,
+    DEFAULT_APPROVED_PUBLICATION_RESEARCH_ROOTS,
+    is_exact_iso_date,
+    parse_publication_manifest_path,
+    publication_manifest_trade_date,
+    publication_performance_as_of_date,
+)
 from stock_research.strategy_publication_contracts import OFFICIAL_STRATEGY_IDS
 from stock_research.vectorized_topn_backtest import (
     VectorizedTopNConfig,
@@ -380,10 +386,13 @@ def _with_latest_eod_strategy_metrics(strategy: dict[str, Any]) -> dict[str, Any
             return strategy
         previous_metrics = strategy.get("latest_metrics")
         previous_metrics = previous_metrics if isinstance(previous_metrics, Mapping) else {}
+        previous_date = str(previous_metrics.get("as_of_date") or "")
+        previous_date = previous_date if is_exact_iso_date(previous_date) else None
         next_strategy = dict(strategy)
         next_strategy["latest_metrics"] = {
-            "as_of_date": previous_metrics.get("as_of_date"),
-            "performance_as_of_date": previous_metrics.get("as_of_date"),
+            "as_of_date": previous_date,
+            "performance_as_of_date": previous_date,
+            "signal_as_of_date": previous_date,
             "signal_status": "contract_mismatch",
             "signal_count": 0,
             "contract_status": "contract_mismatch",
@@ -393,15 +402,15 @@ def _with_latest_eod_strategy_metrics(strategy: dict[str, Any]) -> dict[str, Any
         next_strategy["latest_evidence"] = "策略缺少可校验的版本化正式产物。"
         return next_strategy
 
-    latest_trade_date = str(module.get("latest_trade_date") or module.get("trade_date") or "")
+    latest_trade_date = publication_manifest_trade_date(module) or ""
     if str(module.get("status") or "") != "success":
-        return _with_failed_eod_strategy_metrics(strategy, module, latest_trade_date=latest_trade_date)
+        return _with_failed_eod_strategy_metrics(strategy, module)
 
     rows = _read_eod_strategy_rows(module, latest_trade_date=latest_trade_date, strategy_id=str(strategy["strategy_id"]))
     signal_count = len(rows) or _optional_int(module.get("row_count"))
     metrics = dict(strategy.get("latest_metrics") or {})
     summary = _eod_summary(module)
-    performance_as_of_date = _performance_as_of_date(summary, fallback=latest_trade_date)
+    performance_as_of_date = publication_performance_as_of_date(summary)
     performance_stale = bool(
         performance_as_of_date and latest_trade_date and performance_as_of_date < latest_trade_date
     )
@@ -421,11 +430,20 @@ def _with_latest_eod_strategy_metrics(strategy: dict[str, Any]) -> dict[str, Any
     )
     publication_metrics = _publication_metadata_metrics(module, summary)
     if status != "success":
+        safe_manifest_date = publication_manifest_trade_date(module)
+        safe_performance_date = publication_performance_as_of_date(summary)
+        if (
+            not safe_manifest_date
+            or not is_exact_iso_date(safe_performance_date)
+            or date.fromisoformat(safe_performance_date)
+            > date.fromisoformat(safe_manifest_date)
+        ):
+            safe_performance_date = None
         next_strategy = dict(strategy)
         next_strategy["latest_metrics"] = {
-            "as_of_date": performance_as_of_date or metrics.get("as_of_date"),
-            "performance_as_of_date": performance_as_of_date or metrics.get("as_of_date"),
-            "signal_as_of_date": latest_trade_date or metrics.get("signal_as_of_date"),
+            "as_of_date": safe_manifest_date,
+            "performance_as_of_date": safe_performance_date,
+            "signal_as_of_date": safe_manifest_date,
             "signal_status": "contract_mismatch",
             "signal_count": signal_count,
             "contract_status": status,
@@ -474,14 +492,14 @@ def _with_latest_eod_strategy_metrics(strategy: dict[str, Any]) -> dict[str, Any
 def _with_failed_eod_strategy_metrics(
     strategy: dict[str, Any],
     module: dict[str, Any],
-    *,
-    latest_trade_date: str,
 ) -> dict[str, Any]:
     error_message = str(module.get("error_message") or "")
+    manifest_date = publication_manifest_trade_date(module)
     next_strategy = dict(strategy)
     next_strategy["latest_metrics"] = {
-        "as_of_date": latest_trade_date or str(module.get("trade_date") or ""),
-        "performance_as_of_date": latest_trade_date or str(module.get("trade_date") or ""),
+        "as_of_date": manifest_date,
+        "performance_as_of_date": manifest_date,
+        "signal_as_of_date": manifest_date,
         "signal_status": "contract_mismatch",
         "signal_count": 0,
         "error_message": error_message,
@@ -527,6 +545,17 @@ def _validate_eod_publication_contract(
         )
     except Exception as exc:
         return "contract_mismatch", f"publication contract unavailable: {exc}"
+
+    manifest_trade_date = publication_manifest_trade_date(module)
+    if manifest_trade_date is None:
+        return "contract_mismatch", "manifest trade dates invalid or mismatched"
+    performance_as_of_date = publication_performance_as_of_date(summary)
+    if (
+        not is_exact_iso_date(performance_as_of_date)
+        or date.fromisoformat(performance_as_of_date)
+        > date.fromisoformat(manifest_trade_date)
+    ):
+        return "contract_mismatch", "performance date invalid or after manifest date"
 
     metadata = module.get("metadata") if isinstance(module.get("metadata"), Mapping) else {}
     actual = metadata.get("publication_identity")
@@ -575,7 +604,17 @@ def _validate_eod_publication_contract(
     output_manifest_path = output_paths.get("publication_manifest_path")
     if str(output_manifest_path or "") != str(manifest_path or ""):
         return "contract_mismatch", "mixed publication manifest paths"
-    if not _versioned_publication_manifest_path_valid(manifest_path, strategy_id):
+    try:
+        parse_publication_manifest_path(
+            manifest_path,
+            expected_strategy_id=strategy_id,
+            expected_trade_date=manifest_trade_date,
+            approved_research_roots=(
+                Path(getattr(SETTINGS, "output_root", "outputs")) / "research",
+                *DEFAULT_APPROVED_PUBLICATION_RESEARCH_ROOTS,
+            ),
+        )
+    except ValueError:
         return "contract_mismatch", "publication manifest path mismatch"
 
     legacy_status = _validate_eod_summary_contract(strategy_id, dict(summary))
@@ -585,27 +624,6 @@ def _validate_eod_publication_contract(
     if status != "success":
         return "contract_mismatch", reason
     return "success", reason
-
-
-def _versioned_publication_manifest_path_valid(value: Any, strategy_id: str) -> bool:
-    text = str(value or "")
-    if not text.startswith("/") or "\\" in text or "?" in text or "#" in text:
-        return False
-    parts = text.split("/")[1:]
-    if not parts or any(part in {"", ".", ".."} for part in parts):
-        return False
-    if parts.count("strategy_runs") != 1:
-        return False
-    index = parts.index("strategy_runs")
-    if len(parts) != index + 4:
-        return False
-    publish_id = parts[index + 2]
-    return bool(
-        parts[index + 1] == strategy_id
-        and re.fullmatch(r"[A-Za-z0-9._-]+", publish_id)
-        and publish_id not in {".", ".."}
-        and parts[index + 3] == "publication_manifest.json"
-    )
 
 
 def _publication_metadata_metrics(
@@ -752,17 +770,6 @@ def _metrics_from_eod_summary(summary: dict[str, Any]) -> dict[str, Any]:
     if summary.get("latest_period_label"):
         metrics["latest_period_label"] = str(summary.get("latest_period_label"))
     return metrics
-
-
-def _performance_as_of_date(summary: dict[str, Any], *, fallback: str) -> str:
-    return str(
-        summary.get("performance_effective_date")
-        or summary.get("actual_end_date")
-        or summary.get("equity_latest_date")
-        or summary.get("end_date")
-        or fallback
-        or ""
-    )
 
 
 def _metrics_from_eod_equity_path(module: dict[str, Any], strategy: dict[str, Any]) -> dict[str, Any]:

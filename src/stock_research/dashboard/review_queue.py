@@ -17,7 +17,13 @@ from stock_research.dashboard.scores import load_top_scores_for_dashboard
 from stock_research.dashboard.strategy_backtest_adapters import STRATEGY_BACKTEST_REGISTRY, StrategyBacktestParams
 from stock_research.dashboard.strategy_catalog import list_strategy_catalog
 from stock_research.db import connect, fetch_all
-from stock_research.strategy_publication_artifacts import ARTIFACT_VERSION
+from stock_research.strategy_publication_artifacts import (
+    ARTIFACT_VERSION,
+    is_exact_iso_date,
+    parse_publication_manifest_path,
+    publication_manifest_trade_date,
+    publication_performance_as_of_date,
+)
 from stock_research.strategy_publication_contracts import (
     IDENTITY_SCHEMA_VERSION,
     OFFICIAL_STRATEGY_IDS,
@@ -295,9 +301,13 @@ def _snapshot_publication_contract_valid(
     ):
         return False
     manifest_path = row.get("publication_manifest_path")
-    if not _snapshot_manifest_path_valid(
-        manifest_path, strategy_id, snapshot_trade_date
-    ):
+    try:
+        parse_publication_manifest_path(
+            manifest_path,
+            expected_strategy_id=strategy_id,
+            expected_trade_date=snapshot_trade_date,
+        )
+    except ValueError:
         return False
     for path_field in (
         "source_publication_manifest_path",
@@ -314,6 +324,7 @@ def _snapshot_publication_contract_valid(
     for date_field in ("source_trade_date", "manifest_trade_date"):
         if date_field in row and str(row.get(date_field) or "") != snapshot_trade_date:
             return False
+    trusted_manifest_evidence = False
     for manifest_field in ("publication_manifest", "source_manifest", "manifest"):
         if manifest_field not in row:
             continue
@@ -327,7 +338,8 @@ def _snapshot_publication_contract_valid(
             publication_manifest_path=str(manifest_path),
         ):
             return False
-    return True
+        trusted_manifest_evidence = True
+    return trusted_manifest_evidence
 
 
 def _embedded_snapshot_manifest_valid(
@@ -348,24 +360,29 @@ def _embedded_snapshot_manifest_valid(
     if not summary and isinstance(embedded.get("summary"), dict):
         summary = embedded["summary"]
     containers = (embedded, metadata, summary)
-    declared = False
+    strategy_declared = False
+    artifact_declared = False
+    identity_declared = False
+    trade_date_declared = False
+    performance_date_declared = False
+    manifest_path_declared = False
 
     module_name = embedded.get("module")
     if module_name is not None:
-        declared = True
+        strategy_declared = True
         if str(module_name) != f"strategy_{strategy_id}":
             return False
     for container in containers:
         if "strategy_id" in container:
-            declared = True
+            strategy_declared = True
             if container.get("strategy_id") != strategy_id:
                 return False
         if "artifact_version" in container:
-            declared = True
+            artifact_declared = True
             if container.get("artifact_version") != ARTIFACT_VERSION:
                 return False
         if "publication_identity" in container:
-            declared = True
+            identity_declared = True
             actual_identity = container.get("publication_identity")
             if not isinstance(actual_identity, dict) or validate_publication_identity(
                 actual_identity, expected_identity
@@ -373,20 +390,20 @@ def _embedded_snapshot_manifest_valid(
                 return False
         for field in ("trade_date", "latest_trade_date"):
             if field in container:
-                declared = True
+                trade_date_declared = True
                 if str(container.get(field) or "") != snapshot_trade_date:
                     return False
         if "performance_as_of_date" in container:
-            declared = True
+            performance_date_declared = True
             if str(container.get("performance_as_of_date") or "") != performance_as_of_date:
                 return False
         if "publication_manifest_path" in container:
-            declared = True
+            manifest_path_declared = True
             if str(container.get("publication_manifest_path") or "") != publication_manifest_path:
                 return False
         output_paths = container.get("output_paths")
         if isinstance(output_paths, dict) and "publication_manifest_path" in output_paths:
-            declared = True
+            manifest_path_declared = True
             if str(output_paths.get("publication_manifest_path") or "") != publication_manifest_path:
                 return False
     if any(
@@ -398,8 +415,8 @@ def _embedded_snapshot_manifest_valid(
             "end_date",
         )
     ):
-        declared = True
-        derived_performance_date = _performance_as_of_date_from_summary(summary)
+        performance_date_declared = True
+        derived_performance_date = publication_performance_as_of_date(summary)
         if (
             not _valid_iso_date(derived_performance_date)
             or derived_performance_date != performance_as_of_date
@@ -407,32 +424,15 @@ def _embedded_snapshot_manifest_valid(
             > date.fromisoformat(snapshot_trade_date)
         ):
             return False
-    return declared
-
-
-def _snapshot_manifest_path_valid(
-    value: Any, strategy_id: str, snapshot_trade_date: str
-) -> bool:
-    text = str(value or "")
-    if not text.startswith("/") or "\\" in text or "?" in text or "#" in text:
-        return False
-    parts = text.split("/")[1:]
-    if not parts or any(part in {"", ".", ".."} for part in parts):
-        return False
-    if parts.count("strategy_daily_eod") != 1 or parts.count("strategy_runs") != 1:
-        return False
-    root_index = parts.index("strategy_daily_eod")
-    if (
-        len(parts) != root_index + 6
-        or parts[root_index + 2] != "strategy_runs"
-        or not _valid_iso_date(parts[root_index + 1])
-        or parts[root_index + 1] != snapshot_trade_date
-    ):
-        return False
-    return bool(
-        parts[root_index + 3] == strategy_id
-        and _safe_publish_id(parts[root_index + 4])
-        and parts[root_index + 5] == "publication_manifest.json"
+    return all(
+        (
+            strategy_declared,
+            artifact_declared,
+            identity_declared,
+            trade_date_declared,
+            performance_date_declared,
+            manifest_path_declared,
+        )
     )
 
 
@@ -508,14 +508,14 @@ def _manifest_strategy_contract_valid(module: dict[str, Any]) -> bool:
     metadata = module.get("metadata") if isinstance(module.get("metadata"), dict) else {}
     summary = metadata.get("summary") if isinstance(metadata.get("summary"), dict) else {}
     if not summary:
-        return True
+        return False
     try:
         contract = load_strategy_contracts(profile="balanced").get(strategy_id)
+        if contract is None:
+            return False
+        return validate_strategy_summary_against_contract(summary, contract).status == "success"
     except Exception:
-        return True
-    if contract is None:
-        return True
-    return validate_strategy_summary_against_contract(summary, contract).status == "success"
+        return False
 
 
 def _manifest_strategy_id(module: dict[str, Any]) -> str | None:
@@ -628,14 +628,31 @@ def _manifest_strategy_artifact_path_valid(module: dict[str, Any]) -> bool:
         or str(metadata_manifest_path) != str(output_manifest_path)
     ):
         return False
+    manifest_trade_date = publication_manifest_trade_date(module)
+    if manifest_trade_date is None:
+        return False
+    try:
+        parsed_manifest = parse_publication_manifest_path(
+            metadata_manifest_path,
+            expected_strategy_id=strategy_id,
+            expected_trade_date=manifest_trade_date,
+            approved_research_roots=_approved_research_roots(),
+        )
+        parsed_output_manifest = parse_publication_manifest_path(
+            output_manifest_path,
+            expected_strategy_id=strategy_id,
+            expected_trade_date=manifest_trade_date,
+            approved_research_roots=_approved_research_roots(),
+        )
+    except ValueError:
+        return False
+    if parsed_manifest.path != parsed_output_manifest.path or parsed_manifest.publish_id != publish_id:
+        return False
     if artifact_path.name != "review.csv":
         return False
     if not _regular_publication_file(artifact_path):
         return False
     trusted_root = _trusted_strategy_output_root()
-    manifest_trade_date = _manifest_trade_date(module)
-    if manifest_trade_date is None:
-        return False
     version_dir = artifact_path.parent
     if not _trusted_version_path(artifact_path, trusted_root=trusted_root):
         return False
@@ -693,22 +710,18 @@ def _regular_publication_file(path: Path) -> bool:
 
 
 def _manifest_trade_date(module: dict[str, Any]) -> str | None:
-    values: list[str] = []
-    for key in ("trade_date", "latest_trade_date"):
-        if key not in module:
-            return None
-        value = str(module.get(key) or "")
-        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
-            return None
-        try:
-            if date.fromisoformat(value).isoformat() != value:
-                return None
-        except ValueError:
-            return None
-        values.append(value)
-    if len(values) != 2 or len(set(values)) != 1:
-        return None
-    return values[0]
+    return publication_manifest_trade_date(module)
+
+
+def _approved_research_roots() -> tuple[Path, ...]:
+    output_roots = (
+        Path(getattr(SETTINGS, "output_root", "outputs")),
+        *_APPROVED_SYNCED_OUTPUT_ROOTS,
+    )
+    return tuple(
+        Path(os.path.abspath(output_root)) / "research"
+        for output_root in output_roots
+    )
 
 
 def _trusted_strategy_output_root() -> Path:
@@ -873,17 +886,7 @@ def _read_manifest_strategy_artifact(
 def _manifest_performance_as_of_date(manifest: dict[str, Any]) -> str:
     metadata = manifest.get("metadata") if isinstance(manifest.get("metadata"), dict) else {}
     summary = metadata.get("summary") if isinstance(metadata.get("summary"), dict) else {}
-    return _performance_as_of_date_from_summary(summary)
-
-
-def _performance_as_of_date_from_summary(summary: dict[str, Any]) -> str:
-    return str(
-        summary.get("performance_effective_date")
-        or summary.get("actual_end_date")
-        or summary.get("equity_latest_date")
-        or summary.get("end_date")
-        or ""
-    )[:10]
+    return publication_performance_as_of_date(summary)
 
 
 def _artifact_rows_match_manifest(frame: Any, manifest: dict[str, Any]) -> bool:
@@ -904,7 +907,13 @@ def _artifact_rows_match_manifest(frame: Any, manifest: dict[str, Any]) -> bool:
     except Exception:
         return False
     performance_as_of_date = _manifest_performance_as_of_date(manifest)
-    if not _valid_iso_date(performance_as_of_date):
+    manifest_trade_date = publication_manifest_trade_date(manifest)
+    if (
+        manifest_trade_date is None
+        or not _valid_iso_date(performance_as_of_date)
+        or date.fromisoformat(performance_as_of_date)
+        > date.fromisoformat(manifest_trade_date)
+    ):
         return False
     expected_fields: dict[str, Any] = {
         "contract_id": expected["contract_id"],
@@ -947,13 +956,7 @@ def _declared_row_value(value: Any) -> Any:
 
 
 def _valid_iso_date(value: Any) -> bool:
-    text = str(value or "")
-    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", text):
-        return False
-    try:
-        return date.fromisoformat(text).isoformat() == text
-    except ValueError:
-        return False
+    return is_exact_iso_date(str(value or ""))
 
 
 def _manifest_strategy_score(row: dict[str, Any], *, strategy_id: str, rank: int) -> tuple[float | None, str | None, str | None]:

@@ -1,3 +1,4 @@
+import copy
 import os
 from pathlib import Path
 
@@ -609,7 +610,10 @@ def test_manifest_rejects_entire_mixed_strategy_artifact(extra_row, tmp_path, mo
         ("artifact_version", "strategy_artifact_v999"),
         (
             "publication_manifest_path",
-            "/srv/strategy_runs/tech_bottleneck/publish-1/publication_manifest.json",
+            (
+                "/srv/outputs/research/strategy_daily_eod/2026-07-18/strategy_runs/"
+                "tech_bottleneck/publish-1/publication_manifest.json"
+            ),
         ),
     ],
 )
@@ -631,7 +635,7 @@ def test_persisted_strategy_snapshot_fails_closed_for_stale_or_mixed_contract(
         "publication_policy": identity["publication_policy"],
         "artifact_version": "strategy_artifact_v1",
         "publication_manifest_path": (
-            "/srv/strategy_daily_eod/2026-07-18/strategy_runs/"
+            "/srv/outputs/research/strategy_daily_eod/2026-07-18/strategy_runs/"
             "mid_trend/publish-1/publication_manifest.json"
         ),
         "performance_as_of_date": "2026-07-18",
@@ -665,7 +669,7 @@ def test_persisted_lhb_snapshot_accepts_stale_performance_bound_to_manifest(monk
         "publication_policy": identity["publication_policy"],
         "artifact_version": "strategy_artifact_v1",
         "publication_manifest_path": (
-            "/srv/strategy_daily_eod/2026-07-18/strategy_runs/"
+            "/srv/outputs/research/strategy_daily_eod/2026-07-18/strategy_runs/"
             "lhb_shortline/publish-1/publication_manifest.json"
         ),
         "performance_as_of_date": "2026-07-17",
@@ -676,6 +680,10 @@ def test_persisted_lhb_snapshot_accepts_stale_performance_bound_to_manifest(monk
             "performance_as_of_date": "2026-07-17",
             "artifact_version": "strategy_artifact_v1",
             "publication_identity": identity,
+            "publication_manifest_path": (
+                "/srv/outputs/research/strategy_daily_eod/2026-07-18/strategy_runs/"
+                "lhb_shortline/publish-1/publication_manifest.json"
+            ),
         },
     }
     monkeypatch.setattr(
@@ -724,7 +732,40 @@ def test_persisted_snapshot_rejects_manifest_path_trade_date_mismatch(monkeypatc
         "publication_policy": identity["publication_policy"],
         "artifact_version": "strategy_artifact_v1",
         "publication_manifest_path": (
-            "/srv/strategy_daily_eod/2026-07-17/strategy_runs/"
+            "/srv/outputs/research/strategy_daily_eod/2026-07-17/strategy_runs/"
+            "mid_trend/publish-1/publication_manifest.json"
+        ),
+        "performance_as_of_date": "2026-07-17",
+        "contract_status": "success",
+    }
+    monkeypatch.setattr(
+        review_evidence_snapshots,
+        "list_review_item_snapshots",
+        lambda **kwargs: [{"review_item_payload": payload}],
+    )
+
+    assert review_queue._load_strategy_snapshot_rows(
+        trade_date="2026-07-18", limit=50
+    ) == []
+
+
+def test_persisted_snapshot_rejects_self_asserted_publication_path(monkeypatch):
+    from stock_research import review_evidence_snapshots
+
+    identity = build_publication_identity(get_publication_contract("mid_trend"))
+    payload = {
+        "score_version": "strategy_topn",
+        "trade_date": "2026-07-18",
+        "asset_id": "CN:SH:600002",
+        "strategy_id": "mid_trend",
+        "rank": 1,
+        "contract_id": identity["contract_id"],
+        "identity_schema_version": identity["identity_schema_version"],
+        "config_fingerprint": identity["config_fingerprint"],
+        "publication_policy": identity["publication_policy"],
+        "artifact_version": "strategy_artifact_v1",
+        "publication_manifest_path": (
+            "/srv/outputs/research/strategy_daily_eod/2026-07-18/strategy_runs/"
             "mid_trend/publish-1/publication_manifest.json"
         ),
         "performance_as_of_date": "2026-07-17",
@@ -749,7 +790,7 @@ def test_persisted_snapshot_rejects_invalid_embedded_end_date_fallback(
 
     identity = build_publication_identity(get_publication_contract("mid_trend"))
     manifest_path = (
-        "/srv/strategy_daily_eod/2026-07-18/strategy_runs/"
+        "/srv/outputs/research/strategy_daily_eod/2026-07-18/strategy_runs/"
         "mid_trend/publish-1/publication_manifest.json"
     )
     payload = {
@@ -1055,6 +1096,24 @@ def test_unknown_publication_declaration_rejects_manifest(field, value, tmp_path
     assert review_queue._manifest_publication_declaration_valid(module) is False
     if field == "artifact_version":
         assert review_queue._manifest_strategy_artifact_path_valid(module) is False
+
+
+def test_official_manifest_contract_validation_fails_closed(monkeypatch, tmp_path):
+    module = _v1_versioned_manifest(tmp_path)
+
+    missing_summary = copy.deepcopy(module)
+    missing_summary["metadata"]["summary"] = {}
+    assert review_queue._manifest_strategy_contract_valid(missing_summary) is False
+
+    monkeypatch.setattr(
+        review_queue,
+        "load_strategy_contracts",
+        lambda **kwargs: (_ for _ in ()).throw(RuntimeError("registry unavailable")),
+    )
+    assert review_queue._manifest_strategy_contract_valid(module) is False
+
+    monkeypatch.setattr(review_queue, "load_strategy_contracts", lambda **kwargs: {})
+    assert review_queue._manifest_strategy_contract_valid(module) is False
 
 
 @pytest.mark.parametrize(
