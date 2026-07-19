@@ -12,7 +12,7 @@ import stat
 import threading
 from typing import Any
 
-from stock_research.research_project_v2.canonical import content_sha256
+from stock_research.research_project_v2.canonical import canonical_bytes, content_sha256
 from stock_research.research_project_v2.errors import ResearchProjectV2Error
 from stock_research.research_project_v2 import loader as r1_loader
 from stock_research.research_project_v2_1.layout import LayeredResearchLayout
@@ -259,7 +259,16 @@ def _immutability_violation(
     )
 
 
-def _read_managed_bytes(path: Path, layout: LayeredResearchLayout) -> bytes:
+def _same_inode(left: os.stat_result, right: os.stat_result) -> bool:
+    return left.st_dev == right.st_dev and left.st_ino == right.st_ino
+
+
+def _read_managed_bytes_limited(
+    path: Path,
+    layout: LayeredResearchLayout,
+    *,
+    max_bytes: int,
+) -> bytes:
     try:
         relative = path.relative_to(layout.root)
     except ValueError as exc:
@@ -274,28 +283,193 @@ def _read_managed_bytes(path: Path, layout: LayeredResearchLayout) -> bytes:
     directory_flags = os.O_RDONLY | directory | nofollow | cloexec
     file_flags = os.O_RDONLY | nofollow | cloexec
     opened_fds: list[int] = []
+    component_names: list[str] = []
     final_fd: int | None = None
     try:
         parent_fd = os.open(layout.root, directory_flags)
         opened_fds.append(parent_fd)
+        root_before = os.fstat(parent_fd)
+        if not _same_inode(root_before, os.lstat(layout.root)):
+            raise OSError("managed root binding changed")
         for component in parts[:-1]:
             child_fd = os.open(component, directory_flags, dir_fd=parent_fd)
-            if not stat.S_ISDIR(os.fstat(child_fd).st_mode):
+            child_stat = os.fstat(child_fd)
+            child_entry = os.stat(component, dir_fd=parent_fd, follow_symlinks=False)
+            if not stat.S_ISDIR(child_stat.st_mode) or not _same_inode(
+                child_stat, child_entry
+            ):
                 os.close(child_fd)
                 raise OSError("managed path component is not a directory")
             opened_fds.append(child_fd)
+            component_names.append(component)
             parent_fd = child_fd
         final_fd = os.open(parts[-1], file_flags, dir_fd=parent_fd)
-        if not stat.S_ISREG(os.fstat(final_fd).st_mode):
+        before = os.fstat(final_fd)
+        entry_before = os.stat(parts[-1], dir_fd=parent_fd, follow_symlinks=False)
+        if not stat.S_ISREG(before.st_mode) or not _same_inode(before, entry_before):
             raise OSError("managed path target is not a regular file")
-        with os.fdopen(final_fd, "rb") as handle:
-            final_fd = None
-            return handle.read()
+        chunks: list[bytes] = []
+        total = 0
+        while True:
+            chunk = os.read(final_fd, min(64 * 1024, max_bytes - total + 1))
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > max_bytes:
+                raise _error(
+                    "RESEARCH_PROJECT_V2_1_READ_LIMIT_EXCEEDED",
+                    "Layered managed file exceeds the read limit",
+                    path=str(path),
+                    max_bytes=max_bytes,
+                )
+            chunks.append(chunk)
+        after = os.fstat(final_fd)
+        entry_after = os.stat(parts[-1], dir_fd=parent_fd, follow_symlinks=False)
+        if (
+            not _same_inode(before, after)
+            or not _same_inode(after, entry_after)
+            or before.st_size != after.st_size
+            or before.st_mtime_ns != after.st_mtime_ns
+            or after.st_size != total
+        ):
+            raise OSError("managed file binding changed during read")
+        if not _same_inode(root_before, os.lstat(layout.root)):
+            raise OSError("managed root binding changed during read")
+        for index, component in enumerate(component_names):
+            entry = os.stat(
+                component,
+                dir_fd=opened_fds[index],
+                follow_symlinks=False,
+            )
+            if not _same_inode(os.fstat(opened_fds[index + 1]), entry):
+                raise OSError("managed directory binding changed during read")
+        return b"".join(chunks)
     finally:
         if final_fd is not None:
             os.close(final_fd)
         for fd in reversed(opened_fds):
             os.close(fd)
+
+
+def _read_managed_bytes(path: Path, layout: LayeredResearchLayout) -> bytes:
+    return _read_managed_bytes_limited(path, layout, max_bytes=64 * 1024 * 1024)
+
+
+def read_layered_bytes(
+    relative_path: str | Path,
+    *,
+    layout: LayeredResearchLayout | None = None,
+    max_bytes: int = 64 * 1024 * 1024,
+) -> bytes:
+    """Safely read one bounded regular file below the layered artifact root."""
+    selected = _layout_or_default(layout)
+    candidate = Path(relative_path)
+    if (
+        candidate.is_absolute()
+        or not candidate.parts
+        or any(part in {"", ".", ".."} for part in candidate.parts)
+        or isinstance(max_bytes, bool)
+        or not isinstance(max_bytes, int)
+        or max_bytes < 0
+    ):
+        raise _error(
+            "RESEARCH_PROJECT_V2_1_STORAGE_ERROR",
+            "Unsafe layered managed read request",
+            path=str(relative_path),
+            reason="invalid relative path or max_bytes",
+        )
+    path = selected.root.joinpath(*candidate.parts)
+    with layered_storage_lock(selected, exclusive=False):
+        try:
+            return _read_managed_bytes_limited(
+                path,
+                selected,
+                max_bytes=max_bytes,
+            )
+        except ResearchProjectV2Error:
+            raise
+        except FileNotFoundError as exc:
+            raise _error(
+                "RESEARCH_PROJECT_V2_1_MANAGED_FILE_NOT_FOUND",
+                "Layered managed file not found",
+                path=str(path),
+            ) from exc
+        except OSError as exc:
+            raise _error(
+                "RESEARCH_PROJECT_V2_1_STORAGE_ERROR",
+                "Unsafe or unreadable layered managed file",
+                path=str(path),
+                reason=str(exc),
+            ) from exc
+
+
+def read_layered_json(
+    relative_path: str | Path,
+    *,
+    layout: LayeredResearchLayout | None = None,
+    max_bytes: int = 16 * 1024 * 1024,
+) -> dict[str, Any]:
+    """Safely read one bounded UTF-8 JSON object below the layered root."""
+    data = read_layered_bytes(
+        relative_path,
+        layout=layout,
+        max_bytes=max_bytes,
+    )
+    try:
+        payload = json.loads(data.decode("utf-8"))
+    except (UnicodeError, json.JSONDecodeError) as exc:
+        raise _error(
+            "RESEARCH_PROJECT_V2_1_READ_ERROR",
+            "Layered managed JSON is invalid",
+            path=str(relative_path),
+            reason=type(exc).__name__,
+        ) from exc
+    if not isinstance(payload, dict):
+        raise _error(
+            "RESEARCH_PROJECT_V2_1_READ_ERROR",
+            "Layered managed JSON must contain an object",
+            path=str(relative_path),
+            reason="payload is not an object",
+        )
+    return payload
+
+
+def read_layered_canonical_json(
+    relative_path: str | Path,
+    *,
+    layout: LayeredResearchLayout | None = None,
+    max_bytes: int = 16 * 1024 * 1024,
+) -> dict[str, Any]:
+    """Read a bounded JSON object and require its stored bytes to be canonical."""
+    data = read_layered_bytes(
+        relative_path,
+        layout=layout,
+        max_bytes=max_bytes,
+    )
+    try:
+        payload = json.loads(data.decode("utf-8"))
+    except (UnicodeError, json.JSONDecodeError) as exc:
+        raise _error(
+            "RESEARCH_PROJECT_V2_1_READ_ERROR",
+            "Layered managed JSON is invalid",
+            path=str(relative_path),
+            reason=type(exc).__name__,
+        ) from exc
+    if not isinstance(payload, dict):
+        raise _error(
+            "RESEARCH_PROJECT_V2_1_READ_ERROR",
+            "Layered managed JSON must contain an object",
+            path=str(relative_path),
+            reason="payload is not an object",
+        )
+    if canonical_bytes(payload) != data:
+        raise _error(
+            "RESEARCH_PROJECT_V2_1_IMMUTABILITY_VIOLATION",
+            "Layered managed JSON is not canonically encoded",
+            path=str(relative_path),
+            reason="non-canonical JSON bytes",
+        )
+    return payload
 
 
 def _read_json_object(

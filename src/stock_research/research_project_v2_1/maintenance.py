@@ -274,6 +274,9 @@ def _rebuild_layered_index_unlocked(
         "projects",
         "schema",
     }
+    gitignore_path = selected.root / ".gitignore"
+    if not gitignore_path.exists():
+        raise _error("missing layered root .gitignore", path=gitignore_path)
     for entry in selected.root.iterdir():
         _safe(entry, selected)
         if entry.name not in allowed_root_entries:

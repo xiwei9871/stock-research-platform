@@ -305,6 +305,113 @@ def test_layered_reader_detects_lock_path_rebinding_while_locked(
     assert exc_info.value.details["reason"] == "maintenance lock path rebound"
 
 
+def test_public_managed_reader_rejects_parent_symlink_and_enforces_limit(
+    layered_layout: LayeredResearchLayout,
+    tmp_path: Path,
+) -> None:
+    from stock_research.research_project_v2_1.loader import read_layered_bytes
+
+    evidence = layered_layout.root / "evidence"
+    evidence.mkdir()
+    (evidence / "small.bin").write_bytes(b"1234")
+    assert read_layered_bytes(
+        "evidence/small.bin", layout=layered_layout, max_bytes=4
+    ) == b"1234"
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        read_layered_bytes(
+            "evidence/small.bin", layout=layered_layout, max_bytes=3
+        )
+    _assert_code(exc_info, "RESEARCH_PROJECT_V2_1_READ_LIMIT_EXCEEDED")
+
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "secret.bin").write_bytes(b"secret")
+    (evidence / "linked").symlink_to(outside, target_is_directory=True)
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        read_layered_bytes(
+            "evidence/linked/secret.bin", layout=layered_layout
+        )
+    _assert_code(exc_info, "RESEARCH_PROJECT_V2_1_STORAGE_ERROR")
+
+
+def test_public_managed_reader_detects_intermediate_parent_replacement(
+    layered_layout: LayeredResearchLayout,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from stock_research.research_project_v2_1 import loader as loader_module
+    from stock_research.research_project_v2_1.loader import read_layered_bytes
+
+    evidence = layered_layout.root / "evidence"
+    metadata = evidence / "metadata"
+    metadata.mkdir(parents=True)
+    (metadata / "item.bin").write_bytes(b"old")
+    displaced = layered_layout.root / "evidence-displaced"
+    real_read = loader_module.os.read
+    replaced = False
+
+    def replace_parent(descriptor: int, size: int) -> bytes:
+        nonlocal replaced
+        data = real_read(descriptor, size)
+        if data and not replaced:
+            replaced = True
+            evidence.rename(displaced)
+            (evidence / "metadata").mkdir(parents=True)
+            (evidence / "metadata/item.bin").write_bytes(b"new")
+        return data
+
+    monkeypatch.setattr(loader_module.os, "read", replace_parent)
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        read_layered_bytes(
+            "evidence/metadata/item.bin",
+            layout=layered_layout,
+        )
+    _assert_code(exc_info, "RESEARCH_PROJECT_V2_1_STORAGE_ERROR")
+
+
+def test_public_managed_json_reader_rejects_corrupt_or_non_object_json(
+    layered_layout: LayeredResearchLayout,
+) -> None:
+    from stock_research.research_project_v2_1.loader import read_layered_json
+
+    evidence = layered_layout.root / "evidence"
+    evidence.mkdir()
+    corrupt = evidence / "corrupt.json"
+    corrupt.write_text("{", encoding="utf-8")
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        read_layered_json("evidence/corrupt.json", layout=layered_layout)
+    _assert_code(exc_info, "RESEARCH_PROJECT_V2_1_READ_ERROR")
+
+
+def test_public_canonical_json_reader_rejects_noncanonical_bytes(
+    layered_layout: LayeredResearchLayout,
+) -> None:
+    from stock_research.research_project_v2.canonical import canonical_bytes
+    from stock_research.research_project_v2_1.loader import (
+        read_layered_canonical_json,
+        read_layered_json,
+    )
+
+    evidence = layered_layout.root / "evidence"
+    evidence.mkdir()
+    target = evidence / "object.json"
+    payload = {"b": 2, "a": 1}
+    target.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        read_layered_canonical_json("evidence/object.json", layout=layered_layout)
+    _assert_code(exc_info, "RESEARCH_PROJECT_V2_1_IMMUTABILITY_VIOLATION")
+
+    target.write_bytes(canonical_bytes(payload))
+    assert read_layered_canonical_json(
+        "evidence/object.json", layout=layered_layout
+    ) == payload
+
+    array = evidence / "array.json"
+    array.write_text("[]", encoding="utf-8")
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        read_layered_json("evidence/array.json", layout=layered_layout)
+    _assert_code(exc_info, "RESEARCH_PROJECT_V2_1_READ_ERROR")
+
+
 def test_load_identity_current_explicit_versions_and_semver_sorting(
     layered_layout: LayeredResearchLayout,
 ) -> None:

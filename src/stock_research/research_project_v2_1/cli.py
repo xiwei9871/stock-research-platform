@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import argparse
 from copy import deepcopy
+from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
 import re
 import tempfile
-from typing import Any
+from typing import Any, Callable
 
 from stock_research.research_project_v2.errors import ResearchProjectV2Error
 from stock_research.research_project_v2_1.discovery import (
@@ -16,6 +17,7 @@ from stock_research.research_project_v2_1.discovery import (
     write_discovery_batch,
 )
 from stock_research.research_project_v2_1.evidence import (
+    validate_industry_evidence_assessment,
     write_industry_evidence_assessment,
 )
 from stock_research.research_project_v2_1.gates import evaluate_industry_design_gate
@@ -25,21 +27,27 @@ from stock_research.research_project_v2_1.loader import (
     list_layered_versions,
     load_industry_version,
     load_layered_project,
+    read_layered_bytes,
+    read_layered_canonical_json,
 )
 from stock_research.research_project_v2_1.maintenance import rebuild_layered_index
 from stock_research.research_project_v2_1.normalize import (
     normalize_artifact,
+    validate_normalized_document,
     write_normalized_document,
 )
+from stock_research.research_project_v2_1.schema import validate_v2_1_schema_payload
 from stock_research.research_project_v2_1.search_plan import validate_search_plans
 from stock_research.research_project_v2_1.snapshot import (
     RequestsFetchTransport,
     SystemAddressResolver,
     snapshot_candidate,
+    validate_evidence_artifact,
 )
 
 
 _SAFE_ARTIFACT_ID = re.compile(r"evidence_artifact:[a-f0-9]{24}")
+_Clock = Callable[[], datetime]
 
 
 class _JsonArgumentParser(argparse.ArgumentParser):
@@ -82,16 +90,22 @@ def _parser() -> argparse.ArgumentParser:
     )
     discover.add_argument("--search-plan", required=True)
     discover.add_argument("--results", required=True)
+    discover.add_argument("--discovered-at")
+    discover.add_argument("--agent-run-id")
     discover.add_argument("--write", action="store_true")
 
     snapshot = commands.add_parser(
         "snapshot", help="Fetch and snapshot one source candidate."
     )
     snapshot.add_argument("--candidate", required=True)
+    snapshot.add_argument("--fetched-at")
+    snapshot.add_argument("--agent-run-id")
     snapshot.add_argument("--write", action="store_true")
 
     parse = commands.add_parser("parse", help="Normalize a stored evidence artifact.")
     parse.add_argument("--artifact-id", required=True)
+    parse.add_argument("--parsed-at")
+    parse.add_argument("--agent-run-id")
     parse.add_argument("--write", action="store_true")
 
     assess = commands.add_parser(
@@ -254,49 +268,121 @@ def _unwrap(payload: dict[str, Any], key: str) -> dict[str, Any]:
     return value
 
 
-def _discover(plan_path: str, results_path: str) -> dict[str, Any]:
+def _timestamp(explicit: str | None, clock: _Clock) -> str:
+    if explicit is None:
+        value = clock()
+        if not isinstance(value, datetime) or value.tzinfo is None:
+            raise ResearchProjectV2Error(
+                "Operation clock must return an aware datetime",
+                code="RESEARCH_PROJECT_V2_1_CLI_INPUT_INVALID",
+                details={"field": "operation_time"},
+            )
+        return value.astimezone(timezone.utc).isoformat(timespec="seconds").replace(
+            "+00:00", "Z"
+        )
+    try:
+        parsed = datetime.fromisoformat(explicit.replace("Z", "+00:00"))
+    except (AttributeError, ValueError) as exc:
+        raise ResearchProjectV2Error(
+            "Operation time must be RFC3339",
+            code="RESEARCH_PROJECT_V2_1_CLI_INPUT_INVALID",
+            details={"field": "operation_time"},
+        ) from exc
+    if parsed.tzinfo is None or explicit != explicit.strip():
+        raise ResearchProjectV2Error(
+            "Operation time must be RFC3339",
+            code="RESEARCH_PROJECT_V2_1_CLI_INPUT_INVALID",
+            details={"field": "operation_time"},
+        )
+    return explicit
+
+
+def _operation_provenance(
+    source: object,
+    *,
+    command: str,
+    operation_at: str,
+    agent_run_id: str | None,
+) -> dict[str, Any]:
+    created_in_version = source.get("created_in_version") if isinstance(source, dict) else None
+    if not isinstance(created_in_version, str) or not created_in_version.strip():
+        raise ResearchProjectV2Error(
+            "Upstream object lacks created_in_version",
+            code="RESEARCH_PROJECT_V2_1_CLI_INPUT_INVALID",
+            details={"field": "provenance.created_in_version"},
+        )
+    if agent_run_id is not None and (
+        not isinstance(agent_run_id, str)
+        or not agent_run_id.strip()
+        or agent_run_id != agent_run_id.strip()
+    ):
+        raise ResearchProjectV2Error(
+            "agent_run_id must be canonical",
+            code="RESEARCH_PROJECT_V2_1_CLI_INPUT_INVALID",
+            details={"field": "agent_run_id"},
+        )
+    effective_run_id = agent_run_id or (
+        f"research-project-v2-1-cli:{command}:{operation_at}"
+    )
+    return {
+        "created_by": "research-project-v2-1-cli",
+        "actor_type": "automated_pipeline",
+        "agent_run_id": effective_run_id,
+        "created_at": operation_at,
+        "created_in_version": created_in_version,
+        "review_status": "unreviewed",
+    }
+
+
+def _discover(
+    plan_path: str,
+    results_path: str,
+    *,
+    clock: _Clock,
+    agent_run_id: str | None,
+    discovered_at: str | None = None,
+) -> dict[str, Any]:
     plan_payload = _read_json(plan_path, purpose="Search Plan")
     plan = _unwrap(plan_payload, "search_plan")
     results = _read_json(results_path, purpose="discovery results")
-    provenance = plan.get("provenance")
-    discovered_at = results.get("discovered_at") or (
-        provenance.get("created_at") if isinstance(provenance, dict) else None
+    operation_at = _timestamp(
+        discovered_at if discovered_at is not None else results.get("discovered_at"),
+        clock,
     )
-    if not isinstance(discovered_at, str) or not isinstance(provenance, dict):
-        raise ResearchProjectV2Error(
-            "Discovery input requires deterministic discovered_at and provenance",
-            code="RESEARCH_PROJECT_V2_1_DISCOVERY_INPUT_INVALID",
-            details={"search_plan": plan_path, "results": results_path},
-        )
+    provenance = _operation_provenance(
+        plan.get("provenance"),
+        command="discover",
+        operation_at=operation_at,
+        agent_run_id=agent_run_id,
+    )
     return discover_sources(
         plan,
         ImportedJsonDiscoveryProvider(results_path),
         provider_name=str(results.get("provider", "imported_json")),
-        discovered_at=discovered_at,
+        discovered_at=operation_at,
         provenance=provenance,
     )
 
 
 def _temporary_layout() -> tuple[tempfile.TemporaryDirectory[str], LayeredResearchLayout]:
     temporary = tempfile.TemporaryDirectory(prefix="research-project-v2-1-preview-")
-    root = Path(temporary.name) / "v2_1"
+    root = Path(temporary.name).resolve() / "v2_1"
     root.mkdir(mode=0o700)
     return temporary, LayeredResearchLayout(root)
 
 
-def _snapshot(args: argparse.Namespace) -> dict[str, Any]:
+def _snapshot(args: argparse.Namespace, *, clock: _Clock) -> dict[str, Any]:
     candidate = _unwrap(
         _read_json(args.candidate, purpose="source candidate"),
         "source_candidate",
     )
-    provenance = candidate.get("provenance")
-    fetched_at = provenance.get("created_at") if isinstance(provenance, dict) else None
-    if not isinstance(fetched_at, str) or not isinstance(provenance, dict):
-        raise ResearchProjectV2Error(
-            "Candidate requires deterministic provenance.created_at",
-            code="RESEARCH_PROJECT_V2_1_SNAPSHOT_INVALID",
-            details={"path": args.candidate},
-        )
+    fetched_at = _timestamp(args.fetched_at, clock)
+    provenance = _operation_provenance(
+        candidate.get("provenance"),
+        command="snapshot",
+        operation_at=fetched_at,
+        agent_run_id=args.agent_run_id,
+    )
     temporary: tempfile.TemporaryDirectory[str] | None = None
     layout = LayeredResearchLayout.default()
     if not args.write:
@@ -331,22 +417,21 @@ def _artifact_from_metadata(
             code="RESEARCH_PROJECT_V2_1_ARTIFACT_NOT_FOUND",
             details={"artifact_id": artifact_id},
         )
-    path = layout.evidence_metadata_dir / f"{artifact_id}.json"
-    if path.is_symlink():
-        raise ResearchProjectV2Error(
-            "Unsafe evidence artifact metadata path",
-            code="RESEARCH_PROJECT_V2_1_PATH_VIOLATION",
-            details={"artifact_id": artifact_id, "path": str(path)},
-        )
-    if not path.is_file():
-        raise ResearchProjectV2Error(
-            "Evidence artifact not found",
-            code="RESEARCH_PROJECT_V2_1_ARTIFACT_NOT_FOUND",
-            details={"artifact_id": artifact_id},
-        )
-    payload = _read_json(str(path), purpose="evidence artifact metadata")
+    relative_path = f"evidence/metadata/{artifact_id}.json"
+    try:
+        payload = read_layered_canonical_json(relative_path, layout=layout)
+    except ResearchProjectV2Error as exc:
+        if exc.code == "RESEARCH_PROJECT_V2_1_MANAGED_FILE_NOT_FOUND":
+            raise ResearchProjectV2Error(
+                "Evidence artifact not found or unreadable",
+                code="RESEARCH_PROJECT_V2_1_ARTIFACT_NOT_FOUND",
+                details={"artifact_id": artifact_id},
+            ) from exc
+        raise
+    validate_v2_1_schema_payload("evidence_artifact_v2_1", payload, layout=layout)
     artifact = _unwrap(payload, "evidence_artifact")
-    if artifact.get("artifact_id") != artifact_id:
+    artifact = validate_evidence_artifact(artifact)
+    if artifact["artifact_id"] != artifact_id:
         raise ResearchProjectV2Error(
             "Evidence artifact metadata identity mismatch",
             code="RESEARCH_PROJECT_V2_1_IMMUTABILITY_VIOLATION",
@@ -355,13 +440,24 @@ def _artifact_from_metadata(
     return artifact
 
 
-def _parse(args: argparse.Namespace, layout: LayeredResearchLayout) -> dict[str, Any]:
+def _parse(
+    args: argparse.Namespace,
+    layout: LayeredResearchLayout,
+    *,
+    clock: _Clock,
+) -> dict[str, Any]:
     artifact = _artifact_from_metadata(args.artifact_id, layout)
-    provenance = artifact["provenance"]
+    parsed_at = _timestamp(args.parsed_at, clock)
+    provenance = _operation_provenance(
+        artifact.get("provenance"),
+        command="parse",
+        operation_at=parsed_at,
+        agent_run_id=args.agent_run_id,
+    )
     document = normalize_artifact(
         artifact,
         layout=layout,
-        parsed_at=artifact["fetched_at"],
+        parsed_at=parsed_at,
         provenance=provenance,
     )
     path = write_normalized_document(document, layout=layout) if args.write else None
@@ -406,40 +502,78 @@ def _audit(args: argparse.Namespace, layout: LayeredResearchLayout) -> dict[str,
         findings.append({"code": exc.code, "message": str(exc), "details": exc.details})
     artifacts = {row["artifact_id"]: row for row in snapshot["evidence_artifacts"]}
     documents = {row["document_id"]: row for row in snapshot["normalized_documents"]}
+    verified_documents: dict[str, dict[str, Any]] = {}
     for artifact_id, artifact in sorted(artifacts.items()):
-        raw_path = artifact.get("raw_path")
-        raw_parts = Path(raw_path).parts if isinstance(raw_path, str) else ()
-        if not raw_parts or Path(raw_path).is_absolute() or ".." in raw_parts:
-            findings.append(
-                {"code": "RAW_ARTIFACT_PATH_INVALID", "artifact_id": artifact_id}
+        try:
+            raw = read_layered_bytes(
+                artifact["raw_path"],
+                layout=layout,
+                max_bytes=artifact["byte_count"],
             )
-        else:
-            stored_raw = layout.root / raw_path
-            if stored_raw.is_symlink() or not stored_raw.is_file():
-                findings.append(
-                    {"code": "RAW_ARTIFACT_NOT_FOUND", "artifact_id": artifact_id}
-                )
-            else:
-                actual_hash = hashlib.sha256(stored_raw.read_bytes()).hexdigest()
-                if actual_hash != artifact.get("content_sha256"):
-                    findings.append(
-                        {
-                            "code": "RAW_ARTIFACT_HASH_MISMATCH",
-                            "artifact_id": artifact_id,
-                        }
-                    )
-        metadata_path = layout.evidence_metadata_dir / f"{artifact_id}.json"
-        if metadata_path.is_symlink() or not metadata_path.is_file():
+            if len(raw) != artifact["byte_count"]:
+                findings.append({"code": "RAW_ARTIFACT_SIZE_MISMATCH", "artifact_id": artifact_id})
+            if hashlib.sha256(raw).hexdigest() != artifact["content_sha256"]:
+                findings.append({"code": "RAW_ARTIFACT_HASH_MISMATCH", "artifact_id": artifact_id})
+        except ResearchProjectV2Error as exc:
             findings.append(
-                {"code": "ARTIFACT_METADATA_NOT_FOUND", "artifact_id": artifact_id}
+                {
+                    "code": "RAW_ARTIFACT_NOT_FOUND",
+                    "artifact_id": artifact_id,
+                    "error_code": exc.code,
+                }
+            )
+        try:
+            metadata = read_layered_canonical_json(
+                f"evidence/metadata/{artifact_id}.json",
+                layout=layout,
+            )
+            validate_v2_1_schema_payload(
+                "evidence_artifact_v2_1", metadata, layout=layout
+            )
+            persisted_artifact = validate_evidence_artifact(
+                metadata["evidence_artifact"]
+            )
+            if persisted_artifact["artifact_id"] != artifact_id:
+                raise ResearchProjectV2Error(
+                    "Persisted artifact path identity mismatch",
+                    code="RESEARCH_PROJECT_V2_1_IMMUTABILITY_VIOLATION",
+                )
+            if persisted_artifact != artifact:
+                findings.append({"code": "ARTIFACT_METADATA_SNAPSHOT_DRIFT", "artifact_id": artifact_id})
+        except (ResearchProjectV2Error, KeyError, TypeError) as exc:
+            findings.append(
+                {
+                    "code": "ARTIFACT_METADATA_INVALID",
+                    "artifact_id": artifact_id,
+                    "error_code": getattr(exc, "code", type(exc).__name__),
+                }
             )
     for document_id, document in sorted(documents.items()):
-        document_path = layout.evidence_normalized_dir / f"{document_id}.json"
-        if document_path.is_symlink() or not document_path.is_file():
+        try:
+            wrapper = read_layered_canonical_json(
+                f"evidence/normalized/{document_id}.json",
+                layout=layout,
+            )
+            validate_v2_1_schema_payload(
+                "normalized_document_v2_1", wrapper, layout=layout
+            )
+            persisted_document = validate_normalized_document(
+                wrapper["normalized_document"]
+            )
+            if persisted_document["document_id"] != document_id:
+                raise ResearchProjectV2Error(
+                    "Persisted document path identity mismatch",
+                    code="RESEARCH_PROJECT_V2_1_IMMUTABILITY_VIOLATION",
+                )
+            verified_documents[document_id] = persisted_document
+            if persisted_document != document:
+                findings.append({"code": "NORMALIZED_DOCUMENT_SNAPSHOT_DRIFT", "document_id": document_id})
+        except (ResearchProjectV2Error, KeyError, TypeError) as exc:
             findings.append(
                 {
                     "code": "NORMALIZED_DOCUMENT_NOT_FOUND",
                     "document_id": document_id,
+                    "error_code": getattr(exc, "code", type(exc).__name__),
                 }
             )
         if document.get("artifact_id") not in artifacts:
@@ -448,7 +582,7 @@ def _audit(args: argparse.Namespace, layout: LayeredResearchLayout) -> dict[str,
             )
     for assessment in snapshot["industry_evidence_assessments"]:
         artifact = artifacts.get(assessment.get("artifact_id"))
-        document = documents.get(assessment.get("normalized_document_id"))
+        document = verified_documents.get(assessment.get("normalized_document_id"))
         if artifact is None:
             findings.append(
                 {
@@ -463,6 +597,12 @@ def _audit(args: argparse.Namespace, layout: LayeredResearchLayout) -> dict[str,
                     "assessment_id": assessment.get("assessment_id"),
                 }
             )
+            findings.append(
+                {
+                    "code": "LOCATOR_UNVERIFIED",
+                    "assessment_id": assessment.get("assessment_id"),
+                }
+            )
         elif assessment.get("locator") not in {
             row.get("locator") for row in document.get("sections", [])
         }:
@@ -472,15 +612,32 @@ def _audit(args: argparse.Namespace, layout: LayeredResearchLayout) -> dict[str,
                     "assessment_id": assessment.get("assessment_id"),
                 }
             )
-        assessment_path = (
-            layout.evidence_assessments_dir
-            / f"{assessment.get('assessment_id')}.json"
-        )
-        if assessment_path.is_symlink() or not assessment_path.is_file():
+        try:
+            wrapper = read_layered_canonical_json(
+                f"evidence/assessments/{assessment.get('assessment_id')}.json",
+                layout=layout,
+            )
+            persisted_assessment = validate_industry_evidence_assessment(wrapper)
+            if persisted_assessment["assessment_id"] != assessment.get(
+                "assessment_id"
+            ):
+                raise ResearchProjectV2Error(
+                    "Persisted assessment path identity mismatch",
+                    code="RESEARCH_PROJECT_V2_1_IMMUTABILITY_VIOLATION",
+                )
+            if persisted_assessment != assessment:
+                findings.append(
+                    {
+                        "code": "ASSESSMENT_SNAPSHOT_DRIFT",
+                        "assessment_id": assessment.get("assessment_id"),
+                    }
+                )
+        except (ResearchProjectV2Error, KeyError, TypeError) as exc:
             findings.append(
                 {
                     "code": "ASSESSMENT_NOT_FOUND",
                     "assessment_id": assessment.get("assessment_id"),
+                    "error_code": getattr(exc, "code", type(exc).__name__),
                 }
             )
     gate = evaluate_industry_design_gate(identity, version, layout=layout)
@@ -496,7 +653,11 @@ def _audit(args: argparse.Namespace, layout: LayeredResearchLayout) -> dict[str,
     }
 
 
-def _dispatch(args: argparse.Namespace, layout: LayeredResearchLayout) -> dict[str, Any]:
+def _dispatch(
+    args: argparse.Namespace,
+    layout: LayeredResearchLayout,
+    clock: _Clock,
+) -> dict[str, Any]:
     if args.command == "list":
         return _list(layout)
     if args.command == "show":
@@ -508,7 +669,13 @@ def _dispatch(args: argparse.Namespace, layout: LayeredResearchLayout) -> dict[s
     if args.command == "search-plan":
         return _search_plan(args, layout)
     if args.command == "discover":
-        batch = _discover(args.search_plan, args.results)
+        batch = _discover(
+            args.search_plan,
+            args.results,
+            clock=clock,
+            agent_run_id=args.agent_run_id,
+            discovered_at=args.discovered_at,
+        )
         path = write_discovery_batch(batch) if args.write else None
         return {
             "status": "pass",
@@ -517,9 +684,9 @@ def _dispatch(args: argparse.Namespace, layout: LayeredResearchLayout) -> dict[s
             "batch": batch,
         }
     if args.command == "snapshot":
-        return _snapshot(args)
+        return _snapshot(args, clock=clock)
     if args.command == "parse":
-        return _parse(args, layout)
+        return _parse(args, layout, clock=clock)
     if args.command == "assess":
         return _assessment(args)
     if args.command == "audit":
@@ -533,30 +700,82 @@ def _error_payload(error: ResearchProjectV2Error) -> dict[str, Any]:
     return {"error": {"code": error.code, "message": str(error), "details": error.details}}
 
 
-def _exit_for_domain_error(error: ResearchProjectV2Error) -> int:
-    code = error.code.upper()
-    if any(
-        token in code
-        for token in ("IMMUTABILITY", "HASH", "MANIFEST", "STORAGE", "PATH")
-    ):
-        return 5
-    if any(token in code for token in ("NOT_FOUND", "MISSING")):
+def _exit_for_domain_error(
+    error: ResearchProjectV2Error,
+    *,
+    command: str | None,
+) -> int:
+    code = error.code
+    not_found = {
+        "RESEARCH_PROJECT_V2_1_PROJECT_NOT_FOUND",
+        "RESEARCH_PROJECT_V2_1_VERSION_NOT_FOUND",
+        "RESEARCH_PROJECT_V2_1_INDEX_NOT_FOUND",
+        "RESEARCH_PROJECT_V2_1_ARTIFACT_NOT_FOUND",
+        "RESEARCH_PROJECT_V2_1_DOCUMENT_NOT_FOUND",
+        "RESEARCH_PROJECT_V2_1_MANAGED_FILE_NOT_FOUND",
+    }
+    integrity = {
+        "RESEARCH_PROJECT_V2_1_IMMUTABILITY_VIOLATION",
+        "RESEARCH_PROJECT_V2_1_DISCOVERY_IMMUTABILITY_VIOLATION",
+        "RESEARCH_PROJECT_V2_1_NORMALIZE_IMMUTABILITY_VIOLATION",
+        "RESEARCH_PROJECT_V2_1_SNAPSHOT_IMMUTABILITY_VIOLATION",
+        "RESEARCH_PROJECT_V2_1_PATH_VIOLATION",
+        "RESEARCH_PROJECT_V2_1_STORAGE_ERROR",
+    }
+    parser = {
+        "RESEARCH_PROJECT_V2_1_PARSE_INVALID",
+        "RESEARCH_PROJECT_V2_1_PARSE_LIMIT_EXCEEDED",
+        "RESEARCH_PROJECT_V2_1_PARSE_UNSUPPORTED_MEDIA",
+        "RESEARCH_PROJECT_V2_1_NORMALIZE_INVALID",
+        "RESEARCH_PROJECT_V2_1_NORMALIZE_STORAGE_FAILED",
+    }
+    evidence_audit = {
+        "RESEARCH_PROJECT_V2_1_UPSTREAM_REFERENCE_INVALID",
+        "RESEARCH_PROJECT_V2_1_SEARCH_PLAN_INVALID",
+        "RESEARCH_PROJECT_V2_1_EVIDENCE_ASSESSMENT_INVALID",
+        "RESEARCH_PROJECT_V2_1_EVIDENCE_RELATIONSHIP_INVALID",
+        "RESEARCH_PROJECT_V2_1_READ_ERROR",
+        "RESEARCH_PROJECT_V2_1_READ_LIMIT_EXCEEDED",
+    }
+    if code in not_found:
         return 6
-    if any(token in code for token in ("DISCOVERY", "FETCH", "SNAPSHOT", "NETWORK", "DNS")):
-        return 8
-    if any(token in code for token in ("PARSER", "PARSE", "NORMALIZE")):
-        return 9
-    if "GATE" in code:
-        return 4
-    if any(token in code for token in ("AUDIT", "SEARCH_PLAN", "COVERAGE")):
+    if code in integrity:
+        return 5
+    if command == "audit" and code in evidence_audit:
         return 3
+    if command == "gate":
+        return 4
+    if command == "parse" and code in parser:
+        return 9
+    if command == "discover" and code.startswith("RESEARCH_PROJECT_V2_1_DISCOVERY_"):
+        return 8
+    if command == "snapshot" and (
+        code.startswith("RESEARCH_PROJECT_V2_1_FETCH_")
+        or code == "RESEARCH_PROJECT_V2_1_SNAPSHOT_INVALID"
+    ):
+        return 8
+    if code in {
+        "RESEARCH_PROJECT_V2_1_READ_ERROR",
+        "RESEARCH_PROJECT_V2_1_READ_LIMIT_EXCEEDED",
+        "RESEARCH_PROJECT_V2_1_EVIDENCE_STORAGE_FAILED",
+        "RESEARCH_PROJECT_V2_1_SNAPSHOT_STORAGE_ERROR",
+        "RESEARCH_PROJECT_V2_1_SNAPSHOT_STORAGE_FAILED",
+    }:
+        return 10
     return 2
 
 
-def run_research_project_v2_1_cli(argv: list[str] | None = None) -> int:
+def run_research_project_v2_1_cli(
+    argv: list[str] | None = None,
+    *,
+    clock: _Clock | None = None,
+) -> int:
+    command: str | None = None
     try:
         args = _parser().parse_args(argv)
-        payload = _dispatch(args, LayeredResearchLayout.default())
+        command = args.command
+        effective_clock = clock or (lambda: datetime.now(timezone.utc))
+        payload = _dispatch(args, LayeredResearchLayout.default(), effective_clock)
         _print_json(payload)
         if args.command == "gate" and payload.get("status") == "fail":
             return 4
@@ -565,7 +784,7 @@ def run_research_project_v2_1_cli(argv: list[str] | None = None) -> int:
         return 0
     except ResearchProjectV2Error as exc:
         _print_json(_error_payload(exc))
-        return _exit_for_domain_error(exc)
+        return _exit_for_domain_error(exc, command=command)
     except (KeyboardInterrupt, SystemExit):
         raise
     except Exception as exc:

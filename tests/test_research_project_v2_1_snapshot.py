@@ -20,6 +20,7 @@ from stock_research.research_project_v2_1.snapshot import (
     RequestsFetchTransport,
     SystemAddressResolver,
     snapshot_candidate,
+    validate_evidence_artifact,
 )
 
 
@@ -138,6 +139,11 @@ def test_snapshots_canonical_artifact_and_metadata(tmp_path: Path) -> None:
     validate_v2_1_schema_payload("evidence_artifact_v2_1", wrapper)
     assert Path(result["raw_path"]).read_bytes() == b"%PDF fixture"
     assert json.loads(Path(result["metadata_path"]).read_text()) == wrapper
+    assert validate_evidence_artifact(artifact) == artifact
+    drifted = dict(artifact, artifact_id="evidence_artifact:" + "0" * 24)
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        validate_evidence_artifact(drifted)
+    assert "IMMUTABILITY" in exc_info.value.code
 
 
 @pytest.mark.parametrize(

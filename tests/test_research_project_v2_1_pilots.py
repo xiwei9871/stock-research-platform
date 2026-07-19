@@ -52,6 +52,7 @@ def _tree_hash(path: Path) -> str:
 def _copy_layout(tmp_path: Path, slug: str | None = None) -> LayeredResearchLayout:
     root = tmp_path / "v2_1"
     shutil.copytree(R2A / "schema", root / "schema")
+    (root / ".gitignore").write_bytes(b".maintenance.lock\n")
     (root / ".maintenance.lock").touch(mode=0o600)
     (root / "projects").mkdir()
     selected = list(EXPECTED) if slug is None else [slug]
@@ -274,11 +275,21 @@ def test_rebuild_accepts_only_the_canonical_root_gitignore(tmp_path: Path) -> No
     assert exc_info.value.details["reason"] == "invalid layered root .gitignore"
 
 
+def test_rebuild_requires_canonical_root_gitignore(tmp_path: Path) -> None:
+    slug = next(iter(EXPECTED))
+    layout = _copy_layout(tmp_path, slug)
+    (layout.root / ".gitignore").unlink()
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        rebuild_layered_index(False, layout)
+    assert exc_info.value.details["reason"] == "missing layered root .gitignore"
+
+
 def test_rebuild_rejects_symlinked_root_gitignore(tmp_path: Path) -> None:
     slug = next(iter(EXPECTED))
     layout = _copy_layout(tmp_path, slug)
     outside = tmp_path / "outside-gitignore"
     outside.write_bytes(b".maintenance.lock\n")
+    (layout.root / ".gitignore").unlink()
     (layout.root / ".gitignore").symlink_to(outside)
 
     with pytest.raises(ResearchProjectV2Error) as exc_info:

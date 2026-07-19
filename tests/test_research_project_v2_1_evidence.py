@@ -18,6 +18,7 @@ from stock_research.research_project_v2_1.evidence import (
     build_conflict_summaries,
     build_industry_evidence_assessment,
     count_independent_coverage,
+    validate_industry_evidence_assessment,
     validate_industry_evidence_assessments,
     write_industry_evidence_assessment,
 )
@@ -676,6 +677,11 @@ def test_write_assessment_is_canonical_hashed_idempotent_and_immutable(tmp_path:
     assert paths[0].read_bytes() == canonical_bytes(wrapper)
     assert wrapper["content_hash"] == content_sha256(wrapper, excluded_paths={("content_hash",)})
     assert set(wrapper) == {"schema_version", "artifact_kind", "industry_evidence_assessment", "content_hash"}
+    assert validate_industry_evidence_assessment(wrapper) == assessment
+    drifted = deepcopy(wrapper)
+    drifted["content_hash"] = "0" * 64
+    with pytest.raises(ResearchProjectV2Error):
+        validate_industry_evidence_assessment(drifted)
     changed = deepcopy(assessment)
     changed["assessment_summary"] = "changed"
     with pytest.raises(ResearchProjectV2Error) as exc:

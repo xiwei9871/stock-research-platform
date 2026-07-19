@@ -19,6 +19,7 @@ from stock_research.research_project_v2_1.layout import LayeredResearchLayout
 from stock_research.research_project_v2_1.normalize import (
     normalize_artifact,
     normalize_text,
+    validate_normalized_document,
     write_normalized_document,
 )
 from stock_research.research_project_v2_1.parsers import ParserLimits, parse_document_bytes
@@ -536,6 +537,11 @@ def test_normalize_artifact_is_deterministic_schema_valid_and_does_not_mutate(tm
         "normalized_document_v2_1",
         {"schema_version": "2.1.0", "artifact_kind": "normalized_document", "normalized_document": document},
     )
+    assert validate_normalized_document(document) == document
+    drifted = deepcopy(document)
+    drifted["document_hash"] = "0" * 64
+    with pytest.raises(ResearchProjectV2Error):
+        validate_normalized_document(drifted)
 
 
 def test_normalize_rejects_raw_path_hash_size_extension_and_symlink_without_output(tmp_path: Path) -> None:

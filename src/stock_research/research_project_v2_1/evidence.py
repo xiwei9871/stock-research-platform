@@ -812,6 +812,21 @@ def _validated_wrapper(assessment: dict[str, Any]) -> tuple[dict[str, Any], byte
     return wrapper, canonical_bytes(wrapper)
 
 
+def validate_industry_evidence_assessment(
+    wrapper: dict[str, Any],
+) -> dict[str, Any]:
+    """Validate a persisted standalone assessment wrapper and derived hash/ID."""
+    if not isinstance(wrapper, dict):
+        raise _invalid("assessment wrapper must be an object")
+    assessment = wrapper.get("industry_evidence_assessment")
+    if not isinstance(assessment, dict):
+        raise _invalid("assessment wrapper is missing its assessment")
+    validated_wrapper, _ = _validated_wrapper(assessment)
+    if wrapper != validated_wrapper:
+        raise _immutability("content_hash or wrapper mismatch")
+    return deepcopy(assessment)
+
+
 def _same_inode(left: os.stat_result, right: os.stat_result) -> bool:
     return left.st_dev == right.st_dev and left.st_ino == right.st_ino
 

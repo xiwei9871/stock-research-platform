@@ -1145,6 +1145,30 @@ def _publish_bytes(directory: Path, final_name: str, data: bytes) -> Path:
                 raise cleanup
 
 
+def validate_evidence_artifact(artifact: dict[str, Any]) -> dict[str, Any]:
+    """Validate standalone evidence metadata and its derived identity."""
+    copied = deepcopy(artifact)
+    wrapper = {
+        "schema_version": "2.1.0",
+        "artifact_kind": "evidence_artifact",
+        "evidence_artifact": copied,
+    }
+    validate_v2_1_schema_payload("evidence_artifact_v2_1", wrapper)
+    digest = copied["content_sha256"]
+    expected_identity = sha256(
+        f"{copied['candidate_id']}\n{digest}".encode("utf-8")
+    ).hexdigest()[:24]
+    if copied["artifact_id"] != f"evidence_artifact:{expected_identity}":
+        raise _immutability("artifact_id mismatch")
+    expected_path = (
+        f"evidence/raw/{digest[:2]}/{digest}."
+        f"{_MEDIA_EXTENSIONS[copied['media_type']]}"
+    )
+    if copied["raw_path"] != expected_path:
+        raise _immutability("raw_path mismatch")
+    return copied
+
+
 def snapshot_candidate(
     candidate: dict[str, Any],
     *,

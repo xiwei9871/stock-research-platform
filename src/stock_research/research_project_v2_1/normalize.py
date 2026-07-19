@@ -357,6 +357,12 @@ def _validated_document(document: dict[str, Any]) -> tuple[dict[str, Any], bytes
     return copied, canonical_bytes(wrapper)
 
 
+def validate_normalized_document(document: dict[str, Any]) -> dict[str, Any]:
+    """Validate a normalized document's schema, hashes, IDs, and locators."""
+    validated, _ = _validated_document(document)
+    return validated
+
+
 def _open_absolute_directory(path: Path) -> tuple[list[int], list[str]]:
     if not path.is_absolute():
         raise _storage("normalized directory must be absolute", path=str(path))
