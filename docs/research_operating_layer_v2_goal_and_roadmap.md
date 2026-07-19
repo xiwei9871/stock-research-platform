@@ -165,6 +165,8 @@ V2 结论不会自动改写 V1。未来如需把成熟研究沉淀为新的规�
 
 ### R2A：Industry Evidence Acquisition Baseline
 
+状态：已完成（2026-07-19）
+
 交付：
 
 - 独立 `artifacts/research_projects/v2_1/` root 与 `research_layer=industry_research` 的兼容 artifact contract；
@@ -178,6 +180,20 @@ V2 结论不会自动改写 V1。未来如需把成熟研究沉淀为新的规�
 - 四个新 Industry Project 对 R1 pilot version 的不可变引用。
 
 退出条件：四个 Industry Project 能从 Evidence Requirement 生成定向 Search Plan，外部资料能够被快照、解析、评价和审计；本阶段不生成公司或股票评级。
+
+退出条件已满足。R2A 保持独立 `v2_1` artifact layer，四个 Industry Project 均不可变引用预期 R1 pilot version/hash；Search Plan、deterministic discovery、SSRF-safe snapshot、HTML/PDF/CSV/JSON/text normalization、独立性/新鲜度/冲突判断、Industry Evidence Assessment、Industry Design Gate、CLI、scope guard 和运维文档均已交付。本阶段没有公司候选、公司评级、股票价格、估值或投资判断，也没有生产 migration、API 或 Dashboard 改动。
+
+验证摘要（2026-07-19）：
+
+- R2A：`966 passed, 10 warnings`；
+- 计划指定 R1 compatibility glob：`1199 passed, 10 warnings`；
+- 选定 V1 回归：`380 passed, 8 warnings`；
+- CLI focused acceptance：`49 passed, 8 warnings`，实际只读/维护矩阵全部 exit 0；
+- 40 个 JSON、14 个 JSONL 全部可解析，两次 rebuild write 后 artifact diff 为零；
+- commit-attributed scope guard：56 个 approved full SHA、86 个聚合路径、`31 passed`，未把共享分支并发提交归入 R2A；
+- R1/V1 byte diff 为零，R1 与 R2A 各恰好四个正式项目；四个 R2A pilot 仍为 hypothesis/under_test、零 assessment、无结论、无投资评价。
+
+现有 warning 为非阻塞 deprecation warning，来自 Python 3.14 下的 `py_mini_racer` 和 `jsonschema.RefResolver`，没有新增 R2A warning 类别。完整操作与证据见 `docs/research_operating_layer_v2_r2a.md`。
 
 ### R2B：Industry Chain And Bottleneck Research
 
