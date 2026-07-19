@@ -206,6 +206,7 @@ def test_manifest_strategy_rows_use_versioned_artifact_not_stale_root_mirror(tmp
                 "module": "strategy_mid_trend",
                 "status": "success",
                 "trade_date": trade_date,
+                "latest_trade_date": trade_date,
                 "run_id": "r1",
                 "artifact_path": str(versioned),
                 "metadata": {
@@ -506,6 +507,51 @@ def test_v1_manifest_rejects_malformed_trade_date(trade_date, tmp_path, monkeypa
     module["latest_trade_date"] = trade_date
 
     assert review_queue._manifest_strategy_artifact_path_valid(module) is False
+
+
+@pytest.mark.parametrize("missing_field", ("trade_date", "latest_trade_date"))
+def test_v1_manifest_requires_both_trade_date_fields_and_blocks_all_fallbacks(
+    missing_field, tmp_path, monkeypatch
+):
+    monkeypatch.setattr(review_queue, "SETTINGS", SimpleNamespace(output_root=tmp_path))
+    module = _v1_versioned_manifest(tmp_path)
+    del module[missing_field]
+    monkeypatch.setattr(review_queue, "load_latest_data_run_manifest", lambda trade_date: [module])
+    monkeypatch.setattr(review_queue, "_manifest_strategy_contract_valid", lambda candidate: True)
+    monkeypatch.setattr(
+        review_queue,
+        "_load_strategy_artifact_topn_rows",
+        lambda **kwargs: [
+            {"trade_date": "2026-07-18", "asset_id": "A", "strategy_id": "mid_trend"}
+        ],
+    )
+    monkeypatch.setattr(review_queue, "_load_db_strategy_position_rows", lambda **kwargs: [])
+    monkeypatch.setattr(review_queue, "_load_asset_names", lambda asset_ids: {})
+
+    assert review_queue._manifest_strategy_artifact_path_valid(module) is False
+    rows, blocked = review_queue._load_strategy_manifest_snapshot(
+        trade_date="2026-07-18",
+        limit=50,
+    )
+    assert rows == []
+    assert blocked == {"mid_trend"}
+    assert review_queue.load_active_strategy_topn_rows(trade_date="2026-07-18", limit=50) == []
+
+    monkeypatch.setattr(
+        review_queue,
+        "load_platform_summary",
+        lambda **kwargs: {"latest_market_date": "2026-07-18"},
+    )
+    monkeypatch.setattr(
+        review_queue,
+        "_load_strategy_snapshot_rows",
+        lambda **kwargs: [
+            {"trade_date": "2026-07-18", "asset_id": "B", "strategy_id": "mid_trend", "rank": 1}
+        ],
+    )
+    monkeypatch.setattr(review_queue, "load_top_scores_for_dashboard", lambda *args, **kwargs: [])
+
+    assert review_queue.build_review_queue(trade_date="2026-07-18")["review_mode"] == "score_topn"
 
 
 def test_v1_manifest_does_not_relocate_arbitrary_outputs_prefix(tmp_path, monkeypatch):

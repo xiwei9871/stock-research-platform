@@ -495,7 +495,7 @@ def _manifest_trade_date(module: dict[str, Any]) -> str | None:
     values: list[str] = []
     for key in ("trade_date", "latest_trade_date"):
         if key not in module:
-            continue
+            return None
         value = str(module.get(key) or "")
         if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
             return None
@@ -505,7 +505,7 @@ def _manifest_trade_date(module: dict[str, Any]) -> str | None:
         except ValueError:
             return None
         values.append(value)
-    if not values or len(set(values)) != 1:
+    if len(values) != 2 or len(set(values)) != 1:
         return None
     return values[0]
 
