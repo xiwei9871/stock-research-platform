@@ -636,6 +636,36 @@ def test_write_classifies_enospc_directory_creation_as_storage_failure(
     assert exc.value.code == "RESEARCH_PROJECT_V2_1_NORMALIZE_STORAGE_FAILED"
 
 
+def test_write_classifies_post_publish_unlink_as_path_violation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    artifact = _artifact(layout, b"unlink", "text/plain", "txt")
+    document = normalize_artifact(
+        artifact,
+        layout=layout,
+        parsed_at="2026-07-18T00:00:00Z",
+        provenance=_provenance("unlink"),
+    )
+    original_open = normalize_module._open_absolute_directory
+    calls = 0
+
+    def unlink_before_live_read(directory):
+        nonlocal calls
+        calls += 1
+        descriptors, names = original_open(directory)
+        if calls == 2:
+            os.unlink(f"{document['document_id']}.json", dir_fd=descriptors[-1])
+        return descriptors, names
+
+    monkeypatch.setattr(
+        normalize_module, "_open_absolute_directory", unlink_before_live_read
+    )
+    with pytest.raises(ResearchProjectV2Error) as exc:
+        write_normalized_document(document, layout=layout)
+    assert exc.value.code == "RESEARCH_PROJECT_V2_1_NORMALIZE_PATH_VIOLATION"
+
+
 def test_write_rejects_symlinked_retired_directory_before_publication(tmp_path: Path) -> None:
     layout = LayeredResearchLayout(tmp_path / "v2_1")
     artifact = _artifact(layout, b"retired symlink", "text/plain", "txt")

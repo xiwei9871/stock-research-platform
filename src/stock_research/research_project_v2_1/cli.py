@@ -731,7 +731,6 @@ def _exit_for_domain_error(
         "RESEARCH_PROJECT_V2_1_PARSE_LIMIT_EXCEEDED",
         "RESEARCH_PROJECT_V2_1_PARSE_UNSUPPORTED_MEDIA",
         "RESEARCH_PROJECT_V2_1_NORMALIZE_INVALID",
-        "RESEARCH_PROJECT_V2_1_NORMALIZE_STORAGE_FAILED",
     }
     evidence_audit = {
         "RESEARCH_PROJECT_V2_1_UPSTREAM_REFERENCE_INVALID",
@@ -761,6 +760,16 @@ def _exit_for_domain_error(
         return 4
     if command == "parse" and code in parser:
         return 9
+    if code in {
+        "RESEARCH_PROJECT_V2_1_READ_ERROR",
+        "RESEARCH_PROJECT_V2_1_READ_LIMIT_EXCEEDED",
+        "RESEARCH_PROJECT_V2_1_EVIDENCE_STORAGE_FAILED",
+        "RESEARCH_PROJECT_V2_1_DISCOVERY_STORAGE_FAILED",
+        "RESEARCH_PROJECT_V2_1_NORMALIZE_STORAGE_FAILED",
+        "RESEARCH_PROJECT_V2_1_SNAPSHOT_STORAGE_ERROR",
+        "RESEARCH_PROJECT_V2_1_SNAPSHOT_STORAGE_FAILED",
+    }:
+        return 10
     if command == "discover" and code.startswith("RESEARCH_PROJECT_V2_1_DISCOVERY_"):
         return 8
     if command == "snapshot" and (
@@ -768,14 +777,6 @@ def _exit_for_domain_error(
         or code == "RESEARCH_PROJECT_V2_1_SNAPSHOT_INVALID"
     ):
         return 8
-    if code in {
-        "RESEARCH_PROJECT_V2_1_READ_ERROR",
-        "RESEARCH_PROJECT_V2_1_READ_LIMIT_EXCEEDED",
-        "RESEARCH_PROJECT_V2_1_EVIDENCE_STORAGE_FAILED",
-        "RESEARCH_PROJECT_V2_1_SNAPSHOT_STORAGE_ERROR",
-        "RESEARCH_PROJECT_V2_1_SNAPSHOT_STORAGE_FAILED",
-    }:
-        return 10
     return 2
 
 

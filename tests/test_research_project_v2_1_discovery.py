@@ -1035,9 +1035,47 @@ def test_writer_failure_is_stable_and_leaves_no_partial_file(
 
     error = assert_discovery_error(
         lambda: write_discovery_batch(batch, layout=layout),
-        reason="discovery batch write failed",
+        reason="discovery batch publication failed",
     )
-    assert error.code == "RESEARCH_PROJECT_V2_1_DISCOVERY_INVALID"
+    assert error.code == "RESEARCH_PROJECT_V2_1_DISCOVERY_STORAGE_FAILED"
+
+
+def test_writer_classifies_post_publish_unlink_as_path_violation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    batch = discover_sources(
+        search_plan(),
+        StaticProvider({}),
+        provider_name="static",
+        discovered_at=DISCOVERED_AT,
+        provenance=PROVENANCE,
+    )
+    original_verify = discovery_module._verify_live_final_binding
+
+    def unlink_then_verify(
+        directory_fds, component_names, plan_id, batch_fd, final_name, held_final, expected
+    ):
+        discovery_module.os.unlink(final_name, dir_fd=batch_fd)
+        return original_verify(
+            directory_fds,
+            component_names,
+            plan_id,
+            batch_fd,
+            final_name,
+            held_final,
+            expected,
+        )
+
+    monkeypatch.setattr(
+        discovery_module, "_verify_live_final_binding", unlink_then_verify
+    )
+
+    error = assert_discovery_error(
+        lambda: write_discovery_batch(batch, layout=layout),
+        reason="unsafe managed path",
+    )
+    assert error.code == "RESEARCH_PROJECT_V2_1_DISCOVERY_PATH_VIOLATION"
     batch_dir = layout.evidence_discovery_dir / batch["search_plan_id"]
     assert list(batch_dir.iterdir()) == []
 
@@ -1064,9 +1102,9 @@ def test_writer_classifies_enospc_directory_creation_as_runtime_failure(
 
     error = assert_discovery_error(
         lambda: write_discovery_batch(batch, layout=layout),
-        reason="discovery batch write failed",
+        reason="directory creation failed",
     )
-    assert error.code == "RESEARCH_PROJECT_V2_1_DISCOVERY_INVALID"
+    assert error.code == "RESEARCH_PROJECT_V2_1_DISCOVERY_STORAGE_FAILED"
 
 
 def test_writer_rejects_non_directory_managed_parent_with_stable_error(tmp_path: Path) -> None:

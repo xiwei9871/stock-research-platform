@@ -108,6 +108,14 @@ def _invalid(reason: str, **details: object) -> ResearchProjectV2Error:
     )
 
 
+def _storage(reason: str, **details: object) -> ResearchProjectV2Error:
+    return ResearchProjectV2Error(
+        f"Industry discovery storage failed: {reason}",
+        code="RESEARCH_PROJECT_V2_1_DISCOVERY_STORAGE_FAILED",
+        details={"reason": reason, **details},
+    )
+
+
 def _immutability_error(reason: str, **details: object) -> ResearchProjectV2Error:
     return ResearchProjectV2Error(
         f"Immutable discovery batch failed verification: {reason}",
@@ -861,7 +869,7 @@ def _require_secure_dir_fd_storage() -> None:
         or not getattr(os, "O_DIRECTORY", 0)
         or not _DIR_FD_CAPABLE
     ):
-        raise _invalid("secure dir-fd storage unavailable")
+        raise _storage("secure dir-fd storage unavailable")
 
 
 def _directory_flags() -> int:
@@ -883,12 +891,12 @@ def _open_or_create_directory(parent_fd: int, name: str) -> int:
     except OSError as exc:
         if is_path_structure_error(exc):
             raise _path_violation("unsafe managed path", component=name) from exc
-        raise _invalid("discovery batch write failed", component=name) from exc
+        raise _storage("directory creation failed", component=name) from exc
     if created:
         try:
             os.fsync(parent_fd)
         except OSError as exc:
-            raise _invalid("discovery batch write failed", component=name) from exc
+            raise _storage("directory sync failed", component=name) from exc
     try:
         child_fd = os.open(name, _directory_flags(), dir_fd=parent_fd)
         if not stat.S_ISDIR(os.fstat(child_fd).st_mode):
@@ -898,7 +906,7 @@ def _open_or_create_directory(parent_fd: int, name: str) -> int:
     except OSError as exc:
         if is_path_structure_error(exc):
             raise _path_violation("unsafe managed path", component=name) from exc
-        raise _invalid("discovery batch write failed", component=name) from exc
+        raise _storage("directory open failed", component=name) from exc
 
 
 def _open_absolute_directory(path: Path) -> tuple[list[int], list[str]]:
@@ -909,7 +917,7 @@ def _open_absolute_directory(path: Path) -> tuple[list[int], list[str]]:
     except OSError as exc:
         if is_path_structure_error(exc):
             raise _path_violation("unsafe managed path", path="/") from exc
-        raise _invalid("discovery batch write failed", path="/") from exc
+        raise _storage("directory open failed", path="/") from exc
     component_names: list[str] = []
     try:
         for component in path.parts[1:]:
@@ -960,7 +968,7 @@ def _read_regular_file_at(directory_fd: int, name: str) -> bytes:
     except OSError as exc:
         if is_path_structure_error(exc):
             raise _path_violation("unsafe managed path", target=name) from exc
-        raise _invalid("discovery batch read failed", target=name) from exc
+        raise _storage("discovery batch read failed", target=name) from exc
     try:
         if not stat.S_ISREG(os.fstat(descriptor).st_mode):
             raise _path_violation("unsafe managed path", target=name)
@@ -1021,7 +1029,7 @@ def _open_verified_final_at(
     except OSError as exc:
         if is_path_structure_error(exc):
             raise _path_violation("unsafe managed path", target=name) from exc
-        raise _invalid("discovery batch read failed", target=name) from exc
+        raise _storage("discovery batch read failed", target=name) from exc
     try:
         opened = os.fstat(descriptor)
         entry = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
@@ -1045,7 +1053,7 @@ def _open_verified_final_at(
         os.close(descriptor)
         if is_path_structure_error(exc):
             raise _path_violation("unsafe managed path", target=name) from exc
-        raise _invalid("discovery batch read failed", target=name) from exc
+        raise _storage("discovery batch read failed", target=name) from exc
 
 
 def _same_inode(left: os.stat_result, right: os.stat_result) -> bool:
@@ -1090,7 +1098,7 @@ def _verify_live_final_binding(
             and _read_descriptor_bytes(live_final_fd) == expected
         )
     except OSError as exc:
-        if is_path_structure_error(exc):
+        if exc.errno == errno.ENOENT or is_path_structure_error(exc):
             return False
         raise
     finally:
@@ -1124,8 +1132,8 @@ def _create_temp_file(directory_fd: int, final_name: str) -> tuple[int, str]:
         except FileExistsError:
             continue
         except OSError as exc:
-            raise _invalid("discovery batch write failed", target=name) from exc
-    raise _invalid("discovery batch write failed", reason_detail="temp collision")
+            raise _storage("temporary file creation failed", target=name) from exc
+    raise _storage("temporary file name collision")
 
 
 def _write_all(descriptor: int, data: bytes) -> None:
@@ -1217,7 +1225,7 @@ def write_discovery_batch(
                     "immutable batch path conflict", path=str(target)
                 )
         except OSError as exc:
-            raise _invalid("discovery batch write failed", path=str(target)) from exc
+            raise _storage("discovery batch publication failed", path=str(target)) from exc
         if not _complete_directory_binding_is_valid(
             directory_fds, component_names, discovery_fd, plan_id, batch_fd
         ):
@@ -1253,7 +1261,7 @@ def write_discovery_batch(
             raise _path_violation("unsafe managed path", path=str(target))
         return target
     except OSError as exc:
-        raise _invalid("discovery batch write failed", path=str(target)) from exc
+        raise _storage("discovery batch write failed", path=str(target)) from exc
     finally:
         if held_final_fd is not None:
             os.close(held_final_fd)

@@ -1069,7 +1069,14 @@ def write_industry_evidence_assessment(
         for old, live in zip(descriptors, live_descriptors, strict=True):
             if not _same_inode(os.fstat(old), os.fstat(live)):
                 raise _path_violation("live assessment directory was rebound")
-        live_data, live_stat = _read_regular(live_descriptors[-1], final_name)
+        try:
+            live_data, live_stat = _read_regular(
+                live_descriptors[-1], final_name
+            )
+        except FileNotFoundError as exc:
+            raise _path_violation(
+                "live assessment disappeared", path=str(target)
+            ) from exc
         if live_data != data or not _same_inode(live_stat, held_after):
             raise _path_violation("live assessment was replaced", path=str(target))
         return target

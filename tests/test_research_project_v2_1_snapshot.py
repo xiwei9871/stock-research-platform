@@ -678,6 +678,47 @@ def test_enospc_directory_creation_is_storage_not_path_violation(
     assert exc.value.code == "RESEARCH_PROJECT_V2_1_SNAPSHOT_STORAGE_ERROR"
 
 
+def test_post_publish_unlink_is_path_but_live_eio_is_storage(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import stock_research.research_project_v2_1.snapshot as module
+
+    original_verify = module._verify_live
+    effective = layout(tmp_path)
+
+    def unlink_then_verify(path, held_chain, final_name, held_final, expected):
+        if path.parent.name == "raw":
+            module.os.unlink(final_name, dir_fd=held_chain[-1])
+        return original_verify(path, held_chain, final_name, held_final, expected)
+
+    monkeypatch.setattr(module, "_verify_live", unlink_then_verify)
+    with pytest.raises(ResearchProjectV2Error) as missing:
+        snapshot_candidate(
+            candidate(), transport=Transport([response()]), resolver=Resolver(),
+            layout=effective, fetched_at=FETCHED_AT, provenance=PROVENANCE,
+        )
+    assert missing.value.code == "RESEARCH_PROJECT_V2_1_SNAPSHOT_PATH_VIOLATION"
+
+    monkeypatch.setattr(
+        module,
+        "_verify_live",
+        lambda *args, **kwargs: original_verify(*args, **kwargs),
+    )
+    monkeypatch.setattr(
+        module,
+        "_descriptor_sha256",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            OSError(errno.EIO, "injected live read failure")
+        ),
+    )
+    with pytest.raises(ResearchProjectV2Error) as io_failure:
+        snapshot_candidate(
+            candidate(), transport=Transport([response()]), resolver=Resolver(),
+            layout=layout(tmp_path / "io"), fetched_at=FETCHED_AT, provenance=PROVENANCE,
+        )
+    assert io_failure.value.code == "RESEARCH_PROJECT_V2_1_SNAPSHOT_STORAGE_ERROR"
+
+
 @pytest.mark.parametrize("failure", ["peer", "headers", "too_large"])
 def test_rejection_closes_a_closeable_response_stream(
     tmp_path: Path, failure: str

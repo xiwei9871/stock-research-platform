@@ -641,7 +641,14 @@ def write_normalized_document(
             for old, live in zip(descriptors, live_descriptors, strict=True):
                 if not _same_inode(os.fstat(old), os.fstat(live)):
                     raise _path_violation("live normalized directory was rebound", path=str(directory))
-            live_data, live_stat = _read_named_regular(live_descriptors[-1], final_name)
+            try:
+                live_data, live_stat = _read_named_regular(
+                    live_descriptors[-1], final_name
+                )
+            except FileNotFoundError as exc:
+                raise _path_violation(
+                    "live normalized document disappeared", path=str(target)
+                ) from exc
             if live_data != data or not _same_inode(live_stat, held):
                 raise _path_violation("live normalized document was replaced", path=str(target))
             live_entry = os.stat(

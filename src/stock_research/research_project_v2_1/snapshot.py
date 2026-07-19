@@ -710,7 +710,7 @@ def _open_regular(directory_fd: int, name: str) -> tuple[int, os.stat_result]:
     try:
         descriptor = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0), dir_fd=directory_fd)
     except OSError as exc:
-        if is_path_structure_error(exc):
+        if exc.errno == errno.ENOENT or is_path_structure_error(exc):
             raise _path_violation("unsafe managed file", target=name) from exc
         raise _storage_error("managed file open failed", target=name) from exc
     try:
@@ -852,8 +852,14 @@ def _verify_live(
             else _read_all(final_fd) == expected
         )
         return _same_inode(opened, held_final) and content_matches
-    except (OSError, ResearchProjectV2Error):
-        return False
+    except ResearchProjectV2Error as exc:
+        if exc.code == "RESEARCH_PROJECT_V2_1_SNAPSHOT_PATH_VIOLATION":
+            return False
+        raise
+    except OSError as exc:
+        if exc.errno == errno.ENOENT or is_path_structure_error(exc):
+            return False
+        raise _storage_error("live binding verification failed") from exc
     finally:
         if final_fd is not None:
             os.close(final_fd)

@@ -769,6 +769,29 @@ def test_writer_rejects_group_accessible_assessment_directory_as_path_violation(
     assert exc.value.code == "RESEARCH_PROJECT_V2_1_EVIDENCE_PATH_VIOLATION"
 
 
+def test_writer_classifies_post_publish_unlink_as_path_violation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    artifact = _artifact("artifact:unlink", "a" * 64, publisher_family="issuer")
+    assessment = _assessment(artifact, role="supports", reviewed=False)
+    original_open = evidence_module._open_directory
+    calls = 0
+
+    def unlink_before_live_read(directory):
+        nonlocal calls
+        calls += 1
+        descriptors, names = original_open(directory)
+        if calls == 2:
+            os.unlink(f"{assessment['assessment_id']}.json", dir_fd=descriptors[-1])
+        return descriptors, names
+
+    monkeypatch.setattr(evidence_module, "_open_directory", unlink_before_live_read)
+    with pytest.raises(ResearchProjectV2Error) as exc:
+        write_industry_evidence_assessment(assessment, layout=layout)
+    assert exc.value.code == "RESEARCH_PROJECT_V2_1_EVIDENCE_PATH_VIOLATION"
+
+
 @pytest.mark.parametrize(
     "kwargs",
     [
