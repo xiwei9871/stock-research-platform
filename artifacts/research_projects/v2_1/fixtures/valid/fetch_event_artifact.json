@@ -1,0 +1,29 @@
+{
+  "artifact_kind": "evidence_artifact",
+  "evidence_artifact": {
+    "artifact_id": "evidence_artifact:dea0ee5e334217452c78df2b",
+    "byte_count": 1,
+    "candidate_id": "source_candidate:aaaaaaaaaaaaaaaaaaaaaaaa",
+    "content_sha256": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+    "evidence_channel": "industry",
+    "fetched_at": "2026-07-19T12:00:00Z",
+    "final_url": "https://example.com/source.txt",
+    "media_type": "text/plain",
+    "original_url": "https://example.com/source.txt",
+    "provenance": {
+      "actor_type": "automated_pipeline",
+      "agent_run_id": "fixture:fetch-event",
+      "created_at": "2026-07-19T12:00:00Z",
+      "created_by": "fixture",
+      "created_in_version": "research_version:fixture:0.1.0",
+      "review_status": "unreviewed"
+    },
+    "raw_path": "evidence/raw/2d/2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881.txt",
+    "redirect_chain": [],
+    "response_headers": {
+      "content-type": "text/plain"
+    },
+    "status_code": 200
+  },
+  "schema_version": "2.1.0"
+}

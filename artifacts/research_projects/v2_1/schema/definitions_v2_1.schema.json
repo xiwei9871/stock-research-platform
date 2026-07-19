@@ -921,6 +921,7 @@
     },
     "evidence_artifact": {
       "type": "object",
+      "$comment": "artifact_id is the SHA-256-derived identity of the canonical fetch-event preimage: candidate_id, content_sha256, byte_count, final_url, redirect_chain, status_code, response_headers, media_type, fetched_at, and provenance. artifact_id and storage paths are excluded.",
       "required": [
         "artifact_id",
         "candidate_id",
@@ -938,7 +939,11 @@
         "provenance"
       ],
       "properties": {
-        "artifact_id": {"type": "string", "minLength": 1},
+        "artifact_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Immutable fetch-event identity; repeated content fetched at a different time or by a different operation has a distinct ID."
+        },
         "candidate_id": {"type": "string", "minLength": 1},
         "evidence_channel": {"$ref": "#/$defs/evidence_channel"},
         "original_url": {
