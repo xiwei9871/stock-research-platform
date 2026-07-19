@@ -98,3 +98,69 @@ def test_failed_version_write_leaves_no_final_version_or_mirrors(tmp_path, monke
     strategy_root = tmp_path / "strategy_runs" / "mid_trend"
     assert not strategy_root.exists() or not list(strategy_root.iterdir())
     assert not list(tmp_path.glob("strategy_mid_trend_*.csv"))
+
+
+def test_invalid_mirror_destination_is_rejected_before_version_publication(tmp_path):
+    with pytest.raises(ValueError, match="compatibility"):
+        _write(
+            tmp_path,
+            compatibility_destinations={
+                "equity": tmp_path / "equity.csv",
+                "unknown": tmp_path / "unknown.csv",
+            },
+        )
+
+    assert not (tmp_path / "strategy_runs").exists()
+
+
+def test_mirror_staging_failure_leaves_all_existing_roots_unchanged(tmp_path, monkeypatch):
+    mirrors = {
+        name: tmp_path / f"strategy_mid_trend_{name}.csv"
+        for name in ("equity", "positions", "trades", "review")
+    }
+    for name, path in mirrors.items():
+        path.write_bytes(f"old-{name}".encode())
+    original = artifacts._copy_file
+
+    def fail_positions(source, destination):
+        if source.name == "positions.csv":
+            raise OSError("stage copy failed")
+        return original(source, destination)
+
+    monkeypatch.setattr(artifacts, "_copy_file", fail_positions)
+
+    with pytest.raises(OSError, match="stage copy failed"):
+        _write(tmp_path, compatibility_destinations=mirrors)
+
+    assert {name: path.read_bytes() for name, path in mirrors.items()} == {
+        name: f"old-{name}".encode() for name in mirrors
+    }
+    assert not list(tmp_path.glob(".*.stage-*"))
+    assert not list(tmp_path.glob(".*.backup-*"))
+
+
+def test_mid_replacement_failure_rolls_back_entire_mirror_generation(tmp_path, monkeypatch):
+    mirrors = {
+        name: tmp_path / f"strategy_mid_trend_{name}.csv"
+        for name in ("equity", "positions", "trades", "review")
+    }
+    for name in ("positions", "trades", "review"):
+        mirrors[name].write_bytes(f"old-{name}".encode())
+    original = artifacts._replace_mirror
+
+    def fail_trades(source, destination):
+        if destination == mirrors["trades"]:
+            raise OSError("replace failed")
+        return original(source, destination)
+
+    monkeypatch.setattr(artifacts, "_replace_mirror", fail_trades)
+
+    with pytest.raises(OSError, match="replace failed"):
+        _write(tmp_path, compatibility_destinations=mirrors)
+
+    assert not mirrors["equity"].exists()
+    assert {name: mirrors[name].read_bytes() for name in ("positions", "trades", "review")} == {
+        name: f"old-{name}".encode() for name in ("positions", "trades", "review")
+    }
+    assert not list(tmp_path.glob(".*.stage-*"))
+    assert not list(tmp_path.glob(".*.backup-*"))

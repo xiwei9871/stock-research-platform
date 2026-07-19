@@ -87,7 +87,7 @@ def run_tech_bottleneck_eod_from_frames(
         strategy_run_id=run_id,
     )
 
-    ended_at = datetime.now(timezone.utc)
+    candidate_ended_at = datetime.now(timezone.utc)
     latest_snapshot_date = _latest_trade_date(snapshots, fallback=end_date)
     candidate_source = str(candidate_source_path) if candidate_source_path is not None else TECH_BOTTLENECK_CANDIDATE_SOURCE
     summary = _json_ready(strategy["summary"])
@@ -144,6 +144,7 @@ def run_tech_bottleneck_eod_from_frames(
             "review": output / TECH_BOTTLENECK_EOD_REVIEW_FILENAME,
         },
     )
+    strategy_ended_at = datetime.now(timezone.utc)
     official_output_paths = {
         key: str(path) for key, path in publication["output_paths"].items()
     }
@@ -179,7 +180,7 @@ def run_tech_bottleneck_eod_from_frames(
         tier="tier1",
         status="success",
         started_at=started_at,
-        ended_at=ended_at,
+        ended_at=candidate_ended_at,
         row_count=int(len(snapshots)),
         asset_count=_asset_count(snapshots),
         latest_trade_date=latest_snapshot_date,
@@ -197,7 +198,7 @@ def run_tech_bottleneck_eod_from_frames(
         tier="tier1",
         status="success",
         started_at=started_at,
-        ended_at=ended_at,
+        ended_at=strategy_ended_at,
         row_count=int(len(review)),
         asset_count=_asset_count(review),
         latest_trade_date=latest_snapshot_date,

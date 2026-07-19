@@ -35,6 +35,7 @@ def write_strategy_publication_artifacts(
 ) -> dict[str, Any]:
     """Write one immutable strategy publication, then refresh compatibility mirrors."""
 
+    mirror_destinations = _validate_compatibility_destinations(compatibility_destinations)
     missing_frames = [name for name in _FRAME_NAMES if name not in frames]
     if missing_frames:
         raise ValueError(f"strategy publication frames missing: {', '.join(missing_frames)}")
@@ -101,10 +102,7 @@ def write_strategy_publication_artifacts(
     }
     versioned_paths["summary_path"] = final_dir / "summary.json"
     versioned_paths["publication_manifest_path"] = final_dir / "publication_manifest.json"
-    for name, destination in compatibility_destinations.items():
-        if name not in _FRAME_NAMES:
-            raise ValueError(f"unsupported compatibility artifact: {name}")
-        _atomic_copy(versioned_paths[f"{name}_path"], Path(destination))
+    _publish_compatibility_mirrors(versioned_paths, mirror_destinations)
 
     return {
         "artifact_version": ARTIFACT_VERSION,
@@ -171,20 +169,88 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _atomic_copy(source: Path, destination: Path) -> None:
-    destination.parent.mkdir(parents=True, exist_ok=True)
+def _validate_compatibility_destinations(
+    destinations: Mapping[str, str | Path],
+) -> dict[str, Path]:
+    if set(destinations) != set(_FRAME_NAMES):
+        raise ValueError(
+            "compatibility destinations must contain exactly: " + ", ".join(_FRAME_NAMES)
+        )
+    normalized: dict[str, Path] = {}
+    resolved: set[Path] = set()
+    for name in _FRAME_NAMES:
+        raw = destinations[name]
+        if not str(raw).strip():
+            raise ValueError(f"compatibility destination missing: {name}")
+        destination = Path(raw)
+        if (
+            not destination.name
+            or destination.is_symlink()
+            or (destination.exists() and destination.is_dir())
+        ):
+            raise ValueError(f"invalid compatibility destination: {name}")
+        resolved_destination = destination.resolve()
+        if resolved_destination in resolved:
+            raise ValueError("compatibility destinations must be unique")
+        resolved.add(resolved_destination)
+        normalized[name] = destination
+    return normalized
+
+
+def _publish_compatibility_mirrors(
+    versioned_paths: Mapping[str, Path],
+    destinations: Mapping[str, Path],
+) -> None:
+    staged: dict[str, Path] = {}
+    backups: dict[str, Path] = {}
+    attempted: list[str] = []
+    try:
+        for name in _FRAME_NAMES:
+            destination = destinations[name]
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            staged[name] = _temp_sibling(destination, label="stage")
+            _copy_file(versioned_paths[f"{name}_path"], staged[name])
+        for name in _FRAME_NAMES:
+            destination = destinations[name]
+            if destination.exists():
+                backups[name] = _temp_sibling(destination, label="backup")
+                _copy_file(destination, backups[name])
+        try:
+            for name in _FRAME_NAMES:
+                attempted.append(name)
+                _replace_mirror(staged[name], destinations[name])
+        except Exception:
+            for name in reversed(attempted):
+                destination = destinations[name]
+                backup = backups.get(name)
+                try:
+                    if backup is not None and backup.exists():
+                        os.replace(backup, destination)
+                    else:
+                        destination.unlink(missing_ok=True)
+                except Exception:
+                    pass
+            raise
+    finally:
+        for path in (*staged.values(), *backups.values()):
+            path.unlink(missing_ok=True)
+
+
+def _temp_sibling(destination: Path, *, label: str) -> Path:
     file_descriptor, temp_name = tempfile.mkstemp(
-        prefix=f".{destination.name}.tmp-",
+        prefix=f".{destination.name}.{label}-",
         dir=str(destination.parent),
     )
     os.close(file_descriptor)
-    temp_path = Path(temp_name)
-    try:
-        shutil.copyfile(source, temp_path)
-        os.replace(temp_path, destination)
-    except Exception:
-        temp_path.unlink(missing_ok=True)
-        raise
+    return Path(temp_name)
+
+
+def _copy_file(source: Path, destination: Path) -> None:
+    shutil.copy2(source, destination)
+
+
+def _replace_mirror(source: Path, destination: Path) -> None:
+    os.replace(source, destination)
 
 
 def _utc_text(value: datetime) -> str:

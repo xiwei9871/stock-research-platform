@@ -1,4 +1,5 @@
 import pytest
+from types import SimpleNamespace
 
 from stock_research.dashboard import review_queue
 from stock_research.strategy_publication_contracts import (
@@ -151,7 +152,17 @@ def test_manifest_strategy_reader_preserves_lhb_risk_gate_fields(tmp_path):
 
 def test_manifest_strategy_rows_use_versioned_artifact_not_stale_root_mirror(tmp_path, monkeypatch):
     root_mirror = tmp_path / "strategy_mid_trend_review.csv"
-    versioned = tmp_path / "strategy_runs" / "mid_trend" / "publish-1" / "review.csv"
+    monkeypatch.setattr(review_queue, "SETTINGS", SimpleNamespace(output_root=tmp_path))
+    versioned = (
+        tmp_path
+        / "research"
+        / "strategy_daily_eod"
+        / "2026-07-18"
+        / "strategy_runs"
+        / "mid_trend"
+        / "publish-1"
+        / "review.csv"
+    )
     versioned.parent.mkdir(parents=True)
     root_mirror.write_text(
         "trade_date,asset_id,rank,strategy_id\n2026-07-18,CN:SH:600001,1,mid_trend\n",
@@ -304,11 +315,10 @@ def test_build_review_queue_rejects_snapshot_fallback_for_identity_aware_strateg
         "load_platform_summary",
         lambda **kwargs: {"latest_market_date": "2026-07-18"},
     )
-    monkeypatch.setattr(review_queue, "_load_manifest_strategy_rows", lambda **kwargs: [])
     monkeypatch.setattr(
         review_queue,
-        "_identity_aware_manifest_strategy_ids",
-        lambda **kwargs: {"mid_trend"},
+        "_load_strategy_manifest_snapshot",
+        lambda **kwargs: ([], {"mid_trend"}),
     )
     monkeypatch.setattr(
         review_queue,
@@ -323,8 +333,10 @@ def test_build_review_queue_rejects_snapshot_fallback_for_identity_aware_strateg
             }
         ],
     )
-    monkeypatch.setattr(review_queue, "load_active_strategy_topn_rows", lambda **kwargs: [])
     monkeypatch.setattr(review_queue, "load_top_scores_for_dashboard", lambda *args, **kwargs: [])
+    monkeypatch.setattr(review_queue, "_load_strategy_artifact_topn_rows", lambda **kwargs: [])
+    monkeypatch.setattr(review_queue, "_load_db_strategy_position_rows", lambda **kwargs: [])
+    monkeypatch.setattr(review_queue, "_load_asset_names", lambda asset_ids: {})
 
     result = review_queue.build_review_queue(trade_date="2026-07-18")
 
@@ -388,7 +400,15 @@ def test_artifact_version_v1_without_identity_rejects_manifest_root_and_snapshot
 
 
 def _v1_versioned_manifest(tmp_path):
-    version_dir = tmp_path / "strategy_runs" / "mid_trend" / "publish-1"
+    version_dir = (
+        tmp_path
+        / "research"
+        / "strategy_daily_eod"
+        / "2026-07-18"
+        / "strategy_runs"
+        / "mid_trend"
+        / "publish-1"
+    )
     paths = {
         "equity_path": version_dir / "equity.csv",
         "positions_path": version_dir / "positions.csv",
@@ -438,8 +458,9 @@ def _v1_versioned_manifest(tmp_path):
     ],
 )
 def test_v1_manifest_rejects_any_declared_official_path_outside_version_dir(
-    tmp_path, container_name, path_key
+    tmp_path, monkeypatch, container_name, path_key
 ):
+    monkeypatch.setattr(review_queue, "SETTINGS", SimpleNamespace(output_root=tmp_path))
     module = _v1_versioned_manifest(tmp_path)
     assert review_queue._manifest_strategy_artifact_path_valid(module) is True
     container = (
@@ -467,6 +488,7 @@ def test_v1_manifest_rejects_any_declared_official_path_outside_version_dir(
 def test_v1_manifest_requires_complete_output_paths_and_blocks_all_fallbacks(
     tmp_path, monkeypatch, path_key, missing_kind
 ):
+    monkeypatch.setattr(review_queue, "SETTINGS", SimpleNamespace(output_root=tmp_path))
     module = _v1_versioned_manifest(tmp_path)
     module.update({"status": "success", "trade_date": "2026-07-18", "run_id": "r1"})
     if missing_kind == "removed":
@@ -514,3 +536,162 @@ def test_v1_manifest_requires_complete_output_paths_and_blocks_all_fallbacks(
     monkeypatch.setattr(review_queue, "load_top_scores_for_dashboard", lambda *args, **kwargs: [])
 
     assert review_queue.build_review_queue(trade_date="2026-07-18")["review_mode"] == "score_topn"
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("identity_schema_version", "strategy_publication_identity_v999"),
+        ("artifact_version", "strategy_artifact_v999"),
+    ],
+)
+def test_unknown_publication_declaration_rejects_manifest(field, value, tmp_path, monkeypatch):
+    monkeypatch.setattr(review_queue, "SETTINGS", SimpleNamespace(output_root=tmp_path))
+    module = _v1_versioned_manifest(tmp_path)
+    module["metadata"][field] = value
+
+    assert review_queue._manifest_publication_declaration_valid(module) is False
+    if field == "artifact_version":
+        assert review_queue._manifest_strategy_artifact_path_valid(module) is False
+
+
+@pytest.mark.parametrize(
+    "publish_id",
+    ("", ".", "..", "a/b", "a\\b", "bad space", "非ascii"),
+)
+def test_publish_id_must_be_safe_single_path_component(publish_id):
+    assert review_queue._safe_publish_id(publish_id) is False
+
+
+def test_v1_manifest_rejects_external_strategy_runs_tree(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        review_queue,
+        "SETTINGS",
+        SimpleNamespace(output_root=tmp_path / "trusted_outputs"),
+    )
+    module = _v1_versioned_manifest(tmp_path / "external")
+
+    assert review_queue._manifest_strategy_artifact_path_valid(module) is False
+
+
+def test_v1_manifest_rejects_symlinked_version_directory(tmp_path, monkeypatch):
+    output_root = tmp_path / "outputs"
+    monkeypatch.setattr(review_queue, "SETTINGS", SimpleNamespace(output_root=output_root))
+    trusted_parent = (
+        output_root
+        / "research"
+        / "strategy_daily_eod"
+        / "2026-07-18"
+        / "strategy_runs"
+        / "mid_trend"
+    )
+    trusted_parent.mkdir(parents=True)
+    external_version = tmp_path / "external" / "publish-1"
+    external_version.mkdir(parents=True)
+    (trusted_parent / "publish-1").symlink_to(external_version, target_is_directory=True)
+    module = _v1_versioned_manifest(output_root)
+
+    assert review_queue._manifest_strategy_artifact_path_valid(module) is False
+
+
+def test_manifest_loader_failure_blocks_all_official_fallbacks(monkeypatch):
+    calls = 0
+
+    def fail_loader(*, trade_date):
+        nonlocal calls
+        calls += 1
+        raise RuntimeError("manifest unavailable")
+
+    monkeypatch.setattr(review_queue, "load_latest_data_run_manifest", fail_loader)
+    monkeypatch.setattr(
+        review_queue,
+        "_load_strategy_artifact_topn_rows",
+        lambda **kwargs: [
+            {"trade_date": "2026-07-18", "asset_id": "A", "strategy_id": "mid_trend"}
+        ],
+    )
+    monkeypatch.setattr(
+        review_queue,
+        "_load_db_strategy_position_rows",
+        lambda **kwargs: [
+            {"trade_date": "2026-07-18", "asset_id": "B", "strategy_id": "lhb_shortline"}
+        ],
+    )
+    monkeypatch.setattr(review_queue, "_load_asset_names", lambda asset_ids: {})
+
+    assert review_queue.load_active_strategy_topn_rows(trade_date="2026-07-18", limit=50) == []
+    assert calls == 1
+
+    monkeypatch.setattr(
+        review_queue,
+        "load_platform_summary",
+        lambda **kwargs: {"latest_market_date": "2026-07-18"},
+    )
+    monkeypatch.setattr(
+        review_queue,
+        "_load_strategy_snapshot_rows",
+        lambda **kwargs: [
+            {"trade_date": "2026-07-18", "asset_id": "C", "strategy_id": "tech_bottleneck", "rank": 1}
+        ],
+    )
+    monkeypatch.setattr(review_queue, "load_top_scores_for_dashboard", lambda *args, **kwargs: [])
+    calls = 0
+
+    assert review_queue.build_review_queue(trade_date="2026-07-18")["review_mode"] == "score_topn"
+    assert calls == 1
+
+
+def test_successful_legacy_manifest_without_publication_declarations_remains_readable(
+    tmp_path, monkeypatch
+):
+    artifact = tmp_path / "strategy_mid_trend_review.csv"
+    artifact.write_text(
+        "trade_date,asset_id,rank,strategy_id\n2026-07-18,CN:SH:600002,1,mid_trend\n",
+        encoding="utf-8",
+    )
+    module = {
+        "module": "strategy_mid_trend",
+        "status": "success",
+        "trade_date": "2026-07-18",
+        "run_id": "legacy-r1",
+        "artifact_path": str(artifact),
+        "metadata": {},
+    }
+    monkeypatch.setattr(review_queue, "load_latest_data_run_manifest", lambda trade_date: [module])
+
+    rows = review_queue.load_active_strategy_topn_rows(trade_date="2026-07-18", limit=50)
+
+    assert [row["asset_id"] for row in rows] == ["CN:SH:600002"]
+
+@pytest.mark.parametrize("status", ("failed", "partial", "skipped"))
+def test_non_success_current_manifest_blocks_root_and_snapshot_fallbacks(
+    status, tmp_path, monkeypatch
+):
+    module = _v1_versioned_manifest(tmp_path)
+    module.update({"status": status, "trade_date": "2026-07-18", "run_id": "r1"})
+    calls = 0
+
+    def load_manifest(*, trade_date):
+        nonlocal calls
+        calls += 1
+        return [module]
+
+    monkeypatch.setattr(review_queue, "load_latest_data_run_manifest", load_manifest)
+    monkeypatch.setattr(review_queue, "_load_strategy_artifact_topn_rows", lambda **kwargs: [
+        {"trade_date": "2026-07-18", "asset_id": "A", "strategy_id": "mid_trend"}
+    ])
+    monkeypatch.setattr(review_queue, "_load_db_strategy_position_rows", lambda **kwargs: [])
+    monkeypatch.setattr(review_queue, "_load_asset_names", lambda asset_ids: {})
+
+    assert review_queue.load_active_strategy_topn_rows(trade_date="2026-07-18", limit=50) == []
+    assert calls == 1
+
+    monkeypatch.setattr(review_queue, "load_platform_summary", lambda **kwargs: {"latest_market_date": "2026-07-18"})
+    monkeypatch.setattr(review_queue, "_load_strategy_snapshot_rows", lambda **kwargs: [
+        {"trade_date": "2026-07-18", "asset_id": "A", "strategy_id": "mid_trend", "rank": 1}
+    ])
+    monkeypatch.setattr(review_queue, "load_top_scores_for_dashboard", lambda *args, **kwargs: [])
+    calls = 0
+
+    assert review_queue.build_review_queue(trade_date="2026-07-18")["review_mode"] == "score_topn"
+    assert calls == 1
