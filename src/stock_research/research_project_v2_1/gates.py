@@ -79,6 +79,13 @@ _PROVENANCE_COLLECTIONS = {
 }
 _ACTOR_TYPES = {"human", "codex", "automated_pipeline", "imported"}
 _REVIEW_STATUSES = {"unreviewed", "pending_review", "reviewed", "rejected"}
+_IMMUTABLE_PROVENANCE_FIELDS = (
+    "created_by",
+    "actor_type",
+    "agent_run_id",
+    "created_at",
+    "created_in_version",
+)
 _RFC3339 = re.compile(
     r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$"
 )
@@ -659,9 +666,10 @@ def _provenance(
                     if isinstance(source_item, dict)
                     else None
                 )
-                if not isinstance(source_provenance, dict) or source_provenance.get(
-                    "created_in_version"
-                ) != created_in:
+                if not isinstance(source_provenance, dict) or any(
+                    source_provenance.get(field) != provenance.get(field)
+                    for field in _IMMUTABLE_PROVENANCE_FIELDS
+                ):
                     mismatched.append(str(object_id))
     return _result(
         INDUSTRY_DESIGN_CHECKS[11],

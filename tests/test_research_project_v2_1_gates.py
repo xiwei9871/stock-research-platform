@@ -320,6 +320,55 @@ def test_provenance_rejects_ancestor_object_with_inconsistent_creation_version(
     assert object_id in provenance_check["details"]["mismatched_object_ids"]
 
 
+@pytest.mark.parametrize(
+    ("field", "replacement"),
+    [
+        ("created_by", "Other Author"),
+        ("actor_type", "human"),
+        ("agent_run_id", "other-agent-run"),
+        ("created_at", "2026-07-18T00:00:00Z"),
+    ],
+)
+def test_provenance_rejects_ancestor_object_with_changed_immutable_creation_field(
+    tmp_path: Path,
+    field: str,
+    replacement: str,
+) -> None:
+    identity, version, ancestors = _later_version_with_lineage()
+    object_id = version["snapshot"]["questions"][0]["question_id"]
+    ancestor_object = ancestors["0.1.0"]["snapshot"]["questions"][0]
+    ancestor_object["provenance"][field] = replacement
+    ancestors["0.1.0"]["content_hash"] = content_sha256(
+        ancestors["0.1.0"],
+        excluded_paths={("content_hash",)},
+    )
+    layout = _install_gate_lineage(tmp_path, identity, version, ancestors)
+
+    result = evaluate_industry_design_gate(identity, version, layout=layout)
+
+    provenance_check = next(
+        check for check in result["checks"] if check["code"] == "INDUSTRY_PROVENANCE_COMPLETE"
+    )
+    assert provenance_check["status"] == "fail"
+    assert object_id in provenance_check["details"]["mismatched_object_ids"]
+
+
+def test_provenance_allows_ancestor_review_status_to_evolve(tmp_path: Path) -> None:
+    identity, version, ancestors = _later_version_with_lineage()
+    ancestors["0.1.0"]["snapshot"]["questions"][0]["provenance"]["review_status"] = (
+        "reviewed"
+    )
+    ancestors["0.1.0"]["content_hash"] = content_sha256(
+        ancestors["0.1.0"],
+        excluded_paths={("content_hash",)},
+    )
+    layout = _install_gate_lineage(tmp_path, identity, version, ancestors)
+
+    result = evaluate_industry_design_gate(identity, version, layout=layout)
+
+    assert result["status"] == "pass"
+
+
 @pytest.mark.parametrize("rehash", [False, True])
 def test_public_gate_rejects_initial_payload_without_verified_layout(rehash: bool) -> None:
     identity, version = _pilot()
