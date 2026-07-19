@@ -397,6 +397,30 @@ def test_lhb_rejected_top5_evidence_reconciles_cash_slots_and_research_only_sema
     assert any("filled" in failure and "research-only" in failure for failure in failures)
 
 
+@pytest.mark.parametrize("mutation", ["missing", "mixed"])
+def test_lhb_materializer_rejects_missing_or_malformed_candidates(tmp_path, mutation):
+    result = _raw_result(tmp_path, strategy_id="lhb_shortline")
+    if mutation == "missing":
+        result.pop("candidates")
+    else:
+        result["candidates"].append("malformed-candidate")
+
+    with pytest.raises(ValueError, match="candidates.*(missing|malformed)"):
+        validator.materialize_result_artifacts(
+            result,
+            template=_template(strategy_id="lhb_shortline"),
+            output_dir=tmp_path / mutation,
+        )
+
+
+def test_lhb_candidates_are_materialized_and_audited(tmp_path):
+    baseline, result = _approved_pair(tmp_path, strategy_id="lhb_shortline")
+
+    evidence = {row["name"]: row for row in baseline["artifact_evidence"]}
+    assert evidence["candidates.json"]["record_count"] == 1
+    assert Path(result["artifact_files"]["candidates.json"]).is_file()
+
+
 @pytest.mark.parametrize("strategy_id", ["mid_trend", "tech_bottleneck"])
 def test_candidate_rejects_holdings_curve_reconciliation_drift_including_zero_days(
     tmp_path,
@@ -415,6 +439,43 @@ def test_candidate_rejects_holdings_curve_reconciliation_drift_including_zero_da
             prepared,
             template=_template(strategy_id=strategy_id),
         )
+
+
+@pytest.mark.parametrize("bad_date", ["2025-12-31", "2026-06-18"])
+def test_candidate_rejects_positions_and_trades_outside_fixed_replay_window(
+    tmp_path,
+    bad_date,
+):
+    result = _raw_result(tmp_path)
+    result["positions"][0]["rebalance_date"] = bad_date
+    result["positions"][0]["trade_date"] = bad_date
+    result["trades"][0]["trade_date"] = bad_date
+    prepared = validator.materialize_result_artifacts(
+        result,
+        template=_template(),
+        output_dir=tmp_path / f"candidate-date-{bad_date}",
+    )
+
+    with pytest.raises(ValueError, match="(positions|trades).*outside requested replay window"):
+        validator.build_candidate(prepared, template=_template())
+
+
+@pytest.mark.parametrize("bad_date", ["2025-12-31", "2026-06-18"])
+def test_validator_rejects_positions_and_trades_outside_fixed_replay_window(
+    tmp_path,
+    bad_date,
+):
+    baseline, result = _approved_pair(tmp_path)
+    positions = deepcopy(result["positions"])
+    trades = deepcopy(result["trades"])
+    positions[0]["rebalance_date"] = bad_date
+    positions[0]["trade_date"] = bad_date
+    trades[0]["trade_date"] = bad_date
+    _rewrite_artifact_and_approve(result, baseline, name="positions.json", rows=positions)
+    _rewrite_artifact_and_approve(result, baseline, name="trades.json", rows=trades)
+
+    with pytest.raises(ValueError, match="(positions|trades).*outside requested replay window"):
+        validator.validate_result(result, baseline=baseline)
 
 
 def test_every_registered_strategy_has_a_specific_acceptance_callback():

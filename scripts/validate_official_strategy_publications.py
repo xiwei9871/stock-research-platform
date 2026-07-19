@@ -111,6 +111,7 @@ def validate_result(
         tolerances=baseline["tolerances"],
         failures=failures,
     )
+    _validate_evidence_date_bounds(audited_result, baseline, failures)
     _validate_holdings_reconciliation(strategy_id, audited_result, failures)
     _run_strategy_callback(strategy_id, audited_result, baseline, failures)
     if failures:
@@ -183,6 +184,7 @@ def build_candidate(
         tolerances=candidate["tolerances"],
         failures=failures,
     )
+    _validate_evidence_date_bounds(audited_result, candidate, failures)
     _validate_holdings_reconciliation(strategy_id, audited_result, failures)
     _run_strategy_callback(strategy_id, audited_result, candidate, failures)
     if failures:
@@ -274,6 +276,11 @@ def materialize_result_artifacts(
         artifact_files[name] = str(path)
 
     if str(template.get("strategy_id")) == "lhb_shortline":
+        candidates = _require_record_collection(result.get("candidates"), "candidates")
+        candidate_name = "candidates.json"
+        candidate_path = output / candidate_name
+        _write_canonical_records(candidate_path, candidates)
+        artifact_files[candidate_name] = str(candidate_path)
         rejected = _load_lhb_rejected_top5(result, template=template)
         name = "lhb_rejected_top5.json"
         path = output / name
@@ -448,6 +455,8 @@ def _with_audited_records(
     audited = dict(result)
     for field in ("equity_curve", "positions", "trades"):
         audited[field] = records.get(f"{field}.json", [])
+    if "candidates.json" in records:
+        audited["candidates"] = records["candidates.json"]
     evidence = dict(audited.get("acceptance_evidence") or {})
     if "lhb_rejected_top5.json" in records:
         evidence["lhb_rejected_top5"] = records["lhb_rejected_top5.json"]
@@ -880,6 +889,55 @@ def _integral_count(
         failures.append(f"account safety: {field} at row {index} must be non-negative integral")
         return None
     return parsed
+
+
+def _validate_evidence_date_bounds(
+    result: Mapping[str, Any],
+    baseline: Mapping[str, Any],
+    failures: list[str],
+) -> None:
+    try:
+        requested_start = _parse_date(baseline.get("baseline_start_date"), "baseline_start_date")
+        requested_end = _parse_date(baseline.get("baseline_end_date"), "baseline_end_date")
+        actual_end = _parse_date(baseline.get("actual_end_date"), "actual_end_date")
+    except ValueError as exc:
+        failures.append(str(exc))
+        return
+    for collection, date_fields in (
+        ("positions", ("rebalance_date", "trade_date", "date")),
+        ("trades", ("trade_date",)),
+    ):
+        rows = result.get(collection)
+        if not isinstance(rows, list) or not rows:
+            failures.append(f"{collection} missing or empty for replay date bounds")
+            continue
+        for index, row in enumerate(rows):
+            if not isinstance(row, Mapping):
+                failures.append(f"{collection} row {index} malformed for replay date bounds")
+                continue
+            present_fields = [field for field in date_fields if row.get(field) not in (None, "")]
+            if not present_fields:
+                failures.append(f"{collection} row {index} action date missing")
+                continue
+            for field in present_fields:
+                try:
+                    action_date = _parse_date(
+                        row.get(field),
+                        f"{collection} row {index} {field}",
+                    )
+                except ValueError as exc:
+                    failures.append(str(exc))
+                    continue
+                if not requested_start <= action_date <= requested_end:
+                    failures.append(
+                        f"{collection} row {index} {field} outside requested replay window: "
+                        f"{action_date.isoformat()}"
+                    )
+                if action_date > actual_end:
+                    failures.append(
+                        f"{collection} row {index} {field} is later than actual curve end: "
+                        f"{action_date.isoformat()}"
+                    )
 
 
 def _validate_holdings_reconciliation(

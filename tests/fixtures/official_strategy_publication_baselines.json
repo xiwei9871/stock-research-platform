@@ -30,6 +30,7 @@
         }
       },
       "artifact_evidence": [
+        {"name": "candidates.json", "sha256": "7bdbdc6ff2c0c8c4ac5471c0ea9aa19340a50bbbe4afadfd492d71c8bc0bbba0", "record_count": 590},
         {"name": "equity_curve.json", "sha256": "fc8ff53dda97ede8d86700d3f634dcda122ac6f92b175cfaa5bfbb22cc668c48", "record_count": 118},
         {"name": "lhb_rejected_top5.json", "sha256": "6b1dfae36000938075e5be69ff8dd9dbb85865a3947d7d300231c2aeee638fab", "record_count": 45},
         {"name": "positions.json", "sha256": "0c0a31db69f07d54afe7cf090b9a596ef5d7e257210028478bf16211b659ed82", "record_count": 186},

@@ -250,7 +250,14 @@ def _lhb_acceptance(result: Mapping[str, Any], _baseline: Mapping[str, Any]) -> 
     config = _config(result)
     trades = _rows(result, "trades")
     positions = _rows(result, "positions")
-    candidates = _rows(result, "candidates")
+    raw_candidates = result.get("candidates")
+    candidates = (
+        list(raw_candidates)
+        if isinstance(raw_candidates, list)
+        and raw_candidates
+        and all(isinstance(row, Mapping) for row in raw_candidates)
+        else []
+    )
     acceptance_evidence = result.get("acceptance_evidence")
     rejected = (
         _rows(acceptance_evidence, "lhb_rejected_top5")
@@ -258,6 +265,10 @@ def _lhb_acceptance(result: Mapping[str, Any], _baseline: Mapping[str, Any]) -> 
         else []
     )
     failures: list[str] = []
+    if not isinstance(raw_candidates, list) or not raw_candidates:
+        failures.append("LHB candidates collection missing or empty")
+    elif any(not isinstance(row, Mapping) for row in raw_candidates):
+        failures.append("LHB candidates collection contains malformed or mixed rows")
     if config.get("top_n") != 5 or config.get("rebalance_frequency") != "daily":
         failures.append("LHB acceptance requires daily safe top5 config")
     if config.get("risk_profile") != "balanced":
