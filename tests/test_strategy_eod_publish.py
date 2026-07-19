@@ -99,6 +99,14 @@ def test_write_strategy_artifacts_manifest_owns_versioned_paths(tmp_path):
     assert metadata["publication_identity"] == metadata["summary"]["publication_identity"]
     assert metadata["publication_manifest_path"].endswith("publication_manifest.json")
     assert set(metadata["file_hashes"]) == {"equity", "positions", "trades", "review", "summary"}
+    assert set(metadata["output_paths"]) == {
+        "equity_path",
+        "positions_path",
+        "trades_path",
+        "review_path",
+        "summary_path",
+        "publication_manifest_path",
+    }
     assert all("/strategy_runs/mid_trend/" in path for path in metadata["output_paths"].values())
     assert (tmp_path / "strategy_mid_trend_review.csv").exists()
 

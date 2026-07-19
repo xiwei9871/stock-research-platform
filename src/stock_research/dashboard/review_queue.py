@@ -386,7 +386,6 @@ def _manifest_strategy_artifact_path_valid(module: dict[str, Any]) -> bool:
     publish_id = str(metadata.get("publish_id") or "")
     artifact_version = str(metadata.get("artifact_version") or "")
     artifact_path = Path(str(module.get("artifact_path") or ""))
-    publication_manifest_path = Path(str(metadata.get("publication_manifest_path") or ""))
     if not strategy_id or not publish_id or not artifact_version:
         return False
     if artifact_path.name != "review.csv":
@@ -402,7 +401,10 @@ def _manifest_strategy_artifact_path_valid(module: dict[str, Any]) -> bool:
         "trades_path": "trades.csv",
         "review_path": "review.csv",
         "summary_path": "summary.json",
+        "publication_manifest_path": "publication_manifest.json",
     }
+    if any(output_paths.get(key) in (None, "") for key in expected_files):
+        return False
     for container in (metadata, output_paths):
         for key, expected_name in expected_files.items():
             declared = container.get(key)
@@ -416,20 +418,7 @@ def _manifest_strategy_artifact_path_valid(module: dict[str, Any]) -> bool:
                 return False
     if Path(str(output_paths.get("review_path") or "")).resolve() != artifact_path.resolve():
         return False
-    for container in (metadata, output_paths):
-        declared_manifest = container.get("publication_manifest_path")
-        if declared_manifest in (None, ""):
-            continue
-        declared_manifest_path = Path(str(declared_manifest))
-        if (
-            declared_manifest_path.name != "publication_manifest.json"
-            or declared_manifest_path.parent.resolve() != version_dir.resolve()
-        ):
-            return False
-    return (
-        publication_manifest_path.name == "publication_manifest.json"
-        and publication_manifest_path.parent.resolve() == version_dir.resolve()
-    )
+    return True
 
 
 def _read_manifest_strategy_artifact(

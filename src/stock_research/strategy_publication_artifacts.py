@@ -100,6 +100,7 @@ def write_strategy_publication_artifacts(
         for name in _FRAME_NAMES
     }
     versioned_paths["summary_path"] = final_dir / "summary.json"
+    versioned_paths["publication_manifest_path"] = final_dir / "publication_manifest.json"
     for name, destination in compatibility_destinations.items():
         if name not in _FRAME_NAMES:
             raise ValueError(f"unsupported compatibility artifact: {name}")
@@ -110,7 +111,7 @@ def write_strategy_publication_artifacts(
         "publish_id": publish_id,
         "publication_identity": _json_ready(dict(publication_identity)),
         "version_dir": final_dir,
-        "publication_manifest_path": final_dir / "publication_manifest.json",
+        "publication_manifest_path": versioned_paths["publication_manifest_path"],
         "file_hashes": file_hashes,
         "output_paths": versioned_paths,
         "summary": persisted_summary,

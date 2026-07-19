@@ -162,6 +162,15 @@ def test_manifest_strategy_rows_use_versioned_artifact_not_stale_root_mirror(tmp
         encoding="utf-8",
     )
     identity = build_publication_identity(get_publication_contract("mid_trend"))
+    version_dir = versioned.parent
+    output_paths = {
+        "equity_path": str(version_dir / "equity.csv"),
+        "positions_path": str(version_dir / "positions.csv"),
+        "trades_path": str(version_dir / "trades.csv"),
+        "review_path": str(versioned),
+        "summary_path": str(version_dir / "summary.json"),
+        "publication_manifest_path": str(version_dir / "publication_manifest.json"),
+    }
     summary = {
         "engine_version": "mid_trend_v1",
         "top_n": 5,
@@ -188,7 +197,7 @@ def test_manifest_strategy_rows_use_versioned_artifact_not_stale_root_mirror(tmp
                     "artifact_version": "strategy_artifact_v1",
                     "publish_id": "publish-1",
                     "publication_manifest_path": str(versioned.parent / "publication_manifest.json"),
-                    "output_paths": {"review_path": str(versioned)},
+                    "output_paths": output_paths,
                     "summary": summary,
                 },
             }
@@ -441,3 +450,67 @@ def test_v1_manifest_rejects_any_declared_official_path_outside_version_dir(
     container[path_key] = str(tmp_path / f"stale-{path_key}")
 
     assert review_queue._manifest_strategy_artifact_path_valid(module) is False
+
+
+@pytest.mark.parametrize(
+    "path_key",
+    (
+        "equity_path",
+        "positions_path",
+        "trades_path",
+        "review_path",
+        "summary_path",
+        "publication_manifest_path",
+    ),
+)
+@pytest.mark.parametrize("missing_kind", ("removed", "blank"))
+def test_v1_manifest_requires_complete_output_paths_and_blocks_all_fallbacks(
+    tmp_path, monkeypatch, path_key, missing_kind
+):
+    module = _v1_versioned_manifest(tmp_path)
+    module.update({"status": "success", "trade_date": "2026-07-18", "run_id": "r1"})
+    if missing_kind == "removed":
+        del module["metadata"]["output_paths"][path_key]
+    else:
+        module["metadata"]["output_paths"][path_key] = ""
+    monkeypatch.setattr(review_queue, "load_latest_data_run_manifest", lambda trade_date: [module])
+    monkeypatch.setattr(review_queue, "_manifest_strategy_contract_valid", lambda candidate: True)
+    monkeypatch.setattr(
+        review_queue,
+        "_load_strategy_artifact_topn_rows",
+        lambda **kwargs: [
+            {
+                "trade_date": "2026-07-18",
+                "asset_id": "CN:SH:600001",
+                "strategy_id": "mid_trend",
+            }
+        ],
+    )
+    monkeypatch.setattr(review_queue, "_load_db_strategy_position_rows", lambda **kwargs: [])
+    monkeypatch.setattr(review_queue, "_load_asset_names", lambda asset_ids: {})
+
+    assert review_queue._manifest_strategy_artifact_path_valid(module) is False
+    assert review_queue._load_manifest_strategy_rows(trade_date="2026-07-18", limit=50) == []
+    assert review_queue.load_active_strategy_topn_rows(trade_date="2026-07-18", limit=50) == []
+
+    monkeypatch.setattr(
+        review_queue,
+        "load_platform_summary",
+        lambda **kwargs: {"latest_market_date": "2026-07-18"},
+    )
+    monkeypatch.setattr(
+        review_queue,
+        "_load_strategy_snapshot_rows",
+        lambda **kwargs: [
+            {
+                "trade_date": "2026-07-18",
+                "asset_id": "CN:SH:600001",
+                "strategy_id": "mid_trend",
+                "strategy_name": "Mid Trend Combo",
+                "rank": 1,
+            }
+        ],
+    )
+    monkeypatch.setattr(review_queue, "load_top_scores_for_dashboard", lambda *args, **kwargs: [])
+
+    assert review_queue.build_review_queue(trade_date="2026-07-18")["review_mode"] == "score_topn"

@@ -81,5 +81,13 @@ def test_tech_bottleneck_uses_versioned_official_writer_and_keeps_candidate_entr
     assert metadata["artifact_version"] == ARTIFACT_VERSION
     assert metadata["publication_identity"] == result["publication_identity"]
     assert metadata["output_paths"]["review_path"] == result["review_path"]
+    assert set(metadata["output_paths"]) == {
+        "equity_path",
+        "positions_path",
+        "trades_path",
+        "review_path",
+        "summary_path",
+        "publication_manifest_path",
+    }
     assert metadata["publication_manifest_path"].endswith("publication_manifest.json")
     assert (tmp_path / "strategy_tech_bottleneck_review.csv").exists()

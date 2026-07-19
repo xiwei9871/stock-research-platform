@@ -65,6 +65,7 @@ def test_writer_creates_immutable_version_hashes_and_compatibility_mirrors(tmp_p
     assert manifest["publish_id"] == first["publish_id"]
     assert manifest["publication_identity"] == first["publication_identity"]
     assert manifest["config"] == {"top_n": 5}
+    assert first["output_paths"]["publication_manifest_path"] == first["publication_manifest_path"]
     for name in ("equity", "positions", "trades", "review", "summary"):
         path = first["output_paths"][f"{name}_path"]
         expected_hash = hashlib.sha256(path.read_bytes()).hexdigest()
@@ -97,4 +98,3 @@ def test_failed_version_write_leaves_no_final_version_or_mirrors(tmp_path, monke
     strategy_root = tmp_path / "strategy_runs" / "mid_trend"
     assert not strategy_root.exists() or not list(strategy_root.iterdir())
     assert not list(tmp_path.glob("strategy_mid_trend_*.csv"))
-
