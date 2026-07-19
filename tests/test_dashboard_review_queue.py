@@ -601,7 +601,10 @@ def test_manifest_rejects_entire_mixed_strategy_artifact(extra_row, tmp_path, mo
 @pytest.mark.parametrize(
     ("field", "value"),
     [
-        ("performance_as_of_date", "2026-07-17"),
+        ("performance_as_of_date", "2026-07-19"),
+        ("performance_as_of_date", "not-a-date"),
+        ("performance_as_of_date", ""),
+        ("trade_date", ""),
         ("contract_id", "mid_trend:balanced:legacy"),
         ("artifact_version", "strategy_artifact_v999"),
         (
@@ -635,6 +638,98 @@ def test_persisted_strategy_snapshot_fails_closed_for_stale_or_mixed_contract(
         "contract_status": "success",
     }
     payload[field] = value
+    monkeypatch.setattr(
+        review_evidence_snapshots,
+        "list_review_item_snapshots",
+        lambda **kwargs: [{"review_item_payload": payload}],
+    )
+
+    assert review_queue._load_strategy_snapshot_rows(
+        trade_date="2026-07-18", limit=50
+    ) == []
+
+
+def test_persisted_lhb_snapshot_accepts_stale_performance_bound_to_manifest(monkeypatch):
+    from stock_research import review_evidence_snapshots
+
+    identity = build_publication_identity(get_publication_contract("lhb_shortline"))
+    payload = {
+        "score_version": "strategy_topn",
+        "trade_date": "2026-07-18",
+        "asset_id": "CN:SZ:001399",
+        "strategy_id": "lhb_shortline",
+        "rank": 1,
+        "contract_id": identity["contract_id"],
+        "identity_schema_version": identity["identity_schema_version"],
+        "config_fingerprint": identity["config_fingerprint"],
+        "publication_policy": identity["publication_policy"],
+        "artifact_version": "strategy_artifact_v1",
+        "publication_manifest_path": (
+            "/srv/strategy_daily_eod/2026-07-18/strategy_runs/"
+            "lhb_shortline/publish-1/publication_manifest.json"
+        ),
+        "performance_as_of_date": "2026-07-17",
+        "contract_status": "success",
+        "publication_manifest": {
+            "strategy_id": "lhb_shortline",
+            "trade_date": "2026-07-18",
+            "performance_as_of_date": "2026-07-17",
+            "artifact_version": "strategy_artifact_v1",
+            "publication_identity": identity,
+        },
+    }
+    monkeypatch.setattr(
+        review_evidence_snapshots,
+        "list_review_item_snapshots",
+        lambda **kwargs: [{"review_item_payload": payload}],
+    )
+
+    rows = review_queue._load_strategy_snapshot_rows(
+        trade_date="2026-07-18", limit=50
+    )
+
+    assert len(rows) == 1
+    assert rows[0]["performance_as_of_date"] == "2026-07-17"
+
+    payload["publication_manifest"] = {
+        "module": "strategy_lhb_shortline",
+        "trade_date": "2026-07-18",
+        "latest_trade_date": "2026-07-18",
+        "metadata": {
+            "artifact_version": "strategy_artifact_v1",
+            "publication_identity": identity,
+            "publication_manifest_path": payload["publication_manifest_path"],
+            "summary": {"performance_effective_date": "2026-07-16"},
+        },
+    }
+
+    assert review_queue._load_strategy_snapshot_rows(
+        trade_date="2026-07-18", limit=50
+    ) == []
+
+
+def test_persisted_snapshot_rejects_manifest_path_trade_date_mismatch(monkeypatch):
+    from stock_research import review_evidence_snapshots
+
+    identity = build_publication_identity(get_publication_contract("mid_trend"))
+    payload = {
+        "score_version": "strategy_topn",
+        "trade_date": "2026-07-18",
+        "asset_id": "CN:SH:600002",
+        "strategy_id": "mid_trend",
+        "rank": 1,
+        "contract_id": identity["contract_id"],
+        "identity_schema_version": identity["identity_schema_version"],
+        "config_fingerprint": identity["config_fingerprint"],
+        "publication_policy": identity["publication_policy"],
+        "artifact_version": "strategy_artifact_v1",
+        "publication_manifest_path": (
+            "/srv/strategy_daily_eod/2026-07-17/strategy_runs/"
+            "mid_trend/publish-1/publication_manifest.json"
+        ),
+        "performance_as_of_date": "2026-07-17",
+        "contract_status": "success",
+    }
     monkeypatch.setattr(
         review_evidence_snapshots,
         "list_review_item_snapshots",
@@ -814,6 +909,21 @@ def test_v1_manifest_rejects_any_declared_official_path_outside_version_dir(
     )
     container[path_key] = str(tmp_path / f"stale-{path_key}")
 
+    assert review_queue._manifest_strategy_artifact_path_valid(module) is False
+
+
+@pytest.mark.parametrize("missing_kind", ("removed", "blank"))
+def test_v1_manifest_requires_top_level_publication_manifest_path(
+    missing_kind, tmp_path, monkeypatch
+):
+    monkeypatch.setattr(review_queue, "SETTINGS", SimpleNamespace(output_root=tmp_path))
+    module = _v1_versioned_manifest(tmp_path)
+    if missing_kind == "removed":
+        del module["metadata"]["publication_manifest_path"]
+    else:
+        module["metadata"]["publication_manifest_path"] = ""
+
+    assert module["metadata"]["output_paths"]["publication_manifest_path"]
     assert review_queue._manifest_strategy_artifact_path_valid(module) is False
 
 

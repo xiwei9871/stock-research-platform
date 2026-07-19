@@ -283,30 +283,144 @@ def _snapshot_publication_contract_valid(
             return False
     if row.get("artifact_version") != ARTIFACT_VERSION:
         return False
-    if str(row.get("trade_date") or "") != trade_date:
+    snapshot_trade_date = str(row.get("trade_date") or "")
+    performance_as_of_date = str(row.get("performance_as_of_date") or "")
+    if (
+        not _valid_iso_date(trade_date)
+        or not _valid_iso_date(snapshot_trade_date)
+        or snapshot_trade_date != trade_date
+        or not _valid_iso_date(performance_as_of_date)
+        or date.fromisoformat(performance_as_of_date)
+        > date.fromisoformat(snapshot_trade_date)
+    ):
         return False
-    if str(row.get("performance_as_of_date") or "") != trade_date:
+    manifest_path = row.get("publication_manifest_path")
+    if not _snapshot_manifest_path_valid(
+        manifest_path, strategy_id, snapshot_trade_date
+    ):
         return False
-    return _snapshot_manifest_path_valid(
-        row.get("publication_manifest_path"), strategy_id
+    for path_field in (
+        "source_publication_manifest_path",
+        "manifest_publication_manifest_path",
+    ):
+        if path_field in row and str(row.get(path_field) or "") != str(manifest_path):
+            return False
+    for date_field in (
+        "source_performance_as_of_date",
+        "manifest_performance_as_of_date",
+    ):
+        if date_field in row and str(row.get(date_field) or "") != performance_as_of_date:
+            return False
+    for date_field in ("source_trade_date", "manifest_trade_date"):
+        if date_field in row and str(row.get(date_field) or "") != snapshot_trade_date:
+            return False
+    for manifest_field in ("publication_manifest", "source_manifest", "manifest"):
+        if manifest_field not in row:
+            continue
+        embedded = row.get(manifest_field)
+        if not isinstance(embedded, dict) or not _embedded_snapshot_manifest_valid(
+            embedded,
+            strategy_id=strategy_id,
+            expected_identity=expected,
+            snapshot_trade_date=snapshot_trade_date,
+            performance_as_of_date=performance_as_of_date,
+            publication_manifest_path=str(manifest_path),
+        ):
+            return False
+    return True
+
+
+def _embedded_snapshot_manifest_valid(
+    embedded: dict[str, Any],
+    *,
+    strategy_id: str,
+    expected_identity: dict[str, Any],
+    snapshot_trade_date: str,
+    performance_as_of_date: str,
+    publication_manifest_path: str,
+) -> bool:
+    from stock_research.strategy_publication_contracts import (
+        validate_publication_identity,
     )
 
+    metadata = embedded.get("metadata") if isinstance(embedded.get("metadata"), dict) else {}
+    summary = metadata.get("summary") if isinstance(metadata.get("summary"), dict) else {}
+    if not summary and isinstance(embedded.get("summary"), dict):
+        summary = embedded["summary"]
+    containers = (embedded, metadata, summary)
+    declared = False
 
-def _snapshot_manifest_path_valid(value: Any, strategy_id: str) -> bool:
+    module_name = embedded.get("module")
+    if module_name is not None:
+        declared = True
+        if str(module_name) != f"strategy_{strategy_id}":
+            return False
+    for container in containers:
+        if "strategy_id" in container:
+            declared = True
+            if container.get("strategy_id") != strategy_id:
+                return False
+        if "artifact_version" in container:
+            declared = True
+            if container.get("artifact_version") != ARTIFACT_VERSION:
+                return False
+        if "publication_identity" in container:
+            declared = True
+            actual_identity = container.get("publication_identity")
+            if not isinstance(actual_identity, dict) or validate_publication_identity(
+                actual_identity, expected_identity
+            ):
+                return False
+        for field in ("trade_date", "latest_trade_date"):
+            if field in container:
+                declared = True
+                if str(container.get(field) or "") != snapshot_trade_date:
+                    return False
+        for field in (
+            "performance_as_of_date",
+            "performance_effective_date",
+            "actual_end_date",
+            "equity_latest_date",
+        ):
+            if field in container:
+                declared = True
+                if str(container.get(field) or "") != performance_as_of_date:
+                    return False
+        if "publication_manifest_path" in container:
+            declared = True
+            if str(container.get("publication_manifest_path") or "") != publication_manifest_path:
+                return False
+        output_paths = container.get("output_paths")
+        if isinstance(output_paths, dict) and "publication_manifest_path" in output_paths:
+            declared = True
+            if str(output_paths.get("publication_manifest_path") or "") != publication_manifest_path:
+                return False
+    return declared
+
+
+def _snapshot_manifest_path_valid(
+    value: Any, strategy_id: str, snapshot_trade_date: str
+) -> bool:
     text = str(value or "")
     if not text.startswith("/") or "\\" in text or "?" in text or "#" in text:
         return False
     parts = text.split("/")[1:]
     if not parts or any(part in {"", ".", ".."} for part in parts):
         return False
-    if parts.count("strategy_runs") != 1:
+    if parts.count("strategy_daily_eod") != 1 or parts.count("strategy_runs") != 1:
         return False
-    index = parts.index("strategy_runs")
+    root_index = parts.index("strategy_daily_eod")
+    if (
+        len(parts) != root_index + 6
+        or parts[root_index + 2] != "strategy_runs"
+        or not _valid_iso_date(parts[root_index + 1])
+        or parts[root_index + 1] != snapshot_trade_date
+    ):
+        return False
     return bool(
-        len(parts) == index + 4
-        and parts[index + 1] == strategy_id
-        and _safe_publish_id(parts[index + 2])
-        and parts[index + 3] == "publication_manifest.json"
+        parts[root_index + 3] == strategy_id
+        and _safe_publish_id(parts[root_index + 4])
+        and parts[root_index + 5] == "publication_manifest.json"
     )
 
 
@@ -492,6 +606,14 @@ def _manifest_strategy_artifact_path_valid(module: dict[str, Any]) -> bool:
         not strategy_id
         or not _safe_publish_id(publish_id)
         or artifact_version != ARTIFACT_VERSION
+    ):
+        return False
+    metadata_manifest_path = metadata.get("publication_manifest_path")
+    output_manifest_path = output_paths.get("publication_manifest_path")
+    if (
+        metadata_manifest_path in (None, "")
+        or output_manifest_path in (None, "")
+        or str(metadata_manifest_path) != str(output_manifest_path)
     ):
         return False
     if artifact_path.name != "review.csv":
