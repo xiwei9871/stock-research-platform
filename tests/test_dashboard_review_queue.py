@@ -457,6 +457,15 @@ def _v1_versioned_manifest(tmp_path):
             "summary": {
                 "publication_identity": identity,
                 "performance_effective_date": "2026-07-18",
+                "engine_version": "mid_trend_v1",
+                "top_n": 5,
+                "transaction_cost_bps": 10.0,
+                "max_position_weight": 0.2,
+                "adjust_type": "hfq",
+                "frequency": "weekly",
+                "benchmark_variant": (
+                    "top5_weekly_max2_selective_trend_holding_protection_v1"
+                ),
             },
         },
     }
@@ -546,6 +555,57 @@ def test_v1_manifest_rows_expose_generic_publication_evidence(tmp_path, monkeypa
 
     assert rows == []
     assert blocked == {"mid_trend"}
+
+
+def test_manifest_review_row_snapshot_round_trip_preserves_trusted_evidence(
+    tmp_path, monkeypatch
+):
+    from stock_research.review_evidence_snapshots import build_review_item_snapshot
+
+    monkeypatch.setattr(review_queue, "SETTINGS", SimpleNamespace(output_root=tmp_path))
+    module = _v1_versioned_manifest(tmp_path)
+    local_review_path = Path(module["artifact_path"])
+
+    rows = review_queue._read_manifest_strategy_artifact(
+        local_review_path,
+        trade_date="2026-07-18",
+        limit=50,
+        manifest=module,
+    )
+    queue = review_queue._strategy_review_queue(
+        rows=rows,
+        selected_trade_date="2026-07-18",
+        score_version="strategy_topn",
+        lookback_days=90,
+    )
+    item = next(
+        group for group in queue["groups"] if group["bucket"] == "strategy:mid_trend"
+    )["items"][0]
+    payload = build_review_item_snapshot(item)["review_item_payload"]
+
+    assert set(payload["source_manifest"]) == {
+        "module",
+        "strategy_id",
+        "trade_date",
+        "latest_trade_date",
+        "metadata",
+    }
+    assert set(payload["source_manifest"]["metadata"]) == {
+        "artifact_version",
+        "publication_identity",
+        "publication_manifest_path",
+        "output_paths",
+        "summary",
+    }
+    assert review_queue._snapshot_publication_contract_valid(
+        payload, trade_date="2026-07-18"
+    ) is True
+
+    incomplete = copy.deepcopy(payload)
+    del incomplete["source_manifest"]["metadata"]["publication_identity"]
+    assert review_queue._snapshot_publication_contract_valid(
+        incomplete, trade_date="2026-07-18"
+    ) is False
 
 
 @pytest.mark.parametrize(

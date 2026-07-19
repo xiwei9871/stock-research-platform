@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from copy import deepcopy
 from datetime import date
 from pathlib import Path
 from urllib.parse import urlencode
@@ -19,6 +20,7 @@ from stock_research.dashboard.strategy_catalog import list_strategy_catalog
 from stock_research.db import connect, fetch_all
 from stock_research.strategy_publication_artifacts import (
     ARTIFACT_VERSION,
+    DEFAULT_APPROVED_PUBLICATION_RESEARCH_ROOTS,
     is_exact_iso_date,
     parse_publication_manifest_path,
     publication_manifest_trade_date,
@@ -306,6 +308,7 @@ def _snapshot_publication_contract_valid(
             manifest_path,
             expected_strategy_id=strategy_id,
             expected_trade_date=snapshot_trade_date,
+            approved_research_roots=_approved_research_roots(),
         )
     except ValueError:
         return False
@@ -718,10 +721,11 @@ def _approved_research_roots() -> tuple[Path, ...]:
         Path(getattr(SETTINGS, "output_root", "outputs")),
         *_APPROVED_SYNCED_OUTPUT_ROOTS,
     )
-    return tuple(
+    configured = tuple(
         Path(os.path.abspath(output_root)) / "research"
         for output_root in output_roots
     )
+    return tuple(dict.fromkeys((*configured, *DEFAULT_APPROVED_PUBLICATION_RESEARCH_ROOTS)))
 
 
 def _trusted_strategy_output_root() -> Path:
@@ -819,6 +823,9 @@ def _read_manifest_strategy_artifact(
         if isinstance(metadata.get("publication_identity"), dict)
         else {}
     )
+    source_manifest = _compact_validated_source_manifest_evidence(manifest)
+    if _manifest_has_publication_declaration(manifest) and source_manifest is None:
+        return []
     publication_fields = {
         "contract_id": publication_identity.get("contract_id"),
         "identity_schema_version": publication_identity.get("identity_schema_version"),
@@ -878,9 +885,56 @@ def _read_manifest_strategy_artifact(
                 "risk_flags": _optional_json_list(row.get("risk_flags")),
                 "manifest_module": str(manifest.get("module") or ""),
                 **publication_fields,
+                "source_manifest": deepcopy(source_manifest),
             }
         )
     return normalized
+
+
+def _compact_validated_source_manifest_evidence(
+    manifest: dict[str, Any],
+) -> dict[str, Any] | None:
+    if not (
+        _manifest_publication_declaration_valid(manifest)
+        and _manifest_strategy_snapshot_valid(manifest)
+        and _manifest_strategy_identity_valid(manifest)
+        and _manifest_strategy_artifact_path_valid(manifest)
+        and _manifest_strategy_contract_valid(manifest)
+    ):
+        return None
+    strategy_id = _manifest_strategy_id(manifest)
+    trade_date = publication_manifest_trade_date(manifest)
+    metadata = manifest.get("metadata") if isinstance(manifest.get("metadata"), dict) else {}
+    summary = metadata.get("summary") if isinstance(metadata.get("summary"), dict) else {}
+    publication_identity = metadata.get("publication_identity")
+    manifest_path = metadata.get("publication_manifest_path")
+    if not strategy_id or trade_date is None or not isinstance(publication_identity, dict):
+        return None
+    performance_summary = {
+        field: deepcopy(summary[field])
+        for field in (
+            "performance_effective_date",
+            "actual_end_date",
+            "equity_latest_date",
+            "end_date",
+        )
+        if field in summary
+    }
+    if not performance_summary:
+        return None
+    return {
+        "module": str(manifest.get("module") or ""),
+        "strategy_id": strategy_id,
+        "trade_date": trade_date,
+        "latest_trade_date": trade_date,
+        "metadata": {
+            "artifact_version": ARTIFACT_VERSION,
+            "publication_identity": deepcopy(publication_identity),
+            "publication_manifest_path": str(manifest_path),
+            "output_paths": {"publication_manifest_path": str(manifest_path)},
+            "summary": performance_summary,
+        },
+    }
 
 
 def _manifest_performance_as_of_date(manifest: dict[str, Any]) -> str:
@@ -1647,6 +1701,11 @@ def _queue_item(
         "publication_manifest_path": _optional_text(row.get("publication_manifest_path")),
         "performance_as_of_date": _optional_text(row.get("performance_as_of_date")),
         "contract_status": _optional_text(row.get("contract_status")),
+        "source_manifest": (
+            deepcopy(row["source_manifest"])
+            if isinstance(row.get("source_manifest"), dict)
+            else None
+        ),
         "review_tier": _optional_text(row.get("review_tier")),
         "confirmation_state": _optional_text(row.get("confirmation_state")),
         "phase12a_rule_layer": _optional_text(row.get("phase12a_rule_layer")),
