@@ -11,7 +11,10 @@ import pytest
 
 from stock_research.research_project_v2.errors import ResearchProjectV2Error
 from stock_research.research_project_v2.canonical import content_sha256
-from stock_research.research_project_v2_1.gates import evaluate_industry_design_gate
+from stock_research.research_project_v2_1.gates import (
+    evaluate_industry_design_gate,
+    evaluate_industry_design_gate_unverified,
+)
 from stock_research.research_project_v2_1.layout import LayeredResearchLayout
 from stock_research.research_project_v2_1.loader import (
     list_layered_project_slugs,
@@ -69,7 +72,11 @@ def test_four_layered_projects_resolve_exact_r1_baselines_and_pass_gate() -> Non
         assert upstream["project_id"] == f"research_project:{upstream_slug}"
         assert upstream["version_id"] == f"research_version:{upstream_slug}:0.1.0"
         assert upstream["content_hash"] == reference["upstream_content_hash"]
-        assert evaluate_industry_design_gate(identity, version)["status"] == "pass"
+        assert evaluate_industry_design_gate(
+            identity,
+            version,
+            layout=layout,
+        )["status"] == "pass"
 
 
 def test_pilots_are_design_only_and_have_no_downstream_outputs() -> None:
@@ -477,6 +484,6 @@ def test_invalid_gate_fixture_reports_intended_check(case_name: str, expected_ch
     fixture = R2A / "fixtures/invalid" / case_name
     identity = json.loads((fixture / "project.json").read_text())
     version = json.loads((fixture / "versions/v0.1.0.json").read_text())
-    result = evaluate_industry_design_gate(identity, version)
+    result = evaluate_industry_design_gate_unverified(identity, version)
     failed = {check["code"] for check in result["checks"] if check["status"] == "fail"}
     assert failed == {expected_check}

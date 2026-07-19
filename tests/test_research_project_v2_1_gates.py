@@ -12,6 +12,7 @@ from stock_research.research_project_v2_1.layout import LayeredResearchLayout
 from stock_research.research_project_v2_1.gates import (
     INDUSTRY_DESIGN_CHECKS,
     evaluate_industry_design_gate,
+    evaluate_industry_design_gate_unverified,
 )
 
 
@@ -42,12 +43,22 @@ def _pilot() -> tuple[dict, dict]:
 
 
 def _failed_checks(identity: dict, version: dict) -> set[str]:
-    result = evaluate_industry_design_gate(identity, version)
+    result = evaluate_industry_design_gate_unverified(identity, version)
     return {check["code"] for check in result["checks"] if check["status"] == "fail"}
 
 
 def test_industry_gate_exports_fixed_check_order() -> None:
     assert INDUSTRY_DESIGN_CHECKS == EXPECTED_CHECKS
+
+
+def test_unverified_gate_cannot_claim_verified_provenance() -> None:
+    identity, version = _pilot()
+
+    result = evaluate_industry_design_gate_unverified(identity, version)
+
+    assert result["gate"] == "industry_design_unverified"
+    assert result["status"] == "pass"
+    assert result.get("verified") is False
 
 
 def test_industry_gate_does_not_mutate_input(monkeypatch) -> None:
@@ -64,7 +75,11 @@ def test_industry_gate_does_not_mutate_input(monkeypatch) -> None:
 
 def test_pilot_passes_all_twelve_checks() -> None:
     identity, version = _pilot()
-    result = evaluate_industry_design_gate(identity, version)
+    result = evaluate_industry_design_gate(
+        identity,
+        version,
+        layout=LayeredResearchLayout.default(),
+    )
     assert result["status"] == "pass"
     assert [check["code"] for check in result["checks"]] == list(EXPECTED_CHECKS)
     assert {check["status"] for check in result["checks"]} == {"pass"}
@@ -83,7 +98,7 @@ def test_pilot_passes_all_twelve_checks() -> None:
 def test_industry_gate_reports_the_targeted_failure(mutation, expected_check) -> None:
     identity, version = _pilot()
     mutation(identity, version)
-    result = evaluate_industry_design_gate(identity, version)
+    result = evaluate_industry_design_gate_unverified(identity, version)
     failed = {check["code"] for check in result["checks"] if check["status"] == "fail"}
     assert expected_check in failed
 
@@ -94,7 +109,7 @@ def test_missing_counter_does_not_cascade_into_plan_coverage() -> None:
         query for query in version["snapshot"]["search_plans"][0]["queries"]
         if query["query_role"] != "counter_evidence"
     ]
-    result = evaluate_industry_design_gate(identity, version)
+    result = evaluate_industry_design_gate_unverified(identity, version)
     failed = {check["code"] for check in result["checks"] if check["status"] == "fail"}
     assert failed == {"INDUSTRY_COUNTER_SEARCH_PRESENT"}
 
@@ -106,7 +121,7 @@ def test_missing_counter_does_not_cascade_into_plan_coverage() -> None:
 def test_output_gate_rejects_downstream_key_variants(forbidden_key: str) -> None:
     identity, version = _pilot()
     version["snapshot"][forbidden_key] = []
-    result = evaluate_industry_design_gate(identity, version)
+    result = evaluate_industry_design_gate_unverified(identity, version)
     failed = {check["code"] for check in result["checks"] if check["status"] == "fail"}
     assert "INDUSTRY_NO_COMPANY_OR_STOCK_OUTPUTS" in failed
 
@@ -114,7 +129,7 @@ def test_output_gate_rejects_downstream_key_variants(forbidden_key: str) -> None
 def test_output_gate_allows_company_background_reference_metadata() -> None:
     identity, version = _pilot()
     version["snapshot"]["listed_company_reference"] = {"role": "background"}
-    result = evaluate_industry_design_gate(identity, version)
+    result = evaluate_industry_design_gate_unverified(identity, version)
     failed = {check["code"] for check in result["checks"] if check["status"] == "fail"}
     assert "INDUSTRY_NO_COMPANY_OR_STOCK_OUTPUTS" not in failed
 
@@ -122,7 +137,7 @@ def test_output_gate_allows_company_background_reference_metadata() -> None:
 def test_source_diversity_checks_each_query_source_contract() -> None:
     identity, version = _pilot()
     version["snapshot"]["search_plans"][0]["queries"][0]["source_classes"].pop()
-    result = evaluate_industry_design_gate(identity, version)
+    result = evaluate_industry_design_gate_unverified(identity, version)
     failed = {check["code"] for check in result["checks"] if check["status"] == "fail"}
     assert failed == {"INDUSTRY_SOURCE_CLASS_DIVERSITY"}
 
@@ -132,7 +147,7 @@ def test_initial_design_provenance_must_bind_to_current_version() -> None:
     question = version["snapshot"]["questions"][0]
     question["provenance"]["created_in_version"] = "research_version:other:0.1.0"
 
-    result = evaluate_industry_design_gate(identity, version)
+    result = evaluate_industry_design_gate_unverified(identity, version)
     failed = [check for check in result["checks"] if check["status"] == "fail"]
 
     assert [check["code"] for check in failed] == ["INDUSTRY_PROVENANCE_COMPLETE"]
@@ -215,6 +230,118 @@ def test_provenance_allows_stable_object_from_verified_ancestor(tmp_path: Path) 
     assert result["status"] == "pass"
 
 
+@pytest.mark.parametrize(
+    ("collection", "id_field"),
+    [
+        ("questions", "question_id"),
+        ("claims", "claim_id"),
+        ("claim_relations", "relation_id"),
+        ("evidence_requirements", "requirement_id"),
+        ("references", "reference_id"),
+        ("causal_nodes", "causal_node_id"),
+        ("causal_edges", "causal_edge_id"),
+        ("validation_metrics", "metric_id"),
+        ("invalidation_conditions", "condition_id"),
+        ("search_plans", "search_plan_id"),
+    ],
+)
+def test_provenance_rejects_object_missing_from_declared_ancestor_collection(
+    tmp_path: Path,
+    collection: str,
+    id_field: str,
+) -> None:
+    identity, version, ancestors = _later_version_with_lineage()
+    object_id = version["snapshot"][collection][0][id_field]
+    replacement_id = f"{object_id}:created-in-v0.3"
+
+    def replace_exact(value):
+        if isinstance(value, dict):
+            return {key: replace_exact(child) for key, child in value.items()}
+        if isinstance(value, list):
+            return [replace_exact(child) for child in value]
+        return replacement_id if value == object_id else value
+
+    version = replace_exact(version)
+    version["content_hash"] = content_sha256(
+        version,
+        excluded_paths={("content_hash",)},
+    )
+    layout = _install_gate_lineage(tmp_path, identity, version, ancestors)
+
+    result = evaluate_industry_design_gate(identity, version, layout=layout)
+
+    provenance_check = next(
+        check for check in result["checks"] if check["code"] == "INDUSTRY_PROVENANCE_COMPLETE"
+    )
+    assert provenance_check["status"] == "fail"
+    assert replacement_id in provenance_check["details"]["mismatched_object_ids"]
+
+
+@pytest.mark.parametrize(
+    ("collection", "id_field"),
+    [
+        ("questions", "question_id"),
+        ("claims", "claim_id"),
+        ("claim_relations", "relation_id"),
+        ("evidence_requirements", "requirement_id"),
+        ("references", "reference_id"),
+        ("causal_nodes", "causal_node_id"),
+        ("causal_edges", "causal_edge_id"),
+        ("validation_metrics", "metric_id"),
+        ("invalidation_conditions", "condition_id"),
+        ("search_plans", "search_plan_id"),
+    ],
+)
+def test_provenance_rejects_ancestor_object_with_inconsistent_creation_version(
+    tmp_path: Path,
+    collection: str,
+    id_field: str,
+) -> None:
+    identity, version, ancestors = _later_version_with_lineage()
+    object_id = version["snapshot"][collection][0][id_field]
+    ancestor_object = next(
+        item
+        for item in ancestors["0.1.0"]["snapshot"][collection]
+        if item[id_field] == object_id
+    )
+    ancestor_object["provenance"]["created_in_version"] = version["parent_version_id"]
+    ancestors["0.1.0"]["content_hash"] = content_sha256(
+        ancestors["0.1.0"],
+        excluded_paths={("content_hash",)},
+    )
+    layout = _install_gate_lineage(tmp_path, identity, version, ancestors)
+
+    result = evaluate_industry_design_gate(identity, version, layout=layout)
+
+    provenance_check = next(
+        check for check in result["checks"] if check["code"] == "INDUSTRY_PROVENANCE_COMPLETE"
+    )
+    assert provenance_check["status"] == "fail"
+    assert object_id in provenance_check["details"]["mismatched_object_ids"]
+
+
+@pytest.mark.parametrize("rehash", [False, True])
+def test_public_gate_rejects_initial_payload_without_verified_layout(rehash: bool) -> None:
+    identity, version = _pilot()
+    version["change_summary"] = "unverified in-memory initial payload"
+    if rehash:
+        version["content_hash"] = content_sha256(
+            version,
+            excluded_paths={("content_hash",)},
+        )
+
+    result = evaluate_industry_design_gate(identity, version)
+
+    provenance_check = next(
+        check for check in result["checks"] if check["code"] == "INDUSTRY_PROVENANCE_COMPLETE"
+    )
+    assert result["status"] == "fail"
+    assert provenance_check["status"] == "fail"
+    assert provenance_check["details"]["lineage_error"] == (
+        "verified lineage storage is required"
+    )
+
+
 def test_provenance_rejects_in_memory_payload_that_retains_stored_hash(
     tmp_path: Path,
 ) -> None:
@@ -246,6 +373,27 @@ def test_provenance_verifies_initial_payload_when_layout_is_supplied(tmp_path: P
     assert provenance_check["status"] == "fail"
     assert provenance_check["details"]["lineage_error"] == (
         "gate version does not match verified storage"
+    )
+
+
+@pytest.mark.parametrize("field", ["project_id", "title"])
+def test_verified_gate_rejects_identity_that_does_not_match_storage(field: str) -> None:
+    identity, version = _pilot()
+    identity[field] = f"forged-{field}"
+
+    result = evaluate_industry_design_gate(
+        identity,
+        version,
+        layout=LayeredResearchLayout.default(),
+    )
+
+    provenance_check = next(
+        check for check in result["checks"] if check["code"] == "INDUSTRY_PROVENANCE_COMPLETE"
+    )
+    assert result["status"] == "fail"
+    assert result["verified"] is False
+    assert provenance_check["details"]["lineage_error"] == (
+        "gate identity does not match verified storage"
     )
 
 

@@ -16,6 +16,7 @@ from stock_research.research_project_v2_1.lineage import (
 from stock_research.research_project_v2_1.loader import (
     list_layered_versions,
     load_industry_version,
+    load_layered_project,
     resolve_upstream_r1_version,
 )
 from stock_research.research_project_v2_1.search_plan import validate_search_plans
@@ -606,17 +607,27 @@ def _valid_timestamp(value: object) -> bool:
     return True
 
 
+def _provenance_object_id(
+    collection: str,
+    id_field: str,
+    item: object,
+) -> object:
+    if not isinstance(item, dict):
+        return f"<{collection}>"
+    return item.get(id_field, f"<{collection}>")
+
+
 def _provenance(
     snapshot: dict[str, Any],
     *,
-    allowed_versions: set[str],
+    lineage_snapshots: dict[str, dict[str, Any]],
     lineage_error: str | None,
 ) -> dict[str, Any]:
     invalid: list[str] = []
     mismatched: list[str] = []
     for collection, id_field in _PROVENANCE_COLLECTIONS.items():
         for item in snapshot.get(collection, []):
-            object_id = item.get(id_field, f"<{collection}>") if isinstance(item, dict) else f"<{collection}>"
+            object_id = _provenance_object_id(collection, id_field, item)
             provenance = item.get("provenance") if isinstance(item, dict) else None
             if not isinstance(provenance, dict) or not (
                 isinstance(provenance.get("created_by"), str)
@@ -629,8 +640,29 @@ def _provenance(
                 and provenance.get("review_status") in _REVIEW_STATUSES
             ):
                 invalid.append(str(object_id))
-            elif provenance.get("created_in_version") not in allowed_versions:
-                mismatched.append(str(object_id))
+            else:
+                created_in = provenance["created_in_version"]
+                source_snapshot = lineage_snapshots.get(created_in)
+                source_item = None
+                if isinstance(source_snapshot, dict):
+                    source_item = next(
+                        (
+                            candidate
+                            for candidate in source_snapshot.get(collection, [])
+                            if _provenance_object_id(collection, id_field, candidate)
+                            == object_id
+                        ),
+                        None,
+                    )
+                source_provenance = (
+                    source_item.get("provenance")
+                    if isinstance(source_item, dict)
+                    else None
+                )
+                if not isinstance(source_provenance, dict) or source_provenance.get(
+                    "created_in_version"
+                ) != created_in:
+                    mismatched.append(str(object_id))
     return _result(
         INDUSTRY_DESIGN_CHECKS[11],
         not invalid and not mismatched and lineage_error is None,
@@ -646,61 +678,63 @@ def _verified_gate_lineage(
     identity: dict[str, Any],
     version: dict[str, Any],
     layout: LayeredResearchLayout | None,
-) -> tuple[set[str], str | None]:
+) -> tuple[dict[str, dict[str, Any]], str | None]:
     version_id = version.get("version_id")
     slug = identity.get("project_slug")
     semantic_version = version.get("semantic_version")
     if not isinstance(slug, str) or not isinstance(semantic_version, str):
-        return set(), "lineage version identity mismatch"
+        return {}, "lineage version identity mismatch"
     if version_id != f"research_version:{slug}:{semantic_version}":
-        return set(), "lineage version identity mismatch"
+        return {}, "lineage version identity mismatch"
     if layout is None:
-        if version.get("parent_version_id") is None and semantic_version == "0.1.0":
-            return {version_id}, None
-        return set(), "verified lineage storage is required"
+        return {}, "verified lineage storage is required"
     if content_sha256(version, excluded_paths={("content_hash",)}) != version.get(
         "content_hash"
     ):
-        return set(), "gate version does not match verified storage"
+        return {}, "gate version does not match verified storage"
     try:
+        if load_layered_project(slug, layout=layout) != identity:
+            return {}, "gate identity does not match verified storage"
         stored_current = load_industry_version(slug, semantic_version, layout=layout)
         if (
             stored_current.get("version_id") != version_id
             or stored_current.get("content_hash") != version.get("content_hash")
         ):
-            return set(), "gate version does not match verified storage"
+            return {}, "gate version does not match verified storage"
         known_versions = list_layered_versions(slug, layout=layout)
+        stored_versions = {version_id: stored_current}
+
+        def load_parent(parent_semver: str) -> dict[str, Any]:
+            parent = load_industry_version(slug, parent_semver, layout=layout)
+            stored_versions[parent["version_id"]] = parent
+            return parent
+
         lineage_ids = collect_lineage_version_ids(
             stored_current,
             project_slug=slug,
             known_semantic_versions=known_versions,
-            load_version=lambda parent_semver: load_industry_version(
-                slug,
-                parent_semver,
-                layout=layout,
-            ),
+            load_version=load_parent,
         )
-        return set(lineage_ids), None
+        return {
+            lineage_id: stored_versions[lineage_id]["snapshot"]
+            for lineage_id in lineage_ids
+        }, None
     except LineageError as exc:
-        return set(), exc.reason
+        return {}, exc.reason
     except ResearchProjectV2Error as exc:
-        return set(), exc.code
+        return {}, exc.code
 
 
-def evaluate_industry_design_gate(
+def _evaluate_industry_design_gate(
     identity: dict[str, Any],
     version: dict[str, Any],
     *,
-    layout: LayeredResearchLayout | None = None,
+    lineage_snapshots: dict[str, dict[str, Any]],
+    lineage_error: str | None,
+    gate_name: str,
 ) -> dict[str, Any]:
-    """Evaluate the immutable R2A industry design contract without mutation."""
     safe_identity, safe_version = deepcopy(identity), deepcopy(version)
     snapshot = safe_version.get("snapshot") if isinstance(safe_version.get("snapshot"), dict) else {}
-    allowed_provenance_versions, lineage_error = _verified_gate_lineage(
-        safe_identity,
-        safe_version,
-        layout,
-    )
     checks = [
         _result(
             INDUSTRY_DESIGN_CHECKS[0],
@@ -739,17 +773,57 @@ def evaluate_industry_design_gate(
         ),
         _provenance(
             snapshot,
-            allowed_versions=allowed_provenance_versions,
+            lineage_snapshots=lineage_snapshots,
             lineage_error=lineage_error,
         ),
     ]
     status = "fail" if any(check["status"] == "fail" for check in checks) else "pass"
     return {
-        "gate": "industry_design",
+        "gate": gate_name,
+        "verified": gate_name == "industry_design" and lineage_error is None,
         "status": status,
         "overall": status,
         "checks": checks,
     }
+
+
+def evaluate_industry_design_gate(
+    identity: dict[str, Any],
+    version: dict[str, Any],
+    *,
+    layout: LayeredResearchLayout | None = None,
+) -> dict[str, Any]:
+    """Evaluate the immutable R2A industry design contract without mutation."""
+    safe_identity, safe_version = deepcopy(identity), deepcopy(version)
+    lineage_snapshots, lineage_error = _verified_gate_lineage(
+        safe_identity,
+        safe_version,
+        layout,
+    )
+    return _evaluate_industry_design_gate(
+        safe_identity,
+        safe_version,
+        lineage_snapshots=lineage_snapshots,
+        lineage_error=lineage_error,
+        gate_name="industry_design",
+    )
+
+
+def evaluate_industry_design_gate_unverified(
+    identity: dict[str, Any],
+    version: dict[str, Any],
+) -> dict[str, Any]:
+    """Evaluate structure only; this result does not verify stored provenance."""
+    version_id = version.get("version_id")
+    snapshot = version.get("snapshot") if isinstance(version.get("snapshot"), dict) else {}
+    lineage_snapshots = {version_id: snapshot} if isinstance(version_id, str) else {}
+    return _evaluate_industry_design_gate(
+        identity,
+        version,
+        lineage_snapshots=lineage_snapshots,
+        lineage_error=None,
+        gate_name="industry_design_unverified",
+    )
 
 
 def list_industry_design_checks() -> list[str]:
@@ -759,5 +833,6 @@ def list_industry_design_checks() -> list[str]:
 __all__ = [
     "INDUSTRY_DESIGN_CHECKS",
     "evaluate_industry_design_gate",
+    "evaluate_industry_design_gate_unverified",
     "list_industry_design_checks",
 ]
