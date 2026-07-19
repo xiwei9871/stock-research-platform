@@ -201,6 +201,8 @@ def test_domain_errors_have_stable_json_and_exit_codes(
     [
         ("validate", "RESEARCH_PROJECT_V2_1_SEARCH_PLAN_INVALID", 2),
         ("gate", "RESEARCH_PROJECT_V2_1_UPSTREAM_REFERENCE_INVALID", 4),
+        ("gate", "RESEARCH_PROJECT_V2_1_SCHEMA_INVALID", 2),
+        ("gate", "RESEARCH_PROJECT_V2_1_SEMANTIC_INVALID", 2),
         ("gate", "RESEARCH_PROJECT_V2_1_IMMUTABILITY_VIOLATION", 5),
         ("audit", "RESEARCH_PROJECT_V2_1_UPSTREAM_REFERENCE_INVALID", 3),
         ("assess", "RESEARCH_PROJECT_V2_1_EVIDENCE_ASSESSMENT_INVALID", 2),
@@ -209,12 +211,14 @@ def test_domain_errors_have_stable_json_and_exit_codes(
         ("snapshot", "RESEARCH_PROJECT_V2_1_FETCH_DNS_ERROR", 8),
         ("snapshot", "RESEARCH_PROJECT_V2_1_SNAPSHOT_STORAGE_FAILED", 10),
         ("snapshot", "RESEARCH_PROJECT_V2_1_SNAPSHOT_IMMUTABILITY_VIOLATION", 5),
+        ("snapshot", "RESEARCH_PROJECT_V2_1_SNAPSHOT_PATH_VIOLATION", 5),
         ("discover", "RESEARCH_PROJECT_V2_1_DISCOVERY_IMMUTABILITY_VIOLATION", 5),
         ("assess", "RESEARCH_PROJECT_V2_1_EVIDENCE_STORAGE_FAILED", 10),
         ("parse", "RESEARCH_PROJECT_V2_1_PARSE_UNSUPPORTED_MEDIA", 9),
         ("show", "RESEARCH_PROJECT_V2_1_STORAGE_ERROR", 5),
         ("list", "RESEARCH_PROJECT_V2_1_READ_ERROR", 10),
         ("validate", "RESEARCH_PROJECT_V2_1_SEMANTIC_INVALID", 2),
+        ("search-plan", "RESEARCH_PROJECT_V2_1_SEARCH_PLAN_INVALID", 3),
     ],
 )
 def test_exit_mapping_uses_explicit_code_and_command_context(

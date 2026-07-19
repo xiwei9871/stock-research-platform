@@ -743,7 +743,17 @@ def _exit_for_domain_error(
         return 5
     if command == "audit" and code in evidence_audit:
         return 3
+    if (
+        command == "search-plan"
+        and code == "RESEARCH_PROJECT_V2_1_SEARCH_PLAN_INVALID"
+    ):
+        return 3
     if command == "gate":
+        if code in {
+            "RESEARCH_PROJECT_V2_1_SCHEMA_INVALID",
+            "RESEARCH_PROJECT_V2_1_SEMANTIC_INVALID",
+        }:
+            return 2
         return 4
     if command == "parse" and code in parser:
         return 9
