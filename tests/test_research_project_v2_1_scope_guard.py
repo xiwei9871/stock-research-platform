@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+from functools import lru_cache
 from pathlib import Path
 
 import pytest
@@ -68,6 +69,7 @@ APPROVED_R2A_COMMITS = (
     "128625f9c1bf4cd4a5f0c209b6424f1b0e8aaa23",
     "2607cb332583c0db86dfbcae8bb73b1e31c658d0",
     "14ee82d838f61e770ac14f1abb8a1c830344fe53",
+    "3b19e71f83266b31db8cd5b4d95374770d9741c9",
 )
 
 EXCLUDED_CONCURRENT_COMMITS = {
@@ -76,16 +78,21 @@ EXCLUDED_CONCURRENT_COMMITS = {
     "e0d8ebd",
 }
 
-ALLOWED_EXACT_PATHS = {
-    "src/stock_research/cli.py",
-    "docs/superpowers/specs/2026-07-18-research-layer-separation-design.md",
-    "docs/superpowers/plans/2026-07-18-industry-evidence-acquisition-r2a.md",
-    "docs/research_operating_layer_v2_goal_and_roadmap.md",
-    "docs/research_operating_layer_v2_r2a.md",
-}
-ALLOWED_PREFIXES = (
-    "artifacts/research_projects/v2_1/",
-    "src/stock_research/research_project_v2_1/",
+TASK11_CLOSURE_FILES = frozenset(
+    {
+        "docs/research_operating_layer_v2_goal_and_roadmap.md",
+        "docs/research_operating_layer_v2_r2a.md",
+        "tests/test_research_project_v2_1_scope_guard.py",
+    }
+)
+CLOSURE_SEED = "3b19e71f83266b31db8cd5b4d95374770d9741c9"
+R2A_SUPPORT_FILES = frozenset(
+    {
+        "src/stock_research/cli.py",
+        "docs/superpowers/specs/2026-07-18-research-layer-separation-design.md",
+        "docs/superpowers/plans/2026-07-18-industry-evidence-acquisition-r2a.md",
+        *TASK11_CLOSURE_FILES,
+    }
 )
 FORBIDDEN_PREFIXES = (
     "artifacts/research_projects/v2/",
@@ -93,81 +100,110 @@ FORBIDDEN_PREFIXES = (
     "artifacts/technology_industry_catalog/",
     "dashboard/",
     "src/stock_research/dashboard/",
+    "artifacts/research_projects/v2_1/company_capture/",
+    "artifacts/research_projects/v2_1/stock_evaluation/",
 )
-FORBIDDEN_PATH_PARTS = (
-    "/api/",
-    "/migrations/",
-    "/migration/",
-    "/database/",
+FORBIDDEN_COMPONENTS = {"api", "database", "db", "migration", "migrations"}
+FORBIDDEN_PATH_TERMS = (
     "company_rating",
     "stock_rating",
-    "company_capture",
-    "stock_evaluation",
+    "company_prices",
+    "stock_prices",
+    "stock_price",
+    "valuation",
 )
 FORBIDDEN_FILE_NAMES = {
     "api.py",
+    "api_v2.py",
+    "router.py",
     "routes.py",
+    "database.py",
+    "db.py",
     "database_schema.py",
     "db_schema.py",
+    "migration.sql",
 }
 
 
-def is_r2a_path(path: str) -> bool:
-    normalized = f"/{path.lower()}"
-    if path.startswith(FORBIDDEN_PREFIXES):
-        return False
-    # Negative fixtures are approved support files whose payloads prove that
-    # downstream research layers are rejected; they are not runnable artifacts.
-    if path.startswith("artifacts/research_projects/v2_1/fixtures/invalid/"):
-        return True
-    if path.lower().rsplit("/", 1)[-1] in FORBIDDEN_FILE_NAMES:
-        return False
-    if any(part in normalized for part in FORBIDDEN_PATH_PARTS):
-        return False
-    if path in ALLOWED_EXACT_PATHS:
-        return True
-    if path.startswith(ALLOWED_PREFIXES):
-        return True
-    return path.startswith("tests/test_research_project_v2_1_") and path.endswith(".py")
+def _git(*args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["git", *args],
+        cwd=REPOSITORY_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
 
 
-def changed_paths_for_approved_commits() -> set[str]:
+@lru_cache(maxsize=1)
+def approved_changed_paths() -> frozenset[str]:
     paths: set[str] = set()
     for commit in APPROVED_R2A_COMMITS:
-        subprocess.run(
-            ["git", "cat-file", "-e", f"{commit}^{{commit}}"],
-            cwd=REPOSITORY_ROOT,
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        result = subprocess.run(
-            [
-                "git",
-                "diff-tree",
-                "--no-commit-id",
-                "--name-only",
-                "-r",
-                commit,
-            ],
-            cwd=REPOSITORY_ROOT,
-            check=True,
-            capture_output=True,
-            text=True,
+        _git("cat-file", "-e", f"{commit}^{{commit}}")
+        result = _git(
+            "diff-tree", "--no-commit-id", "--name-only", "-r", commit
         )
         paths.update(line for line in result.stdout.splitlines() if line)
-    return paths
+    return frozenset(paths)
+
+
+def _is_forbidden_path(path: str) -> bool:
+    lowered = path.lower()
+    components = lowered.split("/")
+    basename = components[-1]
+    if lowered.startswith(FORBIDDEN_PREFIXES):
+        return True
+    if any(component in FORBIDDEN_COMPONENTS for component in components[:-1]):
+        return True
+    if basename in FORBIDDEN_FILE_NAMES:
+        return True
+    if basename.startswith("api_") and basename.endswith(".py"):
+        return True
+    if basename.startswith("migration") and basename.endswith(".sql"):
+        return True
+    return any(term in lowered for term in FORBIDDEN_PATH_TERMS)
+
+
+def _is_allowed_path(path: str) -> bool:
+    if _is_forbidden_path(path):
+        return False
+    return path in approved_changed_paths() or path in TASK11_CLOSURE_FILES
+
+
+def is_r2a_path(path: str) -> bool:
+    return _is_allowed_path(path)
+
+
+def is_r2a_monitored_path(path: str) -> bool:
+    return (
+        path in R2A_SUPPORT_FILES
+        or path.startswith("artifacts/research_projects/v2_1/")
+        or path.startswith("src/stock_research/research_project_v2_1/")
+        or (
+            path.startswith("tests/test_research_project_v2_1_")
+            and path.endswith(".py")
+        )
+    )
+
+
+def closure_amendment_paths() -> frozenset[str]:
+    result = _git("diff", "--name-only", f"{CLOSURE_SEED}..HEAD")
+    return frozenset(
+        path
+        for path in result.stdout.splitlines()
+        if path and is_r2a_monitored_path(path)
+    )
 
 
 @pytest.mark.parametrize(
     "path",
     [
-        "artifacts/research_projects/v2_1/schema/source_record.schema.json",
+        "artifacts/research_projects/v2_1/schema/definitions_v2_1.schema.json",
+        "artifacts/research_projects/v2_1/fixtures/invalid/company_capture_layer/project.json",
+        "artifacts/research_projects/v2_1/fixtures/invalid/company_capture_layer/versions/v0.1.0.json",
         "src/stock_research/research_project_v2_1/layout.py",
         "tests/test_research_project_v2_1_layout.py",
         "src/stock_research/cli.py",
-        "docs/superpowers/specs/2026-07-18-research-layer-separation-design.md",
-        "docs/superpowers/plans/2026-07-18-industry-evidence-acquisition-r2a.md",
         "docs/research_operating_layer_v2_goal_and_roadmap.md",
         "docs/research_operating_layer_v2_r2a.md",
     ],
@@ -189,13 +225,23 @@ def test_scope_guard_allows_only_planned_r2a_paths(path: str) -> None:
         "src/stock_research/migrations/001_add_research_table.sql",
         "src/stock_research/api/research_projects.py",
         "src/stock_research/research_project_v2_1/api.py",
+        "src/stock_research/research_project_v2_1/api_v2.py",
         "src/stock_research/research_project_v2_1/api/routes.py",
         "src/stock_research/research_project_v2_1/routes.py",
+        "src/stock_research/research_project_v2_1/router.py",
+        "src/stock_research/research_project_v2_1/database.py",
+        "src/stock_research/research_project_v2_1/db.py",
         "src/stock_research/research_project_v2_1/database_schema.py",
         "src/stock_research/research_project_v2_1/db_schema.py",
         "src/stock_research/research_project_v2_1/migrations/001.sql",
+        "src/stock_research/research_project_v2_1/migration.sql",
         "src/stock_research/research_project_v2_1/company_rating.py",
         "src/stock_research/research_project_v2_1/stock_rating.py",
+        "src/stock_research/research_project_v2_1/company_prices.json",
+        "src/stock_research/research_project_v2_1/stock_prices.json",
+        "src/stock_research/research_project_v2_1/valuation.json",
+        "artifacts/research_projects/v2_1/fixtures/invalid/api/routes.py",
+        "artifacts/research_projects/v2_1/fixtures/invalid/migrations/001.sql",
         "artifacts/research_projects/v2_1/company_capture/project.json",
         "artifacts/research_projects/v2_1/stock_evaluation/project.json",
         "tests/test_research_project_v2_storage.py",
@@ -207,6 +253,7 @@ def test_scope_guard_rejects_r1_and_out_of_scope_paths(path: str) -> None:
 
 
 def test_approved_commit_list_is_full_sha_unique_and_excludes_shared_work() -> None:
+    assert len(APPROVED_R2A_COMMITS) == 57
     assert len(APPROVED_R2A_COMMITS) == len(set(APPROVED_R2A_COMMITS))
     assert all(len(commit) == 40 for commit in APPROVED_R2A_COMMITS)
     assert not any(
@@ -214,9 +261,28 @@ def test_approved_commit_list_is_full_sha_unique_and_excludes_shared_work() -> N
         for commit in APPROVED_R2A_COMMITS
         for excluded in EXCLUDED_CONCURRENT_COMMITS
     )
+    for commit in APPROVED_R2A_COMMITS:
+        assert _git("merge-base", "--is-ancestor", commit, "HEAD").returncode == 0
 
 
 def test_every_path_attributed_to_approved_r2a_commits_is_in_scope() -> None:
-    changed_paths = changed_paths_for_approved_commits()
+    changed_paths = approved_changed_paths()
     assert changed_paths
     assert not [path for path in sorted(changed_paths) if not is_r2a_path(path)]
+
+
+def test_only_exact_approved_invalid_fixture_files_are_allowed() -> None:
+    approved_invalid = {
+        path
+        for path in approved_changed_paths()
+        if path.startswith("artifacts/research_projects/v2_1/fixtures/invalid/")
+    }
+    assert approved_invalid
+    assert all(_is_allowed_path(path) for path in approved_invalid)
+    assert not _is_allowed_path(
+        "artifacts/research_projects/v2_1/fixtures/invalid/unapproved/project.json"
+    )
+
+
+def test_closure_amendments_can_only_touch_the_three_task11_files() -> None:
+    assert closure_amendment_paths() <= TASK11_CLOSURE_FILES

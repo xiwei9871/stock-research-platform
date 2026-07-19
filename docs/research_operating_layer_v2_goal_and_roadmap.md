@@ -173,10 +173,10 @@ V2 结论不会自动改写 V1。未来如需把成熟研究沉淀为新的规�
 - Industry Evidence Requirement 和 Search Plan；
 - 来源发现、抓取、下载与不可变快照；
 - PDF、网页和数据集解析与标准化；
-- evidence_artifact、external document 和 dataset resolver；
+- evidence_artifact 的内容寻址存储与 managed-path resolution；`external_document` / `dataset` namespace 已预留，独立 resolver 留待 R2B+；
 - 来源独立性、新鲜度、转载循环和冲突检测；
 - 命题级 Industry Evidence Assessment；
-- reference drift update event；
+- 上游 R1 version/hash drift validation；独立 reference-drift update event 留待后续阶段；
 - 四个新 Industry Project 对 R1 pilot version 的不可变引用。
 
 退出条件：四个 Industry Project 能从 Evidence Requirement 生成定向 Search Plan，外部资料能够被快照、解析、评价和审计；本阶段不生成公司或股票评级。
@@ -185,13 +185,13 @@ V2 结论不会自动改写 V1。未来如需把成熟研究沉淀为新的规�
 
 验证摘要（2026-07-19）：
 
-- R2A：`966 passed, 10 warnings`；
-- 计划指定 R1 compatibility glob：`1199 passed, 10 warnings`；
+- R2A：`978 passed, 10 warnings`；
+- 计划指定 R1 compatibility glob：`1211 passed, 10 warnings`；
 - 选定 V1 回归：`380 passed, 8 warnings`；
 - CLI focused acceptance：`49 passed, 8 warnings`，实际只读/维护矩阵全部 exit 0；
 - 40 个 JSON、14 个 JSONL 全部可解析，两次 rebuild write 后 artifact diff 为零；
-- commit-attributed scope guard：56 个 approved full SHA、86 个聚合路径、`31 passed`，未把共享分支并发提交归入 R2A；
-- R1/V1 byte diff 为零，R1 与 R2A 各恰好四个正式项目；四个 R2A pilot 仍为 hypothesis/under_test、零 assessment、无结论、无投资评价。
+- commit-attributed scope guard：57 个 approved full SHA、88 个精确归因路径、`43 passed`，并以 closure seed 约束后续 Task 11 修订只能触及三个 closure 文件；未把共享分支并发提交归入 R2A；
+- 57 个 approved R2A commit 的归因 changed-path 并集不包含 R1/V1；共享 HEAD 存在明确排除的并发 V1 提交，因此不以 `base..HEAD` 声称整棵共享树 byte diff 为零；R1 与 R2A 当前各恰好四个正式项目，四个 R2A pilot 仍为 hypothesis/under_test、零 assessment、无结论、无投资评价。
 
 现有 warning 为非阻塞 deprecation warning，来自 Python 3.14 下的 `py_mini_racer` 和 `jsonschema.RefResolver`，没有新增 R2A warning 类别。完整操作与证据见 `docs/research_operating_layer_v2_r2a.md`。
 

@@ -12,7 +12,7 @@ R2A 的研究层固定为 `industry_research`。它回答“产业怎样运行�
 
 - R1 位于 `artifacts/research_projects/v2/`，保存四个 research-design pilot，是冻结的上游基线。
 - R2A 位于 `artifacts/research_projects/v2_1/`，保存四个独立 Industry Project 及证据获取对象。
-- 每个 R2A version 都以 `upstream_research_versions` 引用指定 R1 version ID 和内容哈希；R2A 不拥有、不改写也不迁移 R1。
+- 每个 R2A version 都以 `upstream_research_refs` 引用指定 R1 version ID 和内容哈希；R2A 不拥有、不改写也不迁移 R1。
 - R2A 的 loader、schema、CLI 和测试都位于 `research_project_v2_1` 命名空间；根 CLI 只增加原始参数委派。
 - R2A 不修改 V1 Theme Research、Technology Industry Catalog、Dashboard、API 或数据库。
 
@@ -206,8 +206,8 @@ R2A 是独立 artifact baseline。本阶段明确禁止：
 
 最终 R2A 验证在 2026-07-19 执行，结果如下：
 
-- R2A focused suite：`966 passed, 10 warnings`；
-- 计划指定的 R1 compatibility glob：`1199 passed, 10 warnings`；该 glob 按 shell 规则同时包含 `v2_1` 测试；
+- R2A focused suite：`978 passed, 10 warnings`；
+- 计划指定的 R1 compatibility glob：`1211 passed, 10 warnings`；该 glob 按 shell 规则同时包含 `v2_1` 测试；
 - 选定 V1 Theme/Company/Catalog/Dashboard regression suite：`380 passed, 8 warnings`；
 - CLI focused acceptance：`49 passed, 8 warnings`；
 - 实际 CLI：list、show、validate、gate、search-plan、audit、rebuild dry-run、第一次 write、第二次 write 均 exit `0`；
@@ -215,10 +215,13 @@ R2A 是独立 artifact baseline。本阶段明确禁止：
 - `40` 个 JSON 与 `14` 个 JSONL 全部通过 `jq empty`；
 - 正式 projects/index/discovery/document fixtures 的 downstream object key scan 为零；recommendation term 的文字命中只存在于 `scope.excluded_scope` 和 Search Plan `excluded_terms`，其语义是禁止输出和过滤来源，不是推荐内容；
 - 两次 `rebuild-index --write` 后，`git diff --exit-code -- artifacts/research_projects/v2_1` 为 `0`；
-- scope guard 固定 `56` 个 approved full SHA，逐 commit 执行 `git cat-file` 和 `git diff-tree`，聚合 `86` 个 changed path，`31 passed`；共享分支并发提交不通过 `base..HEAD` 被吸收；
-- 从 Task 1 parent 到当前 HEAD，R1 `v2`、V1 Theme Decomposition 与 Technology Industry Catalog byte diff 为零；R1 仍恰好四个项目；
+- scope guard 固定 `57` 个 approved full SHA，逐 commit 执行 `git cat-file`、祖先检查和 `git diff-tree`，形成 `88` 个精确 approved changed path，focused 结果为 `43 passed`；forbidden policy 先于精确集合判断，任意未批准的 invalid fixture、API、migration、数据库、rating、price 或 valuation 路径均失败；
+- closure commit 本身无法预先包含未来修订 commit hash，因此固定 `CLOSURE_SEED=3b19e71f83266b31db8cd5b4d95374770d9741c9`。scope guard 另外审计 `seed..HEAD` 中所有 R2A monitored path，只允许运维文档、roadmap 和 scope-guard test 三个 Task 11 closure 文件；任何其他 R2A 路径变化都会失败，共享分支的无关并发路径不会被误归因；
+- 57 个 approved R2A commit 的归因 changed-path 并集不包含 R1 `v2`、V1 Theme Decomposition 或 Technology Industry Catalog。共享 HEAD 存在明确排除的并发 V1 提交，因此验证不再使用 `Task 1 parent..HEAD` 声称共享树 byte diff 为零；R1 当前仍恰好四个正式项目；
 - v2.1 index 恰好四个 `industry_research` 项目；每个 version 都通过 loader/lineage audit，引用预期 R1 version ID 和 SHA-256；
 - 四个项目均只有 `hypothesis/under_test` claim、零 Industry Evidence Assessment、`conclusion_status=unavailable`、`investment_status=not_assessed`；
 - scope guard 与提交内容确认没有生产 migration、API、Dashboard、数据库、company rating 或 stock rating 改动。
 
 warning 均为既有的 Python 3.14 `py_mini_racer` layout deprecation 与 `jsonschema.RefResolver` deprecation；R2A 没有引入新的 warning 类别。上述证据只关闭 R2A，不表示 R2B、R3、R4 或 R5 已开始或完成。
+
+R2A 当前实现的是 evidence artifact storage/lookup 和上游 R1 version/hash drift validation。`external_document` / `dataset` namespace 可被 schema 引用，但独立 resolver 与 reference-drift update event 尚未实现，属于 future/R2B+，不得按 R2A 已交付能力操作。
