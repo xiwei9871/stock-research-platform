@@ -174,11 +174,21 @@ FOR UPDATE
 
 
 RETIRE_ABSENT_STRATEGY_PUBLICATION_CONTRACTS_SQL = """
-UPDATE ops.strategy_publication_contract
+UPDATE ops.strategy_publication_contract AS contract
 SET active = false,
     updated_at = now()
-WHERE active
-  AND NOT (contract_id = ANY(%(current_contract_ids)s::text[]))
+WHERE contract.active
+  AND NOT EXISTS (
+      SELECT 1
+      FROM unnest(
+          %(current_strategy_ids)s::text[],
+          %(current_profiles)s::text[],
+          %(current_contract_ids)s::text[]
+      ) AS current_contract(strategy_id, profile, contract_id)
+      WHERE current_contract.strategy_id = contract.strategy_id
+        AND current_contract.profile = contract.profile
+        AND current_contract.contract_id = contract.contract_id
+  )
 """
 
 
@@ -288,6 +298,12 @@ def install_strategy_publication_schema(cursor: Any) -> None:
     cursor.execute(
         RETIRE_ABSENT_STRATEGY_PUBLICATION_CONTRACTS_SQL,
         {
+            "current_strategy_ids": [
+                params["strategy_id"] for params in seed_rows
+            ],
+            "current_profiles": [
+                params["profile"] for params in seed_rows
+            ],
             "current_contract_ids": [
                 params["contract_id"] for params in seed_rows
             ]

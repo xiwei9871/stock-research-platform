@@ -161,6 +161,12 @@ def test_apply_schema_and_seed_is_idempotent_with_one_transaction(monkeypatch):
     assert first_calls[2] == (
         store.RETIRE_ABSENT_STRATEGY_PUBLICATION_CONTRACTS_SQL,
         {
+            "current_strategy_ids": [
+                contract.strategy_id for contract in store.iter_publication_contracts()
+            ],
+            "current_profiles": [
+                contract.profile for contract in store.iter_publication_contracts()
+            ],
             "current_contract_ids": [
                 contract.contract_id for contract in store.iter_publication_contracts()
             ]
@@ -189,7 +195,11 @@ def test_installer_retires_every_active_contract_absent_from_registry_before_see
         (store.LOCK_ACTIVE_STRATEGY_PUBLICATION_CONTRACTS_SQL, None),
         (
             store.RETIRE_ABSENT_STRATEGY_PUBLICATION_CONTRACTS_SQL,
-            {"current_contract_ids": [current.contract_id]},
+            {
+                "current_strategy_ids": [current.strategy_id],
+                "current_profiles": [current.profile],
+                "current_contract_ids": [current.contract_id],
+            },
         ),
     ]
     normalized_retirement = " ".join(
@@ -198,11 +208,48 @@ def test_installer_retires_every_active_contract_absent_from_registry_before_see
     normalized_lock = " ".join(
         store.LOCK_ACTIVE_STRATEGY_PUBLICATION_CONTRACTS_SQL.lower().split()
     )
-    assert "where active" in normalized_retirement
-    assert "contract_id = any" in normalized_retirement
+    assert "where contract.active" in normalized_retirement
+    assert "unnest" in normalized_retirement
+    assert "current_contract.strategy_id = contract.strategy_id" in normalized_retirement
+    assert "current_contract.profile = contract.profile" in normalized_retirement
+    assert "current_contract.contract_id = contract.contract_id" in normalized_retirement
     assert "order by strategy_id, profile, contract_id for update" in normalized_lock
     assert cursor.calls[3][0] == store.DEACTIVATE_SUPERSEDED_STRATEGY_PUBLICATION_SQL
     assert cursor.calls[4][0] == store.UPSERT_STRATEGY_PUBLICATION_CONTRACT_SQL
+
+
+def test_installer_retires_absent_tuple_even_when_contract_id_matches_current(
+    monkeypatch,
+):
+    current = get_publication_contract("mid_trend")
+    current_key = (current.strategy_id, current.profile, current.contract_id)
+    removed_key = ("removed_strategy", "retired", current.contract_id)
+
+    class RetirementStateCursor(RecordingCursor):
+        def __init__(self):
+            super().__init__()
+            self.active_keys = {current_key, removed_key}
+
+        def execute(self, sql, params=None):
+            super().execute(sql, params)
+            if sql != store.RETIRE_ABSENT_STRATEGY_PUBLICATION_CONTRACTS_SQL:
+                return
+            registry_keys = set(
+                zip(
+                    params["current_strategy_ids"],
+                    params["current_profiles"],
+                    params["current_contract_ids"],
+                    strict=True,
+                )
+            )
+            self.active_keys.intersection_update(registry_keys)
+
+    monkeypatch.setattr(store, "iter_publication_contracts", lambda: (current,))
+    cursor = RetirementStateCursor()
+
+    store.install_strategy_publication_schema(cursor)
+
+    assert cursor.active_keys == {current_key}
 
 
 def test_verify_contracts_accepts_valid_rejects_invalid_and_always_rolls_back(monkeypatch):

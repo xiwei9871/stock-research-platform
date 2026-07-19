@@ -269,11 +269,11 @@ def test_unregistered_strategy_module_is_rejected_and_does_not_persist():
     _assert_manifest_absent(params["manifest_id"])
 
 
-def test_apply_retires_contract_removed_from_registry_and_blocks_future_publication():
+def test_apply_retires_removed_tuple_sharing_current_contract_id_and_blocks_publication():
     strategy_id = "retired_contract_probe"
     module = "strategy_retired_contract_probe"
     profile = "integration"
-    contract_id = "retired_contract_probe:integration:v1"
+    contract_id = get_publication_contract("mid_trend").contract_id
     identity = {
         "strategy_id": strategy_id,
         "contract_id": contract_id,
