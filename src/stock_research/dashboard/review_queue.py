@@ -424,6 +424,8 @@ def _manifest_strategy_artifact_path_valid(module: dict[str, Any]) -> bool:
         return False
     if artifact_path.name != "review.csv":
         return False
+    if not _regular_publication_file(artifact_path):
+        return False
     trusted_root = _trusted_strategy_output_root()
     version_dir = artifact_path.parent
     if not _trusted_version_path(artifact_path, trusted_root=trusted_root):
@@ -451,6 +453,7 @@ def _manifest_strategy_artifact_path_valid(module: dict[str, Any]) -> bool:
             if (
                 declared_path.name != expected_name
                 or declared_path.parent != version_dir
+                or not _regular_publication_file(declared_path)
                 or not _trusted_version_path(declared_path, trusted_root=trusted_root)
             ):
                 return False
@@ -465,6 +468,10 @@ def _safe_publish_id(value: object) -> bool:
         publish_id not in {"", ".", ".."}
         and re.fullmatch(r"[A-Za-z0-9._-]+", publish_id)
     )
+
+
+def _regular_publication_file(path: Path) -> bool:
+    return path.exists() and path.is_file() and not path.is_symlink()
 
 
 def _trusted_strategy_output_root() -> Path:

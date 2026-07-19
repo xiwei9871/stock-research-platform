@@ -1,3 +1,6 @@
+import os
+from pathlib import Path
+
 import pytest
 from types import SimpleNamespace
 
@@ -182,6 +185,9 @@ def test_manifest_strategy_rows_use_versioned_artifact_not_stale_root_mirror(tmp
         "summary_path": str(version_dir / "summary.json"),
         "publication_manifest_path": str(version_dir / "publication_manifest.json"),
     }
+    for key, path in output_paths.items():
+        if key != "review_path":
+            Path(path).write_text("{}\n", encoding="utf-8")
     summary = {
         "engine_version": "mid_trend_v1",
         "top_n": 5,
@@ -416,6 +422,16 @@ def _v1_versioned_manifest(tmp_path):
         "review_path": version_dir / "review.csv",
         "summary_path": version_dir / "summary.json",
     }
+    version_dir.mkdir(parents=True, exist_ok=True)
+    paths["equity_path"].write_text("trade_date,equity\n", encoding="utf-8")
+    paths["positions_path"].write_text("trade_date,asset_id\n", encoding="utf-8")
+    paths["trades_path"].write_text("trade_date,asset_id\n", encoding="utf-8")
+    paths["review_path"].write_text(
+        "trade_date,asset_id,rank,strategy_id\n2026-07-18,CN:SH:600002,1,mid_trend\n",
+        encoding="utf-8",
+    )
+    paths["summary_path"].write_text("{}\n", encoding="utf-8")
+    (version_dir / "publication_manifest.json").write_text("{}\n", encoding="utf-8")
     identity = build_publication_identity(get_publication_contract("mid_trend"))
     return {
         "module": "strategy_mid_trend",
@@ -434,6 +450,65 @@ def _v1_versioned_manifest(tmp_path):
             "summary": {"publication_identity": identity},
         },
     }
+
+
+@pytest.mark.parametrize(
+    "path_key",
+    (
+        "equity_path",
+        "positions_path",
+        "trades_path",
+        "review_path",
+        "summary_path",
+        "publication_manifest_path",
+    ),
+)
+def test_v1_manifest_rejects_each_missing_required_file(
+    path_key, tmp_path, monkeypatch
+):
+    monkeypatch.setattr(review_queue, "SETTINGS", SimpleNamespace(output_root=tmp_path))
+    module = _v1_versioned_manifest(tmp_path)
+    module.update({"status": "success", "trade_date": "2026-07-18", "run_id": "r1"})
+    Path(module["metadata"]["output_paths"][path_key]).unlink()
+    monkeypatch.setattr(review_queue, "load_latest_data_run_manifest", lambda trade_date: [module])
+    monkeypatch.setattr(review_queue, "_manifest_strategy_contract_valid", lambda candidate: True)
+
+    rows, blocked = review_queue._load_strategy_manifest_snapshot(
+        trade_date="2026-07-18",
+        limit=50,
+    )
+
+    assert rows == []
+    assert blocked == {"mid_trend"}
+
+
+@pytest.mark.parametrize("file_kind", ("directory", "fifo", "symlink"))
+def test_v1_manifest_rejects_non_regular_required_file(
+    file_kind, tmp_path, monkeypatch
+):
+    monkeypatch.setattr(review_queue, "SETTINGS", SimpleNamespace(output_root=tmp_path))
+    module = _v1_versioned_manifest(tmp_path)
+    module.update({"status": "success", "trade_date": "2026-07-18", "run_id": "r1"})
+    equity_path = Path(module["metadata"]["output_paths"]["equity_path"])
+    equity_path.unlink()
+    if file_kind == "directory":
+        equity_path.mkdir()
+    elif file_kind == "fifo":
+        os.mkfifo(equity_path)
+    else:
+        external = tmp_path / "external-equity.csv"
+        external.write_text("trade_date,equity\n", encoding="utf-8")
+        equity_path.symlink_to(external)
+    monkeypatch.setattr(review_queue, "load_latest_data_run_manifest", lambda trade_date: [module])
+    monkeypatch.setattr(review_queue, "_manifest_strategy_contract_valid", lambda candidate: True)
+
+    rows, blocked = review_queue._load_strategy_manifest_snapshot(
+        trade_date="2026-07-18",
+        limit=50,
+    )
+
+    assert rows == []
+    assert blocked == {"mid_trend"}
 
 
 @pytest.mark.parametrize(
