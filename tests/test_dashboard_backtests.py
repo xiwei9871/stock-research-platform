@@ -267,6 +267,89 @@ def test_official_replay_minimal_request_passes_official_defaults_to_adapter(
     assert attached["publication_identity"]["strategy_id"] == strategy_id
 
 
+def test_official_replay_backfills_missing_canonical_result_config(monkeypatch):
+    def run_replay(params, config):
+        result = _official_result("mid_trend")
+        result.pop("config")
+        return result
+
+    monkeypatch.setitem(
+        backtests.STRATEGY_BACKTEST_REGISTRY,
+        "mid_trend",
+        SimpleNamespace(run_replay=run_replay),
+    )
+
+    attached = backtests.run_replay_backtest(
+        {
+            "strategy_id": "mid_trend",
+            "start_date": "2026-01-01",
+            "end_date": "2026-01-02",
+        }
+    )
+
+    contract = get_publication_contract("mid_trend")
+    assert {
+        key: attached["config"][key]
+        for key in contract.normalized_run_config
+    } == dict(contract.normalized_run_config)
+
+
+def test_official_replay_preserves_conflicting_returned_config_for_validation(monkeypatch):
+    def run_replay(params, config):
+        result = _official_result("mid_trend")
+        result["config"] = {"max_position_weight": 0.5}
+        return result
+
+    monkeypatch.setitem(
+        backtests.STRATEGY_BACKTEST_REGISTRY,
+        "mid_trend",
+        SimpleNamespace(run_replay=run_replay),
+    )
+
+    with pytest.raises(ValueError, match="max_position_weight"):
+        backtests.run_replay_backtest(
+            {
+                "strategy_id": "mid_trend",
+                "start_date": "2026-01-01",
+                "end_date": "2026-01-02",
+            }
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("contract_id", "legacy:contract"),
+        ("contract_profile", "legacy_profile"),
+        ("contract_variant", "legacy_variant"),
+    ],
+)
+def test_official_replay_preserves_conflicting_returned_contract_metadata(
+    monkeypatch,
+    field,
+    value,
+):
+    def run_replay(params, config):
+        result = _official_result("mid_trend")
+        result["config"] = {field: value}
+        return result
+
+    monkeypatch.setitem(
+        backtests.STRATEGY_BACKTEST_REGISTRY,
+        "mid_trend",
+        SimpleNamespace(run_replay=run_replay),
+    )
+
+    with pytest.raises(ValueError, match=field):
+        backtests.run_replay_backtest(
+            {
+                "strategy_id": "mid_trend",
+                "start_date": "2026-01-01",
+                "end_date": "2026-01-02",
+            }
+        )
+
+
 def test_official_replay_preserves_explicit_conflict_and_rejects_result(monkeypatch):
     received: dict[str, Any] = {}
 

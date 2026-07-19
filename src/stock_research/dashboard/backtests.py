@@ -1205,8 +1205,21 @@ def _with_contract_config(result: dict[str, Any], run_config: dict[str, Any]) ->
     next_result = dict(result)
     config = dict(next_result.get("config") or {})
     for key, value in run_config.items():
-        if str(key).startswith("contract_"):
+        if str(key).startswith("contract_") and key not in config:
             config[key] = value
+    try:
+        from stock_research.strategy_publication_contracts import get_publication_contract
+
+        publication_contract = get_publication_contract(
+            _official_result_strategy_id(next_result),
+            profile=str(run_config.get("contract_profile") or "balanced"),
+        )
+    except (KeyError, ValueError):
+        publication_contract = None
+    if publication_contract is not None:
+        for key in publication_contract.normalized_run_config:
+            if key not in config and key in run_config:
+                config[key] = deepcopy(run_config[key])
     next_result["config"] = config
     summary = dict(next_result.get("summary") or {})
     summary_fields = {
