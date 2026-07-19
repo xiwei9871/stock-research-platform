@@ -600,7 +600,7 @@ def test_rejects_symlinked_managed_directories(tmp_path: Path, managed: str) -> 
     evidence = effective.root / "evidence"
     evidence.mkdir(parents=True)
     (evidence / managed).symlink_to(outside, target_is_directory=True)
-    assert "STORAGE" in error_code(lambda: snapshot_candidate(
+    assert "PATH_VIOLATION" in error_code(lambda: snapshot_candidate(
         candidate(), transport=Transport([response()]), resolver=Resolver(), layout=effective,
         fetched_at=FETCHED_AT, provenance=PROVENANCE,
     ))
@@ -654,7 +654,7 @@ def test_raw_live_verification_detects_same_inode_content_mutation(
             (path / final_name).write_bytes(b"corrupt-after-first-compare")
         return original(path, held_chain, final_name, held_final, expected)
     monkeypatch.setattr(module, "_verify_live", mutate_then_verify)
-    assert "STORAGE" in error_code(lambda: snapshot_candidate(
+    assert "PATH_VIOLATION" in error_code(lambda: snapshot_candidate(
         candidate(), transport=Transport([response()]), resolver=Resolver(),
         layout=layout(tmp_path), fetched_at=FETCHED_AT, provenance=PROVENANCE,
     ))
@@ -699,7 +699,7 @@ def test_raw_binding_failure_rolls_back_only_a_created_final(
         lambda path, *args: False if path.parent.name == "raw" else original(path, *args),
     )
     effective = layout(tmp_path)
-    assert "STORAGE" in error_code(lambda: snapshot_candidate(
+    assert "PATH_VIOLATION" in error_code(lambda: snapshot_candidate(
         candidate(), transport=Transport([response()]), resolver=Resolver(),
         layout=effective, fetched_at=FETCHED_AT, provenance=PROVENANCE,
     ))
@@ -722,7 +722,7 @@ def test_raw_binding_failure_never_deletes_reused_existing_raw(
         "_verify_live",
         lambda path, *args: False if path.parent.name == "raw" else original(path, *args),
     )
-    assert "STORAGE" in error_code(lambda: snapshot_candidate(
+    assert "PATH_VIOLATION" in error_code(lambda: snapshot_candidate(
         candidate(), transport=Transport([response()]), resolver=Resolver(),
         layout=effective, fetched_at=FETCHED_AT, provenance=PROVENANCE,
     ))
@@ -878,7 +878,7 @@ def test_raw_primary_binding_error_survives_held_close_failure(
             candidate(), transport=Transport([response()]), resolver=Resolver(),
             layout=layout(tmp_path), fetched_at=FETCHED_AT, provenance=PROVENANCE,
         )
-    assert exc_info.value.code == "RESEARCH_PROJECT_V2_1_SNAPSHOT_STORAGE_ERROR"
+    assert exc_info.value.code == "RESEARCH_PROJECT_V2_1_SNAPSHOT_PATH_VIOLATION"
     assert any("cleanup" in note for note in getattr(exc_info.value, "__notes__", []))
 
 

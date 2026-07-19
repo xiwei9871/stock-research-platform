@@ -142,6 +142,10 @@ def _storage_failed(reason: str, **details: object) -> ResearchProjectV2Error:
     return _error("SNAPSHOT_STORAGE_FAILED", reason, **details)
 
 
+def _path_violation(reason: str, **details: object) -> ResearchProjectV2Error:
+    return _error("SNAPSHOT_PATH_VIOLATION", reason, **details)
+
+
 def _immutability(reason: str, **details: object) -> ResearchProjectV2Error:
     return _error("SNAPSHOT_IMMUTABILITY_VIOLATION", reason, **details)
 
@@ -592,7 +596,7 @@ def _open_or_create_dir(parent_fd: int, name: str) -> int:
     except FileExistsError:
         pass
     except OSError as exc:
-        raise _storage_error("unsafe managed path", component=name) from exc
+        raise _path_violation("unsafe managed path", component=name) from exc
     if created:
         try:
             os.fsync(parent_fd)
@@ -606,19 +610,19 @@ def _open_or_create_dir(parent_fd: int, name: str) -> int:
     except OSError as exc:
         if "descriptor" in locals():
             os.close(descriptor)
-        raise _storage_error("unsafe managed path", component=name) from exc
+        raise _path_violation("unsafe managed path", component=name) from exc
 
 
 def _open_dir_chain(path: Path) -> tuple[list[int], list[str]]:
     if not path.is_absolute():
-        raise _storage_error("managed path must be absolute", path=str(path))
+        raise _path_violation("managed path must be absolute", path=str(path))
     fds: list[int] = []
     names: list[str] = []
     try:
         fds.append(os.open("/", _directory_flags()))
         for name in path.parts[1:]:
             if name in {"", ".", ".."}:
-                raise _storage_error("unsafe managed path", component=name)
+                raise _path_violation("unsafe managed path", component=name)
             fds.append(_open_or_create_dir(fds[-1], name))
             names.append(name)
         return fds, names
@@ -706,7 +710,7 @@ def _open_regular(directory_fd: int, name: str) -> tuple[int, os.stat_result]:
     except OSError as exc:
         if "descriptor" in locals():
             os.close(descriptor)
-        raise _storage_error("unsafe managed file", target=name) from exc
+        raise _path_violation("unsafe managed file", target=name) from exc
 
 
 def _unlink_temp_if_bound(directory_fd: int, name: str, expected: os.stat_result) -> None:
@@ -883,7 +887,7 @@ def _new_raw_temp(layout: LayeredResearchLayout) -> _RawTemp:
     try:
         chain, names = _open_dir_chain(layout.evidence_raw_dir / ".tmp")
         if not _chain_bound(chain, names):
-            raise _storage_error("unsafe raw temporary directory")
+            raise _path_violation("unsafe raw temporary directory")
         fd, name = _create_temp(chain[-1], "snapshot")
         return _RawTemp(chain, names, chain[-1], fd, name)
     except BaseException as primary_error:
@@ -913,11 +917,11 @@ def _publish_raw(temp: _RawTemp, *, layout: LayeredResearchLayout, digest: str, 
         chain, names = _open_dir_chain(final_dir)
         final_directory_stat = os.fstat(chain[-1])
         if not _chain_bound(chain, names) or not _chain_bound(temp.chain, temp.names):
-            raise _storage_error("unsafe raw directory binding")
+            raise _path_violation("unsafe raw directory binding")
         temp.inode = os.fstat(temp.fd)
         entry = os.stat(temp.name, dir_fd=temp.directory_fd, follow_symlinks=False)
         if not stat.S_ISREG(temp.inode.st_mode) or not _same_inode(temp.inode, entry):
-            raise _storage_error("raw temporary binding changed")
+            raise _path_violation("raw temporary binding changed")
         try:
             os.link(temp.name, final_name, src_dir_fd=temp.directory_fd, dst_dir_fd=chain[-1], follow_symlinks=False)
             created = True
@@ -928,7 +932,7 @@ def _publish_raw(temp: _RawTemp, *, layout: LayeredResearchLayout, digest: str, 
             raise _storage_error("raw publication failed", path=str(target)) from exc
         held_fd, held = _open_regular(chain[-1], final_name)
         if created and not _same_inode(held, temp.inode):
-            raise _storage_error("published raw inode changed", path=str(target))
+            raise _path_violation("published raw inode changed", path=str(target))
         if os.fstat(held_fd).st_size != temp.inode.st_size:
             raise _immutability("raw content-address conflict", path=str(target))
         os.lseek(temp.fd, 0, os.SEEK_SET)
@@ -943,7 +947,7 @@ def _publish_raw(temp: _RawTemp, *, layout: LayeredResearchLayout, digest: str, 
         if not _chain_bound(chain, names) or not _verify_live(
             final_dir, chain, final_name, held, ("sha256", digest)
         ):
-            raise _storage_error("raw final binding changed", path=str(target))
+            raise _path_violation("raw final binding changed", path=str(target))
         result = target
     except BaseException as exc:
         if isinstance(exc, (ResearchProjectV2Error, *_CONTROL_FLOW_EXCEPTIONS)) or not isinstance(exc, Exception):
@@ -1072,7 +1076,7 @@ def _publish_bytes(directory: Path, final_name: str, data: bytes) -> Path:
     try:
         chain, names = _open_dir_chain(directory)
         if not _chain_bound(chain, names):
-            raise _storage_error("unsafe metadata directory binding")
+            raise _path_violation("unsafe metadata directory binding")
         temp_fd, temp_name = _create_temp(chain[-1], final_name)
         try:
             _write_all(temp_fd, data)
@@ -1090,7 +1094,7 @@ def _publish_bytes(directory: Path, final_name: str, data: bytes) -> Path:
             raise _storage_error("metadata publication failed", path=str(target)) from exc
         held_fd, held = _open_regular(chain[-1], final_name)
         if created and not _same_inode(held, temp_inode):
-            raise _storage_error("published metadata inode changed", path=str(target))
+            raise _path_violation("published metadata inode changed", path=str(target))
         try:
             existing_data = _read_all(held_fd)
         except OSError as exc:
@@ -1105,7 +1109,7 @@ def _publish_bytes(directory: Path, final_name: str, data: bytes) -> Path:
             raise _storage_failed("metadata temporary cleanup failed") from exc
         temp_name = None
         if not _chain_bound(chain, names) or not _verify_live(directory, chain, final_name, held, data):
-            raise _storage_error("metadata final binding changed", path=str(target))
+            raise _path_violation("metadata final binding changed", path=str(target))
         return target
     except BaseException as exc:
         primary_error = exc

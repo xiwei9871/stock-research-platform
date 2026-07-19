@@ -719,6 +719,7 @@ def _exit_for_domain_error(
         "RESEARCH_PROJECT_V2_1_DISCOVERY_IMMUTABILITY_VIOLATION",
         "RESEARCH_PROJECT_V2_1_NORMALIZE_IMMUTABILITY_VIOLATION",
         "RESEARCH_PROJECT_V2_1_SNAPSHOT_IMMUTABILITY_VIOLATION",
+        "RESEARCH_PROJECT_V2_1_SNAPSHOT_PATH_VIOLATION",
         "RESEARCH_PROJECT_V2_1_PATH_VIOLATION",
         "RESEARCH_PROJECT_V2_1_STORAGE_ERROR",
     }
@@ -741,19 +742,19 @@ def _exit_for_domain_error(
         return 6
     if code in integrity:
         return 5
+    if code in {
+        "RESEARCH_PROJECT_V2_1_SCHEMA_INVALID",
+        "RESEARCH_PROJECT_V2_1_SCHEMA_NOT_FOUND",
+        "RESEARCH_PROJECT_V2_1_SEMANTIC_INVALID",
+        "RESEARCH_PROJECT_V2_1_CLI_ARGUMENT_INVALID",
+        "RESEARCH_PROJECT_V2_1_CLI_INPUT_INVALID",
+    }:
+        return 2
+    if command == "search-plan" and code == "RESEARCH_PROJECT_V2_1_SEARCH_PLAN_INVALID":
+        return 3
     if command == "audit" and code in evidence_audit:
         return 3
-    if (
-        command == "search-plan"
-        and code == "RESEARCH_PROJECT_V2_1_SEARCH_PLAN_INVALID"
-    ):
-        return 3
     if command == "gate":
-        if code in {
-            "RESEARCH_PROJECT_V2_1_SCHEMA_INVALID",
-            "RESEARCH_PROJECT_V2_1_SEMANTIC_INVALID",
-        }:
-            return 2
         return 4
     if command == "parse" and code in parser:
         return 9
