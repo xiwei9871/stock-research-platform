@@ -1007,10 +1007,11 @@ def test_writer_rejects_symlinked_parent_without_external_write(tmp_path: Path) 
         provenance=PROVENANCE,
     )
 
-    assert_discovery_error(
+    error = assert_discovery_error(
         lambda: write_discovery_batch(batch, layout=layout),
         reason="unsafe managed path",
     )
+    assert error.code == "RESEARCH_PROJECT_V2_1_DISCOVERY_PATH_VIOLATION"
     assert list(outside.iterdir()) == []
 
 
@@ -1031,10 +1032,11 @@ def test_writer_failure_is_stable_and_leaves_no_partial_file(
 
     monkeypatch.setattr(discovery_module.os, "link", fail_link)
 
-    assert_discovery_error(
+    error = assert_discovery_error(
         lambda: write_discovery_batch(batch, layout=layout),
         reason="discovery batch write failed",
     )
+    assert error.code == "RESEARCH_PROJECT_V2_1_DISCOVERY_INVALID"
     batch_dir = layout.evidence_discovery_dir / batch["search_plan_id"]
     assert list(batch_dir.iterdir()) == []
 

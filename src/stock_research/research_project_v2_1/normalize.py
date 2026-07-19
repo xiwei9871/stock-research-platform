@@ -57,6 +57,14 @@ def _storage(reason: str, **details: object) -> ResearchProjectV2Error:
     )
 
 
+def _path_violation(reason: str, **details: object) -> ResearchProjectV2Error:
+    return ResearchProjectV2Error(
+        f"Normalized document path violation: {reason}",
+        code="RESEARCH_PROJECT_V2_1_NORMALIZE_PATH_VIOLATION",
+        details={"reason": reason, **details},
+    )
+
+
 def _parse_limit(reason: str, **details: object) -> ResearchProjectV2Error:
     return ResearchProjectV2Error(
         f"Document parse limit exceeded: {reason}",
@@ -108,15 +116,15 @@ def _read_raw(artifact: dict[str, Any], layout: LayeredResearchLayout, limits: P
         raise _error("artifact byte_count is invalid")
     if not isinstance(raw_value, str):
         raise _error("artifact raw_path is invalid")
+    relative = PurePosixPath(raw_value)
+    if relative.is_absolute() or any(part in {"", ".", ".."} for part in relative.parts):
+        raise _path_violation("artifact raw_path is unsafe")
     expected = f"evidence/raw/{digest[:2]}/{digest}.{_EXTENSIONS[media_type]}"
     if raw_value != expected:
         raise _error("artifact raw_path is not canonical", raw_path=raw_value)
-    relative = PurePosixPath(raw_value)
-    if relative.is_absolute() or any(part in {"", ".", ".."} for part in relative.parts):
-        raise _error("artifact raw_path is unsafe")
     root = layout.root
     if not root.is_absolute():
-        raise _error("layout root must be absolute", root=str(root))
+        raise _path_violation("layout root must be absolute", root=str(root))
     descriptors: list[int] = []
     names: list[str] = []
     file_fd: int | None = None
@@ -131,7 +139,7 @@ def _read_raw(artifact: dict[str, Any], layout: LayeredResearchLayout, limits: P
         opened = os.fstat(file_fd)
         entry = os.stat(relative.name, dir_fd=descriptors[-1], follow_symlinks=False)
         if not stat.S_ISREG(opened.st_mode) or not _same_inode(opened, entry):
-            raise _error("raw artifact is not a bound regular file")
+            raise _path_violation("raw artifact is not a bound regular file")
         if opened.st_size > limits.max_bytes:
             raise _parse_limit("document bytes", max_bytes=limits.max_bytes)
         if opened.st_size != byte_count:
@@ -145,19 +153,19 @@ def _read_raw(artifact: dict[str, Any], layout: LayeredResearchLayout, limits: P
             or opened.st_mtime_ns != after_read.st_mtime_ns
             or not _chain_bound(descriptors, names)
         ):
-            raise _error("raw artifact binding changed while reading")
+            raise _path_violation("raw artifact binding changed while reading")
         live_descriptors.append(os.open("/", _DIR_FLAGS))
         for index, component in enumerate(names, start=1):
             live_descriptors.append(os.open(component, _DIR_FLAGS, dir_fd=live_descriptors[-1]))
             if not _same_inode(os.fstat(descriptors[index]), os.fstat(live_descriptors[index])):
-                raise _error("raw directory binding changed while reading", component=component)
+                raise _path_violation("raw directory binding changed while reading", component=component)
         live_file_fd = os.open(relative.name, _FILE_FLAGS, dir_fd=live_descriptors[-1])
         if not _same_inode(after_read, os.fstat(live_file_fd)):
-            raise _error("raw file binding changed while reading")
+            raise _path_violation("raw file binding changed while reading")
         live_digest = sha256()
         live_data = _read_fd(live_file_fd, max_bytes=limits.max_bytes, digest=live_digest)
         if live_data != data or live_digest.digest() != held_digest.digest():
-            raise _error("raw file content changed while verifying live binding")
+            raise _path_violation("raw file content changed while verifying live binding")
         live_after = os.fstat(live_file_fd)
         live_entry_after = os.stat(
             relative.name,
@@ -170,11 +178,13 @@ def _read_raw(artifact: dict[str, Any], layout: LayeredResearchLayout, limits: P
             or not _same_inode(live_after, after_read)
             or live_after.st_size != len(live_data)
         ):
-            raise _error("raw live binding changed during verification")
+            raise _path_violation("raw live binding changed during verification")
     except ResearchProjectV2Error:
         raise
     except OSError as exc:
-        raise _error("raw artifact cannot be read safely", raw_path=raw_value) from exc
+        if exc.errno in {errno.ELOOP, errno.ENOTDIR}:
+            raise _path_violation("raw artifact cannot be read safely", raw_path=raw_value) from exc
+        raise _storage("raw artifact read failed", raw_path=raw_value) from exc
     finally:
         if file_fd is not None:
             os.close(file_fd)
@@ -365,13 +375,13 @@ def validate_normalized_document(document: dict[str, Any]) -> dict[str, Any]:
 
 def _open_absolute_directory(path: Path) -> tuple[list[int], list[str]]:
     if not path.is_absolute():
-        raise _storage("normalized directory must be absolute", path=str(path))
+        raise _path_violation("normalized directory must be absolute", path=str(path))
     descriptors = [os.open("/", _DIR_FLAGS)]
     names: list[str] = []
     try:
         for component in path.parts[1:]:
             if component in {"", ".", ".."}:
-                raise _storage("unsafe normalized directory component", component=component)
+                raise _path_violation("unsafe normalized directory component", component=component)
             try:
                 os.mkdir(component, mode=0o700, dir_fd=descriptors[-1])
                 os.fsync(descriptors[-1])
@@ -437,7 +447,7 @@ def _open_private_retired_directory(directory_fd: int) -> int:
     except OSError as exc:
         if "descriptor" in locals():
             os.close(descriptor)
-        raise _storage("retired directory cannot be opened safely") from exc
+        raise _path_violation("retired directory cannot be opened safely") from exc
 
 
 def _read_named_regular(directory_fd: int, name: str) -> tuple[bytes, os.stat_result]:
@@ -527,9 +537,9 @@ def write_normalized_document(
         except ResearchProjectV2Error:
             raise
         except OSError as exc:
-            raise _storage("unsafe normalized directory", path=str(directory)) from exc
+            raise _path_violation("unsafe normalized directory", path=str(directory)) from exc
         if not _chain_bound(descriptors, names):
-            raise _storage("normalized directory binding changed", path=str(directory))
+            raise _path_violation("normalized directory binding changed", path=str(directory))
         directory_fd = descriptors[-1]
         _require_private_directory(directory_fd, component="normalized")
         retired_fd = _open_private_retired_directory(directory_fd)
@@ -550,7 +560,7 @@ def write_normalized_document(
         _write_all(temporary_fd, data)
         temporary_stat = os.fstat(temporary_fd)
         if not _name_matches_inode(directory_fd, temporary_name, temporary_stat):
-            raise _storage("temporary normalized document binding changed")
+            raise _path_violation("temporary normalized document binding changed")
         try:
             os.link(
                 temporary_name,
@@ -566,11 +576,11 @@ def write_normalized_document(
             try:
                 existing, _ = _read_named_regular(directory_fd, final_name)
             except OSError as exc:
-                raise _storage("unsafe existing normalized document", path=str(target)) from exc
+                raise _path_violation("unsafe existing normalized document", path=str(target)) from exc
             if existing != data:
                 raise _immutability("immutable normalized path conflict", path=str(target))
         if not _chain_bound(descriptors, names):
-            raise _storage("normalized directory binding changed", path=str(directory))
+            raise _path_violation("normalized directory binding changed", path=str(directory))
         try:
             verified, final_stat = _read_named_regular(directory_fd, final_name)
         except OSError as exc:
@@ -580,7 +590,7 @@ def write_normalized_document(
         if not _unlink_if_inode(
             directory_fd, retired_fd, temporary_name, temporary_stat
         ):
-            raise _storage("temporary normalized document binding changed during cleanup")
+            raise _path_violation("temporary normalized document binding changed during cleanup")
         temporary_name = None
         os.close(temporary_fd)
         temporary_fd = None
@@ -594,7 +604,7 @@ def write_normalized_document(
             or not _same_inode(held_before, final_stat)
             or not _same_inode(held_before, held_entry_before)
         ):
-            raise _storage("held normalized document changed", path=str(target))
+            raise _path_violation("held normalized document changed", path=str(target))
         held_data = _read_fd(held_final_fd)
         held = os.fstat(held_final_fd)
         held_entry_after = os.stat(
@@ -609,20 +619,20 @@ def write_normalized_document(
             or held_before.st_mtime_ns != held.st_mtime_ns
             or held.st_size != len(held_data)
         ):
-            raise _storage("held normalized document changed", path=str(target))
+            raise _path_violation("held normalized document changed", path=str(target))
         live_descriptors, live_names = _open_absolute_directory(directory)
         try:
             if not _chain_bound(live_descriptors, live_names):
-                raise _storage("live normalized directory is unsafe", path=str(directory))
+                raise _path_violation("live normalized directory is unsafe", path=str(directory))
             _require_private_directory(
                 live_descriptors[-1], component="normalized"
             )
             for old, live in zip(descriptors, live_descriptors, strict=True):
                 if not _same_inode(os.fstat(old), os.fstat(live)):
-                    raise _storage("live normalized directory was rebound", path=str(directory))
+                    raise _path_violation("live normalized directory was rebound", path=str(directory))
             live_data, live_stat = _read_named_regular(live_descriptors[-1], final_name)
             if live_data != data or not _same_inode(live_stat, held):
-                raise _storage("live normalized document was replaced", path=str(target))
+                raise _path_violation("live normalized document was replaced", path=str(target))
             live_entry = os.stat(
                 final_name,
                 dir_fd=live_descriptors[-1],
@@ -634,12 +644,12 @@ def write_normalized_document(
                 or not _same_inode(live_stat, live_entry)
                 or live_stat.st_size != len(live_data)
             ):
-                raise _storage(
+                raise _path_violation(
                     "live normalized document changed before return", path=str(target)
                 )
             for old, live in zip(descriptors, live_descriptors, strict=True):
                 if not _same_inode(os.fstat(old), os.fstat(live)):
-                    raise _storage(
+                    raise _path_violation(
                         "live normalized directory was rebound", path=str(directory)
                     )
         finally:

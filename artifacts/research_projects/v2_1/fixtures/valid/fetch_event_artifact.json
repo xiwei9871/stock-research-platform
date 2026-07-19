@@ -1,7 +1,7 @@
 {
   "artifact_kind": "evidence_artifact",
   "evidence_artifact": {
-    "artifact_id": "evidence_artifact:dea0ee5e334217452c78df2b",
+    "artifact_id": "evidence_artifact:77dc21b5aa5131e45c760b1c",
     "byte_count": 1,
     "candidate_id": "source_candidate:aaaaaaaaaaaaaaaaaaaaaaaa",
     "content_sha256": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",

@@ -921,7 +921,7 @@
     },
     "evidence_artifact": {
       "type": "object",
-      "$comment": "artifact_id is the SHA-256-derived identity of the canonical fetch-event preimage: candidate_id, content_sha256, byte_count, final_url, redirect_chain, status_code, response_headers, media_type, fetched_at, and provenance. artifact_id and storage paths are excluded.",
+      "$comment": "artifact_id is the SHA-256-derived identity of the canonical fetch-event preimage: candidate_id, evidence_channel, original_url, content_sha256, byte_count, final_url, redirect_chain, status_code, response_headers, media_type, fetched_at, and provenance. artifact_id and storage paths are excluded.",
       "required": [
         "artifact_id",
         "candidate_id",

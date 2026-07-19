@@ -710,9 +710,48 @@ def test_writer_detects_replacement_during_last_live_read(
         return data
 
     monkeypatch.setattr(evidence_module, "_read_fd", replace_after_live_read)
-    with pytest.raises(ResearchProjectV2Error):
+    with pytest.raises(ResearchProjectV2Error) as exc:
         write_industry_evidence_assessment(assessment, layout=layout)
+    assert exc.value.code == "RESEARCH_PROJECT_V2_1_EVIDENCE_PATH_VIOLATION"
     assert final.read_bytes() == b"replacement"
+
+
+def test_writer_rejects_symlinked_assessment_directory_as_path_violation(
+    tmp_path: Path,
+) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    layout.evidence_assessments_dir.parent.mkdir(parents=True)
+    layout.evidence_assessments_dir.symlink_to(outside, target_is_directory=True)
+    artifact = _artifact("artifact:symlink", "a" * 64, publisher_family="issuer")
+    assessment = _assessment(artifact, role="supports", reviewed=False)
+
+    with pytest.raises(ResearchProjectV2Error) as exc:
+        write_industry_evidence_assessment(assessment, layout=layout)
+
+    assert exc.value.code == "RESEARCH_PROJECT_V2_1_EVIDENCE_PATH_VIOLATION"
+    assert list(outside.iterdir()) == []
+
+
+def test_writer_rejects_symlinked_retired_directory_as_path_violation(
+    tmp_path: Path,
+) -> None:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    outside = tmp_path / "outside-retired"
+    outside.mkdir()
+    layout.evidence_assessments_dir.mkdir(parents=True, mode=0o700)
+    (layout.evidence_assessments_dir / ".retired").symlink_to(
+        outside, target_is_directory=True
+    )
+    artifact = _artifact("artifact:retired-symlink", "a" * 64, publisher_family="issuer")
+    assessment = _assessment(artifact, role="supports", reviewed=False)
+
+    with pytest.raises(ResearchProjectV2Error) as exc:
+        write_industry_evidence_assessment(assessment, layout=layout)
+
+    assert exc.value.code == "RESEARCH_PROJECT_V2_1_EVIDENCE_PATH_VIOLATION"
+    assert list(outside.iterdir()) == []
 
 
 @pytest.mark.parametrize(

@@ -380,6 +380,8 @@ def test_existing_raw_or_metadata_conflict_is_immutable(tmp_path: Path) -> None:
     raw.write_bytes(b"%PDF fixture")
     event = {
         "candidate_id": candidate()["candidate_id"],
+        "evidence_channel": "industry",
+        "original_url": candidate()["original_url"],
         "content_sha256": digest,
         "byte_count": len(b"%PDF fixture"),
         "final_url": candidate()["normalized_url"],
@@ -429,6 +431,37 @@ def test_same_bytes_from_distinct_fetch_events_get_distinct_metadata(tmp_path: P
     assert first["metadata_path"] != second["metadata_path"]
     assert Path(first["metadata_path"]).is_file()
     assert Path(second["metadata_path"]).is_file()
+
+
+@pytest.mark.parametrize(
+    ("field", "changed"),
+    [
+        ("original_url", "https://mirror.example.com/source.pdf"),
+        ("evidence_channel", "comparison"),
+    ],
+)
+def test_fetch_event_identity_changes_with_persisted_origin_and_channel(
+    field: str,
+    changed: str,
+) -> None:
+    event = {
+        "candidate_id": candidate()["candidate_id"],
+        "evidence_channel": "industry",
+        "original_url": candidate()["original_url"],
+        "content_sha256": hashlib.sha256(b"%PDF fixture").hexdigest(),
+        "byte_count": len(b"%PDF fixture"),
+        "final_url": candidate()["normalized_url"],
+        "redirect_chain": [],
+        "status_code": 200,
+        "response_headers": {"content-type": "application/pdf"},
+        "media_type": "application/pdf",
+        "fetched_at": FETCHED_AT,
+        "provenance": PROVENANCE,
+    }
+    changed_event = dict(event, **{field: changed})
+    assert evidence_artifact_id_for_event(event) != evidence_artifact_id_for_event(
+        changed_event
+    )
 
 
 @pytest.mark.parametrize("fetched_at", ["", "2026-07-18", "2026-07-18T02:00:00"])

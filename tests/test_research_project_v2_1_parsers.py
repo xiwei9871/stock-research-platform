@@ -564,8 +564,9 @@ def test_normalize_rejects_raw_path_hash_size_extension_and_symlink_without_outp
     original = raw.with_suffix(".original")
     raw.rename(original)
     raw.symlink_to(original)
-    with pytest.raises(ResearchProjectV2Error):
+    with pytest.raises(ResearchProjectV2Error) as exc:
         normalize_artifact(artifact, layout=layout, parsed_at="2026-07-18T00:00:00Z", provenance=_provenance("x"))
+    assert exc.value.code == "RESEARCH_PROJECT_V2_1_NORMALIZE_PATH_VIOLATION"
     assert not layout.evidence_normalized_dir.exists()
 
 
@@ -624,7 +625,7 @@ def test_write_rejects_symlinked_retired_directory_before_publication(tmp_path: 
     (layout.evidence_normalized_dir / ".retired").symlink_to(outside)
     with pytest.raises(ResearchProjectV2Error) as exc:
         write_normalized_document(document, layout=layout)
-    assert exc.value.code == "RESEARCH_PROJECT_V2_1_NORMALIZE_STORAGE_FAILED"
+    assert exc.value.code == "RESEARCH_PROJECT_V2_1_NORMALIZE_PATH_VIOLATION"
     assert not (layout.evidence_normalized_dir / f"{document['document_id']}.json").exists()
 
 
@@ -859,7 +860,7 @@ def test_normalize_rejects_raw_intermediate_directory_rebind(monkeypatch: pytest
             parsed_at="2026-07-18T00:00:00Z",
             provenance=_provenance("rebind"),
         )
-    assert exc.value.code == "RESEARCH_PROJECT_V2_1_NORMALIZE_INVALID"
+    assert exc.value.code == "RESEARCH_PROJECT_V2_1_NORMALIZE_PATH_VIOLATION"
 
 
 def test_normalize_caps_raw_that_grows_during_streaming(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -921,7 +922,7 @@ def test_normalize_rejects_raw_final_replacement_during_live_reread(
             parsed_at="2026-07-18T00:00:00Z",
             provenance=_provenance("live-final"),
         )
-    assert exc.value.code == "RESEARCH_PROJECT_V2_1_NORMALIZE_INVALID"
+    assert exc.value.code == "RESEARCH_PROJECT_V2_1_NORMALIZE_PATH_VIOLATION"
     assert not layout.evidence_normalized_dir.exists()
 
 

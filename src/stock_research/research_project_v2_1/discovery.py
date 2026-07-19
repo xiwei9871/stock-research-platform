@@ -115,6 +115,14 @@ def _immutability_error(reason: str, **details: object) -> ResearchProjectV2Erro
     )
 
 
+def _path_violation(reason: str, **details: object) -> ResearchProjectV2Error:
+    return ResearchProjectV2Error(
+        f"Unsafe industry discovery path: {reason}",
+        code="RESEARCH_PROJECT_V2_1_DISCOVERY_PATH_VIOLATION",
+        details={"reason": reason, **details},
+    )
+
+
 def _url_invalid(url: object, reason: str) -> ResearchProjectV2Error:
     return ResearchProjectV2Error(
         f"Invalid discovery URL: {reason}",
@@ -872,7 +880,7 @@ def _open_or_create_directory(parent_fd: int, name: str) -> int:
     except FileExistsError:
         pass
     except OSError as exc:
-        raise _invalid("unsafe managed path", component=name) from exc
+        raise _path_violation("unsafe managed path", component=name) from exc
     if created:
         try:
             os.fsync(parent_fd)
@@ -885,21 +893,21 @@ def _open_or_create_directory(parent_fd: int, name: str) -> int:
             raise OSError(errno.ENOTDIR, "managed component is not a directory")
         return child_fd
     except OSError as exc:
-        raise _invalid("unsafe managed path", component=name) from exc
+        raise _path_violation("unsafe managed path", component=name) from exc
 
 
 def _open_absolute_directory(path: Path) -> tuple[list[int], list[str]]:
     if not path.is_absolute():
-        raise _invalid("managed discovery path must be absolute", path=str(path))
+        raise _path_violation("managed discovery path must be absolute", path=str(path))
     try:
         directory_fds = [os.open("/", _directory_flags())]
     except OSError as exc:
-        raise _invalid("unsafe managed path", path="/") from exc
+        raise _path_violation("unsafe managed path", path="/") from exc
     component_names: list[str] = []
     try:
         for component in path.parts[1:]:
             if component in {"", ".", ".."}:
-                raise _invalid("unsafe managed path", component=component)
+                raise _path_violation("unsafe managed path", component=component)
             child_fd = _open_or_create_directory(directory_fds[-1], component)
             directory_fds.append(child_fd)
             component_names.append(component)
@@ -941,10 +949,10 @@ def _read_regular_file_at(directory_fd: int, name: str) -> bytes:
     try:
         descriptor = os.open(name, flags, dir_fd=directory_fd)
     except OSError as exc:
-        raise _invalid("unsafe managed path", target=name) from exc
+        raise _path_violation("unsafe managed path", target=name) from exc
     try:
         if not stat.S_ISREG(os.fstat(descriptor).st_mode):
-            raise _invalid("unsafe managed path", target=name)
+            raise _path_violation("unsafe managed path", target=name)
         chunks: list[bytes] = []
         while True:
             chunk = os.read(descriptor, 1024 * 1024)
@@ -1013,7 +1021,7 @@ def _open_verified_final_at(
     except OSError as exc:
         if "descriptor" in locals():
             os.close(descriptor)
-        raise _invalid("unsafe managed path", target=name) from exc
+        raise _path_violation("unsafe managed path", target=name) from exc
 
 
 def _same_inode(left: os.stat_result, right: os.stat_result) -> bool:
@@ -1128,13 +1136,13 @@ def write_discovery_batch(
     """
     raw_plan_id = batch.get("search_plan_id") if isinstance(batch, dict) else None
     if not isinstance(raw_plan_id, str) or _SAFE_PLAN_ID.fullmatch(raw_plan_id) is None:
-        raise _invalid("unsafe search_plan_id", search_plan_id=raw_plan_id)
+        raise _path_violation("unsafe search_plan_id", search_plan_id=raw_plan_id)
     validated = _validate_batch(batch)
     plan_id = validated["search_plan_id"]
     effective_layout = LayeredResearchLayout.default() if layout is None else layout
     discovery_dir = effective_layout.evidence_discovery_dir
     if not discovery_dir.is_absolute():
-        raise _invalid(
+        raise _path_violation(
             "managed discovery path must be absolute", path=str(discovery_dir)
         )
     _require_secure_dir_fd_storage()
@@ -1159,7 +1167,7 @@ def write_discovery_batch(
         if not _complete_directory_binding_is_valid(
             directory_fds, component_names, discovery_fd, plan_id, batch_fd
         ):
-            raise _invalid("unsafe managed path", path=str(batch_dir))
+            raise _path_violation("unsafe managed path", path=str(batch_dir))
         temporary_fd, temporary_name = _create_temp_file(batch_fd, final_name)
         _write_all(temporary_fd, data)
         temporary_stat = os.fstat(temporary_fd)
@@ -1187,7 +1195,7 @@ def write_discovery_batch(
         if not _complete_directory_binding_is_valid(
             directory_fds, component_names, discovery_fd, plan_id, batch_fd
         ):
-            raise _invalid("unsafe managed path", path=str(batch_dir))
+            raise _path_violation("unsafe managed path", path=str(batch_dir))
         os.fsync(batch_fd)
         verified = _read_regular_file_at(batch_fd, final_name)
         if verified != data:
@@ -1197,7 +1205,7 @@ def write_discovery_batch(
         _unlink_and_sync(batch_fd, temporary_name)
         temporary_name = None
         if not _final_entry_is_regular_at(batch_fd, final_name):
-            raise _invalid("unsafe managed path", path=str(target))
+            raise _path_violation("unsafe managed path", path=str(target))
         try:
             held_final_fd, held_final_stat = _open_verified_final_at(
                 batch_fd,
@@ -1216,7 +1224,7 @@ def write_discovery_batch(
             held_final_stat,
             data,
         ):
-            raise _invalid("unsafe managed path", path=str(target))
+            raise _path_violation("unsafe managed path", path=str(target))
         return target
     finally:
         if held_final_fd is not None:

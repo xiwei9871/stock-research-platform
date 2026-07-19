@@ -78,6 +78,14 @@ def _storage(reason: str, **details: object) -> ResearchProjectV2Error:
     )
 
 
+def _path_violation(reason: str, **details: object) -> ResearchProjectV2Error:
+    return ResearchProjectV2Error(
+        f"Industry evidence path violation: {reason}",
+        code="RESEARCH_PROJECT_V2_1_EVIDENCE_PATH_VIOLATION",
+        details={"reason": reason, **details},
+    )
+
+
 def _immutability(reason: str, **details: object) -> ResearchProjectV2Error:
     return ResearchProjectV2Error(
         f"Industry evidence assessment immutability violation: {reason}",
@@ -846,19 +854,27 @@ def _chain_bound(descriptors: list[int], names: list[str]) -> bool:
 
 def _open_directory(path: Path) -> tuple[list[int], list[str]]:
     if not path.is_absolute():
-        raise _storage("assessment directory must be absolute", path=str(path))
+        raise _path_violation("assessment directory must be absolute", path=str(path))
     descriptors = [os.open("/", _DIR_FLAGS)]
     names: list[str] = []
     try:
         for component in path.parts[1:]:
             if component in {"", ".", ".."}:
-                raise _storage("unsafe assessment directory component")
+                raise _path_violation("unsafe assessment directory component")
             try:
                 os.mkdir(component, 0o700, dir_fd=descriptors[-1])
                 os.fsync(descriptors[-1])
             except FileExistsError:
                 pass
-            descriptors.append(os.open(component, _DIR_FLAGS, dir_fd=descriptors[-1]))
+            try:
+                descriptor = os.open(component, _DIR_FLAGS, dir_fd=descriptors[-1])
+            except OSError as exc:
+                if exc.errno in {errno.ELOOP, errno.ENOTDIR}:
+                    raise _path_violation(
+                        "unsafe assessment directory component", component=component
+                    ) from exc
+                raise
+            descriptors.append(descriptor)
             names.append(component)
         return descriptors, names
     except BaseException:
@@ -898,7 +914,7 @@ def _read_regular(directory_fd: int, name: str) -> tuple[bytes, os.stat_result]:
             or before.st_size != len(data)
             or before.st_mtime_ns != after.st_mtime_ns
         ):
-            raise OSError(errno.EIO, "unbound assessment file")
+            raise _path_violation("unbound assessment file", name=name)
         return data, after
     finally:
         os.close(descriptor)
@@ -967,18 +983,23 @@ def write_industry_evidence_assessment(
         descriptors, names = _open_directory(directory)
         directory_fd = descriptors[-1]
         if not _chain_bound(descriptors, names):
-            raise _storage("assessment directory binding changed")
+            raise _path_violation("assessment directory binding changed")
         _require_private(directory_fd)
         try:
             os.mkdir(".retired", 0o700, dir_fd=directory_fd)
             os.fsync(directory_fd)
         except FileExistsError:
             pass
-        retired_fd = os.open(".retired", _DIR_FLAGS, dir_fd=directory_fd)
+        try:
+            retired_fd = os.open(".retired", _DIR_FLAGS, dir_fd=directory_fd)
+        except OSError as exc:
+            if exc.errno in {errno.ELOOP, errno.ENOTDIR}:
+                raise _path_violation("retired directory cannot be opened safely") from exc
+            raise
         _require_private(retired_fd)
         retired_entry = os.stat(".retired", dir_fd=directory_fd, follow_symlinks=False)
         if not _same_inode(os.fstat(retired_fd), retired_entry):
-            raise _storage("retired directory binding changed")
+            raise _path_violation("retired directory binding changed")
         for _ in range(128):
             temporary_name = f".tmp-{secrets.token_hex(16)}"
             try:
@@ -997,7 +1018,7 @@ def write_industry_evidence_assessment(
         temporary_stat = os.fstat(temporary_fd)
         entry = os.stat(temporary_name, dir_fd=directory_fd, follow_symlinks=False)
         if not _same_inode(temporary_stat, entry):
-            raise _storage("temporary assessment binding changed")
+            raise _path_violation("temporary assessment binding changed")
         try:
             os.link(
                 temporary_name,
@@ -1033,16 +1054,16 @@ def write_industry_evidence_assessment(
             or not _same_inode(held_before, held_after)
             or not _same_inode(held_after, held_entry)
         ):
-            raise _storage("held assessment changed", path=str(target))
+            raise _path_violation("held assessment changed", path=str(target))
         live_descriptors, live_names = _open_directory(directory)
         if not _chain_bound(live_descriptors, live_names):
-            raise _storage("live assessment directory is unsafe")
+            raise _path_violation("live assessment directory is unsafe")
         for old, live in zip(descriptors, live_descriptors, strict=True):
             if not _same_inode(os.fstat(old), os.fstat(live)):
-                raise _storage("live assessment directory was rebound")
+                raise _path_violation("live assessment directory was rebound")
         live_data, live_stat = _read_regular(live_descriptors[-1], final_name)
         if live_data != data or not _same_inode(live_stat, held_after):
-            raise _storage("live assessment was replaced", path=str(target))
+            raise _path_violation("live assessment was replaced", path=str(target))
         return target
     except ResearchProjectV2Error:
         raise

@@ -1151,6 +1151,8 @@ def _publish_bytes(directory: Path, final_name: str, data: bytes) -> Path:
 
 _FETCH_EVENT_IDENTITY_FIELDS = (
     "candidate_id",
+    "evidence_channel",
+    "original_url",
     "content_sha256",
     "byte_count",
     "final_url",
