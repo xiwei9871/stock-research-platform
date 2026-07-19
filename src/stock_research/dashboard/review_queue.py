@@ -376,16 +376,10 @@ def _embedded_snapshot_manifest_valid(
                 declared = True
                 if str(container.get(field) or "") != snapshot_trade_date:
                     return False
-        for field in (
-            "performance_as_of_date",
-            "performance_effective_date",
-            "actual_end_date",
-            "equity_latest_date",
-        ):
-            if field in container:
-                declared = True
-                if str(container.get(field) or "") != performance_as_of_date:
-                    return False
+        if "performance_as_of_date" in container:
+            declared = True
+            if str(container.get("performance_as_of_date") or "") != performance_as_of_date:
+                return False
         if "publication_manifest_path" in container:
             declared = True
             if str(container.get("publication_manifest_path") or "") != publication_manifest_path:
@@ -395,6 +389,24 @@ def _embedded_snapshot_manifest_valid(
             declared = True
             if str(output_paths.get("publication_manifest_path") or "") != publication_manifest_path:
                 return False
+    if any(
+        field in summary
+        for field in (
+            "performance_effective_date",
+            "actual_end_date",
+            "equity_latest_date",
+            "end_date",
+        )
+    ):
+        declared = True
+        derived_performance_date = _performance_as_of_date_from_summary(summary)
+        if (
+            not _valid_iso_date(derived_performance_date)
+            or derived_performance_date != performance_as_of_date
+            or date.fromisoformat(derived_performance_date)
+            > date.fromisoformat(snapshot_trade_date)
+        ):
+            return False
     return declared
 
 
@@ -861,6 +873,10 @@ def _read_manifest_strategy_artifact(
 def _manifest_performance_as_of_date(manifest: dict[str, Any]) -> str:
     metadata = manifest.get("metadata") if isinstance(manifest.get("metadata"), dict) else {}
     summary = metadata.get("summary") if isinstance(metadata.get("summary"), dict) else {}
+    return _performance_as_of_date_from_summary(summary)
+
+
+def _performance_as_of_date_from_summary(summary: dict[str, Any]) -> str:
     return str(
         summary.get("performance_effective_date")
         or summary.get("actual_end_date")

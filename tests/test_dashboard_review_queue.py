@@ -741,6 +741,54 @@ def test_persisted_snapshot_rejects_manifest_path_trade_date_mismatch(monkeypatc
     ) == []
 
 
+@pytest.mark.parametrize("embedded_end_date", ("2026-07-19", "not-a-date", "2026-07-16"))
+def test_persisted_snapshot_rejects_invalid_embedded_end_date_fallback(
+    embedded_end_date, monkeypatch
+):
+    from stock_research import review_evidence_snapshots
+
+    identity = build_publication_identity(get_publication_contract("mid_trend"))
+    manifest_path = (
+        "/srv/strategy_daily_eod/2026-07-18/strategy_runs/"
+        "mid_trend/publish-1/publication_manifest.json"
+    )
+    payload = {
+        "score_version": "strategy_topn",
+        "trade_date": "2026-07-18",
+        "asset_id": "CN:SH:600002",
+        "strategy_id": "mid_trend",
+        "rank": 1,
+        "contract_id": identity["contract_id"],
+        "identity_schema_version": identity["identity_schema_version"],
+        "config_fingerprint": identity["config_fingerprint"],
+        "publication_policy": identity["publication_policy"],
+        "artifact_version": "strategy_artifact_v1",
+        "publication_manifest_path": manifest_path,
+        "performance_as_of_date": "2026-07-17",
+        "contract_status": "success",
+        "source_manifest": {
+            "module": "strategy_mid_trend",
+            "trade_date": "2026-07-18",
+            "latest_trade_date": "2026-07-18",
+            "metadata": {
+                "artifact_version": "strategy_artifact_v1",
+                "publication_identity": identity,
+                "publication_manifest_path": manifest_path,
+                "summary": {"end_date": embedded_end_date},
+            },
+        },
+    }
+    monkeypatch.setattr(
+        review_evidence_snapshots,
+        "list_review_item_snapshots",
+        lambda **kwargs: [{"review_item_payload": payload}],
+    )
+
+    assert review_queue._load_strategy_snapshot_rows(
+        trade_date="2026-07-18", limit=50
+    ) == []
+
+
 @pytest.mark.parametrize("trade_date", ("2026-7-18", "../2026-07-18", "not-a-date", ""))
 def test_v1_manifest_rejects_malformed_trade_date(trade_date, tmp_path, monkeypatch):
     monkeypatch.setattr(review_queue, "SETTINGS", SimpleNamespace(output_root=tmp_path))
