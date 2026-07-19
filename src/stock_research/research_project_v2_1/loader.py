@@ -16,6 +16,10 @@ from stock_research.research_project_v2.canonical import content_sha256
 from stock_research.research_project_v2.errors import ResearchProjectV2Error
 from stock_research.research_project_v2 import loader as r1_loader
 from stock_research.research_project_v2_1.layout import LayeredResearchLayout
+from stock_research.research_project_v2_1.lineage import (
+    LineageError,
+    collect_lineage_version_ids,
+)
 from stock_research.research_project_v2_1.schema import validate_v2_1_schema_payload
 
 
@@ -602,20 +606,13 @@ def _verify_manifest_and_hash(
             )
 
 
-def _load_industry_version_unlocked(
+def _read_verified_industry_version_unlocked(
     project_slug: str,
-    semantic_version: str | None = None,
-    *,
-    layout: LayeredResearchLayout | None = None,
+    semantic_version: str,
+    identity: dict[str, Any],
+    layout: LayeredResearchLayout,
 ) -> dict[str, Any]:
-    selected = _layout_or_default(layout)
-    if not _PROJECT_SLUG_PATTERN.fullmatch(project_slug):
-        raise _project_not_found(project_slug)
-    identity = _load_layered_project_unlocked(project_slug, layout=selected)
-    if semantic_version is None:
-        semantic_version = _current_semantic_version(identity, project_slug)
-    elif not _SEMANTIC_VERSION_PATTERN.fullmatch(semantic_version):
-        raise _version_not_found(project_slug, semantic_version)
+    selected = layout
     path = _version_path(project_slug, semantic_version, selected)
     if not _is_safe_managed_path(path, selected) or not path.is_file():
         raise _version_not_found(project_slug, semantic_version)
@@ -631,6 +628,49 @@ def _load_industry_version_unlocked(
     from stock_research.research_project_v2_1.semantic import validate_industry_version_semantics
 
     validate_industry_version_semantics(version)
+    return version
+
+
+def _load_industry_version_unlocked(
+    project_slug: str,
+    semantic_version: str | None = None,
+    *,
+    layout: LayeredResearchLayout | None = None,
+) -> dict[str, Any]:
+    selected = _layout_or_default(layout)
+    if not _PROJECT_SLUG_PATTERN.fullmatch(project_slug):
+        raise _project_not_found(project_slug)
+    identity = _load_layered_project_unlocked(project_slug, layout=selected)
+    if semantic_version is None:
+        semantic_version = _current_semantic_version(identity, project_slug)
+    elif not _SEMANTIC_VERSION_PATTERN.fullmatch(semantic_version):
+        raise _version_not_found(project_slug, semantic_version)
+    version = _read_verified_industry_version_unlocked(
+        project_slug,
+        semantic_version,
+        identity,
+        selected,
+    )
+    known_versions = _discover_semantic_versions(project_slug, selected)
+    try:
+        collect_lineage_version_ids(
+            version,
+            project_slug=project_slug,
+            known_semantic_versions=known_versions,
+            load_version=lambda parent_semver: _read_verified_industry_version_unlocked(
+                project_slug,
+                parent_semver,
+                identity,
+                selected,
+            ),
+        )
+    except LineageError as exc:
+        raise _immutability_violation(
+            project_slug,
+            semantic_version,
+            exc.reason,
+            **exc.details,
+        ) from exc
     return version
 
 

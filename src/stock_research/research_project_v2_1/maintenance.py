@@ -11,6 +11,10 @@ from datetime import datetime
 from stock_research.research_project_v2.canonical import content_sha256
 from stock_research.research_project_v2.errors import ResearchProjectV2Error
 from stock_research.research_project_v2_1.layout import LayeredResearchLayout
+from stock_research.research_project_v2_1.lineage import (
+    LineageError,
+    collect_lineage_version_ids,
+)
 from stock_research.research_project_v2_1.loader import (
     layered_storage_lock,
     list_layered_project_slugs,
@@ -312,6 +316,22 @@ def _rebuild_layered_index_unlocked(
 
         if not loaded_versions:
             raise _error("project has no versions", path=versions_dir, project=slug)
+        for semantic_version, version in loaded_versions.items():
+            try:
+                collect_lineage_version_ids(
+                    version,
+                    project_slug=slug,
+                    known_semantic_versions=loaded_versions,
+                    load_version=lambda parent_semver: loaded_versions[parent_semver],
+                )
+            except LineageError as exc:
+                raise _error(
+                    exc.reason,
+                    path=versions_dir / f"v{semantic_version}.json",
+                    project=slug,
+                    semantic_version=semantic_version,
+                    **exc.details,
+                ) from exc
         current_id = identity["current_version"]
         current_matches = [version for version in loaded_versions.values() if version["version_id"] == current_id]
         if len(current_matches) != 1:

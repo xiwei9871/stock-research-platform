@@ -142,6 +142,19 @@ def _version(slug: str = "fixture-industry", semantic_version: str = "0.1.0") ->
     return payload
 
 
+def _version_with_parent(
+    semantic_version: str,
+    parent_version_id: str | None,
+) -> dict[str, object]:
+    version = _version(semantic_version=semantic_version)
+    version["parent_version_id"] = parent_version_id
+    version["content_hash"] = content_sha256(
+        version,
+        excluded_paths={("content_hash",)},
+    )
+    return version
+
+
 def _manifest_row(version: dict[str, object]) -> dict[str, object]:
     semantic_version = str(version["semantic_version"])
     return {
@@ -295,7 +308,17 @@ def test_layered_reader_detects_lock_path_rebinding_while_locked(
 def test_load_identity_current_explicit_versions_and_semver_sorting(
     layered_layout: LayeredResearchLayout,
 ) -> None:
-    versions = [_version(semantic_version=value) for value in ["1.0.0", "0.10.0", "0.2.0"]]
+    versions = [
+        _version_with_parent(
+            "0.2.0", "research_version:fixture-industry:0.1.0"
+        ),
+        _version_with_parent(
+            "0.10.0", "research_version:fixture-industry:0.2.0"
+        ),
+        _version_with_parent(
+            "1.0.0", "research_version:fixture-industry:0.10.0"
+        ),
+    ]
     for version in versions:
         _install_version(layered_layout, version)
     rows = [_manifest_row(_version()), *[_manifest_row(version) for version in versions]]
@@ -310,6 +333,65 @@ def test_load_identity_current_explicit_versions_and_semver_sorting(
         "0.10.0",
         "1.0.0",
     ]
+
+
+@pytest.mark.parametrize(
+    ("parent_version_id", "reason"),
+    [
+        ("not-a-version", "parent_version_id is not canonical"),
+        ("research_version:other-industry:0.1.0", "parent_version_id project mismatch"),
+        ("research_version:fixture-industry:0.0.5", "parent version not found"),
+        ("research_version:fixture-industry:0.2.0", "parent version is not earlier"),
+        ("research_version:fixture-industry:0.3.0", "parent version is not earlier"),
+    ],
+)
+def test_parent_lineage_rejects_invalid_cross_project_missing_self_and_future(
+    layered_layout: LayeredResearchLayout,
+    parent_version_id: str,
+    reason: str,
+) -> None:
+    base = _version_with_parent("0.1.0", None)
+    target = _version_with_parent("0.2.0", parent_version_id)
+    identity = _identity(version="0.2.0")
+    _write_json(layered_layout.project_dir("fixture-industry") / "project.json", identity)
+    _install_version(layered_layout, base)
+    _install_version(layered_layout, target)
+    _write_jsonl(
+        layered_layout.project_dir("fixture-industry") / "version_manifest.jsonl",
+        [_manifest_row(base), _manifest_row(target)],
+    )
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        load_industry_version("fixture-industry", "0.2.0", layout=layered_layout)
+
+    _assert_code(exc_info, "RESEARCH_PROJECT_V2_1_IMMUTABILITY_VIOLATION")
+    assert exc_info.value.details["reason"] == reason
+
+
+def test_parent_lineage_loads_verified_three_version_chain(
+    layered_layout: LayeredResearchLayout,
+) -> None:
+    versions = [
+        _version_with_parent("0.1.0", None),
+        _version_with_parent(
+            "0.2.0", "research_version:fixture-industry:0.1.0"
+        ),
+        _version_with_parent(
+            "0.3.0", "research_version:fixture-industry:0.2.0"
+        ),
+    ]
+    identity = _identity(version="0.3.0")
+    _write_json(layered_layout.project_dir("fixture-industry") / "project.json", identity)
+    for version in versions:
+        _install_version(layered_layout, version)
+    _write_jsonl(
+        layered_layout.project_dir("fixture-industry") / "version_manifest.jsonl",
+        [_manifest_row(version) for version in versions],
+    )
+
+    loaded = load_industry_version("fixture-industry", "0.3.0", layout=layered_layout)
+
+    assert loaded["parent_version_id"] == "research_version:fixture-industry:0.2.0"
 
 
 @pytest.mark.parametrize(

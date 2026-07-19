@@ -3,9 +3,12 @@ from __future__ import annotations
 from copy import deepcopy
 from pathlib import Path
 import json
+import shutil
 
 import pytest
 
+from stock_research.research_project_v2.canonical import content_sha256
+from stock_research.research_project_v2_1.layout import LayeredResearchLayout
 from stock_research.research_project_v2_1.gates import (
     INDUSTRY_DESIGN_CHECKS,
     evaluate_industry_design_gate,
@@ -134,6 +137,188 @@ def test_initial_design_provenance_must_bind_to_current_version() -> None:
 
     assert [check["code"] for check in failed] == ["INDUSTRY_PROVENANCE_COMPLETE"]
     assert question["question_id"] in failed[0]["details"]["mismatched_object_ids"]
+
+
+def _later_version_with_lineage() -> tuple[dict, dict, dict[str, dict]]:
+    identity, v1 = _pilot()
+    slug = identity["project_slug"]
+    v1_id = f"research_version:{slug}:0.1.0"
+    v2_id = f"research_version:{slug}:0.2.0"
+    v3_id = f"research_version:{slug}:0.3.0"
+    v2 = deepcopy(v1)
+    v2["semantic_version"] = "0.2.0"
+    v2["version_id"] = v2_id
+    v2["parent_version_id"] = v1_id
+    for plan in v2["snapshot"]["search_plans"]:
+        plan["version_id"] = v2_id
+    v2["content_hash"] = content_sha256(v2, excluded_paths={("content_hash",)})
+    v3 = deepcopy(v2)
+    v3["semantic_version"] = "0.3.0"
+    v3["version_id"] = v3_id
+    v3["parent_version_id"] = v2_id
+    for plan in v3["snapshot"]["search_plans"]:
+        plan["version_id"] = v3_id
+    v3["content_hash"] = content_sha256(v3, excluded_paths={("content_hash",)})
+    identity["current_version"] = v3_id
+    return identity, v3, {"0.1.0": v1, "0.2.0": v2}
+
+
+def _install_gate_lineage(
+    tmp_path: Path,
+    identity: dict,
+    current: dict,
+    ancestors: dict[str, dict],
+) -> LayeredResearchLayout:
+    layout = LayeredResearchLayout(tmp_path / "v2_1")
+    shutil.copytree(LayeredResearchLayout.default().schema_dir, layout.schema_dir)
+    project = layout.project_dir(identity["project_slug"])
+    (project / "versions").mkdir(parents=True)
+    (project / "project.json").write_text(
+        json.dumps(identity, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    versions = [*ancestors.values(), current]
+    rows = []
+    for version in versions:
+        semantic_version = version["semantic_version"]
+        (project / f"versions/v{semantic_version}.json").write_text(
+            json.dumps(version, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        rows.append(
+            {
+                "version_id": version["version_id"],
+                "semantic_version": semantic_version,
+                "parent_version_id": version["parent_version_id"],
+                "relative_path": f"versions/v{semantic_version}.json",
+                "content_hash": version["content_hash"],
+                "created_at": version["created_at"],
+            }
+        )
+    (project / "version_manifest.jsonl").write_text(
+        "".join(json.dumps(row) + "\n" for row in rows),
+        encoding="utf-8",
+    )
+    return layout
+
+
+def test_provenance_allows_stable_object_from_verified_ancestor(tmp_path: Path) -> None:
+    identity, version, ancestors = _later_version_with_lineage()
+    layout = _install_gate_lineage(tmp_path, identity, version, ancestors)
+
+    result = evaluate_industry_design_gate(
+        identity,
+        version,
+        layout=layout,
+    )
+
+    assert result["status"] == "pass"
+
+
+def test_provenance_rejects_in_memory_payload_that_retains_stored_hash(
+    tmp_path: Path,
+) -> None:
+    identity, version, ancestors = _later_version_with_lineage()
+    layout = _install_gate_lineage(tmp_path, identity, version, ancestors)
+    version["snapshot"]["questions"][1]["question_text"] = "forged after storage verification"
+
+    result = evaluate_industry_design_gate(identity, version, layout=layout)
+
+    provenance_check = next(
+        check for check in result["checks"] if check["code"] == "INDUSTRY_PROVENANCE_COMPLETE"
+    )
+    assert provenance_check["status"] == "fail"
+    assert provenance_check["details"]["lineage_error"] == (
+        "gate version does not match verified storage"
+    )
+
+
+def test_provenance_verifies_initial_payload_when_layout_is_supplied(tmp_path: Path) -> None:
+    identity, version = _pilot()
+    layout = _install_gate_lineage(tmp_path, identity, version, {})
+    version["snapshot"]["questions"][1]["question_text"] = "forged initial payload"
+
+    result = evaluate_industry_design_gate(identity, version, layout=layout)
+
+    provenance_check = next(
+        check for check in result["checks"] if check["code"] == "INDUSTRY_PROVENANCE_COMPLETE"
+    )
+    assert provenance_check["status"] == "fail"
+    assert provenance_check["details"]["lineage_error"] == (
+        "gate version does not match verified storage"
+    )
+
+
+def test_provenance_rejects_later_version_masquerading_as_initial_without_layout() -> None:
+    identity, version, _ancestors = _later_version_with_lineage()
+    version["parent_version_id"] = None
+    version["content_hash"] = content_sha256(version, excluded_paths={("content_hash",)})
+
+    result = evaluate_industry_design_gate(identity, version)
+
+    provenance_check = next(
+        check for check in result["checks"] if check["code"] == "INDUSTRY_PROVENANCE_COMPLETE"
+    )
+    assert provenance_check["status"] == "fail"
+    assert provenance_check["details"]["lineage_error"] == (
+        "verified lineage storage is required"
+    )
+
+
+@pytest.mark.parametrize("created_in", ["future", "cross_project", "missing", "side_branch"])
+def test_provenance_rejects_versions_outside_current_ancestor_chain(
+    tmp_path: Path,
+    created_in: str,
+) -> None:
+    identity, version, ancestors = _later_version_with_lineage()
+    slug = identity["project_slug"]
+    if created_in == "future":
+        provenance_version = f"research_version:{slug}:0.4.0"
+    elif created_in == "cross_project":
+        provenance_version = "research_version:other-project:0.1.0"
+    elif created_in == "missing":
+        provenance_version = f"research_version:{slug}:0.0.5"
+    else:
+        version["parent_version_id"] = f"research_version:{slug}:0.1.0"
+        provenance_version = f"research_version:{slug}:0.2.0"
+    version["snapshot"]["questions"][0]["provenance"]["created_in_version"] = provenance_version
+    version["content_hash"] = content_sha256(version, excluded_paths={("content_hash",)})
+    layout = _install_gate_lineage(tmp_path, identity, version, ancestors)
+
+    result = evaluate_industry_design_gate(
+        identity,
+        version,
+        layout=layout,
+    )
+
+    provenance_check = next(
+        check for check in result["checks"] if check["code"] == "INDUSTRY_PROVENANCE_COMPLETE"
+    )
+    assert provenance_check["status"] == "fail"
+
+
+@pytest.mark.parametrize("damage", ["missing", "tampered"])
+def test_provenance_rejects_missing_or_unverifiable_stored_ancestor(
+    tmp_path: Path,
+    damage: str,
+) -> None:
+    identity, version, ancestors = _later_version_with_lineage()
+    layout = _install_gate_lineage(tmp_path, identity, version, ancestors)
+    parent_path = layout.project_dir(identity["project_slug"]) / "versions/v0.2.0.json"
+    if damage == "missing":
+        parent_path.unlink()
+    else:
+        parent = json.loads(parent_path.read_text())
+        parent["change_summary"] = "tampered"
+        parent_path.write_text(json.dumps(parent), encoding="utf-8")
+
+    result = evaluate_industry_design_gate(identity, version, layout=layout)
+
+    provenance_check = next(
+        check for check in result["checks"] if check["code"] == "INDUSTRY_PROVENANCE_COMPLETE"
+    )
+    assert provenance_check["status"] == "fail"
+    assert provenance_check["details"]["lineage_error"] is not None
 
 
 @pytest.mark.parametrize(
@@ -438,3 +623,37 @@ def test_downstream_taxonomy_background_only_exempts_legal_metadata() -> None:
         "公司背景参考": {"notes": [], "公司名称": "Example Co", "source_url": "https://example.com"}
     }
     assert "INDUSTRY_NO_COMPANY_OR_STOCK_OUTPUTS" not in _failed_checks(identity, version)
+
+
+@pytest.mark.parametrize(
+    "forbidden_key",
+    [
+        "company_recommendations",
+        "issuer_recommendations",
+        "company_valuations",
+        "issuer_watchlist",
+        "companyRecommendations",
+        "issuerWatchlist",
+    ],
+)
+def test_downstream_taxonomy_rejects_english_subject_action_matrix(
+    forbidden_key: str,
+) -> None:
+    identity, version = _pilot()
+    version["snapshot"][forbidden_key] = []
+    assert "INDUSTRY_NO_COMPANY_OR_STOCK_OUTPUTS" in _failed_checks(identity, version)
+
+
+@pytest.mark.parametrize(
+    "nested_output",
+    [
+        {"company": {"recommendations": []}},
+        {"issuer": {"valuation": []}},
+    ],
+)
+def test_downstream_taxonomy_rejects_nested_english_subject_actions(
+    nested_output: dict,
+) -> None:
+    identity, version = _pilot()
+    version["snapshot"]["nested"] = nested_output
+    assert "INDUSTRY_NO_COMPANY_OR_STOCK_OUTPUTS" in _failed_checks(identity, version)

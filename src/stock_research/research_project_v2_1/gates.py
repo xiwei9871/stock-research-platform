@@ -6,8 +6,18 @@ import re
 from typing import Any
 import unicodedata
 
+from stock_research.research_project_v2.canonical import content_sha256
 from stock_research.research_project_v2.errors import ResearchProjectV2Error
-from stock_research.research_project_v2_1.loader import resolve_upstream_r1_version
+from stock_research.research_project_v2_1.layout import LayeredResearchLayout
+from stock_research.research_project_v2_1.lineage import (
+    LineageError,
+    collect_lineage_version_ids,
+)
+from stock_research.research_project_v2_1.loader import (
+    list_layered_versions,
+    load_industry_version,
+    resolve_upstream_r1_version,
+)
 from stock_research.research_project_v2_1.search_plan import validate_search_plans
 
 
@@ -511,7 +521,8 @@ def _is_downstream_output_key(
         return True
     company_outputs = {
         "assessment", "candidate", "capability", "capture", "collection", "list", "map",
-        "mapping", "output", "profile", "ranking", "rating", "screen",
+        "mapping", "output", "profile", "ranking", "rating", "recommendation",
+        "screen", "strategy", "valuation", "watchlist",
     }
     stock_outputs = {
         "candidate", "list", "map", "output", "ranking", "rating",
@@ -595,12 +606,14 @@ def _valid_timestamp(value: object) -> bool:
     return True
 
 
-def _provenance(snapshot: dict[str, Any], version: dict[str, Any]) -> dict[str, Any]:
+def _provenance(
+    snapshot: dict[str, Any],
+    *,
+    allowed_versions: set[str],
+    lineage_error: str | None,
+) -> dict[str, Any]:
     invalid: list[str] = []
     mismatched: list[str] = []
-    allowed_versions = {version.get("version_id")}
-    if version.get("parent_version_id") is not None:
-        allowed_versions.add(version.get("parent_version_id"))
     for collection, id_field in _PROVENANCE_COLLECTIONS.items():
         for item in snapshot.get(collection, []):
             object_id = item.get(id_field, f"<{collection}>") if isinstance(item, dict) else f"<{collection}>"
@@ -620,20 +633,74 @@ def _provenance(snapshot: dict[str, Any], version: dict[str, Any]) -> dict[str, 
                 mismatched.append(str(object_id))
     return _result(
         INDUSTRY_DESIGN_CHECKS[11],
-        not invalid and not mismatched,
+        not invalid and not mismatched and lineage_error is None,
         {
             "invalid": sorted(invalid),
             "mismatched_object_ids": sorted(mismatched),
+            "lineage_error": lineage_error,
         },
     )
 
 
+def _verified_gate_lineage(
+    identity: dict[str, Any],
+    version: dict[str, Any],
+    layout: LayeredResearchLayout | None,
+) -> tuple[set[str], str | None]:
+    version_id = version.get("version_id")
+    slug = identity.get("project_slug")
+    semantic_version = version.get("semantic_version")
+    if not isinstance(slug, str) or not isinstance(semantic_version, str):
+        return set(), "lineage version identity mismatch"
+    if version_id != f"research_version:{slug}:{semantic_version}":
+        return set(), "lineage version identity mismatch"
+    if layout is None:
+        if version.get("parent_version_id") is None and semantic_version == "0.1.0":
+            return {version_id}, None
+        return set(), "verified lineage storage is required"
+    if content_sha256(version, excluded_paths={("content_hash",)}) != version.get(
+        "content_hash"
+    ):
+        return set(), "gate version does not match verified storage"
+    try:
+        stored_current = load_industry_version(slug, semantic_version, layout=layout)
+        if (
+            stored_current.get("version_id") != version_id
+            or stored_current.get("content_hash") != version.get("content_hash")
+        ):
+            return set(), "gate version does not match verified storage"
+        known_versions = list_layered_versions(slug, layout=layout)
+        lineage_ids = collect_lineage_version_ids(
+            stored_current,
+            project_slug=slug,
+            known_semantic_versions=known_versions,
+            load_version=lambda parent_semver: load_industry_version(
+                slug,
+                parent_semver,
+                layout=layout,
+            ),
+        )
+        return set(lineage_ids), None
+    except LineageError as exc:
+        return set(), exc.reason
+    except ResearchProjectV2Error as exc:
+        return set(), exc.code
+
+
 def evaluate_industry_design_gate(
-    identity: dict[str, Any], version: dict[str, Any]
+    identity: dict[str, Any],
+    version: dict[str, Any],
+    *,
+    layout: LayeredResearchLayout | None = None,
 ) -> dict[str, Any]:
     """Evaluate the immutable R2A industry design contract without mutation."""
     safe_identity, safe_version = deepcopy(identity), deepcopy(version)
     snapshot = safe_version.get("snapshot") if isinstance(safe_version.get("snapshot"), dict) else {}
+    allowed_provenance_versions, lineage_error = _verified_gate_lineage(
+        safe_identity,
+        safe_version,
+        layout,
+    )
     checks = [
         _result(
             INDUSTRY_DESIGN_CHECKS[0],
@@ -670,7 +737,11 @@ def evaluate_industry_design_gate(
             not _output_paths(safe_version),
             {"paths": _output_paths(safe_version)},
         ),
-        _provenance(snapshot, safe_version),
+        _provenance(
+            snapshot,
+            allowed_versions=allowed_provenance_versions,
+            lineage_error=lineage_error,
+        ),
     ]
     status = "fail" if any(check["status"] == "fail" for check in checks) else "pass"
     return {

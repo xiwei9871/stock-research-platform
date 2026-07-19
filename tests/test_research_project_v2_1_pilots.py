@@ -165,6 +165,38 @@ def test_rebuild_rejects_unmanifested_filename_semver_mismatch_without_writes(
     assert _tree_hash(layout.root) == before
 
 
+@pytest.mark.parametrize("write", [False, True])
+def test_rebuild_rejects_unmanifested_invalid_parent_lineage_without_writes(
+    tmp_path: Path,
+    write: bool,
+) -> None:
+    slug = next(iter(EXPECTED))
+    layout = _copy_layout(tmp_path, slug)
+    project = layout.project_dir(slug)
+    identity_path = project / "project.json"
+    identity = json.loads(identity_path.read_text())
+    identity["current_version"] = f"research_version:{slug}:0.2.0"
+    identity_path.write_text(json.dumps(identity, ensure_ascii=False, sort_keys=True, indent=2) + "\n")
+    base = json.loads((project / "versions/v0.1.0.json").read_text())
+    target = deepcopy(base)
+    target["semantic_version"] = "0.2.0"
+    target["version_id"] = f"research_version:{slug}:0.2.0"
+    target["parent_version_id"] = f"research_version:{slug}:0.3.0"
+    for plan in target["snapshot"]["search_plans"]:
+        plan["version_id"] = target["version_id"]
+    target["content_hash"] = "0" * 64
+    (project / "versions/v0.2.0.json").write_text(
+        json.dumps(target, ensure_ascii=False, sort_keys=True, indent=2) + "\n"
+    )
+    before = _tree_hash(layout.root)
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        rebuild_layered_index(write, layout)
+
+    assert exc_info.value.details["reason"] == "parent version is not earlier"
+    assert _tree_hash(layout.root) == before
+
+
 def test_rebuild_generated_at_uses_rfc3339_instant_order(tmp_path: Path) -> None:
     slug = next(iter(EXPECTED))
     layout = _copy_layout(tmp_path, slug)
