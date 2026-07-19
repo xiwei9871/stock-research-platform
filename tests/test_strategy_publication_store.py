@@ -97,6 +97,7 @@ def test_schema_sql_is_generic_and_installs_table_indexes_function_and_trigger()
     assert "new.status = 'success'" in normalized
     assert "new.module like 'strategy" in normalized
     assert "actual_identity is distinct from matched_contract.expected_identity" in normalized
+    assert "for share" in normalized
     assert store.STRATEGY_PUBLICATION_SQLSTATE == "P5100"
     assert normalized.count("errcode = 'p5100'") == 5
 
@@ -156,13 +157,52 @@ def test_apply_schema_and_seed_is_idempotent_with_one_transaction(monkeypatch):
     assert len(connections) == 2
     assert first_calls == second_calls
     assert first_calls[0] == (store.CREATE_STRATEGY_PUBLICATION_SCHEMA_SQL, None)
-    assert len(first_calls) == 1 + 2 * len(store.iter_publication_contracts())
-    for offset in range(1, len(first_calls), 2):
+    assert first_calls[1] == (store.LOCK_ACTIVE_STRATEGY_PUBLICATION_CONTRACTS_SQL, None)
+    assert first_calls[2] == (
+        store.RETIRE_ABSENT_STRATEGY_PUBLICATION_CONTRACTS_SQL,
+        {
+            "current_contract_ids": [
+                contract.contract_id for contract in store.iter_publication_contracts()
+            ]
+        },
+    )
+    assert len(first_calls) == 3 + 2 * len(store.iter_publication_contracts())
+    for offset in range(3, len(first_calls), 2):
         deactivate_sql, deactivate_params = first_calls[offset]
         upsert_sql, upsert_params = first_calls[offset + 1]
         assert deactivate_sql == store.DEACTIVATE_SUPERSEDED_STRATEGY_PUBLICATION_SQL
         assert upsert_sql == store.UPSERT_STRATEGY_PUBLICATION_CONTRACT_SQL
         assert deactivate_params is upsert_params
+
+
+def test_installer_retires_every_active_contract_absent_from_registry_before_seeding(
+    monkeypatch,
+):
+    current = get_publication_contract("mid_trend")
+    monkeypatch.setattr(store, "iter_publication_contracts", lambda: (current,))
+    cursor = RecordingCursor()
+
+    store.install_strategy_publication_schema(cursor)
+
+    assert cursor.calls[:3] == [
+        (store.CREATE_STRATEGY_PUBLICATION_SCHEMA_SQL, None),
+        (store.LOCK_ACTIVE_STRATEGY_PUBLICATION_CONTRACTS_SQL, None),
+        (
+            store.RETIRE_ABSENT_STRATEGY_PUBLICATION_CONTRACTS_SQL,
+            {"current_contract_ids": [current.contract_id]},
+        ),
+    ]
+    normalized_retirement = " ".join(
+        store.RETIRE_ABSENT_STRATEGY_PUBLICATION_CONTRACTS_SQL.lower().split()
+    )
+    normalized_lock = " ".join(
+        store.LOCK_ACTIVE_STRATEGY_PUBLICATION_CONTRACTS_SQL.lower().split()
+    )
+    assert "where active" in normalized_retirement
+    assert "contract_id = any" in normalized_retirement
+    assert "order by strategy_id, profile, contract_id for update" in normalized_lock
+    assert cursor.calls[3][0] == store.DEACTIVATE_SUPERSEDED_STRATEGY_PUBLICATION_SQL
+    assert cursor.calls[4][0] == store.UPSERT_STRATEGY_PUBLICATION_CONTRACT_SQL
 
 
 def test_verify_contracts_accepts_valid_rejects_invalid_and_always_rolls_back(monkeypatch):

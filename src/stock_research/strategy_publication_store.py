@@ -106,7 +106,8 @@ BEGIN
     WHERE contract.active
       AND contract.module = NEW.module
       AND contract.contract_id = actual_contract_id
-      AND contract.strategy_id = actual_strategy_id;
+      AND contract.strategy_id = actual_strategy_id
+    FOR SHARE;
 
     IF NOT FOUND THEN
         IF NOT EXISTS (
@@ -160,6 +161,24 @@ WHERE strategy_id = %(strategy_id)s
   AND profile = %(profile)s
   AND contract_id <> %(contract_id)s
   AND active
+"""
+
+
+LOCK_ACTIVE_STRATEGY_PUBLICATION_CONTRACTS_SQL = """
+SELECT strategy_id, profile, contract_id
+FROM ops.strategy_publication_contract
+WHERE active
+ORDER BY strategy_id, profile, contract_id
+FOR UPDATE
+"""
+
+
+RETIRE_ABSENT_STRATEGY_PUBLICATION_CONTRACTS_SQL = """
+UPDATE ops.strategy_publication_contract
+SET active = false,
+    updated_at = now()
+WHERE active
+  AND NOT (contract_id = ANY(%(current_contract_ids)s::text[]))
 """
 
 
@@ -257,10 +276,26 @@ def apply_strategy_publication_schema(
 
     with connect(service) as conn:
         with conn.cursor() as cur:
-            cur.execute(CREATE_STRATEGY_PUBLICATION_SCHEMA_SQL)
-            for params in build_strategy_publication_seed_rows():
-                cur.execute(DEACTIVATE_SUPERSEDED_STRATEGY_PUBLICATION_SQL, params)
-                cur.execute(UPSERT_STRATEGY_PUBLICATION_CONTRACT_SQL, params)
+            install_strategy_publication_schema(cur)
+
+
+def install_strategy_publication_schema(cursor: Any) -> None:
+    """Install and synchronize publication contracts on the caller transaction."""
+
+    seed_rows = build_strategy_publication_seed_rows()
+    cursor.execute(CREATE_STRATEGY_PUBLICATION_SCHEMA_SQL)
+    cursor.execute(LOCK_ACTIVE_STRATEGY_PUBLICATION_CONTRACTS_SQL)
+    cursor.execute(
+        RETIRE_ABSENT_STRATEGY_PUBLICATION_CONTRACTS_SQL,
+        {
+            "current_contract_ids": [
+                params["contract_id"] for params in seed_rows
+            ]
+        },
+    )
+    for params in seed_rows:
+        cursor.execute(DEACTIVATE_SUPERSEDED_STRATEGY_PUBLICATION_SQL, params)
+        cursor.execute(UPSERT_STRATEGY_PUBLICATION_CONTRACT_SQL, params)
 
 
 def verify_strategy_publication_db_contracts(

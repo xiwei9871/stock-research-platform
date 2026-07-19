@@ -54,14 +54,14 @@ CREATE INDEX IF NOT EXISTS idx_data_run_manifest_trade_date
 
 
 def apply_data_run_manifest_schema(service: str = SETTINGS.research_service) -> None:
+    from stock_research.strategy_publication_store import (
+        install_strategy_publication_schema,
+    )
+
     with connect(service) as conn:
         with conn.cursor() as cur:
             cur.execute(CREATE_DATA_RUN_MANIFEST_SQL)
-    from stock_research.strategy_publication_store import (
-        apply_strategy_publication_schema,
-    )
-
-    apply_strategy_publication_schema(service=service)
+            install_strategy_publication_schema(cur)
 
 
 def build_manifest_entry(

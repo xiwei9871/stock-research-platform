@@ -3,6 +3,8 @@ from __future__ import annotations
 from copy import deepcopy
 import json
 import os
+from threading import Event, Thread
+from time import monotonic, sleep
 from uuid import uuid4
 
 import psycopg
@@ -73,6 +75,35 @@ def _insert_manifest(connection, params):
         )
         """,
         params,
+    )
+
+
+def _insert_contract(
+    connection,
+    *,
+    strategy_id: str,
+    module: str,
+    profile: str,
+    contract_id: str,
+    expected_identity: dict,
+):
+    connection.execute(
+        """
+        INSERT INTO ops.strategy_publication_contract (
+            strategy_id, module, profile, contract_id,
+            identity_schema_version, expected_identity, acceptance_profile, active
+        ) VALUES (
+            %(strategy_id)s, %(module)s, %(profile)s, %(contract_id)s,
+            'integration_probe_v1', %(expected_identity)s::jsonb, '{}'::jsonb, true
+        )
+        """,
+        {
+            "strategy_id": strategy_id,
+            "module": module,
+            "profile": profile,
+            "contract_id": contract_id,
+            "expected_identity": json.dumps(expected_identity, sort_keys=True),
+        },
     )
 
 
@@ -236,3 +267,226 @@ def test_unregistered_strategy_module_is_rejected_and_does_not_persist():
         connection.close()
 
     _assert_manifest_absent(params["manifest_id"])
+
+
+def test_apply_retires_contract_removed_from_registry_and_blocks_future_publication():
+    strategy_id = "retired_contract_probe"
+    module = "strategy_retired_contract_probe"
+    profile = "integration"
+    contract_id = "retired_contract_probe:integration:v1"
+    identity = {
+        "strategy_id": strategy_id,
+        "contract_id": contract_id,
+        "publication_policy": {"version": "retired"},
+    }
+    connection = _connect()
+    try:
+        connection.execute(
+            "DELETE FROM ops.strategy_publication_contract WHERE strategy_id = %s",
+            (strategy_id,),
+        )
+        _insert_contract(
+            connection,
+            strategy_id=strategy_id,
+            module=module,
+            profile=profile,
+            contract_id=contract_id,
+            expected_identity=identity,
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    before_params = _manifest_values(
+        module=module,
+        metadata={"publication_identity": identity},
+    )
+    connection = _connect()
+    try:
+        _insert_manifest(connection, before_params)
+    finally:
+        connection.rollback()
+        connection.close()
+
+    apply_strategy_publication_schema(service=TEST_SERVICE)
+
+    after_params = _manifest_values(
+        module=module,
+        metadata={"publication_identity": identity},
+    )
+    connection = _connect()
+    try:
+        assert connection.execute(
+            """
+            SELECT active
+            FROM ops.strategy_publication_contract
+            WHERE strategy_id = %s AND profile = %s AND contract_id = %s
+            """,
+            (strategy_id, profile, contract_id),
+        ).fetchone() == (False,)
+        with pytest.raises(
+            psycopg.Error,
+            match="unregistered strategy publication module",
+        ) as exc_info:
+            _insert_manifest(connection, after_params)
+        assert exc_info.value.sqlstate == STRATEGY_PUBLICATION_SQLSTATE
+    finally:
+        connection.rollback()
+        connection.close()
+
+    connection = _connect()
+    try:
+        connection.execute(
+            "DELETE FROM ops.strategy_publication_contract WHERE strategy_id = %s",
+            (strategy_id,),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+
+def test_publication_lock_serializes_promotion_and_rejects_stale_identity_afterward():
+    strategy_id = "serialization_contract_probe"
+    module = "strategy_serialization_contract_probe"
+    profile = "integration"
+    old_contract_id = "serialization_contract_probe:integration:old"
+    new_contract_id = "serialization_contract_probe:integration:new"
+    old_identity = {
+        "strategy_id": strategy_id,
+        "contract_id": old_contract_id,
+        "publication_policy": {"version": "old"},
+    }
+    new_identity = {
+        "strategy_id": strategy_id,
+        "contract_id": new_contract_id,
+        "publication_policy": {"version": "new"},
+    }
+    setup = _connect()
+    try:
+        setup.execute("DELETE FROM ops.data_run_manifest WHERE module = %s", (module,))
+        setup.execute(
+            "DELETE FROM ops.strategy_publication_contract WHERE strategy_id = %s",
+            (strategy_id,),
+        )
+        _insert_contract(
+            setup,
+            strategy_id=strategy_id,
+            module=module,
+            profile=profile,
+            contract_id=old_contract_id,
+            expected_identity=old_identity,
+        )
+        setup.commit()
+    finally:
+        setup.close()
+
+    publication_connection = _connect()
+    publication_params = _manifest_values(
+        module=module,
+        metadata={"publication_identity": old_identity},
+    )
+    _insert_manifest(publication_connection, publication_params)
+
+    promotion_started = Event()
+    promotion_done = Event()
+    promotion_errors = []
+    promotion_application_name = f"strategy-publication-promotion-{uuid4().hex}"
+
+    def promote_contract():
+        connection = _connect()
+        try:
+            connection.execute(
+                "SELECT set_config('application_name', %s, false)",
+                (promotion_application_name,),
+            )
+            promotion_started.set()
+            connection.execute(
+                """
+                UPDATE ops.strategy_publication_contract
+                SET active = false, updated_at = now()
+                WHERE strategy_id = %s AND profile = %s AND contract_id = %s AND active
+                """,
+                (strategy_id, profile, old_contract_id),
+            )
+            _insert_contract(
+                connection,
+                strategy_id=strategy_id,
+                module=module,
+                profile=profile,
+                contract_id=new_contract_id,
+                expected_identity=new_identity,
+            )
+            connection.commit()
+        except Exception as exc:
+            promotion_errors.append(exc)
+            connection.rollback()
+        finally:
+            connection.close()
+            promotion_done.set()
+
+    promotion_thread = Thread(target=promote_contract, daemon=True)
+    promotion_thread.start()
+    promotion_started_in_time = promotion_started.wait(timeout=5)
+    observer = _connect()
+    try:
+        deadline = monotonic() + 5
+        promotion_waited_on_lock = False
+        while monotonic() < deadline:
+            wait_event = observer.execute(
+                """
+                SELECT wait_event_type
+                FROM pg_stat_activity
+                WHERE application_name = %s
+                """,
+                (promotion_application_name,),
+            ).fetchone()
+            if wait_event == ("Lock",):
+                promotion_waited_on_lock = True
+                break
+            sleep(0.05)
+    finally:
+        observer.rollback()
+        observer.close()
+
+    publication_connection.commit()
+    publication_connection.close()
+    promotion_finished_in_time = promotion_done.wait(timeout=5)
+    promotion_thread.join(timeout=5)
+    assert promotion_started_in_time
+    assert promotion_waited_on_lock
+    assert promotion_finished_in_time
+    assert promotion_errors == []
+
+    stale_params = _manifest_values(
+        module=module,
+        metadata={"publication_identity": old_identity},
+    )
+    connection = _connect()
+    try:
+        rows = connection.execute(
+            """
+            SELECT contract_id, active
+            FROM ops.strategy_publication_contract
+            WHERE strategy_id = %s
+            ORDER BY contract_id
+            """,
+            (strategy_id,),
+        ).fetchall()
+        assert rows == [(new_contract_id, True), (old_contract_id, False)]
+        with pytest.raises(psycopg.Error, match="stale strategy publication contract") as exc_info:
+            _insert_manifest(connection, stale_params)
+        assert exc_info.value.sqlstate == STRATEGY_PUBLICATION_SQLSTATE
+    finally:
+        connection.rollback()
+        connection.close()
+
+    cleanup = _connect()
+    try:
+        cleanup.execute("DELETE FROM ops.data_run_manifest WHERE module = %s", (module,))
+        cleanup.execute(
+            "DELETE FROM ops.strategy_publication_contract WHERE strategy_id = %s",
+            (strategy_id,),
+        )
+        cleanup.commit()
+    finally:
+        cleanup.close()

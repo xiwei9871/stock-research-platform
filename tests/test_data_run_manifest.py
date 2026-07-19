@@ -1,3 +1,5 @@
+import pytest
+
 from stock_research import data_run_manifest
 
 
@@ -34,6 +36,7 @@ def test_load_recent_data_run_manifest_trade_date_fetches_latest_row_per_module(
 
 def test_apply_schema_creates_manifest_before_publication_contract_schema(monkeypatch):
     calls = []
+    connections = []
 
     class FakeCursor:
         def __enter__(self):
@@ -55,15 +58,77 @@ def test_apply_schema_creates_manifest_before_publication_contract_schema(monkey
         def cursor(self):
             return FakeCursor()
 
-    monkeypatch.setattr(data_run_manifest, "connect", lambda service: FakeConnection())
+    def fake_connect(service):
+        connection = FakeConnection()
+        connections.append(connection)
+        return connection
+
+    monkeypatch.setattr(data_run_manifest, "connect", fake_connect)
     monkeypatch.setattr(
-        "stock_research.strategy_publication_store.apply_strategy_publication_schema",
-        lambda service: calls.append(("publication", service)),
+        "stock_research.strategy_publication_store.install_strategy_publication_schema",
+        lambda cursor: calls.append(("publication", cursor)),
     )
 
     data_run_manifest.apply_data_run_manifest_schema(service="research-test")
 
-    assert calls == [
-        ("manifest", data_run_manifest.CREATE_DATA_RUN_MANIFEST_SQL),
-        ("publication", "research-test"),
+    assert len(connections) == 1
+    assert calls[0] == ("manifest", data_run_manifest.CREATE_DATA_RUN_MANIFEST_SQL)
+    assert calls[1][0] == "publication"
+
+
+def test_apply_schema_rolls_back_manifest_ddl_when_publication_install_fails(monkeypatch):
+    events = []
+
+    class FakeCursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def execute(self, sql):
+            events.append(("execute", sql))
+
+    class TransactionalConnection:
+        def __init__(self):
+            self.cursor_instance = FakeCursor()
+
+        def __enter__(self):
+            events.append(("connect", "enter"))
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            events.append(("rollback" if exc_type else "commit", exc_type))
+            return False
+
+        def cursor(self):
+            return self.cursor_instance
+
+    connection = TransactionalConnection()
+    connect_calls = []
+
+    def fake_connect(service):
+        connect_calls.append(service)
+        return connection
+
+    def fail_install(cursor):
+        assert cursor is connection.cursor_instance
+        events.append(("publication", "failed"))
+        raise RuntimeError("publication install failed")
+
+    monkeypatch.setattr(data_run_manifest, "connect", fake_connect)
+    monkeypatch.setattr(
+        "stock_research.strategy_publication_store.install_strategy_publication_schema",
+        fail_install,
+    )
+
+    with pytest.raises(RuntimeError, match="publication install failed"):
+        data_run_manifest.apply_data_run_manifest_schema(service="research-test")
+
+    assert connect_calls == ["research-test"]
+    assert events == [
+        ("connect", "enter"),
+        ("execute", data_run_manifest.CREATE_DATA_RUN_MANIFEST_SQL),
+        ("publication", "failed"),
+        ("rollback", RuntimeError),
     ]
