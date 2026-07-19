@@ -189,6 +189,15 @@ OFFICIAL_STRATEGY_IDS = frozenset(
 )
 
 
+def iter_publication_contracts() -> tuple[StrategyPublicationContract, ...]:
+    """Return every immutable publication contract in stable registry order."""
+
+    return tuple(
+        _PUBLICATION_CONTRACTS[key]
+        for key in sorted(_PUBLICATION_CONTRACTS)
+    )
+
+
 def get_publication_contract(
     strategy_id: str,
     profile: str = "balanced",

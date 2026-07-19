@@ -13,9 +13,11 @@ from stock_research.strategy_publication_contracts import (
     OFFICIAL_STRATEGY_IDS,
     build_publication_identity,
     get_publication_contract,
+    iter_publication_contracts,
 )
 from stock_research.strategy_publication_store import (
     STRATEGY_MODULE_BY_ID,
+    STRATEGY_PUBLICATION_SQLSTATE,
     apply_strategy_publication_schema,
     verify_strategy_publication_db_contracts,
 )
@@ -102,7 +104,7 @@ def test_second_apply_is_idempotent():
             """,
             (sorted(OFFICIAL_STRATEGY_IDS),),
         ).fetchall()
-        assert len(rows) == len(OFFICIAL_STRATEGY_IDS)
+        assert len(rows) == len(iter_publication_contracts())
         for strategy_id, module, profile, contract_id, expected_identity in rows:
             contract = get_publication_contract(strategy_id, profile)
             assert module == STRATEGY_MODULE_BY_ID[strategy_id]
@@ -127,9 +129,13 @@ def test_verify_helper_probes_contracts_without_persisting_synthetic_rows():
         connection.rollback()
         connection.close()
 
+    assert before == 0
     assert verify_strategy_publication_db_contracts(service=TEST_SERVICE) == {
-        strategy_id: {"valid": "accepted", "invalid": "rejected"}
-        for strategy_id in sorted(OFFICIAL_STRATEGY_IDS)
+        f"{contract.strategy_id}:{contract.profile}": {
+            "valid": "accepted",
+            "invalid": "rejected",
+        }
+        for contract in iter_publication_contracts()
     }
 
     connection = _connect()
@@ -141,15 +147,20 @@ def test_verify_helper_probes_contracts_without_persisting_synthetic_rows():
             WHERE run_id LIKE 'strategy-publication-contract-verify-%'
             """
         ).fetchone()[0]
-        assert after == before
+        assert after == 0
     finally:
         connection.rollback()
         connection.close()
 
 
-@pytest.mark.parametrize("strategy_id", sorted(OFFICIAL_STRATEGY_IDS))
-def test_valid_identity_is_accepted_inside_rollback(strategy_id):
-    identity = build_publication_identity(get_publication_contract(strategy_id))
+@pytest.mark.parametrize(
+    "contract",
+    iter_publication_contracts(),
+    ids=lambda contract: f"{contract.strategy_id}-{contract.profile}",
+)
+def test_valid_identity_is_accepted_inside_rollback(contract):
+    strategy_id = contract.strategy_id
+    identity = build_publication_identity(contract)
     params = _manifest_values(
         module=STRATEGY_MODULE_BY_ID[strategy_id],
         metadata={"publication_identity": identity},
@@ -168,10 +179,15 @@ def test_valid_identity_is_accepted_inside_rollback(strategy_id):
     _assert_manifest_absent(params["manifest_id"])
 
 
-@pytest.mark.parametrize("strategy_id", sorted(OFFICIAL_STRATEGY_IDS))
+@pytest.mark.parametrize(
+    "contract",
+    iter_publication_contracts(),
+    ids=lambda contract: f"{contract.strategy_id}-{contract.profile}",
+)
 @pytest.mark.parametrize("invalid_kind", ["missing", "stale", "nested_mismatch"])
-def test_invalid_identity_is_rejected_and_does_not_persist(strategy_id, invalid_kind):
-    identity = build_publication_identity(get_publication_contract(strategy_id))
+def test_invalid_identity_is_rejected_and_does_not_persist(contract, invalid_kind):
+    strategy_id = contract.strategy_id
+    identity = build_publication_identity(contract)
     if invalid_kind == "missing":
         metadata = {}
         expected_message = "identity missing"
@@ -191,8 +207,9 @@ def test_invalid_identity_is_rejected_and_does_not_persist(strategy_id, invalid_
     )
     connection = _connect()
     try:
-        with pytest.raises(psycopg.Error, match=expected_message):
+        with pytest.raises(psycopg.Error, match=expected_message) as exc_info:
             _insert_manifest(connection, params)
+        assert exc_info.value.sqlstate == STRATEGY_PUBLICATION_SQLSTATE
     finally:
         connection.rollback()
         connection.close()
@@ -208,8 +225,12 @@ def test_unregistered_strategy_module_is_rejected_and_does_not_persist():
     )
     connection = _connect()
     try:
-        with pytest.raises(psycopg.Error, match="unregistered strategy publication module"):
+        with pytest.raises(
+            psycopg.Error,
+            match="unregistered strategy publication module",
+        ) as exc_info:
             _insert_manifest(connection, params)
+        assert exc_info.value.sqlstate == STRATEGY_PUBLICATION_SQLSTATE
     finally:
         connection.rollback()
         connection.close()

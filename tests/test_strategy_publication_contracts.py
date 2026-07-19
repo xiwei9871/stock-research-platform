@@ -10,6 +10,7 @@ from stock_research.strategy_publication_contracts import (
     build_publication_identity,
     canonical_config_fingerprint,
     get_publication_contract,
+    iter_publication_contracts,
     validate_publication_identity,
 )
 
@@ -56,6 +57,16 @@ def test_balanced_registry_contains_the_three_official_contracts():
             "adjust_type": "hfq",
             **specific,
         }
+
+
+def test_publication_contract_iterator_is_immutable_and_sorted_by_strategy_profile():
+    contracts = iter_publication_contracts()
+
+    assert isinstance(contracts, tuple)
+    assert [(contract.strategy_id, contract.profile) for contract in contracts] == sorted(
+        (strategy_id, "balanced") for strategy_id in OFFICIAL_STRATEGY_IDS
+    )
+    assert contracts == iter_publication_contracts()
 
 
 def test_lhb_publication_policy_is_exact():

@@ -9,12 +9,13 @@ from types import MappingProxyType
 from typing import Any
 from uuid import uuid4
 
+import psycopg
+
 from stock_research.config import SETTINGS
 from stock_research.db import connect
 from stock_research.strategy_publication_contracts import (
-    OFFICIAL_STRATEGY_IDS,
     build_publication_identity,
-    get_publication_contract,
+    iter_publication_contracts,
 )
 
 
@@ -26,8 +27,10 @@ STRATEGY_MODULE_BY_ID = MappingProxyType(
     }
 )
 
+STRATEGY_PUBLICATION_SQLSTATE = "P5100"
 
-CREATE_STRATEGY_PUBLICATION_SCHEMA_SQL = r"""
+
+CREATE_STRATEGY_PUBLICATION_SCHEMA_SQL = fr"""
 CREATE TABLE IF NOT EXISTS ops.strategy_publication_contract (
     strategy_id text NOT NULL,
     module text NOT NULL,
@@ -78,15 +81,23 @@ BEGIN
 
     actual_identity := NEW.metadata -> 'publication_identity';
     IF actual_identity IS NULL OR jsonb_typeof(actual_identity) <> 'object' THEN
-        RAISE EXCEPTION 'strategy publication identity missing or not an object for module %',
-            NEW.module;
+        RAISE EXCEPTION USING
+            ERRCODE = '{STRATEGY_PUBLICATION_SQLSTATE}',
+            MESSAGE = format(
+                'strategy publication identity missing or not an object for module %s',
+                NEW.module
+            );
     END IF;
 
     actual_contract_id := NULLIF(actual_identity ->> 'contract_id', '');
     actual_strategy_id := NULLIF(actual_identity ->> 'strategy_id', '');
     IF actual_contract_id IS NULL OR actual_strategy_id IS NULL THEN
-        RAISE EXCEPTION 'strategy publication identity missing contract_id or strategy_id for module %',
-            NEW.module;
+        RAISE EXCEPTION USING
+            ERRCODE = '{STRATEGY_PUBLICATION_SQLSTATE}',
+            MESSAGE = format(
+                'strategy publication identity missing contract_id or strategy_id for module %s',
+                NEW.module
+            );
     END IF;
 
     SELECT contract.*
@@ -103,17 +114,28 @@ BEGIN
             FROM ops.strategy_publication_contract AS contract
             WHERE contract.active AND contract.module = NEW.module
         ) THEN
-            RAISE EXCEPTION 'unregistered strategy publication module: %', NEW.module;
+            RAISE EXCEPTION USING
+                ERRCODE = '{STRATEGY_PUBLICATION_SQLSTATE}',
+                MESSAGE = format(
+                    'unregistered strategy publication module: %s',
+                    NEW.module
+                );
         END IF;
-        RAISE EXCEPTION
-            'stale strategy publication contract for module %, strategy_id %, contract_id %',
-            NEW.module, actual_strategy_id, actual_contract_id;
+        RAISE EXCEPTION USING
+            ERRCODE = '{STRATEGY_PUBLICATION_SQLSTATE}',
+            MESSAGE = format(
+                'stale strategy publication contract for module %s, strategy_id %s, contract_id %s',
+                NEW.module, actual_strategy_id, actual_contract_id
+            );
     END IF;
 
     IF actual_identity IS DISTINCT FROM matched_contract.expected_identity THEN
-        RAISE EXCEPTION
-            'strategy publication identity mismatch for module %, profile %, contract_id %',
-            NEW.module, matched_contract.profile, matched_contract.contract_id;
+        RAISE EXCEPTION USING
+            ERRCODE = '{STRATEGY_PUBLICATION_SQLSTATE}',
+            MESSAGE = format(
+                'strategy publication identity mismatch for module %s, profile %s, contract_id %s',
+                NEW.module, matched_contract.profile, matched_contract.contract_id
+            );
     END IF;
 
     RETURN NEW;
@@ -210,8 +232,8 @@ def _canonical_json(value: Any) -> str:
 
 def build_strategy_publication_seed_rows() -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
-    for strategy_id in sorted(OFFICIAL_STRATEGY_IDS):
-        contract = get_publication_contract(strategy_id)
+    for contract in iter_publication_contracts():
+        strategy_id = contract.strategy_id
         rows.append(
             {
                 "strategy_id": strategy_id,
@@ -250,8 +272,9 @@ def verify_strategy_publication_db_contracts(
     with connect(service) as conn:
         try:
             with conn.cursor() as cur:
-                for strategy_id in sorted(OFFICIAL_STRATEGY_IDS):
-                    contract = get_publication_contract(strategy_id)
+                for contract in iter_publication_contracts():
+                    strategy_id = contract.strategy_id
+                    result_key = f"{strategy_id}:{contract.profile}"
                     expected_identity = build_publication_identity(contract)
                     valid_params = _verification_manifest_params(
                         strategy_id=strategy_id,
@@ -282,7 +305,10 @@ def verify_strategy_publication_db_contracts(
                     except Exception as exc:
                         cur.execute("ROLLBACK TO SAVEPOINT strategy_publication_invalid")
                         cur.execute("RELEASE SAVEPOINT strategy_publication_invalid")
-                        if "strategy publication identity mismatch" not in str(exc):
+                        if not (
+                            isinstance(exc, psycopg.Error)
+                            and exc.sqlstate == STRATEGY_PUBLICATION_SQLSTATE
+                        ):
                             raise RuntimeError(
                                 "invalid strategy publication probe failed unexpectedly: "
                                 f"{strategy_id}/{contract.profile}"
@@ -294,7 +320,7 @@ def verify_strategy_publication_db_contracts(
                             "invalid strategy publication manifest unexpectedly accepted: "
                             f"{strategy_id}/{contract.profile}"
                         )
-                    results[strategy_id] = {
+                    results[result_key] = {
                         "valid": "accepted",
                         "invalid": "rejected",
                     }

@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+from dataclasses import replace
 import json
 
+import psycopg
 import pytest
 
 from stock_research import strategy_publication_store as store
 from stock_research.strategy_publication_contracts import (
-    OFFICIAL_STRATEGY_IDS,
     build_publication_identity,
     get_publication_contract,
 )
@@ -26,11 +27,15 @@ class RecordingCursor:
         reject_invalid_manifests: bool = False,
         reject_all_manifests: bool = False,
         invalid_error_message: str = "strategy publication identity mismatch",
+        invalid_sqlstate: str | None = "P5100",
+        invalid_is_database_error: bool = True,
     ):
         self.calls = []
         self.reject_invalid_manifests = reject_invalid_manifests
         self.reject_all_manifests = reject_all_manifests
         self.invalid_error_message = invalid_error_message
+        self.invalid_sqlstate = invalid_sqlstate
+        self.invalid_is_database_error = invalid_is_database_error
 
     def __enter__(self):
         return self
@@ -47,12 +52,17 @@ class RecordingCursor:
         if self.reject_invalid_manifests:
             metadata = json.loads(params["metadata"])
             identity = metadata.get("publication_identity")
-            strategy_id = (identity or {}).get("strategy_id")
-            if strategy_id not in OFFICIAL_STRATEGY_IDS:
-                raise RuntimeError("publication identity rejected")
-            expected = build_publication_identity(get_publication_contract(strategy_id))
+            expected_by_contract_id = {
+                contract.contract_id: build_publication_identity(contract)
+                for contract in store.iter_publication_contracts()
+            }
+            expected = expected_by_contract_id.get((identity or {}).get("contract_id"))
             if identity != expected:
-                raise RuntimeError(self.invalid_error_message)
+                if not self.invalid_is_database_error:
+                    raise RuntimeError(self.invalid_error_message)
+                error = psycopg.Error(self.invalid_error_message)
+                error.sqlstate = self.invalid_sqlstate
+                raise error
 
 
 class RecordingConnection:
@@ -87,6 +97,8 @@ def test_schema_sql_is_generic_and_installs_table_indexes_function_and_trigger()
     assert "new.status = 'success'" in normalized
     assert "new.module like 'strategy" in normalized
     assert "actual_identity is distinct from matched_contract.expected_identity" in normalized
+    assert store.STRATEGY_PUBLICATION_SQLSTATE == "P5100"
+    assert normalized.count("errcode = 'p5100'") == 5
 
     forbidden_policy_values = {
         "strategy_lhb_shortline",
@@ -104,10 +116,14 @@ def test_schema_sql_is_generic_and_installs_table_indexes_function_and_trigger()
 def test_seed_rows_cover_every_official_contract_with_exact_identity_and_module():
     rows = store.build_strategy_publication_seed_rows()
 
-    assert {row["strategy_id"] for row in rows} == OFFICIAL_STRATEGY_IDS
-    assert {row["strategy_id"]: row["module"] for row in rows} == EXPECTED_MODULES
+    assert len(rows) == len(store.iter_publication_contracts())
+    assert {(row["strategy_id"], row["profile"]) for row in rows} == {
+        (contract.strategy_id, contract.profile)
+        for contract in store.iter_publication_contracts()
+    }
     for row in rows:
         contract = get_publication_contract(row["strategy_id"], row["profile"])
+        assert row["module"] == EXPECTED_MODULES[row["strategy_id"]]
         assert json.loads(row["expected_identity"]) == build_publication_identity(contract)
         assert row["contract_id"] == contract.contract_id
         assert row["identity_schema_version"] == contract.identity_schema_version
@@ -140,7 +156,7 @@ def test_apply_schema_and_seed_is_idempotent_with_one_transaction(monkeypatch):
     assert len(connections) == 2
     assert first_calls == second_calls
     assert first_calls[0] == (store.CREATE_STRATEGY_PUBLICATION_SCHEMA_SQL, None)
-    assert len(first_calls) == 1 + 2 * len(OFFICIAL_STRATEGY_IDS)
+    assert len(first_calls) == 1 + 2 * len(store.iter_publication_contracts())
     for offset in range(1, len(first_calls), 2):
         deactivate_sql, deactivate_params = first_calls[offset]
         upsert_sql, upsert_params = first_calls[offset + 1]
@@ -157,8 +173,11 @@ def test_verify_contracts_accepts_valid_rejects_invalid_and_always_rolls_back(mo
     result = store.verify_strategy_publication_db_contracts(service="publication-test")
 
     assert result == {
-        strategy_id: {"valid": "accepted", "invalid": "rejected"}
-        for strategy_id in sorted(OFFICIAL_STRATEGY_IDS)
+        f"{contract.strategy_id}:{contract.profile}": {
+            "valid": "accepted",
+            "invalid": "rejected",
+        }
+        for contract in store.iter_publication_contracts()
     }
     assert connection.rollback_calls == 1
     manifest_calls = [
@@ -166,7 +185,7 @@ def test_verify_contracts_accepts_valid_rejects_invalid_and_always_rolls_back(mo
         for sql, params in cursor.calls
         if "INSERT INTO ops.data_run_manifest" in sql
     ]
-    assert len(manifest_calls) == 2 * len(OFFICIAL_STRATEGY_IDS)
+    assert len(manifest_calls) == 2 * len(store.iter_publication_contracts())
     assert len({params["manifest_id"] for params in manifest_calls}) == len(manifest_calls)
     assert any("ROLLBACK TO SAVEPOINT" in sql for sql, _params in cursor.calls)
 
@@ -185,7 +204,8 @@ def test_verify_contracts_rolls_back_when_valid_manifest_is_unexpectedly_rejecte
 def test_verify_contracts_raises_when_invalid_write_fails_for_an_unexpected_reason(monkeypatch):
     cursor = RecordingCursor(
         reject_invalid_manifests=True,
-        invalid_error_message="database connection interrupted",
+        invalid_error_message="strategy publication identity mismatch",
+        invalid_is_database_error=False,
     )
     connection = RecordingConnection(cursor)
     monkeypatch.setattr(store, "connect", lambda service: connection)
@@ -194,3 +214,72 @@ def test_verify_contracts_raises_when_invalid_write_fails_for_an_unexpected_reas
         store.verify_strategy_publication_db_contracts(service="publication-test")
 
     assert connection.rollback_calls == 1
+
+
+@pytest.mark.parametrize("sqlstate", [None, "P5101"])
+def test_verify_contracts_rejects_matching_message_with_wrong_or_missing_sqlstate(
+    monkeypatch,
+    sqlstate,
+):
+    cursor = RecordingCursor(
+        reject_invalid_manifests=True,
+        invalid_error_message="strategy publication identity mismatch",
+        invalid_sqlstate=sqlstate,
+    )
+    connection = RecordingConnection(cursor)
+    monkeypatch.setattr(store, "connect", lambda service: connection)
+
+    with pytest.raises(RuntimeError, match="invalid strategy publication probe failed unexpectedly"):
+        store.verify_strategy_publication_db_contracts(service="publication-test")
+
+    assert connection.rollback_calls == 1
+
+
+def test_seed_and_verify_iterate_every_profile_for_a_strategy(monkeypatch):
+    balanced = get_publication_contract("mid_trend")
+    second_profile = replace(
+        balanced,
+        profile="growth",
+        contract_id=f"mid_trend:growth:{balanced.variant}",
+    )
+    contracts = (*store.iter_publication_contracts(), second_profile)
+    contracts = tuple(sorted(contracts, key=lambda item: (item.strategy_id, item.profile)))
+    monkeypatch.setattr(store, "iter_publication_contracts", lambda: contracts)
+
+    rows = store.build_strategy_publication_seed_rows()
+    mid_rows = [row for row in rows if row["strategy_id"] == "mid_trend"]
+    assert [(row["strategy_id"], row["profile"]) for row in mid_rows] == [
+        ("mid_trend", "balanced"),
+        ("mid_trend", "growth"),
+    ]
+    assert json.loads(mid_rows[1]["expected_identity"]) == build_publication_identity(
+        second_profile
+    )
+
+    seed_cursor = RecordingCursor()
+    seed_connection = RecordingConnection(seed_cursor)
+    monkeypatch.setattr(store, "connect", lambda service: seed_connection)
+    store.apply_strategy_publication_schema(service="publication-test")
+    seeded_mid_profiles = [
+        params["profile"]
+        for sql, params in seed_cursor.calls
+        if sql == store.UPSERT_STRATEGY_PUBLICATION_CONTRACT_SQL
+        and params["strategy_id"] == "mid_trend"
+    ]
+    assert seeded_mid_profiles == ["balanced", "growth"]
+
+    cursor = RecordingCursor(reject_invalid_manifests=True)
+    connection = RecordingConnection(cursor)
+    monkeypatch.setattr(store, "connect", lambda service: connection)
+
+    result = store.verify_strategy_publication_db_contracts(service="publication-test")
+
+    assert result["mid_trend:balanced"] == {
+        "valid": "accepted",
+        "invalid": "rejected",
+    }
+    assert result["mid_trend:growth"] == {
+        "valid": "accepted",
+        "invalid": "rejected",
+    }
+    assert len(result) == len(contracts)
