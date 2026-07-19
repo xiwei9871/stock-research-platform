@@ -1,0 +1,99 @@
+{
+  "schema_version": "official_strategy_publication_baseline_v1",
+  "baselines": [
+    {
+      "strategy_id": "lhb_shortline",
+      "profile": "balanced",
+      "baseline_start_date": "2026-01-01",
+      "baseline_end_date": "2026-07-15",
+      "summary": {
+        "total_return": 0.918648063982811,
+        "max_drawdown": -0.042355025316131334,
+        "filled_trade_count": 186,
+        "cash_slot_count": 45
+      },
+      "tolerances": {"total_return": 1e-10, "max_drawdown": 1e-10},
+      "acceptance_profile": "lhb_cash_account_v1",
+      "publication_identity": {
+        "identity_schema_version": "strategy_publication_identity_v1",
+        "strategy_id": "lhb_shortline",
+        "contract_id": "lhb_shortline:balanced:auction_enhanced_rerank:balanced",
+        "engine_version": "lhb_shortline_v1",
+        "variant": "auction_enhanced_rerank:balanced",
+        "config_fingerprint": "41cdc85b187d8290cf4196c9d1b64d6cc6fc61ab7dff465c2e52e547021e1e30",
+        "publication_policy": {
+          "strategy_version": "lhb_v1_stable_safe_top5",
+          "selection_policy": "phase18c_top5_then_eligibility_no_refill",
+          "market_regime_policy": "disabled_for_stable_strategy"
+        }
+      },
+      "artifact_evidence": [
+        {"name": "equity_curve.json", "sha256": "fc8ff53dda97ede8d86700d3f634dcda122ac6f92b175cfaa5bfbb22cc668c48", "record_count": 118},
+        {"name": "positions.json", "sha256": "0c0a31db69f07d54afe7cf090b9a596ef5d7e257210028478bf16211b659ed82", "record_count": 186},
+        {"name": "trades.json", "sha256": "0c0a31db69f07d54afe7cf090b9a596ef5d7e257210028478bf16211b659ed82", "record_count": 186}
+      ]
+    },
+    {
+      "strategy_id": "mid_trend",
+      "profile": "balanced",
+      "baseline_start_date": "2026-01-01",
+      "baseline_end_date": "2026-07-15",
+      "summary": {
+        "total_return": 0.4912125414919939,
+        "max_drawdown": -0.15950544649015808,
+        "filled_trade_count": 108,
+        "cash_slot_count": 0
+      },
+      "tolerances": {"total_return": 1e-10, "max_drawdown": 1e-10},
+      "acceptance_profile": "mid_trend_weekly_control_v1",
+      "publication_identity": {
+        "identity_schema_version": "strategy_publication_identity_v1",
+        "strategy_id": "mid_trend",
+        "contract_id": "mid_trend:balanced:top5_weekly_max2_selective_trend_holding_protection_v1",
+        "engine_version": "mid_trend_v1",
+        "variant": "top5_weekly_max2_selective_trend_holding_protection_v1",
+        "config_fingerprint": "b6230300f258af1da50d717ac1099d63c0cb738f385a49c92bc77417c64af5e5",
+        "publication_policy": {
+          "benchmark_variant": "top5_weekly_max2_selective_trend_holding_protection_v1"
+        }
+      },
+      "artifact_evidence": [
+        {"name": "equity_curve.json", "sha256": "2f01b54362f1d633d220ed20fa5c8f0c153cc42022db88e3b1858be512eade96", "record_count": 127},
+        {"name": "positions.json", "sha256": "bf576f20f58baafa9387a4e877e1bb125b7b68f9e14317e237b2df3d6994a051", "record_count": 135},
+        {"name": "trades.json", "sha256": "4ab6c634bb1fd91e1a1dc5e71fdeb08d0570415b8da3663605ca747cf47797d2", "record_count": 108}
+      ]
+    },
+    {
+      "strategy_id": "tech_bottleneck",
+      "profile": "balanced",
+      "baseline_start_date": "2026-01-01",
+      "baseline_end_date": "2026-07-15",
+      "summary": {
+        "total_return": 0.704975670561941,
+        "max_drawdown": -0.12600220340748958,
+        "filled_trade_count": 68,
+        "cash_slot_count": 0
+      },
+      "tolerances": {"total_return": 1e-10, "max_drawdown": 1e-10},
+      "acceptance_profile": "tech_bottleneck_biweekly_v1",
+      "publication_identity": {
+        "identity_schema_version": "strategy_publication_identity_v1",
+        "strategy_id": "tech_bottleneck",
+        "contract_id": "tech_bottleneck:balanced:strict_153_st_only_financial_state:biweekly:rank_exit_top10_1d",
+        "engine_version": "tech_bottleneck_v1",
+        "variant": "strict_153_st_only_financial_state:biweekly:rank_exit_top10_1d",
+        "config_fingerprint": "1198d8067218ad26b49a29341093eb839ee887b14b18b359bcaa2b80514f8ee1",
+        "publication_policy": {
+          "universe": "strict_153_st_only_financial_state",
+          "frequency": "biweekly",
+          "protection_name": "rank_exit_top10_1d"
+        }
+      },
+      "artifact_evidence": [
+        {"name": "equity_curve.json", "sha256": "55cff4563c8cfa6708ea14e043ee5b100e1b75951dcebf3b24ddc9c520cfb7e7", "record_count": 127},
+        {"name": "positions.json", "sha256": "c8431aee67f89f157ad0df8386f8d10f77e3a29719958e042b53b548bbe8841e", "record_count": 620},
+        {"name": "trades.json", "sha256": "3e5890ef0a751d360ca644575ade5a0eb9b4222bca4bd4bf9eff6c596f7727c1", "record_count": 68}
+      ]
+    }
+  ]
+}

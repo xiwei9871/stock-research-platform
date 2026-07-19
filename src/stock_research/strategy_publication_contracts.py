@@ -6,7 +6,7 @@ import hashlib
 import json
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 
 IDENTITY_SCHEMA_VERSION = "strategy_publication_identity_v1"
@@ -115,6 +115,7 @@ def _contract(
     frequency: str,
     strategy_config: Mapping[str, Any],
     publication_policy: Mapping[str, Any],
+    acceptance_profile: str,
 ) -> StrategyPublicationContract:
     return StrategyPublicationContract(
         strategy_id=strategy_id,
@@ -131,6 +132,7 @@ def _contract(
             **dict(strategy_config),
         },
         publication_policy=publication_policy,
+        acceptance_profile=acceptance_profile,
     )
 
 
@@ -148,6 +150,7 @@ _PUBLICATION_CONTRACTS: Mapping[tuple[str, str], StrategyPublicationContract] = 
                     "selection_policy": "phase18c_top5_then_eligibility_no_refill",
                     "market_regime_policy": "disabled_for_stable_strategy",
                 },
+                acceptance_profile="lhb_cash_account_v1",
             ),
             ("mid_trend", "balanced"): _contract(
                 "mid_trend",
@@ -164,6 +167,7 @@ _PUBLICATION_CONTRACTS: Mapping[tuple[str, str], StrategyPublicationContract] = 
                         "top5_weekly_max2_selective_trend_holding_protection_v1"
                     )
                 },
+                acceptance_profile="mid_trend_weekly_control_v1",
             ),
             ("tech_bottleneck", "balanced"): _contract(
                 "tech_bottleneck",
@@ -179,6 +183,7 @@ _PUBLICATION_CONTRACTS: Mapping[tuple[str, str], StrategyPublicationContract] = 
                     "frequency": "biweekly",
                     "protection_name": "rank_exit_top10_1d",
                 },
+                acceptance_profile="tech_bottleneck_biweekly_v1",
             ),
         }
     )
@@ -206,3 +211,182 @@ def get_publication_contract(
         return _PUBLICATION_CONTRACTS[(strategy_id, profile)]
     except KeyError as exc:
         raise KeyError(f"unknown strategy publication contract: {strategy_id}/{profile}") from exc
+
+
+StrategyAcceptanceCallback = Callable[
+    [Mapping[str, Any], Mapping[str, Any]],
+    list[str],
+]
+
+
+def _summary(result: Mapping[str, Any]) -> Mapping[str, Any]:
+    value = result.get("summary")
+    return value if isinstance(value, Mapping) else {}
+
+
+def _config(result: Mapping[str, Any]) -> Mapping[str, Any]:
+    value = result.get("config")
+    return value if isinstance(value, Mapping) else {}
+
+
+def _rows(result: Mapping[str, Any], field: str) -> list[Mapping[str, Any]]:
+    value = result.get(field)
+    if not isinstance(value, list):
+        return []
+    return [row for row in value if isinstance(row, Mapping)]
+
+
+def _expected_policy(baseline: Mapping[str, Any]) -> Mapping[str, Any]:
+    identity = baseline.get("publication_identity")
+    if not isinstance(identity, Mapping):
+        return {}
+    policy = identity.get("publication_policy")
+    return policy if isinstance(policy, Mapping) else {}
+
+
+def _lhb_acceptance(result: Mapping[str, Any], _baseline: Mapping[str, Any]) -> list[str]:
+    summary = _summary(result)
+    config = _config(result)
+    trades = _rows(result, "trades")
+    positions = _rows(result, "positions")
+    candidates = _rows(result, "candidates")
+    failures: list[str] = []
+    if config.get("top_n") != 5 or config.get("rebalance_frequency") != "daily":
+        failures.append("LHB acceptance requires daily safe top5 config")
+    if config.get("risk_profile") != "balanced":
+        failures.append("LHB acceptance requires balanced risk profile")
+    if summary.get("selection_policy") != "phase18c_top5_then_eligibility_no_refill":
+        failures.append("LHB acceptance requires top5 no-refill selection policy")
+    if summary.get("phase18c_top_n") != 5:
+        failures.append("LHB acceptance requires phase18c_top_n=5")
+    for field in ("filled_trade_count", "cash_slot_count"):
+        value = summary.get(field)
+        if value is not None and (isinstance(value, bool) or int(value) < 0):
+            failures.append(f"{field} must be a non-negative integer")
+    if not trades or not positions or not candidates:
+        failures.append("LHB acceptance evidence missing trades, positions, or candidates")
+    if len(trades) != int(summary.get("filled_trade_count") or -1):
+        failures.append("LHB filled_trade_count does not match trade rows")
+    if positions != trades:
+        failures.append("LHB positions must be the authoritative filled account trades")
+    for location, rows in (("trade", trades), ("candidate", candidates)):
+        for row in rows:
+            rank = row.get("phase18c_selection_rank")
+            try:
+                valid_rank = int(rank) == float(rank) and 1 <= int(rank) <= 5
+            except (TypeError, ValueError, OverflowError):
+                valid_rank = False
+            if not valid_rank:
+                failures.append(f"LHB {location} rank must stay within approved top5")
+            if row.get("backtest_entry_eligible") is not True or row.get("eligibility_status") != "eligible":
+                failures.append(f"LHB {location} must contain only eligible evidence")
+            if row.get("top5_eligible") is not True:
+                failures.append(f"LHB {location} must be explicitly top5 eligible")
+            if row.get("research_only") is True:
+                failures.append(f"LHB {location} must not include research-only evidence")
+    if any(row.get("account_trade_status") != "filled" for row in trades):
+        failures.append("LHB authoritative trade rows must all be filled")
+    return failures
+
+
+def _mid_trend_acceptance(
+    result: Mapping[str, Any],
+    _baseline: Mapping[str, Any],
+) -> list[str]:
+    summary = _summary(result)
+    config = _config(result)
+    positions = _rows(result, "positions")
+    trades = _rows(result, "trades")
+    failures: list[str] = []
+    expected_variant = str(
+        _baseline.get("publication_identity", {}).get("variant", "")
+        if isinstance(_baseline.get("publication_identity"), Mapping)
+        else ""
+    )
+    if config.get("rebalance_frequency") != "weekly":
+        failures.append("Mid Trend acceptance requires weekly rebalance")
+    if config.get("max_weekly_replacements") != 2:
+        failures.append("Mid Trend acceptance requires max_weekly_replacements=2")
+    if config.get("benchmark_variant") != expected_variant or summary.get("benchmark_variant") != expected_variant:
+        failures.append("Mid Trend acceptance requires approved holding protection policy")
+    if summary.get("position_rows") != len(positions):
+        failures.append("Mid Trend position_rows does not match positions artifact")
+    if summary.get("trade_rows") != len(trades):
+        failures.append("Mid Trend trade_rows does not match trades artifact")
+    if not positions or not trades:
+        failures.append("Mid Trend acceptance evidence missing positions or trades")
+    by_date: dict[str, int] = {}
+    for row in positions:
+        date = str(row.get("rebalance_date") or row.get("trade_date") or "")
+        if not date:
+            failures.append("Mid Trend position row missing rebalance date")
+            break
+        by_date[date] = by_date.get(date, 0) + 1
+    if any(count > 5 for count in by_date.values()):
+        failures.append("Mid Trend positions exceed approved top5 account size")
+    invested_weight = summary.get("average_invested_weight")
+    if invested_weight is not None and not 0.0 <= float(invested_weight) <= 1.0:
+        failures.append("average_invested_weight must be between zero and one")
+    return failures
+
+
+def _tech_bottleneck_acceptance(
+    result: Mapping[str, Any],
+    _baseline: Mapping[str, Any],
+) -> list[str]:
+    summary = _summary(result)
+    config = _config(result)
+    positions = _rows(result, "positions")
+    trades = _rows(result, "trades")
+    policy = _expected_policy(_baseline)
+    failures: list[str] = []
+    expected_universe = policy.get("universe")
+    expected_frequency = policy.get("frequency")
+    expected_protection = policy.get("protection_name")
+    if config.get("universe") != expected_universe or summary.get("universe") != expected_universe:
+        failures.append("Tech Bottleneck universe does not match approved policy")
+    if config.get("rebalance_frequency") != expected_frequency or summary.get("frequency") != expected_frequency:
+        failures.append("Tech Bottleneck acceptance requires approved biweekly frequency")
+    if config.get("protection_name") != expected_protection or summary.get("protection_name") != expected_protection:
+        failures.append("Tech Bottleneck protection policy mismatch")
+    coverage = summary.get("data_coverage")
+    latest_snapshot = coverage.get("candidate_snapshot_latest_date") if isinstance(coverage, Mapping) else None
+    if latest_snapshot != _baseline.get("baseline_end_date"):
+        failures.append("Tech Bottleneck candidate snapshot does not cover fixed replay end date")
+    if summary.get("position_rows") != len(positions):
+        failures.append("Tech Bottleneck position_rows does not match positions artifact")
+    if summary.get("trade_rows") != len(trades):
+        failures.append("Tech Bottleneck trade_rows does not match trades artifact")
+    if not positions or not trades:
+        failures.append("Tech Bottleneck acceptance evidence missing positions or trades")
+    by_date: dict[str, int] = {}
+    for row in positions:
+        date = str(row.get("trade_date") or row.get("date") or "")
+        if not date:
+            failures.append("Tech Bottleneck position row missing trade date")
+            break
+        by_date[date] = by_date.get(date, 0) + 1
+    if any(count > 5 for count in by_date.values()):
+        failures.append("Tech Bottleneck positions exceed approved top5 account size")
+    exposure = summary.get("avg_actual_exposure")
+    if exposure is not None and not 0.0 <= float(exposure) <= 1.0:
+        failures.append("avg_actual_exposure must be between zero and one")
+    return failures
+
+
+_STRATEGY_ACCEPTANCE_CALLBACKS: Mapping[str, StrategyAcceptanceCallback] = MappingProxyType(
+    {
+        "lhb_shortline": _lhb_acceptance,
+        "mid_trend": _mid_trend_acceptance,
+        "tech_bottleneck": _tech_bottleneck_acceptance,
+    }
+)
+
+
+def get_strategy_acceptance_callback(strategy_id: str) -> StrategyAcceptanceCallback:
+    """Return the registered strategy-specific replay acceptance callback."""
+
+    try:
+        return _STRATEGY_ACCEPTANCE_CALLBACKS[strategy_id]
+    except KeyError as exc:
+        raise KeyError(f"unknown strategy acceptance callback: {strategy_id}") from exc
