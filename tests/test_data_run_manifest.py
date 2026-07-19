@@ -30,3 +30,40 @@ def test_load_recent_data_run_manifest_trade_date_fetches_latest_row_per_module(
     assert calls["params"] == {"trade_date": "2026-07-02"}
     assert "PARTITION BY module, source" in calls["sql"]
     assert "run_id = (SELECT run_id FROM latest)" not in calls["sql"]
+
+
+def test_apply_schema_creates_manifest_before_publication_contract_schema(monkeypatch):
+    calls = []
+
+    class FakeCursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def execute(self, sql):
+            calls.append(("manifest", sql))
+
+    class FakeConnection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def cursor(self):
+            return FakeCursor()
+
+    monkeypatch.setattr(data_run_manifest, "connect", lambda service: FakeConnection())
+    monkeypatch.setattr(
+        "stock_research.strategy_publication_store.apply_strategy_publication_schema",
+        lambda service: calls.append(("publication", service)),
+    )
+
+    data_run_manifest.apply_data_run_manifest_schema(service="research-test")
+
+    assert calls == [
+        ("manifest", data_run_manifest.CREATE_DATA_RUN_MANIFEST_SQL),
+        ("publication", "research-test"),
+    ]
