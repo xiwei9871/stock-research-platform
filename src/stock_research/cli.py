@@ -127,6 +127,7 @@ from stock_research.theme_decomposition import cli as run_theme_decomposition_cl
 from stock_research.theme_research_ingestion import cli as run_theme_research_ingestion_cli
 from stock_research.theme_research_db_schema import cli as run_theme_research_db_cli
 from stock_research.research_project_v2.cli import run_research_project_v2_cli
+from stock_research.research_project_v2_1.cli import run_research_project_v2_1_cli
 from stock_research.theme_research_phase_verifier import (
     cli as run_theme_research_phase_verifier_cli,
 )
@@ -5176,6 +5177,8 @@ def _run_technology_industry_catalog_fallback(args: argparse.Namespace) -> int:
 
 def main_for_args(argv: list[str] | None = None) -> int | None:
     raw_argv = list(argv) if argv is not None else sys.argv[1:]
+    if raw_argv and raw_argv[0] == "research-project-v2-1":
+        return run_research_project_v2_1_cli(raw_argv[1:])
     if raw_argv and raw_argv[0] == "research-project-v2":
         return run_research_project_v2_cli(raw_argv[1:])
     if raw_argv and raw_argv[0] == "technology-industry-catalog":
