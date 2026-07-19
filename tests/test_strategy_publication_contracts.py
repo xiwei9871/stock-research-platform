@@ -15,6 +15,7 @@ from stock_research.strategy_publication_contracts import (
 
 
 def test_balanced_registry_contains_the_three_official_contracts():
+    assert isinstance(OFFICIAL_STRATEGY_IDS, frozenset)
     assert OFFICIAL_STRATEGY_IDS == {"lhb_shortline", "mid_trend", "tech_bottleneck"}
 
     expected = {
@@ -134,3 +135,63 @@ def test_identity_mismatch_reports_every_missing_field_without_coercing_values()
         "expected": expected["publication_policy"],
         "actual": "invalid",
     }
+
+
+def test_identity_mismatch_reports_unexpected_actual_fields():
+    expected = build_publication_identity(get_publication_contract("mid_trend"))
+    actual = {**expected, "artifact_version": "v2"}
+
+    assert validate_publication_identity(actual, expected) == [
+        {"field": "artifact_version", "expected": None, "actual": "v2"}
+    ]
+
+
+def test_identity_mismatch_reports_additional_expected_schema_fields():
+    actual = build_publication_identity(get_publication_contract("mid_trend"))
+    expected = {**actual, "future_schema_field": "required"}
+
+    assert validate_publication_identity(actual, expected) == [
+        {"field": "future_schema_field", "expected": "required", "actual": None}
+    ]
+
+
+def test_contract_recursively_snapshots_nested_json_inputs():
+    source_config = {"nested": {"weights": [1, 2]}}
+    source_policy = {"nested": {"rules": ["keep"]}}
+    contract = StrategyPublicationContract(
+        strategy_id="test_strategy",
+        profile="balanced",
+        contract_id="test_strategy:balanced:v1",
+        engine_version="test_engine_v1",
+        variant="v1",
+        normalized_run_config=source_config,
+        publication_policy=source_policy,
+    )
+    fingerprint = canonical_config_fingerprint(contract.normalized_run_config)
+
+    source_config["nested"]["weights"].append(3)
+    source_policy["nested"]["rules"].append("replace")
+
+    assert contract.normalized_run_config["nested"]["weights"] == (1, 2)
+    assert contract.publication_policy["nested"]["rules"] == ("keep",)
+    assert canonical_config_fingerprint(contract.normalized_run_config) == fingerprint
+
+
+def test_built_identity_policy_is_detached_from_nested_contract_state():
+    contract = StrategyPublicationContract(
+        strategy_id="test_strategy",
+        profile="balanced",
+        contract_id="test_strategy:balanced:v1",
+        engine_version="test_engine_v1",
+        variant="v1",
+        normalized_run_config={"nested": {"weights": [1, 2]}},
+        publication_policy={"nested": {"rules": ["keep"]}},
+    )
+
+    identity = build_publication_identity(contract)
+    identity["publication_policy"]["nested"]["rules"].append("replace")
+
+    assert build_publication_identity(contract)["publication_policy"] == {
+        "nested": {"rules": ["keep"]}
+    }
+    assert contract.publication_policy["nested"]["rules"] == ("keep",)
