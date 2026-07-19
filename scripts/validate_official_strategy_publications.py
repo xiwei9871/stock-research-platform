@@ -906,8 +906,11 @@ def _validate_evidence_date_bounds(
     for collection, date_fields in (
         ("positions", ("rebalance_date", "trade_date", "date")),
         ("trades", ("trade_date",)),
+        ("candidates", ("trade_date",)),
     ):
         rows = result.get(collection)
+        if collection == "candidates" and rows is None:
+            continue
         if not isinstance(rows, list) or not rows:
             failures.append(f"{collection} missing or empty for replay date bounds")
             continue

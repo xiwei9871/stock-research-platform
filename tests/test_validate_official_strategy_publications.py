@@ -478,6 +478,45 @@ def test_validator_rejects_positions_and_trades_outside_fixed_replay_window(
         validator.validate_result(result, baseline=baseline)
 
 
+@pytest.mark.parametrize("bad_date", ["2025-12-31", "2026-07-16"])
+def test_lhb_candidate_generation_rejects_candidates_outside_replay_window(
+    tmp_path,
+    bad_date,
+):
+    result = _raw_result(tmp_path, strategy_id="lhb_shortline")
+    result["candidates"][0]["trade_date"] = bad_date
+    prepared = validator.materialize_result_artifacts(
+        result,
+        template=_template(strategy_id="lhb_shortline"),
+        output_dir=tmp_path / f"lhb-candidate-date-{bad_date}",
+    )
+
+    with pytest.raises(ValueError, match="candidates.*outside requested replay window"):
+        validator.build_candidate(
+            prepared,
+            template=_template(strategy_id="lhb_shortline"),
+        )
+
+
+@pytest.mark.parametrize("bad_date", ["2025-12-31", "2026-07-16"])
+def test_lhb_validation_rejects_candidates_outside_replay_window_after_hash_update(
+    tmp_path,
+    bad_date,
+):
+    baseline, result = _approved_pair(tmp_path, strategy_id="lhb_shortline")
+    candidates = deepcopy(result["candidates"])
+    candidates[0]["trade_date"] = bad_date
+    _rewrite_artifact_and_approve(
+        result,
+        baseline,
+        name="candidates.json",
+        rows=candidates,
+    )
+
+    with pytest.raises(ValueError, match="candidates.*outside requested replay window"):
+        validator.validate_result(result, baseline=baseline)
+
+
 def test_every_registered_strategy_has_a_specific_acceptance_callback():
     callbacks = {
         contract.strategy_id: get_strategy_acceptance_callback(contract.strategy_id)
