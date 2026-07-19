@@ -261,6 +261,31 @@ def test_rebuild_allows_only_the_stable_lock_at_layered_root(tmp_path: Path) -> 
     assert exc_info.value.details["path"] == str(unexpected)
 
 
+def test_rebuild_accepts_only_the_canonical_root_gitignore(tmp_path: Path) -> None:
+    slug = next(iter(EXPECTED))
+    layout = _copy_layout(tmp_path, slug)
+    gitignore = layout.root / ".gitignore"
+    gitignore.write_bytes(b".maintenance.lock\n")
+    assert rebuild_layered_index(False, layout)["status"] == "planned"
+
+    gitignore.write_bytes(b".maintenance.lock\n*.json\n")
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        rebuild_layered_index(False, layout)
+    assert exc_info.value.details["reason"] == "invalid layered root .gitignore"
+
+
+def test_rebuild_rejects_symlinked_root_gitignore(tmp_path: Path) -> None:
+    slug = next(iter(EXPECTED))
+    layout = _copy_layout(tmp_path, slug)
+    outside = tmp_path / "outside-gitignore"
+    outside.write_bytes(b".maintenance.lock\n")
+    (layout.root / ".gitignore").symlink_to(outside)
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        rebuild_layered_index(False, layout)
+    assert exc_info.value.details["reason"] == "unsafe managed path"
+
+
 def test_rebuild_rolls_back_all_files_on_atomic_failure(tmp_path: Path, monkeypatch) -> None:
     slug = next(iter(EXPECTED))
     layout = _copy_layout(tmp_path, slug)

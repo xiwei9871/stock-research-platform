@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import re
+import stat
 import tempfile
 from typing import Any
 from datetime import datetime
@@ -35,6 +36,7 @@ _MANIFEST_FIELDS = {
     "content_hash",
     "created_at",
 }
+_ROOT_GITIGNORE = b".maintenance.lock\n"
 
 
 def _error(reason: str, *, path: Path | None = None, **details: object) -> ResearchProjectV2Error:
@@ -128,6 +130,38 @@ def _safe(path: Path, layout: LayeredResearchLayout, *, allow_missing: bool = Fa
         raise _error("unsafe managed path", path=path) from exc
     if not allow_missing and not path.exists():
         raise _error("managed path missing", path=path)
+
+
+def _validate_root_gitignore(path: Path, layout: LayeredResearchLayout) -> None:
+    _safe(path, layout)
+    descriptor: int | None = None
+    try:
+        descriptor = os.open(
+            path,
+            os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0),
+        )
+        before = os.fstat(descriptor)
+        entry_before = os.lstat(path)
+        data = os.read(descriptor, len(_ROOT_GITIGNORE) + 1)
+        after = os.fstat(descriptor)
+        entry_after = os.lstat(path)
+    except OSError as exc:
+        raise _error("unsafe managed path", path=path) from exc
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+    stable = (
+        stat.S_ISREG(before.st_mode)
+        and before.st_dev == entry_before.st_dev == after.st_dev == entry_after.st_dev
+        and before.st_ino == entry_before.st_ino == after.st_ino == entry_after.st_ino
+        and before.st_size == after.st_size
+        and before.st_mtime_ns == after.st_mtime_ns
+    )
+    if not stable:
+        raise _error("unsafe managed path", path=path)
+    _safe(path, layout)
+    if data != _ROOT_GITIGNORE:
+        raise _error("invalid layered root .gitignore", path=path)
 
 
 def _manifest(path: Path, slug: str) -> tuple[bytes, list[dict[str, Any]]]:
@@ -232,6 +266,7 @@ def _rebuild_layered_index_unlocked(
     """Rebuild only the V2.1 layered index and bootstrap placeholder hashes."""
     selected = layout
     allowed_root_entries = {
+        ".gitignore",
         ".maintenance.lock",
         "evidence",
         "fixtures",
@@ -243,6 +278,8 @@ def _rebuild_layered_index_unlocked(
         _safe(entry, selected)
         if entry.name not in allowed_root_entries:
             raise _error("unexpected layered root entry", path=entry)
+        if entry.name == ".gitignore":
+            _validate_root_gitignore(entry, selected)
     _safe(selected.projects_dir, selected)
     for entry in selected.projects_dir.iterdir():
         _safe(entry, selected)
