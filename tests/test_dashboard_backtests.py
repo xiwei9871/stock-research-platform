@@ -452,7 +452,32 @@ def test_latest_eod_strategy_module_uses_recent_manifest_by_module(monkeypatch):
     assert module["latest_trade_date"] == "2026-07-02"
 
 
+def test_registered_strategy_without_versioned_eod_evidence_fails_closed(monkeypatch):
+    monkeypatch.setattr(backtests, "_latest_eod_strategy_module", lambda strategy_id: None)
+
+    strategy = backtests._with_latest_eod_strategy_metrics(
+        {
+            "strategy_id": "mid_trend",
+            "strategy_name": "Mid Trend Combo",
+            "latest_metrics": {
+                "as_of_date": "2026-07-18",
+                "total_return_pct": 88.8,
+                "max_drawdown_pct": -12.3,
+            },
+        }
+    )
+
+    assert strategy["latest_metrics"] == {
+        "as_of_date": "2026-07-18",
+        "signal_status": "contract_mismatch",
+        "signal_count": 0,
+        "contract_status": "contract_mismatch",
+        "contract_reason": "versioned official publication missing",
+    }
+
+
 def test_lhb_stale_performance_does_not_publish_latest_day_zero_return(monkeypatch):
+    identity = build_publication_identity(get_publication_contract("lhb_shortline"))
     monkeypatch.setattr(backtests, "_read_eod_strategy_rows", lambda module, latest_trade_date, strategy_id: [])
     monkeypatch.setattr(backtests, "_validate_eod_summary_contract", lambda strategy_id, summary: ("success", "ok"))
     monkeypatch.setattr(backtests, "_metrics_from_eod_equity_path", lambda module, strategy: {})
@@ -463,8 +488,22 @@ def test_lhb_stale_performance_does_not_publish_latest_day_zero_return(monkeypat
             "module": "strategy_lhb_shortline",
             "status": "success",
             "row_count": 4,
+            "trade_date": "2026-06-29",
             "latest_trade_date": "2026-06-29",
             "metadata": {
+                "publication_identity": identity,
+                "identity_schema_version": "strategy_publication_identity_v1",
+                "artifact_version": "strategy_artifact_v1",
+                "publication_manifest_path": (
+                    "/srv/strategy_daily_eod/2026-06-29/strategy_runs/"
+                    "lhb_shortline/publish-1/publication_manifest.json"
+                ),
+                "output_paths": {
+                    "publication_manifest_path": (
+                        "/srv/strategy_daily_eod/2026-06-29/strategy_runs/"
+                        "lhb_shortline/publish-1/publication_manifest.json"
+                    )
+                },
                 "summary": {
                     "total_return": 1.6241,
                     "max_drawdown": -0.0842,
@@ -472,6 +511,8 @@ def test_lhb_stale_performance_does_not_publish_latest_day_zero_return(monkeypat
                     "latest_period_return": 0.0,
                     "latest_period_label": "最近交易日",
                     "performance_effective_date": "2026-06-26",
+                    "publication_identity": identity,
+                    "artifact_version": "strategy_artifact_v1",
                 }
             },
         },
@@ -580,3 +621,112 @@ def test_eod_summary_projects_lhb_metrics_from_generic_publication_policy():
     assert metrics["strategy_version"] == policy["strategy_version"]
     assert metrics["selection_policy"] == policy["selection_policy"]
     assert metrics["market_regime_policy"] == policy["market_regime_policy"]
+
+
+def test_latest_eod_metrics_fail_closed_per_strategy_for_publication_identity(tmp_path, monkeypatch):
+    output_root = tmp_path / "outputs"
+    strategies = []
+    modules = {}
+    for strategy_id in ("lhb_shortline", "mid_trend", "tech_bottleneck"):
+        identity = build_publication_identity(get_publication_contract(strategy_id))
+        summary = backtests.attach_publication_identity(
+            _official_result(strategy_id), profile="balanced"
+        )["summary"]
+        summary.update(
+            {
+                "total_return": 0.25,
+                "max_drawdown": -0.05,
+                "latest_period_return": 0.02,
+                "performance_effective_date": "2026-07-18",
+                "artifact_version": "strategy_artifact_v1",
+            }
+        )
+        version_dir = (
+            output_root
+            / "research"
+            / "strategy_daily_eod"
+            / "2026-07-18"
+            / "strategy_runs"
+            / strategy_id
+            / "publish-1"
+        )
+        version_dir.mkdir(parents=True)
+        manifest_path = version_dir / "publication_manifest.json"
+        manifest_path.write_text("{}\n", encoding="utf-8")
+        modules[strategy_id] = {
+            "module": f"strategy_{strategy_id}",
+            "status": "success",
+            "trade_date": "2026-07-18",
+            "latest_trade_date": "2026-07-18",
+            "row_count": 5,
+            "metadata": {
+                "publication_identity": identity,
+                "identity_schema_version": identity["identity_schema_version"],
+                "artifact_version": "strategy_artifact_v1",
+                "publication_manifest_path": str(manifest_path),
+                "output_paths": {"publication_manifest_path": str(manifest_path)},
+                "summary": summary,
+            },
+        }
+        strategies.append(
+            {
+                "strategy_id": strategy_id,
+                "strategy_name": strategy_id,
+                "status": "runnable",
+                "latest_metrics": {},
+            }
+        )
+    modules["tech_bottleneck"]["metadata"]["publication_identity"] = {
+        **modules["tech_bottleneck"]["metadata"]["publication_identity"],
+        "config_fingerprint": "wrong",
+    }
+
+    monkeypatch.setattr(backtests, "SETTINGS", SimpleNamespace(output_root=output_root))
+    monkeypatch.setattr(backtests, "list_strategy_catalog", lambda: strategies)
+    monkeypatch.setattr(
+        backtests, "_enrich_strategies_with_latest_db_metrics", lambda items: items
+    )
+    monkeypatch.setattr(
+        backtests, "_latest_eod_strategy_module", lambda strategy_id: modules[strategy_id]
+    )
+    monkeypatch.setattr(backtests, "_read_eod_strategy_rows", lambda *args, **kwargs: [])
+    monkeypatch.setattr(backtests, "_metrics_from_eod_equity_path", lambda *args, **kwargs: {})
+
+    items = {item["strategy_id"]: item for item in backtests.list_backtest_strategies()}
+
+    for strategy_id in ("lhb_shortline", "mid_trend"):
+        metrics = items[strategy_id]["latest_metrics"]
+        assert metrics["contract_status"] == "success"
+        assert metrics["contract_id"] == build_publication_identity(
+            get_publication_contract(strategy_id)
+        )["contract_id"]
+        assert metrics["artifact_version"] == "strategy_artifact_v1"
+        assert metrics["publication_manifest_path"].endswith(
+            f"/strategy_runs/{strategy_id}/publish-1/publication_manifest.json"
+        )
+        assert metrics["total_return_pct"] == 25.0
+
+    invalid = items["tech_bottleneck"]["latest_metrics"]
+    assert invalid["contract_status"] == "contract_mismatch"
+    assert "total_return_pct" not in invalid
+    assert "max_drawdown_pct" not in invalid
+    assert "latest_period_return_pct" not in invalid
+
+    missing_versioned_paths = copy.deepcopy(modules["mid_trend"])
+    del missing_versioned_paths["metadata"]["output_paths"]
+    assert backtests._validate_eod_publication_contract(
+        "mid_trend",
+        missing_versioned_paths,
+        missing_versioned_paths["metadata"]["summary"],
+    )[0] == "contract_mismatch"
+
+    mixed_identity = copy.deepcopy(modules["mid_trend"])
+    mixed_identity["metadata"]["config"] = {
+        "publication_identity": {
+            **build_publication_identity(get_publication_contract("mid_trend")),
+            "contract_id": "mid_trend:balanced:legacy",
+        }
+    }
+    assert backtests._validate_eod_publication_contract(
+        "mid_trend", mixed_identity, mixed_identity["metadata"]["summary"]
+    )[0] == "contract_mismatch"

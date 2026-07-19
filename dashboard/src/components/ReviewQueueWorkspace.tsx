@@ -393,6 +393,27 @@ export function ReviewQueueWorkspace({
                   <span className="status-chip">{selectedDigest.bucket}</span>
                 </div>
 
+                <div className="strategy-metric-grid" aria-label="正式发布合同">
+                  <div>
+                    <span>正式合同</span>
+                    <strong>{selectedItem.contract_id ?? '-'}</strong>
+                  </div>
+                  <div>
+                    <span>产物版本</span>
+                    <strong>{selectedItem.artifact_version ?? '-'}</strong>
+                  </div>
+                  <div>
+                    <span>校验状态</span>
+                    <strong>
+                      {selectedItem.contract_status === 'success'
+                        ? '通过'
+                        : selectedItem.contract_status === 'contract_mismatch'
+                          ? '合同不匹配'
+                          : '未校验'}
+                    </strong>
+                  </div>
+                </div>
+
                 {selectedItem.source_kinds.length > 0 ? (
                   <div className="tag-stack" aria-label="证据来源">
                     {selectedItem.source_kinds.map((sourceKind) => (

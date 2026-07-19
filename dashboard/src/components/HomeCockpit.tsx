@@ -267,12 +267,17 @@ function strategyEvidenceMetrics(strategy: StrategyCatalogItem) {
   const navMatch = evidence.match(/净值(?:约)?\s*([0-9]+(?:\.[0-9]+)?)/);
   const drawdownMatch = evidence.match(/(?:最大)?回撤(?:约)?\s*(-?[0-9]+(?:\.[0-9]+)?)%/);
   const nav = navMatch ? Number(navMatch[1]) : null;
-  const totalReturnPct =
-    strategy.latest_metrics?.total_return_pct ??
-    (typeof nav === 'number' && !Number.isNaN(nav) ? (nav - 1) * 100 : null);
-  const maxDrawdownPct = strategy.latest_metrics?.max_drawdown_pct ?? (drawdownMatch ? Number(drawdownMatch[1]) : null);
+  const contractStatus = strategy.latest_metrics?.contract_status ?? 'contract_mismatch';
+  const contractReady = contractStatus === 'success';
+  const totalReturnPct = contractReady
+    ? strategy.latest_metrics?.total_return_pct ??
+      (typeof nav === 'number' && !Number.isNaN(nav) ? (nav - 1) * 100 : null)
+    : null;
+  const maxDrawdownPct = contractReady
+    ? strategy.latest_metrics?.max_drawdown_pct ?? (drawdownMatch ? Number(drawdownMatch[1]) : null)
+    : null;
   let status = 'Evidence';
-  if (strategy.latest_metrics?.signal_status === 'strategy_failed') {
+  if (strategy.latest_metrics?.signal_status === 'strategy_failed' || !contractReady) {
     status = 'NotReady';
   }
   if (typeof maxDrawdownPct === 'number' && !Number.isNaN(maxDrawdownPct)) {
@@ -283,14 +288,24 @@ function strategyEvidenceMetrics(strategy: StrategyCatalogItem) {
   return {
     totalReturnPct,
     maxDrawdownPct,
-    latestDayReturnPct: strategy.latest_metrics?.latest_day_return_pct ?? null,
-    latestPeriodReturnPct: strategy.latest_metrics?.latest_period_return_pct ?? strategy.latest_metrics?.latest_day_return_pct ?? null,
+    latestDayReturnPct: contractReady ? strategy.latest_metrics?.latest_day_return_pct ?? null : null,
+    latestPeriodReturnPct: contractReady
+      ? strategy.latest_metrics?.latest_period_return_pct ?? strategy.latest_metrics?.latest_day_return_pct ?? null
+      : null,
     latestPeriodLabel: strategy.latest_metrics?.latest_period_label ?? '最近交易日',
-    latestDayDrawdownPct: strategy.latest_metrics?.latest_day_drawdown_pct ?? null,
+    latestDayDrawdownPct: contractReady ? strategy.latest_metrics?.latest_day_drawdown_pct ?? null : null,
     asOfDate: strategy.latest_metrics?.as_of_date ?? null,
     signalStatus: strategy.latest_metrics?.signal_status ?? 'no_position_rows',
     signalCount: strategy.latest_metrics?.signal_count ?? null,
     strategyVersion: strategy.latest_metrics?.strategy_version ?? null,
+    contractId: strategy.latest_metrics?.contract_id ?? null,
+    artifactVersion: strategy.latest_metrics?.artifact_version ?? null,
+    contractStatus,
+    isLhbPolicy:
+      contractReady &&
+      strategy.strategy_id === 'lhb_shortline' &&
+      strategy.latest_metrics?.publication_policy?.selection_policy ===
+        'phase18c_top5_then_eligibility_no_refill',
     status,
     evidence
   };
@@ -319,6 +334,7 @@ function metricClass(value: number | null | undefined) {
 
 function signalLabel(metrics: ReturnType<typeof strategyEvidenceMetrics>) {
   if (metrics.signalStatus === 'strategy_failed') return '正式产物失败';
+  if (metrics.contractStatus !== 'success') return '正式合同不匹配';
   if (typeof metrics.signalCount === 'number') {
     if (metrics.signalStatus === 'candidate_rows') return `当日候选 ${metrics.signalCount}`;
     if (metrics.signalStatus === 'current_holdings') return `当前持仓 ${metrics.signalCount}`;
@@ -1712,6 +1728,21 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
                     </strong>
                   </div>
                 </div>
+                <div className="strategy-metric-grid" aria-label={`${strategy.strategy_name} 正式发布合同`}>
+                  <div>
+                    <span>正式合同</span>
+                    <strong>{metrics.contractId ?? '-'}</strong>
+                  </div>
+                  <div>
+                    <span>产物版本</span>
+                    <strong>{metrics.artifactVersion ?? '-'}</strong>
+                  </div>
+                  <div>
+                    <span>校验状态</span>
+                    <strong>{metrics.contractStatus === 'success' ? '通过' : metrics.contractStatus === 'contract_mismatch' ? '合同不匹配' : '未校验'}</strong>
+                  </div>
+                </div>
+                {metrics.isLhbPolicy ? <p className="muted">Top5 先选后校验，不补位</p> : null}
                 <div className="strategy-card-footer">
                   <span>{metrics.asOfDate ? `截至 ${metrics.asOfDate}` : '最近日期未接入'}</span>
                   <span>{signalLabel(metrics)}</span>

@@ -42,6 +42,16 @@ function makeQueue(overrides: Partial<ReviewQueueResponse> = {}): ReviewQueueRes
             strategy_id: 'mid_trend',
             strategy_name: 'Mid Trend Combo',
             strategy_run_id: 'mid_trend:run',
+            contract_id: 'mid_trend:balanced:top5_weekly_max2_selective_trend_holding_protection_v1',
+            identity_schema_version: 'strategy_publication_identity_v1',
+            config_fingerprint: 'mid-fingerprint',
+            publication_policy: {
+              benchmark_variant: 'top5_weekly_max2_selective_trend_holding_protection_v1'
+            },
+            artifact_version: 'strategy_artifact_v1',
+            publication_manifest_path:
+              '/srv/strategy_runs/mid_trend/publish-1/publication_manifest.json',
+            contract_status: 'success',
             review_tier: 'top5_focus',
             digest_key: '2026-06-08:strategy_topn:000001.SZ',
             digest_title: 'Strong evidence',
@@ -163,6 +173,16 @@ describe('ReviewQueueWorkspace', () => {
     expect(within(preview).getByText('Recent accepted news')).toBeInTheDocument();
     expect(within(sourceChips).getByText('策略')).toBeInTheDocument();
     expect(within(sourceChips).getByText('研报')).toBeInTheDocument();
+    expect(within(preview).getByText('正式合同')).toBeVisible();
+    expect(within(preview).getByText('产物版本')).toBeVisible();
+    expect(within(preview).getByText('校验状态')).toBeVisible();
+    expect(
+      within(preview).getByText(
+        'mid_trend:balanced:top5_weekly_max2_selective_trend_holding_protection_v1'
+      )
+    ).toBeVisible();
+    expect(within(preview).getByText('strategy_artifact_v1')).toBeVisible();
+    expect(within(preview).getByText('通过')).toBeVisible();
   });
 
   it('shows platform and per-strategy freshness when review queue is stale', async () => {

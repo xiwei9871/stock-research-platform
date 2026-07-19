@@ -1,4 +1,5 @@
 import math
+import re
 import time
 from copy import deepcopy
 from datetime import datetime, timezone
@@ -23,6 +24,8 @@ from stock_research.tech_bottleneck_v1 import (
     TECH_BOTTLENECK_V1_CANDIDATES_PATH,
     run_tech_bottleneck_v1_backtest_for_dashboard,
 )
+from stock_research.strategy_publication_artifacts import ARTIFACT_VERSION
+from stock_research.strategy_publication_contracts import OFFICIAL_STRATEGY_IDS
 from stock_research.vectorized_topn_backtest import (
     VectorizedTopNConfig,
     run_vectorized_topn_backtest,
@@ -31,11 +34,7 @@ from stock_research.vectorized_topn_backtest import (
 if TYPE_CHECKING:
     from stock_research.strategy_publication_contracts import StrategyPublicationContract
 
-BACKTEST_LAB_STRATEGY_IDS = {
-    "lhb_shortline",
-    "mid_trend",
-    "tech_bottleneck",
-}
+BACKTEST_LAB_STRATEGY_IDS = set(OFFICIAL_STRATEGY_IDS)
 TECH_BOTTLENECK_LAB_OUTPUT_ROOT = Path(getattr(SETTINGS, "output_root", "/Users/xiwei/stock_research/outputs")) / "research" / "strategy_lab_tech_bottleneck"
 
 
@@ -374,9 +373,23 @@ def _enrich_strategies_with_latest_eod_metrics(strategies: list[dict[str, Any]])
 
 
 def _with_latest_eod_strategy_metrics(strategy: dict[str, Any]) -> dict[str, Any]:
-    module = _latest_eod_strategy_module(str(strategy.get("strategy_id") or ""))
+    strategy_id = str(strategy.get("strategy_id") or "")
+    module = _latest_eod_strategy_module(strategy_id)
     if not module:
-        return strategy
+        if strategy_id not in OFFICIAL_STRATEGY_IDS:
+            return strategy
+        previous_metrics = strategy.get("latest_metrics")
+        previous_metrics = previous_metrics if isinstance(previous_metrics, Mapping) else {}
+        next_strategy = dict(strategy)
+        next_strategy["latest_metrics"] = {
+            "as_of_date": previous_metrics.get("as_of_date"),
+            "signal_status": "contract_mismatch",
+            "signal_count": 0,
+            "contract_status": "contract_mismatch",
+            "contract_reason": "versioned official publication missing",
+        }
+        next_strategy["latest_evidence"] = "策略缺少可校验的版本化正式产物。"
+        return next_strategy
 
     latest_trade_date = str(module.get("latest_trade_date") or module.get("trade_date") or "")
     if str(module.get("status") or "") != "success":
@@ -401,22 +414,26 @@ def _with_latest_eod_strategy_metrics(strategy: dict[str, Any]) -> dict[str, Any
         }
     )
 
-    contract_status = _validate_eod_summary_contract(str(strategy["strategy_id"]), summary)
-    if contract_status:
-        status, reason = contract_status
-        if status != "success":
-            next_strategy = dict(strategy)
-            next_strategy["latest_metrics"] = {
-                "as_of_date": performance_as_of_date or metrics.get("as_of_date"),
-                "signal_as_of_date": latest_trade_date or metrics.get("signal_as_of_date"),
-                "signal_status": "contract_mismatch",
-                "signal_count": signal_count,
-                "contract_status": status,
-                "contract_reason": reason,
-            }
-            next_strategy["latest_evidence"] = f"策略产物未通过正式身份合同校验：{reason}"
-            return next_strategy
-        metrics["contract_status"] = status
+    status, reason = _validate_eod_publication_contract(
+        str(strategy["strategy_id"]), module, summary
+    )
+    publication_metrics = _publication_metadata_metrics(module, summary)
+    if status != "success":
+        next_strategy = dict(strategy)
+        next_strategy["latest_metrics"] = {
+            "as_of_date": performance_as_of_date or metrics.get("as_of_date"),
+            "performance_as_of_date": performance_as_of_date or metrics.get("as_of_date"),
+            "signal_as_of_date": latest_trade_date or metrics.get("signal_as_of_date"),
+            "signal_status": "contract_mismatch",
+            "signal_count": signal_count,
+            "contract_status": status,
+            "contract_reason": reason,
+            **publication_metrics,
+        }
+        next_strategy["latest_evidence"] = f"策略产物未通过正式身份合同校验：{reason}"
+        return next_strategy
+    metrics.update(publication_metrics)
+    metrics["contract_status"] = status
     equity_metrics = _metrics_from_eod_equity_path(module, strategy)
     if summary:
         metrics.update(_metrics_from_eod_summary(summary))
@@ -487,14 +504,133 @@ def _validate_eod_summary_contract(strategy_id: str, summary: dict[str, Any]) ->
     return result.status, result.reason
 
 
+def _validate_eod_publication_contract(
+    strategy_id: str,
+    module: Mapping[str, Any],
+    summary: Mapping[str, Any],
+) -> tuple[str, str]:
+    from stock_research.strategy_publication_contracts import (
+        build_publication_identity,
+        get_publication_contract,
+        validate_publication_identity,
+    )
+
+    try:
+        expected = build_publication_identity(
+            get_publication_contract(strategy_id, profile="balanced")
+        )
+    except Exception as exc:
+        return "contract_mismatch", f"publication contract unavailable: {exc}"
+
+    metadata = module.get("metadata") if isinstance(module.get("metadata"), Mapping) else {}
+    actual = metadata.get("publication_identity")
+    summary_identity = summary.get("publication_identity")
+    if not isinstance(actual, Mapping) or not isinstance(summary_identity, Mapping):
+        return "contract_mismatch", "publication identity missing"
+    if validate_publication_identity(actual, expected):
+        return "contract_mismatch", "metadata publication identity mismatch"
+    if validate_publication_identity(summary_identity, expected):
+        return "contract_mismatch", "summary publication identity mismatch"
+    config = metadata.get("config") if isinstance(metadata.get("config"), Mapping) else {}
+    for location, container in (
+        ("module", module),
+        ("metadata", metadata),
+        ("summary", summary),
+        ("config", config),
+    ):
+        if "publication_identity" in container:
+            declared_identity = container.get("publication_identity")
+            if not isinstance(declared_identity, Mapping) or validate_publication_identity(
+                declared_identity, expected
+            ):
+                return "contract_mismatch", f"{location} publication identity mismatch"
+        if (
+            "identity_schema_version" in container
+            and container.get("identity_schema_version")
+            != expected["identity_schema_version"]
+        ):
+            return "contract_mismatch", f"{location} identity schema version mismatch"
+        if (
+            "artifact_version" in container
+            and container.get("artifact_version") != ARTIFACT_VERSION
+        ):
+            return "contract_mismatch", f"{location} artifact version mismatch"
+    if metadata.get("identity_schema_version") != expected["identity_schema_version"]:
+        return "contract_mismatch", "identity schema version missing"
+    if metadata.get("artifact_version") != ARTIFACT_VERSION:
+        return "contract_mismatch", "artifact version missing"
+    if summary.get("artifact_version") != ARTIFACT_VERSION:
+        return "contract_mismatch", "summary artifact version missing"
+
+    manifest_path = metadata.get("publication_manifest_path")
+    output_paths = metadata.get("output_paths")
+    if not isinstance(output_paths, Mapping):
+        return "contract_mismatch", "versioned output paths missing"
+    output_manifest_path = output_paths.get("publication_manifest_path")
+    if str(output_manifest_path or "") != str(manifest_path or ""):
+        return "contract_mismatch", "mixed publication manifest paths"
+    if not _versioned_publication_manifest_path_valid(manifest_path, strategy_id):
+        return "contract_mismatch", "publication manifest path mismatch"
+
+    legacy_status = _validate_eod_summary_contract(strategy_id, dict(summary))
+    if legacy_status is None:
+        return "contract_mismatch", "strategy parameter contract unavailable"
+    status, reason = legacy_status
+    if status != "success":
+        return "contract_mismatch", reason
+    return "success", reason
+
+
+def _versioned_publication_manifest_path_valid(value: Any, strategy_id: str) -> bool:
+    text = str(value or "")
+    if not text.startswith("/") or "\\" in text or "?" in text or "#" in text:
+        return False
+    parts = text.split("/")[1:]
+    if not parts or any(part in {"", ".", ".."} for part in parts):
+        return False
+    if parts.count("strategy_runs") != 1:
+        return False
+    index = parts.index("strategy_runs")
+    if len(parts) != index + 4:
+        return False
+    publish_id = parts[index + 2]
+    return bool(
+        parts[index + 1] == strategy_id
+        and re.fullmatch(r"[A-Za-z0-9._-]+", publish_id)
+        and publish_id not in {".", ".."}
+        and parts[index + 3] == "publication_manifest.json"
+    )
+
+
+def _publication_metadata_metrics(
+    module: Mapping[str, Any], summary: Mapping[str, Any]
+) -> dict[str, Any]:
+    metadata = module.get("metadata") if isinstance(module.get("metadata"), Mapping) else {}
+    metrics = _metrics_from_eod_summary(dict(summary))
+    for key in ("artifact_version", "publication_manifest_path"):
+        if metadata.get(key) is not None:
+            metrics[key] = deepcopy(metadata[key])
+    return {
+        key: metrics[key]
+        for key in (
+            "contract_id",
+            "identity_schema_version",
+            "config_fingerprint",
+            "publication_policy",
+            "artifact_version",
+            "publication_manifest_path",
+            "strategy_version",
+            "selection_policy",
+            "market_regime_policy",
+        )
+        if key in metrics
+    }
+
+
 def _latest_eod_strategy_module(strategy_id: str) -> dict[str, Any] | None:
-    module_name = {
-        "lhb_shortline": "strategy_lhb_shortline",
-        "mid_trend": "strategy_mid_trend",
-        "tech_bottleneck": "strategy_tech_bottleneck",
-    }.get(strategy_id)
-    if not module_name:
+    if strategy_id not in OFFICIAL_STRATEGY_IDS:
         return None
+    module_name = f"strategy_{strategy_id}"
     try:
         modules = list(load_recent_data_run_manifest())
     except Exception:

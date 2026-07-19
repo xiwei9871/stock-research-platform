@@ -18,7 +18,10 @@ from stock_research.dashboard.strategy_backtest_adapters import STRATEGY_BACKTES
 from stock_research.dashboard.strategy_catalog import list_strategy_catalog
 from stock_research.db import connect, fetch_all
 from stock_research.strategy_publication_artifacts import ARTIFACT_VERSION
-from stock_research.strategy_publication_contracts import IDENTITY_SCHEMA_VERSION
+from stock_research.strategy_publication_contracts import (
+    IDENTITY_SCHEMA_VERSION,
+    OFFICIAL_STRATEGY_IDS,
+)
 
 BUCKET_ORDER = ["strong", "mixed", "risk_heavy", "thin"]
 BUCKET_LABELS = {
@@ -28,7 +31,7 @@ BUCKET_LABELS = {
     "thin": "Thin / Missing Sources",
 }
 RESEARCH_OUTPUT_ROOT = Path("/Users/xiwei/stock_research/outputs/research")
-_OFFICIAL_STRATEGY_IDS = frozenset({"lhb_shortline", "mid_trend", "tech_bottleneck"})
+_OFFICIAL_STRATEGY_IDS = frozenset(OFFICIAL_STRATEGY_IDS)
 _APPROVED_SYNCED_OUTPUT_ROOTS = (
     Path("/Users/xiwei/stock_research/outputs"),
     Path("/mnt/internal/stock_research/outputs"),
@@ -326,11 +329,11 @@ def _manifest_strategy_contract_valid(module: dict[str, Any]) -> bool:
 
 
 def _manifest_strategy_id(module: dict[str, Any]) -> str | None:
-    return {
-        "strategy_lhb_shortline": "lhb_shortline",
-        "strategy_mid_trend": "mid_trend",
-        "strategy_tech_bottleneck": "tech_bottleneck",
-    }.get(str(module.get("module") or ""))
+    module_name = str(module.get("module") or "")
+    if not module_name.startswith("strategy_"):
+        return None
+    strategy_id = module_name.removeprefix("strategy_")
+    return strategy_id if strategy_id in _OFFICIAL_STRATEGY_IDS else None
 
 
 def _manifest_declares_identity_v1(module: dict[str, Any]) -> bool:
@@ -358,7 +361,7 @@ def _manifest_has_publication_declaration(module: dict[str, Any]) -> bool:
 
 def _manifest_publication_declaration_valid(module: dict[str, Any]) -> bool:
     if not _manifest_has_publication_declaration(module):
-        return True
+        return _manifest_strategy_id(module) is None
     metadata = module.get("metadata") if isinstance(module.get("metadata"), dict) else {}
     summary = metadata.get("summary") if isinstance(metadata.get("summary"), dict) else {}
     config = metadata.get("config") if isinstance(metadata.get("config"), dict) else {}
@@ -388,7 +391,7 @@ def _manifest_strategy_identity_valid(module: dict[str, Any]) -> bool:
     metadata = module.get("metadata") if isinstance(module.get("metadata"), dict) else {}
     actual = metadata.get("publication_identity")
     if not _manifest_declares_identity_v1(module) and not isinstance(actual, dict):
-        return True
+        return False
     if not isinstance(actual, dict):
         return False
     try:
@@ -595,6 +598,21 @@ def _read_manifest_strategy_artifact(
     rows = _rows_for_latest_date(frame, trade_date=trade_date, date_col="trade_date")
     if rows is None:
         return []
+    metadata = manifest.get("metadata") if isinstance(manifest.get("metadata"), dict) else {}
+    publication_identity = (
+        metadata.get("publication_identity")
+        if isinstance(metadata.get("publication_identity"), dict)
+        else {}
+    )
+    publication_fields = {
+        "contract_id": publication_identity.get("contract_id"),
+        "identity_schema_version": publication_identity.get("identity_schema_version"),
+        "config_fingerprint": publication_identity.get("config_fingerprint"),
+        "publication_policy": dict(publication_identity.get("publication_policy") or {}),
+        "artifact_version": metadata.get("artifact_version"),
+        "publication_manifest_path": metadata.get("publication_manifest_path"),
+        "contract_status": "success",
+    }
     normalized: list[dict[str, Any]] = []
     for index, row in enumerate(_sort_records(rows, ["rank", "source_rank"])[:limit], start=1):
         asset_id = _asset_id_from_ts_code(row.get("asset_id") or row.get("ts_code") or row.get("stock_code"))
@@ -643,6 +661,7 @@ def _read_manifest_strategy_artifact(
                 "warnings": _optional_json_list(row.get("warnings")),
                 "risk_flags": _optional_json_list(row.get("risk_flags")),
                 "manifest_module": str(manifest.get("module") or ""),
+                **publication_fields,
             }
         )
     return normalized
@@ -1328,6 +1347,13 @@ def _queue_item(
         "strategy_id": _optional_text(row.get("strategy_id")),
         "strategy_name": _optional_text(row.get("strategy_name") or lineage.get("strategy_name")),
         "strategy_run_id": strategy_run_id,
+        "contract_id": _optional_text(row.get("contract_id")),
+        "identity_schema_version": _optional_text(row.get("identity_schema_version")),
+        "config_fingerprint": _optional_text(row.get("config_fingerprint")),
+        "publication_policy": dict(row.get("publication_policy") or {}),
+        "artifact_version": _optional_text(row.get("artifact_version")),
+        "publication_manifest_path": _optional_text(row.get("publication_manifest_path")),
+        "contract_status": _optional_text(row.get("contract_status")),
         "review_tier": _optional_text(row.get("review_tier")),
         "confirmation_state": _optional_text(row.get("confirmation_state")),
         "phase12a_rule_layer": _optional_text(row.get("phase12a_rule_layer")),

@@ -490,6 +490,49 @@ def test_v1_manifest_rejects_complete_version_from_different_trade_date(
 
     assert review_queue._manifest_strategy_artifact_path_valid(module) is False
 
+
+def test_v1_manifest_rows_expose_generic_publication_evidence(tmp_path, monkeypatch):
+    monkeypatch.setattr(review_queue, "SETTINGS", SimpleNamespace(output_root=tmp_path))
+    module = _v1_versioned_manifest(tmp_path)
+    module["metadata"]["summary"].update(
+        {
+            "engine_version": "mid_trend_v1",
+            "top_n": 5,
+            "transaction_cost_bps": 10.0,
+            "max_position_weight": 0.2,
+            "adjust_type": "hfq",
+            "frequency": "weekly",
+            "benchmark_variant": (
+                "top5_weekly_max2_selective_trend_holding_protection_v1"
+            ),
+        }
+    )
+    monkeypatch.setattr(
+        review_queue, "load_latest_data_run_manifest", lambda trade_date: [module]
+    )
+
+    rows = review_queue._load_manifest_strategy_rows(trade_date="2026-07-18", limit=50)
+    queue = review_queue._strategy_review_queue(
+        rows=rows,
+        selected_trade_date="2026-07-18",
+        score_version="strategy_topn",
+        lookback_days=90,
+    )
+    item = next(group for group in queue["groups"] if group["bucket"] == "strategy:mid_trend")[
+        "items"
+    ][0]
+    identity = build_publication_identity(get_publication_contract("mid_trend"))
+
+    assert item["contract_id"] == identity["contract_id"]
+    assert item["identity_schema_version"] == identity["identity_schema_version"]
+    assert item["config_fingerprint"] == identity["config_fingerprint"]
+    assert item["publication_policy"] == identity["publication_policy"]
+    assert item["artifact_version"] == "strategy_artifact_v1"
+    assert item["publication_manifest_path"].endswith(
+        "/strategy_runs/mid_trend/publish-1/publication_manifest.json"
+    )
+    assert item["contract_status"] == "success"
+
     rows, blocked = review_queue._load_strategy_manifest_snapshot(
         trade_date="2026-07-17",
         limit=50,
@@ -838,7 +881,7 @@ def test_manifest_loader_failure_blocks_all_official_fallbacks(monkeypatch):
     assert calls == 1
 
 
-def test_successful_legacy_manifest_without_publication_declarations_remains_readable(
+def test_successful_legacy_manifest_without_publication_declarations_is_rejected(
     tmp_path, monkeypatch
 ):
     artifact = tmp_path / "strategy_mid_trend_review.csv"
@@ -856,9 +899,9 @@ def test_successful_legacy_manifest_without_publication_declarations_remains_rea
     }
     monkeypatch.setattr(review_queue, "load_latest_data_run_manifest", lambda trade_date: [module])
 
-    rows = review_queue.load_active_strategy_topn_rows(trade_date="2026-07-18", limit=50)
+    rows = review_queue._load_manifest_strategy_rows(trade_date="2026-07-18", limit=50)
 
-    assert [row["asset_id"] for row in rows] == ["CN:SH:600002"]
+    assert rows == []
 
 @pytest.mark.parametrize("status", ("failed", "partial", "skipped"))
 def test_non_success_current_manifest_blocks_root_and_snapshot_fallbacks(

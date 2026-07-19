@@ -170,6 +170,18 @@ describe('AppShell and HomeCockpit', () => {
           strategy_version: 'lhb_v1_stable_safe_top5',
           selection_policy: 'original_topn_then_eligibility_no_refill',
           cash_slot_count: 9,
+          contract_status: 'success',
+          contract_id: 'lhb_shortline:balanced:auction_enhanced_rerank:balanced',
+          identity_schema_version: 'strategy_publication_identity_v1',
+          config_fingerprint: 'lhb-fingerprint',
+          publication_policy: {
+            strategy_version: 'lhb_v1_stable_safe_top5',
+            selection_policy: 'phase18c_top5_then_eligibility_no_refill',
+            market_regime_policy: 'disabled_for_stable_strategy'
+          },
+          artifact_version: 'strategy_artifact_v1',
+          publication_manifest_path: '/srv/strategy_runs/lhb_shortline/publish-1/publication_manifest.json',
+          performance_as_of_date: '2026-06-08',
           signal_status: 'no_position_rows',
           signal_count: null
         },
@@ -190,6 +202,16 @@ describe('AppShell and HomeCockpit', () => {
           max_drawdown_pct: -17.5,
           latest_day_return_pct: -2.1,
           latest_day_drawdown_pct: -2.7,
+          contract_status: 'success',
+          contract_id: 'mid_trend:balanced:top5_weekly_max2_selective_trend_holding_protection_v1',
+          identity_schema_version: 'strategy_publication_identity_v1',
+          config_fingerprint: 'mid-fingerprint',
+          publication_policy: {
+            benchmark_variant: 'top5_weekly_max2_selective_trend_holding_protection_v1'
+          },
+          artifact_version: 'strategy_artifact_v1',
+          publication_manifest_path: '/srv/strategy_runs/mid_trend/publish-1/publication_manifest.json',
+          performance_as_of_date: '2026-06-02',
           signal_status: 'connected',
           signal_count: 5
         },
@@ -210,6 +232,18 @@ describe('AppShell and HomeCockpit', () => {
           max_drawdown_pct: -8.3,
           latest_day_return_pct: 0.8,
           latest_day_drawdown_pct: -0.5,
+          contract_status: 'success',
+          contract_id: 'tech_bottleneck:balanced:strict_153_st_only_financial_state:biweekly:rank_exit_top10_1d',
+          identity_schema_version: 'strategy_publication_identity_v1',
+          config_fingerprint: 'tech-fingerprint',
+          publication_policy: {
+            universe: 'strict_153_st_only_financial_state',
+            frequency: 'biweekly',
+            protection_name: 'rank_exit_top10_1d'
+          },
+          artifact_version: 'strategy_artifact_v1',
+          publication_manifest_path: '/srv/strategy_runs/tech_bottleneck/publish-1/publication_manifest.json',
+          performance_as_of_date: '2026-06-08',
           signal_status: 'connected',
           signal_count: 5
         },
@@ -1366,6 +1400,86 @@ describe('AppShell and HomeCockpit', () => {
     expect(strategyPerformance.getByText('正式产物失败')).toBeVisible();
     expect(strategyPerformance.getByText(/base candidate source freshness metadata missing/)).toBeVisible();
     expect(strategyPerformance.queryByText('+60.1%')).not.toBeInTheDocument();
+  });
+
+  it('renders generic publication contracts and suppresses mismatched strategy performance', async () => {
+    vi.mocked(api.fetchBacktestStrategies).mockResolvedValueOnce([
+      {
+        strategy_id: 'lhb_shortline',
+        strategy_name: 'LHB Shortline Combo',
+        status: 'runnable',
+        description: 'LHB combo',
+        factor_groups: ['资金行为'],
+        signal_inputs: ['龙虎榜'],
+        default_parameters: { top_n: 5 },
+        latest_evidence: '正式策略产物。',
+        latest_metrics: {
+          as_of_date: '2026-07-18',
+          performance_as_of_date: '2026-07-18',
+          total_return_pct: 34.5,
+          max_drawdown_pct: -4.2,
+          signal_status: 'candidate_rows',
+          signal_count: 5,
+          contract_status: 'success',
+          contract_id: 'lhb_shortline:balanced:auction_enhanced_rerank:balanced',
+          identity_schema_version: 'strategy_publication_identity_v1',
+          config_fingerprint: 'lhb-fingerprint',
+          publication_policy: {
+            strategy_version: 'lhb_v1_stable_safe_top5',
+            selection_policy: 'phase18c_top5_then_eligibility_no_refill',
+            market_regime_policy: 'disabled_for_stable_strategy'
+          },
+          artifact_version: 'strategy_artifact_v1',
+          publication_manifest_path:
+            '/srv/strategy_runs/lhb_shortline/publish-1/publication_manifest.json'
+        },
+        primary_action: 'Run backtest'
+      },
+      {
+        strategy_id: 'mid_trend',
+        strategy_name: 'Mid Trend Combo',
+        status: 'runnable',
+        description: 'Mid trend combo',
+        factor_groups: ['趋势'],
+        signal_inputs: ['趋势'],
+        default_parameters: { top_n: 5 },
+        latest_evidence: '身份合同不匹配。',
+        latest_metrics: {
+          as_of_date: '2026-07-18',
+          performance_as_of_date: '2026-07-18',
+          total_return_pct: 88.8,
+          max_drawdown_pct: -12.3,
+          signal_status: 'contract_mismatch',
+          signal_count: 5,
+          contract_status: 'contract_mismatch',
+          contract_id: 'mid_trend:balanced:wrong',
+          artifact_version: 'strategy_artifact_v1'
+        },
+        primary_action: 'Run backtest'
+      }
+    ]);
+
+    render(<AppShell />);
+
+    const strategyPerformance = within(await screen.findByRole('region', { name: '启用策略表现' }));
+    const lhbCard = strategyPerformance.getByText('LHB Shortline Combo').closest('article');
+    const midCard = strategyPerformance.getByText('Mid Trend Combo').closest('article');
+    expect(lhbCard).not.toBeNull();
+    expect(midCard).not.toBeNull();
+    expect(within(lhbCard!).getByText('正式合同')).toBeVisible();
+    expect(within(lhbCard!).getByText('产物版本')).toBeVisible();
+    expect(within(lhbCard!).getByText('校验状态')).toBeVisible();
+    expect(within(lhbCard!).getByText('lhb_shortline:balanced:auction_enhanced_rerank:balanced')).toBeVisible();
+    expect(within(lhbCard!).getByText('strategy_artifact_v1')).toBeVisible();
+    expect(within(lhbCard!).getByText('通过')).toBeVisible();
+    expect(within(lhbCard!).getByText('Top5 先选后校验，不补位')).toBeVisible();
+    expect(within(midCard!).getByText('正式合同')).toBeVisible();
+    expect(within(midCard!).getByText('校验状态')).toBeVisible();
+    expect(within(midCard!).getByText('合同不匹配')).toBeVisible();
+    expect(within(midCard!).getByText('正式合同不匹配')).toBeVisible();
+    expect(within(midCard!).queryByText('+88.8%')).not.toBeInTheDocument();
+    expect(within(midCard!).queryByText('-12.3%')).not.toBeInTheDocument();
+    expect(within(midCard!).queryByText('Top5 先选后校验，不补位')).not.toBeInTheDocument();
   });
 
   it('does not expose Data Explorer in primary navigation', async () => {
