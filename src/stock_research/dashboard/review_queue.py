@@ -14,6 +14,7 @@ from stock_research.dashboard.scores import load_top_scores_for_dashboard
 from stock_research.dashboard.strategy_backtest_adapters import STRATEGY_BACKTEST_REGISTRY, StrategyBacktestParams
 from stock_research.dashboard.strategy_catalog import list_strategy_catalog
 from stock_research.db import connect, fetch_all
+from stock_research.strategy_publication_artifacts import ARTIFACT_VERSION
 
 BUCKET_ORDER = ["strong", "mixed", "risk_heavy", "thin"]
 BUCKET_LABELS = {
@@ -333,7 +334,16 @@ def _manifest_declares_identity_v1(module: dict[str, Any]) -> bool:
         if isinstance(summary_identity, dict)
         else None,
     )
-    return "strategy_publication_identity_v1" in declarations
+    artifact_versions = (
+        module.get("artifact_version"),
+        metadata.get("artifact_version"),
+        summary.get("artifact_version"),
+        config.get("artifact_version"),
+    )
+    return (
+        "strategy_publication_identity_v1" in declarations
+        or ARTIFACT_VERSION in artifact_versions
+    )
 
 
 def _manifest_strategy_identity_valid(module: dict[str, Any]) -> bool:
@@ -376,17 +386,46 @@ def _manifest_strategy_artifact_path_valid(module: dict[str, Any]) -> bool:
     publish_id = str(metadata.get("publish_id") or "")
     artifact_version = str(metadata.get("artifact_version") or "")
     artifact_path = Path(str(module.get("artifact_path") or ""))
-    review_path = Path(str(output_paths.get("review_path") or ""))
     publication_manifest_path = Path(str(metadata.get("publication_manifest_path") or ""))
     if not strategy_id or not publish_id or not artifact_version:
         return False
-    if artifact_path.name != "review.csv" or artifact_path.resolve() != review_path.resolve():
+    if artifact_path.name != "review.csv":
         return False
     version_dir = artifact_path.parent
     if version_dir.name != publish_id:
         return False
     if version_dir.parent.name != strategy_id or version_dir.parent.parent.name != "strategy_runs":
         return False
+    expected_files = {
+        "equity_path": "equity.csv",
+        "positions_path": "positions.csv",
+        "trades_path": "trades.csv",
+        "review_path": "review.csv",
+        "summary_path": "summary.json",
+    }
+    for container in (metadata, output_paths):
+        for key, expected_name in expected_files.items():
+            declared = container.get(key)
+            if declared in (None, ""):
+                continue
+            declared_path = Path(str(declared))
+            if (
+                declared_path.name != expected_name
+                or declared_path.parent.resolve() != version_dir.resolve()
+            ):
+                return False
+    if Path(str(output_paths.get("review_path") or "")).resolve() != artifact_path.resolve():
+        return False
+    for container in (metadata, output_paths):
+        declared_manifest = container.get("publication_manifest_path")
+        if declared_manifest in (None, ""):
+            continue
+        declared_manifest_path = Path(str(declared_manifest))
+        if (
+            declared_manifest_path.name != "publication_manifest.json"
+            or declared_manifest_path.parent.resolve() != version_dir.resolve()
+        ):
+            return False
     return (
         publication_manifest_path.name == "publication_manifest.json"
         and publication_manifest_path.parent.resolve() == version_dir.resolve()

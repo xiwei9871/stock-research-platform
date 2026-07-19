@@ -1,3 +1,5 @@
+import pytest
+
 from stock_research.dashboard import review_queue
 from stock_research.strategy_publication_contracts import (
     build_publication_identity,
@@ -318,3 +320,124 @@ def test_build_review_queue_rejects_snapshot_fallback_for_identity_aware_strateg
     result = review_queue.build_review_queue(trade_date="2026-07-18")
 
     assert result["review_mode"] == "score_topn"
+
+
+def test_artifact_version_v1_without_identity_rejects_manifest_root_and_snapshot_fallbacks(
+    tmp_path, monkeypatch
+):
+    root_mirror = tmp_path / "strategy_mid_trend_review.csv"
+    root_mirror.write_text(
+        "trade_date,asset_id,rank,strategy_id\n2026-07-18,CN:SH:600001,1,mid_trend\n",
+        encoding="utf-8",
+    )
+    module = {
+        "module": "strategy_mid_trend",
+        "status": "success",
+        "trade_date": "2026-07-18",
+        "artifact_path": str(root_mirror),
+        "metadata": {"artifact_version": "strategy_artifact_v1"},
+    }
+    monkeypatch.setattr(review_queue, "load_latest_data_run_manifest", lambda trade_date: [module])
+    monkeypatch.setattr(
+        review_queue,
+        "_load_strategy_artifact_topn_rows",
+        lambda **kwargs: [
+            {
+                "trade_date": "2026-07-18",
+                "asset_id": "CN:SH:600001",
+                "strategy_id": "mid_trend",
+            }
+        ],
+    )
+    monkeypatch.setattr(review_queue, "_load_db_strategy_position_rows", lambda **kwargs: [])
+    monkeypatch.setattr(review_queue, "_load_asset_names", lambda asset_ids: {})
+
+    assert review_queue._load_manifest_strategy_rows(trade_date="2026-07-18", limit=50) == []
+    assert review_queue.load_active_strategy_topn_rows(trade_date="2026-07-18", limit=50) == []
+
+    monkeypatch.setattr(
+        review_queue,
+        "load_platform_summary",
+        lambda **kwargs: {"latest_market_date": "2026-07-18"},
+    )
+    monkeypatch.setattr(
+        review_queue,
+        "_load_strategy_snapshot_rows",
+        lambda **kwargs: [
+            {
+                "trade_date": "2026-07-18",
+                "asset_id": "CN:SH:600001",
+                "strategy_id": "mid_trend",
+                "strategy_name": "Mid Trend Combo",
+                "rank": 1,
+            }
+        ],
+    )
+    monkeypatch.setattr(review_queue, "load_top_scores_for_dashboard", lambda *args, **kwargs: [])
+
+    assert review_queue.build_review_queue(trade_date="2026-07-18")["review_mode"] == "score_topn"
+
+
+def _v1_versioned_manifest(tmp_path):
+    version_dir = tmp_path / "strategy_runs" / "mid_trend" / "publish-1"
+    paths = {
+        "equity_path": version_dir / "equity.csv",
+        "positions_path": version_dir / "positions.csv",
+        "trades_path": version_dir / "trades.csv",
+        "review_path": version_dir / "review.csv",
+        "summary_path": version_dir / "summary.json",
+    }
+    identity = build_publication_identity(get_publication_contract("mid_trend"))
+    return {
+        "module": "strategy_mid_trend",
+        "artifact_path": str(paths["review_path"]),
+        "metadata": {
+            "identity_schema_version": "strategy_publication_identity_v1",
+            "artifact_version": "strategy_artifact_v1",
+            "publish_id": "publish-1",
+            "publication_identity": identity,
+            "publication_manifest_path": str(version_dir / "publication_manifest.json"),
+            **{key: str(path) for key, path in paths.items()},
+            "output_paths": {
+                **{key: str(path) for key, path in paths.items()},
+                "publication_manifest_path": str(version_dir / "publication_manifest.json"),
+            },
+            "summary": {"publication_identity": identity},
+        },
+    }
+
+
+@pytest.mark.parametrize(
+    ("container_name", "path_key"),
+    [
+        *[("metadata", key) for key in (
+            "equity_path",
+            "positions_path",
+            "trades_path",
+            "review_path",
+            "summary_path",
+        )],
+        *[("output_paths", key) for key in (
+            "equity_path",
+            "positions_path",
+            "trades_path",
+            "review_path",
+            "summary_path",
+        )],
+        ("metadata", "publication_manifest_path"),
+        ("output_paths", "publication_manifest_path"),
+    ],
+)
+def test_v1_manifest_rejects_any_declared_official_path_outside_version_dir(
+    tmp_path, container_name, path_key
+):
+    module = _v1_versioned_manifest(tmp_path)
+    assert review_queue._manifest_strategy_artifact_path_valid(module) is True
+    container = (
+        module["metadata"]
+        if container_name == "metadata"
+        else module["metadata"]["output_paths"]
+    )
+    container[path_key] = str(tmp_path / f"stale-{path_key}")
+
+    assert review_queue._manifest_strategy_artifact_path_valid(module) is False
