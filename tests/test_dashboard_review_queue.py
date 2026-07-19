@@ -1,4 +1,8 @@
 from stock_research.dashboard import review_queue
+from stock_research.strategy_publication_contracts import (
+    build_publication_identity,
+    get_publication_contract,
+)
 
 
 def test_review_queue_defaults_to_latest_market_date_when_display_gate_lags(monkeypatch):
@@ -141,3 +145,176 @@ def test_manifest_strategy_reader_preserves_lhb_risk_gate_fields(tmp_path):
     assert rows[0]["risk_gate_reason"] == "接近跌停"
     assert rows[0]["confirmation_state"] == "risk_watch"
     assert rows[0]["phase12a_rule_layer"] == "pending_intraday"
+
+
+def test_manifest_strategy_rows_use_versioned_artifact_not_stale_root_mirror(tmp_path, monkeypatch):
+    root_mirror = tmp_path / "strategy_mid_trend_review.csv"
+    versioned = tmp_path / "strategy_runs" / "mid_trend" / "publish-1" / "review.csv"
+    versioned.parent.mkdir(parents=True)
+    root_mirror.write_text(
+        "trade_date,asset_id,rank,strategy_id\n2026-07-18,CN:SH:600001,1,mid_trend\n",
+        encoding="utf-8",
+    )
+    versioned.write_text(
+        "trade_date,asset_id,rank,strategy_id\n2026-07-18,CN:SH:600002,1,mid_trend\n",
+        encoding="utf-8",
+    )
+    identity = build_publication_identity(get_publication_contract("mid_trend"))
+    summary = {
+        "engine_version": "mid_trend_v1",
+        "top_n": 5,
+        "transaction_cost_bps": 10.0,
+        "max_position_weight": 0.2,
+        "adjust_type": "hfq",
+        "frequency": "weekly",
+        "benchmark_variant": "top5_weekly_max2_selective_trend_holding_protection_v1",
+        "publication_identity": identity,
+    }
+    monkeypatch.setattr(
+        review_queue,
+        "load_latest_data_run_manifest",
+        lambda trade_date: [
+            {
+                "module": "strategy_mid_trend",
+                "status": "success",
+                "trade_date": trade_date,
+                "run_id": "r1",
+                "artifact_path": str(versioned),
+                "metadata": {
+                    "publication_identity": identity,
+                    "identity_schema_version": "strategy_publication_identity_v1",
+                    "artifact_version": "strategy_artifact_v1",
+                    "publish_id": "publish-1",
+                    "publication_manifest_path": str(versioned.parent / "publication_manifest.json"),
+                    "output_paths": {"review_path": str(versioned)},
+                    "summary": summary,
+                },
+            }
+        ],
+    )
+
+    rows = review_queue._load_manifest_strategy_rows(trade_date="2026-07-18", limit=50)
+
+    assert [row["asset_id"] for row in rows] == ["CN:SH:600002"]
+
+
+def test_v1_manifest_rejects_root_mirror_as_artifact_path(tmp_path, monkeypatch):
+    root_mirror = tmp_path / "strategy_mid_trend_review.csv"
+    root_mirror.write_text(
+        "trade_date,asset_id,rank,strategy_id\n2026-07-18,CN:SH:600001,1,mid_trend\n",
+        encoding="utf-8",
+    )
+    identity = build_publication_identity(get_publication_contract("mid_trend"))
+    monkeypatch.setattr(review_queue, "_manifest_strategy_contract_valid", lambda module: True)
+    monkeypatch.setattr(
+        review_queue,
+        "load_latest_data_run_manifest",
+        lambda trade_date: [
+            {
+                "module": "strategy_mid_trend",
+                "status": "success",
+                "trade_date": trade_date,
+                "run_id": "r1",
+                "artifact_path": str(root_mirror),
+                "metadata": {
+                    "identity_schema_version": "strategy_publication_identity_v1",
+                    "publication_identity": identity,
+                    "artifact_version": "strategy_artifact_v1",
+                    "publish_id": "publish-1",
+                    "publication_manifest_path": str(tmp_path / "publication_manifest.json"),
+                    "output_paths": {"review_path": str(root_mirror)},
+                    "summary": {"publication_identity": identity},
+                },
+            }
+        ],
+    )
+
+    assert review_queue._load_manifest_strategy_rows(trade_date="2026-07-18", limit=50) == []
+
+
+def test_manifest_strategy_rows_reject_v1_identity_mismatch(tmp_path, monkeypatch):
+    artifact = tmp_path / "review.csv"
+    artifact.write_text(
+        "trade_date,asset_id,rank,strategy_id\n2026-07-18,CN:SH:600002,1,mid_trend\n",
+        encoding="utf-8",
+    )
+    identity = build_publication_identity(get_publication_contract("mid_trend"))
+    identity["config_fingerprint"] = "wrong"
+    monkeypatch.setattr(
+        review_queue,
+        "load_latest_data_run_manifest",
+        lambda trade_date: [
+            {
+                "module": "strategy_mid_trend",
+                "status": "success",
+                "trade_date": trade_date,
+                "run_id": "r1",
+                "artifact_path": str(artifact),
+                "metadata": {
+                    "identity_schema_version": "strategy_publication_identity_v1",
+                    "publication_identity": identity,
+                    "summary": {"publication_identity": identity},
+                },
+            }
+        ],
+    )
+
+    assert review_queue._load_manifest_strategy_rows(trade_date="2026-07-18", limit=50) == []
+
+
+def test_v1_manifest_missing_identity_does_not_fall_back_to_root_artifact(tmp_path, monkeypatch):
+    root_mirror = tmp_path / "strategy_mid_trend_review.csv"
+    root_mirror.write_text(
+        "trade_date,asset_id,rank,strategy_id\n2026-07-18,CN:SH:600001,1,mid_trend\n",
+        encoding="utf-8",
+    )
+    module = {
+        "module": "strategy_mid_trend",
+        "status": "success",
+        "trade_date": "2026-07-18",
+        "artifact_path": str(tmp_path / "missing-version" / "review.csv"),
+        "metadata": {"identity_schema_version": "strategy_publication_identity_v1"},
+    }
+    monkeypatch.setattr(review_queue, "load_latest_data_run_manifest", lambda trade_date: [module])
+    monkeypatch.setattr(review_queue, "_load_strategy_artifact_topn_rows", lambda **kwargs: [
+        {"trade_date": "2026-07-18", "asset_id": "CN:SH:600001", "strategy_id": "mid_trend"}
+    ])
+    monkeypatch.setattr(review_queue, "_load_db_strategy_position_rows", lambda **kwargs: [])
+    monkeypatch.setattr(review_queue, "_load_asset_names", lambda asset_ids: {})
+
+    rows = review_queue.load_active_strategy_topn_rows(trade_date="2026-07-18", limit=50)
+
+    assert rows == []
+
+
+def test_build_review_queue_rejects_snapshot_fallback_for_identity_aware_strategy(monkeypatch):
+    monkeypatch.setattr(
+        review_queue,
+        "load_platform_summary",
+        lambda **kwargs: {"latest_market_date": "2026-07-18"},
+    )
+    monkeypatch.setattr(review_queue, "_load_manifest_strategy_rows", lambda **kwargs: [])
+    monkeypatch.setattr(
+        review_queue,
+        "_identity_aware_manifest_strategy_ids",
+        lambda **kwargs: {"mid_trend"},
+    )
+    monkeypatch.setattr(
+        review_queue,
+        "_load_strategy_snapshot_rows",
+        lambda **kwargs: [
+            {
+                "trade_date": "2026-07-18",
+                "asset_id": "CN:SH:600001",
+                "strategy_id": "mid_trend",
+                "strategy_name": "Mid Trend Combo",
+                "rank": 1,
+            }
+        ],
+    )
+    monkeypatch.setattr(review_queue, "load_active_strategy_topn_rows", lambda **kwargs: [])
+    monkeypatch.setattr(review_queue, "load_top_scores_for_dashboard", lambda *args, **kwargs: [])
+
+    result = review_queue.build_review_queue(trade_date="2026-07-18")
+
+    assert result["review_mode"] == "score_topn"

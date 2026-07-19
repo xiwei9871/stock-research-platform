@@ -10,6 +10,7 @@ import pandas as pd
 from stock_research.config import SETTINGS
 from stock_research.data_run_manifest import build_manifest_entry, upsert_data_run_manifest
 from stock_research.strategy_contracts import OFFICIAL_MAX_POSITION_WEIGHT, OFFICIAL_TRANSACTION_COST_BPS
+from stock_research.strategy_publication_artifacts import write_strategy_publication_artifacts
 from stock_research.tech_bottleneck_candidates import (
     TECH_BOTTLENECK_CANDIDATE_SOURCE,
     build_point_in_time_candidate_snapshots,
@@ -74,13 +75,6 @@ def run_tech_bottleneck_eod_from_frames(
         adjust_type=TECH_BOTTLENECK_EOD_ADJUST_TYPE,
     )
 
-    paths = {
-        "snapshot_path": snapshot_path,
-        "review_path": output / TECH_BOTTLENECK_EOD_REVIEW_FILENAME,
-        "equity_path": output / TECH_BOTTLENECK_EOD_EQUITY_FILENAME,
-        "positions_path": output / TECH_BOTTLENECK_EOD_POSITIONS_FILENAME,
-        "trades_path": output / TECH_BOTTLENECK_EOD_TRADES_FILENAME,
-    }
     equity = _anchor_equity_curve_to_initial_equity(
         pd.DataFrame(strategy["equity_curve"]),
         start_date=start_date,
@@ -92,14 +86,9 @@ def run_tech_bottleneck_eod_from_frames(
         trade_date=end_date,
         strategy_run_id=run_id,
     )
-    review.to_csv(paths["review_path"], index=False)
-    equity.to_csv(paths["equity_path"], index=False)
-    positions.to_csv(paths["positions_path"], index=False)
-    trades.to_csv(paths["trades_path"], index=False)
 
     ended_at = datetime.now(timezone.utc)
     latest_snapshot_date = _latest_trade_date(snapshots, fallback=end_date)
-    output_paths = {key: str(path) for key, path in paths.items()}
     candidate_source = str(candidate_source_path) if candidate_source_path is not None else TECH_BOTTLENECK_CANDIDATE_SOURCE
     summary = _json_ready(strategy["summary"])
     summary.setdefault("transaction_cost_bps", TECH_BOTTLENECK_EOD_TRANSACTION_COST_BPS)
@@ -113,21 +102,72 @@ def run_tech_bottleneck_eod_from_frames(
         "max_position_weight": TECH_BOTTLENECK_EOD_MAX_POSITION_WEIGHT,
         "adjust_type": TECH_BOTTLENECK_EOD_ADJUST_TYPE,
         "engine_version": TECH_BOTTLENECK_V1_ENGINE_VERSION,
+        "universe": summary.get("universe"),
+        "protection_name": summary.get("protection_name"),
     }
+    official_result = {
+        "strategy_id": "tech_bottleneck",
+        "strategy_name": "Tech Bottleneck Discovery",
+        "source_kind": TECH_BOTTLENECK_V1_ENGINE_VERSION,
+        "config": config,
+        "summary": summary,
+        "equity_curve": equity.to_dict("records"),
+        "positions": positions.to_dict("records"),
+        "trades": trades.to_dict("records"),
+        "review": review.to_dict("records"),
+    }
+    from stock_research.dashboard.backtests import (
+        attach_publication_identity,
+        validate_official_strategy_result,
+    )
+
+    official_result = attach_publication_identity(official_result, profile="balanced")
+    validate_official_strategy_result(official_result, profile="balanced")
+    publication = write_strategy_publication_artifacts(
+        output_dir=output,
+        strategy_id="tech_bottleneck",
+        run_id=run_id,
+        started_at=started_at,
+        publication_identity=official_result["publication_identity"],
+        frames={
+            "equity": equity,
+            "positions": positions,
+            "trades": trades,
+            "review": review,
+        },
+        summary=official_result["summary"],
+        config=config,
+        compatibility_destinations={
+            "equity": output / TECH_BOTTLENECK_EOD_EQUITY_FILENAME,
+            "positions": output / TECH_BOTTLENECK_EOD_POSITIONS_FILENAME,
+            "trades": output / TECH_BOTTLENECK_EOD_TRADES_FILENAME,
+            "review": output / TECH_BOTTLENECK_EOD_REVIEW_FILENAME,
+        },
+    )
+    official_output_paths = {
+        key: str(path) for key, path in publication["output_paths"].items()
+    }
+    output_paths = {"snapshot_path": str(snapshot_path), **official_output_paths}
 
     candidate_metadata = {
         "candidate_snapshot_latest_date": latest_snapshot_date,
         "candidate_source": candidate_source,
         "candidate_snapshot_row_count": int(len(snapshots)),
-        "output_paths": output_paths,
+        "output_paths": {"snapshot_path": str(snapshot_path)},
     }
     strategy_metadata = {
         "candidate_snapshot_latest_date": latest_snapshot_date,
         "candidate_source": candidate_source,
         "candidate_snapshot_row_count": int(len(snapshots)),
-        "output_paths": output_paths,
-        "summary": summary,
-        "config": config,
+        "output_paths": official_output_paths,
+        "summary": publication["summary"],
+        "config": publication["config"],
+        "publication_identity": publication["publication_identity"],
+        "identity_schema_version": publication["publication_identity"].get("identity_schema_version"),
+        "artifact_version": publication["artifact_version"],
+        "publish_id": publication["publish_id"],
+        "publication_manifest_path": str(publication["publication_manifest_path"]),
+        "file_hashes": publication["file_hashes"],
     }
 
     candidate_entry = build_manifest_entry(
@@ -161,7 +201,7 @@ def run_tech_bottleneck_eod_from_frames(
         row_count=int(len(review)),
         asset_count=_asset_count(review),
         latest_trade_date=latest_snapshot_date,
-        artifact_path=paths["review_path"],
+        artifact_path=publication["output_paths"]["review_path"],
         code_version=TECH_BOTTLENECK_V1_ENGINE_VERSION,
         config_version=TECH_BOTTLENECK_V1_ENGINE_VERSION,
         metadata=strategy_metadata,
@@ -173,6 +213,11 @@ def run_tech_bottleneck_eod_from_frames(
         "candidate_rows": int(len(snapshots)),
         "review_rows": int(len(review)),
         **output_paths,
+        "publication_identity": publication["publication_identity"],
+        "artifact_version": publication["artifact_version"],
+        "publish_id": publication["publish_id"],
+        "publication_manifest_path": str(publication["publication_manifest_path"]),
+        "file_hashes": publication["file_hashes"],
         "manifest_entries": [candidate_entry, strategy_entry],
     }
 

@@ -9,7 +9,7 @@ from typing import Any, Callable
 import pandas as pd
 
 from stock_research.config import SETTINGS
-from stock_research.dashboard.backtests import run_fresh_backtest
+from stock_research.dashboard.backtests import run_fresh_backtest, validate_official_strategy_result
 from stock_research.dashboard.platform import load_platform_summary
 from stock_research.dashboard.reports import DEFAULT_REPORTS_DIR
 from stock_research.data_run_manifest import build_manifest_entry, upsert_data_run_manifest
@@ -19,6 +19,7 @@ from stock_research.lhb_review_policy import apply_lhb_top5_gate, is_valid_stock
 from stock_research.news_features import NEWS_FEATURE_COLUMNS, build_news_feature_daily
 from stock_research.review_evidence_snapshots import run_eod_review_evidence_snapshots
 from stock_research.strategy_contracts import OFFICIAL_MAX_POSITION_WEIGHT, OFFICIAL_TRANSACTION_COST_BPS
+from stock_research.strategy_publication_artifacts import write_strategy_publication_artifacts
 from stock_research.strategy_score_audit import build_strategy_score_audit, summarize_strategy_score_audit
 from stock_research.tech_bottleneck_eod import run_tech_bottleneck_eod
 from stock_research.tech_bottleneck_v1 import TECH_BOTTLENECK_V1_CANDIDATES_PATH
@@ -689,15 +690,9 @@ def _write_strategy_artifacts(
 ) -> tuple[dict[str, Any], pd.DataFrame]:
     module = STRATEGY_EOD_MODULES[strategy_id]
     prefix = module
-    equity_path = output_dir / f"{prefix}_equity.csv"
-    positions_path = output_dir / f"{prefix}_positions.csv"
-    trades_path = output_dir / f"{prefix}_trades.csv"
-    review_path = output_dir / f"{prefix}_review.csv"
+    validate_official_strategy_result(result, profile="balanced")
 
-    _records_frame(result.get("equity_curve")).to_csv(equity_path, index=False)
     positions = _records_frame(result.get("positions"))
-    positions.to_csv(positions_path, index=False)
-    _records_frame(result.get("trades")).to_csv(trades_path, index=False)
     excluded_lhb_assets = (
         _lhb_delisting_assets_for_trade_date(trade_date) if strategy_id == "lhb_shortline" else set()
     )
@@ -706,27 +701,53 @@ def _write_strategy_artifacts(
         trade_date=trade_date,
         excluded_lhb_assets=excluded_lhb_assets,
     )
-    review.to_csv(review_path, index=False)
 
     summary = dict(result.get("summary") or {})
     summary.setdefault("engine_version", result.get("source_kind") or result.get("result_source") or "")
     summary.setdefault("requested_end_date", trade_date)
     summary.setdefault("actual_end_date", trade_date)
+    publication = write_strategy_publication_artifacts(
+        output_dir=output_dir,
+        strategy_id=strategy_id,
+        run_id=run_id,
+        started_at=started_at,
+        publication_identity=result["publication_identity"],
+        frames={
+            "equity": _records_frame(result.get("equity_curve")),
+            "positions": positions,
+            "trades": _records_frame(result.get("trades")),
+            "review": review,
+        },
+        summary=summary,
+        config=dict(result.get("config") or {}),
+        compatibility_destinations={
+            "equity": output_dir / f"{prefix}_equity.csv",
+            "positions": output_dir / f"{prefix}_positions.csv",
+            "trades": output_dir / f"{prefix}_trades.csv",
+            "review": output_dir / f"{prefix}_review.csv",
+        },
+    )
+    output_paths = publication["output_paths"]
+    equity_path = output_paths["equity_path"]
+    positions_path = output_paths["positions_path"]
+    trades_path = output_paths["trades_path"]
+    review_path = output_paths["review_path"]
     metadata = {
-        "summary": summary,
-        "config": dict(result.get("config") or {}),
+        "summary": publication["summary"],
+        "config": publication["config"],
+        "publication_identity": publication["publication_identity"],
+        "identity_schema_version": publication["publication_identity"].get("identity_schema_version"),
+        "artifact_version": publication["artifact_version"],
+        "publish_id": publication["publish_id"],
+        "publication_manifest_path": str(publication["publication_manifest_path"]),
+        "file_hashes": publication["file_hashes"],
         "equity_path": str(equity_path),
         "positions_path": str(positions_path),
         "trades_path": str(trades_path),
         "review_path": str(review_path),
-        "output_paths": {
-            "equity_path": str(equity_path),
-            "positions_path": str(positions_path),
-            "trades_path": str(trades_path),
-            "review_path": str(review_path),
-        },
+        "output_paths": {key: str(path) for key, path in output_paths.items()},
     }
-    data_coverage = summary.get("data_coverage")
+    data_coverage = publication["summary"].get("data_coverage")
     if isinstance(data_coverage, dict) and data_coverage.get("candidate_snapshot_latest_date"):
         metadata["candidate_snapshot_latest_date"] = data_coverage.get("candidate_snapshot_latest_date")
 

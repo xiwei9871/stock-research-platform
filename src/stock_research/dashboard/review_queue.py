@@ -56,12 +56,18 @@ def build_review_queue(
     explicit_trade_date = bool(trade_date)
     selected_trade_date = str(trade_date) if explicit_trade_date else _default_display_trade_date(summary)
     if normalized_review_mode == "strategy_topn":
+        identity_aware_strategy_ids = _identity_aware_manifest_strategy_ids(
+            trade_date=selected_trade_date
+        )
         strategy_rows = _attach_asset_names(_load_manifest_strategy_rows(trade_date=selected_trade_date, limit=50))
         if not strategy_rows:
             strategy_rows = (
                 _load_strategy_snapshot_rows(trade_date=selected_trade_date, limit=50)
                 if use_strategy_snapshots
                 else []
+            )
+            strategy_rows = _without_strategy_rows(
+                strategy_rows, identity_aware_strategy_ids
             )
         if not strategy_rows:
             strategy_rows = load_active_strategy_topn_rows(trade_date=selected_trade_date, limit=min(bounded_limit, 10))
@@ -162,12 +168,15 @@ def load_active_strategy_topn_rows(*, trade_date: str, limit: int) -> list[dict[
     manifest_rows = _load_manifest_strategy_rows(trade_date=trade_date, limit=limit)
     if manifest_rows:
         return _attach_asset_names(manifest_rows)
+    blocked_strategy_ids = _identity_aware_manifest_strategy_ids(trade_date=trade_date)
     suppress_tech_fallback = _has_untrusted_tech_manifest(trade_date=trade_date)
     artifact_rows = _load_strategy_artifact_topn_rows(trade_date=trade_date, limit=limit)
     db_rows = _load_db_strategy_position_rows(trade_date=trade_date, limit=limit)
     if suppress_tech_fallback:
-        artifact_rows = _without_tech_bottleneck_rows(artifact_rows)
-        db_rows = _without_tech_bottleneck_rows(db_rows)
+        blocked_strategy_ids.add("tech_bottleneck")
+    if blocked_strategy_ids:
+        artifact_rows = _without_strategy_rows(artifact_rows, blocked_strategy_ids)
+        db_rows = _without_strategy_rows(db_rows, blocked_strategy_ids)
     return _attach_asset_names(
         _select_latest_strategy_sources(artifact_rows=artifact_rows, db_rows=db_rows)
     )
@@ -221,6 +230,10 @@ def _load_manifest_strategy_rows(*, trade_date: str, limit: int) -> list[dict[st
             continue
         if not _manifest_strategy_snapshot_valid(module):
             continue
+        if not _manifest_strategy_identity_valid(module):
+            continue
+        if not _manifest_strategy_artifact_path_valid(module):
+            continue
         if not _manifest_strategy_contract_valid(module):
             continue
         artifact_path = Path(str(module.get("artifact_path") or ""))
@@ -252,8 +265,25 @@ def _has_untrusted_tech_manifest(*, trade_date: str) -> bool:
     return False
 
 
-def _without_tech_bottleneck_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return [row for row in rows if str(row.get("strategy_id") or "") != "tech_bottleneck"]
+def _without_strategy_rows(
+    rows: list[dict[str, Any]], strategy_ids: set[str]
+) -> list[dict[str, Any]]:
+    return [row for row in rows if str(row.get("strategy_id") or "") not in strategy_ids]
+
+
+def _identity_aware_manifest_strategy_ids(*, trade_date: str) -> set[str]:
+    if not trade_date:
+        return set()
+    try:
+        modules = list(load_latest_data_run_manifest(trade_date=trade_date))
+    except Exception:
+        return set()
+    blocked: set[str] = set()
+    for module in modules:
+        strategy_id = _manifest_strategy_id(module)
+        if strategy_id and _manifest_declares_identity_v1(module):
+            blocked.add(strategy_id)
+    return blocked
 
 
 def _candidate_snapshot_latest_date(metadata: dict[str, Any]) -> str:
@@ -264,11 +294,7 @@ def _candidate_snapshot_latest_date(metadata: dict[str, Any]) -> str:
 
 
 def _manifest_strategy_contract_valid(module: dict[str, Any]) -> bool:
-    strategy_id = {
-        "strategy_lhb_shortline": "lhb_shortline",
-        "strategy_mid_trend": "mid_trend",
-        "strategy_tech_bottleneck": "tech_bottleneck",
-    }.get(str(module.get("module") or ""))
+    strategy_id = _manifest_strategy_id(module)
     if not strategy_id:
         return True
     metadata = module.get("metadata") if isinstance(module.get("metadata"), dict) else {}
@@ -282,6 +308,89 @@ def _manifest_strategy_contract_valid(module: dict[str, Any]) -> bool:
     if contract is None:
         return True
     return validate_strategy_summary_against_contract(summary, contract).status == "success"
+
+
+def _manifest_strategy_id(module: dict[str, Any]) -> str | None:
+    return {
+        "strategy_lhb_shortline": "lhb_shortline",
+        "strategy_mid_trend": "mid_trend",
+        "strategy_tech_bottleneck": "tech_bottleneck",
+    }.get(str(module.get("module") or ""))
+
+
+def _manifest_declares_identity_v1(module: dict[str, Any]) -> bool:
+    metadata = module.get("metadata") if isinstance(module.get("metadata"), dict) else {}
+    summary = metadata.get("summary") if isinstance(metadata.get("summary"), dict) else {}
+    config = metadata.get("config") if isinstance(metadata.get("config"), dict) else {}
+    identity = metadata.get("publication_identity")
+    summary_identity = summary.get("publication_identity")
+    declarations = (
+        metadata.get("identity_schema_version"),
+        summary.get("identity_schema_version"),
+        config.get("identity_schema_version"),
+        identity.get("identity_schema_version") if isinstance(identity, dict) else None,
+        summary_identity.get("identity_schema_version")
+        if isinstance(summary_identity, dict)
+        else None,
+    )
+    return "strategy_publication_identity_v1" in declarations
+
+
+def _manifest_strategy_identity_valid(module: dict[str, Any]) -> bool:
+    strategy_id = _manifest_strategy_id(module)
+    if not strategy_id:
+        return True
+    metadata = module.get("metadata") if isinstance(module.get("metadata"), dict) else {}
+    actual = metadata.get("publication_identity")
+    if not _manifest_declares_identity_v1(module) and not isinstance(actual, dict):
+        return True
+    if not isinstance(actual, dict):
+        return False
+    try:
+        from stock_research.strategy_publication_contracts import (
+            build_publication_identity,
+            get_publication_contract,
+            validate_publication_identity,
+        )
+
+        expected = build_publication_identity(get_publication_contract(strategy_id, profile="balanced"))
+    except Exception:
+        return False
+    if validate_publication_identity(actual, expected):
+        return False
+    summary = metadata.get("summary") if isinstance(metadata.get("summary"), dict) else {}
+    summary_identity = summary.get("publication_identity")
+    if _manifest_declares_identity_v1(module) and not isinstance(summary_identity, dict):
+        return False
+    return not isinstance(summary_identity, dict) or not validate_publication_identity(
+        summary_identity, expected
+    )
+
+
+def _manifest_strategy_artifact_path_valid(module: dict[str, Any]) -> bool:
+    if not _manifest_declares_identity_v1(module):
+        return True
+    strategy_id = _manifest_strategy_id(module)
+    metadata = module.get("metadata") if isinstance(module.get("metadata"), dict) else {}
+    output_paths = metadata.get("output_paths") if isinstance(metadata.get("output_paths"), dict) else {}
+    publish_id = str(metadata.get("publish_id") or "")
+    artifact_version = str(metadata.get("artifact_version") or "")
+    artifact_path = Path(str(module.get("artifact_path") or ""))
+    review_path = Path(str(output_paths.get("review_path") or ""))
+    publication_manifest_path = Path(str(metadata.get("publication_manifest_path") or ""))
+    if not strategy_id or not publish_id or not artifact_version:
+        return False
+    if artifact_path.name != "review.csv" or artifact_path.resolve() != review_path.resolve():
+        return False
+    version_dir = artifact_path.parent
+    if version_dir.name != publish_id:
+        return False
+    if version_dir.parent.name != strategy_id or version_dir.parent.parent.name != "strategy_runs":
+        return False
+    return (
+        publication_manifest_path.name == "publication_manifest.json"
+        and publication_manifest_path.parent.resolve() == version_dir.resolve()
+    )
 
 
 def _read_manifest_strategy_artifact(

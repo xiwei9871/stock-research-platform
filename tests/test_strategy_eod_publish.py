@@ -1,7 +1,10 @@
 from datetime import datetime, timezone
 
 import stock_research.strategy_eod_publish as strategy_eod_publish
+from stock_research.dashboard.backtests import attach_publication_identity
 from stock_research.strategy_eod_publish import _review_rows_from_result
+from stock_research.strategy_publication_artifacts import ARTIFACT_VERSION
+from stock_research.strategy_publication_contracts import get_publication_contract
 import pytest
 
 
@@ -34,6 +37,70 @@ def _lhb_result_for_review_test():
         "positions": [],
         "candidates": candidates,
     }
+
+
+def _official_mid_result():
+    contract = get_publication_contract("mid_trend")
+    return attach_publication_identity(
+        {
+            "strategy_id": "mid_trend",
+            "source_kind": contract.engine_version,
+            "config": dict(contract.normalized_run_config),
+            "summary": {
+                "engine_version": contract.engine_version,
+                "top_n": 5,
+                "transaction_cost_bps": 10.0,
+                "adjust_type": "hfq",
+                "frequency": "weekly",
+                "benchmark_variant": contract.normalized_run_config["benchmark_variant"],
+            },
+            "equity_curve": [{"trade_date": "2026-07-18", "equity": 1.0}],
+            "positions": [],
+            "trades": [],
+        },
+        profile="balanced",
+    )
+
+
+def test_write_strategy_artifacts_rejects_invalid_identity_without_any_output(tmp_path):
+    result = _official_mid_result()
+    del result["publication_identity"]
+
+    with pytest.raises(ValueError, match="publication identity missing"):
+        strategy_eod_publish._write_strategy_artifacts(
+            run_id="strategy-eod-2026-07-18-local",
+            trade_date="2026-07-18",
+            strategy_id="mid_trend",
+            result=result,
+            output_dir=tmp_path,
+            started_at=datetime(2026, 7, 18, tzinfo=timezone.utc),
+        )
+
+    assert not (tmp_path / "strategy_runs").exists()
+    assert not list(tmp_path.glob("strategy_mid_trend_*"))
+
+
+def test_write_strategy_artifacts_manifest_owns_versioned_paths(tmp_path):
+    entry, review = strategy_eod_publish._write_strategy_artifacts(
+        run_id="strategy-eod-2026-07-18-local",
+        trade_date="2026-07-18",
+        strategy_id="mid_trend",
+        result=_official_mid_result(),
+        output_dir=tmp_path,
+        started_at=datetime(2026, 7, 18, tzinfo=timezone.utc),
+    )
+
+    metadata = entry["metadata"]
+    assert review.empty
+    assert "/strategy_runs/mid_trend/" in entry["artifact_path"]
+    assert entry["artifact_path"] == metadata["review_path"]
+    assert metadata["artifact_version"] == ARTIFACT_VERSION
+    assert metadata["summary"]["artifact_version"] == ARTIFACT_VERSION
+    assert metadata["publication_identity"] == metadata["summary"]["publication_identity"]
+    assert metadata["publication_manifest_path"].endswith("publication_manifest.json")
+    assert set(metadata["file_hashes"]) == {"equity", "positions", "trades", "review", "summary"}
+    assert all("/strategy_runs/mid_trend/" in path for path in metadata["output_paths"].values())
+    assert (tmp_path / "strategy_mid_trend_review.csv").exists()
 
 
 def test_lhb_review_publishes_original_top5_after_gate_without_refill(monkeypatch):
