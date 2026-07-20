@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test';
 
+import { sanitizeRuntimeEvidenceText } from '../assertions/runtime';
 import type { RuntimeEvidence } from './test';
 
 const runtimeEvidenceKey: unique symbol = Symbol('playwrightRuntimeEvidence');
@@ -50,11 +51,17 @@ export async function installMockPlatformApi(
     const response = normalizedRoutes.get(key);
 
     if (!response) {
-      evidence.unhandledApiRoutes.push(key);
+      const sanitizedKey = sanitizeRuntimeEvidenceText(key);
+      const sanitizedPathname = sanitizeRuntimeEvidenceText(pathname);
+      evidence.unhandledApiRoutes.push(sanitizedKey);
       await route.fulfill({
         status: 599,
         contentType: 'application/json',
-        body: JSON.stringify({ detail: 'unhandled_mock_api_route', method, pathname })
+        body: JSON.stringify({
+          detail: 'unhandled_mock_api_route',
+          method: sanitizeRuntimeEvidenceText(method),
+          pathname: sanitizedPathname
+        })
       });
       return;
     }

@@ -3,7 +3,8 @@ import type { Page } from '@playwright/test';
 import {
   expectNoFatalRuntimeErrors,
   expectNoHorizontalOverflow,
-  expectNoUnhandledApiRoutes
+  expectNoUnhandledApiRoutes,
+  serializeRuntimeEvidence
 } from '../assertions/runtime';
 import { installMockPlatformApi } from '../fixtures/mockPlatformApi';
 import { expect, test } from '../fixtures/test';
@@ -159,7 +160,7 @@ test('unhandled mock API route fails closed with exact evidence @p0 @runtime-con
   await installMockPlatformApi(page, {});
   await setContractContent(page, baseURL, '<main>unhandled API contract</main>');
   const response = await page.evaluate(async () => {
-    const result = await fetch('/api/unexpected?ignored=query');
+    const result = await fetch('/api/access_token/path-secret?refresh_token=query-secret');
     return { status: result.status, body: await result.json() };
   });
 
@@ -168,16 +169,18 @@ test('unhandled mock API route fails closed with exact evidence @p0 @runtime-con
     body: {
       detail: 'unhandled_mock_api_route',
       method: 'GET',
-      pathname: '/api/unexpected'
+      pathname: '/api/access_token/[REDACTED]'
     }
   });
-  expect(runtimeEvidence.unhandledApiRoutes).toEqual(['GET /api/unexpected']);
+  expect(runtimeEvidence.unhandledApiRoutes).toEqual([
+    'GET /api/access_token/[REDACTED]'
+  ]);
   expect(captureErrorMessage(() => expectNoUnhandledApiRoutes(runtimeEvidence))).toBe(
-    'Unexpected unhandled API routes:\n- GET /api/unexpected'
+    'Unexpected unhandled API routes:\n- GET /api/access_token/[REDACTED]'
   );
   const unhandledConsole =
     'Failed to load resource: the server responded with a status of 599 (Unknown)';
-  const unhandledUrl = new URL('/api/unexpected', page.url()).toString();
+  const unhandledUrl = new URL('/api/access_token/[REDACTED]', page.url()).toString();
   await expect.poll(() => runtimeEvidence.consoleErrors).toEqual([unhandledConsole]);
   await expect.poll(() => runtimeEvidence.failedRequests).toEqual([
     { method: 'GET', url: unhandledUrl, failure: 'HTTP 599' }
@@ -200,12 +203,18 @@ test('runtime evidence redacts credential-shaped console and page errors @p0 @ru
 }) => {
   const rawEvidence =
     'Authorization: Bearer auth-secret ' +
-    '{"token":"token-secret","password":"password-secret",' +
-    '"api_key":"api-key-secret","secret":"json-secret"}';
+    'Cookie: session=cookie-secret; theme=theme-secret; csrf_token=csrf-cookie-secret\n' +
+    'Set-Cookie: access_token=set-cookie-secret; Path=/; refresh_token=refresh-cookie-secret\n' +
+    '{"token":"token-secret","access_token":"access-secret",' +
+    '"refreshToken":"refresh-secret","csrf_token":"csrf-secret",' +
+    '"password":"password-secret","api_key":"api-key-secret","secret":"json-secret"}';
   const redactedEvidence =
     'Authorization: [REDACTED] ' +
-    '{"token":"[REDACTED]","password":"[REDACTED]",' +
-    '"api_key":"[REDACTED]","secret":"[REDACTED]"}';
+    'Cookie: [REDACTED]\n' +
+    'Set-Cookie: [REDACTED]\n' +
+    '{"token":"[REDACTED]","access_token":"[REDACTED]",' +
+    '"refreshToken":"[REDACTED]","csrf_token":"[REDACTED]",' +
+    '"password":"[REDACTED]","api_key":"[REDACTED]","secret":"[REDACTED]"}';
   runtimePolicy.consoleErrors.push(redactedEvidence);
   runtimePolicy.pageErrors.push(redactedEvidence);
 
@@ -221,6 +230,70 @@ test('runtime evidence redacts credential-shaped console and page errors @p0 @ru
 
   expect(runtimeEvidence.consoleErrors).toEqual([redactedEvidence]);
   expect(runtimeEvidence.pageErrors).toEqual([redactedEvidence]);
+});
+
+test('runtime evidence attachment sanitizes every field and sorts arrays @p0 @runtime-contract', async () => {
+  const rawEvidence = {
+    consoleErrors: [
+      'z-error accessToken=console-access-secret',
+      'Cookie: session=first-secret; theme=second-secret; csrf_token=third-secret'
+    ],
+    pageErrors: [
+      '{"refresh_token":"page-refresh-secret","csrfToken":"page-csrf-secret"}'
+    ],
+    failedRequests: [
+      {
+        method: 'POST',
+        url: 'https://example.test/api/refresh_token/path-refresh-secret?access_token=query-secret',
+        failure: 'password=failure-secret'
+      },
+      {
+        method: 'GET',
+        url: 'https://example.test/api/clean',
+        failure: 'secret=failure-secret'
+      }
+    ],
+    unhandledApiRoutes: [
+      'POST /api/secret/path-secret?csrf_token=query-secret',
+      'GET /api/access_token/route-secret?refreshToken=query-secret'
+    ]
+  };
+  const reverseEvidence = {
+    consoleErrors: [...rawEvidence.consoleErrors].reverse(),
+    pageErrors: [...rawEvidence.pageErrors].reverse(),
+    failedRequests: [...rawEvidence.failedRequests].reverse(),
+    unhandledApiRoutes: [...rawEvidence.unhandledApiRoutes].reverse()
+  };
+
+  const serialized = serializeRuntimeEvidence(rawEvidence);
+
+  expect(serialized).toBe(serializeRuntimeEvidence(reverseEvidence));
+  expect(JSON.parse(serialized)).toEqual({
+    consoleErrors: [
+      'Cookie: [REDACTED]',
+      'z-error accessToken=[REDACTED]'
+    ],
+    pageErrors: [
+      '{"refresh_token":"[REDACTED]","csrfToken":"[REDACTED]"}'
+    ],
+    failedRequests: [
+      {
+        method: 'GET',
+        url: 'https://example.test/api/clean',
+        failure: 'secret=[REDACTED]'
+      },
+      {
+        method: 'POST',
+        url: 'https://example.test/api/refresh_token/[REDACTED]',
+        failure: 'password=[REDACTED]'
+      }
+    ],
+    unhandledApiRoutes: [
+      'GET /api/access_token/[REDACTED]?refreshToken=[REDACTED]',
+      'POST /api/secret/[REDACTED]?csrf_token=[REDACTED]'
+    ]
+  });
+  expect(rawEvidence.consoleErrors[0]).toBe('z-error accessToken=console-access-secret');
 });
 
 test('explicit allowlist is narrow and permits only the intended error @p0 @runtime-contract', async ({
@@ -252,6 +325,45 @@ test('explicit allowlist is narrow and permits only the intended error @p0 @runt
       'consoleErrors:\n' +
       '- intentional-runtime-console-error-extra'
   );
+});
+
+test('match-all runtime allowlists are rejected exactly @p0 @runtime-contract', async () => {
+  const evidence = {
+    consoleErrors: ['runtime-contract-console-error'],
+    pageErrors: [],
+    failedRequests: [],
+    unhandledApiRoutes: []
+  };
+
+  expect(
+    captureErrorMessage(() =>
+      expectNoFatalRuntimeErrors(
+        {
+          consoleErrors: [],
+          pageErrors: [],
+          failedRequests: [],
+          unhandledApiRoutes: []
+        },
+        {
+          consoleErrors: [/.*/]
+        }
+      )
+    )
+  ).toBe('Runtime evidence allowlist rejects match-all pattern: /.*/');
+  expect(
+    captureErrorMessage(() =>
+      expectNoFatalRuntimeErrors(evidence, {
+        consoleErrors: [/.*/]
+      })
+    )
+  ).toBe('Runtime evidence allowlist rejects match-all pattern: /.*/');
+  expect(
+    captureErrorMessage(() =>
+      expectNoFatalRuntimeErrors(evidence, {
+        consoleErrors: [/^.*$/]
+      })
+    )
+  ).toBe('Runtime evidence allowlist rejects match-all pattern: /^.*$/');
 });
 
 test('horizontal overflow helper passes for contained content @p0 @runtime-contract', async ({

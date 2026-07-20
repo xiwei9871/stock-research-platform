@@ -3,7 +3,8 @@ import { expect, test as base } from '@playwright/test';
 import {
   expectNoFatalRuntimeErrors,
   expectNoUnhandledApiRoutes,
-  sanitizeRuntimeEvidenceText
+  sanitizeRuntimeEvidenceText,
+  serializeRuntimeEvidence
 } from '../assertions/runtime';
 import { bindRuntimeEvidenceToPage } from './mockPlatformApi';
 
@@ -82,7 +83,7 @@ export const test = base.extend<RuntimeFixtures>({
       }) => {
         evidence.failedRequests.push({
           method: request.method().toUpperCase(),
-          url: safeUrl(request.url()),
+          url: sanitizeRuntimeEvidenceText(safeUrl(request.url())),
           failure: sanitizeRuntimeEvidenceText(request.failure()?.errorText ?? 'request_failed')
         });
       };
@@ -96,7 +97,7 @@ export const test = base.extend<RuntimeFixtures>({
         if (status >= 500 && url.pathname.startsWith('/api/')) {
           evidence.failedRequests.push({
             method: response.request().method().toUpperCase(),
-            url: safeUrl(response.url()),
+            url: sanitizeRuntimeEvidenceText(safeUrl(response.url())),
             failure: `HTTP ${status}`
           });
         }
@@ -117,7 +118,7 @@ export const test = base.extend<RuntimeFixtures>({
         unbindRuntimeEvidence();
 
         await testInfo.attach('runtime-evidence.json', {
-          body: `${JSON.stringify(evidence, null, 2)}\n`,
+          body: serializeRuntimeEvidence(evidence),
           contentType: 'application/json'
         });
 
