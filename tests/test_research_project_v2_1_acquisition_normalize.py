@@ -121,6 +121,14 @@ def test_checkpoint_references_attempt_artifact_and_normalization_without_resear
         attempts=[acquired.attempt],
         artifacts=[acquired.artifact],
         normalization_outcomes=[outcome],
+        selected_requirement_ids=[
+            "requirement:ai_compute_pcb_industry_bottleneck:r2b_er01"
+        ],
+        candidate_ids=["source_candidate:smoke-fixture"],
+        exact_duplicate_results=[],
+        provenance_completeness="complete",
+        security_violations=[],
+        unresolved_issues=["Evidence assessment is outside the smoke scope."],
         provenance=PROVENANCE,
     )
     assert checkpoint["status"] == "pending_assessment"
@@ -128,6 +136,19 @@ def test_checkpoint_references_attempt_artifact_and_normalization_without_resear
         acquired.artifact["evidence_artifact_id"]
     ]
     assert checkpoint["normalization_records"][0]["parser"] == outcome.parser
+    assert checkpoint["selected_requirement_ids"] == [
+        "requirement:ai_compute_pcb_industry_bottleneck:r2b_er01"
+    ]
+    assert checkpoint["candidate_ids"] == ["source_candidate:smoke-fixture"]
+    assert checkpoint["successful_attempt_count"] == 1
+    assert checkpoint["failed_attempt_count"] == 0
+    assert checkpoint["provider_distribution"] == {"local_file": 1}
+    assert checkpoint["failure_distribution"] == {}
+    assert checkpoint["provenance_completeness"] == "complete"
+    assert checkpoint["security_violations"] == []
+    assert checkpoint["unresolved_issues"] == [
+        "Evidence assessment is outside the smoke scope."
+    ]
     path = write_acquisition_checkpoint(checkpoint, layout=layout)
     assert path.is_file()
     assert not (layout.project_dir("ai_compute_pcb_industry_bottleneck") / "versions/v0.2.2.json").exists()

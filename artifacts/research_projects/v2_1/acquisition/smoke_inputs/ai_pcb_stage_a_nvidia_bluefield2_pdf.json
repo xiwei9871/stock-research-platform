@@ -1,0 +1,24 @@
+{
+  "candidate_id": "source_candidate:b1b5a4709b59bc9dd73dcb90",
+  "search_plan_id": "search_plan:ai_compute_pcb_industry_bottleneck:r2b_er03",
+  "query_id": "query:ai_compute_pcb_industry_bottleneck:r2b_er03:phase_c_official_dpu_pdf",
+  "normalized_url": "https://network.nvidia.com/files/doc-2020/pb-bluefield-2-dpu.pdf",
+  "original_url": "https://network.nvidia.com/files/doc-2020/pb-bluefield-2-dpu.pdf",
+  "title": "NVIDIA BlueField-2 DPU Product Brief",
+  "snippet": "Official DPU product brief candidate for NIC/DPU placement and system relationships; discovery metadata only.",
+  "publisher": "NVIDIA",
+  "publish_date": null,
+  "source_class": "company_primary",
+  "rank": 2,
+  "exclusion_status": "included",
+  "exclusion_reasons": [],
+  "dedup_key": "https://network.nvidia.com/files/doc-2020/pb-bluefield-2-dpu.pdf",
+  "provenance": {
+    "created_by": "Codex",
+    "actor_type": "codex",
+    "agent_run_id": "r2b-phase-c-ai-pcb-stage-a-smoke-20260721",
+    "created_at": "2026-07-20T23:29:02Z",
+    "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.2.1",
+    "review_status": "unreviewed"
+  }
+}

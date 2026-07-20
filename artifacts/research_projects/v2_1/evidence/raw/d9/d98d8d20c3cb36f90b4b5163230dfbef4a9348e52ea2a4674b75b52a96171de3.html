@@ -1,0 +1,1178 @@
+
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="./" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Introduction to NVIDIA DGX B200 Systems &#8212; NVIDIA DGX B200 User Guide</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="_static/styles/theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+<link href="_static/styles/pydata-sphinx-theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/nvidia-sphinx-theme.css?v=933278ad" />
+    <link rel="stylesheet" type="text/css" href="_static/custom.css?v=890d343d" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="_static/custom.css?v=890d343d" />
+  
+  <!-- So that users can add custom icons -->
+  <script src="_static/scripts/fontawesome.js?digest=8878045cc6db502f8baf"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
+<link rel="preload" as="script" href="_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
+
+
+<script src="https://cdn.cookielaw.org/scripttemplates/otSDKStub.js" type="text/javascript"
+  data-document-language="true" charset="UTF-8" data-domain-script="3e2b62ff-7ae7-4ac5-87c8-d5949ecafff5">
+</script>
+<script type="text/javascript">
+  function OptanonWrapper() {
+    var event = new Event('bannerLoaded');
+    window.dispatchEvent(event);
+  }
+</script>
+<script src="https://images.nvidia.com/aem-dam/Solutions/ot-js/ot-custom.js" type="text/javascript">
+</script>
+
+
+    <script rel="preload" src="_static/modal-table.js"></script>
+    <script src="_static/documentation_options.js?v=b08bce9f"></script>
+    <script src="_static/doctools.js?v=9bcbadda"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/scrollspy-patch.js?v=edc4054a"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=65e89d2a"></script>
+    <script src="_static/design-tabs.js?v=f930bc37"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'introduction-to-dgxb200';</script>
+    <script src="_static/version-patch.js?v=3e13fdd2"></script>
+
+<script type="text/javascript" src="https://assets.adobedtm.com/5d4962a43b79/c1061d2c5e7b/launch-191c2462b890.min.js"></script>
+
+    <link rel="icon" href="_static/favicon.ico"/>
+
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Connecting to DGX B200" href="connect-dgx.html" />
+    <link rel="prev" title="NVIDIA DGX B200 System User Guide" href="index.html" />
+
+<link rel="preload" as="image" href="https://www.nvidia.com/content/dam/1x1-00000000.png">
+
+
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="" />
+    <meta name="docbuild:last-update" content="Jun 29, 2026"/>
+
+
+  </head>
+
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+<img src="https://www.nvidia.com/content/dam/1x1-00000000.png" width="1" height="1" style="display:none;" alt="country_code">
+
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="_static/nvidia-logo-horiz-rgb-blk-for-screen.svg" class="logo__image only-light" alt="NVIDIA DGX B200 User Guide - Home"/>
+    <img src="_static/nvidia-logo-horiz-rgb-wht-for-screen.svg" class="logo__image only-dark pst-js-only" alt="NVIDIA DGX B200 User Guide - Home"/>
+  
+  
+    <p class="title logo__title">NVIDIA DGX B200 User Guide</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+    <button class="pst-navbar-icon sidebar-toggle secondary-toggle" aria-label="On this page">
+      <span class="fa-solid fa-outdent"></span>
+    </button>
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="_static/nvidia-logo-horiz-rgb-blk-for-screen.svg" class="logo__image only-light" alt="NVIDIA DGX B200 User Guide - Home"/>
+    <img src="_static/nvidia-logo-horiz-rgb-wht-for-screen.svg" class="logo__image only-dark pst-js-only" alt="NVIDIA DGX B200 User Guide - Home"/>
+  
+  
+    <p class="title logo__title">NVIDIA DGX B200 User Guide</p>
+  
+</a>
+
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+        
+      </div>
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+
+
+<nav class="bd-docs-nav bd-links"
+     aria-label="Table of Contents">
+  <p class="bd-links__title" role="heading" aria-level="1">Table of Contents</p>
+  <div class="bd-toc-item navbar-nav"><ul class="current nav bd-sidenav">
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Introduction to NVIDIA DGX B200 Systems</a></li>
+<li class="toctree-l1"><a class="reference internal" href="connect-dgx.html">Connecting to DGX B200</a></li>
+<li class="toctree-l1"><a class="reference internal" href="first-boot-setup.html">First Boot Setup</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quickstart-basics.html">Quickstart and Basic Operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="sbios-settings.html">SBIOS Settings</a></li>
+<li class="toctree-l1"><a class="reference internal" href="bmc.html">Using the BMC</a></li>
+<li class="toctree-l1"><a class="reference internal" href="power-capping.html">Managing Power Capping</a></li>
+<li class="toctree-l1"><a class="reference internal" href="security.html">Security</a></li>
+<li class="toctree-l1"><a class="reference internal" href="redfish-api-supp.html">Redfish APIs Support</a></li>
+<li class="toctree-l1"><a class="reference internal" href="safety.html">Safety</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Legal Information</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="compliance.html">Compliance</a></li>
+<li class="toctree-l1"><a class="reference internal" href="licenses.html">Third-Party License Notices</a></li>
+<li class="toctree-l1"><a class="reference internal" href="notices.html">Notices</a></li>
+</ul>
+</div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+  </div>
+
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="https://docs.nvidia.com">NVIDIA Docs Hub</a>
+    </li>
+    <li class="breadcrumb-item">
+      <a href="https://docs.nvidia.com/dgx">NVIDIA DGX Platform</a>
+    </li>
+    <li class="breadcrumb-item">
+      <a href="https://docs.nvidia.com/dgx-systems">NVIDIA DGX Systems</a>
+    </li>
+    <li class="breadcrumb-item active" aria-current="page">Introduction to NVIDIA DGX B200 Systems</li>
+  </ul>
+</nav></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+<div class="header-article-item">
+  <div class="d-flex justify-content-end w-100">
+    <a href="https://surveys.hotjar.com/4904bf71-6484-47a7-83ff-4715cceabdb5" id="openPopupButton">Is this page helpful?</a>
+  </div>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="introduction-to-nvidia-dgx-b200-systems">
+<span id="introduction-to-dgxb200"></span><h1>Introduction to NVIDIA DGX B200 Systems<a class="headerlink" href="#introduction-to-nvidia-dgx-b200-systems" title="Link to this heading">#</a></h1>
+<p>The NVIDIA DGX™ B200 System is the universal system purpose-built for all AI infrastructure
+and workloads from analytics to training to inference. The system is built on eight
+NVIDIA B200 Tensor Core GPUs.</p>
+<img alt="_images/dgx-b200-with-bezel.png" src="_images/dgx-b200-with-bezel.png" />
+<section id="hardware-overview">
+<span id="hw-overview"></span><h2>Hardware Overview<a class="headerlink" href="#hardware-overview" title="Link to this heading">#</a></h2>
+<section id="dgx-b200-component-descriptions">
+<span id="models-comp-desc-dgxb200"></span><h3>DGX B200 Component Descriptions<a class="headerlink" href="#dgx-b200-component-descriptions" title="Link to this heading">#</a></h3>
+<p>The NVIDIA DGX B200 (1,440 GB) system includes the following components.</p>
+<div class="pst-scrollable-table-container"><table class="table" id="id3">
+<caption><span class="caption-text">Component Description</span><a class="headerlink" href="#id3" title="Link to this table">#</a></caption>
+<colgroup>
+<col style="width: 35.0%" />
+<col style="width: 65.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Component</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>GPU</p></td>
+<td><p>8 x NVIDIA B200 GPUs that provide 1,440 GB total GPU memory</p></td>
+</tr>
+<tr class="row-odd"><td><p>CPU</p></td>
+<td><p>2 x Intel Xeon 8570 PCIe Gen5 CPUs with 56 cores each 2.1/4 GHz (Base/Max boost)</p></td>
+</tr>
+<tr class="row-even"><td><p>NVSwitch</p></td>
+<td><p>2 x 5th generation NVLink switches that provide 14.4 TB/s aggregate bandwidth</p></td>
+</tr>
+<tr class="row-odd"><td><p>Storage (OS)</p></td>
+<td><p>2 x 1.92 TB NVMe M.2 SSD (ea) in RAID 1 array</p></td>
+</tr>
+<tr class="row-even"><td><p>Storage (Data Cache)</p></td>
+<td><p>8 x 3.84 TB NVMe U.2 SED (ea) in RAID 0 array</p></td>
+</tr>
+<tr class="row-odd"><td><p>Network (Cluster) card</p></td>
+<td><p>4 x OSFP ports for 8 x NVIDIA® ConnectX®-7 Single Port Cards</p>
+<p>Each card provides the following speeds:</p>
+<ul class="simple">
+<li><p>InfiniBand (default): Up to 400Gbps</p></li>
+<li><p>Ethernet: 400GbE, 200GbE, 100GbE, 50GbE, 40GbE, 25GbE, and 10GbE</p></li>
+</ul>
+</td>
+</tr>
+<tr class="row-even"><td><p>Network (storage and in-band management) card</p></td>
+<td><p>2 x NVIDIA® BlueField®-3 DPU Dual Port Cards</p>
+<p>Each card provides the following speeds:</p>
+<ul class="simple">
+<li><p>Ethernet (1 port): 400GbE, 200GbE, 100GbE, 50GbE, 40GbE, 25GbE, and 10GbE</p></li>
+<li><p>InfiniBand (1 port): Up to 400Gbps</p></li>
+</ul>
+</td>
+</tr>
+<tr class="row-odd"><td><p>System memory (DIMM)</p></td>
+<td><p>2 TB using 32 x DIMMs (upgradable to 4 TB)</p></td>
+</tr>
+<tr class="row-even"><td><p>BMC (out-of-band system management)</p></td>
+<td><p>1 GbE RJ45 interface</p>
+<p>Supports Redfish, IPMI, SNMP, KVM, and Web user interface</p>
+</td>
+</tr>
+<tr class="row-odd"><td><p>System management interfaces (optional)</p></td>
+<td><p>Dual port 100GbE in slot 3 and 10 GbE RJ45 interface</p></td>
+</tr>
+<tr class="row-even"><td><p>Power supply</p></td>
+<td><p>6 x 3.3 kW</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="mechanical-specifications">
+<span id="mech-specs"></span><h3>Mechanical Specifications<a class="headerlink" href="#mechanical-specifications" title="Link to this heading">#</a></h3>
+<div class="pst-scrollable-table-container"><table class="table" id="id4">
+<caption><span class="caption-text">Mechanical Specifications</span><a class="headerlink" href="#id4" title="Link to this table">#</a></caption>
+<thead>
+<tr class="row-odd"><th class="head"><p>Feature</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Form Factor</p></td>
+<td><p>10U Rackmount</p></td>
+</tr>
+<tr class="row-odd"><td><p>Height</p></td>
+<td><p>17.5” (444 mm)</p></td>
+</tr>
+<tr class="row-even"><td><p>Width</p></td>
+<td><p>19” (482.3 mm) max</p></td>
+</tr>
+<tr class="row-odd"><td><p>Depth</p></td>
+<td><p>35.3” (897.1 mm) max</p></td>
+</tr>
+<tr class="row-even"><td><p>System Weight</p></td>
+<td><p>313.9 lbs (142.4 kg) max</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="power-specifications">
+<span id="power-specs"></span><h3>Power Specifications<a class="headerlink" href="#power-specifications" title="Link to this heading">#</a></h3>
+<p>The DGX B200 system contains six power supplies with a balanced distribution of the power load.</p>
+<div class="pst-scrollable-table-container"><table class="table" id="id5">
+<caption><span class="caption-text">Power Specifications</span><a class="headerlink" href="#id5" title="Link to this table">#</a></caption>
+<thead>
+<tr class="row-odd"><th class="head"><p>Input</p></th>
+<th class="head"></th>
+<th class="head"><p>Specification for Each Power Supply</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>200-240 volts AC</p></td>
+<td><p>14.3 kW max.</p></td>
+<td><p>3,300 W &#64; 200-240 V, 16 A, 50-60 Hz</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<section id="support-for-psu-redundancy-and-continuous-operation">
+<span id="supp-nn-red"></span><h4>Support for PSU Redundancy and Continuous Operation<a class="headerlink" href="#support-for-psu-redundancy-and-continuous-operation" title="Link to this heading">#</a></h4>
+<p>The system includes six power supply units (PSU) configured for 5+1 redundancy.</p>
+<p>Refer to the following additional considerations:</p>
+<ul class="simple">
+<li><p>If a PSU fails, troubleshoot the cause and replace the failed PSU immediately.</p></li>
+<li><p>If two PSUs lose power due to a data center issue or power distribution unit failure, the
+system continues to function but at a reduced performance level.</p></li>
+<li><p>If only two PSUs have power, shut down the system before replacing an operational PSU.</p></li>
+<li><p>The system only boots if at least three PSUs are operational.
+If fewer than three are operational, only the BMC is available.</p></li>
+<li><p>Do not operate the system with PSUs depopulated.</p></li>
+</ul>
+<p>This table shows the effects of disconnecting AC power cables from the DGX B200 system.</p>
+<div class="pst-scrollable-table-container"><table class="table" id="id6">
+<caption><span class="caption-text">System Effects of Disconnecting AC Power Cables</span><a class="headerlink" href="#id6" title="Link to this table">#</a></caption>
+<colgroup>
+<col style="width: 23.0%" />
+<col style="width: 20.0%" />
+<col style="width: 37.0%" />
+<col style="width: 20.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><div class="line-block">
+<div class="line">AC Power Cable</div>
+<div class="line">Disconnection</div>
+</div>
+</th>
+<th class="head"><div class="line-block">
+<div class="line">Operating PSUs</div>
+</div>
+</th>
+<th class="head"><div class="line-block">
+<div class="line">Effect</div>
+</div>
+</th>
+<th class="head"><div class="line-block">
+<div class="line">Maximum Power</div>
+<div class="line">per GPU <a class="footnote-reference brackets" href="#f1" id="id1" role="doc-noteref"><span class="fn-bracket">[</span>1<span class="fn-bracket">]</span></a></div>
+</div>
+</th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Removing 1 cable</p></td>
+<td><p>5</p></td>
+<td><p>No effect on the DGX system.</p></td>
+<td><p>1,000 W</p></td>
+</tr>
+<tr class="row-odd"><td><p>Removing 2 cables</p></td>
+<td><p>4</p></td>
+<td><p>The BMC alerts on AC power loss.</p></td>
+<td><p>800 W</p></td>
+</tr>
+<tr class="row-even"><td><p>Removing 3 cables</p></td>
+<td><p>3</p></td>
+<td><p>The BMC alerts on AC power loss.</p></td>
+<td><p>800 W</p></td>
+</tr>
+<tr class="row-odd"><td><p>Removing 4 cables</p></td>
+<td><p>2</p></td>
+<td><p>The DGX system shuts down.</p></td>
+<td><p>Not applicable</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<aside class="footnote-list brackets">
+<aside class="footnote brackets" id="f1" role="doc-footnote">
+<span class="label"><span class="fn-bracket">[</span><a role="doc-backlink" href="#id1">1</a><span class="fn-bracket">]</span></span>
+<p>The maximum power per GPU is reported by the <code class="docutils literal notranslate"><span class="pre">nvidia-smi</span></code> tool.</p>
+</aside>
+</aside>
+</section>
+</section>
+<section id="dgx-b200-locking-power-cord-specification">
+<span id="lock-power-cord-spec"></span><h3>DGX B200 Locking Power Cord Specification<a class="headerlink" href="#dgx-b200-locking-power-cord-specification" title="Link to this heading">#</a></h3>
+<p>The DGX B200 system is shipped with a set of six (6) locking power cords that have been qualified
+for use with the DGX B200 system to ensure regulatory compliance.</p>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>To avoid electric shock or fire, only use the NVIDIA-provided power cords to connect power to the DGX B200.
+For more information, refer to <a class="reference internal" href="safety.html#electrical-precautions"><span class="std std-ref">Electrical Precautions</span></a>.</p>
+</div>
+<div class="admonition important">
+<p class="admonition-title">Important</p>
+<p>Do not use the provided cables with any other product or for any other purpose.</p>
+</div>
+<p class="title sectiontitle rubric" id="power-cord-specification">Power Cord Specification</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Power Cord Feature</p></th>
+<th class="head"><p>Specification</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Electrical</p></td>
+<td><p>250VAC, 20A</p></td>
+</tr>
+<tr class="row-odd"><td><p>Plug Standard</p></td>
+<td><p>C19/C20</p></td>
+</tr>
+<tr class="row-even"><td><p>Dimension</p></td>
+<td><p>1200mm length</p></td>
+</tr>
+<tr class="row-odd"><td><p>Compliance</p></td>
+<td><p>Cord: UL62, IEC60227</p>
+<p>Connector/Plug: IEC60320-1</p>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="using-the-locking-power-cords">
+<span id="use-lock-power-cords"></span><h3>Using the Locking Power Cords<a class="headerlink" href="#using-the-locking-power-cords" title="Link to this heading">#</a></h3>
+<p>This section provides information about how to use the locking power cords.</p>
+<p class="title sectiontitle rubric" id="locking-and-unlocking-the-pdu-side">Locking and Unlocking the PDU Side</p>
+<p>Power Distribution Unit side</p>
+<ul>
+<li><p>To INSERT, push the cable into the PDU socket.</p></li>
+<li><p>To REMOVE, press the clips together and pull the cord out of the socket.</p>
+<img alt="_images/locking-cord.png" src="_images/locking-cord.png" />
+</li>
+</ul>
+<p>Locking/Unlocking the PSU Side (Cords with Twist-Lock Mechanism)</p>
+<p>Power Supply (System) side - Twist locking</p>
+<ul>
+<li><p>To INSERT or REMOVE, ensure the cable is UNLOCKED and push/ pull into/out of the socket.</p>
+<img alt="_images/cords.jpg" src="_images/cords.jpg" />
+</li>
+</ul>
+</section>
+<section id="environmental-specifications">
+<span id="env-spec"></span><h3>Environmental Specifications<a class="headerlink" href="#environmental-specifications" title="Link to this heading">#</a></h3>
+<p>Here are the environmental specifications for your DGX B200 system.</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Feature</p></th>
+<th class="head"><p>Specification</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Operating Temperature</p></td>
+<td><p>10°C to 35°C (50˚F to 95˚F)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Relative Humidity</p></td>
+<td><p>20% to 80% non-condensing</p></td>
+</tr>
+<tr class="row-even"><td><p>Airflow</p></td>
+<td><p>1,550 CFM</p></td>
+</tr>
+<tr class="row-odd"><td><p>Heat Output</p></td>
+<td><p>48,794 BTU/hr</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="front-panel-connections-and-controls">
+<span id="front-panel-conn-controls"></span><h3>Front Panel Connections and Controls<a class="headerlink" href="#front-panel-connections-and-controls" title="Link to this heading">#</a></h3>
+<p>This section provides information about the front panel, connections, and controls of the DGX B200 system.</p>
+<section id="with-a-bezel">
+<span id="with-bezel"></span><h4>With a Bezel<a class="headerlink" href="#with-a-bezel" title="Link to this heading">#</a></h4>
+<p>Here is an image of the DGX B200 system with a bezel.</p>
+<img alt="_images/dgx-b200-with-bezel.png" src="_images/dgx-b200-with-bezel.png" />
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Control</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Power Button</p></td>
+<td><p>Press to turn the DGX B200 system on or off.</p>
+<ul class="simple">
+<li><p>Green flashing (1 Hz): Standby (BMC booted)</p></li>
+<li><p>Green flashing (4 Hz): POST in progress</p></li>
+<li><p>Green solid On: Power On</p></li>
+</ul>
+</td>
+</tr>
+<tr class="row-odd"><td><p>ID Button</p></td>
+<td><p>Press to have the blue LED turn On or blink (configurable through the BMC) as an identifier during servicing.</p>
+<p>It also causes an LED on the back of the unit to flash as an identifier during servicing.</p>
+</td>
+</tr>
+<tr class="row-even"><td><p>Fault LED</p></td>
+<td><p>Amber On: System or component faulted</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="with-the-bezel-removed">
+<span id="dgxh100-no-bezel"></span><h4>With the Bezel Removed<a class="headerlink" href="#with-the-bezel-removed" title="Link to this heading">#</a></h4>
+<p>Here is an image of the DGX B200 system without a bezel.</p>
+<img alt="_images/dgx-b200-front-view.png" src="_images/dgx-b200-front-view.png" />
+<div class="admonition important">
+<p class="admonition-title">Important</p>
+<p>Refer to the section <a class="reference internal" href="first-boot-setup.html"><span class="doc">First Boot Setup</span></a> for instructions on how to properly turn the system on or off.</p>
+</div>
+</section>
+</section>
+<section id="rear-panel-modules">
+<h3>Rear Panel Modules<a class="headerlink" href="#rear-panel-modules" title="Link to this heading">#</a></h3>
+<p>Here is an image that shows the actual panel modules on DGX B200.</p>
+<img alt="_images/dgx-b200-rear-panel-modules.png" src="_images/dgx-b200-rear-panel-modules.png" />
+</section>
+<section id="motherboard-connections-and-controls">
+<h3>Motherboard Connections and Controls<a class="headerlink" href="#motherboard-connections-and-controls" title="Link to this heading">#</a></h3>
+<p>The following image shows the motherboard connections and controls in a DGX B200 system.</p>
+<img alt="_images/dgx-b200-port-view.png" src="_images/dgx-b200-port-view.png" />
+<div class="pst-scrollable-table-container"><table class="table" id="id7">
+<caption><span class="caption-text">Motherboard Controls</span><a class="headerlink" href="#id7" title="Link to this table">#</a></caption>
+<thead>
+<tr class="row-odd"><th class="head"><p>Control</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Power Button</p></td>
+<td><p>Press to turn the system On or Off.</p></td>
+</tr>
+<tr class="row-odd"><td><p>ID LED Button</p></td>
+<td><p>It blinks when the ID button is pressed from the front of the unit to help identify the unit that needs servicing.</p></td>
+</tr>
+<tr class="row-even"><td><p>BMC Reset Button</p></td>
+<td><p>Press to manually reset the BMC.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>See <a class="reference internal" href="#network-conn-cables-adaptors"><span class="std std-ref">Network Connections, Cables, and Adaptors</span></a> for details on the network connections.</p>
+</section>
+<section id="motherboard-tray-components">
+<h3>Motherboard Tray Components<a class="headerlink" href="#motherboard-tray-components" title="Link to this heading">#</a></h3>
+<p>The following image shows the motherboard tray components in the DGX B200 system.</p>
+<img alt="_images/dgx-b200-mb-tray-comp.png" src="_images/dgx-b200-mb-tray-comp.png" />
+</section>
+<section id="gpu-tray-components">
+<h3>GPU Tray Components<a class="headerlink" href="#gpu-tray-components" title="Link to this heading">#</a></h3>
+<p>Here is an image of the GPU tray components in the DGX B200 system.</p>
+<img alt="_images/dgx-b200-gpu-tray.png" src="_images/dgx-b200-gpu-tray.png" />
+</section>
+</section>
+<section id="network-connections-cables-and-adaptors">
+<span id="network-conn-cables-adaptors"></span><h2>Network Connections, Cables, and Adaptors<a class="headerlink" href="#network-connections-cables-and-adaptors" title="Link to this heading">#</a></h2>
+<p>This section provides information about network connections, cables, and adaptors.</p>
+<section id="network-ports">
+<h3>Network Ports<a class="headerlink" href="#network-ports" title="Link to this heading">#</a></h3>
+<p>Here is an image that shows the network ports on a DGX B200 system.</p>
+<img alt="_images/dgx-b200-port-view.png" src="_images/dgx-b200-port-view.png" />
+<div class="pst-scrollable-table-container"><table class="table" id="id8">
+<caption><span class="caption-text">Network Port Mapping</span><a class="headerlink" href="#id8" title="Link to this table">#</a></caption>
+<thead>
+<tr class="row-odd"><th class="head"><p></p></th>
+<th class="head"></th>
+<th class="head" colspan="2"><p>Port Designation</p></th>
+<th class="head"></th>
+</tr>
+<tr class="row-even"><th class="head"><p>Port</p></th>
+<th class="head"><p>PCI Bus</p></th>
+<th class="head"><p>Default</p></th>
+<th class="head"><p>Optional</p></th>
+<th class="head"><p>RDMA</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-odd"><td><p>OSFP1P1</p></td>
+<td><p>dc:00.0</p></td>
+<td><p>ibp220s0</p></td>
+<td><p>enp220s0np0</p></td>
+<td><p>mlx5_15</p></td>
+</tr>
+<tr class="row-even"><td><p>OSFP1P2</p></td>
+<td><p>9a:00.0</p></td>
+<td><p>ibp154s0</p></td>
+<td><p>enp154s0np0</p></td>
+<td><p>mlx5_10</p></td>
+</tr>
+<tr class="row-odd"><td><p>OSFP2P1</p></td>
+<td><p>ce:00.0</p></td>
+<td><p>ibp206s0</p></td>
+<td><p>enp206s0np0</p></td>
+<td><p>mlx5_14</p></td>
+</tr>
+<tr class="row-even"><td><p>OSFP2P2</p></td>
+<td><p>c0:00.0</p></td>
+<td><p>ibp192s0</p></td>
+<td><p>enp192s0np0</p></td>
+<td><p>mlx5_13</p></td>
+</tr>
+<tr class="row-odd"><td><p>OSFP3P1</p></td>
+<td><p>4f:00.0</p></td>
+<td><p>ibp79s0</p></td>
+<td><p>enp79s0np0</p></td>
+<td><p>mlx5_8</p></td>
+</tr>
+<tr class="row-even"><td><p>OSFP3P2</p></td>
+<td><p>40:00.0</p></td>
+<td><p>ibp64s0</p></td>
+<td><p>enp64s0np0</p></td>
+<td><p>mlx5_7</p></td>
+</tr>
+<tr class="row-odd"><td><p>OSFP4P1</p></td>
+<td><p>5e:00.0</p></td>
+<td><p>ibp94s0</p></td>
+<td><p>enp94s0np0</p></td>
+<td><p>mlx5_9</p></td>
+</tr>
+<tr class="row-even"><td><p>OSFP4P2</p></td>
+<td><p>18:00.0</p></td>
+<td><p>ibp24s0</p></td>
+<td><p>enp24s0np0</p></td>
+<td><p>mlx5_4</p></td>
+</tr>
+<tr class="row-odd"><td><p>Slot1 P1</p></td>
+<td><p>aa:00.0</p></td>
+<td><p>ibp170s0f0</p></td>
+<td><p>enp170s0f0np0</p></td>
+<td><p>mlx5_11</p></td>
+</tr>
+<tr class="row-even"><td><p>Slot1 P2</p></td>
+<td><p>aa:00.1</p></td>
+<td><p>enp170s0f1np1</p></td>
+<td><p>ibp170s0f1</p></td>
+<td><p>mlx5_12</p></td>
+</tr>
+<tr class="row-odd"><td><p>Slot2 P1</p></td>
+<td><p>29:00.0</p></td>
+<td><p>ibp41s0f0</p></td>
+<td><p>enp41s0f0np0</p></td>
+<td><p>mlx5_5</p></td>
+</tr>
+<tr class="row-even"><td><p>Slot2 P2</p></td>
+<td><p>29:00.1</p></td>
+<td><p>enp41s0f1np1</p></td>
+<td><p>ibp41s0f1</p></td>
+<td><p>mlx5_6</p></td>
+</tr>
+<tr class="row-odd"><td><p>Slot3 P1</p></td>
+<td><p>82:00.0</p></td>
+<td><p>ens6f0</p></td>
+<td><p>N/A</p></td>
+<td><p>irdma0</p></td>
+</tr>
+<tr class="row-even"><td><p>Slot3 P2</p></td>
+<td><p>82:00.1</p></td>
+<td><p>ens6f1</p></td>
+<td><p>N/A</p></td>
+<td><p>irdma1</p></td>
+</tr>
+<tr class="row-odd"><td><p>On-board</p></td>
+<td><p>0b:00.0</p></td>
+<td><p>eno3</p></td>
+<td><p>N/A</p></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="compute-and-storage-networking">
+<h3>Compute and Storage Networking<a class="headerlink" href="#compute-and-storage-networking" title="Link to this heading">#</a></h3>
+<img alt="_images/dgx-b200-storage-nw.png" src="_images/dgx-b200-storage-nw.png" />
+</section>
+<section id="network-modules">
+<span id="nw-modules"></span><h3>Network Modules<a class="headerlink" href="#network-modules" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p>New form factor for aggregate PCIe network devices</p></li>
+<li><p>Consolidates four ConnectX-7 networking cards into a single device</p></li>
+</ul>
+<p>The DGX B200 system has eight ConnectX-7 network cards on two network module trays. Internal DensiLink
+cables connect the dual-port OSFP interface to the individual ConnectX-7 network card.</p>
+<div class="pst-scrollable-table-container"><table class="table" id="id9">
+<caption><span class="caption-text">Network Modules</span><a class="headerlink" href="#id9" title="Link to this table">#</a></caption>
+<thead>
+<tr class="row-odd"><th class="head"><p>Port</p></th>
+<th class="head"><p>ConnectX Device</p></th>
+<th class="head"><p>Network Module/CPU</p></th>
+<th class="head"><p>GPU</p></th>
+<th class="head"><p>Default</p></th>
+<th class="head"><p>RDMA</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>OSFP1P1</p></td>
+<td><p>CX0</p></td>
+<td><p>1</p></td>
+<td><p>7</p></td>
+<td><p>ibp220s0</p></td>
+<td><p>mlx5_15</p></td>
+</tr>
+<tr class="row-odd"><td><p>OSFP1P2</p></td>
+<td><p>CX1</p></td>
+<td><p>1</p></td>
+<td><p>4</p></td>
+<td><p>ibp154s0</p></td>
+<td><p>mlx5_10</p></td>
+</tr>
+<tr class="row-even"><td><p>OSFP2P1</p></td>
+<td><p>CX2</p></td>
+<td><p>1</p></td>
+<td><p>6</p></td>
+<td><p>ibp206s0</p></td>
+<td><p>mlx5_14</p></td>
+</tr>
+<tr class="row-odd"><td><p>OSFP2P2</p></td>
+<td><p>CX3</p></td>
+<td><p>1</p></td>
+<td><p>5</p></td>
+<td><p>ibp192s0</p></td>
+<td><p>mlx5_13</p></td>
+</tr>
+<tr class="row-even"><td><p>OSFP3P1</p></td>
+<td><p>CX2</p></td>
+<td><p>0</p></td>
+<td><p>2</p></td>
+<td><p>ibp79s0</p></td>
+<td><p>mlx5_8</p></td>
+</tr>
+<tr class="row-odd"><td><p>OSFP3P2</p></td>
+<td><p>CX3</p></td>
+<td><p>0</p></td>
+<td><p>1</p></td>
+<td><p>ibp64s0</p></td>
+<td><p>mlx5_7</p></td>
+</tr>
+<tr class="row-even"><td><p>OSFP4P1</p></td>
+<td><p>CX0</p></td>
+<td><p>0</p></td>
+<td><p>3</p></td>
+<td><p>ibp94s0</p></td>
+<td><p>mlx5_9</p></td>
+</tr>
+<tr class="row-odd"><td><p>OSFP4P2</p></td>
+<td><p>CX1</p></td>
+<td><p>0</p></td>
+<td><p>0</p></td>
+<td><p>ibp24s0</p></td>
+<td><p>mlx5_4</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<a class="reference internal image-reference" href="_images/dgx-b200-network-modules.jpg"><img alt="_images/dgx-b200-network-modules.jpg" src="_images/dgx-b200-network-modules.jpg" style="width: 600px;" />
+</a>
+</section>
+<section id="bmc-port-leds">
+<h3>BMC Port LEDs<a class="headerlink" href="#bmc-port-leds" title="Link to this heading">#</a></h3>
+<p>The BCM RJ-45 port has two LEDs.</p>
+<p>The LED on the left indicates the speed.
+Solid green indicates the speed is 100M.
+Solid amber indicates the speed is 1G.</p>
+<p>The LED on the right is green and flashes to indicate activity.</p>
+</section>
+<section id="supported-network-cables-and-adaptors">
+<span id="supp-network-cables-adap"></span><h3>Supported Network Cables and Adaptors<a class="headerlink" href="#supported-network-cables-and-adaptors" title="Link to this heading">#</a></h3>
+<p>The DGX B200 system is not shipped with network cables or adaptors. You will need to purchase supported cables or adaptors for your network.</p>
+<p>The ConnectX-7 firmware determines which cables and adaptors are supported. For a list of cables and
+adaptors compatible with the NVIDIA ConnectX cards installed in the DGX B200 system,</p>
+<ol class="arabic simple">
+<li><p>Visit the <a class="reference external" href="https://docs.nvidia.com/networking/category/adapterfw">NVIDIA Adapter Firmware Release</a> page.</p></li>
+<li><p>Click the ConnectX model and select the corresponding firmware included in the DGX B200 system.</p></li>
+<li><p>From the left <strong>Topics</strong> pane, select the Validated and Supported Cables and Switches topic.</p></li>
+</ol>
+<p>To configure the BlueField-3 DPU in NIC mode, follow the instructions in <a class="reference external" href="https://docs.nvidia.com/networking/display/bluefielddpubspv422/modes+of+operation#src-141856548_ModesofOperation-NICModeforBlueField-3">NIC Mode for BlueField-3</a>.</p>
+</section>
+</section>
+<section id="dgx-b200-system-topology">
+<span id="system-topology"></span><h2>DGX B200 System Topology<a class="headerlink" href="#dgx-b200-system-topology" title="Link to this heading">#</a></h2>
+<p>The following figure shows the DGX B200 system topology.</p>
+<a class="reference internal image-reference" href="_images/dgx-b200-system-topology.png"><img alt="_images/dgx-b200-system-topology.png" src="_images/dgx-b200-system-topology.png" style="width: 700px;" />
+</a>
+</section>
+<section id="dgx-os-software">
+<span id="id2"></span><h2>DGX OS Software<a class="headerlink" href="#dgx-os-software" title="Link to this heading">#</a></h2>
+<p>The DGX B200 system comes pre-installed with a DGX software stack incorporating the following components:</p>
+<ul>
+<li><p>An Ubuntu server distribution using the optimized Linux kernel with supporting packages</p></li>
+<li><p>The following system management and monitoring software:</p>
+<ul>
+<li><p>NVIDIA System Management (NVSM)</p>
+<p>Provides active health monitoring and system alerts for NVIDIA DGX nodes in a data center. It also provides simple commands for checking the health of the DGX B200 system from the command line.</p>
+</li>
+<li><p>Data Center GPU Management (DCGM)</p>
+<p>This software enables node-wide administration of GPUs and can be used for cluster and data-center level management.</p>
+</li>
+</ul>
+</li>
+<li><p>DGX B200 system support packages</p></li>
+<li><p>The NVIDIA GPU driver, including NVIDIA CUDA</p></li>
+<li><p>Docker Engine</p></li>
+<li><p>NVIDIA Container Toolkit</p></li>
+<li><p>NVIDIA Networking OpenFabrics Enterprise Distribution for Linux (DOCA-OFED)</p></li>
+<li><p>NVIDIA Networking Software Tools (MST)</p></li>
+<li><p>cachefilesd (daemon for managing cache data storage)</p></li>
+</ul>
+</section>
+<section id="customer-support">
+<h2>Customer Support<a class="headerlink" href="#customer-support" title="Link to this heading">#</a></h2>
+<p>Contact NVIDIA Enterprise Support for assistance in reporting, troubleshooting, or diagnosing problems with your DGX B200 system. You can also contact NVIDIA Enterprise Support for help in moving the DGX B200 system.</p>
+<ul class="simple">
+<li><p>For contracted Enterprise Support questions, you can send an email to <a class="reference external" href="mailto:enterprisesupport&#37;&#52;&#48;nvidia&#46;com">enterprisesupport<span>&#64;</span>nvidia<span>&#46;</span>com</a>.</p></li>
+<li><p>For more information on obtaining support, go to <a class="reference external" href="https://www.nvidia.com/en-us/support/enterprise/">NVIDIA Enterprise Support</a>.</p></li>
+</ul>
+<p>Our support team can help collect appropriate information about your issue and involve internal resources as needed.</p>
+</section>
+</section>
+
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="index.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">NVIDIA DGX B200 System User Guide</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="connect-dgx.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Connecting to DGX B200</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+
+
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+<div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> On this page
+  </div>
+  <nav class="bd-toc-nav page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#hardware-overview">Hardware Overview</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#dgx-b200-component-descriptions">DGX B200 Component Descriptions</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#mechanical-specifications">Mechanical Specifications</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#power-specifications">Power Specifications</a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#support-for-psu-redundancy-and-continuous-operation">Support for PSU Redundancy and Continuous Operation</a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#dgx-b200-locking-power-cord-specification">DGX B200 Locking Power Cord Specification</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#using-the-locking-power-cords">Using the Locking Power Cords</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#environmental-specifications">Environmental Specifications</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#front-panel-connections-and-controls">Front Panel Connections and Controls</a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#with-a-bezel">With a Bezel</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#with-the-bezel-removed">With the Bezel Removed</a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#rear-panel-modules">Rear Panel Modules</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#motherboard-connections-and-controls">Motherboard Connections and Controls</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#motherboard-tray-components">Motherboard Tray Components</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#gpu-tray-components">GPU Tray Components</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#network-connections-cables-and-adaptors">Network Connections, Cables, and Adaptors</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#network-ports">Network Ports</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#compute-and-storage-networking">Compute and Storage Networking</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#network-modules">Network Modules</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#bmc-port-leds">BMC Port LEDs</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#supported-network-cables-and-adaptors">Supported Network Cables and Adaptors</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#dgx-b200-system-topology">DGX B200 System Topology</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#dgx-os-software">DGX OS Software</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#customer-support">Customer Support</a></li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf"></script>
+<script defer src="_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf"></script>
+
+
+<script type="text/javascript">if (typeof _satellite !== "undefined") {_satellite.pageBottom();}</script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+<a class="footer-brand logo" href="https://www.nvidia.com">
+  <img src="_static/nvidia-logo-horiz-rgb-1c-blk-for-screen.svg" class="logo__image only-light" alt="NVIDIA"/>
+  <img src="_static/nvidia-logo-horiz-rgb-1c-wht-for-screen.svg" class="logo__image only-dark" alt="NVIDIA"/>
+</a></div>
+      
+        <div class="footer-item">
+
+<div class="footer-links">
+  
+  
+  <a class="external" href="https://www.nvidia.com/en-us/about-nvidia/privacy-policy/">Privacy Policy</a>
+   | 
+  
+  
+  
+  <a class="external" href="https://www.nvidia.com/en-us/about-nvidia/privacy-center/">Your Privacy Choices</a>
+   | 
+  
+  
+  
+  <a class="external" href="https://www.nvidia.com/en-us/about-nvidia/terms-of-service/">Terms of Service</a>
+   | 
+  
+  
+  
+  <a class="external" href="https://www.nvidia.com/en-us/about-nvidia/accessibility/">Accessibility</a>
+   | 
+  
+  
+  
+  <a class="external" href="https://www.nvidia.com/en-us/about-nvidia/company-policies/">Corporate Policies</a>
+   | 
+  
+  
+  
+  <a class="external" href="https://www.nvidia.com/en-us/product-security/">Product Security</a>
+   | 
+  
+  
+  
+  <a class="external" href="https://www.nvidia.com/en-us/contact/">Contact</a>
+  
+  
+  
+</div>
+</div>
+      
+        <div class="footer-item">
+
+
+
+
+  <p class="copyright">
+    
+      Copyright © 2022-2026, NVIDIA Corporation.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item"><p class="last-updated">
+  Last updated on Jun 29, 2026.
+  <br/>
+</p></div>
+      
+    </div>
+  
+  
+  
+</div>
+
+  </footer>
+  </body>
+</html>

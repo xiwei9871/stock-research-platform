@@ -57,7 +57,15 @@ def _security_details(error: BaseException, requested_url: str, proxy_mode: str)
         "policy_stage": stage,
         "target_host": host,
         "resolved_address_class": "unknown",
-        "peer_address_class": "private" if "PEER" in error.code else "unknown",
+        "peer_address_class": (
+            "private"
+            if error.code
+            in {
+                "RESEARCH_PROJECT_V2_1_FETCH_PEER_DENIED",
+                "RESEARCH_PROJECT_V2_1_FETCH_PEER_MISMATCH",
+            }
+            else "unknown"
+        ),
         "redirect_hop": int(error.details.get("redirect_hop", 0) or 0),
         "proxy_mode": proxy_mode,
         "blocked_reason": str(error),

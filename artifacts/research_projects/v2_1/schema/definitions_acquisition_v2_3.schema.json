@@ -134,6 +134,40 @@
         "normalized_document_ids": {"$ref": "#/$defs/string_array"},
         "pending_assessment_artifact_ids": {"$ref": "#/$defs/string_array"},
         "failed_attempt_ids": {"$ref": "#/$defs/string_array"},
+        "selected_requirement_ids": {"$ref": "#/$defs/string_array"},
+        "candidate_ids": {"$ref": "#/$defs/string_array"},
+        "successful_attempt_count": {"type": "integer", "minimum": 0},
+        "failed_attempt_count": {"type": "integer", "minimum": 0},
+        "provider_distribution": {
+          "type": "object",
+          "patternProperties": {
+            "^[a-z][a-z0-9_]*$": {"type": "integer", "minimum": 0}
+          },
+          "additionalProperties": false
+        },
+        "failure_distribution": {
+          "type": "object",
+          "patternProperties": {
+            "^[a-z][a-z0-9_]*$": {"type": "integer", "minimum": 0}
+          },
+          "additionalProperties": false
+        },
+        "exact_duplicate_results": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["attempt_id", "content_hash", "deduplicated_to_artifact_id"],
+            "properties": {
+              "attempt_id": {"type": "string", "minLength": 1},
+              "content_hash": {"$ref": "#/$defs/sha256"},
+              "deduplicated_to_artifact_id": {"type": "string", "minLength": 1}
+            },
+            "additionalProperties": false
+          }
+        },
+        "provenance_completeness": {"enum": ["complete", "incomplete"]},
+        "security_violations": {"$ref": "#/$defs/string_array"},
+        "unresolved_issues": {"$ref": "#/$defs/string_array"},
         "status": {"enum": ["acquisition_complete", "pending_assessment", "partial", "blocked"]},
         "provenance": {"$ref": "definitions_v2_1.schema.json#/$defs/provenance"},
         "content_hash": {"$ref": "#/$defs/sha256"},

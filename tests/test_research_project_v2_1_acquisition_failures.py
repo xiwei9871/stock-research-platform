@@ -57,3 +57,15 @@ def test_failure_classifier_does_not_guess_auth_or_paywall_from_plain_403() -> N
     classified = classify_acquisition_failure(None, http_status=403)
     assert classified.failure_code == "http_error"
     assert classified.result_status == "failed"
+
+
+def test_failure_classifier_fails_closed_when_connected_peer_cannot_be_verified() -> None:
+    classified = classify_acquisition_failure(
+        ResearchProjectV2Error(
+            "peer unavailable",
+            code="RESEARCH_PROJECT_V2_1_FETCH_PEER_UNAVAILABLE",
+            details={},
+        )
+    )
+    assert classified.failure_code == "security_policy_blocked"
+    assert classified.result_status == "blocked"

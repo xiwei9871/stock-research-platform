@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 
 import pytest
 
@@ -63,3 +64,53 @@ def test_acquisition_smoke_is_not_run_without_explicit_online_flag(capsys) -> No
         "status": "not_run",
         "reason": "online acquisition smoke requires separate Phase C approval",
     }
+
+
+def test_acquisition_fetch_returns_nonzero_for_structured_blocked_attempt(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    candidate_path = tmp_path / "candidate.json"
+    candidate_path.write_text(
+        json.dumps(
+            {
+                "candidate_id": "source_candidate:blocked",
+                "provenance": {
+                    "created_by": "Codex",
+                    "actor_type": "codex",
+                    "agent_run_id": "run:blocked-cli",
+                    "created_at": "2026-07-21T00:00:00Z",
+                    "created_in_version": f"research_version:{PROJECT}:{VERSION}",
+                    "review_status": "unreviewed",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    class BlockedProvider:
+        def acquire(self, *_args, **_kwargs):
+            return SimpleNamespace(
+                attempt={"status": "blocked", "failure_code": "security_policy_blocked"},
+                artifact=None,
+            )
+
+    monkeypatch.setattr(cli, "DirectHttpProvider", BlockedProvider)
+    code, payload = run(
+        [
+            "acquisition",
+            "fetch",
+            "--project",
+            PROJECT,
+            "--version",
+            VERSION,
+            "--requirement",
+            "requirement:ai_compute_pcb_industry_bottleneck:r2b_er01",
+            "--candidate",
+            str(candidate_path),
+            "--proxy-mode",
+            "direct",
+        ],
+        capsys,
+    )
+    assert code == 8
+    assert payload["acquisition_attempt"]["failure_code"] == "security_policy_blocked"

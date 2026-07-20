@@ -6,6 +6,7 @@ from threading import Thread
 
 import requests
 
+from stock_research.research_project_v2.errors import ResearchProjectV2Error
 from stock_research.research_project_v2_1.acquisition_contracts import AcquisitionContext
 from stock_research.research_project_v2_1.acquisition_http import DirectHttpProvider
 from stock_research.research_project_v2_1.acquisition_storage import read_acquisition_attempt
@@ -302,6 +303,38 @@ def test_environment_proxy_mode_is_fail_closed_until_trusted_proxy_design_exists
     assert result.attempt["status"] == "blocked"
     assert result.attempt["failure_code"] == "security_policy_blocked"
     assert result.attempt["failure_details"]["policy_stage"] == "proxy_selection"
+
+
+def test_unverifiable_connected_peer_is_a_structured_fail_closed_attempt(
+    tmp_path: Path,
+) -> None:
+    layout = LayeredResearchLayout((tmp_path / "v2_1").resolve())
+    layout.root.mkdir(mode=0o700)
+    provider = DirectHttpProvider(
+        transport=SequenceTransport(
+            [
+                ResearchProjectV2Error(
+                    "peer unavailable",
+                    code="RESEARCH_PROJECT_V2_1_FETCH_PEER_UNAVAILABLE",
+                    details={},
+                )
+            ]
+        ),
+        resolver=Resolver(),
+        now=lambda: "2026-07-20T08:00:01Z",
+        monotonic_ms=iter([0, 1]).__next__,
+    )
+    result = provider.acquire(
+        candidate(),
+        context=context(),
+        layout=layout,
+        attempted_at="2026-07-20T08:00:00Z",
+        max_retries=0,
+    )
+    assert result.attempt["status"] == "blocked"
+    assert result.attempt["failure_code"] == "security_policy_blocked"
+    assert result.attempt["failure_details"]["policy_stage"] == "peer_validation"
+    assert result.attempt["failure_details"]["peer_address_class"] == "unknown"
 
 
 def test_non_200_response_is_preserved_as_http_error_attempt(tmp_path: Path) -> None:

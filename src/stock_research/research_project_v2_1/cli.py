@@ -974,6 +974,13 @@ def run_research_project_v2_1_cli(
             return 4
         if args.command == "audit" and payload.get("status") == "fail":
             return 3
+        if args.command == "acquisition" and args.acquisition_command in {
+            "fetch",
+            "import",
+        }:
+            attempt = payload.get("acquisition_attempt")
+            if isinstance(attempt, dict) and attempt.get("status") != "acquired":
+                return 8
         return 0
     except ResearchProjectV2Error as exc:
         _print_json(_error_payload(exc))

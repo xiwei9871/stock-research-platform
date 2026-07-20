@@ -1,0 +1,24 @@
+{
+  "candidate_id": "source_candidate:ef8d976a9c0961bb1112ee6f",
+  "search_plan_id": "search_plan:ai_compute_pcb_industry_bottleneck:r2b_er02",
+  "query_id": "query:ai_compute_pcb_industry_bottleneck:r2b_er02:phase_c_official_html",
+  "normalized_url": "https://docs.nvidia.com/dgx/dgxb200-user-guide/introduction-to-dgxb200.html",
+  "original_url": "https://docs.nvidia.com/dgx/dgxb200-user-guide/introduction-to-dgxb200.html",
+  "title": "NVIDIA DGX B200 User Guide — Introduction",
+  "snippet": "Official product documentation candidate for accelerator server system structure; discovery metadata only.",
+  "publisher": "NVIDIA",
+  "publish_date": null,
+  "source_class": "company_primary",
+  "rank": 1,
+  "exclusion_status": "included",
+  "exclusion_reasons": [],
+  "dedup_key": "https://docs.nvidia.com/dgx/dgxb200-user-guide/introduction-to-dgxb200.html",
+  "provenance": {
+    "created_by": "Codex",
+    "actor_type": "codex",
+    "agent_run_id": "r2b-phase-c-ai-pcb-stage-a-smoke-20260721",
+    "created_at": "2026-07-20T23:29:02Z",
+    "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.2.1",
+    "review_status": "unreviewed"
+  }
+}

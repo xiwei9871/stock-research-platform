@@ -1,0 +1,24 @@
+{
+  "candidate_id": "source_candidate:63f33cb36dac86bd6bc45e8c",
+  "search_plan_id": "search_plan:ai_compute_pcb_industry_bottleneck:r2b_er01",
+  "query_id": "query:ai_compute_pcb_industry_bottleneck:r2b_er01:phase_c_official_pdf",
+  "normalized_url": "https://nvdam.widen.net/content/z2w2dqu14d/original/dgx-scale-ai-infrastructure-dgx-b200-datasheet-nvidia-3184101-r6-web.pdf?download=true&u=d6ur78&use=hm8sc",
+  "original_url": "https://nvdam.widen.net/content/z2w2dqu14d/original/dgx-scale-ai-infrastructure-dgx-b200-datasheet-nvidia-3184101-r6-web.pdf?u=d6ur78&use=hm8sc&download=true",
+  "title": "NVIDIA DGX B200 Datasheet",
+  "snippet": "Official datasheet candidate for AI compute system composition and rack-scale deployment; discovery metadata only.",
+  "publisher": "NVIDIA",
+  "publish_date": null,
+  "source_class": "company_primary",
+  "rank": 1,
+  "exclusion_status": "included",
+  "exclusion_reasons": [],
+  "dedup_key": "https://nvdam.widen.net/content/z2w2dqu14d/original/dgx-scale-ai-infrastructure-dgx-b200-datasheet-nvidia-3184101-r6-web.pdf?download=true&u=d6ur78&use=hm8sc",
+  "provenance": {
+    "created_by": "Codex",
+    "actor_type": "codex",
+    "agent_run_id": "r2b-phase-c-ai-pcb-stage-a-smoke-20260721",
+    "created_at": "2026-07-20T23:29:02Z",
+    "created_in_version": "research_version:ai_compute_pcb_industry_bottleneck:0.2.1",
+    "review_status": "unreviewed"
+  }
+}

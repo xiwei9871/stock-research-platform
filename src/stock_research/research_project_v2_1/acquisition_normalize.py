@@ -210,6 +210,12 @@ def build_acquisition_checkpoint(
     attempts: list[dict[str, Any]],
     artifacts: list[dict[str, Any]],
     normalization_outcomes: list[NormalizationOutcome],
+    selected_requirement_ids: list[str] | None = None,
+    candidate_ids: list[str] | None = None,
+    exact_duplicate_results: list[dict[str, Any]] | None = None,
+    provenance_completeness: str | None = None,
+    security_violations: list[str] | None = None,
+    unresolved_issues: list[str] | None = None,
     provenance: dict[str, Any],
 ) -> dict[str, Any]:
     attempt_ids = sorted({row["attempt_id"] for row in attempts})
@@ -224,6 +230,15 @@ def build_acquisition_checkpoint(
     failed_attempts = sorted(
         {row["attempt_id"] for row in attempts if row["status"] in {"failed", "blocked", "unavailable"}}
     )
+    successful_attempts = [row for row in attempts if row["status"] == "acquired"]
+    provider_distribution: dict[str, int] = {}
+    failure_distribution: dict[str, int] = {}
+    for row in attempts:
+        provider = row["provider"]
+        provider_distribution[provider] = provider_distribution.get(provider, 0) + 1
+        failure_code = row.get("failure_code")
+        if failure_code is not None:
+            failure_distribution[failure_code] = failure_distribution.get(failure_code, 0) + 1
     normalization_records = [
         {
             "raw_artifact_id": outcome.raw_artifact_id,
@@ -253,6 +268,22 @@ def build_acquisition_checkpoint(
         "provenance": deepcopy(provenance),
         "normalization_records": normalization_records,
     }
+    if selected_requirement_ids is not None:
+        core["selected_requirement_ids"] = sorted(set(selected_requirement_ids))
+    if candidate_ids is not None:
+        core["candidate_ids"] = sorted(set(candidate_ids))
+    core["successful_attempt_count"] = len(successful_attempts)
+    core["failed_attempt_count"] = len(failed_attempts)
+    core["provider_distribution"] = dict(sorted(provider_distribution.items()))
+    core["failure_distribution"] = dict(sorted(failure_distribution.items()))
+    if exact_duplicate_results is not None:
+        core["exact_duplicate_results"] = deepcopy(exact_duplicate_results)
+    if provenance_completeness is not None:
+        core["provenance_completeness"] = provenance_completeness
+    if security_violations is not None:
+        core["security_violations"] = sorted(set(security_violations))
+    if unresolved_issues is not None:
+        core["unresolved_issues"] = sorted(set(unresolved_issues))
     checkpoint_id, digest = _checkpoint_identity(core)
     checkpoint = {"checkpoint_id": checkpoint_id, **core, "content_hash": digest}
     validate_acquisition_checkpoint(checkpoint)
