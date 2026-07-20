@@ -136,7 +136,33 @@
         "failed_attempt_ids": {"$ref": "#/$defs/string_array"},
         "status": {"enum": ["acquisition_complete", "pending_assessment", "partial", "blocked"]},
         "provenance": {"$ref": "definitions_v2_1.schema.json#/$defs/provenance"},
-        "content_hash": {"$ref": "#/$defs/sha256"}
+        "content_hash": {"$ref": "#/$defs/sha256"},
+        "normalization_records": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["raw_artifact_id", "normalized_document_id", "status", "parser", "parser_version", "parser_configuration", "normalized_at", "failure_code"],
+            "properties": {
+              "raw_artifact_id": {"type": "string", "minLength": 1},
+              "normalized_document_id": {"type": ["string", "null"]},
+              "status": {"enum": ["normalized", "failed", "unavailable"]},
+              "parser": {"type": "string", "minLength": 1},
+              "parser_version": {"type": "string", "minLength": 1},
+              "parser_configuration": {
+                "type": "object",
+                "properties": {
+                  "mode": {"type": "string"},
+                  "use_ocr": {"type": "boolean"},
+                  "table_mode": {"type": "string"}
+                },
+                "additionalProperties": false
+              },
+              "normalized_at": {"type": "string", "format": "date-time"},
+              "failure_code": {"anyOf": [{"$ref": "#/$defs/failure_code"}, {"type": "null"}]}
+            },
+            "additionalProperties": false
+          }
+        }
       },
       "additionalProperties": false
     },
