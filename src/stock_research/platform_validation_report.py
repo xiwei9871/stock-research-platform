@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import base64
+import hashlib
+import html
 import json
 import re
 from collections.abc import Mapping
@@ -49,6 +52,34 @@ ROUTE_PARAM_SOURCES = frozenset({"authoritative_stock_asset_id"})
 
 _PRIORITY_ORDER = {"P0": 0, "P1": 1, "P2": 2}
 _PLACEHOLDER = re.compile(r"\{([a-z][a-z0-9_]*)\}")
+_ANSI = re.compile(r"(?:\x1b\[[0-?]*[ -/]*[@-~]|\x9b[0-?]*[ -/]*[@-~])")
+_ISO_TIMESTAMP = re.compile(r"\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z\b")
+_LOCAL_URL = re.compile(r"https?://(?:127\.0\.0\.1|localhost|\[::1\]):\d+")
+_LINE_COLUMN = re.compile(r"(\.[A-Za-z0-9]{1,5}):\d+(?::\d+)?")
+_LINE_WORD = re.compile(r"\b(?:line|column)\s+\d+\b", re.IGNORECASE)
+_SENSITIVE_NAME = (
+    r"(?:access[_-]?token|refresh[_-]?token|csrf[_-]?token|api[_-]?key|password|passwd|"
+    r"secret|token|authorization|proxy[_-]?authorization|cookie|set[_-]?cookie)"
+)
+_SENSITIVE_HEADER = re.compile(
+    r"(?im)^(?:authorization|proxy-authorization|cookie|set-cookie|x-api-key)\s*:\s*.*$"
+)
+_BEARER = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+")
+_QUOTED_SECRET = re.compile(
+    rf'(?i)(["\']{_SENSITIVE_NAME}["\']\s*:\s*["\'])[^"\']*(["\'])'
+)
+_ASSIGNED_SECRET = re.compile(rf"(?i)(\b{_SENSITIVE_NAME}\b\s*[=:]\s*)[^\s,;&#]+")
+_QUERY_SECRET = re.compile(rf"(?i)([?&]{_SENSITIVE_NAME}=)[^&#\s]+")
+_PATH_SECRET = re.compile(rf"(?i)(/{_SENSITIVE_NAME}/)[^/?#\s]+")
+_TITLE_INVENTORY = re.compile(r"\[inventory(?:_ids?)?:([a-z0-9_, -]+)\]", re.IGNORECASE)
+_TITLE_INVENTORY_CALL = re.compile(r"@inventory\(([a-z0-9_, -]+)\)", re.IGNORECASE)
+_ROUTE_CENSUS_TITLE = re.compile(r"^route census ([a-z0-9_]+):", re.IGNORECASE)
+_BASELINE_STATUSES = frozenset({"baseline_candidate", "trusted_baseline"})
+_PLAYWRIGHT_TEST_STATUSES = frozenset(
+    {"expected", "unexpected", "flaky", "skipped", "passed", "failed", "timedout", "timeout"}
+)
+_ISSUE_SCHEMA_VERSION = "platform_validation_issue_ledger_v1"
+_COVERAGE_SCHEMA_VERSION = "platform_validation_coverage_v1"
 
 
 def _inventory_error(field: str, detail: str) -> ValueError:
@@ -419,3 +450,807 @@ def build_coverage_matrix(
         )
 
     return sorted(rows, key=lambda row: (_PRIORITY_ORDER[row["priority"]], row["id"]))
+
+
+def _sanitize_text(value: object, *, checkout_roots: tuple[str, ...] = ()) -> str:
+    text = _ANSI.sub("", str(value))
+    for root in sorted({root.rstrip("/") for root in checkout_roots if root}, key=len, reverse=True):
+        text = text.replace(root, "<WORKTREE>")
+    text = _SENSITIVE_HEADER.sub("[REDACTED HEADER]", text)
+    text = _BEARER.sub("Bearer [REDACTED]", text)
+    text = _QUOTED_SECRET.sub(r"\1[REDACTED]\2", text)
+    text = _QUERY_SECRET.sub(r"\1[REDACTED]", text)
+    text = _PATH_SECRET.sub(r"\1[REDACTED]", text)
+    text = _ASSIGNED_SECRET.sub(r"\1[REDACTED]", text)
+    return text
+
+
+def _sanitize_payload(value: Any, *, checkout_roots: tuple[str, ...] = ()) -> Any:
+    if isinstance(value, Mapping):
+        sanitized: dict[str, Any] = {}
+        for key, item in value.items():
+            safe_key = _sanitize_text(key, checkout_roots=checkout_roots)
+            if re.search(_SENSITIVE_NAME, str(key), re.IGNORECASE):
+                sanitized[safe_key] = "[REDACTED]"
+            else:
+                sanitized[safe_key] = _sanitize_payload(item, checkout_roots=checkout_roots)
+        return sanitized
+    if isinstance(value, list):
+        return [_sanitize_payload(item, checkout_roots=checkout_roots) for item in value]
+    if isinstance(value, tuple):
+        return [_sanitize_payload(item, checkout_roots=checkout_roots) for item in value]
+    if isinstance(value, str):
+        return _sanitize_text(value, checkout_roots=checkout_roots)
+    return value
+
+
+def _fingerprint_text(value: str) -> str:
+    normalized = _ISO_TIMESTAMP.sub("<TIMESTAMP>", value)
+    normalized = _LOCAL_URL.sub("<LOCAL_URL>", normalized)
+    normalized = _LINE_COLUMN.sub(r"\1:<LINE>:<COLUMN>", normalized)
+    normalized = _LINE_WORD.sub("<LINE>", normalized)
+    normalized = re.sub(r"\s+", " ", normalized).strip().lower()
+    return normalized
+
+
+def _load_playwright_json(path: Path) -> dict[str, Any]:
+    def strict_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        value: dict[str, Any] = {}
+        for key, item in pairs:
+            if key in value:
+                raise ValueError(f"duplicate JSON key {key!r}")
+            value[key] = item
+        return value
+
+    def reject_constant(value: str) -> None:
+        raise ValueError(f"non-finite JSON value {value}")
+
+    try:
+        payload = json.loads(
+            path.read_text(encoding="utf-8"),
+            object_pairs_hook=strict_object,
+            parse_constant=reject_constant,
+        )
+    except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as exc:
+        raise ValueError(f"Playwright result {path}: cannot load: {exc}") from exc
+    if not isinstance(payload, dict) or not isinstance(payload.get("suites"), list):
+        raise ValueError(f"Playwright result {path}: root must contain a suites list")
+    config = payload.get("config", {})
+    if config is not None and not isinstance(config, dict):
+        raise ValueError(f"Playwright result {path}: config must be an object")
+    return payload
+
+
+def _checkout_roots(payload: Mapping[str, Any]) -> tuple[str, ...]:
+    config = payload.get("config")
+    if not isinstance(config, Mapping):
+        return ()
+    roots: set[str] = set()
+    root_dir = config.get("rootDir")
+    if isinstance(root_dir, str) and Path(root_dir).is_absolute():
+        path = Path(root_dir)
+        roots.add(str(path))
+        if path.name == "tests" and path.parent.name == "dashboard":
+            roots.add(str(path.parent.parent))
+        else:
+            roots.add(str(path.parent))
+    config_file = config.get("configFile")
+    if isinstance(config_file, str) and Path(config_file).is_absolute():
+        roots.add(str(Path(config_file).parent.parent))
+    return tuple(sorted(roots, key=len, reverse=True))
+
+
+def _profile_for_result(path: Path, payload: Mapping[str, Any]) -> str:
+    config = payload.get("config")
+    if isinstance(config, Mapping):
+        metadata = config.get("metadata")
+        if isinstance(metadata, Mapping):
+            for key in ("platformValidationProfile", "platform_validation_profile", "profile"):
+                value = metadata.get(key)
+                if isinstance(value, str) and value in PLAYWRIGHT_PROFILES:
+                    return value
+    for part in reversed(path.parts):
+        if part in PLAYWRIGHT_PROFILES:
+            return part
+    return "legacy"
+
+
+def _relative_test_file(raw: object, *, root_dir: object, checkout_roots: tuple[str, ...]) -> str:
+    if not isinstance(raw, str) or not raw.strip():
+        return "<unknown-file>"
+    path = Path(raw)
+    if path.is_absolute():
+        if isinstance(root_dir, str):
+            try:
+                path = path.resolve().relative_to(Path(root_dir).resolve())
+            except ValueError:
+                return _sanitize_text(path.name, checkout_roots=checkout_roots)
+        else:
+            return _sanitize_text(path.name, checkout_roots=checkout_roots)
+    if ".." in path.parts:
+        raise ValueError(f"unsafe Playwright test file {raw!r}")
+    return _sanitize_text(path.as_posix(), checkout_roots=checkout_roots)
+
+
+def _annotation_inventory_ids(annotations: object) -> list[str] | None:
+    if not isinstance(annotations, list):
+        return None
+    for annotation in annotations:
+        if not isinstance(annotation, Mapping):
+            continue
+        annotation_type = str(annotation.get("type", "")).lower().replace("-", "_")
+        if annotation_type not in {
+            "inventory_id",
+            "inventory_ids",
+            "platform_inventory_id",
+            "platform_inventory_ids",
+        }:
+            continue
+        description = annotation.get("description")
+        if not isinstance(description, str) or not description.strip():
+            return []
+        raw = description.strip()
+        try:
+            decoded = json.loads(raw)
+        except json.JSONDecodeError:
+            decoded = None
+        if isinstance(decoded, list) and all(isinstance(item, str) for item in decoded):
+            return sorted(set(decoded))
+        return sorted({item.strip() for item in raw.split(",") if item.strip()})
+    return None
+
+
+def _title_inventory_ids(title: str) -> list[str] | None:
+    for pattern in (_TITLE_INVENTORY, _TITLE_INVENTORY_CALL):
+        match = pattern.search(title)
+        if match:
+            return sorted({item.strip() for item in match.group(1).split(",") if item.strip()})
+    census_match = _ROUTE_CENSUS_TITLE.search(title)
+    return [census_match.group(1)] if census_match else None
+
+
+def _decode_attachment_json(attachment: Mapping[str, Any]) -> Mapping[str, Any] | None:
+    if attachment.get("name") != "route-census.json":
+        return None
+    body = attachment.get("body")
+    if not isinstance(body, str):
+        return None
+    candidates: list[str] = [body]
+    try:
+        candidates.insert(0, base64.b64decode(body, validate=True).decode("utf-8"))
+    except (ValueError, UnicodeError):
+        pass
+    for candidate in candidates:
+        try:
+            decoded = json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(decoded, Mapping):
+            return decoded
+    raise ValueError("route-census.json attachment is not valid JSON")
+
+
+def _attachment_inventory_ids(results: object) -> list[str] | None:
+    if not isinstance(results, list):
+        return None
+    for result in results:
+        if not isinstance(result, Mapping) or not isinstance(result.get("attachments"), list):
+            continue
+        for attachment in result["attachments"]:
+            if not isinstance(attachment, Mapping):
+                continue
+            metadata = _decode_attachment_json(attachment)
+            if metadata is None:
+                continue
+            raw_ids = metadata.get("inventoryIds", metadata.get("inventory_ids"))
+            if isinstance(raw_ids, list) and all(isinstance(item, str) for item in raw_ids):
+                return sorted(set(raw_ids))
+            raw_id = metadata.get("inventoryId", metadata.get("inventory_id"))
+            if isinstance(raw_id, str) and raw_id.strip():
+                return [raw_id.strip()]
+            return []
+    return None
+
+
+def _inventory_ids_for_test(
+    test: Mapping[str, Any],
+    *,
+    title: str,
+    known_ids: frozenset[str],
+) -> list[str]:
+    inventory_ids = _annotation_inventory_ids(test.get("annotations"))
+    if inventory_ids is None:
+        results = test.get("results")
+        if isinstance(results, list):
+            for result in results:
+                if isinstance(result, Mapping):
+                    inventory_ids = _annotation_inventory_ids(result.get("annotations"))
+                    if inventory_ids is not None:
+                        break
+    if inventory_ids is None:
+        inventory_ids = _title_inventory_ids(title)
+    if inventory_ids is None:
+        inventory_ids = _attachment_inventory_ids(test.get("results"))
+    if inventory_ids is None:
+        return []
+    unknown = sorted(set(inventory_ids) - known_ids)
+    if unknown:
+        safe_unknown = _sanitize_text(unknown[0])
+        raise ValueError(f"Playwright result contains unknown inventory ID {safe_unknown!r}")
+    if not inventory_ids:
+        raise ValueError("Playwright inventory metadata must contain at least one inventory ID")
+    return sorted(set(inventory_ids))
+
+
+def _disposition_for_test(test: Mapping[str, Any], checkout_roots: tuple[str, ...]) -> str | None:
+    annotation_lists: list[object] = [test.get("annotations")]
+    results = test.get("results")
+    if isinstance(results, list):
+        annotation_lists.extend(
+            result.get("annotations") for result in results if isinstance(result, Mapping)
+        )
+    for annotations in annotation_lists:
+        if not isinstance(annotations, list):
+            continue
+        for annotation in annotations:
+            if not isinstance(annotation, Mapping):
+                continue
+            if str(annotation.get("type", "")).lower().replace("-", "_") != "disposition":
+                continue
+            description = annotation.get("description")
+            if isinstance(description, str) and description.strip():
+                return _sanitize_text(description.strip(), checkout_roots=checkout_roots)
+    return None
+
+
+def _safe_evidence_path(
+    raw: str,
+    *,
+    result_path: Path,
+    output_dir: Path,
+    checkout_roots: tuple[str, ...],
+) -> str:
+    path = Path(raw)
+    if path.is_absolute():
+        resolved = path.resolve()
+        bases = (output_dir.resolve(), result_path.parent.resolve())
+        relative: Path | None = None
+        for base in bases:
+            try:
+                relative = resolved.relative_to(base)
+                break
+            except ValueError:
+                continue
+        if relative is None:
+            safe_raw = _sanitize_text(raw, checkout_roots=checkout_roots)
+            raise ValueError(f"unsafe evidence path {safe_raw!r}: absolute path escapes audit results")
+        path = relative
+    if not path.parts or ".." in path.parts or path.as_posix().startswith("/"):
+        safe_raw = _sanitize_text(raw, checkout_roots=checkout_roots)
+        raise ValueError(f"unsafe evidence path {safe_raw!r}")
+    safe = _sanitize_text(path.as_posix(), checkout_roots=checkout_roots)
+    if not safe or safe.startswith("/") or ".." in Path(safe).parts:
+        safe_raw = _sanitize_text(raw, checkout_roots=checkout_roots)
+        raise ValueError(f"unsafe evidence path {safe_raw!r}")
+    return safe
+
+
+def _evidence_for_test(
+    test: Mapping[str, Any],
+    *,
+    result_path: Path,
+    output_dir: Path,
+    checkout_roots: tuple[str, ...],
+) -> list[str]:
+    evidence: set[str] = set()
+    results = test.get("results")
+    if not isinstance(results, list):
+        return []
+    for result in results:
+        if not isinstance(result, Mapping) or not isinstance(result.get("attachments"), list):
+            continue
+        for attachment in result["attachments"]:
+            if not isinstance(attachment, Mapping):
+                continue
+            raw_path = attachment.get("path")
+            if isinstance(raw_path, str) and raw_path.strip():
+                evidence.add(
+                    _safe_evidence_path(
+                        raw_path,
+                        result_path=result_path,
+                        output_dir=output_dir,
+                        checkout_roots=checkout_roots,
+                    )
+                )
+    return sorted(evidence)
+
+
+def _actual_for_test(test: Mapping[str, Any], checkout_roots: tuple[str, ...]) -> str:
+    messages: list[str] = []
+    results = test.get("results")
+    if isinstance(results, list):
+        for result in results:
+            if not isinstance(result, Mapping):
+                continue
+            raw_errors = result.get("errors")
+            errors = list(raw_errors) if isinstance(raw_errors, list) else []
+            if not errors and result.get("error") is not None:
+                errors.append(result["error"])
+            for error in errors:
+                if isinstance(error, Mapping):
+                    value = error.get("message", error.get("value", error.get("stack")))
+                else:
+                    value = error
+                if isinstance(value, str) and value.strip():
+                    messages.append(_sanitize_text(value.strip(), checkout_roots=checkout_roots))
+    if not messages:
+        messages.append(f"Playwright status: {test.get('status', 'unknown')}")
+    return "\n---\n".join(sorted(set(messages)))
+
+
+def _observed_status(test: Mapping[str, Any]) -> str:
+    status = str(test.get("status", "")).lower()
+    if status in {"expected", "passed"}:
+        return "covered"
+    if status in {"skipped", "flaky", "unexpected", "failed", "timedout", "timeout"}:
+        return "partial"
+    results = test.get("results")
+    result_statuses = {
+        str(result.get("status", "")).lower()
+        for result in results
+        if isinstance(result, Mapping)
+    } if isinstance(results, list) else set()
+    if result_statuses and result_statuses <= {"passed"}:
+        return "covered"
+    return "partial"
+
+
+def _is_issue(test: Mapping[str, Any]) -> bool:
+    status = str(test.get("status", "")).lower()
+    if status in {"unexpected", "failed", "timedout", "timeout"}:
+        return True
+    if status in {"expected", "passed", "skipped", "flaky"}:
+        return False
+    expected_status = str(test.get("expectedStatus", "passed")).lower()
+    results = test.get("results")
+    if not isinstance(results, list):
+        return False
+    failure_statuses = {"failed", "timedout", "timeout"}
+    return expected_status != "failed" and any(
+        isinstance(result, Mapping) and str(result.get("status", "")).lower() in failure_statuses
+        for result in results
+    )
+
+
+def _walk_specs(suites: object, parents: tuple[str, ...] = ()) -> list[tuple[tuple[str, ...], Mapping[str, Any]]]:
+    if not isinstance(suites, list):
+        raise ValueError("Playwright result suites must be a list")
+    specs: list[tuple[tuple[str, ...], Mapping[str, Any]]] = []
+    for suite in suites:
+        if not isinstance(suite, Mapping):
+            raise ValueError("Playwright suite entries must be objects")
+        title = suite.get("title")
+        next_parents = parents + ((str(title),) if isinstance(title, str) and title.strip() else ())
+        raw_specs = suite.get("specs", [])
+        if not isinstance(raw_specs, list):
+            raise ValueError("Playwright suite specs must be a list")
+        for spec in raw_specs:
+            if not isinstance(spec, Mapping):
+                raise ValueError("Playwright spec entries must be objects")
+            specs.append((next_parents, spec))
+        child_suites = suite.get("suites", [])
+        specs.extend(_walk_specs(child_suites, next_parents))
+    return specs
+
+
+def _ingest_playwright_results(
+    paths: list[Path],
+    *,
+    inventory: Mapping[str, Any],
+    output_dir: Path,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, dict[str, int]], dict[str, dict[str, int]]]:
+    inventory_by_id = {item["id"]: item for item in inventory["items"]}
+    known_ids = frozenset(inventory_by_id)
+    events: list[dict[str, Any]] = []
+    observations: list[dict[str, Any]] = []
+    profile_counts: dict[str, dict[str, int]] = {}
+    browser_counts: dict[str, dict[str, int]] = {}
+
+    for result_path in sorted(set(paths), key=lambda item: item.as_posix()):
+        payload = _load_playwright_json(result_path)
+        roots = _checkout_roots(payload)
+        config = payload.get("config", {})
+        root_dir = config.get("rootDir") if isinstance(config, Mapping) else None
+        profile = _profile_for_result(result_path, payload)
+        for parents, spec in _walk_specs(payload["suites"]):
+            title = spec.get("title")
+            if not isinstance(title, str) or not title.strip():
+                raise ValueError(f"Playwright result {result_path}: spec title must be non-empty")
+            tests = spec.get("tests")
+            if not isinstance(tests, list):
+                raise ValueError(f"Playwright result {result_path}: spec tests must be a list")
+            relative_file = _relative_test_file(
+                spec.get("file", "<unknown-file>"),
+                root_dir=root_dir,
+                checkout_roots=roots,
+            )
+            full_title = " > ".join((*parents, title))
+            safe_title = _sanitize_text(full_title, checkout_roots=roots)
+            for test in tests:
+                if not isinstance(test, Mapping):
+                    raise ValueError(f"Playwright result {result_path}: tests must be objects")
+                project = test.get("projectName", test.get("projectId", "unknown-project"))
+                if not isinstance(project, str) or not project.strip():
+                    project = "unknown-project"
+                project = _sanitize_text(project.strip(), checkout_roots=roots)
+                aggregate_status = str(test.get("status", "unknown")).lower()
+                if aggregate_status not in _PLAYWRIGHT_TEST_STATUSES:
+                    raise ValueError(
+                        f"Playwright result {result_path}: unsupported Playwright test status"
+                    )
+                profile_counts.setdefault(profile, {}).setdefault(aggregate_status, 0)
+                profile_counts[profile][aggregate_status] += 1
+                browser = project
+                browser_counts.setdefault(browser, {}).setdefault(aggregate_status, 0)
+                browser_counts[browser][aggregate_status] += 1
+
+                inventory_ids = _inventory_ids_for_test(test, title=title, known_ids=known_ids)
+                test_id = f"{project}::{relative_file}::{safe_title}"
+                observation = {
+                    "inventory_ids": inventory_ids,
+                    "profile": profile,
+                    "status": _observed_status(test),
+                    "test_id": test_id,
+                }
+                observations.append(observation)
+                if not _is_issue(test):
+                    continue
+                issue_inventory_ids = inventory_ids or ["unmapped"]
+                expected_status = str(test.get("expectedStatus", "passed"))
+                expected = _sanitize_text(
+                    f"Expected test status: {expected_status}",
+                    checkout_roots=roots,
+                )
+                actual = _actual_for_test(test, roots)
+                events.append(
+                    {
+                        "actual": actual,
+                        "disposition": _disposition_for_test(test, roots),
+                        "evidence": _evidence_for_test(
+                            test,
+                            result_path=result_path,
+                            output_dir=output_dir,
+                            checkout_roots=roots,
+                        ),
+                        "expected": expected,
+                        "inventory_ids": issue_inventory_ids,
+                        "test_id": test_id,
+                        "title": safe_title,
+                    }
+                )
+    return events, observations, profile_counts, browser_counts
+
+
+def _normalize_issues(
+    events: list[dict[str, Any]], inventory: Mapping[str, Any]
+) -> list[dict[str, Any]]:
+    priority_by_id = {item["id"]: item["priority"] for item in inventory["items"]}
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for event in events:
+        fingerprint = "\x00".join(
+            (
+                _fingerprint_text(event["expected"]),
+                _fingerprint_text(event["actual"]),
+            )
+        )
+        groups.setdefault(fingerprint, []).append(event)
+
+    issues: list[dict[str, Any]] = []
+    for fingerprint, grouped in groups.items():
+        inventory_ids = sorted({item for event in grouped for item in event["inventory_ids"]})
+        priorities = [priority_by_id[item] for item in inventory_ids if item in priority_by_id]
+        severity = (
+            "P0"
+            if "unmapped" in inventory_ids or not priorities
+            else min(priorities, key=_PRIORITY_ORDER.__getitem__)
+        )
+        digest = hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()[:12]
+        dispositions = sorted(
+            {event["disposition"] for event in grouped if event["disposition"] is not None}
+        )
+        disposition_complete = all(event["disposition"] is not None for event in grouped)
+        test_ids = sorted({event["test_id"] for event in grouped})
+        issue: dict[str, Any] = {
+            "issue_id": f"PV-{severity}-{digest}",
+            "test_id": test_ids[0],
+            "test_ids": test_ids,
+            "inventory_ids": inventory_ids,
+            "severity": severity,
+            "status": "open",
+            "expected": "\n---\n".join(sorted({event["expected"] for event in grouped})),
+            "actual": "\n---\n".join(sorted({event["actual"] for event in grouped})),
+            "evidence": sorted({path for event in grouped for path in event["evidence"]}),
+            "title": sorted({event["title"] for event in grouped})[0],
+            "_disposition_complete": disposition_complete,
+        }
+        if dispositions:
+            issue["disposition"] = "\n---\n".join(dispositions)
+        issues.append(issue)
+    return sorted(
+        issues,
+        key=lambda issue: (_PRIORITY_ORDER[issue["severity"]], issue["issue_id"]),
+    )
+
+
+def _build_playwright_coverage(
+    inventory: Mapping[str, Any], observations: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    by_inventory_profile: dict[tuple[str, str], list[str]] = {}
+    for observation in observations:
+        for inventory_id in observation["inventory_ids"]:
+            by_inventory_profile.setdefault((inventory_id, observation["profile"]), []).append(
+                observation["status"]
+            )
+
+    rows: list[dict[str, Any]] = []
+    for item in inventory["items"]:
+        if not item["reachable"]:
+            status = "not_applicable"
+            profile_statuses: dict[str, str] = {}
+            layer_statuses = {layer: "not_applicable" for layer in sorted(item["layers"])}
+        else:
+            profile_statuses = {}
+            for profile in sorted(item["profiles"]):
+                statuses = by_inventory_profile.get((item["id"], profile), [])
+                if statuses and all(value == "covered" for value in statuses):
+                    profile_statuses[profile] = "covered"
+                elif statuses:
+                    profile_statuses[profile] = "partial"
+                else:
+                    profile_statuses[profile] = "missing"
+
+            layer_statuses: dict[str, str] = {}
+            for layer in sorted(item["layers"]):
+                if layer != "playwright":
+                    layer_statuses[layer] = "missing"
+                elif not item["profiles"]:
+                    layer_statuses[layer] = "missing"
+                elif all(value == "covered" for value in profile_statuses.values()):
+                    layer_statuses[layer] = "covered"
+                elif any(value != "missing" for value in profile_statuses.values()):
+                    layer_statuses[layer] = "partial"
+                else:
+                    layer_statuses[layer] = "missing"
+            all_statuses = [*profile_statuses.values(), *layer_statuses.values()]
+            if all_statuses and all(value == "covered" for value in all_statuses):
+                status = "covered"
+            elif any(value != "missing" for value in all_statuses):
+                status = "partial"
+            else:
+                status = "missing"
+
+        rows.append(
+            {
+                "id": item["id"],
+                "label": item["label"],
+                "priority": item["priority"],
+                "route": item["route"],
+                "status": status,
+                "layer_statuses": layer_statuses,
+                "profile_statuses": profile_statuses,
+            }
+        )
+    return sorted(rows, key=lambda row: (_PRIORITY_ORDER[row["priority"]], row["id"]))
+
+
+def _validate_baseline_status(baseline_status: str, issues: list[dict[str, Any]]) -> None:
+    if baseline_status not in _BASELINE_STATUSES:
+        raise ValueError(f"baseline_status must be one of {sorted(_BASELINE_STATUSES)}")
+    if baseline_status != "trusted_baseline":
+        return
+    if any(issue["severity"] in {"P0", "P1"} for issue in issues):
+        raise ValueError("trusted_baseline is invalid while P0/P1 issues remain open")
+    if any(
+        issue["severity"] == "P2" and not issue["_disposition_complete"]
+        for issue in issues
+    ):
+        raise ValueError("trusted_baseline requires every accepted P2 issue to have a disposition")
+
+
+def _count_values(values: list[str]) -> dict[str, int]:
+    return {value: values.count(value) for value in sorted(set(values))}
+
+
+def _public_issue(issue: Mapping[str, Any]) -> dict[str, Any]:
+    return {key: deepcopy(value) for key, value in issue.items() if not key.startswith("_")}
+
+
+def _atomic_write(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.tmp")
+    temporary.write_text(content, encoding="utf-8")
+    temporary.replace(path)
+
+
+def _write_json(path: Path, payload: Any) -> None:
+    _atomic_write(path, json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
+
+
+def _html_report(
+    *,
+    audit_id: str,
+    revision: str,
+    audit_date: str,
+    baseline_status: str,
+    profile_counts: Mapping[str, Mapping[str, int]],
+    browser_counts: Mapping[str, Mapping[str, int]],
+    blocker_counts: Mapping[str, int],
+    coverage: list[dict[str, Any]],
+    issues: list[dict[str, Any]],
+) -> str:
+    esc = lambda value: html.escape(str(value), quote=True)
+    issue_rows: list[str] = []
+    for issue in issues:
+        evidence = " ".join(
+            f'<a href="{esc(path)}">{esc(path)}</a>' for path in issue["evidence"]
+        ) or "none"
+        issue_rows.append(
+            "<tr>"
+            f"<td>{esc(issue['severity'])}</td>"
+            f"<td>{esc(issue['issue_id'])}</td>"
+            f"<td>{esc(issue['title'])}</td>"
+            f"<td>{esc(', '.join(issue['inventory_ids']))}</td>"
+            f"<td><pre>{esc(issue['actual'])}</pre></td>"
+            f"<td>{evidence}</td>"
+            "</tr>"
+        )
+    coverage_rows = [
+        "<tr>"
+        f"<td>{esc(row['priority'])}</td><td>{esc(row['id'])}</td>"
+        f"<td>{esc(row['route'])}</td><td>{esc(row['status'])}</td>"
+        "</tr>"
+        for row in coverage
+    ]
+    profile_summary = ", ".join(
+        f"{esc(profile)}: {esc(sum(counts.values()))}" for profile, counts in sorted(profile_counts.items())
+    ) or "none"
+    browser_summary = ", ".join(
+        f"{esc(browser)}: {esc(sum(counts.values()))}" for browser, counts in sorted(browser_counts.items())
+    ) or "none"
+    blocker_summary = ", ".join(
+        f"{priority}: {blocker_counts.get(priority, 0)}" for priority in ("P0", "P1", "P2")
+    )
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Platform validation audit {esc(audit_id)}</title>
+  <style>
+    body{{font-family:system-ui,sans-serif;margin:2rem;line-height:1.4}}
+    .summary{{border:1px solid #bbb;padding:1rem}}
+    table{{border-collapse:collapse;width:100%;margin-top:1rem}}
+    th,td{{border:1px solid #ccc;padding:.45rem;text-align:left;vertical-align:top}}
+    pre{{white-space:pre-wrap;max-width:48rem}}
+    .P0,.P1{{font-weight:700}}
+  </style>
+</head>
+<body>
+  <main>
+    <section class="summary" aria-label="Audit summary">
+      <h1>Platform validation audit</h1>
+      <dl>
+        <dt>Revision</dt><dd>{esc(revision)}</dd>
+        <dt>Audit ID</dt><dd>{esc(audit_id)}</dd>
+        <dt>Date</dt><dd>{esc(audit_date)}</dd>
+        <dt>Baseline status</dt><dd>{esc(baseline_status)}</dd>
+        <dt>Profiles</dt><dd>{profile_summary}</dd>
+        <dt>Browsers</dt><dd>{browser_summary}</dd>
+        <dt>Blockers</dt><dd>{blocker_summary}</dd>
+      </dl>
+    </section>
+    <section>
+      <h2>Issue ledger</h2>
+      <table><thead><tr><th>Severity</th><th>ID</th><th>Test</th><th>Inventory</th>
+      <th>Actual</th><th>Evidence</th></tr></thead>
+      <tbody>{''.join(issue_rows)}</tbody></table>
+    </section>
+    <section>
+      <h2>Coverage matrix</h2>
+      <table><thead><tr><th>Priority</th><th>Inventory</th><th>Route</th><th>Status</th></tr></thead>
+      <tbody>{''.join(coverage_rows)}</tbody></table>
+    </section>
+  </main>
+</body>
+</html>
+"""
+
+
+def build_platform_validation_report(
+    *,
+    inventory: Mapping[str, Any] | str | Path,
+    playwright_result_paths: list[str | Path],
+    output_dir: str | Path,
+    audit_id: str,
+    revision: str,
+    audit_date: str,
+    baseline_status: str = "baseline_candidate",
+) -> dict[str, Path]:
+    """Build deterministic, sanitized JSON and HTML platform-validation audit artifacts."""
+    if not isinstance(audit_id, str) or not audit_id.strip():
+        raise ValueError("audit_id must be a non-empty string")
+    if not isinstance(revision, str) or not revision.strip():
+        raise ValueError("revision must be a non-empty string")
+    if not isinstance(audit_date, str) or not audit_date.strip():
+        raise ValueError("audit_date must be a non-empty string")
+    audit_id = _sanitize_text(audit_id.strip())
+    revision = _sanitize_text(revision.strip())
+    audit_date = _sanitize_text(audit_date.strip())
+    validated_inventory = (
+        load_inventory(inventory) if isinstance(inventory, (str, Path)) else validate_inventory(inventory)
+    )
+    destination = Path(output_dir)
+    result_paths = [Path(path) for path in playwright_result_paths]
+    events, observations, profile_counts, browser_counts = _ingest_playwright_results(
+        result_paths,
+        inventory=validated_inventory,
+        output_dir=destination,
+    )
+    issues = _normalize_issues(events, validated_inventory)
+    _validate_baseline_status(baseline_status, issues)
+    coverage = _build_playwright_coverage(validated_inventory, observations)
+    blocker_counts = _count_values([issue["severity"] for issue in issues])
+    coverage_counts = _count_values([row["status"] for row in coverage])
+    public_issues = [_public_issue(issue) for issue in issues]
+
+    route_inventory = destination / "route_inventory.json"
+    coverage_matrix = destination / "coverage_matrix.json"
+    issue_ledger = destination / "issue_ledger.json"
+    audit_report = destination / "audit_report.html"
+    sanitized_inventory = _sanitize_payload(validated_inventory)
+    _write_json(route_inventory, sanitized_inventory)
+    _write_json(
+        coverage_matrix,
+        {
+            "schema_version": _COVERAGE_SCHEMA_VERSION,
+            "audit_id": audit_id,
+            "summary": coverage_counts,
+            "items": coverage,
+        },
+    )
+    _write_json(
+        issue_ledger,
+        {
+            "schema_version": _ISSUE_SCHEMA_VERSION,
+            "audit_id": audit_id,
+            "revision": revision,
+            "audit_date": audit_date,
+            "baseline_status": baseline_status,
+            "summary": {
+                "blockers": blocker_counts,
+                "profiles": profile_counts,
+                "browsers": browser_counts,
+            },
+            "issues": public_issues,
+        },
+    )
+    _atomic_write(
+        audit_report,
+        _html_report(
+            audit_id=audit_id,
+            revision=revision,
+            audit_date=audit_date,
+            baseline_status=baseline_status,
+            profile_counts=profile_counts,
+            browser_counts=browser_counts,
+            blocker_counts=blocker_counts,
+            coverage=coverage,
+            issues=public_issues,
+        ),
+    )
+    return {
+        "route_inventory": route_inventory,
+        "coverage_matrix": coverage_matrix,
+        "issue_ledger": issue_ledger,
+        "audit_report": audit_report,
+    }
