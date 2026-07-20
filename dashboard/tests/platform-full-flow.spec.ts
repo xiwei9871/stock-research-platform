@@ -1,4 +1,7 @@
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+
+import { expectNoHorizontalOverflow } from './e2e/assertions/runtime';
+import { expect, test } from './e2e/fixtures/test';
 
 const topNScore = {
   trade_date: '2026-06-08',
@@ -164,6 +167,21 @@ async function mockPlatformApi(page: Page) {
   await page.route('/api/**', async (route) => {
     const url = new URL(route.request().url());
 
+    if (url.pathname === '/api/auth/me') {
+      await route.fulfill({
+        json: {
+          user: {
+            user_id: 'legacy-full-flow-user',
+            username: 'legacy_full_flow_user',
+            display_name: 'Legacy Full Flow User',
+            role: 'user',
+            is_active: true
+          }
+        }
+      });
+      return;
+    }
+
     if (url.pathname === '/api/platform/summary') {
       await route.fulfill({
         json: {
@@ -279,6 +297,65 @@ async function mockPlatformApi(page: Page) {
       return;
     }
 
+    if (url.pathname === '/api/strategy-score-audit') {
+      await route.fulfill({
+        json: {
+          trade_date: '2026-06-08',
+          overall_status: 'ok',
+          anomaly_row_count: 0,
+          anomaly_counts_by_type: {},
+          strategies: []
+        }
+      });
+      return;
+    }
+
+    if (url.pathname === '/api/research/cases' || url.pathname === '/api/research/evidence') {
+      await route.fulfill({ json: { items: [] } });
+      return;
+    }
+
+    if (url.pathname === '/api/research/queue/health') {
+      await route.fulfill({
+        json: {
+          status: 'ready',
+          can_review: true,
+          can_publish_research_queue: false,
+          summary: {
+            case_count: 0,
+            open_case_count: 0,
+            claim_count: 0,
+            evidence_artifact_count: 0,
+            evidence_link_count: 0,
+            evidence_gap_count: 0,
+            unmatched_digest_count: 0
+          },
+          top_gap_cases: []
+        }
+      });
+      return;
+    }
+
+    if (url.pathname === '/api/research/queue/publish-gate') {
+      await route.fulfill({
+        json: {
+          status: 'empty',
+          research_ready_for_publication: false,
+          internal_snapshot_enabled: false,
+          summary: { pending_gap_count: 0, request_more_evidence_count: 0, error_count: 0 },
+          blockers: [],
+          top_blocked_cases: [],
+          warnings: []
+        }
+      });
+      return;
+    }
+
+    if (url.pathname === '/api/research/publication/snapshots') {
+      await route.fulfill({ json: { items: [] } });
+      return;
+    }
+
     if (url.pathname === '/api/evidence-digest') {
       const assetId = url.searchParams.get('asset_id') ?? 'CN:SZ:300951';
       await route.fulfill({
@@ -371,6 +448,37 @@ async function mockPlatformApi(page: Page) {
 
     if (url.pathname === '/api/backtests/strategies') {
       await route.fulfill({ json: { items: backtestStrategies } });
+      return;
+    }
+
+    if (url.pathname === '/api/backtests/jobs' && route.request().method() === 'POST') {
+      const request = route.request().postDataJSON() as { strategy_id?: string };
+      const strategy = backtestStrategies.find((item) => item.strategy_id === request.strategy_id) ?? lhbStrategy;
+      backtestRunStrategyIds.push(strategy.strategy_id);
+      if (backtestRunStrategyIds.length > 1) {
+        await delay(50);
+      }
+      await route.fulfill({
+        json: {
+          job_id: `platform-full-flow:${strategy.strategy_id}:${backtestRunStrategyIds.length}`,
+          status: 'queued'
+        }
+      });
+      return;
+    }
+
+    if (url.pathname.startsWith('/api/backtests/jobs/') && route.request().method() === 'GET') {
+      const jobId = decodeURIComponent(url.pathname.slice('/api/backtests/jobs/'.length));
+      const strategyId = backtestStrategies.find((item) => jobId.includes(`:${item.strategy_id}:`))?.strategy_id ?? 'lhb_shortline';
+      const strategy = backtestStrategies.find((item) => item.strategy_id === strategyId) ?? lhbStrategy;
+      await route.fulfill({
+        json: {
+          job_id: jobId,
+          status: 'succeeded',
+          result: makeBacktestResult(strategy.strategy_id, strategy.strategy_name, 'validated'),
+          error: ''
+        }
+      });
       return;
     }
 
@@ -623,11 +731,6 @@ async function assertNoUnsafeExecutionControls(page: Page) {
   await expect(page.getByRole('link', { name: /place order|auto trade|production write/i })).toHaveCount(0);
 }
 
-async function assertNoHorizontalOverflow(page: Page) {
-  const hasOverflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
-  expect(hasOverflow).toBe(false);
-}
-
 test('platform full flow covers all research workspaces with mocked API responses', async ({ page }) => {
   const { unhandledRoutes, backtestRunStrategyIds } = await mockPlatformApi(page);
 
@@ -635,9 +738,9 @@ test('platform full flow covers all research workspaces with mocked API response
 
   await expect(page.getByRole('heading', { name: '策略指挥中心' })).toBeVisible();
   const activeStrategies = page.getByRole('region', { name: '启用策略表现' });
-  await expect(activeStrategies.getByText('LHB Shortline Combo')).toBeVisible();
-  await expect(activeStrategies.getByText('Mid Trend Combo')).toBeVisible();
-  await expect(activeStrategies.getByText('Tech Bottleneck Combo')).toBeVisible();
+  await expect(activeStrategies.getByText('LHB Shortline Combo', { exact: true })).toBeVisible();
+  await expect(activeStrategies.getByText('Mid Trend Combo', { exact: true })).toBeVisible();
+  await expect(activeStrategies.getByText('Tech Bottleneck Combo', { exact: true })).toBeVisible();
   await expect(page.getByText('Manual V1 TopN Rotation')).toHaveCount(0);
   await expect(page.getByText('策略持仓状态')).toBeVisible();
   const readiness = page.getByRole('region', { name: '平台就绪状态' });
@@ -649,13 +752,13 @@ test('platform full flow covers all research workspaces with mocked API response
   await expect(readiness.getByText('1')).toBeVisible();
   await expect(readiness.getByText('News collector lagging')).toBeVisible();
   await assertNoUnsafeExecutionControls(page);
-  await assertNoHorizontalOverflow(page);
+  await expectNoHorizontalOverflow(page);
 
   await page.getByRole('button', { name: 'Open Review Queue workspace' }).click();
   await expect(page.getByRole('heading', { name: '策略复盘队列' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Strong evidence' })).toBeVisible();
   await assertNoUnsafeExecutionControls(page);
-  await assertNoHorizontalOverflow(page);
+  await expectNoHorizontalOverflow(page);
 
   await expect(page.getByRole('button', { name: 'Open Data Explorer workspace' })).toHaveCount(0);
 
@@ -666,7 +769,7 @@ test('platform full flow covers all research workspaces with mocked API response
   await page.getByRole('button', { name: 'Preview Scores' }).click();
   await expect(page.getByRole('cell', { name: 'CN:SZ:300951' })).toBeVisible();
   await assertNoUnsafeExecutionControls(page);
-  await assertNoHorizontalOverflow(page);
+  await expectNoHorizontalOverflow(page);
 
   await page.getByRole('button', { name: 'Open Strategy Lab workspace' }).click();
   await expect(page.getByRole('heading', { name: 'Strategy Lab' })).toBeVisible();
@@ -711,18 +814,18 @@ test('platform full flow covers all research workspaces with mocked API response
     'tech_bottleneck'
   ]);
   await assertNoUnsafeExecutionControls(page);
-  await assertNoHorizontalOverflow(page);
+  await expectNoHorizontalOverflow(page);
 
   await page.getByRole('tab', { name: 'Validation Replay' }).click();
   await expect(page.getByRole('combobox', { name: 'strategy validation run' })).toContainText('LHB Shortline');
   await expect(page.getByText('support confirmed')).toBeVisible();
   await assertNoUnsafeExecutionControls(page);
-  await assertNoHorizontalOverflow(page);
+  await expectNoHorizontalOverflow(page);
 
   await page.getByRole('button', { name: 'Open Generated Reports workspace' }).click();
   await expect(page.getByRole('heading', { name: 'Generated Reports', level: 1 })).toBeVisible();
   await expect(page.getByText('Daily TopN')).toBeVisible();
   await assertNoUnsafeExecutionControls(page);
-  await assertNoHorizontalOverflow(page);
+  await expectNoHorizontalOverflow(page);
   expect(unhandledRoutes).toEqual([]);
 });
