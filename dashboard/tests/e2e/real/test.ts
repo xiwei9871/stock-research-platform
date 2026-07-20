@@ -314,7 +314,8 @@ async function installContextGuard(
   const originalContextRoute = context.route.bind(context);
   const originalContextUnroute = context.unroute.bind(context);
   const routeHandler = (route: Route) => rejectWriteRoute(route, realApi);
-  await originalContextRoute('**/api/**', routeHandler);
+  const apiRoutePattern = (url: URL) => isApiUrl(url.href);
+  await originalContextRoute(apiRoutePattern, routeHandler);
   const restoreContextRoutes = guardRouteOverrides(context, baseURL);
   const pageRouteRestorers = new Map<Page, () => void>();
   const guardPage = (page: Page) => {
@@ -328,7 +329,7 @@ async function installContextGuard(
     context.off('page', guardPage);
     for (const restore of pageRouteRestorers.values()) restore();
     restoreContextRoutes();
-    await originalContextUnroute('**/api/**', routeHandler);
+    await originalContextUnroute(apiRoutePattern, routeHandler);
     restoreRequestContext();
   };
 }
@@ -341,7 +342,7 @@ function addResponseEvidence(
   return (async () => {
     const request: Request = response.request();
     const url = new URL(response.url());
-    if (!url.pathname.startsWith('/api/')) return;
+    if (!isApiUrl(response.url())) return;
     try {
       const [requestHeaders, responseHeaders] = await Promise.all([
         request.allHeaders(),

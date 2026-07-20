@@ -58,6 +58,22 @@ async function mutateWithFetch(page: Page, method: 'PUT' | 'DELETE'): Promise<Gu
   );
 }
 
+async function postWithFetch(page: Page, path: string): Promise<GuardedResult> {
+  return page.evaluate(async (apiPath) => {
+    const response = await fetch(apiPath, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ marker: 'real_profile_write_forbidden' })
+    });
+    const payload = (await response.json()) as { detail?: unknown };
+    return {
+      status: response.status,
+      detail: typeof payload.detail === 'string' ? payload.detail : '',
+      guard: response.headers.get('x-playwright-real-guard')
+    };
+  }, path);
+}
+
 async function mutateWithXhr(page: Page, method: 'PATCH'): Promise<GuardedResult> {
   return page.evaluate(
     ({ marker, requestMethod }) =>
@@ -215,6 +231,103 @@ test('@read-only-contract GET control reaches the real API', async ({ page }) =>
   expect(result.payload).toEqual(expect.objectContaining({ display_trade_date: expect.any(String) }));
 });
 
+test('@read-only-contract exact API root GET reaches the server and is recorded', async ({
+  page,
+  realHttpEvidence,
+  runtimePolicy
+}) => {
+  runtimePolicy.consoleErrors.push(
+    'Failed to load resource: the server responded with a status of 404 (Not Found)'
+  );
+  await openProbeDocument(page);
+
+  const result = await page.evaluate(async () => {
+    const response = await fetch('/api', {
+      headers: { 'x-request-id': 'playwright-real-api-root-get' }
+    });
+    return {
+      status: response.status,
+      guard: response.headers.get('x-playwright-real-guard'),
+      requestId: response.headers.get('x-request-id')
+    };
+  });
+
+  expect([200, 404]).toContain(result.status);
+  expect(result.guard).toBeNull();
+  expect(result.requestId).toBe('playwright-real-api-root-get');
+  await expect
+    .poll(() =>
+      realHttpEvidence.exchanges.filter(
+        (exchange) => exchange.method === 'GET' && new URL(exchange.url).pathname === '/api'
+      )
+    )
+    .toEqual([
+      expect.objectContaining({
+        responseStatus: result.status,
+        responseHeaders: expect.objectContaining({
+          'x-request-id': 'playwright-real-api-root-get'
+        })
+      })
+    ]);
+});
+
+test('@read-only-contract exact API root writes are locally rejected with or without query', async ({
+  page,
+  realHttpEvidence,
+  runtimePolicy
+}) => {
+  runtimePolicy.consoleErrors.push(
+    'Failed to load resource: the server responded with a status of 404 (Not Found)'
+  );
+  await openProbeDocument(page);
+
+  expectLocallyRejected(await postWithFetch(page, '/api'));
+  expectLocallyRejected(await postWithFetch(page, '/api?probe=1'));
+  await expect
+    .poll(() =>
+      realHttpEvidence.exchanges.filter(
+        (exchange) => exchange.method === 'POST' && new URL(exchange.url).pathname === '/api'
+      )
+    )
+    .toEqual([
+      expect.objectContaining({
+        responseStatus: 460,
+        responseHeaders: expect.objectContaining({
+          'x-playwright-real-guard': WRITE_FORBIDDEN
+        })
+      }),
+      expect.objectContaining({
+        responseStatus: 460,
+        responseHeaders: expect.objectContaining({
+          'x-playwright-real-guard': WRITE_FORBIDDEN
+        })
+      })
+    ]);
+});
+
+test('@read-only-contract API sibling paths are neither guarded nor recorded as API traffic', async ({
+  page,
+  realHttpEvidence,
+  runtimePolicy
+}) => {
+  runtimePolicy.consoleErrors.push(
+    'Failed to load resource: the server responded with a status of 404 (Not Found)'
+  );
+  await openProbeDocument(page);
+
+  const result = await page.evaluate(async () => {
+    const response = await fetch('/apix', { method: 'POST' });
+    return {
+      status: response.status,
+      guard: response.headers.get('x-playwright-real-guard')
+    };
+  });
+
+  expect(result.status).toBe(404);
+  expect(result.guard).toBeNull();
+  expect(realHttpEvidence.exchanges).toEqual([]);
+});
+
 test('@read-only-contract shared header evidence is deterministic and secret-free', async ({
   page,
   realApi,
@@ -293,12 +406,12 @@ test('@read-only-contract API route overrides cannot take precedence over the gu
   };
 
   const pageError = await attempt(
-    () => page.route('/api/__playwright_real_route_bypass__', handler),
-    () => page.unroute('/api/__playwright_real_route_bypass__', handler)
+    () => page.route('/api', handler),
+    () => page.unroute('/api', handler)
   );
   const contextError = await attempt(
-    () => context.route('/api/__playwright_real_context_bypass__', handler),
-    () => context.unroute('/api/__playwright_real_context_bypass__', handler)
+    () => context.route('/api?probe=1', handler),
+    () => context.unroute('/api?probe=1', handler)
   );
   const nextPage = await context.newPage();
   const nextPageError = await attempt(
