@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from threading import Thread
 
 import requests
 
@@ -99,6 +101,76 @@ def test_requests_transport_uses_explicit_session_proxy_mode() -> None:
     assert environment.session is None
     assert environment.trust_env is True
     assert requests.Session().trust_env is True
+
+
+def test_direct_transport_against_controlled_local_server_ignores_environment_proxy(
+    monkeypatch,
+) -> None:
+    class Handler(BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.1"
+
+        def do_GET(self) -> None:  # noqa: N802 - stdlib callback name
+            if self.path == "/redirect":
+                body = b"redirect"
+                self.send_response(302)
+                self.send_header("Location", "/html")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            if self.path == "/missing":
+                body = b"missing"
+                self.send_response(404)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            if self.path == "/empty":
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+            if self.path == "/pdf":
+                body = b"%PDF-1.4\ncontrolled fixture"
+                content_type = "application/pdf"
+            else:
+                body = b"<html><body>controlled fixture</body></html>"
+                content_type = "text/html"
+            self.send_response(200)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, _format: str, *_args: object) -> None:
+            return
+
+    class QuietServer(ThreadingHTTPServer):
+        daemon_threads = True
+
+        def handle_error(self, _request: object, _client_address: object) -> None:
+            return
+
+    server = QuietServer(("127.0.0.1", 0), Handler)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    monkeypatch.setenv("HTTP_PROXY", "http://127.0.0.1:1")
+    monkeypatch.setenv("HTTPS_PROXY", "http://127.0.0.1:1")
+    transport = RequestsFetchTransport(proxy_mode="direct")
+    base_url = f"http://127.0.0.1:{server.server_port}"
+    try:
+        html = transport.get(f"{base_url}/html", timeout_seconds=1)
+        pdf = transport.get(f"{base_url}/pdf", timeout_seconds=1)
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=1)
+
+    assert html.status_code == 200
+    assert b"controlled fixture" in b"".join(html.chunks)
+    assert pdf.headers["Content-Type"] == "application/pdf"
+    assert b"".join(pdf.chunks).startswith(b"%PDF")
 
 
 def test_direct_provider_acquires_raw_artifact_and_attempt(tmp_path: Path) -> None:
