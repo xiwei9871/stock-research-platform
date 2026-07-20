@@ -5,10 +5,12 @@ import base64
 import json
 import subprocess
 import sys
+import zipfile
 from pathlib import Path
 
 import pytest
 
+from stock_research import platform_validation_report as platform_report
 from stock_research.platform_validation_report import (
     build_coverage_matrix,
     build_platform_validation_report,
@@ -658,7 +660,13 @@ def _write_json(path: Path, payload: object) -> Path:
                     evidence = path.parent / attachment
                     evidence.parent.mkdir(parents=True, exist_ok=True)
                     if not evidence.exists():
-                        evidence.write_bytes(f"fixture:{attachment.as_posix()}".encode())
+                        if evidence.suffix == ".png":
+                            evidence.write_bytes(b"\x89PNG\r\n\x1a\nfixture")
+                        elif evidence.suffix == ".zip":
+                            with zipfile.ZipFile(evidence, "w") as archive:
+                                archive.writestr("evidence.txt", f"fixture:{attachment.as_posix()}")
+                        else:
+                            evidence.write_bytes(f"fixture:{attachment.as_posix()}".encode())
             pending.extend(value.values())
         elif isinstance(value, list):
             pending.extend(value)
@@ -1048,8 +1056,8 @@ def test_evidence_is_archived_with_safe_collision_resistant_names_and_rejects_es
     tmp_path: Path,
 ) -> None:
     result_dir = tmp_path / "results"
-    absolute = result_dir / "first" / "trace.zip"
-    relative = result_dir / "second" / "trace.zip"
+    absolute = result_dir / "first" / "trace.log"
+    relative = result_dir / "second" / "trace.log"
     absolute.parent.mkdir(parents=True)
     relative.parent.mkdir(parents=True)
     absolute.write_bytes(b"absolute evidence")
@@ -1068,7 +1076,7 @@ def test_evidence_is_archived_with_safe_collision_resistant_names_and_rejects_es
         project="chromium-desktop",
         status="unexpected",
         error="relative root failure",
-        attachment="second/trace.zip",
+        attachment="second/trace.log",
     )
     result = _write_json(
         result_dir / "results.json",
@@ -1091,7 +1099,7 @@ def test_evidence_is_archived_with_safe_collision_resistant_names_and_rejects_es
     archived = sorted(path for issue in issues for path in issue["evidence"])
     assert len(archived) == 2
     assert archived[0] != archived[1]
-    assert all(path.startswith("evidence/") and path.endswith("-trace.zip") for path in archived)
+    assert all(path.startswith("evidence/") and path.endswith("-trace.log") for path in archived)
     assert {(tmp_path / "audit" / path).read_bytes() for path in archived} == {
         b"absolute evidence",
         b"relative evidence",
@@ -1407,6 +1415,334 @@ def test_issue_fingerprint_ignores_playwright_code_frame_line_numbers_but_not_co
     changed = issue_id(912, "expect(actual).toEqual(expected);", "changed")
     assert first == moved
     assert changed != first
+
+
+def test_trace_zip_is_rewritten_without_secrets_or_binary_resources(tmp_path: Path) -> None:
+    secret = "TRACE-SECRET-DO-NOT-LEAK"
+    result_dir = tmp_path / "results"
+    trace = result_dir / "trace.zip"
+    result_dir.mkdir()
+    with zipfile.ZipFile(trace, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr(
+            "trace.network",
+            f"Authorization: Bearer {secret}\nCookie: sid={secret}\npassword={secret}",
+        )
+        archive.writestr(
+            "events.json",
+            json.dumps({"token": secret, "url": f"https://example.test/?api_key={secret}"}),
+        )
+        archive.writestr(
+            "trace.trace",
+            json.dumps({"headers": [{"name": "cookie", "value": secret}]}),
+        )
+        archive.writestr("resources/body.bin", secret.encode())
+    result = _write_json(
+        result_dir / "results.json",
+        _playwright_payload(
+            root=tmp_path / "root",
+            profile="real",
+            project="chromium-desktop",
+            specs=[
+                _playwright_spec(
+                    title="safe trace",
+                    inventory_id="home",
+                    project="chromium-desktop",
+                    status="unexpected",
+                    error="trace failure",
+                    attachment="trace.zip",
+                )
+            ],
+        ),
+    )
+    paths = build_platform_validation_report(
+        inventory=_report_inventory(),
+        playwright_result_paths=[result],
+        output_dir=tmp_path / "audit",
+        audit_id="trace",
+        revision="rev",
+        audit_date="2026-07-21",
+    )
+    evidence = json.loads(paths["issue_ledger"].read_text(encoding="utf-8"))["issues"][0][
+        "evidence"
+    ][0]
+    archived = tmp_path / "audit" / evidence
+    assert zipfile.is_zipfile(archived)
+    with zipfile.ZipFile(archived) as archive:
+        names = archive.namelist()
+        combined = b"\n".join(archive.read(name) for name in names)
+    assert secret.encode() not in combined
+    assert b"Authorization:" not in combined
+    assert b"Cookie:" not in combined
+    assert any(name.endswith(".omitted.txt") for name in names)
+
+
+@pytest.mark.parametrize("kind", ["path_escape", "symlink", "bomb"])
+def test_trace_zip_rejects_unsafe_members_and_resource_bombs(tmp_path: Path, kind: str) -> None:
+    result_dir = tmp_path / kind
+    result_dir.mkdir()
+    trace = result_dir / "trace.zip"
+    with zipfile.ZipFile(trace, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        if kind == "path_escape":
+            archive.writestr("../escape.txt", "escape")
+        elif kind == "symlink":
+            info = zipfile.ZipInfo("link")
+            info.create_system = 3
+            info.external_attr = 0o120777 << 16
+            archive.writestr(info, "target")
+        else:
+            archive.writestr("trace.network", b"A" * (platform_report._MAX_ZIP_MEMBER_BYTES + 1))
+    result = _write_json(
+        result_dir / "results.json",
+        _playwright_payload(
+            root=tmp_path / "root",
+            profile="real",
+            project="chromium-desktop",
+            specs=[
+                _playwright_spec(
+                    title="unsafe trace",
+                    inventory_id="home",
+                    project="chromium-desktop",
+                    status="unexpected",
+                    error="unsafe trace",
+                    attachment="trace.zip",
+                )
+            ],
+        ),
+    )
+    with pytest.raises(ValueError, match="zip|trace|evidence"):
+        build_platform_validation_report(
+            inventory=_report_inventory(),
+            playwright_result_paths=[result],
+            output_dir=tmp_path / f"{kind}-out",
+            audit_id=kind,
+            revision="rev",
+            audit_date="2026-07-21",
+        )
+
+
+def test_issue_dedupe_separates_generic_cross_inventory_but_merges_explicit_roots(
+    tmp_path: Path,
+) -> None:
+    generic = "Timeout 30000ms waiting for locator('[data-testid=workspace]')"
+    explicit = "real_route_census_primary_api_failed:GET /api/platform/summary status 500"
+    specs = [
+        _playwright_spec(
+            title="home generic",
+            inventory_id="home",
+            project="chromium-desktop",
+            status="unexpected",
+            error=generic,
+        ),
+        _playwright_spec(
+            title="research generic",
+            inventory_id="research",
+            project="chromium-desktop",
+            status="unexpected",
+            error=generic,
+        ),
+        _playwright_spec(
+            title="home generic firefox",
+            inventory_id="home",
+            project="firefox-desktop",
+            status="unexpected",
+            error=generic,
+        ),
+        _playwright_spec(
+            title="home explicit",
+            inventory_id="home",
+            project="chromium-desktop",
+            status="unexpected",
+            error=explicit,
+        ),
+        _playwright_spec(
+            title="research explicit",
+            inventory_id="research",
+            project="webkit-mobile",
+            status="unexpected",
+            error=explicit,
+        ),
+    ]
+    result = _write_json(
+        tmp_path / "dedupe" / "results.json",
+        _playwright_payload(
+            root=tmp_path / "root",
+            profile="real",
+            project="chromium-desktop",
+            specs=specs,
+        ),
+    )
+    paths = build_platform_validation_report(
+        inventory=_report_inventory(),
+        playwright_result_paths=[result],
+        output_dir=tmp_path / "dedupe-out",
+        audit_id="dedupe",
+        revision="rev",
+        audit_date="2026-07-21",
+    )
+    issues = json.loads(paths["issue_ledger"].read_text(encoding="utf-8"))["issues"]
+    assert len(issues) == 3
+    home_generic = next(
+        issue for issue in issues if issue["inventory_ids"] == ["home"] and len(issue["test_ids"]) == 2
+    )
+    assert {test_id.split("::", 1)[0] for test_id in home_generic["test_ids"]} == {
+        "chromium-desktop",
+        "firefox-desktop",
+    }
+    explicit_issue = next(issue for issue in issues if len(issue["inventory_ids"]) == 2)
+    assert explicit_issue["inventory_ids"] == ["home", "research"]
+    assert len(explicit_issue["test_ids"]) == 2
+
+
+def test_output_directory_is_replaced_without_stale_evidence_and_failure_restores_old(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    output = tmp_path / "audit"
+    failed = _write_json(
+        tmp_path / "first" / "results.json",
+        _playwright_payload(
+            root=tmp_path / "root",
+            profile="real",
+            project="chromium-desktop",
+            specs=[
+                _playwright_spec(
+                    title="first failure",
+                    inventory_id="home",
+                    project="chromium-desktop",
+                    status="unexpected",
+                    error="first failure",
+                    attachment="trace.zip",
+                )
+            ],
+        ),
+    )
+    (failed.parent / "trace.zip").write_bytes(b"not a zip yet")
+    # Use a PNG because invalid ZIPs are intentionally rejected by the safe archiver.
+    payload = json.loads(failed.read_text(encoding="utf-8"))
+    attachment = payload["suites"][0]["suites"][0]["specs"][0]["tests"][0]["results"][0][
+        "attachments"
+    ][0]
+    attachment["path"] = "failure.png"
+    _write_json(failed, payload)
+    (failed.parent / "failure.png").write_bytes(b"\x89PNG\r\n\x1a\nfixture")
+    first_paths = build_platform_validation_report(
+        inventory=_report_inventory(),
+        playwright_result_paths=[failed],
+        output_dir=output,
+        audit_id="first",
+        revision="rev",
+        audit_date="2026-07-21",
+    )
+    old_evidence = json.loads(first_paths["issue_ledger"].read_text(encoding="utf-8"))["issues"][0][
+        "evidence"
+    ][0]
+    assert (output / old_evidence).exists()
+
+    passed = _write_json(
+        tmp_path / "second" / "results.json",
+        _playwright_payload(
+            root=tmp_path / "root",
+            profile="real",
+            project="chromium-desktop",
+            specs=[
+                _playwright_spec(
+                    title="second pass",
+                    inventory_id="home",
+                    project="chromium-desktop",
+                    status="expected",
+                )
+            ],
+        ),
+    )
+    build_platform_validation_report(
+        inventory=_report_inventory(),
+        playwright_result_paths=[passed],
+        output_dir=output,
+        audit_id="second",
+        revision="rev",
+        audit_date="2026-07-21",
+    )
+    assert json.loads((output / "issue_ledger.json").read_text(encoding="utf-8"))["issues"] == []
+    assert not (output / old_evidence).exists()
+    snapshot = {
+        path.relative_to(output).as_posix(): path.read_bytes()
+        for path in sorted(output.rglob("*"))
+        if path.is_file()
+    }
+
+    original_write = platform_report._atomic_write
+
+    def fail_mid_build(path: Path, content: str) -> None:
+        if path.name == "issue_ledger.json":
+            raise RuntimeError("mid-build failure")
+        original_write(path, content)
+
+    monkeypatch.setattr(platform_report, "_atomic_write", fail_mid_build)
+    with pytest.raises(RuntimeError, match="mid-build failure"):
+        build_platform_validation_report(
+            inventory=_report_inventory(),
+            playwright_result_paths=[failed],
+            output_dir=output,
+            audit_id="broken",
+            revision="rev",
+            audit_date="2026-07-21",
+        )
+    assert snapshot == {
+        path.relative_to(output).as_posix(): path.read_bytes()
+        for path in sorted(output.rglob("*"))
+        if path.is_file()
+    }
+    assert not list(output.parent.glob(f".{output.name}.tmp-*"))
+    assert not list(output.parent.glob(f".{output.name}.backup-*"))
+
+
+def test_resource_limits_reject_deep_and_oversized_json_as_value_errors(tmp_path: Path) -> None:
+    oversized = tmp_path / "oversized.json"
+    oversized.write_bytes(b" " * (platform_report._MAX_PLAYWRIGHT_JSON_BYTES + 1))
+    with pytest.raises(ValueError, match="Playwright result.*size limit"):
+        build_platform_validation_report(
+            inventory=_report_inventory(),
+            playwright_result_paths=[("real", oversized)],
+            output_dir=tmp_path / "oversized-out",
+            audit_id="oversized",
+            revision="rev",
+            audit_date="2026-07-21",
+        )
+
+    depth = platform_report._MAX_JSON_DEPTH + 10
+    deep = tmp_path / "deep.json"
+    deep.write_text(
+        '{"config":{"metadata":{"platformValidationProfile":"real"}},"suites":['
+        + '{"title":"nested","suites":[' * depth
+        + "]}" * depth
+        + "]}",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="Playwright result.*(?:depth|cannot load)"):
+        build_platform_validation_report(
+            inventory=_report_inventory(),
+            playwright_result_paths=[deep],
+            output_dir=tmp_path / "deep-out",
+            audit_id="deep",
+            revision="rev",
+            audit_date="2026-07-21",
+        )
+
+    coverage = tmp_path / "coverage.json"
+    coverage.write_bytes(b" " * (platform_report._MAX_COVERAGE_JSON_BYTES + 1))
+    empty = _write_json(
+        tmp_path / "empty.json",
+        {"config": {"metadata": {"platformValidationProfile": "real"}}, "suites": []},
+    )
+    with pytest.raises(ValueError, match="coverage results.*size limit"):
+        build_platform_validation_report(
+            inventory=_report_inventory(),
+            playwright_result_paths=[empty],
+            coverage_results=coverage,
+            output_dir=tmp_path / "coverage-out",
+            audit_id="coverage",
+            revision="rev",
+            audit_date="2026-07-21",
+        )
 
 
 def test_report_fails_closed_for_malformed_json_unknown_inventory_and_bad_baseline(tmp_path: Path) -> None:

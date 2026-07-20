@@ -3,9 +3,15 @@ from __future__ import annotations
 import base64
 import hashlib
 import html
+import io
 import json
+import os
 import re
 import shutil
+import stat
+import tempfile
+import uuid
+import zipfile
 from collections.abc import Mapping
 from copy import deepcopy
 from pathlib import Path
@@ -78,6 +84,11 @@ _PATH_SECRET = re.compile(rf"(?i)(/{_SENSITIVE_NAME}/)[^/?#\s]+")
 _TITLE_INVENTORY = re.compile(r"\[inventory(?:_ids?)?:([a-z0-9_, -]+)\]", re.IGNORECASE)
 _TITLE_INVENTORY_CALL = re.compile(r"@inventory\(([a-z0-9_, -]+)\)", re.IGNORECASE)
 _ROUTE_CENSUS_TITLE = re.compile(r"^route census ([a-z0-9_]+):", re.IGNORECASE)
+_EXPLICIT_ROOT_MARKER = re.compile(r"\b[a-z][a-z0-9]*(?:_[a-z0-9]+){3,}\b", re.IGNORECASE)
+_HTTP_ROOT_MARKER = re.compile(
+    r"\b(?:GET|POST|PATCH|PUT|DELETE|HEAD|OPTIONS)\s+/[^\s]+.*\b(?:status\s*)?[45]\d\d\b",
+    re.IGNORECASE,
+)
 _BASELINE_STATUSES = frozenset({"baseline_candidate", "trusted_baseline"})
 _PLAYWRIGHT_TEST_STATUSES = frozenset(
     {"expected", "unexpected", "flaky", "skipped", "passed", "failed", "timedout", "timeout"}
@@ -86,6 +97,27 @@ _ISSUE_SCHEMA_VERSION = "platform_validation_issue_ledger_v1"
 _COVERAGE_SCHEMA_VERSION = "platform_validation_coverage_v1"
 _COVERAGE_RESULTS_SCHEMA_VERSION = "platform_validation_coverage_results_v1"
 _OBSERVED_COVERAGE_STATUSES = frozenset({"covered", "partial", "missing"})
+_MAX_PLAYWRIGHT_JSON_BYTES = 16 * 1024 * 1024
+_MAX_COVERAGE_JSON_BYTES = 4 * 1024 * 1024
+_MAX_JSON_DEPTH = 100
+_MAX_JSON_NODES = 500_000
+_MAX_SUITES = 10_000
+_MAX_SPECS = 50_000
+_MAX_TESTS = 200_000
+_MAX_RESULTS = 500_000
+_MAX_ATTACHMENTS = 500_000
+_MAX_EVIDENCE_BYTES = 64 * 1024 * 1024
+_MAX_PNG_BYTES = 20 * 1024 * 1024
+_MAX_ZIP_MEMBERS = 2_000
+_MAX_ZIP_MEMBER_BYTES = 16 * 1024 * 1024
+_MAX_ZIP_TOTAL_BYTES = 64 * 1024 * 1024
+_MAX_ZIP_COMPRESSION_RATIO = 500
+_TEXT_EVIDENCE_SUFFIXES = frozenset(
+    {
+        ".csv", ".html", ".json", ".jsonl", ".log", ".md", ".network",
+        ".stacks", ".trace", ".txt", ".xml", ".yaml", ".yml",
+    }
+)
 
 
 def _inventory_error(field: str, detail: str) -> ValueError:
@@ -474,9 +506,15 @@ def _sanitize_text(value: object, *, checkout_roots: tuple[str, ...] = ()) -> st
 def _sanitize_payload(value: Any, *, checkout_roots: tuple[str, ...] = ()) -> Any:
     if isinstance(value, Mapping):
         sanitized: dict[str, Any] = {}
+        header_name = value.get("name")
+        redact_header_value = isinstance(header_name, str) and bool(
+            re.fullmatch(_SENSITIVE_NAME, header_name, re.IGNORECASE)
+        )
         for key, item in value.items():
             safe_key = _sanitize_text(key, checkout_roots=checkout_roots)
-            if re.search(_SENSITIVE_NAME, str(key), re.IGNORECASE):
+            if (redact_header_value and str(key).lower() == "value") or re.search(
+                _SENSITIVE_NAME, str(key), re.IGNORECASE
+            ):
                 sanitized[safe_key] = "[REDACTED]"
             else:
                 sanitized[safe_key] = _sanitize_payload(item, checkout_roots=checkout_roots)
@@ -500,6 +538,33 @@ def _fingerprint_text(value: str) -> str:
     return normalized
 
 
+def _validate_json_file(path: Path, *, label: str, max_bytes: int) -> None:
+    try:
+        size = path.stat().st_size
+    except OSError as exc:
+        raise ValueError(f"{label} {path}: cannot load: {exc}") from exc
+    if not path.is_file() or path.is_symlink():
+        raise ValueError(f"{label} {path}: must be a regular file")
+    if size > max_bytes:
+        raise ValueError(f"{label} {path}: size limit exceeded")
+
+
+def _assert_json_limits(payload: Any, *, label: str) -> None:
+    stack: list[tuple[Any, int]] = [(payload, 0)]
+    nodes = 0
+    while stack:
+        value, depth = stack.pop()
+        nodes += 1
+        if nodes > _MAX_JSON_NODES:
+            raise ValueError(f"{label}: JSON node limit exceeded")
+        if depth > _MAX_JSON_DEPTH:
+            raise ValueError(f"{label}: JSON depth limit exceeded")
+        if isinstance(value, Mapping):
+            stack.extend((item, depth + 1) for item in value.values())
+        elif isinstance(value, list):
+            stack.extend((item, depth + 1) for item in value)
+
+
 def _load_playwright_json(path: Path) -> dict[str, Any]:
     def strict_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
         value: dict[str, Any] = {}
@@ -512,19 +577,21 @@ def _load_playwright_json(path: Path) -> dict[str, Any]:
     def reject_constant(value: str) -> None:
         raise ValueError(f"non-finite JSON value {value}")
 
+    _validate_json_file(path, label="Playwright result", max_bytes=_MAX_PLAYWRIGHT_JSON_BYTES)
     try:
         payload = json.loads(
             path.read_text(encoding="utf-8"),
             object_pairs_hook=strict_object,
             parse_constant=reject_constant,
         )
-    except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as exc:
+    except (OSError, UnicodeError, json.JSONDecodeError, ValueError, RecursionError) as exc:
         raise ValueError(f"Playwright result {path}: cannot load: {exc}") from exc
     if not isinstance(payload, dict) or not isinstance(payload.get("suites"), list):
         raise ValueError(f"Playwright result {path}: root must contain a suites list")
     config = payload.get("config", {})
     if config is not None and not isinstance(config, dict):
         raise ValueError(f"Playwright result {path}: config must be an object")
+    _assert_json_limits(payload, label=f"Playwright result {path}")
     return payload
 
 
@@ -669,7 +736,8 @@ def _decode_attachment_json(attachment: Mapping[str, Any]) -> Mapping[str, Any] 
     for candidate in candidates:
         try:
             decoded = json.loads(candidate)
-        except json.JSONDecodeError:
+            _assert_json_limits(decoded, label="route-census attachment")
+        except (json.JSONDecodeError, RecursionError, ValueError):
             continue
         if isinstance(decoded, Mapping):
             return decoded
@@ -757,17 +825,21 @@ def _file_digest(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _safe_archive_content(path: Path, checkout_roots: tuple[str, ...]) -> bytes | None:
-    if path.suffix.lower() not in {".csv", ".html", ".json", ".log", ".md", ".txt", ".xml", ".yaml", ".yml"}:
-        return None
+def _sanitize_text_evidence(
+    content: bytes,
+    *,
+    suffix: str,
+    checkout_roots: tuple[str, ...],
+) -> bytes | None:
     try:
-        text = path.read_text(encoding="utf-8")
+        text = content.decode("utf-8")
     except UnicodeError:
         return None
-    if path.suffix.lower() == ".json":
+    if suffix == ".json":
         try:
             payload = json.loads(text)
-        except json.JSONDecodeError:
+            _assert_json_limits(payload, label="evidence JSON")
+        except (json.JSONDecodeError, RecursionError, ValueError):
             pass
         else:
             return (
@@ -779,7 +851,125 @@ def _safe_archive_content(path: Path, checkout_roots: tuple[str, ...]) -> bytes 
                 )
                 + "\n"
             ).encode("utf-8")
+    if suffix in {".jsonl", ".network", ".stacks", ".trace"}:
+        sanitized_lines: list[str] = []
+        for line in text.splitlines():
+            try:
+                payload = json.loads(line)
+                _assert_json_limits(payload, label="trace JSON line")
+            except (json.JSONDecodeError, RecursionError, ValueError):
+                sanitized_lines.append(_sanitize_text(line, checkout_roots=checkout_roots))
+            else:
+                sanitized_lines.append(
+                    json.dumps(
+                        _sanitize_payload(payload, checkout_roots=checkout_roots),
+                        ensure_ascii=False,
+                        sort_keys=True,
+                    )
+                )
+        return ("\n".join(sanitized_lines) + ("\n" if text.endswith("\n") else "")).encode(
+            "utf-8"
+        )
     return _sanitize_text(text, checkout_roots=checkout_roots).encode("utf-8")
+
+
+def _safe_zip_member_name(raw: str) -> str:
+    if not raw or raw.startswith(("/", "\\")) or ":" in raw:
+        raise ValueError("trace zip contains an unsafe member path")
+    parts = raw.replace("\\", "/").split("/")
+    if any(part in {"", ".", ".."} for part in parts):
+        raise ValueError("trace zip contains an unsafe member path")
+    safe_parts = []
+    for part in parts:
+        sanitized = _sanitize_text(part)
+        safe = re.sub(r"[^A-Za-z0-9._-]+", "-", sanitized).strip(".-") or "member"
+        safe_parts.append(safe)
+    return "/".join(safe_parts)
+
+
+def _safe_trace_zip(path: Path, checkout_roots: tuple[str, ...]) -> bytes:
+    try:
+        archive = zipfile.ZipFile(path)
+    except (OSError, zipfile.BadZipFile) as exc:
+        raise ValueError("trace zip is invalid") from exc
+    output = io.BytesIO()
+    used_names: set[str] = set()
+    total_size = 0
+    with archive, zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as sanitized_zip:
+        infos = archive.infolist()
+        if len(infos) > _MAX_ZIP_MEMBERS:
+            raise ValueError("trace zip member count limit exceeded")
+        for info in sorted(infos, key=lambda value: value.filename):
+            if info.is_dir():
+                continue
+            mode = (info.external_attr >> 16) & 0o170000
+            if mode == stat.S_IFLNK:
+                raise ValueError("trace zip symlink members are not allowed")
+            safe_name = _safe_zip_member_name(info.filename)
+            if info.file_size > _MAX_ZIP_MEMBER_BYTES:
+                raise ValueError("trace zip member size limit exceeded")
+            total_size += info.file_size
+            if total_size > _MAX_ZIP_TOTAL_BYTES:
+                raise ValueError("trace zip total size limit exceeded")
+            if info.compress_size and info.file_size / info.compress_size > _MAX_ZIP_COMPRESSION_RATIO:
+                raise ValueError("trace zip compression ratio limit exceeded")
+            try:
+                content = archive.read(info)
+            except (OSError, RuntimeError, zipfile.BadZipFile) as exc:
+                raise ValueError("trace zip member cannot be read safely") from exc
+            if len(content) != info.file_size:
+                raise ValueError("trace zip member size mismatch")
+            suffix = Path(safe_name).suffix.lower()
+            text_content = (
+                _sanitize_text_evidence(
+                    content,
+                    suffix=suffix,
+                    checkout_roots=checkout_roots,
+                )
+                if suffix in _TEXT_EVIDENCE_SUFFIXES
+                else None
+            )
+            if text_content is None:
+                safe_name = f"{safe_name}.omitted.txt"
+                text_content = (
+                    f"Binary resource omitted from sanitized trace: {safe_name}\n"
+                ).encode("utf-8")
+            if safe_name in used_names:
+                suffix_digest = hashlib.sha256(info.filename.encode("utf-8")).hexdigest()[:12]
+                safe_name = f"{safe_name}.{suffix_digest}"
+            used_names.add(safe_name)
+            target = zipfile.ZipInfo(safe_name, date_time=(1980, 1, 1, 0, 0, 0))
+            target.compress_type = zipfile.ZIP_DEFLATED
+            target.external_attr = 0o100600 << 16
+            sanitized_zip.writestr(target, text_content)
+    return output.getvalue()
+
+
+def _safe_archive_content(
+    path: Path,
+    checkout_roots: tuple[str, ...],
+) -> tuple[bytes, bool]:
+    size = path.stat().st_size
+    if size > _MAX_EVIDENCE_BYTES:
+        raise ValueError("evidence file size limit exceeded")
+    suffix = path.suffix.lower()
+    if suffix == ".zip":
+        return _safe_trace_zip(path, checkout_roots), False
+    content = path.read_bytes()
+    if suffix == ".png":
+        if size > _MAX_PNG_BYTES or not content.startswith(b"\x89PNG\r\n\x1a\n"):
+            raise ValueError("PNG evidence is invalid or exceeds the size limit")
+        return content, False
+    if suffix in _TEXT_EVIDENCE_SUFFIXES:
+        sanitized = _sanitize_text_evidence(
+            content,
+            suffix=suffix,
+            checkout_roots=checkout_roots,
+        )
+        if sanitized is not None:
+            return sanitized, False
+    note = f"Binary evidence omitted: {path.name}\n".encode("utf-8")
+    return _sanitize_text(note.decode("utf-8")).encode("utf-8"), True
 
 
 def _evidence_source(
@@ -815,11 +1005,11 @@ def _evidence_source(
     if not resolved.is_file() or resolved.is_symlink():
         raise ValueError(f"evidence path {safe_raw!r} must reference an existing regular file")
     source_digest = _file_digest(resolved)
-    archive_content = _safe_archive_content(resolved, checkout_roots)
-    archive_digest = (
-        hashlib.sha256(archive_content).hexdigest() if archive_content is not None else source_digest
-    )
+    archive_content, omitted = _safe_archive_content(resolved, checkout_roots)
+    archive_digest = hashlib.sha256(archive_content).hexdigest()
     basename = re.sub(r"[^A-Za-z0-9._-]+", "-", resolved.name).strip(".-") or "evidence.bin"
+    if omitted:
+        basename = f"{basename}.omitted.txt"
     identity = f"{namespace}\0{relative.as_posix()}\0{archive_digest}"
     name_digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:20]
     return {
@@ -848,10 +1038,9 @@ def _archive_evidence(records: list[dict[str, Any]], output_dir: Path) -> None:
         destination.parent.mkdir(parents=True, exist_ok=True)
         temporary = destination.with_name(f".{destination.name}.tmp")
         archive_content = record.get("archive_content")
-        if isinstance(archive_content, bytes):
-            temporary.write_bytes(archive_content)
-        else:
-            shutil.copyfile(source, temporary)
+        if not isinstance(archive_content, bytes):
+            raise ValueError("evidence archive content was not safely materialized")
+        temporary.write_bytes(archive_content)
         temporary.replace(destination)
 
 
@@ -945,11 +1134,21 @@ def _walk_specs(suites: object, parents: tuple[str, ...] = ()) -> list[tuple[tup
     if not isinstance(suites, list):
         raise ValueError("Playwright result suites must be a list")
     specs: list[tuple[tuple[str, ...], Mapping[str, Any]]] = []
-    for suite in suites:
+    stack: list[tuple[object, tuple[str, ...], int]] = [
+        (suite, parents, 1) for suite in reversed(suites)
+    ]
+    suite_count = 0
+    while stack:
+        suite, suite_parents, depth = stack.pop()
+        suite_count += 1
+        if suite_count > _MAX_SUITES:
+            raise ValueError("Playwright suite count limit exceeded")
+        if depth > _MAX_JSON_DEPTH:
+            raise ValueError("Playwright suite depth limit exceeded")
         if not isinstance(suite, Mapping):
             raise ValueError("Playwright suite entries must be objects")
         title = suite.get("title")
-        next_parents = parents + ((str(title),) if isinstance(title, str) and title.strip() else ())
+        next_parents = suite_parents + ((str(title),) if isinstance(title, str) and title.strip() else ())
         raw_specs = suite.get("specs", [])
         if not isinstance(raw_specs, list):
             raise ValueError("Playwright suite specs must be a list")
@@ -957,8 +1156,12 @@ def _walk_specs(suites: object, parents: tuple[str, ...] = ()) -> list[tuple[tup
             if not isinstance(spec, Mapping):
                 raise ValueError("Playwright spec entries must be objects")
             specs.append((next_parents, spec))
+            if len(specs) > _MAX_SPECS:
+                raise ValueError("Playwright spec count limit exceeded")
         child_suites = suite.get("suites", [])
-        specs.extend(_walk_specs(child_suites, next_parents))
+        if not isinstance(child_suites, list):
+            raise ValueError("Playwright child suites must be a list")
+        stack.extend((child, next_parents, depth + 1) for child in reversed(child_suites))
     return specs
 
 
@@ -973,6 +1176,9 @@ def _ingest_playwright_results(
     observations: list[dict[str, Any]] = []
     profile_counts: dict[str, dict[str, int]] = {}
     browser_counts: dict[str, dict[str, int]] = {}
+    test_count = 0
+    result_count = 0
+    attachment_count = 0
 
     for explicit_profile, result_path in inputs:
         payload = _load_playwright_json(result_path)
@@ -1001,8 +1207,26 @@ def _ingest_playwright_results(
             full_title = " > ".join((*parents, title))
             safe_title = _sanitize_text(full_title, checkout_roots=roots)
             for test in tests:
+                test_count += 1
+                if test_count > _MAX_TESTS:
+                    raise ValueError("Playwright test count limit exceeded")
                 if not isinstance(test, Mapping):
                     raise ValueError(f"Playwright result {result_path}: tests must be objects")
+                raw_results = test.get("results", [])
+                if not isinstance(raw_results, list):
+                    raise ValueError(f"Playwright result {result_path}: results must be a list")
+                result_count += len(raw_results)
+                if result_count > _MAX_RESULTS:
+                    raise ValueError("Playwright result-attempt count limit exceeded")
+                for raw_result in raw_results:
+                    if not isinstance(raw_result, Mapping):
+                        raise ValueError(f"Playwright result {result_path}: attempts must be objects")
+                    attachments = raw_result.get("attachments", [])
+                    if not isinstance(attachments, list):
+                        raise ValueError(f"Playwright result {result_path}: attachments must be a list")
+                    attachment_count += len(attachments)
+                    if attachment_count > _MAX_ATTACHMENTS:
+                        raise ValueError("Playwright attachment count limit exceeded")
                 project = test.get("projectName", test.get("projectId", "unknown-project"))
                 if not isinstance(project, str) or not project.strip():
                     project = "unknown-project"
@@ -1050,6 +1274,7 @@ def _ingest_playwright_results(
                         ),
                         "expected": expected,
                         "inventory_ids": issue_inventory_ids,
+                        "test_location": relative_file,
                         "test_id": test_id,
                         "title": safe_title,
                     }
@@ -1063,12 +1288,16 @@ def _normalize_issues(
     priority_by_id = {item["id"]: item["priority"] for item in inventory["items"]}
     groups: dict[str, list[dict[str, Any]]] = {}
     for event in events:
-        fingerprint = "\x00".join(
-            (
-                _fingerprint_text(event["expected"]),
-                _fingerprint_text(event["actual"]),
-            )
+        actual_fingerprint = _fingerprint_text(event["actual"])
+        components = [_fingerprint_text(event["expected"]), actual_fingerprint]
+        explicit_root = bool(
+            _EXPLICIT_ROOT_MARKER.search(actual_fingerprint)
+            or _HTTP_ROOT_MARKER.search(actual_fingerprint)
         )
+        if not explicit_root:
+            scope = sorted(event["inventory_ids"])
+            components.append(",".join(scope) if scope else event["test_location"])
+        fingerprint = "\x00".join(components)
         groups.setdefault(fingerprint, []).append(event)
 
     issues: list[dict[str, Any]] = []
@@ -1132,14 +1361,16 @@ def _load_coverage_results(
     def reject_constant(value: str) -> None:
         raise ValueError(f"non-finite JSON value {value}")
 
+    _validate_json_file(path, label="coverage results", max_bytes=_MAX_COVERAGE_JSON_BYTES)
     try:
         payload = json.loads(
             path.read_text(encoding="utf-8"),
             object_pairs_hook=strict_object,
             parse_constant=reject_constant,
         )
-    except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as exc:
+    except (OSError, UnicodeError, json.JSONDecodeError, ValueError, RecursionError) as exc:
         raise ValueError(f"coverage results {path}: cannot load: {exc}") from exc
+    _assert_json_limits(payload, label=f"coverage results {path}")
     if not isinstance(payload, Mapping) or set(payload) != {"schema_version", "items"}:
         raise ValueError("coverage results must contain exactly schema_version and items")
     if payload["schema_version"] != _COVERAGE_RESULTS_SCHEMA_VERSION:
@@ -1358,6 +1589,32 @@ def _write_json(path: Path, payload: Any) -> None:
     _atomic_write(path, json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
 
 
+def _commit_output_directory(staging: Path, destination: Path) -> None:
+    backup = destination.parent / f".{destination.name}.backup-{uuid.uuid4().hex}"
+    moved_old = False
+    try:
+        if destination.exists():
+            if not destination.is_dir() or destination.is_symlink():
+                raise ValueError("output_dir must be a directory and must not be a symlink")
+            os.replace(destination, backup)
+            moved_old = True
+        os.replace(staging, destination)
+    except BaseException:
+        if moved_old and backup.exists() and not destination.exists():
+            os.replace(backup, destination)
+        raise
+    else:
+        if backup.exists():
+            try:
+                shutil.rmtree(backup)
+            except BaseException:
+                failed_new = destination.parent / f".{destination.name}.failed-{uuid.uuid4().hex}"
+                os.replace(destination, failed_new)
+                os.replace(backup, destination)
+                shutil.rmtree(failed_new)
+                raise
+
+
 def _html_report(
     *,
     audit_id: str,
@@ -1496,56 +1753,66 @@ def build_platform_validation_report(
         for result in layer_results.values()
         for record in result["evidence"]
     )
-    _archive_evidence(evidence_records, destination)
     blocker_counts = _count_values([issue["severity"] for issue in issues])
     coverage_counts = _count_values([row["status"] for row in coverage])
     public_issues = [_public_issue(issue) for issue in issues]
 
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    staging = Path(
+        tempfile.mkdtemp(prefix=f".{destination.name}.tmp-", dir=destination.parent)
+    )
+    try:
+        _archive_evidence(evidence_records, staging)
+        sanitized_inventory = _sanitize_payload(validated_inventory)
+        _write_json(staging / "route_inventory.json", sanitized_inventory)
+        _write_json(
+            staging / "coverage_matrix.json",
+            {
+                "schema_version": _COVERAGE_SCHEMA_VERSION,
+                "audit_id": audit_id,
+                "summary": coverage_counts,
+                "items": coverage,
+            },
+        )
+        _write_json(
+            staging / "issue_ledger.json",
+            {
+                "schema_version": _ISSUE_SCHEMA_VERSION,
+                "audit_id": audit_id,
+                "revision": revision,
+                "audit_date": audit_date,
+                "baseline_status": baseline_status,
+                "summary": {
+                    "blockers": blocker_counts,
+                    "profiles": profile_counts,
+                    "browsers": browser_counts,
+                },
+                "issues": public_issues,
+            },
+        )
+        _atomic_write(
+            staging / "audit_report.html",
+            _html_report(
+                audit_id=audit_id,
+                revision=revision,
+                audit_date=audit_date,
+                baseline_status=baseline_status,
+                profile_counts=profile_counts,
+                browser_counts=browser_counts,
+                blocker_counts=blocker_counts,
+                coverage=coverage,
+                issues=public_issues,
+            ),
+        )
+        _commit_output_directory(staging, destination)
+    except BaseException:
+        if staging.exists():
+            shutil.rmtree(staging)
+        raise
     route_inventory = destination / "route_inventory.json"
     coverage_matrix = destination / "coverage_matrix.json"
     issue_ledger = destination / "issue_ledger.json"
     audit_report = destination / "audit_report.html"
-    sanitized_inventory = _sanitize_payload(validated_inventory)
-    _write_json(route_inventory, sanitized_inventory)
-    _write_json(
-        coverage_matrix,
-        {
-            "schema_version": _COVERAGE_SCHEMA_VERSION,
-            "audit_id": audit_id,
-            "summary": coverage_counts,
-            "items": coverage,
-        },
-    )
-    _write_json(
-        issue_ledger,
-        {
-            "schema_version": _ISSUE_SCHEMA_VERSION,
-            "audit_id": audit_id,
-            "revision": revision,
-            "audit_date": audit_date,
-            "baseline_status": baseline_status,
-            "summary": {
-                "blockers": blocker_counts,
-                "profiles": profile_counts,
-                "browsers": browser_counts,
-            },
-            "issues": public_issues,
-        },
-    )
-    _atomic_write(
-        audit_report,
-        _html_report(
-            audit_id=audit_id,
-            revision=revision,
-            audit_date=audit_date,
-            baseline_status=baseline_status,
-            profile_counts=profile_counts,
-            browser_counts=browser_counts,
-            blocker_counts=blocker_counts,
-            coverage=coverage,
-            issues=public_issues,
-        ),
-    )
     return {
         "route_inventory": route_inventory,
         "coverage_matrix": coverage_matrix,
