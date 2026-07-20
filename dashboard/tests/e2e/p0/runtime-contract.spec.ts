@@ -387,6 +387,43 @@ test('match-all runtime allowlists are rejected exactly @p0 @runtime-contract', 
   ).toBe(
     'Runtime evidence allowlist rejects unanchored pattern: /runtime-contract-console-error/'
   );
+  expect(
+    captureErrorMessage(() =>
+      expectNoFatalRuntimeErrors(
+        {
+          consoleErrors: ['prefix-unexpected-error'],
+          pageErrors: [],
+          failedRequests: [],
+          unhandledApiRoutes: []
+        },
+        {
+          consoleErrors: [/^intentional$|unexpected-error$/]
+        }
+      )
+    )
+  ).toBe(
+    'Runtime evidence allowlist rejects unanchored pattern: /^intentional$|unexpected-error$/'
+  );
+  expect(
+    captureErrorMessage(() =>
+      expectNoFatalRuntimeErrors(
+        {
+          consoleErrors: ['intentional-runtime-console-error\nunexpected-tail'],
+          pageErrors: [],
+          failedRequests: [],
+          unhandledApiRoutes: []
+        },
+        {
+          consoleErrors: [/^intentional-runtime-console-error$/g]
+        }
+      )
+    )
+  ).toBe(
+    'Unexpected fatal runtime evidence:\n' +
+      'consoleErrors:\n' +
+      '- intentional-runtime-console-error\n' +
+      'unexpected-tail'
+  );
 });
 
 test('horizontal overflow helper passes for contained content @p0 @runtime-contract', async ({

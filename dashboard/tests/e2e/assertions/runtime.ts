@@ -8,9 +8,9 @@ import type {
 
 function patternMatches(pattern: RegExp, value: string): boolean {
   pattern.lastIndex = 0;
-  const matches = pattern.test(value);
+  const match = pattern.exec(value);
   pattern.lastIndex = 0;
-  return matches;
+  return match !== null && match.index === 0 && match[0].length === value.length;
 }
 
 function hasUnescapedEndAnchor(source: string): boolean {
@@ -20,6 +20,43 @@ function hasUnescapedEndAnchor(source: string): boolean {
     backslashCount += 1;
   }
   return backslashCount % 2 === 0;
+}
+
+function hasTopLevelAlternation(source: string): boolean {
+  let groupDepth = 0;
+  let inCharacterClass = false;
+  let escaped = false;
+
+  for (const character of source) {
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (character === '\\') {
+      escaped = true;
+      continue;
+    }
+    if (character === '[') {
+      inCharacterClass = true;
+      continue;
+    }
+    if (character === ']' && inCharacterClass) {
+      inCharacterClass = false;
+      continue;
+    }
+    if (inCharacterClass) continue;
+    if (character === '(') {
+      groupDepth += 1;
+      continue;
+    }
+    if (character === ')') {
+      groupDepth = Math.max(0, groupDepth - 1);
+      continue;
+    }
+    if (character === '|' && groupDepth === 0) return true;
+  }
+
+  return false;
 }
 
 function validateAllowlist(patterns: readonly RuntimeEvidencePattern[] = []): void {
@@ -34,7 +71,12 @@ function validateAllowlist(patterns: readonly RuntimeEvidencePattern[] = []): vo
     if (matchesEverySample) {
       throw new Error(`Runtime evidence allowlist rejects match-all pattern: ${pattern.toString()}`);
     }
-    if (!pattern.source.startsWith('^') || !hasUnescapedEndAnchor(pattern.source) || pattern.multiline) {
+    if (
+      !pattern.source.startsWith('^') ||
+      !hasUnescapedEndAnchor(pattern.source) ||
+      hasTopLevelAlternation(pattern.source) ||
+      pattern.multiline
+    ) {
       throw new Error(`Runtime evidence allowlist rejects unanchored pattern: ${pattern.toString()}`);
     }
   }
