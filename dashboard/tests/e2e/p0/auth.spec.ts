@@ -20,12 +20,18 @@ type AuthApiOptions = {
   authenticated?: boolean;
   user?: typeof NORMAL_USER;
   expireAdminRequests?: boolean;
+  holdLogout?: boolean;
 };
 
 async function mockAuthJourneyApi(page: Page, options: AuthApiOptions = {}) {
   let authenticated = options.authenticated ?? false;
   let currentUser = options.user ?? NORMAL_USER;
   let logoutCalls = 0;
+  let remainingAdminExpiries = options.expireAdminRequests ? 1 : 0;
+  let releaseLogoutRequest: (() => void) | undefined;
+  const logoutRelease = new Promise<void>((resolve) => {
+    releaseLogoutRequest = resolve;
+  });
   const unexpectedRequests: string[] = [];
 
   await page.route('/api/**', async (route) => {
@@ -43,23 +49,31 @@ async function mockAuthJourneyApi(page: Page, options: AuthApiOptions = {}) {
 
     if (url.pathname === '/api/auth/login') {
       const credentials = request.postDataJSON() as { username?: string; password?: string };
-      if (credentials.username !== 'analyst' || credentials.password !== 'secret') {
+      const loginUser = credentials.username === 'admin' ? ADMIN_USER : NORMAL_USER;
+      if (!['admin', 'analyst'].includes(String(credentials.username)) || credentials.password !== 'secret') {
         await route.fulfill({ status: 401, json: { detail: 'invalid credentials' } });
         return;
       }
       authenticated = true;
-      currentUser = NORMAL_USER;
+      currentUser = loginUser;
       await route.fulfill({ json: { user: currentUser } });
       return;
     }
 
-    if (url.pathname === '/api/admin/users' && options.expireAdminRequests) {
+    if (url.pathname === '/api/admin/users' && remainingAdminExpiries > 0) {
+      remainingAdminExpiries -= 1;
       await route.fulfill({ status: 401, json: { detail: 'session expired' } });
+      return;
+    }
+
+    if (url.pathname === '/api/admin/users') {
+      await route.fulfill({ json: { items: [] } });
       return;
     }
 
     if (url.pathname === '/api/auth/logout') {
       logoutCalls += 1;
+      if (options.holdLogout) await logoutRelease;
       authenticated = false;
       await route.fulfill({ json: { status: 'ok' } });
       return;
@@ -192,6 +206,7 @@ async function mockAuthJourneyApi(page: Page, options: AuthApiOptions = {}) {
 
   return {
     logoutCallCount: () => logoutCalls,
+    releaseLogout: () => releaseLogoutRequest?.(),
     unexpectedRequests
   };
 }
@@ -238,5 +253,37 @@ test('a credentialed API 401 expires the active session and returns to LoginView
   await page.getByRole('button', { name: 'Open User Management workspace' }).click();
 
   await expect(page.getByRole('heading', { name: '登录' })).toBeVisible();
+  expect(authApi.unexpectedRequests).toEqual([]);
+});
+
+test('serializes relogin behind an expired in-flight logout', async ({ page }) => {
+  const authApi = await mockAuthJourneyApi(page, {
+    authenticated: true,
+    user: ADMIN_USER,
+    expireAdminRequests: true,
+    holdLogout: true
+  });
+  await page.goto('/');
+
+  await expect(page.locator('.platform-topbar')).toContainText('Platform Admin');
+  await page.getByRole('button', { name: '退出登录' }).click();
+  await page.getByRole('button', { name: 'Open User Management workspace' }).click();
+
+  const loginButton = page.getByRole('button', { name: '登录' });
+  await expect(page.getByRole('heading', { name: '登录' })).toBeVisible();
+  await expect(loginButton).toBeDisabled();
+  await expect(loginButton).toHaveText('正在退出…');
+
+  authApi.releaseLogout();
+  await expect(loginButton).toBeEnabled();
+  await page.getByLabel('用户名').fill('admin');
+  await page.getByLabel('密码').fill('secret');
+  await loginButton.click();
+
+  await expect(page.locator('.platform-topbar')).toContainText('Platform Admin');
+  await page.getByRole('button', { name: 'Open User Management workspace' }).click();
+  await expect(page.getByRole('heading', { name: '用户管理' })).toBeVisible();
+  await page.reload();
+  await expect(page.locator('.platform-topbar')).toContainText('Platform Admin');
   expect(authApi.unexpectedRequests).toEqual([]);
 });

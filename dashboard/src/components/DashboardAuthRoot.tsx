@@ -13,6 +13,7 @@ export function DashboardAuthRoot() {
   const [logoutPending, setLogoutPending] = useState(false);
   const loginInFlight = useRef(false);
   const logoutInFlight = useRef(false);
+  const logoutRequestSequence = useRef(0);
   const authGeneration = useRef(0);
 
   useEffect(() => {
@@ -25,9 +26,7 @@ export function DashboardAuthRoot() {
         setError('');
         setLoginPending(false);
         setLogoutError('');
-        setLogoutPending(false);
         loginInFlight.current = false;
-        logoutInFlight.current = false;
         setLoading(false);
       }
     };
@@ -57,9 +56,10 @@ export function DashboardAuthRoot() {
     return (
       <LoginView
         error={error}
-        pending={loginPending}
+        pending={loginPending || logoutPending}
+        pendingLabel={logoutPending ? '正在退出…' : '登录中…'}
         onSubmit={(username, password) => {
-          if (loginInFlight.current) return;
+          if (loginInFlight.current || logoutInFlight.current) return;
 
           loginInFlight.current = true;
           const generation = authGeneration.current + 1;
@@ -90,6 +90,8 @@ export function DashboardAuthRoot() {
     if (logoutInFlight.current) return;
 
     logoutInFlight.current = true;
+    const logoutRequestId = logoutRequestSequence.current + 1;
+    logoutRequestSequence.current = logoutRequestId;
     const generation = authGeneration.current + 1;
     authGeneration.current = generation;
     setLogoutError('');
@@ -107,7 +109,7 @@ export function DashboardAuthRoot() {
         }
       })
       .finally(() => {
-        if (generation === authGeneration.current) {
+        if (logoutRequestId === logoutRequestSequence.current) {
           logoutInFlight.current = false;
           setLogoutPending(false);
         }

@@ -1,10 +1,11 @@
 type LoginViewProps = {
   error: string;
   pending: boolean;
+  pendingLabel: string;
   onSubmit: (username: string, password: string) => void;
 };
 
-export function LoginView({ error, pending, onSubmit }: LoginViewProps) {
+export function LoginView({ error, pending, pendingLabel, onSubmit }: LoginViewProps) {
   return (
     <main className="login-shell">
       <section className="login-panel">
@@ -27,7 +28,7 @@ export function LoginView({ error, pending, onSubmit }: LoginViewProps) {
           </label>
           {error ? <p role="alert">{error}</p> : null}
           <button type="submit" aria-label="登录" disabled={pending}>
-            {pending ? '登录中…' : '登录'}
+            {pending ? pendingLabel : '登录'}
           </button>
         </form>
       </section>

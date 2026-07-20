@@ -212,6 +212,76 @@ describe('DashboardAuthRoot', () => {
     await waitFor(() => expect(screen.getByRole('heading', { name: '登录' })).toBeVisible());
   });
 
+  it('blocks relogin after expiry until the pending logout succeeds', async () => {
+    type LoginPayload = {
+      user: { user_id: string; username: string; display_name: string; role: 'user'; is_active: boolean };
+    };
+    let resolveLogout: ((value: { status: string }) => void) | undefined;
+    const logoutRequest = new Promise<{ status: string }>((resolve) => {
+      resolveLogout = resolve;
+    });
+    apiMocks.fetchCurrentUser.mockResolvedValueOnce({
+      user: { user_id: 'user:1', username: 'admin', display_name: 'Admin', role: 'admin', is_active: true }
+    });
+    apiMocks.logoutDashboardUser.mockReturnValueOnce(logoutRequest);
+    apiMocks.loginDashboardUser.mockResolvedValueOnce({
+      user: { user_id: 'user:2', username: 'analyst', display_name: 'Analyst', role: 'user', is_active: true }
+    } satisfies LoginPayload);
+
+    render(<DashboardAuthRoot />);
+    fireEvent.click(await screen.findByRole('button', { name: '退出登录' }));
+    window.dispatchEvent(new CustomEvent('dashboard-auth-expired'));
+
+    const loginButton = await screen.findByRole('button', { name: '登录' });
+    expect(loginButton).toBeDisabled();
+    expect(loginButton).toHaveTextContent('正在退出…');
+    fireEvent.click(loginButton);
+    expect(apiMocks.loginDashboardUser).not.toHaveBeenCalled();
+
+    resolveLogout?.({ status: 'ok' });
+    await waitFor(() => expect(screen.getByRole('button', { name: '登录' })).toBeEnabled());
+
+    fireEvent.change(screen.getByLabelText('用户名'), { target: { value: 'analyst' } });
+    fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'secret' } });
+    fireEvent.click(screen.getByRole('button', { name: '登录' }));
+
+    expect(await screen.findByText('Official Dashboard analyst')).toBeVisible();
+    expect(apiMocks.loginDashboardUser).toHaveBeenCalledTimes(1);
+  });
+
+  it('releases the relogin gate after stale logout rejection without carrying its error forward', async () => {
+    let rejectLogout: ((reason: Error) => void) | undefined;
+    const logoutRequest = new Promise<{ status: string }>((_resolve, reject) => {
+      rejectLogout = reject;
+    });
+    apiMocks.fetchCurrentUser.mockResolvedValueOnce({
+      user: { user_id: 'user:1', username: 'admin', display_name: 'Admin', role: 'admin', is_active: true }
+    });
+    apiMocks.logoutDashboardUser.mockReturnValueOnce(logoutRequest);
+    apiMocks.loginDashboardUser.mockResolvedValueOnce({
+      user: { user_id: 'user:2', username: 'analyst', display_name: 'Analyst', role: 'user', is_active: true }
+    });
+
+    render(<DashboardAuthRoot />);
+    fireEvent.click(await screen.findByRole('button', { name: '退出登录' }));
+    window.dispatchEvent(new CustomEvent('dashboard-auth-expired'));
+
+    expect(await screen.findByRole('button', { name: '登录' })).toBeDisabled();
+    await act(async () => {
+      rejectLogout?.(new Error('late logout failure'));
+      await expect(logoutRequest).rejects.toThrow('late logout failure');
+    });
+
+    await waitFor(() => expect(screen.getByRole('button', { name: '登录' })).toBeEnabled());
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('用户名'), { target: { value: 'analyst' } });
+    fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'secret' } });
+    fireEvent.click(screen.getByRole('button', { name: '登录' }));
+
+    expect(await screen.findByText('Official Dashboard analyst')).toBeVisible();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   it('returns to login when the active session expires after the dashboard has rendered', async () => {
     apiMocks.fetchCurrentUser.mockResolvedValueOnce({
       user: { user_id: 'user:1', username: 'admin', display_name: 'Admin', role: 'admin', is_active: true }
@@ -249,7 +319,7 @@ describe('DashboardAuthRoot', () => {
     expect(screen.queryByText('Official Dashboard admin')).not.toBeInTheDocument();
   });
 
-  it('ignores a stale logout result after session expiry and a new login', async () => {
+  it('keeps LoginView stable when an expired logout settles before a new login', async () => {
     let resolveLogout: ((value: { status: string }) => void) | undefined;
     const logoutRequest = new Promise<{ status: string }>((resolve) => {
       resolveLogout = resolve;
@@ -266,17 +336,19 @@ describe('DashboardAuthRoot', () => {
     fireEvent.click(await screen.findByRole('button', { name: '退出登录' }));
     window.dispatchEvent(new CustomEvent('dashboard-auth-expired'));
 
-    fireEvent.change(await screen.findByLabelText('用户名'), { target: { value: 'analyst' } });
-    fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'secret' } });
-    fireEvent.click(screen.getByRole('button', { name: '登录' }));
-    expect(await screen.findByText('Official Dashboard analyst')).toBeVisible();
-
+    expect(await screen.findByRole('button', { name: '登录' })).toBeDisabled();
     await act(async () => {
       resolveLogout?.({ status: 'ok' });
       await logoutRequest;
     });
 
-    expect(screen.getByText('Official Dashboard analyst')).toBeVisible();
+    await waitFor(() => expect(screen.getByRole('button', { name: '登录' })).toBeEnabled());
+    expect(screen.getByRole('heading', { name: '登录' })).toBeVisible();
+    expect(screen.queryByText('Official Dashboard admin')).not.toBeInTheDocument();
+    fireEvent.change(await screen.findByLabelText('用户名'), { target: { value: 'analyst' } });
+    fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'secret' } });
+    fireEvent.click(screen.getByRole('button', { name: '登录' }));
+    expect(await screen.findByText('Official Dashboard analyst')).toBeVisible();
     expect(screen.queryByRole('heading', { name: '登录' })).not.toBeInTheDocument();
   });
 });
