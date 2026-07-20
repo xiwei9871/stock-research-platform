@@ -7,6 +7,7 @@ from typing import Any, Protocol
 
 from stock_research.research_project_v2.canonical import canonical_bytes, content_sha256
 from stock_research.research_project_v2_1.schema import validate_v2_1_schema_payload
+from stock_research.research_project_v2.errors import ResearchProjectV2Error
 
 
 @dataclass(frozen=True)
@@ -33,6 +34,24 @@ class AcquisitionProviderResult:
 
 class AcquisitionProvider(Protocol):
     def acquire(self, *args: Any, **kwargs: Any) -> AcquisitionProviderResult: ...
+
+
+class UnavailableSearchDiscoveryProvider:
+    """Explicit unavailable adapter; it never fabricates discovery candidates."""
+
+    status = "unavailable"
+    failure_code = "search_provider_error"
+
+    def search(self, query: dict[str, Any]) -> list[Any]:
+        raise ResearchProjectV2Error(
+            "Search discovery provider is unavailable",
+            code="RESEARCH_PROJECT_V2_1_ACQUISITION_PROVIDER_UNAVAILABLE",
+            details={
+                "provider": "search_discovery",
+                "query_id": query.get("query_id"),
+                "failure_code": self.failure_code,
+            },
+        )
 
 
 def _attempt_identity(core: dict[str, Any]) -> tuple[str, str]:
@@ -139,8 +158,6 @@ def validate_acquisition_attempt(payload: dict[str, Any]) -> dict[str, Any]:
     }
     expected_id, expected_hash = _attempt_identity(core)
     if copied["attempt_id"] != expected_id or copied["content_hash"] != expected_hash:
-        from stock_research.research_project_v2.errors import ResearchProjectV2Error
-
         raise ResearchProjectV2Error(
             "Acquisition attempt identity mismatch",
             code="RESEARCH_PROJECT_V2_1_ACQUISITION_IMMUTABILITY_VIOLATION",
