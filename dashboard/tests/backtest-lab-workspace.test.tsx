@@ -114,6 +114,14 @@ function deferredRunResult() {
   return { promise, resolve, reject };
 }
 
+function deferredStrategies() {
+  let resolve!: (strategies: StrategyCatalogItem[]) => void;
+  const promise = new Promise<StrategyCatalogItem[]>((promiseResolve) => {
+    resolve = promiseResolve;
+  });
+  return { promise, resolve };
+}
+
 describe('BacktestLabWorkspace', () => {
   beforeEach(() => {
     apiMocks.fetchBacktestStrategies.mockResolvedValue(makeStrategies());
@@ -208,6 +216,32 @@ describe('BacktestLabWorkspace', () => {
     expect(within(publication).getByTestId('strategy-total-return')).toHaveTextContent('+49.12%');
     expect(apiMocks.runBacktest).not.toHaveBeenCalled();
     expect(apiMocks.runFreshBacktest).not.toHaveBeenCalled();
+  });
+
+  it('fails closed for an unknown deep-linked strategy instead of selecting the first official strategy', async () => {
+    render(<BacktestLabWorkspace initialStrategyId="unknown_strategy" />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('未知策略 unknown_strategy');
+    expect(screen.getByLabelText('strategy')).toHaveValue('');
+    expect(screen.queryByRole('region', { name: /正式发布合同/ })).not.toBeInTheDocument();
+    expect(apiMocks.runBacktest).not.toHaveBeenCalled();
+    expect(apiMocks.runFreshBacktest).not.toHaveBeenCalled();
+  });
+
+  it('ignores an older catalog response after the deep-linked strategy changes', async () => {
+    const firstCatalog = deferredStrategies();
+    const secondCatalog = deferredStrategies();
+    apiMocks.fetchBacktestStrategies
+      .mockReturnValueOnce(firstCatalog.promise)
+      .mockReturnValueOnce(secondCatalog.promise);
+    const view = render(<BacktestLabWorkspace initialStrategyId="lhb_shortline" />);
+
+    view.rerender(<BacktestLabWorkspace initialStrategyId="mid_trend" />);
+    await act(async () => secondCatalog.resolve(makeStrategies()));
+    await waitFor(() => expect(screen.getByLabelText('strategy')).toHaveValue('mid_trend'));
+
+    await act(async () => firstCatalog.resolve(makeStrategies()));
+    expect(screen.getByLabelText('strategy')).toHaveValue('mid_trend');
   });
 
   it('runs the default LHB combo backtest with default dates and parameters', async () => {

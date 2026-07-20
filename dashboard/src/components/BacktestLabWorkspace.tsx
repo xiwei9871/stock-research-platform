@@ -132,37 +132,53 @@ export function BacktestLabWorkspace({
   const [isRunning, setIsRunning] = useState(false);
   const [isComparing, setIsComparing] = useState(false);
   const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [strategySelectionError, setStrategySelectionError] = useState<string | null>(null);
   const [runError, setRunError] = useState<string | null>(null);
   const mountedRef = useRef(false);
+  const catalogRequestIdRef = useRef(0);
   const runRequestIdRef = useRef(0);
 
   useEffect(() => {
     mountedRef.current = true;
+    const requestId = catalogRequestIdRef.current + 1;
+    catalogRequestIdRef.current = requestId;
     setIsCatalogLoading(true);
     setCatalogError(null);
+    setStrategySelectionError(null);
+    setStrategies([]);
+    setStrategyId('');
 
     fetchBacktestStrategies()
       .then((rows) => {
-        if (!mountedRef.current) {
+        if (!mountedRef.current || catalogRequestIdRef.current !== requestId) {
           return;
         }
         setStrategies(rows);
-        setStrategyId(
-          rows.find(
-            (row) =>
-              row.strategy_id === initialStrategyId &&
-              row.status === 'runnable' &&
-              DEFAULT_COMBO_STRATEGY_IDS.has(row.strategy_id)
-          )?.strategy_id ??
-            rows.find((row) => row.status === 'runnable' && DEFAULT_COMBO_STRATEGY_IDS.has(row.strategy_id))?.strategy_id ??
-            rows.find((row) => row.status === 'runnable')?.strategy_id ??
-            rows[0]?.strategy_id ??
-            DEFAULT_STRATEGY_ID
-        );
+        const explicitStrategy =
+          initialStrategyId === undefined
+            ? null
+            : rows.find(
+                (row) =>
+                  row.strategy_id === initialStrategyId &&
+                  row.status === 'runnable' &&
+                  DEFAULT_COMBO_STRATEGY_IDS.has(row.strategy_id)
+              );
+        if (initialStrategyId !== undefined && !explicitStrategy) {
+          setStrategyId('');
+          setStrategySelectionError(`未知策略 ${initialStrategyId}`);
+        } else {
+          setStrategyId(
+            explicitStrategy?.strategy_id ??
+              rows.find((row) => row.status === 'runnable' && DEFAULT_COMBO_STRATEGY_IDS.has(row.strategy_id))?.strategy_id ??
+              rows.find((row) => row.status === 'runnable')?.strategy_id ??
+              rows[0]?.strategy_id ??
+              DEFAULT_STRATEGY_ID
+          );
+        }
         setIsCatalogLoading(false);
       })
       .catch((err: unknown) => {
-        if (!mountedRef.current) {
+        if (!mountedRef.current || catalogRequestIdRef.current !== requestId) {
           return;
         }
         setCatalogError(err instanceof Error ? err.message : String(err));
@@ -190,7 +206,8 @@ export function BacktestLabWorkspace({
     maxPositions > 0 &&
     maxPositions <= 100;
   const canRun = selectedStrategy?.status === 'runnable' && hasValidConfig && !isRunning && !isComparing;
-  const canCompare = runnableStrategies.length > 0 && hasValidConfig && !isRunning && !isComparing;
+  const canCompare =
+    !strategySelectionError && runnableStrategies.length > 0 && hasValidConfig && !isRunning && !isComparing;
   const completedComparisonCount = comparisonRows.filter((row) => row.status !== 'running').length;
   const runDisabledReason =
     selectedStrategy && selectedStrategy.status !== 'runnable'
@@ -210,6 +227,7 @@ export function BacktestLabWorkspace({
 
   const updateStrategyId = (nextStrategyId: string) => {
     setStrategyId(nextStrategyId);
+    setStrategySelectionError(null);
     invalidateRun();
   };
 
@@ -368,7 +386,10 @@ export function BacktestLabWorkspace({
         <label>
           <span>Strategy</span>
           <select aria-label="strategy" value={strategyId} onChange={(event) => updateStrategyId(event.target.value)}>
-            {strategies.length === 0 ? <option value={DEFAULT_STRATEGY_ID}>manual_v1_topn_rotation</option> : null}
+            {strategyId === '' ? <option value="">未选择策略</option> : null}
+            {strategies.length === 0 && strategyId !== '' ? (
+              <option value={DEFAULT_STRATEGY_ID}>manual_v1_topn_rotation</option>
+            ) : null}
             {strategies.map((strategy) => (
               <option key={strategy.strategy_id} value={strategy.strategy_id}>
                 {strategy.strategy_name}
@@ -455,6 +476,7 @@ export function BacktestLabWorkspace({
       </section>
 
       {catalogError ? <p className="error-text">{catalogError}</p> : null}
+      {strategySelectionError ? <p role="alert" className="error-text">{strategySelectionError}</p> : null}
       {runError ? <p className="error-text">{runError}</p> : null}
 
       {selectedStrategy ? (

@@ -1,4 +1,5 @@
 import math
+import re
 import time
 from copy import deepcopy
 from datetime import date, datetime, timezone
@@ -558,6 +559,13 @@ def _validate_eod_publication_contract(
         return "contract_mismatch", "performance date invalid or after manifest date"
 
     metadata = module.get("metadata") if isinstance(module.get("metadata"), Mapping) else {}
+    publish_id = metadata.get("publish_id")
+    if (
+        not isinstance(publish_id, str)
+        or publish_id in {"", ".", ".."}
+        or re.fullmatch(r"[A-Za-z0-9._-]+", publish_id) is None
+    ):
+        return "contract_mismatch", "publish id missing or invalid"
     actual = metadata.get("publication_identity")
     summary_identity = summary.get("publication_identity")
     if not isinstance(actual, Mapping) or not isinstance(summary_identity, Mapping):
@@ -590,6 +598,8 @@ def _validate_eod_publication_contract(
             and container.get("artifact_version") != ARTIFACT_VERSION
         ):
             return "contract_mismatch", f"{location} artifact version mismatch"
+        if "publish_id" in container and container.get("publish_id") != publish_id:
+            return "contract_mismatch", f"{location} publish id mismatch"
     if metadata.get("identity_schema_version") != expected["identity_schema_version"]:
         return "contract_mismatch", "identity schema version missing"
     if metadata.get("artifact_version") != ARTIFACT_VERSION:
@@ -605,7 +615,7 @@ def _validate_eod_publication_contract(
     if str(output_manifest_path or "") != str(manifest_path or ""):
         return "contract_mismatch", "mixed publication manifest paths"
     try:
-        parse_publication_manifest_path(
+        parsed_manifest = parse_publication_manifest_path(
             manifest_path,
             expected_strategy_id=strategy_id,
             expected_trade_date=manifest_trade_date,
@@ -616,6 +626,8 @@ def _validate_eod_publication_contract(
         )
     except ValueError:
         return "contract_mismatch", "publication manifest path mismatch"
+    if parsed_manifest.publish_id != publish_id:
+        return "contract_mismatch", "publish id does not match publication manifest path"
 
     legacy_status = _validate_eod_summary_contract(strategy_id, dict(summary))
     if legacy_status is None:

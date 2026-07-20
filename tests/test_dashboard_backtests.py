@@ -556,6 +556,7 @@ def test_lhb_stale_performance_does_not_publish_latest_day_zero_return(monkeypat
                 "publication_identity": identity,
                 "identity_schema_version": "strategy_publication_identity_v1",
                 "artifact_version": "strategy_artifact_v1",
+                "publish_id": "publish-1",
                 "publication_manifest_path": (
                     "/srv/outputs/research/strategy_daily_eod/2026-06-29/strategy_runs/"
                     "lhb_shortline/publish-1/publication_manifest.json"
@@ -724,9 +725,9 @@ def test_latest_eod_metrics_fail_closed_per_strategy_for_publication_identity(tm
             "metadata": {
                 "publication_identity": identity,
                 "identity_schema_version": identity["identity_schema_version"],
-                    "artifact_version": "strategy_artifact_v1",
-                    "publish_id": "publish-1",
-                    "publication_manifest_path": str(manifest_path),
+                "artifact_version": "strategy_artifact_v1",
+                "publish_id": "publish-1",
+                "publication_manifest_path": str(manifest_path),
                 "output_paths": {"publication_manifest_path": str(manifest_path)},
                 "summary": summary,
             },
@@ -821,3 +822,46 @@ def test_latest_eod_metrics_fail_closed_per_strategy_for_publication_identity(tm
             invalid_performance_date,
             invalid_performance_date["metadata"]["summary"],
         )[0] == "contract_mismatch"
+
+    original_mid_trend = modules["mid_trend"]
+    for label, publish_id, reason_fragment in (
+        ("missing", None, "missing or invalid"),
+        ("unsafe", "../publish-1", "missing or invalid"),
+        ("reserved", "..", "missing or invalid"),
+        ("path_mismatch", "publish-2", "does not match"),
+    ):
+        invalid_publish_id = copy.deepcopy(original_mid_trend)
+        if publish_id is None:
+            del invalid_publish_id["metadata"]["publish_id"]
+        else:
+            invalid_publish_id["metadata"]["publish_id"] = publish_id
+        status, reason = backtests._validate_eod_publication_contract(
+            "mid_trend",
+            invalid_publish_id,
+            invalid_publish_id["metadata"]["summary"],
+        )
+        assert status == "contract_mismatch", label
+        assert reason_fragment in reason, label
+
+        modules["mid_trend"] = invalid_publish_id
+        failed_closed = backtests._with_latest_eod_strategy_metrics(
+            {
+                "strategy_id": "mid_trend",
+                "strategy_name": "Mid Trend Combo",
+                "latest_metrics": {},
+            }
+        )["latest_metrics"]
+        assert failed_closed["contract_status"] == "contract_mismatch", label
+        assert failed_closed["publish_id"] is None, label
+        assert "total_return_pct" not in failed_closed, label
+    modules["mid_trend"] = original_mid_trend
+
+    conflicting_publish_identity = copy.deepcopy(original_mid_trend)
+    conflicting_publish_identity["metadata"]["summary"]["publish_id"] = "publish-2"
+    status, reason = backtests._validate_eod_publication_contract(
+        "mid_trend",
+        conflicting_publish_identity,
+        conflicting_publish_identity["metadata"]["summary"],
+    )
+    assert status == "contract_mismatch"
+    assert "publish" in reason

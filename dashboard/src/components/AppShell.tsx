@@ -241,9 +241,9 @@ function searchQueryFromHistoryState() {
 
 const OFFICIAL_STRATEGY_IDS = new Set(['lhb_shortline', 'mid_trend', 'tech_bottleneck']);
 
-function officialStrategyIdFromSearch(search: string): string | undefined {
-  const strategyId = new URLSearchParams(search).get('strategy_id') ?? '';
-  return OFFICIAL_STRATEGY_IDS.has(strategyId) ? strategyId : undefined;
+function strategyIdFromSearch(search: string): string | undefined {
+  const params = new URLSearchParams(search);
+  return params.has('strategy_id') ? (params.get('strategy_id') ?? '') : undefined;
 }
 
 function historyStateFields() {
@@ -336,7 +336,7 @@ export function AppShell({ currentUser: _currentUser, onLogout, logoutPending = 
   );
   const [initialStrategyId, setInitialStrategyId] = useState(() =>
     typeof window !== 'undefined' && initialPlatformLocation.workspace === 'strategyLab'
-      ? officialStrategyIdFromSearch(window.location.search)
+      ? strategyIdFromSearch(window.location.search)
       : undefined
   );
   const [displayTradeDate, setDisplayTradeDate] = useState(FALLBACK_DISPLAY_TRADE_DATE);
@@ -385,7 +385,7 @@ export function AppShell({ currentUser: _currentUser, onLogout, logoutPending = 
         }
       }
       setInitialStrategyId(
-        nextLocation.workspace === 'strategyLab' ? officialStrategyIdFromSearch(window.location.search) : undefined
+        nextLocation.workspace === 'strategyLab' ? strategyIdFromSearch(window.location.search) : undefined
       );
       setGlobalSearchQuery(nextLocation.workspace === 'home' ? searchQueryFromHistoryState() : '');
       setWorkspaceMode(workspaceModeForCurrentUser(nextLocation.workspace, currentUser));

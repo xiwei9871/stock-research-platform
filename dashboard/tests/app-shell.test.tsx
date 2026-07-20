@@ -3310,6 +3310,18 @@ describe('dashboard app shell', () => {
     expect(apiMocks.runBacktest).not.toHaveBeenCalled();
   });
 
+  it('preserves an unknown strategy deep link and fails closed without selecting an official strategy', async () => {
+    window.history.replaceState({}, '', '/strategy-lab?strategy_id=unknown_strategy');
+
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('未知策略 unknown_strategy');
+    expect(window.location.pathname).toBe('/strategy-lab');
+    expect(window.location.search).toBe('?strategy_id=unknown_strategy');
+    expect(screen.getByLabelText('strategy')).toHaveValue('');
+    expect(apiMocks.runBacktest).not.toHaveBeenCalled();
+  });
+
   it('supports keyboard navigation between Strategy Lab tabs', async () => {
     render(<AppShell currentUser={TEST_ADMIN_USER} />);
     const navigation = within(screen.getByRole('complementary', { name: 'Workspace navigation' }));

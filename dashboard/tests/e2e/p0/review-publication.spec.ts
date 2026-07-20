@@ -299,3 +299,23 @@ test('official publication identity is stable across home, strategy deep links, 
   await expect(page.getByText('+175.29%', { exact: true })).toHaveCount(0);
   await expect(runRequests).toEqual([]);
 });
+
+test('unknown strategy deep links fail closed without selecting or running an official strategy @p0 @mock @publication', async ({
+  page
+}) => {
+  const runRequests: string[] = [];
+  page.on('request', (request) => {
+    const url = new URL(request.url());
+    if (request.method() === 'POST' && url.pathname.startsWith('/api/backtests/')) {
+      runRequests.push(`${request.method()} ${url.pathname}`);
+    }
+  });
+
+  await page.goto('/strategy-lab?strategy_id=unknown_strategy');
+
+  await expect(page).toHaveURL(/\/strategy-lab\?strategy_id=unknown_strategy$/);
+  await expect(page.getByRole('alert')).toHaveText('未知策略 unknown_strategy');
+  await expect(page.getByLabel('strategy', { exact: true })).toHaveValue('');
+  await expect(page.getByRole('region', { name: /正式发布合同/ })).toHaveCount(0);
+  await expect(runRequests).toEqual([]);
+});
