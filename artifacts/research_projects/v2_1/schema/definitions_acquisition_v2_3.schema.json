@@ -1,0 +1,183 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "definitions_acquisition_v2_3.schema.json",
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "id24": {"type": "string", "pattern": "^[A-Za-z_]+:[a-f0-9]{24}$"},
+    "string_array": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "failure_code": {
+      "enum": [
+        "dns_failure", "connection_refused", "connection_timeout", "proxy_unreachable",
+        "proxy_auth_required", "tls_failure", "http_error", "rate_limited",
+        "search_provider_error", "search_auth_error", "search_quota_exceeded",
+        "robots_disallowed", "login_required", "paywalled", "browser_runtime_unavailable",
+        "javascript_required", "invalid_mime_type", "empty_content", "checksum_failure",
+        "unsupported_format", "manually_unavailable", "security_policy_blocked", "unknown_failure"
+      ]
+    },
+    "failure_details": {
+      "type": "object",
+      "required": ["policy_name", "policy_stage", "target_host", "resolved_address_class", "peer_address_class", "redirect_hop", "proxy_mode", "blocked_reason"],
+      "properties": {
+        "policy_name": {"type": "string", "minLength": 1},
+        "policy_stage": {"type": "string", "minLength": 1},
+        "target_host": {"type": "string", "minLength": 1},
+        "resolved_address_class": {"enum": ["public", "private", "loopback", "link_local", "reserved", "mixed", "unknown"]},
+        "peer_address_class": {"enum": ["public", "private", "loopback", "link_local", "reserved", "unknown"]},
+        "redirect_hop": {"type": "integer", "minimum": 0},
+        "proxy_mode": {"enum": ["direct", "environment_proxy", "explicit_proxy", "local_file", "browser"]},
+        "blocked_reason": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "acquisition_attempt": {
+      "type": "object",
+      "required": ["attempt_id", "project_id", "research_version_context", "requirement_id", "candidate_id", "provider", "request_mode", "proxy_mode", "requested_url", "resolved_url", "attempted_at", "completed_at", "elapsed_ms", "status", "failure_code", "http_status", "redirect_chain", "content_type", "bytes_received", "retry_count", "raw_artifact_id", "diagnostic_summary", "failure_details", "provenance", "content_hash"],
+      "properties": {
+        "attempt_id": {"type": "string", "pattern": "^acquisition_attempt:[a-f0-9]{24}$"},
+        "project_id": {"type": "string", "minLength": 1},
+        "research_version_context": {"type": "string", "minLength": 1},
+        "requirement_id": {"type": ["string", "null"]},
+        "candidate_id": {"type": ["string", "null"]},
+        "provider": {"enum": ["local_file", "direct_http", "search_discovery", "browser"]},
+        "request_mode": {"enum": ["fetch", "import", "discovery", "render"]},
+        "proxy_mode": {"enum": ["direct", "environment_proxy", "explicit_proxy", "local_file", "browser"]},
+        "requested_url": {"type": ["string", "null"], "format": "uri"},
+        "resolved_url": {"type": ["string", "null"], "format": "uri"},
+        "attempted_at": {"type": "string", "format": "date-time"},
+        "completed_at": {"type": "string", "format": "date-time"},
+        "elapsed_ms": {"type": "integer", "minimum": 0},
+        "status": {"enum": ["acquired", "normalized", "pending_assessment", "blocked", "failed", "unavailable"]},
+        "failure_code": {"anyOf": [{"$ref": "#/$defs/failure_code"}, {"type": "null"}]},
+        "http_status": {"type": ["integer", "null"], "minimum": 100, "maximum": 599},
+        "redirect_chain": {"type": "array", "items": {"type": "string", "format": "uri"}},
+        "content_type": {"type": ["string", "null"]},
+        "bytes_received": {"type": "integer", "minimum": 0},
+        "retry_count": {"type": "integer", "minimum": 0},
+        "raw_artifact_id": {"type": ["string", "null"]},
+        "diagnostic_summary": {"type": "string", "minLength": 1},
+        "failure_details": {"anyOf": [{"$ref": "#/$defs/failure_details"}, {"type": "null"}]},
+        "provenance": {"$ref": "definitions_v2_1.schema.json#/$defs/provenance"},
+        "content_hash": {"$ref": "#/$defs/sha256"}
+      },
+      "additionalProperties": false
+    },
+    "evidence_artifact": {
+      "type": "object",
+      "required": ["evidence_artifact_id", "acquisition_attempt_id", "source_candidate_id", "source_url", "resolved_url", "source_title", "publisher", "published_at", "accessed_at", "content_type", "byte_size", "content_hash", "raw_artifact_path", "normalized_artifact_ids", "provenance", "access_status", "license_or_access_note"],
+      "properties": {
+        "evidence_artifact_id": {"type": "string", "pattern": "^evidence_artifact:[a-f0-9]{24}$"},
+        "acquisition_attempt_id": {"type": "string", "pattern": "^acquisition_attempt:[a-f0-9]{24}$"},
+        "source_candidate_id": {"type": ["string", "null"]},
+        "source_url": {"type": ["string", "null"], "format": "uri"},
+        "resolved_url": {"type": ["string", "null"], "format": "uri"},
+        "source_title": {"type": "string", "minLength": 1},
+        "publisher": {"type": ["string", "null"]},
+        "published_at": {"type": ["string", "null"], "format": "date-time"},
+        "accessed_at": {"type": "string", "format": "date-time"},
+        "content_type": {"enum": ["application/pdf", "text/html", "text/plain", "text/markdown", "application/json", "text/csv", "application/vnd.docling+json", "image/png", "image/jpeg"]},
+        "byte_size": {"type": "integer", "minimum": 0, "maximum": 26214400},
+        "content_hash": {"$ref": "#/$defs/sha256"},
+        "raw_artifact_path": {"type": "string", "minLength": 1},
+        "normalized_artifact_ids": {"$ref": "#/$defs/string_array"},
+        "provenance": {"$ref": "definitions_v2_1.schema.json#/$defs/provenance"},
+        "access_status": {"enum": ["acquired", "incomplete_metadata"]},
+        "license_or_access_note": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "manual_import_request": {
+      "type": "object",
+      "required": ["import_request_id", "project_id", "research_version_context", "requirement_id", "candidate_id", "local_path", "source_title", "publisher", "original_url", "source_note", "publication_date", "imported_at", "imported_by", "actor_type", "declared_mime_type", "access_or_license_note", "locator_metadata", "metadata_status", "provenance", "content_hash"],
+      "properties": {
+        "import_request_id": {"type": "string", "pattern": "^manual_import_request:[a-f0-9]{24}$"},
+        "project_id": {"type": "string", "minLength": 1},
+        "research_version_context": {"type": "string", "minLength": 1},
+        "requirement_id": {"type": ["string", "null"]},
+        "candidate_id": {"type": ["string", "null"]},
+        "local_path": {"type": "string", "minLength": 1},
+        "source_title": {"type": "string", "minLength": 1},
+        "publisher": {"type": ["string", "null"]},
+        "original_url": {"type": ["string", "null"], "format": "uri"},
+        "source_note": {"type": ["string", "null"]},
+        "publication_date": {"type": ["string", "null"], "format": "date"},
+        "imported_at": {"type": "string", "format": "date-time"},
+        "imported_by": {"type": "string", "minLength": 1},
+        "actor_type": {"enum": ["human", "codex", "automated_pipeline", "imported"]},
+        "declared_mime_type": {"type": "string", "minLength": 1},
+        "access_or_license_note": {"type": "string", "minLength": 1},
+        "locator_metadata": {
+          "type": "object",
+          "properties": {
+            "page_locators_expected": {"type": "boolean"},
+            "section_locators_expected": {"type": "boolean"},
+            "locator_note": {"type": "string"}
+          },
+          "additionalProperties": false
+        },
+        "metadata_status": {"enum": ["complete", "incomplete_metadata"]},
+        "provenance": {"$ref": "definitions_v2_1.schema.json#/$defs/provenance"},
+        "content_hash": {"$ref": "#/$defs/sha256"}
+      },
+      "additionalProperties": false
+    },
+    "acquisition_checkpoint": {
+      "type": "object",
+      "required": ["checkpoint_id", "project_id", "research_version_context", "created_at", "attempt_ids", "raw_artifact_ids", "normalized_document_ids", "pending_assessment_artifact_ids", "failed_attempt_ids", "status", "provenance", "content_hash"],
+      "properties": {
+        "checkpoint_id": {"type": "string", "pattern": "^acquisition_checkpoint:[a-f0-9]{24}$"},
+        "project_id": {"type": "string", "minLength": 1},
+        "research_version_context": {"type": "string", "minLength": 1},
+        "created_at": {"type": "string", "format": "date-time"},
+        "attempt_ids": {"$ref": "#/$defs/string_array"},
+        "raw_artifact_ids": {"$ref": "#/$defs/string_array"},
+        "normalized_document_ids": {"$ref": "#/$defs/string_array"},
+        "pending_assessment_artifact_ids": {"$ref": "#/$defs/string_array"},
+        "failed_attempt_ids": {"$ref": "#/$defs/string_array"},
+        "status": {"enum": ["acquisition_complete", "pending_assessment", "partial", "blocked"]},
+        "provenance": {"$ref": "definitions_v2_1.schema.json#/$defs/provenance"},
+        "content_hash": {"$ref": "#/$defs/sha256"}
+      },
+      "additionalProperties": false
+    },
+    "provider_diagnostic": {
+      "type": "object",
+      "required": ["diagnostic_id", "generated_at", "dns_status", "tls_status", "direct_html_status", "direct_pdf_status", "redirect_status", "system_proxy_detected", "environment_proxy_detected", "proxy_endpoint_class", "proxy_endpoint_redacted", "requests_trust_mode", "browser_runtime_status", "search_provider_status", "available_normalizers", "security_policy_status", "checks", "provenance", "content_hash"],
+      "properties": {
+        "diagnostic_id": {"type": "string", "pattern": "^provider_diagnostic:[a-f0-9]{24}$"},
+        "generated_at": {"type": "string", "format": "date-time"},
+        "dns_status": {"enum": ["pass", "fail", "unknown"]},
+        "tls_status": {"enum": ["pass", "fail", "unknown"]},
+        "direct_html_status": {"enum": ["pass", "fail", "not_run"]},
+        "direct_pdf_status": {"enum": ["pass", "fail", "not_run"]},
+        "redirect_status": {"enum": ["pass", "fail", "not_run"]},
+        "system_proxy_detected": {"type": "boolean"},
+        "environment_proxy_detected": {"type": "boolean"},
+        "proxy_endpoint_class": {"enum": ["none", "public", "private", "mixed", "unknown"]},
+        "proxy_endpoint_redacted": {"type": ["string", "null"]},
+        "requests_trust_mode": {"enum": ["explicit_direct", "environment_proxy", "not_tested"]},
+        "browser_runtime_status": {"enum": ["available", "unavailable", "not_tested"]},
+        "search_provider_status": {"enum": ["available", "unavailable", "not_tested"]},
+        "available_normalizers": {"$ref": "#/$defs/string_array"},
+        "security_policy_status": {"enum": ["enforced", "blocked", "not_tested"]},
+        "checks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["check_id", "status", "failure_code", "summary"],
+            "properties": {
+              "check_id": {"type": "string", "minLength": 1},
+              "status": {"enum": ["pass", "fail", "blocked", "unavailable", "not_run"]},
+              "failure_code": {"anyOf": [{"$ref": "#/$defs/failure_code"}, {"type": "null"}]},
+              "summary": {"type": "string", "minLength": 1}
+            },
+            "additionalProperties": false
+          }
+        },
+        "provenance": {"$ref": "definitions_v2_1.schema.json#/$defs/provenance"},
+        "content_hash": {"$ref": "#/$defs/sha256"}
+      },
+      "additionalProperties": false
+    }
+  }
+}

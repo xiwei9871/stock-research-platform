@@ -29,6 +29,7 @@ SCHEMA_DIR = (
 ALL_SCHEMA_FILES = {
     "definitions_v2_1.schema.json",
     "definitions_v2_2.schema.json",
+    "definitions_acquisition_v2_3.schema.json",
     *SCHEMA_FILES.values(),
 }
 
@@ -923,7 +924,7 @@ def test_validation_failure_reports_deterministic_schema_and_path(sample_identit
 
 def test_all_layered_schema_files_are_valid_draft_2020_12_schemas():
     assert {path.name for path in SCHEMA_DIR.glob("*.schema.json")} == ALL_SCHEMA_FILES
-    assert len(ALL_SCHEMA_FILES) == 11
+    assert len(ALL_SCHEMA_FILES) == 17
 
     for filename in sorted(ALL_SCHEMA_FILES):
         Draft202012Validator.check_schema(
@@ -1033,6 +1034,11 @@ def test_public_registry_excludes_common_definitions():
         "research_project_index_v2_1": "research_project_index_v2_1.schema.json",
         "industry_research_version_v2_2": "industry_research_version_v2_2.schema.json",
         "industry_evidence_assessment_v2_2": "industry_evidence_assessment_v2_2.schema.json",
+        "acquisition_attempt_v2_3": "acquisition_attempt_v2_3.schema.json",
+        "evidence_artifact_v2_3": "evidence_artifact_v2_3.schema.json",
+        "manual_import_request_v2_3": "manual_import_request_v2_3.schema.json",
+        "acquisition_checkpoint_v2_3": "acquisition_checkpoint_v2_3.schema.json",
+        "provider_diagnostic_v2_3": "provider_diagnostic_v2_3.schema.json",
     }
 
 

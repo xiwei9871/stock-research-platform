@@ -39,7 +39,8 @@
     "tests/test_research_project_v2_1_acquisition_normalize.py",
     "tests/test_research_project_v2_1_acquisition_schema.py",
     "tests/test_research_project_v2_1_acquisition_storage.py",
-    "tests/test_research_project_v2_1_r2b_scope_guard.py"
+    "tests/test_research_project_v2_1_r2b_scope_guard.py",
+    "tests/test_research_project_v2_1_schema.py"
   ],
   "phase": "external_evidence_acquisition_recovery_phase_b",
   "schema_version": "1.0.0"

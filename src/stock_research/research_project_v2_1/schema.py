@@ -19,6 +19,11 @@ SCHEMA_FILES = {
     "research_project_index_v2_1": "research_project_index_v2_1.schema.json",
     "industry_research_version_v2_2": "industry_research_version_v2_2.schema.json",
     "industry_evidence_assessment_v2_2": "industry_evidence_assessment_v2_2.schema.json",
+    "acquisition_attempt_v2_3": "acquisition_attempt_v2_3.schema.json",
+    "evidence_artifact_v2_3": "evidence_artifact_v2_3.schema.json",
+    "manual_import_request_v2_3": "manual_import_request_v2_3.schema.json",
+    "acquisition_checkpoint_v2_3": "acquisition_checkpoint_v2_3.schema.json",
+    "provider_diagnostic_v2_3": "provider_diagnostic_v2_3.schema.json",
 }
 
 
@@ -55,6 +60,12 @@ def validate_v2_1_schema_payload(
     store = {"definitions_v2_1.schema.json": definitions}
     if definitions_v2_2 is not None:
         store["definitions_v2_2.schema.json"] = definitions_v2_2
+    acquisition_definitions_path = (
+        effective_layout.schema_dir / "definitions_acquisition_v2_3.schema.json"
+    )
+    if acquisition_definitions_path.exists():
+        with acquisition_definitions_path.open(encoding="utf-8") as handle:
+            store["definitions_acquisition_v2_3.schema.json"] = json.load(handle)
     resolver = RefResolver.from_schema(
         schema,
         store=store,

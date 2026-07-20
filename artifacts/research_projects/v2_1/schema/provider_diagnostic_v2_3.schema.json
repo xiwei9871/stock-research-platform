@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "provider_diagnostic_v2_3.schema.json",
+  "type": "object",
+  "required": ["schema_version", "artifact_kind", "provider_diagnostic"],
+  "properties": {
+    "schema_version": {"const": "2.3.0"},
+    "artifact_kind": {"const": "provider_diagnostic"},
+    "provider_diagnostic": {"$ref": "definitions_acquisition_v2_3.schema.json#/$defs/provider_diagnostic"}
+  },
+  "additionalProperties": false
+}

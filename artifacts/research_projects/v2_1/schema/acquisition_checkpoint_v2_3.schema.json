@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "acquisition_checkpoint_v2_3.schema.json",
+  "type": "object",
+  "required": ["schema_version", "artifact_kind", "acquisition_checkpoint"],
+  "properties": {
+    "schema_version": {"const": "2.3.0"},
+    "artifact_kind": {"const": "acquisition_checkpoint"},
+    "acquisition_checkpoint": {"$ref": "definitions_acquisition_v2_3.schema.json#/$defs/acquisition_checkpoint"}
+  },
+  "additionalProperties": false
+}
