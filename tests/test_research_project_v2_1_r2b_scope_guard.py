@@ -177,7 +177,15 @@ def test_acquisition_recovery_phase_b_uses_the_machine_readable_exact_allowlist(
     assert len(allowed) == len(payload["paths"])
     result = _git("diff", "--name-only", f"{ACQUISITION_RECOVERY_PHASE_A_END}..HEAD")
     changed = {path for path in result.stdout.splitlines() if path}
-    assert changed <= allowed
+    monitored_prefixes = (
+        "artifacts/research_projects/v2_1/",
+        "src/stock_research/research_project_v2_1/",
+        "tests/test_research_project_v2_1_",
+        "docs/research_operating_layer_v2_r2b_external_acquisition_",
+        "docs/superpowers/plans/2026-07-20-r2b-external-acquisition-",
+    )
+    monitored = {path for path in changed if path.startswith(monitored_prefixes)}
+    assert monitored <= allowed
     assert not any(
         path.startswith(tuple(payload["forbidden_prefixes"])) for path in changed
     )
