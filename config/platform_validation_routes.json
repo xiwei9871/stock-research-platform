@@ -1,0 +1,301 @@
+{
+  "schema_version": "platform_validation_inventory_v1",
+  "items": [
+    {
+      "id": "home",
+      "label": "首页",
+      "route": "/",
+      "entry_kind": "main_navigation",
+      "priority": "P0",
+      "auth": "authenticated",
+      "write_mode": "read_write",
+      "primary_apis": [
+        "/api/platform/readiness",
+        "/api/platform/summary",
+        "/api/research/queue/health",
+        "/api/research/review-actions"
+      ],
+      "layers": ["unit", "api", "playwright"],
+      "profiles": ["mock", "real", "sandbox", "audit"],
+      "daily_eod": false,
+      "owner": "platform",
+      "reachable": true,
+      "disabled_reason": null
+    },
+    {
+      "id": "review_queue",
+      "label": "复盘队列",
+      "route": "/review-queue",
+      "entry_kind": "main_navigation",
+      "priority": "P0",
+      "auth": "authenticated",
+      "write_mode": "read_only",
+      "primary_apis": [
+        "/api/review-queue",
+        "/api/review-queue/snapshots"
+      ],
+      "layers": ["unit", "api", "playwright"],
+      "profiles": ["mock", "real", "audit", "eod"],
+      "daily_eod": true,
+      "owner": "review",
+      "reachable": true,
+      "disabled_reason": null
+    },
+    {
+      "id": "daily_review",
+      "label": "每日复盘",
+      "route": "/daily-review",
+      "entry_kind": "main_navigation",
+      "priority": "P0",
+      "auth": "authenticated",
+      "write_mode": "read_only",
+      "primary_apis": ["/api/daily-review-lite"],
+      "layers": ["unit", "api", "playwright"],
+      "profiles": ["mock", "real", "audit", "eod"],
+      "daily_eod": true,
+      "owner": "review",
+      "reachable": true,
+      "disabled_reason": null
+    },
+    {
+      "id": "market_monitor",
+      "label": "市场监控",
+      "route": "/market-monitor",
+      "entry_kind": "main_navigation",
+      "priority": "P0",
+      "auth": "authenticated",
+      "write_mode": "read_only",
+      "primary_apis": [
+        "/api/market-monitor/eod",
+        "/api/market-monitor/overview",
+        "/api/market-monitor/sectors/heatmap"
+      ],
+      "layers": ["unit", "api", "playwright"],
+      "profiles": ["mock", "real", "audit", "eod"],
+      "daily_eod": true,
+      "owner": "market_data",
+      "reachable": true,
+      "disabled_reason": null
+    },
+    {
+      "id": "news",
+      "label": "新闻",
+      "route": "/news",
+      "entry_kind": "main_navigation",
+      "priority": "P1",
+      "auth": "authenticated",
+      "write_mode": "read_only",
+      "primary_apis": [
+        "/api/public-news",
+        "/api/public-news/status"
+      ],
+      "layers": ["unit", "api", "playwright"],
+      "profiles": ["real", "audit", "eod"],
+      "daily_eod": true,
+      "owner": "research_data",
+      "reachable": true,
+      "disabled_reason": null
+    },
+    {
+      "id": "research_reports",
+      "label": "研报",
+      "route": "/research-reports",
+      "entry_kind": "main_navigation",
+      "priority": "P1",
+      "auth": "authenticated",
+      "write_mode": "read_only",
+      "primary_apis": [
+        "/api/research-reports",
+        "/api/research-reports/summary"
+      ],
+      "layers": ["unit", "api", "playwright"],
+      "profiles": ["real", "audit", "eod"],
+      "daily_eod": true,
+      "owner": "research_data",
+      "reachable": true,
+      "disabled_reason": null
+    },
+    {
+      "id": "stock_workspace",
+      "label": "个股工作台",
+      "route": "/stock/{asset_id}",
+      "entry_kind": "main_navigation",
+      "priority": "P0",
+      "auth": "authenticated",
+      "write_mode": "read_write",
+      "primary_apis": [
+        "/api/assets/{asset_id}/profile",
+        "/api/assets/{asset_id}/decisions",
+        "/api/operator-decisions"
+      ],
+      "layers": ["unit", "api", "playwright"],
+      "profiles": ["mock", "real", "sandbox", "audit"],
+      "daily_eod": false,
+      "owner": "review",
+      "reachable": true,
+      "disabled_reason": null
+    },
+    {
+      "id": "watchlist",
+      "label": "观察池",
+      "route": "/watchlist",
+      "entry_kind": "main_navigation",
+      "priority": "P0",
+      "auth": "authenticated",
+      "write_mode": "read_only",
+      "primary_apis": ["/api/watchlists/{watchlist_id}"],
+      "layers": ["unit", "api", "playwright"],
+      "profiles": ["mock", "real", "audit", "eod"],
+      "daily_eod": true,
+      "owner": "strategy",
+      "reachable": true,
+      "disabled_reason": null
+    },
+    {
+      "id": "theme_research",
+      "label": "主题研究与产业目录",
+      "route": "/theme-research",
+      "entry_kind": "main_navigation",
+      "priority": "P0",
+      "auth": "authenticated",
+      "write_mode": "read_only",
+      "primary_apis": [
+        "/api/research/theme-decomposition/themes",
+        "/api/research/theme-decomposition/themes/{theme_id}/companies"
+      ],
+      "layers": ["unit", "api", "playwright"],
+      "profiles": ["mock", "real", "audit", "eod"],
+      "daily_eod": true,
+      "owner": "research",
+      "reachable": true,
+      "disabled_reason": null
+    },
+    {
+      "id": "docling_audit",
+      "label": "Docling 报告审计",
+      "route": "/research/data-to-brief/docling-90",
+      "entry_kind": "main_navigation",
+      "priority": "P1",
+      "auth": "authenticated",
+      "write_mode": "read_only",
+      "primary_apis": ["/api/research/data-to-brief/docling-90"],
+      "layers": ["unit", "api", "playwright"],
+      "profiles": ["real", "audit"],
+      "daily_eod": false,
+      "owner": "research",
+      "reachable": true,
+      "disabled_reason": null
+    },
+    {
+      "id": "tech_bottleneck_review",
+      "label": "卡脖子复盘",
+      "route": "/research/tech-bottleneck/review-universe",
+      "entry_kind": "main_navigation",
+      "priority": "P0",
+      "auth": "authenticated",
+      "write_mode": "read_write",
+      "primary_apis": [
+        "/api/research/tech-bottleneck/review-universe/summary",
+        "/api/research/tech-bottleneck/review-universe/stocks",
+        "/api/research/tech-bottleneck/review-universe/decisions"
+      ],
+      "layers": ["unit", "api", "playwright"],
+      "profiles": ["mock", "real", "sandbox", "audit"],
+      "daily_eod": false,
+      "owner": "research",
+      "reachable": true,
+      "disabled_reason": null
+    },
+    {
+      "id": "factor_lab",
+      "label": "因子实验室",
+      "route": "/factor-lab",
+      "entry_kind": "main_navigation",
+      "priority": "P1",
+      "auth": "authenticated",
+      "write_mode": "read_only",
+      "primary_apis": [
+        "/api/factors/library",
+        "/api/factors/score-preview"
+      ],
+      "layers": ["unit", "api", "playwright"],
+      "profiles": ["real", "audit"],
+      "daily_eod": false,
+      "owner": "strategy",
+      "reachable": true,
+      "disabled_reason": null
+    },
+    {
+      "id": "strategy_lab",
+      "label": "策略实验室",
+      "route": "/strategy-lab",
+      "entry_kind": "main_navigation",
+      "priority": "P0",
+      "auth": "authenticated",
+      "write_mode": "read_write",
+      "primary_apis": [
+        "/api/backtests/strategies",
+        "/api/backtests/jobs",
+        "/api/strategy-validation/runs"
+      ],
+      "layers": ["unit", "api", "playwright"],
+      "profiles": ["mock", "real", "sandbox", "audit"],
+      "daily_eod": false,
+      "owner": "strategy",
+      "reachable": true,
+      "disabled_reason": null
+    },
+    {
+      "id": "generated_reports",
+      "label": "生成报告",
+      "route": "/generated-reports",
+      "entry_kind": "main_navigation",
+      "priority": "P1",
+      "auth": "authenticated",
+      "write_mode": "read_only",
+      "primary_apis": ["/api/dashboard/overview"],
+      "layers": ["unit", "api", "playwright"],
+      "profiles": ["real", "audit", "eod"],
+      "daily_eod": true,
+      "owner": "reporting",
+      "reachable": true,
+      "disabled_reason": null
+    },
+    {
+      "id": "user_management",
+      "label": "用户管理",
+      "route": "/admin/users",
+      "entry_kind": "admin_navigation",
+      "priority": "P0",
+      "auth": "admin",
+      "write_mode": "read_write",
+      "primary_apis": [
+        "/api/admin/users",
+        "/api/admin/users/{user_id}/disable",
+        "/api/admin/users/{user_id}/enable"
+      ],
+      "layers": ["unit", "api", "playwright"],
+      "profiles": ["mock", "sandbox", "audit"],
+      "daily_eod": false,
+      "owner": "platform_admin",
+      "reachable": true,
+      "disabled_reason": null
+    },
+    {
+      "id": "data_explorer",
+      "label": "Data Explorer",
+      "route": "/data-explorer",
+      "entry_kind": "hidden",
+      "priority": "P2",
+      "auth": "authenticated",
+      "write_mode": "read_only",
+      "primary_apis": ["/api/assets/{asset_id}/profile"],
+      "layers": ["unit"],
+      "profiles": [],
+      "daily_eod": false,
+      "owner": "platform",
+      "reachable": false,
+      "disabled_reason": "Component exists but is not registered in AppShell, canonical routing, or main navigation."
+    }
+  ]
+}
