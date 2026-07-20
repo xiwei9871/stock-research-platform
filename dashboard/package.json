@@ -8,12 +8,12 @@
     "dev": "vite --host 127.0.0.1 --port 5174",
     "build": "tsc && vite build",
     "test": "vitest run --exclude \"**/*.spec.ts\"",
-    "test:e2e": "PLAYWRIGHT_PROFILE=legacy playwright test tests/*.spec.ts",
-    "test:e2e:p0": "PLAYWRIGHT_PROFILE=mock playwright test tests/e2e/p0",
-    "test:e2e:real": "PLAYWRIGHT_PROFILE=real playwright test tests/e2e/real",
-    "test:e2e:sandbox": "PLAYWRIGHT_PROFILE=sandbox playwright test tests/e2e/sandbox",
-    "test:e2e:audit": "PLAYWRIGHT_PROFILE=audit playwright test tests/e2e/p0 tests/e2e/real tests/e2e/audit tests/e2e/visual",
-    "test:e2e:eod": "PLAYWRIGHT_PROFILE=eod playwright test tests/e2e/eod"
+    "test:e2e": "cross-env PLAYWRIGHT_PROFILE=legacy playwright test",
+    "test:e2e:p0": "cross-env PLAYWRIGHT_PROFILE=mock playwright test tests/e2e/p0",
+    "test:e2e:real": "cross-env PLAYWRIGHT_PROFILE=real playwright test tests/e2e/real",
+    "test:e2e:sandbox": "cross-env PLAYWRIGHT_PROFILE=sandbox playwright test tests/e2e/sandbox",
+    "test:e2e:audit": "cross-env PLAYWRIGHT_PROFILE=audit playwright test tests/e2e/p0 tests/e2e/real tests/e2e/audit tests/e2e/visual",
+    "test:e2e:eod": "cross-env PLAYWRIGHT_PROFILE=eod playwright test tests/e2e/eod"
   },
   "dependencies": {
     "echarts": "^6.1.0",
@@ -29,6 +29,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "cross-env": "^10.1.0",
     "jsdom": "^25.0.0",
     "typescript": "^5.0.0",
     "vite": "^7.0.0",

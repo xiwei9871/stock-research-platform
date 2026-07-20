@@ -62,6 +62,9 @@ jobs:
       - name: Build dashboard
         run: pnpm build
 
+      - name: Validate Playwright project configuration
+        run: pnpm vitest run tests/playwright-projects.test.ts
+
       - name: Install Playwright Chromium
         run: pnpm exec playwright install --with-deps chromium
 
@@ -69,12 +72,12 @@ jobs:
         run: pnpm test:e2e:p0
 
       - name: Upload Playwright P0 artifacts
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-p0-mock
           path: |
             dashboard/playwright-report/mock
             dashboard/test-results/mock
-          if-no-files-found: ignore
+          if-no-files-found: warn
           retention-days: 7
