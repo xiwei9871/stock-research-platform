@@ -1649,6 +1649,64 @@ def test_issue_dedupe_separates_generic_cross_inventory_but_merges_explicit_root
     assert all(len(issue["test_ids"]) == 2 for issue in shared_roots)
 
 
+def test_unmapped_generic_dedupe_uses_stable_file_and_full_title_scope(tmp_path: Path) -> None:
+    generic = "Timeout 30000ms waiting for locator('[data-testid=result]')"
+    same_chromium = _playwright_spec(
+        title="unmapped shared test",
+        inventory_id=None,
+        project="chromium-desktop",
+        status="unexpected",
+        error=generic,
+    )
+    same_firefox = _playwright_spec(
+        title="unmapped shared test",
+        inventory_id=None,
+        project="firefox-desktop",
+        status="unexpected",
+        error=generic,
+    )
+    different_title = _playwright_spec(
+        title="unmapped different title",
+        inventory_id=None,
+        project="chromium-desktop",
+        status="unexpected",
+        error=generic,
+    )
+    different_file = _playwright_spec(
+        title="unmapped shared test",
+        inventory_id=None,
+        project="chromium-desktop",
+        status="unexpected",
+        error=generic,
+    )
+    different_file["file"] = "e2e/other-audit.spec.ts"
+    result = _write_json(
+        tmp_path / "unmapped" / "results.json",
+        _playwright_payload(
+            root=tmp_path / "root",
+            profile="real",
+            project="chromium-desktop",
+            specs=[different_file, same_firefox, different_title, same_chromium],
+        ),
+    )
+    paths = build_platform_validation_report(
+        inventory=_report_inventory(),
+        playwright_result_paths=[result],
+        output_dir=tmp_path / "unmapped-out",
+        audit_id="unmapped-scope",
+        revision="rev",
+        audit_date="2026-07-21",
+    )
+    issues = json.loads(paths["issue_ledger"].read_text(encoding="utf-8"))["issues"]
+    assert len(issues) == 3
+    assert all(issue["inventory_ids"] == ["unmapped"] for issue in issues)
+    shared = next(issue for issue in issues if len(issue["test_ids"]) == 2)
+    assert {test_id.split("::", 1)[0] for test_id in shared["test_ids"]} == {
+        "chromium-desktop",
+        "firefox-desktop",
+    }
+
+
 def test_output_directory_is_replaced_without_stale_evidence_and_failure_restores_old(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

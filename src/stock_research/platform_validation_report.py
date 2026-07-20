@@ -1308,7 +1308,7 @@ def _ingest_playwright_results(
                         "expected": expected,
                         "inventory_ids": issue_inventory_ids,
                         "root_cause": _root_cause_for_test(test),
-                        "test_location": relative_file,
+                        "test_location": f"{relative_file}::{safe_title}",
                         "test_id": test_id,
                         "title": safe_title,
                     }
@@ -1336,7 +1336,11 @@ def _normalize_issues(
         else:
             components.append(actual_fingerprint)
             scope = sorted(event["inventory_ids"])
-            components.append(",".join(scope) if scope else event["test_location"])
+            components.append(
+                event["test_location"]
+                if not scope or scope == ["unmapped"]
+                else ",".join(scope)
+            )
         fingerprint = "\x00".join(components)
         groups.setdefault(fingerprint, []).append(event)
 
