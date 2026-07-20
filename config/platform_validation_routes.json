@@ -84,14 +84,15 @@
       "entry_kind": "main_navigation",
       "priority": "P1",
       "auth": "authenticated",
-      "write_mode": "read_only",
+      "write_mode": "read_write",
       "primary_apis": [
         "/api/public-news",
-        "/api/public-news/status"
+        "/api/public-news/status",
+        "/api/public-news/refresh"
       ],
       "layers": ["unit", "api", "playwright"],
-      "profiles": ["real", "audit", "eod"],
-      "daily_eod": true,
+      "profiles": ["real", "sandbox", "audit"],
+      "daily_eod": false,
       "owner": "research_data",
       "reachable": true,
       "disabled_reason": null

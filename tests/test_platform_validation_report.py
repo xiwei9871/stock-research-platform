@@ -106,6 +106,19 @@ def test_inventory_contract_has_unique_ids_routes_and_required_assignments() -> 
     assert all(item["reachable"] for item in items if item["daily_eod"])
 
 
+def test_news_inventory_classifies_visible_refresh_as_sandboxed_write() -> None:
+    inventory = load_inventory(INVENTORY_PATH)
+    news = next(item for item in inventory["items"] if item["id"] == "news")
+
+    assert news["write_mode"] == "read_write"
+    assert "/api/public-news" in news["primary_apis"]
+    assert "/api/public-news/refresh" in news["primary_apis"]
+    assert {"api", "playwright"} <= set(news["layers"])
+    assert {"real", "sandbox", "audit"} <= set(news["profiles"])
+    assert "eod" not in news["profiles"]
+    assert news["daily_eod"] is False
+
+
 @pytest.mark.parametrize(
     ("field", "value"),
     [
