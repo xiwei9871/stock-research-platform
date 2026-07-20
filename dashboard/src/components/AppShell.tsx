@@ -279,6 +279,9 @@ function techBottleneckReviewUniverseStockHandoff(stock: TechBottleneckReviewSto
 
 type AppShellProps = {
   currentUser?: CurrentUser;
+  onLogout?: () => void;
+  logoutPending?: boolean;
+  logoutError?: string;
 };
 
 function workspaceModeForCurrentUser(workspace: WorkspaceMode, currentUser?: CurrentUser): WorkspaceMode {
@@ -286,7 +289,7 @@ function workspaceModeForCurrentUser(workspace: WorkspaceMode, currentUser?: Cur
   return workspace;
 }
 
-export function AppShell({ currentUser: _currentUser }: AppShellProps = {}) {
+export function AppShell({ currentUser: _currentUser, onLogout, logoutPending = false, logoutError = '' }: AppShellProps = {}) {
   const currentUser = _currentUser;
   const navItems = currentUser?.role === 'admin' ? [...NAV_ITEMS, ...ADMIN_NAV_ITEMS] : NAV_ITEMS;
   const initialPlatformLocation =
@@ -597,6 +600,15 @@ export function AppShell({ currentUser: _currentUser }: AppShellProps = {}) {
             onQueryChange={setGlobalSearchQuery}
             onOpenResult={openGlobalSearchResult}
           />
+          {currentUser ? (
+            <div className="platform-user-controls">
+              <span>{currentUser.display_name.trim() || currentUser.username}</span>
+              <button type="button" disabled={logoutPending} onClick={onLogout}>
+                退出登录
+              </button>
+              {logoutError ? <p role="alert">{logoutError}</p> : null}
+            </div>
+          ) : null}
         </header>
         <section className="platform-workspace">
           {workspaceMode === 'home' ? <HomeCockpit onNavigate={openWorkspaceMode} /> : null}

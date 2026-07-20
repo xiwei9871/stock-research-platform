@@ -1324,6 +1324,39 @@ describe('dashboard app shell', () => {
     expect(screen.queryByText('Manual V1 TopN Rotation')).not.toBeInTheDocument();
   });
 
+  it('shows the signed-in user and logout control in the top bar', () => {
+    const onLogout = vi.fn();
+
+    render(<AppShell currentUser={TEST_ADMIN_USER} onLogout={onLogout} />);
+
+    const topbar = document.querySelector<HTMLElement>('.platform-topbar');
+    expect(topbar).not.toBeNull();
+    if (!topbar) throw new Error('platform top bar missing');
+    expect(within(topbar).getByText('Admin')).toBeVisible();
+    fireEvent.click(within(topbar).getByRole('button', { name: '退出登录' }));
+    expect(onLogout).toHaveBeenCalledTimes(1);
+  });
+
+  it('falls back to the username and exposes pending logout errors', () => {
+    const currentUser = { ...TEST_ADMIN_USER, username: 'admin-fallback', display_name: '' };
+
+    render(
+      <AppShell
+        currentUser={currentUser}
+        onLogout={vi.fn()}
+        logoutPending
+        logoutError="退出登录失败：network unavailable"
+      />
+    );
+
+    const topbar = document.querySelector<HTMLElement>('.platform-topbar');
+    expect(topbar).not.toBeNull();
+    if (!topbar) throw new Error('platform top bar missing');
+    expect(within(topbar).getByText('admin-fallback')).toBeVisible();
+    expect(within(topbar).getByRole('button', { name: '退出登录' })).toBeDisabled();
+    expect(screen.getByRole('alert')).toHaveTextContent('退出登录失败：network unavailable');
+  });
+
   it('shows user management navigation only for admins', async () => {
     const admin = { user_id: 'user:1', username: 'admin', display_name: 'Admin', role: 'admin' as const, is_active: true };
     const regular = { user_id: 'user:2', username: 'analyst', display_name: 'Analyst', role: 'user' as const, is_active: true };

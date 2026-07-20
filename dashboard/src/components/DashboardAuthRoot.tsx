@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { DASHBOARD_AUTH_EXPIRED_EVENT, fetchCurrentUser, loginDashboardUser } from '../api/client';
+import { useEffect, useRef, useState } from 'react';
+import { DASHBOARD_AUTH_EXPIRED_EVENT, fetchCurrentUser, loginDashboardUser, logoutDashboardUser } from '../api/client';
 import type { CurrentUser } from '../api/types';
 import { AppShell } from './AppShell';
 import { LoginView } from './LoginView';
@@ -8,13 +8,22 @@ export function DashboardAuthRoot() {
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [logoutError, setLogoutError] = useState('');
+  const [logoutPending, setLogoutPending] = useState(false);
+  const logoutInFlight = useRef(false);
+  const authGeneration = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
+    const generation = authGeneration.current;
     const handleAuthExpired = () => {
       if (!cancelled) {
+        authGeneration.current += 1;
         setUser(null);
         setError('');
+        setLogoutError('');
+        setLogoutPending(false);
+        logoutInFlight.current = false;
         setLoading(false);
       }
     };
@@ -22,13 +31,13 @@ export function DashboardAuthRoot() {
     window.addEventListener(DASHBOARD_AUTH_EXPIRED_EVENT, handleAuthExpired);
     fetchCurrentUser()
       .then((payload) => {
-        if (!cancelled) setUser(payload.user);
+        if (!cancelled && generation === authGeneration.current) setUser(payload.user);
       })
       .catch(() => {
-        if (!cancelled) setUser(null);
+        if (!cancelled && generation === authGeneration.current) setUser(null);
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled && generation === authGeneration.current) setLoading(false);
       });
     return () => {
       cancelled = true;
@@ -45,14 +54,57 @@ export function DashboardAuthRoot() {
       <LoginView
         error={error}
         onSubmit={(username, password) => {
+          const generation = authGeneration.current + 1;
+          authGeneration.current = generation;
           setError('');
           loginDashboardUser({ username, password })
-            .then((payload) => setUser(payload.user))
-            .catch((err) => setError(`登录失败：${err instanceof Error ? err.message : 'unknown'}`));
+            .then((payload) => {
+              if (generation === authGeneration.current) setUser(payload.user);
+            })
+            .catch((err) => {
+              if (generation === authGeneration.current) {
+                setError(`登录失败：${err instanceof Error ? err.message : 'unknown'}`);
+              }
+            });
         }}
       />
     );
   }
 
-  return <AppShell currentUser={user} />;
+  const handleLogout = () => {
+    if (logoutInFlight.current) return;
+
+    logoutInFlight.current = true;
+    const generation = authGeneration.current + 1;
+    authGeneration.current = generation;
+    setLogoutError('');
+    setLogoutPending(true);
+    logoutDashboardUser()
+      .then(() => {
+        if (generation === authGeneration.current) {
+          setLogoutError('');
+          setUser(null);
+        }
+      })
+      .catch((err) => {
+        if (generation === authGeneration.current) {
+          setLogoutError(`退出登录失败：${err instanceof Error ? err.message : 'unknown'}`);
+        }
+      })
+      .finally(() => {
+        if (generation === authGeneration.current) {
+          logoutInFlight.current = false;
+          setLogoutPending(false);
+        }
+      });
+  };
+
+  return (
+    <AppShell
+      currentUser={user}
+      onLogout={handleLogout}
+      logoutPending={logoutPending}
+      logoutError={logoutError}
+    />
+  );
 }
