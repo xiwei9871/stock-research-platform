@@ -35,7 +35,7 @@ vi.mock('../src/components/AppShell', () => ({
 
 afterEach(() => {
   cleanup();
-  vi.clearAllMocks();
+  vi.resetAllMocks();
 });
 
 describe('DashboardAuthRoot', () => {
@@ -60,6 +60,75 @@ describe('DashboardAuthRoot', () => {
 
     expect(await screen.findByText('Official Dashboard admin')).toBeVisible();
     expect(apiMocks.loginDashboardUser).toHaveBeenCalledWith({ username: 'admin', password: 'secret' });
+  });
+
+  it('disables login while pending and blocks duplicate submissions', async () => {
+    let resolveLogin: ((value: { user: { user_id: string; username: string; display_name: string; role: 'admin'; is_active: boolean } }) => void) | undefined;
+    apiMocks.fetchCurrentUser.mockRejectedValueOnce(new Error('not_authenticated'));
+    apiMocks.loginDashboardUser.mockImplementation(
+      () => new Promise((resolve) => {
+        resolveLogin = resolve;
+      })
+    );
+
+    render(<DashboardAuthRoot />);
+    fireEvent.change(await screen.findByLabelText('用户名'), { target: { value: 'admin' } });
+    fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'secret' } });
+    const loginButton = screen.getByRole('button', { name: '登录' });
+    fireEvent.click(loginButton);
+    fireEvent.click(loginButton);
+
+    expect(loginButton).toBeDisabled();
+    expect(loginButton).toHaveTextContent('登录中…');
+    expect(apiMocks.loginDashboardUser).toHaveBeenCalledTimes(1);
+
+    resolveLogin?.({
+      user: { user_id: 'user:1', username: 'admin', display_name: 'Admin', role: 'admin', is_active: true }
+    });
+    expect(await screen.findByText('Official Dashboard admin')).toBeVisible();
+  });
+
+  it('keeps a newer login pending when an older login settles after session expiry', async () => {
+    type LoginPayload = {
+      user: { user_id: string; username: string; display_name: string; role: 'user'; is_active: boolean };
+    };
+    let resolveOldLogin: ((value: LoginPayload) => void) | undefined;
+    let resolveNewLogin: ((value: LoginPayload) => void) | undefined;
+    const oldLogin = new Promise<LoginPayload>((resolve) => {
+      resolveOldLogin = resolve;
+    });
+    const newLogin = new Promise<LoginPayload>((resolve) => {
+      resolveNewLogin = resolve;
+    });
+    apiMocks.fetchCurrentUser.mockRejectedValueOnce(new Error('not_authenticated'));
+    apiMocks.loginDashboardUser.mockReturnValueOnce(oldLogin).mockReturnValueOnce(newLogin);
+
+    render(<DashboardAuthRoot />);
+    fireEvent.change(await screen.findByLabelText('用户名'), { target: { value: 'analyst' } });
+    fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'secret' } });
+    fireEvent.click(screen.getByRole('button', { name: '登录' }));
+    window.dispatchEvent(new CustomEvent('dashboard-auth-expired'));
+
+    await waitFor(() => expect(screen.getByRole('button', { name: '登录' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: '登录' }));
+    const currentLoginButton = screen.getByRole('button', { name: '登录' });
+    expect(currentLoginButton).toBeDisabled();
+    expect(apiMocks.loginDashboardUser).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      resolveOldLogin?.({
+        user: { user_id: 'user:old', username: 'old', display_name: 'Old', role: 'user', is_active: true }
+      });
+      await oldLogin;
+    });
+
+    expect(screen.getByRole('button', { name: '登录' })).toBeDisabled();
+    expect(screen.queryByText('Official Dashboard old')).not.toBeInTheDocument();
+
+    resolveNewLogin?.({
+      user: { user_id: 'user:new', username: 'analyst', display_name: 'Analyst', role: 'user', is_active: true }
+    });
+    expect(await screen.findByText('Official Dashboard analyst')).toBeVisible();
   });
 
   it('returns to login after logout succeeds and calls the API once', async () => {

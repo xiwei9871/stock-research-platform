@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  DASHBOARD_AUTH_EXPIRED_EVENT,
   fetchCurrentUser,
   fetchAdminUsers,
   createAdminUser,
@@ -67,6 +68,75 @@ import {
 } from '../src/api/client';
 
 describe('dashboard API client', () => {
+  it('ignores a stale credentialed 401 after a login transition advances the auth session', async () => {
+    let resolveOldRequest: ((response: { ok: boolean; status: number; json: () => Promise<{ detail: string }> }) => void) | undefined;
+    const oldRequestResponse = new Promise<{ ok: boolean; status: number; json: () => Promise<{ detail: string }> }>((resolve) => {
+      resolveOldRequest = resolve;
+    });
+    const fetchMock = vi
+      .fn()
+      .mockReturnValueOnce(oldRequestResponse)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          user: { user_id: 'user:2', username: 'analyst', display_name: 'Analyst', role: 'user', is_active: true }
+        })
+      });
+    const handleAuthExpired = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    window.addEventListener(DASHBOARD_AUTH_EXPIRED_EVENT, handleAuthExpired);
+
+    const oldRequest = fetchAdminUsers();
+    await loginDashboardUser({ username: 'analyst', password: 'secret' });
+    resolveOldRequest?.({ ok: false, status: 401, json: async () => ({ detail: 'expired old session' }) });
+    await expect(oldRequest).rejects.toThrow('GET /api/admin/users failed with 401');
+    window.removeEventListener(DASHBOARD_AUTH_EXPIRED_EVENT, handleAuthExpired);
+
+    expect(handleAuthExpired).not.toHaveBeenCalled();
+  });
+
+  it('dispatches exactly one expiry event when sibling current-session requests return 401', async () => {
+    type ErrorResponse = { ok: boolean; status: number; json: () => Promise<{ detail: string }> };
+    let resolveFirst: ((response: ErrorResponse) => void) | undefined;
+    let resolveSecond: ((response: ErrorResponse) => void) | undefined;
+    const firstResponse = new Promise<ErrorResponse>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const secondResponse = new Promise<ErrorResponse>((resolve) => {
+      resolveSecond = resolve;
+    });
+    const fetchMock = vi.fn().mockReturnValueOnce(firstResponse).mockReturnValueOnce(secondResponse);
+    const handleAuthExpired = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    window.addEventListener(DASHBOARD_AUTH_EXPIRED_EVENT, handleAuthExpired);
+
+    const firstRequest = fetchAdminUsers();
+    const secondRequest = fetchAdminUsers();
+    resolveFirst?.({ ok: false, status: 401, json: async () => ({ detail: 'expired' }) });
+    await expect(firstRequest).rejects.toThrow('GET /api/admin/users failed with 401');
+    resolveSecond?.({ ok: false, status: 401, json: async () => ({ detail: 'expired' }) });
+    await expect(secondRequest).rejects.toThrow('GET /api/admin/users failed with 401');
+    window.removeEventListener(DASHBOARD_AUTH_EXPIRED_EVENT, handleAuthExpired);
+
+    expect(handleAuthExpired).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps logout 401 as a logout failure without dispatching an expiry cycle', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      json: async () => ({ detail: 'logout rejected' })
+    });
+    const handleAuthExpired = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    window.addEventListener(DASHBOARD_AUTH_EXPIRED_EVENT, handleAuthExpired);
+
+    await expect(logoutDashboardUser()).rejects.toThrow('POST /api/auth/logout failed with 401: logout rejected');
+    window.removeEventListener(DASHBOARD_AUTH_EXPIRED_EVENT, handleAuthExpired);
+
+    expect(handleAuthExpired).not.toHaveBeenCalled();
+  });
+
   it('uses cookie credentials for auth session endpoints and csrf for logout', async () => {
     const fetchMock = vi
       .fn()

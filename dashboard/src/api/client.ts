@@ -201,6 +201,11 @@ type RequestOptions = {
 };
 
 export const DASHBOARD_AUTH_EXPIRED_EVENT = 'dashboard-auth-expired';
+let dashboardAuthEpoch = 0;
+
+function advanceDashboardAuthEpoch() {
+  dashboardAuthEpoch += 1;
+}
 
 function csrfTokenFromCookie() {
   return (
@@ -219,10 +224,12 @@ export async function fetchCurrentUser(): Promise<AuthMeResponse> {
 }
 
 export async function loginDashboardUser(request: LoginRequest): Promise<LoginResponse> {
+  advanceDashboardAuthEpoch();
   return postJson<LoginResponse>('/api/auth/login', request, { credentials: 'include' });
 }
 
 export async function logoutDashboardUser(): Promise<{ status: string }> {
+  advanceDashboardAuthEpoch();
   return postJson<{ status: string }>('/api/auth/logout', {}, { credentials: 'include', csrfToken: csrfTokenFromCookie() });
 }
 
@@ -1032,6 +1039,7 @@ async function postBacktest(url: string, request: BacktestRunRequest): Promise<B
 }
 
 async function postJson<T>(url: string, request: unknown, options: RequestOptions = {}): Promise<T> {
+  const authEpoch = authEpochForRequest(url, options);
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (options.csrfToken) {
     headers['X-CSRF-Token'] = options.csrfToken;
@@ -1043,7 +1051,7 @@ async function postJson<T>(url: string, request: unknown, options: RequestOption
     body: JSON.stringify(request)
   });
   if (!response.ok) {
-    notifyAuthExpired(url, response.status, options);
+    notifyAuthExpired(url, response.status, options, authEpoch);
     const detail = await responseErrorDetail(response);
     throw new Error(`POST ${url} failed with ${response.status}${detail ? `: ${detail}` : ''}`);
   }
@@ -1062,6 +1070,7 @@ async function responseErrorDetail(response: Response): Promise<string> {
 }
 
 async function patchJson<T>(url: string, request: unknown, options: RequestOptions = {}): Promise<T> {
+  const authEpoch = authEpochForRequest(url, options);
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (options.csrfToken) {
     headers['X-CSRF-Token'] = options.csrfToken;
@@ -1073,16 +1082,17 @@ async function patchJson<T>(url: string, request: unknown, options: RequestOptio
     body: JSON.stringify(request)
   });
   if (!response.ok) {
-    notifyAuthExpired(url, response.status, options);
+    notifyAuthExpired(url, response.status, options, authEpoch);
     throw new Error(`PATCH ${url} failed with ${response.status}`);
   }
   return response.json() as Promise<T>;
 }
 
 async function getJson<T>(url: string, options: RequestOptions = {}): Promise<T> {
+  const authEpoch = authEpochForRequest(url, options);
   const response = options.credentials ? await fetch(url, { credentials: options.credentials }) : await fetch(url);
   if (!response.ok) {
-    notifyAuthExpired(url, response.status, options);
+    notifyAuthExpired(url, response.status, options, authEpoch);
     throw new Error(`GET ${url} failed with ${response.status}`);
   }
   return response.json() as Promise<T>;
@@ -1092,12 +1102,27 @@ function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function notifyAuthExpired(url: string, status: number, options: RequestOptions) {
-  if (status !== 401 || options.credentials !== 'include' || url === '/api/auth/login') {
+function authEpochForRequest(url: string, options: RequestOptions) {
+  if (options.credentials !== 'include') return null;
+  if (typeof window === 'undefined') return url.startsWith('/') ? dashboardAuthEpoch : null;
+  const requestUrl = new URL(url, window.location.href);
+  return requestUrl.origin === window.location.origin ? dashboardAuthEpoch : null;
+}
+
+function notifyAuthExpired(url: string, status: number, options: RequestOptions, requestAuthEpoch: number | null) {
+  if (
+    status !== 401 ||
+    options.credentials !== 'include' ||
+    url === '/api/auth/login' ||
+    url === '/api/auth/logout' ||
+    requestAuthEpoch === null ||
+    requestAuthEpoch !== dashboardAuthEpoch
+  ) {
     return;
   }
   if (typeof window === 'undefined') {
     return;
   }
+  advanceDashboardAuthEpoch();
   window.dispatchEvent(new CustomEvent(DASHBOARD_AUTH_EXPIRED_EVENT));
 }

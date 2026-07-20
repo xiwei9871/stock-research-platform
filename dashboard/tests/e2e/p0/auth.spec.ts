@@ -26,6 +26,7 @@ async function mockAuthJourneyApi(page: Page, options: AuthApiOptions = {}) {
   let authenticated = options.authenticated ?? false;
   let currentUser = options.user ?? NORMAL_USER;
   let logoutCalls = 0;
+  const unexpectedRequests: string[] = [];
 
   await page.route('/api/**', async (route) => {
     const request = route.request();
@@ -185,20 +186,23 @@ async function mockAuthJourneyApi(page: Page, options: AuthApiOptions = {}) {
       return;
     }
 
-    await route.fulfill({ json: { items: [], warnings: [] } });
+    unexpectedRequests.push(`${request.method()} ${url.pathname}`);
+    await route.fulfill({ status: 599, json: { detail: `unexpected API request: ${url.pathname}` } });
   });
 
   return {
-    logoutCallCount: () => logoutCalls
+    logoutCallCount: () => logoutCalls,
+    unexpectedRequests
   };
 }
 
 test('unauthenticated initial session renders LoginView', async ({ page }) => {
-  await mockAuthJourneyApi(page);
+  const authApi = await mockAuthJourneyApi(page);
 
   await page.goto('/');
 
   await expect(page.getByRole('heading', { name: '登录' })).toBeVisible();
+  expect(authApi.unexpectedRequests).toEqual([]);
 });
 
 test('invalid login fails visibly, successful login opens the normal-user home shell, and logout returns to LoginView', async ({ page }) => {
@@ -215,6 +219,7 @@ test('invalid login fails visibly, successful login opens the normal-user home s
 
   await expect(page.getByText('A股策略研究')).toBeVisible();
   await expect(page.getByRole('heading', { name: '策略指挥中心' })).toBeVisible();
+  await expect(page.getByText('今日暂无待处理研究事项。')).toBeVisible();
   await expect(page.locator('.platform-topbar')).toContainText('Research Analyst');
   await expect(page.getByRole('button', { name: 'Open User Management workspace' })).toHaveCount(0);
 
@@ -222,14 +227,16 @@ test('invalid login fails visibly, successful login opens the normal-user home s
 
   await expect(page.getByRole('heading', { name: '登录' })).toBeVisible();
   expect(authApi.logoutCallCount()).toBe(1);
+  expect(authApi.unexpectedRequests).toEqual([]);
 });
 
 test('a credentialed API 401 expires the active session and returns to LoginView', async ({ page }) => {
-  await mockAuthJourneyApi(page, { authenticated: true, user: ADMIN_USER, expireAdminRequests: true });
+  const authApi = await mockAuthJourneyApi(page, { authenticated: true, user: ADMIN_USER, expireAdminRequests: true });
   await page.goto('/');
 
   await expect(page.locator('.platform-topbar')).toContainText('Platform Admin');
   await page.getByRole('button', { name: 'Open User Management workspace' }).click();
 
   await expect(page.getByRole('heading', { name: '登录' })).toBeVisible();
+  expect(authApi.unexpectedRequests).toEqual([]);
 });
