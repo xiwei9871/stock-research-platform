@@ -12,6 +12,7 @@ from stock_research.research_project_v2_1.acquisition_contracts import validate_
 from stock_research.research_project_v2_1.layout import LayeredResearchLayout
 from stock_research.research_project_v2_1.loader import read_layered_canonical_json
 from stock_research.research_project_v2_1.snapshot import _publish_bytes
+from stock_research.research_project_v2_1.schema import validate_v2_1_schema_payload
 
 
 _ATTEMPT_ID = re.compile(r"acquisition_attempt:[a-f0-9]{24}")
@@ -35,6 +36,63 @@ class PublishedRawBytes:
     content_hash: str
     byte_size: int
     content_type: str
+
+
+def evidence_artifact_id(payload: dict[str, Any]) -> str:
+    identity = {
+        key: payload[key]
+        for key in (
+            "source_candidate_id",
+            "source_url",
+            "resolved_url",
+            "source_title",
+            "publisher",
+            "published_at",
+            "content_type",
+            "byte_size",
+            "content_hash",
+            "raw_artifact_path",
+        )
+    }
+    return f"evidence_artifact:{sha256(canonical_bytes(identity)).hexdigest()[:24]}"
+
+
+def validate_v2_3_evidence_artifact(payload: dict[str, Any]) -> dict[str, Any]:
+    copied = dict(payload)
+    validate_v2_1_schema_payload(
+        "evidence_artifact_v2_3",
+        {
+            "schema_version": "2.3.0",
+            "artifact_kind": "evidence_artifact",
+            "evidence_artifact": copied,
+        },
+    )
+    if copied["evidence_artifact_id"] != evidence_artifact_id(copied):
+        raise ResearchProjectV2Error(
+            "Evidence artifact identity mismatch",
+            code="RESEARCH_PROJECT_V2_1_ACQUISITION_IMMUTABILITY_VIOLATION",
+            details={"evidence_artifact_id": copied.get("evidence_artifact_id")},
+        )
+    return copied
+
+
+def write_v2_3_evidence_artifact(
+    artifact: dict[str, Any],
+    *,
+    layout: LayeredResearchLayout | None = None,
+) -> Path:
+    effective = LayeredResearchLayout.default() if layout is None else layout
+    validated = validate_v2_3_evidence_artifact(artifact)
+    wrapper = {
+        "schema_version": "2.3.0",
+        "artifact_kind": "evidence_artifact",
+        "evidence_artifact": validated,
+    }
+    return _publish_bytes(
+        effective.evidence_metadata_v2_3_dir,
+        f"{validated['evidence_artifact_id']}.json",
+        canonical_bytes(wrapper),
+    )
 
 
 def write_acquisition_attempt(

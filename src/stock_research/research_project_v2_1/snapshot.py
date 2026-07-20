@@ -225,16 +225,39 @@ def _peer_from_requests_response(response: object) -> str:
 
 
 class RequestsFetchTransport:
+    def __init__(
+        self,
+        *,
+        proxy_mode: str = "environment_proxy",
+        headers: Mapping[str, str] | None = None,
+        session: object | None = None,
+    ) -> None:
+        if proxy_mode not in {"direct", "environment_proxy"}:
+            raise _snapshot_invalid("unsupported requests proxy_mode", proxy_mode=proxy_mode)
+        import requests
+
+        self.proxy_mode = proxy_mode
+        self.session = (
+            requests.Session()
+            if session is None and proxy_mode == "direct"
+            else session
+        )
+        self.trust_env = proxy_mode == "environment_proxy"
+        if self.session is not None:
+            self.session.trust_env = self.trust_env
+        self.headers = {"Accept-Encoding": "identity", **dict(headers or {})}
+
     def get(self, url: str, *, timeout_seconds: float) -> FetchResponse:
         try:
             import requests
 
-            response = requests.get(
+            get = requests.get if self.session is None else self.session.get
+            response = get(
                 url,
                 timeout=timeout_seconds,
                 stream=True,
                 allow_redirects=False,
-                headers={"Accept-Encoding": "identity"},
+                headers=self.headers,
             )
         except _CONTROL_FLOW_EXCEPTIONS:
             raise

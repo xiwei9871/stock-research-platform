@@ -36,6 +36,10 @@ class LayeredResearchLayout:
         return self.root / "evidence/metadata"
 
     @property
+    def evidence_metadata_v2_3_dir(self) -> Path:
+        return self.root / "evidence/metadata_v2_3"
+
+    @property
     def evidence_normalized_dir(self) -> Path:
         return self.root / "evidence/normalized"
 

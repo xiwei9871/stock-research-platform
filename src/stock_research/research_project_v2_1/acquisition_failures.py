@@ -73,6 +73,12 @@ def classify_acquisition_failure(
     if http_status is not None and not 200 <= http_status <= 299:
         return _classification("http_error", f"HTTP request failed with status {http_status}.")
 
+    cause = getattr(error, "__cause__", None)
+    if cause is not None and cause is not error:
+        nested = classify_acquisition_failure(cause, provider=provider)
+        if nested.failure_code != "unknown_failure":
+            return nested
+
     if isinstance(error, ResearchProjectV2Error):
         code = error.code
         if code in _SECURITY_CODES:
