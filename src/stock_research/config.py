@@ -43,7 +43,12 @@ def _env_int(name: str, default: int) -> int:
 
 @dataclass(frozen=True)
 class Settings:
-    research_service: str = "stock_research"
+    research_service: str = field(
+        default_factory=lambda: os.getenv(
+            "STOCK_RESEARCH_SERVICE", "stock_research"
+        ).strip()
+        or "stock_research"
+    )
     theme_research_migration_service: str = field(
         default_factory=lambda: os.getenv(
             "THEME_RESEARCH_MIGRATION_SERVICE", "stock_research"
