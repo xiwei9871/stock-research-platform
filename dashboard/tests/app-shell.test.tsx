@@ -1474,6 +1474,13 @@ describe('dashboard app shell', () => {
     expect(screen.queryByRole('button', { name: 'Open Reports workspace' })).not.toBeInTheDocument();
   });
 
+  it('exposes exactly one named workspace navigation landmark without the legacy complementary role', () => {
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
+
+    expect(screen.getAllByRole('navigation', { name: 'Workspace navigation' })).toHaveLength(1);
+    expect(screen.queryByRole('complementary', { name: 'Workspace navigation' })).not.toBeInTheDocument();
+  });
+
   it('opens redesigned workspaces from navigation', async () => {
     render(<AppShell currentUser={TEST_ADMIN_USER} />);
 
@@ -2660,7 +2667,7 @@ describe('dashboard app shell', () => {
     apiMocks.fetchOverview.mockResolvedValue({ ...makeOverview(), reports: [] });
 
     render(<AppShell currentUser={TEST_ADMIN_USER} />);
-    const navigation = within(screen.getByRole('complementary', { name: 'Workspace navigation' }));
+    const navigation = within(screen.getByRole('navigation', { name: 'Workspace navigation' }));
 
     fireEvent.click(navigation.getByRole('button', { name: 'Open Generated Reports workspace' }));
 
@@ -2958,7 +2965,7 @@ describe('dashboard app shell', () => {
   it('navigates between planned platform workspaces', async () => {
     render(<AppShell currentUser={TEST_ADMIN_USER} />);
     await screen.findByRole('heading', { name: '策略指挥中心' });
-    const navigation = within(screen.getByRole('complementary', { name: 'Workspace navigation' }));
+    const navigation = within(screen.getByRole('navigation', { name: 'Workspace navigation' }));
 
     fireEvent.click(navigation.getByRole('button', { name: 'Open Factor Lab workspace' }));
     expect(await screen.findByRole('heading', { name: 'Factor Lab' })).toBeVisible();
@@ -3272,7 +3279,7 @@ describe('dashboard app shell', () => {
     });
 
     render(<AppShell currentUser={TEST_ADMIN_USER} />);
-    const navigation = within(screen.getByRole('complementary', { name: 'Workspace navigation' }));
+    const navigation = within(screen.getByRole('navigation', { name: 'Workspace navigation' }));
 
     fireEvent.click(navigation.getByRole('button', { name: 'Open Strategy Lab workspace' }));
     const validationTab = await screen.findByRole('tab', { name: 'Validation Replay' });
@@ -3324,7 +3331,7 @@ describe('dashboard app shell', () => {
 
   it('supports keyboard navigation between Strategy Lab tabs', async () => {
     render(<AppShell currentUser={TEST_ADMIN_USER} />);
-    const navigation = within(screen.getByRole('complementary', { name: 'Workspace navigation' }));
+    const navigation = within(screen.getByRole('navigation', { name: 'Workspace navigation' }));
 
     fireEvent.click(navigation.getByRole('button', { name: 'Open Strategy Lab workspace' }));
 

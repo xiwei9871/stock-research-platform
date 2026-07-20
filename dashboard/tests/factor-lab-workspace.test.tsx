@@ -227,7 +227,7 @@ describe('FactorLabWorkspace', () => {
   it('opens Factor Lab from AppShell side navigation', async () => {
     render(<AppShell />);
 
-    const navigation = within(screen.getByRole('complementary', { name: 'Workspace navigation' }));
+    const navigation = within(screen.getByRole('navigation', { name: 'Workspace navigation' }));
     fireEvent.click(navigation.getByRole('button', { name: 'Open Factor Lab workspace' }));
 
     expect(await screen.findByRole('heading', { name: 'Factor Lab' })).toBeInTheDocument();

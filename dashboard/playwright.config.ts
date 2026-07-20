@@ -50,6 +50,13 @@ export default defineConfig({
   testMatch: profileTestMatch(profile),
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
+  expect: {
+    toHaveScreenshot: {
+      animations: 'disabled',
+      caret: 'hide',
+      scale: 'css'
+    }
+  },
   outputDir: `test-results/${profile}`,
   reporter: [
     ['html', { outputFolder: `playwright-report/${profile}`, open: 'never' }],

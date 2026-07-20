@@ -1510,7 +1510,7 @@ describe('AppShell and HomeCockpit', () => {
     render(<AppShell />);
     await screen.findByRole('heading', { name: '策略指挥中心' });
 
-    const sideNav = screen.getByRole('complementary', { name: 'Workspace navigation' });
+    const sideNav = screen.getByRole('navigation', { name: 'Workspace navigation' });
 
     expect(within(sideNav).queryByRole('button', { name: 'Open Data Explorer workspace' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Data Explorer' })).not.toBeInTheDocument();
@@ -1520,7 +1520,7 @@ describe('AppShell and HomeCockpit', () => {
     render(<AppShell />);
     await screen.findByRole('heading', { name: '策略指挥中心' });
 
-    const sideNav = screen.getByRole('complementary', { name: 'Workspace navigation' });
+    const sideNav = screen.getByRole('navigation', { name: 'Workspace navigation' });
 
     expect(within(sideNav).getByRole('button', { name: 'Open Home workspace' })).toHaveAttribute(
       'aria-current',
@@ -1536,7 +1536,7 @@ describe('AppShell and HomeCockpit', () => {
     render(<AppShell />);
     await screen.findByRole('heading', { name: '策略指挥中心' });
 
-    const sideNav = screen.getByRole('complementary', { name: 'Workspace navigation' });
+    const sideNav = screen.getByRole('navigation', { name: 'Workspace navigation' });
     fireEvent.click(within(sideNav).getByRole('button', { name: 'Open Generated Reports workspace' }));
 
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Generated Reports', level: 1 })).toBeVisible());
@@ -1554,7 +1554,7 @@ describe('AppShell and HomeCockpit', () => {
     render(<AppShell />);
     await screen.findByRole('heading', { name: '策略指挥中心' });
 
-    const sideNav = screen.getByRole('complementary', { name: 'Workspace navigation' });
+    const sideNav = screen.getByRole('navigation', { name: 'Workspace navigation' });
     fireEvent.click(within(sideNav).getByRole('button', { name: 'Open Generated Reports workspace' }));
     await screen.findByRole('heading', { name: 'Generated Reports', level: 1 });
 

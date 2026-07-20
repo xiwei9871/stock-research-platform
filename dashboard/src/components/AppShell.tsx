@@ -611,7 +611,7 @@ export function AppShell({ currentUser: _currentUser, onLogout, logoutPending = 
 
   return (
     <main className="platform-shell">
-      <aside className="platform-nav" aria-label="Workspace navigation">
+      <nav className="platform-nav" aria-label="Workspace navigation">
         <div className="panel-title">A股策略研究</div>
         {navItems.map((item) => (
           <button
@@ -625,7 +625,7 @@ export function AppShell({ currentUser: _currentUser, onLogout, logoutPending = 
             {item.label}
           </button>
         ))}
-      </aside>
+      </nav>
       <div className="platform-main">
         <header className="platform-topbar">
           <GlobalSearchBox

@@ -299,7 +299,7 @@ describe('DataExplorerWorkspace', () => {
   it('keeps Data Explorer out of AppShell primary navigation', async () => {
     render(<AppShell />);
 
-    const navigation = screen.getByRole('complementary', { name: 'Workspace navigation' });
+    const navigation = screen.getByRole('navigation', { name: 'Workspace navigation' });
 
     expect(within(navigation).queryByRole('button', { name: 'Open Data Explorer workspace' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Data Explorer' })).not.toBeInTheDocument();

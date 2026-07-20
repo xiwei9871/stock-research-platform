@@ -47,7 +47,14 @@ export function buildProjects(profile: PlaywrightProfile): Project[] {
       chromiumMobile(),
       {
         name: 'firefox-desktop',
-        use: cloneDevice('Desktop Firefox')
+        use: {
+          ...cloneDevice('Desktop Firefox'),
+          launchOptions: {
+            firefoxUserPrefs: {
+              'network.proxy.type': 0
+            }
+          }
+        }
       },
       {
         name: 'webkit-critical',

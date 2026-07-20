@@ -829,7 +829,7 @@ test('dashboard shell renders with mocked API responses', async ({ page }) => {
 
   await expect(page.getByText('A股策略研究')).toBeVisible();
   await expect(page.getByRole('heading', { name: '策略指挥中心' })).toBeVisible();
-  await expect(page.getByRole('complementary', { name: 'Workspace navigation' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Workspace navigation' })).toBeVisible();
   await expect(page.getByRole('combobox', { name: 'Global search' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Open Home workspace' })).toBeVisible();
   await expectNoHorizontalOverflow(page);
@@ -843,7 +843,7 @@ test('dashboard shell stacks without horizontal overflow on mobile viewport', as
 
   await expect(page.getByText('A股策略研究')).toBeVisible();
   await expect(page.getByRole('heading', { name: '策略指挥中心' })).toBeVisible();
-  await expect(page.getByRole('complementary', { name: 'Workspace navigation' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Workspace navigation' })).toBeVisible();
   await expect(page.getByRole('combobox', { name: 'Global search' })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 });

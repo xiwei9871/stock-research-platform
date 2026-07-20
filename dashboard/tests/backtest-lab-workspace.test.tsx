@@ -807,7 +807,7 @@ describe('BacktestLabWorkspace', () => {
   it('opens Backtest Lab through Strategy Lab from AppShell side navigation', async () => {
     render(<AppShell />);
 
-    const navigation = within(screen.getByRole('complementary', { name: 'Workspace navigation' }));
+    const navigation = within(screen.getByRole('navigation', { name: 'Workspace navigation' }));
     fireEvent.click(navigation.getByRole('button', { name: 'Open Strategy Lab workspace' }));
 
     expect(await screen.findByRole('heading', { name: 'Strategy Lab' })).toBeInTheDocument();
