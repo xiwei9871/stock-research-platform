@@ -173,6 +173,7 @@ describe('AppShell and HomeCockpit', () => {
           cash_slot_count: 9,
           contract_status: 'success',
           contract_id: 'lhb_shortline:balanced:auction_enhanced_rerank:balanced',
+          publish_id: 'lhb-shortline-20260608',
           identity_schema_version: 'strategy_publication_identity_v1',
           config_fingerprint: 'lhb-fingerprint',
           publication_policy: {
@@ -206,6 +207,7 @@ describe('AppShell and HomeCockpit', () => {
           latest_day_drawdown_pct: -2.7,
           contract_status: 'success',
           contract_id: 'mid_trend:balanced:top5_weekly_max2_selective_trend_holding_protection_v1',
+          publish_id: 'mid-trend-20260602',
           identity_schema_version: 'strategy_publication_identity_v1',
           config_fingerprint: 'mid-fingerprint',
           publication_policy: {
@@ -237,6 +239,7 @@ describe('AppShell and HomeCockpit', () => {
           latest_day_drawdown_pct: -0.5,
           contract_status: 'success',
           contract_id: 'tech_bottleneck:balanced:strict_153_st_only_financial_state:biweekly:rank_exit_top10_1d',
+          publish_id: 'tech-bottleneck-20260608',
           identity_schema_version: 'strategy_publication_identity_v1',
           config_fingerprint: 'tech-fingerprint',
           publication_policy: {
@@ -729,22 +732,25 @@ describe('AppShell and HomeCockpit', () => {
     const strategyPerformance = within(screen.getByRole('region', { name: '启用策略表现' }));
     expect(strategyPerformance.getByText('LHB Shortline Combo')).toBeVisible();
     expect(strategyPerformance.getByText('LHB V1 Stable Safe Top5')).toBeVisible();
-    expect(strategyPerformance.getByText('+160.7%')).toBeVisible();
+    expect(strategyPerformance.getByText('+160.70%')).toBeVisible();
     expect(strategyPerformance.getByText('-5.3%')).toBeVisible();
     expect(strategyPerformance.getByText('+1.2%')).toBeVisible();
     expect(strategyPerformance.getAllByText('正常')).toHaveLength(2);
     expect(strategyPerformance.getByText('Mid Trend Combo')).toBeVisible();
-    expect(strategyPerformance.getByText('+56.0%')).toBeVisible();
+    expect(strategyPerformance.getByText('+56.00%')).toBeVisible();
     expect(strategyPerformance.getByText('-17.5%')).toBeVisible();
     expect(strategyPerformance.getByText('-2.1%')).toBeVisible();
     expect(strategyPerformance.getByText('复盘')).toBeVisible();
     expect(strategyPerformance.getByText('Tech Bottleneck Combo')).toBeVisible();
-    expect(strategyPerformance.getByText('+60.1%')).toBeVisible();
+    expect(strategyPerformance.getByText('+60.10%')).toBeVisible();
     expect(strategyPerformance.getByText('-8.3%')).toBeVisible();
     expect(strategyPerformance.getByText('+0.8%')).toBeVisible();
     expect(strategyPerformance.getByText('持仓明细暂无')).toBeVisible();
     expect(strategyPerformance.getAllByText('最新持仓 5')).toHaveLength(2);
-    expect(strategyPerformance.getAllByText('截至 2026-06-08')).toHaveLength(2);
+    expect(strategyPerformance.getAllByTestId('strategy-performance-date').filter((node) => node.textContent === '2026-06-08')).toHaveLength(2);
+    expect(
+      within(strategyPerformance.getByText('LHB Shortline Combo').closest('article')!).getByTestId('strategy-publish-id')
+    ).toHaveTextContent('lhb-shortline-20260608');
 
     await screen.findByText('策略指挥中心');
     const researchQueueRegion = screen.getByRole('region', { name: '今日研究队列' });
@@ -1403,7 +1409,7 @@ describe('AppShell and HomeCockpit', () => {
     expect(strategyPerformance.getByText('未就绪')).toBeVisible();
     expect(strategyPerformance.getByText('正式产物失败')).toBeVisible();
     expect(strategyPerformance.getByText(/base candidate source freshness metadata missing/)).toBeVisible();
-    expect(strategyPerformance.queryByText('+60.1%')).not.toBeInTheDocument();
+    expect(strategyPerformance.queryByText('+60.10%')).not.toBeInTheDocument();
   });
 
   it('renders generic publication contracts and suppresses mismatched strategy performance', async () => {
@@ -1426,6 +1432,7 @@ describe('AppShell and HomeCockpit', () => {
           signal_count: 5,
           contract_status: 'success',
           contract_id: 'lhb_shortline:balanced:auction_enhanced_rerank:balanced',
+          publish_id: 'lhb-shortline-20260718',
           identity_schema_version: 'strategy_publication_identity_v1',
           config_fingerprint: 'lhb-fingerprint',
           publication_policy: {
@@ -1471,9 +1478,11 @@ describe('AppShell and HomeCockpit', () => {
     expect(lhbCard).not.toBeNull();
     expect(midCard).not.toBeNull();
     expect(within(lhbCard!).getByText('正式合同')).toBeVisible();
+    expect(within(lhbCard!).getByText('发布编号')).toBeVisible();
     expect(within(lhbCard!).getByText('产物版本')).toBeVisible();
     expect(within(lhbCard!).getByText('校验状态')).toBeVisible();
     expect(within(lhbCard!).getByText('lhb_shortline:balanced:auction_enhanced_rerank:balanced')).toBeVisible();
+    expect(within(lhbCard!).getByTestId('strategy-publish-id')).toHaveTextContent('lhb-shortline-20260718');
     expect(within(lhbCard!).getByText('strategy_artifact_v1')).toBeVisible();
     expect(within(lhbCard!).getByText('通过')).toBeVisible();
     expect(within(lhbCard!).getByText('Top5 先选后校验，不补位')).toBeVisible();
@@ -1484,6 +1493,17 @@ describe('AppShell and HomeCockpit', () => {
     expect(within(midCard!).queryByText('+88.8%')).not.toBeInTheDocument();
     expect(within(midCard!).queryByText('-12.3%')).not.toBeInTheDocument();
     expect(within(midCard!).queryByText('Top5 先选后校验，不补位')).not.toBeInTheDocument();
+  });
+
+  it('opens an official strategy deep link and selects it without running a backtest', async () => {
+    render(<AppShell />);
+
+    const strategyPerformance = within(await screen.findByRole('region', { name: '启用策略表现' }));
+    fireEvent.click(strategyPerformance.getByRole('button', { name: '打开策略 Mid Trend Combo' }));
+
+    expect(window.location.pathname).toBe('/strategy-lab');
+    expect(window.location.search).toBe('?strategy_id=mid_trend');
+    await waitFor(() => expect(screen.getByLabelText('strategy')).toHaveValue('mid_trend'));
   });
 
   it('does not expose Data Explorer in primary navigation', async () => {

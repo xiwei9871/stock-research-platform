@@ -14,6 +14,11 @@ function formatScore(score: number | null) {
   return typeof score === 'number' ? score.toFixed(1) : '-';
 }
 
+function formatSignedPercent(value: number | null | undefined) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '-';
+  return `${value > 0 ? '+' : ''}${value.toFixed(2)}%`;
+}
+
 function findInitialSelection(queue: ReviewQueueResponse) {
   const selectedGroup = queue.groups.find((group) => group.items.length > 0) ?? queue.groups[0] ?? null;
   return {
@@ -381,7 +386,7 @@ export function ReviewQueueWorkspace({
 
           <section className="workspace-band" role="region" aria-label="选中标的证据">
             {selectedItem && selectedDigest ? (
-              <div className="workspace-stack">
+              <div className="workspace-stack" data-strategy-id={selectedItem.strategy_id ?? undefined}>
                 <div className="section-heading">
                   <div>
                     <h2>{selectedItem.digest_title || selectedDigest.title}</h2>
@@ -396,7 +401,11 @@ export function ReviewQueueWorkspace({
                 <div className="strategy-metric-grid" aria-label="正式发布合同">
                   <div>
                     <span>正式合同</span>
-                    <strong>{selectedItem.contract_id ?? '-'}</strong>
+                    <strong data-testid="strategy-contract-id">{selectedItem.contract_id ?? '-'}</strong>
+                  </div>
+                  <div>
+                    <span>发布编号</span>
+                    <strong data-testid="strategy-publish-id">{selectedItem.publish_id ?? '-'}</strong>
                   </div>
                   <div>
                     <span>产物版本</span>
@@ -414,7 +423,13 @@ export function ReviewQueueWorkspace({
                   </div>
                   <div>
                     <span>表现日期</span>
-                    <strong>{selectedItem.performance_as_of_date ?? '-'}</strong>
+                    <strong data-testid="strategy-performance-date">{selectedItem.performance_as_of_date ?? '-'}</strong>
+                  </div>
+                  <div>
+                    <span>累计收益</span>
+                    <strong data-testid="strategy-total-return">
+                      {formatSignedPercent(selectedItem.total_return_pct)}
+                    </strong>
                   </div>
                 </div>
 

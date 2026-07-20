@@ -174,6 +174,42 @@ describe('BacktestLabWorkspace', () => {
     expect(screen.queryByLabelText('rebalance frequency')).not.toBeInTheDocument();
   });
 
+  it('selects an explicit initial official strategy without starting a backtest', async () => {
+    apiMocks.fetchBacktestStrategies.mockResolvedValueOnce(
+      makeStrategies().map((strategy) =>
+        strategy.strategy_id === 'mid_trend'
+          ? {
+              ...strategy,
+              latest_metrics: {
+                as_of_date: '2026-07-18',
+                performance_as_of_date: '2026-07-18',
+                total_return_pct: 49.12,
+                signal_status: 'current_holdings',
+                signal_count: 5,
+                contract_id: 'mid_trend:balanced:top5_weekly_max2_selective_trend_holding_protection_v1',
+                publish_id: 'mid-trend-20260718',
+                artifact_version: 'mid_trend_publication_v2',
+                contract_status: 'success'
+              }
+            }
+          : strategy
+      )
+    );
+    render(<BacktestLabWorkspace initialStrategyId="mid_trend" />);
+
+    await waitFor(() => expect(screen.getByLabelText('strategy')).toHaveValue('mid_trend'));
+    const publication = screen.getByRole('region', { name: 'Mid Trend Combo 正式发布合同' });
+    expect(publication).toHaveAttribute('data-strategy-id', 'mid_trend');
+    expect(within(publication).getByTestId('strategy-contract-id')).toHaveTextContent(
+      'mid_trend:balanced:top5_weekly_max2_selective_trend_holding_protection_v1'
+    );
+    expect(within(publication).getByTestId('strategy-publish-id')).toHaveTextContent('mid-trend-20260718');
+    expect(within(publication).getByTestId('strategy-performance-date')).toHaveTextContent('2026-07-18');
+    expect(within(publication).getByTestId('strategy-total-return')).toHaveTextContent('+49.12%');
+    expect(apiMocks.runBacktest).not.toHaveBeenCalled();
+    expect(apiMocks.runFreshBacktest).not.toHaveBeenCalled();
+  });
+
   it('runs the default LHB combo backtest with default dates and parameters', async () => {
     render(<BacktestLabWorkspace />);
 

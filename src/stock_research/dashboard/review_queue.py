@@ -826,14 +826,18 @@ def _read_manifest_strategy_artifact(
     source_manifest = _compact_validated_source_manifest_evidence(manifest)
     if _manifest_has_publication_declaration(manifest) and source_manifest is None:
         return []
+    summary = metadata.get("summary") if isinstance(metadata.get("summary"), dict) else {}
+    total_return = _optional_float(summary.get("total_return"))
     publication_fields = {
         "contract_id": publication_identity.get("contract_id"),
         "identity_schema_version": publication_identity.get("identity_schema_version"),
         "config_fingerprint": publication_identity.get("config_fingerprint"),
         "publication_policy": dict(publication_identity.get("publication_policy") or {}),
+        "publish_id": metadata.get("publish_id"),
         "artifact_version": metadata.get("artifact_version"),
         "publication_manifest_path": metadata.get("publication_manifest_path"),
         "performance_as_of_date": _manifest_performance_as_of_date(manifest),
+        "total_return_pct": round(total_return * 100, 10) if total_return is not None else None,
         "contract_status": "success",
     }
     normalized: list[dict[str, Any]] = []
@@ -1697,9 +1701,11 @@ def _queue_item(
         "identity_schema_version": _optional_text(row.get("identity_schema_version")),
         "config_fingerprint": _optional_text(row.get("config_fingerprint")),
         "publication_policy": dict(row.get("publication_policy") or {}),
+        "publish_id": _optional_text(row.get("publish_id")),
         "artifact_version": _optional_text(row.get("artifact_version")),
         "publication_manifest_path": _optional_text(row.get("publication_manifest_path")),
         "performance_as_of_date": _optional_text(row.get("performance_as_of_date")),
+        "total_return_pct": _optional_float(row.get("total_return_pct")),
         "contract_status": _optional_text(row.get("contract_status")),
         "source_manifest": (
             deepcopy(row["source_manifest"])

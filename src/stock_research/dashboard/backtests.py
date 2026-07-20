@@ -631,7 +631,7 @@ def _publication_metadata_metrics(
 ) -> dict[str, Any]:
     metadata = module.get("metadata") if isinstance(module.get("metadata"), Mapping) else {}
     metrics = _metrics_from_eod_summary(dict(summary))
-    for key in ("artifact_version", "publication_manifest_path"):
+    for key in ("publish_id", "artifact_version", "publication_manifest_path"):
         if metadata.get(key) is not None:
             metrics[key] = deepcopy(metadata[key])
     return {
@@ -641,6 +641,7 @@ def _publication_metadata_metrics(
             "identity_schema_version",
             "config_fingerprint",
             "publication_policy",
+            "publish_id",
             "artifact_version",
             "publication_manifest_path",
             "strategy_version",
@@ -667,6 +668,7 @@ def _expected_publication_metrics(strategy_id: str) -> dict[str, Any]:
             "identity_schema_version": None,
             "config_fingerprint": None,
             "publication_policy": None,
+            "publish_id": None,
             "artifact_version": None,
             "publication_manifest_path": None,
         }
@@ -675,6 +677,7 @@ def _expected_publication_metrics(strategy_id: str) -> dict[str, Any]:
         "identity_schema_version": identity["identity_schema_version"],
         "config_fingerprint": identity["config_fingerprint"],
         "publication_policy": deepcopy(identity["publication_policy"]),
+        "publish_id": None,
         "artifact_version": None,
         "publication_manifest_path": None,
     }

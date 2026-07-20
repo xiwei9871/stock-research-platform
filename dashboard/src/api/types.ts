@@ -1617,6 +1617,7 @@ export type StrategyCatalogItem = {
     signal_as_of_date?: string | null;
     performance_as_of_date?: string | null;
     contract_id?: string | null;
+    publish_id?: string | null;
     identity_schema_version?: string | null;
     config_fingerprint?: string | null;
     publication_policy?: Record<string, unknown> | null;
@@ -2291,12 +2292,14 @@ export type ReviewQueueItem = {
   strategy_name?: string | null;
   strategy_run_id?: string | null;
   contract_id?: string | null;
+  publish_id?: string | null;
   identity_schema_version?: string | null;
   config_fingerprint?: string | null;
   publication_policy?: Record<string, unknown> | null;
   artifact_version?: string | null;
   publication_manifest_path?: string | null;
   performance_as_of_date?: string | null;
+  total_return_pct?: number | null;
   contract_status?: 'success' | 'contract_mismatch' | string | null;
   review_tier?: 'top5_focus' | 'top10_watch' | string | null;
   weight?: number | null;

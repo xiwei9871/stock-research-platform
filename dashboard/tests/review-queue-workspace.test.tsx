@@ -43,6 +43,7 @@ function makeQueue(overrides: Partial<ReviewQueueResponse> = {}): ReviewQueueRes
             strategy_name: 'Mid Trend Combo',
             strategy_run_id: 'mid_trend:run',
             contract_id: 'mid_trend:balanced:top5_weekly_max2_selective_trend_holding_protection_v1',
+            publish_id: 'mid-trend-20260608',
             identity_schema_version: 'strategy_publication_identity_v1',
             config_fingerprint: 'mid-fingerprint',
             publication_policy: {
@@ -52,6 +53,7 @@ function makeQueue(overrides: Partial<ReviewQueueResponse> = {}): ReviewQueueRes
             publication_manifest_path:
               '/srv/outputs/research/strategy_daily_eod/2026-06-08/strategy_runs/mid_trend/publish-1/publication_manifest.json',
             performance_as_of_date: '2026-06-08',
+            total_return_pct: 49.12,
             contract_status: 'success',
             review_tier: 'top5_focus',
             digest_key: '2026-06-08:strategy_topn:000001.SZ',
@@ -175,6 +177,7 @@ describe('ReviewQueueWorkspace', () => {
     expect(within(sourceChips).getByText('策略')).toBeInTheDocument();
     expect(within(sourceChips).getByText('研报')).toBeInTheDocument();
     expect(within(preview).getByText('正式合同')).toBeVisible();
+    expect(within(preview).getByText('发布编号')).toBeVisible();
     expect(within(preview).getByText('产物版本')).toBeVisible();
     expect(within(preview).getByText('校验状态')).toBeVisible();
     expect(
@@ -183,6 +186,8 @@ describe('ReviewQueueWorkspace', () => {
       )
     ).toBeVisible();
     expect(within(preview).getByText('strategy_artifact_v1')).toBeVisible();
+    expect(within(preview).getByTestId('strategy-publish-id')).toHaveTextContent('mid-trend-20260608');
+    expect(within(preview).getByTestId('strategy-total-return')).toHaveTextContent('+49.12%');
     expect(within(preview).getByText('2026-06-08')).toBeVisible();
     expect(within(preview).getByText('通过')).toBeVisible();
   });

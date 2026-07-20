@@ -239,6 +239,13 @@ function searchQueryFromHistoryState() {
   return typeof state?.searchQuery === 'string' ? state.searchQuery : '';
 }
 
+const OFFICIAL_STRATEGY_IDS = new Set(['lhb_shortline', 'mid_trend', 'tech_bottleneck']);
+
+function officialStrategyIdFromSearch(search: string): string | undefined {
+  const strategyId = new URLSearchParams(search).get('strategy_id') ?? '';
+  return OFFICIAL_STRATEGY_IDS.has(strategyId) ? strategyId : undefined;
+}
+
 function historyStateFields() {
   const state = window.history.state;
   return state && typeof state === 'object' && !Array.isArray(state) ? state : {};
@@ -327,6 +334,11 @@ export function AppShell({ currentUser: _currentUser, onLogout, logoutPending = 
       ? window.location.pathname
       : WORKSPACE_PATHS.themeResearch
   );
+  const [initialStrategyId, setInitialStrategyId] = useState(() =>
+    typeof window !== 'undefined' && initialPlatformLocation.workspace === 'strategyLab'
+      ? officialStrategyIdFromSearch(window.location.search)
+      : undefined
+  );
   const [displayTradeDate, setDisplayTradeDate] = useState(FALLBACK_DISPLAY_TRADE_DATE);
   const [stockDefaultTradeDate, setStockDefaultTradeDate] = useState(FALLBACK_DISPLAY_TRADE_DATE);
 
@@ -372,6 +384,9 @@ export function AppShell({ currentUser: _currentUser, onLogout, logoutPending = 
           }));
         }
       }
+      setInitialStrategyId(
+        nextLocation.workspace === 'strategyLab' ? officialStrategyIdFromSearch(window.location.search) : undefined
+      );
       setGlobalSearchQuery(nextLocation.workspace === 'home' ? searchQueryFromHistoryState() : '');
       setWorkspaceMode(workspaceModeForCurrentUser(nextLocation.workspace, currentUser));
     };
@@ -461,6 +476,14 @@ export function AppShell({ currentUser: _currentUser, onLogout, logoutPending = 
       setThemeResearchPathname(path);
     }
     setWorkspaceMode(mode);
+  }
+
+  function openStrategyWorkspace(strategyId: string) {
+    if (!OFFICIAL_STRATEGY_IDS.has(strategyId)) return;
+    const path = `${pathForWorkspace('strategyLab')}?strategy_id=${encodeURIComponent(strategyId)}`;
+    pushLocation(path);
+    setInitialStrategyId(strategyId);
+    setWorkspaceMode('strategyLab');
   }
 
   function navigateThemeResearch(path: string) {
@@ -621,7 +644,9 @@ export function AppShell({ currentUser: _currentUser, onLogout, logoutPending = 
           ) : null}
         </header>
         <section className="platform-workspace">
-          {workspaceMode === 'home' ? <HomeCockpit onNavigate={openWorkspaceMode} /> : null}
+          {workspaceMode === 'home' ? (
+            <HomeCockpit onNavigate={openWorkspaceMode} onOpenStrategy={openStrategyWorkspace} />
+          ) : null}
           {workspaceMode === 'reviewQueue' ? (
             <ReviewQueueWorkspace
               onOpenStock={openStockWorkspaceFromReviewQueue}
@@ -695,7 +720,9 @@ export function AppShell({ currentUser: _currentUser, onLogout, logoutPending = 
             <TechBottleneckReviewPage onOpenStock={openStockWorkspaceFromTechBottleneckReviewUniverse} />
           ) : null}
           {workspaceMode === 'dataToBriefDocling90' ? <DataToBriefDocling90ReviewWorkspace /> : null}
-          {workspaceMode === 'strategyLab' ? <StrategyLabWorkspace defaultEndDate={displayTradeDate} /> : null}
+          {workspaceMode === 'strategyLab' ? (
+            <StrategyLabWorkspace defaultEndDate={displayTradeDate} initialStrategyId={initialStrategyId} />
+          ) : null}
           {workspaceMode === 'generatedReports' ? (
             <GeneratedReportsWorkspace
               key={`generatedReports:${generatedReportsHandoff.version}`}

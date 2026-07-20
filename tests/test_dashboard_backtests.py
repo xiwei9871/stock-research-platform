@@ -480,9 +480,25 @@ def test_registered_strategy_without_versioned_eod_evidence_fails_closed(monkeyp
         "identity_schema_version": expected["identity_schema_version"],
         "config_fingerprint": expected["config_fingerprint"],
         "publication_policy": expected["publication_policy"],
+        "publish_id": None,
         "artifact_version": None,
         "publication_manifest_path": None,
     }
+
+
+def test_publication_metadata_metrics_preserves_explicit_publish_id():
+    metrics = backtests._publication_metadata_metrics(
+        {
+            "metadata": {
+                "publish_id": "lhb-shortline-20260719",
+                "artifact_version": "strategy_artifact_v1",
+                "publication_manifest_path": "/ignored/identity/path/publication_manifest.json",
+            }
+        },
+        {},
+    )
+
+    assert metrics["publish_id"] == "lhb-shortline-20260719"
 
 
 def test_failed_official_eod_has_complete_fail_closed_contract_shape(monkeypatch):
@@ -516,6 +532,7 @@ def test_failed_official_eod_has_complete_fail_closed_contract_shape(monkeypatch
         "identity_schema_version": expected["identity_schema_version"],
         "config_fingerprint": expected["config_fingerprint"],
         "publication_policy": expected["publication_policy"],
+        "publish_id": None,
         "artifact_version": None,
         "publication_manifest_path": None,
     }
@@ -707,8 +724,9 @@ def test_latest_eod_metrics_fail_closed_per_strategy_for_publication_identity(tm
             "metadata": {
                 "publication_identity": identity,
                 "identity_schema_version": identity["identity_schema_version"],
-                "artifact_version": "strategy_artifact_v1",
-                "publication_manifest_path": str(manifest_path),
+                    "artifact_version": "strategy_artifact_v1",
+                    "publish_id": "publish-1",
+                    "publication_manifest_path": str(manifest_path),
                 "output_paths": {"publication_manifest_path": str(manifest_path)},
                 "summary": summary,
             },
@@ -746,6 +764,7 @@ def test_latest_eod_metrics_fail_closed_per_strategy_for_publication_identity(tm
             get_publication_contract(strategy_id)
         )["contract_id"]
         assert metrics["artifact_version"] == "strategy_artifact_v1"
+        assert metrics["publish_id"] == "publish-1"
         assert metrics["publication_manifest_path"].endswith(
             f"/strategy_runs/{strategy_id}/publish-1/publication_manifest.json"
         )

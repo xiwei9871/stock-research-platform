@@ -26,6 +26,7 @@ type ComparisonRow = {
 type BacktestLabWorkspaceProps = {
   embedded?: boolean;
   defaultEndDate?: string;
+  initialStrategyId?: string;
 };
 
 function formatValue(value: BacktestScalar | undefined) {
@@ -70,6 +71,11 @@ function formatStrategyStatus(status: string) {
   return status.replace(/_/g, '-');
 }
 
+function formatPublicationPercent(value: number | null | undefined) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '-';
+  return `${value > 0 ? '+' : ''}${value.toFixed(2)}%`;
+}
+
 function metricValue(result: BacktestRunResult | null, keys: string[]) {
   if (!result) {
     return null;
@@ -107,7 +113,11 @@ function elapsedSeconds(result: BacktestRunResult | null) {
   return `${Number((result.elapsed_ms / 1000).toFixed(2))}s`;
 }
 
-export function BacktestLabWorkspace({ embedded = false, defaultEndDate = DEFAULT_END_DATE }: BacktestLabWorkspaceProps = {}) {
+export function BacktestLabWorkspace({
+  embedded = false,
+  defaultEndDate = DEFAULT_END_DATE,
+  initialStrategyId
+}: BacktestLabWorkspaceProps = {}) {
   const [strategies, setStrategies] = useState<StrategyCatalogItem[]>([]);
   const [strategyId, setStrategyId] = useState(DEFAULT_STRATEGY_ID);
   const [startDate, setStartDate] = useState(DEFAULT_START_DATE);
@@ -138,7 +148,13 @@ export function BacktestLabWorkspace({ embedded = false, defaultEndDate = DEFAUL
         }
         setStrategies(rows);
         setStrategyId(
-          rows.find((row) => row.status === 'runnable' && DEFAULT_COMBO_STRATEGY_IDS.has(row.strategy_id))?.strategy_id ??
+          rows.find(
+            (row) =>
+              row.strategy_id === initialStrategyId &&
+              row.status === 'runnable' &&
+              DEFAULT_COMBO_STRATEGY_IDS.has(row.strategy_id)
+          )?.strategy_id ??
+            rows.find((row) => row.status === 'runnable' && DEFAULT_COMBO_STRATEGY_IDS.has(row.strategy_id))?.strategy_id ??
             rows.find((row) => row.status === 'runnable')?.strategy_id ??
             rows[0]?.strategy_id ??
             DEFAULT_STRATEGY_ID
@@ -156,7 +172,7 @@ export function BacktestLabWorkspace({ embedded = false, defaultEndDate = DEFAUL
     return () => {
       mountedRef.current = false;
     };
-  }, []);
+  }, [initialStrategyId]);
 
   const selectedStrategy = useMemo(
     () => strategies.find((strategy) => strategy.strategy_id === strategyId) ?? null,
@@ -440,6 +456,52 @@ export function BacktestLabWorkspace({ embedded = false, defaultEndDate = DEFAUL
 
       {catalogError ? <p className="error-text">{catalogError}</p> : null}
       {runError ? <p className="error-text">{runError}</p> : null}
+
+      {selectedStrategy ? (
+        <section
+          className="workspace-band"
+          role="region"
+          aria-label={`${selectedStrategy.strategy_name} 正式发布合同`}
+          data-strategy-id={selectedStrategy.strategy_id}
+        >
+          <div className="strategy-metric-grid">
+            <div>
+              <span>正式合同</span>
+              <strong data-testid="strategy-contract-id">{selectedStrategy.latest_metrics?.contract_id ?? '-'}</strong>
+            </div>
+            <div>
+              <span>发布编号</span>
+              <strong data-testid="strategy-publish-id">{selectedStrategy.latest_metrics?.publish_id ?? '-'}</strong>
+            </div>
+            <div>
+              <span>产物版本</span>
+              <strong>{selectedStrategy.latest_metrics?.artifact_version ?? '-'}</strong>
+            </div>
+            <div>
+              <span>表现日期</span>
+              <strong data-testid="strategy-performance-date">
+                {selectedStrategy.latest_metrics?.performance_as_of_date ?? selectedStrategy.latest_metrics?.as_of_date ?? '-'}
+              </strong>
+            </div>
+            <div>
+              <span>累计收益</span>
+              <strong data-testid="strategy-total-return">
+                {formatPublicationPercent(selectedStrategy.latest_metrics?.total_return_pct)}
+              </strong>
+            </div>
+            <div>
+              <span>校验状态</span>
+              <strong>
+                {selectedStrategy.latest_metrics?.contract_status === 'success'
+                  ? '通过'
+                  : selectedStrategy.latest_metrics?.contract_status === 'contract_mismatch'
+                    ? '合同不匹配'
+                    : '未校验'}
+              </strong>
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       <section className="workspace-band">
         <div className="section-heading">

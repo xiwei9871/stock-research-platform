@@ -53,6 +53,7 @@ type WorkspaceMode =
 
 type HomeCockpitProps = {
   onNavigate: (mode: WorkspaceMode) => void;
+  onOpenStrategy?: (strategyId: string) => void;
 };
 
 const ACTIVE_STRATEGY_IDS = ['lhb_shortline', 'mid_trend', 'tech_bottleneck'];
@@ -66,10 +67,13 @@ function formatCount(value: number | null | undefined) {
   return typeof value === 'number' ? value.toLocaleString() : '-';
 }
 
-function formatPercent(value: number | null | undefined, options: { signed?: boolean } = {}) {
+function formatPercent(
+  value: number | null | undefined,
+  options: { signed?: boolean; fractionDigits?: number } = {}
+) {
   if (typeof value !== 'number' || Number.isNaN(value)) return '-';
   const prefix = options.signed && value > 0 ? '+' : '';
-  return `${prefix}${value.toFixed(1)}%`;
+  return `${prefix}${value.toFixed(options.fractionDigits ?? 1)}%`;
 }
 
 function formatOneDecimal(value: number | null | undefined) {
@@ -299,6 +303,7 @@ function strategyEvidenceMetrics(strategy: StrategyCatalogItem) {
     signalCount: strategy.latest_metrics?.signal_count ?? null,
     strategyVersion: strategy.latest_metrics?.strategy_version ?? null,
     contractId: strategy.latest_metrics?.contract_id ?? null,
+    publishId: strategy.latest_metrics?.publish_id ?? null,
     artifactVersion: strategy.latest_metrics?.artifact_version ?? null,
     contractStatus,
     isLhbPolicy:
@@ -559,7 +564,7 @@ function metadataText(metadata: Record<string, unknown>) {
     .join(' · ');
 }
 
-export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
+export function HomeCockpit({ onNavigate, onOpenStrategy }: HomeCockpitProps) {
   const [summary, setSummary] = useState<PlatformSummary | null>(null);
   const [strategies, setStrategies] = useState<StrategyCatalogItem[]>([]);
   const [marketMonitor, setMarketMonitor] = useState<MarketMonitorPayload | null>(null);
@@ -1702,7 +1707,7 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
           {visibleStrategies.map((strategy) => {
             const metrics = strategyEvidenceMetrics(strategy);
             return (
-              <article className="strategy-command-card" key={strategy.strategy_id}>
+              <article className="strategy-command-card" data-strategy-id={strategy.strategy_id} key={strategy.strategy_id}>
                 <div className="strategy-command-card-header">
                   <strong>{strategy.strategy_name}</strong>
                   {strategyVersionLabel(metrics.strategyVersion) ? (
@@ -1713,8 +1718,8 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
                 <div className="strategy-metric-grid">
                   <div>
                     <span>累计收益</span>
-                    <strong className={metricClass(metrics.totalReturnPct)}>
-                      {formatPercent(metrics.totalReturnPct, { signed: true })}
+                    <strong className={metricClass(metrics.totalReturnPct)} data-testid="strategy-total-return">
+                      {formatPercent(metrics.totalReturnPct, { signed: true, fractionDigits: 2 })}
                     </strong>
                   </div>
                   <div>
@@ -1731,7 +1736,11 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
                 <div className="strategy-metric-grid" aria-label={`${strategy.strategy_name} 正式发布合同`}>
                   <div>
                     <span>正式合同</span>
-                    <strong>{metrics.contractId ?? '-'}</strong>
+                    <strong data-testid="strategy-contract-id">{metrics.contractId ?? '-'}</strong>
+                  </div>
+                  <div>
+                    <span>发布编号</span>
+                    <strong data-testid="strategy-publish-id">{metrics.publishId ?? '-'}</strong>
                   </div>
                   <div>
                     <span>产物版本</span>
@@ -1744,10 +1753,16 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
                 </div>
                 {metrics.isLhbPolicy ? <p className="muted">Top5 先选后校验，不补位</p> : null}
                 <div className="strategy-card-footer">
-                  <span>{metrics.asOfDate ? `截至 ${metrics.asOfDate}` : '最近日期未接入'}</span>
+                  <span>
+                    截至{' '}
+                    <span data-testid="strategy-performance-date">{metrics.asOfDate ?? '-'}</span>
+                  </span>
                   <span>{signalLabel(metrics)}</span>
                 </div>
                 <p>{metrics.evidence || strategy.description}</p>
+                <button type="button" onClick={() => onOpenStrategy?.(strategy.strategy_id)}>
+                  打开策略 {strategy.strategy_name}
+                </button>
               </article>
             );
           })}

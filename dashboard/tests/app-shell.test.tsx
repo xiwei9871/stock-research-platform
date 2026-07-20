@@ -3287,6 +3287,29 @@ describe('dashboard app shell', () => {
     await waitFor(() => expect(screen.getByText('LHB Shortline')).toBeInTheDocument());
   });
 
+  it('restores the selected official strategy from a direct strategy-lab URL', async () => {
+    window.history.replaceState({}, '', '/strategy-lab?strategy_id=tech_bottleneck');
+    apiMocks.fetchBacktestStrategies.mockResolvedValueOnce([
+      {
+        strategy_id: 'tech_bottleneck',
+        strategy_name: 'Tech Bottleneck Combo',
+        status: 'runnable',
+        description: 'Tech bottleneck combo',
+        factor_groups: ['technical'],
+        signal_inputs: ['official publication'],
+        default_parameters: { top_n: 5 },
+        latest_evidence: '',
+        primary_action: 'Run backtest'
+      }
+    ]);
+
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
+
+    expect(await screen.findByRole('heading', { name: 'Strategy Lab' })).toBeVisible();
+    await waitFor(() => expect(screen.getByLabelText('strategy')).toHaveValue('tech_bottleneck'));
+    expect(apiMocks.runBacktest).not.toHaveBeenCalled();
+  });
+
   it('supports keyboard navigation between Strategy Lab tabs', async () => {
     render(<AppShell currentUser={TEST_ADMIN_USER} />);
     const navigation = within(screen.getByRole('complementary', { name: 'Workspace navigation' }));

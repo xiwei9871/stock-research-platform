@@ -199,6 +199,7 @@ def test_manifest_strategy_rows_use_versioned_artifact_not_stale_root_mirror(tmp
         "benchmark_variant": "top5_weekly_max2_selective_trend_holding_protection_v1",
         "publication_identity": identity,
         "performance_effective_date": "2026-07-18",
+        "total_return": 0.4912,
     }
     monkeypatch.setattr(
         review_queue,
@@ -227,6 +228,8 @@ def test_manifest_strategy_rows_use_versioned_artifact_not_stale_root_mirror(tmp
     rows = review_queue._load_manifest_strategy_rows(trade_date="2026-07-18", limit=50)
 
     assert [row["asset_id"] for row in rows] == ["CN:SH:600002"]
+    assert rows[0]["publish_id"] == "publish-1"
+    assert rows[0]["total_return_pct"] == 49.12
 
 
 def test_v1_manifest_rejects_root_mirror_as_artifact_path(tmp_path, monkeypatch):
@@ -466,6 +469,7 @@ def _v1_versioned_manifest(tmp_path):
                 "benchmark_variant": (
                     "top5_weekly_max2_selective_trend_holding_protection_v1"
                 ),
+                "total_return": 0.4912,
             },
         },
     }
@@ -541,11 +545,13 @@ def test_v1_manifest_rows_expose_generic_publication_evidence(tmp_path, monkeypa
     assert item["identity_schema_version"] == identity["identity_schema_version"]
     assert item["config_fingerprint"] == identity["config_fingerprint"]
     assert item["publication_policy"] == identity["publication_policy"]
+    assert item["publish_id"] == "publish-1"
     assert item["artifact_version"] == "strategy_artifact_v1"
     assert item["publication_manifest_path"].endswith(
         "/strategy_runs/mid_trend/publish-1/publication_manifest.json"
     )
     assert item["performance_as_of_date"] == "2026-07-18"
+    assert item["total_return_pct"] == 49.12
     assert item["contract_status"] == "success"
 
     rows, blocked = review_queue._load_strategy_manifest_snapshot(
