@@ -414,9 +414,10 @@ test('a critical API 500 exposes a local error and succeeds through the real ret
   );
   await installDeepRouteApi(page);
   let detailAttempts = 0;
+  let detailPhase: 'failure' | 'success' = 'failure';
   await page.route(`/api/research/theme-decomposition/themes/${THEME_ID}`, async (route) => {
     detailAttempts += 1;
-    if (detailAttempts <= 2) {
+    if (detailPhase === 'failure') {
       await route.fulfill({ status: 500, json: { detail: 'theme store unavailable' } });
       return;
     }
@@ -427,10 +428,13 @@ test('a critical API 500 exposes a local error and succeeds through the real ret
   const errorState = page.locator('.theme-research-state');
   await expect(errorState).toHaveAttribute('role', 'alert');
   await expect(errorState).toContainText('无法读取主题研究数据，请重试。');
+  expect(detailAttempts).toBeGreaterThanOrEqual(1);
+  const attemptsBeforeRetry = detailAttempts;
+  detailPhase = 'success';
   await errorState.getByRole('button', { name: '重试' }).click();
 
   await expect(page.getByRole('heading', { name: '公司映射' })).toBeVisible();
-  expect(detailAttempts).toBeGreaterThanOrEqual(3);
+  expect(detailAttempts).toBeGreaterThan(attemptsBeforeRetry);
 });
 
 test('every P0 deep route survives a direct refresh @p0 @mock @failure-isolation', async ({ page }) => {
