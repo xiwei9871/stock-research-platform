@@ -11,6 +11,7 @@ import {
 const WRITE_FORBIDDEN = 'real_profile_write_forbidden';
 const ROUTE_OVERRIDE_FORBIDDEN = 'real_profile_api_route_override_forbidden';
 const UNSCOPED_REQUEST_FORBIDDEN = 'real_profile_unscoped_request_context_forbidden';
+const UNSCOPED_BROWSER_CONTEXT_FORBIDDEN = 'real_profile_unscoped_browser_context_forbidden';
 const PROBE_DOCUMENT = '/__playwright_real_contract__';
 
 type GuardedResult = {
@@ -65,7 +66,13 @@ async function postWithFetch(page: Page, path: string): Promise<GuardedResult> {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ marker: 'real_profile_write_forbidden' })
     });
-    const payload = (await response.json()) as { detail?: unknown };
+    const text = await response.text();
+    let payload: { detail?: unknown } = {};
+    try {
+      payload = JSON.parse(text) as { detail?: unknown };
+    } catch {
+      // The contract assertion fails closed when a response is not the guard JSON.
+    }
     return {
       status: response.status,
       detail: typeof payload.detail === 'string' ? payload.detail : '',
@@ -383,6 +390,77 @@ test('@read-only-contract APIRequestContext cannot bypass the write guard', asyn
   });
   expect(control.ok()).toBe(true);
   expect(control.headers()['x-request-id']).toBe('playwright-real-request-context-control');
+});
+
+test('@read-only-contract encoded API paths cannot bypass page or request guards', async ({
+  page,
+  realHttpEvidence,
+  request,
+  runtimePolicy
+}) => {
+  runtimePolicy.consoleErrors.push(
+    'Failed to load resource: the server responded with a status of 404 (Not Found)'
+  );
+  await openProbeDocument(page);
+  const encodedApiPaths = [
+    '/%61pi',
+    '/api%2Fencoded',
+    '/%2561pi/double-encoded',
+    '/%61pi%ZZ'
+  ];
+
+  for (const path of encodedApiPaths) {
+    expectLocallyRejected(await postWithFetch(page, path));
+    await expect(async () => request.post(path)).rejects.toThrow(WRITE_FORBIDDEN);
+  }
+  await expect
+    .poll(
+      () =>
+        realHttpEvidence.exchanges.filter(
+          (exchange) =>
+            exchange.method === 'POST' &&
+            exchange.responseHeaders['x-playwright-real-guard'] === WRITE_FORBIDDEN
+        ).length
+    )
+    .toBe(encodedApiPaths.length);
+
+  const pageSibling = await postWithFetch(page, '/%61pix');
+  expect([200, 404]).toContain(pageSibling.status);
+  expect(pageSibling.guard).toBeNull();
+  const requestSibling = await request.post('/%61pix');
+  expect([200, 404]).toContain(requestSibling.status());
+  expect(requestSibling.headers()['x-playwright-real-guard']).toBeUndefined();
+});
+
+test.describe.serial('@read-only-contract browser context guard restoration', () => {
+  test('rejects browser.newContext request writes and browser.newPage', async ({ browser, page }) => {
+    await openProbeDocument(page);
+    const baseURL = new URL(page.url()).origin;
+    await expect(async () => {
+      const extraContext = await browser.newContext({ baseURL });
+      try {
+        await extraContext.request.post('/api');
+      } finally {
+        await extraContext.close();
+      }
+    }).rejects.toThrow(UNSCOPED_BROWSER_CONTEXT_FORBIDDEN);
+
+    await expect(async () => {
+      const extraPage = await browser.newPage({ baseURL });
+      try {
+        await extraPage.goto('about:blank');
+      } finally {
+        await extraPage.close();
+      }
+    }).rejects.toThrow(UNSCOPED_BROWSER_CONTEXT_FORBIDDEN);
+  });
+
+  test('the next test still receives a fresh built-in context', async ({ context, page }) => {
+    expect(context.pages()).toContain(page);
+    await openProbeDocument(page);
+    const response = await page.evaluate(() => fetch('/api/platform/display-date').then((item) => item.status));
+    expect(response).toBe(200);
+  });
 });
 
 test('@read-only-contract API route overrides cannot take precedence over the guard', async ({

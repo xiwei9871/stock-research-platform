@@ -1,6 +1,7 @@
 import type {
   APIRequestContext,
   APIResponse,
+  Browser,
   BrowserContext,
   Page,
   Request,
@@ -20,6 +21,8 @@ export const REAL_PROFILE_API_ROUTE_OVERRIDE_FORBIDDEN =
   'real_profile_api_route_override_forbidden';
 export const REAL_PROFILE_UNSCOPED_REQUEST_CONTEXT_FORBIDDEN =
   'real_profile_unscoped_request_context_forbidden';
+export const REAL_PROFILE_UNSCOPED_BROWSER_CONTEXT_FORBIDDEN =
+  'real_profile_unscoped_browser_context_forbidden';
 const ALLOWED_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 const REDACTED = '[REDACTED]';
 
@@ -50,6 +53,7 @@ export type RealApiControl = {
 
 type RealFixtures = {
   realApi: RealApiControl;
+  realBrowserContextGuard: void;
   realHttpEvidence: RealHttpEvidence;
   realReadOnlyGuard: void;
 };
@@ -83,9 +87,38 @@ function safeEvidenceUrl(rawUrl: string): string {
     : sanitizeRuntimeEvidenceText(rawUrl.split(/[?#]/, 1)[0]);
 }
 
+function isApiPath(pathname: string): boolean {
+  return pathname === '/api' || pathname.startsWith('/api/');
+}
+
+function decodePathLayer(pathname: string): string {
+  try {
+    return decodeURIComponent(pathname);
+  } catch {
+    return pathname.replace(/%([0-9a-f]{2})/gi, (_match, encoded: string) => {
+      const value = Number.parseInt(encoded, 16);
+      return value <= 0x7f ? String.fromCharCode(value) : `%${encoded.toUpperCase()}`;
+    });
+  }
+}
+
+function hasMalformedPercent(value: string): boolean {
+  return /%(?![0-9a-f]{2})/i.test(value);
+}
+
 function isApiUrl(rawUrl: string, baseURL?: string): boolean {
-  const pathname = safeUrl(rawUrl, baseURL)?.pathname;
-  return pathname === '/api' || pathname?.startsWith('/api/') === true;
+  const url = safeUrl(rawUrl, baseURL);
+  if (!url) return false;
+  let pathname = url.pathname;
+  for (let layer = 0; layer < 8; layer += 1) {
+    if (isApiPath(pathname)) return true;
+    if (pathname.startsWith('/api%') && hasMalformedPercent(pathname.slice(4))) return true;
+    const decoded = decodePathLayer(pathname);
+    if (decoded === pathname) return false;
+    pathname = decoded;
+  }
+  return isApiPath(pathname) ||
+    (pathname.startsWith('/api%') && hasMalformedPercent(pathname.slice(4)));
 }
 
 function createRealApiControl(): RealApiControl {
@@ -290,6 +323,27 @@ function guardRouteOverrides(owner: RouteOwner, baseURL?: string): () => void {
   };
 }
 
+function guardBrowserContextCreation(browser: Browser): () => void {
+  const mutable = browser as unknown as Record<string, unknown>;
+  const hadOwnNewContext = Object.prototype.hasOwnProperty.call(mutable, 'newContext');
+  const hadOwnNewPage = Object.prototype.hasOwnProperty.call(mutable, 'newPage');
+  const previousNewContext = mutable.newContext;
+  const previousNewPage = mutable.newPage;
+  mutable.newContext = async () => {
+    throw new Error(REAL_PROFILE_UNSCOPED_BROWSER_CONTEXT_FORBIDDEN);
+  };
+  mutable.newPage = async () => {
+    throw new Error(REAL_PROFILE_UNSCOPED_BROWSER_CONTEXT_FORBIDDEN);
+  };
+
+  return () => {
+    if (hadOwnNewContext) mutable.newContext = previousNewContext;
+    else delete mutable.newContext;
+    if (hadOwnNewPage) mutable.newPage = previousNewPage;
+    else delete mutable.newPage;
+  };
+}
+
 function baseURLFromProject(testInfo: { project: { use: Record<string, unknown> } }): string | undefined {
   const value = testInfo.project.use.baseURL;
   return typeof value === 'string' ? value : undefined;
@@ -402,6 +456,18 @@ export const test = sharedTest.extend<RealFixtures, RealWorkerFixtures>({
   realApi: async ({}, use) => {
     await use(createRealApiControl());
   },
+  realBrowserContextGuard: [
+    async ({ browser, context }, use) => {
+      void context;
+      const restore = guardBrowserContextCreation(browser);
+      try {
+        await use();
+      } finally {
+        restore();
+      }
+    },
+    { auto: true }
+  ],
   realReadOnlyGuard: [
     async ({ context, realApi, runtimePolicy }, use, testInfo) => {
       const uninstall = await installContextGuard(
