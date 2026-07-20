@@ -1,9 +1,16 @@
-import type { Page, Response } from '@playwright/test';
+import type { Page, Response, Route } from '@playwright/test';
 
 import { loadAuthoritativeSnapshot } from './authoritativeSnapshot';
-import { expect, serializeRealHttpEvidence, test } from './test';
+import {
+  expect,
+  serializeRealHttpEvidence,
+  test,
+  type RealApiControl
+} from './test';
 
 const WRITE_FORBIDDEN = 'real_profile_write_forbidden';
+const ROUTE_OVERRIDE_FORBIDDEN = 'real_profile_api_route_override_forbidden';
+const UNSCOPED_REQUEST_FORBIDDEN = 'real_profile_unscoped_request_context_forbidden';
 const PROBE_DOCUMENT = '/__playwright_real_contract__';
 
 type GuardedResult = {
@@ -13,7 +20,7 @@ type GuardedResult = {
 };
 
 async function openProbeDocument(page: Page): Promise<void> {
-  await page.route(`**${PROBE_DOCUMENT}`, async (route) => {
+  await page.route(PROBE_DOCUMENT, async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'text/html',
@@ -110,6 +117,10 @@ function expectLocallyRejected(result: GuardedResult): void {
   });
 }
 
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 const COMPLETE_PUBLICATIONS = [
   {
     strategyId: 'lhb_shortline',
@@ -137,53 +148,50 @@ const COMPLETE_PUBLICATIONS = [
   }
 ] as const;
 
-async function installSnapshotResponses(page: Page, conflictStrategyId?: string): Promise<void> {
-  await page.route('**/api/platform/display-date', (route) =>
-    route.fulfill({
-      json: {
-        display_trade_date: '2026-07-20',
-        candidate_trade_date: '2026-07-21'
-      }
-    })
-  );
-  await page.route('**/api/strategies/catalog', (route) =>
-    route.fulfill({
-      json: {
-        items: COMPLETE_PUBLICATIONS.map((publication) => ({
-          strategy_id: publication.strategyId,
-          latest_metrics: {
+async function installSnapshotResponses(
+  realApi: RealApiControl,
+  conflictStrategyId?: string
+): Promise<void> {
+  realApi.stubGet('/api/platform/display-date', {
+    json: {
+      display_trade_date: '2026-07-20',
+      candidate_trade_date: '2026-07-21'
+    }
+  });
+  realApi.stubGet('/api/strategies/catalog', {
+    json: {
+      items: COMPLETE_PUBLICATIONS.map((publication) => ({
+        strategy_id: publication.strategyId,
+        latest_metrics: {
+          performance_as_of_date: publication.tradeDate,
+          total_return_pct: publication.totalReturnPct,
+          contract_id: publication.contractId,
+          publish_id: publication.publishId,
+          artifact_version: publication.artifactVersion
+        }
+      }))
+    }
+  });
+  realApi.stubGet('/api/review-queue', {
+    json: {
+      groups: COMPLETE_PUBLICATIONS.map((publication) => ({
+        bucket: `strategy:${publication.strategyId}`,
+        items: [
+          {
+            strategy_id: publication.strategyId,
             performance_as_of_date: publication.tradeDate,
             total_return_pct: publication.totalReturnPct,
             contract_id: publication.contractId,
-            publish_id: publication.publishId,
+            publish_id:
+              publication.strategyId === conflictStrategyId
+                ? `${publication.publishId}-conflict`
+                : publication.publishId,
             artifact_version: publication.artifactVersion
           }
-        }))
-      }
-    })
-  );
-  await page.route('**/api/review-queue?*', (route) =>
-    route.fulfill({
-      json: {
-        groups: COMPLETE_PUBLICATIONS.map((publication) => ({
-          bucket: `strategy:${publication.strategyId}`,
-          items: [
-            {
-              strategy_id: publication.strategyId,
-              performance_as_of_date: publication.tradeDate,
-              total_return_pct: publication.totalReturnPct,
-              contract_id: publication.contractId,
-              publish_id:
-                publication.strategyId === conflictStrategyId
-                  ? `${publication.publishId}-conflict`
-                  : publication.publishId,
-              artifact_version: publication.artifactVersion
-            }
-          ]
-        }))
-      }
-    })
-  );
+        ]
+      }))
+    }
+  });
 }
 
 test('@read-only-contract GET control reaches the real API', async ({ page }) => {
@@ -209,23 +217,22 @@ test('@read-only-contract GET control reaches the real API', async ({ page }) =>
 
 test('@read-only-contract shared header evidence is deterministic and secret-free', async ({
   page,
+  realApi,
   realHttpEvidence
 }) => {
   await openProbeDocument(page);
   await page.context().addCookies([
     { name: 'real_secret_cookie', value: 'cookie-secret-value', url: new URL(page.url()).origin }
   ]);
-  await page.route('**/api/__playwright_real_header_probe__', (route) =>
-    route.fulfill({
-      status: 200,
-      headers: {
-        authorization: 'Bearer response-secret-value',
-        'set-cookie': 'server_secret_cookie=set-cookie-secret-value; Path=/',
-        'x-request-id': 'playwright-real-header-probe'
-      },
-      json: { ok: true }
-    })
-  );
+  realApi.stubGet('/api/__playwright_real_header_probe__', {
+    status: 200,
+    headers: {
+      authorization: 'Bearer response-secret-value',
+      'set-cookie': 'server_secret_cookie=set-cookie-secret-value; Path=/',
+      'x-request-id': 'playwright-real-header-probe'
+    },
+    json: { ok: true }
+  });
 
   await page.evaluate(async () => {
     await fetch('/api/__playwright_real_header_probe__', {
@@ -265,9 +272,119 @@ test('@read-only-contract APIRequestContext cannot bypass the write guard', asyn
   expect(control.headers()['x-request-id']).toBe('playwright-real-request-context-control');
 });
 
-test('@read-only-contract snapshot parser accepts matching explicit identities', async ({ page }) => {
+test('@read-only-contract API route overrides cannot take precedence over the guard', async ({
+  context,
+  page
+}) => {
+  const handler = async (route: Route) => {
+    await route.fulfill({ json: { bypassed: true } });
+  };
+  const attempt = async (
+    install: () => Promise<unknown>,
+    cleanup: () => Promise<unknown>
+  ): Promise<string> => {
+    try {
+      await install();
+    } catch (error) {
+      return errorText(error);
+    }
+    await cleanup();
+    return '';
+  };
+
+  const pageError = await attempt(
+    () => page.route('/api/__playwright_real_route_bypass__', handler),
+    () => page.unroute('/api/__playwright_real_route_bypass__', handler)
+  );
+  const contextError = await attempt(
+    () => context.route('/api/__playwright_real_context_bypass__', handler),
+    () => context.unroute('/api/__playwright_real_context_bypass__', handler)
+  );
+  const nextPage = await context.newPage();
+  const nextPageError = await attempt(
+    () => nextPage.route('/api/__playwright_real_new_page_bypass__', handler),
+    () => nextPage.unroute('/api/__playwright_real_new_page_bypass__', handler)
+  );
+  await nextPage.close();
+
+  expect([pageError, contextError, nextPageError]).toEqual([
+    ROUTE_OVERRIDE_FORBIDDEN,
+    ROUTE_OVERRIDE_FORBIDDEN,
+    ROUTE_OVERRIDE_FORBIDDEN
+  ]);
+
   await openProbeDocument(page);
-  await installSnapshotResponses(page);
+  expectLocallyRejected(await mutateWithFetch(page, 'PUT'));
+});
+
+test('@read-only-contract unscoped request.newContext is forbidden in the real worker', async ({
+  playwright
+}) => {
+  let created: Awaited<ReturnType<typeof playwright.request.newContext>> | undefined;
+  let message = '';
+  try {
+    created = await playwright.request.newContext();
+  } catch (error) {
+    message = errorText(error);
+  } finally {
+    await created?.dispose();
+  }
+
+  expect(message).toBe(UNSCOPED_REQUEST_FORBIDDEN);
+});
+
+test('@read-only-contract service workers stay blocked and cannot send an API write', async ({
+  context,
+  page,
+  realHttpEvidence
+}) => {
+  await openProbeDocument(page);
+  let serviceWorkerScriptRequests = 0;
+  await page.route('/__playwright_real_write_probe_sw.js', (route) => {
+    serviceWorkerScriptRequests += 1;
+    return route.fulfill({
+      contentType: 'application/javascript',
+      body:
+        "self.addEventListener('install', event => event.waitUntil(" +
+        "fetch('/api/__playwright_real_contract__/POST/service-worker', { method: 'POST' })" +
+        '));'
+    });
+  });
+
+  await page.evaluate(async () => {
+    try {
+      await navigator.serviceWorker.register('/__playwright_real_write_probe_sw.js');
+    } catch {
+      // Browsers may reject or return an inert registration when Playwright blocks workers.
+    }
+  });
+
+  expect(serviceWorkerScriptRequests).toBe(0);
+  expect(context.serviceWorkers()).toHaveLength(0);
+  expectLocallyRejected(await mutateWithForm(page));
+  await expect
+    .poll(() =>
+      realHttpEvidence.exchanges.filter((exchange) =>
+        exchange.url.includes('/api/__playwright_real_contract__/POST/')
+      )
+    )
+    .toEqual([
+      expect.objectContaining({
+        method: 'POST',
+        responseStatus: 460,
+        responseHeaders: expect.objectContaining({
+          'x-playwright-real-guard': WRITE_FORBIDDEN
+        })
+      })
+    ]);
+});
+
+test('@read-only-contract snapshot parser accepts matching explicit identities', async ({
+  page,
+  realApi
+}) => {
+  await openProbeDocument(page);
+  await installSnapshotResponses(realApi);
 
   await expect(loadAuthoritativeSnapshot(page)).resolves.toEqual({
     displayTradeDate: '2026-07-20',
@@ -277,10 +394,11 @@ test('@read-only-contract snapshot parser accepts matching explicit identities',
 });
 
 test('@read-only-contract snapshot parser fails closed on publication identity conflict', async ({
-  page
+  page,
+  realApi
 }) => {
   await openProbeDocument(page);
-  await installSnapshotResponses(page, 'lhb_shortline');
+  await installSnapshotResponses(realApi, 'lhb_shortline');
 
   await expect(loadAuthoritativeSnapshot(page)).rejects.toThrow(
     'authoritative_snapshot_publication_identity_conflict:lhb_shortline'

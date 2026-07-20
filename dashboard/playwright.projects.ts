@@ -64,6 +64,10 @@ export function profileNeedsApi(profile: PlaywrightProfile): boolean {
   return profile !== 'mock';
 }
 
+export function profileServiceWorkers(profile: PlaywrightProfile): 'allow' | 'block' {
+  return profile === 'real' || profile === 'audit' || profile === 'eod' ? 'block' : 'allow';
+}
+
 export function profileTestMatch(profile: PlaywrightProfile): string | RegExp {
   return profile === 'legacy'
     ? /(?:^|[\\/]tests[\\/])[^\\/]+\.spec\.ts$/

@@ -6,6 +6,7 @@ import {
   buildWebServers,
   parsePlaywrightProfile,
   profileNeedsApi,
+  profileServiceWorkers,
   profileTestMatch,
   resolveReuseExistingServer,
   resolveUvicornExecutable,
@@ -103,6 +104,19 @@ test('only the mock profile runs without the API server', () => {
     sandbox: true,
     audit: true,
     eod: true
+  });
+});
+
+test('blocks service workers only in read-only API profiles', () => {
+  expect(
+    Object.fromEntries(PLAYWRIGHT_PROFILES.map((profile) => [profile, profileServiceWorkers(profile)]))
+  ).toEqual({
+    legacy: 'allow',
+    mock: 'allow',
+    real: 'block',
+    sandbox: 'allow',
+    audit: 'block',
+    eod: 'block'
   });
 });
 

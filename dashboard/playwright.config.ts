@@ -8,6 +8,7 @@ import {
   buildWebServers,
   parsePlaywrightProfile,
   profileNeedsApi,
+  profileServiceWorkers,
   profileTestMatch,
   resolveUvicornExecutable
 } from './playwright.projects';
@@ -61,7 +62,8 @@ export default defineConfig({
     baseURL: `http://127.0.0.1:${dashboardPort}`,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
-    video: 'retain-on-failure'
+    video: 'retain-on-failure',
+    serviceWorkers: profileServiceWorkers(profile)
   },
   projects: buildProjects(profile),
   webServer
