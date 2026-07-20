@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import json
 from pathlib import Path
 
 import pytest
@@ -20,6 +21,7 @@ R2B_CLOSURE_SEED = "db2ad5320d3a3debd816ed3c8a760f8cc6c7d709"
 R2B_CLOSURE_END = "fd057e20ca1d81129ff39f0a253fe122acca99c2"
 R2B_CLOSURE_FILES = {"tests/test_research_project_v2_1_r2b_scope_guard.py"}
 ACQUISITION_RECOVERY_PHASE_A_SEED = "fd057e20ca1d81129ff39f0a253fe122acca99c2"
+ACQUISITION_RECOVERY_PHASE_A_END = "d8b3101149408bfb92cd3733eb737e3ba677ea47"
 ACQUISITION_RECOVERY_PHASE_A_PATHS = {
     "artifacts/research_projects/v2_1/acquisition/diagnostics/r2b_external_acquisition_phase_a_2026-07-20.json",
     "docs/research_operating_layer_v2_r2b_external_acquisition_recovery_phase_a.md",
@@ -154,11 +156,28 @@ def test_r2b_closure_amendments_only_touch_the_scope_guard() -> None:
 
 def test_acquisition_recovery_phase_a_only_adds_diagnostics_and_governance() -> None:
     assert (
-        _git("merge-base", "--is-ancestor", ACQUISITION_RECOVERY_PHASE_A_SEED, "HEAD").returncode
+        _git("merge-base", "--is-ancestor", ACQUISITION_RECOVERY_PHASE_A_END, "HEAD").returncode
         == 0
     )
     result = _git(
-        "diff", "--name-only", f"{ACQUISITION_RECOVERY_PHASE_A_SEED}..HEAD"
+        "diff", "--name-only", f"{ACQUISITION_RECOVERY_PHASE_A_SEED}..{ACQUISITION_RECOVERY_PHASE_A_END}"
     )
     changed = {path for path in result.stdout.splitlines() if path}
     assert changed <= ACQUISITION_RECOVERY_PHASE_A_PATHS
+
+
+def test_acquisition_recovery_phase_b_uses_the_machine_readable_exact_allowlist() -> None:
+    allowlist_path = (
+        REPOSITORY_ROOT
+        / "artifacts/research_projects/v2_1/acquisition/phase_b_exact_allowlist.json"
+    )
+    payload = json.loads(allowlist_path.read_text(encoding="utf-8"))
+    assert payload["baseline_commit"] == ACQUISITION_RECOVERY_PHASE_A_END
+    allowed = set(payload["paths"])
+    assert len(allowed) == len(payload["paths"])
+    result = _git("diff", "--name-only", f"{ACQUISITION_RECOVERY_PHASE_A_END}..HEAD")
+    changed = {path for path in result.stdout.splitlines() if path}
+    assert changed <= allowed
+    assert not any(
+        path.startswith(tuple(payload["forbidden_prefixes"])) for path in changed
+    )
