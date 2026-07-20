@@ -44,6 +44,22 @@ class LayeredResearchLayout:
         return self.root / "evidence/assessments"
 
     @property
+    def acquisition_attempts_dir(self) -> Path:
+        return self.root / "acquisition/attempts"
+
+    @property
+    def acquisition_checkpoints_dir(self) -> Path:
+        return self.root / "acquisition/checkpoints"
+
+    @property
+    def acquisition_import_requests_dir(self) -> Path:
+        return self.root / "acquisition/import_requests"
+
+    @property
+    def acquisition_diagnostics_dir(self) -> Path:
+        return self.root / "acquisition/diagnostics"
+
+    @property
     def index_path(self) -> Path:
         return self.root / "index/research_project_index_v2_1.json"
 
