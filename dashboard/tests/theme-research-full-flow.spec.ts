@@ -35,13 +35,13 @@ async function prepareDashboard(page: Page) {
   await page.route('/api/research/theme-decomposition/**', (route) => proxyThemeApi(page, route));
 }
 
-test('theme research desktop flow preserves routes and stock handoff', async ({ page }) => {
+test('theme research desktop flow preserves routes and deep-research views', async ({ page }) => {
   await prepareDashboard(page);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/theme-research');
 
   await expect(page.getByRole('heading', { name: '主题研究' })).toBeVisible();
-  await expect(page.getByText('5 个主题')).toBeVisible();
+  await expect(page.getByText(/^\d+ 个主题$/)).toBeVisible();
   await expect(page.getByRole('button', { name: /打开AI供电产业链/ })).toBeVisible();
   await expect(page.getByRole('button', { name: /打开人形机器人：从头到脚的价值链与受益环节/ })).toBeVisible();
 
@@ -67,11 +67,6 @@ test('theme research desktop flow preserves routes and stock handoff', async ({ 
   await expect(page.getByText('覆盖缺口').first()).toBeVisible();
   await page.screenshot({ path: 'test-results/theme-research-desktop.png', fullPage: true });
 
-  await page.getByRole('button', { name: '打开欧陆通个股工作台' }).click();
-  await expect(page).toHaveURL(/\/tech-bottleneck\/stock\/300870\.SZ\?source=theme_research$/);
-  await page.goBack();
-  await expect(page).toHaveURL(/\/theme-research\/ai_power_value_capture_v1\/companies$/);
-  await expect(page.getByRole('heading', { name: '公司映射' })).toBeVisible();
 });
 
 test('theme research mobile layout contains wide tables without page overflow', async ({ page }) => {

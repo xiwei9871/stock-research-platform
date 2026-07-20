@@ -306,7 +306,7 @@ async function mockWorkflowApi(page: Page) {
   );
 }
 
-test('reviewed theme context flows through Daily Review, Watchlist and Stock Workspace', async ({ page }) => {
+test('stock workspace renders reviewed theme context from Daily Review and Watchlist read models', async ({ page }) => {
   await mockWorkflowApi(page);
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('/tech-bottleneck/stock/002837.SZ?source=theme_research');
