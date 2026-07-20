@@ -6,7 +6,13 @@ from typing import Any
 
 def summarize_evidence_coverage(version: dict[str, Any]) -> dict[str, Any]:
     snapshot = version["snapshot"]
-    requirements = snapshot.get("evidence_requirements", [])
+    all_requirements = snapshot.get("evidence_requirements", [])
+    requirements = [
+        item
+        for item in all_requirements
+        if item.get("lifecycle_status", "active")
+        not in {"superseded", "retired", "removed_from_scope"}
+    ]
     candidates = snapshot.get("source_candidates", [])
     assessments = snapshot.get("industry_evidence_assessments", [])
 
@@ -61,6 +67,7 @@ def summarize_evidence_coverage(version: dict[str, Any]) -> dict[str, Any]:
         "semantic_version": version["semantic_version"],
         "requirements": {
             "total": len(requirements),
+            "total_including_inactive": len(all_requirements),
             "covered": sorted(
                 item["requirement_id"]
                 for item in requirements

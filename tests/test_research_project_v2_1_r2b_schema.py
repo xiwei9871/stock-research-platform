@@ -178,12 +178,41 @@ def test_v2_2_semantics_require_active_open_discovery_requirement() -> None:
     assert exc_info.value.code == "RESEARCH_PROJECT_V2_1_SEMANTIC_INVALID"
 
 
+def test_evidence_snapshot_can_reuse_parent_design_search_plans() -> None:
+    version = _v2_2_version()
+    version["version_id"] = f"research_version:{PROJECT_SLUG}:0.2.1"
+    version["semantic_version"] = "0.2.1"
+    version["parent_version_id"] = VERSION_ID
+    version["creation_stage"] = "evidence_snapshot"
+    version["snapshot"]["project_lifecycle_state"] = "active"
+    version["snapshot"]["evidence_stage"] = "collecting"
+    for plan in version["snapshot"]["search_plans"]:
+        plan["version_id"] = VERSION_ID
+
+    validate_industry_version_semantics(version)
+
+
 def test_v2_2_industry_profile_requires_all_new_collections() -> None:
     version = _v2_2_version()
     del version["snapshot"]["bottleneck_hypotheses"]
     with pytest.raises(ResearchProjectV2Error) as exc_info:
         validate_v2_1_schema_payload("industry_research_version_v2_2", version)
     assert exc_info.value.code == "RESEARCH_PROJECT_V2_1_SCHEMA_INVALID"
+
+
+def test_v2_2_requirement_can_record_stopped_acquisition_impact() -> None:
+    version = _v2_2_version()
+    requirement = version["snapshot"]["evidence_requirements"][0]
+    requirement.update(
+        {
+            "blocked_reason": "No network acquisition channel was available.",
+            "attempted_candidate_ids": ["candidate:fixture:one"],
+            "impact_on_claim_ids": ["claim:ai_compute_pcb_industry_bottleneck:primary"],
+            "impact_on_bottleneck_ids": [],
+            "recommended_scope_change": None,
+        }
+    )
+    validate_v2_1_schema_payload("industry_research_version_v2_2", version)
 
 
 def test_v2_2_metrics_and_invalidations_can_target_bottlenecks() -> None:

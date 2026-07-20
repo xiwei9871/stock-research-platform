@@ -35,6 +35,7 @@ EXPECTED = {
     "new_energy_storage_industry_bottleneck": "new_energy_storage_route_competition",
     "high_end_medical_device_industry_bottleneck": "high_end_medical_device_commercialization",
 }
+MAINTENANCE_FIXTURE_SLUG = "humanoid_robot_industry_bottleneck"
 
 
 def test_rebuild_layered_index_public_api_exists() -> None:
@@ -87,7 +88,7 @@ def test_pilots_are_design_only_and_have_no_downstream_outputs() -> None:
     }
     forbidden = {"candidate_companies", "company_capture_assessments", "stock_rating", "company_capability_collection"}
     for slug in EXPECTED:
-        version = load_industry_version(slug)
+        version = load_industry_version(slug, "0.1.0")
         snapshot = version["snapshot"]
         assert len(snapshot["questions"]) >= 4
         assert len(snapshot["evidence_requirements"]) >= 4
@@ -101,7 +102,7 @@ def test_pilots_are_design_only_and_have_no_downstream_outputs() -> None:
 
 def test_pilot_provenance_is_bound_to_current_version_and_real_agent_run() -> None:
     for slug in EXPECTED:
-        version = load_industry_version(slug)
+        version = load_industry_version(slug, "0.1.0")
         seen = 0
         stack: list[object] = [version["snapshot"]]
         while stack:
@@ -133,7 +134,7 @@ def test_rebuild_is_preview_safe_idempotent_and_does_not_touch_r1(tmp_path: Path
 
 
 def test_rebuild_bootstraps_placeholder_and_preserves_manifest_prefix(tmp_path: Path) -> None:
-    slug = next(iter(EXPECTED))
+    slug = MAINTENANCE_FIXTURE_SLUG
     layout = _copy_layout(tmp_path, slug)
     project = layout.project_dir(slug)
     version_path = project / "versions/v0.1.0.json"
@@ -154,7 +155,7 @@ def test_rebuild_rejects_unmanifested_filename_semver_mismatch_without_writes(
     tmp_path: Path,
     write: bool,
 ) -> None:
-    slug = next(iter(EXPECTED))
+    slug = MAINTENANCE_FIXTURE_SLUG
     layout = _copy_layout(tmp_path, slug)
     project = layout.project_dir(slug)
     version_path = project / "versions/v0.1.0.json"
@@ -178,7 +179,7 @@ def test_rebuild_rejects_unmanifested_invalid_parent_lineage_without_writes(
     tmp_path: Path,
     write: bool,
 ) -> None:
-    slug = next(iter(EXPECTED))
+    slug = MAINTENANCE_FIXTURE_SLUG
     layout = _copy_layout(tmp_path, slug)
     project = layout.project_dir(slug)
     identity_path = project / "project.json"
@@ -206,7 +207,7 @@ def test_rebuild_rejects_unmanifested_invalid_parent_lineage_without_writes(
 
 
 def test_rebuild_generated_at_uses_rfc3339_instant_order(tmp_path: Path) -> None:
-    slug = next(iter(EXPECTED))
+    slug = MAINTENANCE_FIXTURE_SLUG
     layout = _copy_layout(tmp_path, slug)
     project = layout.project_dir(slug)
     identity_path = project / "project.json"
@@ -236,7 +237,7 @@ def test_rebuild_generated_at_uses_rfc3339_instant_order(tmp_path: Path) -> None
 
 
 def test_rebuild_rejects_symlink(tmp_path: Path) -> None:
-    slug = next(iter(EXPECTED))
+    slug = MAINTENANCE_FIXTURE_SLUG
     layout = _copy_layout(tmp_path, slug)
     target = layout.project_dir(slug) / "versions/v0.1.0.json"
     original = target.read_bytes()
@@ -249,7 +250,7 @@ def test_rebuild_rejects_symlink(tmp_path: Path) -> None:
 
 
 def test_rebuild_allows_only_the_stable_lock_at_layered_root(tmp_path: Path) -> None:
-    slug = next(iter(EXPECTED))
+    slug = MAINTENANCE_FIXTURE_SLUG
     layout = _copy_layout(tmp_path, slug)
     assert rebuild_layered_index(False, layout)["status"] == "planned"
     unexpected = layout.root / ".unexpected"
@@ -263,7 +264,7 @@ def test_rebuild_allows_only_the_stable_lock_at_layered_root(tmp_path: Path) -> 
 
 
 def test_rebuild_accepts_only_the_canonical_root_gitignore(tmp_path: Path) -> None:
-    slug = next(iter(EXPECTED))
+    slug = MAINTENANCE_FIXTURE_SLUG
     layout = _copy_layout(tmp_path, slug)
     gitignore = layout.root / ".gitignore"
     gitignore.write_bytes(b".maintenance.lock\n")
@@ -276,7 +277,7 @@ def test_rebuild_accepts_only_the_canonical_root_gitignore(tmp_path: Path) -> No
 
 
 def test_rebuild_requires_canonical_root_gitignore(tmp_path: Path) -> None:
-    slug = next(iter(EXPECTED))
+    slug = MAINTENANCE_FIXTURE_SLUG
     layout = _copy_layout(tmp_path, slug)
     (layout.root / ".gitignore").unlink()
     with pytest.raises(ResearchProjectV2Error) as exc_info:
@@ -285,7 +286,7 @@ def test_rebuild_requires_canonical_root_gitignore(tmp_path: Path) -> None:
 
 
 def test_rebuild_rejects_symlinked_root_gitignore(tmp_path: Path) -> None:
-    slug = next(iter(EXPECTED))
+    slug = MAINTENANCE_FIXTURE_SLUG
     layout = _copy_layout(tmp_path, slug)
     outside = tmp_path / "outside-gitignore"
     outside.write_bytes(b".maintenance.lock\n")
@@ -298,7 +299,7 @@ def test_rebuild_rejects_symlinked_root_gitignore(tmp_path: Path) -> None:
 
 
 def test_rebuild_rolls_back_all_files_on_atomic_failure(tmp_path: Path, monkeypatch) -> None:
-    slug = next(iter(EXPECTED))
+    slug = MAINTENANCE_FIXTURE_SLUG
     layout = _copy_layout(tmp_path, slug)
     project = layout.project_dir(slug)
     version_path = project / "versions/v0.1.0.json"
@@ -325,7 +326,7 @@ def test_rebuild_detects_post_write_target_rebinding_and_rolls_back(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    slug = next(iter(EXPECTED))
+    slug = MAINTENANCE_FIXTURE_SLUG
     layout = _copy_layout(tmp_path, slug)
     _prepare_unmanifested(layout, slug)
     version_path = layout.project_dir(slug) / "versions/v0.1.0.json"
@@ -366,7 +367,7 @@ def test_reader_blocks_during_mid_commit_and_then_loads_consistent_version(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    slug = next(iter(EXPECTED))
+    slug = MAINTENANCE_FIXTURE_SLUG
     layout = _copy_layout(tmp_path, slug)
     _prepare_unmanifested(layout, slug)
     paused = threading.Event()
@@ -416,7 +417,7 @@ def test_two_writers_serialize_before_second_manifest_read(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    slug = next(iter(EXPECTED))
+    slug = MAINTENANCE_FIXTURE_SLUG
     layout = _copy_layout(tmp_path, slug)
     _prepare_unmanifested(layout, slug)
     paused = threading.Event()

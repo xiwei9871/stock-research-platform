@@ -64,6 +64,11 @@
         "lifecycle_status": {"enum": ["active", "retired", "superseded", "removed_from_scope"]},
         "supersedes_requirement_id": {"type": ["string", "null"]},
         "open_discovery": {"type": "boolean"},
+        "blocked_reason": {"type": ["string", "null"]},
+        "attempted_candidate_ids": {"$ref": "definitions_v2_1.schema.json#/$defs/string_array"},
+        "impact_on_claim_ids": {"$ref": "definitions_v2_1.schema.json#/$defs/string_array"},
+        "impact_on_bottleneck_ids": {"$ref": "definitions_v2_1.schema.json#/$defs/string_array"},
+        "recommended_scope_change": {"type": ["string", "null"]},
         "provenance": {"$ref": "definitions_v2_1.schema.json#/$defs/provenance"}
       },
       "additionalProperties": false

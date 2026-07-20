@@ -39,3 +39,24 @@ def test_ai_pcb_v0_1_to_v0_2_diff_reports_r2b_design_objects() -> None:
     assert len(result["changes"]["industry_model_nodes"]["added"]) == 7
     assert len(result["changes"]["bottleneck_hypotheses"]["added"]) == 8
     assert result["changes"]["industry_evidence_assessments"]["added"] == []
+
+
+def test_ai_pcb_v0_2_1_records_blocked_acquisition_without_false_assessment() -> None:
+    version = load_industry_version(PROJECT, "0.2.1")
+    snapshot = version["snapshot"]
+
+    assert version["creation_stage"] == "evidence_snapshot"
+    assert version["parent_version_id"] == f"research_version:{PROJECT}:0.2.0"
+    assert snapshot["evidence_stage"] == "collecting"
+    assert snapshot["source_candidates"]
+    assert all(
+        candidate["acquisition_status"]
+        in {"unavailable", "paywalled", "inaccessible", "failed"}
+        for candidate in snapshot["source_candidates"]
+    )
+    assert snapshot["industry_evidence_assessments"] == []
+    assert snapshot["bottleneck_readiness_reviews"] == []
+    assert all(
+        bottleneck["status"] == "under_investigation"
+        for bottleneck in snapshot["bottleneck_hypotheses"]
+    )

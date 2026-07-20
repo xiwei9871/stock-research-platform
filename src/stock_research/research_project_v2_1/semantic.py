@@ -377,7 +377,14 @@ def _validate_plans_and_candidates(
                 field="project_id",
                 referenced_id=plan["project_id"],
             )
-        if plan["version_id"] != version["version_id"]:
+        allowed_version_ids = {version["version_id"]}
+        if (
+            version.get("schema_version") == "2.2.0"
+            and version.get("creation_stage") == "evidence_snapshot"
+            and isinstance(version.get("parent_version_id"), str)
+        ):
+            allowed_version_ids.add(version["parent_version_id"])
+        if plan["version_id"] not in allowed_version_ids:
             raise _error(
                 "Search plan version_id does not match its version",
                 collection="search_plans",
@@ -713,6 +720,19 @@ def _validate_r2b_semantics(
             field="target_id",
             source_id=requirement["requirement_id"],
         )
+        for field, known in (
+            ("attempted_candidate_ids", context.candidate_by_id),
+            ("impact_on_claim_ids", claims),
+            ("impact_on_bottleneck_ids", bottlenecks),
+        ):
+            for referenced_id in requirement.get(field, []):
+                _require_reference(
+                    referenced_id,
+                    known,
+                    collection="evidence_requirements",
+                    field=field,
+                    source_id=requirement["requirement_id"],
+                )
 
     for collection, id_field in (
         ("validation_metrics", "metric_id"),
