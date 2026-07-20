@@ -6,20 +6,36 @@ import type {
   RuntimeEvidencePattern
 } from '../fixtures/test';
 
+function patternMatches(pattern: RegExp, value: string): boolean {
+  pattern.lastIndex = 0;
+  const matches = pattern.test(value);
+  pattern.lastIndex = 0;
+  return matches;
+}
+
+function hasUnescapedEndAnchor(source: string): boolean {
+  if (!source.endsWith('$')) return false;
+  let backslashCount = 0;
+  for (let index = source.length - 2; index >= 0 && source[index] === '\\'; index -= 1) {
+    backslashCount += 1;
+  }
+  return backslashCount % 2 === 0;
+}
+
 function validateAllowlist(patterns: readonly RuntimeEvidencePattern[] = []): void {
   for (const pattern of patterns) {
     if (typeof pattern === 'string') continue;
     const matchesEverySample = [
-      '',
       'runtime-console-error',
       'GET /api/unexpected',
-      'completely-different-value'
-    ].every((sample) => {
-      pattern.lastIndex = 0;
-      return pattern.test(sample);
-    });
+      'POST https://example.test/api/data — net::ERR_FAILED',
+      '{"pageErrors":["completely-different-value"]}'
+    ].every((sample) => patternMatches(pattern, sample));
     if (matchesEverySample) {
       throw new Error(`Runtime evidence allowlist rejects match-all pattern: ${pattern.toString()}`);
+    }
+    if (!pattern.source.startsWith('^') || !hasUnescapedEndAnchor(pattern.source) || pattern.multiline) {
+      throw new Error(`Runtime evidence allowlist rejects unanchored pattern: ${pattern.toString()}`);
     }
   }
 }
@@ -27,8 +43,7 @@ function validateAllowlist(patterns: readonly RuntimeEvidencePattern[] = []): vo
 function matchesAllowlist(value: string, patterns: readonly RuntimeEvidencePattern[] = []): boolean {
   return patterns.some((pattern) => {
     if (typeof pattern === 'string') return value === pattern;
-    pattern.lastIndex = 0;
-    return pattern.test(value);
+    return patternMatches(pattern, value);
   });
 }
 

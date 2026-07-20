@@ -302,7 +302,7 @@ test('explicit allowlist is narrow and permits only the intended error @p0 @runt
   runtimeEvidence,
   runtimePolicy
 }) => {
-  runtimePolicy.consoleErrors.push(/^intentional-runtime-console-error$/);
+  runtimePolicy.consoleErrors.push(/^intentional-runtime-console-error$/g);
 
   await setContractContent(page, baseURL, '<main>allowlist contract</main>');
   await page.evaluate(() => console.error('intentional-runtime-console-error'));
@@ -353,6 +353,20 @@ test('match-all runtime allowlists are rejected exactly @p0 @runtime-contract', 
   expect(
     captureErrorMessage(() =>
       expectNoFatalRuntimeErrors(evidence, {
+        consoleErrors: [/.+/]
+      })
+    )
+  ).toBe('Runtime evidence allowlist rejects match-all pattern: /.+/');
+  expect(
+    captureErrorMessage(() =>
+      expectNoFatalRuntimeErrors(evidence, {
+        consoleErrors: [/^.+$/s]
+      })
+    )
+  ).toBe('Runtime evidence allowlist rejects match-all pattern: /^.+$/s');
+  expect(
+    captureErrorMessage(() =>
+      expectNoFatalRuntimeErrors(evidence, {
         consoleErrors: [/.*/]
       })
     )
@@ -364,6 +378,15 @@ test('match-all runtime allowlists are rejected exactly @p0 @runtime-contract', 
       })
     )
   ).toBe('Runtime evidence allowlist rejects match-all pattern: /^.*$/');
+  expect(
+    captureErrorMessage(() =>
+      expectNoFatalRuntimeErrors(evidence, {
+        consoleErrors: [/runtime-contract-console-error/]
+      })
+    )
+  ).toBe(
+    'Runtime evidence allowlist rejects unanchored pattern: /runtime-contract-console-error/'
+  );
 });
 
 test('horizontal overflow helper passes for contained content @p0 @runtime-contract', async ({
