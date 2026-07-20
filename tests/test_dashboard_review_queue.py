@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from types import SimpleNamespace
 
-from stock_research.dashboard import review_queue
+from stock_research.dashboard import backtests, review_queue
 from stock_research.strategy_publication_contracts import (
     build_publication_identity,
     get_publication_contract,
@@ -469,6 +469,7 @@ def _v1_versioned_manifest(tmp_path):
                 "benchmark_variant": (
                     "top5_weekly_max2_selective_trend_holding_protection_v1"
                 ),
+                "artifact_version": "strategy_artifact_v1",
                 "total_return": 0.4912,
             },
         },
@@ -563,6 +564,54 @@ def test_v1_manifest_rows_expose_generic_publication_evidence(tmp_path, monkeypa
     assert blocked == {"mid_trend"}
 
 
+@pytest.mark.parametrize("container", ["metadata_missing", "module", "summary", "config"])
+def test_v1_manifest_publish_id_declarations_fail_closed_across_containers(
+    tmp_path, monkeypatch, container
+):
+    monkeypatch.setattr(review_queue, "SETTINGS", SimpleNamespace(output_root=tmp_path))
+    module = _v1_versioned_manifest(tmp_path)
+    if container == "metadata_missing":
+        del module["metadata"]["publish_id"]
+    elif container == "module":
+        module["publish_id"] = "publish-2"
+    elif container == "summary":
+        module["metadata"]["summary"]["publish_id"] = "publish-2"
+    else:
+        module["metadata"].setdefault("config", {})["publish_id"] = "publish-2"
+
+    assert review_queue._manifest_publication_declaration_valid(module) is False
+    assert review_queue._compact_validated_source_manifest_evidence(module) is None
+
+
+def test_invalid_publish_manifest_fails_closed_in_catalog_and_review_queue(tmp_path, monkeypatch):
+    module = _v1_versioned_manifest(tmp_path)
+    module["metadata"]["summary"]["publish_id"] = "publish-2"
+    monkeypatch.setattr(backtests, "SETTINGS", SimpleNamespace(output_root=tmp_path))
+    monkeypatch.setattr(backtests, "_latest_eod_strategy_module", lambda strategy_id: module)
+    monkeypatch.setattr(backtests, "_read_eod_strategy_rows", lambda *args, **kwargs: [{"asset_id": "CN:SH:600002"}])
+    monkeypatch.setattr(backtests, "_validate_eod_summary_contract", lambda *args, **kwargs: ("success", "ok"))
+
+    catalog_metrics = backtests._with_latest_eod_strategy_metrics(
+        {
+            "strategy_id": "mid_trend",
+            "strategy_name": "Mid Trend Combo",
+            "latest_metrics": {},
+        }
+    )["latest_metrics"]
+
+    assert catalog_metrics["contract_status"] == "contract_mismatch"
+    assert catalog_metrics["signal_count"] == 0
+    assert catalog_metrics["publish_id"] is None
+    assert "total_return_pct" not in catalog_metrics
+    assert review_queue._compact_validated_source_manifest_evidence(module) is None
+    assert review_queue._read_manifest_strategy_artifact(
+        Path(module["artifact_path"]),
+        trade_date="2026-07-18",
+        limit=50,
+        manifest=module,
+    ) == []
+
+
 def test_manifest_review_row_snapshot_round_trip_preserves_trusted_evidence(
     tmp_path, monkeypatch
 ):
@@ -598,6 +647,7 @@ def test_manifest_review_row_snapshot_round_trip_preserves_trusted_evidence(
     }
     assert set(payload["source_manifest"]["metadata"]) == {
         "artifact_version",
+        "publish_id",
         "publication_identity",
         "publication_manifest_path",
         "output_paths",
@@ -700,6 +750,7 @@ def test_persisted_strategy_snapshot_fails_closed_for_stale_or_mixed_contract(
         "config_fingerprint": identity["config_fingerprint"],
         "publication_policy": identity["publication_policy"],
         "artifact_version": "strategy_artifact_v1",
+        "publish_id": "publish-1",
         "publication_manifest_path": (
             "/srv/outputs/research/strategy_daily_eod/2026-07-18/strategy_runs/"
             "mid_trend/publish-1/publication_manifest.json"
@@ -734,6 +785,7 @@ def test_persisted_lhb_snapshot_accepts_stale_performance_bound_to_manifest(monk
         "config_fingerprint": identity["config_fingerprint"],
         "publication_policy": identity["publication_policy"],
         "artifact_version": "strategy_artifact_v1",
+        "publish_id": "publish-1",
         "publication_manifest_path": (
             "/srv/outputs/research/strategy_daily_eod/2026-07-18/strategy_runs/"
             "lhb_shortline/publish-1/publication_manifest.json"
@@ -745,6 +797,7 @@ def test_persisted_lhb_snapshot_accepts_stale_performance_bound_to_manifest(monk
             "trade_date": "2026-07-18",
             "performance_as_of_date": "2026-07-17",
             "artifact_version": "strategy_artifact_v1",
+            "publish_id": "publish-1",
             "publication_identity": identity,
             "publication_manifest_path": (
                 "/srv/outputs/research/strategy_daily_eod/2026-07-18/strategy_runs/"

@@ -407,29 +407,10 @@ def _with_latest_eod_strategy_metrics(strategy: dict[str, Any]) -> dict[str, Any
     if str(module.get("status") or "") != "success":
         return _with_failed_eod_strategy_metrics(strategy, module)
 
-    rows = _read_eod_strategy_rows(module, latest_trade_date=latest_trade_date, strategy_id=str(strategy["strategy_id"]))
-    signal_count = len(rows) or _optional_int(module.get("row_count"))
-    metrics = dict(strategy.get("latest_metrics") or {})
     summary = _eod_summary(module)
-    performance_as_of_date = publication_performance_as_of_date(summary)
-    performance_stale = bool(
-        performance_as_of_date and latest_trade_date and performance_as_of_date < latest_trade_date
-    )
-    metrics.update(
-        {
-            "as_of_date": performance_as_of_date or metrics.get("as_of_date"),
-            "signal_as_of_date": latest_trade_date or metrics.get("signal_as_of_date"),
-            "signal_status": "candidate_rows" if strategy["strategy_id"] == "lhb_shortline" else "current_holdings",
-            "signal_count": signal_count,
-            "performance_status": "stale" if performance_stale else "ready",
-            "performance_as_of_date": performance_as_of_date or metrics.get("as_of_date"),
-        }
-    )
-
     status, reason = _validate_eod_publication_contract(
         str(strategy["strategy_id"]), module, summary
     )
-    publication_metrics = _publication_metadata_metrics(module, summary)
     if status != "success":
         safe_manifest_date = publication_manifest_trade_date(module)
         safe_performance_date = publication_performance_as_of_date(summary)
@@ -446,13 +427,33 @@ def _with_latest_eod_strategy_metrics(strategy: dict[str, Any]) -> dict[str, Any
             "performance_as_of_date": safe_performance_date,
             "signal_as_of_date": safe_manifest_date,
             "signal_status": "contract_mismatch",
-            "signal_count": signal_count,
+            "signal_count": 0,
             "contract_status": status,
             "contract_reason": reason,
             **_expected_publication_metrics(str(strategy["strategy_id"])),
         }
         next_strategy["latest_evidence"] = f"策略产物未通过正式身份合同校验：{reason}"
         return next_strategy
+
+    rows = _read_eod_strategy_rows(module, latest_trade_date=latest_trade_date, strategy_id=str(strategy["strategy_id"]))
+    signal_count = len(rows) or _optional_int(module.get("row_count"))
+    metrics = dict(strategy.get("latest_metrics") or {})
+    performance_as_of_date = publication_performance_as_of_date(summary)
+    performance_stale = bool(
+        performance_as_of_date and latest_trade_date and performance_as_of_date < latest_trade_date
+    )
+    metrics.update(
+        {
+            "as_of_date": performance_as_of_date or metrics.get("as_of_date"),
+            "signal_as_of_date": latest_trade_date or metrics.get("signal_as_of_date"),
+            "signal_status": "candidate_rows" if strategy["strategy_id"] == "lhb_shortline" else "current_holdings",
+            "signal_count": signal_count,
+            "performance_status": "stale" if performance_stale else "ready",
+            "performance_as_of_date": performance_as_of_date or metrics.get("as_of_date"),
+        }
+    )
+
+    publication_metrics = _publication_metadata_metrics(module, summary)
     metrics.update(publication_metrics)
     metrics["contract_status"] = status
     equity_metrics = _metrics_from_eod_equity_path(module, strategy)

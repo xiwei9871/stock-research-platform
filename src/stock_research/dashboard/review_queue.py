@@ -303,14 +303,19 @@ def _snapshot_publication_contract_valid(
     ):
         return False
     manifest_path = row.get("publication_manifest_path")
+    publish_id = row.get("publish_id")
+    if not _safe_publish_id(publish_id):
+        return False
     try:
-        parse_publication_manifest_path(
+        parsed_manifest = parse_publication_manifest_path(
             manifest_path,
             expected_strategy_id=strategy_id,
             expected_trade_date=snapshot_trade_date,
             approved_research_roots=_approved_research_roots(),
         )
     except ValueError:
+        return False
+    if parsed_manifest.publish_id != publish_id:
         return False
     for path_field in (
         "source_publication_manifest_path",
@@ -339,6 +344,7 @@ def _snapshot_publication_contract_valid(
             snapshot_trade_date=snapshot_trade_date,
             performance_as_of_date=performance_as_of_date,
             publication_manifest_path=str(manifest_path),
+            publish_id=str(publish_id),
         ):
             return False
         trusted_manifest_evidence = True
@@ -353,6 +359,7 @@ def _embedded_snapshot_manifest_valid(
     snapshot_trade_date: str,
     performance_as_of_date: str,
     publication_manifest_path: str,
+    publish_id: str,
 ) -> bool:
     from stock_research.strategy_publication_contracts import (
         validate_publication_identity,
@@ -360,15 +367,17 @@ def _embedded_snapshot_manifest_valid(
 
     metadata = embedded.get("metadata") if isinstance(embedded.get("metadata"), dict) else {}
     summary = metadata.get("summary") if isinstance(metadata.get("summary"), dict) else {}
+    config = metadata.get("config") if isinstance(metadata.get("config"), dict) else {}
     if not summary and isinstance(embedded.get("summary"), dict):
         summary = embedded["summary"]
-    containers = (embedded, metadata, summary)
+    containers = (embedded, metadata, summary, config)
     strategy_declared = False
     artifact_declared = False
     identity_declared = False
     trade_date_declared = False
     performance_date_declared = False
     manifest_path_declared = False
+    publish_id_declared = False
 
     module_name = embedded.get("module")
     if module_name is not None:
@@ -404,6 +413,10 @@ def _embedded_snapshot_manifest_valid(
             manifest_path_declared = True
             if str(container.get("publication_manifest_path") or "") != publication_manifest_path:
                 return False
+        if "publish_id" in container:
+            publish_id_declared = True
+            if container.get("publish_id") != publish_id:
+                return False
         output_paths = container.get("output_paths")
         if isinstance(output_paths, dict) and "publication_manifest_path" in output_paths:
             manifest_path_declared = True
@@ -435,6 +448,7 @@ def _embedded_snapshot_manifest_valid(
             trade_date_declared,
             performance_date_declared,
             manifest_path_declared,
+            publish_id_declared,
         )
     )
 
@@ -558,6 +572,9 @@ def _manifest_publication_declaration_valid(module: dict[str, Any]) -> bool:
     metadata = module.get("metadata") if isinstance(module.get("metadata"), dict) else {}
     summary = metadata.get("summary") if isinstance(metadata.get("summary"), dict) else {}
     config = metadata.get("config") if isinstance(metadata.get("config"), dict) else {}
+    publish_id = metadata.get("publish_id")
+    if not _safe_publish_id(publish_id):
+        return False
     if metadata.get("identity_schema_version") != IDENTITY_SCHEMA_VERSION:
         return False
     if metadata.get("artifact_version") != ARTIFACT_VERSION:
@@ -573,6 +590,8 @@ def _manifest_publication_declaration_valid(module: dict[str, Any]) -> bool:
         ):
             return False
         if "artifact_version" in container and container.get("artifact_version") != ARTIFACT_VERSION:
+            return False
+        if "publish_id" in container and container.get("publish_id") != publish_id:
             return False
     return True
 
@@ -933,6 +952,7 @@ def _compact_validated_source_manifest_evidence(
         "latest_trade_date": trade_date,
         "metadata": {
             "artifact_version": ARTIFACT_VERSION,
+            "publish_id": str(metadata.get("publish_id") or ""),
             "publication_identity": deepcopy(publication_identity),
             "publication_manifest_path": str(manifest_path),
             "output_paths": {"publication_manifest_path": str(manifest_path)},
@@ -979,6 +999,7 @@ def _artifact_rows_match_manifest(frame: Any, manifest: dict[str, Any]) -> bool:
         "config_fingerprint": expected["config_fingerprint"],
         "publication_policy": expected["publication_policy"],
         "artifact_version": ARTIFACT_VERSION,
+        "publish_id": str(metadata.get("publish_id") or ""),
         "publication_manifest_path": str(metadata.get("publication_manifest_path") or ""),
         "performance_as_of_date": performance_as_of_date,
     }

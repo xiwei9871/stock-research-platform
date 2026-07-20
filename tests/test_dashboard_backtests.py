@@ -773,6 +773,7 @@ def test_latest_eod_metrics_fail_closed_per_strategy_for_publication_identity(tm
 
     invalid = items["tech_bottleneck"]["latest_metrics"]
     assert invalid["contract_status"] == "contract_mismatch"
+    assert invalid["signal_count"] == 0
     assert "total_return_pct" not in invalid
     assert "max_drawdown_pct" not in invalid
     assert "latest_period_return_pct" not in invalid
@@ -852,6 +853,7 @@ def test_latest_eod_metrics_fail_closed_per_strategy_for_publication_identity(tm
             }
         )["latest_metrics"]
         assert failed_closed["contract_status"] == "contract_mismatch", label
+        assert failed_closed["signal_count"] == 0, label
         assert failed_closed["publish_id"] is None, label
         assert "total_return_pct" not in failed_closed, label
     modules["mid_trend"] = original_mid_trend
