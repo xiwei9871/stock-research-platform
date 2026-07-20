@@ -139,7 +139,11 @@ def test_list_show_validate_gate_and_search_plan_are_deterministic_json(
     code, validated = _run(["validate", "--all"], capsys)
     assert code == 0
     assert validated["status"] == "pass"
-    assert len(validated["validated"]) == 4
+    expected_version_count = sum(
+        len(cli.list_layered_versions(row["project_slug"]))
+        for row in listed["projects"]
+    )
+    assert len(validated["validated"]) == expected_version_count
 
     code, gate = _run(
         [

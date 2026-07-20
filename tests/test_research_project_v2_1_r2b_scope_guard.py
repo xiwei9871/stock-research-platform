@@ -21,6 +21,8 @@ ALLOWED_EXACT_PATHS = {
     "src/stock_research/cli.py",
     "tests/test_research_project_v2_1_schema.py",
     "tests/test_research_project_v2_1_pilots.py",
+    "tests/test_research_project_v2_1_cli.py",
+    "tests/test_research_project_v2_1_scope_guard.py",
 }
 ALLOWED_PREFIXES = (
     "artifacts/research_projects/v2_1/schema/",

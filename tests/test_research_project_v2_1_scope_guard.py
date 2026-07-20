@@ -86,6 +86,7 @@ TASK11_CLOSURE_FILES = frozenset(
     }
 )
 CLOSURE_SEED = "3b19e71f83266b31db8cd5b4d95374770d9741c9"
+CLOSURE_END = "a38df73bdbba86b6b6247e8a54ee33370a752dfc"
 R2A_SUPPORT_FILES = frozenset(
     {
         "src/stock_research/cli.py",
@@ -187,7 +188,7 @@ def is_r2a_monitored_path(path: str) -> bool:
 
 
 def closure_amendment_paths() -> frozenset[str]:
-    result = _git("diff", "--name-only", f"{CLOSURE_SEED}..HEAD")
+    result = _git("diff", "--name-only", f"{CLOSURE_SEED}..{CLOSURE_END}")
     return frozenset(
         path
         for path in result.stdout.splitlines()
@@ -285,4 +286,5 @@ def test_only_exact_approved_invalid_fixture_files_are_allowed() -> None:
 
 
 def test_closure_amendments_can_only_touch_the_three_task11_files() -> None:
+    assert _git("merge-base", "--is-ancestor", CLOSURE_END, "HEAD").returncode == 0
     assert closure_amendment_paths() <= TASK11_CLOSURE_FILES
