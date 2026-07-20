@@ -137,6 +137,93 @@ describe('dashboard API client', () => {
     expect(handleAuthExpired).not.toHaveBeenCalled();
   });
 
+  it('keeps the current epoch when logout fails so a sibling 401 still expires the session', async () => {
+    type ErrorResponse = { ok: boolean; status: number; json: () => Promise<{ detail: string }> };
+    let resolveSibling: ((response: ErrorResponse) => void) | undefined;
+    const siblingResponse = new Promise<ErrorResponse>((resolve) => {
+      resolveSibling = resolve;
+    });
+    const fetchMock = vi
+      .fn()
+      .mockReturnValueOnce(siblingResponse)
+      .mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({ detail: 'logout unavailable' }) });
+    const handleAuthExpired = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    window.addEventListener(DASHBOARD_AUTH_EXPIRED_EVENT, handleAuthExpired);
+
+    const siblingRequest = fetchAdminUsers();
+    await expect(logoutDashboardUser()).rejects.toThrow('POST /api/auth/logout failed with 500: logout unavailable');
+    resolveSibling?.({ ok: false, status: 401, json: async () => ({ detail: 'session expired' }) });
+    await expect(siblingRequest).rejects.toThrow('GET /api/admin/users failed with 401');
+    window.removeEventListener(DASHBOARD_AUTH_EXPIRED_EVENT, handleAuthExpired);
+
+    expect(handleAuthExpired).toHaveBeenCalledTimes(1);
+  });
+
+  it('advances the epoch after logout succeeds so a late sibling 401 is ignored', async () => {
+    type ErrorResponse = { ok: boolean; status: number; json: () => Promise<{ detail: string }> };
+    let resolveSibling: ((response: ErrorResponse) => void) | undefined;
+    const siblingResponse = new Promise<ErrorResponse>((resolve) => {
+      resolveSibling = resolve;
+    });
+    const fetchMock = vi
+      .fn()
+      .mockReturnValueOnce(siblingResponse)
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ status: 'logged_out' }) });
+    const handleAuthExpired = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    window.addEventListener(DASHBOARD_AUTH_EXPIRED_EVENT, handleAuthExpired);
+
+    const siblingRequest = fetchAdminUsers();
+    await logoutDashboardUser();
+    resolveSibling?.({ ok: false, status: 401, json: async () => ({ detail: 'old session expired' }) });
+    await expect(siblingRequest).rejects.toThrow('GET /api/admin/users failed with 401');
+    window.removeEventListener(DASHBOARD_AUTH_EXPIRED_EVENT, handleAuthExpired);
+
+    expect(handleAuthExpired).not.toHaveBeenCalled();
+  });
+
+  it('does not let late logout success invalidate a request from a newer login session', async () => {
+    type ErrorResponse = { ok: boolean; status: number; json: () => Promise<{ detail: string }> };
+    type SuccessResponse = { ok: boolean; json: () => Promise<{ status: string }> };
+    let resolveLogout: ((response: SuccessResponse) => void) | undefined;
+    let resolveNewSessionRequest: ((response: ErrorResponse) => void) | undefined;
+    const logoutResponse = new Promise<SuccessResponse>((resolve) => {
+      resolveLogout = resolve;
+    });
+    const newSessionResponse = new Promise<ErrorResponse>((resolve) => {
+      resolveNewSessionRequest = resolve;
+    });
+    const fetchMock = vi
+      .fn()
+      .mockReturnValueOnce(logoutResponse)
+      .mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({ detail: 'session expired' }) })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          user: { user_id: 'user:2', username: 'analyst', display_name: 'Analyst', role: 'user', is_active: true }
+        })
+      })
+      .mockReturnValueOnce(newSessionResponse);
+    const handleAuthExpired = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    window.addEventListener(DASHBOARD_AUTH_EXPIRED_EVENT, handleAuthExpired);
+
+    const logoutRequest = logoutDashboardUser();
+    await expect(fetchAdminUsers()).rejects.toThrow('GET /api/admin/users failed with 401');
+    expect(handleAuthExpired).toHaveBeenCalledTimes(1);
+    await loginDashboardUser({ username: 'analyst', password: 'secret' });
+    const newSessionRequest = fetchAdminUsers();
+
+    resolveLogout?.({ ok: true, json: async () => ({ status: 'logged_out' }) });
+    await logoutRequest;
+    resolveNewSessionRequest?.({ ok: false, status: 401, json: async () => ({ detail: 'new session expired' }) });
+    await expect(newSessionRequest).rejects.toThrow('GET /api/admin/users failed with 401');
+    window.removeEventListener(DASHBOARD_AUTH_EXPIRED_EVENT, handleAuthExpired);
+
+    expect(handleAuthExpired).toHaveBeenCalledTimes(2);
+  });
+
   it('uses cookie credentials for auth session endpoints and csrf for logout', async () => {
     const fetchMock = vi
       .fn()

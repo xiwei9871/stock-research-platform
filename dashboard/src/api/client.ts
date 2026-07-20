@@ -229,8 +229,15 @@ export async function loginDashboardUser(request: LoginRequest): Promise<LoginRe
 }
 
 export async function logoutDashboardUser(): Promise<{ status: string }> {
-  advanceDashboardAuthEpoch();
-  return postJson<{ status: string }>('/api/auth/logout', {}, { credentials: 'include', csrfToken: csrfTokenFromCookie() });
+  const startingAuthEpoch = dashboardAuthEpoch;
+  const response = await postJson<{ status: string }>('/api/auth/logout', {}, {
+    credentials: 'include',
+    csrfToken: csrfTokenFromCookie()
+  });
+  if (startingAuthEpoch === dashboardAuthEpoch) {
+    advanceDashboardAuthEpoch();
+  }
+  return response;
 }
 
 export async function fetchAdminUsers(): Promise<AdminUsersResponse> {
