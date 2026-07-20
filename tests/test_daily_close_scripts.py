@@ -145,7 +145,7 @@ exit 0
     assert "daily_close_pipeline|business_failed|stage=minute5|trade_date=2026-06-22" not in result.stderr
 
 
-def test_daily_close_minute5_wrapper_emits_compact_heartbeat(tmp_path: Path) -> None:
+def test_daily_close_minute5_wrapper_keeps_heartbeat_in_detail_log_only(tmp_path: Path) -> None:
     fake_python = tmp_path / "python.sh"
     fake_python.write_text(
         """#!/usr/bin/env bash
@@ -182,11 +182,15 @@ exit 0
     )
 
     assert result.returncode == 0
-    assert "daily_close_pipeline|started|stage=minute5" in result.stdout
-    assert "daily_close_pipeline|heartbeat|stage=minute5" in result.stdout
-    assert "completed|50|total|100" in result.stdout
+    assert "daily_close_pipeline|started|stage=minute5" not in result.stdout
+    assert "daily_close_pipeline|heartbeat|stage=minute5" not in result.stdout
+    assert "股票日终阶段完成" in result.stdout
     detail_log = next(log_dir.glob("daily_close_pipeline_minute5_*.log"))
-    assert '"status":"success"' in detail_log.read_text(encoding="utf-8")
+    detail_text = detail_log.read_text(encoding="utf-8")
+    assert "daily_close_pipeline|started|stage=minute5" in detail_text
+    assert "daily_close_pipeline|heartbeat|stage=minute5" in detail_text
+    assert "completed|50|total|100" in detail_text
+    assert '"status":"success"' in detail_text
 
 
 def test_open_auction_spot_snapshot_script_clears_proxy_env(tmp_path: Path) -> None:

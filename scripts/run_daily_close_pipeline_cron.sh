@@ -82,7 +82,7 @@ forward_signal() {
 trap forward_signal TERM INT
 trap cleanup_heartbeat EXIT
 
-echo "daily_close_pipeline|started|stage=${STAGE}|trade_date=${TRADE_DATE:-auto}|detail_log=${DETAIL_LOG}"
+echo "daily_close_pipeline|started|stage=${STAGE}|trade_date=${TRADE_DATE:-auto}|detail_log=${DETAIL_LOG}" >>"$DETAIL_LOG"
 
 set +e
 if [[ -n "${TRADE_DATE}" ]]; then
@@ -110,7 +110,7 @@ PIPELINE_PID=$!
     kill -0 "$PIPELINE_PID" 2>/dev/null || break
     now_epoch="$(date +%s)"
     last_progress="$(grep -E '^(progress\|minute5_bar|minute5\|progress)' "$DETAIL_LOG" | tail -n 1 || true)"
-    echo "daily_close_pipeline|heartbeat|stage=${STAGE}|trade_date=${TRADE_DATE:-auto}|elapsed_seconds=$((now_epoch-started_epoch))|last_progress=${last_progress:-waiting}"
+    echo "daily_close_pipeline|heartbeat|stage=${STAGE}|trade_date=${TRADE_DATE:-auto}|elapsed_seconds=$((now_epoch-started_epoch))|last_progress=${last_progress:-waiting}" >>"$DETAIL_LOG"
   done
 ) &
 HEARTBEAT_PID=$!
