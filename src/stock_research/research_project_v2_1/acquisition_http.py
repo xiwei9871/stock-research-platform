@@ -187,6 +187,20 @@ class DirectHttpProvider:
                 retry_count = attempt_index
                 if attempt_index >= max_retries:
                     break
+                failure_status = None
+                if isinstance(exc, ResearchProjectV2Error):
+                    raw_status = exc.details.get("status_code")
+                    failure_status = raw_status if isinstance(raw_status, int) else None
+                classified = classify_acquisition_failure(
+                    exc, http_status=failure_status
+                )
+                if classified.failure_code not in {
+                    "connection_refused",
+                    "connection_timeout",
+                    "proxy_unreachable",
+                    "rate_limited",
+                }:
+                    break
                 self.sleep(retry_backoff_seconds * (2**attempt_index))
 
         completed_at = self.now()

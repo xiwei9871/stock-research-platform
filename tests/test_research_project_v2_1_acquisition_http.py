@@ -235,16 +235,18 @@ def test_environment_proxy_mode_is_fail_closed_until_trusted_proxy_design_exists
 def test_non_200_response_is_preserved_as_http_error_attempt(tmp_path: Path) -> None:
     layout = LayeredResearchLayout((tmp_path / "v2_1").resolve())
     layout.root.mkdir(mode=0o700)
+    transport = SequenceTransport([error_response(404)])
     provider = DirectHttpProvider(
-        transport=SequenceTransport([error_response(404)]),
+        transport=transport,
         resolver=Resolver(),
         now=lambda: "2026-07-20T08:00:01Z",
         monotonic_ms=iter([0, 1]).__next__,
     )
     result = provider.acquire(
         candidate(), context=context(), layout=layout,
-        attempted_at="2026-07-20T08:00:00Z", max_retries=0,
+        attempted_at="2026-07-20T08:00:00Z", max_retries=2,
     )
+    assert transport.calls == 1
     assert result.attempt["http_status"] == 404
     assert result.attempt["failure_code"] == "http_error"
     assert result.artifact is None
