@@ -1523,8 +1523,33 @@ def test_trace_zip_rejects_unsafe_members_and_resource_bombs(tmp_path: Path, kin
 def test_issue_dedupe_separates_generic_cross_inventory_but_merges_explicit_roots(
     tmp_path: Path,
 ) -> None:
-    generic = "Timeout 30000ms waiting for locator('[data-testid=workspace]')"
+    generic = (
+        "Timeout 30000ms waiting for locator('[data-testid=global_search_result_item]') "
+        "while reading global_search_result_item"
+    )
     explicit = "real_route_census_primary_api_failed:GET /api/platform/summary status 500"
+    auth_root = "GET /api/auth/me status 401"
+    authoritative_root = "authoritative_snapshot_contract_mismatch: snapshot digest differs"
+    annotated_home = _playwright_spec(
+        title="home annotated root",
+        inventory_id="home",
+        project="chromium-desktop",
+        status="unexpected",
+        error="session disappeared from home",
+    )
+    annotated_home["tests"][0]["annotations"].append(  # type: ignore[index]
+        {"type": "root_cause", "description": "auth_session_expired"}
+    )
+    annotated_research = _playwright_spec(
+        title="research annotated root",
+        inventory_id="research",
+        project="webkit-mobile",
+        status="unexpected",
+        error="research received an unrelated login redirect",
+    )
+    annotated_research["tests"][0]["annotations"].append(  # type: ignore[index]
+        {"type": "root_cause:auth_session_expired"}
+    )
     specs = [
         _playwright_spec(
             title="home generic",
@@ -1561,6 +1586,36 @@ def test_issue_dedupe_separates_generic_cross_inventory_but_merges_explicit_root
             status="unexpected",
             error=explicit,
         ),
+        _playwright_spec(
+            title="home auth root",
+            inventory_id="home",
+            project="chromium-desktop",
+            status="unexpected",
+            error=auth_root,
+        ),
+        _playwright_spec(
+            title="research auth root",
+            inventory_id="research",
+            project="webkit-mobile",
+            status="unexpected",
+            error=auth_root,
+        ),
+        _playwright_spec(
+            title="home authoritative root",
+            inventory_id="home",
+            project="chromium-desktop",
+            status="unexpected",
+            error=authoritative_root,
+        ),
+        _playwright_spec(
+            title="research authoritative root",
+            inventory_id="research",
+            project="webkit-mobile",
+            status="unexpected",
+            error=authoritative_root,
+        ),
+        annotated_home,
+        annotated_research,
     ]
     result = _write_json(
         tmp_path / "dedupe" / "results.json",
@@ -1580,7 +1635,7 @@ def test_issue_dedupe_separates_generic_cross_inventory_but_merges_explicit_root
         audit_date="2026-07-21",
     )
     issues = json.loads(paths["issue_ledger"].read_text(encoding="utf-8"))["issues"]
-    assert len(issues) == 3
+    assert len(issues) == 6
     home_generic = next(
         issue for issue in issues if issue["inventory_ids"] == ["home"] and len(issue["test_ids"]) == 2
     )
@@ -1588,9 +1643,10 @@ def test_issue_dedupe_separates_generic_cross_inventory_but_merges_explicit_root
         "chromium-desktop",
         "firefox-desktop",
     }
-    explicit_issue = next(issue for issue in issues if len(issue["inventory_ids"]) == 2)
-    assert explicit_issue["inventory_ids"] == ["home", "research"]
-    assert len(explicit_issue["test_ids"]) == 2
+    shared_roots = [issue for issue in issues if len(issue["inventory_ids"]) == 2]
+    assert len(shared_roots) == 4
+    assert all(issue["inventory_ids"] == ["home", "research"] for issue in shared_roots)
+    assert all(len(issue["test_ids"]) == 2 for issue in shared_roots)
 
 
 def test_output_directory_is_replaced_without_stale_evidence_and_failure_restores_old(

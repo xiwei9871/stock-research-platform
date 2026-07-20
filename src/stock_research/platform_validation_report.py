@@ -84,11 +84,17 @@ _PATH_SECRET = re.compile(rf"(?i)(/{_SENSITIVE_NAME}/)[^/?#\s]+")
 _TITLE_INVENTORY = re.compile(r"\[inventory(?:_ids?)?:([a-z0-9_, -]+)\]", re.IGNORECASE)
 _TITLE_INVENTORY_CALL = re.compile(r"@inventory\(([a-z0-9_, -]+)\)", re.IGNORECASE)
 _ROUTE_CENSUS_TITLE = re.compile(r"^route census ([a-z0-9_]+):", re.IGNORECASE)
-_EXPLICIT_ROOT_MARKER = re.compile(r"\b[a-z][a-z0-9]*(?:_[a-z0-9]+){3,}\b", re.IGNORECASE)
-_HTTP_ROOT_MARKER = re.compile(
-    r"\b(?:GET|POST|PATCH|PUT|DELETE|HEAD|OPTIONS)\s+/[^\s]+.*\b(?:status\s*)?[45]\d\d\b",
+_STABLE_ROOT_MARKER = re.compile(
+    r"\b(?:authoritative_snapshot_|real_profile_|platform_validation_|real_route_census_)"
+    r"[a-z0-9_]*\b",
     re.IGNORECASE,
 )
+_HTTP_ROOT_MARKER = re.compile(
+    r"\b(GET|POST|PATCH|PUT|DELETE|HEAD|OPTIONS)\s+(/[^\s?#]+)(?:\?[^\s]*)?"
+    r".*?\b(?:status\s*)?([45]\d\d)\b",
+    re.IGNORECASE,
+)
+_ROOT_CAUSE_ID = re.compile(r"[a-z][a-z0-9_]{2,80}")
 _BASELINE_STATUSES = frozenset({"baseline_candidate", "trusted_baseline"})
 _PLAYWRIGHT_TEST_STATUSES = frozenset(
     {"expected", "unexpected", "flaky", "skipped", "passed", "failed", "timedout", "timeout"}
@@ -817,6 +823,33 @@ def _disposition_for_test(test: Mapping[str, Any], checkout_roots: tuple[str, ..
     return None
 
 
+def _root_cause_for_test(test: Mapping[str, Any]) -> str | None:
+    annotation_lists: list[object] = [test.get("annotations")]
+    results = test.get("results")
+    if isinstance(results, list):
+        annotation_lists.extend(
+            result.get("annotations") for result in results if isinstance(result, Mapping)
+        )
+    for annotations in annotation_lists:
+        if not isinstance(annotations, list):
+            continue
+        for annotation in annotations:
+            if not isinstance(annotation, Mapping):
+                continue
+            raw_type = str(annotation.get("type", "")).lower()
+            root_cause: object | None = None
+            if raw_type == "root_cause":
+                root_cause = annotation.get("description")
+            elif raw_type.startswith("root_cause:"):
+                root_cause = raw_type.split(":", 1)[1]
+            else:
+                continue
+            if not isinstance(root_cause, str) or _ROOT_CAUSE_ID.fullmatch(root_cause) is None:
+                raise ValueError("root_cause annotation must contain a strict lowercase identifier")
+            return root_cause
+    return None
+
+
 def _file_digest(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -1274,6 +1307,7 @@ def _ingest_playwright_results(
                         ),
                         "expected": expected,
                         "inventory_ids": issue_inventory_ids,
+                        "root_cause": _root_cause_for_test(test),
                         "test_location": relative_file,
                         "test_id": test_id,
                         "title": safe_title,
@@ -1289,12 +1323,18 @@ def _normalize_issues(
     groups: dict[str, list[dict[str, Any]]] = {}
     for event in events:
         actual_fingerprint = _fingerprint_text(event["actual"])
-        components = [_fingerprint_text(event["expected"]), actual_fingerprint]
-        explicit_root = bool(
-            _EXPLICIT_ROOT_MARKER.search(actual_fingerprint)
-            or _HTTP_ROOT_MARKER.search(actual_fingerprint)
-        )
-        if not explicit_root:
+        components = [_fingerprint_text(event["expected"])]
+        stable_marker = _STABLE_ROOT_MARKER.search(actual_fingerprint)
+        http_marker = _HTTP_ROOT_MARKER.search(actual_fingerprint)
+        if event["root_cause"] is not None:
+            components.append(f"root_cause:{event['root_cause']}")
+        elif stable_marker is not None:
+            components.append(f"machine:{stable_marker.group(0).lower()}")
+        elif http_marker is not None:
+            method, path, status = http_marker.groups()
+            components.append(f"http:{method.upper()}:{path}:{status}")
+        else:
+            components.append(actual_fingerprint)
             scope = sorted(event["inventory_ids"])
             components.append(",".join(scope) if scope else event["test_location"])
         fingerprint = "\x00".join(components)
