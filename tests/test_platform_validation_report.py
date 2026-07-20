@@ -647,6 +647,21 @@ def _playwright_spec(
 def _write_json(path: Path, payload: object) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload), encoding="utf-8")
+    pending = [payload]
+    while pending:
+        value = pending.pop()
+        if isinstance(value, dict):
+            raw_path = value.get("path")
+            if isinstance(raw_path, str):
+                attachment = Path(raw_path)
+                if not attachment.is_absolute() and ".." not in attachment.parts and ":" not in raw_path:
+                    evidence = path.parent / attachment
+                    evidence.parent.mkdir(parents=True, exist_ok=True)
+                    if not evidence.exists():
+                        evidence.write_bytes(f"fixture:{attachment.as_posix()}".encode())
+            pending.extend(value.values())
+        elif isinstance(value, list):
+            pending.extend(value)
     return path
 
 
@@ -747,10 +762,10 @@ def test_report_ingests_nested_playwright_results_deduplicates_and_writes_all_ar
     assert issue["inventory_ids"] == ["home"]
     assert len(issue["test_ids"]) == 2
     assert issue["test_id"] == issue["test_ids"][0]
-    assert issue["evidence"] == [
-        "artifacts/home/screenshot.png",
-        "artifacts/home/trace.zip",
-    ]
+    assert len(issue["evidence"]) == 2
+    assert all(path.startswith("evidence/") for path in issue["evidence"])
+    assert {Path(path).suffix for path in issue["evidence"]} == {".png", ".zip"}
+    assert all((tmp_path / "audit" / path).is_file() for path in issue["evidence"])
     assert "\u001b" not in issue["actual"]
     assert str(root) not in issue["actual"]
 
@@ -768,7 +783,7 @@ def test_report_ingests_nested_playwright_results_deduplicates_and_writes_all_ar
     assert "chromium-desktop" in html and "webkit-mobile" in html
     assert "&lt;script&gt;alert(1)&lt;/script&gt;" in html
     assert "<script>alert(1)</script>" not in html
-    assert 'href="artifacts/home/trace.zip"' in html
+    assert all(f'href="{path}"' in html for path in issue["evidence"])
 
 
 def test_issue_ids_and_output_are_stable_across_input_order_roots_ansi_ports_and_line_noise(
@@ -872,7 +887,9 @@ def test_report_redacts_recursive_secrets_rejects_unsafe_evidence_and_escapes_ht
         revision=f"token={secret}",
         audit_date="2026-07-21",
     )
-    combined = b"\n".join(path.read_bytes() for path in paths.values())
+    combined = b"\n".join(
+        path.read_bytes() for path in sorted((tmp_path / "out").rglob("*")) if path.is_file()
+    )
     assert secret.encode() not in combined
     assert b"Authorization:" not in combined
     assert b"Cookie:" not in combined
@@ -917,18 +934,16 @@ def test_trusted_baseline_requires_no_p0_p1_and_disposition_for_every_p2_issue(
         {"type": "disposition", "description": "accepted: documented browser variance"}
     )
     _write_json(p2_without_disposition, payload)
-    paths = build_platform_validation_report(
-        inventory=_report_inventory(),
-        playwright_result_paths=[p2_without_disposition],
-        output_dir=tmp_path / "trusted",
-        audit_id="trusted",
-        revision="rev",
-        audit_date="2026-07-21",
-        baseline_status="trusted_baseline",
-    )
-    ledger = json.loads(paths["issue_ledger"].read_text(encoding="utf-8"))
-    assert ledger["baseline_status"] == "trusted_baseline"
-    assert ledger["issues"][0]["disposition"] == "accepted: documented browser variance"
+    with pytest.raises(ValueError, match="trusted_baseline.*(?:coverage|statuses)"):
+        build_platform_validation_report(
+            inventory=_report_inventory(),
+            playwright_result_paths=[p2_without_disposition],
+            output_dir=tmp_path / "trusted",
+            audit_id="trusted",
+            revision="rev",
+            audit_date="2026-07-21",
+            baseline_status="trusted_baseline",
+        )
 
     p0 = _write_json(
         tmp_path / "p0.json",
@@ -1029,6 +1044,371 @@ def test_inventory_mapping_prefers_annotations_then_route_census_and_marks_unmap
     assert next(issue for issue in issues if issue["inventory_ids"] == ["unmapped"])["severity"] == "P0"
 
 
+def test_evidence_is_archived_with_safe_collision_resistant_names_and_rejects_escapes(
+    tmp_path: Path,
+) -> None:
+    result_dir = tmp_path / "results"
+    absolute = result_dir / "first" / "trace.zip"
+    relative = result_dir / "second" / "trace.zip"
+    absolute.parent.mkdir(parents=True)
+    relative.parent.mkdir(parents=True)
+    absolute.write_bytes(b"absolute evidence")
+    relative.write_bytes(b"relative evidence")
+    first = _playwright_spec(
+        title="absolute evidence",
+        inventory_id="home",
+        project="chromium-desktop",
+        status="unexpected",
+        error="absolute root failure",
+        attachment=str(absolute),
+    )
+    second = _playwright_spec(
+        title="relative evidence",
+        inventory_id="research",
+        project="chromium-desktop",
+        status="unexpected",
+        error="relative root failure",
+        attachment="second/trace.zip",
+    )
+    result = _write_json(
+        result_dir / "results.json",
+        _playwright_payload(
+            root=tmp_path / "root",
+            profile="real",
+            project="chromium-desktop",
+            specs=[second, first],
+        ),
+    )
+    paths = build_platform_validation_report(
+        inventory=_report_inventory(),
+        playwright_result_paths=[result],
+        output_dir=tmp_path / "audit",
+        audit_id="evidence",
+        revision="rev",
+        audit_date="2026-07-21",
+    )
+    issues = json.loads(paths["issue_ledger"].read_text(encoding="utf-8"))["issues"]
+    archived = sorted(path for issue in issues for path in issue["evidence"])
+    assert len(archived) == 2
+    assert archived[0] != archived[1]
+    assert all(path.startswith("evidence/") and path.endswith("-trace.zip") for path in archived)
+    assert {(tmp_path / "audit" / path).read_bytes() for path in archived} == {
+        b"absolute evidence",
+        b"relative evidence",
+    }
+
+    unsafe_spec = _playwright_spec(
+        title="unsafe evidence",
+        inventory_id="home",
+        project="chromium-desktop",
+        status="unexpected",
+        error="unsafe",
+        attachment="javascript:alert(1)",
+    )
+    unsafe_result = _write_json(
+        result_dir / "unsafe.json",
+        _playwright_payload(
+            root=tmp_path / "root",
+            profile="real",
+            project="chromium-desktop",
+            specs=[unsafe_spec],
+        ),
+    )
+    with pytest.raises(ValueError, match="unsafe evidence path"):
+        build_platform_validation_report(
+            inventory=_report_inventory(),
+            playwright_result_paths=[unsafe_result],
+            output_dir=tmp_path / "unsafe-out",
+            audit_id="unsafe",
+            revision="rev",
+            audit_date="2026-07-21",
+        )
+
+    missing_spec = _playwright_spec(
+        title="missing evidence",
+        inventory_id="home",
+        project="chromium-desktop",
+        status="unexpected",
+        error="missing",
+        attachment="missing/trace.zip",
+    )
+    missing_result = _write_json(
+        result_dir / "missing.json",
+        _playwright_payload(
+            root=tmp_path / "root",
+            profile="real",
+            project="chromium-desktop",
+            specs=[missing_spec],
+        ),
+    )
+    (result_dir / "missing" / "trace.zip").unlink()
+    with pytest.raises(ValueError, match="evidence.*regular file"):
+        build_platform_validation_report(
+            inventory=_report_inventory(),
+            playwright_result_paths=[missing_result],
+            output_dir=tmp_path / "missing-out",
+            audit_id="missing",
+            revision="rev",
+            audit_date="2026-07-21",
+        )
+
+    outside = tmp_path / "outside.zip"
+    outside.write_bytes(b"outside")
+    symlink = result_dir / "symlink.zip"
+    symlink.symlink_to(outside)
+    symlink_spec = _playwright_spec(
+        title="symlink evidence",
+        inventory_id="home",
+        project="chromium-desktop",
+        status="unexpected",
+        error="symlink",
+        attachment="symlink.zip",
+    )
+    symlink_result = _write_json(
+        result_dir / "symlink.json",
+        _playwright_payload(
+            root=tmp_path / "root",
+            profile="real",
+            project="chromium-desktop",
+            specs=[symlink_spec],
+        ),
+    )
+    with pytest.raises(ValueError, match="symlink|escapes"):
+        build_platform_validation_report(
+            inventory=_report_inventory(),
+            playwright_result_paths=[symlink_result],
+            output_dir=tmp_path / "symlink-out",
+            audit_id="symlink",
+            revision="rev",
+            audit_date="2026-07-21",
+        )
+
+
+def test_playwright_profile_must_be_explicit_or_metadata_bound(tmp_path: Path) -> None:
+    payload = _playwright_payload(
+        root=tmp_path / "root",
+        profile="real",
+        project="chromium-desktop",
+        specs=[],
+    )
+    payload["config"]["metadata"] = {}
+    result = _write_json(tmp_path / "results.json", payload)
+
+    with pytest.raises(ValueError, match="Playwright profile.*explicit"):
+        build_platform_validation_report(
+            inventory=_report_inventory(),
+            playwright_result_paths=[result],
+            output_dir=tmp_path / "unbound",
+            audit_id="unbound",
+            revision="rev",
+            audit_date="2026-07-21",
+        )
+
+    paths = build_platform_validation_report(
+        inventory=_report_inventory(),
+        playwright_result_paths=[("real", result)],
+        output_dir=tmp_path / "bound",
+        audit_id="bound",
+        revision="rev",
+        audit_date="2026-07-21",
+    )
+    assert paths["issue_ledger"].is_file()
+
+
+def test_trusted_baseline_requires_complete_traceable_layer_and_profile_coverage(
+    tmp_path: Path,
+) -> None:
+    inventory = _inventory(
+        _item(
+            id="complete",
+            route="/complete",
+            priority="P0",
+            layers=["unit", "api", "playwright"],
+            profiles=["real"],
+        )
+    )
+    passed = _write_json(
+        tmp_path / "playwright" / "results.json",
+        _playwright_payload(
+            root=tmp_path / "root",
+            profile="real",
+            project="chromium-desktop",
+            specs=[
+                _playwright_spec(
+                    title="complete route",
+                    inventory_id="complete",
+                    project="chromium-desktop",
+                    status="expected",
+                )
+            ],
+        ),
+    )
+    with pytest.raises(ValueError, match="trusted_baseline.*coverage"):
+        build_platform_validation_report(
+            inventory=inventory,
+            playwright_result_paths=[passed],
+            output_dir=tmp_path / "missing-coverage",
+            audit_id="missing-coverage",
+            revision="rev",
+            audit_date="2026-07-21",
+            baseline_status="trusted_baseline",
+        )
+
+    coverage_dir = tmp_path / "coverage"
+    coverage_dir.mkdir()
+    (coverage_dir / "unit.txt").write_text("unit pass", encoding="utf-8")
+    (coverage_dir / "api.txt").write_text("api pass", encoding="utf-8")
+    coverage = _write_json(
+        coverage_dir / "coverage.json",
+        {
+            "schema_version": "platform_validation_coverage_results_v1",
+            "items": [
+                {
+                    "inventory_id": "complete",
+                    "layers": {
+                        "unit": {"status": "covered", "evidence": ["unit.txt"]},
+                        "api": {"status": "covered", "evidence": ["api.txt"]},
+                    },
+                }
+            ],
+        },
+    )
+    paths = build_platform_validation_report(
+        inventory=inventory,
+        playwright_result_paths=[passed],
+        coverage_results=coverage,
+        output_dir=tmp_path / "trusted",
+        audit_id="trusted-complete",
+        revision="rev",
+        audit_date="2026-07-21",
+        baseline_status="trusted_baseline",
+    )
+    matrix = json.loads(paths["coverage_matrix"].read_text(encoding="utf-8"))
+    assert matrix["items"][0]["status"] == "covered"
+    assert all(matrix["items"][0]["layer_evidence"].values())
+    assert matrix["items"][0]["profile_evidence"]["real"]
+    assert all((tmp_path / "trusted" / path).is_file() for path in matrix["items"][0]["layer_evidence"]["api"])
+
+
+@pytest.mark.parametrize("status", ["skipped", "flaky"])
+def test_trusted_baseline_rejects_skipped_or_flaky_playwright_results(
+    tmp_path: Path, status: str
+) -> None:
+    inventory = _inventory(
+        _item(id="complete", route="/complete", priority="P0", layers=["playwright"], profiles=["real"])
+    )
+    spec = _playwright_spec(
+        title=f"complete {status}",
+        inventory_id="complete",
+        project="chromium-desktop",
+        status="skipped" if status == "skipped" else "expected",
+    )
+    spec["tests"][0]["status"] = status  # type: ignore[index]
+    result = _write_json(
+        tmp_path / status / "results.json",
+        _playwright_payload(
+            root=tmp_path / "root",
+            profile="real",
+            project="chromium-desktop",
+            specs=[spec],
+        ),
+    )
+    with pytest.raises(ValueError, match="trusted_baseline.*(?:coverage|skipped|flaky)"):
+        build_platform_validation_report(
+            inventory=inventory,
+            playwright_result_paths=[result],
+            output_dir=tmp_path / f"{status}-out",
+            audit_id=status,
+            revision="rev",
+            audit_date="2026-07-21",
+            baseline_status="trusted_baseline",
+        )
+
+
+def test_trusted_baseline_rejects_unmapped_tests_even_when_required_coverage_is_complete(
+    tmp_path: Path,
+) -> None:
+    inventory = _inventory(
+        _item(id="complete", route="/complete", priority="P0", layers=["playwright"], profiles=["real"])
+    )
+    result = _write_json(
+        tmp_path / "real" / "results.json",
+        _playwright_payload(
+            root=tmp_path / "root",
+            profile="real",
+            project="chromium-desktop",
+            specs=[
+                _playwright_spec(
+                    title="mapped pass",
+                    inventory_id="complete",
+                    project="chromium-desktop",
+                    status="expected",
+                ),
+                _playwright_spec(
+                    title="unmapped pass",
+                    inventory_id=None,
+                    project="chromium-desktop",
+                    status="expected",
+                ),
+            ],
+        ),
+    )
+    with pytest.raises(ValueError, match="trusted_baseline.*unmapped"):
+        build_platform_validation_report(
+            inventory=inventory,
+            playwright_result_paths=[result],
+            output_dir=tmp_path / "unmapped-out",
+            audit_id="unmapped",
+            revision="rev",
+            audit_date="2026-07-21",
+            baseline_status="trusted_baseline",
+        )
+
+
+def test_issue_fingerprint_ignores_playwright_code_frame_line_numbers_but_not_code(
+    tmp_path: Path,
+) -> None:
+    def issue_id(line: int, code: str, output: str) -> str:
+        error = (
+            f"Error: mismatch\n\n  {line - 1} | const before = true;\n"
+            f"> {line} | {code}\n"
+            "      |       ^\n"
+            f"  {line + 1} | const after = true;"
+        )
+        result = _write_json(
+            tmp_path / output / "results.json",
+            _playwright_payload(
+                root=tmp_path / output,
+                profile="real",
+                project="chromium-desktop",
+                specs=[
+                    _playwright_spec(
+                        title="code frame",
+                        inventory_id="home",
+                        project="chromium-desktop",
+                        status="unexpected",
+                        error=error,
+                    )
+                ],
+            ),
+        )
+        paths = build_platform_validation_report(
+            inventory=_report_inventory(),
+            playwright_result_paths=[result],
+            output_dir=tmp_path / f"{output}-audit",
+            audit_id=output,
+            revision="rev",
+            audit_date="2026-07-21",
+        )
+        return json.loads(paths["issue_ledger"].read_text(encoding="utf-8"))["issues"][0]["issue_id"]
+
+    first = issue_id(475, "expect(actual).toBe(expected);", "first")
+    moved = issue_id(912, "expect(actual).toBe(expected);", "moved")
+    changed = issue_id(912, "expect(actual).toEqual(expected);", "changed")
+    assert first == moved
+    assert changed != first
+
+
 def test_report_fails_closed_for_malformed_json_unknown_inventory_and_bad_baseline(tmp_path: Path) -> None:
     malformed = tmp_path / "malformed.json"
     malformed.write_text("{", encoding="utf-8")
@@ -1108,6 +1488,7 @@ def test_report_cli_help_and_fixture_smoke(tmp_path: Path) -> None:
     )
     assert help_result.returncode == 0
     assert "--playwright-results" in help_result.stdout
+    assert "--coverage-results" in help_result.stdout
     assert "--baseline-status" in help_result.stdout
 
     results = _write_json(

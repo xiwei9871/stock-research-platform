@@ -22,10 +22,17 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("inventory", type=Path, help="Canonical platform route inventory JSON")
     parser.add_argument(
         "--playwright-results",
-        type=Path,
         action="append",
         required=True,
-        help="Playwright JSON reporter output; repeat for each profile/project result",
+        help=(
+            "Playwright JSON reporter output; repeat for each result. Use profile=path "
+            "when profile metadata is absent."
+        ),
+    )
+    parser.add_argument(
+        "--coverage-results",
+        type=Path,
+        help="Optional platform_validation_coverage_results_v1 JSON for unit/API layers",
     )
     parser.add_argument("--output-dir", type=Path, required=True, help="Audit artifact directory")
     parser.add_argument("--audit-id", required=True, help="Stable identifier for this audit run")
@@ -45,6 +52,7 @@ def main(argv: list[str] | None = None) -> int:
     paths = build_platform_validation_report(
         inventory=args.inventory,
         playwright_result_paths=args.playwright_results,
+        coverage_results=args.coverage_results,
         output_dir=args.output_dir,
         audit_id=args.audit_id,
         revision=args.revision,

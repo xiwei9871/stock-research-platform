@@ -5,6 +5,7 @@ import hashlib
 import html
 import json
 import re
+import shutil
 from collections.abc import Mapping
 from copy import deepcopy
 from pathlib import Path
@@ -53,10 +54,13 @@ ROUTE_PARAM_SOURCES = frozenset({"authoritative_stock_asset_id"})
 _PRIORITY_ORDER = {"P0": 0, "P1": 1, "P2": 2}
 _PLACEHOLDER = re.compile(r"\{([a-z][a-z0-9_]*)\}")
 _ANSI = re.compile(r"(?:\x1b\[[0-?]*[ -/]*[@-~]|\x9b[0-?]*[ -/]*[@-~])")
-_ISO_TIMESTAMP = re.compile(r"\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z\b")
+_ISO_TIMESTAMP = re.compile(
+    r"\b\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?(?:Z|[+-]\d{2}:?\d{2})?\b"
+)
 _LOCAL_URL = re.compile(r"https?://(?:127\.0\.0\.1|localhost|\[::1\]):\d+")
 _LINE_COLUMN = re.compile(r"(\.[A-Za-z0-9]{1,5}):\d+(?::\d+)?")
 _LINE_WORD = re.compile(r"\b(?:line|column)\s+\d+\b", re.IGNORECASE)
+_CODE_FRAME_LINE = re.compile(r"(?m)^\s*(>?)\s*\d+\s*\|")
 _SENSITIVE_NAME = (
     r"(?:access[_-]?token|refresh[_-]?token|csrf[_-]?token|api[_-]?key|password|passwd|"
     r"secret|token|authorization|proxy[_-]?authorization|cookie|set[_-]?cookie)"
@@ -80,6 +84,8 @@ _PLAYWRIGHT_TEST_STATUSES = frozenset(
 )
 _ISSUE_SCHEMA_VERSION = "platform_validation_issue_ledger_v1"
 _COVERAGE_SCHEMA_VERSION = "platform_validation_coverage_v1"
+_COVERAGE_RESULTS_SCHEMA_VERSION = "platform_validation_coverage_results_v1"
+_OBSERVED_COVERAGE_STATUSES = frozenset({"covered", "partial", "missing"})
 
 
 def _inventory_error(field: str, detail: str) -> ValueError:
@@ -489,6 +495,7 @@ def _fingerprint_text(value: str) -> str:
     normalized = _LOCAL_URL.sub("<LOCAL_URL>", normalized)
     normalized = _LINE_COLUMN.sub(r"\1:<LINE>:<COLUMN>", normalized)
     normalized = _LINE_WORD.sub("<LINE>", normalized)
+    normalized = _CODE_FRAME_LINE.sub(r"\1 <LINE> |", normalized)
     normalized = re.sub(r"\s+", " ", normalized).strip().lower()
     return normalized
 
@@ -540,19 +547,58 @@ def _checkout_roots(payload: Mapping[str, Any]) -> tuple[str, ...]:
     return tuple(sorted(roots, key=len, reverse=True))
 
 
-def _profile_for_result(path: Path, payload: Mapping[str, Any]) -> str:
+def _profile_for_result(payload: Mapping[str, Any], explicit_profile: str | None) -> str:
+    metadata_profile: str | None = None
     config = payload.get("config")
     if isinstance(config, Mapping):
         metadata = config.get("metadata")
         if isinstance(metadata, Mapping):
             for key in ("platformValidationProfile", "platform_validation_profile", "profile"):
                 value = metadata.get(key)
-                if isinstance(value, str) and value in PLAYWRIGHT_PROFILES:
-                    return value
-    for part in reversed(path.parts):
-        if part in PLAYWRIGHT_PROFILES:
-            return part
-    return "legacy"
+                if value is None:
+                    continue
+                if not isinstance(value, str) or value not in PLAYWRIGHT_PROFILES:
+                    raise ValueError("Playwright profile metadata is invalid")
+                metadata_profile = value
+                break
+    if explicit_profile is not None:
+        if explicit_profile not in PLAYWRIGHT_PROFILES:
+            raise ValueError(f"Playwright profile {explicit_profile!r} is unsupported")
+        if metadata_profile is not None and metadata_profile != explicit_profile:
+            raise ValueError("Playwright profile binding conflicts with result metadata")
+        return explicit_profile
+    if metadata_profile is not None:
+        return metadata_profile
+    raise ValueError("Playwright profile must be explicit or present in result metadata")
+
+
+def _normalize_playwright_inputs(
+    entries: list[str | Path | tuple[str, str | Path]],
+) -> list[tuple[str | None, Path]]:
+    normalized: set[tuple[str | None, Path]] = set()
+    for entry in entries:
+        explicit_profile: str | None = None
+        raw_path: str | Path
+        if isinstance(entry, tuple):
+            if len(entry) != 2:
+                raise ValueError("Playwright result tuple must contain profile and path")
+            explicit_profile, raw_path = entry
+        elif isinstance(entry, str) and "=" in entry:
+            candidate_profile, candidate_path = entry.split("=", 1)
+            if candidate_profile in PLAYWRIGHT_PROFILES:
+                explicit_profile = candidate_profile
+                raw_path = candidate_path
+            else:
+                raw_path = entry
+        else:
+            raw_path = entry
+        if explicit_profile is not None and explicit_profile not in PLAYWRIGHT_PROFILES:
+            raise ValueError(f"Playwright profile {explicit_profile!r} is unsupported")
+        path = Path(raw_path)
+        if not str(path):
+            raise ValueError("Playwright result path must be non-empty")
+        normalized.add((explicit_profile, path))
+    return sorted(normalized, key=lambda item: ((item[0] or ""), item[1].as_posix()))
 
 
 def _relative_test_file(raw: object, *, root_dir: object, checkout_roots: tuple[str, ...]) -> str:
@@ -703,46 +749,120 @@ def _disposition_for_test(test: Mapping[str, Any], checkout_roots: tuple[str, ..
     return None
 
 
-def _safe_evidence_path(
+def _file_digest(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _safe_archive_content(path: Path, checkout_roots: tuple[str, ...]) -> bytes | None:
+    if path.suffix.lower() not in {".csv", ".html", ".json", ".log", ".md", ".txt", ".xml", ".yaml", ".yml"}:
+        return None
+    try:
+        text = path.read_text(encoding="utf-8")
+    except UnicodeError:
+        return None
+    if path.suffix.lower() == ".json":
+        try:
+            payload = json.loads(text)
+        except json.JSONDecodeError:
+            pass
+        else:
+            return (
+                json.dumps(
+                    _sanitize_payload(payload, checkout_roots=checkout_roots),
+                    ensure_ascii=False,
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n"
+            ).encode("utf-8")
+    return _sanitize_text(text, checkout_roots=checkout_roots).encode("utf-8")
+
+
+def _evidence_source(
     raw: str,
     *,
-    result_path: Path,
-    output_dir: Path,
+    source_root: Path,
+    namespace: str,
     checkout_roots: tuple[str, ...],
-) -> str:
+) -> dict[str, Any]:
+    safe_raw = _sanitize_text(raw, checkout_roots=checkout_roots)
+    if not raw or ":" in raw or re.match(r"^[A-Za-z][A-Za-z0-9+.-]*:", raw):
+        raise ValueError(f"unsafe evidence path {safe_raw!r}")
     path = Path(raw)
-    if path.is_absolute():
-        resolved = path.resolve()
-        bases = (output_dir.resolve(), result_path.parent.resolve())
-        relative: Path | None = None
-        for base in bases:
-            try:
-                relative = resolved.relative_to(base)
-                break
-            except ValueError:
-                continue
-        if relative is None:
-            safe_raw = _sanitize_text(raw, checkout_roots=checkout_roots)
-            raise ValueError(f"unsafe evidence path {safe_raw!r}: absolute path escapes audit results")
-        path = relative
-    if not path.parts or ".." in path.parts or path.as_posix().startswith("/"):
-        safe_raw = _sanitize_text(raw, checkout_roots=checkout_roots)
+    if not path.parts or ".." in path.parts:
         raise ValueError(f"unsafe evidence path {safe_raw!r}")
-    safe = _sanitize_text(path.as_posix(), checkout_roots=checkout_roots)
-    if not safe or safe.startswith("/") or ".." in Path(safe).parts:
-        safe_raw = _sanitize_text(raw, checkout_roots=checkout_roots)
-        raise ValueError(f"unsafe evidence path {safe_raw!r}")
-    return safe
+    root = source_root.resolve()
+    candidate = path if path.is_absolute() else source_root / path
+    try:
+        resolved = candidate.resolve(strict=True)
+    except OSError as exc:
+        raise ValueError(f"evidence path {safe_raw!r} must reference an existing regular file") from exc
+    try:
+        relative = resolved.relative_to(root)
+    except ValueError as exc:
+        raise ValueError(
+            f"unsafe evidence path {safe_raw!r}: symlink or absolute path escapes result directory"
+        ) from exc
+    current = source_root
+    for part in relative.parts:
+        current = current / part
+        if current.is_symlink():
+            raise ValueError(f"unsafe evidence path {safe_raw!r}: symlink is not allowed")
+    if not resolved.is_file() or resolved.is_symlink():
+        raise ValueError(f"evidence path {safe_raw!r} must reference an existing regular file")
+    source_digest = _file_digest(resolved)
+    archive_content = _safe_archive_content(resolved, checkout_roots)
+    archive_digest = (
+        hashlib.sha256(archive_content).hexdigest() if archive_content is not None else source_digest
+    )
+    basename = re.sub(r"[^A-Za-z0-9._-]+", "-", resolved.name).strip(".-") or "evidence.bin"
+    identity = f"{namespace}\0{relative.as_posix()}\0{archive_digest}"
+    name_digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:20]
+    return {
+        "source": resolved,
+        "source_relative": relative.as_posix(),
+        "source_digest": source_digest,
+        "archive_digest": archive_digest,
+        "archive_content": archive_content,
+        "archive_path": f"evidence/{name_digest}-{basename}",
+    }
+
+
+def _archive_evidence(records: list[dict[str, Any]], output_dir: Path) -> None:
+    by_archive: dict[str, dict[str, Any]] = {}
+    for record in records:
+        archive_path = record["archive_path"]
+        existing = by_archive.get(archive_path)
+        if existing is not None and existing["archive_digest"] != record["archive_digest"]:
+            raise ValueError(f"evidence archive collision for {archive_path}")
+        by_archive[archive_path] = record
+    for archive_path, record in sorted(by_archive.items()):
+        source = Path(record["source"])
+        if source.is_symlink() or not source.is_file() or _file_digest(source) != record["source_digest"]:
+            raise ValueError("evidence source changed or is no longer a regular file")
+        destination = output_dir / archive_path
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        temporary = destination.with_name(f".{destination.name}.tmp")
+        archive_content = record.get("archive_content")
+        if isinstance(archive_content, bytes):
+            temporary.write_bytes(archive_content)
+        else:
+            shutil.copyfile(source, temporary)
+        temporary.replace(destination)
 
 
 def _evidence_for_test(
     test: Mapping[str, Any],
     *,
     result_path: Path,
-    output_dir: Path,
+    namespace: str,
     checkout_roots: tuple[str, ...],
-) -> list[str]:
-    evidence: set[str] = set()
+) -> list[dict[str, Any]]:
+    evidence: dict[str, dict[str, Any]] = {}
     results = test.get("results")
     if not isinstance(results, list):
         return []
@@ -754,15 +874,14 @@ def _evidence_for_test(
                 continue
             raw_path = attachment.get("path")
             if isinstance(raw_path, str) and raw_path.strip():
-                evidence.add(
-                    _safe_evidence_path(
-                        raw_path,
-                        result_path=result_path,
-                        output_dir=output_dir,
-                        checkout_roots=checkout_roots,
-                    )
+                record = _evidence_source(
+                    raw_path,
+                    source_root=result_path.parent,
+                    namespace=namespace,
+                    checkout_roots=checkout_roots,
                 )
-    return sorted(evidence)
+                evidence[record["archive_path"]] = record
+    return [evidence[key] for key in sorted(evidence)]
 
 
 def _actual_for_test(test: Mapping[str, Any], checkout_roots: tuple[str, ...]) -> str:
@@ -844,10 +963,9 @@ def _walk_specs(suites: object, parents: tuple[str, ...] = ()) -> list[tuple[tup
 
 
 def _ingest_playwright_results(
-    paths: list[Path],
+    inputs: list[tuple[str | None, Path]],
     *,
     inventory: Mapping[str, Any],
-    output_dir: Path,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, dict[str, int]], dict[str, dict[str, int]]]:
     inventory_by_id = {item["id"]: item for item in inventory["items"]}
     known_ids = frozenset(inventory_by_id)
@@ -856,12 +974,18 @@ def _ingest_playwright_results(
     profile_counts: dict[str, dict[str, int]] = {}
     browser_counts: dict[str, dict[str, int]] = {}
 
-    for result_path in sorted(set(paths), key=lambda item: item.as_posix()):
+    for explicit_profile, result_path in inputs:
         payload = _load_playwright_json(result_path)
         roots = _checkout_roots(payload)
         config = payload.get("config", {})
         root_dir = config.get("rootDir") if isinstance(config, Mapping) else None
-        profile = _profile_for_result(result_path, payload)
+        profile = _profile_for_result(payload, explicit_profile)
+        result_evidence = _evidence_source(
+            str(result_path.resolve()),
+            source_root=result_path.parent,
+            namespace=f"playwright-result:{profile}",
+            checkout_roots=roots,
+        )
         for parents, spec in _walk_specs(payload["suites"]):
             title = spec.get("title")
             if not isinstance(title, str) or not title.strip():
@@ -897,8 +1021,10 @@ def _ingest_playwright_results(
                 inventory_ids = _inventory_ids_for_test(test, title=title, known_ids=known_ids)
                 test_id = f"{project}::{relative_file}::{safe_title}"
                 observation = {
+                    "aggregate_status": aggregate_status,
                     "inventory_ids": inventory_ids,
                     "profile": profile,
+                    "result_evidence": result_evidence,
                     "status": _observed_status(test),
                     "test_id": test_id,
                 }
@@ -919,7 +1045,7 @@ def _ingest_playwright_results(
                         "evidence": _evidence_for_test(
                             test,
                             result_path=result_path,
-                            output_dir=output_dir,
+                            namespace=f"playwright-attachment:{profile}",
                             checkout_roots=roots,
                         ),
                         "expected": expected,
@@ -969,7 +1095,13 @@ def _normalize_issues(
             "status": "open",
             "expected": "\n---\n".join(sorted({event["expected"] for event in grouped})),
             "actual": "\n---\n".join(sorted({event["actual"] for event in grouped})),
-            "evidence": sorted({path for event in grouped for path in event["evidence"]}),
+            "evidence": sorted(
+                {
+                    record["archive_path"]
+                    for event in grouped
+                    for record in event["evidence"]
+                }
+            ),
             "title": sorted({event["title"] for event in grouped})[0],
             "_disposition_complete": disposition_complete,
         }
@@ -982,14 +1114,96 @@ def _normalize_issues(
     )
 
 
+def _load_coverage_results(
+    path: Path | None,
+    inventory: Mapping[str, Any],
+) -> dict[tuple[str, str], dict[str, Any]]:
+    if path is None:
+        return {}
+
+    def strict_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        value: dict[str, Any] = {}
+        for key, item in pairs:
+            if key in value:
+                raise ValueError(f"duplicate JSON key {key!r}")
+            value[key] = item
+        return value
+
+    def reject_constant(value: str) -> None:
+        raise ValueError(f"non-finite JSON value {value}")
+
+    try:
+        payload = json.loads(
+            path.read_text(encoding="utf-8"),
+            object_pairs_hook=strict_object,
+            parse_constant=reject_constant,
+        )
+    except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as exc:
+        raise ValueError(f"coverage results {path}: cannot load: {exc}") from exc
+    if not isinstance(payload, Mapping) or set(payload) != {"schema_version", "items"}:
+        raise ValueError("coverage results must contain exactly schema_version and items")
+    if payload["schema_version"] != _COVERAGE_RESULTS_SCHEMA_VERSION:
+        raise ValueError(f"coverage results schema_version must equal {_COVERAGE_RESULTS_SCHEMA_VERSION}")
+    if not isinstance(payload["items"], list):
+        raise ValueError("coverage results items must be a list")
+    inventory_by_id = {item["id"]: item for item in inventory["items"]}
+    results: dict[tuple[str, str], dict[str, Any]] = {}
+    seen_items: set[str] = set()
+    for raw_item in payload["items"]:
+        if not isinstance(raw_item, Mapping) or set(raw_item) != {"inventory_id", "layers"}:
+            raise ValueError("coverage result item must contain exactly inventory_id and layers")
+        inventory_id = raw_item["inventory_id"]
+        if not isinstance(inventory_id, str) or inventory_id not in inventory_by_id:
+            raise ValueError("coverage results contain unknown inventory ID")
+        if inventory_id in seen_items:
+            raise ValueError(f"coverage results contain duplicate inventory ID {inventory_id!r}")
+        seen_items.add(inventory_id)
+        layers = raw_item["layers"]
+        if not isinstance(layers, Mapping):
+            raise ValueError(f"coverage results item {inventory_id}: layers must be an object")
+        for layer, raw_result in layers.items():
+            key = (inventory_id, layer)
+            if key in results:
+                raise ValueError(f"coverage results contain duplicate layer {inventory_id}:{layer}")
+            if layer == "playwright" or layer not in inventory_by_id[inventory_id]["layers"]:
+                raise ValueError(f"coverage results item {inventory_id}: unsupported layer {layer!r}")
+            if not isinstance(raw_result, Mapping) or set(raw_result) != {"status", "evidence"}:
+                raise ValueError(
+                    f"coverage results item {inventory_id}:{layer} must contain status and evidence"
+                )
+            status = raw_result["status"]
+            evidence = raw_result["evidence"]
+            if status not in _OBSERVED_COVERAGE_STATUSES:
+                raise ValueError(f"coverage results item {inventory_id}:{layer} has invalid status")
+            if not isinstance(evidence, list) or any(not isinstance(value, str) for value in evidence):
+                raise ValueError(f"coverage results item {inventory_id}:{layer} evidence must be a list")
+            if len(set(evidence)) != len(evidence):
+                raise ValueError(f"coverage results item {inventory_id}:{layer} evidence has duplicates")
+            if status == "covered" and not evidence:
+                raise ValueError(f"covered layer {inventory_id}:{layer} requires evidence")
+            records = [
+                _evidence_source(
+                    raw,
+                    source_root=path.parent,
+                    namespace=f"coverage:{inventory_id}:{layer}",
+                    checkout_roots=(str(path.parent.resolve()),),
+                )
+                for raw in evidence
+            ]
+            results[key] = {"status": status, "evidence": records}
+    return results
+
+
 def _build_playwright_coverage(
-    inventory: Mapping[str, Any], observations: list[dict[str, Any]]
+    inventory: Mapping[str, Any],
+    observations: list[dict[str, Any]],
+    layer_results: Mapping[tuple[str, str], Mapping[str, Any]],
 ) -> list[dict[str, Any]]:
-    by_inventory_profile: dict[tuple[str, str], list[str]] = {}
+    by_inventory_profile: dict[tuple[str, str], list[dict[str, Any]]] = {}
     for observation in observations:
         for inventory_id in observation["inventory_ids"]:
             by_inventory_profile.setdefault((inventory_id, observation["profile"]), []).append(
-                observation["status"]
+                observation
             )
 
     rows: list[dict[str, Any]] = []
@@ -997,30 +1211,51 @@ def _build_playwright_coverage(
         if not item["reachable"]:
             status = "not_applicable"
             profile_statuses: dict[str, str] = {}
+            profile_evidence: dict[str, list[str]] = {}
             layer_statuses = {layer: "not_applicable" for layer in sorted(item["layers"])}
+            layer_evidence = {layer: [] for layer in sorted(item["layers"])}
         else:
             profile_statuses = {}
+            profile_evidence = {}
             for profile in sorted(item["profiles"]):
-                statuses = by_inventory_profile.get((item["id"], profile), [])
+                profile_observations = by_inventory_profile.get((item["id"], profile), [])
+                statuses = [observation["status"] for observation in profile_observations]
                 if statuses and all(value == "covered" for value in statuses):
                     profile_statuses[profile] = "covered"
                 elif statuses:
                     profile_statuses[profile] = "partial"
                 else:
                     profile_statuses[profile] = "missing"
+                profile_evidence[profile] = sorted(
+                    {
+                        observation["result_evidence"]["archive_path"]
+                        for observation in profile_observations
+                    }
+                )
 
             layer_statuses: dict[str, str] = {}
+            layer_evidence: dict[str, list[str]] = {}
             for layer in sorted(item["layers"]):
-                if layer != "playwright":
-                    layer_statuses[layer] = "missing"
-                elif not item["profiles"]:
-                    layer_statuses[layer] = "missing"
-                elif all(value == "covered" for value in profile_statuses.values()):
-                    layer_statuses[layer] = "covered"
-                elif any(value != "missing" for value in profile_statuses.values()):
-                    layer_statuses[layer] = "partial"
+                if layer == "playwright":
+                    layer_evidence[layer] = sorted(
+                        {path for paths in profile_evidence.values() for path in paths}
+                    )
+                    if not item["profiles"]:
+                        layer_statuses[layer] = "missing"
+                    elif all(value == "covered" for value in profile_statuses.values()):
+                        layer_statuses[layer] = "covered"
+                    elif any(value != "missing" for value in profile_statuses.values()):
+                        layer_statuses[layer] = "partial"
+                    else:
+                        layer_statuses[layer] = "missing"
                 else:
-                    layer_statuses[layer] = "missing"
+                    declared = layer_results.get((item["id"], layer))
+                    layer_statuses[layer] = declared["status"] if declared else "missing"
+                    layer_evidence[layer] = (
+                        sorted(record["archive_path"] for record in declared["evidence"])
+                        if declared
+                        else []
+                    )
             all_statuses = [*profile_statuses.values(), *layer_statuses.values()]
             if all_statuses and all(value == "covered" for value in all_statuses):
                 status = "covered"
@@ -1036,14 +1271,21 @@ def _build_playwright_coverage(
                 "priority": item["priority"],
                 "route": item["route"],
                 "status": status,
+                "layer_evidence": layer_evidence,
                 "layer_statuses": layer_statuses,
+                "profile_evidence": profile_evidence,
                 "profile_statuses": profile_statuses,
             }
         )
     return sorted(rows, key=lambda row: (_PRIORITY_ORDER[row["priority"]], row["id"]))
 
 
-def _validate_baseline_status(baseline_status: str, issues: list[dict[str, Any]]) -> None:
+def _validate_baseline_status(
+    baseline_status: str,
+    issues: list[dict[str, Any]],
+    coverage: list[dict[str, Any]],
+    observations: list[dict[str, Any]],
+) -> None:
     if baseline_status not in _BASELINE_STATUSES:
         raise ValueError(f"baseline_status must be one of {sorted(_BASELINE_STATUSES)}")
     if baseline_status != "trusted_baseline":
@@ -1055,6 +1297,46 @@ def _validate_baseline_status(baseline_status: str, issues: list[dict[str, Any]]
         for issue in issues
     ):
         raise ValueError("trusted_baseline requires every accepted P2 issue to have a disposition")
+    if any(not observation["inventory_ids"] for observation in observations):
+        raise ValueError("trusted_baseline rejects unmapped Playwright tests")
+    coverage_by_id = {row["id"]: row for row in coverage}
+    if any(
+        observation["profile"] not in coverage_by_id[inventory_id]["profile_statuses"]
+        for observation in observations
+        for inventory_id in observation["inventory_ids"]
+    ):
+        raise ValueError("trusted_baseline rejects tests bound to unassigned profiles")
+    unstable = sorted(
+        {
+            observation["aggregate_status"]
+            for observation in observations
+            if observation["aggregate_status"] in {"skipped", "flaky", "unexpected", "failed", "timedout", "timeout"}
+        }
+    )
+    if unstable:
+        raise ValueError(f"trusted_baseline rejects Playwright statuses {unstable}")
+    incomplete = [
+        row["id"]
+        for row in coverage
+        if row["status"] != "not_applicable" and row["status"] != "covered"
+    ]
+    if incomplete:
+        raise ValueError(f"trusted_baseline requires complete coverage; incomplete items: {incomplete}")
+    for row in coverage:
+        if row["status"] == "not_applicable":
+            continue
+        if any(
+            status != "covered" or not row["layer_evidence"].get(layer)
+            for layer, status in row["layer_statuses"].items()
+        ):
+            raise ValueError("trusted_baseline requires traceable evidence for every required layer")
+        if any(
+            status != "covered" or not row["profile_evidence"].get(profile)
+            for profile, status in row["profile_statuses"].items()
+        ):
+            raise ValueError("trusted_baseline requires traceable evidence for every required profile")
+    if any(issue["severity"] == "P2" and not issue["evidence"] for issue in issues):
+        raise ValueError("trusted_baseline requires evidence for every accepted P2 issue")
 
 
 def _count_values(values: list[str]) -> dict[str, int]:
@@ -1169,7 +1451,8 @@ def _html_report(
 def build_platform_validation_report(
     *,
     inventory: Mapping[str, Any] | str | Path,
-    playwright_result_paths: list[str | Path],
+    playwright_result_paths: list[str | Path | tuple[str, str | Path]],
+    coverage_results: str | Path | None = None,
     output_dir: str | Path,
     audit_id: str,
     revision: str,
@@ -1190,15 +1473,30 @@ def build_platform_validation_report(
         load_inventory(inventory) if isinstance(inventory, (str, Path)) else validate_inventory(inventory)
     )
     destination = Path(output_dir)
-    result_paths = [Path(path) for path in playwright_result_paths]
+    result_inputs = _normalize_playwright_inputs(playwright_result_paths)
     events, observations, profile_counts, browser_counts = _ingest_playwright_results(
-        result_paths,
+        result_inputs,
         inventory=validated_inventory,
-        output_dir=destination,
+    )
+    layer_results = _load_coverage_results(
+        Path(coverage_results) if coverage_results is not None else None,
+        validated_inventory,
     )
     issues = _normalize_issues(events, validated_inventory)
-    _validate_baseline_status(baseline_status, issues)
-    coverage = _build_playwright_coverage(validated_inventory, observations)
+    coverage = _build_playwright_coverage(validated_inventory, observations, layer_results)
+    _validate_baseline_status(baseline_status, issues, coverage, observations)
+    evidence_records = [
+        record
+        for event in events
+        for record in event["evidence"]
+    ]
+    evidence_records.extend(observation["result_evidence"] for observation in observations)
+    evidence_records.extend(
+        record
+        for result in layer_results.values()
+        for record in result["evidence"]
+    )
+    _archive_evidence(evidence_records, destination)
     blocker_counts = _count_values([issue["severity"] for issue in issues])
     coverage_counts = _count_values([row["status"] for row in coverage])
     public_issues = [_public_issue(issue) for issue in issues]
