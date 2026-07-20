@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import json
 import secrets
 import signal
 import socket
@@ -44,6 +45,8 @@ def wait_for_http(
     process: Any,
     *,
     timeout: float = 120.0,
+    readiness: str,
+    opener: Callable[..., Any] = urlopen,
 ) -> None:
     deadline = time.monotonic() + timeout
     while True:
@@ -51,14 +54,41 @@ def wait_for_http(
         if return_code is not None:
             raise RuntimeError(f"server exited before readiness: {url} (exit {return_code})")
         try:
-            with urlopen(url, timeout=1.0) as response:
-                if response.status < 500:
+            with opener(url, timeout=1.0) as response:
+                body = response.read().decode("utf-8", errors="replace")
+                if _response_is_ready(readiness, response.status, body):
+                    if process.poll() is not None:
+                        raise RuntimeError(
+                            f"server exited before readiness: {url} (exit {process.poll()})"
+                        )
                     return
         except (OSError, URLError):
             pass
         if time.monotonic() >= deadline:
             raise TimeoutError(f"server readiness timed out: {url}")
         time.sleep(0.1)
+
+
+def _response_is_ready(readiness: str, status: int, body: str) -> bool:
+    if not 200 <= status < 300:
+        return False
+    if readiness == "vite":
+        return (
+            "<title>Stock Research Dashboard</title>" in body
+            and '<div id="root"' in body
+        )
+    if readiness == "api":
+        try:
+            payload = json.loads(body)
+        except json.JSONDecodeError:
+            return False
+        return bool(
+            isinstance(payload, dict)
+            and isinstance(payload.get("openapi"), str)
+            and isinstance(payload.get("info"), dict)
+            and payload["info"].get("title") == "Stock Research Dashboard API"
+        )
+    raise ValueError(f"unknown readiness contract: {readiness}")
 
 
 def check_ports_available(*, dashboard_port: int, api_port: int) -> None:
@@ -70,15 +100,27 @@ def check_ports_available(*, dashboard_port: int, api_port: int) -> None:
             raise RuntimeError(f"sandbox port unavailable: {port}") from exc
 
 
-def _stop_process(process: Any) -> None:
-    if process is None or process.poll() is not None:
+def _signal_process_group(pgid: int, signum: int) -> bool:
+    try:
+        os.killpg(pgid, signum)
+        return True
+    except ProcessLookupError:
+        return False
+
+
+def _stop_process_group(process: Any) -> None:
+    if process is None:
         return
-    process.terminate()
+    pgid = int(process.pid)
+    group_found = _signal_process_group(pgid, signal.SIGTERM)
     try:
         process.wait(timeout=10)
     except subprocess.TimeoutExpired:
-        process.kill()
+        _signal_process_group(pgid, signal.SIGKILL)
         process.wait(timeout=5)
+        return
+    if group_found and _signal_process_group(pgid, 0):
+        _signal_process_group(pgid, signal.SIGKILL)
 
 
 def _run_lifecycle_step(
@@ -114,9 +156,9 @@ def run_sandbox(
     run_id: str | None = None,
     connector: Callable[..., Any] = psycopg.connect,
     popen: Callable[..., Any] = subprocess.Popen,
-    run_command: Callable[..., Any] = subprocess.run,
     wait_for_http: Callable[..., None] = wait_for_http,
     port_checker: Callable[..., None] = check_ports_available,
+    process_stopper: Callable[[Any], None] = _stop_process_group,
     cleanup: Callable[[Any, str], None] = cleanup_sandbox,
     password_factory: Callable[[str], str] = _default_password_factory,
     dashboard_port: int = DEFAULT_DASHBOARD_PORT,
@@ -129,6 +171,7 @@ def run_sandbox(
     connection = connector(service=service)
     api_process = None
     vite_process = None
+    playwright_process = None
     prepared = False
     exit_code = 1
     primary_error: BaseException | None = None
@@ -171,11 +214,13 @@ def run_sandbox(
             ],
             cwd=REPO_ROOT,
             env=api_env,
+            start_new_session=True,
         )
         wait_for_http(
             f"http://127.0.0.1:{api_port}/openapi.json",
             api_process,
             timeout=startup_timeout,
+            readiness="api",
         )
 
         vite_env = {
@@ -195,11 +240,13 @@ def run_sandbox(
             ],
             cwd=REPO_ROOT / "dashboard",
             env=vite_env,
+            start_new_session=True,
         )
         wait_for_http(
             f"http://127.0.0.1:{dashboard_port}/",
             vite_process,
             timeout=startup_timeout,
+            readiness="vite",
         )
 
         playwright_env = {
@@ -223,14 +270,14 @@ def run_sandbox(
             "PLAYWRIGHT_SANDBOX_OPERATOR_EVENT_ID": seed.operator_event_id,
         }
         try:
-            completed = run_command(
+            playwright_process = popen(
                 ["pnpm", "test:e2e:sandbox"],
                 cwd=REPO_ROOT / "dashboard",
                 env=playwright_env,
-                timeout=playwright_timeout,
-                check=False,
+                start_new_session=True,
             )
-            exit_code = int(completed.returncode)
+            playwright_process.communicate(timeout=playwright_timeout)
+            exit_code = int(playwright_process.returncode or 0)
         except subprocess.TimeoutExpired:
             exit_code = 124
     except BaseException as exc:
@@ -239,13 +286,18 @@ def run_sandbox(
         lifecycle_errors: list[tuple[str, BaseException]] = []
         _run_lifecycle_step(
             lifecycle_errors,
+            "stop_playwright",
+            lambda: process_stopper(playwright_process),
+        )
+        _run_lifecycle_step(
+            lifecycle_errors,
             "stop_vite",
-            lambda: _stop_process(vite_process),
+            lambda: process_stopper(vite_process),
         )
         _run_lifecycle_step(
             lifecycle_errors,
             "stop_api",
-            lambda: _stop_process(api_process),
+            lambda: process_stopper(api_process),
         )
         if prepared:
             _run_lifecycle_step(

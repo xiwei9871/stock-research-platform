@@ -1,4 +1,5 @@
 import importlib.util
+import json
 from pathlib import Path
 import signal
 import socket
@@ -63,12 +64,27 @@ class FakeConnection:
 
 
 class FakeProcess:
-    def __init__(self, args, *, fail_immediately=False):
+    next_pid = 41000
+
+    def __init__(
+        self,
+        args,
+        *,
+        fail_immediately=False,
+        completion_returncode=0,
+        communicate_error=None,
+        communicate_callback=None,
+    ):
         self.args = args
         self.returncode = 1 if fail_immediately else None
+        self.completion_returncode = completion_returncode
+        self.communicate_error = communicate_error
+        self.communicate_callback = communicate_callback
         self.terminated = False
         self.killed = False
         self.wait_calls = []
+        self.pid = FakeProcess.next_pid
+        FakeProcess.next_pid += 1
 
     def poll(self):
         return self.returncode
@@ -85,27 +101,43 @@ class FakeProcess:
         self.wait_calls.append(timeout)
         return self.returncode or 0
 
+    def communicate(self, timeout=None):
+        if self.communicate_callback is not None:
+            self.communicate_callback()
+        if self.communicate_error is not None:
+            raise self.communicate_error
+        self.returncode = self.completion_returncode
+        return (None, None)
+
+
+def stop_fake_process(process):
+    if process is None:
+        return
+    process.terminate()
+    try:
+        process.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait(timeout=5)
+
 
 def test_runner_uses_array_commands_auth_test_service_and_cleans_after_playwright():
     runner = load_runner()
     connection = FakeConnection()
     processes = []
-    command_calls = []
     observed = []
 
     def popen(args, **kwargs):
         assert isinstance(args, list)
         assert kwargs.get("shell") is not True
-        process = FakeProcess(args)
+        is_playwright = args == ["pnpm", "test:e2e:sandbox"]
+        process = FakeProcess(
+            args,
+            completion_returncode=7 if is_playwright else 0,
+            communicate_callback=(lambda: observed.append("playwright")) if is_playwright else None,
+        )
         processes.append((process, kwargs))
         return process
-
-    def run_command(args, **kwargs):
-        assert isinstance(args, list)
-        assert kwargs.get("shell") is not True
-        command_calls.append((args, kwargs))
-        observed.append("playwright")
-        return subprocess.CompletedProcess(args, 7)
 
     original_cleanup = runner.cleanup_sandbox
 
@@ -118,28 +150,44 @@ def test_runner_uses_array_commands_auth_test_service_and_cleans_after_playwrigh
         run_id="audit_20260721_ab12",
         connector=lambda **kwargs: connection,
         popen=popen,
-        run_command=run_command,
         wait_for_http=lambda *args, **kwargs: None,
         cleanup=cleanup,
         password_factory=lambda label: f"strong-{label}-password",
         port_checker=lambda **kwargs: None,
+        process_stopper=lambda process: (
+            observed.append(
+                "stop:playwright"
+                if process.args == ["pnpm", "test:e2e:sandbox"]
+                else "stop:vite"
+                if process.args[:3] == ["pnpm", "exec", "vite"]
+                else "stop:api"
+            ),
+            stop_fake_process(process),
+        )[-1],
     )
 
     assert exit_code == 7
-    assert observed == ["playwright", "cleanup"]
+    assert observed == [
+        "playwright",
+        "stop:playwright",
+        "stop:vite",
+        "stop:api",
+        "cleanup",
+    ]
     assert connection.closed is True
-    assert len(processes) == 2
+    assert len(processes) == 3
     api_process, api_kwargs = processes[0]
     vite_process, vite_kwargs = processes[1]
+    playwright_process, playwright_kwargs = processes[2]
     assert "uvicorn" in " ".join(api_process.args)
     assert vite_process.args[:3] == ["pnpm", "exec", "vite"]
     assert "--strictPort" in vite_process.args
+    assert playwright_process.args == ["pnpm", "test:e2e:sandbox"]
+    assert all(kwargs["start_new_session"] is True for _, kwargs in processes)
     assert api_kwargs["env"]["STOCK_RESEARCH_SERVICE"] == "stock_research_e2e_test"
     assert api_kwargs["env"]["STOCK_RESEARCH_DASHBOARD_AUTH_REQUIRED"] == "true"
     assert api_kwargs["env"]["STOCK_RESEARCH_DASHBOARD_WRITE_GUARD"] == "true"
     assert api_kwargs["env"]["STOCK_RESEARCH_NEWS_SCHEDULER_ENABLED"] == "false"
-    playwright_args, playwright_kwargs = command_calls[0]
-    assert playwright_args == ["pnpm", "test:e2e:sandbox"]
     assert playwright_kwargs["cwd"].name == "dashboard"
     assert playwright_kwargs["env"]["PLAYWRIGHT_REUSE_EXISTING"] == "false"
     assert playwright_kwargs["env"]["PLAYWRIGHT_EXTERNAL_SERVERS"] == "true"
@@ -161,10 +209,10 @@ def test_runner_refuses_non_test_database_before_schema_seed_or_process_start():
             run_id="audit_20260721_ab12",
             connector=lambda **kwargs: connection,
             popen=lambda *args, **kwargs: starts.append((args, kwargs)),
-            run_command=lambda *args, **kwargs: pytest.fail("playwright must not run"),
             wait_for_http=lambda *args, **kwargs: pytest.fail("servers must not start"),
             password_factory=lambda label: f"strong-{label}-password",
             port_checker=lambda **kwargs: None,
+            process_stopper=stop_fake_process,
         )
 
     statements = [query.strip() for query, _ in connection.cursor_instance.executed]
@@ -178,9 +226,14 @@ def test_runner_cleans_up_after_playwright_timeout():
     connection = FakeConnection()
     observed = []
 
-    def run_command(args, **kwargs):
-        observed.append("timeout")
-        raise subprocess.TimeoutExpired(args, timeout=kwargs["timeout"])
+    def popen(args, **kwargs):
+        if args == ["pnpm", "test:e2e:sandbox"]:
+            return FakeProcess(
+                args,
+                communicate_error=subprocess.TimeoutExpired(args, timeout=900),
+                communicate_callback=lambda: observed.append("timeout"),
+            )
+        return FakeProcess(args)
 
     original_cleanup = runner.cleanup_sandbox
 
@@ -192,12 +245,12 @@ def test_runner_cleans_up_after_playwright_timeout():
         service="stock_research_e2e_test",
         run_id="audit_20260721_ab12",
         connector=lambda **kwargs: connection,
-        popen=lambda args, **kwargs: FakeProcess(args),
-        run_command=run_command,
+        popen=popen,
         wait_for_http=lambda *args, **kwargs: None,
         cleanup=cleanup,
         password_factory=lambda label: f"strong-{label}-password",
         port_checker=lambda **kwargs: None,
+        process_stopper=stop_fake_process,
     )
 
     assert exit_code == 124
@@ -233,12 +286,12 @@ def test_runner_cleans_up_when_second_server_fails_to_start():
             run_id="audit_20260721_ab12",
             connector=lambda **kwargs: connection,
             popen=popen,
-            run_command=lambda *args, **kwargs: pytest.fail("playwright must not run"),
             wait_for_http=wait_until_ready,
             cleanup=cleanup,
             password_factory=lambda label: f"strong-{label}-password",
             startup_timeout=0,
             port_checker=lambda **kwargs: None,
+            process_stopper=stop_fake_process,
         )
 
     assert observed == ["cleanup"]
@@ -251,9 +304,14 @@ def test_runner_cleans_up_when_interrupted_by_signal():
     connection = FakeConnection()
     observed = []
 
-    def run_command(*args, **kwargs):
-        observed.append("signal")
-        raise KeyboardInterrupt
+    def popen(args, **kwargs):
+        if args == ["pnpm", "test:e2e:sandbox"]:
+            return FakeProcess(
+                args,
+                communicate_error=KeyboardInterrupt(),
+                communicate_callback=lambda: observed.append("signal"),
+            )
+        return FakeProcess(args)
 
     original_cleanup = runner.cleanup_sandbox
 
@@ -266,12 +324,12 @@ def test_runner_cleans_up_when_interrupted_by_signal():
             service="stock_research_e2e_test",
             run_id="audit_20260721_ab12",
             connector=lambda **kwargs: connection,
-            popen=lambda args, **kwargs: FakeProcess(args),
-            run_command=run_command,
+            popen=popen,
             wait_for_http=lambda *args, **kwargs: None,
             cleanup=cleanup,
             password_factory=lambda label: f"strong-{label}-password",
             port_checker=lambda **kwargs: None,
+            process_stopper=stop_fake_process,
         )
 
     assert observed == ["signal", "cleanup"]
@@ -346,7 +404,6 @@ def test_runner_port_preflight_fails_before_database_or_existing_server_use():
             run_id="audit_20260721_ab12",
             connector=lambda **kwargs: observed.append("connect"),
             popen=lambda *args, **kwargs: observed.append("popen"),
-            run_command=lambda *args, **kwargs: observed.append("playwright"),
             port_checker=lambda **kwargs: (_ for _ in ()).throw(
                 RuntimeError("sandbox port unavailable: 5274")
             ),
@@ -386,7 +443,7 @@ class FaultProcess(FakeProcess):
 
 @pytest.mark.parametrize(
     ("faulty_process_index", "fault"),
-    [(1, "terminate"), (0, "wait"), (1, "kill")],
+    [(1, "terminate"), (0, "wait"), (2, "kill")],
 )
 def test_runner_resource_stop_errors_do_not_skip_other_stop_cleanup_or_close(
     faulty_process_index,
@@ -399,10 +456,11 @@ def test_runner_resource_stop_errors_do_not_skip_other_stop_cleanup_or_close(
     observed = []
 
     def popen(args, **kwargs):
+        is_playwright = args == ["pnpm", "test:e2e:sandbox"]
         process = (
             FaultProcess(args, fault=fault)
             if len(processes) == faulty_process_index
-            else FakeProcess(args)
+            else FakeProcess(args, completion_returncode=0 if is_playwright else 0)
         )
         processes.append(process)
         return process
@@ -415,19 +473,24 @@ def test_runner_resource_stop_errors_do_not_skip_other_stop_cleanup_or_close(
         run_id="audit_20260721_ab12",
         connector=lambda **kwargs: connection,
         popen=popen,
-        run_command=lambda *args, **kwargs: subprocess.CompletedProcess(args, 0),
         wait_for_http=lambda *args, **kwargs: None,
         cleanup=cleanup,
         password_factory=lambda label: f"strong-{label}-password",
         port_checker=lambda **kwargs: None,
+        process_stopper=stop_fake_process,
     )
 
     assert exit_code == 1
     assert observed == ["cleanup"]
     assert connection.closed is True
-    assert processes[1 - faulty_process_index].terminated is True
+    assert all(
+        process.terminated
+        for index, process in enumerate(processes)
+        if index != faulty_process_index
+    )
     lifecycle_log = capsys.readouterr().err
-    assert f"stop_{'api' if faulty_process_index == 0 else 'vite'}: RuntimeError" in lifecycle_log
+    faulty_label = ["api", "vite", "playwright"][faulty_process_index]
+    assert f"stop_{faulty_label}: RuntimeError" in lifecycle_log
     assert "secret" not in lifecycle_log
 
 
@@ -452,11 +515,11 @@ def test_runner_cleanup_and_close_errors_are_independent_and_make_success_nonzer
         run_id="audit_20260721_ab12",
         connector=lambda **kwargs: connection,
         popen=lambda args, **kwargs: FakeProcess(args),
-        run_command=lambda *args, **kwargs: subprocess.CompletedProcess(args, 0),
         wait_for_http=lambda *args, **kwargs: None,
         cleanup=cleanup,
         password_factory=lambda label: f"strong-{label}-password",
         port_checker=lambda **kwargs: None,
+        process_stopper=stop_fake_process,
     )
 
     assert exit_code == 1
@@ -488,12 +551,16 @@ def test_runner_preserves_primary_error_while_all_cleanup_layers_run(capsys):
             service="stock_research_e2e_test",
             run_id="audit_20260721_ab12",
             connector=lambda **kwargs: connection,
-            popen=popen,
-            run_command=lambda *args, **kwargs: (_ for _ in ()).throw(primary),
+            popen=lambda args, **kwargs: (
+                (_ for _ in ()).throw(primary)
+                if args == ["pnpm", "test:e2e:sandbox"]
+                else popen(args, **kwargs)
+            ),
             wait_for_http=lambda *args, **kwargs: None,
             cleanup=cleanup,
             password_factory=lambda label: f"strong-{label}-password",
             port_checker=lambda **kwargs: None,
+            process_stopper=stop_fake_process,
         )
 
     assert error.value is primary
@@ -516,15 +583,150 @@ def test_runner_keeps_existing_nonzero_playwright_code_when_cleanup_fails(capsys
         service="stock_research_e2e_test",
         run_id="audit_20260721_ab12",
         connector=lambda **kwargs: connection,
-        popen=lambda args, **kwargs: FakeProcess(args),
-        run_command=lambda *args, **kwargs: subprocess.CompletedProcess(args, 7),
+        popen=lambda args, **kwargs: FakeProcess(
+            args,
+            completion_returncode=7 if args == ["pnpm", "test:e2e:sandbox"] else 0,
+        ),
         wait_for_http=lambda *args, **kwargs: None,
         cleanup=lambda *args, **kwargs: (_ for _ in ()).throw(
             RuntimeError("secret cleanup detail")
         ),
         password_factory=lambda label: f"strong-{label}-password",
         port_checker=lambda **kwargs: None,
+        process_stopper=stop_fake_process,
     )
 
     assert exit_code == 7
     assert "secret" not in capsys.readouterr().err
+
+
+class FakeHttpResponse:
+    def __init__(self, status, body, headers=None):
+        self.status = status
+        self.body = body.encode("utf-8")
+        self.headers = headers or {}
+
+    def read(self):
+        return self.body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        return None
+
+
+def test_api_readiness_requires_2xx_openapi_json_and_live_process():
+    runner = load_runner()
+    process = FakeProcess(["api"])
+    response = FakeHttpResponse(
+        200,
+        json.dumps({"openapi": "3.1.0", "info": {"title": "Stock Research Dashboard API"}}),
+    )
+
+    runner.wait_for_http(
+        "http://127.0.0.1:8866/openapi.json",
+        process,
+        timeout=0,
+        readiness="api",
+        opener=lambda *args, **kwargs: response,
+    )
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        FakeHttpResponse(404, '{"detail":"not found"}'),
+        FakeHttpResponse(200, '{"status":"ok"}'),
+        FakeHttpResponse(200, '{"openapi":"3.1.0","info":{"title":"Other API"}}'),
+    ],
+)
+def test_api_readiness_rejects_404_and_unrecognized_json(response):
+    runner = load_runner()
+
+    with pytest.raises(TimeoutError, match="server readiness timed out"):
+        runner.wait_for_http(
+            "http://127.0.0.1:8866/openapi.json",
+            FakeProcess(["api"]),
+            timeout=0,
+            readiness="api",
+            opener=lambda *args, **kwargs: response,
+        )
+
+
+def test_vite_readiness_requires_200_and_dashboard_page_fingerprint():
+    runner = load_runner()
+    valid = FakeHttpResponse(
+        200,
+        '<title>Stock Research Dashboard</title><div id="root"></div>',
+    )
+
+    runner.wait_for_http(
+        "http://127.0.0.1:5274/",
+        FakeProcess(["vite"]),
+        timeout=0,
+        readiness="vite",
+        opener=lambda *args, **kwargs: valid,
+    )
+
+    with pytest.raises(TimeoutError, match="server readiness timed out"):
+        runner.wait_for_http(
+            "http://127.0.0.1:5274/",
+            FakeProcess(["vite"]),
+            timeout=0,
+            readiness="vite",
+            opener=lambda *args, **kwargs: FakeHttpResponse(200, "unrelated page"),
+        )
+
+
+def test_stop_process_group_terms_then_kills_group_and_waits_direct_child(monkeypatch):
+    runner = load_runner()
+    events = []
+
+    class GroupProcess:
+        pid = 43210
+
+        def wait(self, timeout=None):
+            events.append(("wait", timeout))
+            if timeout == 10:
+                raise subprocess.TimeoutExpired(["group"], timeout=timeout)
+            return -9
+
+    def killpg(pgid, signum):
+        events.append(("killpg", pgid, signum))
+
+    monkeypatch.setattr(runner.os, "killpg", killpg)
+
+    runner._stop_process_group(GroupProcess())
+
+    assert events == [
+        ("killpg", 43210, signal.SIGTERM),
+        ("wait", 10),
+        ("killpg", 43210, signal.SIGKILL),
+        ("wait", 5),
+    ]
+
+
+def test_stop_process_group_treats_missing_group_as_safe_and_reaps_child(monkeypatch):
+    runner = load_runner()
+    events = []
+
+    class ExitedProcess:
+        pid = 43211
+
+        def wait(self, timeout=None):
+            events.append(("wait", timeout))
+            return 0
+
+    def missing_group(pgid, signum):
+        events.append(("killpg", pgid, signum))
+        raise ProcessLookupError
+
+    monkeypatch.setattr(runner.os, "killpg", missing_group)
+
+    runner._stop_process_group(ExitedProcess())
+
+    assert events == [
+        ("killpg", 43211, signal.SIGTERM),
+        ("wait", 10),
+    ]
