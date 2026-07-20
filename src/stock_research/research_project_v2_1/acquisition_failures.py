@@ -99,7 +99,7 @@ def classify_acquisition_failure(
         return _classification("proxy_unreachable", "The configured proxy was unreachable.")
     if isinstance(error, requests.exceptions.SSLError):
         return _classification("tls_failure", "TLS negotiation or verification failed.")
-    if isinstance(error, requests.exceptions.Timeout):
+    if isinstance(error, (requests.exceptions.Timeout, TimeoutError)):
         return _classification("connection_timeout", "The connection timed out.")
     if isinstance(error, requests.exceptions.ConnectionError):
         cause: Any = error

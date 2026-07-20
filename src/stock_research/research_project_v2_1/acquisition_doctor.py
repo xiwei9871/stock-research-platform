@@ -5,15 +5,21 @@ from hashlib import sha256
 import importlib.util
 import ipaddress
 import os
+import socket
+import ssl
 from typing import Any
 from urllib.parse import urlsplit
 import urllib.request
+
+import requests
 
 from stock_research.research_project_v2.canonical import canonical_bytes, content_sha256
 from stock_research.research_project_v2.errors import ResearchProjectV2Error
 from stock_research.research_project_v2_1.layout import LayeredResearchLayout
 from stock_research.research_project_v2_1.schema import validate_v2_1_schema_payload
 from stock_research.research_project_v2_1.snapshot import _publish_bytes
+from stock_research.research_project_v2_1.acquisition_browser import detect_browser_runtime
+from stock_research.research_project_v2_1.acquisition_failures import classify_acquisition_failure
 
 
 _PROXY_KEYS = {
@@ -54,6 +60,7 @@ def build_provider_diagnostic(
     browser_runtime_status: str = "not_tested",
     search_provider_status: str = "unavailable",
     checks: list[dict[str, Any]] | None = None,
+    network_statuses: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     env = dict(os.environ if environment is None else environment)
     system = dict(urllib.request.getproxies() if system_proxies is None else system_proxies)
@@ -75,11 +82,11 @@ def build_provider_diagnostic(
     )
     core = {
         "generated_at": generated_at,
-        "dns_status": "unknown",
-        "tls_status": "unknown",
-        "direct_html_status": "not_run",
-        "direct_pdf_status": "not_run",
-        "redirect_status": "not_run",
+        "dns_status": (network_statuses or {}).get("dns", "unknown"),
+        "tls_status": (network_statuses or {}).get("tls", "unknown"),
+        "direct_html_status": (network_statuses or {}).get("direct_html", "not_run"),
+        "direct_pdf_status": (network_statuses or {}).get("direct_pdf", "not_run"),
+        "redirect_status": (network_statuses or {}).get("redirect", "not_run"),
         "system_proxy_detected": bool(system_values),
         "environment_proxy_detected": bool(environment_values),
         "proxy_endpoint_class": proxy_class,
@@ -100,6 +107,108 @@ def build_provider_diagnostic(
     }
     validate_provider_diagnostic(diagnostic)
     return diagnostic
+
+
+def _dns_probe() -> bool:
+    addresses = {
+        answer[4][0]
+        for answer in socket.getaddrinfo(
+            "example.com", 443, family=socket.AF_UNSPEC, type=socket.SOCK_STREAM
+        )
+    }
+    return bool(addresses) and all(ipaddress.ip_address(value).is_global for value in addresses)
+
+
+def _tls_probe() -> bool:
+    context = ssl.create_default_context()
+    with socket.create_connection(("example.com", 443), timeout=5) as raw:
+        with context.wrap_socket(raw, server_hostname="example.com") as secured:
+            return bool(secured.version())
+
+
+def _http_probe(url: str, expected_type: str, *, redirect: bool = False) -> bool:
+    session = requests.Session()
+    session.trust_env = False
+    response = session.get(url, timeout=8, allow_redirects=True, stream=True)
+    try:
+        content_type = response.headers.get("Content-Type", "").split(";", 1)[0].lower()
+        return (
+            response.status_code == 200
+            and content_type == expected_type
+            and (not redirect or bool(response.history))
+        )
+    finally:
+        response.close()
+        session.close()
+
+
+def run_provider_doctor(
+    *,
+    generated_at: str,
+    provenance: dict[str, Any],
+    online: bool,
+    environment: dict[str, str] | None = None,
+    system_proxies: dict[str, str] | None = None,
+    probes: dict[str, Any] | None = None,
+    browser_probe=None,
+) -> dict[str, Any]:
+    runtime = detect_browser_runtime(probe=browser_probe)
+    if not online:
+        return build_provider_diagnostic(
+            generated_at=generated_at,
+            provenance=provenance,
+            environment=environment,
+            system_proxies=system_proxies,
+            browser_runtime_status="available" if runtime.available else "unavailable",
+            search_provider_status="unavailable",
+            checks=[],
+        )
+    effective_probes = probes or {
+        "dns": _dns_probe,
+        "tls": _tls_probe,
+        "direct_html": lambda: _http_probe("https://example.com/", "text/html"),
+        "direct_pdf": lambda: _http_probe(
+            "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
+            "application/pdf",
+        ),
+        "redirect": lambda: _http_probe(
+            "https://httpbingo.org/redirect/1", "application/json", redirect=True
+        ),
+    }
+    statuses: dict[str, str] = {}
+    checks: list[dict[str, Any]] = []
+    for check_id in ("dns", "tls", "direct_html", "direct_pdf", "redirect"):
+        try:
+            passed = bool(effective_probes[check_id]())
+            status = "pass" if passed else "fail"
+            failure_code = None if passed else "unknown_failure"
+            summary = f"{check_id} diagnostic {'passed' if passed else 'failed'}."
+        except (KeyboardInterrupt, SystemExit, MemoryError):
+            raise
+        except BaseException as exc:
+            classified = classify_acquisition_failure(exc)
+            status = "fail"
+            failure_code = classified.failure_code
+            summary = classified.diagnostic_summary
+        statuses[check_id] = status
+        checks.append(
+            {
+                "check_id": check_id,
+                "status": status,
+                "failure_code": failure_code,
+                "summary": summary,
+            }
+        )
+    return build_provider_diagnostic(
+        generated_at=generated_at,
+        provenance=provenance,
+        environment=environment,
+        system_proxies=system_proxies,
+        browser_runtime_status="available" if runtime.available else "unavailable",
+        search_provider_status="unavailable",
+        checks=checks,
+        network_statuses=statuses,
+    )
 
 
 def validate_provider_diagnostic(diagnostic: dict[str, Any]) -> dict[str, Any]:

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from stock_research.research_project_v2_1.acquisition_doctor import build_provider_diagnostic
+from stock_research.research_project_v2_1.acquisition_doctor import (
+    build_provider_diagnostic,
+    run_provider_doctor,
+)
 
 
 PROVENANCE = {
@@ -49,3 +52,27 @@ def test_doctor_dry_diagnostic_marks_network_checks_not_run() -> None:
     assert diagnostic["dns_status"] == "unknown"
     assert diagnostic["direct_html_status"] == "not_run"
     assert diagnostic["requests_trust_mode"] == "explicit_direct"
+
+
+def test_online_doctor_uses_explicit_probes_and_classifies_failure() -> None:
+    diagnostic = run_provider_doctor(
+        generated_at="2026-07-20T08:00:00Z",
+        provenance=PROVENANCE,
+        online=True,
+        environment={},
+        system_proxies={},
+        probes={
+            "dns": lambda: True,
+            "tls": lambda: True,
+            "direct_html": lambda: True,
+            "direct_pdf": lambda: True,
+            "redirect": lambda: (_ for _ in ()).throw(TimeoutError()),
+        },
+        browser_probe=lambda: "chromium",
+    )
+    assert diagnostic["dns_status"] == "pass"
+    assert diagnostic["direct_pdf_status"] == "pass"
+    assert diagnostic["redirect_status"] == "fail"
+    assert diagnostic["browser_runtime_status"] == "available"
+    redirect = next(row for row in diagnostic["checks"] if row["check_id"] == "redirect")
+    assert redirect["failure_code"] == "connection_timeout"

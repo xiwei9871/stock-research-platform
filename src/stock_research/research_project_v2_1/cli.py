@@ -19,7 +19,7 @@ from stock_research.research_project_v2_1.discovery import (
 from stock_research.research_project_v2_1.coverage import summarize_evidence_coverage
 from stock_research.research_project_v2_1.acquisition_contracts import AcquisitionContext
 from stock_research.research_project_v2_1.acquisition_doctor import (
-    build_provider_diagnostic,
+    run_provider_doctor,
     write_provider_diagnostic,
 )
 from stock_research.research_project_v2_1.acquisition_http import DirectHttpProvider
@@ -159,6 +159,7 @@ def _parser() -> argparse.ArgumentParser:
         command.add_argument("--dry-run", action="store_true")
     doctor = acquisition_commands.choices["doctor"]
     doctor.add_argument("--write", action="store_true")
+    doctor.add_argument("--online", action="store_true")
     doctor.add_argument("--agent-run-id")
 
     fetch = acquisition_commands.add_parser("fetch")
@@ -752,12 +753,10 @@ def _acquisition_dispatch(
         agent_run_id=getattr(args, "agent_run_id", None),
     )
     if args.acquisition_command == "doctor":
-        diagnostic = build_provider_diagnostic(
+        diagnostic = run_provider_doctor(
             generated_at=operation_at,
             provenance=provenance,
-            browser_runtime_status="not_tested",
-            search_provider_status="unavailable",
-            checks=[],
+            online=bool(args.online),
         )
         write = bool(args.write and not args.dry_run)
         path = write_provider_diagnostic(diagnostic, layout=layout) if write else None
