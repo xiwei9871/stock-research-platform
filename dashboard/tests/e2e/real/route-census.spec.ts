@@ -3,6 +3,10 @@ import type { APIRequestContext, Page, Response, TestInfo } from '@playwright/te
 import platformValidationInventory from '../../../../config/platform_validation_routes.json' with {
   type: 'json'
 };
+import {
+  sanitizeRuntimeEvidenceText,
+  serializeRuntimeEvidence
+} from '../assertions/runtime';
 import type { RuntimeEvidence } from '../fixtures/test';
 import { expect, test } from './test';
 
@@ -275,6 +279,146 @@ async function attachFailureScreenshot(
   }
 }
 
+const ANSI_CSI_PATTERN = /(?:\u001B\[|\u009B)[0-?]*[ -/]*[@-~]/g;
+
+function compareStrings(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function canonicalEvidenceText(value: string): string {
+  return sanitizeRuntimeEvidenceText(value.replace(ANSI_CSI_PATTERN, ''));
+}
+
+function canonicalRuntimeEvidence(record: CensusRecord): RuntimeEvidence {
+  const withoutAnsi: RuntimeEvidence = {
+    consoleErrors: record.consoleErrors.map((value) => value.replace(ANSI_CSI_PATTERN, '')),
+    pageErrors: record.pageErrors.map((value) => value.replace(ANSI_CSI_PATTERN, '')),
+    failedRequests: record.failedRequests.map((entry) => ({
+      method: entry.method.replace(ANSI_CSI_PATTERN, ''),
+      url: entry.url.replace(ANSI_CSI_PATTERN, ''),
+      failure: entry.failure.replace(ANSI_CSI_PATTERN, '')
+    })),
+    unhandledApiRoutes: record.unhandledApiRoutes.map((value) =>
+      value.replace(ANSI_CSI_PATTERN, '')
+    )
+  };
+  return JSON.parse(serializeRuntimeEvidence(withoutAnsi)) as RuntimeEvidence;
+}
+
+function serializeCensusRecordForAttachment(record: CensusRecord): string {
+  const runtime = canonicalRuntimeEvidence(record);
+  const canonical: CensusRecord = {
+    actualUrl: canonicalEvidenceText(record.actualUrl),
+    apiResponses: record.apiResponses
+      .map((observation) => ({
+        method: canonicalEvidenceText(observation.method),
+        path: canonicalEvidenceText(observation.path),
+        requestId:
+          observation.requestId === null
+            ? null
+            : canonicalEvidenceText(observation.requestId),
+        status: observation.status
+      }))
+      .sort((left, right) =>
+        compareStrings(
+          `${left.method}\u0000${left.path}\u0000${left.status}\u0000${left.requestId ?? ''}`,
+          `${right.method}\u0000${right.path}\u0000${right.status}\u0000${right.requestId ?? ''}`
+        )
+      ),
+    consoleErrors: runtime.consoleErrors,
+    failedRequests: runtime.failedRequests,
+    failure: record.failure === null ? null : canonicalEvidenceText(record.failure),
+    failureAttachments: record.failureAttachments.map(canonicalEvidenceText).sort(compareStrings),
+    inventoryId: canonicalEvidenceText(record.inventoryId),
+    pageErrors: runtime.pageErrors,
+    route: canonicalEvidenceText(record.route),
+    status: record.status,
+    unhandledApiRoutes: runtime.unhandledApiRoutes
+  };
+  return `${JSON.stringify(canonical, null, 2)}\n`;
+}
+
+test('route census evidence serialization is deterministic, ANSI-free, and secret-free @route-census-contract', () => {
+  const first: CensusRecord = {
+    actualUrl: 'http://127.0.0.1:5174/stock/000001.SZ?token=raw-url-secret',
+    apiResponses: [
+      {
+        method: 'GET',
+        path: '/api/token/raw-path-secret',
+        requestId: '\u001b[35mrequest-secret=raw-request-secret\u001b[0m',
+        status: 200
+      },
+      {
+        method: 'GET',
+        path: '/api/platform/summary',
+        requestId: 'request-b',
+        status: 200
+      }
+    ],
+    consoleErrors: [
+      '\u001b[31;1mconsole-b\u001b[0m token=raw-console-secret',
+      '\u009b2Kconsole-a'
+    ],
+    failedRequests: [
+      {
+        method: 'GET',
+        url: 'https://example.test/api/data?api_key=raw-query-secret',
+        failure: '\u001b[1msecret=raw-failure-secret\u001b[0m'
+      },
+      {
+        method: 'GET',
+        url: 'https://example.test/api/alpha',
+        failure: '\u009b2Kfailure-a'
+      }
+    ],
+    failure: '\u001b[31mauthorization: Bearer raw-authorization-secret\u001b[0m',
+    failureAttachments: [
+      '\u001b[32mscreenshot-capture-error:token=raw-attachment-secret\u001b[0m',
+      'route-census-failure.png'
+    ],
+    inventoryId: 'secret=raw-inventory-secret',
+    pageErrors: ['page-b password=raw-password-secret', '\u001b[2Jpage-a'],
+    route: '/stock/{asset_id}?csrf_token=raw-route-secret',
+    status: 'failed',
+    unhandledApiRoutes: [
+      'GET /api/z?access_token=raw-access-secret',
+      '\u001b[33mGET /api/a\u001b[0m'
+    ]
+  };
+  const second: CensusRecord = {
+    ...first,
+    apiResponses: [...first.apiResponses].reverse(),
+    consoleErrors: [...first.consoleErrors].reverse(),
+    failedRequests: [...first.failedRequests].reverse(),
+    failureAttachments: [...first.failureAttachments].reverse(),
+    pageErrors: [...first.pageErrors].reverse(),
+    unhandledApiRoutes: [...first.unhandledApiRoutes].reverse()
+  };
+
+  const firstSerialized = serializeCensusRecordForAttachment(first);
+  const secondSerialized = serializeCensusRecordForAttachment(second);
+
+  expect(firstSerialized).toBe(secondSerialized);
+  expect(firstSerialized).not.toMatch(/[\u001b\u009b]/);
+  for (const secret of [
+    'raw-url-secret',
+    'raw-path-secret',
+    'raw-request-secret',
+    'raw-console-secret',
+    'raw-query-secret',
+    'raw-failure-secret',
+    'raw-authorization-secret',
+    'raw-attachment-secret',
+    'raw-inventory-secret',
+    'raw-password-secret',
+    'raw-route-secret',
+    'raw-access-secret'
+  ]) {
+    expect(firstSerialized).not.toContain(secret);
+  }
+  expect(firstSerialized).toContain('[REDACTED]');
+});
+
 for (const item of REAL_ROUTE_ITEMS) {
   test(`route census ${item.id}: ${item.label} @real @route-census`, async ({
     page,
@@ -370,13 +514,8 @@ for (const item of REAL_ROUTE_ITEMS) {
       await attachFailureScreenshot(page, testInfo, record);
     } finally {
       record.actualUrl = page.url();
-      observations.sort((left, right) =>
-        `${left.method}\u0000${left.path}\u0000${left.status}\u0000${left.requestId ?? ''}`.localeCompare(
-          `${right.method}\u0000${right.path}\u0000${right.status}\u0000${right.requestId ?? ''}`
-        )
-      );
       await testInfo.attach('route-census.json', {
-        body: `${JSON.stringify(record, null, 2)}\n`,
+        body: serializeCensusRecordForAttachment(record),
         contentType: 'application/json'
       });
     }
