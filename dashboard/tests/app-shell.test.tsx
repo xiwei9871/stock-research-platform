@@ -37,6 +37,7 @@ import type {
 
 const apiMocks = vi.hoisted(() => ({
   fetchCurrentUser: vi.fn(),
+  fetchAdminUsers: vi.fn(),
   loginDashboardUser: vi.fn(),
   logoutDashboardUser: vi.fn(),
   fetchPlatformReadiness: vi.fn(),
@@ -994,9 +995,11 @@ const TEST_ADMIN_USER = { user_id: 'user:1', username: 'admin', display_name: 'A
 describe('dashboard app shell', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.history.replaceState({}, '', '/');
     apiMocks.fetchCurrentUser.mockResolvedValue({
       user: { user_id: 'user:1', username: 'admin', display_name: 'Admin', role: 'admin', is_active: true }
     });
+    apiMocks.fetchAdminUsers.mockResolvedValue({ items: [] });
     apiMocks.fetchPlatformReadiness.mockResolvedValue({
       mode: 'eod_local',
       status: 'ready',
@@ -1331,6 +1334,16 @@ describe('dashboard app shell', () => {
     expect(screen.getByRole('button', { name: 'Open User Management workspace' })).toBeVisible();
   });
 
+  it('keeps the admin route behind the existing admin workspace gate', () => {
+    const regular = { user_id: 'user:2', username: 'analyst', display_name: 'Analyst', role: 'user' as const, is_active: true };
+    window.history.replaceState({}, '', '/admin/users');
+
+    render(<AppShell currentUser={regular} />);
+
+    expect(screen.getByRole('button', { name: 'Open Home workspace' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.queryByRole('button', { name: 'Open User Management workspace' })).not.toBeInTheDocument();
+  });
+
   it('renders the redesigned home cockpit sections', async () => {
     apiMocks.fetchMarketMonitorEod.mockResolvedValueOnce({
       trade_date: '2026-06-10',
@@ -1418,15 +1431,68 @@ describe('dashboard app shell', () => {
     render(<AppShell currentUser={TEST_ADMIN_USER} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Open Research Reports workspace' }));
+    expect(window.location.pathname).toBe('/research-reports');
     expect(await screen.findByRole('heading', { name: '研报' })).toBeInTheDocument();
     expect(screen.getByText('可读研报')).toBeInTheDocument();
     expect(await screen.findByText('Ping An Bank Initiation')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Open Stock Workspace workspace' }));
+    expect(window.location.pathname).toBe('/stock/000001.SZ');
     expect(await screen.findByRole('heading', { name: /贵州茅台|个股复盘工作台/ })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Open Watchlist workspace' }));
+    expect(window.location.pathname).toBe('/watchlist');
     expect(await screen.findByRole('heading', { name: '观察池' })).toBeInTheDocument();
+  });
+
+  it('restores primary routes and reparses the complete stock location on popstate', async () => {
+    window.history.replaceState({}, '', '/review-queue');
+    apiMocks.fetchAssetProfile.mockResolvedValue(makeAssetProfile('600519.SH'));
+
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
+
+    expect(screen.getByRole('button', { name: 'Open Review Queue workspace' })).toHaveAttribute('aria-current', 'page');
+
+    act(() => {
+      window.history.pushState({}, '', '/daily-review');
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Open Daily Review workspace' })).toHaveAttribute('aria-current', 'page')
+    );
+
+    act(() => {
+      window.history.pushState({}, '', '/stock/600519.SH?source=search&q=%E8%B4%B5%E5%B7%9E%E8%8C%85%E5%8F%B0');
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Open Stock Workspace workspace' })).toHaveAttribute('aria-current', 'page')
+    );
+    await waitFor(() =>
+      expect(apiMocks.fetchAssetProfile).toHaveBeenCalledWith(
+        '600519.SH',
+        expect.anything(),
+        expect.anything(),
+        expect.anything(),
+        'manual_v1',
+        'qfq'
+      )
+    );
+    expect(screen.getByText((_content, element) => element?.textContent === '来源工作台：Search')).toBeInTheDocument();
+  });
+
+  it('replaces the legacy review route with its canonical path once', () => {
+    window.history.pushState({}, '', '/tech-bottleneck/watchlist-review');
+    const replaceState = vi.spyOn(window.history, 'replaceState');
+
+    try {
+      render(<AppShell currentUser={TEST_ADMIN_USER} />);
+
+      expect(replaceState).toHaveBeenCalledTimes(1);
+      expect(replaceState).toHaveBeenCalledWith({}, '', '/research/tech-bottleneck/review-universe');
+    } finally {
+      replaceState.mockRestore();
+    }
   });
 
   it('switches stock workspace chart to intraday bars', async () => {

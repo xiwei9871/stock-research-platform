@@ -27,23 +27,17 @@ import {
   techBottleneckWorkbenchRejectedCandidates
 } from '../features/techBottleneckWatchlistReview/techBottleneckCandidateUniverseData';
 import type { TechBottleneckWorkbenchCandidate } from '../features/techBottleneckWatchlistReview/types';
-
-type WorkspaceMode =
-  | 'home'
-  | 'reviewQueue'
-  | 'dailyReview'
-  | 'market'
-  | 'news'
-  | 'researchReports'
-  | 'stock'
-  | 'watchlist'
-  | 'themeResearch'
-  | 'techBottleneckReviewUniverse'
-  | 'dataToBriefDocling90'
-  | 'factors'
-  | 'strategyLab'
-  | 'generatedReports'
-  | 'userManagement';
+import {
+  LEGACY_TECH_BOTTLENECK_REVIEW_PATH,
+  LEGACY_TECH_BOTTLENECK_STOCK_PREFIX,
+  WORKSPACE_PATHS,
+  parsePlatformLocation,
+  pathForWorkspace,
+  stockCodeToAssetId,
+  stockPath,
+  type PlatformLocation,
+  type WorkspaceMode
+} from '../navigation/platformRoutes';
 
 type WorkspaceHandoff = {
   query: string;
@@ -111,37 +105,15 @@ const ADMIN_NAV_ITEMS: Array<{ mode: WorkspaceMode; label: string; ariaLabel: st
 ];
 
 const FALLBACK_DISPLAY_TRADE_DATE = '2026-06-18';
-const TECH_BOTTLENECK_REVIEW_PATH = '/tech-bottleneck/watchlist-review';
-const TECH_BOTTLENECK_REVIEW_UNIVERSE_PATH = '/research/tech-bottleneck/review-universe';
-const TECH_BOTTLENECK_STOCK_PREFIX = '/tech-bottleneck/stock/';
-const DATA_TO_BRIEF_DOCLING_90_PATH = '/research/data-to-brief/docling-90';
-const THEME_RESEARCH_PATH = '/theme-research';
 const TECH_BOTTLENECK_REVIEW_UNIVERSE_SOURCE = 'tech_bottleneck_review_universe_frontend_dataset_v1';
 
 function firstDate(...dates: Array<string | null | undefined>) {
   return dates.map((date) => date?.trim()).find(Boolean) ?? '';
 }
 
-function workspaceModeFromPath(pathname: string): WorkspaceMode {
-  if (pathname === THEME_RESEARCH_PATH || pathname.startsWith(`${THEME_RESEARCH_PATH}/`)) return 'themeResearch';
-  if (pathname === TECH_BOTTLENECK_REVIEW_PATH) return 'techBottleneckReviewUniverse';
-  if (pathname === TECH_BOTTLENECK_REVIEW_UNIVERSE_PATH) return 'techBottleneckReviewUniverse';
-  if (pathname === DATA_TO_BRIEF_DOCLING_90_PATH) return 'dataToBriefDocling90';
-  if (pathname.startsWith(TECH_BOTTLENECK_STOCK_PREFIX)) return 'stock';
-  return 'home';
-}
-
 function stockCodeFromTechBottleneckPath(pathname: string) {
-  if (!pathname.startsWith(TECH_BOTTLENECK_STOCK_PREFIX)) return '';
-  return pathname.slice(TECH_BOTTLENECK_STOCK_PREFIX.length).split('/')[0];
-}
-
-function stockCodeToAssetId(stockCode: string) {
-  const normalized = stockCode.trim().toUpperCase();
-  if (/^\d{6}$/.test(normalized)) {
-    return `${normalized}.${normalized.startsWith('6') ? 'SH' : 'SZ'}`;
-  }
-  return normalized;
+  if (!pathname.startsWith(LEGACY_TECH_BOTTLENECK_STOCK_PREFIX)) return '';
+  return pathname.slice(LEGACY_TECH_BOTTLENECK_STOCK_PREFIX.length).split('/')[0];
 }
 
 function findTechBottleneckCandidate(stockCode: string): TechBottleneckWorkbenchCandidate | undefined {
@@ -214,6 +186,65 @@ function techBottleneckStockHandoffFromLocation(pathname: string, search: string
   };
 }
 
+function stockSourceWorkspaceFromPlatformLocation(
+  sourceWorkspace: PlatformLocation['sourceWorkspace']
+): StockSourceWorkspace | undefined {
+  if (
+    sourceWorkspace === 'search' ||
+    sourceWorkspace === 'news' ||
+    sourceWorkspace === 'watchlist' ||
+    sourceWorkspace === 'researchReports' ||
+    sourceWorkspace === 'market' ||
+    sourceWorkspace === 'reviewQueue' ||
+    sourceWorkspace === 'techBottleneck'
+  ) {
+    return sourceWorkspace;
+  }
+  return undefined;
+}
+
+function stockHandoffFromLocation(pathname: string, search: string): StockHandoff | null {
+  if (pathname.startsWith(LEGACY_TECH_BOTTLENECK_STOCK_PREFIX)) {
+    return techBottleneckStockHandoffFromLocation(pathname, search);
+  }
+  const location = parsePlatformLocation(pathname, search);
+  if (location.workspace !== 'stock' || !location.assetId) return null;
+  return {
+    assetId: location.assetId,
+    sourceWorkspace: stockSourceWorkspaceFromPlatformLocation(location.sourceWorkspace),
+    query: location.query,
+    matchReason: location.matchReason,
+    newsId: location.newsId,
+    eventKey: location.eventKey,
+    reportId: location.reportId,
+    tradeDate: location.tradeDate,
+    monitorTab: location.monitorTab,
+    version: 0
+  };
+}
+
+function stockSourceQueryValue(sourceWorkspace?: StockSourceWorkspace) {
+  if (sourceWorkspace === 'reviewQueue') return 'review_queue';
+  if (sourceWorkspace === 'researchReports') return 'research_reports';
+  if (sourceWorkspace === 'techBottleneck') return 'tech_bottleneck';
+  return sourceWorkspace;
+}
+
+function stockLocationPath(assetId: string, context: Omit<StockHandoff, 'assetId' | 'version'>) {
+  const params = new URLSearchParams();
+  const source = stockSourceQueryValue(context.sourceWorkspace);
+  if (source) params.set('source', source);
+  if (context.query) params.set('q', context.query);
+  if (context.matchReason) params.set('match_reason', context.matchReason);
+  if (context.newsId) params.set('news_id', context.newsId);
+  if (context.eventKey) params.set('event_key', context.eventKey);
+  if (context.reportId) params.set('report_id', context.reportId);
+  if (context.tradeDate) params.set('trade_date', context.tradeDate);
+  if (context.monitorTab) params.set('monitor_tab', context.monitorTab);
+  const search = params.toString();
+  return `${stockPath(assetId)}${search ? `?${search}` : ''}`;
+}
+
 function conceptTagsFromReviewUniverseStock(stock: TechBottleneckReviewStock) {
   if (Array.isArray(stock.concept_tags)) return stock.concept_tags;
   return String(stock.concept_tags || '')
@@ -261,24 +292,33 @@ type AppShellProps = {
   currentUser?: CurrentUser;
 };
 
+function workspaceModeForCurrentUser(workspace: WorkspaceMode, currentUser?: CurrentUser): WorkspaceMode {
+  if (workspace === 'userManagement' && currentUser?.role !== 'admin') return 'home';
+  return workspace;
+}
+
 export function AppShell({ currentUser: _currentUser }: AppShellProps = {}) {
   const currentUser = _currentUser;
   const navItems = currentUser?.role === 'admin' ? [...NAV_ITEMS, ...ADMIN_NAV_ITEMS] : NAV_ITEMS;
-  const initialTechBottleneckStockHandoff =
-    typeof window === 'undefined' ? null : techBottleneckStockHandoffFromLocation(window.location.pathname, window.location.search);
-  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>(() =>
-    typeof window === 'undefined' ? 'home' : workspaceModeFromPath(window.location.pathname)
+  const initialPlatformLocation =
+    typeof window === 'undefined'
+      ? parsePlatformLocation(WORKSPACE_PATHS.home, '')
+      : parsePlatformLocation(window.location.pathname, window.location.search);
+  const initialStockHandoff =
+    typeof window === 'undefined' ? null : stockHandoffFromLocation(window.location.pathname, window.location.search);
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>(
+    workspaceModeForCurrentUser(initialPlatformLocation.workspace, currentUser)
   );
-  const [selectedAssetId, setSelectedAssetId] = useState(initialTechBottleneckStockHandoff?.assetId ?? '000001.SZ');
+  const [selectedAssetId, setSelectedAssetId] = useState(initialStockHandoff?.assetId ?? '000001.SZ');
   const [newsHandoff, setNewsHandoff] = useState<WorkspaceHandoff>({ query: '', version: 0 });
   const [researchReportsHandoff, setResearchReportsHandoff] = useState<WorkspaceHandoff>({ query: '', version: 0 });
   const [generatedReportsHandoff, setGeneratedReportsHandoff] = useState<WorkspaceHandoff>({ query: '', version: 0 });
   const [marketHandoff, setMarketHandoff] = useState<WorkspaceHandoff>({ query: '', version: 0 });
-  const [stockHandoff, setStockHandoff] = useState<StockHandoff>(initialTechBottleneckStockHandoff ?? { version: 0 });
+  const [stockHandoff, setStockHandoff] = useState<StockHandoff>(initialStockHandoff ?? { version: 0 });
   const [themeResearchPathname, setThemeResearchPathname] = useState(() =>
-    typeof window !== 'undefined' && window.location.pathname.startsWith(THEME_RESEARCH_PATH)
+    typeof window !== 'undefined' && initialPlatformLocation.workspace === 'themeResearch'
       ? window.location.pathname
-      : THEME_RESEARCH_PATH
+      : WORKSPACE_PATHS.themeResearch
   );
   const [displayTradeDate, setDisplayTradeDate] = useState(FALLBACK_DISPLAY_TRADE_DATE);
   const [stockDefaultTradeDate, setStockDefaultTradeDate] = useState(FALLBACK_DISPLAY_TRADE_DATE);
@@ -307,31 +347,32 @@ export function AppShell({ currentUser: _currentUser }: AppShellProps = {}) {
 
   useEffect(() => {
     const handleLocationChange = () => {
-      if (window.location.pathname === TECH_BOTTLENECK_REVIEW_PATH) {
-        window.history.replaceState({}, '', TECH_BOTTLENECK_REVIEW_UNIVERSE_PATH);
+      let nextLocation = parsePlatformLocation(window.location.pathname, window.location.search);
+      if (window.location.pathname === LEGACY_TECH_BOTTLENECK_REVIEW_PATH) {
+        window.history.replaceState({}, '', nextLocation.canonicalPath);
+        nextLocation = parsePlatformLocation(window.location.pathname, window.location.search);
       }
-      const nextMode = workspaceModeFromPath(window.location.pathname);
-      if (nextMode === 'themeResearch') {
+      if (nextLocation.workspace === 'themeResearch') {
         setThemeResearchPathname(window.location.pathname);
       }
-      if (window.location.pathname.startsWith(TECH_BOTTLENECK_STOCK_PREFIX)) {
-        const techBottleneckHandoff = techBottleneckStockHandoffFromLocation(window.location.pathname, window.location.search);
-        if (techBottleneckHandoff?.assetId) {
-          setSelectedAssetId(techBottleneckHandoff.assetId);
+      if (nextLocation.workspace === 'stock') {
+        const nextStockHandoff = stockHandoffFromLocation(window.location.pathname, window.location.search);
+        if (nextStockHandoff?.assetId) {
+          setSelectedAssetId(nextStockHandoff.assetId);
           setStockHandoff((current) => ({
-            ...techBottleneckHandoff,
+            ...nextStockHandoff,
             version: current.version + 1
           }));
         }
       }
-      setWorkspaceMode(nextMode);
+      setWorkspaceMode(workspaceModeForCurrentUser(nextLocation.workspace, currentUser));
     };
     handleLocationChange();
     window.addEventListener('popstate', handleLocationChange);
     return () => {
       window.removeEventListener('popstate', handleLocationChange);
     };
-  }, []);
+  }, [currentUser?.role]);
 
   useEffect(() => {
     if (
@@ -373,7 +414,7 @@ export function AppShell({ currentUser: _currentUser }: AppShellProps = {}) {
     };
   }, [stockHandoff.assetId, stockHandoff.sourceWorkspace, stockHandoff.techBottleneckSource]);
 
-  function openStockWorkspace(assetId: string, context: Omit<StockHandoff, 'assetId' | 'version'> = {}) {
+  function activateStockWorkspace(assetId: string, context: Omit<StockHandoff, 'assetId' | 'version'> = {}) {
     setSelectedAssetId(assetId);
     setStockHandoff((current) => ({
       ...context,
@@ -383,35 +424,26 @@ export function AppShell({ currentUser: _currentUser }: AppShellProps = {}) {
     setWorkspaceMode('stock');
   }
 
+  function openStockWorkspace(assetId: string, context: Omit<StockHandoff, 'assetId' | 'version'> = {}) {
+    window.history.pushState({}, '', stockLocationPath(assetId, context));
+    activateStockWorkspace(assetId, context);
+  }
+
   function openWorkspaceMode(mode: WorkspaceMode) {
     if (mode === 'stock') {
       openStockWorkspace(selectedAssetId);
       return;
     }
-    if (mode === 'techBottleneckReviewUniverse' && window.location.pathname !== TECH_BOTTLENECK_REVIEW_UNIVERSE_PATH) {
-      window.history.pushState({}, '', TECH_BOTTLENECK_REVIEW_UNIVERSE_PATH);
-    } else if (mode === 'themeResearch' && window.location.pathname !== THEME_RESEARCH_PATH) {
-      window.history.pushState({}, '', THEME_RESEARCH_PATH);
-      setThemeResearchPathname(THEME_RESEARCH_PATH);
-    } else if (mode === 'dataToBriefDocling90' && window.location.pathname !== DATA_TO_BRIEF_DOCLING_90_PATH) {
-      window.history.pushState({}, '', DATA_TO_BRIEF_DOCLING_90_PATH);
-    } else if (
-      mode !== 'techBottleneckReviewUniverse' &&
-      mode !== 'themeResearch' &&
-      mode !== 'dataToBriefDocling90' &&
-      (window.location.pathname === TECH_BOTTLENECK_REVIEW_PATH ||
-        window.location.pathname === TECH_BOTTLENECK_REVIEW_UNIVERSE_PATH ||
-        window.location.pathname === DATA_TO_BRIEF_DOCLING_90_PATH ||
-        window.location.pathname.startsWith(THEME_RESEARCH_PATH) ||
-        window.location.pathname.startsWith(TECH_BOTTLENECK_STOCK_PREFIX))
-    ) {
-      window.history.pushState({}, '', '/');
+    const path = pathForWorkspace(mode);
+    window.history.pushState({}, '', path);
+    if (mode === 'themeResearch') {
+      setThemeResearchPathname(path);
     }
     setWorkspaceMode(mode);
   }
 
   function navigateThemeResearch(path: string) {
-    if (!path.startsWith(THEME_RESEARCH_PATH)) return;
+    if (!path.startsWith(WORKSPACE_PATHS.themeResearch)) return;
     if (`${window.location.pathname}${window.location.search}` !== path) {
       window.history.pushState({}, '', path);
     }
@@ -420,16 +452,15 @@ export function AppShell({ currentUser: _currentUser }: AppShellProps = {}) {
   }
 
   function openStockWorkspaceFromThemeResearch(path: string) {
-    if (!path.startsWith(TECH_BOTTLENECK_STOCK_PREFIX)) return;
+    if (!path.startsWith(LEGACY_TECH_BOTTLENECK_STOCK_PREFIX)) return;
     window.history.pushState({}, '', path);
     const handoff = techBottleneckStockHandoffFromLocation(window.location.pathname, window.location.search);
     if (!handoff?.assetId) return;
-    setSelectedAssetId(handoff.assetId);
-    setStockHandoff((current) => ({ ...handoff, version: current.version + 1 }));
-    setWorkspaceMode('stock');
+    activateStockWorkspace(handoff.assetId, handoff);
   }
 
   function openNewsWorkspaceFromStock(context: StockEntryContext) {
+    window.history.pushState({}, '', pathForWorkspace('news'));
     setNewsHandoff((current) => ({
       query: context.query ?? context.assetId ?? selectedAssetId,
       newsId: context.newsId,
@@ -441,6 +472,7 @@ export function AppShell({ currentUser: _currentUser }: AppShellProps = {}) {
   }
 
   function openResearchReportsWorkspaceFromStock(context: StockEntryContext) {
+    window.history.pushState({}, '', pathForWorkspace('researchReports'));
     setResearchReportsHandoff((current) => ({
       query: context.query ?? context.assetId ?? selectedAssetId,
       eventKey: context.eventKey,
@@ -453,6 +485,7 @@ export function AppShell({ currentUser: _currentUser }: AppShellProps = {}) {
   }
 
   function openMarketMonitorWorkspaceFromStock(context: StockEntryContext) {
+    window.history.pushState({}, '', pathForWorkspace('market'));
     setMarketHandoff((current) => ({
       query: context.query ?? context.assetId ?? selectedAssetId,
       assetId: context.assetId ?? selectedAssetId,
@@ -472,8 +505,12 @@ export function AppShell({ currentUser: _currentUser }: AppShellProps = {}) {
   function openStockWorkspaceFromTechBottleneckReviewUniverse(stock: TechBottleneckReviewStock) {
     const context = techBottleneckReviewUniverseStockHandoff(stock);
     if (!context.assetId) return;
-    window.history.pushState({}, '', `/tech-bottleneck/stock/${stock.stock_code}?source=${TECH_BOTTLENECK_REVIEW_UNIVERSE_SOURCE}`);
-    openStockWorkspace(context.assetId, context);
+    window.history.pushState(
+      {},
+      '',
+      `${LEGACY_TECH_BOTTLENECK_STOCK_PREFIX}${stock.stock_code}?source=${TECH_BOTTLENECK_REVIEW_UNIVERSE_SOURCE}`
+    );
+    activateStockWorkspace(context.assetId, context);
   }
 
   function openGlobalSearchResult(result: GlobalSearchResult) {
@@ -489,6 +526,7 @@ export function AppShell({ currentUser: _currentUser }: AppShellProps = {}) {
 
     if (target.workspace === 'news') {
       const query = target.q ?? result.title;
+      window.history.pushState({}, '', pathForWorkspace('news'));
       setNewsHandoff((current) => ({
         query,
         newsId: target.news_id,
@@ -501,6 +539,7 @@ export function AppShell({ currentUser: _currentUser }: AppShellProps = {}) {
 
     if (target.workspace === 'researchReports') {
       const query = target.q ?? result.title;
+      window.history.pushState({}, '', pathForWorkspace('researchReports'));
       setResearchReportsHandoff((current) => ({
         query,
         eventKey: target.event_key,
@@ -514,6 +553,7 @@ export function AppShell({ currentUser: _currentUser }: AppShellProps = {}) {
 
     if (target.workspace === 'generatedReports') {
       const query = target.q ?? result.title;
+      window.history.pushState({}, '', pathForWorkspace('generatedReports'));
       setGeneratedReportsHandoff((current) => ({
         query,
         tradeDate: target.trade_date ?? result.trade_date,

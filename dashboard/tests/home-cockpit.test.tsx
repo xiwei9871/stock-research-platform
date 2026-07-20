@@ -59,6 +59,7 @@ import * as api from '../src/api/client';
 
 describe('AppShell and HomeCockpit', () => {
   beforeEach(() => {
+    window.history.replaceState({}, '', '/');
     vi.mocked(api.fetchPlatformReadiness).mockResolvedValue({
       mode: 'eod_local',
       status: 'PARTIAL',
