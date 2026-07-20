@@ -8,12 +8,19 @@ import pytest
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 R2B_PHASE1_SEED = "dec9187"
-APPROVED_R2B_COMMITS: tuple[str, ...] = ()
+APPROVED_R2B_COMMITS = (
+    "0fb8997dc09bf89cbbc9116a68c03dc3885eef86",
+    "0577656e5f3c981d9ecbb1a56c129b02a34099f1",
+    "fa516b9b10e61d2b0f88c59b6da7a11a933002d6",
+    "560d700d970ac281f2274faa362a86c4ac7ed1c6",
+)
 
 ALLOWED_EXACT_PATHS = {
     "docs/research_operating_layer_v2_r2b_plan.md",
     "docs/research_operating_layer_v2_r2b_schema_extension_proposal.md",
     "src/stock_research/cli.py",
+    "tests/test_research_project_v2_1_schema.py",
+    "tests/test_research_project_v2_1_pilots.py",
 }
 ALLOWED_PREFIXES = (
     "artifacts/research_projects/v2_1/schema/",
