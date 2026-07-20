@@ -1677,6 +1677,54 @@ describe('dashboard app shell', () => {
     expect(screen.getByLabelText('Global search')).toHaveValue('');
   });
 
+  it('restores home search state after opening a non-stock global result', async () => {
+    window.history.replaceState({ existing: 'keep' }, '', '/');
+    const newsResult = makeGlobalSearchResult({
+      type: 'news',
+      id: 'news-1',
+      title: '贵州茅台新闻',
+      subtitle: '7x24',
+      target: { workspace: 'news', q: '茅台', news_id: 'news-1' }
+    });
+    apiMocks.fetchGlobalSearch.mockResolvedValue(makeGlobalSearchPayload(newsResult, '茅台'));
+
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
+
+    fireEvent.change(screen.getByLabelText('Global search'), { target: { value: '茅台' } });
+    fireEvent.click(await screen.findByRole('option', { name: /贵州茅台新闻 7x24/ }));
+    expect(window.location.pathname).toBe('/news');
+    expect(screen.getByLabelText('Global search')).toHaveValue('');
+
+    act(() => window.history.back());
+
+    await waitFor(() => expect(window.location.pathname).toBe('/'));
+    expect(window.history.state).toEqual({ existing: 'keep', searchQuery: '茅台' });
+    expect(screen.getByLabelText('Global search')).toHaveValue('茅台');
+    expect(await screen.findByRole('option', { name: /贵州茅台新闻 7x24/ })).toBeInTheDocument();
+    expect(apiMocks.fetchGlobalSearch).toHaveBeenCalledTimes(2);
+  });
+
+  it('snapshots and clears home search state when sidebar navigation leaves home', async () => {
+    window.history.replaceState({ existing: 'keep' }, '', '/');
+    apiMocks.fetchGlobalSearch.mockResolvedValue(makeGlobalSearchPayload(makeGlobalSearchResult(), '600519'));
+
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
+
+    fireEvent.change(screen.getByLabelText('Global search'), { target: { value: '600519' } });
+    expect(await screen.findByRole('option', { name: /贵州茅台 600519.SH/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Open Daily Review workspace' }));
+    expect(window.location.pathname).toBe('/daily-review');
+    expect(screen.getByLabelText('Global search')).toHaveValue('');
+
+    act(() => window.history.back());
+
+    await waitFor(() => expect(window.location.pathname).toBe('/'));
+    expect(window.history.state).toEqual({ existing: 'keep', searchQuery: '600519' });
+    expect(screen.getByLabelText('Global search')).toHaveValue('600519');
+    expect(await screen.findByRole('option', { name: /贵州茅台 600519.SH/ })).toBeInTheDocument();
+    expect(apiMocks.fetchGlobalSearch).toHaveBeenCalledTimes(2);
+  });
+
   type MockWorkspaceRender = {
     initialAssetId?: string;
     defaultTradeDate?: string;

@@ -68,7 +68,7 @@ export function GlobalSearchBox({ query, onQueryChange, onOpenResult }: GlobalSe
     }, 250);
 
     return () => window.clearTimeout(timer);
-  }, [dismissedQuery, trimmedQuery]);
+  }, [dismissedQuery, query, trimmedQuery]);
 
   function handleQueryChange(nextQuery: string) {
     onQueryChange(nextQuery);

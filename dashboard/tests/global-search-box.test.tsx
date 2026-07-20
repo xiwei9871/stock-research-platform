@@ -114,6 +114,22 @@ describe('GlobalSearchBox', () => {
     expect(onQueryChange).toHaveBeenLastCalledWith('');
   });
 
+  it('refetches when the raw controlled query changes to the same trimmed value', async () => {
+    render(<StatefulGlobalSearchBox onOpenResult={vi.fn()} />);
+    await searchFor('茅台');
+
+    expect(await screen.findByText('贵州茅台')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Global search'), { target: { value: '茅台 ' } });
+    await act(async () => {
+      vi.advanceTimersByTime(250);
+    });
+
+    expect(apiMocks.fetchGlobalSearch).toHaveBeenCalledTimes(2);
+    expect(apiMocks.fetchGlobalSearch).toHaveBeenLastCalledWith('茅台', 5);
+    expect(await screen.findByText('贵州茅台')).toBeInTheDocument();
+  });
+
   it('renders grouped search results and opens a clicked result', async () => {
     const selected = makeResult({ id: 'news-1', type: 'news', title: '茅台新闻', subtitle: '公告摘要' });
     apiMocks.fetchGlobalSearch.mockResolvedValueOnce(

@@ -420,9 +420,16 @@ export function AppShell({ currentUser: _currentUser }: AppShellProps = {}) {
   }
 
   function pushLocation(path: string) {
-    if (`${window.location.pathname}${window.location.search}` !== path) {
-      window.history.pushState({}, '', path);
+    if (`${window.location.pathname}${window.location.search}` === path) return;
+    if (parsePlatformLocation(window.location.pathname, window.location.search).workspace === 'home') {
+      window.history.replaceState(
+        { ...historyStateFields(), searchQuery: globalSearchQuery },
+        '',
+        `${window.location.pathname}${window.location.search}${window.location.hash}`
+      );
+      setGlobalSearchQuery('');
     }
+    window.history.pushState({}, '', path);
   }
 
   function openStockWorkspace(assetId: string, context: Omit<StockHandoff, 'assetId' | 'version'> = {}) {
@@ -518,13 +525,6 @@ export function AppShell({ currentUser: _currentUser }: AppShellProps = {}) {
     const { target } = result;
     if (target.workspace === 'stock' && target.asset_id) {
       const query = globalSearchQuery || target.q || result.title;
-      if (parsePlatformLocation(window.location.pathname, window.location.search).workspace === 'home') {
-        window.history.replaceState(
-          { ...historyStateFields(), searchQuery: globalSearchQuery },
-          '',
-          `${window.location.pathname}${window.location.search}${window.location.hash}`
-        );
-      }
       openStockWorkspace(target.asset_id, {
         sourceWorkspace: 'search',
         query,
@@ -535,7 +535,7 @@ export function AppShell({ currentUser: _currentUser }: AppShellProps = {}) {
 
     if (target.workspace === 'news') {
       const query = target.q ?? result.title;
-      window.history.pushState({}, '', pathForWorkspace('news'));
+      pushLocation(pathForWorkspace('news'));
       setNewsHandoff((current) => ({
         query,
         newsId: target.news_id,
@@ -548,7 +548,7 @@ export function AppShell({ currentUser: _currentUser }: AppShellProps = {}) {
 
     if (target.workspace === 'researchReports') {
       const query = target.q ?? result.title;
-      window.history.pushState({}, '', pathForWorkspace('researchReports'));
+      pushLocation(pathForWorkspace('researchReports'));
       setResearchReportsHandoff((current) => ({
         query,
         eventKey: target.event_key,
@@ -562,7 +562,7 @@ export function AppShell({ currentUser: _currentUser }: AppShellProps = {}) {
 
     if (target.workspace === 'generatedReports') {
       const query = target.q ?? result.title;
-      window.history.pushState({}, '', pathForWorkspace('generatedReports'));
+      pushLocation(pathForWorkspace('generatedReports'));
       setGeneratedReportsHandoff((current) => ({
         query,
         tradeDate: target.trade_date ?? result.trade_date,
