@@ -40,10 +40,11 @@ PLAYWRIGHT_PROFILES = frozenset({"legacy", "mock", "real", "sandbox", "audit", "
 COVERAGE_STATUSES = frozenset({"covered", "partial", "missing", "not_applicable"})
 LANDMARK_FIELDS = frozenset({"role", "name"})
 LANDMARK_ROLES = frozenset({"region", "heading"})
-API_FIELDS = frozenset({"method", "path", "access"})
+API_FIELDS = frozenset({"method", "path", "access", "census_scope"})
 API_METHODS = frozenset({"GET", "HEAD", "OPTIONS", "POST", "PATCH", "PUT", "DELETE"})
 READ_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 API_ACCESS = frozenset({"read", "write"})
+CENSUS_SCOPES = frozenset({"route_load", "journey"})
 ROUTE_PARAM_SOURCES = frozenset({"authoritative_stock_asset_id"})
 
 _PRIORITY_ORDER = {"P0": 0, "P1": 1, "P2": 2}
@@ -204,16 +205,27 @@ def _validate_primary_apis(item: Mapping[str, Any], item_id: str, write_mode: st
     has_write = False
     for api in primary_apis:
         if not isinstance(api, dict) or set(api) != API_FIELDS:
-            raise _item_error(item_id, "primary_apis", "entries must contain exactly method, path, and access")
+            raise _item_error(
+                item_id,
+                "primary_apis",
+                "entries must contain exactly method, path, access, and census_scope",
+            )
         method = api["method"]
         access = api["access"]
+        census_scope = api["census_scope"]
         if not isinstance(method, str) or method not in API_METHODS:
             raise _item_error(item_id, "primary_apis", f"method must be one of {sorted(API_METHODS)}")
         if not isinstance(access, str) or access not in API_ACCESS:
             raise _item_error(item_id, "primary_apis", f"access must be one of {sorted(API_ACCESS)}")
+        if not isinstance(census_scope, str) or census_scope not in CENSUS_SCOPES:
+            raise _item_error(item_id, "primary_apis", f"census_scope must be one of {sorted(CENSUS_SCOPES)}")
         expected_access = "read" if method in READ_METHODS else "write"
         if access != expected_access:
             raise _item_error(item_id, "primary_apis", f"{method} requires access {expected_access}")
+        if census_scope == "route_load" and access != "read":
+            raise _item_error(item_id, "primary_apis", "route_load operations must be read-only")
+        if access == "write" and census_scope != "journey":
+            raise _item_error(item_id, "primary_apis", "write operations must use journey scope")
         _validate_canonical_path(api["path"], item_id, "primary_apis", api=True)
         key = (method, api["path"])
         if key in seen:

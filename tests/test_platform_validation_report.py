@@ -82,7 +82,14 @@ def _item(**updates: object) -> dict[str, object]:
         "priority": "P1",
         "auth": "authenticated",
         "write_mode": "read_only",
-        "primary_apis": [{"method": "GET", "path": "/api/sample", "access": "read"}],
+        "primary_apis": [
+            {
+                "method": "GET",
+                "path": "/api/sample",
+                "access": "read",
+                "census_scope": "route_load",
+            }
+        ],
         "layers": ["api", "playwright"],
         "profiles": ["real"],
         "daily_eod": False,
@@ -184,6 +191,44 @@ def test_inventory_operations_match_visible_workspace_writes_and_review_queue_re
     }
 
 
+def test_inventory_census_scope_separates_route_load_from_journeys() -> None:
+    inventory = load_inventory(INVENTORY_PATH)
+    items = {item["id"]: item for item in inventory["items"]}
+
+    def operation(item_id: str, method: str, path: str) -> dict[str, str]:
+        return next(
+            api
+            for api in items[item_id]["primary_apis"]
+            if api["method"] == method and api["path"] == path
+        )
+
+    assert operation("news", "GET", "/api/public-news")["census_scope"] == "route_load"
+    assert operation("news", "POST", "/api/public-news/refresh")["census_scope"] == "journey"
+    assert {api["path"] for api in items["stock_workspace"]["primary_apis"]} == {
+        "/api/assets/{asset_id}/profile",
+        "/api/operator-decisions",
+        "/api/operator-decisions/{event_id}",
+    }
+    assert operation(
+        "theme_research",
+        "GET",
+        "/api/research/theme-decomposition/themes",
+    )["census_scope"] == "route_load"
+    assert operation(
+        "theme_research",
+        "GET",
+        "/api/research/theme-decomposition/themes/{theme_id}/companies",
+    )["census_scope"] == "journey"
+    assert operation("factor_lab", "GET", "/api/factors/score-preview")["census_scope"] == "journey"
+    assert operation("strategy_lab", "GET", "/api/strategy-validation/runs")["census_scope"] == "journey"
+    assert all(
+        api["access"] == "read"
+        for item in items.values()
+        for api in item["primary_apis"]
+        if api["census_scope"] == "route_load"
+    )
+
+
 @pytest.mark.parametrize(
     ("field", "value"),
     [
@@ -224,7 +269,15 @@ def test_validation_rejects_missing_and_unknown_item_fields() -> None:
         validate_inventory(_inventory(unknown_landmark))
 
     unknown_api = _item(
-        primary_apis=[{"method": "GET", "path": "/api/sample", "access": "read", "timeout": 1}]
+        primary_apis=[
+            {
+                "method": "GET",
+                "path": "/api/sample",
+                "access": "read",
+                "census_scope": "route_load",
+                "timeout": 1,
+            }
+        ]
     )
     with pytest.raises(ValueError, match=r"item sample.*field primary_apis"):
         validate_inventory(_inventory(unknown_api))
@@ -275,7 +328,11 @@ def test_validation_rejects_noncanonical_or_ambiguous_api_paths(path: str) -> No
     with pytest.raises(ValueError, match=r"item sample.*field primary_apis"):
         validate_inventory(
             _inventory(
-                _item(primary_apis=[{"method": "GET", "path": path, "access": "read"}])
+                _item(
+                    primary_apis=[
+                        {"method": "GET", "path": path, "access": "read", "census_scope": "route_load"}
+                    ]
+                )
             )
         )
 
@@ -328,18 +385,21 @@ def test_primary_api_contract_allows_get_and_post_on_same_path_but_rejects_bad_m
     same_path = _item(
         write_mode="read_write",
         primary_apis=[
-            {"method": "GET", "path": "/api/sample", "access": "read"},
-            {"method": "POST", "path": "/api/sample", "access": "write"},
+            {"method": "GET", "path": "/api/sample", "access": "read", "census_scope": "route_load"},
+            {"method": "POST", "path": "/api/sample", "access": "write", "census_scope": "journey"},
         ],
     )
     validate_inventory(_inventory(same_path))
 
     invalid_apis = [
-        [{"method": "TRACE", "path": "/api/sample", "access": "read"}],
-        [{"method": "GET", "path": "/api/sample", "access": "write"}],
-        [{"method": "POST", "path": "/api/sample", "access": "read"}],
-        [{"method": "GET", "path": "/api/sample", "access": "public"}],
+        [{"method": "TRACE", "path": "/api/sample", "access": "read", "census_scope": "route_load"}],
+        [{"method": "GET", "path": "/api/sample", "access": "write", "census_scope": "journey"}],
+        [{"method": "POST", "path": "/api/sample", "access": "read", "census_scope": "journey"}],
+        [{"method": "GET", "path": "/api/sample", "access": "public", "census_scope": "route_load"}],
         [{"method": "GET", "path": "/api/sample"}],
+        [{"method": "GET", "path": "/api/sample", "access": "read"}],
+        [{"method": "GET", "path": "/api/sample", "access": "read", "census_scope": "always"}],
+        [{"method": "POST", "path": "/api/sample", "access": "write", "census_scope": "route_load"}],
     ]
     for primary_apis in invalid_apis:
         with pytest.raises(ValueError, match=r"item sample.*field primary_apis"):
@@ -350,8 +410,8 @@ def test_primary_api_contract_allows_get_and_post_on_same_path_but_rejects_bad_m
             _inventory(
                 _item(
                     primary_apis=[
-                        {"method": "GET", "path": "/api/sample", "access": "read"},
-                        {"method": "GET", "path": "/api/sample", "access": "read"},
+                        {"method": "GET", "path": "/api/sample", "access": "read", "census_scope": "route_load"},
+                        {"method": "GET", "path": "/api/sample", "access": "read", "census_scope": "journey"},
                     ]
                 )
             )
@@ -363,7 +423,9 @@ def test_write_mode_must_match_declared_api_access() -> None:
         validate_inventory(
             _inventory(
                 _item(
-                    primary_apis=[{"method": "POST", "path": "/api/sample", "access": "write"}]
+                    primary_apis=[
+                        {"method": "POST", "path": "/api/sample", "access": "write", "census_scope": "journey"}
+                    ]
                 )
             )
         )
@@ -390,8 +452,8 @@ def test_validation_rejects_p0_without_profile_and_invalid_daily_eod_or_hidden_s
                 _item(
                     write_mode="read_write",
                     primary_apis=[
-                        {"method": "GET", "path": "/api/sample", "access": "read"},
-                        {"method": "POST", "path": "/api/sample", "access": "write"},
+                        {"method": "GET", "path": "/api/sample", "access": "read", "census_scope": "route_load"},
+                        {"method": "POST", "path": "/api/sample", "access": "write", "census_scope": "journey"},
                     ],
                     profiles=["real", "eod"],
                     daily_eod=True,
