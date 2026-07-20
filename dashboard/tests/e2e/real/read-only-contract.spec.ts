@@ -482,6 +482,14 @@ test('@read-only-contract API route overrides cannot take precedence over the gu
     await cleanup();
     return '';
   };
+  const capture = async (action: () => Promise<unknown>): Promise<string> => {
+    try {
+      await action();
+      return '';
+    } catch (error) {
+      return errorText(error);
+    }
+  };
 
   const pageError = await attempt(
     () => page.route('/api', handler),
@@ -493,16 +501,41 @@ test('@read-only-contract API route overrides cannot take precedence over the gu
   );
   const nextPage = await context.newPage();
   const nextPageError = await attempt(
-    () => nextPage.route('/api/__playwright_real_new_page_bypass__', handler),
-    () => nextPage.unroute('/api/__playwright_real_new_page_bypass__', handler)
+    () => nextPage.route('/%2561pi/double-encoded-route', handler),
+    () => nextPage.unroute('/%2561pi/double-encoded-route', handler)
   );
+  const encodedPageError = await attempt(
+    () => page.route('/%61pi/encoded-route', handler),
+    () => page.unroute('/%61pi/encoded-route', handler)
+  );
+  const encodedContextError = await attempt(
+    () => context.route('/api%2Fencoded-context-route', handler),
+    () => context.unroute('/api%2Fencoded-context-route', handler)
+  );
+  const pageUnrouteError = await capture(() => page.unroute('/%61pi/encoded-unroute', handler));
+  const contextUnrouteError = await capture(() =>
+    context.unroute('/api%2Fencoded-context-unroute', handler)
+  );
+  const pageUnrouteAllError = await capture(() => page.unrouteAll());
+  const contextUnrouteAllError = await capture(() => context.unrouteAll());
+
+  await page.route('/%61pix-static', handler);
+  await page.unroute('/%61pix-static', handler);
+  await context.route('/%61pix-context-static', handler);
+  await context.unroute('/%61pix-context-static', handler);
   await nextPage.close();
 
-  expect([pageError, contextError, nextPageError]).toEqual([
-    ROUTE_OVERRIDE_FORBIDDEN,
-    ROUTE_OVERRIDE_FORBIDDEN,
-    ROUTE_OVERRIDE_FORBIDDEN
-  ]);
+  expect([
+    pageError,
+    contextError,
+    nextPageError,
+    encodedPageError,
+    encodedContextError,
+    pageUnrouteError,
+    contextUnrouteError,
+    pageUnrouteAllError,
+    contextUnrouteAllError
+  ]).toEqual(Array(9).fill(ROUTE_OVERRIDE_FORBIDDEN));
 
   await openProbeDocument(page);
   expectLocallyRejected(await mutateWithFetch(page, 'PUT'));

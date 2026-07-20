@@ -280,7 +280,7 @@ function routePatternMayMatchApi(pattern: RoutePattern, baseURL?: string): boole
   if (/[*{}]/.test(pattern)) return true;
   const url = safeUrl(pattern, baseURL);
   if (!url) return true;
-  return url.pathname === '/api' || url.pathname.startsWith('/api/');
+  return isApiUrl(url.href);
 }
 
 function assertRoutePatternAllowed(pattern: RoutePattern, baseURL?: string): void {
