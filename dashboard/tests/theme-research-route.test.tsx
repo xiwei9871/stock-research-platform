@@ -59,7 +59,8 @@ vi.mock('../src/components/StockWorkspace', () => ({
     <section>
       <h1>Stock Workspace Mock</h1>
       <span>{initialAssetId}</span>
-      <span>{String(entryContext?.techBottleneckSource ?? '')}</span>
+      <span data-testid="stock-source-workspace">{String(entryContext?.sourceWorkspace ?? '')}</span>
+      <span data-testid="stock-tech-bottleneck-source">{String(entryContext?.techBottleneckSource ?? '')}</span>
     </section>
   )
 }));
@@ -152,7 +153,8 @@ describe('Theme research AppShell routing', () => {
     expect(window.location.search).toBe('?source=theme_research');
     expect(screen.getByRole('heading', { name: 'Stock Workspace Mock' })).toBeInTheDocument();
     expect(screen.getByText('002837.SZ')).toBeInTheDocument();
-    expect(screen.getByText('theme_research')).toBeInTheDocument();
+    expect(screen.getByTestId('stock-source-workspace')).toHaveTextContent('themeResearch');
+    expect(screen.getByTestId('stock-tech-bottleneck-source')).toBeEmptyDOMElement();
   });
 
   it('returns to the theme index when primary navigation is clicked from a child route', () => {

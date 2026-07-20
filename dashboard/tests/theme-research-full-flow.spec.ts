@@ -41,7 +41,7 @@ test('theme research desktop flow preserves routes and deep-research views', asy
   await page.goto('/theme-research');
 
   await expect(page.getByRole('heading', { name: '主题研究' })).toBeVisible();
-  await expect(page.getByText(/^\d+ 个主题$/)).toBeVisible();
+  await expect(page.getByText('40 个主题')).toBeVisible();
   await expect(page.getByRole('button', { name: /打开AI供电产业链/ })).toBeVisible();
   await expect(page.getByRole('button', { name: /打开人形机器人：从头到脚的价值链与受益环节/ })).toBeVisible();
 

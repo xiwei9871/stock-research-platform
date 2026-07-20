@@ -306,7 +306,7 @@ test.beforeEach(async ({ page }) => {
   await installResearchApi(page);
 });
 
-test('theme company handoff preserves its source token and restores the selected company tab @p0 @mock @handoff', async ({ page }) => {
+test('theme company handoff preserves its source workspace and restores the selected company tab @p0 @mock @handoff', async ({ page }) => {
   await page.goto('/theme-research');
   await page.getByRole('button', { name: '打开科学仪器价值链' }).click();
   await expectRouteContext(page, { path: new RegExp(`^/theme-research/${THEME_ID}$`) });
@@ -321,7 +321,8 @@ test('theme company handoff preserves its source token and restores the selected
     source: 'theme_research'
   });
   await expect(page.getByRole('heading', { name: '海能技术 430476.BJ' })).toBeVisible();
-  await expect(page.getByText(/科技卡脖子来源\s+theme_research/)).toBeVisible();
+  await expect(page.getByText(/来源工作台：\s*Theme Research/)).toBeVisible();
+  await expect(page.getByText(/科技卡脖子来源\s+theme_research/)).toHaveCount(0);
 
   await page.reload();
   await expectRouteContext(page, {
@@ -330,7 +331,8 @@ test('theme company handoff preserves its source token and restores the selected
     source: 'theme_research'
   });
   await expect(page.getByRole('heading', { name: '海能技术 430476.BJ' })).toBeVisible();
-  await expect(page.getByText(/科技卡脖子来源\s+theme_research/)).toBeVisible();
+  await expect(page.getByText(/来源工作台：\s*Theme Research/)).toBeVisible();
+  await expect(page.getByText(/科技卡脖子来源\s+theme_research/)).toHaveCount(0);
 
   await page.goBack();
   await expectRouteContext(page, { path: new RegExp(`^/theme-research/${THEME_ID}/companies$`) });

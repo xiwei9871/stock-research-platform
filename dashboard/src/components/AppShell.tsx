@@ -130,6 +130,16 @@ function techBottleneckStockHandoffFromLocation(pathname: string, search: string
   const stockCode = stockCodeFromTechBottleneckPath(pathname);
   if (!stockCode) return null;
   const assetId = stockCodeToAssetId(stockCode);
+  const platformLocation = parsePlatformLocation(pathname, search);
+  if (platformLocation.sourceWorkspace === 'themeResearch') {
+    return {
+      assetId,
+      sourceWorkspace: 'themeResearch',
+      query: platformLocation.query,
+      matchReason: platformLocation.matchReason,
+      version: 0
+    };
+  }
   const source = new URLSearchParams(search).get('source') ?? 'tech_bottleneck_candidate_universe_workbench_patch_v1';
   if (source === TECH_BOTTLENECK_REVIEW_UNIVERSE_SOURCE) {
     return {

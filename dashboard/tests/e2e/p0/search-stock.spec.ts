@@ -268,22 +268,19 @@ test('current and legacy Haineng security-code deep links resolve the same compa
       path: '/stock/920476.BJ?source=theme_research',
       route: /^\/stock\/920476\.BJ$/,
       assetId: '920476.BJ',
-      heading: '海能技术 920476.BJ',
-      legacyTechSourceToken: false
+      heading: '海能技术 920476.BJ'
     },
     {
       path: '/stock/430476.BJ?source=theme_research',
       route: /^\/stock\/430476\.BJ$/,
       assetId: '430476.BJ',
-      heading: '海能技术 430476.BJ',
-      legacyTechSourceToken: false
+      heading: '海能技术 430476.BJ'
     },
     {
       path: '/tech-bottleneck/stock/430476.BJ?source=theme_research',
       route: /^\/tech-bottleneck\/stock\/430476\.BJ$/,
       assetId: '430476.BJ',
-      heading: '海能技术 430476.BJ',
-      legacyTechSourceToken: true
+      heading: '海能技术 430476.BJ'
     }
   ];
 
@@ -295,11 +292,8 @@ test('current and legacy Haineng security-code deep links resolve the same compa
       source: 'theme_research'
     });
     await expect(page.getByRole('heading', { name: deepLink.heading })).toBeVisible();
-    if (deepLink.legacyTechSourceToken) {
-      await expect(page.getByText(/科技卡脖子来源\s+theme_research/)).toBeVisible();
-    } else {
-      await expect(page.getByText(/来源工作台：\s*Theme Research/)).toBeVisible();
-    }
+    await expect(page.getByText(/来源工作台：\s*Theme Research/)).toBeVisible();
+    await expect(page.getByText(/科技卡脖子来源\s+theme_research/)).toHaveCount(0);
     await expect(page.getByText('No bars available.')).toBeVisible();
 
     await page.reload();
@@ -309,11 +303,8 @@ test('current and legacy Haineng security-code deep links resolve the same compa
       source: 'theme_research'
     });
     await expect(page.getByRole('heading', { name: deepLink.heading })).toBeVisible();
-    if (deepLink.legacyTechSourceToken) {
-      await expect(page.getByText(/科技卡脖子来源\s+theme_research/)).toBeVisible();
-    } else {
-      await expect(page.getByText(/来源工作台：\s*Theme Research/)).toBeVisible();
-    }
+    await expect(page.getByText(/来源工作台：\s*Theme Research/)).toBeVisible();
+    await expect(page.getByText(/科技卡脖子来源\s+theme_research/)).toHaveCount(0);
     await expect(page.getByText('No bars available.')).toBeVisible();
   }
 });

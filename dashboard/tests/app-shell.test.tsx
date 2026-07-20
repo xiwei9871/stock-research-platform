@@ -1519,6 +1519,18 @@ describe('dashboard app shell', () => {
     ).toBeInTheDocument();
   });
 
+  it('preserves theme research source context on direct legacy stock routes', async () => {
+    window.history.replaceState({}, '', '/tech-bottleneck/stock/002837.SZ?source=theme_research');
+    apiMocks.fetchAssetProfile.mockResolvedValue(makeAssetProfile('002837.SZ'));
+
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
+
+    expect(
+      await screen.findByText((_content, element) => element?.textContent === '来源工作台：Theme Research')
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/科技卡脖子来源\s+theme_research/)).not.toBeInTheDocument();
+  });
+
   it('restores primary routes and reparses the complete stock location on popstate', async () => {
     window.history.replaceState({}, '', '/review-queue');
     apiMocks.fetchAssetProfile.mockResolvedValue(makeAssetProfile('600519.SH'));
