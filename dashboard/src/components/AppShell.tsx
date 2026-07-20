@@ -224,6 +224,16 @@ function stockHandoffFromLocation(pathname: string, search: string): StockHandof
   };
 }
 
+function searchQueryFromHistoryState() {
+  const state = window.history.state;
+  return typeof state?.searchQuery === 'string' ? state.searchQuery : '';
+}
+
+function historyStateFields() {
+  const state = window.history.state;
+  return state && typeof state === 'object' && !Array.isArray(state) ? state : {};
+}
+
 function conceptTagsFromReviewUniverseStock(stock: TechBottleneckReviewStock) {
   if (Array.isArray(stock.concept_tags)) return stock.concept_tags;
   return String(stock.concept_tags || '')
@@ -288,6 +298,11 @@ export function AppShell({ currentUser: _currentUser }: AppShellProps = {}) {
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>(
     workspaceModeForCurrentUser(initialPlatformLocation.workspace, currentUser)
   );
+  const [globalSearchQuery, setGlobalSearchQuery] = useState(() =>
+    typeof window !== 'undefined' && initialPlatformLocation.workspace === 'home'
+      ? searchQueryFromHistoryState()
+      : ''
+  );
   const [selectedAssetId, setSelectedAssetId] = useState(initialStockHandoff?.assetId ?? '000001.SZ');
   const [newsHandoff, setNewsHandoff] = useState<WorkspaceHandoff>({ query: '', version: 0 });
   const [researchReportsHandoff, setResearchReportsHandoff] = useState<WorkspaceHandoff>({ query: '', version: 0 });
@@ -344,6 +359,7 @@ export function AppShell({ currentUser: _currentUser }: AppShellProps = {}) {
           }));
         }
       }
+      setGlobalSearchQuery(nextLocation.workspace === 'home' ? searchQueryFromHistoryState() : '');
       setWorkspaceMode(workspaceModeForCurrentUser(nextLocation.workspace, currentUser));
     };
     handleLocationChange();
@@ -501,9 +517,17 @@ export function AppShell({ currentUser: _currentUser }: AppShellProps = {}) {
   function openGlobalSearchResult(result: GlobalSearchResult) {
     const { target } = result;
     if (target.workspace === 'stock' && target.asset_id) {
+      const query = globalSearchQuery || target.q || result.title;
+      if (parsePlatformLocation(window.location.pathname, window.location.search).workspace === 'home') {
+        window.history.replaceState(
+          { ...historyStateFields(), searchQuery: globalSearchQuery },
+          '',
+          `${window.location.pathname}${window.location.search}${window.location.hash}`
+        );
+      }
       openStockWorkspace(target.asset_id, {
         sourceWorkspace: 'search',
-        query: target.q ?? result.title,
+        query,
         matchReason: result.match_reason
       });
       return;
@@ -568,7 +592,11 @@ export function AppShell({ currentUser: _currentUser }: AppShellProps = {}) {
       </aside>
       <div className="platform-main">
         <header className="platform-topbar">
-          <GlobalSearchBox onOpenResult={openGlobalSearchResult} />
+          <GlobalSearchBox
+            query={globalSearchQuery}
+            onQueryChange={setGlobalSearchQuery}
+            onOpenResult={openGlobalSearchResult}
+          />
         </header>
         <section className="platform-workspace">
           {workspaceMode === 'home' ? <HomeCockpit onNavigate={openWorkspaceMode} /> : null}

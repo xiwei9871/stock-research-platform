@@ -1,4 +1,5 @@
 import '@testing-library/jest-dom/vitest';
+import { useState } from 'react';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GlobalSearchBox } from '../src/components/GlobalSearchBox';
@@ -46,6 +47,11 @@ async function searchFor(query: string) {
   });
 }
 
+function StatefulGlobalSearchBox({ onOpenResult }: { onOpenResult: (result: GlobalSearchResult) => void }) {
+  const [query, setQuery] = useState('');
+  return <GlobalSearchBox query={query} onQueryChange={setQuery} onOpenResult={onOpenResult} />;
+}
+
 beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
   vi.clearAllMocks();
@@ -58,6 +64,56 @@ afterEach(() => {
 });
 
 describe('GlobalSearchBox', () => {
+  it('renders parent-driven query updates and fetches results for the controlled value', async () => {
+    const onQueryChange = vi.fn();
+    const { rerender } = render(
+      <GlobalSearchBox query="茅台" onQueryChange={onQueryChange} onOpenResult={vi.fn()} />
+    );
+
+    expect(screen.getByLabelText('Global search')).toHaveValue('茅台');
+    await act(async () => {
+      vi.advanceTimersByTime(250);
+    });
+    expect(apiMocks.fetchGlobalSearch).toHaveBeenCalledWith('茅台', 5);
+
+    rerender(<GlobalSearchBox query="浦发" onQueryChange={onQueryChange} onOpenResult={vi.fn()} />);
+
+    expect(screen.getByLabelText('Global search')).toHaveValue('浦发');
+    await act(async () => {
+      vi.advanceTimersByTime(250);
+    });
+    expect(apiMocks.fetchGlobalSearch).toHaveBeenLastCalledWith('浦发', 5);
+  });
+
+  it('reports controlled query changes and opens normally fetched results', async () => {
+    const onOpenResult = vi.fn();
+    const onQueryChange = vi.fn();
+
+    function ControlledSearchBox() {
+      const [query, setQuery] = useState('');
+      return (
+        <GlobalSearchBox
+          query={query}
+          onQueryChange={(nextQuery) => {
+            onQueryChange(nextQuery);
+            setQuery(nextQuery);
+          }}
+          onOpenResult={onOpenResult}
+        />
+      );
+    }
+
+    render(<ControlledSearchBox />);
+    await searchFor('600519');
+
+    expect(onQueryChange).toHaveBeenCalledWith('600519');
+    const result = await screen.findByRole('option', { name: /贵州茅台 600519\.SH/ });
+    fireEvent.click(result);
+
+    expect(onOpenResult).toHaveBeenCalledWith(makePayload().groups[0]?.items[0]);
+    expect(onQueryChange).toHaveBeenLastCalledWith('');
+  });
+
   it('renders grouped search results and opens a clicked result', async () => {
     const selected = makeResult({ id: 'news-1', type: 'news', title: '茅台新闻', subtitle: '公告摘要' });
     apiMocks.fetchGlobalSearch.mockResolvedValueOnce(
@@ -71,7 +127,7 @@ describe('GlobalSearchBox', () => {
     );
     const onOpenResult = vi.fn();
 
-    render(<GlobalSearchBox onOpenResult={onOpenResult} />);
+    render(<StatefulGlobalSearchBox onOpenResult={onOpenResult} />);
     await searchFor('  茅台  ');
 
     expect(apiMocks.fetchGlobalSearch).toHaveBeenCalledWith('茅台', 5);
@@ -114,7 +170,7 @@ describe('GlobalSearchBox', () => {
       })
     );
 
-    render(<GlobalSearchBox onOpenResult={vi.fn()} />);
+    render(<StatefulGlobalSearchBox onOpenResult={vi.fn()} />);
     await searchFor('600519');
 
     const titleOnlyOption = await screen.findByRole('option', { name: /中国平安 Title match/ });
@@ -128,7 +184,7 @@ describe('GlobalSearchBox', () => {
   });
 
   it('does not call the API for a one-character query', async () => {
-    render(<GlobalSearchBox onOpenResult={vi.fn()} />);
+    render(<StatefulGlobalSearchBox onOpenResult={vi.fn()} />);
 
     await searchFor('茅');
 
@@ -149,7 +205,7 @@ describe('GlobalSearchBox', () => {
         })
       );
 
-    render(<GlobalSearchBox onOpenResult={vi.fn()} />);
+    render(<StatefulGlobalSearchBox onOpenResult={vi.fn()} />);
 
     await searchFor('茅台');
     await searchFor('浦发');
@@ -175,7 +231,7 @@ describe('GlobalSearchBox', () => {
       resolveFirst = resolve;
     }));
 
-    render(<GlobalSearchBox onOpenResult={vi.fn()} />);
+    render(<StatefulGlobalSearchBox onOpenResult={vi.fn()} />);
 
     await searchFor('茅台');
     fireEvent.change(screen.getByLabelText('Global search'), { target: { value: '浦发' } });
@@ -198,7 +254,7 @@ describe('GlobalSearchBox', () => {
       resolveSearch = resolve;
     }));
 
-    render(<GlobalSearchBox onOpenResult={vi.fn()} />);
+    render(<StatefulGlobalSearchBox onOpenResult={vi.fn()} />);
 
     await searchFor('茅台');
     fireEvent.keyDown(screen.getByLabelText('Global search'), { key: 'Escape' });
@@ -225,7 +281,7 @@ describe('GlobalSearchBox', () => {
       })
     );
 
-    render(<GlobalSearchBox onOpenResult={onOpenResult} />);
+    render(<StatefulGlobalSearchBox onOpenResult={onOpenResult} />);
     await searchFor('银行');
 
     const input = screen.getByLabelText('Global search');
@@ -248,7 +304,7 @@ describe('GlobalSearchBox', () => {
       })
     );
 
-    render(<GlobalSearchBox onOpenResult={onOpenResult} />);
+    render(<StatefulGlobalSearchBox onOpenResult={onOpenResult} />);
     await searchFor('茅台');
 
     const input = screen.getByLabelText('Global search');

@@ -4,11 +4,12 @@ import { fetchGlobalSearch } from '../api/client';
 import type { GlobalSearchResponse, GlobalSearchResult } from '../api/types';
 
 type GlobalSearchBoxProps = {
+  query: string;
+  onQueryChange: (query: string) => void;
   onOpenResult: (result: GlobalSearchResult) => void;
 };
 
-export function GlobalSearchBox({ onOpenResult }: GlobalSearchBoxProps) {
-  const [query, setQuery] = useState('');
+export function GlobalSearchBox({ query, onQueryChange, onOpenResult }: GlobalSearchBoxProps) {
   const [payload, setPayload] = useState<GlobalSearchResponse | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -21,6 +22,15 @@ export function GlobalSearchBox({ onOpenResult }: GlobalSearchBoxProps) {
   const results = useMemo(() => groups.flatMap((group) => group.items), [groups]);
   const hasSearched = trimmedQuery.length >= 2;
   const isMenuOpen = hasSearched && (isSearching || Boolean(error) || Boolean(payload));
+
+  useEffect(() => {
+    requestIdRef.current += 1;
+    setDismissedQuery(null);
+    setPayload(null);
+    setError(null);
+    setIsSearching(false);
+    setHighlightedIndex(-1);
+  }, [query]);
 
   useEffect(() => {
     if (trimmedQuery.length < 2 || dismissedQuery === trimmedQuery) {
@@ -61,19 +71,13 @@ export function GlobalSearchBox({ onOpenResult }: GlobalSearchBoxProps) {
   }, [dismissedQuery, trimmedQuery]);
 
   function handleQueryChange(nextQuery: string) {
-    requestIdRef.current += 1;
-    setDismissedQuery(null);
-    setQuery(nextQuery);
-    setPayload(null);
-    setError(null);
-    setIsSearching(false);
-    setHighlightedIndex(-1);
+    onQueryChange(nextQuery);
   }
 
   function clearSearch() {
     requestIdRef.current += 1;
     setDismissedQuery(null);
-    setQuery('');
+    onQueryChange('');
     setPayload(null);
     setError(null);
     setIsSearching(false);

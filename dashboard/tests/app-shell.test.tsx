@@ -10,6 +10,7 @@ import { ShadowFollowUpResolutionPanel } from '../src/components/ShadowFollowUpR
 import { ShadowOutcomeAnalyticsPanel } from '../src/components/ShadowOutcomeAnalyticsPanel';
 import { ShadowOutcomesPanel } from '../src/components/ShadowOutcomesPanel';
 import type { StockEntryContext } from '../src/components/StockWorkspace';
+import { stockPath } from '../src/navigation/platformRoutes';
 import type {
   BarPoint,
   AssetProfile,
@@ -1344,6 +1345,19 @@ describe('dashboard app shell', () => {
     expect(screen.queryByRole('button', { name: 'Open User Management workspace' })).not.toBeInTheDocument();
   });
 
+  it('initializes the home search only from a string history-state query', () => {
+    window.history.replaceState({ searchQuery: '600519' }, '', '/');
+    const firstRender = render(<AppShell currentUser={TEST_ADMIN_USER} />);
+
+    expect(screen.getByLabelText('Global search')).toHaveValue('600519');
+
+    firstRender.unmount();
+    window.history.replaceState({ searchQuery: { unsafe: true } }, '', '/');
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
+
+    expect(screen.getByLabelText('Global search')).toHaveValue('');
+  });
+
   it('renders the redesigned home cockpit sections', async () => {
     apiMocks.fetchMarketMonitorEod.mockResolvedValueOnce({
       trade_date: '2026-06-10',
@@ -1616,6 +1630,13 @@ describe('dashboard app shell', () => {
       });
       fireEvent.click(await screen.findByRole('option', { name: /贵州茅台 600519.SH/ }));
 
+      expect(`${window.location.pathname}${window.location.search}`).toBe(
+        stockPath('CN:SH:600519', {
+          sourceWorkspace: 'search',
+          query: '600519',
+          matchReason: 'Exact code match'
+        })
+      );
       expect(await screen.findByRole('heading', { name: /贵州茅台 CN:SH:600519/ })).toBeInTheDocument();
       expect(apiMocks.fetchAssetProfile).toHaveBeenCalledWith(
         'CN:SH:600519',
@@ -1628,6 +1649,32 @@ describe('dashboard app shell', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('restores the home search query and refetches results after actual browser Back', async () => {
+    window.history.replaceState({ existing: 'keep' }, '', '/');
+    apiMocks.fetchGlobalSearch.mockResolvedValue(makeGlobalSearchPayload(makeGlobalSearchResult(), '600519'));
+    apiMocks.fetchAssetProfile.mockResolvedValueOnce(makeAssetProfile('CN:SH:600519'));
+
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
+
+    fireEvent.change(screen.getByLabelText('Global search'), { target: { value: '600519' } });
+    fireEvent.click(await screen.findByRole('option', { name: /贵州茅台 600519.SH/ }));
+    expect(window.location.pathname).toBe('/stock/CN%3ASH%3A600519');
+    expect(screen.getByLabelText('Global search')).toHaveValue('');
+
+    act(() => window.history.back());
+
+    await waitFor(() => expect(window.location.pathname).toBe('/'));
+    expect(window.history.state).toEqual({ existing: 'keep', searchQuery: '600519' });
+    expect(screen.getByLabelText('Global search')).toHaveValue('600519');
+    expect(await screen.findByRole('option', { name: /贵州茅台 600519.SH/ })).toBeInTheDocument();
+    expect(apiMocks.fetchGlobalSearch).toHaveBeenCalledTimes(2);
+
+    act(() => window.history.forward());
+
+    await waitFor(() => expect(window.location.pathname).toBe('/stock/CN%3ASH%3A600519'));
+    expect(screen.getByLabelText('Global search')).toHaveValue('');
   });
 
   type MockWorkspaceRender = {
@@ -2004,6 +2051,30 @@ describe('dashboard app shell', () => {
         matchReason: 'Exact code match'
       },
       mountId: 2
+    });
+  });
+
+  it('reconstructs canonical stock route context on direct refresh', async () => {
+    window.history.replaceState(
+      {},
+      '',
+      stockPath('CN:SH:600519', {
+        sourceWorkspace: 'search',
+        query: '600519',
+        matchReason: 'Exact code match'
+      })
+    );
+
+    const { stockRenders } = await renderMockedAppShellForHandoff();
+
+    expect(stockRenders.at(-1)).toMatchObject({
+      initialAssetId: 'CN:SH:600519',
+      entryContext: {
+        assetId: 'CN:SH:600519',
+        sourceWorkspace: 'search',
+        query: '600519',
+        matchReason: 'Exact code match'
+      }
     });
   });
 
