@@ -4,6 +4,8 @@ from copy import deepcopy
 from dataclasses import dataclass
 from hashlib import sha256
 from typing import Any, Protocol
+import tempfile
+from pathlib import Path
 
 from stock_research.research_project_v2.canonical import canonical_bytes, content_sha256
 from stock_research.research_project_v2.errors import ResearchProjectV2Error
@@ -11,6 +13,7 @@ from stock_research.research_project_v2_1.layout import LayeredResearchLayout
 from stock_research.research_project_v2_1.loader import read_layered_bytes
 from stock_research.research_project_v2_1.normalize import normalize_text, write_normalized_document
 from stock_research.research_project_v2_1.parsers import ParserLimits, parse_document_bytes
+from stock_research.research_project_v2_1.parsers import ParsedDocument, ParsedSection
 from stock_research.research_project_v2_1.schema import validate_v2_1_schema_payload
 from stock_research.research_project_v2_1.snapshot import _publish_bytes
 
@@ -33,6 +36,57 @@ class DeterministicNormalizationAdapter:
         if effective_type == "application/vnd.docling+json":
             raise ValueError("Docling JSON requires the optional Docling adapter")
         return parse_document_bytes(data, media_type=effective_type, limits=ParserLimits())
+
+
+class DoclingNormalizationAdapter:
+    name = "docling"
+    configuration = {
+        "mode": "docling",
+        "use_ocr": False,
+        "table_mode": "preserve",
+    }
+
+    def __init__(self, *, parser=None, version: str = "unknown") -> None:
+        self.parser = parser
+        self.version = version
+
+    def normalize(self, data: bytes, *, content_type: str) -> ParsedDocument:
+        parser = self.parser
+        if parser is None:
+            from stock_research.data_to_brief_docling_parser_poc import parse_with_docling
+
+            parser = parse_with_docling
+        suffix = {
+            "application/pdf": ".pdf",
+            "text/html": ".html",
+        }.get(content_type, ".bin")
+        path: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as handle:
+                handle.write(data)
+                handle.flush()
+                path = Path(handle.name)
+            result = parser(path)
+        finally:
+            if path is not None:
+                path.unlink(missing_ok=True)
+        if not isinstance(result, dict) or result.get("status") != "parsed":
+            raise ValueError("Docling normalization failed")
+        markdown = result.get("markdown")
+        if not isinstance(markdown, str) or not markdown.strip():
+            raise ValueError("Docling emitted empty markdown")
+        return ParsedDocument(
+            parser="docling",
+            media_type="text/markdown",
+            title=None,
+            sections=(
+                ParsedSection(
+                    heading=None,
+                    locator="docling:markdown:0001",
+                    text=markdown,
+                ),
+            ),
+        )
 
 
 @dataclass(frozen=True)

@@ -8,6 +8,7 @@ from stock_research.research_project_v2_1.acquisition_import import (
 )
 from stock_research.research_project_v2_1.acquisition_normalize import (
     DeterministicNormalizationAdapter,
+    DoclingNormalizationAdapter,
     build_acquisition_checkpoint,
     normalize_acquired_artifact,
     write_acquisition_checkpoint,
@@ -130,3 +131,37 @@ def test_checkpoint_references_attempt_artifact_and_normalization_without_resear
     path = write_acquisition_checkpoint(checkpoint, layout=layout)
     assert path.is_file()
     assert not (layout.project_dir("ai_compute_pcb_industry_bottleneck") / "versions/v0.2.2.json").exists()
+
+
+def test_optional_docling_adapter_creates_a_distinct_normalized_representation(tmp_path: Path) -> None:
+    layout = LayeredResearchLayout((tmp_path / "v2_1").resolve())
+    layout.root.mkdir(mode=0o700)
+    acquired = imported_html(tmp_path, layout)
+    deterministic = normalize_acquired_artifact(
+        acquired.artifact,
+        adapter=DeterministicNormalizationAdapter(),
+        layout=layout,
+        parsed_at="2026-07-20T08:00:02Z",
+        provenance=PROVENANCE,
+    )
+    docling = normalize_acquired_artifact(
+        acquired.artifact,
+        adapter=DoclingNormalizationAdapter(
+            parser=lambda _path: {
+                "status": "parsed",
+                "markdown": "# Architecture\n\nDocling fixture.",
+            },
+            version="2.110.0",
+        ),
+        layout=layout,
+        parsed_at="2026-07-20T08:00:03Z",
+        provenance=PROVENANCE,
+    )
+    assert docling.status == "normalized"
+    assert docling.parser == "docling"
+    assert docling.document["document_id"] != deterministic.document["document_id"]
+    assert docling.parser_configuration == {
+        "mode": "docling",
+        "use_ocr": False,
+        "table_mode": "preserve",
+    }
