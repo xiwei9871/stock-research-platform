@@ -8,7 +8,12 @@
     "dev": "vite --host 127.0.0.1 --port 5174",
     "build": "tsc && vite build",
     "test": "vitest run --exclude \"**/*.spec.ts\"",
-    "test:e2e": "playwright test tests/*.spec.ts"
+    "test:e2e": "PLAYWRIGHT_PROFILE=legacy playwright test tests/*.spec.ts",
+    "test:e2e:p0": "PLAYWRIGHT_PROFILE=mock playwright test tests/e2e/p0",
+    "test:e2e:real": "PLAYWRIGHT_PROFILE=real playwright test tests/e2e/real",
+    "test:e2e:sandbox": "PLAYWRIGHT_PROFILE=sandbox playwright test tests/e2e/sandbox",
+    "test:e2e:audit": "PLAYWRIGHT_PROFILE=audit playwright test tests/e2e/p0 tests/e2e/real tests/e2e/audit tests/e2e/visual",
+    "test:e2e:eod": "PLAYWRIGHT_PROFILE=eod playwright test tests/e2e/eod"
   },
   "dependencies": {
     "echarts": "^6.1.0",
