@@ -14,6 +14,31 @@ function matchesAllowlist(value: string, patterns: readonly RuntimeEvidencePatte
   });
 }
 
+export function sanitizeRuntimeEvidenceText(value: string): string {
+  return value
+    .replace(/https?:\/\/[^\s"')]+/g, (rawUrl) => {
+      try {
+        const url = new URL(rawUrl);
+        return `${url.origin}${url.pathname}`;
+      } catch {
+        return rawUrl.split(/[?#]/, 1)[0];
+      }
+    })
+    .replace(
+      /(["'])(authorization|password|passwd|token|api[_-]?key|secret|cookie|set-cookie)\1(\s*[:=]\s*)(["'])(.*?)\4/gi,
+      (_match, quote: string, key: string, separator: string, valueQuote: string) =>
+        `${quote}${key}${quote}${separator}${valueQuote}[REDACTED]${valueQuote}`
+    )
+    .replace(
+      /\b(authorization)\b(\s*[:=]\s*)(?:bearer\s+)?([^\s,;}]+)/gi,
+      '$1$2[REDACTED]'
+    )
+    .replace(
+      /\b(password|passwd|token|api[_-]?key|secret|cookie|set-cookie)\b(\s*[:=]\s*)([^\s,;}]+)/gi,
+      '$1$2[REDACTED]'
+    );
+}
+
 function failedRequestLabel(entry: RuntimeEvidence['failedRequests'][number]): string {
   return `${entry.method} ${entry.url} — ${entry.failure}`;
 }

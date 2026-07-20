@@ -2,6 +2,9 @@ import type { Page } from '@playwright/test';
 
 import type { RuntimeEvidence } from './test';
 
+const runtimeEvidenceKey: unique symbol = Symbol('playwrightRuntimeEvidence');
+type RuntimeEvidencePage = Page & { [runtimeEvidenceKey]?: RuntimeEvidence };
+
 export type MockPlatformApiResponse = {
   status?: number;
   json: unknown;
@@ -9,6 +12,17 @@ export type MockPlatformApiResponse = {
 };
 
 export type MockPlatformApiRoutes = Record<string, MockPlatformApiResponse>;
+
+export function bindRuntimeEvidenceToPage(
+  page: Page,
+  evidence: RuntimeEvidence
+): () => void {
+  const evidencePage = page as RuntimeEvidencePage;
+  evidencePage[runtimeEvidenceKey] = evidence;
+  return () => {
+    if (evidencePage[runtimeEvidenceKey] === evidence) delete evidencePage[runtimeEvidenceKey];
+  };
+}
 
 function normalizeRouteKey(key: string): string {
   const separator = key.indexOf(' ');
@@ -18,9 +32,12 @@ function normalizeRouteKey(key: string): string {
 
 export async function installMockPlatformApi(
   page: Page,
-  routes: MockPlatformApiRoutes,
-  evidence?: RuntimeEvidence
+  routes: MockPlatformApiRoutes
 ): Promise<void> {
+  const evidence = (page as RuntimeEvidencePage)[runtimeEvidenceKey];
+  if (!evidence) {
+    throw new Error('installMockPlatformApi requires the shared runtime test fixture');
+  }
   const normalizedRoutes = new Map(
     Object.entries(routes).map(([key, response]) => [normalizeRouteKey(key), response])
   );
@@ -33,7 +50,7 @@ export async function installMockPlatformApi(
     const response = normalizedRoutes.get(key);
 
     if (!response) {
-      evidence?.unhandledApiRoutes.push(key);
+      evidence.unhandledApiRoutes.push(key);
       await route.fulfill({
         status: 599,
         contentType: 'application/json',

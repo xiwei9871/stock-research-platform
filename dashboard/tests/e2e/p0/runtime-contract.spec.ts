@@ -1,6 +1,10 @@
 import type { Page } from '@playwright/test';
 
-import { expectNoFatalRuntimeErrors, expectNoHorizontalOverflow } from '../assertions/runtime';
+import {
+  expectNoFatalRuntimeErrors,
+  expectNoHorizontalOverflow,
+  expectNoUnhandledApiRoutes
+} from '../assertions/runtime';
 import { installMockPlatformApi } from '../fixtures/mockPlatformApi';
 import { expect, test } from '../fixtures/test';
 
@@ -12,6 +16,16 @@ async function setContractContent(page: Page, baseURL: string | undefined, conte
   );
   await page.goto(documentUrl);
   await page.unroute(documentUrl);
+}
+
+function captureErrorMessage(assertion: () => void): string {
+  try {
+    assertion();
+  } catch (error) {
+    if (error instanceof Error) return error.message;
+    throw error;
+  }
+  throw new Error('Expected runtime assertion to fail');
 }
 
 test('clean control passes @p0 @runtime-contract', async ({ page, baseURL, runtimeEvidence }) => {
@@ -33,7 +47,12 @@ test('unexpected console.error fails with exact evidence @p0 @runtime-contract',
   await setContractContent(page, baseURL, '<main>console error contract</main>');
   await page.evaluate(() => console.error('runtime-contract-console-error'));
 
-  expect(runtimeEvidence.consoleErrors).toContain('runtime-contract-console-error');
+  expect(runtimeEvidence.consoleErrors).toEqual(['runtime-contract-console-error']);
+  expect(captureErrorMessage(() => expectNoFatalRuntimeErrors(runtimeEvidence))).toBe(
+    'Unexpected fatal runtime evidence:\n' +
+      'consoleErrors:\n' +
+      '- runtime-contract-console-error'
+  );
   test.fail();
 });
 
@@ -51,7 +70,12 @@ test('uncaught page error fails with exact evidence @p0 @runtime-contract', asyn
   });
   await pageError;
 
-  expect(runtimeEvidence.pageErrors).toContain('runtime-contract-page-error');
+  expect(runtimeEvidence.pageErrors).toEqual(['runtime-contract-page-error']);
+  expect(captureErrorMessage(() => expectNoFatalRuntimeErrors(runtimeEvidence))).toBe(
+    'Unexpected fatal runtime evidence:\n' +
+      'pageErrors:\n' +
+      '- runtime-contract-page-error'
+  );
   test.fail();
 });
 
@@ -66,11 +90,24 @@ test('failed critical API request fails with exact evidence @p0 @runtime-contrac
 
   await expect
     .poll(() => runtimeEvidence.failedRequests)
-    .toContainEqual({
-      method: 'GET',
-      url: new URL('/api/runtime-contract-abort', page.url()).toString(),
-      failure: 'net::ERR_FAILED'
-    });
+    .toEqual([
+      {
+        method: 'GET',
+        url: new URL('/api/runtime-contract-abort', page.url()).toString(),
+        failure: 'net::ERR_FAILED'
+      }
+    ]);
+  await expect
+    .poll(() => runtimeEvidence.consoleErrors)
+    .toEqual(['Failed to load resource: net::ERR_FAILED']);
+  const failedRequestUrl = new URL('/api/runtime-contract-abort', page.url()).toString();
+  expect(captureErrorMessage(() => expectNoFatalRuntimeErrors(runtimeEvidence))).toBe(
+    'Unexpected fatal runtime evidence:\n' +
+      'consoleErrors:\n' +
+      '- Failed to load resource: net::ERR_FAILED\n' +
+      'failedRequests:\n' +
+      `- GET ${failedRequestUrl} — net::ERR_FAILED`
+  );
   test.fail();
 });
 
@@ -86,19 +123,31 @@ test('fulfilled critical API 5xx fails with exact evidence @p0 @runtime-contract
         status: 503,
         json: { detail: 'intentional server error' }
       }
-    },
-    runtimeEvidence
+    }
   );
   await setContractContent(page, baseURL, '<main>server error contract</main>');
   await page.evaluate(() => fetch('/api/runtime-contract-server-error'));
 
   await expect
     .poll(() => runtimeEvidence.failedRequests)
-    .toContainEqual({
-      method: 'GET',
-      url: new URL('/api/runtime-contract-server-error', page.url()).toString(),
-      failure: 'HTTP 503'
-    });
+    .toEqual([
+      {
+        method: 'GET',
+        url: new URL('/api/runtime-contract-server-error', page.url()).toString(),
+        failure: 'HTTP 503'
+      }
+    ]);
+  const serverErrorConsole =
+    'Failed to load resource: the server responded with a status of 503 (Service Unavailable)';
+  await expect.poll(() => runtimeEvidence.consoleErrors).toEqual([serverErrorConsole]);
+  const serverErrorUrl = new URL('/api/runtime-contract-server-error', page.url()).toString();
+  expect(captureErrorMessage(() => expectNoFatalRuntimeErrors(runtimeEvidence))).toBe(
+    'Unexpected fatal runtime evidence:\n' +
+      'consoleErrors:\n' +
+      `- ${serverErrorConsole}\n` +
+      'failedRequests:\n' +
+      `- GET ${serverErrorUrl} — HTTP 503`
+  );
   test.fail();
 });
 
@@ -107,7 +156,7 @@ test('unhandled mock API route fails closed with exact evidence @p0 @runtime-con
   baseURL,
   runtimeEvidence
 }) => {
-  await installMockPlatformApi(page, {}, runtimeEvidence);
+  await installMockPlatformApi(page, {});
   await setContractContent(page, baseURL, '<main>unhandled API contract</main>');
   const response = await page.evaluate(async () => {
     const result = await fetch('/api/unexpected?ignored=query');
@@ -123,7 +172,55 @@ test('unhandled mock API route fails closed with exact evidence @p0 @runtime-con
     }
   });
   expect(runtimeEvidence.unhandledApiRoutes).toEqual(['GET /api/unexpected']);
+  expect(captureErrorMessage(() => expectNoUnhandledApiRoutes(runtimeEvidence))).toBe(
+    'Unexpected unhandled API routes:\n- GET /api/unexpected'
+  );
+  const unhandledConsole =
+    'Failed to load resource: the server responded with a status of 599 (Unknown)';
+  const unhandledUrl = new URL('/api/unexpected', page.url()).toString();
+  await expect.poll(() => runtimeEvidence.consoleErrors).toEqual([unhandledConsole]);
+  await expect.poll(() => runtimeEvidence.failedRequests).toEqual([
+    { method: 'GET', url: unhandledUrl, failure: 'HTTP 599' }
+  ]);
+  expect(captureErrorMessage(() => expectNoFatalRuntimeErrors(runtimeEvidence))).toBe(
+    'Unexpected fatal runtime evidence:\n' +
+      'consoleErrors:\n' +
+      `- ${unhandledConsole}\n` +
+      'failedRequests:\n' +
+      `- GET ${unhandledUrl} — HTTP 599`
+  );
   test.fail();
+});
+
+test('runtime evidence redacts credential-shaped console and page errors @p0 @runtime-contract', async ({
+  page,
+  baseURL,
+  runtimeEvidence,
+  runtimePolicy
+}) => {
+  const rawEvidence =
+    'Authorization: Bearer auth-secret ' +
+    '{"token":"token-secret","password":"password-secret",' +
+    '"api_key":"api-key-secret","secret":"json-secret"}';
+  const redactedEvidence =
+    'Authorization: [REDACTED] ' +
+    '{"token":"[REDACTED]","password":"[REDACTED]",' +
+    '"api_key":"[REDACTED]","secret":"[REDACTED]"}';
+  runtimePolicy.consoleErrors.push(redactedEvidence);
+  runtimePolicy.pageErrors.push(redactedEvidence);
+
+  await setContractContent(page, baseURL, '<main>redaction contract</main>');
+  await page.evaluate((message) => console.error(message), rawEvidence);
+  const pageError = page.waitForEvent('pageerror');
+  await page.evaluate((message) => {
+    window.setTimeout(() => {
+      throw new Error(message);
+    }, 0);
+  }, rawEvidence);
+  await pageError;
+
+  expect(runtimeEvidence.consoleErrors).toEqual([redactedEvidence]);
+  expect(runtimeEvidence.pageErrors).toEqual([redactedEvidence]);
 });
 
 test('explicit allowlist is narrow and permits only the intended error @p0 @runtime-contract', async ({
@@ -138,17 +235,23 @@ test('explicit allowlist is narrow and permits only the intended error @p0 @runt
   await page.evaluate(() => console.error('intentional-runtime-console-error'));
 
   expect(runtimeEvidence.consoleErrors).toEqual(['intentional-runtime-console-error']);
-  expect(() =>
-    expectNoFatalRuntimeErrors(
-      {
-        consoleErrors: ['intentional-runtime-console-error-extra'],
-        pageErrors: [],
-        failedRequests: [],
-        unhandledApiRoutes: []
-      },
-      runtimePolicy
+  expect(
+    captureErrorMessage(() =>
+      expectNoFatalRuntimeErrors(
+        {
+          consoleErrors: ['intentional-runtime-console-error-extra'],
+          pageErrors: [],
+          failedRequests: [],
+          unhandledApiRoutes: []
+        },
+        runtimePolicy
+      )
     )
-  ).toThrow(/intentional-runtime-console-error-extra/);
+  ).toBe(
+    'Unexpected fatal runtime evidence:\n' +
+      'consoleErrors:\n' +
+      '- intentional-runtime-console-error-extra'
+  );
 });
 
 test('horizontal overflow helper passes for contained content @p0 @runtime-contract', async ({
@@ -186,8 +289,10 @@ test('horizontal overflow helper reports measured widths @p0 @runtime-contract',
     scrollWidth: document.documentElement.scrollWidth,
     clientWidth: document.documentElement.clientWidth
   }));
-  expect(overflowError.message).toContain(
-    `scrollWidth=${widths.scrollWidth}, clientWidth=${widths.clientWidth}, ` +
+  expect(overflowError.message).toBe(
+    'Horizontal overflow detected: ' +
+      'document.documentElement.' +
+      `scrollWidth=${widths.scrollWidth}, clientWidth=${widths.clientWidth}, ` +
       `allowedMaximum=${widths.clientWidth + 1}`
   );
   test.fail();
