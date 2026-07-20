@@ -125,6 +125,34 @@ def test_direct_provider_acquires_raw_artifact_and_attempt(tmp_path: Path) -> No
     assert read_acquisition_attempt(result.attempt["attempt_id"], layout=layout) == result.attempt
 
 
+def test_direct_provider_accepts_v2_2_candidate_acquisition_metadata(tmp_path: Path) -> None:
+    layout = LayeredResearchLayout((tmp_path / "v2_1").resolve())
+    layout.root.mkdir(mode=0o700)
+    v2_2_candidate = candidate()
+    v2_2_candidate.update(
+        {
+            "acquisition_batch_id": "acquisition_batch:fixture",
+            "acquisition_status": "not_attempted",
+            "accessed_at": None,
+            "failure_reason": None,
+        }
+    )
+    provider = DirectHttpProvider(
+        transport=SequenceTransport([response()]),
+        resolver=Resolver(),
+        now=lambda: "2026-07-20T08:00:01Z",
+        monotonic_ms=iter([0, 1]).__next__,
+    )
+    result = provider.acquire(
+        v2_2_candidate,
+        context=context(),
+        layout=layout,
+        attempted_at="2026-07-20T08:00:00Z",
+        max_retries=0,
+    )
+    assert result.attempt["status"] == "acquired"
+
+
 def test_direct_provider_records_timeout_and_bounded_retry(tmp_path: Path) -> None:
     layout = LayeredResearchLayout((tmp_path / "v2_1").resolve())
     layout.root.mkdir(mode=0o700)

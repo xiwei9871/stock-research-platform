@@ -31,6 +31,11 @@ from stock_research.research_project_v2_1.snapshot import (
 
 _Now = Callable[[], str]
 _MonotonicMs = Callable[[], int]
+_SNAPSHOT_CANDIDATE_FIELDS = (
+    "candidate_id", "search_plan_id", "query_id", "normalized_url", "original_url",
+    "title", "snippet", "publisher", "publish_date", "source_class", "rank",
+    "exclusion_status", "exclusion_reasons", "dedup_key", "provenance",
+)
 
 
 def _utc_now() -> str:
@@ -157,10 +162,13 @@ class DirectHttpProvider:
         error: BaseException | None = None
         fetched: dict[str, Any] | None = None
         retry_count = 0
+        snapshot_input = {
+            field: deepcopy(candidate[field]) for field in _SNAPSHOT_CANDIDATE_FIELDS
+        }
         for attempt_index in range(max_retries + 1):
             try:
                 fetched = snapshot_candidate(
-                    deepcopy(candidate),
+                    snapshot_input,
                     transport=transport,
                     resolver=self.resolver,
                     layout=effective_layout,
