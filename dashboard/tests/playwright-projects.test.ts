@@ -2,12 +2,14 @@ import { describe, expect, test } from 'vitest';
 
 import {
   PLAYWRIGHT_PROFILES,
+  buildConfiguredWebServers,
   buildProjects,
   buildWebServers,
   parsePlaywrightProfile,
   profileNeedsApi,
   profileServiceWorkers,
   profileTestMatch,
+  resolveExternalServers,
   resolveReuseExistingServer,
   resolveUvicornExecutable,
   type PlaywrightProfile
@@ -210,6 +212,32 @@ describe('resolveReuseExistingServer', () => {
   test('never reuses an existing server in CI', () => {
     expect(resolveReuseExistingServer('mock', 'true', true)).toBe(false);
     expect(resolveReuseExistingServer('real', 'true', true)).toBe(false);
+  });
+});
+
+describe('resolveExternalServers', () => {
+  test('enables external servers only for the exact explicit true token', () => {
+    expect(resolveExternalServers('true')).toBe(true);
+    expect(resolveExternalServers(undefined)).toBe(false);
+    expect(resolveExternalServers('')).toBe(false);
+    expect(resolveExternalServers('TRUE')).toBe(false);
+    expect(resolveExternalServers('false')).toBe(false);
+  });
+
+  test('omits config webServer only for explicit external servers and keeps defaults otherwise', () => {
+    const options = {
+      profile: 'sandbox' as const,
+      dashboardPort: 5174,
+      apiPort: 8766,
+      usePreview: false,
+      reuseExisting: undefined,
+      ci: false,
+      checkoutRoot: '/repo',
+      uvicornCommand: 'python -m uvicorn'
+    };
+
+    expect(buildConfiguredWebServers(options, 'true')).toBeUndefined();
+    expect(buildConfiguredWebServers(options, undefined)).toHaveLength(2);
   });
 });
 

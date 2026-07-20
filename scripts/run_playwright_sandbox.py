@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import secrets
 import signal
+import socket
 import subprocess
 import sys
 import time
@@ -60,6 +61,15 @@ def wait_for_http(
         time.sleep(0.1)
 
 
+def check_ports_available(*, dashboard_port: int, api_port: int) -> None:
+    for port in dict.fromkeys((dashboard_port, api_port)):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as candidate:
+                candidate.bind(("127.0.0.1", port))
+        except OSError as exc:
+            raise RuntimeError(f"sandbox port unavailable: {port}") from exc
+
+
 def _stop_process(process: Any) -> None:
     if process is None or process.poll() is not None:
         return
@@ -69,6 +79,25 @@ def _stop_process(process: Any) -> None:
     except subprocess.TimeoutExpired:
         process.kill()
         process.wait(timeout=5)
+
+
+def _run_lifecycle_step(
+    errors: list[tuple[str, BaseException]],
+    label: str,
+    action: Callable[[], None],
+) -> None:
+    try:
+        action()
+    except BaseException as exc:
+        errors.append((label, exc))
+
+
+def _report_lifecycle_errors(errors: list[tuple[str, BaseException]]) -> None:
+    for label, error in errors:
+        print(
+            f"playwright sandbox lifecycle error: {label}: {type(error).__name__}",
+            file=sys.stderr,
+        )
 
 
 def _default_password_factory(label: str) -> str:
@@ -87,6 +116,7 @@ def run_sandbox(
     popen: Callable[..., Any] = subprocess.Popen,
     run_command: Callable[..., Any] = subprocess.run,
     wait_for_http: Callable[..., None] = wait_for_http,
+    port_checker: Callable[..., None] = check_ports_available,
     cleanup: Callable[[Any, str], None] = cleanup_sandbox,
     password_factory: Callable[[str], str] = _default_password_factory,
     dashboard_port: int = DEFAULT_DASHBOARD_PORT,
@@ -95,10 +125,13 @@ def run_sandbox(
     playwright_timeout: float = 900.0,
 ) -> int:
     selected_run_id = run_id or _new_run_id()
+    port_checker(dashboard_port=dashboard_port, api_port=api_port)
     connection = connector(service=service)
     api_process = None
     vite_process = None
     prepared = False
+    exit_code = 1
+    primary_error: BaseException | None = None
     try:
         admin_password = password_factory("admin")
         seeded_user_password = password_factory("user")
@@ -158,6 +191,7 @@ def run_sandbox(
                 "127.0.0.1",
                 "--port",
                 str(dashboard_port),
+                "--strictPort",
             ],
             cwd=REPO_ROOT / "dashboard",
             env=vite_env,
@@ -170,7 +204,8 @@ def run_sandbox(
 
         playwright_env = {
             **base_env,
-            "PLAYWRIGHT_REUSE_EXISTING": "true",
+            "PLAYWRIGHT_REUSE_EXISTING": "false",
+            "PLAYWRIGHT_EXTERNAL_SERVERS": "true",
             "PLAYWRIGHT_DASHBOARD_PORT": str(dashboard_port),
             "PLAYWRIGHT_API_PORT": str(api_port),
             "PLAYWRIGHT_SANDBOX_SERVICE": service,
@@ -195,17 +230,52 @@ def run_sandbox(
                 timeout=playwright_timeout,
                 check=False,
             )
-            return int(completed.returncode)
+            exit_code = int(completed.returncode)
         except subprocess.TimeoutExpired:
-            return 124
+            exit_code = 124
+    except BaseException as exc:
+        primary_error = exc
     finally:
-        _stop_process(vite_process)
-        _stop_process(api_process)
-        try:
-            if prepared:
-                cleanup(connection, selected_run_id)
-        finally:
-            connection.close()
+        lifecycle_errors: list[tuple[str, BaseException]] = []
+        _run_lifecycle_step(
+            lifecycle_errors,
+            "stop_vite",
+            lambda: _stop_process(vite_process),
+        )
+        _run_lifecycle_step(
+            lifecycle_errors,
+            "stop_api",
+            lambda: _stop_process(api_process),
+        )
+        if prepared:
+            _run_lifecycle_step(
+                lifecycle_errors,
+                "cleanup",
+                lambda: cleanup(connection, selected_run_id),
+            )
+        _run_lifecycle_step(lifecycle_errors, "close", connection.close)
+        _report_lifecycle_errors(lifecycle_errors)
+
+    if primary_error is not None:
+        for label, error in lifecycle_errors:
+            primary_error.add_note(
+                f"sandbox lifecycle failure: {label}: {type(error).__name__}"
+            )
+        raise primary_error
+
+    signal_error = next(
+        (
+            error
+            for _, error in lifecycle_errors
+            if isinstance(error, (SandboxSignalInterrupt, KeyboardInterrupt))
+        ),
+        None,
+    )
+    if signal_error is not None:
+        raise signal_error
+    if lifecycle_errors and exit_code == 0:
+        return 1
+    return exit_code
 
 
 def main() -> int:

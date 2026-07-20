@@ -4,8 +4,8 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig } from '@playwright/test';
 
 import {
+  buildConfiguredWebServers,
   buildProjects,
-  buildWebServers,
   parsePlaywrightProfile,
   profileNeedsApi,
   profileServiceWorkers,
@@ -31,16 +31,19 @@ const uvicornCommand = profileNeedsApi(profile)
       isExecutable
     })
   : 'python -m uvicorn';
-const webServer = buildWebServers({
-  profile,
-  dashboardPort,
-  apiPort,
-  usePreview: process.env.PLAYWRIGHT_USE_PREVIEW === 'true',
-  reuseExisting: process.env.PLAYWRIGHT_REUSE_EXISTING,
-  ci: Boolean(process.env.CI),
-  checkoutRoot,
-  uvicornCommand
-});
+const webServer = buildConfiguredWebServers(
+  {
+    profile,
+    dashboardPort,
+    apiPort,
+    usePreview: process.env.PLAYWRIGHT_USE_PREVIEW === 'true',
+    reuseExisting: process.env.PLAYWRIGHT_REUSE_EXISTING,
+    ci: Boolean(process.env.CI),
+    checkoutRoot,
+    uvicornCommand
+  },
+  process.env.PLAYWRIGHT_EXTERNAL_SERVERS
+);
 
 export default defineConfig({
   testDir: './tests',
@@ -66,5 +69,5 @@ export default defineConfig({
     serviceWorkers: profileServiceWorkers(profile)
   },
   projects: buildProjects(profile),
-  webServer
+  ...(webServer ? { webServer } : {})
 });

@@ -85,6 +85,10 @@ export function resolveReuseExistingServer(
   return !profileNeedsApi(profile);
 }
 
+export function resolveExternalServers(raw: string | undefined): boolean {
+  return raw === 'true';
+}
+
 type UvicornResolutionOptions = {
   override?: string;
   isExecutable?: (candidate: string) => boolean;
@@ -127,7 +131,7 @@ export type WebServerConfig = {
   timeout: number;
 };
 
-type WebServerOptions = {
+export type WebServerOptions = {
   profile: PlaywrightProfile;
   dashboardPort: number;
   apiPort: number;
@@ -176,4 +180,11 @@ export function buildWebServers(options: WebServerOptions): WebServerConfig[] {
   }
 
   return servers;
+}
+
+export function buildConfiguredWebServers(
+  options: WebServerOptions,
+  externalServersRaw: string | undefined
+): WebServerConfig[] | undefined {
+  return resolveExternalServers(externalServersRaw) ? undefined : buildWebServers(options);
 }
