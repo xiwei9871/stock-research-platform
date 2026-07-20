@@ -91,7 +91,7 @@ class DirectHttpProvider:
         max_retries: int = 2,
         retry_backoff_seconds: float = 0.25,
     ) -> AcquisitionProviderResult:
-        if proxy_mode not in {"direct", "environment_proxy"}:
+        if proxy_mode not in {"direct", "environment_proxy", "explicit_proxy"}:
             raise ResearchProjectV2Error(
                 "Proxy mode is not enabled for direct acquisition",
                 code="RESEARCH_PROJECT_V2_1_ACQUISITION_PROXY_MODE_BLOCKED",
@@ -107,7 +107,17 @@ class DirectHttpProvider:
         operation_started = attempted_at or self.now()
         started_ms = self.monotonic_ms()
         requested_url = candidate.get("normalized_url")
+        parsed_url = urlsplit(requested_url)
+        effective_port = parsed_url.port or (443 if parsed_url.scheme == "https" else 80)
+        blocked_stage = None
+        blocked_reason = None
         if proxy_mode != "direct":
+            blocked_stage = "proxy_selection"
+            blocked_reason = "trusted proxy allowlist is not implemented"
+        elif effective_port not in {80, 443}:
+            blocked_stage = "url_validation"
+            blocked_reason = "non-standard destination port is not allowed"
+        if blocked_stage is not None:
             completed_at = self.now()
             built = build_acquisition_attempt(
                 context=context,
@@ -127,16 +137,16 @@ class DirectHttpProvider:
                 bytes_received=0,
                 retry_count=0,
                 raw_artifact_id=None,
-                diagnostic_summary="Proxy acquisition is fail-closed until a trusted proxy policy is approved.",
+                diagnostic_summary="Acquisition was blocked by the local security policy.",
                 failure_details={
-                    "policy_name": "trusted_proxy_required",
-                    "policy_stage": "proxy_selection",
+                    "policy_name": "trusted_proxy_required" if proxy_mode != "direct" else "standard_web_ports_only",
+                    "policy_stage": blocked_stage,
                     "target_host": urlsplit(requested_url).hostname or "unknown",
                     "resolved_address_class": "unknown",
                     "peer_address_class": "unknown",
                     "redirect_hop": 0,
                     "proxy_mode": proxy_mode,
-                    "blocked_reason": "trusted proxy allowlist is not implemented",
+                    "blocked_reason": blocked_reason,
                 },
             )
             write_acquisition_attempt(built.payload, layout=effective_layout)
@@ -174,11 +184,11 @@ class DirectHttpProvider:
         completed_at = self.now()
         elapsed_ms = max(0, self.monotonic_ms() - started_ms)
         if fetched is None:
-            classified = classify_acquisition_failure(error)
             http_status = None
             if isinstance(error, ResearchProjectV2Error):
                 raw_status = error.details.get("status_code")
                 http_status = raw_status if isinstance(raw_status, int) else None
+            classified = classify_acquisition_failure(error, http_status=http_status)
             built = build_acquisition_attempt(
                 context=context,
                 provider="direct_http",

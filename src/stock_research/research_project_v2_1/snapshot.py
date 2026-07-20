@@ -1358,6 +1358,8 @@ def snapshot_candidate(
                 declared_length=declared_length,
                 byte_count=byte_count,
             )
+        if byte_count == 0:
+            raise _error("FETCH_EMPTY_CONTENT", "response body is empty")
         try:
             os.fsync(raw_temp.fd)
         except OSError as exc:

@@ -92,6 +92,8 @@ def classify_acquisition_failure(
             return _classification("invalid_mime_type", str(error))
         if code == "RESEARCH_PROJECT_V2_1_FETCH_TOO_LARGE":
             return _classification("unsupported_format", str(error))
+        if code == "RESEARCH_PROJECT_V2_1_FETCH_EMPTY_CONTENT":
+            return _classification("empty_content", str(error))
         if code == "RESEARCH_PROJECT_V2_1_DISCOVERY_PROVIDER_FAILED":
             return _classification("search_provider_error", str(error))
 

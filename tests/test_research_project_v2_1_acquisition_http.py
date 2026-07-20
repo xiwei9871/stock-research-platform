@@ -82,6 +82,16 @@ def response(body: bytes = b"%PDF-1.4\nfixture") -> FetchResponse:
     )
 
 
+def error_response(status_code: int) -> FetchResponse:
+    return FetchResponse(
+        status_code=status_code,
+        headers={"Content-Type": "text/html"},
+        chunks=(),
+        url="https://example.com/source.pdf",
+        peer_ip="93.184.216.34",
+    )
+
+
 def test_requests_transport_uses_explicit_session_proxy_mode() -> None:
     direct = RequestsFetchTransport(proxy_mode="direct")
     environment = RequestsFetchTransport(proxy_mode="environment_proxy")
@@ -192,3 +202,76 @@ def test_environment_proxy_mode_is_fail_closed_until_trusted_proxy_design_exists
     assert result.attempt["status"] == "blocked"
     assert result.attempt["failure_code"] == "security_policy_blocked"
     assert result.attempt["failure_details"]["policy_stage"] == "proxy_selection"
+
+
+def test_non_200_response_is_preserved_as_http_error_attempt(tmp_path: Path) -> None:
+    layout = LayeredResearchLayout((tmp_path / "v2_1").resolve())
+    layout.root.mkdir(mode=0o700)
+    provider = DirectHttpProvider(
+        transport=SequenceTransport([error_response(404)]),
+        resolver=Resolver(),
+        now=lambda: "2026-07-20T08:00:01Z",
+        monotonic_ms=iter([0, 1]).__next__,
+    )
+    result = provider.acquire(
+        candidate(), context=context(), layout=layout,
+        attempted_at="2026-07-20T08:00:00Z", max_retries=0,
+    )
+    assert result.attempt["http_status"] == 404
+    assert result.attempt["failure_code"] == "http_error"
+    assert result.artifact is None
+
+
+def test_empty_success_body_is_recorded_as_empty_content(tmp_path: Path) -> None:
+    layout = LayeredResearchLayout((tmp_path / "v2_1").resolve())
+    layout.root.mkdir(mode=0o700)
+    provider = DirectHttpProvider(
+        transport=SequenceTransport([response(b"")]),
+        resolver=Resolver(),
+        now=lambda: "2026-07-20T08:00:01Z",
+        monotonic_ms=iter([0, 1]).__next__,
+    )
+    result = provider.acquire(
+        candidate(), context=context(), layout=layout,
+        attempted_at="2026-07-20T08:00:00Z", max_retries=0,
+    )
+    assert result.attempt["failure_code"] == "empty_content"
+    assert result.artifact is None
+
+
+def test_explicit_proxy_and_non_standard_port_are_blocked_attempts(tmp_path: Path) -> None:
+    layout = LayeredResearchLayout((tmp_path / "v2_1").resolve())
+    layout.root.mkdir(mode=0o700)
+    transport = SequenceTransport([response()])
+    provider = DirectHttpProvider(
+        transport=transport,
+        resolver=Resolver(),
+        now=lambda: "2026-07-20T08:00:01Z",
+        monotonic_ms=iter([0, 1, 2, 3]).__next__,
+    )
+    proxy_result = provider.acquire(
+        candidate(), context=context(), layout=layout,
+        attempted_at="2026-07-20T08:00:00Z", proxy_mode="explicit_proxy",
+        max_retries=0,
+    )
+    port_candidate = candidate()
+    port_candidate["normalized_url"] = "https://example.com:8443/source.pdf"
+    port_candidate["original_url"] = "https://example.com:8443/source.pdf"
+    port_candidate["dedup_key"] = "https://example.com:8443/source.pdf"
+    port_candidate["candidate_id"] = source_candidate_id(
+        port_candidate["normalized_url"], port_candidate["title"]
+    )
+    port_context = AcquisitionContext(
+        project_id=context().project_id,
+        research_version_context=context().research_version_context,
+        requirement_id=context().requirement_id,
+        candidate_id=port_candidate["candidate_id"],
+        provenance=PROVENANCE,
+    )
+    port_result = provider.acquire(
+        port_candidate, context=port_context, layout=layout,
+        attempted_at="2026-07-20T08:00:00Z", max_retries=0,
+    )
+    assert proxy_result.attempt["failure_code"] == "security_policy_blocked"
+    assert port_result.attempt["failure_code"] == "security_policy_blocked"
+    assert transport.calls == 0
