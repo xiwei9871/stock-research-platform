@@ -16,6 +16,17 @@ Phase 1 consists only of the audit and design documents dated 2026-07-20. No ext
 
 Phase 2 requires explicit user approval of the decisions listed at the end of this plan.
 
+### Phase 2 Approval Addendum — 2026-07-20
+
+Phase 2 is approved for **AI Compute PCB only** with these binding corrections:
+
+- version chain: `v0.1.0 baseline → v0.2.0 industry_design → v0.2.1 evidence_snapshot → v0.3.0 review_candidate`;
+- project-level Research Update Event remains deferred; acquisition failure and provenance stay in source/acquisition/evidence records;
+- evidence stance enum is `supports | opposes | neutral | mixed | unclear` and functions are multi-valued from `definition | context | mechanism | quantification | feasibility | supply | demand | qualification | economics | validation | invalidation`;
+- each Pilot keeps an open-discovery requirement and supports reject/merge/split/reclassify/scope_narrow/emergent/no_bottleneck dispositions;
+- AI PCB acquisition order is Stage A system facts, B engineering/process, C supply/effective capacity, D economics/value migration, E counter/substitution;
+- after AI PCB `v0.2.1`, publish an intermediate coverage/scope/schema report and stop. Medical acquisition requires a separate approval after its scope is frozen as framework-level or one/two bounded cohorts.
+
 ## 2. Phase 1 Files
 
 Create only:
@@ -107,19 +118,28 @@ Do not modify current artifacts or production code in Phase 1.
 - Add immutable artifacts only under `artifacts/research_projects/v2_1/evidence/`
 - Do not modify project version during collection
 
-- [ ] Execute one requirement at a time using its approved Search Plan.
+- [ ] Execute requirements in Stage A→B→C→D→E order, one requirement at a time using its approved Search Plan.
 - [ ] Prioritize primary technical/engineering/customer/capacity evidence before professional secondary sources.
 - [ ] Store inaccessible-source outcomes in source-candidate/acquisition audit status; do not fabricate locators or invent research events.
 - [ ] Normalize documents and create assessment only for exact target/locator.
 - [ ] Build source relationships before counting independence.
 - [ ] Complete counter-evidence search for every bottleneck.
+- [ ] Execute the open-discovery requirement and record emergent/no-bottleneck outcomes without forcing them into the original eight hypotheses.
 - [ ] Stop after coverage conditions are met or the requirement stop condition triggers.
 - [ ] Run audit and coverage report; no bottleneck status may become confirmed automatically.
 - [ ] Commit evidence in small, requirement-attributed batches.
 
+### Task 5A: Publish AI PCB Evidence Snapshot And Hard Checkpoint
+
+- [ ] Create immutable `v0.2.1 evidence_snapshot` with parent `v0.2.0`; do not overwrite design objects.
+- [ ] Incorporate evidence/assessment IDs, failed acquisitions, independence clusters, freshness, conflicts, coverage and unresolved gaps.
+- [ ] Generate stable-ID diff for `v0.2.0 → v0.2.1`.
+- [ ] Produce acquisition coverage, primary-source coverage, independent clusters, inaccessible evidence, quality distribution, bottleneck coverage, unexpected findings, scope audit and schema-adjustment recommendation.
+- [ ] Stop and report. Do not start Medical until the user approves the checkpoint and freezes Medical scope.
+
 ### Task 6: Repeat Design And Acquisition For Medical Device
 
-Start only after AI PCB first-round coverage review is accepted.
+Start only after AI PCB `v0.2.1` checkpoint is accepted and Medical scope is explicitly frozen.
 
 **Files:**
 
@@ -167,7 +187,7 @@ Start only after AI PCB first-round coverage review is accepted.
 
 ### Task 9: Publish Review Candidate Versions
 
-- [ ] Create AI PCB `v0.3.0 review_candidate` from `v0.2.0`.
+- [ ] Create AI PCB `v0.3.0 review_candidate` from `v0.2.1` only after Phase 3 causal/value/bottleneck review.
 - [ ] Create Medical `v0.3.0 review_candidate` only after its evidence review.
 - [ ] Keep `incorporated_event_ids=[]` unless a separately approved event stream has been implemented; record all evidence/assessment references directly.
 - [ ] Calculate canonical hash and append immutable manifest rows.
