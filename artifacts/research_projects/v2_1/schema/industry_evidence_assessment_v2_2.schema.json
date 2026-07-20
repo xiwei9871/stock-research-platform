@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "industry_evidence_assessment_v2_2.schema.json",
+  "type": "object",
+  "required": ["schema_version", "artifact_kind", "industry_evidence_assessment", "content_hash"],
+  "properties": {
+    "schema_version": {"const": "2.2.0"},
+    "artifact_kind": {"const": "industry_evidence_assessment"},
+    "industry_evidence_assessment": {"$ref": "definitions_v2_2.schema.json#/$defs/industry_evidence_assessment"},
+    "content_hash": {"$ref": "definitions_v2_1.schema.json#/$defs/sha256"}
+  },
+  "additionalProperties": false
+}

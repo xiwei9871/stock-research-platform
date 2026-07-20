@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "industry_research_version_v2_2.schema.json",
+  "type": "object",
+  "required": ["schema_version", "artifact_kind", "version_id", "project_id", "semantic_version", "parent_version_id", "creation_stage", "created_at", "created_by", "change_summary", "change_reason", "incorporated_event_ids", "content_hash", "snapshot"],
+  "properties": {
+    "schema_version": {"const": "2.2.0"},
+    "artifact_kind": {"const": "industry_research_version"},
+    "version_id": {"type": "string", "minLength": 1},
+    "project_id": {"type": "string", "minLength": 1},
+    "semantic_version": {"$ref": "definitions_v2_1.schema.json#/$defs/semantic_version"},
+    "parent_version_id": {"type": ["string", "null"]},
+    "creation_stage": {"enum": ["research_design", "evidence_snapshot", "review_candidate", "publication_snapshot"]},
+    "created_at": {"type": "string", "format": "date-time"},
+    "created_by": {"type": "string", "minLength": 1},
+    "change_summary": {"type": "string", "minLength": 1},
+    "change_reason": {"type": "string", "minLength": 1},
+    "incorporated_event_ids": {"type": "array", "maxItems": 0},
+    "content_hash": {"$ref": "definitions_v2_1.schema.json#/$defs/sha256"},
+    "snapshot": {
+      "type": "object",
+      "required": ["research_layer", "project_lifecycle_state", "evidence_stage", "conclusion_status", "investment_status", "scope", "router_decision", "questions", "question_tree_nodes", "claims", "claim_relations", "evidence_requirements", "references", "evidence_assessments", "causal_nodes", "causal_edges", "validation_metrics", "invalidation_conditions", "upstream_research_refs", "search_plans", "source_candidates", "source_relationships", "evidence_artifacts", "normalized_documents", "industry_evidence_assessments", "conflict_summaries", "industry_model_nodes", "industry_model_edges", "bottleneck_hypotheses", "value_migration_analyses", "bottleneck_readiness_reviews"],
+      "properties": {
+        "research_layer": {"const": "industry_research"},
+        "project_lifecycle_state": {"$ref": "definitions_v2_1.schema.json#/$defs/project_lifecycle"},
+        "evidence_stage": {"$ref": "definitions_v2_1.schema.json#/$defs/evidence_stage"},
+        "conclusion_status": {"$ref": "definitions_v2_1.schema.json#/$defs/conclusion_status"},
+        "investment_status": {"$ref": "definitions_v2_1.schema.json#/$defs/industry_investment_status"},
+        "scope": {"$ref": "definitions_v2_1.schema.json#/$defs/scope"},
+        "router_decision": {"$ref": "definitions_v2_2.schema.json#/$defs/router_decision"},
+        "questions": {"type": "array", "items": {"$ref": "definitions_v2_1.schema.json#/$defs/question"}},
+        "question_tree_nodes": {"type": "array", "items": {"$ref": "definitions_v2_1.schema.json#/$defs/question_tree_node"}},
+        "claims": {"type": "array", "items": {"$ref": "definitions_v2_1.schema.json#/$defs/claim"}},
+        "claim_relations": {"type": "array", "items": {"$ref": "definitions_v2_1.schema.json#/$defs/claim_relation"}},
+        "evidence_requirements": {"type": "array", "items": {"$ref": "definitions_v2_2.schema.json#/$defs/industry_evidence_requirement"}},
+        "references": {"type": "array", "items": {"$ref": "definitions_v2_1.schema.json#/$defs/reference"}},
+        "evidence_assessments": {"type": "array", "items": {"$ref": "definitions_v2_1.schema.json#/$defs/industry_common_evidence_assessment"}},
+        "causal_nodes": {"type": "array", "items": {"$ref": "definitions_v2_1.schema.json#/$defs/industry_causal_node"}},
+        "causal_edges": {"type": "array", "items": {"$ref": "definitions_v2_2.schema.json#/$defs/causal_edge"}},
+        "validation_metrics": {"type": "array", "items": {"$ref": "definitions_v2_2.schema.json#/$defs/industry_validation_metric"}},
+        "invalidation_conditions": {"type": "array", "items": {"$ref": "definitions_v2_2.schema.json#/$defs/industry_invalidation_condition"}},
+        "upstream_research_refs": {"type": "array", "items": {"$ref": "definitions_v2_1.schema.json#/$defs/industry_upstream_research_ref"}},
+        "search_plans": {"type": "array", "items": {"$ref": "definitions_v2_1.schema.json#/$defs/industry_search_plan"}},
+        "source_candidates": {"type": "array", "items": {"$ref": "definitions_v2_2.schema.json#/$defs/industry_source_candidate"}},
+        "source_relationships": {"type": "array", "items": {"$ref": "definitions_v2_1.schema.json#/$defs/source_relationship"}},
+        "evidence_artifacts": {"type": "array", "items": {"$ref": "definitions_v2_1.schema.json#/$defs/industry_evidence_artifact"}},
+        "normalized_documents": {"type": "array", "items": {"$ref": "definitions_v2_1.schema.json#/$defs/normalized_document"}},
+        "industry_evidence_assessments": {"type": "array", "items": {"$ref": "definitions_v2_2.schema.json#/$defs/industry_evidence_assessment"}},
+        "conflict_summaries": {"type": "array", "items": {"$ref": "definitions_v2_1.schema.json#/$defs/industry_conflict_summary"}},
+        "industry_model_nodes": {"type": "array", "items": {"$ref": "definitions_v2_2.schema.json#/$defs/industry_model_node"}},
+        "industry_model_edges": {"type": "array", "items": {"$ref": "definitions_v2_2.schema.json#/$defs/industry_model_edge"}},
+        "bottleneck_hypotheses": {"type": "array", "items": {"$ref": "definitions_v2_2.schema.json#/$defs/bottleneck_hypothesis"}},
+        "value_migration_analyses": {"type": "array", "items": {"$ref": "definitions_v2_2.schema.json#/$defs/value_migration_analysis"}},
+        "bottleneck_readiness_reviews": {"type": "array", "items": {"$ref": "definitions_v2_2.schema.json#/$defs/bottleneck_readiness_review"}}
+      },
+      "additionalProperties": false
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"creation_stage": {"const": "research_design"}}, "required": ["creation_stage"]},
+      "then": {"properties": {"snapshot": {"properties": {"project_lifecycle_state": {"const": "research_ready"}, "evidence_stage": {"const": "requirements_defined"}, "conclusion_status": {"const": "unavailable"}, "investment_status": {"const": "not_assessed"}, "evidence_assessments": {"maxItems": 0}, "industry_evidence_assessments": {"maxItems": 0}, "bottleneck_readiness_reviews": {"maxItems": 0}}}}}
+    },
+    {
+      "if": {"properties": {"creation_stage": {"const": "evidence_snapshot"}}, "required": ["creation_stage"]},
+      "then": {"properties": {"snapshot": {"properties": {"conclusion_status": {"const": "unavailable"}, "investment_status": {"const": "not_assessed"}, "bottleneck_readiness_reviews": {"maxItems": 0}}}}}
+    }
+  ],
+  "additionalProperties": false
+}

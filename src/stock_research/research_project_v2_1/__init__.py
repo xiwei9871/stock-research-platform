@@ -12,6 +12,7 @@ from stock_research.research_project_v2_1.loader import (
 from stock_research.research_project_v2_1.schema import validate_v2_1_schema_payload
 from stock_research.research_project_v2_1.semantic import validate_industry_version_semantics
 from stock_research.research_project_v2_1.search_plan import validate_search_plans
+from stock_research.research_project_v2_1.diff import diff_industry_versions
 
 __all__ = [
     "LayeredResearchLayout",
@@ -26,4 +27,5 @@ __all__ = [
     "validate_industry_version_semantics",
     "validate_search_plans",
     "validate_v2_1_schema_payload",
+    "diff_industry_versions",
 ]

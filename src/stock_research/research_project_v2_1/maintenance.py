@@ -17,6 +17,7 @@ from stock_research.research_project_v2_1.lineage import (
     collect_lineage_version_ids,
 )
 from stock_research.research_project_v2_1.loader import (
+    _industry_version_schema_name,
     layered_storage_lock,
     list_layered_project_slugs,
     load_industry_version,
@@ -337,7 +338,11 @@ def _rebuild_layered_index_unlocked(
                     raise _error("content hash mismatch", path=version_path, project=slug, version=semantic_version)
                 version = dict(version)
                 version["content_hash"] = calculated_hash
-                validate_v2_1_schema_payload("industry_research_version_v2_1", version, layout=selected)
+                validate_v2_1_schema_payload(
+                    _industry_version_schema_name(version),
+                    version,
+                    layout=selected,
+                )
                 validate_industry_version_semantics(version)
                 targets.append((version_path, _json_bytes(version)))
                 planned_versions.append(f"{slug}@{semantic_version}")

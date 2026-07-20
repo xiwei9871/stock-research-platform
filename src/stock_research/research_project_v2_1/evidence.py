@@ -797,13 +797,25 @@ def build_conflict_summaries(
 
 def _validated_wrapper(assessment: dict[str, Any]) -> tuple[dict[str, Any], bytes]:
     copied = deepcopy(assessment)
+    is_v2_2 = "evidence_stance" in copied
+    locator = copied.get("locator")
+    locator_key = (
+        json.dumps(
+            locator,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        if isinstance(locator, dict)
+        else str(locator)
+    )
     expected_id = sha256(
-        f"{copied.get('requirement_id')}\n{copied.get('artifact_id')}\n{copied.get('locator')}".encode()
+        f"{copied.get('requirement_id')}\n{copied.get('artifact_id')}\n{locator_key}".encode()
     ).hexdigest()[:24]
     if copied.get("assessment_id") != f"industry_evidence_assessment:{expected_id}":
         raise _immutability("assessment_id mismatch")
     wrapper = {
-        "schema_version": "2.1.0",
+        "schema_version": "2.2.0" if is_v2_2 else "2.1.0",
         "artifact_kind": "industry_evidence_assessment",
         "industry_evidence_assessment": copied,
     }
@@ -811,7 +823,12 @@ def _validated_wrapper(assessment: dict[str, Any]) -> tuple[dict[str, Any], byte
     # a self-excluding content hash; no persisted assessment migration exists.
     wrapper["content_hash"] = content_sha256(wrapper)
     try:
-        validate_v2_1_schema_payload("industry_evidence_assessment_v2_1", wrapper)
+        validate_v2_1_schema_payload(
+            "industry_evidence_assessment_v2_2"
+            if is_v2_2
+            else "industry_evidence_assessment_v2_1",
+            wrapper,
+        )
     except ResearchProjectV2Error as exc:
         raise _invalid("assessment does not satisfy schema", path=exc.details.get("path")) from exc
     if wrapper["content_hash"] != content_sha256(

@@ -505,6 +505,55 @@ def _read_json_object(
     return payload
 
 
+def _industry_version_schema_name(payload: dict[str, Any]) -> str:
+    schema_version = payload.get("schema_version")
+    if schema_version == "2.1.0":
+        return "industry_research_version_v2_1"
+    if schema_version == "2.2.0":
+        return "industry_research_version_v2_2"
+    raise _error(
+        "RESEARCH_PROJECT_V2_1_SCHEMA_NOT_FOUND",
+        "Unsupported layered industry research schema version",
+        schema_version=schema_version,
+    )
+
+
+def _read_industry_version_object(
+    path: Path,
+    *,
+    layout: LayeredResearchLayout,
+) -> dict[str, Any]:
+    if not _is_safe_managed_path(path, layout):
+        raise _error(
+            "RESEARCH_PROJECT_V2_1_STORAGE_ERROR",
+            "Unsafe layered research storage path",
+            path=str(path),
+            reason="unsafe managed path",
+        )
+    try:
+        payload = json.loads(_read_managed_bytes(path, layout).decode("utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise _error(
+            "RESEARCH_PROJECT_V2_1_READ_ERROR",
+            "Layered research JSON is missing, unreadable, or invalid",
+            path=str(path),
+            reason=type(exc).__name__,
+        ) from exc
+    if not isinstance(payload, dict):
+        raise _error(
+            "RESEARCH_PROJECT_V2_1_READ_ERROR",
+            "Layered research JSON must contain an object",
+            path=str(path),
+            reason="payload is not an object",
+        )
+    validate_v2_1_schema_payload(
+        _industry_version_schema_name(payload),
+        payload,
+        layout=layout,
+    )
+    return payload
+
+
 def _require_identity_path(project_slug: str, layout: LayeredResearchLayout) -> Path:
     if not _PROJECT_SLUG_PATTERN.fullmatch(project_slug):
         raise _project_not_found(project_slug)
@@ -790,7 +839,7 @@ def _read_verified_industry_version_unlocked(
     path = _version_path(project_slug, semantic_version, selected)
     if not _is_safe_managed_path(path, selected) or not path.is_file():
         raise _version_not_found(project_slug, semantic_version)
-    version = _read_json_object(path, "industry_research_version_v2_1", layout=selected)
+    version = _read_industry_version_object(path, layout=selected)
     _verify_manifest_and_hash(
         project_slug,
         semantic_version,

@@ -16,6 +16,8 @@ from stock_research.research_project_v2_1.discovery import (
     discover_sources,
     write_discovery_batch,
 )
+from stock_research.research_project_v2_1.coverage import summarize_evidence_coverage
+from stock_research.research_project_v2_1.diff import diff_industry_versions
 from stock_research.research_project_v2_1.evidence import (
     validate_industry_evidence_assessment,
     write_industry_evidence_assessment,
@@ -119,6 +121,17 @@ def _parser() -> argparse.ArgumentParser:
     )
     audit.add_argument("--project", required=True)
     audit.add_argument("--version", required=True)
+
+    diff = commands.add_parser("diff", help="Diff two direct layered versions by stable ID.")
+    diff.add_argument("--project", required=True)
+    diff.add_argument("--from", dest="from_version", required=True)
+    diff.add_argument("--to", dest="to_version", required=True)
+
+    coverage = commands.add_parser(
+        "coverage", help="Summarize evidence acquisition and bottleneck coverage."
+    )
+    coverage.add_argument("--project", required=True)
+    coverage.add_argument("--version", required=True)
 
     rebuild = commands.add_parser(
         "rebuild-index", help="Rebuild only the v2.1 index generation."
@@ -691,6 +704,13 @@ def _dispatch(
         return _assessment(args)
     if args.command == "audit":
         return _audit(args, layout)
+    if args.command == "diff":
+        before = load_industry_version(args.project, args.from_version, layout=layout)
+        after = load_industry_version(args.project, args.to_version, layout=layout)
+        return {"status": "pass", **diff_industry_versions(before, after)}
+    if args.command == "coverage":
+        version = load_industry_version(args.project, args.version, layout=layout)
+        return {"status": "pass", **summarize_evidence_coverage(version)}
     if args.command == "rebuild-index":
         return {"status": "pass", **rebuild_layered_index(args.write, layout=layout)}
     raise AssertionError(f"Unhandled command: {args.command}")

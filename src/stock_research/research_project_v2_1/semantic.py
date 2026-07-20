@@ -47,10 +47,21 @@ _COMMON_ID_FIELDS = {
     "invalidation_conditions": "condition_id",
 }
 
+_R2B_ID_FIELDS = {
+    "industry_model_nodes": "industry_model_node_id",
+    "industry_model_edges": "industry_model_edge_id",
+    "bottleneck_hypotheses": "bottleneck_hypothesis_id",
+    "value_migration_analyses": "value_migration_analysis_id",
+    "bottleneck_readiness_reviews": "bottleneck_readiness_review_id",
+}
+
 _TARGET_COLLECTIONS = {
     "research_question": ("questions", "question_id"),
     "research_claim": ("claims", "claim_id"),
     "causal_edge": ("causal_edges", "causal_edge_id"),
+    "industry_model_node": ("industry_model_nodes", "industry_model_node_id"),
+    "bottleneck_hypothesis": ("bottleneck_hypotheses", "bottleneck_hypothesis_id"),
+    "value_migration_analysis": ("value_migration_analyses", "value_migration_analysis_id"),
 }
 
 _MEDIA_EXTENSIONS = {
@@ -103,6 +114,48 @@ def common_r1_projection(version: dict[str, Any]) -> dict[str, Any]:
         snapshot = projected["snapshot"]
         for field in R2A_SNAPSHOT_FIELDS:
             snapshot.pop(field, None)
+        if version.get("schema_version") == "2.2.0":
+            r1_target_types = {
+                "research_project",
+                "research_question",
+                "research_claim",
+                "causal_edge",
+            }
+            for collection in (
+                "evidence_requirements",
+                "evidence_assessments",
+                "validation_metrics",
+                "invalidation_conditions",
+            ):
+                snapshot[collection] = [
+                    item
+                    for item in snapshot[collection]
+                    if item.get("target_type") in r1_target_types
+                ]
+            retained_metrics = {
+                item["metric_id"] for item in snapshot["validation_metrics"]
+            }
+            retained_invalidations = {
+                item["condition_id"]
+                for item in snapshot["invalidation_conditions"]
+            }
+            for claim in snapshot["claims"]:
+                claim["validation_metric_ids"] = [
+                    item
+                    for item in claim["validation_metric_ids"]
+                    if item in retained_metrics
+                ]
+                claim["invalidation_condition_ids"] = [
+                    item
+                    for item in claim["invalidation_condition_ids"]
+                    if item in retained_invalidations
+                ]
+            for edge in snapshot["causal_edges"]:
+                edge["validation_metric_ids"] = [
+                    item
+                    for item in edge["validation_metric_ids"]
+                    if item in retained_metrics
+                ]
         snapshot["company_capture_assessments"] = []
         validate_r1_version_semantics(projected)
     except (KeyError, TypeError, IndexError) as exc:
@@ -112,8 +165,8 @@ def common_r1_projection(version: dict[str, Any]) -> dict[str, Any]:
 
 def _require_unique_ids(snapshot: dict[str, Any]) -> None:
     seen: dict[str, str] = {}
-    for collection, id_field in _COMMON_ID_FIELDS.items():
-        for item in snapshot[collection]:
+    for collection, id_field in {**_COMMON_ID_FIELDS, **_R2B_ID_FIELDS}.items():
+        for item in snapshot.get(collection, []):
             seen[item[id_field]] = collection
     for collection, id_field in _NEW_ID_FIELDS.items():
         for item in snapshot[collection]:
@@ -244,7 +297,7 @@ def _build_validation_context(
     target_ids_by_type = {"research_project": {version["project_id"]}}
     for target_type, (collection, id_field) in _TARGET_COLLECTIONS.items():
         target_ids_by_type[target_type] = {
-            item[id_field] for item in snapshot[collection]
+            item[id_field] for item in snapshot.get(collection, [])
         }
 
     locators_by_document: dict[str, dict[str, dict[str, Any]]] = {}
@@ -450,8 +503,12 @@ def _validate_assessments_relationships_and_conflicts(
                 id=source_id,
                 referenced_id=assessment["artifact_id"],
             )
+        locator = assessment["locator"]
+        locator_id = (
+            locator.get("locator_value") if isinstance(locator, dict) else locator
+        )
         _require_reference(
-            assessment["locator"],
+            locator_id,
             context.locators_by_document[assessment["normalized_document_id"]],
             collection="industry_evidence_assessments",
             field="locator",
@@ -500,6 +557,190 @@ def _validate_assessments_relationships_and_conflicts(
                 )
 
 
+def _validate_r2b_semantics(
+    version: dict[str, Any],
+    snapshot: dict[str, Any],
+    context: _ValidationContext,
+) -> None:
+    if version.get("schema_version") != "2.2.0":
+        return
+
+    nodes = {
+        item["industry_model_node_id"]: item
+        for item in snapshot["industry_model_nodes"]
+    }
+    edges = {
+        item["industry_model_edge_id"]: item
+        for item in snapshot["industry_model_edges"]
+    }
+    causal_nodes = {
+        item["causal_node_id"]: item for item in snapshot["causal_nodes"]
+    }
+    causal_edges = {
+        item["causal_edge_id"]: item for item in snapshot["causal_edges"]
+    }
+    claims = {item["claim_id"] for item in snapshot["claims"]}
+    requirements = {
+        item["requirement_id"] for item in snapshot["evidence_requirements"]
+    }
+    metrics = {item["metric_id"] for item in snapshot["validation_metrics"]}
+    invalidations = {
+        item["condition_id"] for item in snapshot["invalidation_conditions"]
+    }
+    bottlenecks = {
+        item["bottleneck_hypothesis_id"]: item
+        for item in snapshot["bottleneck_hypotheses"]
+    }
+
+    for node_id, node in nodes.items():
+        for field in ("input_ids", "output_ids"):
+            for referenced_id in node[field]:
+                _require_reference(
+                    referenced_id,
+                    nodes,
+                    collection="industry_model_nodes",
+                    field=field,
+                    source_id=node_id,
+                )
+    for edge_id, edge in edges.items():
+        for field in (
+            "from_industry_model_node_id",
+            "to_industry_model_node_id",
+        ):
+            _require_reference(
+                edge[field],
+                nodes,
+                collection="industry_model_edges",
+                field=field,
+                source_id=edge_id,
+            )
+        for field, known in (
+            ("supporting_claim_ids", claims),
+            ("counter_claim_ids", claims),
+        ):
+            for referenced_id in edge[field]:
+                _require_reference(
+                    referenced_id,
+                    known,
+                    collection="industry_model_edges",
+                    field=field,
+                    source_id=edge_id,
+                )
+
+    for bottleneck_id, bottleneck in bottlenecks.items():
+        _require_reference(
+            bottleneck["target_node_or_process_id"],
+            nodes,
+            collection="bottleneck_hypotheses",
+            field="target_node_or_process_id",
+            source_id=bottleneck_id,
+        )
+        for parameter_id in bottleneck["affected_system_parameter_ids"]:
+            _require_reference(
+                parameter_id,
+                causal_nodes,
+                collection="bottleneck_hypotheses",
+                field="affected_system_parameter_ids",
+                source_id=bottleneck_id,
+            )
+            if causal_nodes[parameter_id]["node_kind"] != "system_parameter":
+                raise _error(
+                    "Bottleneck affected parameter must reference a system_parameter causal node",
+                    collection="bottleneck_hypotheses",
+                    field="affected_system_parameter_ids",
+                    id=bottleneck_id,
+                    referenced_id=parameter_id,
+                )
+        for field, known in (
+            ("impact_path_edge_ids", causal_edges),
+            ("supporting_claim_ids", claims),
+            ("counter_claim_ids", claims),
+            ("evidence_requirement_ids", requirements),
+            ("validation_metric_ids", metrics),
+            ("invalidation_condition_ids", invalidations),
+            ("related_bottleneck_ids", bottlenecks),
+        ):
+            for referenced_id in bottleneck[field]:
+                _require_reference(
+                    referenced_id,
+                    known,
+                    collection="bottleneck_hypotheses",
+                    field=field,
+                    source_id=bottleneck_id,
+                )
+
+    for analysis in snapshot["value_migration_analyses"]:
+        source_id = analysis["value_migration_analysis_id"]
+        _require_reference(
+            analysis["bottleneck_hypothesis_id"],
+            bottlenecks,
+            collection="value_migration_analyses",
+            field="bottleneck_hypothesis_id",
+            source_id=source_id,
+        )
+        for field in (
+            "affected_node_ids",
+            "beneficiary_node_ids",
+            "disadvantaged_node_ids",
+        ):
+            for referenced_id in analysis[field]:
+                _require_reference(
+                    referenced_id,
+                    nodes,
+                    collection="value_migration_analyses",
+                    field=field,
+                    source_id=source_id,
+                )
+
+    active_open = [
+        item
+        for item in snapshot["evidence_requirements"]
+        if item["lifecycle_status"] == "active" and item["open_discovery"]
+    ]
+    if not active_open:
+        raise _error(
+            "R2B industry research requires an active open-discovery evidence requirement",
+            collection="evidence_requirements",
+            reason="open discovery requirement missing",
+        )
+
+    for requirement in snapshot["evidence_requirements"]:
+        target_type = requirement["target_type"]
+        _require_reference(
+            requirement["target_id"],
+            context.target_ids_by_type[target_type],
+            collection="evidence_requirements",
+            field="target_id",
+            source_id=requirement["requirement_id"],
+        )
+
+    for collection, id_field in (
+        ("validation_metrics", "metric_id"),
+        ("invalidation_conditions", "condition_id"),
+    ):
+        for item in snapshot[collection]:
+            _require_reference(
+                item["target_id"],
+                context.target_ids_by_type[item["target_type"]],
+                collection=collection,
+                field="target_id",
+                source_id=item[id_field],
+            )
+
+    if version["creation_stage"] in {"research_design", "evidence_snapshot"}:
+        forbidden = [
+            item["bottleneck_hypothesis_id"]
+            for item in snapshot["bottleneck_hypotheses"]
+            if item["status"] == "confirmed_for_current_scope"
+        ]
+        if forbidden:
+            raise _error(
+                "R2B design/evidence snapshots cannot confirm bottlenecks",
+                collection="bottleneck_hypotheses",
+                ids=forbidden,
+            )
+
+
 def validate_industry_version_semantics(version: dict[str, Any]) -> None:
     try:
         common_r1_projection(version)
@@ -513,6 +754,7 @@ def validate_industry_version_semantics(version: dict[str, Any]) -> None:
         _validate_assessments_relationships_and_conflicts(
             snapshot, context
         )
+        _validate_r2b_semantics(version, snapshot, context)
     except ResearchProjectV2Error:
         raise
     except (KeyError, TypeError, IndexError) as exc:

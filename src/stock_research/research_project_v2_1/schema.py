@@ -17,6 +17,8 @@ SCHEMA_FILES = {
     "normalized_document_v2_1": "normalized_document_v2_1.schema.json",
     "industry_evidence_assessment_v2_1": "industry_evidence_assessment_v2_1.schema.json",
     "research_project_index_v2_1": "research_project_index_v2_1.schema.json",
+    "industry_research_version_v2_2": "industry_research_version_v2_2.schema.json",
+    "industry_evidence_assessment_v2_2": "industry_evidence_assessment_v2_2.schema.json",
 }
 
 
@@ -44,10 +46,18 @@ def validate_v2_1_schema_payload(
         encoding="utf-8"
     ) as handle:
         definitions = json.load(handle)
+    definitions_v2_2_path = effective_layout.schema_dir / "definitions_v2_2.schema.json"
+    definitions_v2_2 = None
+    if definitions_v2_2_path.exists():
+        with definitions_v2_2_path.open(encoding="utf-8") as handle:
+            definitions_v2_2 = json.load(handle)
 
+    store = {"definitions_v2_1.schema.json": definitions}
+    if definitions_v2_2 is not None:
+        store["definitions_v2_2.schema.json"] = definitions_v2_2
     resolver = RefResolver.from_schema(
         schema,
-        store={"definitions_v2_1.schema.json": definitions},
+        store=store,
     )
     validator = Draft202012Validator(
         schema,

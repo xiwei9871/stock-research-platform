@@ -1,0 +1,192 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "definitions_v2_2.schema.json",
+  "$defs": {
+    "research_method": {
+      "enum": [
+        "system_architecture",
+        "manufacturing_process",
+        "complex_system",
+        "engineering_scale_up",
+        "technology_route",
+        "infrastructure_economics",
+        "lifecycle",
+        "regulation",
+        "platform_ecosystem",
+        "commercialization",
+        "constraint_analysis",
+        "value_migration"
+      ]
+    },
+    "router_decision": {
+      "type": "object",
+      "required": ["primary_method", "secondary_methods", "routing_reasons", "required_research_modules", "excluded_modules", "confidence", "manual_override", "override_reason", "decided_by", "decided_at"],
+      "properties": {
+        "primary_method": {"$ref": "#/$defs/research_method"},
+        "secondary_methods": {"type": "array", "items": {"$ref": "#/$defs/research_method"}, "uniqueItems": true},
+        "routing_reasons": {"$ref": "definitions_v2_1.schema.json#/$defs/string_array"},
+        "required_research_modules": {"$ref": "definitions_v2_1.schema.json#/$defs/string_array"},
+        "excluded_modules": {"$ref": "definitions_v2_1.schema.json#/$defs/string_array"},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "manual_override": {"type": "boolean"},
+        "override_reason": {"type": ["string", "null"]},
+        "decided_by": {"type": "string", "minLength": 1},
+        "decided_at": {"type": "string", "format": "date-time"}
+      },
+      "additionalProperties": false
+    },
+    "industry_target_type": {
+      "enum": ["research_project", "research_question", "research_claim", "causal_edge", "industry_model_node", "bottleneck_hypothesis", "value_migration_analysis"]
+    },
+    "industry_evidence_requirement": {
+      "type": "object",
+      "required": ["requirement_id", "target_type", "target_id", "question_to_resolve", "requirement_type", "required_source_classes", "required_independence", "required_freshness", "required_scope", "minimum_coverage", "conflict_search_required", "primary_source_required", "collection_status", "satisfaction_status", "geography_scope", "product_scope", "stop_conditions", "required_evidence_stances", "required_evidence_functions", "lifecycle_status", "supersedes_requirement_id", "open_discovery", "provenance"],
+      "properties": {
+        "requirement_id": {"type": "string", "minLength": 1},
+        "target_type": {"$ref": "#/$defs/industry_target_type"},
+        "target_id": {"type": "string", "minLength": 1},
+        "question_to_resolve": {"type": "string", "minLength": 1},
+        "requirement_type": {"type": "string", "minLength": 1},
+        "required_source_classes": {"$ref": "definitions_v2_1.schema.json#/$defs/string_array"},
+        "required_independence": {"type": "string", "minLength": 1},
+        "required_freshness": {"type": "string", "minLength": 1},
+        "required_scope": {"type": "string", "minLength": 1},
+        "minimum_coverage": {"type": "integer", "minimum": 0},
+        "conflict_search_required": {"type": "boolean"},
+        "primary_source_required": {"type": "boolean"},
+        "collection_status": {"enum": ["not_started", "collecting", "blocked", "partially_covered", "covered", "stale"]},
+        "satisfaction_status": {"enum": ["unsatisfied", "partial", "satisfied", "blocked", "stale"]},
+        "geography_scope": {"$ref": "definitions_v2_1.schema.json#/$defs/string_array"},
+        "product_scope": {"type": "string", "minLength": 1},
+        "stop_conditions": {"$ref": "definitions_v2_1.schema.json#/$defs/string_array"},
+        "required_evidence_stances": {"type": "array", "items": {"enum": ["supports", "opposes", "neutral", "mixed", "unclear"]}, "uniqueItems": true},
+        "required_evidence_functions": {"type": "array", "items": {"enum": ["definition", "context", "mechanism", "quantification", "feasibility", "supply", "demand", "qualification", "economics", "validation", "invalidation"]}, "uniqueItems": true},
+        "lifecycle_status": {"enum": ["active", "retired", "superseded", "removed_from_scope"]},
+        "supersedes_requirement_id": {"type": ["string", "null"]},
+        "open_discovery": {"type": "boolean"},
+        "provenance": {"$ref": "definitions_v2_1.schema.json#/$defs/provenance"}
+      },
+      "additionalProperties": false
+    },
+    "industry_model_node": {
+      "type": "object",
+      "required": ["industry_model_node_id", "node_kind", "title", "scope", "description", "input_ids", "output_ids", "key_parameter_names", "lifecycle_status", "provenance"],
+      "properties": {
+        "industry_model_node_id": {"type": "string", "minLength": 1},
+        "node_kind": {"enum": ["system_component", "manufacturing_process", "material", "equipment", "qualification", "lifecycle_stage", "infrastructure", "substitution_boundary"]},
+        "title": {"type": "string", "minLength": 1},
+        "scope": {"type": "string", "minLength": 1},
+        "description": {"type": "string", "minLength": 1},
+        "input_ids": {"$ref": "definitions_v2_1.schema.json#/$defs/string_array"},
+        "output_ids": {"$ref": "definitions_v2_1.schema.json#/$defs/string_array"},
+        "key_parameter_names": {"$ref": "definitions_v2_1.schema.json#/$defs/string_array"},
+        "lifecycle_status": {"$ref": "definitions_v2_1.schema.json#/$defs/object_lifecycle"},
+        "provenance": {"$ref": "definitions_v2_1.schema.json#/$defs/provenance"}
+      },
+      "additionalProperties": false
+    },
+    "industry_model_edge": {
+      "type": "object",
+      "required": ["industry_model_edge_id", "from_industry_model_node_id", "to_industry_model_node_id", "relation_type", "dependency_criticality", "flow_or_dependency_text", "time_lag", "boundary_condition", "supporting_claim_ids", "counter_claim_ids", "lifecycle_status", "provenance"],
+      "properties": {
+        "industry_model_edge_id": {"type": "string", "minLength": 1},
+        "from_industry_model_node_id": {"type": "string", "minLength": 1},
+        "to_industry_model_node_id": {"type": "string", "minLength": 1},
+        "relation_type": {"enum": ["contains", "feeds", "depends_on", "transforms", "qualifies", "enables", "constrains", "substitutes", "flows_to"]},
+        "dependency_criticality": {"enum": ["low", "medium", "high", "unknown"]},
+        "flow_or_dependency_text": {"type": "string", "minLength": 1},
+        "time_lag": {"type": ["string", "null"]},
+        "boundary_condition": {"type": ["string", "null"]},
+        "supporting_claim_ids": {"$ref": "definitions_v2_1.schema.json#/$defs/string_array"},
+        "counter_claim_ids": {"$ref": "definitions_v2_1.schema.json#/$defs/string_array"},
+        "lifecycle_status": {"$ref": "definitions_v2_1.schema.json#/$defs/object_lifecycle"},
+        "provenance": {"$ref": "definitions_v2_1.schema.json#/$defs/provenance"}
+      },
+      "additionalProperties": false
+    },
+    "causal_edge": {
+      "type": "object",
+      "required": ["causal_edge_id", "from_causal_node_id", "to_causal_node_id", "relation_type", "mechanism_text", "effect_polarity", "strength", "confidence", "time_lag", "boundary_condition", "feedback_loop_id", "supporting_claim_ids", "counter_claim_ids", "validation_metric_ids", "lifecycle_status", "provenance"],
+      "properties": {
+        "causal_edge_id": {"type": "string"}, "from_causal_node_id": {"type": "string"}, "to_causal_node_id": {"type": "string"}, "relation_type": {"type": "string"}, "mechanism_text": {"type": "string"},
+        "effect_polarity": {"enum": ["positive", "negative", "mixed", "conditional", "unknown"]}, "strength": {"type": "number", "minimum": 0, "maximum": 1}, "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "time_lag": {"type": ["string", "null"]}, "boundary_condition": {"type": ["string", "null"]}, "feedback_loop_id": {"type": ["string", "null"]},
+        "supporting_claim_ids": {"$ref": "definitions_v2_1.schema.json#/$defs/string_array"}, "counter_claim_ids": {"$ref": "definitions_v2_1.schema.json#/$defs/string_array"}, "validation_metric_ids": {"$ref": "definitions_v2_1.schema.json#/$defs/string_array"},
+        "lifecycle_status": {"$ref": "definitions_v2_1.schema.json#/$defs/object_lifecycle"}, "provenance": {"$ref": "definitions_v2_1.schema.json#/$defs/provenance"}
+      },
+      "additionalProperties": false
+    },
+    "industry_validation_metric": {
+      "type": "object",
+      "required": ["metric_id", "target_type", "target_id", "metric_name", "metric_definition", "data_source_plan", "unit", "baseline_value", "baseline_as_of", "comparison_operator", "observation_window", "aggregation_method", "expected_range", "confirmation_threshold", "warning_threshold", "data_freshness_requirement", "observation_frequency", "status", "provenance"],
+      "properties": {
+        "metric_id": {"type": "string"}, "target_type": {"$ref": "#/$defs/industry_target_type"}, "target_id": {"type": "string"}, "metric_name": {"type": "string"}, "metric_definition": {"type": "string"}, "data_source_plan": {"type": "string"}, "unit": {"type": ["string", "null"]}, "baseline_value": {"$ref": "definitions_v2_1.schema.json#/$defs/nullable_scalar"}, "baseline_as_of": {"anyOf": [{"type": "string", "format": "date-time"}, {"type": "null"}]}, "comparison_operator": {"type": "string"}, "observation_window": {"type": "string"}, "aggregation_method": {"type": "string"}, "expected_range": {"$ref": "definitions_v2_1.schema.json#/$defs/nullable_scalar"}, "confirmation_threshold": {"$ref": "definitions_v2_1.schema.json#/$defs/nullable_scalar"}, "warning_threshold": {"$ref": "definitions_v2_1.schema.json#/$defs/nullable_scalar"}, "data_freshness_requirement": {"type": "string"}, "observation_frequency": {"type": "string"}, "status": {"type": "string"}, "provenance": {"$ref": "definitions_v2_1.schema.json#/$defs/provenance"}
+      }, "additionalProperties": false
+    },
+    "industry_invalidation_condition": {
+      "type": "object",
+      "required": ["condition_id", "target_type", "target_id", "condition_text", "observable_test", "comparison_operator", "threshold_value", "unit", "persistence_window", "minimum_observations", "recovery_condition", "severity", "status", "triggered_at", "provenance"],
+      "properties": {
+        "condition_id": {"type": "string"}, "target_type": {"$ref": "#/$defs/industry_target_type"}, "target_id": {"type": "string"}, "condition_text": {"type": "string"}, "observable_test": {"type": "string"}, "comparison_operator": {"type": "string"}, "threshold_value": {"$ref": "definitions_v2_1.schema.json#/$defs/nullable_scalar"}, "unit": {"type": ["string", "null"]}, "persistence_window": {"type": "string"}, "minimum_observations": {"type": "integer", "minimum": 1}, "recovery_condition": {"type": ["string", "null"]}, "severity": {"type": "string"}, "status": {"type": "string"}, "triggered_at": {"anyOf": [{"type": "string", "format": "date-time"}, {"type": "null"}]}, "provenance": {"$ref": "definitions_v2_1.schema.json#/$defs/provenance"}
+      }, "additionalProperties": false
+    },
+    "bottleneck_hypothesis": {
+      "type": "object",
+      "required": ["bottleneck_hypothesis_id", "title", "bottleneck_type", "target_node_or_process_id", "scope", "mechanism", "affected_system_parameter_ids", "impact_path_edge_ids", "severity_hypothesis", "duration_hypothesis", "substitution_paths", "mitigation_conditions", "supporting_claim_ids", "counter_claim_ids", "evidence_requirement_ids", "validation_metric_ids", "invalidation_condition_ids", "status", "confidence", "lifecycle_status", "research_disposition", "related_bottleneck_ids", "scope_change_note", "created_in_version", "provenance"],
+      "properties": {
+        "bottleneck_hypothesis_id": {"type": "string", "minLength": 1}, "title": {"type": "string", "minLength": 1},
+        "bottleneck_type": {"enum": ["system", "technical", "process", "material", "equipment", "effective_capacity", "supply_chain", "qualification", "regulatory", "software_ecosystem", "economic", "short_term_supply_demand"]},
+        "target_node_or_process_id": {"type": "string", "minLength": 1}, "scope": {"type": "string", "minLength": 1}, "mechanism": {"type": "string", "minLength": 1},
+        "affected_system_parameter_ids": {"$ref": "definitions_v2_1.schema.json#/$defs/string_array"}, "impact_path_edge_ids": {"$ref": "definitions_v2_1.schema.json#/$defs/string_array"},
+        "severity_hypothesis": {"type": "string", "minLength": 1}, "duration_hypothesis": {"type": "string", "minLength": 1}, "substitution_paths": {"$ref": "definitions_v2_1.schema.json#/$defs/string_array"}, "mitigation_conditions": {"$ref": "definitions_v2_1.schema.json#/$defs/string_array"},
+        "supporting_claim_ids": {"$ref": "definitions_v2_1.schema.json#/$defs/string_array"}, "counter_claim_ids": {"$ref": "definitions_v2_1.schema.json#/$defs/string_array"}, "evidence_requirement_ids": {"$ref": "definitions_v2_1.schema.json#/$defs/string_array"}, "validation_metric_ids": {"$ref": "definitions_v2_1.schema.json#/$defs/string_array"}, "invalidation_condition_ids": {"$ref": "definitions_v2_1.schema.json#/$defs/string_array"},
+        "status": {"enum": ["proposed", "under_investigation", "provisionally_supported", "contested", "confirmed_for_current_scope", "rejected", "stale", "invalidated"]}, "confidence": {"type": "number", "minimum": 0, "maximum": 1}, "lifecycle_status": {"$ref": "definitions_v2_1.schema.json#/$defs/object_lifecycle"},
+        "research_disposition": {"enum": ["unchanged", "reject", "merge", "split", "reclassify", "scope_narrow", "emergent", "no_bottleneck"]}, "related_bottleneck_ids": {"$ref": "definitions_v2_1.schema.json#/$defs/string_array"}, "scope_change_note": {"type": ["string", "null"]},
+        "created_in_version": {"type": "string", "minLength": 1}, "provenance": {"$ref": "definitions_v2_1.schema.json#/$defs/provenance"}
+      },
+      "additionalProperties": false
+    },
+    "value_dimension": {"type": "object", "required": ["dimension", "direction", "explanation"], "properties": {"dimension": {"enum": ["quantity", "content_per_system", "unit_price_or_asp", "penetration_rate", "market_share", "gross_margin", "capital_intensity", "working_capital", "replacement_cycle", "supplier_concentration", "switching_cost", "qualification_cost"]}, "direction": {"enum": ["increase", "decrease", "mixed", "unchanged", "unknown"]}, "explanation": {"type": "string", "minLength": 1}}, "additionalProperties": false},
+    "value_migration_analysis": {
+      "type": "object",
+      "required": ["value_migration_analysis_id", "bottleneck_hypothesis_id", "scope", "affected_node_ids", "beneficiary_node_ids", "disadvantaged_node_ids", "dimensions", "structurality", "mechanism_summary", "supporting_claim_ids", "counter_claim_ids", "evidence_requirement_ids", "validation_metric_ids", "status", "confidence", "lifecycle_status", "provenance"],
+      "properties": {
+        "value_migration_analysis_id": {"type": "string"}, "bottleneck_hypothesis_id": {"type": "string"}, "scope": {"type": "string"},
+        "affected_node_ids": {"$ref": "definitions_v2_1.schema.json#/$defs/string_array"}, "beneficiary_node_ids": {"$ref": "definitions_v2_1.schema.json#/$defs/string_array"}, "disadvantaged_node_ids": {"$ref": "definitions_v2_1.schema.json#/$defs/string_array"},
+        "dimensions": {"type": "array", "items": {"$ref": "#/$defs/value_dimension"}, "uniqueItems": true}, "structurality": {"enum": ["short_term", "mixed", "structural", "unknown"]}, "mechanism_summary": {"type": "string"},
+        "supporting_claim_ids": {"$ref": "definitions_v2_1.schema.json#/$defs/string_array"}, "counter_claim_ids": {"$ref": "definitions_v2_1.schema.json#/$defs/string_array"}, "evidence_requirement_ids": {"$ref": "definitions_v2_1.schema.json#/$defs/string_array"}, "validation_metric_ids": {"$ref": "definitions_v2_1.schema.json#/$defs/string_array"},
+        "status": {"enum": ["proposed", "under_investigation", "reviewed", "contested", "rejected", "stale"]}, "confidence": {"type": "number", "minimum": 0, "maximum": 1}, "lifecycle_status": {"$ref": "definitions_v2_1.schema.json#/$defs/object_lifecycle"}, "provenance": {"$ref": "definitions_v2_1.schema.json#/$defs/provenance"}
+      }, "additionalProperties": false
+    },
+    "readiness_action": {"type": "object", "required": ["action_id", "criterion_id", "action_text", "owner", "due_at", "completion_condition", "status"], "properties": {"action_id": {"type": "string"}, "criterion_id": {"type": "string"}, "action_text": {"type": "string"}, "owner": {"type": "string"}, "due_at": {"type": ["string", "null"], "format": "date-time"}, "completion_condition": {"type": "string"}, "status": {"enum": ["open", "complete", "cancelled"]}}, "additionalProperties": false},
+    "readiness_criterion": {"type": "object", "required": ["criterion_id", "status", "reason", "claim_ids", "assessment_ids", "metric_ids"], "properties": {"criterion_id": {"type": "string"}, "status": {"enum": ["pass", "fail", "warning", "not_applicable"]}, "reason": {"type": "string"}, "claim_ids": {"$ref": "definitions_v2_1.schema.json#/$defs/string_array"}, "assessment_ids": {"$ref": "definitions_v2_1.schema.json#/$defs/string_array"}, "metric_ids": {"$ref": "definitions_v2_1.schema.json#/$defs/string_array"}}, "additionalProperties": false},
+    "bottleneck_readiness_review": {
+      "type": "object",
+      "required": ["bottleneck_readiness_review_id", "gate_version", "project_id", "version_id", "bottleneck_hypothesis_id", "status", "scope", "as_of_date", "reviewed_version", "evidence_cutoff", "criteria_results", "failed_criteria", "warnings", "unresolved_conflicts", "unresolved_questions", "evidence_gaps", "required_next_actions", "reviewer_decision", "reviewed_by", "reviewed_at", "verified_scope", "provenance"],
+      "properties": {
+        "bottleneck_readiness_review_id": {"type": "string"}, "gate_version": {"type": "string"}, "project_id": {"type": "string"}, "version_id": {"type": "string"}, "bottleneck_hypothesis_id": {"type": "string"},
+        "status": {"enum": ["ready", "conditionally_ready", "contested", "insufficient_evidence", "stale", "rejected"]}, "scope": {"type": "string"}, "as_of_date": {"type": "string", "format": "date"}, "reviewed_version": {"type": "string"}, "evidence_cutoff": {"type": "string", "format": "date"},
+        "criteria_results": {"type": "array", "items": {"$ref": "#/$defs/readiness_criterion"}, "minItems": 19, "maxItems": 19}, "failed_criteria": {"$ref": "definitions_v2_1.schema.json#/$defs/string_array"}, "warnings": {"$ref": "definitions_v2_1.schema.json#/$defs/string_array"}, "unresolved_conflicts": {"$ref": "definitions_v2_1.schema.json#/$defs/string_array"}, "unresolved_questions": {"$ref": "definitions_v2_1.schema.json#/$defs/string_array"}, "evidence_gaps": {"$ref": "definitions_v2_1.schema.json#/$defs/string_array"}, "required_next_actions": {"type": "array", "items": {"$ref": "#/$defs/readiness_action"}},
+        "reviewer_decision": {"enum": ["approve", "approve_with_conditions", "defer", "reject"]}, "reviewed_by": {"type": "string"}, "reviewed_at": {"type": "string", "format": "date-time"}, "verified_scope": {"type": "string"}, "provenance": {"$ref": "definitions_v2_1.schema.json#/$defs/provenance"}
+      }, "additionalProperties": false
+    },
+    "industry_evidence_assessment": {
+      "type": "object",
+      "required": ["assessment_id", "evidence_channel", "target_type", "target_id", "requirement_id", "artifact_id", "normalized_document_id", "evidence_stance", "evidence_functions", "locator", "assessment_summary", "applicable_scope", "directness", "strength", "independence", "freshness", "scope_match", "conflict_status", "review_status", "assessed_by", "assessed_at", "provenance"],
+      "properties": {
+        "assessment_id": {"type": "string"}, "evidence_channel": {"const": "industry"}, "target_type": {"$ref": "#/$defs/industry_target_type"}, "target_id": {"type": "string"}, "requirement_id": {"type": "string"}, "artifact_id": {"type": "string"}, "normalized_document_id": {"type": "string"},
+        "evidence_stance": {"enum": ["supports", "opposes", "neutral", "mixed", "unclear"]}, "evidence_functions": {"type": "array", "items": {"enum": ["definition", "context", "mechanism", "quantification", "feasibility", "supply", "demand", "qualification", "economics", "validation", "invalidation"]}, "minItems": 1, "uniqueItems": true},
+        "locator": {"type": "object", "required": ["locator_type", "locator_value", "quoted_text"], "properties": {"locator_type": {"enum": ["page", "section", "paragraph", "table", "figure", "timestamp", "json_pointer", "other"]}, "locator_value": {"type": "string"}, "quoted_text": {"type": ["string", "null"]}}, "additionalProperties": false},
+        "assessment_summary": {"type": "string"}, "applicable_scope": {"type": "string"}, "directness": {"type": "string"}, "strength": {"type": "string"}, "independence": {"type": "string"}, "freshness": {"enum": ["current", "fresh", "stale", "future_dated", "unknown"]}, "scope_match": {"type": "string"}, "conflict_status": {"type": "string"}, "review_status": {"enum": ["pending_review", "reviewed", "rejected", "superseded"]}, "assessed_by": {"type": "string"}, "assessed_at": {"type": "string", "format": "date-time"}, "provenance": {"$ref": "definitions_v2_1.schema.json#/$defs/provenance"}
+      }, "additionalProperties": false
+    },
+    "industry_source_candidate": {
+      "type": "object",
+      "required": ["candidate_id", "search_plan_id", "query_id", "normalized_url", "original_url", "title", "snippet", "publisher", "publish_date", "source_class", "rank", "exclusion_status", "exclusion_reasons", "dedup_key", "acquisition_batch_id", "acquisition_status", "accessed_at", "failure_reason", "provenance"],
+      "properties": {
+        "candidate_id": {"type": "string"}, "search_plan_id": {"type": "string"}, "query_id": {"type": "string"}, "normalized_url": {"type": "string", "format": "uri", "pattern": "^https?://"}, "original_url": {"type": "string", "format": "uri", "pattern": "^https?://"}, "title": {"type": "string"}, "snippet": {"type": "string"}, "publisher": {"type": "string"}, "publish_date": {"type": ["string", "null"], "format": "date"}, "source_class": {"type": "string"}, "rank": {"type": "integer", "minimum": 1}, "exclusion_status": {"type": "string"}, "exclusion_reasons": {"$ref": "definitions_v2_1.schema.json#/$defs/string_array"}, "dedup_key": {"type": "string"},
+        "acquisition_batch_id": {"type": "string"}, "acquisition_status": {"enum": ["not_attempted", "acquired", "unavailable", "paywalled", "inaccessible", "failed"]}, "accessed_at": {"type": ["string", "null"], "format": "date-time"}, "failure_reason": {"type": ["string", "null"]}, "provenance": {"$ref": "definitions_v2_1.schema.json#/$defs/provenance"}
+      }, "additionalProperties": false
+    }
+  }
+}

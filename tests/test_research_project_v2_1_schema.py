@@ -28,6 +28,7 @@ SCHEMA_DIR = (
 )
 ALL_SCHEMA_FILES = {
     "definitions_v2_1.schema.json",
+    "definitions_v2_2.schema.json",
     *SCHEMA_FILES.values(),
 }
 
@@ -920,9 +921,9 @@ def test_validation_failure_reports_deterministic_schema_and_path(sample_identit
     }
 
 
-def test_all_eight_v2_1_schema_files_are_valid_draft_2020_12_schemas():
+def test_all_layered_schema_files_are_valid_draft_2020_12_schemas():
     assert {path.name for path in SCHEMA_DIR.glob("*.schema.json")} == ALL_SCHEMA_FILES
-    assert len(ALL_SCHEMA_FILES) == 8
+    assert len(ALL_SCHEMA_FILES) == 11
 
     for filename in sorted(ALL_SCHEMA_FILES):
         Draft202012Validator.check_schema(
@@ -1030,6 +1031,8 @@ def test_public_registry_excludes_common_definitions():
         "normalized_document_v2_1": "normalized_document_v2_1.schema.json",
         "industry_evidence_assessment_v2_1": "industry_evidence_assessment_v2_1.schema.json",
         "research_project_index_v2_1": "research_project_index_v2_1.schema.json",
+        "industry_research_version_v2_2": "industry_research_version_v2_2.schema.json",
+        "industry_evidence_assessment_v2_2": "industry_evidence_assessment_v2_2.schema.json",
     }
 
 
