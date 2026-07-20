@@ -58,13 +58,6 @@ function valueMatches(rendered: string, expected: string): boolean {
   return normalizedRenderedValue(rendered) === normalizedExpectedValue(expected);
 }
 
-function valueAppearsInText(rendered: string, expected: string): boolean {
-  const normalizedText = compactText(rendered).replace(/,/g, '');
-  const normalizedExpected = expected.replace(/,/g, '');
-  const candidates = [normalizedExpected, `+${normalizedExpected}`];
-  return candidates.some((candidate) => normalizedText.includes(candidate));
-}
-
 export async function expectRouteContext(
   page: Page,
   expected: { path: RegExp; assetId?: string; source?: string }
@@ -183,16 +176,24 @@ export async function expectPublicationConsistency(
     );
   }
 
+  const totalReturnLocator = card.getByTestId('strategy-total-return');
+  const totalReturnCount = await totalReturnLocator.count();
+  const renderedReturnText =
+    totalReturnCount === 1
+      ? compactText(await totalReturnLocator.innerText())
+      : totalReturnCount === 0
+        ? '<missing>'
+        : `<ambiguous:${totalReturnCount}>`;
   const numericValue = finiteValue(expected.totalReturnPct);
   const expectedReturn = numericValue === null ? null : formatValue(numericValue, 'percent');
-  if (expectedReturn === null || !valueAppearsInText(renderedText, expectedReturn)) {
+  if (expectedReturn === null || !valueMatches(renderedReturnText, expectedReturn)) {
     const returnExpectation =
       expectedReturn === null
         ? 'expected a finite numeric value.'
         : `expected ${quoted(expectedReturn)}.`;
     mismatches.push(
       `- totalReturnPct: raw value ${rawValueText(expected.totalReturnPct)}; rendered text ` +
-        `${quoted(renderedText)}; rule percent; ${returnExpectation}`
+        `${quoted(renderedReturnText)}; rule percent; ${returnExpectation}`
     );
   }
 

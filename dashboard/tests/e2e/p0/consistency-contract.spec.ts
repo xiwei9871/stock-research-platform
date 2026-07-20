@@ -220,7 +220,8 @@ test('publication identity matches official fixture and visible card @p0 @consis
     '/__consistency-publication__',
     `<main><article data-strategy-id="${strategy.strategyId}">` +
       `<span>${strategy.contractId}</span> <span>${strategy.publishId}</span> ` +
-      `<time>${strategy.performanceDate}</time> <strong>+52.40%</strong></article></main>`
+      `<time>${strategy.performanceDate}</time> ` +
+      '<strong data-testid="strategy-total-return">+52.40%</strong></article></main>'
   );
 
   await expectPublicationConsistency(page.locator('article'), {
@@ -242,7 +243,8 @@ test('publication failure reports strategy and publish identity plus values @p0 
     '/__consistency-publication-mismatch__',
     `<main><article data-strategy-id="${strategy.strategyId}">` +
       `<span>${strategy.contractId}</span> <span>${strategy.publishId}-stale</span> ` +
-      `<time>2026-07-18</time> <strong>175.29%</strong></article></main>`
+      '<time>2026-07-18</time> ' +
+      '<strong data-testid="strategy-total-return">175.29%</strong></article></main>'
   );
 
   expect(
@@ -259,11 +261,49 @@ test('publication failure reports strategy and publish identity plus values @p0 
       `publish ID "${strategy.publishId}":\n` +
       `- publishId: expected "${strategy.publishId}", rendered text did not contain it\n` +
       `- tradeDate: expected "${strategy.performanceDate}", rendered text did not contain it\n` +
-      '- totalReturnPct: raw value 52.4; rendered text "' +
-      `${strategy.contractId} ${strategy.publishId}-stale 2026-07-18 175.29%"; ` +
+      '- totalReturnPct: raw value 52.4; rendered text "175.29%"; ' +
       'rule percent; expected "52.40%".'
   );
 });
+
+for (const [caseName, totalReturnText, otherMetricText] of [
+  ['larger percentage token', '152.40%', '9.10%'],
+  ['opposite sign', '-52.40%', '9.10%'],
+  ['matching value in another field', '175.29%', '52.40%']
+] as const) {
+  test(`publication total return rejects ${caseName} @p0 @consistency-contract`, async ({
+    page,
+    baseURL
+  }) => {
+    const strategy = officialStrategies.lhb_shortline;
+    await setContractContent(
+      page,
+      baseURL,
+      `/__consistency-publication-return-${encodeURIComponent(caseName)}__`,
+      `<main><article data-strategy-id="${strategy.strategyId}">` +
+        `<span>${strategy.contractId}</span> <span>${strategy.publishId}</span> ` +
+        `<time>${strategy.performanceDate}</time> ` +
+        `<strong data-testid="strategy-total-return">${totalReturnText}</strong> ` +
+        `<span data-testid="another-metric">${otherMetricText}</span></article></main>`
+    );
+
+    expect(
+      await captureErrorMessage(() =>
+        expectPublicationConsistency(page.locator('article'), {
+          contractId: strategy.contractId,
+          publishId: strategy.publishId,
+          tradeDate: strategy.performanceDate,
+          totalReturnPct: strategy.totalReturn
+        })
+      )
+    ).toBe(
+      `Publication consistency mismatch for strategy ID "${strategy.strategyId}" and ` +
+        `publish ID "${strategy.publishId}":\n` +
+        `- totalReturnPct: raw value 52.4; rendered text "${totalReturnText}"; ` +
+        'rule percent; expected "52.40%".'
+    );
+  });
+}
 
 test('official strategy fixtures are distinct and exclude the regressed LHB value @p0 @consistency-contract', () => {
   const strategies = Object.values(officialStrategies);
