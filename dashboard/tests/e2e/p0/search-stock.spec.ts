@@ -213,7 +213,7 @@ async function installSearchStockApi(page: Page) {
     ...emptyHomeRoutes(),
     ...stockReadRoutes('300203.SZ'),
     ...stockReadRoutes('920476.BJ'),
-    ...stockReadRoutes('430476.BJ')
+    ...stockReadRoutes('430476.BJ', '920476.BJ')
   });
 }
 
@@ -263,28 +263,38 @@ test('global search restores its query across stock Back and Forward @p0 @mock @
 });
 
 test('current and legacy Haineng security-code deep links resolve the same company @p0 @mock @handoff', async ({ page }) => {
+  const apiRequests: string[] = [];
+  page.on('request', (request) => {
+    const url = new URL(request.url());
+    if (url.pathname.startsWith('/api/')) apiRequests.push(url.toString());
+  });
+
   const deepLinks = [
     {
       path: '/stock/920476.BJ?source=theme_research',
       route: /^\/stock\/920476\.BJ$/,
       assetId: '920476.BJ',
+      profileAssetId: '920476.BJ',
       heading: '海能技术 920476.BJ'
     },
     {
       path: '/stock/430476.BJ?source=theme_research',
       route: /^\/stock\/430476\.BJ$/,
       assetId: '430476.BJ',
-      heading: '海能技术 430476.BJ'
+      profileAssetId: '430476.BJ',
+      heading: '海能技术 920476.BJ'
     },
     {
       path: '/tech-bottleneck/stock/430476.BJ?source=theme_research',
       route: /^\/tech-bottleneck\/stock\/430476\.BJ$/,
       assetId: '430476.BJ',
-      heading: '海能技术 430476.BJ'
+      profileAssetId: '430476.BJ',
+      heading: '海能技术 920476.BJ'
     }
   ];
 
   for (const deepLink of deepLinks) {
+    const requestStart = apiRequests.length;
     await page.goto(deepLink.path);
     await expectRouteContext(page, {
       path: deepLink.route,
@@ -296,6 +306,37 @@ test('current and legacy Haineng security-code deep links resolve the same compa
     await expect(page.getByText(/科技卡脖子来源\s+theme_research/)).toHaveCount(0);
     await expect(page.getByText('No bars available.')).toBeVisible();
 
+    const navigationRequests = apiRequests.slice(requestStart).map((rawUrl) => new URL(rawUrl));
+    expect(
+      navigationRequests.filter((url) => url.pathname === `/api/assets/${deepLink.profileAssetId}/profile`)
+    ).not.toHaveLength(0);
+    for (const suffix of ['bars', 'news', 'research-reports']) {
+      expect(
+        navigationRequests.filter((url) => url.pathname === `/api/assets/920476.BJ/${suffix}`)
+      ).not.toHaveLength(0);
+    }
+    expect(
+      navigationRequests.filter((url) => url.pathname === '/api/stocks/920476.BJ/market-context/heatmap')
+    ).not.toHaveLength(0);
+    expect(
+      navigationRequests.filter(
+        (url) => url.pathname === '/api/evidence-digest' && url.searchParams.get('asset_id') === '920476.BJ'
+      )
+    ).not.toHaveLength(0);
+    if (deepLink.profileAssetId === '430476.BJ') {
+      expect(
+        navigationRequests.filter((url) =>
+          ['/bars', '/news', '/research-reports'].some(
+            (suffix) => url.pathname === `/api/assets/430476.BJ${suffix}`
+          )
+        )
+      ).toHaveLength(0);
+      expect(
+        navigationRequests.filter((url) => url.pathname === '/api/stocks/430476.BJ/market-context/heatmap')
+      ).toHaveLength(0);
+    }
+
+    const reloadStart = apiRequests.length;
     await page.reload();
     await expectRouteContext(page, {
       path: deepLink.route,
@@ -306,5 +347,24 @@ test('current and legacy Haineng security-code deep links resolve the same compa
     await expect(page.getByText(/来源工作台：\s*Theme Research/)).toBeVisible();
     await expect(page.getByText(/科技卡脖子来源\s+theme_research/)).toHaveCount(0);
     await expect(page.getByText('No bars available.')).toBeVisible();
+
+    const reloadRequests = apiRequests.slice(reloadStart).map((rawUrl) => new URL(rawUrl));
+    expect(
+      reloadRequests.filter((url) => url.pathname === `/api/assets/${deepLink.profileAssetId}/profile`)
+    ).not.toHaveLength(0);
+    expect(reloadRequests.filter((url) => url.pathname === '/api/assets/920476.BJ/bars')).not.toHaveLength(0);
   }
+});
+
+test('unknown legacy stock source remains a technology-bottleneck handoff @p0 @mock @handoff', async ({ page }) => {
+  await page.goto('/tech-bottleneck/stock/300203.SZ?source=unknown_tech_dataset');
+
+  await expectRouteContext(page, {
+    path: /^\/tech-bottleneck\/stock\/300203\.SZ$/,
+    assetId: '300203.SZ',
+    source: 'unknown_tech_dataset'
+  });
+  await expect(page.getByRole('heading', { name: '聚光科技 300203.SZ' })).toBeVisible();
+  await expect(page.getByText(/来源工作台：\s*科技卡脖子复盘/)).toBeVisible();
+  await expect(page.getByText(/科技卡脖子来源\s+unknown_tech_dataset/)).toBeVisible();
 });

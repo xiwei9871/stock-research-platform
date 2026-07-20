@@ -1520,11 +1520,23 @@ describe('dashboard app shell', () => {
   });
 
   it('preserves theme research source context on direct legacy stock routes', async () => {
-    window.history.replaceState({}, '', '/tech-bottleneck/stock/002837.SZ?source=theme_research');
-    apiMocks.fetchAssetProfile.mockResolvedValue(makeAssetProfile('002837.SZ'));
+    window.history.replaceState({}, '', '/tech-bottleneck/stock/430476.BJ?source=theme_research');
+    apiMocks.fetchAssetProfile.mockResolvedValue({
+      ...makeAssetProfile('920476.BJ'),
+      asset_id: '430476.BJ',
+      asset: {
+        asset_id: '920476.BJ',
+        symbol: '920476',
+        name: '海能技术',
+        exchange: 'BJ',
+        board: 'bse',
+        is_active: true
+      }
+    });
 
     render(<AppShell currentUser={TEST_ADMIN_USER} />);
 
+    expect(await screen.findByRole('heading', { name: '海能技术 920476.BJ' })).toBeInTheDocument();
     expect(
       await screen.findByText((_content, element) => element?.textContent === '来源工作台：Theme Research')
     ).toBeInTheDocument();

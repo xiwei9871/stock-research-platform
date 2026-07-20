@@ -931,7 +931,11 @@ export function StockWorkspace({
   const currentAssetId = profile?.canonical_asset_id ?? entryContext?.assetId ?? assetId;
   const entryContextAssetCode = entryContext?.assetId ? comparableStockCode(entryContext.assetId) : null;
   const currentAssetCode = comparableStockCode(currentAssetId);
-  const isEntryContextForCurrentAsset = !entryContextAssetCode || entryContextAssetCode === currentAssetCode;
+  const profileRequestAssetCode = profile?.asset_id ? comparableStockCode(profile.asset_id) : null;
+  const isEntryContextForCurrentAsset =
+    !entryContextAssetCode ||
+    entryContextAssetCode === currentAssetCode ||
+    entryContextAssetCode === profileRequestAssetCode;
   const currentEntryContext: StockEntryContext = isEntryContextForCurrentAsset
     ? {
         ...entryContext,
