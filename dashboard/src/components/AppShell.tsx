@@ -196,6 +196,7 @@ function stockSourceWorkspaceFromPlatformLocation(
     sourceWorkspace === 'researchReports' ||
     sourceWorkspace === 'market' ||
     sourceWorkspace === 'reviewQueue' ||
+    sourceWorkspace === 'themeResearch' ||
     sourceWorkspace === 'techBottleneck'
   ) {
     return sourceWorkspace;
@@ -221,28 +222,6 @@ function stockHandoffFromLocation(pathname: string, search: string): StockHandof
     monitorTab: location.monitorTab,
     version: 0
   };
-}
-
-function stockSourceQueryValue(sourceWorkspace?: StockSourceWorkspace) {
-  if (sourceWorkspace === 'reviewQueue') return 'review_queue';
-  if (sourceWorkspace === 'researchReports') return 'research_reports';
-  if (sourceWorkspace === 'techBottleneck') return 'tech_bottleneck';
-  return sourceWorkspace;
-}
-
-function stockLocationPath(assetId: string, context: Omit<StockHandoff, 'assetId' | 'version'>) {
-  const params = new URLSearchParams();
-  const source = stockSourceQueryValue(context.sourceWorkspace);
-  if (source) params.set('source', source);
-  if (context.query) params.set('q', context.query);
-  if (context.matchReason) params.set('match_reason', context.matchReason);
-  if (context.newsId) params.set('news_id', context.newsId);
-  if (context.eventKey) params.set('event_key', context.eventKey);
-  if (context.reportId) params.set('report_id', context.reportId);
-  if (context.tradeDate) params.set('trade_date', context.tradeDate);
-  if (context.monitorTab) params.set('monitor_tab', context.monitorTab);
-  const search = params.toString();
-  return `${stockPath(assetId)}${search ? `?${search}` : ''}`;
 }
 
 function conceptTagsFromReviewUniverseStock(stock: TechBottleneckReviewStock) {
@@ -424,8 +403,14 @@ export function AppShell({ currentUser: _currentUser }: AppShellProps = {}) {
     setWorkspaceMode('stock');
   }
 
+  function pushLocation(path: string) {
+    if (`${window.location.pathname}${window.location.search}` !== path) {
+      window.history.pushState({}, '', path);
+    }
+  }
+
   function openStockWorkspace(assetId: string, context: Omit<StockHandoff, 'assetId' | 'version'> = {}) {
-    window.history.pushState({}, '', stockLocationPath(assetId, context));
+    pushLocation(stockPath(assetId, context));
     activateStockWorkspace(assetId, context);
   }
 
@@ -435,7 +420,7 @@ export function AppShell({ currentUser: _currentUser }: AppShellProps = {}) {
       return;
     }
     const path = pathForWorkspace(mode);
-    window.history.pushState({}, '', path);
+    pushLocation(path);
     if (mode === 'themeResearch') {
       setThemeResearchPathname(path);
     }

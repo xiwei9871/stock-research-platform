@@ -37,30 +37,50 @@ export type PlatformLocation = {
   reportPath?: string;
 };
 
-const SOURCE_WORKSPACES: Record<string, PlatformSourceWorkspace> = {
-  search: 'search',
+export type StockPathHandoff = Pick<
+  PlatformLocation,
+  | 'sourceWorkspace'
+  | 'query'
+  | 'matchReason'
+  | 'newsId'
+  | 'eventKey'
+  | 'reportId'
+  | 'tradeDate'
+  | 'monitorTab'
+  | 'reportPath'
+>;
+
+const SOURCE_TOKENS = {
   home: 'home',
-  review_queue: 'reviewQueue',
-  reviewQueue: 'reviewQueue',
-  daily_review: 'dailyReview',
-  dailyReview: 'dailyReview',
+  reviewQueue: 'review_queue',
+  dailyReview: 'daily_review',
   market: 'market',
-  market_monitor: 'market',
   news: 'news',
-  research_reports: 'researchReports',
-  researchReports: 'researchReports',
+  researchReports: 'research_reports',
+  stock: 'stock',
   watchlist: 'watchlist',
-  theme_research: 'themeResearch',
+  themeResearch: 'theme_research',
+  techBottleneckReviewUniverse: 'tech_bottleneck_review_universe',
+  dataToBriefDocling90: 'data_to_brief_docling_90',
+  factors: 'factor_lab',
+  strategyLab: 'strategy_lab',
+  generatedReports: 'generated_reports',
+  userManagement: 'user_management',
+  search: 'search',
+  techBottleneck: 'tech_bottleneck'
+} satisfies Record<PlatformSourceWorkspace, string>;
+
+const SOURCE_WORKSPACES: Record<string, PlatformSourceWorkspace> = {
+  ...Object.fromEntries(
+    Object.entries(SOURCE_TOKENS).map(([sourceWorkspace, token]) => [token, sourceWorkspace as PlatformSourceWorkspace])
+  ),
+  reviewQueue: 'reviewQueue',
+  dailyReview: 'dailyReview',
+  market_monitor: 'market',
+  researchReports: 'researchReports',
   themeResearch: 'themeResearch',
-  tech_bottleneck: 'techBottleneck',
   techBottleneck: 'techBottleneck',
-  tech_bottleneck_review_universe: 'techBottleneckReviewUniverse',
-  data_to_brief_docling_90: 'dataToBriefDocling90',
-  factors: 'factors',
-  factor_lab: 'factors',
-  strategy_lab: 'strategyLab',
-  generated_reports: 'generatedReports',
-  user_management: 'userManagement'
+  factors: 'factors'
 };
 
 const QUERY_FIELDS = {
@@ -86,15 +106,45 @@ export function stockCodeToAssetId(stockCode: string) {
   return normalized;
 }
 
-export function stockPath(assetId: string) {
-  return `/stock/${encodeURIComponent(stockCodeToAssetId(assetId))}`;
+function normalizeAssetId(assetId: string) {
+  const normalized = stockCodeToAssetId(assetId);
+  if (
+    !normalized ||
+    normalized === '.' ||
+    normalized === '..' ||
+    /[\/\\\u0000-\u001f\u007f]/.test(normalized)
+  ) {
+    return null;
+  }
+  return normalized;
+}
+
+function searchForHandoff(handoff: StockPathHandoff) {
+  const params = new URLSearchParams();
+  if (handoff.sourceWorkspace) params.set('source', SOURCE_TOKENS[handoff.sourceWorkspace]);
+  if (handoff.query) params.set('q', handoff.query);
+  if (handoff.matchReason) params.set('match_reason', handoff.matchReason);
+  if (handoff.newsId) params.set('news_id', handoff.newsId);
+  if (handoff.eventKey) params.set('event_key', handoff.eventKey);
+  if (handoff.reportId) params.set('report_id', handoff.reportId);
+  if (handoff.tradeDate) params.set('trade_date', handoff.tradeDate);
+  if (handoff.monitorTab) params.set('monitor_tab', handoff.monitorTab);
+  if (handoff.reportPath) params.set('path', handoff.reportPath);
+  return params.toString();
+}
+
+export function stockPath(assetId: string, handoff: StockPathHandoff = {}) {
+  const normalized = normalizeAssetId(assetId);
+  if (!normalized) throw new Error('invalid_asset_id');
+  const search = searchForHandoff(handoff);
+  return `/stock/${encodeURIComponent(normalized)}${search ? `?${search}` : ''}`;
 }
 
 function decodePathSegment(segment: string) {
   try {
     return decodeURIComponent(segment);
   } catch {
-    return '';
+    return null;
   }
 }
 
@@ -102,7 +152,8 @@ function stockAssetIdFromPath(pathname: string, prefix: string) {
   if (!pathname.startsWith(prefix)) return '';
   const segment = pathname.slice(prefix.length);
   if (!segment || segment.includes('/')) return '';
-  return stockCodeToAssetId(decodePathSegment(segment));
+  const decoded = decodePathSegment(segment);
+  return decoded === null ? '' : (normalizeAssetId(decoded) ?? '');
 }
 
 function handoffFromSearch(search: string): Partial<PlatformLocation> {

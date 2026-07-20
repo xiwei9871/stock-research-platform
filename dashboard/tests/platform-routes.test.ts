@@ -89,6 +89,43 @@ describe('platform routes', () => {
     expect(stockPath('CN:SH:600519')).toBe('/stock/CN%3ASH%3A600519');
   });
 
+  it.each([
+    '/stock/%',
+    '/stock/%2F',
+    '/stock/%5C',
+    '/stock/%00',
+    '/stock/.',
+    '/stock/..'
+  ])('rejects malformed stock route %s', (pathname) => {
+    expect(parsePlatformLocation(pathname, '')).toEqual({ workspace: 'home', canonicalPath: '/' });
+  });
+
+  it.each(['', '.', '..', 'A/B', 'A\\B', 'A\0B'])('rejects invalid stock serializer input %j', (assetId) => {
+    expect(() => stockPath(assetId)).toThrowError('invalid_asset_id');
+  });
+
+  it('round-trips encoded asset ids and supported stock handoff fields', () => {
+    const path = stockPath('CN:SH:600519', {
+      sourceWorkspace: 'themeResearch',
+      query: '算力 / 电力',
+      matchReason: 'theme company'
+    });
+    const url = new URL(path, 'https://dashboard.test');
+
+    expect(parsePlatformLocation(url.pathname, url.search)).toMatchObject({
+      workspace: 'stock',
+      assetId: 'CN:SH:600519',
+      sourceWorkspace: 'themeResearch',
+      query: '算力 / 电力',
+      matchReason: 'theme company'
+    });
+    expect(parsePlatformLocation('/stock/CN%3ASH%3A600519', '')).toMatchObject({
+      workspace: 'stock',
+      assetId: 'CN:SH:600519',
+      canonicalPath: '/stock/CN%3ASH%3A600519'
+    });
+  });
+
   it('falls back invalid paths to home', () => {
     expect(parsePlatformLocation('/not-a-workspace', '?source=search&q=ignored')).toEqual({
       workspace: 'home',

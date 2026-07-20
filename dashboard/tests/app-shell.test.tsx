@@ -1445,6 +1445,33 @@ describe('dashboard app shell', () => {
     expect(await screen.findByRole('heading', { name: '观察池' })).toBeInTheDocument();
   });
 
+  it('does not add a duplicate history entry when the active workspace is clicked', async () => {
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open News workspace' }));
+    expect(window.location.pathname).toBe('/news');
+    expect(screen.getByRole('button', { name: 'Open News workspace' })).toHaveAttribute('aria-current', 'page');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open News workspace' }));
+    act(() => window.history.back());
+
+    await waitFor(() => expect(window.location.pathname).toBe('/'));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Open Home workspace' })).toHaveAttribute('aria-current', 'page')
+    );
+  });
+
+  it('preserves theme research source context on direct canonical stock routes', async () => {
+    window.history.replaceState({}, '', '/stock/002837.SZ?source=theme_research');
+    apiMocks.fetchAssetProfile.mockResolvedValue(makeAssetProfile('002837.SZ'));
+
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
+
+    expect(
+      await screen.findByText((_content, element) => element?.textContent === '来源工作台：Theme Research')
+    ).toBeInTheDocument();
+  });
+
   it('restores primary routes and reparses the complete stock location on popstate', async () => {
     window.history.replaceState({}, '', '/review-queue');
     apiMocks.fetchAssetProfile.mockResolvedValue(makeAssetProfile('600519.SH'));
@@ -1479,6 +1506,16 @@ describe('dashboard app shell', () => {
       )
     );
     expect(screen.getByText((_content, element) => element?.textContent === '来源工作台：Search')).toBeInTheDocument();
+
+    act(() => {
+      window.history.pushState({}, '', '/stock/002837.SZ?source=theme_research');
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+    await waitFor(() =>
+      expect(
+        screen.getByText((_content, element) => element?.textContent === '来源工作台：Theme Research')
+      ).toBeInTheDocument()
+    );
   });
 
   it('replaces the legacy review route with its canonical path once', () => {

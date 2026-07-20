@@ -79,7 +79,15 @@ type StockWorkspaceAssetProfile = AssetProfile & {
 };
 
 export type StockEntryContext = {
-  sourceWorkspace?: 'search' | 'news' | 'watchlist' | 'researchReports' | 'market' | 'reviewQueue' | 'techBottleneck';
+  sourceWorkspace?:
+    | 'search'
+    | 'news'
+    | 'watchlist'
+    | 'researchReports'
+    | 'market'
+    | 'reviewQueue'
+    | 'themeResearch'
+    | 'techBottleneck';
   assetId?: string;
   query?: string;
   matchReason?: string;
@@ -104,6 +112,7 @@ function formatSourceWorkspace(sourceWorkspace: NonNullable<StockEntryContext['s
   if (sourceWorkspace === 'watchlist') return 'Watchlist';
   if (sourceWorkspace === 'researchReports') return 'Research Reports';
   if (sourceWorkspace === 'reviewQueue') return 'Review Queue';
+  if (sourceWorkspace === 'themeResearch') return 'Theme Research';
   if (sourceWorkspace === 'techBottleneck') return '科技卡脖子复盘';
   return 'Market Monitor';
 }
