@@ -13,7 +13,11 @@ APPROVED_R2B_COMMITS = (
     "0577656e5f3c981d9ecbb1a56c129b02a34099f1",
     "fa516b9b10e61d2b0f88c59b6da7a11a933002d6",
     "560d700d970ac281f2274faa362a86c4ac7ed1c6",
+    "bc0f56ba8f39b54bd05f075bdaf35451c4e495a2",
+    "db2ad5320d3a3debd816ed3c8a760f8cc6c7d709",
 )
+R2B_CLOSURE_SEED = "db2ad5320d3a3debd816ed3c8a760f8cc6c7d709"
+R2B_CLOSURE_FILES = {"tests/test_research_project_v2_1_r2b_scope_guard.py"}
 
 ALLOWED_EXACT_PATHS = {
     "docs/research_operating_layer_v2_r2b_plan.md",
@@ -133,3 +137,9 @@ def test_every_approved_r2b_commit_stays_inside_scope() -> None:
         result = _git("diff-tree", "--no-commit-id", "--name-only", "-r", commit)
         changed.update(path for path in result.stdout.splitlines() if path)
     assert not [path for path in sorted(changed) if not is_r2b_path(path)]
+
+
+def test_r2b_closure_amendments_only_touch_the_scope_guard() -> None:
+    result = _git("diff", "--name-only", f"{R2B_CLOSURE_SEED}..HEAD")
+    changed = {path for path in result.stdout.splitlines() if path}
+    assert changed <= R2B_CLOSURE_FILES
