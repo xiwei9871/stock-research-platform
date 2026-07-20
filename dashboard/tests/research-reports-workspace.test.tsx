@@ -238,6 +238,38 @@ describe('ResearchReportsWorkspace', () => {
     expect(screen.getByRole('link', { name: '来源链接' })).toHaveAttribute('href', 'https://example.com/r1');
   });
 
+  it('keeps exactly one main landmark and one page title after opening the reader', async () => {
+    render(
+      <main>
+        <ResearchReportsWorkspace />
+      </main>
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Open report 贵州茅台深度报告' }));
+
+    expect(screen.getAllByRole('main')).toHaveLength(1);
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+    expect(screen.getByRole('heading', { level: 1, name: '贵州茅台深度报告' })).toBeInTheDocument();
+  });
+
+  it('places a functional keyboard focus exit after the reader and returns to the list', async () => {
+    render(<ResearchReportsWorkspace />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Open report 贵州茅台深度报告' }));
+
+    const reader = screen.getByLabelText('Research report full-screen reader');
+    const sourceLink = within(reader).getByRole('link', { name: '来源链接' });
+    const focusExit = screen.getByRole('button', { name: '阅读结束，返回研报列表' });
+    expect(reader).not.toContainElement(focusExit);
+    expect(sourceLink.compareDocumentPosition(focusExit) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+    expect(focusExit).toHaveClass('research-report-reader-focus-exit');
+
+    fireEvent.click(focusExit);
+
+    expect(screen.queryByLabelText('Research report full-screen reader')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Research report results')).toBeInTheDocument();
+  });
+
   it('renders a full-screen PDF reader for the selected research report', async () => {
     render(<ResearchReportsWorkspace />);
 

@@ -484,13 +484,6 @@ async function expectCombinedRegionScreenshot(
   expect(screenshot).toMatchSnapshot(name);
 }
 
-test.beforeEach(async ({}, testInfo) => {
-  test.skip(
-    testInfo.project.name !== 'chromium-desktop',
-    'Reviewed visual baselines are intentionally generated only for Chromium desktop.'
-  );
-});
-
 test('login panel stable region @audit @visual', async ({ page, runtimePolicy }) => {
   runtimePolicy.consoleErrors.push(
     /^Failed to load resource: the server responded with a status of 401 \(Unauthorized\)$/

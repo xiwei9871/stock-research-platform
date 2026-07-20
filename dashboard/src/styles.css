@@ -4693,6 +4693,32 @@ table.data-table td {
   padding: 6px;
 }
 
+.research-report-reader-focus-exit {
+  position: fixed;
+  top: 8px;
+  left: 50%;
+  z-index: 1100;
+  min-height: 36px;
+  border: 2px solid #ffffff;
+  border-radius: 6px;
+  background: #174ea6;
+  color: #ffffff;
+  padding: 8px 14px;
+  font: inherit;
+  font-weight: 700;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, calc(-100% - 16px));
+}
+
+.research-report-reader-focus-exit:focus-visible {
+  opacity: 1;
+  outline: 3px solid #facc15;
+  outline-offset: 2px;
+  pointer-events: auto;
+  transform: translate(-50%, 0);
+}
+
 .research-report-reader-toolbar {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;

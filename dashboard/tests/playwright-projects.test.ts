@@ -80,6 +80,17 @@ describe('buildProjects', () => {
     expect(webkit?.grep).toEqual(/@webkit-critical/);
   });
 
+  test('selects visual audit tests only in Chromium desktop at the project layer', () => {
+    const projects = buildProjects('audit');
+    const chromiumDesktopProject = projects.find((project) => project.name === 'chromium-desktop');
+    const chromiumMobileProject = projects.find((project) => project.name === 'chromium-mobile');
+    const firefoxProject = projects.find((project) => project.name === 'firefox-desktop');
+
+    expect(chromiumDesktopProject?.grepInvert).toBeUndefined();
+    expect(chromiumMobileProject?.grepInvert).toEqual(/@visual/);
+    expect(firefoxProject?.grepInvert).toEqual(/@visual/);
+  });
+
   test('forces the audit Firefox project to connect directly to local test servers', () => {
     const firefox = buildProjects('audit').find((project) => project.name === 'firefox-desktop');
     const launchOptions = (firefox?.use as {
@@ -88,6 +99,17 @@ describe('buildProjects', () => {
 
     expect(launchOptions?.firefoxUserPrefs).toMatchObject({
       'network.proxy.type': 0
+    });
+  });
+
+  test('makes Firefox keyboard traversal include links and form controls on macOS', () => {
+    const firefox = buildProjects('audit').find((project) => project.name === 'firefox-desktop');
+    const launchOptions = (firefox?.use as {
+      launchOptions?: { firefoxUserPrefs?: Record<string, string | number | boolean> };
+    })?.launchOptions;
+
+    expect(launchOptions?.firefoxUserPrefs).toMatchObject({
+      'accessibility.tabfocus': 7
     });
   });
 

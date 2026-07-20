@@ -389,6 +389,67 @@ async function expectVisibleKeyboardFocus(locator: Locator) {
   expect(focusIndicator.outlineVisible || focusIndicator.shadowVisible).toBe(true);
 }
 
+async function expectBoundaryKeyLeavesReader(
+  page: Page,
+  start: Locator,
+  key: 'Tab' | 'Shift+Tab'
+) {
+  await start.focus();
+  const observationPromise = page.evaluate(
+    ({ expectedKey }) =>
+      new Promise<{
+        activeElement: string;
+        defaultPrevented: boolean;
+        documentHasFocus: boolean;
+        outside: boolean;
+        redirected: boolean;
+      }>((resolve) => {
+        const reader = document.querySelector<HTMLElement>(
+          '[aria-label="Research report full-screen reader"]'
+        );
+        if (!reader) throw new Error('reader_not_found');
+
+        let sawOutside = false;
+        let redirected = false;
+        const observeFocus = () => {
+          const outside = !document.hasFocus() || !reader.contains(document.activeElement);
+          if (outside) sawOutside = true;
+          else if (sawOutside) redirected = true;
+        };
+        const onFocusIn = () => observeFocus();
+        const onKeyDown = (event: KeyboardEvent) => {
+          const normalizedKey = event.shiftKey && event.key === 'Tab' ? 'Shift+Tab' : event.key;
+          if (normalizedKey !== expectedKey) return;
+          window.setTimeout(() => {
+            observeFocus();
+            document.removeEventListener('focusin', onFocusIn, true);
+            document.removeEventListener('keydown', onKeyDown);
+            const activeElement = document.activeElement as HTMLElement | null;
+            resolve({
+              activeElement: activeElement
+                ? `${activeElement.tagName.toLowerCase()}:${activeElement.getAttribute('aria-label') ?? activeElement.textContent?.trim() ?? ''}`
+                : 'none',
+              defaultPrevented: event.defaultPrevented,
+              documentHasFocus: document.hasFocus(),
+              outside: !document.hasFocus() || !reader.contains(activeElement),
+              redirected
+            });
+          }, 50);
+        };
+
+        document.addEventListener('focusin', onFocusIn, true);
+        document.addEventListener('keydown', onKeyDown);
+      }),
+    { expectedKey: key }
+  );
+
+  await page.keyboard.press(key);
+  const observation = await observationPromise;
+  expect(observation.defaultPrevented).toBe(false);
+  expect(observation.outside, JSON.stringify(observation)).toBe(true);
+  expect(observation.redirected).toBe(false);
+}
+
 test('login has one main, one page title, named controls, and visible keyboard focus @audit @webkit-critical', async ({
   page,
   runtimePolicy
@@ -473,32 +534,18 @@ test('full-screen report reader does not trap forward, backward, or Escape keybo
 
   const reader = page.getByRole('region', { name: 'Research report full-screen reader' });
   await expect(reader).toBeVisible();
+  await expectPageHeadingStructure(page, '科学仪器国产化跟踪');
   const back = reader.getByRole('button', { name: '返回研报列表' });
-  await back.focus();
-  await page.keyboard.press('Shift+Tab');
-  await expect
-    .poll(() => page.evaluate(() => document.activeElement?.closest('[aria-label="Research report full-screen reader"]') === null))
-    .toBe(true);
-
   const source = reader.getByRole('link', { name: '来源链接' });
-  await source.focus();
-  const forwardTabResult = page.evaluate(
-    () =>
-      new Promise<{ defaultPrevented: boolean }>((resolve) => {
-        document.addEventListener(
-          'keydown',
-          (event) => {
-            window.setTimeout(() => resolve({ defaultPrevented: event.defaultPrevented }), 0);
-          },
-          { once: true }
-        );
-      })
-  );
-  await page.keyboard.press('Tab');
-  expect(await forwardTabResult).toEqual({ defaultPrevented: false });
+  const focusExit = page.getByRole('button', { name: '阅读结束，返回研报列表' });
+  await expectBoundaryKeyLeavesReader(page, back, 'Shift+Tab');
+  await expectBoundaryKeyLeavesReader(page, source, 'Tab');
+  await expect(focusExit).toBeFocused();
 
   await back.focus();
   await page.keyboard.press('Escape');
-  await page.keyboard.press('Tab');
-  await expect(back).not.toBeFocused();
+  await expect(reader).toBeVisible();
+  await expectBoundaryKeyLeavesReader(page, source, 'Tab');
+  await expect(focusExit).toBeFocused();
+  await expectBoundaryKeyLeavesReader(page, back, 'Shift+Tab');
 });

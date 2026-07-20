@@ -28,10 +28,11 @@ function chromiumDesktop(): Project {
   };
 }
 
-function chromiumMobile(grep?: RegExp): Project {
+function chromiumMobile(grep?: RegExp, grepInvert?: RegExp): Project {
   return {
     name: 'chromium-mobile',
     grep,
+    grepInvert,
     use: cloneDevice('Pixel 5')
   };
 }
@@ -44,13 +45,15 @@ export function buildProjects(profile: PlaywrightProfile): Project[] {
   if (profile === 'audit') {
     return [
       chromiumDesktop(),
-      chromiumMobile(),
+      chromiumMobile(undefined, /@visual/),
       {
         name: 'firefox-desktop',
+        grepInvert: /@visual/,
         use: {
           ...cloneDevice('Desktop Firefox'),
           launchOptions: {
             firefoxUserPrefs: {
+              'accessibility.tabfocus': 7,
               'network.proxy.type': 0
             }
           }
