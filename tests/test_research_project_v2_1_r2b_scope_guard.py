@@ -17,7 +17,14 @@ APPROVED_R2B_COMMITS = (
     "db2ad5320d3a3debd816ed3c8a760f8cc6c7d709",
 )
 R2B_CLOSURE_SEED = "db2ad5320d3a3debd816ed3c8a760f8cc6c7d709"
+R2B_CLOSURE_END = "fd057e20ca1d81129ff39f0a253fe122acca99c2"
 R2B_CLOSURE_FILES = {"tests/test_research_project_v2_1_r2b_scope_guard.py"}
+ACQUISITION_RECOVERY_PHASE_A_SEED = "fd057e20ca1d81129ff39f0a253fe122acca99c2"
+ACQUISITION_RECOVERY_PHASE_A_PATHS = {
+    "artifacts/research_projects/v2_1/acquisition/diagnostics/r2b_external_acquisition_phase_a_2026-07-20.json",
+    "docs/research_operating_layer_v2_r2b_external_acquisition_recovery_phase_a.md",
+    "tests/test_research_project_v2_1_r2b_scope_guard.py",
+}
 
 ALLOWED_EXACT_PATHS = {
     "docs/research_operating_layer_v2_r2b_plan.md",
@@ -140,6 +147,18 @@ def test_every_approved_r2b_commit_stays_inside_scope() -> None:
 
 
 def test_r2b_closure_amendments_only_touch_the_scope_guard() -> None:
-    result = _git("diff", "--name-only", f"{R2B_CLOSURE_SEED}..HEAD")
+    result = _git("diff", "--name-only", f"{R2B_CLOSURE_SEED}..{R2B_CLOSURE_END}")
     changed = {path for path in result.stdout.splitlines() if path}
     assert changed <= R2B_CLOSURE_FILES
+
+
+def test_acquisition_recovery_phase_a_only_adds_diagnostics_and_governance() -> None:
+    assert (
+        _git("merge-base", "--is-ancestor", ACQUISITION_RECOVERY_PHASE_A_SEED, "HEAD").returncode
+        == 0
+    )
+    result = _git(
+        "diff", "--name-only", f"{ACQUISITION_RECOVERY_PHASE_A_SEED}..HEAD"
+    )
+    changed = {path for path in result.stdout.splitlines() if path}
+    assert changed <= ACQUISITION_RECOVERY_PHASE_A_PATHS

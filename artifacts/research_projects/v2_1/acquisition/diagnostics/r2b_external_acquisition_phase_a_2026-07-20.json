@@ -1,0 +1,169 @@
+{
+  "artifact_kind": "acquisition_environment_diagnostic",
+  "baseline_head": "fd057e20ca1d81129ff39f0a253fe122acca99c2",
+  "diagnostic_id": "acquisition_diagnostic:r2b_external_recovery:2026-07-20",
+  "generated_at": "2026-07-20T06:29:33Z",
+  "project_slug": "ai_compute_pcb_industry_bottleneck",
+  "scope": {
+    "ai_pcb_phase_3_started": false,
+    "high_end_medical_device_started": false,
+    "immutable_versions_modified": [],
+    "implementation_performed": false,
+    "phase": "external_evidence_acquisition_recovery_phase_a"
+  },
+  "proxy_configuration": {
+    "environment_variables": {
+      "ALL_PROXY": {"set": false},
+      "HTTPS_PROXY": {"set": false},
+      "HTTP_PROXY": {"set": false},
+      "NO_PROXY": {"set": false},
+      "all_proxy": {"set": false},
+      "http_proxy": {"set": false},
+      "https_proxy": {"set": false},
+      "no_proxy": {"set": false}
+    },
+    "macos_system_proxy": {
+      "http": {
+        "credentials_present": false,
+        "enabled": true,
+        "endpoint": "192.168.3.x:789x"
+      },
+      "https": {
+        "credentials_present": false,
+        "enabled": true,
+        "endpoint": "192.168.3.x:789x"
+      },
+      "socks": {
+        "credentials_present": false,
+        "enabled": true,
+        "endpoint": "192.168.3.x:789x"
+      }
+    },
+    "sensitive_values_recorded": false
+  },
+  "checks": [
+    {
+      "check_id": "dns_public_host",
+      "failure_code": null,
+      "result_status": "pass",
+      "summary": "example.com resolved to public IPv4 and IPv6 addresses."
+    },
+    {
+      "check_id": "tls_public_host",
+      "failure_code": null,
+      "result_status": "pass",
+      "summary": "TLS 1.3 negotiation and certificate verification succeeded for example.com."
+    },
+    {
+      "check_id": "curl_default_html",
+      "failure_code": null,
+      "http_status": 200,
+      "mime_type": "text/html",
+      "request_mode": "system_curl_default",
+      "result_status": "pass"
+    },
+    {
+      "check_id": "curl_explicit_direct_html",
+      "failure_code": null,
+      "http_status": 200,
+      "mime_type": "text/html",
+      "request_mode": "system_curl_no_proxy",
+      "result_status": "pass"
+    },
+    {
+      "bytes_received": 13264,
+      "check_id": "curl_explicit_direct_pdf",
+      "content_sha256": "3df79d34abbca99308e79cb94461c1893582604d68329a41fd4bec1885e6adb4",
+      "failure_code": null,
+      "http_status": 200,
+      "mime_type": "application/pdf",
+      "request_mode": "system_curl_no_proxy",
+      "result_status": "pass"
+    },
+    {
+      "check_id": "redirect_public_endpoint",
+      "failure_code": null,
+      "http_status": 200,
+      "redirect_count": 1,
+      "resolved_url": "https://httpbingo.org/get",
+      "result_status": "pass"
+    },
+    {
+      "check_id": "alternate_redirect_endpoint",
+      "failure_code": "connection_timeout",
+      "result_status": "failed",
+      "summary": "The httpbin.org redirect diagnostic timed out; the independent httpbingo.org redirect check passed."
+    },
+    {
+      "check_id": "requests_default_transport_html",
+      "failure_code": "security_policy_blocked",
+      "http_status": 200,
+      "proxy_mode": "macos_system_proxy_implicitly_discovered",
+      "result_status": "failed",
+      "summary": "requests reached the source through a private-LAN system proxy; snapshot SSRF peer validation correctly rejected the private peer."
+    },
+    {
+      "check_id": "requests_explicit_direct_html",
+      "failure_code": null,
+      "http_status": 200,
+      "mime_type": "text/html",
+      "parser": "stdlib.html.parser",
+      "proxy_mode": "disabled",
+      "result_status": "pass",
+      "section_count": 4
+    },
+    {
+      "bytes_received": 13264,
+      "check_id": "requests_explicit_direct_pdf",
+      "content_sha256": "3df79d34abbca99308e79cb94461c1893582604d68329a41fd4bec1885e6adb4",
+      "failure_code": null,
+      "http_status": 200,
+      "mime_type": "application/pdf",
+      "parser": "pypdf",
+      "proxy_mode": "disabled",
+      "result_status": "pass",
+      "section_count": 1
+    },
+    {
+      "check_id": "search_provider_search_query",
+      "failure_code": "search_provider_error",
+      "http_status": 404,
+      "result_status": "failed",
+      "summary": "The configured search service returned HTTP 404 with no authentication, quota, or rate-limit signal."
+    },
+    {
+      "check_id": "search_provider_direct_open",
+      "failure_code": "search_provider_error",
+      "http_status": 404,
+      "result_status": "failed",
+      "summary": "The same service returned HTTP 404 for direct URL open, indicating a provider/gateway route failure rather than a query-specific failure."
+    },
+    {
+      "check_id": "in_app_browser_binding",
+      "failure_code": "browser_runtime_unavailable",
+      "result_status": "unavailable",
+      "summary": "The browser-control runtime reported that no browser binding was available."
+    },
+    {
+      "check_id": "python_playwright_runtime",
+      "failure_code": null,
+      "provider": "python_playwright",
+      "result_status": "pass",
+      "runtime": "chromium_headless"
+    },
+    {
+      "check_id": "docling_runtime",
+      "failure_code": null,
+      "result_status": "pass",
+      "version": "2.110.0"
+    }
+  ],
+  "root_cause": {
+    "automated_direct_acquisition_recoverable": true,
+    "browser_channel_status": "optional_runtime_available_but_in_app_binding_unavailable",
+    "primary_failure_code": "security_policy_blocked",
+    "search_channel_status": "provider_unavailable",
+    "summary": "The host network is currently healthy. Existing RequestsFetchTransport silently inherits macOS system proxy settings through urllib/requests discovery, connects to a private proxy peer, and is then rejected by the existing SSRF peer policy. Explicit direct mode succeeds. The configured search service independently remains unavailable with HTTP 404."
+  },
+  "recommended_next_step": "Implement an explicit, non-fallback direct_http mode around the existing snapshot pipeline, plus append-only acquisition attempt records and a formal local/manual import path. Keep search and browser providers independently optional."
+}
