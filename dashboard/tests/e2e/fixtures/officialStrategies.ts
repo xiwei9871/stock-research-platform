@@ -1,5 +1,7 @@
+export type OfficialStrategyId = 'lhb_shortline' | 'mid_trend' | 'tech_bottleneck';
+
 export type OfficialStrategyFixture = {
-  strategyId: 'lhb_shortline' | 'mid_trend' | 'tech_bottleneck';
+  strategyId: OfficialStrategyId;
   contractId: string;
   publishId: string;
   artifactVersion: string;
@@ -33,4 +35,4 @@ export const officialStrategies = {
     performanceDate: '2026-07-17',
     totalReturn: 70.5
   }
-} as const satisfies Record<string, OfficialStrategyFixture>;
+} as const satisfies Record<OfficialStrategyId, OfficialStrategyFixture>;

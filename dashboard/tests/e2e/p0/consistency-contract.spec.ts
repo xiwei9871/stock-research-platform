@@ -142,6 +142,28 @@ test('restored state failure reports expected and rendered state @p0 @consistenc
   );
 });
 
+test('restored state waits for delayed search and selected state @p0 @consistency-contract', async ({
+  page,
+  baseURL
+}) => {
+  await setContractContent(
+    page,
+    baseURL,
+    '/__consistency-delayed-state__',
+    '<main><input id="search" aria-label="Global search" role="combobox" value="">' +
+      '<button id="tab" role="tab" aria-selected="false">研究事实表</button>' +
+      '<script>setTimeout(() => {' +
+      'document.querySelector("#search").value = "海能技术";' +
+      'document.querySelector("#tab").setAttribute("aria-selected", "true");' +
+      '}, 150);</script></main>'
+  );
+
+  await expectStateRestored(page, {
+    searchQuery: '海能技术',
+    selectedText: '研究事实表'
+  });
+});
+
 test('API/UI rules format number, ratio, and percent without double scaling @p0 @consistency-contract', async ({
   page,
   baseURL
@@ -150,11 +172,12 @@ test('API/UI rules format number, ratio, and percent without double scaling @p0 
     page,
     baseURL,
     '/__consistency-values__',
-    '<main><strong id="number">-1,234.50</strong><strong id="ratio">+52.40%</strong>' +
-      '<strong id="percent">52.40%</strong></main>'
+    '<main><strong id="number">-1,234.50</strong><strong id="number-plain">1234.50</strong>' +
+      '<strong id="ratio">+52.40%</strong><strong id="percent">52.40%</strong></main>'
   );
 
   await expectApiUiConsistency('-1234.5', page.locator('#number'), 'number');
+  await expectApiUiConsistency('1234.5', page.locator('#number-plain'), 'number');
   await expectApiUiConsistency(0.524, page.locator('#ratio'), 'ratio-as-percent');
   await expectApiUiConsistency('52.4', page.locator('#percent'), 'percent');
 });
@@ -209,6 +232,64 @@ test('API/UI assertions fail closed for null and invalid numeric values @p0 @con
   );
 });
 
+for (const [rawValue, renderedText] of [
+  ['0x34', '52.00'],
+  ['0b110100', '52.00'],
+  ['NaN', 'NaN'],
+  ['$52.4', '52.40']
+] as const) {
+  test(`API string rejects non-decimal syntax ${rawValue} @p0 @consistency-contract`, async ({
+    page,
+    baseURL
+  }) => {
+    await setContractContent(
+      page,
+      baseURL,
+      `/__consistency-api-string-${encodeURIComponent(rawValue)}__`,
+      `<main><strong id="value">${renderedText}</strong></main>`
+    );
+
+    expect(
+      await captureErrorMessage(() =>
+        expectApiUiConsistency(rawValue, page.locator('#value'), 'number')
+      )
+    ).toBe(
+      `API/UI consistency mismatch: raw value "${rawValue}"; rendered text ` +
+        `"${renderedText}"; rule number; expected a finite numeric value.`
+    );
+  });
+}
+
+for (const [caseName, renderedText, rule] of [
+  ['invalid number grouping', '-12,34.50', 'number'],
+  ['comma in percent', '5,2.40%', 'percent'],
+  ['repeated percent symbol', '52.40%%', 'percent'],
+  ['currency in percent', '$52.40%', 'percent']
+] as const) {
+  test(`rendered value rejects ${caseName} @p0 @consistency-contract`, async ({
+    page,
+    baseURL
+  }) => {
+    await setContractContent(
+      page,
+      baseURL,
+      `/__consistency-rendered-${encodeURIComponent(caseName)}__`,
+      `<main><strong id="value">${renderedText}</strong></main>`
+    );
+
+    const actual = rule === 'number' ? -1234.5 : 52.4;
+    const expectedText = rule === 'number' ? '-1,234.50' : '52.40%';
+    expect(
+      await captureErrorMessage(() =>
+        expectApiUiConsistency(actual, page.locator('#value'), rule)
+      )
+    ).toBe(
+      `API/UI consistency mismatch: raw value ${actual}; rendered text ` +
+        `"${renderedText}"; rule ${rule}; expected "${expectedText}".`
+    );
+  });
+}
+
 test('publication identity matches official fixture and visible card @p0 @consistency-contract', async ({
   page,
   baseURL
@@ -219,8 +300,9 @@ test('publication identity matches official fixture and visible card @p0 @consis
     baseURL,
     '/__consistency-publication__',
     `<main><article data-strategy-id="${strategy.strategyId}">` +
-      `<span>${strategy.contractId}</span> <span>${strategy.publishId}</span> ` +
-      `<time>${strategy.performanceDate}</time> ` +
+      `<span data-testid="strategy-contract-id">${strategy.contractId}</span> ` +
+      `<span data-testid="strategy-publish-id">${strategy.publishId}</span> ` +
+      `<time data-testid="strategy-performance-date">${strategy.performanceDate}</time> ` +
       '<strong data-testid="strategy-total-return">+52.40%</strong></article></main>'
   );
 
@@ -242,8 +324,9 @@ test('publication failure reports strategy and publish identity plus values @p0 
     baseURL,
     '/__consistency-publication-mismatch__',
     `<main><article data-strategy-id="${strategy.strategyId}">` +
-      `<span>${strategy.contractId}</span> <span>${strategy.publishId}-stale</span> ` +
-      '<time>2026-07-18</time> ' +
+      `<span data-testid="strategy-contract-id">${strategy.contractId}</span> ` +
+      `<span data-testid="strategy-publish-id">${strategy.publishId}-stale</span> ` +
+      '<time data-testid="strategy-performance-date">2026-07-18</time> ' +
       '<strong data-testid="strategy-total-return">175.29%</strong></article></main>'
   );
 
@@ -257,10 +340,10 @@ test('publication failure reports strategy and publish identity plus values @p0 
       })
     )
   ).toBe(
-    `Publication consistency mismatch for strategy ID "${strategy.strategyId}" and ` +
+      `Publication consistency mismatch for strategy ID "${strategy.strategyId}" and ` +
       `publish ID "${strategy.publishId}":\n` +
-      `- publishId: expected "${strategy.publishId}", rendered text did not contain it\n` +
-      `- tradeDate: expected "${strategy.performanceDate}", rendered text did not contain it\n` +
+      `- publishId: expected "${strategy.publishId}", rendered "${strategy.publishId}-stale"\n` +
+      `- tradeDate: expected "${strategy.performanceDate}", rendered "2026-07-18"\n` +
       '- totalReturnPct: raw value 52.4; rendered text "175.29%"; ' +
       'rule percent; expected "52.40%".'
   );
@@ -281,8 +364,9 @@ for (const [caseName, totalReturnText, otherMetricText] of [
       baseURL,
       `/__consistency-publication-return-${encodeURIComponent(caseName)}__`,
       `<main><article data-strategy-id="${strategy.strategyId}">` +
-        `<span>${strategy.contractId}</span> <span>${strategy.publishId}</span> ` +
-        `<time>${strategy.performanceDate}</time> ` +
+        `<span data-testid="strategy-contract-id">${strategy.contractId}</span> ` +
+        `<span data-testid="strategy-publish-id">${strategy.publishId}</span> ` +
+        `<time data-testid="strategy-performance-date">${strategy.performanceDate}</time> ` +
         `<strong data-testid="strategy-total-return">${totalReturnText}</strong> ` +
         `<span data-testid="another-metric">${otherMetricText}</span></article></main>`
     );
@@ -301,6 +385,126 @@ for (const [caseName, totalReturnText, otherMetricText] of [
         `publish ID "${strategy.publishId}":\n` +
         `- totalReturnPct: raw value 52.4; rendered text "${totalReturnText}"; ` +
         'rule percent; expected "52.40%".'
+    );
+  });
+}
+
+test('publication waits for delayed stable fields @p0 @consistency-contract', async ({
+  page,
+  baseURL
+}) => {
+  const strategy = officialStrategies.lhb_shortline;
+  await setContractContent(
+    page,
+    baseURL,
+    '/__consistency-publication-delayed__',
+    `<main><article id="card" data-strategy-id="${strategy.strategyId}"></article>` +
+      '<script>setTimeout(() => {' +
+      `document.querySelector("#card").innerHTML = ` +
+      '`<span data-testid="strategy-contract-id">' +
+      `${strategy.contractId}</span> ` +
+      '<span data-testid="strategy-publish-id">' +
+      `${strategy.publishId}</span> ` +
+      '<time data-testid="strategy-performance-date">' +
+      `${strategy.performanceDate}</time> ` +
+      '<strong data-testid="strategy-total-return">52.40%</strong>`;' +
+      '}, 150);</script></main>'
+  );
+
+  await expectPublicationConsistency(page.locator('article'), {
+    contractId: strategy.contractId,
+    publishId: strategy.publishId,
+    tradeDate: strategy.performanceDate,
+    totalReturnPct: strategy.totalReturn
+  });
+});
+
+for (const [caseName, strategyIdAttribute, fieldsHtml, expectedLines] of [
+  [
+    'missing strategy identity',
+    '',
+    (strategy: typeof officialStrategies.lhb_shortline) =>
+      `<span data-testid="strategy-contract-id">${strategy.contractId}</span>` +
+      `<span data-testid="strategy-publish-id">${strategy.publishId}</span>` +
+      `<time data-testid="strategy-performance-date">${strategy.performanceDate}</time>` +
+      '<strong data-testid="strategy-total-return">52.40%</strong>',
+    (strategy: typeof officialStrategies.lhb_shortline) => [
+      `- strategyId: expected "${strategy.strategyId}", rendered "<missing>"`
+    ]
+  ],
+  [
+    'wrong strategy identity',
+    'mid_trend',
+    (strategy: typeof officialStrategies.lhb_shortline) =>
+      `<span data-testid="strategy-contract-id">${strategy.contractId}</span>` +
+      `<span data-testid="strategy-publish-id">${strategy.publishId}</span>` +
+      `<time data-testid="strategy-performance-date">${strategy.performanceDate}</time>` +
+      '<strong data-testid="strategy-total-return">52.40%</strong>',
+    (strategy: typeof officialStrategies.lhb_shortline) => [
+      `- strategyId: expected "${strategy.strategyId}", rendered "mid_trend"`
+    ]
+  ],
+  [
+    'wrong contract marker with unrelated text',
+    'lhb_shortline',
+    (strategy: typeof officialStrategies.lhb_shortline) =>
+      `<span data-testid="strategy-contract-label">${strategy.contractId}</span>` +
+      `<span data-testid="strategy-publish-id">${strategy.publishId}</span>` +
+      `<time data-testid="strategy-performance-date">${strategy.performanceDate}</time>` +
+      '<strong data-testid="strategy-total-return">52.40%</strong>',
+    (strategy: typeof officialStrategies.lhb_shortline) => [
+      '- contractId: expected a unique visible field, rendered "<missing>"'
+    ]
+  ],
+  [
+    'duplicate publish field',
+    'lhb_shortline',
+    (strategy: typeof officialStrategies.lhb_shortline) =>
+      `<span data-testid="strategy-contract-id">${strategy.contractId}</span>` +
+      `<span data-testid="strategy-publish-id">${strategy.publishId}</span>` +
+      `<span data-testid="strategy-publish-id">${strategy.publishId}</span>` +
+      `<time data-testid="strategy-performance-date">${strategy.performanceDate}</time>` +
+      '<strong data-testid="strategy-total-return">52.40%</strong>',
+    () => ['- publishId: expected a unique visible field, rendered "<ambiguous:2>"']
+  ],
+  [
+    'hidden performance date field',
+    'lhb_shortline',
+    (strategy: typeof officialStrategies.lhb_shortline) =>
+      `<span data-testid="strategy-contract-id">${strategy.contractId}</span>` +
+      `<span data-testid="strategy-publish-id">${strategy.publishId}</span>` +
+      `<time hidden data-testid="strategy-performance-date">${strategy.performanceDate}</time>` +
+      '<strong data-testid="strategy-total-return">52.40%</strong>',
+    () => ['- tradeDate: expected a unique visible field, rendered "<hidden>"']
+  ]
+] as const) {
+  test(`publication fails closed for ${caseName} @p0 @consistency-contract`, async ({
+    page,
+    baseURL
+  }) => {
+    const strategy = officialStrategies.lhb_shortline;
+    const attribute = strategyIdAttribute
+      ? ` data-strategy-id="${strategyIdAttribute}"`
+      : '';
+    await setContractContent(
+      page,
+      baseURL,
+      `/__consistency-publication-identity-${encodeURIComponent(caseName)}__`,
+      `<main><article${attribute}>${fieldsHtml(strategy)}</article></main>`
+    );
+
+    expect(
+      await captureErrorMessage(() =>
+        expectPublicationConsistency(page.locator('article'), {
+          contractId: strategy.contractId,
+          publishId: strategy.publishId,
+          tradeDate: strategy.performanceDate,
+          totalReturnPct: strategy.totalReturn
+        })
+      )
+    ).toBe(
+      `Publication consistency mismatch for strategy ID "${strategy.strategyId}" and ` +
+        `publish ID "${strategy.publishId}":\n${expectedLines(strategy).join('\n')}`
     );
   });
 }
