@@ -10,17 +10,19 @@
       "auth": "authenticated",
       "write_mode": "read_write",
       "primary_apis": [
-        "/api/platform/readiness",
-        "/api/platform/summary",
-        "/api/research/queue/health",
-        "/api/research/review-actions"
+        {"method": "GET", "path": "/api/platform/readiness", "access": "read"},
+        {"method": "GET", "path": "/api/platform/summary", "access": "read"},
+        {"method": "GET", "path": "/api/research/queue/health", "access": "read"},
+        {"method": "POST", "path": "/api/research/review-actions", "access": "write"}
       ],
       "layers": ["unit", "api", "playwright"],
       "profiles": ["mock", "real", "sandbox", "audit"],
       "daily_eod": false,
       "owner": "platform",
       "reachable": true,
-      "disabled_reason": null
+      "disabled_reason": null,
+      "landmark": {"role": "region", "name": "策略指挥中心"},
+      "route_params": {}
     },
     {
       "id": "review_queue",
@@ -31,15 +33,17 @@
       "auth": "authenticated",
       "write_mode": "read_only",
       "primary_apis": [
-        "/api/review-queue",
-        "/api/review-queue/snapshots"
+        {"method": "GET", "path": "/api/review-queue", "access": "read"},
+        {"method": "GET", "path": "/api/platform/summary", "access": "read"}
       ],
       "layers": ["unit", "api", "playwright"],
       "profiles": ["mock", "real", "audit", "eod"],
       "daily_eod": true,
       "owner": "review",
       "reachable": true,
-      "disabled_reason": null
+      "disabled_reason": null,
+      "landmark": {"role": "region", "name": "策略复盘队列"},
+      "route_params": {}
     },
     {
       "id": "daily_review",
@@ -49,13 +53,17 @@
       "priority": "P0",
       "auth": "authenticated",
       "write_mode": "read_only",
-      "primary_apis": ["/api/daily-review-lite"],
+      "primary_apis": [
+        {"method": "GET", "path": "/api/daily-review-lite", "access": "read"}
+      ],
       "layers": ["unit", "api", "playwright"],
       "profiles": ["mock", "real", "audit", "eod"],
       "daily_eod": true,
       "owner": "review",
       "reachable": true,
-      "disabled_reason": null
+      "disabled_reason": null,
+      "landmark": {"role": "region", "name": "每日复盘"},
+      "route_params": {}
     },
     {
       "id": "market_monitor",
@@ -66,16 +74,18 @@
       "auth": "authenticated",
       "write_mode": "read_only",
       "primary_apis": [
-        "/api/market-monitor/eod",
-        "/api/market-monitor/overview",
-        "/api/market-monitor/sectors/heatmap"
+        {"method": "GET", "path": "/api/market-monitor/eod", "access": "read"},
+        {"method": "GET", "path": "/api/market-monitor/overview", "access": "read"},
+        {"method": "GET", "path": "/api/market-monitor/sectors/heatmap", "access": "read"}
       ],
       "layers": ["unit", "api", "playwright"],
       "profiles": ["mock", "real", "audit", "eod"],
       "daily_eod": true,
       "owner": "market_data",
       "reachable": true,
-      "disabled_reason": null
+      "disabled_reason": null,
+      "landmark": {"role": "region", "name": "Market Monitor workspace"},
+      "route_params": {}
     },
     {
       "id": "news",
@@ -86,16 +96,18 @@
       "auth": "authenticated",
       "write_mode": "read_write",
       "primary_apis": [
-        "/api/public-news",
-        "/api/public-news/status",
-        "/api/public-news/refresh"
+        {"method": "GET", "path": "/api/public-news", "access": "read"},
+        {"method": "GET", "path": "/api/public-news/status", "access": "read"},
+        {"method": "POST", "path": "/api/public-news/refresh", "access": "write"}
       ],
       "layers": ["unit", "api", "playwright"],
       "profiles": ["real", "sandbox", "audit"],
       "daily_eod": false,
       "owner": "research_data",
       "reachable": true,
-      "disabled_reason": null
+      "disabled_reason": null,
+      "landmark": {"role": "region", "name": "News workspace"},
+      "route_params": {}
     },
     {
       "id": "research_reports",
@@ -106,15 +118,17 @@
       "auth": "authenticated",
       "write_mode": "read_only",
       "primary_apis": [
-        "/api/research-reports",
-        "/api/research-reports/summary"
+        {"method": "GET", "path": "/api/research-reports", "access": "read"},
+        {"method": "GET", "path": "/api/research-reports/summary", "access": "read"}
       ],
       "layers": ["unit", "api", "playwright"],
       "profiles": ["real", "audit", "eod"],
       "daily_eod": true,
       "owner": "research_data",
       "reachable": true,
-      "disabled_reason": null
+      "disabled_reason": null,
+      "landmark": {"role": "region", "name": "Research Reports workspace"},
+      "route_params": {}
     },
     {
       "id": "stock_workspace",
@@ -125,16 +139,19 @@
       "auth": "authenticated",
       "write_mode": "read_write",
       "primary_apis": [
-        "/api/assets/{asset_id}/profile",
-        "/api/assets/{asset_id}/decisions",
-        "/api/operator-decisions"
+        {"method": "GET", "path": "/api/assets/{asset_id}/profile", "access": "read"},
+        {"method": "GET", "path": "/api/assets/{asset_id}/decisions", "access": "read"},
+        {"method": "POST", "path": "/api/operator-decisions", "access": "write"},
+        {"method": "PATCH", "path": "/api/operator-decisions/{event_id}", "access": "write"}
       ],
       "layers": ["unit", "api", "playwright"],
       "profiles": ["mock", "real", "sandbox", "audit"],
       "daily_eod": false,
       "owner": "review",
       "reachable": true,
-      "disabled_reason": null
+      "disabled_reason": null,
+      "landmark": {"role": "region", "name": "个股复盘工作台"},
+      "route_params": {"asset_id": "authoritative_stock_asset_id"}
     },
     {
       "id": "watchlist",
@@ -144,13 +161,17 @@
       "priority": "P0",
       "auth": "authenticated",
       "write_mode": "read_only",
-      "primary_apis": ["/api/watchlists/{watchlist_id}"],
+      "primary_apis": [
+        {"method": "GET", "path": "/api/watchlists/{watchlist_id}", "access": "read"}
+      ],
       "layers": ["unit", "api", "playwright"],
       "profiles": ["mock", "real", "audit", "eod"],
       "daily_eod": true,
       "owner": "strategy",
       "reachable": true,
-      "disabled_reason": null
+      "disabled_reason": null,
+      "landmark": {"role": "region", "name": "Watchlist workspace"},
+      "route_params": {}
     },
     {
       "id": "theme_research",
@@ -161,15 +182,17 @@
       "auth": "authenticated",
       "write_mode": "read_only",
       "primary_apis": [
-        "/api/research/theme-decomposition/themes",
-        "/api/research/theme-decomposition/themes/{theme_id}/companies"
+        {"method": "GET", "path": "/api/research/theme-decomposition/themes", "access": "read"},
+        {"method": "GET", "path": "/api/research/theme-decomposition/themes/{theme_id}/companies", "access": "read"}
       ],
       "layers": ["unit", "api", "playwright"],
       "profiles": ["mock", "real", "audit", "eod"],
       "daily_eod": true,
       "owner": "research",
       "reachable": true,
-      "disabled_reason": null
+      "disabled_reason": null,
+      "landmark": {"role": "region", "name": "主题研究与产业目录工作台"},
+      "route_params": {}
     },
     {
       "id": "docling_audit",
@@ -179,13 +202,17 @@
       "priority": "P1",
       "auth": "authenticated",
       "write_mode": "read_only",
-      "primary_apis": ["/api/research/data-to-brief/docling-90"],
+      "primary_apis": [
+        {"method": "GET", "path": "/api/research/data-to-brief/docling-90", "access": "read"}
+      ],
       "layers": ["unit", "api", "playwright"],
       "profiles": ["real", "audit"],
       "daily_eod": false,
       "owner": "research",
       "reachable": true,
-      "disabled_reason": null
+      "disabled_reason": null,
+      "landmark": {"role": "region", "name": "Data-to-Brief Docling 90-stock review"},
+      "route_params": {}
     },
     {
       "id": "tech_bottleneck_review",
@@ -196,16 +223,19 @@
       "auth": "authenticated",
       "write_mode": "read_write",
       "primary_apis": [
-        "/api/research/tech-bottleneck/review-universe/summary",
-        "/api/research/tech-bottleneck/review-universe/stocks",
-        "/api/research/tech-bottleneck/review-universe/decisions"
+        {"method": "GET", "path": "/api/research/tech-bottleneck/review-universe/summary", "access": "read"},
+        {"method": "GET", "path": "/api/research/tech-bottleneck/review-universe/stocks", "access": "read"},
+        {"method": "GET", "path": "/api/research/tech-bottleneck/review-universe/decisions", "access": "read"},
+        {"method": "POST", "path": "/api/research/tech-bottleneck/review-universe/decisions", "access": "write"}
       ],
       "layers": ["unit", "api", "playwright"],
       "profiles": ["mock", "real", "sandbox", "audit"],
       "daily_eod": false,
       "owner": "research",
       "reachable": true,
-      "disabled_reason": null
+      "disabled_reason": null,
+      "landmark": {"role": "region", "name": "科技卡脖子复盘工作台"},
+      "route_params": {}
     },
     {
       "id": "factor_lab",
@@ -216,15 +246,17 @@
       "auth": "authenticated",
       "write_mode": "read_only",
       "primary_apis": [
-        "/api/factors/library",
-        "/api/factors/score-preview"
+        {"method": "GET", "path": "/api/factors/library", "access": "read"},
+        {"method": "GET", "path": "/api/factors/score-preview", "access": "read"}
       ],
       "layers": ["unit", "api", "playwright"],
       "profiles": ["real", "audit"],
       "daily_eod": false,
       "owner": "strategy",
       "reachable": true,
-      "disabled_reason": null
+      "disabled_reason": null,
+      "landmark": {"role": "region", "name": "Factor Lab workspace"},
+      "route_params": {}
     },
     {
       "id": "strategy_lab",
@@ -235,16 +267,18 @@
       "auth": "authenticated",
       "write_mode": "read_write",
       "primary_apis": [
-        "/api/backtests/strategies",
-        "/api/backtests/jobs",
-        "/api/strategy-validation/runs"
+        {"method": "GET", "path": "/api/backtests/strategies", "access": "read"},
+        {"method": "POST", "path": "/api/backtests/jobs", "access": "write"},
+        {"method": "GET", "path": "/api/strategy-validation/runs", "access": "read"}
       ],
       "layers": ["unit", "api", "playwright"],
       "profiles": ["mock", "real", "sandbox", "audit"],
       "daily_eod": false,
       "owner": "strategy",
       "reachable": true,
-      "disabled_reason": null
+      "disabled_reason": null,
+      "landmark": {"role": "region", "name": "Strategy Lab workspace"},
+      "route_params": {}
     },
     {
       "id": "generated_reports",
@@ -254,13 +288,17 @@
       "priority": "P1",
       "auth": "authenticated",
       "write_mode": "read_only",
-      "primary_apis": ["/api/dashboard/overview"],
+      "primary_apis": [
+        {"method": "GET", "path": "/api/dashboard/overview", "access": "read"}
+      ],
       "layers": ["unit", "api", "playwright"],
       "profiles": ["real", "audit", "eod"],
       "daily_eod": true,
       "owner": "reporting",
       "reachable": true,
-      "disabled_reason": null
+      "disabled_reason": null,
+      "landmark": {"role": "region", "name": "Generated Reports workspace"},
+      "route_params": {}
     },
     {
       "id": "user_management",
@@ -271,16 +309,20 @@
       "auth": "admin",
       "write_mode": "read_write",
       "primary_apis": [
-        "/api/admin/users",
-        "/api/admin/users/{user_id}/disable",
-        "/api/admin/users/{user_id}/enable"
+        {"method": "GET", "path": "/api/admin/users", "access": "read"},
+        {"method": "POST", "path": "/api/admin/users", "access": "write"},
+        {"method": "POST", "path": "/api/admin/users/{user_id}/disable", "access": "write"},
+        {"method": "POST", "path": "/api/admin/users/{user_id}/enable", "access": "write"},
+        {"method": "POST", "path": "/api/admin/users/{user_id}/reset-password", "access": "write"}
       ],
       "layers": ["unit", "api", "playwright"],
       "profiles": ["mock", "sandbox", "audit"],
       "daily_eod": false,
       "owner": "platform_admin",
       "reachable": true,
-      "disabled_reason": null
+      "disabled_reason": null,
+      "landmark": {"role": "heading", "name": "用户管理"},
+      "route_params": {}
     },
     {
       "id": "data_explorer",
@@ -290,13 +332,17 @@
       "priority": "P2",
       "auth": "authenticated",
       "write_mode": "read_only",
-      "primary_apis": ["/api/assets/{asset_id}/profile"],
+      "primary_apis": [
+        {"method": "GET", "path": "/api/assets/{asset_id}/profile", "access": "read"}
+      ],
       "layers": ["unit"],
       "profiles": [],
       "daily_eod": false,
       "owner": "platform",
       "reachable": false,
-      "disabled_reason": "Component exists but is not registered in AppShell, canonical routing, or main navigation."
+      "disabled_reason": "Component exists but is not registered in AppShell, canonical routing, or main navigation.",
+      "landmark": null,
+      "route_params": {}
     }
   ]
 }

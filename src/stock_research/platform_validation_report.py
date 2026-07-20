@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Mapping
 from copy import deepcopy
 from pathlib import Path
@@ -26,6 +27,8 @@ ITEM_FIELDS = frozenset(
         "owner",
         "reachable",
         "disabled_reason",
+        "landmark",
+        "route_params",
     }
 )
 ENTRY_KINDS = frozenset({"main_navigation", "admin_navigation", "deep_link", "hidden"})
@@ -35,8 +38,16 @@ WRITE_MODES = frozenset({"read_only", "read_write"})
 LAYERS = frozenset({"unit", "api", "playwright"})
 PLAYWRIGHT_PROFILES = frozenset({"legacy", "mock", "real", "sandbox", "audit", "eod"})
 COVERAGE_STATUSES = frozenset({"covered", "partial", "missing", "not_applicable"})
+LANDMARK_FIELDS = frozenset({"role", "name"})
+LANDMARK_ROLES = frozenset({"region", "heading"})
+API_FIELDS = frozenset({"method", "path", "access"})
+API_METHODS = frozenset({"GET", "HEAD", "OPTIONS", "POST", "PATCH", "PUT", "DELETE"})
+READ_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+API_ACCESS = frozenset({"read", "write"})
+ROUTE_PARAM_SOURCES = frozenset({"authoritative_stock_asset_id"})
 
 _PRIORITY_ORDER = {"P0": 0, "P1": 1, "P2": 2}
+_PLACEHOLDER = re.compile(r"\{([a-z][a-z0-9_]*)\}")
 
 
 def _inventory_error(field: str, detail: str) -> ValueError:
@@ -111,6 +122,111 @@ def _require_string_list(
     return value
 
 
+def _validate_canonical_path(
+    value: Any,
+    item_id: str,
+    field: str,
+    *,
+    api: bool = False,
+) -> tuple[str, ...]:
+    if not isinstance(value, str) or not value or value != value.strip():
+        raise _item_error(item_id, field, "must be a non-empty trimmed canonical path")
+    if not value.startswith("/") or (api and not value.startswith("/api/")):
+        required_prefix = "/api/" if api else "/"
+        raise _item_error(item_id, field, f"must start with {required_prefix}")
+    if value != "/" and value.endswith("/"):
+        raise _item_error(item_id, field, "must not have a trailing slash")
+    if any(token in value for token in ("//", "?", "#", "%", "\\")):
+        raise _item_error(item_id, field, "must not contain ambiguous separators, encoding, query, or fragment")
+    if any(character.isspace() or ord(character) < 32 or ord(character) == 127 for character in value):
+        raise _item_error(item_id, field, "must not contain whitespace or control characters")
+    if value == "/":
+        return ()
+
+    placeholders: list[str] = []
+    for segment in value[1:].split("/"):
+        if not segment or segment in {".", ".."}:
+            raise _item_error(item_id, field, "must not contain empty or dot segments")
+        if "{" in segment or "}" in segment:
+            match = _PLACEHOLDER.fullmatch(segment)
+            if match is None:
+                raise _item_error(
+                    item_id,
+                    field,
+                    "placeholders must be whole segments named {[a-z][a-z0-9_]*}",
+                )
+            placeholder = match.group(1)
+            if placeholder in placeholders:
+                raise _item_error(item_id, field, f"placeholder {placeholder!r} must be unique")
+            placeholders.append(placeholder)
+    return tuple(placeholders)
+
+
+def _validate_route_params(item: Mapping[str, Any], item_id: str, placeholders: tuple[str, ...]) -> None:
+    route_params = item["route_params"]
+    if not isinstance(route_params, dict):
+        raise _item_error(item_id, "route_params", "must be an object")
+    if set(route_params) != set(placeholders):
+        raise _item_error(item_id, "route_params", "keys must exactly match route placeholders")
+    for source in route_params.values():
+        if not isinstance(source, str) or source not in ROUTE_PARAM_SOURCES:
+            raise _item_error(
+                item_id,
+                "route_params",
+                f"values must be one of {sorted(ROUTE_PARAM_SOURCES)}",
+            )
+
+
+def _validate_landmark(item: Mapping[str, Any], item_id: str, reachable: bool) -> None:
+    landmark = item["landmark"]
+    if not reachable:
+        if landmark is not None:
+            raise _item_error(item_id, "landmark", "must be null for unreachable items")
+        return
+    if not isinstance(landmark, dict):
+        raise _item_error(item_id, "landmark", "must be an object for reachable items")
+    if set(landmark) != LANDMARK_FIELDS:
+        raise _item_error(item_id, "landmark", "must contain exactly role and name")
+    role = landmark["role"]
+    if not isinstance(role, str) or role not in LANDMARK_ROLES:
+        raise _item_error(item_id, "landmark", f"role must be one of {sorted(LANDMARK_ROLES)}")
+    name = landmark["name"]
+    if not isinstance(name, str) or not name.strip() or name != name.strip():
+        raise _item_error(item_id, "landmark", "name must be a non-empty trimmed string")
+
+
+def _validate_primary_apis(item: Mapping[str, Any], item_id: str, write_mode: str) -> None:
+    primary_apis = item["primary_apis"]
+    if not isinstance(primary_apis, list) or not primary_apis:
+        raise _item_error(item_id, "primary_apis", "must be a non-empty list")
+
+    seen: set[tuple[str, str]] = set()
+    has_write = False
+    for api in primary_apis:
+        if not isinstance(api, dict) or set(api) != API_FIELDS:
+            raise _item_error(item_id, "primary_apis", "entries must contain exactly method, path, and access")
+        method = api["method"]
+        access = api["access"]
+        if not isinstance(method, str) or method not in API_METHODS:
+            raise _item_error(item_id, "primary_apis", f"method must be one of {sorted(API_METHODS)}")
+        if not isinstance(access, str) or access not in API_ACCESS:
+            raise _item_error(item_id, "primary_apis", f"access must be one of {sorted(API_ACCESS)}")
+        expected_access = "read" if method in READ_METHODS else "write"
+        if access != expected_access:
+            raise _item_error(item_id, "primary_apis", f"{method} requires access {expected_access}")
+        _validate_canonical_path(api["path"], item_id, "primary_apis", api=True)
+        key = (method, api["path"])
+        if key in seen:
+            raise _item_error(item_id, "primary_apis", f"duplicate API operation {method} {api['path']}")
+        seen.add(key)
+        has_write = has_write or access == "write"
+
+    if write_mode == "read_only" and has_write:
+        raise _item_error(item_id, "write_mode", "read-only items must not declare write APIs")
+    if write_mode == "read_write" and not has_write:
+        raise _item_error(item_id, "write_mode", "read-write items require at least one write API")
+
+
 def _validate_item(item: Any, index: int) -> dict[str, Any]:
     if not isinstance(item, dict):
         raise _item_error(f"<index:{index}>", "root", "must be an object")
@@ -128,24 +244,25 @@ def _validate_item(item: Any, index: int) -> dict[str, Any]:
     if not all(character.islower() or character.isdigit() or character == "_" for character in item_id):
         raise _item_error(item_id, "id", "must use lowercase letters, digits, and underscores")
     _require_string(item, item_id, "label")
-    route = _require_string(item, item_id, "route")
-    if not route.startswith("/") or "?" in route or "#" in route or "//" in route:
-        raise _item_error(item_id, "route", "must be a canonical absolute path without query or fragment")
+    route_placeholders = _validate_canonical_path(item["route"], item_id, "route")
+    _validate_route_params(item, item_id, route_placeholders)
     entry_kind = _require_enum(item, item_id, "entry_kind", ENTRY_KINDS)
     priority = _require_enum(item, item_id, "priority", PRIORITIES)
     _require_enum(item, item_id, "auth", AUTH_MODES)
     write_mode = _require_enum(item, item_id, "write_mode", WRITE_MODES)
-    primary_apis = _require_string_list(item, item_id, "primary_apis", non_empty=True)
-    if any(not api.startswith("/api/") or "?" in api or "#" in api for api in primary_apis):
-        raise _item_error(item_id, "primary_apis", "must contain canonical /api/ paths without query or fragment")
-    _require_string_list(item, item_id, "layers", allowed=LAYERS, non_empty=True)
+    _validate_primary_apis(item, item_id, write_mode)
+    layers = _require_string_list(item, item_id, "layers", allowed=LAYERS, non_empty=True)
     profiles = _require_string_list(item, item_id, "profiles", allowed=PLAYWRIGHT_PROFILES)
     if priority == "P0" and not profiles:
         raise _item_error(item_id, "profiles", "P0 items require a named Playwright profile")
+    if profiles and "playwright" not in layers:
+        raise _item_error(item_id, "layers", "items with profiles require the playwright layer")
 
     daily_eod = item["daily_eod"]
     if type(daily_eod) is not bool:
         raise _item_error(item_id, "daily_eod", "must be a boolean")
+    if ("eod" in profiles) != daily_eod:
+        raise _item_error(item_id, "profiles", "the eod profile must be present if and only if daily_eod is true")
     reachable = item["reachable"]
     if type(reachable) is not bool:
         raise _item_error(item_id, "reachable", "must be a boolean")
@@ -165,6 +282,7 @@ def _validate_item(item: Any, index: int) -> dict[str, Any]:
             raise _item_error(item_id, "disabled_reason", "is required for unreachable items")
     if daily_eod and (write_mode != "read_only" or not reachable):
         raise _item_error(item_id, "daily_eod", "is allowed only for reachable read-only items")
+    _validate_landmark(item, item_id, reachable)
 
     return deepcopy(item)
 
@@ -218,10 +336,12 @@ def _validate_result_map(
             raise _inventory_error(field, f"contains unknown item ID {item_id!r}")
         if not isinstance(values, list) or any(not isinstance(value, str) for value in values):
             raise _item_error(item_id, field, "must be a list of strings")
+        if len(set(values)) != len(values):
+            raise _item_error(item_id, field, "must not contain duplicate values")
         assigned = set(inventory_items[item_id][assignment_field])
         unsupported = sorted(set(values) - assigned)
         if unsupported:
-            raise _item_error(item_id, assignment_field, f"result contains unassigned values {unsupported}")
+            raise _item_error(item_id, field, f"contains unassigned values {unsupported}")
         normalized[item_id] = set(values)
     return normalized
 
@@ -259,6 +379,8 @@ def build_coverage_matrix(
 
         if not item["reachable"]:
             status = "not_applicable"
+            missing_layers = []
+            missing_profiles = []
         else:
             required_count = len(required_layers) + len(required_profiles)
             covered_count = len(item_covered_layers) + len(item_covered_profiles)
