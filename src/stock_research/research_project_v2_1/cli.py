@@ -17,6 +17,14 @@ from stock_research.research_project_v2_1.discovery import (
     write_discovery_batch,
 )
 from stock_research.research_project_v2_1.coverage import summarize_evidence_coverage
+from stock_research.research_project_v2_1.acquisition_contracts import AcquisitionContext
+from stock_research.research_project_v2_1.acquisition_doctor import (
+    build_provider_diagnostic,
+    write_provider_diagnostic,
+)
+from stock_research.research_project_v2_1.acquisition_http import DirectHttpProvider
+from stock_research.research_project_v2_1.acquisition_import import LocalFileProvider
+from stock_research.research_project_v2_1.acquisition_storage import read_acquisition_attempt
 from stock_research.research_project_v2_1.diff import diff_industry_versions
 from stock_research.research_project_v2_1.evidence import (
     validate_industry_evidence_assessment,
@@ -137,6 +145,43 @@ def _parser() -> argparse.ArgumentParser:
         "rebuild-index", help="Rebuild only the v2.1 index generation."
     )
     rebuild.add_argument("--write", action="store_true")
+
+    acquisition = commands.add_parser(
+        "acquisition", help="Run explicit acquisition providers and diagnostics."
+    )
+    acquisition_commands = acquisition.add_subparsers(
+        dest="acquisition_command", required=True
+    )
+    for name in ("doctor", "smoke"):
+        command = acquisition_commands.add_parser(name)
+        command.add_argument("--project", required=True)
+        command.add_argument("--version", required=True)
+        command.add_argument("--dry-run", action="store_true")
+    doctor = acquisition_commands.choices["doctor"]
+    doctor.add_argument("--write", action="store_true")
+    doctor.add_argument("--agent-run-id")
+
+    fetch = acquisition_commands.add_parser("fetch")
+    fetch.add_argument("--project", required=True)
+    fetch.add_argument("--version", required=True)
+    fetch.add_argument("--requirement")
+    fetch.add_argument("--candidate", required=True)
+    fetch.add_argument("--proxy-mode", choices=("direct", "environment_proxy", "explicit_proxy"), default="direct")
+    fetch.add_argument("--timeout-seconds", type=float, default=20.0)
+    fetch.add_argument("--max-retries", type=int, default=2)
+    fetch.add_argument("--dry-run", action="store_true")
+    fetch.add_argument("--agent-run-id")
+
+    import_command = acquisition_commands.add_parser("import")
+    import_command.add_argument("--project", required=True)
+    import_command.add_argument("--version", required=True)
+    import_command.add_argument("--request", required=True)
+    import_command.add_argument("--dry-run", action="store_true")
+
+    show_attempt = acquisition_commands.add_parser("show-attempt")
+    show_attempt.add_argument("--project", required=True)
+    show_attempt.add_argument("--version", required=True)
+    show_attempt.add_argument("--attempt-id", required=True)
     return parser
 
 
@@ -666,6 +711,118 @@ def _audit(args: argparse.Namespace, layout: LayeredResearchLayout) -> dict[str,
     }
 
 
+def _acquisition_provenance(
+    *, project: str, version: str, operation_at: str, agent_run_id: str | None
+) -> dict[str, Any]:
+    return {
+        "created_by": "research-project-v2-1 acquisition",
+        "actor_type": "automated_pipeline",
+        "agent_run_id": agent_run_id,
+        "created_at": operation_at,
+        "created_in_version": f"research_version:{project}:{version}",
+        "review_status": "unreviewed",
+    }
+
+
+def _acquisition_dispatch(
+    args: argparse.Namespace,
+    layout: LayeredResearchLayout,
+    clock: _Clock,
+) -> dict[str, Any]:
+    version = load_industry_version(args.project, args.version, layout=layout)
+    version_id = version["version_id"]
+    if args.acquisition_command == "smoke":
+        return {
+            "status": "not_run",
+            "reason": "online acquisition smoke requires separate Phase C approval",
+        }
+    if args.acquisition_command == "show-attempt":
+        return {
+            "status": "pass",
+            "acquisition_attempt": read_acquisition_attempt(
+                args.attempt_id, layout=layout
+            ),
+        }
+
+    operation_at = _timestamp(None, clock)
+    provenance = _acquisition_provenance(
+        project=args.project,
+        version=args.version,
+        operation_at=operation_at,
+        agent_run_id=getattr(args, "agent_run_id", None),
+    )
+    if args.acquisition_command == "doctor":
+        diagnostic = build_provider_diagnostic(
+            generated_at=operation_at,
+            provenance=provenance,
+            browser_runtime_status="not_tested",
+            search_provider_status="unavailable",
+            checks=[],
+        )
+        write = bool(args.write and not args.dry_run)
+        path = write_provider_diagnostic(diagnostic, layout=layout) if write else None
+        return {
+            "status": "pass",
+            "written": write,
+            "path": str(path) if path is not None else None,
+            "provider_diagnostic": diagnostic,
+        }
+
+    temporary: tempfile.TemporaryDirectory[str] | None = None
+    effective_layout = layout
+    if args.dry_run:
+        temporary, effective_layout = _temporary_layout()
+    try:
+        if args.acquisition_command == "fetch":
+            candidate = _unwrap(
+                _read_json(args.candidate, purpose="source candidate"),
+                "source_candidate",
+            )
+            candidate_provenance = candidate.get("provenance")
+            context = AcquisitionContext(
+                project_id=f"research_project:{args.project}",
+                research_version_context=version_id,
+                requirement_id=args.requirement,
+                candidate_id=candidate.get("candidate_id"),
+                provenance=(
+                    candidate_provenance
+                    if isinstance(candidate_provenance, dict)
+                    else provenance
+                ),
+            )
+            result = DirectHttpProvider().acquire(
+                candidate,
+                context=context,
+                layout=effective_layout,
+                attempted_at=operation_at,
+                proxy_mode=args.proxy_mode,
+                timeout_seconds=args.timeout_seconds,
+                max_retries=args.max_retries,
+            )
+            return {
+                "status": "pass",
+                "written": not args.dry_run,
+                "acquisition_attempt": result.attempt,
+                "evidence_artifact": result.artifact,
+            }
+        if args.acquisition_command == "import":
+            request = _unwrap(
+                _read_json(args.request, purpose="manual import request"),
+                "manual_import_request",
+            )
+            result = LocalFileProvider().acquire(request, layout=effective_layout)
+            return {
+                "status": "pass",
+                "written": not args.dry_run,
+                "acquisition_attempt": result.attempt,
+                "evidence_artifact": result.artifact,
+            }
+    finally:
+        if temporary is not None:
+            temporary.cleanup()
+    raise AssertionError(f"Unhandled acquisition command: {args.acquisition_command}")
+
+
 def _dispatch(
     args: argparse.Namespace,
     layout: LayeredResearchLayout,
@@ -713,6 +870,8 @@ def _dispatch(
         return {"status": "pass", **summarize_evidence_coverage(version)}
     if args.command == "rebuild-index":
         return {"status": "pass", **rebuild_layered_index(args.write, layout=layout)}
+    if args.command == "acquisition":
+        return _acquisition_dispatch(args, layout, clock)
     raise AssertionError(f"Unhandled command: {args.command}")
 
 
