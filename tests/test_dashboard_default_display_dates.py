@@ -57,17 +57,13 @@ def _manifest_modules(trade_date: str, *, run_id: str, browser_status: str | Non
     return rows
 
 
-def _install_boundary_gate(monkeypatch, browser_status: str | None) -> None:
+def _install_gate_modules(monkeypatch, modules: list[dict[str, object]]) -> None:
     monkeypatch.setattr(
         display_date_gate,
         "SETTINGS",
         SimpleNamespace(browser_acceptance_required_from="2026-07-21"),
     )
     monkeypatch.setattr(display_date_gate, "load_strategy_contracts", lambda profile="balanced": {})
-    modules = [
-        *_manifest_modules("2026-07-20", run_id="prior", browser_status=None),
-        *_manifest_modules("2026-07-21", run_id="candidate", browser_status=browser_status),
-    ]
     monkeypatch.setattr(display_date_gate, "load_recent_data_run_manifest", lambda **_kwargs: modules)
     real_select = display_date_gate.select_display_date
     monkeypatch.setattr(
@@ -79,6 +75,121 @@ def _install_boundary_gate(monkeypatch, browser_status: str | None) -> None:
             now=datetime(2026, 7, 21, 21, 0, tzinfo=display_date_gate.LOCAL_ZONE),
         ),
     )
+
+
+def _install_boundary_gate(monkeypatch, browser_status: str | None) -> None:
+    _install_gate_modules(
+        monkeypatch,
+        [
+            *_manifest_modules("2026-07-20", run_id="prior", browser_status=None),
+            *_manifest_modules("2026-07-21", run_id="candidate", browser_status=browser_status),
+        ],
+    )
+
+
+@pytest.mark.parametrize(
+    ("include_prior", "candidate_status", "expected_trade_date"),
+    [
+        (True, None, "2026-07-20"),
+        (False, None, ""),
+        (True, "failed", "2026-07-20"),
+        (True, "success", "2026-07-21"),
+    ],
+)
+def test_select_display_date_never_selects_ready_future_manifest(
+    monkeypatch,
+    include_prior,
+    candidate_status,
+    expected_trade_date,
+):
+    monkeypatch.setattr(
+        display_date_gate,
+        "SETTINGS",
+        SimpleNamespace(browser_acceptance_required_from="2026-07-21"),
+    )
+    monkeypatch.setattr(display_date_gate, "load_strategy_contracts", lambda profile="balanced": {})
+    modules = [
+        *(
+            _manifest_modules("2026-07-20", run_id="prior", browser_status=None)
+            if include_prior
+            else []
+        ),
+        *_manifest_modules("2026-07-21", run_id="candidate", browser_status=candidate_status),
+        *_manifest_modules("2026-07-22", run_id="future", browser_status="success"),
+    ]
+
+    gate = display_date_gate.select_display_date(
+        modules,
+        latest_market_date="2026-07-21",
+        now=datetime(2026, 7, 21, 21, 0, tzinfo=display_date_gate.LOCAL_ZONE),
+    )
+
+    assert gate["display_trade_date"] == expected_trade_date
+
+
+@pytest.mark.parametrize(
+    ("include_prior", "candidate_status", "expected_trade_date", "expected_status"),
+    [
+        (True, None, "2026-07-20", "ready"),
+        (False, None, "", "blocked"),
+        (True, "failed", "2026-07-20", "ready"),
+        (True, "success", "2026-07-21", "ready"),
+    ],
+)
+def test_default_trade_date_resolver_never_selects_ready_future_manifest(
+    monkeypatch,
+    include_prior,
+    candidate_status,
+    expected_trade_date,
+    expected_status,
+):
+    modules = [
+        *(
+            _manifest_modules("2026-07-20", run_id="prior", browser_status=None)
+            if include_prior
+            else []
+        ),
+        *_manifest_modules("2026-07-21", run_id="candidate", browser_status=candidate_status),
+        *_manifest_modules("2026-07-22", run_id="future", browser_status="success"),
+    ]
+    _install_gate_modules(monkeypatch, modules)
+
+    result = display_date_gate.resolve_default_trade_date({"latest_market_date": "2026-07-21"})
+
+    assert result["trade_date"] == expected_trade_date
+    assert result["status"] == expected_status
+
+
+def test_review_market_and_daily_defaults_ignore_ready_future_manifest(monkeypatch):
+    modules = [
+        *_manifest_modules("2026-07-20", run_id="prior", browser_status=None),
+        *_manifest_modules("2026-07-21", run_id="candidate", browser_status="failed"),
+        *_manifest_modules("2026-07-22", run_id="future", browser_status="success"),
+    ]
+    _install_gate_modules(monkeypatch, modules)
+    summary = {"latest_market_date": "2026-07-21", "latest_score_date": "2026-07-21"}
+
+    assert review_queue._default_display_trade_date(summary) == "2026-07-20"
+    assert market_monitor._default_display_trade_date(summary) == "2026-07-20"
+
+    monkeypatch.setattr(daily_review_lite, "load_platform_summary", lambda service: summary)
+    selected_dates: list[str] = []
+
+    def latest_run(trade_date, *, service):
+        selected_dates.append(trade_date)
+        return {"run_id": "registered"}
+
+    monkeypatch.setattr(daily_review_lite, "_latest_registered_run", latest_run)
+    monkeypatch.setattr(
+        daily_review_lite,
+        "_load_payload_from_run",
+        lambda run, *, selected_trade_date: {"trade_date": selected_trade_date},
+    )
+
+    payload = daily_review_lite.build_daily_review_lite(service="test")
+
+    assert payload["trade_date"] == "2026-07-20"
+    assert selected_dates == ["2026-07-20"]
 
 
 @pytest.mark.parametrize(

@@ -212,6 +212,7 @@ def select_display_date(
         trade_date
         for trade_date, status in ready_by_date.items()
         if status["display_status"] == "ready"
+        and (not candidate_trade_date or trade_date <= candidate_trade_date)
     )
     candidate = ready_by_date.get(candidate_trade_date)
 
