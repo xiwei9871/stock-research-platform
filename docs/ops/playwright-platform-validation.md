@@ -32,6 +32,13 @@ git status --porcelain=v1 --untracked-files=all
 
 The command must be the first entry in `commands-manifest.json`, with start/end timestamps, exit code, and separate stdout/stderr evidence paths. An authoritative freeze requires exit 0 and empty stdout. If any tracked or untracked path is printed, stop immediately; do not run a layer or describe the audit as frozen.
 
+The audit runner must write each action atomically in two phases:
+
+1. before execution: `status=started`, action ID, command, cwd, start time, stdout path, and stderr path;
+2. after execution: terminal status, exit code, end time, interruption detail, log sizes, and log SHA-256 values.
+
+Signal or runner exceptions must leave a durable `interrupted` or `error` action instead of creating a manifest gap. Expected nonzero test or gate attempts remain in the manifest alongside their successful correction.
+
 Before running any layer, save:
 
 - full revision and clean/dirty status;
@@ -110,6 +117,8 @@ pnpm test:e2e:audit
 
 Use distinct JSON names and profile artifact directories. After every Playwright command, copy the matching `dashboard/test-results/<profile>` and `dashboard/playwright-report/<profile>` trees into that audit's `inputs/raw/` before a later command can overwrite them.
 
+Every copy and transformation is a separately recorded runner action. This includes raw artifact copies, report-ready evidence copies, coverage JSON generation, attachment-path rebasing, report generation, root-ledger generation, safety scanning, permission normalization, artifact-manifest generation, and sealed verification. Do not use an unrecorded `cp`, ad hoc script, or reused prior-audit result.
+
 ## Report Inputs And Coverage
 
 Create `platform_validation_coverage_results_v1` JSON. Every declared `unit` or `api` status must cite an evidence file relative to the coverage JSON. Use `covered` only when the command exercises the inventory item, `partial` when the command provides relevant but incomplete evidence, and `missing` when no accepted command covers it.
@@ -178,10 +187,17 @@ Promote to `trusted_baseline` only when:
 
 - Never archive cookies, passwords, authorization headers, CSRF tokens, API keys, or raw request headers.
 - Keep report ingestion fail-closed on path traversal, symlinks, unsafe archives, oversized JSON, and secret-shaped text.
+- Scan `inputs/raw`, copied artifact/report trees, `inputs/report-ready`, the generated report/evidence, and text members inside ZIP traces. Classify findings as known synthetic sentinels, known noncredential framework code, potential real credentials, or scan errors. Potential real credentials or scan errors block sealing; expected synthetic sentinels keep the candidate untrusted and support the R5 ledger.
 - Generated audit directories stay under ignored `outputs/research/platform_validation/`; do not `git add` them.
 - Retain daily EOD evidence for 90 days, then delete by whole audit directory after confirming it is not a release/trusted baseline or linked incident.
 - Retain initial audits, trusted baselines, release audits, and incident evidence long term.
 - Restrict local evidence permissions to the operator account; never publish traces or screenshots without a security scan.
+
+Create the audit root with mode `0700` under `umask 077`. Normalize all directories to `0700` and all files to `0600`. The final permission gate must record `world_readable=0` and `world_traversable=0`; any nonstandard mode blocks sealing.
+
+Generate `artifact-manifest.json` only after core artifacts, safety outputs, root mapping, and the permission gate are complete. Record every core file's relative path, type, size, mode, and SHA-256; record every directory's mode, file count, total size, and deterministic tree SHA-256. Exclude only `commands-manifest.json`, `artifact-manifest.json`, temporary files, and a documented post-seal `verification/**` chain.
+
+After generating the artifact manifest, do not modify core artifacts. Recompute the complete file and directory manifest into `verification/sealed-verification.json`; require zero file/directory mismatches and a repeated world-permission count of zero.
 
 ## Daily EOD Use
 
@@ -189,6 +205,6 @@ Auto EOD Repair should run the small `eod` acceptance after repair succeeds. Dai
 
 ## Current Authoritative Initial Audit
 
-The authoritative initial audit is `pv-initial-20260721-5fb90fd` at revision `5fb90fd1081269f52c4fef9668d3885ca12ed6cc`.
+The sealed authoritative initial audit is `pv-initial-20260721-796495a` at revision `796495a511646fafc8333c7aac58a3dcc0cab483`.
 
-The earlier `pv-initial-20260720-372f4a5` directory is retained unchanged as a superseded draft. Its results must not be used as evidence for the current revision.
+The earlier `pv-initial-20260720-372f4a5` and `pv-initial-20260721-5fb90fd` directories are retained unchanged as superseded attempts. Their results must not be used as evidence for the current revision.
