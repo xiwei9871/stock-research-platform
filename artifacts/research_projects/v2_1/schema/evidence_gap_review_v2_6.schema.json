@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "evidence_gap_review_v2_6.schema.json",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "artifact_type",
+    "review_id",
+    "project_id",
+    "input_bindings",
+    "execution_policy",
+    "group_definitions",
+    "gap_reviews",
+    "evidence_requirements",
+    "source_class_boundaries",
+    "cross_level_inference_rules",
+    "stopping_state_definitions",
+    "governance",
+    "provenance",
+    "content_hash"
+  ],
+  "properties": {
+    "schema_version": {"const": "2.6.0"},
+    "artifact_type": {"const": "evidence_gap_review_and_targeted_research_design"},
+    "review_id": {"type": "string", "minLength": 1},
+    "project_id": {"type": "string", "minLength": 1},
+    "input_bindings": {
+      "type": "object",
+      "properties": {
+        "cognition_package_path": {"type": "string", "minLength": 1},
+        "cognition_package_hash": {"$ref": "#/$defs/sha256"},
+        "cognition_audit_path": {"type": "string", "minLength": 1},
+        "cognition_audit_hash": {"$ref": "#/$defs/sha256"},
+        "cognition_report_path": {"type": "string", "minLength": 1},
+        "cognition_report_hash": {"$ref": "#/$defs/sha256"},
+        "acquisition_checkpoint_id": {"type": "string", "minLength": 1},
+        "acquisition_checkpoint_hash": {"$ref": "#/$defs/sha256"}
+      },
+      "additionalProperties": false
+    },
+    "execution_policy": {
+      "type": "object",
+      "required": ["execution_mode", "network_access", "new_acquisition", "evidence_assessment_of_new_sources", "framework_expansion"],
+      "properties": {
+        "execution_mode": {"const": "offline_read_only_research_design"},
+        "network_access": {"const": false},
+        "new_acquisition": {"const": false},
+        "evidence_assessment_of_new_sources": {"const": false},
+        "framework_expansion": {"const": false}
+      },
+      "additionalProperties": false
+    },
+    "group_definitions": {"$ref": "#/$defs/semantic_array"},
+    "gap_reviews": {"$ref": "#/$defs/semantic_array"},
+    "evidence_requirements": {"$ref": "#/$defs/semantic_array"},
+    "source_class_boundaries": {"$ref": "#/$defs/semantic_array"},
+    "cross_level_inference_rules": {"$ref": "#/$defs/semantic_array"},
+    "stopping_state_definitions": {"$ref": "#/$defs/semantic_array"},
+    "governance": {
+      "type": "object",
+      "required": ["future_acquisition_authorized", "stage_a2_authorized", "stage_b_authorized", "company_mapping_authorized", "bottleneck_judgment_authorized", "value_migration_judgment_authorized"],
+      "properties": {
+        "future_acquisition_authorized": {"const": false},
+        "stage_a2_authorized": {"const": false},
+        "stage_b_authorized": {"const": false},
+        "company_mapping_authorized": {"const": false},
+        "bottleneck_judgment_authorized": {"const": false},
+        "value_migration_judgment_authorized": {"const": false}
+      },
+      "additionalProperties": false
+    },
+    "provenance": {"$ref": "definitions_v2_1.schema.json#/$defs/provenance"},
+    "content_hash": {"$ref": "#/$defs/sha256"}
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "semantic_array": {"type": "array", "items": {}}
+  }
+}
