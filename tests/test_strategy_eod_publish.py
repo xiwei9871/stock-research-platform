@@ -114,8 +114,8 @@ def test_write_strategy_artifacts_manifest_owns_versioned_paths(tmp_path):
 
 
 def test_same_day_rerun_keeps_publish_id_and_manifest_row_start_time_atomic(tmp_path):
-    first_started_at = datetime(2026, 7, 20, 12, 30, tzinfo=timezone.utc)
-    second_started_at = datetime(2026, 7, 20, 12, 31, tzinfo=timezone.utc)
+    first_started_at = datetime(2026, 7, 20, 12, 30, 0, 100000, tzinfo=timezone.utc)
+    second_started_at = datetime(2026, 7, 20, 12, 30, 0, 900000, tzinfo=timezone.utc)
 
     first_entry, _ = strategy_eod_publish._write_strategy_artifacts(
         run_id="strategy-eod-2026-07-20-local",
@@ -142,8 +142,10 @@ def test_same_day_rerun_keeps_publish_id_and_manifest_row_start_time_atomic(tmp_
     )
     assert first_entry["metadata"]["publish_id"] == first_manifest["publish_id"]
     assert first_entry["started_at"] == first_manifest["started_at"]
+    assert "20260720T123000100000Z" in first_manifest["publish_id"]
     assert second_entry["metadata"]["publish_id"] == second_manifest["publish_id"]
     assert second_entry["started_at"] == second_manifest["started_at"]
+    assert "20260720T123000900000Z" in second_manifest["publish_id"]
     assert second_entry["metadata"]["publish_id"] != first_entry["metadata"]["publish_id"]
     assert second_entry["started_at"] > first_entry["started_at"]
 

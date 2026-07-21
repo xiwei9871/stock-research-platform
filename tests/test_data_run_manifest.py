@@ -6,8 +6,67 @@ import pytest
 from stock_research import data_run_manifest
 
 
-def test_upsert_replaces_publish_identity_and_start_time_for_same_day_rerun(monkeypatch):
+@pytest.mark.parametrize(
+    (
+        "first_started_at",
+        "second_started_at",
+        "expected_publish_id",
+        "expected_status",
+        "expected_started_at",
+    ),
+    [
+        (
+            datetime(2026, 7, 20, 12, 30, 0, 100000, tzinfo=timezone.utc),
+            datetime(2026, 7, 20, 12, 30, 0, 900000, tzinfo=timezone.utc),
+            "publish-2",
+            "failed",
+            "2026-07-20T12:30:00.900000+00:00",
+        ),
+        (
+            datetime(2026, 7, 20, 12, 30, 0, 900000, tzinfo=timezone.utc),
+            datetime(2026, 7, 20, 12, 30, 0, 100000, tzinfo=timezone.utc),
+            "publish-1",
+            "success",
+            "2026-07-20T12:30:00.900000+00:00",
+        ),
+        (
+            datetime(2026, 7, 20, 12, 30, 0, 500000, tzinfo=timezone.utc),
+            datetime(2026, 7, 20, 12, 30, 0, 500000, tzinfo=timezone.utc),
+            "publish-2",
+            "failed",
+            "2026-07-20T12:30:00.500000+00:00",
+        ),
+        (
+            datetime(2026, 7, 20, 12, 30, tzinfo=timezone.utc),
+            None,
+            "publish-1",
+            "success",
+            "2026-07-20T12:30:00.000000+00:00",
+        ),
+        (
+            None,
+            datetime(2026, 7, 20, 12, 30, tzinfo=timezone.utc),
+            "publish-2",
+            "failed",
+            "2026-07-20T12:30:00.000000+00:00",
+        ),
+        (None, None, "publish-2", "failed", None),
+    ],
+)
+def test_upsert_only_replaces_same_day_row_with_non_older_start_time(
+    monkeypatch,
+    first_started_at,
+    second_started_at,
+    expected_publish_id,
+    expected_status,
+    expected_started_at,
+):
     stored_row = {}
+    expected_gate = (
+        "WHERE existing.started_at IS NULL OR "
+        "( EXCLUDED.started_at IS NOT NULL AND "
+        "EXCLUDED.started_at >= existing.started_at )"
+    )
 
     class FakeCursor:
         def __enter__(self):
@@ -17,13 +76,19 @@ def test_upsert_replaces_publish_identity_and_start_time_for_same_day_rerun(monk
             return False
 
         def execute(self, sql, params):
+            assert expected_gate in " ".join(sql.split())
             if not stored_row:
                 stored_row.update(params)
                 return
-            if "metadata = EXCLUDED.metadata" in sql:
-                stored_row["metadata"] = params["metadata"]
-            if "started_at = EXCLUDED.started_at" in sql:
-                stored_row["started_at"] = params["started_at"]
+            current_started_at = stored_row["started_at"]
+            incoming_started_at = params["started_at"]
+            should_update = current_started_at is None or (
+                incoming_started_at is not None
+                and datetime.fromisoformat(incoming_started_at)
+                >= datetime.fromisoformat(current_started_at)
+            )
+            if should_update:
+                stored_row.update(params)
 
     class FakeConnection:
         def __enter__(self):
@@ -44,7 +109,7 @@ def test_upsert_replaces_publish_identity_and_start_time_for_same_day_rerun(monk
         source="strategy_daily_eod",
         tier="tier1",
         status="success",
-        started_at=datetime(2026, 7, 20, 12, 30, tzinfo=timezone.utc),
+        started_at=first_started_at,
         metadata={"publish_id": "publish-1"},
     )
     second = data_run_manifest.build_manifest_entry(
@@ -54,8 +119,8 @@ def test_upsert_replaces_publish_identity_and_start_time_for_same_day_rerun(monk
         module="strategy_mid_trend",
         source="strategy_daily_eod",
         tier="tier1",
-        status="success",
-        started_at=datetime(2026, 7, 20, 12, 31, tzinfo=timezone.utc),
+        status="failed",
+        started_at=second_started_at,
         metadata={"publish_id": "publish-2"},
     )
 
@@ -63,8 +128,41 @@ def test_upsert_replaces_publish_identity_and_start_time_for_same_day_rerun(monk
     data_run_manifest.upsert_data_run_manifest(first, service="research-test")
     data_run_manifest.upsert_data_run_manifest(second, service="research-test")
 
-    assert json.loads(stored_row["metadata"])["publish_id"] == "publish-2"
-    assert stored_row["started_at"] == "2026-07-20T12:31:00+00:00"
+    assert json.loads(stored_row["metadata"])["publish_id"] == expected_publish_id
+    assert stored_row["status"] == expected_status
+    assert stored_row["started_at"] == expected_started_at
+
+
+@pytest.mark.parametrize(
+    ("started_at", "expected"),
+    [
+        (
+            datetime.fromisoformat("2026-07-20T20:30:00.123456+08:00"),
+            "2026-07-20T12:30:00.123456+00:00",
+        ),
+        (
+            "2026-07-20T20:30:00.654321+08:00",
+            "2026-07-20T12:30:00.654321+00:00",
+        ),
+        (
+            datetime(2026, 7, 20, 12, 30, 0, 987654),
+            "2026-07-20T12:30:00.987654+00:00",
+        ),
+    ],
+)
+def test_build_manifest_entry_canonicalizes_utc_microseconds(started_at, expected):
+    entry = data_run_manifest.build_manifest_entry(
+        run_id="run-1",
+        run_date="2026-07-20",
+        trade_date="2026-07-20",
+        module="module-1",
+        source="source-1",
+        tier="tier1",
+        status="success",
+        started_at=started_at,
+    )
+
+    assert entry["started_at"] == expected
 
 
 def test_load_recent_data_run_manifest_trade_date_fetches_latest_row_per_module(monkeypatch):

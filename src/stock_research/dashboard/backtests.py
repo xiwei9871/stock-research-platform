@@ -604,11 +604,12 @@ def _validate_eod_publication_contract(
             return "contract_mismatch", f"{location} artifact version mismatch"
         if "publish_id" in container and container.get("publish_id") != publish_id:
             return "contract_mismatch", f"{location} publish id mismatch"
-        if (
-            "publish_started_at" in container
-            and container.get("publish_started_at") != publish_started_at
-        ):
-            return "contract_mismatch", f"{location} publish start time mismatch"
+        if "publish_started_at" in container:
+            declared_publish_started_at = _normalized_publication_started_at(
+                container.get("publish_started_at")
+            )
+            if declared_publish_started_at != publish_started_at:
+                return "contract_mismatch", f"{location} publish start time mismatch"
     if metadata.get("identity_schema_version") != expected["identity_schema_version"]:
         return "contract_mismatch", "identity schema version missing"
     if metadata.get("artifact_version") != ARTIFACT_VERSION:
@@ -678,20 +679,22 @@ def _publication_metadata_metrics(
 
 
 def _publication_started_at(module: Mapping[str, Any]) -> str | None:
-    value = module.get("started_at")
+    return _normalized_publication_started_at(module.get("started_at"))
+
+
+def _normalized_publication_started_at(value: Any) -> str | None:
     if isinstance(value, datetime):
-        if value.tzinfo is None or value.utcoffset() is None:
+        parsed = value
+    elif isinstance(value, str) and value.strip():
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
             return None
-        return value.isoformat()
-    if not isinstance(value, str) or not value.strip():
-        return None
-    try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError:
+    else:
         return None
     if parsed.tzinfo is None or parsed.utcoffset() is None:
         return None
-    return parsed.isoformat()
+    return parsed.astimezone(timezone.utc).isoformat(timespec="microseconds")
 
 
 def _expected_publication_metrics(strategy_id: str) -> dict[str, Any]:

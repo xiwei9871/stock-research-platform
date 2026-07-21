@@ -21,7 +21,7 @@ describe('platform API clients', () => {
               strategy_id: 'manual_v1_topn_rotation',
               latest_metrics: {
                 publish_id: 'publish-20260720',
-                publish_started_at: '2026-07-20T12:30:00+00:00'
+                publish_started_at: '2026-07-20T12:30:00.000000+00:00'
               }
             }
           ]
@@ -35,7 +35,9 @@ describe('platform API clients', () => {
     expect(summary.latest_market_date).toBe('2026-06-08');
     expect(catalog[0].strategy_id).toBe('manual_v1_topn_rotation');
     expect(catalog[0].latest_metrics?.publish_id).toBe('publish-20260720');
-    expect(catalog[0].latest_metrics?.publish_started_at).toBe('2026-07-20T12:30:00+00:00');
+    expect(catalog[0].latest_metrics?.publish_started_at).toBe(
+      '2026-07-20T12:30:00.000000+00:00'
+    );
     expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/platform/summary');
     expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/strategies/catalog');
   });

@@ -124,7 +124,7 @@ def upsert_data_run_manifest(
 ) -> str:
     params = _db_params(entry)
     sql = """
-    INSERT INTO ops.data_run_manifest (
+    INSERT INTO ops.data_run_manifest AS existing (
         manifest_id, run_id, run_date, trade_date, module, source, tier, status,
         started_at, ended_at, duration_seconds, row_count, asset_count,
         coverage_ratio, latest_trade_date, freshness_lag, warning_count,
@@ -158,6 +158,11 @@ def upsert_data_run_manifest(
         config_version = EXCLUDED.config_version,
         metadata = EXCLUDED.metadata,
         updated_at = now()
+    WHERE existing.started_at IS NULL
+       OR (
+            EXCLUDED.started_at IS NOT NULL
+            AND EXCLUDED.started_at >= existing.started_at
+       )
     """
     with connect(service) as conn:
         with conn.cursor() as cur:
@@ -312,10 +317,16 @@ def _optional_datetime_text(value: object | None) -> str | None:
     if value in (None, ""):
         return None
     if isinstance(value, datetime):
-        if value.tzinfo is None:
-            value = value.replace(tzinfo=timezone.utc)
-        return value.isoformat(timespec="seconds")
-    return str(value)
+        parsed = value
+    else:
+        text = str(value)
+        try:
+            parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        except ValueError:
+            return text
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc).isoformat(timespec="microseconds")
 
 
 def _jsonable(value: Any) -> Any:

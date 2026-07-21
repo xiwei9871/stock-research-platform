@@ -490,7 +490,7 @@ def test_registered_strategy_without_versioned_eod_evidence_fails_closed(monkeyp
 def test_publication_metadata_metrics_preserves_explicit_publish_identity_timestamp():
     metrics = backtests._publication_metadata_metrics(
         {
-            "started_at": "2026-07-20T12:30:00+00:00",
+            "started_at": "2026-07-20T20:30:00.123456+08:00",
             "metadata": {
                 "publish_id": "lhb-shortline-20260719",
                 "artifact_version": "strategy_artifact_v1",
@@ -501,7 +501,7 @@ def test_publication_metadata_metrics_preserves_explicit_publish_identity_timest
     )
 
     assert metrics["publish_id"] == "lhb-shortline-20260719"
-    assert metrics["publish_started_at"] == "2026-07-20T12:30:00+00:00"
+    assert metrics["publish_started_at"] == "2026-07-20T12:30:00.123456+00:00"
 
 
 def test_failed_official_eod_has_complete_fail_closed_contract_shape(monkeypatch):
@@ -553,7 +553,7 @@ def test_lhb_stale_performance_does_not_publish_latest_day_zero_return(monkeypat
         lambda strategy_id: {
             "module": "strategy_lhb_shortline",
             "status": "success",
-            "started_at": "2026-06-29T12:30:00+00:00",
+            "started_at": "2026-06-29T12:30:00.123456+00:00",
             "row_count": 4,
             "trade_date": "2026-06-29",
             "latest_trade_date": "2026-06-29",
@@ -724,7 +724,7 @@ def test_latest_eod_metrics_fail_closed_per_strategy_for_publication_identity(tm
         modules[strategy_id] = {
             "module": f"strategy_{strategy_id}",
             "status": "success",
-            "started_at": "2026-07-20T12:30:00+00:00",
+            "started_at": "2026-07-20T12:30:00.123456+00:00",
             "trade_date": "2026-07-18",
             "latest_trade_date": "2026-07-18",
             "row_count": 5,
@@ -772,7 +772,7 @@ def test_latest_eod_metrics_fail_closed_per_strategy_for_publication_identity(tm
         )["contract_id"]
         assert metrics["artifact_version"] == "strategy_artifact_v1"
         assert metrics["publish_id"] == "publish-1"
-        assert metrics["publish_started_at"] == "2026-07-20T12:30:00+00:00"
+        assert metrics["publish_started_at"] == "2026-07-20T12:30:00.123456+00:00"
         assert metrics["publication_manifest_path"].endswith(
             f"/strategy_runs/{strategy_id}/publish-1/publication_manifest.json"
         )
@@ -865,6 +865,16 @@ def test_latest_eod_metrics_fail_closed_per_strategy_for_publication_identity(tm
         assert failed_closed["publish_started_at"] is None, label
         assert "total_return_pct" not in failed_closed, label
     modules["mid_trend"] = original_mid_trend
+
+    same_instant_different_offset = copy.deepcopy(original_mid_trend)
+    same_instant_different_offset["metadata"]["publish_started_at"] = (
+        "2026-07-20T20:30:00.123456+08:00"
+    )
+    assert backtests._validate_eod_publication_contract(
+        "mid_trend",
+        same_instant_different_offset,
+        same_instant_different_offset["metadata"]["summary"],
+    )[0] == "success"
 
     for label, started_at, reason_fragment in (
         ("missing", None, "publish start time missing or invalid"),
