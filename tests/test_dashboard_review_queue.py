@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from types import SimpleNamespace
 
-from stock_research.dashboard import backtests, review_queue
+from stock_research.dashboard import backtests, display_date_gate, review_queue
 from stock_research.strategy_publication_contracts import (
     build_publication_identity,
     get_publication_contract,
@@ -32,6 +32,25 @@ def test_review_queue_defaults_to_latest_market_date_when_display_gate_lags(monk
     )
 
     assert selected == "2026-07-03"
+
+
+def test_review_queue_does_not_hide_invalid_browser_acceptance_rollout_config(monkeypatch):
+    monkeypatch.setattr(
+        display_date_gate,
+        "SETTINGS",
+        SimpleNamespace(browser_acceptance_required_from="not-a-date"),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        review_queue,
+        "load_recent_data_run_manifest",
+        lambda: [{"trade_date": "2026-07-20"}],
+    )
+
+    with pytest.raises(ValueError, match="STOCK_RESEARCH_BROWSER_ACCEPTANCE_REQUIRED_FROM"):
+        review_queue._default_display_trade_date(
+            {"latest_market_date": "", "latest_score_date": "2026-07-20"}
+        )
 
 
 def test_attach_asset_names_keeps_published_lhb_name_when_master_missing(monkeypatch):

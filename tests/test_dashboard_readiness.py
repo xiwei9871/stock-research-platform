@@ -1,7 +1,10 @@
 from fastapi.testclient import TestClient
+from datetime import datetime
 import pytest
+from types import SimpleNamespace
 
 from stock_research.dashboard import app as dashboard_app
+from stock_research.dashboard import display_date_gate
 from stock_research.dashboard import readiness
 from stock_research.dashboard.display_date_gate import select_display_date
 
@@ -32,6 +35,132 @@ def _patch_market_monitor_ready(monkeypatch):
             f"Market Monitor sources ready for {latest_market_date}",
         ),
     )
+
+
+def _display_gate_modules(
+    trade_date: str,
+    *,
+    run_id: str,
+    browser_status: str | None = None,
+) -> list[dict[str, object]]:
+    modules: list[dict[str, object]] = [
+        {"run_id": run_id, "trade_date": trade_date, "module": "daily_bars", "status": "success"},
+        {"run_id": run_id, "trade_date": trade_date, "module": "technical_features", "status": "success"},
+        {"run_id": run_id, "trade_date": trade_date, "module": "score_topn", "status": "success"},
+        {"run_id": run_id, "trade_date": trade_date, "module": "lhb_features", "status": "success"},
+        {"run_id": run_id, "trade_date": trade_date, "module": "tech_bottleneck_candidates", "status": "success"},
+        {"run_id": run_id, "trade_date": trade_date, "module": "strategy_lhb_shortline", "status": "success"},
+        {"run_id": run_id, "trade_date": trade_date, "module": "strategy_mid_trend", "status": "success"},
+        {
+            "run_id": run_id,
+            "trade_date": trade_date,
+            "module": "strategy_tech_bottleneck",
+            "status": "success",
+            "metadata": {"candidate_snapshot_latest_date": trade_date},
+        },
+        {
+            "run_id": run_id,
+            "trade_date": trade_date,
+            "module": "review_queue_strategy_manifest",
+            "status": "success",
+        },
+    ]
+    if browser_status is not None:
+        modules.append(
+            {
+                "run_id": run_id,
+                "trade_date": trade_date,
+                "module": "dashboard_browser_acceptance",
+                "status": browser_status,
+            }
+        )
+    return modules
+
+
+def test_display_gate_does_not_require_browser_acceptance_before_rollout(monkeypatch):
+    monkeypatch.setattr(
+        display_date_gate,
+        "SETTINGS",
+        SimpleNamespace(browser_acceptance_required_from="2026-07-21"),
+        raising=False,
+    )
+    monkeypatch.setattr(display_date_gate, "load_strategy_contracts", lambda profile="balanced": {})
+
+    gate = select_display_date(
+        _display_gate_modules("2026-07-20", run_id="prior"),
+        latest_market_date="2026-07-20",
+        now=datetime(2026, 7, 20, 21, 0, tzinfo=display_date_gate.LOCAL_ZONE),
+    )
+
+    assert gate["display_trade_date"] == "2026-07-20"
+    assert gate["candidate_status"] == "ready"
+
+
+@pytest.mark.parametrize("browser_status", (None, "failed"))
+def test_display_gate_blocks_missing_or_failed_browser_acceptance_from_rollout_boundary(
+    monkeypatch,
+    browser_status,
+):
+    monkeypatch.setattr(
+        display_date_gate,
+        "SETTINGS",
+        SimpleNamespace(browser_acceptance_required_from="2026-07-21"),
+        raising=False,
+    )
+    monkeypatch.setattr(display_date_gate, "load_strategy_contracts", lambda profile="balanced": {})
+    modules = _display_gate_modules("2026-07-20", run_id="prior")
+    modules.extend(
+        _display_gate_modules("2026-07-21", run_id="candidate", browser_status=browser_status)
+    )
+
+    gate = select_display_date(
+        modules,
+        latest_market_date="2026-07-21",
+        now=datetime(2026, 7, 21, 21, 0, tzinfo=display_date_gate.LOCAL_ZONE),
+    )
+
+    assert gate["display_trade_date"] == "2026-07-20"
+    assert gate["candidate_status"] == "incomplete"
+    assert "missing:dashboard_browser_acceptance" in gate["blocking_reasons"]
+
+
+@pytest.mark.parametrize("browser_status", ("success", "degraded"))
+def test_display_gate_accepts_success_or_degraded_browser_acceptance_from_rollout_boundary(
+    monkeypatch,
+    browser_status,
+):
+    monkeypatch.setattr(
+        display_date_gate,
+        "SETTINGS",
+        SimpleNamespace(browser_acceptance_required_from="2026-07-21"),
+        raising=False,
+    )
+    monkeypatch.setattr(display_date_gate, "load_strategy_contracts", lambda profile="balanced": {})
+
+    gate = select_display_date(
+        _display_gate_modules("2026-07-21", run_id="candidate", browser_status=browser_status),
+        latest_market_date="2026-07-21",
+        now=datetime(2026, 7, 21, 21, 0, tzinfo=display_date_gate.LOCAL_ZONE),
+    )
+
+    assert gate["display_trade_date"] == "2026-07-21"
+    assert gate["candidate_status"] == "ready"
+
+
+def test_display_gate_rejects_invalid_browser_acceptance_rollout_boundary(monkeypatch):
+    monkeypatch.setattr(
+        display_date_gate,
+        "SETTINGS",
+        SimpleNamespace(browser_acceptance_required_from="not-a-date"),
+        raising=False,
+    )
+
+    with pytest.raises(ValueError, match="STOCK_RESEARCH_BROWSER_ACCEPTANCE_REQUIRED_FROM"):
+        select_display_date(
+            _display_gate_modules("2026-07-21", run_id="candidate"),
+            latest_market_date="2026-07-21",
+            now=datetime(2026, 7, 21, 21, 0, tzinfo=display_date_gate.LOCAL_ZONE),
+        )
 
 
 def test_aggregate_readiness_status_prioritizes_missing_data():

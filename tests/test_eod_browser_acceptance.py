@@ -155,6 +155,70 @@ def _candidate_identities(*, run_id: bool = False):
     return identities
 
 
+@pytest.mark.parametrize(
+    "status",
+    (RepairStatus.SUCCESS, RepairStatus.DEGRADED, RepairStatus.FAILED),
+)
+def test_write_browser_acceptance_manifest_persists_exact_status_and_evidence(status):
+    captured = []
+    result = BrowserAcceptanceResult(
+        status=status,
+        trade_date=TRADE_DATE,
+        run_id=RUN_ID,
+        duration_seconds=3.25,
+        failure_classes=("presentation_runtime",) if status != RepairStatus.SUCCESS else (),
+        warnings=("console warning",),
+        artifact_paths=("/tmp/report.json", "/tmp/trace.zip"),
+        snapshot={"schemaVersion": "candidate/v1", "tradeDate": TRADE_DATE},
+        started_at=f"{TRADE_DATE}T08:00:00+00:00",
+        ended_at=f"{TRADE_DATE}T08:00:03+00:00",
+        message="browser acceptance failed" if status == RepairStatus.FAILED else "",
+    )
+
+    entry = acceptance.write_browser_acceptance_manifest(
+        result,
+        application_revision=REVISION,
+        browser_project="eod-chromium",
+        manifest_upsert=captured.append,
+    )
+
+    assert captured == [entry]
+    assert entry["module"] == "dashboard_browser_acceptance"
+    assert entry["source"] == "eod_browser_acceptance"
+    assert entry["tier"] == "tier1"
+    assert entry["status"] == status.value
+    assert entry["duration_seconds"] == 3.25
+    assert entry["warnings"] == ["console warning"]
+    assert entry["artifact_path"] == "/tmp/report.json"
+    assert entry["code_version"] == REVISION
+    assert entry["metadata"] == {
+        "report_schema_version": acceptance.REPORT_SCHEMA_VERSION,
+        "application_revision": REVISION,
+        "browser_project": "eod-chromium",
+        "duration_seconds": 3.25,
+        "failure_classes": list(result.failure_classes),
+        "warnings": ["console warning"],
+        "candidate_snapshot": result.snapshot,
+        "artifact_paths": ["/tmp/report.json", "/tmp/trace.zip"],
+    }
+
+
+def test_write_browser_acceptance_manifest_rejects_non_manifest_status():
+    result = BrowserAcceptanceResult(
+        status=RepairStatus.SKIPPED,
+        trade_date=TRADE_DATE,
+        run_id=RUN_ID,
+        duration_seconds=0.0,
+    )
+
+    with pytest.raises(ValueError, match="browser acceptance manifest status"):
+        acceptance.write_browser_acceptance_manifest(
+            result,
+            application_revision=REVISION,
+            manifest_upsert=lambda _entry: None,
+        )
+
+
 def test_parse_report_accepts_success_and_collects_safe_artifacts(tmp_path):
     report_path = _write_report(tmp_path / "attempt-1" / "eod-browser-acceptance.json")
 

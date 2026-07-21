@@ -10,7 +10,7 @@ from stock_research.config import SETTINGS
 from stock_research.db import connect, fetch_all
 
 VALID_TIERS = {"tier1", "tier2", "tier3"}
-VALID_STATUSES = {"success", "partial", "skipped", "failed", "unavailable"}
+VALID_STATUSES = {"success", "degraded", "partial", "skipped", "failed", "unavailable"}
 BLOCKING_STATUSES = {"failed", "unavailable"}
 PARTIAL_STATUSES = {"partial", "failed", "unavailable"}
 
@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS ops.data_run_manifest (
     module text NOT NULL,
     source text NOT NULL,
     tier text NOT NULL CHECK (tier IN ('tier1', 'tier2', 'tier3')),
-    status text NOT NULL CHECK (status IN ('success', 'partial', 'skipped', 'failed', 'unavailable')),
+    status text NOT NULL CHECK (status IN ('success', 'degraded', 'partial', 'skipped', 'failed', 'unavailable')),
     started_at timestamptz,
     ended_at timestamptz,
     duration_seconds numeric,
@@ -50,6 +50,23 @@ CREATE INDEX IF NOT EXISTS idx_data_run_manifest_run
 
 CREATE INDEX IF NOT EXISTS idx_data_run_manifest_trade_date
     ON ops.data_run_manifest (trade_date DESC, tier, status);
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'ops.data_run_manifest'::regclass
+          AND conname = 'data_run_manifest_status_check'
+          AND pg_get_constraintdef(oid) LIKE '%degraded%'
+    ) THEN
+        ALTER TABLE ops.data_run_manifest
+            DROP CONSTRAINT IF EXISTS data_run_manifest_status_check;
+        ALTER TABLE ops.data_run_manifest
+            ADD CONSTRAINT data_run_manifest_status_check
+            CHECK (status IN ('success', 'degraded', 'partial', 'skipped', 'failed', 'unavailable'));
+    END IF;
+END $$;
 """
 
 

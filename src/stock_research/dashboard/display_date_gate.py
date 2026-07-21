@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime, time
+from datetime import date, datetime, time
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from stock_research.config import SETTINGS
+
 REQUIRED_BASE_MODULES = {"daily_bars", "technical_features", "score_topn", "lhb_features", "tech_bottleneck_candidates"}
-REQUIRED_REVIEW_MODULES = {"review_queue_strategy_manifest"}
+BASE_REQUIRED_REVIEW_MODULES = {"review_queue_strategy_manifest"}
 REQUIRED_STRATEGY_MODULES = {
     "strategy_lhb_shortline": "lhb_shortline",
     "strategy_mid_trend": "mid_trend",
@@ -14,6 +16,26 @@ REQUIRED_STRATEGY_MODULES = {
 }
 LOCAL_ZONE = ZoneInfo("Asia/Shanghai")
 DISPLAY_CUTOFF = time(20, 30)
+
+
+class BrowserAcceptanceRolloutConfigError(ValueError):
+    """The browser acceptance rollout boundary is configured incorrectly."""
+
+
+def required_review_modules(trade_date: str) -> set[str]:
+    required = set(BASE_REQUIRED_REVIEW_MODULES)
+    raw_boundary = SETTINGS.browser_acceptance_required_from
+    if not raw_boundary:
+        return required
+    try:
+        boundary = date.fromisoformat(raw_boundary)
+    except ValueError as exc:
+        raise BrowserAcceptanceRolloutConfigError(
+            "STOCK_RESEARCH_BROWSER_ACCEPTANCE_REQUIRED_FROM must be an ISO date (YYYY-MM-DD)"
+        ) from exc
+    if trade_date >= boundary.isoformat():
+        required.add("dashboard_browser_acceptance")
+    return required
 
 
 def load_strategy_contracts(*, profile: str = "balanced") -> dict[str, Any]:
@@ -125,7 +147,7 @@ def _best_run_evaluation(evaluations: list[dict[str, Any]]) -> dict[str, Any]:
 
 def _evaluate_run(trade_date: str, run_id: str, rows: list[dict[str, Any]]) -> dict[str, Any]:
     by_module = {str(row.get("module") or ""): row for row in rows}
-    required_modules = REQUIRED_BASE_MODULES | REQUIRED_REVIEW_MODULES | set(REQUIRED_STRATEGY_MODULES)
+    required_modules = REQUIRED_BASE_MODULES | required_review_modules(trade_date) | set(REQUIRED_STRATEGY_MODULES)
     missing = [
         module
         for module in sorted(required_modules)
@@ -159,6 +181,8 @@ def _module_ready_for_display(module: str, row: dict[str, Any]) -> bool:
     status = str(row.get("status") or "")
     if status == "success":
         return True
+    if module == "dashboard_browser_acceptance":
+        return status == "degraded"
     return module == "daily_bars" and status in {"partial", "degraded"}
 
 

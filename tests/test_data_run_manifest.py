@@ -6,6 +6,41 @@ import pytest
 from stock_research import data_run_manifest
 
 
+def test_manifest_schema_and_validator_preserve_degraded_status():
+    entry = data_run_manifest.build_manifest_entry(
+        run_id="browser-run-1",
+        run_date="2026-07-21",
+        trade_date="2026-07-21",
+        module="dashboard_browser_acceptance",
+        source="eod_browser_acceptance",
+        tier="tier1",
+        status="degraded",
+    )
+
+    assert entry["status"] == "degraded"
+    assert "'degraded'" in data_run_manifest.CREATE_DATA_RUN_MANIFEST_SQL
+    assert "DROP CONSTRAINT IF EXISTS data_run_manifest_status_check" in (
+        data_run_manifest.CREATE_DATA_RUN_MANIFEST_SQL
+    )
+
+
+def test_degraded_does_not_change_existing_generic_manifest_summary_semantics():
+    summary = data_run_manifest.summarize_manifest_modules(
+        [
+            {
+                "module": "some_non_browser_module",
+                "tier": "tier1",
+                "status": "degraded",
+                "warnings": [],
+            }
+        ]
+    )
+
+    assert summary["status"] == "OK"
+    assert summary["missing_data"] == []
+    assert summary["partial_data"] == []
+
+
 @pytest.mark.parametrize(
     (
         "first_started_at",

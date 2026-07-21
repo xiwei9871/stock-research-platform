@@ -80,6 +80,11 @@ class Settings:
     dashboard_session_ttl_seconds: int = field(
         default_factory=lambda: _env_int("STOCK_RESEARCH_DASHBOARD_SESSION_TTL_SECONDS", 60 * 60 * 12)
     )
+    browser_acceptance_required_from: str = field(
+        default_factory=lambda: os.getenv(
+            "STOCK_RESEARCH_BROWSER_ACCEPTANCE_REQUIRED_FROM", ""
+        ).strip()
+    )
 
 
 SETTINGS = Settings()

@@ -16,6 +16,7 @@ import subprocess
 import time
 from typing import Any
 
+from stock_research.data_run_manifest import build_manifest_entry, upsert_data_run_manifest
 from stock_research.eod_auto_repair_models import RepairStatus
 
 
@@ -186,6 +187,55 @@ class BrowserAcceptanceResult:
         if not isinstance(self.snapshot, Mapping):
             raise TypeError("browser acceptance snapshot must be a mapping")
         object.__setattr__(self, "snapshot", _freeze_json(self.snapshot))
+
+
+def write_browser_acceptance_manifest(
+    result: BrowserAcceptanceResult,
+    *,
+    application_revision: str,
+    browser_project: str = "eod-chromium",
+    manifest_upsert: Callable[[dict[str, Any]], Any] = upsert_data_run_manifest,
+) -> dict[str, Any]:
+    status = result.status.value
+    if status not in {"success", "degraded", "failed"}:
+        raise ValueError(
+            "browser acceptance manifest status must be success, degraded, or failed"
+        )
+    revision = _required_string(
+        application_revision, "browser_acceptance_application_revision_invalid"
+    )
+    project = _required_string(
+        browser_project, "browser_acceptance_browser_project_invalid"
+    )
+    artifacts = list(result.artifact_paths)
+    entry = build_manifest_entry(
+        run_id=result.run_id,
+        run_date=result.trade_date,
+        trade_date=result.trade_date,
+        module="dashboard_browser_acceptance",
+        source="eod_browser_acceptance",
+        tier="tier1",
+        status=status,
+        started_at=result.started_at or None,
+        ended_at=result.ended_at or None,
+        duration_seconds=result.duration_seconds,
+        warnings=list(result.warnings),
+        error_message=result.message if result.status == RepairStatus.FAILED else "",
+        artifact_path=artifacts[0] if artifacts else None,
+        code_version=revision,
+        metadata={
+            "report_schema_version": REPORT_SCHEMA_VERSION,
+            "application_revision": revision,
+            "browser_project": project,
+            "duration_seconds": result.duration_seconds,
+            "failure_classes": list(result.failure_classes),
+            "warnings": list(result.warnings),
+            "candidate_snapshot": result.snapshot,
+            "artifact_paths": artifacts,
+        },
+    )
+    manifest_upsert(entry)
+    return entry
 
 
 def _error(code: str, detail: object | None = None) -> BrowserAcceptanceError:
