@@ -12,7 +12,10 @@ from stock_research.data_run_manifest import (
 )
 
 load_latest_data_run_manifest = load_recent_data_run_manifest
-from stock_research.dashboard.display_date_gate import select_display_date
+from stock_research.dashboard.display_date_gate import (
+    select_display_date,
+    validate_browser_acceptance_rollout_config,
+)
 from stock_research.dashboard.platform import load_platform_summary
 from stock_research.dashboard.reports import DEFAULT_REPORTS_DIR
 from stock_research.db import connect, fetch_all
@@ -78,6 +81,7 @@ def aggregate_readiness_status(checks: list[dict[str, Any]]) -> str:
 
 
 def build_platform_readiness(score_version: str = "manual_v1") -> dict[str, Any]:
+    validate_browser_acceptance_rollout_config()
     warnings: list[str] = []
 
     try:

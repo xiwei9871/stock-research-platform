@@ -22,17 +22,23 @@ class BrowserAcceptanceRolloutConfigError(ValueError):
     """The browser acceptance rollout boundary is configured incorrectly."""
 
 
-def required_review_modules(trade_date: str) -> set[str]:
-    required = set(BASE_REQUIRED_REVIEW_MODULES)
+def validate_browser_acceptance_rollout_config() -> date | None:
     raw_boundary = SETTINGS.browser_acceptance_required_from
     if not raw_boundary:
-        return required
+        return None
     try:
-        boundary = date.fromisoformat(raw_boundary)
+        return date.fromisoformat(raw_boundary)
     except ValueError as exc:
         raise BrowserAcceptanceRolloutConfigError(
             "STOCK_RESEARCH_BROWSER_ACCEPTANCE_REQUIRED_FROM must be an ISO date (YYYY-MM-DD)"
         ) from exc
+
+
+def required_review_modules(trade_date: str) -> set[str]:
+    required = set(BASE_REQUIRED_REVIEW_MODULES)
+    boundary = validate_browser_acceptance_rollout_config()
+    if boundary is None:
+        return required
     if trade_date >= boundary.isoformat():
         required.add("dashboard_browser_acceptance")
     return required
@@ -58,6 +64,7 @@ def select_display_date(
     now: datetime | None = None,
     latest_market_date: str = "",
 ) -> dict[str, Any]:
+    validate_browser_acceptance_rollout_config()
     current_time = now.astimezone(LOCAL_ZONE) if now else datetime.now(LOCAL_ZONE)
     grouped = _modules_by_trade_date(modules)
     candidate_trade_date = str(latest_market_date or _latest_trade_date(grouped) or "")

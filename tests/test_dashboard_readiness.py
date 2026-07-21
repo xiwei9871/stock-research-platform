@@ -163,6 +163,57 @@ def test_display_gate_rejects_invalid_browser_acceptance_rollout_boundary(monkey
         )
 
 
+def test_display_gate_rejects_invalid_rollout_boundary_without_manifest_rows(monkeypatch):
+    monkeypatch.setattr(
+        display_date_gate,
+        "SETTINGS",
+        SimpleNamespace(browser_acceptance_required_from="not-a-date"),
+    )
+
+    with pytest.raises(ValueError, match="STOCK_RESEARCH_BROWSER_ACCEPTANCE_REQUIRED_FROM"):
+        select_display_date([], latest_market_date="2026-07-21")
+
+
+def test_platform_readiness_rejects_invalid_rollout_boundary_with_empty_manifest(monkeypatch):
+    monkeypatch.setattr(
+        display_date_gate,
+        "SETTINGS",
+        SimpleNamespace(browser_acceptance_required_from="not-a-date"),
+    )
+    monkeypatch.setattr(
+        readiness,
+        "load_platform_summary",
+        lambda score_version, top_n: {
+            "latest_market_date": "2026-07-21",
+            "topn_preview": [{"asset_id": "CN:SH:600519"}],
+        },
+    )
+    monkeypatch.setattr(readiness, "load_latest_data_run_manifest", lambda: [])
+
+    with pytest.raises(ValueError, match="STOCK_RESEARCH_BROWSER_ACCEPTANCE_REQUIRED_FROM"):
+        readiness.build_platform_readiness()
+
+
+def test_platform_readiness_config_failure_precedes_manifest_loader_fallback(monkeypatch):
+    monkeypatch.setattr(
+        display_date_gate,
+        "SETTINGS",
+        SimpleNamespace(browser_acceptance_required_from="not-a-date"),
+    )
+    calls = 0
+
+    def fail_manifest_loader():
+        nonlocal calls
+        calls += 1
+        raise RuntimeError("manifest unavailable")
+
+    monkeypatch.setattr(readiness, "load_latest_data_run_manifest", fail_manifest_loader)
+
+    with pytest.raises(ValueError, match="STOCK_RESEARCH_BROWSER_ACCEPTANCE_REQUIRED_FROM"):
+        readiness.build_platform_readiness()
+    assert calls == 0
+
+
 def test_aggregate_readiness_status_prioritizes_missing_data():
     checks = [
         {"key": "news", "status": "ready"},
@@ -1269,3 +1320,42 @@ def test_platform_readiness_route_returns_payload(monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["score_version"] == "manual_v2"
+
+
+def test_platform_readiness_route_validates_rollout_before_cached_fallback(monkeypatch):
+    monkeypatch.setattr(
+        display_date_gate,
+        "SETTINGS",
+        SimpleNamespace(browser_acceptance_required_from="not-a-date"),
+    )
+    monkeypatch.setattr(
+        dashboard_app,
+        "build_platform_readiness",
+        lambda score_version="manual_v1": {"status": "OK"},
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    with pytest.raises(ValueError, match="STOCK_RESEARCH_BROWSER_ACCEPTANCE_REQUIRED_FROM"):
+        client.get("/api/platform/readiness")
+
+
+def test_platform_display_date_route_rejects_invalid_rollout_before_fallback(monkeypatch):
+    monkeypatch.setattr(
+        display_date_gate,
+        "SETTINGS",
+        SimpleNamespace(browser_acceptance_required_from="not-a-date"),
+    )
+    monkeypatch.setattr(
+        dashboard_app,
+        "build_platform_readiness",
+        lambda score_version="manual_v1": {
+            "status": "OK",
+            "latest_trade_date": "2026-07-21",
+            "latest_market_date": "2026-07-21",
+            "warnings": [],
+        },
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    with pytest.raises(ValueError, match="STOCK_RESEARCH_BROWSER_ACCEPTANCE_REQUIRED_FROM"):
+        client.get("/api/platform/display-date")

@@ -14,6 +14,7 @@ from stock_research.data_run_manifest import load_latest_data_run_manifest, load
 from stock_research.dashboard.display_date_gate import (
     BrowserAcceptanceRolloutConfigError,
     select_display_date,
+    validate_browser_acceptance_rollout_config,
 )
 from stock_research.dashboard.evidence_digest import build_evidence_digest
 from stock_research.dashboard.platform import load_platform_summary
@@ -72,6 +73,7 @@ def build_review_queue(
     review_mode: str = "strategy_topn",
     use_strategy_snapshots: bool = True,
 ) -> dict[str, Any]:
+    validate_browser_acceptance_rollout_config()
     bounded_limit = _bounded_int(limit, default=20, minimum=1, maximum=50)
     bounded_lookback_days = _bounded_int(lookback_days, default=90, minimum=1, maximum=365)
     normalized_review_mode = review_mode if review_mode in {"strategy_topn", "score_topn"} else "strategy_topn"
@@ -169,6 +171,7 @@ def build_review_queue(
 
 
 def _default_display_trade_date(summary: dict[str, Any]) -> str:
+    validate_browser_acceptance_rollout_config()
     latest_market_date = str(summary.get("latest_market_date") or "")
     if latest_market_date:
         return latest_market_date

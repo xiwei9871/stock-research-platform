@@ -53,6 +53,40 @@ def test_review_queue_does_not_hide_invalid_browser_acceptance_rollout_config(mo
         )
 
 
+def test_review_queue_rejects_invalid_rollout_before_latest_market_date_early_return(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        display_date_gate,
+        "SETTINGS",
+        SimpleNamespace(browser_acceptance_required_from="not-a-date"),
+    )
+
+    with pytest.raises(ValueError, match="STOCK_RESEARCH_BROWSER_ACCEPTANCE_REQUIRED_FROM"):
+        review_queue._default_display_trade_date(
+            {
+                "latest_market_date": "2026-07-21",
+                "latest_score_date": "2026-07-21",
+            }
+        )
+
+
+def test_build_review_queue_validates_rollout_before_explicit_date_path(monkeypatch):
+    monkeypatch.setattr(
+        display_date_gate,
+        "SETTINGS",
+        SimpleNamespace(browser_acceptance_required_from="not-a-date"),
+    )
+    monkeypatch.setattr(
+        review_queue,
+        "load_platform_summary",
+        lambda **_kwargs: pytest.fail("platform summary must not load before config validation"),
+    )
+
+    with pytest.raises(ValueError, match="STOCK_RESEARCH_BROWSER_ACCEPTANCE_REQUIRED_FROM"):
+        review_queue.build_review_queue(trade_date="2026-07-21")
+
+
 def test_attach_asset_names_keeps_published_lhb_name_when_master_missing(monkeypatch):
     monkeypatch.setattr(review_queue, "_load_asset_names", lambda asset_ids: {})
 

@@ -77,6 +77,9 @@ from stock_research.dashboard.overview import build_dashboard_overview
 from stock_research.dashboard.observability import install_request_id_middleware
 from stock_research.dashboard.outcome_analytics import load_outcome_analytics_summary
 from stock_research.dashboard.outcomes import load_asset_outcome_history
+from stock_research.dashboard.display_date_gate import (
+    validate_browser_acceptance_rollout_config,
+)
 from stock_research.dashboard.ops_snapshot import (
     build_internal_ops_snapshot,
     build_public_snapshot,
@@ -523,6 +526,7 @@ def create_app() -> FastAPI:
 
     @app.get("/api/platform/readiness")
     def platform_readiness(score_version: str = "manual_v1"):
+        validate_browser_acceptance_rollout_config()
         return app.state.eod_response_cache.get_or_set(
             ("platform_readiness", score_version),
             lambda: build_platform_readiness(score_version=score_version),
@@ -530,6 +534,8 @@ def create_app() -> FastAPI:
 
     @app.get("/api/platform/display-date")
     def platform_display_date(score_version: str = "manual_v1"):
+        validate_browser_acceptance_rollout_config()
+
         def build_payload():
             readiness = build_platform_readiness(score_version=score_version)
             display_gate = readiness.get("display_gate") if isinstance(readiness.get("display_gate"), dict) else {}

@@ -4,8 +4,41 @@ from decimal import Decimal
 
 import pandas as pd
 import pytest
+from types import SimpleNamespace
 
-from stock_research.dashboard import market_monitor
+from stock_research.dashboard import display_date_gate, market_monitor
+
+
+def test_market_monitor_rejects_invalid_rollout_before_latest_date_fallback(monkeypatch):
+    monkeypatch.setattr(
+        display_date_gate,
+        "SETTINGS",
+        SimpleNamespace(browser_acceptance_required_from="not-a-date"),
+    )
+
+    with pytest.raises(ValueError, match="STOCK_RESEARCH_BROWSER_ACCEPTANCE_REQUIRED_FROM"):
+        market_monitor._default_display_trade_date(
+            {
+                "latest_market_date": "2026-07-21",
+                "latest_score_date": "2026-07-21",
+            }
+        )
+
+
+def test_build_market_monitor_validates_rollout_before_explicit_date_path(monkeypatch):
+    monkeypatch.setattr(
+        display_date_gate,
+        "SETTINGS",
+        SimpleNamespace(browser_acceptance_required_from="not-a-date"),
+    )
+    monkeypatch.setattr(
+        market_monitor,
+        "load_platform_summary",
+        lambda **_kwargs: pytest.fail("platform summary must not load before config validation"),
+    )
+
+    with pytest.raises(ValueError, match="STOCK_RESEARCH_BROWSER_ACCEPTANCE_REQUIRED_FROM"):
+        market_monitor.build_market_monitor_eod(trade_date="2026-07-21")
 
 
 def test_build_market_monitor_eod_uses_latest_complete_date(monkeypatch):

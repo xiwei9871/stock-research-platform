@@ -10,7 +10,11 @@ from typing import Any
 from stock_research.config import SETTINGS
 from stock_research.dashboard.amount_units import storage_amount_to_yuan
 from stock_research.data_run_manifest import load_recent_data_run_manifest
-from stock_research.dashboard.display_date_gate import select_display_date
+from stock_research.dashboard.display_date_gate import (
+    BrowserAcceptanceRolloutConfigError,
+    select_display_date,
+    validate_browser_acceptance_rollout_config,
+)
 from stock_research.dashboard.platform import load_platform_summary
 from stock_research.dashboard.reports import load_report_links
 from stock_research.dashboard.scores import load_top_scores_for_dashboard
@@ -322,6 +326,7 @@ def build_market_monitor_eod(
     score_version: str = "manual_v1",
     top_n: int = 5,
 ) -> dict[str, Any]:
+    validate_browser_acceptance_rollout_config()
     summary = load_platform_summary(score_version=score_version, top_n=top_n)
     latest_market_date = str(summary.get("latest_market_date") or "")
     latest_factor_date = str(summary.get("latest_factor_date") or "")
@@ -411,6 +416,7 @@ def build_market_monitor_eod(
 
 
 def _default_display_trade_date(summary: dict[str, Any]) -> str:
+    validate_browser_acceptance_rollout_config()
     latest_market_date = str(summary.get("latest_market_date") or "")
     if latest_market_date:
         return latest_market_date
@@ -419,6 +425,8 @@ def _default_display_trade_date(summary: dict[str, Any]) -> str:
             list(load_latest_data_run_manifest()),
             latest_market_date=latest_market_date,
         )
+    except BrowserAcceptanceRolloutConfigError:
+        raise
     except Exception:
         gate = {}
     display_trade_date = str(gate.get("display_trade_date") or "")
