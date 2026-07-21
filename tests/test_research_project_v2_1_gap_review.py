@@ -6,7 +6,9 @@ import pytest
 
 from stock_research.research_project_v2.errors import ResearchProjectV2Error
 from stock_research.research_project_v2_1.gap_review import (
+    load_gap_review_artifact,
     render_gap_review_report,
+    validate_gap_review_artifact,
     validate_persisted_gap_review_report,
     validate_gap_universe,
     validate_input_bindings,
@@ -309,3 +311,24 @@ def test_persisted_gap_review_report_rejects_added_content() -> None:
     report = render_gap_review_report(artifact) + b"\nUnregistered conclusion.\n"
     with pytest.raises(ResearchProjectV2Error):
         validate_persisted_gap_review_report(artifact, report)
+
+
+def test_repository_gap_review_artifact_and_report_are_valid() -> None:
+    layout = LayeredResearchLayout.default()
+    artifact = load_gap_review_artifact(
+        layout.analysis_dir
+        / "ai_pcb_evidence_gap_review_and_targeted_research_design_v1.json",
+        layout=layout,
+    )
+    result = validate_gap_review_artifact(artifact, layout=layout)
+    report = (
+        layout.reports_dir
+        / "ai_pcb_evidence_gap_review_and_targeted_research_design_v1.md"
+    ).read_bytes()
+    validate_persisted_gap_review_report(artifact, report)
+    assert result == {
+        "gap_count": 10,
+        "atomic_question_count": 32,
+        "evidence_requirement_count": 32,
+        "scope_leakage": [],
+    }

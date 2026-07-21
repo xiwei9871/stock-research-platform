@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 import unicodedata
 
+from stock_research.research_project_v2.canonical import content_sha256
 from stock_research.research_project_v2.errors import ResearchProjectV2Error
 from stock_research.research_project_v2_1.cognition import validate_cognition_package
 from stock_research.research_project_v2_1.layout import LayeredResearchLayout
@@ -12,6 +13,7 @@ from stock_research.research_project_v2_1.loader import (
     read_layered_bytes,
     read_layered_canonical_json,
 )
+from stock_research.research_project_v2_1.schema import validate_v2_1_schema_payload
 
 
 FIXED_GAP_GROUPS = {
@@ -90,10 +92,43 @@ ER_REQUIRED_FIELDS = (
     "maximum_supported_cognition_level",
     "prohibited_inferences",
 )
+REQUIRED_STOPPING_STATES = {
+    "resolved",
+    "bounded_by_public_evidence",
+    "stopped_due_to_structural_limit",
+    "stopped_due_to_redundancy",
+    "stopped_due_to_scope",
+}
 
 
 def _error(message: str, *, code: str, **details: object) -> ResearchProjectV2Error:
     return ResearchProjectV2Error(message, code=code, details=details)
+
+
+def load_gap_review_artifact(
+    path: Path,
+    *,
+    layout: LayeredResearchLayout | None = None,
+) -> dict[str, Any]:
+    effective = LayeredResearchLayout.default() if layout is None else layout
+    try:
+        relative = path.resolve().relative_to(effective.root.resolve())
+    except ValueError as exc:
+        raise _error(
+            "Gap review artifact is outside the managed root",
+            code="RESEARCH_PROJECT_V2_1_GAP_REVIEW_INVALID",
+            path=str(path),
+        ) from exc
+    artifact = read_layered_canonical_json(relative, layout=effective)
+    validate_v2_1_schema_payload("evidence_gap_review_v2_6", artifact, layout=effective)
+    expected = content_sha256(artifact, excluded_paths={("content_hash",)})
+    if artifact.get("content_hash") != expected:
+        raise _error(
+            "Gap review artifact content hash mismatch",
+            code="RESEARCH_PROJECT_V2_1_GAP_REVIEW_INVALID",
+            field="content_hash",
+        )
+    return artifact
 
 
 def validate_gap_universe(
@@ -360,6 +395,88 @@ def validate_research_design(artifact: dict[str, Any]) -> dict[str, int]:
     }
 
 
+def _validate_supporting_design_records(artifact: dict[str, Any]) -> None:
+    source_rows = artifact.get("source_class_boundaries")
+    rule_rows = artifact.get("cross_level_inference_rules")
+    stop_rows = artifact.get("stopping_state_definitions")
+    for field, rows in (
+        ("source_class_boundaries", source_rows),
+        ("cross_level_inference_rules", rule_rows),
+        ("stopping_state_definitions", stop_rows),
+    ):
+        if not isinstance(rows, list) or not rows or not all(
+            isinstance(row, dict) for row in rows
+        ):
+            raise _error(
+                "Supporting research-design records must be non-empty object arrays",
+                code="RESEARCH_PROJECT_V2_1_GAP_REVIEW_INVALID",
+                field=field,
+            )
+    source_ids = [row.get("source_class") for row in source_rows]
+    if len(source_ids) != len(set(source_ids)) or any(
+        not row.get("can_support") or not row.get("cannot_support") for row in source_rows
+    ):
+        raise _error(
+            "Source-class boundaries are incomplete or duplicated",
+            code="RESEARCH_PROJECT_V2_1_GAP_REVIEW_INVALID",
+        )
+    rule_ids = [row.get("rule_id") for row in rule_rows]
+    if len(rule_ids) != len(set(rule_ids)) or any(
+        not row.get("from_level")
+        or not row.get("prohibited_target_level")
+        or not row.get("reason")
+        for row in rule_rows
+    ):
+        raise _error(
+            "Cross-level inference rules are incomplete or duplicated",
+            code="RESEARCH_PROJECT_V2_1_GAP_REVIEW_INVALID",
+        )
+    states = {row.get("state") for row in stop_rows}
+    if states != REQUIRED_STOPPING_STATES or any(
+        not row.get("meaning") for row in stop_rows
+    ):
+        raise _error(
+            "Stopping-state definitions differ from the frozen contract",
+            code="RESEARCH_PROJECT_V2_1_GAP_REVIEW_INVALID",
+        )
+
+
+def validate_gap_review_artifact(
+    artifact: dict[str, Any],
+    *,
+    layout: LayeredResearchLayout | None = None,
+) -> dict[str, Any]:
+    effective = LayeredResearchLayout.default() if layout is None else layout
+    validate_v2_1_schema_payload("evidence_gap_review_v2_6", artifact, layout=effective)
+    expected_hash = content_sha256(artifact, excluded_paths={("content_hash",)})
+    if artifact.get("content_hash") != expected_hash:
+        raise _error(
+            "Gap review artifact content hash mismatch",
+            code="RESEARCH_PROJECT_V2_1_GAP_REVIEW_INVALID",
+            field="content_hash",
+        )
+    package = validate_input_bindings(artifact, layout=effective)
+    upstream_gaps = {
+        row["gap_id"]: row["blocked_question"]
+        for row in package.get("evidence_gap_referrals", [])
+    }
+    if set(upstream_gaps) != set(FIXED_GAP_GROUPS):
+        raise _error(
+            "Frozen cognition package gap universe is unexpected",
+            code="RESEARCH_PROJECT_V2_1_GAP_REVIEW_UPSTREAM_DRIFT",
+        )
+    for row in artifact.get("gap_reviews", []):
+        if row.get("original_gap_description") != upstream_gaps.get(row.get("gap_id")):
+            raise _error(
+                "Gap review rewrites the upstream gap description",
+                code="RESEARCH_PROJECT_V2_1_GAP_REVIEW_INVALID",
+                gap_id=row.get("gap_id"),
+            )
+    result = validate_research_design(artifact)
+    _validate_supporting_design_records(artifact)
+    return {**result, "scope_leakage": []}
+
+
 def _values(value: object) -> str:
     if isinstance(value, list):
         return "; ".join(str(item) for item in value)
@@ -504,9 +621,11 @@ def validate_persisted_gap_review_report(
 
 __all__ = [
     "FIXED_GAP_GROUPS",
+    "load_gap_review_artifact",
     "validate_gap_universe",
     "validate_input_bindings",
     "validate_research_design",
+    "validate_gap_review_artifact",
     "render_gap_review_report",
     "validate_persisted_gap_review_report",
 ]
