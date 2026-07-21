@@ -51,6 +51,70 @@ def test_repair_summary_serializes_nested_results():
     assert payload["actions"][0]["artifact_paths"][0].endswith("lhb_event_features_daily_sample.csv")
 
 
+def test_repair_summary_exposes_final_browser_check_and_action_without_new_canonical_state():
+    summary = RepairRunSummary(
+        trade_date="2026-07-20",
+        mode="loop",
+        final_status=RepairStatus.DEGRADED,
+        checks_before=[
+            RepairCheckResult(
+                "dashboard_browser_acceptance",
+                RepairStatus.FAILED,
+                "missing",
+                blocker=True,
+            )
+        ],
+        actions=[
+            RepairActionResult(
+                "dashboard_browser_acceptance",
+                RepairStatus.DEGRADED,
+                "publishable warnings",
+                artifact_paths=["/tmp/eod-browser-acceptance.json"],
+                validation_result={
+                    "component": "dashboard_browser_acceptance",
+                    "evidence": {"run_id": "strategy-eod-2026-07-20-local"},
+                },
+            )
+        ],
+        checks_after=[
+            RepairCheckResult(
+                "dashboard_browser_acceptance",
+                RepairStatus.DEGRADED,
+                "publishable warnings",
+                metrics={"warnings": ["console warning"]},
+            )
+        ],
+    )
+
+    payload = summary.to_dict()
+
+    assert payload["browser_acceptance"] == {
+        "check": payload["checks_after"][0],
+        "action": payload["actions"][0],
+    }
+    assert set(summary.__dataclass_fields__) == {
+        "trade_date",
+        "mode",
+        "final_status",
+        "checks_before",
+        "actions",
+        "checks_after",
+        "stages",
+        "loop_cycles",
+        "remaining_blockers",
+        "remaining_non_blockers",
+        "next_actions",
+        "initial_classification",
+        "final_classification",
+        "loop_stop_reason",
+        "dry_run",
+        "max_cycles",
+        "warnings",
+        "infrastructure_issues",
+        "recommended_followups",
+    }
+
+
 def test_repair_summary_serializes_stages_and_remaining_issues():
     summary = RepairRunSummary(
         trade_date="2026-07-01",

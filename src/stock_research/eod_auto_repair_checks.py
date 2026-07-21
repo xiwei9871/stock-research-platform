@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
@@ -10,6 +11,7 @@ from stock_research.config import SETTINGS
 from stock_research.data_run_manifest import load_recent_data_run_manifest
 from stock_research.db import connect, fetch_all
 from stock_research.eod_auto_repair_models import RepairCheckResult, RepairStatus
+from stock_research.eod_browser_acceptance import REPORT_SCHEMA_VERSION
 
 
 @dataclass(frozen=True)
@@ -355,6 +357,107 @@ def check_strategy_publish(
     return RepairCheckResult("strategy_publish", RepairStatus.FAILED, "strategy publish incomplete", metrics, blocker=True)
 
 
+def _browser_acceptance_failure(message: str, metrics: dict[str, object] | None = None) -> RepairCheckResult:
+    return RepairCheckResult(
+        "dashboard_browser_acceptance",
+        RepairStatus.FAILED,
+        message,
+        metrics=dict(metrics or {}),
+        blocker=True,
+    )
+
+
+def _browser_manifest_sort_key(row: dict[str, object]) -> tuple[datetime, str]:
+    raw_timestamp = row.get("ended_at") or row.get("updated_at") or row.get("created_at")
+    if not isinstance(raw_timestamp, (str, datetime)):
+        raise ValueError("browser acceptance manifest timestamp missing")
+    if isinstance(raw_timestamp, datetime):
+        parsed = raw_timestamp
+    else:
+        parsed = datetime.fromisoformat(raw_timestamp.replace("Z", "+00:00"))
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise ValueError("browser acceptance manifest timestamp must be timezone-aware")
+    run_id = row.get("run_id")
+    if not isinstance(run_id, str) or not run_id.strip():
+        raise ValueError("browser acceptance manifest run_id missing")
+    return parsed.astimezone(timezone.utc), run_id.strip()
+
+
+def check_dashboard_browser_acceptance(
+    trade_date: str,
+    *,
+    manifest_loader=load_recent_data_run_manifest,
+) -> RepairCheckResult:
+    try:
+        rows = [
+            dict(row)
+            for row in manifest_loader(trade_date=trade_date)
+            if row.get("module") == "dashboard_browser_acceptance"
+            and row.get("source") == "eod_browser_acceptance"
+        ]
+    except Exception as exc:  # noqa: BLE001 - check failures must remain observable.
+        return _browser_acceptance_failure(f"browser acceptance manifest load failed: {exc}")
+    if not rows:
+        return _browser_acceptance_failure("browser acceptance manifest missing")
+    try:
+        ranked = sorted(
+            ((_browser_manifest_sort_key(row), row) for row in rows),
+            key=lambda item: item[0],
+            reverse=True,
+        )
+    except (TypeError, ValueError) as exc:
+        return _browser_acceptance_failure(f"browser acceptance manifest malformed: {exc}")
+    latest_key, latest = ranked[0]
+    if sum(1 for key, _row in ranked if key == latest_key) != 1:
+        return _browser_acceptance_failure("browser acceptance latest manifest ambiguous")
+
+    metadata = latest.get("metadata")
+    warnings = latest.get("warnings")
+    if not isinstance(metadata, dict) or not isinstance(warnings, list):
+        return _browser_acceptance_failure("browser acceptance manifest malformed")
+    run_id = str(latest.get("run_id") or "")
+    row_trade_date = str(latest.get("trade_date") or "")
+    schema_version = metadata.get("report_schema_version")
+    revision = metadata.get("application_revision")
+    artifact_paths = metadata.get("artifact_paths")
+    if row_trade_date != trade_date:
+        return _browser_acceptance_failure(
+            "browser acceptance manifest wrong trade date",
+            {"run_id": run_id, "trade_date": row_trade_date},
+        )
+    if schema_version != REPORT_SCHEMA_VERSION:
+        return _browser_acceptance_failure(
+            "browser acceptance manifest wrong schema",
+            {"run_id": run_id, "report_schema_version": schema_version},
+        )
+    if not isinstance(revision, str) or not revision.strip() or not isinstance(artifact_paths, list):
+        return _browser_acceptance_failure("browser acceptance manifest malformed")
+    metrics = {
+        "run_id": run_id,
+        "trade_date": row_trade_date,
+        "report_schema_version": schema_version,
+        "application_revision": revision,
+        "warnings": list(warnings),
+        "artifact_paths": [str(path) for path in artifact_paths],
+    }
+    status = latest.get("status")
+    if status == "success":
+        return RepairCheckResult(
+            "dashboard_browser_acceptance",
+            RepairStatus.SUCCESS,
+            "ready",
+            metrics,
+        )
+    if status == "degraded":
+        return RepairCheckResult(
+            "dashboard_browser_acceptance",
+            RepairStatus.DEGRADED,
+            "browser acceptance publishable with warnings",
+            metrics,
+        )
+    return _browser_acceptance_failure("browser acceptance failed", metrics)
+
+
 def _stale_strategy_performance_modules(
     latest: dict[str, dict[str, object]],
     trade_date: str,
@@ -680,6 +783,7 @@ def build_check_plan(trade_date: str) -> list[RepairCheck]:
         RepairCheck("strategy_score_audit", lambda: check_strategy_score_audit(trade_date)),
         RepairCheck("reports", lambda: check_reports(trade_date)),
         RepairCheck("review_evidence_snapshots", lambda: check_review_evidence_snapshots(trade_date)),
-        RepairCheck("ops_health", lambda: check_ops_health(trade_date)),
+        RepairCheck("dashboard_browser_acceptance", lambda: check_dashboard_browser_acceptance(trade_date)),
         RepairCheck("dashboard_surface_freshness", lambda: check_dashboard_surface_freshness(trade_date)),
+        RepairCheck("ops_health", lambda: check_ops_health(trade_date)),
     ]

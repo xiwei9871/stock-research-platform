@@ -118,6 +118,23 @@ class RepairRunSummary:
     recommended_followups: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
+        browser_check = next(
+            (
+                check
+                for check in reversed(self.checks_after or self.checks_before)
+                if check.name == "dashboard_browser_acceptance"
+            ),
+            None,
+        )
+        browser_action = next(
+            (
+                action
+                for action in reversed(self.actions)
+                if action.name == "dashboard_browser_acceptance"
+                or action.validation_result.get("component") == "dashboard_browser_acceptance"
+            ),
+            None,
+        )
         return {
             "trade_date": self.trade_date,
             "mode": self.mode,
@@ -138,4 +155,8 @@ class RepairRunSummary:
             "warnings": self.warnings,
             "infrastructure_issues": self.infrastructure_issues,
             "recommended_followups": self.recommended_followups,
+            "browser_acceptance": {
+                "check": browser_check.to_dict() if browser_check else None,
+                "action": browser_action.to_dict() if browser_action else None,
+            },
         }

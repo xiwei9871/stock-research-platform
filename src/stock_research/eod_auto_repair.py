@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
+import os
 import signal
+import subprocess
 import threading
 import time
 from dataclasses import replace
@@ -85,7 +88,16 @@ STAGE_CHECKS: list[tuple[str, tuple[str, ...]]] = [
     ("scores_and_watchlists", ("factor_daily", "score_topn", "watchlist")),
     ("market_monitor", ("market_monitor",)),
     ("strategy_eod", ("strategy_publish", "review_queue", "strategy_score_audit")),
-    ("presentation", ("reports", "review_evidence_snapshots", "ops_health", "dashboard_surface_freshness")),
+    (
+        "presentation",
+        (
+            "reports",
+            "review_evidence_snapshots",
+            "dashboard_browser_acceptance",
+            "dashboard_surface_freshness",
+            "ops_health",
+        ),
+    ),
 ]
 PUBLISH_ONLY_STAGE_NAMES = {"strategy_eod", "presentation"}
 LOOP_REPAIR_ORDER = [
@@ -101,16 +113,25 @@ LOOP_REPAIR_ORDER = [
     "strategy_publish",
     "review_queue",
     "strategy_score_audit",
-    "ops_health",
+    "dashboard_browser_acceptance",
     "dashboard_surface_freshness",
+    "ops_health",
 ]
 LOOP_DEPENDENT_REPAIRS: dict[str, list[str]] = {
     "factor_daily": ["score_topn", "watchlist", "market_monitor", "strategy_publish"],
     "score_topn": ["watchlist", "market_monitor", "strategy_publish"],
     "watchlist": ["market_monitor", "strategy_publish"],
-    "market_monitor": ["ops_health", "dashboard_surface_freshness"],
-    "strategy_publish": ["ops_health", "dashboard_surface_freshness"],
+    "market_monitor": ["dashboard_surface_freshness", "ops_health"],
+    "strategy_publish": [
+        "dashboard_browser_acceptance",
+        "dashboard_surface_freshness",
+        "ops_health",
+    ],
+    "dashboard_browser_acceptance": ["dashboard_surface_freshness", "ops_health"],
+    "dashboard_surface_freshness": ["ops_health"],
 }
+ACTION_FAILURE_LIMITS = {"dashboard_browser_acceptance": 1}
+DEFAULT_ACTION_FAILURE_LIMIT = 2
 OPS_READY_STATUSES = {"READY", "ready", "success", "DEGRADED_READY", "degraded_ready"}
 
 
@@ -150,7 +171,7 @@ def _annotate_action_timing(
 ) -> RepairActionResult:
     exit_code = action.exit_code
     if exit_code is None:
-        exit_code = 0 if action.status == RepairStatus.SUCCESS else 1
+        exit_code = 0 if action.status in {RepairStatus.SUCCESS, RepairStatus.DEGRADED} else 1
     return RepairActionResult(
         name=action.name,
         status=action.status,
@@ -292,17 +313,21 @@ def _action_with_validation(
     checks_after: list[RepairCheckResult],
 ) -> RepairActionResult:
     check = _checks_by_name(checks_after).get(component)
-    validation_result: dict[str, object]
+    validation_result: dict[str, object] = dict(action.validation_result)
     if check is None:
-        validation_result = {"component": component, "status": "unknown", "message": "validation check missing"}
+        validation_result.update(
+            {"component": component, "status": "unknown", "message": "validation check missing"}
+        )
     else:
-        validation_result = {
-            "component": component,
-            "status": check.status.value,
-            "message": check.message,
-            "blocker": check.blocker,
-            "metrics": check.metrics,
-        }
+        validation_result.update(
+            {
+                "component": component,
+                "status": check.status.value,
+                "message": check.message,
+                "blocker": check.blocker,
+                "metrics": check.metrics,
+            }
+        )
     return RepairActionResult(
         name=action.name,
         status=action.status,
@@ -323,6 +348,29 @@ def _stage_checks(checks: list[RepairCheckResult], names: tuple[str, ...]) -> li
 
 def _has_blocker(checks: list[RepairCheckResult]) -> bool:
     return any(check.blocker and check.status != RepairStatus.SUCCESS for check in checks)
+
+
+def _action_is_publishable(action: RepairActionResult) -> bool:
+    return action.status in {RepairStatus.SUCCESS, RepairStatus.DEGRADED}
+
+
+def _action_failure_limit(name: str) -> int:
+    return ACTION_FAILURE_LIMITS.get(name, DEFAULT_ACTION_FAILURE_LIMIT)
+
+
+def _upstream_blockers(checks: list[RepairCheckResult], component: str) -> list[str]:
+    try:
+        component_index = LOOP_REPAIR_ORDER.index(component)
+    except ValueError:
+        return []
+    upstream_names = set(LOOP_REPAIR_ORDER[:component_index])
+    return [
+        check.name
+        for check in checks
+        if check.name in upstream_names
+        and check.blocker
+        and check.status != RepairStatus.SUCCESS
+    ]
 
 
 def _ops_health_value(checks: list[RepairCheckResult]) -> str:
@@ -567,7 +615,10 @@ def _run_eod_auto_repair_loop(
                     continue
                 if check_name in ran_action_this_cycle:
                     continue
-                if failed_action_counts.get(check_name, 0) >= 2:
+                if _upstream_blockers(current_checks, check_name):
+                    continue
+                failure_limit = _action_failure_limit(check_name)
+                if failed_action_counts.get(check_name, 0) >= failure_limit:
                     stop_reason = f"failed_action_repeat_limit:{check_name}"
                     break
                 runner = action_registry.get(check_name)
@@ -589,9 +640,9 @@ def _run_eod_auto_repair_loop(
                     ),
                 )
                 ran_action_this_cycle.add(check_name)
-                if action.status != RepairStatus.SUCCESS:
+                if not _action_is_publishable(action):
                     failed_action_counts[check_name] = failed_action_counts.get(check_name, 0) + 1
-                    if failed_action_counts[check_name] >= 2:
+                    if failed_action_counts[check_name] >= failure_limit:
                         stop_reason = f"failed_action_repeat_limit:{check_name}"
                 current_checks = _safe_run_check_plan(check_plan_builder, trade_date)
                 action = _action_with_validation(action, component=check_name, checks_after=current_checks)
@@ -609,7 +660,7 @@ def _run_eod_auto_repair_loop(
                 )
                 cycle_actions.append(action)
                 actions.append(action)
-                if action.status == RepairStatus.SUCCESS:
+                if _action_is_publishable(action):
                     for dependent_name in LOOP_DEPENDENT_REPAIRS.get(check_name, []):
                         if dependent_name in ran_action_this_cycle:
                             continue
@@ -744,8 +795,16 @@ def run_eod_auto_repair(
             for check in before:
                 if check.status == RepairStatus.SUCCESS:
                     continue
+                if (
+                    check.name == "dashboard_browser_acceptance"
+                    and check.status == RepairStatus.DEGRADED
+                    and not check.blocker
+                ):
+                    continue
                 runner = registry.get(check.name)
                 if runner is None:
+                    if check.name == "dashboard_browser_acceptance" and check.blocker:
+                        break
                     continue
                 action = _safe_run_action(
                     check.name,
@@ -754,8 +813,24 @@ def run_eod_auto_repair(
                     out,
                     action_timeout_seconds=action_timeout_seconds,
                 )
+                if check.name == "dashboard_browser_acceptance":
+                    current_checks = _safe_run_check_plan(check_plan_builder, trade_date)
+                    action = _action_with_validation(
+                        action,
+                        component=check.name,
+                        checks_after=current_checks,
+                    )
                 stage_actions.append(action)
                 actions.append(action)
+                if check.name == "dashboard_browser_acceptance":
+                    browser_check = _checks_by_name(current_checks).get(check.name)
+                    if (
+                        not _action_is_publishable(action)
+                        or browser_check is None
+                        or browser_check.blocker
+                        or browser_check.status not in {RepairStatus.SUCCESS, RepairStatus.DEGRADED}
+                    ):
+                        break
             if stage_actions:
                 current_checks = _safe_run_check_plan(check_plan_builder, trade_date)
             after = _stage_checks(current_checks, check_names)
@@ -791,7 +866,182 @@ def run_eod_auto_repair(
     return summary
 
 
-def build_default_action_registry(*, output_root: str | Path = "outputs") -> dict[str, ActionRunner]:
+_BROWSER_STRATEGY_IDS = ("lhb_shortline", "mid_trend", "tech_bottleneck")
+
+
+def _browser_revision_value(value: str | Callable[[], str] | None) -> str:
+    if callable(value):
+        revision = value()
+    elif value is not None:
+        revision = value
+    else:
+        revision = os.getenv("STOCK_RESEARCH_APPLICATION_REVISION", "")
+        if not revision:
+            completed = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=Path(__file__).resolve().parents[2],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            revision = completed.stdout.strip()
+    if not isinstance(revision, str) or not revision.strip():
+        raise ValueError("browser acceptance application revision missing")
+    return revision.strip()
+
+
+def _browser_timestamp(value: object, field: str) -> str:
+    if isinstance(value, datetime):
+        parsed = value
+    elif isinstance(value, str) and value.strip():
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    else:
+        raise ValueError(f"browser candidate {field} missing")
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise ValueError(f"browser candidate {field} must be timezone-aware")
+    return parsed.astimezone(timezone.utc).isoformat()
+
+
+def _browser_candidate_from_manifest(
+    row: dict[str, object],
+    *,
+    strategy_id: str,
+    trade_date: str,
+    run_id: str,
+) -> dict[str, object]:
+    if row.get("status") != "success" or row.get("source") != "strategy_daily_eod":
+        raise ValueError(f"browser candidate manifest not successful: {strategy_id}")
+    if str(row.get("trade_date") or "") != trade_date:
+        raise ValueError(f"browser candidate trade date mismatch: {strategy_id}")
+    if str(row.get("latest_trade_date") or "") != trade_date:
+        raise ValueError(f"browser candidate latest trade date mismatch: {strategy_id}")
+    if str(row.get("run_id") or "") != run_id:
+        raise ValueError(f"browser candidate run mismatch: {strategy_id}")
+    metadata = row.get("metadata")
+    if not isinstance(metadata, dict):
+        raise ValueError(f"browser candidate metadata malformed: {strategy_id}")
+    summary = metadata.get("summary")
+    metadata_identity = metadata.get("publication_identity")
+    if not isinstance(summary, dict) or not isinstance(metadata_identity, dict):
+        raise ValueError(f"browser candidate identity malformed: {strategy_id}")
+    summary_identity = summary.get("publication_identity")
+    if not isinstance(summary_identity, dict):
+        raise ValueError(f"browser candidate summary identity malformed: {strategy_id}")
+    if metadata_identity.get("strategy_id") != strategy_id or summary_identity.get("strategy_id") != strategy_id:
+        raise ValueError(f"browser candidate strategy identity mismatch: {strategy_id}")
+    contract_ids = {
+        str(identity.get("contract_id") or "")
+        for identity in (metadata_identity, summary_identity)
+    }
+    if len(contract_ids) != 1 or "" in contract_ids:
+        raise ValueError(f"browser candidate contract identity mismatch: {strategy_id}")
+    publish_id = metadata.get("publish_id")
+    if not isinstance(publish_id, str) or not publish_id.strip():
+        raise ValueError(f"browser candidate publish identity missing: {strategy_id}")
+    if "publish_id" in summary and summary.get("publish_id") != publish_id:
+        raise ValueError(f"browser candidate publish identity conflict: {strategy_id}")
+    artifact_versions = {
+        str(container.get("artifact_version") or "")
+        for container in (metadata, summary)
+    }
+    if len(artifact_versions) != 1 or "" in artifact_versions:
+        raise ValueError(f"browser candidate artifact version mismatch: {strategy_id}")
+    if "total_return_pct" in summary:
+        total_return_pct = summary.get("total_return_pct")
+    elif "total_return" in summary:
+        total_return_pct = 100.0 * float(summary["total_return"])
+    elif "final_equity" in summary:
+        total_return_pct = 100.0 * (float(summary["final_equity"]) - 1.0)
+    else:
+        raise ValueError(f"browser candidate return missing: {strategy_id}")
+    if isinstance(total_return_pct, bool) or not isinstance(total_return_pct, (int, float)):
+        raise ValueError(f"browser candidate return malformed: {strategy_id}")
+    normalized_return = float(total_return_pct)
+    if not math.isfinite(normalized_return):
+        raise ValueError(f"browser candidate return malformed: {strategy_id}")
+    return {
+        "strategyId": strategy_id,
+        "tradeDate": trade_date,
+        "totalReturnPct": normalized_return,
+        "contractId": next(iter(contract_ids)),
+        "publishId": publish_id.strip(),
+        "publishStartedAt": _browser_timestamp(
+            row.get("started_at"),
+            f"publishStartedAt:{strategy_id}",
+        ),
+        "artifactVersion": next(iter(artifact_versions)),
+        "runId": run_id,
+    }
+
+
+def _load_browser_candidate_publications(
+    trade_date: str,
+    *,
+    manifest_loader: Callable[..., list[dict[str, Any]]],
+    expected_run_id: str | None = None,
+) -> tuple[str, list[dict[str, object]]]:
+    required_modules = {f"strategy_{strategy_id}" for strategy_id in _BROWSER_STRATEGY_IDS}
+    rows = [
+        dict(row)
+        for row in manifest_loader(trade_date=trade_date)
+        if row.get("module") in required_modules
+    ]
+    if expected_run_id:
+        rows = [row for row in rows if row.get("run_id") == expected_run_id]
+    run_ids = {str(row.get("run_id") or "") for row in rows}
+    run_ids.discard("")
+    if len(run_ids) != 1:
+        raise ValueError("browser candidate manifests must identify exactly one strategy run")
+    run_id = next(iter(run_ids))
+    by_module: dict[str, list[dict[str, object]]] = {}
+    for row in rows:
+        by_module.setdefault(str(row.get("module") or ""), []).append(row)
+    if set(by_module) != required_modules or any(len(module_rows) != 1 for module_rows in by_module.values()):
+        raise ValueError("browser candidate manifests incomplete or ambiguous")
+    candidates = [
+        _browser_candidate_from_manifest(
+            by_module[f"strategy_{strategy_id}"][0],
+            strategy_id=strategy_id,
+            trade_date=trade_date,
+            run_id=run_id,
+        )
+        for strategy_id in _BROWSER_STRATEGY_IDS
+    ]
+    return run_id, candidates
+
+
+def _browser_result_payload(result: object) -> dict[str, object]:
+    status = getattr(result, "status")
+    status_value = status.value if isinstance(status, RepairStatus) else str(status)
+    snapshot = json.loads(json.dumps(getattr(result, "snapshot", {}), default=str))
+    return {
+        "status": status_value,
+        "trade_date": str(getattr(result, "trade_date", "")),
+        "run_id": str(getattr(result, "run_id", "")),
+        "duration_seconds": float(getattr(result, "duration_seconds", 0.0) or 0.0),
+        "application_revision": str(getattr(result, "application_revision", "")),
+        "browser_project": str(getattr(result, "browser_project", "")),
+        "report_schema_version": str(getattr(result, "report_schema_version", "")),
+        "failure_classes": list(getattr(result, "failure_classes", ()) or ()),
+        "warnings": list(getattr(result, "warnings", ()) or ()),
+        "artifact_paths": list(getattr(result, "artifact_paths", ()) or ()),
+        "snapshot": snapshot,
+        "started_at": str(getattr(result, "started_at", "")),
+        "ended_at": str(getattr(result, "ended_at", "")),
+        "message": str(getattr(result, "message", "")),
+    }
+
+
+def build_default_action_registry(
+    *,
+    output_root: str | Path = "outputs",
+    browser_runner: Callable[..., object] | None = None,
+    browser_manifest_writer: Callable[[object], dict[str, Any]] | None = None,
+    browser_revision: str | Callable[[], str] | None = None,
+    browser_output_root: str | Path | None = None,
+    browser_manifest_loader: Callable[..., list[dict[str, Any]]] | None = None,
+    strategy_publisher: Callable[..., dict[str, Any]] | None = None,
+) -> dict[str, ActionRunner]:
     from stock_research.eod_auto_repair_actions import (
         repair_factor_daily,
         repair_generated_reports,
@@ -805,7 +1055,14 @@ def build_default_action_registry(*, output_root: str | Path = "outputs") -> dic
         repair_watchlist,
     )
     from stock_research.daily_pipeline import run_daily_factor_pipeline
-    from stock_research.data_run_manifest import upsert_data_run_manifest
+    from stock_research.data_run_manifest import (
+        load_recent_data_run_manifest,
+        upsert_data_run_manifest,
+    )
+    from stock_research.eod_browser_acceptance import (
+        run_browser_acceptance,
+        write_browser_acceptance_manifest,
+    )
     from stock_research.free_enrichment_data import run_free_enrichment_backfill
     from stock_research.lhb_data import run_lhb_event_features_build
     from stock_research.review_evidence_snapshots import run_eod_review_evidence_snapshots
@@ -823,6 +1080,17 @@ def build_default_action_registry(*, output_root: str | Path = "outputs") -> dic
         store_watchlist_daily_signals,
     )
 
+    selected_browser_runner = browser_runner or run_browser_acceptance
+    selected_browser_writer = browser_manifest_writer or write_browser_acceptance_manifest
+    selected_browser_manifest_loader = browser_manifest_loader or load_recent_data_run_manifest
+    selected_strategy_publisher = strategy_publisher or publish_strategy_eod
+    selected_browser_output_root = Path(
+        browser_output_root
+        if browser_output_root is not None
+        else Path(output_root) / "research" / "eod_browser_acceptance"
+    )
+    published_run_ids: dict[str, str] = {}
+
     def lhb_action(trade_date: str, output_dir: str | Path) -> RepairActionResult:
         return repair_lhb_source_and_features(
             trade_date,
@@ -832,11 +1100,77 @@ def build_default_action_registry(*, output_root: str | Path = "outputs") -> dic
         )
 
     def strategy_action(trade_date: str, output_dir: str | Path) -> RepairActionResult:
+        def publisher(**kwargs) -> dict[str, Any]:
+            result = selected_strategy_publisher(**kwargs)
+            run_id = str(result.get("run_id") or "")
+            if not run_id:
+                raise ValueError("strategy publish result run_id missing")
+            published_run_ids[trade_date] = run_id
+            return result
+
         return repair_strategy_publish(
             trade_date,
             output_root=output_root,
-            publisher=publish_strategy_eod,
+            publisher=publisher,
         )
+
+    def browser_acceptance_action(trade_date: str, output_dir: str | Path) -> RepairActionResult:
+        try:
+            run_id, candidate_publications = _load_browser_candidate_publications(
+                trade_date,
+                manifest_loader=selected_browser_manifest_loader,
+                expected_run_id=published_run_ids.get(trade_date),
+            )
+            revision = _browser_revision_value(browser_revision)
+            result = selected_browser_runner(
+                trade_date=trade_date,
+                run_id=run_id,
+                revision=revision,
+                output_dir=selected_browser_output_root / trade_date / run_id,
+                candidate_publications=candidate_publications,
+            )
+            manifest = selected_browser_writer(result)
+            parsed_result = _browser_result_payload(result)
+            status = getattr(result, "status")
+            if not isinstance(status, RepairStatus):
+                status = RepairStatus(str(status))
+            artifact_paths = [str(path) for path in getattr(result, "artifact_paths", ())]
+            return RepairActionResult(
+                name="dashboard_browser_acceptance",
+                status=status,
+                message=str(getattr(result, "message", "") or "browser acceptance complete"),
+                metrics={
+                    "run_id": run_id,
+                    "application_revision": revision,
+                    "warnings": list(getattr(result, "warnings", ()) or ()),
+                    "failure_classes": list(getattr(result, "failure_classes", ()) or ()),
+                },
+                artifact_paths=artifact_paths,
+                started_at=str(getattr(result, "started_at", "") or "") or None,
+                ended_at=str(getattr(result, "ended_at", "") or "") or None,
+                exit_code=0 if status in {RepairStatus.SUCCESS, RepairStatus.DEGRADED} else 1,
+                validation_result={
+                    "evidence": {
+                        "candidate_publications": candidate_publications,
+                        "report_paths": artifact_paths,
+                        "parsed_result": parsed_result,
+                        "manifest": manifest,
+                    }
+                },
+            )
+        except Exception as exc:  # noqa: BLE001 - action reports fail-closed orchestration errors.
+            return RepairActionResult(
+                name="dashboard_browser_acceptance",
+                status=RepairStatus.FAILED,
+                message=f"{type(exc).__name__}: {exc}",
+                exit_code=1,
+                validation_result={
+                    "evidence": {
+                        "candidate_publications": [],
+                        "report_paths": [],
+                    }
+                },
+            )
 
     def market_monitor_action(trade_date: str, output_dir: str | Path) -> RepairActionResult:
         from stock_research.daily_close_pipeline import PipelineConfig, run_market_monitor_stage
@@ -1027,6 +1361,7 @@ def build_default_action_registry(*, output_root: str | Path = "outputs") -> dic
         "strategy_publish": strategy_action,
         "review_queue": strategy_action,
         "strategy_score_audit": strategy_action,
+        "dashboard_browser_acceptance": browser_acceptance_action,
         "ops_health": ops_health_action,
         "reports": reports_action,
         "review_evidence_snapshots": snapshots_action,

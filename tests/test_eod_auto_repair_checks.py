@@ -1,3 +1,6 @@
+import pytest
+
+import stock_research.eod_auto_repair_checks as eod_auto_repair_checks
 from stock_research.eod_auto_repair_checks import (
     build_check_plan,
     check_factor_daily,
@@ -10,6 +13,30 @@ from stock_research.eod_auto_repair_checks import (
     evaluate_strategy_review_scores,
 )
 from stock_research.eod_auto_repair_models import RepairStatus
+from stock_research.eod_browser_acceptance import REPORT_SCHEMA_VERSION
+
+
+def _browser_manifest_row(**overrides):
+    row = {
+        "module": "dashboard_browser_acceptance",
+        "source": "eod_browser_acceptance",
+        "status": "success",
+        "trade_date": "2026-06-29",
+        "run_id": "strategy-eod-2026-06-29-local",
+        "ended_at": "2026-06-29T09:00:00+00:00",
+        "warnings": [],
+        "artifact_path": "/tmp/eod-browser-acceptance.json",
+        "metadata": {
+            "report_schema_version": REPORT_SCHEMA_VERSION,
+            "application_revision": "abc123",
+            "artifact_paths": [
+                "/tmp/eod-browser-acceptance.json",
+                "/tmp/trace.zip",
+            ],
+        },
+    }
+    row.update(overrides)
+    return row
 
 
 def test_evaluate_count_check_success_when_count_meets_minimum():
@@ -58,9 +85,104 @@ def test_build_check_plan_contains_required_gate_names():
         "strategy_score_audit",
         "reports",
         "review_evidence_snapshots",
-        "ops_health",
+        "dashboard_browser_acceptance",
         "dashboard_surface_freshness",
+        "ops_health",
     ]
+
+    ordered_gate_names = [
+        name
+        for name in names
+        if name
+        in {
+            "strategy_publish",
+            "dashboard_browser_acceptance",
+            "dashboard_surface_freshness",
+            "ops_health",
+        }
+    ]
+    assert ordered_gate_names == [
+        "strategy_publish",
+        "dashboard_browser_acceptance",
+        "dashboard_surface_freshness",
+        "ops_health",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("manifest_status", "expected_status"),
+    [("success", RepairStatus.SUCCESS), ("degraded", RepairStatus.DEGRADED)],
+)
+def test_check_dashboard_browser_acceptance_maps_publishable_latest_manifest(
+    manifest_status,
+    expected_status,
+):
+    older = _browser_manifest_row(
+        run_id="older-run",
+        ended_at="2026-06-29T08:00:00+00:00",
+        status="failed",
+    )
+    latest = _browser_manifest_row(
+        status=manifest_status,
+        warnings=["console warning"] if manifest_status == "degraded" else [],
+    )
+
+    result = eod_auto_repair_checks.check_dashboard_browser_acceptance(
+        "2026-06-29",
+        manifest_loader=lambda trade_date: [older, latest],
+    )
+
+    assert result.status == expected_status
+    assert result.blocker is False
+    assert result.metrics["run_id"] == latest["run_id"]
+    assert result.metrics["report_schema_version"] == REPORT_SCHEMA_VERSION
+    assert result.metrics["artifact_paths"] == latest["metadata"]["artifact_paths"]
+    assert result.metrics["warnings"] == latest["warnings"]
+
+
+@pytest.mark.parametrize(
+    "rows",
+    [
+        [],
+        [_browser_manifest_row(status="failed")],
+        [_browser_manifest_row(trade_date="2026-06-28")],
+        [
+            _browser_manifest_row(
+                metadata={
+                    "report_schema_version": "playwright-eod-browser-acceptance/v0",
+                    "application_revision": "abc123",
+                    "artifact_paths": [],
+                }
+            )
+        ],
+        [_browser_manifest_row(metadata="malformed")],
+        [_browser_manifest_row(run_id="")],
+    ],
+)
+def test_check_dashboard_browser_acceptance_fails_closed_for_invalid_manifest(rows):
+    result = eod_auto_repair_checks.check_dashboard_browser_acceptance(
+        "2026-06-29",
+        manifest_loader=lambda trade_date: rows,
+    )
+
+    assert result.status == RepairStatus.FAILED
+    assert result.blocker is True
+
+
+def test_check_dashboard_browser_acceptance_fails_closed_when_latest_record_is_ambiguous():
+    rows = [
+        _browser_manifest_row(),
+        _browser_manifest_row(status="degraded", warnings=["different result"]),
+    ]
+
+    result = eod_auto_repair_checks.check_dashboard_browser_acceptance(
+        "2026-06-29",
+        manifest_loader=lambda trade_date: rows,
+    )
+
+    assert result.status == RepairStatus.FAILED
+    assert result.blocker is True
+    assert "ambiguous" in result.message
 
 
 def test_check_lhb_features_reads_factor_table_with_fetcher():

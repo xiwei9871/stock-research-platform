@@ -1,4 +1,5 @@
 import json
+import hashlib
 import time
 from datetime import date
 from types import SimpleNamespace
@@ -16,6 +17,135 @@ import stock_research.eod_auto_repair_checks as eod_auto_repair_checks
 import stock_research.daily_close_pipeline as daily_close_pipeline
 from stock_research.eod_auto_repair import build_default_action_registry, run_eod_auto_repair
 from stock_research.eod_auto_repair_models import RepairActionResult, RepairCheckResult, RepairRunSummary, RepairStatus
+from stock_research.eod_browser_acceptance import (
+    REPORT_SCHEMA_VERSION,
+    parse_browser_acceptance_report,
+    write_browser_acceptance_manifest,
+)
+
+
+BROWSER_STRATEGY_IDS = ("lhb_shortline", "mid_trend", "tech_bottleneck")
+
+
+def _browser_candidate(strategy_id, *, trade_date="2026-07-20", hour=1, run_id="strategy-run-1"):
+    return {
+        "strategyId": strategy_id,
+        "tradeDate": trade_date,
+        "totalReturnPct": 52.4 + hour,
+        "contractId": f"{strategy_id}:balanced:v1",
+        "publishId": f"{strategy_id}-publish-{trade_date}",
+        "publishStartedAt": f"{trade_date}T{hour:02d}:00:00+00:00",
+        "artifactVersion": "strategy-publication/v1",
+        "runId": run_id,
+    }
+
+
+def _strategy_manifest_rows(*, trade_date="2026-07-20", run_id="strategy-run-1"):
+    rows = []
+    for index, strategy_id in enumerate(BROWSER_STRATEGY_IDS):
+        candidate = _browser_candidate(
+            strategy_id,
+            trade_date=trade_date,
+            hour=index + 1,
+            run_id=run_id,
+        )
+        rows.append(
+            {
+                "module": f"strategy_{strategy_id}",
+                "source": "strategy_daily_eod",
+                "status": "success",
+                "trade_date": trade_date,
+                "latest_trade_date": trade_date,
+                "run_id": run_id,
+                "started_at": candidate["publishStartedAt"],
+                "ended_at": candidate["publishStartedAt"],
+                "metadata": {
+                    "publish_id": candidate["publishId"],
+                    "artifact_version": candidate["artifactVersion"],
+                    "publication_identity": {
+                        "strategy_id": strategy_id,
+                        "contract_id": candidate["contractId"],
+                    },
+                    "summary": {
+                        "total_return_pct": candidate["totalReturnPct"],
+                        "artifact_version": candidate["artifactVersion"],
+                        "publication_identity": {
+                            "strategy_id": strategy_id,
+                            "contract_id": candidate["contractId"],
+                        },
+                    },
+                },
+            }
+        )
+    return rows
+
+
+def _verified_browser_result(tmp_path, *, candidates, trade_date="2026-07-20", run_id="strategy-run-1"):
+    snapshot = {
+        "schemaVersion": "playwright-eod-candidate-snapshot/v1",
+        "tradeDate": trade_date,
+        "publications": [
+            {key: value for key, value in candidate.items() if key != "runId"}
+            for candidate in candidates
+        ],
+    }
+    snapshot_digest = hashlib.sha256(
+        json.dumps(snapshot, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    ).hexdigest()
+    tests = [
+        {
+            "testId": f"test-{gate_id}",
+            "title": f"@eod @eod-gate-{gate_id} gate {gate_id}",
+            "projectName": "eod-chromium",
+            "retry": 0,
+            "status": "passed",
+            "durationMs": 25,
+            "failures": [],
+            "attachments": [],
+            "severity": "blocker-consistency",
+            "attemptHistory": [
+                {
+                    "retry": 0,
+                    "status": "passed",
+                    "durationMs": 25,
+                    "failures": [],
+                    "attachments": [],
+                }
+            ],
+        }
+        for gate_id in (
+            "candidate-consistency",
+            "publication-consistency",
+            "runtime-deep-links",
+        )
+    ]
+    report = {
+        "schemaVersion": REPORT_SCHEMA_VERSION,
+        "runId": run_id,
+        "tradeDate": trade_date,
+        "revision": "abc123",
+        "startedAt": f"{trade_date}T08:00:00+00:00",
+        "endedAt": f"{trade_date}T08:00:02+00:00",
+        "durationSeconds": 2.0,
+        "contractOnly": False,
+        "status": "success",
+        "tests": tests,
+        "failures": [],
+        "attachments": [],
+        "candidateSnapshot": snapshot,
+        "candidateSnapshotSha256": snapshot_digest,
+    }
+    report_path = tmp_path / "browser-run" / "eod-browser-acceptance.json"
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(json.dumps(report), encoding="utf-8")
+    return parse_browser_acceptance_report(
+        report_path,
+        expected_run_id=run_id,
+        expected_trade_date=trade_date,
+        expected_revision="abc123",
+        expected_candidate_publications=candidates,
+        exit_code=0,
+    )
 
 
 def test_run_eod_auto_repair_runs_action_for_failed_check_then_rechecks():
@@ -555,6 +685,294 @@ def test_run_eod_auto_repair_loop_stops_after_repeated_action_failures(tmp_path)
     assert summary.loop_stop_reason == "failed_action_repeat_limit:strategy_publish"
 
 
+def test_run_eod_auto_repair_loop_skips_browser_and_downstream_when_upstream_blocker_remains(tmp_path):
+    calls = []
+
+    def check_plan_builder(trade_date):
+        return [
+            SimpleNamespace(
+                name=name,
+                run=lambda check_name=name: RepairCheckResult(
+                    check_name,
+                    RepairStatus.FAILED,
+                    "blocked",
+                    metrics={"pipeline_status": "BLOCKED"} if check_name == "ops_health" else {},
+                    blocker=True,
+                ),
+            )
+            for name in (
+                "strategy_publish",
+                "dashboard_browser_acceptance",
+                "dashboard_surface_freshness",
+                "ops_health",
+            )
+        ]
+
+    def action_for(name):
+        def action(trade_date, output_dir):
+            calls.append(name)
+            return RepairActionResult(name, RepairStatus.SUCCESS, "unexpected")
+
+        return action
+
+    summary = run_eod_auto_repair(
+        trade_date="2026-07-20",
+        output_dir=tmp_path,
+        mode="loop",
+        max_cycles=3,
+        check_plan_builder=check_plan_builder,
+        action_registry={
+            "dashboard_browser_acceptance": action_for("dashboard_browser_acceptance"),
+            "dashboard_surface_freshness": action_for("dashboard_surface_freshness"),
+            "ops_health": action_for("ops_health"),
+        },
+    )
+
+    assert calls == []
+    assert summary.final_status == RepairStatus.FAILED
+    assert "strategy_publish" in summary.remaining_blockers
+
+
+def test_run_eod_auto_repair_loop_attempts_failed_browser_once_and_blocks_downstream(tmp_path):
+    calls = []
+
+    def check_plan_builder(trade_date):
+        return [
+            SimpleNamespace(
+                name="strategy_publish",
+                run=lambda: RepairCheckResult("strategy_publish", RepairStatus.SUCCESS, "ready"),
+            ),
+            SimpleNamespace(
+                name="dashboard_browser_acceptance",
+                run=lambda: RepairCheckResult(
+                    "dashboard_browser_acceptance",
+                    RepairStatus.FAILED,
+                    "consistency failed",
+                    blocker=True,
+                ),
+            ),
+            SimpleNamespace(
+                name="dashboard_surface_freshness",
+                run=lambda: RepairCheckResult(
+                    "dashboard_surface_freshness",
+                    RepairStatus.FAILED,
+                    "blocked",
+                    blocker=True,
+                ),
+            ),
+            SimpleNamespace(
+                name="ops_health",
+                run=lambda: RepairCheckResult(
+                    "ops_health",
+                    RepairStatus.FAILED,
+                    "blocked",
+                    metrics={"pipeline_status": "BLOCKED"},
+                    blocker=True,
+                ),
+            ),
+        ]
+
+    def browser_action(trade_date, output_dir):
+        calls.append("dashboard_browser_acceptance")
+        return RepairActionResult(
+            "dashboard_browser_acceptance",
+            RepairStatus.FAILED,
+            "api_ui_mismatch",
+            validation_result={"evidence": {"failure_classes": ["api_ui_mismatch"]}},
+        )
+
+    def downstream_action(name):
+        return lambda trade_date, output_dir: calls.append(name) or RepairActionResult(
+            name,
+            RepairStatus.SUCCESS,
+            "unexpected",
+        )
+
+    summary = run_eod_auto_repair(
+        trade_date="2026-07-20",
+        output_dir=tmp_path,
+        mode="loop",
+        max_cycles=3,
+        check_plan_builder=check_plan_builder,
+        action_registry={
+            "dashboard_browser_acceptance": browser_action,
+            "dashboard_surface_freshness": downstream_action("dashboard_surface_freshness"),
+            "ops_health": downstream_action("ops_health"),
+        },
+    )
+
+    assert calls == ["dashboard_browser_acceptance"]
+    assert summary.final_status == RepairStatus.FAILED
+    assert summary.loop_stop_reason == "failed_action_repeat_limit:dashboard_browser_acceptance"
+    assert summary.actions[0].validation_result["evidence"]["failure_classes"] == [
+        "api_ui_mismatch"
+    ]
+
+
+def test_run_eod_auto_repair_stage_stops_downstream_after_failed_browser_consistency(tmp_path):
+    calls = []
+
+    def check_plan_builder(trade_date):
+        return [
+            SimpleNamespace(
+                name="strategy_publish",
+                run=lambda: RepairCheckResult("strategy_publish", RepairStatus.SUCCESS, "ready"),
+            ),
+            SimpleNamespace(
+                name="dashboard_browser_acceptance",
+                run=lambda: RepairCheckResult(
+                    "dashboard_browser_acceptance",
+                    RepairStatus.FAILED,
+                    "consistency failed",
+                    blocker=True,
+                ),
+            ),
+            SimpleNamespace(
+                name="dashboard_surface_freshness",
+                run=lambda: RepairCheckResult(
+                    "dashboard_surface_freshness",
+                    RepairStatus.FAILED,
+                    "blocked",
+                    blocker=True,
+                ),
+            ),
+            SimpleNamespace(
+                name="ops_health",
+                run=lambda: RepairCheckResult(
+                    "ops_health",
+                    RepairStatus.FAILED,
+                    "blocked",
+                    metrics={"pipeline_status": "BLOCKED"},
+                    blocker=True,
+                ),
+            ),
+        ]
+
+    def action_for(name, status):
+        def action(trade_date, output_dir):
+            calls.append(name)
+            return RepairActionResult(name, status, "ran")
+
+        return action
+
+    summary = run_eod_auto_repair(
+        trade_date="2026-07-20",
+        output_dir=tmp_path,
+        mode="repair",
+        check_plan_builder=check_plan_builder,
+        action_registry={
+            "dashboard_browser_acceptance": action_for(
+                "dashboard_browser_acceptance", RepairStatus.FAILED
+            ),
+            "dashboard_surface_freshness": action_for(
+                "dashboard_surface_freshness", RepairStatus.SUCCESS
+            ),
+            "ops_health": action_for("ops_health", RepairStatus.SUCCESS),
+        },
+    )
+
+    assert calls == ["dashboard_browser_acceptance"]
+    assert summary.final_status == RepairStatus.FAILED
+    assert "dashboard_browser_acceptance" in summary.remaining_blockers
+
+
+def test_run_eod_auto_repair_loop_keeps_degraded_browser_publishable_and_finalizes_in_order(tmp_path):
+    state = {
+        "dashboard_browser_acceptance": RepairStatus.FAILED,
+        "dashboard_surface_freshness": RepairStatus.FAILED,
+        "ops_health": RepairStatus.FAILED,
+    }
+    calls = []
+
+    def check_plan_builder(trade_date):
+        return [
+            SimpleNamespace(
+                name="strategy_publish",
+                run=lambda: RepairCheckResult("strategy_publish", RepairStatus.SUCCESS, "ready"),
+            ),
+            SimpleNamespace(
+                name="dashboard_browser_acceptance",
+                run=lambda: RepairCheckResult(
+                    "dashboard_browser_acceptance",
+                    state["dashboard_browser_acceptance"],
+                    "publishable warnings"
+                    if state["dashboard_browser_acceptance"] == RepairStatus.DEGRADED
+                    else "missing",
+                    metrics={"warnings": ["console warning"]}
+                    if state["dashboard_browser_acceptance"] == RepairStatus.DEGRADED
+                    else {},
+                    blocker=state["dashboard_browser_acceptance"] == RepairStatus.FAILED,
+                ),
+            ),
+            SimpleNamespace(
+                name="dashboard_surface_freshness",
+                run=lambda: RepairCheckResult(
+                    "dashboard_surface_freshness",
+                    state["dashboard_surface_freshness"],
+                    "ready" if state["dashboard_surface_freshness"] == RepairStatus.SUCCESS else "missing",
+                    blocker=state["dashboard_surface_freshness"] == RepairStatus.FAILED,
+                ),
+            ),
+            SimpleNamespace(
+                name="ops_health",
+                run=lambda: RepairCheckResult(
+                    "ops_health",
+                    state["ops_health"],
+                    "ready" if state["ops_health"] == RepairStatus.SUCCESS else "missing",
+                    metrics={
+                        "pipeline_status": "READY"
+                        if state["ops_health"] == RepairStatus.SUCCESS
+                        else "BLOCKED"
+                    },
+                    blocker=state["ops_health"] == RepairStatus.FAILED,
+                ),
+            ),
+        ]
+
+    def browser_action(trade_date, output_dir):
+        calls.append("dashboard_browser_acceptance")
+        state["dashboard_browser_acceptance"] = RepairStatus.DEGRADED
+        return RepairActionResult(
+            "dashboard_browser_acceptance",
+            RepairStatus.DEGRADED,
+            "publishable warnings",
+            validation_result={"evidence": {"warnings": ["console warning"]}},
+        )
+
+    def success_action(name):
+        def action(trade_date, output_dir):
+            calls.append(name)
+            state[name] = RepairStatus.SUCCESS
+            return RepairActionResult(name, RepairStatus.SUCCESS, "ready")
+
+        return action
+
+    summary = run_eod_auto_repair(
+        trade_date="2026-07-20",
+        output_dir=tmp_path,
+        mode="loop",
+        max_cycles=3,
+        check_plan_builder=check_plan_builder,
+        action_registry={
+            "dashboard_browser_acceptance": browser_action,
+            "dashboard_surface_freshness": success_action("dashboard_surface_freshness"),
+            "ops_health": success_action("ops_health"),
+        },
+    )
+
+    assert calls == [
+        "dashboard_browser_acceptance",
+        "dashboard_surface_freshness",
+        "ops_health",
+    ]
+    assert summary.final_status == RepairStatus.DEGRADED
+    assert summary.remaining_blockers == []
+    assert summary.checks_after[1].metrics["warnings"] == ["console warning"]
+    assert summary.actions[0].validation_result["evidence"]["warnings"] == [
+        "console warning"
+    ]
+
+
 def test_run_eod_auto_repair_loop_bounds_individual_action_runtime(tmp_path):
     def check_plan_builder(trade_date):
         return [
@@ -815,9 +1233,134 @@ def test_default_action_registry_contains_repairable_checks():
     assert "watchlist" in registry
     assert "market_monitor" in registry
     assert "strategy_publish" in registry
+    assert "dashboard_browser_acceptance" in registry
     assert "ops_health" in registry
     assert "reports" in registry
     assert "review_evidence_snapshots" in registry
+
+
+def test_browser_acceptance_is_ordered_between_strategy_publish_and_downstream_presentation():
+    loop_names = [
+        name
+        for name in eod_auto_repair.LOOP_REPAIR_ORDER
+        if name
+        in {
+            "strategy_publish",
+            "dashboard_browser_acceptance",
+            "dashboard_surface_freshness",
+            "ops_health",
+        }
+    ]
+    presentation_names = next(
+        names for stage, names in eod_auto_repair.STAGE_CHECKS if stage == "presentation"
+    )
+    presentation_gate_names = [
+        name
+        for name in presentation_names
+        if name
+        in {
+            "dashboard_browser_acceptance",
+            "dashboard_surface_freshness",
+            "ops_health",
+        }
+    ]
+
+    assert loop_names == [
+        "strategy_publish",
+        "dashboard_browser_acceptance",
+        "dashboard_surface_freshness",
+        "ops_health",
+    ]
+    assert presentation_gate_names == [
+        "dashboard_browser_acceptance",
+        "dashboard_surface_freshness",
+        "ops_health",
+    ]
+
+
+def test_default_browser_action_uses_same_run_manifest_identities_and_verified_result(tmp_path):
+    trade_date = "2026-07-20"
+    run_id = "strategy-run-1"
+    rows = _strategy_manifest_rows(trade_date=trade_date, run_id=run_id)
+    candidates = [
+        _browser_candidate(
+            strategy_id,
+            trade_date=trade_date,
+            hour=index + 1,
+            run_id=run_id,
+        )
+        for index, strategy_id in enumerate(BROWSER_STRATEGY_IDS)
+    ]
+    parsed_result = _verified_browser_result(
+        tmp_path,
+        candidates=candidates,
+        trade_date=trade_date,
+        run_id=run_id,
+    )
+    captured = {"runner": [], "manifest": []}
+
+    def browser_runner(**kwargs):
+        captured["runner"].append(kwargs)
+        return parsed_result
+
+    def browser_writer(result):
+        assert result is parsed_result
+        return write_browser_acceptance_manifest(
+            result,
+            manifest_upsert=captured["manifest"].append,
+        )
+
+    registry = build_default_action_registry(
+        output_root=tmp_path,
+        browser_runner=browser_runner,
+        browser_manifest_writer=browser_writer,
+        browser_revision="abc123",
+        browser_output_root=tmp_path / "browser-output",
+        browser_manifest_loader=lambda trade_date: rows,
+    )
+
+    result = registry["dashboard_browser_acceptance"](trade_date, tmp_path)
+
+    assert len(captured["runner"]) == 1
+    assert captured["runner"][0] == {
+        "trade_date": trade_date,
+        "run_id": run_id,
+        "revision": "abc123",
+        "output_dir": tmp_path / "browser-output" / trade_date / run_id,
+        "candidate_publications": candidates,
+    }
+    assert captured["manifest"][0]["run_id"] == run_id
+    assert result.status == RepairStatus.SUCCESS
+    assert result.artifact_paths == list(parsed_result.artifact_paths)
+    assert result.validation_result["evidence"]["parsed_result"]["run_id"] == run_id
+    assert result.validation_result["evidence"]["manifest"]["status"] == "success"
+
+
+@pytest.mark.parametrize("row_mutation", ["missing_strategy", "wrong_run"])
+def test_default_browser_action_fails_closed_before_runner_for_invalid_candidate_identity(
+    tmp_path,
+    row_mutation,
+):
+    rows = _strategy_manifest_rows()
+    if row_mutation == "missing_strategy":
+        rows.pop()
+    else:
+        rows[-1]["run_id"] = "different-run"
+    browser_calls = []
+    registry = build_default_action_registry(
+        output_root=tmp_path,
+        browser_runner=lambda **kwargs: browser_calls.append(kwargs),
+        browser_manifest_writer=lambda result: None,
+        browser_revision="abc123",
+        browser_output_root=tmp_path / "browser-output",
+        browser_manifest_loader=lambda trade_date: rows,
+    )
+
+    result = registry["dashboard_browser_acceptance"]("2026-07-20", tmp_path)
+
+    assert browser_calls == []
+    assert result.status == RepairStatus.FAILED
+    assert "candidate" in result.message or "run" in result.message
 
 
 def test_default_minute5_action_uses_direct_raw_repair(monkeypatch, tmp_path):
