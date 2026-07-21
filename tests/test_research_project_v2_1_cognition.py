@@ -18,6 +18,12 @@ from stock_research.research_project_v2_1.cognition import (
     validate_grounded_mechanisms,
     validate_judgment_boundaries,
 )
+from stock_research.research_project_v2_1.cognition_audit import (
+    compute_audit,
+    compute_capability,
+    compute_domain_coverage,
+    validate_persisted_audit,
+)
 from stock_research.research_project_v2_1.layout import LayeredResearchLayout
 from stock_research.research_project_v2_1.schema import validate_v2_1_schema_payload
 
@@ -407,3 +413,79 @@ def test_value_hypotheses_have_only_open_gap_linked_or_ineligible_status() -> No
     ]
     with pytest.raises(ResearchProjectV2Error):
         validate_judgment_boundaries(package)
+
+
+def capability_package_fixture() -> dict:
+    package = minimal_package()
+    package["content_hash"] = "a" * 64
+    package["evidence_grounded_mechanisms"] = [
+        {"mechanism_id": "MECH-A", "domain": "ai_system_architecture"},
+        {"mechanism_id": "MECH-B", "domain": "accelerator_interconnect"},
+        {"mechanism_id": "MECH-C", "domain": "network_fabric"},
+        {"mechanism_id": "MECH-D", "domain": "dpu"},
+        {"mechanism_id": "MECH-E", "domain": "optical_boundary"},
+    ]
+    package["unverified_mechanism_skeletons"] = [
+        {"skeleton_id": "SKEL-001", "domain": "signal_integrity"}
+    ]
+    package["evidence_gap_referrals"] = [
+        {"gap_id": "GAP-MAT", "domain": "pcb_materials", "status": "not_assessable"},
+        {"gap_id": "GAP-MFG", "domain": "pcb_manufacturing", "status": "not_assessable"},
+        {"gap_id": "GAP-TST", "domain": "pcb_testing", "status": "not_assessable"},
+        {"gap_id": "GAP-YLD", "domain": "yield", "status": "not_assessable"},
+        {"gap_id": "GAP-CAP", "domain": "effective_capacity", "status": "not_assessable"},
+    ]
+    return package
+
+
+def test_domain_matrix_distinguishes_grounded_skeleton_and_not_assessable() -> None:
+    coverage = {row["domain"]: row["status"] for row in compute_domain_coverage(capability_package_fixture())}
+    assert coverage["accelerator_interconnect"] == "evidence_grounded"
+    assert coverage["signal_integrity"] == "unverified_skeleton_only"
+    assert coverage["pcb_manufacturing"] == "not_assessable"
+
+
+def test_skeletons_never_raise_domain_coverage() -> None:
+    package = capability_package_fixture()
+    package["evidence_grounded_mechanisms"] = []
+    package["unverified_mechanism_skeletons"].append(
+        {"skeleton_id": "SKEL-A", "domain": "ai_system_architecture"}
+    )
+    coverage = {row["domain"]: row["status"] for row in compute_domain_coverage(package)}
+    assert coverage["ai_system_architecture"] == "unverified_skeleton_only"
+
+
+def test_missing_pcb_domains_caps_full_cognition_and_mapping_readiness() -> None:
+    package = capability_package_fixture()
+    capability = compute_capability(package, compute_domain_coverage(package))
+    assert capability == {
+        "overall_capability": "partial_industry_cognition_demand_side_only",
+        "ai_system_interconnect_cognition": "evidence_grounded",
+        "signal_integrity_and_pcb_mechanism_cognition": "unverified_skeleton_only",
+        "pcb_material_and_manufacturing_cognition": "not_assessable",
+        "pcb_industry_bottleneck_judgment": "not_available",
+        "full_ai_pcb_industry_cognition": "not_achieved",
+        "company_mapping_readiness": False,
+        "next_required_action": "evidence_gap_review",
+        "automatic_gap_acquisition_authorized": False,
+    }
+
+
+def test_persisted_audit_must_equal_recomputed_audit() -> None:
+    package = capability_package_fixture()
+    expected = compute_audit(package, b"report\n")
+    validate_persisted_audit(deepcopy(expected), expected)
+    drifted = deepcopy(expected)
+    drifted["computed_capability"]["company_mapping_readiness"] = True
+    with pytest.raises(ResearchProjectV2Error):
+        validate_persisted_audit(drifted, expected)
+
+
+def test_eight_audit_answers_include_supporting_and_blocking_ids() -> None:
+    audit = compute_audit(capability_package_fixture(), b"report\n")
+    assert len(audit["audit_answers"]) == 8
+    assert all(row["calculation_rule"] for row in audit["audit_answers"])
+    assert all(
+        "supporting_object_ids" in row and "blocking_object_ids" in row
+        for row in audit["audit_answers"]
+    )
