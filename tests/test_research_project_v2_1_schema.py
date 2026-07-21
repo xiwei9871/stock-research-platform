@@ -924,7 +924,7 @@ def test_validation_failure_reports_deterministic_schema_and_path(sample_identit
 
 def test_all_layered_schema_files_are_valid_draft_2020_12_schemas():
     assert {path.name for path in SCHEMA_DIR.glob("*.schema.json")} == ALL_SCHEMA_FILES
-    assert len(ALL_SCHEMA_FILES) == 20
+    assert len(ALL_SCHEMA_FILES) == 21
 
     for filename in sorted(ALL_SCHEMA_FILES):
         Draft202012Validator.check_schema(
@@ -1042,6 +1042,7 @@ def test_public_registry_excludes_common_definitions():
         "stage_a_scope_correction_v2_4": "stage_a_scope_correction_v2_4.schema.json",
         "industry_cognition_baseline_v2_5": "industry_cognition_baseline_v2_5.schema.json",
         "evidence_gap_review_v2_6": "evidence_gap_review_v2_6.schema.json",
+        "targeted_evidence_assessment_v2_7": "targeted_evidence_assessment_v2_7.schema.json",
     }
 
 

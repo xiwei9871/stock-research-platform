@@ -1,0 +1,202 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "targeted_evidence_assessment_v2_7.schema.json",
+  "$defs": {
+    "non_empty_string": {"type": "string", "minLength": 1},
+    "string_array": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "locator": {
+      "type": "object",
+      "required": [
+        "artifact_id", "normalized_document_id", "section_index",
+        "section_hash", "heading", "locator_note"
+      ],
+      "properties": {
+        "artifact_id": {"type": "string", "pattern": "^evidence_artifact:"},
+        "normalized_document_id": {"type": "string", "pattern": "^normalized_document:"},
+        "section_index": {"type": "integer", "minimum": 0},
+        "section_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "heading": {"type": ["string", "null"]},
+        "locator_note": {"$ref": "#/$defs/non_empty_string"}
+      },
+      "additionalProperties": false
+    },
+    "evidence_chain": {
+      "type": "object",
+      "required": ["chain_id", "source_owner", "artifact_ids", "independence_group"],
+      "properties": {
+        "chain_id": {"type": "string", "pattern": "^evidence_chain:"},
+        "source_owner": {"$ref": "#/$defs/non_empty_string"},
+        "artifact_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^evidence_artifact:"}
+        },
+        "independence_group": {"$ref": "#/$defs/non_empty_string"}
+      },
+      "additionalProperties": false
+    },
+    "atomic_claim": {
+      "type": "object",
+      "required": [
+        "claim_id", "er_id", "claim_text", "claim_type", "scope",
+        "product_or_standard_generation", "rate", "frequency", "distance",
+        "topology", "test_method", "denominator", "evidence_locators",
+        "evidence_stance", "evidence_chain_ids", "source_independence_status",
+        "freshness_status", "assessment_status", "evidence_strength", "confidence",
+        "assessment_reason", "limitations", "counterevidence",
+        "alternative_explanations", "missing_evidence", "maximum_supported_cognition"
+      ],
+      "properties": {
+        "claim_id": {"$ref": "#/$defs/non_empty_string"},
+        "er_id": {"enum": ["PCB-ER-A01", "PCB-ER-A02", "PCB-ER-A03", "PCB-ER-A04", "PCB-ER-B01", "PCB-ER-B02"]},
+        "claim_text": {"$ref": "#/$defs/non_empty_string"},
+        "claim_type": {"enum": ["fact", "inference", "hypothesis", "judgment"]},
+        "scope": {"$ref": "#/$defs/non_empty_string"},
+        "product_or_standard_generation": {"$ref": "#/$defs/non_empty_string"},
+        "rate": {"$ref": "#/$defs/non_empty_string"},
+        "frequency": {"$ref": "#/$defs/non_empty_string"},
+        "distance": {"$ref": "#/$defs/non_empty_string"},
+        "topology": {"$ref": "#/$defs/non_empty_string"},
+        "test_method": {"$ref": "#/$defs/non_empty_string"},
+        "denominator": {"$ref": "#/$defs/non_empty_string"},
+        "evidence_locators": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/locator"}
+        },
+        "evidence_stance": {"enum": ["support", "oppose", "mixed", "contextual", "non_evidence"]},
+        "evidence_chain_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^evidence_chain:"}
+        },
+        "source_independence_status": {"$ref": "#/$defs/non_empty_string"},
+        "freshness_status": {"enum": ["current", "stale", "unknown", "mixed"]},
+        "assessment_status": {"enum": ["sufficient", "insufficient", "conflicted", "open", "not_assessable"]},
+        "evidence_strength": {"enum": ["very_low", "low", "medium", "high"]},
+        "confidence": {"enum": ["very_low", "low", "medium", "high"]},
+        "assessment_reason": {"$ref": "#/$defs/non_empty_string"},
+        "limitations": {"$ref": "#/$defs/string_array"},
+        "counterevidence": {"$ref": "#/$defs/string_array"},
+        "alternative_explanations": {"$ref": "#/$defs/string_array"},
+        "missing_evidence": {"$ref": "#/$defs/string_array"},
+        "maximum_supported_cognition": {"$ref": "#/$defs/non_empty_string"}
+      },
+      "additionalProperties": false
+    },
+    "er_assessment": {
+      "type": "object",
+      "required": [
+        "er_id", "assessed_claim_ids", "sufficient_claim_ids",
+        "insufficient_claim_ids", "conflicted_claim_ids", "open_claim_ids",
+        "not_assessable_claim_ids", "independent_evidence_chain_count",
+        "overall_status", "overall_status_reason", "remaining_evidence_gaps",
+        "recommended_next_action"
+      ],
+      "properties": {
+        "er_id": {"enum": ["PCB-ER-A01", "PCB-ER-A02", "PCB-ER-A03", "PCB-ER-A04", "PCB-ER-B01", "PCB-ER-B02"]},
+        "assessed_claim_ids": {"$ref": "#/$defs/string_array"},
+        "sufficient_claim_ids": {"$ref": "#/$defs/string_array"},
+        "insufficient_claim_ids": {"$ref": "#/$defs/string_array"},
+        "conflicted_claim_ids": {"$ref": "#/$defs/string_array"},
+        "open_claim_ids": {"$ref": "#/$defs/string_array"},
+        "not_assessable_claim_ids": {"$ref": "#/$defs/string_array"},
+        "independent_evidence_chain_count": {"type": "integer", "minimum": 0},
+        "overall_status": {"enum": ["sufficient", "insufficient", "conflicted", "open", "not_assessable"]},
+        "overall_status_reason": {"$ref": "#/$defs/non_empty_string"},
+        "remaining_evidence_gaps": {"$ref": "#/$defs/string_array"},
+        "recommended_next_action": {"$ref": "#/$defs/non_empty_string"}
+      },
+      "additionalProperties": false
+    },
+    "excluded_record": {
+      "type": "object",
+      "required": ["record_id", "record_type", "reason"],
+      "properties": {
+        "record_id": {"$ref": "#/$defs/non_empty_string"},
+        "artifact_id": {"type": "string", "pattern": "^evidence_artifact:"},
+        "record_type": {"$ref": "#/$defs/non_empty_string"},
+        "reason": {"$ref": "#/$defs/non_empty_string"}
+      },
+      "additionalProperties": false
+    }
+  },
+  "type": "object",
+  "required": [
+    "schema_version", "artifact_type", "assessment_id", "project_id",
+    "assessment_wave", "execution_mode", "renderer_version", "input_bindings",
+    "authorized_er_ids", "evidence_chain_register", "atomic_claims",
+    "er_assessments", "excluded_records", "governance", "provenance", "content_hash"
+  ],
+  "properties": {
+    "schema_version": {"const": "2.7.0"},
+    "artifact_type": {"const": "targeted_evidence_assessment"},
+    "assessment_id": {"$ref": "#/$defs/non_empty_string"},
+    "project_id": {"$ref": "#/$defs/non_empty_string"},
+    "assessment_wave": {"const": "targeted_evidence_assessment_wave_1_v1"},
+    "execution_mode": {"const": "offline_read_only_evidence_assessment"},
+    "renderer_version": {"const": "targeted_evidence_assessment_markdown_v1"},
+    "input_bindings": {
+      "type": "object",
+      "required": ["checkpoint_id", "checkpoint_hash", "gate_hash"],
+      "properties": {
+        "checkpoint_id": {"const": "targeted_acquisition_checkpoint:b53ab0a0143b89f9914842f5"},
+        "checkpoint_hash": {"const": "b53ab0a0143b89f9914842f5848ed606b86de3dc1a4a7f5f08a05c6afcf81013"},
+        "gate_hash": {"const": "38f48163bfdc825b6f3afc12e95a9cc99c59c0fccc809fbe4e86460405d509ea"}
+      },
+      "additionalProperties": false
+    },
+    "authorized_er_ids": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "uniqueItems": true,
+      "items": {"enum": ["PCB-ER-A01", "PCB-ER-A02", "PCB-ER-A03", "PCB-ER-A04", "PCB-ER-B01", "PCB-ER-B02"]}
+    },
+    "evidence_chain_register": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/evidence_chain"}
+    },
+    "atomic_claims": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/atomic_claim"}
+    },
+    "er_assessments": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "items": {"$ref": "#/$defs/er_assessment"}
+    },
+    "excluded_records": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/excluded_record"}
+    },
+    "governance": {
+      "type": "object",
+      "required": [
+        "network_access", "new_acquisition", "cognition_update",
+        "gap_review_update", "gate_update", "company_mapping_authorized",
+        "stage_a2_authorized", "stage_b_authorized", "wave_1b_authorized"
+      ],
+      "properties": {
+        "network_access": {"const": false},
+        "new_acquisition": {"const": false},
+        "cognition_update": {"const": false},
+        "gap_review_update": {"const": false},
+        "gate_update": {"const": false},
+        "company_mapping_authorized": {"const": false},
+        "stage_a2_authorized": {"const": false},
+        "stage_b_authorized": {"const": false},
+        "wave_1b_authorized": {"const": false}
+      },
+      "additionalProperties": false
+    },
+    "provenance": {"$ref": "definitions_v2_1.schema.json#/$defs/provenance"},
+    "content_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  },
+  "additionalProperties": false
+}

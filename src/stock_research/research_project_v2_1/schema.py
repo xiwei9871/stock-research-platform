@@ -27,6 +27,7 @@ SCHEMA_FILES = {
     "stage_a_scope_correction_v2_4": "stage_a_scope_correction_v2_4.schema.json",
     "industry_cognition_baseline_v2_5": "industry_cognition_baseline_v2_5.schema.json",
     "evidence_gap_review_v2_6": "evidence_gap_review_v2_6.schema.json",
+    "targeted_evidence_assessment_v2_7": "targeted_evidence_assessment_v2_7.schema.json",
 }
 
 
