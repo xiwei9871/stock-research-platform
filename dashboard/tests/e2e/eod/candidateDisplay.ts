@@ -60,12 +60,38 @@ const OVERRIDDEN_EXACT_ENDPOINTS = new Set([
   '/api/platform/display-date',
   '/api/review-queue'
 ]);
-const DISPLAY_DATE_FIELDS = new Set([
+const ROOT_SELECTOR_FIELDS: Record<string, ReadonlySet<string>> = {
+  '/api/platform/display-date': new Set([
+    'display_trade_date',
+    'candidate_trade_date',
+    'latest_market_date',
+    'latest_trade_date'
+  ]),
+  '/api/platform/readiness': new Set([
+    'display_trade_date',
+    'candidate_trade_date',
+    'latest_market_date',
+    'latest_trade_date'
+  ]),
+  '/api/platform/summary': new Set([
+    'display_trade_date',
+    'candidate_trade_date',
+    'latest_market_date',
+    'latest_trade_date'
+  ]),
+  '/api/review-queue': new Set([
+    'trade_date',
+    'display_trade_date',
+    'candidate_trade_date',
+    'selected_trade_date',
+    'generated_trade_date'
+  ])
+};
+const MARKET_MONITOR_ROOT_SELECTOR_FIELDS = new Set([
+  'trade_date',
   'display_trade_date',
   'candidate_trade_date',
-  'latest_market_date',
-  'latest_trade_date',
-  'trade_date'
+  'selected_trade_date'
 ]);
 const PREVIOUS_ROOT_KEYS = ['publications', 'schemaVersion'];
 const PUBLICATION_KEYS = [
@@ -346,9 +372,15 @@ function assertNoRollback(
 export function parseCandidateSnapshot(
   targetTradeDate: string,
   payloads: CandidatePayloads,
-  previousPublicationsJson?: string
+  previousPublicationsJson: string | undefined
 ): CandidateSnapshot {
   const target = requiredDate(targetTradeDate, 'eod_candidate_target_trade_date_missing');
+  if (
+    typeof previousPublicationsJson !== 'string' ||
+    previousPublicationsJson.trim() === ''
+  ) {
+    fail('eod_previous_publications_required');
+  }
   const catalog = objectValue(payloads.catalog, 'eod_candidate_catalog_invalid');
   const reviewQueue = objectValue(payloads.reviewQueue, 'eod_candidate_review_queue_invalid');
   const readiness = objectValue(payloads.readiness, 'eod_candidate_readiness_invalid');
@@ -367,15 +399,13 @@ export function parseCandidateSnapshot(
     assertReviewQueueIdentity(publication, allQueueItems);
   }
 
-  if (previousPublicationsJson !== undefined && previousPublicationsJson.trim() !== '') {
-    const previous = parsePreviousPublicationsJson(previousPublicationsJson);
-    for (const candidate of publications) {
-      const prior = previous.publications.find(
-        (publication) => publication.strategyId === candidate.strategyId
-      );
-      if (!prior) fail('eod_previous_publications_strategy_missing', candidate.strategyId);
-      assertNoRollback(candidate, prior);
-    }
+  const previous = parsePreviousPublicationsJson(previousPublicationsJson);
+  for (const candidate of publications) {
+    const prior = previous.publications.find(
+      (publication) => publication.strategyId === candidate.strategyId
+    );
+    if (!prior) fail('eod_previous_publications_strategy_missing', candidate.strategyId);
+    assertNoRollback(candidate, prior);
   }
 
   return {
@@ -385,11 +415,10 @@ export function parseCandidateSnapshot(
   };
 }
 
-export async function loadCandidateSnapshot(
+async function loadCandidatePayloads(
   targetTradeDate: string,
-  fetchJson: CandidateJsonFetcher,
-  previousPublicationsJson = environmentValue('PLAYWRIGHT_EOD_PREVIOUS_PUBLICATIONS_JSON')
-): Promise<CandidateSnapshot> {
+  fetchJson: CandidateJsonFetcher
+): Promise<CandidatePayloads> {
   const encodedDate = encodeURIComponent(targetTradeDate);
   const [catalog, reviewQueue, readiness, summary] = await Promise.all([
     fetchJson('/api/strategies/catalog'),
@@ -397,15 +426,79 @@ export async function loadCandidateSnapshot(
     fetchJson('/api/platform/readiness'),
     fetchJson('/api/platform/summary')
   ]);
+  return { catalog, reviewQueue, readiness, summary };
+}
+
+export async function loadCandidateSnapshotWithPrevious(
+  targetTradeDate: string,
+  fetchJson: CandidateJsonFetcher,
+  previousPublicationsJson: string | undefined
+): Promise<CandidateSnapshot> {
+  const payloads = await loadCandidatePayloads(targetTradeDate, fetchJson);
   return parseCandidateSnapshot(
     targetTradeDate,
-    { catalog, reviewQueue, readiness, summary },
+    payloads,
     previousPublicationsJson
+  );
+}
+
+export async function loadCandidateSnapshot(
+  targetTradeDate: string,
+  fetchJson: CandidateJsonFetcher
+): Promise<CandidateSnapshot> {
+  return loadCandidateSnapshotWithPrevious(
+    targetTradeDate,
+    fetchJson,
+    environmentValue('PLAYWRIGHT_EOD_PREVIOUS_PUBLICATIONS_JSON')
   );
 }
 
 function isOverriddenEndpoint(pathname: string): boolean {
   return OVERRIDDEN_EXACT_ENDPOINTS.has(pathname) || pathname.startsWith('/api/market-monitor/');
+}
+
+function safeUrl(rawUrl: string): URL | null {
+  try {
+    return new URL(rawUrl);
+  } catch {
+    return null;
+  }
+}
+
+function isApiPath(pathname: string): boolean {
+  return pathname === '/api' || pathname.startsWith('/api/');
+}
+
+function decodePathLayer(pathname: string): string {
+  try {
+    return decodeURIComponent(pathname);
+  } catch {
+    return pathname.replace(/%([0-9a-f]{2})/gi, (_match, encoded: string) => {
+      const value = Number.parseInt(encoded, 16);
+      return value <= 0x7f ? String.fromCharCode(value) : `%${encoded.toUpperCase()}`;
+    });
+  }
+}
+
+function hasMalformedPercent(value: string): boolean {
+  return /%(?![0-9a-f]{2})/i.test(value);
+}
+
+function isApiUrl(rawUrl: string): boolean {
+  const url = safeUrl(rawUrl);
+  if (!url) return false;
+  let pathname = url.pathname;
+  for (let layer = 0; layer < 8; layer += 1) {
+    if (isApiPath(pathname)) return true;
+    if (pathname.startsWith('/api%') && hasMalformedPercent(pathname.slice(4))) return true;
+    const decoded = decodePathLayer(pathname);
+    if (decoded === pathname) return false;
+    pathname = decoded;
+  }
+  return (
+    isApiPath(pathname) ||
+    (pathname.startsWith('/api%') && hasMalformedPercent(pathname.slice(4)))
+  );
 }
 
 export function candidateDisplayDecision(
@@ -414,12 +507,10 @@ export function candidateDisplayDecision(
   targetTradeDate: string
 ): CandidateDisplayDecision {
   const normalizedMethod = method.toUpperCase();
-  const url = new URL(rawUrl);
+  const url = safeUrl(rawUrl);
+  if (!url) return { action: 'continue' };
   const endpoint = url.pathname;
-  if (
-    (endpoint === '/api' || endpoint.startsWith('/api/')) &&
-    !ALLOWED_API_METHODS.has(normalizedMethod)
-  ) {
+  if (isApiUrl(rawUrl) && !ALLOWED_API_METHODS.has(normalizedMethod)) {
     return { action: 'reject-write', endpoint, method: normalizedMethod };
   }
   if (normalizedMethod !== 'GET' || !isOverriddenEndpoint(endpoint)) {
@@ -431,28 +522,23 @@ export function candidateDisplayDecision(
   return { action: 'override', endpoint, effectiveUrl: url.toString() };
 }
 
-function rewriteDateFields(value: unknown, targetTradeDate: string): unknown {
-  if (Array.isArray(value)) {
-    return value.map((item) => rewriteDateFields(item, targetTradeDate));
-  }
-  if (typeof value !== 'object' || value === null) return value;
-  return Object.fromEntries(
-    Object.entries(value as JsonObject).map(([key, nestedValue]) => [
-      key,
-      DISPLAY_DATE_FIELDS.has(key)
-        ? targetTradeDate
-        : rewriteDateFields(nestedValue, targetTradeDate)
-    ])
-  );
-}
-
 export function rewriteCandidateDisplayPayload(
   pathname: string,
   payload: unknown,
   targetTradeDate: string
 ): unknown {
   if (!isOverriddenEndpoint(pathname)) return payload;
-  return rewriteDateFields(payload, targetTradeDate);
+  if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) return payload;
+  const selectorFields = pathname.startsWith('/api/market-monitor/')
+    ? MARKET_MONITOR_ROOT_SELECTOR_FIELDS
+    : ROOT_SELECTOR_FIELDS[pathname];
+  if (!selectorFields) return payload;
+  return Object.fromEntries(
+    Object.entries(payload as JsonObject).map(([key, value]) => [
+      key,
+      selectorFields.has(key) ? targetTradeDate : value
+    ])
+  );
 }
 
 function stableQuery(rawUrl: string): string {
@@ -514,6 +600,6 @@ export async function installCandidateDisplayOverride(
     effectiveQueries: [],
     rejectedWrites: []
   };
-  await page.route('**/api/**', (route) => handleCandidateRoute(route, target, evidence));
+  await page.context().route('**/*', (route) => handleCandidateRoute(route, target, evidence));
   return evidence;
 }

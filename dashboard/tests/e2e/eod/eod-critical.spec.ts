@@ -12,6 +12,7 @@ import {
   candidateDisplayDecision,
   installCandidateDisplayOverride,
   loadCandidateSnapshot,
+  loadCandidateSnapshotWithPrevious,
   parseCandidateSnapshot,
   parsePreviousPublicationsJson,
   rewriteCandidateDisplayPayload,
@@ -111,9 +112,31 @@ function previousJson(overrides: Record<string, unknown> = {}) {
   });
 }
 
+async function withPreviousPublicationsEnvironment(
+  value: string | undefined,
+  action: () => Promise<void>
+): Promise<void> {
+  const environment = (
+    globalThis as typeof globalThis & {
+      process?: { env?: Record<string, string | undefined> };
+    }
+  ).process?.env;
+  if (!environment) throw new Error('playwright_eod_process_environment_missing');
+  const name = 'PLAYWRIGHT_EOD_PREVIOUS_PUBLICATIONS_JSON';
+  const previous = environment[name];
+  if (value === undefined) delete environment[name];
+  else environment[name] = value;
+  try {
+    await action();
+  } finally {
+    if (previous === undefined) delete environment[name];
+    else environment[name] = previous;
+  }
+}
+
 contractTest.describe('EOD candidate snapshot contracts', () => {
   contractTest('rejects a missing target trade date', () => {
-    contractExpect(() => parseCandidateSnapshot('', clonePayloads())).toThrow(
+    contractExpect(() => parseCandidateSnapshot('', clonePayloads(), previousJson())).toThrow(
       'eod_candidate_target_trade_date_missing'
     );
   });
@@ -121,7 +144,7 @@ contractTest.describe('EOD candidate snapshot contracts', () => {
   contractTest('rejects a missing official strategy', () => {
     const payloads = clonePayloads();
     (payloads.catalog as { items: unknown[] }).items.pop();
-    contractExpect(() => parseCandidateSnapshot(TARGET_DATE, payloads)).toThrow(
+    contractExpect(() => parseCandidateSnapshot(TARGET_DATE, payloads, previousJson())).toThrow(
       'eod_candidate_catalog_strategy_count:tech_bottleneck:0'
     );
   });
@@ -129,7 +152,7 @@ contractTest.describe('EOD candidate snapshot contracts', () => {
   contractTest('rejects a nonfinite return', () => {
     const payloads = clonePayloads();
     catalogMetrics(payloads).total_return_pct = Number.NaN;
-    contractExpect(() => parseCandidateSnapshot(TARGET_DATE, payloads)).toThrow(
+    contractExpect(() => parseCandidateSnapshot(TARGET_DATE, payloads, previousJson())).toThrow(
       'eod_candidate_catalog_total_return_invalid:lhb_shortline'
     );
   });
@@ -137,7 +160,7 @@ contractTest.describe('EOD candidate snapshot contracts', () => {
   contractTest('rejects a failed publication contract', () => {
     const payloads = clonePayloads();
     catalogMetrics(payloads).contract_status = 'contract_mismatch';
-    contractExpect(() => parseCandidateSnapshot(TARGET_DATE, payloads)).toThrow(
+    contractExpect(() => parseCandidateSnapshot(TARGET_DATE, payloads, previousJson())).toThrow(
       'eod_candidate_catalog_contract_mismatch:lhb_shortline'
     );
   });
@@ -145,7 +168,7 @@ contractTest.describe('EOD candidate snapshot contracts', () => {
   contractTest('rejects a missing publish ID', () => {
     const payloads = clonePayloads();
     delete catalogMetrics(payloads).publish_id;
-    contractExpect(() => parseCandidateSnapshot(TARGET_DATE, payloads)).toThrow(
+    contractExpect(() => parseCandidateSnapshot(TARGET_DATE, payloads, previousJson())).toThrow(
       'eod_candidate_catalog_publish_id_missing:lhb_shortline'
     );
   });
@@ -153,7 +176,7 @@ contractTest.describe('EOD candidate snapshot contracts', () => {
   contractTest('rejects a missing publish start timestamp', () => {
     const payloads = clonePayloads();
     delete catalogMetrics(payloads).publish_started_at;
-    contractExpect(() => parseCandidateSnapshot(TARGET_DATE, payloads)).toThrow(
+    contractExpect(() => parseCandidateSnapshot(TARGET_DATE, payloads, previousJson())).toThrow(
       'eod_candidate_catalog_publish_started_at_missing:lhb_shortline'
     );
   });
@@ -161,7 +184,7 @@ contractTest.describe('EOD candidate snapshot contracts', () => {
   contractTest('rejects a missing artifact version', () => {
     const payloads = clonePayloads();
     delete catalogMetrics(payloads).artifact_version;
-    contractExpect(() => parseCandidateSnapshot(TARGET_DATE, payloads)).toThrow(
+    contractExpect(() => parseCandidateSnapshot(TARGET_DATE, payloads, previousJson())).toThrow(
       'eod_candidate_catalog_artifact_version_missing:lhb_shortline'
     );
   });
@@ -169,7 +192,7 @@ contractTest.describe('EOD candidate snapshot contracts', () => {
   contractTest('rejects a performance date different from the target', () => {
     const payloads = clonePayloads();
     catalogMetrics(payloads).performance_as_of_date = '2026-07-19';
-    contractExpect(() => parseCandidateSnapshot(TARGET_DATE, payloads)).toThrow(
+    contractExpect(() => parseCandidateSnapshot(TARGET_DATE, payloads, previousJson())).toThrow(
       'eod_candidate_performance_date_mismatch:lhb_shortline:2026-07-19:2026-07-20'
     );
   });
@@ -177,7 +200,7 @@ contractTest.describe('EOD candidate snapshot contracts', () => {
   contractTest('rejects a review queue publication identity mismatch', () => {
     const payloads = clonePayloads();
     queueItem(payloads).publish_id = 'different-publish';
-    contractExpect(() => parseCandidateSnapshot(TARGET_DATE, payloads)).toThrow(
+    contractExpect(() => parseCandidateSnapshot(TARGET_DATE, payloads, previousJson())).toThrow(
       'eod_candidate_review_queue_identity_mismatch:lhb_shortline'
     );
   });
@@ -242,10 +265,10 @@ contractTest.describe('EOD candidate snapshot contracts', () => {
       ['/api/platform/summary', payloads.summary]
     ]);
 
-    const snapshot = await loadCandidateSnapshot(TARGET_DATE, async (path) => {
+    const snapshot = await loadCandidateSnapshotWithPrevious(TARGET_DATE, async (path) => {
       calls.push(path);
       return byPath.get(path);
-    });
+    }, previousJson());
 
     contractExpect(snapshot.publications).toHaveLength(3);
     contractExpect(calls).toEqual([
@@ -254,6 +277,48 @@ contractTest.describe('EOD candidate snapshot contracts', () => {
       '/api/platform/readiness',
       '/api/platform/summary'
     ]);
+  });
+
+  for (const [label, previous] of [
+    ['missing', undefined],
+    ['empty', ''],
+    ['blank', '   ']
+  ] as const) {
+    contractTest(`production loading rejects ${label} previous publications`, async () => {
+      const payloads = clonePayloads();
+      const byPath = new Map<string, unknown>([
+        ['/api/strategies/catalog', payloads.catalog],
+        [`/api/review-queue?trade_date=${TARGET_DATE}`, payloads.reviewQueue],
+        ['/api/platform/readiness', payloads.readiness],
+        ['/api/platform/summary', payloads.summary]
+      ]);
+      await withPreviousPublicationsEnvironment(previous, async () => {
+        await contractExpect(
+          loadCandidateSnapshot(TARGET_DATE, async (path) => byPath.get(path))
+        ).rejects.toThrow('eod_previous_publications_required');
+      });
+    });
+  }
+
+  contractTest('production loading rejects an empty previous publication set', async () => {
+    const payloads = clonePayloads();
+    const byPath = new Map<string, unknown>([
+      ['/api/strategies/catalog', payloads.catalog],
+      [`/api/review-queue?trade_date=${TARGET_DATE}`, payloads.reviewQueue],
+      ['/api/platform/readiness', payloads.readiness],
+      ['/api/platform/summary', payloads.summary]
+    ]);
+    await withPreviousPublicationsEnvironment(
+      JSON.stringify({
+          schemaVersion: 'playwright-eod-previous-publications/v1',
+          publications: []
+      }),
+      async () => {
+        await contractExpect(
+          loadCandidateSnapshot(TARGET_DATE, async (path) => byPath.get(path))
+        ).rejects.toThrow('eod_previous_publications_schema_invalid:publication_count');
+      }
+    );
   });
 });
 
@@ -289,6 +354,27 @@ contractTest.describe('EOD candidate display rewrite contracts', () => {
     }
   });
 
+  contractTest('recognizes encoded, double-encoded, exact, and malformed possible API writes', () => {
+    for (const path of [
+      '/api',
+      '/api/?q=1',
+      '/%61pi/review-queue',
+      '/api%2Freview-queue',
+      '/api%252Freview-queue',
+      '/%2561pi%252Freview-queue',
+      '/api%ZZ'
+    ]) {
+      contractExpect(
+        candidateDisplayDecision('POST', `http://127.0.0.1:5176${path}`, TARGET_DATE)
+      ).toMatchObject({ action: 'reject-write' });
+    }
+    for (const path of ['/apiculture', '/v1/api/review-queue', '/assets/api-client.js']) {
+      contractExpect(
+        candidateDisplayDecision('POST', `http://127.0.0.1:5176${path}`, TARGET_DATE)
+      ).toEqual({ action: 'continue' });
+    }
+  });
+
   contractTest('preserves fields while replacing only supported display date fields', () => {
     const source = {
       status: 'blocked',
@@ -304,9 +390,87 @@ contractTest.describe('EOD candidate display rewrite contracts', () => {
       display_trade_date: TARGET_DATE,
       candidate_trade_date: TARGET_DATE,
       latest_market_date: TARGET_DATE,
-      nested: { trade_date: TARGET_DATE, performance_as_of_date: '2026-07-19' }
+      nested: { trade_date: '2026-07-19', performance_as_of_date: '2026-07-19' }
     });
     contractExpect(source.display_trade_date).toBe('2026-07-19');
+  });
+
+  contractTest('keeps nested facts immutable for every overridden endpoint', () => {
+    const cases = [
+      {
+        path: '/api/platform/display-date',
+        source: {
+          display_trade_date: '2026-07-19',
+          candidate_trade_date: '2026-07-19',
+          latest_market_date: '2026-07-19',
+          display_gate: { trade_date: '2026-07-18', latest_trade_date: '2026-07-18' }
+        },
+        expectedRoot: { display_trade_date: TARGET_DATE, latest_market_date: TARGET_DATE }
+      },
+      {
+        path: '/api/platform/readiness',
+        source: {
+          display_trade_date: '2026-07-19',
+          candidate_trade_date: '2026-07-19',
+          latest_market_date: '2026-07-19',
+          modules: [{ trade_date: '2026-07-18', latest_trade_date: '2026-07-18' }]
+        },
+        expectedRoot: { display_trade_date: TARGET_DATE, latest_market_date: TARGET_DATE }
+      },
+      {
+        path: '/api/platform/summary',
+        source: {
+          latest_market_date: '2026-07-19',
+          items: [{ trade_date: '2026-07-18', latest_market_date: '2026-07-18' }]
+        },
+        expectedRoot: { latest_market_date: TARGET_DATE }
+      },
+      {
+        path: '/api/market-monitor/eod',
+        source: {
+          trade_date: '2026-07-19',
+          strategy_signals: [{ trade_date: '2026-07-18' }],
+          stocks: [{ latest_trade_date: '2026-07-18' }]
+        },
+        expectedRoot: { trade_date: TARGET_DATE }
+      },
+      {
+        path: '/api/review-queue',
+        source: {
+          trade_date: '2026-07-19',
+          latest_trade_date: '2026-07-19',
+          groups: [
+            {
+              trade_date: '2026-07-18',
+              items: [
+                {
+                  trade_date: '2026-07-18',
+                  latest_trade_date: '2026-07-18',
+                  performance_as_of_date: '2026-07-18'
+                }
+              ]
+            }
+          ]
+        },
+        expectedRoot: { trade_date: TARGET_DATE, latest_trade_date: '2026-07-19' }
+      }
+    ];
+
+    for (const candidate of cases) {
+      const rewritten = rewriteCandidateDisplayPayload(
+        candidate.path,
+        candidate.source,
+        TARGET_DATE
+      ) as Record<string, unknown>;
+      contractExpect(rewritten).toMatchObject(candidate.expectedRoot);
+      for (const nestedKey of ['display_gate', 'modules', 'items', 'strategy_signals', 'stocks', 'groups']) {
+        if (nestedKey in candidate.source) {
+          contractExpect(rewritten[nestedKey]).toEqual(
+            (candidate.source as Record<string, unknown>)[nestedKey]
+          );
+        }
+      }
+    }
   });
 
   contractTest('does not rewrite publication, stock, or theme payloads', () => {
