@@ -12,6 +12,7 @@ from stock_research.research_project_v2_1.gap_review import (
     validate_persisted_gap_review_report,
     validate_gap_universe,
     validate_input_bindings,
+    validate_no_scope_leakage,
     validate_research_design,
 )
 from stock_research.research_project_v2_1.layout import LayeredResearchLayout
@@ -287,6 +288,32 @@ def test_group_a_er_cannot_claim_manufacturing_or_capacity_cognition() -> None:
     ] = "effective_capacity_bounded"
     with pytest.raises(ResearchProjectV2Error):
         validate_research_design(artifact)
+
+
+def test_every_linked_er_must_be_used_by_an_atomic_question() -> None:
+    artifact = complete_design_artifact()
+    extra = deepcopy(artifact["evidence_requirements"][0])
+    extra["er_id"] = "PCB-ER-EXTRA"
+    artifact["evidence_requirements"].append(extra)
+    artifact["gap_reviews"][0]["new_evidence_requirement_ids"].append("PCB-ER-EXTRA")
+    with pytest.raises(ResearchProjectV2Error):
+        validate_research_design(artifact)
+
+
+def test_atomic_question_cognition_level_must_match_its_er() -> None:
+    artifact = complete_design_artifact()
+    artifact["gap_reviews"][0]["atomic_research_questions"][0][
+        "target_cognition_level"
+    ] = "effective_capacity_bounded"
+    with pytest.raises(ResearchProjectV2Error):
+        validate_research_design(artifact)
+
+
+def test_gap_review_artifact_rejects_downstream_object_keys() -> None:
+    artifact = complete_design_artifact()
+    artifact["gap_reviews"][0]["company_candidates"] = []
+    with pytest.raises(ResearchProjectV2Error):
+        validate_no_scope_leakage(artifact)
 
 
 def test_gap_review_report_is_deterministic_under_array_reordering() -> None:

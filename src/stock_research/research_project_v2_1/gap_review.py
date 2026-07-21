@@ -99,6 +99,19 @@ REQUIRED_STOPPING_STATES = {
     "stopped_due_to_redundancy",
     "stopped_due_to_scope",
 }
+FORBIDDEN_SCOPE_KEYS = {
+    "company_candidates",
+    "equity_candidates",
+    "company_scores",
+    "stock_scores",
+    "signals",
+    "admissions",
+    "portfolio",
+    "strategy",
+    "industry_conclusions",
+    "bottleneck_conclusions",
+    "value_migration_conclusions",
+}
 
 
 def _error(message: str, *, code: str, **details: object) -> ResearchProjectV2Error:
@@ -235,6 +248,38 @@ def _require_nonempty(row: dict[str, Any], fields: tuple[str, ...], *, identity:
             )
 
 
+def validate_no_scope_leakage(artifact: dict[str, Any]) -> None:
+    violations: list[str] = []
+
+    def walk(value: object, path: str) -> None:
+        if isinstance(value, dict):
+            for key, child in value.items():
+                child_path = f"{path}.{key}"
+                if key in FORBIDDEN_SCOPE_KEYS:
+                    violations.append(child_path)
+                if key == "object_type" and child in {
+                    "company",
+                    "equity",
+                    "signal",
+                    "admission",
+                    "portfolio",
+                    "strategy",
+                }:
+                    violations.append(child_path)
+                walk(child, child_path)
+        elif isinstance(value, list):
+            for index, child in enumerate(value):
+                walk(child, f"{path}[{index}]")
+
+    walk(artifact, "$")
+    if violations:
+        raise _error(
+            "Gap review contains downstream or conclusion objects",
+            code="RESEARCH_PROJECT_V2_1_GAP_REVIEW_SCOPE_VIOLATION",
+            paths=sorted(violations),
+        )
+
+
 def validate_research_design(artifact: dict[str, Any]) -> dict[str, int]:
     gap_reviews = artifact.get("gap_reviews")
     requirements = artifact.get("evidence_requirements")
@@ -359,6 +404,7 @@ def validate_research_design(artifact: dict[str, Any]) -> dict[str, int]:
                 code="RESEARCH_PROJECT_V2_1_GAP_REVIEW_INVALID",
                 gap_id=gap_id,
             )
+        question_er_ids: set[str] = set()
         for question in questions:
             question_id = question.get("question_id")
             refs = question.get("evidence_requirement_ids")
@@ -376,6 +422,23 @@ def validate_research_design(artifact: dict[str, Any]) -> dict[str, int]:
                     gap_id=gap_id,
                 )
             question_ids.add(question_id)
+            question_er_ids.update(refs)
+            for er_id in refs:
+                if question.get("target_cognition_level") != er_by_id[er_id].get(
+                    "maximum_supported_cognition_level"
+                ):
+                    raise _error(
+                        "Atomic question cognition level differs from its evidence requirement",
+                        code="RESEARCH_PROJECT_V2_1_GAP_REVIEW_INVALID",
+                        question_id=question_id,
+                        er_id=er_id,
+                    )
+        if question_er_ids != set(linked_er_ids):
+            raise _error(
+                "Every linked evidence requirement must answer an atomic question",
+                code="RESEARCH_PROJECT_V2_1_GAP_REVIEW_INVALID",
+                gap_id=gap_id,
+            )
     if used_er_ids != set(er_by_id):
         raise _error(
             "Every evidence requirement must be linked by exactly one gap",
@@ -474,6 +537,7 @@ def validate_gap_review_artifact(
             )
     result = validate_research_design(artifact)
     _validate_supporting_design_records(artifact)
+    validate_no_scope_leakage(artifact)
     return {**result, "scope_leakage": []}
 
 
@@ -626,6 +690,7 @@ __all__ = [
     "validate_input_bindings",
     "validate_research_design",
     "validate_gap_review_artifact",
+    "validate_no_scope_leakage",
     "render_gap_review_report",
     "validate_persisted_gap_review_report",
 ]
