@@ -54,6 +54,7 @@ def _report(
     failures: list[str] | None = None,
     failed_gate: str | None = None,
     severity: str = "blocker-consistency",
+    attachment_path: str = "trace.zip",
 ):
     tests = []
     for gate_id in GATE_IDS:
@@ -111,7 +112,7 @@ def _report(
                 "retry": 0,
                 "name": "trace",
                 "contentType": "application/zip",
-                "path": "test-results/eod/trace.zip",
+                "path": attachment_path,
             }
         ],
         "candidateSnapshot": snapshot,
@@ -121,7 +122,11 @@ def _report(
 
 def _write_report(path: Path, **kwargs) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(_report(**kwargs)), encoding="utf-8")
+    payload = _report(**kwargs)
+    attachment_path = payload["attachments"][0]["path"]
+    if attachment_path == "trace.zip":
+        (path.parent / attachment_path).write_bytes(b"trace")
+    path.write_text(json.dumps(payload), encoding="utf-8")
     return path
 
 
@@ -157,6 +162,8 @@ def test_parse_report_accepts_success_and_collects_safe_artifacts(tmp_path):
         report_path,
         expected_run_id=RUN_ID,
         expected_trade_date=TRADE_DATE,
+        expected_revision=REVISION,
+        expected_candidate_publications=_report()["candidateSnapshot"]["publications"],
         exit_code=0,
     )
 
@@ -164,7 +171,7 @@ def test_parse_report_accepts_success_and_collects_safe_artifacts(tmp_path):
     assert result.snapshot["tradeDate"] == TRADE_DATE
     assert result.failure_classes == ()
     assert str(report_path) in result.artifact_paths
-    assert "test-results/eod/trace.zip" in result.artifact_paths
+    assert "trace.zip" in result.artifact_paths
 
 
 def test_browser_acceptance_snapshot_is_deeply_immutable_and_json_serializable(tmp_path):
@@ -173,6 +180,8 @@ def test_browser_acceptance_snapshot_is_deeply_immutable_and_json_serializable(t
         report_path,
         expected_run_id=RUN_ID,
         expected_trade_date=TRADE_DATE,
+        expected_revision=REVISION,
+        expected_candidate_publications=_report()["candidateSnapshot"]["publications"],
         exit_code=0,
     )
 
@@ -239,7 +248,15 @@ def test_parse_report_maps_warning_only_failure_to_degraded(tmp_path):
             "failures": ["optional chart label drift"],
             "attachments": [],
             "severity": "warning",
-            "attemptHistory": [],
+            "attemptHistory": [
+                {
+                    "retry": 0,
+                    "status": "failed",
+                    "durationMs": 1,
+                    "failures": ["optional chart label drift"],
+                    "attachments": [],
+                }
+            ],
         }
     )
     report_path.write_text(json.dumps(payload), encoding="utf-8")
@@ -248,6 +265,8 @@ def test_parse_report_maps_warning_only_failure_to_degraded(tmp_path):
         report_path,
         expected_run_id=RUN_ID,
         expected_trade_date=TRADE_DATE,
+        expected_revision=REVISION,
+        expected_candidate_publications=_report()["candidateSnapshot"]["publications"],
         exit_code=0,
     )
 
@@ -277,10 +296,63 @@ def test_parse_report_validates_digest_against_reported_snapshot_before_timestam
         path,
         expected_run_id=RUN_ID,
         expected_trade_date=TRADE_DATE,
+        expected_revision=REVISION,
+        expected_candidate_publications=payload["candidateSnapshot"]["publications"],
         exit_code=0,
     )
 
     assert result.snapshot["publications"][0]["publishStartedAt"].endswith("+00:00")
+
+
+@pytest.mark.parametrize(
+    ("field", "replacement"),
+    [
+        ("tradeDate", "2026-07-19"),
+        ("publishId", "different-publish"),
+        ("publishStartedAt", "2026-07-20T00:30:00+00:00"),
+        ("contractId", "different-contract"),
+        ("artifactVersion", "different-artifact"),
+        ("totalReturnPct", 999.0),
+    ],
+)
+def test_parse_report_binds_candidate_snapshot_to_expected_candidate(tmp_path, field, replacement):
+    payload = _report()
+    expected_candidates = json.loads(json.dumps(payload["candidateSnapshot"]["publications"]))
+    payload["candidateSnapshot"]["publications"][0][field] = replacement
+    payload["candidateSnapshotSha256"] = hashlib.sha256(
+        json.dumps(
+            payload["candidateSnapshot"],
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+    ).hexdigest()
+    path = tmp_path / "eod-browser-acceptance.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(BrowserAcceptanceError, match="candidate_snapshot"):
+        parse_browser_acceptance_report(
+            path,
+            expected_run_id=RUN_ID,
+            expected_trade_date=TRADE_DATE,
+            expected_revision=REVISION,
+            expected_candidate_publications=expected_candidates,
+            exit_code=0,
+        )
+
+
+def test_parse_report_binds_application_revision(tmp_path):
+    path = _write_report(tmp_path / "eod-browser-acceptance.json")
+
+    with pytest.raises(BrowserAcceptanceError, match="revision_mismatch"):
+        parse_browser_acceptance_report(
+            path,
+            expected_run_id=RUN_ID,
+            expected_trade_date=TRADE_DATE,
+            expected_revision="different-revision",
+            expected_candidate_publications=_report()["candidateSnapshot"]["publications"],
+            exit_code=0,
+        )
 
 
 def test_success_report_requires_every_required_gate_to_have_passed(tmp_path):
@@ -295,6 +367,64 @@ def test_success_report_requires_every_required_gate_to_have_passed(tmp_path):
             path,
             expected_run_id=RUN_ID,
             expected_trade_date=TRADE_DATE,
+            expected_revision=REVISION,
+            expected_candidate_publications=payload["candidateSnapshot"]["publications"],
+            exit_code=0,
+        )
+
+
+def test_parse_report_rejects_duplicate_test_ids_before_gate_inventory(tmp_path):
+    payload = _report()
+    duplicate = json.loads(json.dumps(payload["tests"][0]))
+    duplicate["title"] = "@eod @warning duplicate logical test"
+    duplicate["severity"] = "warning"
+    payload["tests"].append(duplicate)
+    path = tmp_path / "eod-browser-acceptance.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(BrowserAcceptanceError, match="test_id_duplicate"):
+        parse_browser_acceptance_report(
+            path,
+            expected_run_id=RUN_ID,
+            expected_trade_date=TRADE_DATE,
+            expected_revision=REVISION,
+            expected_candidate_publications=payload["candidateSnapshot"]["publications"],
+            exit_code=0,
+        )
+
+
+def test_parse_report_rejects_passed_test_with_failure_payload(tmp_path):
+    payload = _report()
+    payload["tests"][0]["failures"] = ["hidden failure"]
+    payload["tests"][0]["attemptHistory"][0]["failures"] = ["hidden failure"]
+    path = tmp_path / "eod-browser-acceptance.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(BrowserAcceptanceError, match="passed_with_failures"):
+        parse_browser_acceptance_report(
+            path,
+            expected_run_id=RUN_ID,
+            expected_trade_date=TRADE_DATE,
+            expected_revision=REVISION,
+            expected_candidate_publications=payload["candidateSnapshot"]["publications"],
+            exit_code=0,
+        )
+
+
+def test_parse_report_rejects_attempt_history_that_contradicts_final_test(tmp_path):
+    payload = _report()
+    payload["tests"][0]["attemptHistory"][0]["status"] = "failed"
+    payload["tests"][0]["attemptHistory"][0]["failures"] = ["attempt failed"]
+    path = tmp_path / "eod-browser-acceptance.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(BrowserAcceptanceError, match="attempt_history_final_mismatch"):
+        parse_browser_acceptance_report(
+            path,
+            expected_run_id=RUN_ID,
+            expected_trade_date=TRADE_DATE,
+            expected_revision=REVISION,
+            expected_candidate_publications=payload["candidateSnapshot"]["publications"],
             exit_code=0,
         )
 
@@ -314,6 +444,8 @@ def test_degraded_report_requires_every_required_gate_to_have_passed(tmp_path):
             path,
             expected_run_id=RUN_ID,
             expected_trade_date=TRADE_DATE,
+            expected_revision=REVISION,
+            expected_candidate_publications=payload["candidateSnapshot"]["publications"],
             exit_code=0,
         )
 
@@ -349,7 +481,15 @@ def test_degraded_report_rejects_nonwarning_or_nonrepairable_top_level_failures(
             "failures": ["optional chart label drift"],
             "attachments": [],
             "severity": "warning",
-            "attemptHistory": [],
+            "attemptHistory": [
+                {
+                    "retry": 0,
+                    "status": "failed",
+                    "durationMs": 1,
+                    "failures": ["optional chart label drift"],
+                    "attachments": [],
+                }
+            ],
         }
     )
     payload["failures"].append(top_level_failure)
@@ -360,6 +500,8 @@ def test_degraded_report_rejects_nonwarning_or_nonrepairable_top_level_failures(
             path,
             expected_run_id=RUN_ID,
             expected_trade_date=TRADE_DATE,
+            expected_revision=REVISION,
+            expected_candidate_publications=payload["candidateSnapshot"]["publications"],
             exit_code=0,
         )
 
@@ -377,10 +519,23 @@ def test_degraded_report_rejects_nonwarning_or_nonrepairable_top_level_failures(
             lambda payload: payload["attachments"][0].update(path="../../secret"),
             "artifact_path",
         ),
+        (
+            lambda payload: payload["attachments"][0].update(path="\\rooted\\trace.zip"),
+            "artifact_path",
+        ),
+        (
+            lambda payload: payload["attachments"][0].update(path="C:relative\\trace.zip"),
+            "artifact_path",
+        ),
+        (
+            lambda payload: payload["attachments"][0].update(path="C:\\absolute\\trace.zip"),
+            "artifact_path",
+        ),
     ],
 )
 def test_parse_report_fails_closed_on_invalid_contract(tmp_path, mutation, code):
     payload = _report()
+    expected_candidates = json.loads(json.dumps(payload["candidateSnapshot"]["publications"]))
     mutation(payload)
     path = tmp_path / "eod-browser-acceptance.json"
     path.write_text(json.dumps(payload), encoding="utf-8")
@@ -390,6 +545,8 @@ def test_parse_report_fails_closed_on_invalid_contract(tmp_path, mutation, code)
             path,
             expected_run_id=RUN_ID,
             expected_trade_date=TRADE_DATE,
+            expected_revision=REVISION,
+            expected_candidate_publications=expected_candidates,
             exit_code=0,
         )
 
@@ -412,6 +569,8 @@ def test_parse_report_rejects_exit_status_mismatch(tmp_path, status, exit_code):
             path,
             expected_run_id=RUN_ID,
             expected_trade_date=TRADE_DATE,
+            expected_revision=REVISION,
+            expected_candidate_publications=_report()["candidateSnapshot"]["publications"],
             exit_code=exit_code,
         )
 
@@ -547,6 +706,7 @@ def test_runner_uses_exact_command_isolated_env_nonreuse_and_private_logs(tmp_pa
     assert command == ["pnpm", "test:e2e:eod"]
     assert kwargs["cwd"].name == "dashboard"
     assert kwargs["start_new_session"] is True
+    assert kwargs["umask"] == 0o077
     env = kwargs["env"]
     assert env["PLAYWRIGHT_PROFILE"] == "eod"
     assert env["PLAYWRIGHT_EOD_TRADE_DATE"] == TRADE_DATE
@@ -563,6 +723,40 @@ def test_runner_uses_exact_command_isolated_env_nonreuse_and_private_logs(tmp_pa
         path = tmp_path / "attempt-1" / name
         assert path.exists()
         assert path.stat().st_mode & 0o777 == 0o600
+    assert tmp_path.stat().st_mode & 0o777 == 0o700
+    attempt_dir = tmp_path / "attempt-1"
+    assert attempt_dir.stat().st_mode & 0o777 == 0o700
+    for artifact in result.artifact_paths:
+        artifact_path = Path(artifact)
+        assert artifact_path.is_absolute()
+        assert artifact_path.is_relative_to(attempt_dir)
+        assert artifact_path.is_file()
+        assert not artifact_path.is_symlink()
+        assert artifact_path.stat().st_mode & 0o777 == 0o600
+
+
+def test_runner_restores_attempt_directory_permissions_after_subprocess(tmp_path):
+    def popen(_command, **kwargs):
+        def write_success_and_relax_permissions(call_kwargs):
+            attempt = Path(call_kwargs["env"]["PLAYWRIGHT_EOD_OUTPUT_DIR"])
+            _write_report(attempt / "eod-browser-acceptance.json")
+            attempt.chmod(0o755)
+
+        return FakeProcess(kwargs, write_success_and_relax_permissions)
+
+    result = run_browser_acceptance(
+        trade_date=TRADE_DATE,
+        run_id=RUN_ID,
+        revision=REVISION,
+        output_dir=tmp_path,
+        candidate_publications=_candidate_identities(),
+        previous_publications=_previous_json(),
+        popen=popen,
+        runtime_checker=lambda _dashboard: None,
+    )
+
+    assert result.status == RepairStatus.SUCCESS
+    assert (tmp_path / "attempt-1").stat().st_mode & 0o777 == 0o700
 
 
 def test_missing_runtime_is_an_infrastructure_blocker_without_starting_process(tmp_path):
@@ -841,12 +1035,16 @@ def test_cache_clear_failure_blocks_without_second_attempt(tmp_path):
         previous_publications=_previous_json(),
         popen=popen,
         runtime_checker=lambda _dashboard: None,
-        cache_clearer=lambda: (_ for _ in ()).throw(RuntimeError("cache denied")),
+        cache_clearer=lambda: (_ for _ in ()).throw(
+            RuntimeError("cache denied GH_TOKEN=cache-secret https://u:url-secret@example.com")
+        ),
     )
 
     assert result.status == RepairStatus.FAILED
     assert result.failure_classes == ("infrastructure",)
     assert "cache denied" in result.message
+    assert "cache-secret" not in result.message
+    assert "url-secret" not in result.message
     assert len(starts) == 1
 
 
@@ -859,6 +1057,9 @@ def test_runner_redacts_stderr_tail_secrets_and_absolute_paths(tmp_path):
                 "Cookie: session=abcdef\n"
                 "Authorization: Bearer hidden-token\n"
                 "password=super-secret token=api-secret\n"
+                "PGPASSWORD=pg-secret AWS_SECRET_ACCESS_KEY=aws-secret\n"
+                "GH_TOKEN=gh-secret DATABASE_URL=postgresql://alice:url-secret@db.local/app\n"
+                "request failed https://bob:web-secret@example.com/private\n"
                 f"failed at {secret_path}\n"
             ).encode()
         )
@@ -881,10 +1082,56 @@ def test_runner_redacts_stderr_tail_secrets_and_absolute_paths(tmp_path):
     assert "hidden-token" not in result.message
     assert "super-secret" not in result.message
     assert "api-secret" not in result.message
+    assert "pg-secret" not in result.message
+    assert "aws-secret" not in result.message
+    assert "gh-secret" not in result.message
+    assert "url-secret" not in result.message
+    assert "web-secret" not in result.message
     assert secret_path not in result.message
     assert "<redacted>" in result.message
     raw_stderr = (tmp_path / "attempt-1" / "stderr.log").read_text(encoding="utf-8")
     assert "hidden-token" in raw_stderr
+
+
+def test_runner_redacts_sensitive_runtime_exception_message(tmp_path):
+    secret_message = (
+        "PGPASSWORD=pg-secret aws_secret_access_key=aws-secret "
+        "GH_TOKEN=gh-secret DATABASE_URL=postgresql://alice:url-secret@db.local/app "
+        "https://bob:web-secret@example.com/private"
+    )
+
+    result = run_browser_acceptance(
+        trade_date=TRADE_DATE,
+        run_id=RUN_ID,
+        revision=REVISION,
+        output_dir=tmp_path,
+        candidate_publications=_candidate_identities(),
+        previous_publications=_previous_json(),
+        runtime_checker=lambda _dashboard: (_ for _ in ()).throw(RuntimeError(secret_message)),
+    )
+
+    assert result.status == RepairStatus.FAILED
+    for secret in ("pg-secret", "aws-secret", "gh-secret", "url-secret", "web-secret"):
+        assert secret not in result.message
+    assert "<redacted>" in result.message
+
+
+def test_runner_redacts_sensitive_previous_loader_exception_message(tmp_path):
+    result = run_browser_acceptance(
+        trade_date=TRADE_DATE,
+        run_id=RUN_ID,
+        revision=REVISION,
+        output_dir=tmp_path,
+        candidate_publications=_candidate_identities(),
+        previous_publication_loader=lambda: (_ for _ in ()).throw(
+            RuntimeError("DATABASE_URL=postgresql://alice:loader-secret@db.local/app")
+        ),
+        runtime_checker=lambda _dashboard: None,
+    )
+
+    assert result.status == RepairStatus.FAILED
+    assert "loader-secret" not in result.message
+    assert "DATABASE_URL=<redacted>" in result.message
 
 
 def test_runner_missing_report_is_explicit_infrastructure_failure_with_logs_only(tmp_path):
@@ -942,6 +1189,43 @@ def test_runner_malformed_report_is_explicit_infrastructure_failure_and_keeps_re
         "stderr.log",
         "eod-browser-acceptance.json",
     }
+
+
+@pytest.mark.parametrize("artifact_kind", ["symlink", "directory"])
+def test_runner_rejects_nonregular_or_symlink_report_artifacts(tmp_path, artifact_kind):
+    outside = tmp_path.parent / f"outside-{artifact_kind}.zip"
+    outside.write_bytes(b"outside")
+
+    def popen(_command, **kwargs):
+        def write_unsafe(call_kwargs):
+            attempt = Path(call_kwargs["env"]["PLAYWRIGHT_EOD_OUTPUT_DIR"])
+            artifact = attempt / "unsafe-artifact"
+            if artifact_kind == "symlink":
+                artifact.symlink_to(outside)
+            else:
+                artifact.mkdir()
+            payload = _report(attachment_path="unsafe-artifact")
+            (attempt / "eod-browser-acceptance.json").write_text(
+                json.dumps(payload), encoding="utf-8"
+            )
+
+        return FakeProcess(kwargs, write_unsafe)
+
+    result = run_browser_acceptance(
+        trade_date=TRADE_DATE,
+        run_id=RUN_ID,
+        revision=REVISION,
+        output_dir=tmp_path,
+        candidate_publications=_candidate_identities(),
+        previous_publications=_previous_json(),
+        popen=popen,
+        runtime_checker=lambda _dashboard: None,
+    )
+
+    assert result.status == RepairStatus.FAILED
+    assert result.failure_classes == ("infrastructure",)
+    assert "artifact_" in result.message
+    assert all(Path(path).name != "unsafe-artifact" for path in result.artifact_paths)
 
 
 def _manifest_row(

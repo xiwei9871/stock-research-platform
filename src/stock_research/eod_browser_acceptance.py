@@ -11,6 +11,7 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 import re
 import shutil
 import signal
+import stat
 import subprocess
 import time
 from typing import Any
@@ -84,6 +85,31 @@ _CANDIDATE_IDENTITY_REQUIRED_KEYS = frozenset(
 )
 _CANDIDATE_IDENTITY_ALLOWED_KEYS = _PUBLICATION_KEYS | {"runId"}
 _GATE_PATTERN = re.compile(r"(?:^|\s)@eod-gate-([a-z0-9_-]+)(?=\s|$)")
+_REPORTED_TEST_KEYS = frozenset(
+    {
+        "testId",
+        "title",
+        "projectName",
+        "retry",
+        "status",
+        "durationMs",
+        "failures",
+        "attachments",
+        "severity",
+        "attemptHistory",
+    }
+)
+_ATTEMPT_KEYS = frozenset(
+    {"retry", "status", "durationMs", "failures", "attachments"}
+)
+_TEST_ATTACHMENT_REQUIRED_KEYS = frozenset({"name", "contentType"})
+_TOP_ATTACHMENT_REQUIRED_KEYS = frozenset(
+    {"test", "retry", "name", "contentType"}
+)
+_ATTACHMENT_OPTIONAL_KEYS = frozenset({"path"})
+_PLAYWRIGHT_TEST_STATUSES = frozenset(
+    {"passed", "failed", "timedOut", "interrupted", "skipped"}
+)
 
 
 class BrowserAcceptanceError(RuntimeError):
@@ -369,12 +395,12 @@ def _validate_candidate_publication_identities(
     value: object,
     *,
     expected_trade_date: str | None = None,
-) -> tuple[dict[str, str], ...]:
+) -> tuple[dict[str, object], ...]:
     if not isinstance(value, (list, tuple)):
         raise _error("previous_publication_candidate_identity_schema")
     if len(value) != len(OFFICIAL_STRATEGY_IDS):
         raise _error("previous_publication_candidate_identity_count")
-    normalized: list[dict[str, str]] = []
+    normalized: list[dict[str, object]] = []
     seen: set[str] = set()
     for index, raw in enumerate(value):
         candidate = _required_object(
@@ -419,13 +445,13 @@ def _validate_candidate_publication_identities(
                 f"previous_publication_candidate_run_id:{strategy_id}",
             )
         if "totalReturnPct" in candidate:
-            _required_number(
+            item["totalReturnPct"] = _required_number(
                 candidate.get("totalReturnPct"),
                 f"previous_publication_candidate_total_return_pct:{strategy_id}",
             )
         for optional_key in ("contractId", "artifactVersion"):
             if optional_key in candidate:
-                _required_string(
+                item[optional_key] = _required_string(
                     candidate.get(optional_key),
                     f"previous_publication_candidate_{optional_key}:{strategy_id}",
                 )
@@ -440,12 +466,189 @@ def _validate_candidate_publication_identities(
 
 def _safe_report_artifact_path(value: object) -> str:
     text = _required_string(value, "browser_acceptance_artifact_path_invalid")
-    if PurePosixPath(text).is_absolute() or PureWindowsPath(text).is_absolute():
+    windows_path = PureWindowsPath(text)
+    if (
+        PurePosixPath(text).is_absolute()
+        or windows_path.is_absolute()
+        or bool(windows_path.drive)
+        or bool(windows_path.root)
+    ):
         raise _error("browser_acceptance_artifact_path_absolute")
-    posix_parts = PurePosixPath(text.replace("\\", "/")).parts
+    normalized = text.replace("\\", "/")
+    posix_parts = PurePosixPath(normalized).parts
     if any(part in {"", ".", ".."} for part in posix_parts):
         raise _error("browser_acceptance_artifact_path_traversal")
-    return text
+    return str(PurePosixPath(*posix_parts))
+
+
+def _required_nonnegative_int(value: object, code: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise _error(code)
+    return value
+
+
+def _validate_attachment(
+    value: object,
+    *,
+    required_keys: frozenset[str],
+    code: str,
+) -> dict[str, object]:
+    attachment = _required_object(value, code)
+    keys = frozenset(attachment)
+    if not required_keys.issubset(keys) or not keys.issubset(
+        required_keys | _ATTACHMENT_OPTIONAL_KEYS
+    ):
+        raise _error(f"{code}_schema")
+    normalized: dict[str, object] = {}
+    for key in sorted(required_keys):
+        if key == "retry":
+            normalized[key] = _required_nonnegative_int(
+                attachment.get(key), f"{code}_{key}"
+            )
+        else:
+            normalized[key] = _required_string(
+                attachment.get(key), f"{code}_{key}"
+            )
+    if "path" in attachment:
+        normalized["path"] = _safe_report_artifact_path(attachment["path"])
+    return normalized
+
+
+def _validate_failures(value: object, code: str) -> list[str]:
+    return [
+        _required_string(item, code)
+        for item in _required_list(value, f"{code}_list")
+    ]
+
+
+def _validate_report_tests(tests: Sequence[object]) -> None:
+    seen_test_ids: set[str] = set()
+    for index, raw in enumerate(tests):
+        test = _required_object(raw, f"browser_acceptance_test_invalid:{index}")
+        _exact_keys(test, _REPORTED_TEST_KEYS, f"browser_acceptance_test_schema:{index}")
+        test_id = _required_string(test.get("testId"), f"browser_acceptance_test_id:{index}")
+        if test_id in seen_test_ids:
+            raise _error("browser_acceptance_test_id_duplicate", test_id)
+        seen_test_ids.add(test_id)
+        _required_string(test.get("title"), f"browser_acceptance_test_title:{index}")
+        _required_string(
+            test.get("projectName"), f"browser_acceptance_test_project_name:{index}"
+        )
+        retry = _required_nonnegative_int(
+            test.get("retry"), f"browser_acceptance_test_retry:{index}"
+        )
+        status = _required_string(
+            test.get("status"), f"browser_acceptance_test_status:{index}"
+        )
+        if status not in _PLAYWRIGHT_TEST_STATUSES:
+            raise _error("browser_acceptance_test_status_invalid", status)
+        duration = _required_number(
+            test.get("durationMs"), f"browser_acceptance_test_duration:{index}"
+        )
+        if duration < 0:
+            raise _error("browser_acceptance_test_duration_negative", index)
+        failures = _validate_failures(
+            test.get("failures"), f"browser_acceptance_test_failure:{index}"
+        )
+        if status in {"passed", "skipped"} and failures:
+            raise _error("browser_acceptance_test_passed_with_failures", test_id)
+        if status in {"failed", "timedOut", "interrupted"} and not failures:
+            raise _error("browser_acceptance_test_failed_without_failures", test_id)
+        attachments = [
+            _validate_attachment(
+                attachment,
+                required_keys=_TEST_ATTACHMENT_REQUIRED_KEYS,
+                code=f"browser_acceptance_test_attachment:{index}:{attachment_index}",
+            )
+            for attachment_index, attachment in enumerate(
+                _required_list(
+                    test.get("attachments"),
+                    f"browser_acceptance_test_attachments:{index}",
+                )
+            )
+        ]
+        _required_string(test.get("severity"), f"browser_acceptance_test_severity:{index}")
+        history = _required_list(
+            test.get("attemptHistory"),
+            f"browser_acceptance_test_attempt_history:{index}",
+        )
+        if not history:
+            raise _error("browser_acceptance_attempt_history_missing", test_id)
+        normalized_history: list[dict[str, object]] = []
+        seen_retries: set[int] = set()
+        for attempt_index, raw_attempt in enumerate(history):
+            attempt = _required_object(
+                raw_attempt,
+                f"browser_acceptance_attempt_history_invalid:{index}:{attempt_index}",
+            )
+            _exact_keys(
+                attempt,
+                _ATTEMPT_KEYS,
+                f"browser_acceptance_attempt_history_schema:{index}:{attempt_index}",
+            )
+            attempt_retry = _required_nonnegative_int(
+                attempt.get("retry"),
+                f"browser_acceptance_attempt_history_retry:{index}:{attempt_index}",
+            )
+            if attempt_retry in seen_retries:
+                raise _error("browser_acceptance_attempt_history_retry_duplicate", test_id)
+            seen_retries.add(attempt_retry)
+            attempt_status = _required_string(
+                attempt.get("status"),
+                f"browser_acceptance_attempt_history_status:{index}:{attempt_index}",
+            )
+            if attempt_status not in _PLAYWRIGHT_TEST_STATUSES:
+                raise _error("browser_acceptance_attempt_history_status_invalid", attempt_status)
+            attempt_duration = _required_number(
+                attempt.get("durationMs"),
+                f"browser_acceptance_attempt_history_duration:{index}:{attempt_index}",
+            )
+            if attempt_duration < 0:
+                raise _error("browser_acceptance_attempt_history_duration_negative", test_id)
+            attempt_failures = _validate_failures(
+                attempt.get("failures"),
+                f"browser_acceptance_attempt_history_failure:{index}:{attempt_index}",
+            )
+            if attempt_status in {"passed", "skipped"} and attempt_failures:
+                raise _error("browser_acceptance_attempt_history_passed_with_failures", test_id)
+            if attempt_status in {"failed", "timedOut", "interrupted"} and not attempt_failures:
+                raise _error("browser_acceptance_attempt_history_failed_without_failures", test_id)
+            attempt_attachments = [
+                _validate_attachment(
+                    attachment,
+                    required_keys=_TEST_ATTACHMENT_REQUIRED_KEYS,
+                    code=(
+                        f"browser_acceptance_attempt_history_attachment:"
+                        f"{index}:{attempt_index}:{attachment_index}"
+                    ),
+                )
+                for attachment_index, attachment in enumerate(
+                    _required_list(
+                        attempt.get("attachments"),
+                        f"browser_acceptance_attempt_history_attachments:{index}:{attempt_index}",
+                    )
+                )
+            ]
+            normalized_history.append(
+                {
+                    "retry": attempt_retry,
+                    "status": attempt_status,
+                    "durationMs": attempt_duration,
+                    "failures": attempt_failures,
+                    "attachments": attempt_attachments,
+                }
+            )
+        if [item["retry"] for item in normalized_history] != sorted(seen_retries):
+            raise _error("browser_acceptance_attempt_history_order", test_id)
+        final_attempt = normalized_history[-1]
+        if final_attempt != {
+            "retry": retry,
+            "status": status,
+            "durationMs": duration,
+            "failures": failures,
+            "attachments": attachments,
+        }:
+            raise _error("browser_acceptance_attempt_history_final_mismatch", test_id)
 
 
 def _test_failure_messages(tests: Sequence[object]) -> tuple[list[str], list[str]]:
@@ -613,11 +816,66 @@ def _failure_corresponds_to_warning(failure: str, warning: str) -> bool:
     return failure == warning or failure.endswith(f": {warning}")
 
 
+def _assert_candidate_snapshot_matches_expected(
+    snapshot: Mapping[str, object],
+    expected_candidate_publications: Sequence[Mapping[str, object]],
+    expected_trade_date: str,
+) -> None:
+    expected = _validate_candidate_publication_identities(
+        expected_candidate_publications,
+        expected_trade_date=expected_trade_date,
+    )
+    actual_publications = _required_list(
+        snapshot.get("publications"),
+        "browser_acceptance_candidate_snapshot_publications",
+    )
+    actual_by_strategy = {
+        str(publication["strategyId"]): publication
+        for publication in actual_publications
+        if isinstance(publication, Mapping)
+    }
+    raw_expected_by_strategy = {
+        str(publication.get("strategyId")): publication
+        for publication in expected_candidate_publications
+    }
+    for expected_identity in expected:
+        strategy_id = expected_identity["strategyId"]
+        actual = actual_by_strategy.get(strategy_id)
+        if actual is None:
+            raise _error("browser_acceptance_candidate_snapshot_expected_mismatch", strategy_id)
+        for field in ("tradeDate", "publishId", "publishStartedAt"):
+            if actual.get(field) != expected_identity[field]:
+                raise _error(
+                    "browser_acceptance_candidate_snapshot_expected_mismatch",
+                    f"{strategy_id}:{field}",
+                )
+        raw_expected = raw_expected_by_strategy[strategy_id]
+        for field in ("contractId", "artifactVersion"):
+            if field in raw_expected and actual.get(field) != _required_string(
+                raw_expected.get(field),
+                f"browser_acceptance_expected_candidate_{field}:{strategy_id}",
+            ):
+                raise _error(
+                    "browser_acceptance_candidate_snapshot_expected_mismatch",
+                    f"{strategy_id}:{field}",
+                )
+        if "totalReturnPct" in raw_expected and actual.get("totalReturnPct") != _required_number(
+            raw_expected.get("totalReturnPct"),
+            f"browser_acceptance_expected_candidate_total_return_pct:{strategy_id}",
+        ):
+            raise _error(
+                "browser_acceptance_candidate_snapshot_expected_mismatch",
+                f"{strategy_id}:totalReturnPct",
+            )
+
+
 def parse_browser_acceptance_report(
     report_path: str | Path,
     *,
     expected_run_id: str,
     expected_trade_date: str,
+    expected_revision: str,
+    expected_candidate_publications: Sequence[Mapping[str, object]],
     exit_code: int,
 ) -> BrowserAcceptanceResult:
     path = Path(report_path)
@@ -642,7 +900,12 @@ def parse_browser_acceptance_report(
             "browser_acceptance_report_trade_date_mismatch",
             f"{trade_date}:{expected_trade_date}",
         )
-    _required_string(report.get("revision"), "browser_acceptance_report_revision")
+    revision = _required_string(report.get("revision"), "browser_acceptance_report_revision")
+    if revision != expected_revision:
+        raise _error(
+            "browser_acceptance_report_revision_mismatch",
+            f"{revision}:{expected_revision}",
+        )
     started_at = _required_timestamp(
         report.get("startedAt"), "browser_acceptance_report_started_at"
     )
@@ -663,6 +926,7 @@ def parse_browser_acceptance_report(
         raise _error("browser_acceptance_exit_status_mismatch", f"{status_text}:{exit_code}")
 
     tests = _required_list(report.get("tests"), "browser_acceptance_report_tests")
+    _validate_report_tests(tests)
     gate_statuses = _validate_gate_inventory(tests)
     blocking_failures, warning_failures = _test_failure_messages(tests)
     top_level_failures = [
@@ -701,6 +965,11 @@ def parse_browser_acceptance_report(
 
     raw_snapshot = report.get("candidateSnapshot")
     snapshot = _validate_candidate_snapshot(raw_snapshot, trade_date)
+    _assert_candidate_snapshot_matches_expected(
+        snapshot,
+        expected_candidate_publications,
+        expected_trade_date,
+    )
     digest = _required_string(
         report.get("candidateSnapshotSha256"), "browser_acceptance_candidate_snapshot_sha256"
     )
@@ -714,8 +983,10 @@ def parse_browser_acceptance_report(
     for index, raw_attachment in enumerate(
         _required_list(report.get("attachments"), "browser_acceptance_report_attachments")
     ):
-        attachment = _required_object(
-            raw_attachment, f"browser_acceptance_report_attachment:{index}"
+        attachment = _validate_attachment(
+            raw_attachment,
+            required_keys=_TOP_ATTACHMENT_REQUIRED_KEYS,
+            code=f"browser_acceptance_report_attachment:{index}",
         )
         if "path" in attachment:
             artifact_paths.append(_safe_report_artifact_path(attachment["path"]))
@@ -752,11 +1023,21 @@ def _redact_text(value: str) -> str:
         text,
     )
     text = re.sub(
-        r"(?i)\b(password|passwd|token|secret|api[_-]?key)\s*[=:]\s*[^\s,;]+",
+        (
+            r"(?i)(?<![A-Za-z0-9_])"
+            r"((?:PGPASSWORD|AWS_SECRET_ACCESS_KEY|GH_TOKEN|DATABASE_URL|"
+            r"[A-Za-z0-9_]*(?:PASSWORD|PASSWD|TOKEN|SECRET|API[_-]?KEY|ACCESS[_-]?KEY)"
+            r"[A-Za-z0-9_]*))\s*[=:]\s*(?:\"[^\"]*\"|'[^']*'|[^\s,;]+)"
+        ),
         lambda match: f"{match.group(1)}=<redacted>",
         text,
     )
     text = re.sub(r"(?i)\bBearer\s+[^\s,;]+", "Bearer <redacted>", text)
+    text = re.sub(
+        r"(?i)\b([a-z][a-z0-9+.-]*://)[^\s/@:]+:[^\s/@]+@",
+        lambda match: f"{match.group(1)}<redacted>@",
+        text,
+    )
     text = re.sub(r"(?<![:/\w])/[A-Za-z0-9._~!$&'()*+,;=:@%/-]+", "<path>", text)
     text = re.sub(r"(?<!\w)[A-Za-z]:[\\/][^\s,;]+", "<path>", text)
     return text
@@ -776,8 +1057,63 @@ def _redacted_tail(path: Path, *, max_bytes: int = 16_384, max_chars: int = 4_00
 
 
 def _private_binary_writer(path: Path):
-    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    descriptor = os.open(path, flags, 0o600)
+    os.fchmod(descriptor, 0o600)
     return os.fdopen(descriptor, "wb")
+
+
+def _prepare_private_directory(path: Path, *, must_create: bool) -> None:
+    if path.is_symlink():
+        raise _error("browser_acceptance_output_directory_symlink")
+    try:
+        path.mkdir(parents=True, exist_ok=not must_create, mode=0o700)
+    except FileExistsError as exc:
+        raise _error("browser_acceptance_attempt_output_exists") from exc
+    metadata = path.lstat()
+    if not stat.S_ISDIR(metadata.st_mode) or stat.S_ISLNK(metadata.st_mode):
+        raise _error("browser_acceptance_output_directory_invalid")
+    path.chmod(0o700)
+    if path.stat().st_mode & 0o777 != 0o700:
+        raise _error("browser_acceptance_output_directory_permissions")
+
+
+def _secure_attempt_artifacts(
+    attempt_dir: Path,
+    artifacts: Iterable[str | Path],
+) -> tuple[str, ...]:
+    root = attempt_dir.resolve(strict=True)
+    secured: list[str] = []
+    for raw in artifacts:
+        path = Path(raw)
+        candidate = path if path.is_absolute() else attempt_dir / path
+        try:
+            relative_candidate = candidate.relative_to(attempt_dir)
+        except ValueError:
+            raise _error("browser_acceptance_artifact_outside_attempt", str(path))
+        cursor = attempt_dir
+        for part in relative_candidate.parts:
+            cursor = cursor / part
+            if cursor.is_symlink():
+                raise _error("browser_acceptance_artifact_symlink", str(path))
+        try:
+            resolved = candidate.resolve(strict=True)
+        except OSError as exc:
+            raise _error("browser_acceptance_artifact_missing", str(path)) from exc
+        if not resolved.is_relative_to(root):
+            raise _error("browser_acceptance_artifact_outside_attempt", str(path))
+        metadata = candidate.lstat()
+        if stat.S_ISLNK(metadata.st_mode):
+            raise _error("browser_acceptance_artifact_symlink", str(path))
+        if not stat.S_ISREG(metadata.st_mode):
+            raise _error("browser_acceptance_artifact_not_regular", str(path))
+        candidate.chmod(0o600)
+        if candidate.stat().st_mode & 0o777 != 0o600:
+            raise _error("browser_acceptance_artifact_permissions", str(path))
+        secured.append(str(resolved))
+    return _dedupe(secured)
 
 
 def _terminate_process_group(process: Any, grace_seconds: float) -> None:
@@ -877,6 +1213,7 @@ def _run_attempt(
     trade_date: str,
     run_id: str,
     revision: str,
+    candidate_publications: Sequence[Mapping[str, object]],
     output_root: Path,
     previous_publications_json: str,
     dashboard_root: Path,
@@ -890,14 +1227,14 @@ def _run_attempt(
     attempt_started = time.monotonic()
     attempt_dir = output_root / f"attempt-{attempt_number}"
     try:
-        attempt_dir.mkdir(parents=True, exist_ok=False)
-    except FileExistsError:
+        _prepare_private_directory(attempt_dir, must_create=True)
+    except (BrowserAcceptanceError, OSError) as exc:
         return _infrastructure_attempt(
             attempt_number=attempt_number,
             duration_seconds=max(0.0, time.monotonic() - attempt_started),
             exit_code=None,
-            artifacts=(str(attempt_dir),),
-            message="browser_acceptance_attempt_output_exists",
+            artifacts=(),
+            message=_redact_text(str(exc)),
         )
     stdout_path = attempt_dir / "stdout.log"
     stderr_path = attempt_dir / "stderr.log"
@@ -931,6 +1268,7 @@ def _run_attempt(
                 stdout=stdout,
                 stderr=stderr,
                 start_new_session=True,
+                umask=0o077,
             )
             exit_code = int(process.wait(timeout=timeout_seconds))
         except subprocess.TimeoutExpired:
@@ -942,12 +1280,30 @@ def _run_attempt(
             error = _error("browser_acceptance_process_start_failed", type(exc).__name__)
     duration = max(0.0, time.monotonic() - attempt_started)
     stderr_tail = _redacted_tail(stderr_path)
+    try:
+        _prepare_private_directory(attempt_dir, must_create=False)
+        _prepare_private_directory(output_root, must_create=False)
+    except (BrowserAcceptanceError, OSError) as exc:
+        error = _error("browser_acceptance_output_directory_security", _redact_text(str(exc)))
+    base_artifacts = [str(stdout_path), str(stderr_path)]
+    if report_path.exists() or report_path.is_symlink():
+        base_artifacts.append(str(report_path))
+    try:
+        secured_base_artifacts = _secure_attempt_artifacts(attempt_dir, base_artifacts)
+    except (BrowserAcceptanceError, OSError) as exc:
+        error = _error("browser_acceptance_artifact_security", _redact_text(str(exc)))
+        secured_base_artifacts = _secure_attempt_artifacts(
+            attempt_dir,
+            [str(stdout_path), str(stderr_path)],
+        )
     if error is None:
         try:
             parsed = parse_browser_acceptance_report(
                 report_path,
                 expected_run_id=run_id,
                 expected_trade_date=trade_date,
+                expected_revision=revision,
+                expected_candidate_publications=candidate_publications,
                 exit_code=int(exit_code or 0),
             )
         except BrowserAcceptanceError as exc:
@@ -956,23 +1312,31 @@ def _run_attempt(
             message = _redact_text(parsed.message)
             if stderr_tail:
                 message = f"{message}; stderr_tail={stderr_tail}"
-            return _attempt_from_result(
-                replace(parsed, duration_seconds=duration),
-                attempt_number=attempt_number,
-                exit_code=exit_code,
-                artifacts=artifacts,
-                message=message,
-            )
-    message = str(error or _error("browser_acceptance_unknown_infrastructure_failure"))
+            try:
+                secured_artifacts = _secure_attempt_artifacts(
+                    attempt_dir,
+                    [*secured_base_artifacts, *parsed.artifact_paths],
+                )
+            except (BrowserAcceptanceError, OSError) as exc:
+                error = _error("browser_acceptance_artifact_security", _redact_text(str(exc)))
+            else:
+                return _attempt_from_result(
+                    replace(parsed, duration_seconds=duration, artifact_paths=()),
+                    attempt_number=attempt_number,
+                    exit_code=exit_code,
+                    artifacts=secured_artifacts,
+                    message=message,
+                )
+    message = _redact_text(
+        str(error or _error("browser_acceptance_unknown_infrastructure_failure"))
+    )
     if stderr_tail:
         message = f"{message}; stderr_tail={stderr_tail}"
-    if report_path.exists():
-        artifacts.append(str(report_path))
     return _infrastructure_attempt(
         attempt_number=attempt_number,
         duration_seconds=duration,
         exit_code=exit_code,
-        artifacts=artifacts,
+        artifacts=secured_base_artifacts,
         message=message,
     )
 
@@ -1038,8 +1402,19 @@ def run_browser_acceptance(
         raise _error("browser_acceptance_timeout_invalid")
     if not 1 <= int(dashboard_port) <= 65535 or not 1 <= int(api_port) <= 65535:
         raise _error("browser_acceptance_port_invalid")
-    output_root = Path(output_dir)
-    output_root.mkdir(parents=True, exist_ok=True)
+    output_root = Path(output_dir).absolute()
+    try:
+        _prepare_private_directory(output_root, must_create=False)
+    except (BrowserAcceptanceError, OSError) as exc:
+        return BrowserAcceptanceResult(
+            status=RepairStatus.FAILED,
+            trade_date=validated_trade_date,
+            run_id=validated_run_id,
+            duration_seconds=0.0,
+            failure_classes=("infrastructure",),
+            message=_redact_text(str(exc)),
+        )
+    output_root = output_root.resolve(strict=True)
     started_at = _utc_now()
     overall_started = time.monotonic()
     try:
@@ -1079,6 +1454,7 @@ def run_browser_acceptance(
             trade_date=validated_trade_date,
             run_id=validated_run_id,
             revision=validated_revision,
+            candidate_publications=validated_candidates,
             output_root=output_root,
             previous_publications_json=previous_json,
             dashboard_root=Path(dashboard_root),
@@ -1116,6 +1492,7 @@ def run_browser_acceptance(
                 trade_date=validated_trade_date,
                 run_id=validated_run_id,
                 revision=validated_revision,
+                candidate_publications=validated_candidates,
                 output_root=output_root,
                 previous_publications_json=previous_json,
                 dashboard_root=Path(dashboard_root),
