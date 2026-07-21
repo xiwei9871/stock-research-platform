@@ -748,6 +748,38 @@ def test_previous_publication_loader_selects_latest_successful_identity_without_
     assert payload["publications"][0]["totalReturnPct"] == pytest.approx(52.4)
 
 
+@pytest.mark.parametrize("prior_trade_date", ["2026-07-19", TRADE_DATE])
+def test_previous_loader_excludes_the_newest_candidate_version_for_the_runner(prior_trade_date):
+    rows = []
+    for index, strategy_id in enumerate(STRATEGY_IDS):
+        rows.extend(
+            [
+                _manifest_row(
+                    strategy_id,
+                    trade_date=prior_trade_date,
+                    started_at=f"{prior_trade_date}T0{index + 1}:00:00+00:00",
+                    publish_id=f"{strategy_id}-official",
+                ),
+                _manifest_row(
+                    strategy_id,
+                    trade_date=TRADE_DATE,
+                    started_at=f"{TRADE_DATE}T1{index + 1}:00:00+00:00",
+                    publish_id=f"{strategy_id}-candidate",
+                ),
+            ]
+        )
+
+    payload = load_previous_official_publications(
+        reader=lambda: rows,
+        candidate_trade_date=TRADE_DATE,
+    )
+
+    assert [item["publishId"] for item in payload["publications"]] == [
+        f"{strategy_id}-official" for strategy_id in STRATEGY_IDS
+    ]
+    assert all(item["tradeDate"] == prior_trade_date for item in payload["publications"])
+
+
 def test_previous_loader_accepts_native_database_date_timestamp_and_decimal_like_values():
     rows = [
         _manifest_row(

@@ -866,9 +866,7 @@ def run_browser_acceptance(
     popen: Callable[..., Any] = subprocess.Popen,
     runtime_checker: Callable[[Path], None] = _default_runtime_checker,
     base_env: Mapping[str, str] | None = None,
-    previous_publication_loader: Callable[[], Mapping[str, object]] = (
-        lambda: load_previous_official_publications()
-    ),
+    previous_publication_loader: Callable[[], Mapping[str, object]] | None = None,
 ) -> BrowserAcceptanceResult:
     validated_trade_date = _required_date(trade_date, "browser_acceptance_trade_date_invalid")
     validated_run_id = _required_string(run_id, "browser_acceptance_run_id_invalid")
@@ -883,11 +881,14 @@ def run_browser_acceptance(
     overall_started = time.monotonic()
     try:
         runtime_checker(Path(dashboard_root))
-        previous = (
-            previous_publications
-            if previous_publications is not None
-            else previous_publication_loader()
-        )
+        if previous_publications is not None:
+            previous = previous_publications
+        elif previous_publication_loader is not None:
+            previous = previous_publication_loader()
+        else:
+            previous = load_previous_official_publications(
+                candidate_trade_date=validated_trade_date
+            )
         previous = _validate_previous_publications_payload(previous)
         previous_json = _stable_json(previous)
     except Exception as exc:
@@ -1089,6 +1090,7 @@ def load_previous_official_publications(
     reader: Callable[[], Iterable[Mapping[str, object]]] | None = None,
     connection: object | None = None,
     connection_reader: Callable[[object, str], Iterable[Mapping[str, object]]] | None = None,
+    candidate_trade_date: str | None = None,
 ) -> dict[str, object]:
     if reader is not None and connection is not None:
         raise _error("previous_publication_loader_ambiguous")
@@ -1105,6 +1107,11 @@ def load_previous_official_publications(
         from stock_research.data_run_manifest import load_recent_data_run_manifest
 
         rows = list(load_recent_data_run_manifest())
+    candidate_date = (
+        _required_date(candidate_trade_date, "previous_publication_candidate_trade_date")
+        if candidate_trade_date is not None
+        else None
+    )
     selected: list[dict[str, object]] = []
     for strategy_id in OFFICIAL_STRATEGY_IDS:
         module = f"strategy_{strategy_id}"
@@ -1118,6 +1125,25 @@ def load_previous_official_publications(
         ]
         if not candidates:
             raise _error("previous_publication_missing", strategy_id)
+        if candidate_date is not None:
+            candidate_versions = [
+                row
+                for row in candidates
+                if str(row.get("trade_date") or "")[:10] == candidate_date
+            ]
+            if not candidate_versions:
+                raise _error("previous_publication_candidate_missing", strategy_id)
+            newest_candidate = max(
+                candidate_versions,
+                key=lambda row: (
+                    str(row.get("started_at") or ""),
+                    str(row.get("ended_at") or row.get("updated_at") or ""),
+                    str(row.get("run_id") or ""),
+                ),
+            )
+            candidates = [row for row in candidates if row is not newest_candidate]
+            if not candidates:
+                raise _error("previous_publication_missing_before_candidate", strategy_id)
         latest = max(
             candidates,
             key=lambda row: (
