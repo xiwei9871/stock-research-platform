@@ -150,5 +150,5 @@ def test_tech_strategy_manifest_ends_after_candidate_and_publication(tmp_path, m
     )
 
     candidate, strategy = entries
-    assert candidate["ended_at"] == "2026-07-18T02:00:00+00:00"
-    assert strategy["ended_at"] == "2026-07-18T03:00:00+00:00"
+    assert candidate["ended_at"] == "2026-07-18T02:00:00.000000+00:00"
+    assert strategy["ended_at"] == "2026-07-18T03:00:00.000000+00:00"
