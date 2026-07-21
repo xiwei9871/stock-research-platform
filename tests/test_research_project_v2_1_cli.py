@@ -150,6 +150,35 @@ def test_cognition_commands_are_read_only_deterministic_projections(
     assert captured.out.encode("utf-8") == report.read_bytes()
 
 
+def test_cognition_cli_runs_full_scope_validation_before_projection(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    def reject_scope(*args: object, **kwargs: object) -> dict:
+        raise ResearchProjectV2Error(
+            "scope violation",
+            code="RESEARCH_PROJECT_V2_1_COGNITION_SCOPE_VIOLATION",
+        )
+
+    monkeypatch.setattr(cli, "validate_cognition_package", reject_scope)
+    base = Path("artifacts/research_projects/v2_1")
+    code = cli.run_research_project_v2_1_cli(
+        [
+            "cognition",
+            "validate",
+            "--package",
+            str(base / "analysis/ai_pcb_industry_cognition_package_v1.json"),
+            "--report",
+            str(base / "reports/ai_pcb_industry_cognition_report_v1.md"),
+            "--audit",
+            str(base / "analysis/ai_pcb_industry_cognition_audit_v1.json"),
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert code == 4
+    assert payload["error"]["code"] == "RESEARCH_PROJECT_V2_1_COGNITION_SCOPE_VIOLATION"
+
+
 def test_root_cli_delegates_raw_argv_before_main_parser(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

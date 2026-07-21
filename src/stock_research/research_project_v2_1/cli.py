@@ -17,7 +17,10 @@ from stock_research.research_project_v2_1.discovery import (
     write_discovery_batch,
 )
 from stock_research.research_project_v2_1.coverage import summarize_evidence_coverage
-from stock_research.research_project_v2_1.cognition import load_cognition_package
+from stock_research.research_project_v2_1.cognition import (
+    load_cognition_package,
+    validate_cognition_package,
+)
 from stock_research.research_project_v2_1.cognition_audit import (
     compute_audit as compute_cognition_audit,
     validate_persisted_audit,
@@ -859,6 +862,7 @@ def _cognition_dispatch(
     layout: LayeredResearchLayout,
 ) -> dict[str, Any]:
     package = load_cognition_package(Path(args.package).resolve(), layout=layout)
+    validate_cognition_package(package, layout=layout)
     report_bytes = _read_required_bytes(args.report, purpose="report")
     validate_persisted_report(package, report_bytes)
     persisted_audit = _read_json(args.audit, purpose="cognition audit")
