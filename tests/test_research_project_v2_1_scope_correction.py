@@ -1,10 +1,19 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from hashlib import sha256
+import json
+from pathlib import Path
+import shutil
 
 import pytest
 
+from stock_research.research_project_v2.canonical import canonical_bytes, content_sha256
 from stock_research.research_project_v2.errors import ResearchProjectV2Error
+from stock_research.research_project_v2_1.governance import (
+    validate_stage_a_scope_correction,
+)
+from stock_research.research_project_v2_1.layout import LayeredResearchLayout
 from stock_research.research_project_v2_1.schema import validate_v2_1_schema_payload
 
 
@@ -15,6 +24,14 @@ GLOBAL_ENTITIES = (
     "Broadcom",
     "Lightmatter",
     "Supermicro",
+)
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+CHECKPOINT_NAME = "acquisition_checkpoint:a5f7627d8726c9405ba67a75.json"
+CHECKPOINT_CANONICAL_HASH = (
+    "a5f7627d8726c9405ba67a7527826edb0cff26ee777287e33cb55442bace660e"
+)
+CHECKPOINT_FILE_SHA256 = (
+    "e2b91137df1c01a7fa7b30c8ed9cdd8b052e30ad3a57a274519fab20cb2f07ae"
 )
 
 
@@ -147,3 +164,142 @@ def test_schema_v2_4_rejects_unknown_fields() -> None:
     payload["decision"]["stock_recommendation"] = "forbidden"
     with pytest.raises(ResearchProjectV2Error):
         validate_v2_1_schema_payload("stage_a_scope_correction_v2_4", payload)
+
+
+def _layout_with_checkpoint(tmp_path: Path) -> LayeredResearchLayout:
+    root = tmp_path / "v2_1"
+    checkpoint_dir = root / "acquisition/checkpoints"
+    checkpoint_dir.mkdir(parents=True)
+    source = (
+        REPOSITORY_ROOT
+        / "artifacts/research_projects/v2_1/acquisition/checkpoints"
+        / CHECKPOINT_NAME
+    )
+    shutil.copyfile(source, checkpoint_dir / CHECKPOINT_NAME)
+    schema_source = REPOSITORY_ROOT / "artifacts/research_projects/v2_1/schema"
+    shutil.copytree(schema_source, root / "schema")
+    return LayeredResearchLayout(root)
+
+
+def _semantic_payload() -> dict:
+    payload = scope_correction_payload()
+    payload["content_hash"] = content_sha256(
+        payload, excluded_paths={("content_hash",)}
+    )
+    return payload
+
+
+def test_validate_scope_correction_binds_checkpoint_id_and_both_hashes(
+    tmp_path: Path,
+) -> None:
+    layout = _layout_with_checkpoint(tmp_path)
+    validated = validate_stage_a_scope_correction(
+        _semantic_payload(), layout=layout
+    )
+    assert validated["decision"]["original_checkpoint"] == {
+        "checkpoint_id": CHECKPOINT_NAME.removesuffix(".json"),
+        "canonical_content_hash": CHECKPOINT_CANONICAL_HASH,
+        "file_sha256": CHECKPOINT_FILE_SHA256,
+    }
+
+
+def test_validate_scope_correction_rejects_embedded_checkpoint_hash_drift(
+    tmp_path: Path,
+) -> None:
+    layout = _layout_with_checkpoint(tmp_path)
+    checkpoint_path = layout.acquisition_checkpoints_dir / CHECKPOINT_NAME
+    wrapper = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    wrapper["acquisition_checkpoint"]["content_hash"] = "f" * 64
+    checkpoint_path.write_bytes(canonical_bytes(wrapper))
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        validate_stage_a_scope_correction(_semantic_payload(), layout=layout)
+    assert exc_info.value.code == "RESEARCH_PROJECT_V2_1_SCOPE_CORRECTION_INVALID"
+    assert exc_info.value.details["field"] == (
+        "original_checkpoint.canonical_content_hash"
+    )
+
+
+def test_validate_scope_correction_rejects_checkpoint_file_drift(
+    tmp_path: Path,
+) -> None:
+    layout = _layout_with_checkpoint(tmp_path)
+    checkpoint_path = layout.acquisition_checkpoints_dir / CHECKPOINT_NAME
+    wrapper = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    wrapper["acquisition_checkpoint"]["unresolved_issues"].append(
+        "unauthorized mutation"
+    )
+    checkpoint_path.write_bytes(canonical_bytes(wrapper))
+
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        validate_stage_a_scope_correction(_semantic_payload(), layout=layout)
+    assert exc_info.value.code == "RESEARCH_PROJECT_V2_1_SCOPE_CORRECTION_INVALID"
+    assert exc_info.value.details["field"] == "original_checkpoint.file_sha256"
+
+
+@pytest.mark.parametrize("entity_name", GLOBAL_ENTITIES)
+def test_validate_scope_correction_requires_every_global_reference_entity(
+    tmp_path: Path, entity_name: str
+) -> None:
+    layout = _layout_with_checkpoint(tmp_path)
+    payload = _semantic_payload()
+    payload["decision"]["entity_classifications"] = [
+        entity
+        for entity in payload["decision"]["entity_classifications"]
+        if entity["entity_name"] != entity_name
+    ]
+    payload["decision"]["entity_classifications"].append(
+        deepcopy(payload["decision"]["entity_classifications"][0])
+    )
+    payload["content_hash"] = content_sha256(
+        payload, excluded_paths={("content_hash",)}
+    )
+    with pytest.raises(ResearchProjectV2Error):
+        validate_stage_a_scope_correction(payload, layout=layout)
+
+
+@pytest.mark.parametrize(
+    "forbidden",
+    [
+        "company_score",
+        "stock_recommendation",
+        "signal",
+        "admission",
+        "portfolio",
+        "strategy",
+        "trade",
+    ],
+)
+def test_validate_scope_correction_requires_every_downstream_prohibition(
+    tmp_path: Path, forbidden: str
+) -> None:
+    layout = _layout_with_checkpoint(tmp_path)
+    payload = _semantic_payload()
+    payload["decision"]["stage_a2_plan"]["forbidden_outputs"].remove(forbidden)
+    payload["content_hash"] = content_sha256(
+        payload, excluded_paths={("content_hash",)}
+    )
+    with pytest.raises(ResearchProjectV2Error):
+        validate_stage_a_scope_correction(payload, layout=layout)
+
+
+def test_validate_scope_correction_rejects_content_hash_mismatch(
+    tmp_path: Path,
+) -> None:
+    layout = _layout_with_checkpoint(tmp_path)
+    payload = _semantic_payload()
+    payload["content_hash"] = "f" * 64
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        validate_stage_a_scope_correction(payload, layout=layout)
+    assert exc_info.value.details["field"] == "content_hash"
+
+
+def test_checkpoint_fixture_hashes_match_the_immutable_baseline() -> None:
+    checkpoint = (
+        REPOSITORY_ROOT
+        / "artifacts/research_projects/v2_1/acquisition/checkpoints"
+        / CHECKPOINT_NAME
+    )
+    wrapper = json.loads(checkpoint.read_text(encoding="utf-8"))
+    assert wrapper["acquisition_checkpoint"]["content_hash"] == CHECKPOINT_CANONICAL_HASH
+    assert sha256(checkpoint.read_bytes()).hexdigest() == CHECKPOINT_FILE_SHA256

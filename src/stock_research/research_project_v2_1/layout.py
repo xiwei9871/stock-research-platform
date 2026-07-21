@@ -64,6 +64,10 @@ class LayeredResearchLayout:
         return self.root / "acquisition/diagnostics"
 
     @property
+    def governance_dir(self) -> Path:
+        return self.root / "governance"
+
+    @property
     def index_path(self) -> Path:
         return self.root / "index/research_project_index_v2_1.json"
 
