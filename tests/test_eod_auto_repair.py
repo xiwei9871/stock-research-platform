@@ -180,6 +180,63 @@ def test_run_eod_auto_repair_runs_action_for_failed_check_then_rechecks():
     assert summary.actions[0].name == "repair_lhb_source_and_features"
 
 
+def test_run_eod_auto_repair_generates_unique_and_accepts_injected_run_id(tmp_path):
+    def check_plan_builder(_trade_date):
+        return [
+            SimpleNamespace(
+                name="ops_health",
+                run=lambda: RepairCheckResult("ops_health", RepairStatus.SUCCESS, "ready"),
+            )
+        ]
+
+    first = run_eod_auto_repair(
+        trade_date="2026-07-20",
+        output_dir=tmp_path / "first",
+        mode="check",
+        check_plan_builder=check_plan_builder,
+        action_registry={},
+    )
+    second = run_eod_auto_repair(
+        trade_date="2026-07-20",
+        output_dir=tmp_path / "second",
+        mode="check",
+        check_plan_builder=check_plan_builder,
+        action_registry={},
+    )
+    injected = run_eod_auto_repair(
+        trade_date="2026-07-20",
+        output_dir=tmp_path / "injected",
+        mode="check",
+        check_plan_builder=check_plan_builder,
+        action_registry={},
+        run_id="eod-fixed-test-run",
+    )
+
+    assert first.run_id
+    assert second.run_id
+    assert first.run_id != second.run_id
+    assert injected.run_id == "eod-fixed-test-run"
+
+
+@pytest.mark.parametrize("mode", ["check", "repair", "loop"])
+def test_run_eod_auto_repair_uses_injected_run_id_in_all_top_level_modes(tmp_path, mode):
+    summary = run_eod_auto_repair(
+        trade_date="2026-07-20",
+        output_dir=tmp_path / mode,
+        mode=mode,
+        check_plan_builder=lambda _trade_date: [
+            SimpleNamespace(
+                name="ops_health",
+                run=lambda: RepairCheckResult("ops_health", RepairStatus.SUCCESS, "ready"),
+            )
+        ],
+        action_registry={},
+        run_id=f"eod-fixed-{mode}",
+    )
+
+    assert summary.run_id == f"eod-fixed-{mode}"
+
+
 @pytest.mark.parametrize("mode", ["check", "repair", "publish-only"])
 def test_non_loop_modes_exclude_browser_acceptance_check_and_action(mode, tmp_path):
     browser_check_calls = []

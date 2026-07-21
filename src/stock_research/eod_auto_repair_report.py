@@ -84,12 +84,13 @@ def _report_context(summary: RepairRunSummary, output_dir: str | Path) -> JsonOb
     publications = publications if isinstance(publications, list) else []
     attempts = parsed.get("attempts")
     attempts = attempts if isinstance(attempts, list) else []
-    run_id = metrics.get("run_id") or parsed.get("run_id") or "n/a"
+    strategy_run_id = metrics.get("run_id") or parsed.get("run_id") or "n/a"
     browser_status = action.get("status") or parsed.get("status") or "not-run"
     return {
         "payload": payload,
         "action": action,
-        "run_id": str(run_id),
+        "eod_run_id": summary.run_id or "n/a",
+        "strategy_run_id": str(strategy_run_id),
         "browser_status": str(browser_status),
         "publications": [item for item in publications if isinstance(item, dict)],
         "attempts": [item for item in attempts if isinstance(item, dict)],
@@ -115,7 +116,9 @@ def render_markdown_report(summary: RepairRunSummary, output_dir: str | Path) ->
     lines = [
         f"# EOD Auto Repair Report {summary.trade_date}",
         "",
-        f"- EOD run ID: {context['run_id']}",
+        f"- EOD run ID: {context['eod_run_id']}",
+        f"- Strategy cohort run ID: {context['strategy_run_id']}",
+        "- Report path: run_report.md",
         f"- Trade date: {summary.trade_date}",
         f"- Mode: {summary.mode}",
         f"- Initial status: {summary.checks_before[0].status.value if summary.checks_before else 'unknown'}",
@@ -205,7 +208,8 @@ def render_markdown_report(summary: RepairRunSummary, output_dir: str | Path) ->
             lines.append(
                 f"- {repair_action.name}: {repair_action.status.value} exit_code={repair_action.exit_code} "
                 f"started={repair_action.started_at} ended={repair_action.ended_at} "
-                f"metrics={_json_text(repair_action.metrics)}"
+                f"metrics={_json_text(repair_action.metrics)} "
+                f"validation={_json_text(repair_action.validation_result)}"
             )
     else:
         lines.append("- none")
@@ -282,7 +286,8 @@ def render_html_report(summary: RepairRunSummary, output_dir: str | Path) -> str
         f"<p>{text(_banner(summary))}</p></header>\n"
         "<main>\n"
         "<section><h2>Run identity</h2><dl>"
-        f"<dt>EOD run ID</dt><dd>{text(context['run_id'])}</dd>"
+        f"<dt>EOD run ID</dt><dd>{text(context['eod_run_id'])}</dd>"
+        f"<dt>Strategy cohort run ID</dt><dd>{text(context['strategy_run_id'])}</dd>"
         f"<dt>Trade date</dt><dd>{text(summary.trade_date)}</dd>"
         f"<dt>Final status</dt><dd>{text(summary.final_status.value)}</dd>"
         f"<dt>Remaining blockers</dt><dd>{text(blocker_text)}</dd>"
@@ -370,18 +375,55 @@ def write_summary_files(
     return summary
 
 
-def _retention_run_id(payload: JsonObject) -> str:
-    direct = payload.get("run_id")
-    if isinstance(direct, str):
-        return direct
-    action = _browser_action(payload)
-    metrics = action.get("metrics")
-    if isinstance(metrics, dict) and isinstance(metrics.get("run_id"), str):
-        return metrics["run_id"]
-    parsed = _browser_evidence(payload).get("parsed_result")
-    if isinstance(parsed, dict) and isinstance(parsed.get("run_id"), str):
-        return parsed["run_id"]
-    return ""
+def _retention_run_ids(payload: JsonObject) -> list[str]:
+    run_id_keys = {
+        "run_id",
+        "runId",
+        "eod_run_id",
+        "strategy_cohort_run_id",
+        "browser_run_id",
+    }
+    values: list[str] = []
+
+    def collect(value: object) -> None:
+        if isinstance(value, dict):
+            for key, nested in value.items():
+                if key in run_id_keys and isinstance(nested, str) and nested.strip():
+                    values.append(nested.strip())
+                collect(nested)
+        elif isinstance(value, list):
+            for nested in value:
+                collect(nested)
+
+    collect(payload)
+    return values
+
+
+def _is_initial_baseline_run_id(value: str) -> bool:
+    return value == "pv-initial" or value.startswith("pv-initial-")
+
+
+def _artifact_is_trusted(path_value: str, *, run_dir: Path, browser_dir: Path) -> bool:
+    raw = Path(path_value)
+    artifact = raw if raw.is_absolute() else run_dir / raw
+    try:
+        lexical_relative = artifact.relative_to(run_dir)
+    except ValueError:
+        return False
+    current = run_dir
+    for part in lexical_relative.parts:
+        current = current / part
+        if current.is_symlink():
+            return False
+    if not artifact.is_file():
+        return False
+    try:
+        resolved = artifact.resolve(strict=True)
+        resolved.relative_to(run_dir)
+        resolved.relative_to(browser_dir)
+    except (OSError, RuntimeError, ValueError):
+        return False
+    return True
 
 
 def prune_report_retention(
@@ -423,20 +465,65 @@ def prune_report_retention(
             continue
         if not isinstance(payload, dict):
             continue
-        if payload.get("final_status") != RepairStatus.SUCCESS.value or payload.get("remaining_blockers"):
+        if payload.get("trade_date") != candidate.name:
+            continue
+        blockers = payload.get("remaining_blockers")
+        if (
+            payload.get("final_status") != RepairStatus.SUCCESS.value
+            or not isinstance(blockers, list)
+            or blockers
+        ):
+            continue
+        browser = payload.get("browser_acceptance")
+        if not isinstance(browser, dict):
+            continue
+        action = browser.get("action")
+        check = browser.get("check")
+        if not isinstance(action, dict) or not isinstance(check, dict):
+            continue
+        if action.get("status") != RepairStatus.SUCCESS.value:
+            continue
+        if check.get("status") != RepairStatus.SUCCESS.value:
             continue
         metadata = payload.get("metadata")
         trusted_baseline = payload.get("trusted_initial_baseline") is True or (
             isinstance(metadata, dict) and metadata.get("trusted_initial_baseline") is True
         )
-        if trusted_baseline or _retention_run_id(payload).startswith("pv-initial-"):
+        run_ids = _retention_run_ids(payload)
+        eod_run_id = payload.get("run_id")
+        action_metrics = action.get("metrics")
+        strategy_run_id = action_metrics.get("run_id") if isinstance(action_metrics, dict) else None
+        if not isinstance(eod_run_id, str) or not eod_run_id.strip():
+            continue
+        if not isinstance(strategy_run_id, str) or not strategy_run_id.strip():
+            continue
+        if trusted_baseline or any(_is_initial_baseline_run_id(value) for value in run_ids):
             continue
         browser_dir = resolved / "browser"
         reports_exist = all(
-            (resolved / name).is_file()
+            (resolved / name).is_file() and not (resolved / name).is_symlink()
             for name in ("run_summary.json", "run_report.md", "run_report.html")
         )
         if browser_dir.is_symlink() or not browser_dir.is_dir() or not reports_exist:
+            continue
+        try:
+            browser_resolved = browser_dir.resolve(strict=True)
+            browser_resolved.relative_to(resolved)
+        except (OSError, RuntimeError, ValueError):
+            continue
+        artifact_paths = action.get("artifact_paths")
+        if not isinstance(artifact_paths, list) or not artifact_paths:
+            continue
+        if not all(
+            isinstance(path_value, str)
+            and path_value
+            and _artifact_is_trusted(
+                path_value,
+                run_dir=resolved,
+                browser_dir=browser_resolved,
+            )
+            for path_value in artifact_paths
+        ):
             continue
         removed.append(candidate)
         if not dry_run:

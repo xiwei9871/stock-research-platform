@@ -14,6 +14,7 @@ def test_repair_summary_serializes_nested_results():
         trade_date="2026-06-29",
         mode="repair",
         final_status=RepairStatus.SUCCESS,
+        run_id="eod-model-test",
         checks_before=[
             RepairCheckResult(
                 name="lhb_features",
@@ -44,6 +45,7 @@ def test_repair_summary_serializes_nested_results():
     )
 
     payload = summary.to_dict()
+    assert payload["run_id"] == "eod-model-test"
 
     assert payload["trade_date"] == "2026-06-29"
     assert payload["final_status"] == "success"
@@ -96,6 +98,7 @@ def test_repair_summary_exposes_final_browser_check_and_action_without_new_canon
         "trade_date",
         "mode",
         "final_status",
+        "run_id",
         "checks_before",
         "actions",
         "checks_after",

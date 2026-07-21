@@ -38,12 +38,12 @@ def _summary(
     message: str = "ready",
     artifact_paths: list[str] | None = None,
 ) -> RepairRunSummary:
-    run_id = "strategy-eod-2026-07-20-local"
+    strategy_run_id = "strategy-eod-2026-07-20-local"
     browser = RepairActionResult(
         "dashboard_browser_acceptance",
         RepairStatus.DEGRADED if status == RepairStatus.DEGRADED else status,
         message,
-        metrics={"run_id": run_id},
+        metrics={"run_id": strategy_run_id},
         artifact_paths=list(artifact_paths or []),
         validation_result={
             "evidence": {
@@ -53,7 +53,7 @@ def _summary(
                 ],
                 "report_paths": list(artifact_paths or []),
                 "parsed_result": {
-                    "run_id": run_id,
+                    "run_id": strategy_run_id,
                     "status": "degraded" if status == RepairStatus.DEGRADED else status.value,
                     "attempts": [
                         {"attempt_number": 1, "status": "failed", "message": "runtime retry"},
@@ -68,6 +68,7 @@ def _summary(
         trade_date="2026-07-20",
         mode="loop",
         final_status=status,
+        run_id="eod-auto-repair-2026-07-20-test",
         checks_before=[RepairCheckResult("data_stage", RepairStatus.SUCCESS, "data ready")],
         actions=[browser],
         checks_after=[
@@ -118,7 +119,8 @@ def test_report_escapes_html_and_renders_canonical_browser_evidence(tmp_path):
     assert "browser/attempt-2/trace.zip" in html
     assert "../outside" not in html
     assert "trace.zip" not in html.replace("browser/attempt-2/trace.zip", "")
-    assert "strategy-eod-2026-07-20-local" in markdown
+    assert "EOD run ID: eod-auto-repair-2026-07-20-test" in markdown
+    assert "Strategy cohort run ID: strategy-eod-2026-07-20-local" in markdown
     assert "lhb_shortline-publish" in markdown
     assert "mid_trend-publish" in markdown
     assert "tech_bottleneck-publish" in markdown
@@ -133,6 +135,21 @@ def test_report_rendering_is_deterministic_for_same_summary(tmp_path):
     assert report.render_markdown_report(summary, tmp_path) == report.render_markdown_report(summary, tmp_path)
     assert report.render_html_report(summary, tmp_path) == report.render_html_report(summary, tmp_path)
     assert report.summary_json_bytes(summary) == report.summary_json_bytes(summary)
+
+
+def test_three_report_formats_share_same_eod_run_id(tmp_path):
+    report = _report_module()
+    summary = _summary()
+
+    result = report.write_summary_files(summary, tmp_path)
+
+    payload = json.loads((tmp_path / "run_summary.json").read_text())
+    markdown = (tmp_path / "run_report.md").read_text()
+    html = (tmp_path / "run_report.html").read_text()
+    assert result.run_id == "eod-auto-repair-2026-07-20-test"
+    assert payload["run_id"] == result.run_id
+    assert f"EOD run ID: {result.run_id}" in markdown
+    assert f"<dd>{result.run_id}</dd>" in html
 
 
 def test_html_failure_preserves_json_markdown_and_returns_failed_summary(tmp_path):
@@ -173,17 +190,45 @@ def test_writer_rejects_symlink_output_directory(tmp_path):
     assert list(outside.iterdir()) == []
 
 
-def _write_retention_summary(path: Path, *, status: str, run_id: str = "run-1", **extra):
+def _write_retention_summary(
+    path: Path,
+    *,
+    status: str,
+    run_id: str = "strategy-run-1",
+    eod_run_id: str = "eod-run-1",
+    browser_status: str = "success",
+    trade_date: str | None = None,
+    artifact_paths: list[str] | None = None,
+    create_default_artifact: bool = True,
+    include_check: bool = True,
+    **extra,
+):
     path.mkdir(parents=True, exist_ok=True)
+    browser_dir = path / "browser"
+    browser_dir.mkdir()
+    if artifact_paths is None and create_default_artifact:
+        artifact = browser_dir / "eod-browser-acceptance.json"
+        artifact.write_text("{}", encoding="utf-8")
+        artifact_paths = [str(artifact)]
+    browser_acceptance = {
+        "action": {
+            "status": browser_status,
+            "metrics": {"run_id": run_id},
+            "artifact_paths": list(artifact_paths or []),
+            "validation_result": {"evidence": {"parsed_result": {"run_id": run_id}}},
+        },
+    }
+    if include_check:
+        browser_acceptance["check"] = {"status": browser_status}
     payload = {
-        "trade_date": path.name,
+        "run_id": eod_run_id,
+        "trade_date": trade_date or path.name,
         "final_status": status,
         "remaining_blockers": [] if status == "success" else ["blocked"],
-        "browser_acceptance": {"action": {"metrics": {"run_id": run_id}}},
+        "browser_acceptance": browser_acceptance,
         **extra,
     }
     (path / "run_summary.json").write_text(json.dumps(payload), encoding="utf-8")
-    (path / "browser").mkdir()
     (path / "run_report.md").write_text("report", encoding="utf-8")
     (path / "run_report.html").write_text("report", encoding="utf-8")
 
@@ -199,6 +244,7 @@ def test_retention_removes_only_old_official_and_preserves_safety_boundaries(tmp
     _write_retention_summary(root / "2026-04-18", status="degraded")
     _write_retention_summary(root / "2026-04-17", status="success", run_id="pv-initial-baseline")
     _write_retention_summary(root / "2026-04-16", status="success", trusted_initial_baseline=True)
+    _write_retention_summary(root / "2026-04-14", status="success", eod_run_id="pv-initial")
     _write_retention_summary(root / "2026-07-20", status="success")
     (root / "not-a-date").mkdir()
     (root / "2026-04-15").symlink_to(outside, target_is_directory=True)
@@ -217,6 +263,7 @@ def test_retention_removes_only_old_official_and_preserves_safety_boundaries(tmp
         "2026-04-18",
         "2026-04-17",
         "2026-04-16",
+        "2026-04-14",
         "2026-07-20",
         "not-a-date",
         "2026-04-15",
@@ -239,3 +286,79 @@ def test_retention_dry_run_reports_candidate_without_deleting(tmp_path):
 
     assert removed == [target]
     assert target.exists()
+
+
+def test_retention_keeps_untrusted_or_incomplete_browser_evidence(tmp_path):
+    report = _report_module()
+    root = tmp_path / "daily"
+    outside = tmp_path / "outside-evidence.json"
+    outside.write_text("{}", encoding="utf-8")
+
+    _write_retention_summary(
+        root / "2026-04-13",
+        status="success",
+        trade_date="2026-04-12",
+    )
+    _write_retention_summary(
+        root / "2026-04-12",
+        status="success",
+        browser_status="degraded",
+    )
+    _write_retention_summary(
+        root / "2026-04-11",
+        status="success",
+        create_default_artifact=False,
+        artifact_paths=[],
+    )
+    _write_retention_summary(
+        root / "2026-04-10",
+        status="success",
+        create_default_artifact=False,
+        artifact_paths=[str(root / "2026-04-10" / "browser" / "missing.json")],
+    )
+    _write_retention_summary(
+        root / "2026-04-09",
+        status="success",
+        create_default_artifact=False,
+        artifact_paths=[str(outside)],
+    )
+    symlink_dir = root / "2026-04-08"
+    _write_retention_summary(
+        symlink_dir,
+        status="success",
+        create_default_artifact=False,
+        artifact_paths=[str(symlink_dir / "browser" / "linked.json")],
+    )
+    (symlink_dir / "browser" / "linked.json").symlink_to(outside)
+    traversal = root / "outside-evidence.json"
+    traversal.write_text("{}", encoding="utf-8")
+    _write_retention_summary(
+        root / "2026-04-07",
+        status="success",
+        create_default_artifact=False,
+        artifact_paths=["../outside-evidence.json"],
+    )
+    _write_retention_summary(
+        root / "2026-04-06",
+        status="success",
+        include_check=False,
+    )
+
+    removed = report.prune_report_retention(
+        root,
+        current_run_dir=root / "2026-07-20",
+        now=datetime(2026, 7, 20, 12, tzinfo=timezone.utc),
+    )
+
+    assert removed == []
+    for name in (
+        "2026-04-13",
+        "2026-04-12",
+        "2026-04-11",
+        "2026-04-10",
+        "2026-04-09",
+        "2026-04-08",
+        "2026-04-07",
+        "2026-04-06",
+    ):
+        assert (root / name).exists()

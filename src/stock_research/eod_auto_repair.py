@@ -11,6 +11,7 @@ from dataclasses import replace
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
+from uuid import uuid4
 
 from stock_research.eod_auto_repair_checks import build_check_plan
 from stock_research.eod_auto_repair_models import (
@@ -665,11 +666,18 @@ def run_eod_auto_repair(
     dry_run: bool = False,
     strict: bool = False,
     action_timeout_seconds: int | None = None,
+    run_id: str | None = None,
 ) -> RepairRunSummary:
     if mode not in {"check", "repair", "publish-only", "loop"}:
         raise ValueError("mode must be check, repair, publish-only, or loop")
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
+    if run_id is None:
+        eod_run_id = f"eod-auto-repair-{trade_date}-{uuid4()}"
+    elif isinstance(run_id, str) and run_id.strip():
+        eod_run_id = run_id.strip()
+    else:
+        raise ValueError("run_id must be a non-empty string when provided")
     registry = action_registry if action_registry is not None else build_default_action_registry(output_root="outputs")
     if mode == "loop":
         _reset_progress_files(out)
@@ -682,6 +690,7 @@ def run_eod_auto_repair(
             dry_run=dry_run,
             action_timeout_seconds=action_timeout_seconds,
         )
+        summary = replace(summary, run_id=eod_run_id)
         if strict and summary.final_status != RepairStatus.SUCCESS:
             summary = replace(summary, final_status=RepairStatus.FAILED)
         _emit_progress(
@@ -750,6 +759,7 @@ def run_eod_auto_repair(
                 break
     checks_after = current_checks if actions or stages else checks_before
     summary = RepairRunSummary(
+        run_id=eod_run_id,
         trade_date=trade_date,
         mode=mode,
         final_status=_final_status(checks_after),

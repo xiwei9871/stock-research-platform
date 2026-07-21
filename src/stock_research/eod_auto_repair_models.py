@@ -100,6 +100,7 @@ class RepairRunSummary:
     trade_date: str
     mode: str
     final_status: RepairStatus
+    run_id: str = ""
     checks_before: list[RepairCheckResult] = field(default_factory=list)
     actions: list[RepairActionResult] = field(default_factory=list)
     checks_after: list[RepairCheckResult] = field(default_factory=list)
@@ -136,6 +137,7 @@ class RepairRunSummary:
             None,
         )
         return {
+            "run_id": self.run_id,
             "trade_date": self.trade_date,
             "mode": self.mode,
             "final_status": self.final_status.value,

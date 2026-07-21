@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="${STOCK_RESEARCH_ROOT:-/Users/xiwei/stock_research}"
 PYTHON="${STOCK_RESEARCH_PYTHON:-$ROOT/.venv/bin/python}"
+JSON_PYTHON="${STOCK_RESEARCH_JSON_PYTHON:-python3}"
 TRADE_DATE="${1:-$(date +%F)}"
 LOG_DIR="$ROOT/logs/eod_auto_repair"
 OUTPUT_DIR="$ROOT/outputs/research/eod_auto_repair/$TRADE_DATE"
@@ -99,6 +100,33 @@ clear_dashboard_cache() {
   rm -f "$cookie_jar"
 }
 
+parse_browser_status() {
+  "$JSON_PYTHON" - "$1" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    payload = json.load(handle)
+browser = payload.get("browser_acceptance")
+if not isinstance(browser, dict):
+    raise SystemExit(1)
+action = browser.get("action")
+if isinstance(action, dict):
+    status = action.get("status")
+    if not isinstance(status, str) or not status:
+        raise SystemExit(1)
+    print(status)
+    raise SystemExit(0)
+check = browser.get("check")
+if isinstance(check, dict):
+    status = check.get("status")
+    if isinstance(status, str) and status:
+        print(f"{status} (check fallback)")
+        raise SystemExit(0)
+raise SystemExit(1)
+PY
+}
+
 print_summary() {
   local title="$1"
   local rc="$2"
@@ -139,8 +167,10 @@ run_repair() {
   echo "eod_auto_repair|report|$OUTPUT_DIR/run_report.md" >>"$DETAIL_LOG"
   echo "eod_auto_repair|html_report|$OUTPUT_DIR/run_report.html" >>"$DETAIL_LOG"
   if [[ -f "$OUTPUT_DIR/run_summary.json" ]]; then
-    BROWSER_STATUS="$(tr -d '\n' < "$OUTPUT_DIR/run_summary.json" | sed -n 's/.*"browser_acceptance".*"action".*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
-    BROWSER_STATUS="${BROWSER_STATUS:-unknown}"
+    parsed_browser_status="$(parse_browser_status "$OUTPUT_DIR/run_summary.json" 2>>"$DETAIL_LOG")"
+    if [[ -n "$parsed_browser_status" ]]; then
+      BROWSER_STATUS="$parsed_browser_status"
+    fi
   fi
   if [[ -d "$OUTPUT_DIR/browser" && ! -L "$OUTPUT_DIR/browser" ]]; then
     BROWSER_EVIDENCE_PATHS="$(find "$OUTPUT_DIR/browser" -type f -print 2>/dev/null | sort || true)"
