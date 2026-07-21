@@ -214,3 +214,27 @@ Confirm whether Stage A Evidence Assessment should:
 
 The workflow stops at acquisition and normalization pending those decisions.
 
+## Scope Correction
+
+Stage A acquisition remains technically valid and all original acquisition facts remain unchanged. The original checkpoint, attempts, raw artifacts, normalized representations, blocked results, provenance, duplicate classifications and unknown publication-date states are immutable history.
+
+The current investment boundary is `investment_market_scope = A_share`. Stage A is therefore reclassified through an append-only governance overlay as `global_industry_reference_acquisition`, with status `global_industry_reference_acquisition_complete`.
+
+NVIDIA, Intel / Habana, Cisco, Broadcom, Lightmatter and Supermicro are global industry references only. They provide technology-route, architecture, product-boundary, component-requirement and demand-side context. They are not investment candidates, A-share review-universe members, company-scoring targets, signal targets or admission targets in this project.
+
+The acquired global artifacts may later enter `industry_claim_level_only` assessment. They cannot establish A-share company supply-chain participation, qualification, effective capacity, orders, revenue, profit exposure, beneficiary ranking or investment value. In particular:
+
+```text
+global_reference_coverage != a_share_candidate_coverage
+primary_source_count != evidence_sufficiency
+industry_claim_support != company_exposure_support
+```
+
+The formal governance flags are:
+
+```text
+company_level_assessment_allowed = false
+stage_b_authorized = false
+```
+
+Company-level Evidence Assessment is paused. Stage B is not authorized. The next planned step is `Stage A2 — A-share Supply-chain Mapping`; Stage A2 remains research-only and has not started acquisition, candidate generation, scoring or downstream transmission.

@@ -316,3 +316,27 @@ def test_repository_scope_correction_artifact_is_valid_and_checkpoint_is_unchang
     wrapper = json.loads(checkpoint.read_text(encoding="utf-8"))
     assert wrapper["acquisition_checkpoint"]["content_hash"] == CHECKPOINT_CANONICAL_HASH
     assert sha256(checkpoint.read_bytes()).hexdigest() == CHECKPOINT_FILE_SHA256
+
+
+def test_scope_correction_documents_preserve_history_and_state_boundaries() -> None:
+    stage_a = (
+        REPOSITORY_ROOT
+        / "docs/research_operating_layer_v2_r2b_ai_pcb_stage_a_acquisition.md"
+    ).read_text(encoding="utf-8")
+    plan = (
+        REPOSITORY_ROOT
+        / "docs/research_operating_layer_v2_r2b_ai_pcb_scope_correction_and_stage_a2_plan.md"
+    ).read_text(encoding="utf-8")
+    for phrase in (
+        "global_industry_reference_acquisition",
+        "investment_market_scope = A_share",
+        "industry_claim_level_only",
+        "company_level_assessment_allowed = false",
+        "stage_b_authorized = false",
+        "Stage A2 — A-share Supply-chain Mapping",
+    ):
+        assert phrase in stage_a
+        assert phrase in plan
+    assert "Stage A2 acquisition has not started" in plan
+    assert "global_reference_coverage != a_share_candidate_coverage" in plan
+    assert "industry_claim_support != company_exposure_support" in plan
