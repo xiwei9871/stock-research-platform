@@ -65,6 +65,7 @@
             "required": [
               "entity_name",
               "entity_role",
+              "reference_roles",
               "investment_candidate",
               "eligible_for_a_share_review_universe",
               "eligible_for_company_scoring",
@@ -74,6 +75,18 @@
             "properties": {
               "entity_name": {"enum": ["NVIDIA", "Intel / Habana", "Cisco", "Broadcom", "Lightmatter", "Supermicro"]},
               "entity_role": {"const": "global_industry_reference"},
+              "reference_roles": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "enum": [
+                    "industry_architecture_or_product_reference",
+                    "boundary_candidate",
+                    "alternative_technology_route"
+                  ]
+                }
+              },
               "investment_candidate": {"const": false},
               "eligible_for_a_share_review_universe": {"const": false},
               "eligible_for_company_scoring": {"const": false},
@@ -120,6 +133,8 @@
             "acquisition_started",
             "company_universe_generated",
             "object_flow",
+            "inputs",
+            "planned_outputs",
             "candidate_mapping_dimensions",
             "acceptance_criteria",
             "forbidden_outputs"
@@ -138,6 +153,34 @@
                 "a_share_candidate_hypothesis",
                 "company_specific_evidence_requirement"
               ]
+            },
+            "inputs": {
+              "type": "array",
+              "minItems": 4,
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "er01_er05",
+                  "global_industry_reference_artifacts",
+                  "future_industry_claim_level_assessments",
+                  "unresolved_boundaries_duplicates_and_freshness_warnings"
+                ]
+              }
+            },
+            "planned_outputs": {
+              "type": "array",
+              "minItems": 6,
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "component_or_process_requirements",
+                  "value_chain_segment_map",
+                  "benefit_path_classifications",
+                  "a_share_candidate_discovery_rules",
+                  "draft_a_share_candidate_universe",
+                  "company_specific_evidence_requirements"
+                ]
+              }
             },
             "candidate_mapping_dimensions": {
               "type": "array",

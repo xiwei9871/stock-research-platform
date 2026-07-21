@@ -63,6 +63,11 @@ def scope_correction_payload() -> dict:
                 {
                     "entity_name": name,
                     "entity_role": "global_industry_reference",
+                    "reference_roles": (
+                        ["boundary_candidate", "alternative_technology_route"]
+                        if name == "Lightmatter"
+                        else ["industry_architecture_or_product_reference"]
+                    ),
                     "investment_candidate": False,
                     "eligible_for_a_share_review_universe": False,
                     "eligible_for_company_scoring": False,
@@ -97,6 +102,20 @@ def scope_correction_payload() -> dict:
                     "value_chain_segment",
                     "a_share_candidate_hypothesis",
                     "company_specific_evidence_requirement",
+                ],
+                "inputs": [
+                    "er01_er05",
+                    "global_industry_reference_artifacts",
+                    "future_industry_claim_level_assessments",
+                    "unresolved_boundaries_duplicates_and_freshness_warnings",
+                ],
+                "planned_outputs": [
+                    "component_or_process_requirements",
+                    "value_chain_segment_map",
+                    "benefit_path_classifications",
+                    "a_share_candidate_discovery_rules",
+                    "draft_a_share_candidate_universe",
+                    "company_specific_evidence_requirements",
                 ],
                 "candidate_mapping_dimensions": ["high_speed_pcb"],
                 "acceptance_criteria": [
@@ -341,6 +360,28 @@ def test_repository_scope_correction_artifact_is_valid_and_checkpoint_is_unchang
     wrapper = json.loads(checkpoint.read_text(encoding="utf-8"))
     assert wrapper["acquisition_checkpoint"]["content_hash"] == CHECKPOINT_CANONICAL_HASH
     assert sha256(checkpoint.read_bytes()).hexdigest() == CHECKPOINT_FILE_SHA256
+
+
+def test_repository_scope_correction_structures_stage_a2_inputs_outputs_and_lightmatter_boundary() -> None:
+    path = (
+        LayeredResearchLayout.default().governance_dir
+        / "stage_a_scope_correction_v1.json"
+    )
+    decision = json.loads(path.read_text(encoding="utf-8"))["decision"]
+    lightmatter = next(
+        entity
+        for entity in decision["entity_classifications"]
+        if entity["entity_name"] == "Lightmatter"
+    )
+    assert set(lightmatter["reference_roles"]) == {
+        "boundary_candidate",
+        "alternative_technology_route",
+    }
+    plan = decision["stage_a2_plan"]
+    assert "er01_er05" in plan["inputs"]
+    assert "global_industry_reference_artifacts" in plan["inputs"]
+    assert "draft_a_share_candidate_universe" in plan["planned_outputs"]
+    assert "company_specific_evidence_requirements" in plan["planned_outputs"]
 
 
 def test_scope_correction_documents_preserve_history_and_state_boundaries() -> None:
