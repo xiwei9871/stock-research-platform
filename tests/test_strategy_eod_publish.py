@@ -1,4 +1,6 @@
+import json
 from datetime import datetime, timezone
+from pathlib import Path
 
 import stock_research.strategy_eod_publish as strategy_eod_publish
 from stock_research.dashboard.backtests import attach_publication_identity
@@ -109,6 +111,41 @@ def test_write_strategy_artifacts_manifest_owns_versioned_paths(tmp_path):
     }
     assert all("/strategy_runs/mid_trend/" in path for path in metadata["output_paths"].values())
     assert (tmp_path / "strategy_mid_trend_review.csv").exists()
+
+
+def test_same_day_rerun_keeps_publish_id_and_manifest_row_start_time_atomic(tmp_path):
+    first_started_at = datetime(2026, 7, 20, 12, 30, tzinfo=timezone.utc)
+    second_started_at = datetime(2026, 7, 20, 12, 31, tzinfo=timezone.utc)
+
+    first_entry, _ = strategy_eod_publish._write_strategy_artifacts(
+        run_id="strategy-eod-2026-07-20-local",
+        trade_date="2026-07-20",
+        strategy_id="mid_trend",
+        result=_official_mid_result(),
+        output_dir=tmp_path,
+        started_at=first_started_at,
+    )
+    second_entry, _ = strategy_eod_publish._write_strategy_artifacts(
+        run_id="strategy-eod-2026-07-20-local",
+        trade_date="2026-07-20",
+        strategy_id="mid_trend",
+        result=_official_mid_result(),
+        output_dir=tmp_path,
+        started_at=second_started_at,
+    )
+
+    first_manifest = json.loads(
+        Path(first_entry["metadata"]["publication_manifest_path"]).read_text(encoding="utf-8")
+    )
+    second_manifest = json.loads(
+        Path(second_entry["metadata"]["publication_manifest_path"]).read_text(encoding="utf-8")
+    )
+    assert first_entry["metadata"]["publish_id"] == first_manifest["publish_id"]
+    assert first_entry["started_at"] == first_manifest["started_at"]
+    assert second_entry["metadata"]["publish_id"] == second_manifest["publish_id"]
+    assert second_entry["started_at"] == second_manifest["started_at"]
+    assert second_entry["metadata"]["publish_id"] != first_entry["metadata"]["publish_id"]
+    assert second_entry["started_at"] > first_entry["started_at"]
 
 
 def test_lhb_review_publishes_original_top5_after_gate_without_refill(monkeypatch):

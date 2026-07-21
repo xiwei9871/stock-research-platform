@@ -1,6 +1,70 @@
+import json
+from datetime import datetime, timezone
+
 import pytest
 
 from stock_research import data_run_manifest
+
+
+def test_upsert_replaces_publish_identity_and_start_time_for_same_day_rerun(monkeypatch):
+    stored_row = {}
+
+    class FakeCursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def execute(self, sql, params):
+            if not stored_row:
+                stored_row.update(params)
+                return
+            if "metadata = EXCLUDED.metadata" in sql:
+                stored_row["metadata"] = params["metadata"]
+            if "started_at = EXCLUDED.started_at" in sql:
+                stored_row["started_at"] = params["started_at"]
+
+    class FakeConnection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def cursor(self):
+            return FakeCursor()
+
+    monkeypatch.setattr(data_run_manifest, "connect", lambda service: FakeConnection())
+    first = data_run_manifest.build_manifest_entry(
+        run_id="strategy-eod-2026-07-20-local",
+        run_date="2026-07-20",
+        trade_date="2026-07-20",
+        module="strategy_mid_trend",
+        source="strategy_daily_eod",
+        tier="tier1",
+        status="success",
+        started_at=datetime(2026, 7, 20, 12, 30, tzinfo=timezone.utc),
+        metadata={"publish_id": "publish-1"},
+    )
+    second = data_run_manifest.build_manifest_entry(
+        run_id="strategy-eod-2026-07-20-local",
+        run_date="2026-07-20",
+        trade_date="2026-07-20",
+        module="strategy_mid_trend",
+        source="strategy_daily_eod",
+        tier="tier1",
+        status="success",
+        started_at=datetime(2026, 7, 20, 12, 31, tzinfo=timezone.utc),
+        metadata={"publish_id": "publish-2"},
+    )
+
+    assert first["manifest_id"] == second["manifest_id"]
+    data_run_manifest.upsert_data_run_manifest(first, service="research-test")
+    data_run_manifest.upsert_data_run_manifest(second, service="research-test")
+
+    assert json.loads(stored_row["metadata"])["publish_id"] == "publish-2"
+    assert stored_row["started_at"] == "2026-07-20T12:31:00+00:00"
 
 
 def test_load_recent_data_run_manifest_trade_date_fetches_latest_row_per_module(monkeypatch):

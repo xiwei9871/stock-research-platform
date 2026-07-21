@@ -142,6 +142,7 @@ def upsert_data_run_manifest(
     ON CONFLICT (manifest_id)
     DO UPDATE SET
         status = EXCLUDED.status,
+        started_at = EXCLUDED.started_at,
         ended_at = EXCLUDED.ended_at,
         duration_seconds = EXCLUDED.duration_seconds,
         row_count = EXCLUDED.row_count,
