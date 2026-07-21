@@ -6,14 +6,18 @@ from html import escape
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import tempfile
 from typing import Any, Callable
+from urllib.parse import quote
 
 from stock_research.eod_auto_repair_models import RepairRunSummary, RepairStatus
 
 
 JsonObject = dict[str, Any]
+_SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
+_MARKDOWN_ESCAPE_RE = re.compile(r"([\\`*{}\[\]()#!|>])")
 
 
 def summary_json_bytes(summary: RepairRunSummary) -> bytes:
@@ -35,6 +39,14 @@ def _browser_action(payload: JsonObject) -> JsonObject:
     return action if isinstance(action, dict) else {}
 
 
+def _browser_check(payload: JsonObject) -> JsonObject:
+    browser = payload.get("browser_acceptance")
+    if not isinstance(browser, dict):
+        return {}
+    check = browser.get("check")
+    return check if isinstance(check, dict) else {}
+
+
 def _browser_evidence(payload: JsonObject) -> JsonObject:
     validation = _browser_action(payload).get("validation_result")
     if not isinstance(validation, dict):
@@ -47,9 +59,16 @@ def _safe_relative_evidence_paths(summary: RepairRunSummary, output_dir: str | P
     output = Path(output_dir).resolve(strict=False)
     payload = summary.to_dict()
     action = _browser_action(payload)
+    check = _browser_check(payload)
     evidence = _browser_evidence(payload)
+    check_metrics = check.get("metrics")
+    check_metrics = check_metrics if isinstance(check_metrics, dict) else {}
     candidates: list[object] = []
-    for value in (action.get("artifact_paths"), evidence.get("report_paths")):
+    for value in (
+        action.get("artifact_paths"),
+        evidence.get("report_paths"),
+        check_metrics.get("artifact_paths"),
+    ):
         if isinstance(value, list):
             candidates.extend(value)
 
@@ -57,7 +76,11 @@ def _safe_relative_evidence_paths(summary: RepairRunSummary, output_dir: str | P
     for candidate in candidates:
         if not isinstance(candidate, str) or not candidate:
             continue
+        if any(ord(character) < 32 or ord(character) == 127 for character in candidate):
+            continue
         raw = Path(candidate)
+        if any(_SCHEME_RE.match(part) for part in raw.parts):
+            continue
         path = raw if raw.is_absolute() else output / raw
         try:
             resolved = path.resolve(strict=True)
@@ -68,30 +91,46 @@ def _safe_relative_evidence_paths(summary: RepairRunSummary, output_dir: str | P
             continue
         if not resolved.is_file():
             continue
-        links.add(relative.as_posix())
+        encoded = "/".join(quote(part, safe="") for part in relative.parts)
+        links.add(f"./{encoded}")
     return sorted(links)
 
 
 def _report_context(summary: RepairRunSummary, output_dir: str | Path) -> JsonObject:
     payload = summary.to_dict()
     action = _browser_action(payload)
+    check = _browser_check(payload)
     evidence = _browser_evidence(payload)
     parsed = evidence.get("parsed_result")
     parsed = parsed if isinstance(parsed, dict) else {}
     metrics = action.get("metrics")
     metrics = metrics if isinstance(metrics, dict) else {}
+    check_metrics = check.get("metrics")
+    check_metrics = check_metrics if isinstance(check_metrics, dict) else {}
     publications = evidence.get("candidate_publications")
+    if not isinstance(publications, list):
+        snapshot = check_metrics.get("candidate_snapshot")
+        snapshot = snapshot if isinstance(snapshot, dict) else {}
+        publications = snapshot.get("publications")
     publications = publications if isinstance(publications, list) else []
     attempts = parsed.get("attempts")
     attempts = attempts if isinstance(attempts, list) else []
-    strategy_run_id = metrics.get("run_id") or parsed.get("run_id") or "n/a"
-    browser_status = action.get("status") or parsed.get("status") or "not-run"
+    strategy_run_id = (
+        check_metrics.get("run_id")
+        or metrics.get("run_id")
+        or parsed.get("run_id")
+        or "n/a"
+    )
+    browser_status = check.get("status") or action.get("status") or parsed.get("status") or "not-run"
+    action_status = action.get("status") or "not-run"
     return {
         "payload": payload,
         "action": action,
+        "check": check,
         "eod_run_id": summary.run_id or "n/a",
         "strategy_run_id": str(strategy_run_id),
         "browser_status": str(browser_status),
+        "action_status": str(action_status),
         "publications": [item for item in publications if isinstance(item, dict)],
         "attempts": [item for item in attempts if isinstance(item, dict)],
         "links": _safe_relative_evidence_paths(summary, output_dir),
@@ -110,33 +149,60 @@ def _json_text(value: object) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
 
 
+def _display_text(value: object) -> str:
+    rendered = str(value)
+    return "".join(
+        character if ord(character) >= 32 and ord(character) != 127 else f"\\x{ord(character):02x}"
+        for character in rendered
+    )
+
+
+def _markdown_text(value: object) -> str:
+    escaped_html = escape(_display_text(value), quote=False)
+    return _MARKDOWN_ESCAPE_RE.sub(r"\\\1", escaped_html)
+
+
+def _initial_status(summary: RepairRunSummary) -> str:
+    if not summary.checks_before:
+        return "unknown"
+    if any(check.blocker and check.status != RepairStatus.SUCCESS for check in summary.checks_before):
+        return "blocked"
+    if any(check.status != RepairStatus.SUCCESS for check in summary.checks_before):
+        return "degraded"
+    return "official"
+
+
 def render_markdown_report(summary: RepairRunSummary, output_dir: str | Path) -> str:
     context = _report_context(summary, output_dir)
     action = context["action"]
+    md = _markdown_text
     lines = [
-        f"# EOD Auto Repair Report {summary.trade_date}",
+        f"# EOD Auto Repair Report {md(summary.trade_date)}",
         "",
-        f"- EOD run ID: {context['eod_run_id']}",
-        f"- Strategy cohort run ID: {context['strategy_run_id']}",
+        f"- EOD run ID: {md(context['eod_run_id'])}",
+        f"- Strategy cohort run ID: {md(context['strategy_run_id'])}",
         "- Report path: run_report.md",
-        f"- Trade date: {summary.trade_date}",
-        f"- Mode: {summary.mode}",
-        f"- Initial status: {summary.checks_before[0].status.value if summary.checks_before else 'unknown'}",
-        f"- Final status: {summary.final_status.value}",
+        f"- Trade date: {md(summary.trade_date)}",
+        f"- Mode: {md(summary.mode)}",
+        f"- Initial status: {_initial_status(summary)}",
+        f"- Final status: {md(summary.final_status.value)}",
         f"- Publication decision: {_banner(summary)}",
-        f"- Loop stop reason: {summary.loop_stop_reason or 'n/a'}",
+        f"- Loop stop reason: {md(summary.loop_stop_reason or 'n/a')}",
         f"- Dry run: {summary.dry_run}",
-        f"- Remaining blockers: {', '.join(summary.remaining_blockers) if summary.remaining_blockers else 'none'}",
-        f"- Remaining non-blockers: {', '.join(summary.remaining_non_blockers) if summary.remaining_non_blockers else 'none'}",
+        f"- Remaining blockers: {md(', '.join(summary.remaining_blockers) if summary.remaining_blockers else 'none')}",
+        f"- Remaining non-blockers: {md(', '.join(summary.remaining_non_blockers) if summary.remaining_non_blockers else 'none')}",
         "",
         "## Stages",
     ]
     if summary.stages:
         for stage in summary.stages:
             blockers = ", ".join(stage.remaining_blockers) if stage.remaining_blockers else "none"
-            lines.append(f"- {stage.name}: blockers={blockers}")
+            lines.append(f"- {md(stage.name)}: blockers={md(blockers)}")
             for stage_action in stage.actions:
-                lines.append(f"  - action {stage_action.name}: {stage_action.status.value} {stage_action.message}")
+                lines.append(
+                    f"  - action {md(stage_action.name)}: {md(stage_action.status.value)} "
+                    f"{md(stage_action.message)}"
+                )
     else:
         lines.append("- none")
 
@@ -145,8 +211,8 @@ def render_markdown_report(summary: RepairRunSummary, output_dir: str | Path) ->
     if checks:
         for check in checks:
             lines.append(
-                f"- {check.name}: {check.status.value} blocker={str(check.blocker).lower()} "
-                f"metrics={_json_text(check.metrics)} {check.message}".rstrip()
+                f"- {md(check.name)}: {md(check.status.value)} blocker={str(check.blocker).lower()} "
+                f"metrics={md(_json_text(check.metrics))} {md(check.message)}".rstrip()
             )
     else:
         lines.append("- none")
@@ -156,10 +222,10 @@ def render_markdown_report(summary: RepairRunSummary, output_dir: str | Path) ->
         for publication in context["publications"]:
             lines.append(
                 "- "
-                f"strategy={publication.get('strategyId', 'n/a')} "
-                f"publish_id={publication.get('publishId', 'n/a')} "
-                f"contract_id={publication.get('contractId', 'n/a')} "
-                f"trade_date={publication.get('tradeDate', 'n/a')}"
+                f"strategy={md(publication.get('strategyId', 'n/a'))} "
+                f"publish_id={md(publication.get('publishId', 'n/a'))} "
+                f"contract_id={md(publication.get('contractId', 'n/a'))} "
+                f"trade_date={md(publication.get('tradeDate', 'n/a'))}"
             )
     else:
         lines.append("- none")
@@ -168,8 +234,9 @@ def render_markdown_report(summary: RepairRunSummary, output_dir: str | Path) ->
         [
             "",
             "## Browser acceptance",
-            f"- Status: {context['browser_status']}",
-            f"- Repair action: {action.get('name') or 'none'} — {action.get('message') or 'none'}",
+            f"- Status: {md(context['browser_status'])}",
+            f"- Repair action result: {md(context['action_status'])}",
+            f"- Repair action: {md(action.get('name') or 'none')} — {md(action.get('message') or 'none')}",
         ]
     )
     attempts = context["attempts"]
@@ -177,12 +244,12 @@ def render_markdown_report(summary: RepairRunSummary, output_dir: str | Path) ->
         for attempt in attempts:
             number = attempt.get("attempt_number", "?")
             lines.append(
-                f"- Attempt {number}: {attempt.get('status', 'unknown')} "
-                f"{attempt.get('message', '')}".rstrip()
+                f"- Attempt {md(number)}: {md(attempt.get('status', 'unknown'))} "
+                f"{md(attempt.get('message', ''))}".rstrip()
             )
         last = attempts[-1]
         lines.append(
-            f"- Rerun result: {last.get('status', 'unknown')} {last.get('message', '')}".rstrip()
+            f"- Rerun result: {md(last.get('status', 'unknown'))} {md(last.get('message', ''))}".rstrip()
         )
     else:
         lines.append("- Rerun result: not run")
@@ -198,28 +265,28 @@ def render_markdown_report(summary: RepairRunSummary, output_dir: str | Path) ->
         for cycle in summary.loop_cycles:
             blockers = ", ".join(cycle.remaining_blockers) if cycle.remaining_blockers else "none"
             lines.append(
-                f"- Cycle {cycle.cycle_number}: actions={len(cycle.actions)} blockers={blockers} "
-                f"stop={cycle.stop_reason or 'continue'}"
+                f"- Cycle {cycle.cycle_number}: actions={len(cycle.actions)} blockers={md(blockers)} "
+                f"stop={md(cycle.stop_reason or 'continue')}"
             )
 
     lines.extend(["", "## Actions"])
     if summary.actions:
         for repair_action in summary.actions:
             lines.append(
-                f"- {repair_action.name}: {repair_action.status.value} exit_code={repair_action.exit_code} "
-                f"started={repair_action.started_at} ended={repair_action.ended_at} "
-                f"metrics={_json_text(repair_action.metrics)} "
-                f"validation={_json_text(repair_action.validation_result)}"
+                f"- {md(repair_action.name)}: {md(repair_action.status.value)} exit_code={md(repair_action.exit_code)} "
+                f"started={md(repair_action.started_at)} ended={md(repair_action.ended_at)} "
+                f"metrics={md(_json_text(repair_action.metrics))} "
+                f"validation={md(_json_text(repair_action.validation_result))}"
             )
     else:
         lines.append("- none")
 
     lines.extend(["", "## Next actions"])
-    lines.extend(f"- {item}" for item in summary.next_actions or ["none"])
+    lines.extend(f"- {md(item)}" for item in summary.next_actions or ["none"])
     lines.extend(["", "## Warnings"])
-    lines.extend(f"- {item}" for item in summary.warnings or ["none"])
+    lines.extend(f"- {md(item)}" for item in summary.warnings or ["none"])
     lines.extend(["", "## Infrastructure issues"])
-    lines.extend(f"- {item}" for item in summary.infrastructure_issues or ["none"])
+    lines.extend(f"- {md(item)}" for item in summary.infrastructure_issues or ["none"])
     lines.extend(["", "## Final decision"])
     if not summary.remaining_blockers and summary.final_status in {RepairStatus.SUCCESS, RepairStatus.DEGRADED}:
         lines.append(
@@ -231,7 +298,7 @@ def render_markdown_report(summary: RepairRunSummary, output_dir: str | Path) ->
         lines.append("Blocking EOD issues remain; review failed actions and external data availability.")
     if summary.recommended_followups:
         lines.extend(["", "## Recommended follow-ups"])
-        lines.extend(f"- {item}" for item in summary.recommended_followups)
+        lines.extend(f"- {md(item)}" for item in summary.recommended_followups)
     return "\n".join(lines) + "\n"
 
 
@@ -240,7 +307,7 @@ def render_html_report(summary: RepairRunSummary, output_dir: str | Path) -> str
     action = context["action"]
 
     def text(value: object) -> str:
-        return escape(str(value), quote=True)
+        return escape(_display_text(value), quote=True)
 
     checks = [*summary.checks_before, *summary.checks_after]
     check_items = "".join(
@@ -289,6 +356,7 @@ def render_html_report(summary: RepairRunSummary, output_dir: str | Path) -> str
         f"<dt>EOD run ID</dt><dd>{text(context['eod_run_id'])}</dd>"
         f"<dt>Strategy cohort run ID</dt><dd>{text(context['strategy_run_id'])}</dd>"
         f"<dt>Trade date</dt><dd>{text(summary.trade_date)}</dd>"
+        f"<dt>Initial status</dt><dd>{text(_initial_status(summary))}</dd>"
         f"<dt>Final status</dt><dd>{text(summary.final_status.value)}</dd>"
         f"<dt>Remaining blockers</dt><dd>{text(blocker_text)}</dd>"
         "</dl></section>\n"
@@ -296,6 +364,7 @@ def render_html_report(summary: RepairRunSummary, output_dir: str | Path) -> str
         f"<section><h2>Strategy publications</h2><ul>{publication_items}</ul></section>\n"
         "<section><h2>Browser acceptance</h2>"
         f"<p>Status: {text(context['browser_status'])}</p>"
+        f"<p>Repair action result: {text(context['action_status'])}</p>"
         f"<p>Repair action: {text(action.get('name') or 'none')} — {text(action.get('message') or 'none')}</p>"
         f"<ul>{attempt_items}</ul><p>Rerun result: {text(rerun_text)}</p></section>\n"
         f"<section><h2>Evidence links</h2><ul>{link_items}</ul></section>\n"
@@ -306,14 +375,75 @@ def render_html_report(summary: RepairRunSummary, output_dir: str | Path) -> str
 
 
 def _safe_output_dir(output_dir: str | Path) -> Path:
-    output = Path(output_dir)
+    output = Path(output_dir).absolute()
+    if ".." in output.parts:
+        raise ValueError(f"report output directory must not contain traversal: {output}")
+    parent = _ensure_private_parent(output.parent)
+    output = parent / output.name
     if output.exists() and output.is_symlink():
         raise ValueError(f"report output directory must not be a symlink: {output}")
-    output.mkdir(parents=True, exist_ok=True)
+    output.mkdir(parents=True, exist_ok=True, mode=0o700)
     resolved = output.resolve(strict=True)
     if not resolved.is_dir():
         raise ValueError(f"report output is not a directory: {output}")
+    os.chmod(resolved, 0o700)
+    if resolved.stat().st_mode & 0o777 != 0o700:
+        raise PermissionError(f"report output directory is not private: {resolved}")
     return resolved
+
+
+def _ensure_private_parent(parent: Path) -> Path:
+    absolute = parent.absolute()
+    missing: list[Path] = []
+    current = absolute
+    while not current.exists():
+        missing.append(current)
+        current = current.parent
+    if current.is_symlink():
+        raise ValueError(f"report parent must not contain symlinks: {current}")
+    if not current.is_dir():
+        raise ValueError(f"report parent must be a real directory: {current}")
+    for directory in reversed(missing):
+        directory.mkdir(mode=0o700)
+        os.chmod(directory, 0o700)
+    current = absolute
+    while True:
+        if current.is_symlink():
+            raise ValueError(f"report parent must not contain symlinks: {current}")
+        if current == current.parent:
+            break
+        current = current.parent
+    return absolute
+
+
+def atomic_private_write_path(target_path: str | Path, content: bytes) -> None:
+    target = Path(target_path).absolute()
+    parent = _ensure_private_parent(target.parent)
+    if target.is_symlink():
+        raise ValueError(f"report target must not be a symlink: {target}")
+    if target.exists() and not target.is_file():
+        raise ValueError(f"report target must be a regular file: {target}")
+    fd, temporary_name = tempfile.mkstemp(prefix=f".{target.name}.", dir=parent)
+    temporary = Path(temporary_name)
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        if target.is_symlink():
+            raise ValueError(f"report target must not be a symlink: {target}")
+        os.replace(temporary, target)
+        os.chmod(target, 0o600)
+        if target.stat().st_mode & 0o777 != 0o600:
+            raise PermissionError(f"report file is not private: {target}")
+    except BaseException:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+        temporary.unlink(missing_ok=True)
+        raise
 
 
 def _atomic_private_write(output_dir: Path, name: str, content: bytes) -> None:
@@ -322,23 +452,7 @@ def _atomic_private_write(output_dir: Path, name: str, content: bytes) -> None:
         target.relative_to(output_dir)
     except ValueError as exc:
         raise ValueError(f"report path escapes output directory: {target}") from exc
-    fd, temporary_name = tempfile.mkstemp(prefix=f".{name}.", dir=output_dir)
-    temporary = Path(temporary_name)
-    try:
-        os.fchmod(fd, 0o600)
-        with os.fdopen(fd, "wb") as handle:
-            handle.write(content)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary, target)
-        os.chmod(target, 0o600)
-    except BaseException:
-        try:
-            os.close(fd)
-        except OSError:
-            pass
-        temporary.unlink(missing_ok=True)
-        raise
+    atomic_private_write_path(target, content)
 
 
 def _report_failure(summary: RepairRunSummary, issue: str) -> RepairRunSummary:
@@ -354,6 +468,7 @@ def write_summary_files(
     output_dir: str | Path,
     *,
     html_renderer: Callable[[RepairRunSummary, str | Path], str] | None = None,
+    run_retention: bool = True,
 ) -> RepairRunSummary:
     output = _safe_output_dir(output_dir)
     selected_html_renderer = html_renderer or render_html_report
@@ -371,7 +486,20 @@ def write_summary_files(
         _atomic_private_write(output, "run_report.md", failed_markdown.encode("utf-8"))
         return failed
 
-    prune_report_retention(output.parent, current_run_dir=output)
+    if run_retention:
+        try:
+            prune_report_retention(output.parent, current_run_dir=output)
+        except Exception as exc:
+            failed = _report_failure(
+                summary,
+                f"retention_cleanup_failed:{type(exc).__name__}:{exc}",
+            )
+            return write_summary_files(
+                failed,
+                output,
+                html_renderer=selected_html_renderer,
+                run_retention=False,
+            )
     return summary
 
 

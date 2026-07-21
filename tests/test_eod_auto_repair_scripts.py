@@ -105,6 +105,7 @@ def test_eod_auto_repair_cron_uses_module_entrypoint_and_portable_lock():
     assert "浏览器证据" in script
     assert "test:e2e" not in script
     assert "pnpm playwright" not in script
+    assert 'find "$OUTPUT_DIR/browser"' not in script
     assert "lock_mode|$LOCK_MODE" in script
 
 
@@ -114,7 +115,7 @@ def test_eod_auto_repair_cron_prints_browser_status_and_evidence(tmp_path):
         python_body=(
             'test "$PLAYWRIGHT_EOD_OUTPUT_DIR" = "$STOCK_RESEARCH_ROOT/outputs/research/eod_auto_repair/2026-07-02/browser" || exit 9\n'
             'mkdir -p "$PLAYWRIGHT_EOD_OUTPUT_DIR/attempt-2"\n'
-            'printf %s \'{"browser_acceptance":{"action":{"status":"failed","validation_result":{"evidence":{"parsed_result":{"attempts":[{"status":"success"}]}}}},"check":{"status":"degraded"}}}\' > "$STOCK_RESEARCH_ROOT/outputs/research/eod_auto_repair/2026-07-02/run_summary.json"\n'
+            'printf %s \'{"browser_acceptance":{"action":{"status":"success","artifact_paths":["safe/trace.zip","bad\\npath.zip"],"validation_result":{"evidence":{"parsed_result":{"attempts":[{"status":"success"}]}}}},"check":{"status":"failed"}}}\' > "$STOCK_RESEARCH_ROOT/outputs/research/eod_auto_repair/2026-07-02/run_summary.json"\n'
             'touch "$STOCK_RESEARCH_ROOT/outputs/research/eod_auto_repair/2026-07-02/run_report.html"\n'
             'touch "$PLAYWRIGHT_EOD_OUTPUT_DIR/attempt-2/trace.zip"\n'
             "exit 0"
@@ -124,11 +125,12 @@ def test_eod_auto_repair_cron_prints_browser_status_and_evidence(tmp_path):
     result = _run_cron(env, "2026-07-02")
 
     assert result.returncode == 0
-    assert "浏览器验收状态: failed" in result.stdout
+    assert "浏览器验收状态: 失败" in result.stdout
     assert "HTML报告:" in result.stdout
     assert "run_report.html" in result.stdout
     assert "浏览器证据:" in result.stdout
-    assert "browser/attempt-2/trace.zip" in result.stdout
+    assert "浏览器证据: safe/trace.zip" in result.stdout
+    assert "bad" not in result.stdout
 
 
 def test_eod_auto_repair_cron_marks_check_status_fallback(tmp_path):
@@ -143,7 +145,40 @@ def test_eod_auto_repair_cron_marks_check_status_fallback(tmp_path):
     result = _run_cron(env, "2026-07-02")
 
     assert result.returncode == 0
-    assert "浏览器验收状态: degraded (check fallback)" in result.stdout
+    assert "浏览器验收状态: 降级" in result.stdout
+
+
+def test_eod_auto_repair_cron_uses_successful_check_without_action(tmp_path):
+    root, env = _make_cron_harness(
+        tmp_path,
+        python_body=(
+            'printf %s \'{"browser_acceptance":{"action":null,"check":{"status":"success","metrics":{"artifact_paths":["safe/report.json"]}}}}\' > "$STOCK_RESEARCH_ROOT/outputs/research/eod_auto_repair/2026-07-02/run_summary.json"\n'
+            "exit 0"
+        ),
+    )
+
+    result = _run_cron(env, "2026-07-02")
+
+    assert result.returncode == 0
+    assert "浏览器验收状态: 通过" in result.stdout
+    assert "浏览器证据: safe/report.json" in result.stdout
+
+
+def test_eod_auto_repair_cron_rejects_noncanonical_status_and_control_characters(tmp_path):
+    root, env = _make_cron_harness(
+        tmp_path,
+        python_body=(
+            'printf %s \'{"browser_acceptance":{"check":{"status":"success\\nINJECT","metrics":{"artifact_paths":["ok.json","bad\\tpath"]}}}}\' > "$STOCK_RESEARCH_ROOT/outputs/research/eod_auto_repair/2026-07-02/run_summary.json"\n'
+            "exit 5"
+        ),
+    )
+
+    result = _run_cron(env, "2026-07-02")
+
+    assert result.returncode == 5
+    assert "浏览器验收状态: unknown" in result.stdout
+    assert "INJECT" not in result.stdout
+    assert "bad" not in result.stdout
 
 
 def test_eod_auto_repair_cron_malformed_summary_preserves_main_exit_code(tmp_path):

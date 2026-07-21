@@ -1203,15 +1203,17 @@ def _main(argv: list[str] | None = None) -> int:
         action_timeout_seconds=args.action_timeout_seconds,
     )
     if args.report_json:
-        Path(args.report_json).parent.mkdir(parents=True, exist_ok=True)
-        Path(args.report_json).write_text(
-            json.dumps(summary.to_dict(), ensure_ascii=False, indent=2, default=str),
-            encoding="utf-8",
+        from stock_research.eod_auto_repair_report import (
+            atomic_private_write_path,
+            summary_json_bytes,
         )
+
+        atomic_private_write_path(args.report_json, summary_json_bytes(summary))
     if args.report_md:
+        from stock_research.eod_auto_repair_report import atomic_private_write_path
+
         source = Path(output_dir) / "run_report.md"
-        Path(args.report_md).parent.mkdir(parents=True, exist_ok=True)
-        Path(args.report_md).write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+        atomic_private_write_path(args.report_md, source.read_bytes())
     print(json.dumps(summary.to_dict(), ensure_ascii=False, indent=2, default=str))
     return 0 if summary.final_status in {RepairStatus.SUCCESS, RepairStatus.DEGRADED} else 2
 

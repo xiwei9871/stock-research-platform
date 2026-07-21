@@ -100,7 +100,6 @@ class RepairRunSummary:
     trade_date: str
     mode: str
     final_status: RepairStatus
-    run_id: str = ""
     checks_before: list[RepairCheckResult] = field(default_factory=list)
     actions: list[RepairActionResult] = field(default_factory=list)
     checks_after: list[RepairCheckResult] = field(default_factory=list)
@@ -117,6 +116,7 @@ class RepairRunSummary:
     warnings: list[str] = field(default_factory=list)
     infrastructure_issues: list[str] = field(default_factory=list)
     recommended_followups: list[str] = field(default_factory=list)
+    run_id: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         browser_check = next(

@@ -100,30 +100,50 @@ clear_dashboard_cache() {
   rm -f "$cookie_jar"
 }
 
-parse_browser_status() {
+parse_browser_summary() {
   "$JSON_PYTHON" - "$1" <<'PY'
 import json
 import sys
+
+STATUS_LABELS = {
+    "success": "通过",
+    "degraded": "降级",
+    "failed": "失败",
+    "blocked": "阻塞",
+    "skipped": "跳过",
+}
 
 with open(sys.argv[1], encoding="utf-8") as handle:
     payload = json.load(handle)
 browser = payload.get("browser_acceptance")
 if not isinstance(browser, dict):
     raise SystemExit(1)
-action = browser.get("action")
-if isinstance(action, dict):
-    status = action.get("status")
-    if not isinstance(status, str) or not status:
-        raise SystemExit(1)
-    print(status)
-    raise SystemExit(0)
 check = browser.get("check")
 if isinstance(check, dict):
     status = check.get("status")
-    if isinstance(status, str) and status:
-        print(f"{status} (check fallback)")
-        raise SystemExit(0)
-raise SystemExit(1)
+else:
+    action = browser.get("action")
+    status = action.get("status") if isinstance(action, dict) else None
+if status not in STATUS_LABELS:
+    raise SystemExit(1)
+print(f"STATUS\t{STATUS_LABELS[status]}")
+
+paths = []
+action = browser.get("action")
+if isinstance(action, dict) and isinstance(action.get("artifact_paths"), list):
+    paths.extend(action["artifact_paths"])
+if isinstance(check, dict):
+    metrics = check.get("metrics")
+    if isinstance(metrics, dict) and isinstance(metrics.get("artifact_paths"), list):
+        paths.extend(metrics["artifact_paths"])
+seen = set()
+for path in paths:
+    if not isinstance(path, str) or not path or path in seen:
+        continue
+    if any(ord(character) < 32 or ord(character) == 127 for character in path):
+        continue
+    seen.add(path)
+    print(f"EVIDENCE\t{path}")
 PY
 }
 
@@ -167,13 +187,19 @@ run_repair() {
   echo "eod_auto_repair|report|$OUTPUT_DIR/run_report.md" >>"$DETAIL_LOG"
   echo "eod_auto_repair|html_report|$OUTPUT_DIR/run_report.html" >>"$DETAIL_LOG"
   if [[ -f "$OUTPUT_DIR/run_summary.json" ]]; then
-    parsed_browser_status="$(parse_browser_status "$OUTPUT_DIR/run_summary.json" 2>>"$DETAIL_LOG")"
-    if [[ -n "$parsed_browser_status" ]]; then
-      BROWSER_STATUS="$parsed_browser_status"
+    parsed_browser_records="$(parse_browser_summary "$OUTPUT_DIR/run_summary.json" 2>>"$DETAIL_LOG")"
+    if [[ -n "$parsed_browser_records" ]]; then
+      while IFS=$'\t' read -r record_type record_value; do
+        if [[ "$record_type" == "STATUS" ]]; then
+          BROWSER_STATUS="$record_value"
+        elif [[ "$record_type" == "EVIDENCE" ]]; then
+          if [[ -n "$BROWSER_EVIDENCE_PATHS" ]]; then
+            BROWSER_EVIDENCE_PATHS+=$'\n'
+          fi
+          BROWSER_EVIDENCE_PATHS+="$record_value"
+        fi
+      done <<< "$parsed_browser_records"
     fi
-  fi
-  if [[ -d "$OUTPUT_DIR/browser" && ! -L "$OUTPUT_DIR/browser" ]]; then
-    BROWSER_EVIDENCE_PATHS="$(find "$OUTPUT_DIR/browser" -type f -print 2>/dev/null | sort || true)"
   fi
   echo "eod_auto_repair|browser_status|$BROWSER_STATUS" >>"$DETAIL_LOG"
   if [[ -n "$BROWSER_EVIDENCE_PATHS" ]]; then

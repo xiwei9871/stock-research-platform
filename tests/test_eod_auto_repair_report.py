@@ -128,6 +128,112 @@ def test_report_escapes_html_and_renders_canonical_browser_evidence(tmp_path):
     assert "rerun passed" in markdown
 
 
+def test_report_percent_encodes_links_and_blocks_markdown_injection(tmp_path):
+    report = _report_module()
+    safe = tmp_path / "browser" / "proof (x) [ok] <script>.zip"
+    unsafe_scheme = tmp_path / "browser" / "javascript:alert.zip"
+    unsafe_control = tmp_path / "browser" / "line\nbreak.zip"
+    safe.parent.mkdir(parents=True)
+    for path in (safe, unsafe_scheme, unsafe_control):
+        path.write_bytes(b"evidence")
+    summary = _summary(
+        message='<script>[click](javascript:alert(1))\nnext',
+        artifact_paths=[str(safe), str(unsafe_scheme), str(unsafe_control)],
+    )
+
+    html = report.render_html_report(summary, tmp_path)
+    markdown = report.render_markdown_report(summary, tmp_path)
+
+    encoded = "./browser/proof%20%28x%29%20%5Bok%5D%20%3Cscript%3E.zip"
+    assert f'href="{encoded}"' in html
+    assert f"[{encoded}]({encoded})" in markdown
+    assert "javascript:alert.zip" not in html
+    assert "line%0Abreak.zip" not in html
+    assert "<script>" not in markdown
+    assert "[click](javascript:alert(1))" not in markdown
+    assert "&lt;script&gt;" in markdown
+
+
+def test_report_uses_final_browser_check_status_and_separate_action_result(tmp_path):
+    report = _report_module()
+    action = RepairActionResult(
+        "dashboard_browser_acceptance",
+        RepairStatus.SUCCESS,
+        "repair passed",
+        metrics={"run_id": "strategy-action-run"},
+    )
+    summary = RepairRunSummary(
+        trade_date="2026-07-20",
+        mode="loop",
+        final_status=RepairStatus.FAILED,
+        actions=[action],
+        checks_after=[
+            RepairCheckResult(
+                "dashboard_browser_acceptance",
+                RepairStatus.FAILED,
+                "final validation failed",
+                blocker=True,
+            )
+        ],
+        remaining_blockers=["dashboard_browser_acceptance"],
+        run_id="eod-status-test",
+    )
+
+    markdown = report.render_markdown_report(summary, tmp_path)
+    html = report.render_html_report(summary, tmp_path)
+
+    assert "- Status: failed" in markdown
+    assert "- Repair action result: success" in markdown
+    assert "Status: failed" in html
+    assert "Repair action result: success" in html
+
+
+def test_report_uses_check_metrics_when_browser_action_is_absent(tmp_path):
+    report = _report_module()
+    publications = [_publication(strategy_id) for strategy_id in ("lhb_shortline", "mid_trend", "tech_bottleneck")]
+    summary = RepairRunSummary(
+        trade_date="2026-07-20",
+        mode="check",
+        final_status=RepairStatus.SUCCESS,
+        checks_after=[
+            RepairCheckResult(
+                "dashboard_browser_acceptance",
+                RepairStatus.SUCCESS,
+                "ready",
+                metrics={
+                    "run_id": "strategy-check-run",
+                    "candidate_snapshot": {"publications": publications},
+                    "artifact_paths": [],
+                },
+            )
+        ],
+        run_id="eod-check-only",
+    )
+
+    markdown = report.render_markdown_report(summary, tmp_path)
+
+    assert "- Status: success" in markdown
+    assert "- Repair action result: not-run" in markdown
+    assert "Strategy cohort run ID: strategy-check-run" in markdown
+    assert all(publication["publishId"] in markdown for publication in publications)
+
+
+def test_initial_status_uses_all_checks_before(tmp_path):
+    summary = RepairRunSummary(
+        trade_date="2026-07-20",
+        mode="check",
+        final_status=RepairStatus.FAILED,
+        checks_before=[
+            RepairCheckResult("first", RepairStatus.SUCCESS, "ready"),
+            RepairCheckResult("second", RepairStatus.FAILED, "blocked", blocker=True),
+        ],
+    )
+
+    markdown = _report_module().render_markdown_report(summary, tmp_path)
+
+    assert "Initial status: blocked" in markdown
+
+
 def test_report_rendering_is_deterministic_for_same_summary(tmp_path):
     report = _report_module()
     summary = _summary()
@@ -177,6 +283,18 @@ def test_html_failure_preserves_json_markdown_and_returns_failed_summary(tmp_pat
     assert os.stat(tmp_path / "run_report.md").st_mode & 0o777 == 0o600
 
 
+def test_report_output_directory_is_private(tmp_path):
+    report = _report_module()
+    output = tmp_path / "2026-07-20"
+    output.mkdir(mode=0o755)
+
+    report.write_summary_files(_summary(), output)
+
+    assert output.stat().st_mode & 0o777 == 0o700
+    for name in ("run_summary.json", "run_report.md", "run_report.html"):
+        assert (output / name).stat().st_mode & 0o777 == 0o600
+
+
 def test_writer_rejects_symlink_output_directory(tmp_path):
     report = _report_module()
     outside = tmp_path / "outside"
@@ -187,6 +305,11 @@ def test_writer_rejects_symlink_output_directory(tmp_path):
     with pytest.raises(ValueError, match="symlink"):
         report.write_summary_files(_summary(), linked_output)
 
+    assert list(outside.iterdir()) == []
+    linked_parent = tmp_path / "linked-parent"
+    linked_parent.symlink_to(outside, target_is_directory=True)
+    with pytest.raises(ValueError, match="symlink"):
+        report.write_summary_files(_summary(), linked_parent / "2026-07-20")
     assert list(outside.iterdir()) == []
 
 
@@ -286,6 +409,29 @@ def test_retention_dry_run_reports_candidate_without_deleting(tmp_path):
 
     assert removed == [target]
     assert target.exists()
+
+
+def test_retention_failure_rewrites_reports_as_blocking_infrastructure_failure(monkeypatch, tmp_path):
+    report = _report_module()
+    root = tmp_path / "daily"
+    old = root / "2026-04-20"
+    current = root / "2026-07-20"
+    _write_retention_summary(old, status="success")
+
+    def fail_delete(_path):
+        raise PermissionError("retention denied")
+
+    monkeypatch.setattr(report.shutil, "rmtree", fail_delete)
+
+    result = report.write_summary_files(_summary(), current)
+
+    assert result.final_status == RepairStatus.FAILED
+    assert any(issue.startswith("retention_cleanup_failed:PermissionError") for issue in result.infrastructure_issues)
+    assert old.exists()
+    payload = json.loads((current / "run_summary.json").read_text())
+    assert payload["final_status"] == "failed"
+    assert (current / "run_report.md").exists()
+    assert 'data-status="blocked"' in (current / "run_report.html").read_text()
 
 
 def test_retention_normalizes_semantic_run_id_keys_without_matching_ordinary_fields(tmp_path):

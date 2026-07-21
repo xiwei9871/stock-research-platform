@@ -9,6 +9,20 @@ from stock_research.eod_auto_repair_models import (
 from stock_research.eod_auto_repair import _write_summary_files
 
 
+def test_repair_summary_preserves_legacy_positional_field_order():
+    checks = [RepairCheckResult("ops_health", RepairStatus.SUCCESS, "ready")]
+
+    summary = RepairRunSummary(
+        "2026-07-20",
+        "check",
+        RepairStatus.SUCCESS,
+        checks,
+    )
+
+    assert summary.checks_before == checks
+    assert summary.run_id == ""
+
+
 def test_repair_summary_serializes_nested_results():
     summary = RepairRunSummary(
         trade_date="2026-06-29",

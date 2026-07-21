@@ -1,5 +1,6 @@
 import json
 import hashlib
+import os
 import time
 from datetime import date
 from types import SimpleNamespace
@@ -696,6 +697,94 @@ def test_cli_returns_failure_when_report_generation_fails(monkeypatch, tmp_path)
     )
 
     assert rc == 2
+
+
+def test_cli_returns_failure_when_retention_cleanup_fails(monkeypatch, tmp_path):
+    original_run = run_eod_auto_repair
+
+    def fail_retention(*_args, **_kwargs):
+        raise PermissionError("retention denied")
+
+    def run_with_controlled_checks(**kwargs):
+        return original_run(
+            **kwargs,
+            check_plan_builder=lambda _trade_date: [
+                SimpleNamespace(
+                    name="ops_health",
+                    run=lambda: RepairCheckResult("ops_health", RepairStatus.SUCCESS, "ready"),
+                )
+            ],
+        )
+
+    monkeypatch.setattr(eod_auto_repair_report, "prune_report_retention", fail_retention)
+    monkeypatch.setattr(eod_auto_repair, "build_default_action_registry", lambda **_kwargs: {})
+    monkeypatch.setattr(eod_auto_repair, "run_eod_auto_repair", run_with_controlled_checks)
+
+    rc = eod_auto_repair._main(
+        [
+            "--trade-date",
+            "2026-07-01",
+            "--output-dir",
+            str(tmp_path),
+            "--mode",
+            "check",
+        ]
+    )
+
+    assert rc == 2
+    assert json.loads((tmp_path / "run_summary.json").read_text())["final_status"] == "failed"
+
+
+def test_cli_report_copies_are_private_and_reject_symlinks(monkeypatch, tmp_path):
+    def fake_registry(**_kwargs):
+        return {}
+
+    def fake_run(**kwargs):
+        output = kwargs["output_dir"]
+        os.makedirs(output, exist_ok=True)
+        with open(os.path.join(output, "run_report.md"), "w", encoding="utf-8") as handle:
+            handle.write("report\n")
+        return RepairRunSummary(
+            trade_date=kwargs["trade_date"],
+            mode=kwargs["mode"],
+            final_status=RepairStatus.SUCCESS,
+            run_id="eod-copy-test",
+        )
+
+    monkeypatch.setattr(eod_auto_repair, "build_default_action_registry", fake_registry)
+    monkeypatch.setattr(eod_auto_repair, "run_eod_auto_repair", fake_run)
+    report_json = tmp_path / "copies" / "summary.json"
+    report_md = tmp_path / "copies" / "report.md"
+
+    rc = eod_auto_repair._main(
+        [
+            "--trade-date",
+            "2026-07-01",
+            "--output-dir",
+            str(tmp_path / "out"),
+            "--report-json",
+            str(report_json),
+            "--report-md",
+            str(report_md),
+        ]
+    )
+
+    assert rc == 0
+    assert report_json.stat().st_mode & 0o777 == 0o600
+    assert report_md.stat().st_mode & 0o777 == 0o600
+    symlink = tmp_path / "summary-link.json"
+    symlink.symlink_to(report_json)
+    with pytest.raises(ValueError, match="symlink"):
+        eod_auto_repair._main(
+            [
+                "--trade-date",
+                "2026-07-01",
+                "--output-dir",
+                str(tmp_path / "out-2"),
+                "--report-json",
+                str(symlink),
+            ]
+        )
 
 
 def test_run_eod_auto_repair_loop_runs_factor_dependents_before_stopping(tmp_path):
