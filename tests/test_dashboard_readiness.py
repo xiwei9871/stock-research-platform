@@ -175,6 +175,20 @@ def test_display_gate_rejects_invalid_rollout_boundary_without_manifest_rows(mon
 
 
 @pytest.mark.parametrize(
+    ("boundary", "expected"),
+    [("", False), ("2026-07-21", True)],
+)
+def test_browser_acceptance_boundary_enabled_uses_strict_config(monkeypatch, boundary, expected):
+    monkeypatch.setattr(
+        display_date_gate,
+        "SETTINGS",
+        SimpleNamespace(browser_acceptance_required_from=boundary),
+    )
+
+    assert display_date_gate.browser_acceptance_boundary_enabled() is expected
+
+
+@pytest.mark.parametrize(
     "trade_date",
     ("2026-07-21-WRONG", "20260721", datetime(2026, 7, 21, 0, 0)),
 )
@@ -263,6 +277,141 @@ def test_platform_readiness_config_failure_precedes_manifest_loader_fallback(mon
     with pytest.raises(ValueError, match="STOCK_RESEARCH_BROWSER_ACCEPTANCE_REQUIRED_FROM"):
         readiness.build_platform_readiness()
     assert calls == 0
+
+
+@pytest.mark.parametrize(
+    ("browser_status", "expected_display"),
+    [(None, "2026-07-20"), ("failed", "2026-07-20"), ("success", "2026-07-21"), ("degraded", "2026-07-21")],
+)
+def test_platform_readiness_boundary_uses_prior_until_candidate_browser_ready(
+    monkeypatch,
+    browser_status,
+    expected_display,
+):
+    monkeypatch.setattr(
+        display_date_gate,
+        "SETTINGS",
+        SimpleNamespace(browser_acceptance_required_from="2026-07-21"),
+    )
+    monkeypatch.setattr(display_date_gate, "load_strategy_contracts", lambda profile="balanced": {})
+    modules = _display_gate_modules("2026-07-20", run_id="prior")
+    modules.extend(
+        _display_gate_modules("2026-07-21", run_id="candidate", browser_status=browser_status)
+    )
+    modules = [
+        {**module, "tier": "tier1", "warnings": [], "error_message": ""}
+        for module in modules
+    ]
+    monkeypatch.setattr(
+        readiness,
+        "load_platform_summary",
+        lambda score_version, top_n: {
+            "latest_market_date": "2026-07-21",
+            "topn_preview": [{"asset_id": "CN:SH:600519"}],
+        },
+    )
+    monkeypatch.setattr(readiness, "load_latest_data_run_manifest", lambda: modules)
+    monkeypatch.setattr(
+        readiness,
+        "select_display_date",
+        lambda manifest_modules, latest_market_date: select_display_date(
+            manifest_modules,
+            latest_market_date=latest_market_date,
+            now=datetime(2026, 7, 21, 21, 0, tzinfo=display_date_gate.LOCAL_ZONE),
+        ),
+    )
+    monkeypatch.setattr(readiness, "_has_public_news", lambda: True)
+    monkeypatch.setattr(readiness, "_has_research_reports", lambda: True)
+    monkeypatch.setattr(readiness, "_has_generated_reports", lambda latest_market_date: True)
+    _patch_market_monitor_ready(monkeypatch)
+
+    payload = readiness.build_platform_readiness()
+
+    assert payload["display_trade_date"] == expected_display
+    assert payload["candidate_trade_date"] == "2026-07-21"
+
+
+def test_platform_readiness_boundary_blocks_empty_manifest_without_promoting_latest(monkeypatch):
+    monkeypatch.setattr(
+        display_date_gate,
+        "SETTINGS",
+        SimpleNamespace(browser_acceptance_required_from="2026-07-21"),
+    )
+    monkeypatch.setattr(
+        readiness,
+        "load_platform_summary",
+        lambda score_version, top_n: {
+            "latest_market_date": "2026-07-21",
+            "topn_preview": [{"asset_id": "CN:SH:600519"}],
+        },
+    )
+    monkeypatch.setattr(readiness, "load_latest_data_run_manifest", lambda: [])
+
+    payload = readiness.build_platform_readiness()
+
+    assert payload["status"] == "BLOCKED"
+    assert payload["source"] != "lightweight_probe"
+    assert payload["display_trade_date"] == ""
+    assert payload["candidate_trade_date"] == "2026-07-21"
+    assert "data_run_manifest" in payload["missing_data"]
+
+
+def test_platform_readiness_boundary_blocks_manifest_loader_error_without_promoting_latest(monkeypatch):
+    monkeypatch.setattr(
+        display_date_gate,
+        "SETTINGS",
+        SimpleNamespace(browser_acceptance_required_from="2026-07-21"),
+    )
+    monkeypatch.setattr(
+        readiness,
+        "load_platform_summary",
+        lambda score_version, top_n: {
+            "latest_market_date": "2026-07-21",
+            "topn_preview": [{"asset_id": "CN:SH:600519"}],
+        },
+    )
+
+    def fail_manifest_loader():
+        raise RuntimeError("database unavailable secret=do-not-leak")
+
+    monkeypatch.setattr(readiness, "load_latest_data_run_manifest", fail_manifest_loader)
+
+    payload = readiness.build_platform_readiness()
+
+    assert payload["status"] == "BLOCKED"
+    assert payload["source"] != "lightweight_probe"
+    assert payload["display_trade_date"] == ""
+    assert payload["candidate_trade_date"] == "2026-07-21"
+    assert payload["errors"] == ["Data run manifest unavailable: RuntimeError"]
+    assert "do-not-leak" not in str(payload)
+
+
+def test_platform_readiness_boundary_disabled_keeps_lightweight_latest_fallback(monkeypatch):
+    monkeypatch.setattr(
+        display_date_gate,
+        "SETTINGS",
+        SimpleNamespace(browser_acceptance_required_from=""),
+    )
+    monkeypatch.setattr(
+        readiness,
+        "load_platform_summary",
+        lambda score_version, top_n: {
+            "latest_market_date": "2026-07-21",
+            "topn_preview": [{"asset_id": "CN:SH:600519"}],
+        },
+    )
+    monkeypatch.setattr(readiness, "load_latest_data_run_manifest", lambda: [])
+    monkeypatch.setattr(readiness, "_review_queue_check", lambda *_args: readiness._check("review_queue", "ready", "ready"))
+    monkeypatch.setattr(readiness, "_news_check", lambda *_args: readiness._check("news", "ready", "ready"))
+    monkeypatch.setattr(readiness, "_research_reports_check", lambda *_args: readiness._check("research_reports", "ready", "ready"))
+    monkeypatch.setattr(readiness, "_generated_reports_check", lambda *_args: readiness._check("generated_reports", "ready", "ready"))
+    _patch_market_monitor_ready(monkeypatch)
+
+    payload = readiness.build_platform_readiness()
+
+    assert payload["source"] == "lightweight_probe"
+    assert payload["latest_market_date"] == "2026-07-21"
+    assert "display_trade_date" not in payload
 
 
 def test_aggregate_readiness_status_prioritizes_missing_data():
@@ -1410,3 +1559,64 @@ def test_platform_display_date_route_rejects_invalid_rollout_before_fallback(mon
 
     with pytest.raises(ValueError, match="STOCK_RESEARCH_BROWSER_ACCEPTANCE_REQUIRED_FROM"):
         client.get("/api/platform/display-date")
+
+
+@pytest.mark.parametrize(
+    ("boundary", "readiness_payload", "expected_display"),
+    [
+        (
+            "2026-07-21",
+            {
+                "status": "BLOCKED",
+                "latest_trade_date": "2026-07-21",
+                "latest_market_date": "2026-07-21",
+                "warnings": ["manifest missing"],
+            },
+            "",
+        ),
+        (
+            "2026-07-21",
+            {
+                "status": "BLOCKED",
+                "display_trade_date": "2026-07-20",
+                "candidate_trade_date": "2026-07-21",
+                "latest_trade_date": "2026-07-21",
+                "latest_market_date": "2026-07-21",
+                "warnings": [],
+            },
+            "2026-07-20",
+        ),
+        (
+            "",
+            {
+                "status": "OK",
+                "latest_trade_date": "2026-07-21",
+                "latest_market_date": "2026-07-21",
+                "warnings": [],
+            },
+            "2026-07-21",
+        ),
+    ],
+)
+def test_platform_display_date_route_respects_boundary_fallback_policy(
+    monkeypatch,
+    boundary,
+    readiness_payload,
+    expected_display,
+):
+    monkeypatch.setattr(
+        display_date_gate,
+        "SETTINGS",
+        SimpleNamespace(browser_acceptance_required_from=boundary),
+    )
+    monkeypatch.setattr(
+        dashboard_app,
+        "build_platform_readiness",
+        lambda score_version="manual_v1": readiness_payload,
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/platform/display-date")
+
+    assert response.status_code == 200
+    assert response.json()["display_trade_date"] == expected_display

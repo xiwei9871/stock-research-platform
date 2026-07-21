@@ -78,6 +78,7 @@ from stock_research.dashboard.observability import install_request_id_middleware
 from stock_research.dashboard.outcome_analytics import load_outcome_analytics_summary
 from stock_research.dashboard.outcomes import load_asset_outcome_history
 from stock_research.dashboard.display_date_gate import (
+    browser_acceptance_boundary_enabled,
     validate_browser_acceptance_rollout_config,
 )
 from stock_research.dashboard.ops_snapshot import (
@@ -534,19 +535,21 @@ def create_app() -> FastAPI:
 
     @app.get("/api/platform/display-date")
     def platform_display_date(score_version: str = "manual_v1"):
-        validate_browser_acceptance_rollout_config()
+        boundary_enabled = browser_acceptance_boundary_enabled()
 
         def build_payload():
             readiness = build_platform_readiness(score_version=score_version)
             display_gate = readiness.get("display_gate") if isinstance(readiness.get("display_gate"), dict) else {}
             if "display_trade_date" in readiness:
                 display_trade_date = str(readiness.get("display_trade_date") or "")
-            else:
+            elif not boundary_enabled:
                 display_trade_date = str(
                     display_gate.get("display_trade_date")
                     or readiness.get("latest_trade_date")
                     or ""
                 )
+            else:
+                display_trade_date = ""
             candidate_trade_date = str(
                 readiness.get("candidate_trade_date")
                 or display_gate.get("candidate_trade_date")

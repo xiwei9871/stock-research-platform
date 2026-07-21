@@ -93,6 +93,11 @@ def test_build_market_monitor_eod_uses_latest_complete_date(monkeypatch):
 def test_build_market_monitor_eod_defaults_to_latest_market_date_when_display_gate_lags(monkeypatch):
     requested_top_scores: list[tuple[str, str, int]] = []
     monkeypatch.setattr(
+        display_date_gate,
+        "SETTINGS",
+        SimpleNamespace(browser_acceptance_required_from="2026-06-18"),
+    )
+    monkeypatch.setattr(
         market_monitor,
         "load_platform_summary",
         lambda score_version="manual_v1", top_n=5: {
@@ -145,9 +150,28 @@ def test_build_market_monitor_eod_defaults_to_latest_market_date_when_display_ga
 
     payload = market_monitor.build_market_monitor_eod()
 
-    assert payload["trade_date"] == "2026-06-18"
-    assert requested_top_scores == []
-    assert payload["strategy_signal_summary"]["topn_preview"][0]["asset_id"] == "LATEST.SZ"
+    assert payload["trade_date"] == "2026-06-17"
+    assert requested_top_scores == [("2026-06-17", "manual_v1", 5)]
+    assert payload["strategy_signal_summary"]["topn_preview"][0]["asset_id"] == "DISPLAY.SZ"
+
+
+def test_market_monitor_keeps_latest_market_date_when_boundary_disabled(monkeypatch):
+    monkeypatch.setattr(
+        display_date_gate,
+        "SETTINGS",
+        SimpleNamespace(browser_acceptance_required_from=""),
+    )
+    monkeypatch.setattr(
+        market_monitor,
+        "select_display_date",
+        lambda *_args, **_kwargs: pytest.fail("disabled boundary must keep legacy latest fallback"),
+    )
+
+    selected = market_monitor._default_display_trade_date(
+        {"latest_market_date": "2026-07-21", "latest_score_date": "2026-07-21"}
+    )
+
+    assert selected == "2026-07-21"
 
 
 def test_build_market_monitor_eod_maps_market_emotion_row(monkeypatch):

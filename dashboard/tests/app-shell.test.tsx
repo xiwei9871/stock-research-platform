@@ -2190,7 +2190,7 @@ describe('dashboard app shell', () => {
     });
   });
 
-  it('uses the latest market date rather than the gated display date for stock workspace defaults', async () => {
+  it('uses the gated display date for stock workspace defaults', async () => {
     apiMocks.fetchPlatformReadiness.mockResolvedValueOnce({
       mode: 'eod_local',
       status: 'BLOCKED',
@@ -2224,7 +2224,37 @@ describe('dashboard app shell', () => {
     await waitFor(() => expect(apiMocks.fetchPlatformReadiness).toHaveBeenCalled());
     fireEvent.click(screen.getByRole('button', { name: 'Open Stock Workspace workspace' }));
 
-    await waitFor(() => expect(stockRenders.at(-1)?.defaultTradeDate).toBe('2026-07-02'));
+    await waitFor(() => expect(stockRenders.at(-1)?.defaultTradeDate).toBe('2026-06-30'));
+  });
+
+  it('does not invent a stock default date when the enabled gate has no display date', async () => {
+    apiMocks.fetchPlatformReadiness.mockResolvedValueOnce({
+      mode: 'eod_local',
+      status: 'BLOCKED',
+      as_of: '2026-07-21T16:00:00+08:00',
+      display_trade_date: '',
+      latest_trade_date: '2026-07-21',
+      latest_market_date: '2026-07-21',
+      checks: [],
+      warnings: ['Data run manifest unavailable: no rows']
+    });
+    apiMocks.fetchPlatformSummary.mockResolvedValueOnce({
+      latest_market_date: '2026-07-21',
+      latest_score_date: '2026-07-21',
+      latest_factor_date: '2026-07-21',
+      market_asset_count: 5207,
+      score_asset_count: 5207,
+      factor_count: 43,
+      score_versions: ['manual_v1'],
+      topn_preview: []
+    });
+
+    const { stockRenders } = await renderMockedAppShellForHandoff();
+
+    await waitFor(() => expect(apiMocks.fetchPlatformReadiness).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button', { name: 'Open Stock Workspace workspace' }));
+
+    await waitFor(() => expect(stockRenders.at(-1)?.defaultTradeDate).toBe(''));
   });
 
   it('resets stale stock source context when opening stock from plain navigation', async () => {
@@ -2389,7 +2419,7 @@ describe('dashboard app shell', () => {
       initialQuery: '贵州茅台深度报告',
       initialEventKey: 'r1:600519.SH',
       initialReportId: 'r1',
-      initialTradeDate: '2026-06-11'
+      initialTradeDate: '2026-06-12'
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Open Market Monitor workspace' }));
@@ -2479,7 +2509,7 @@ describe('dashboard app shell', () => {
         query: '贵州茅台深度报告',
         eventKey: 'r1:600519.SH',
         reportId: 'r1',
-        tradeDate: '2026-06-11'
+        tradeDate: '2026-06-12'
       },
       mountId: 1
     });

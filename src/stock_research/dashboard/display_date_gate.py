@@ -37,6 +37,10 @@ def validate_browser_acceptance_rollout_config() -> date | None:
         ) from exc
 
 
+def browser_acceptance_boundary_enabled() -> bool:
+    return validate_browser_acceptance_rollout_config() is not None
+
+
 def required_review_modules(trade_date: str) -> set[str]:
     required = set(BASE_REQUIRED_REVIEW_MODULES)
     parsed_trade_date = _strict_trade_date(trade_date)

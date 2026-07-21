@@ -27,7 +27,7 @@ Task 7 status:
 | Step 2 historical 175.29 simulation | complete | Injected temporary fixture failed with `api_ui_mismatch` and `return_unit`; no cache clear; manifest failed; prior ready date remained; EOD exit 2. |
 | Step 3 successful controlled candidate | **not complete** | Blocked by the authoritative audit roots below; no Real/EOD live browser run was started. |
 | Step 4 repairable stale-cache path | complete | The default action integration fixture proves one cache clear, one identical-command rerun, final success, and two attempts; it also proves nonrepairable and missing-URL fail-safe paths. |
-| Step 5 enable rollout boundary | **not complete** | Boundary intentionally remains disabled. |
+| Step 5 enable rollout boundary | **not complete** | `apply_data_run_manifest_schema()` degraded-CHECK migration has not been run/verified for rollout, and both the action flag and boundary intentionally remain disabled. |
 | Step 6 observe first live run | **not complete** | No live rollout occurred, so duration/display/process observations cannot be claimed. |
 | Step 7 evidence and rollback | complete | Recorded here and in the two operations runbooks. |
 | Step 8 documentation commit | complete | The implementation, rollback commands, and verification record are updated together; the final commit SHA is reported with task handoff. |

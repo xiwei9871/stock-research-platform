@@ -226,11 +226,18 @@ The JSON, Markdown, and HTML files must agree on the EOD run ID, trade date, thr
 
 Before enabling the boundary:
 
-1. Run the focused backend, full Dashboard unit suite, production build, and Mock P0 commands.
-2. Prove nonrepairable return-unit failures do not clear cache and keep the prior ready date.
-3. Prove a repairable `stale_cache` failure clears cache exactly once, reruns the identical EOD command exactly once, and records two attempts.
-4. Run an approved candidate and live-observation window only after all authoritative audit blockers have been remediated.
-5. Record the boundary value in both EOD and Dashboard environments and confirm they match before the next scheduled run.
+1. Run `apply_data_run_manifest_schema()` against the deployment database and verify it completes the `dashboard_browser_acceptance` degraded-status CHECK migration. If this migration has not completed successfully, rollout remains `BLOCKED`.
+2. Run the focused backend, full Dashboard unit suite, production build, and Mock P0 commands.
+3. Prove nonrepairable return-unit failures do not clear cache and keep the prior ready date.
+4. Prove a repairable `stale_cache` failure clears cache exactly once, reruns the identical EOD command exactly once, and records two attempts.
+5. Run an approved candidate and live-observation window only after all authoritative audit blockers have been remediated.
+6. In the same rollout change, set `STOCK_RESEARCH_EOD_BROWSER_ACCEPTANCE_ENABLED=true` for EOD execution and set the matching `STOCK_RESEARCH_BROWSER_ACCEPTANCE_REQUIRED_FROM` date in both EOD and Dashboard environments; confirm the boundary values match before the next scheduled run.
+
+Schema migration command:
+
+```bash
+PYTHONPATH=src rtk .venv/bin/python -c 'from stock_research.data_run_manifest import apply_data_run_manifest_schema; apply_data_run_manifest_schema()'
+```
 
 When enabling the execution switch, configure `DASHBOARD_CACHE_CLEAR_URL` with the exact path `/api/dashboard/cache/clear` on a literal IPv4/IPv6 loopback address. When credentials are present, `DASHBOARD_AUTH_LOGIN_URL` must match its scheme, address, and effective port and use exactly `/api/auth/login`. DNS names (including `localhost`), remote IPs, userinfo, query strings, fragments, invalid ports, cross-origin login, redirects, and environment proxies are rejected. The default action uses the Dashboard login cookie flow and/or `DASHBOARD_WRITE_TOKEN`; it never logs credential values. Missing or unsafe URLs, network errors, non-2xx responses, and timeouts fail the repair as infrastructure.
 

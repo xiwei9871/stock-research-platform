@@ -13,8 +13,8 @@ from stock_research.data_run_manifest import (
 
 load_latest_data_run_manifest = load_recent_data_run_manifest
 from stock_research.dashboard.display_date_gate import (
+    browser_acceptance_boundary_enabled,
     select_display_date,
-    validate_browser_acceptance_rollout_config,
 )
 from stock_research.dashboard.platform import load_platform_summary
 from stock_research.dashboard.reports import DEFAULT_REPORTS_DIR
@@ -25,6 +25,7 @@ REPORT_SUFFIXES = {".html", ".md", ".json", ".csv"}
 
 
 CHECK_LABELS = {
+    "data_run_manifest": "Data Run Manifest",
     "platform_summary": "Platform Summary",
     "review_queue": "Review Queue",
     "market_monitor": "Market Monitor",
@@ -81,7 +82,7 @@ def aggregate_readiness_status(checks: list[dict[str, Any]]) -> str:
 
 
 def build_platform_readiness(score_version: str = "manual_v1") -> dict[str, Any]:
-    validate_browser_acceptance_rollout_config()
+    boundary_enabled = browser_acceptance_boundary_enabled()
     warnings: list[str] = []
 
     try:
@@ -93,13 +94,24 @@ def build_platform_readiness(score_version: str = "manual_v1") -> dict[str, Any]
     latest_market_date = str(platform_summary.get("latest_market_date") or "")
     topn_preview = list(platform_summary.get("topn_preview") or [])
 
-    manifest_modules = _load_manifest_modules()
+    manifest_error = ""
+    try:
+        manifest_modules = _load_manifest_modules()
+    except Exception as exc:
+        manifest_modules = []
+        manifest_error = type(exc).__name__
     if manifest_modules:
         return _build_manifest_readiness(
             manifest_modules=manifest_modules,
             latest_market_date=latest_market_date,
             topn_preview=topn_preview,
             warnings=warnings,
+        )
+    if boundary_enabled:
+        return _build_boundary_manifest_unavailable_readiness(
+            latest_market_date=latest_market_date,
+            warnings=warnings,
+            manifest_error=manifest_error,
         )
 
     checks: list[dict[str, Any]] = []
@@ -177,10 +189,67 @@ def build_platform_readiness(score_version: str = "manual_v1") -> dict[str, Any]
 
 
 def _load_manifest_modules() -> list[dict[str, Any]]:
-    try:
-        return load_latest_data_run_manifest()
-    except Exception:
-        return []
+    return load_latest_data_run_manifest()
+
+
+def _build_boundary_manifest_unavailable_readiness(
+    *,
+    latest_market_date: str,
+    warnings: list[str],
+    manifest_error: str,
+) -> dict[str, Any]:
+    candidate_trade_date = latest_market_date
+    display_gate = select_display_date([], latest_market_date=candidate_trade_date)
+    reason = "manifest_error" if manifest_error else "manifest_missing"
+    blocking_reason = f"data_run_manifest:{reason}"
+    display_gate = {
+        **display_gate,
+        "display_trade_date": "",
+        "candidate_status": reason,
+        "display_status": "missing",
+        "blocking_reasons": [blocking_reason],
+    }
+    detail = (
+        f"Data run manifest unavailable: {manifest_error}"
+        if manifest_error
+        else "Data run manifest unavailable: no rows"
+    )
+    checks = [_check("data_run_manifest", "missing_data", detail)]
+    missing_data = ["data_run_manifest", "display_trade_date"]
+    errors = [detail] if manifest_error else []
+    combined_warnings = _dedupe([*warnings, detail])
+    return {
+        "mode": "eod_local",
+        "status": "BLOCKED",
+        "policy": _policy_from_manifest_status(
+            status="BLOCKED",
+            missing_data=missing_data,
+            partial_data=[],
+            warnings=combined_warnings,
+        ),
+        "as_of": datetime.now(ZoneInfo("Asia/Shanghai")).isoformat(timespec="seconds"),
+        "run_id": "",
+        "latest_trade_date": latest_market_date,
+        "latest_market_date": latest_market_date,
+        "display_trade_date": "",
+        "candidate_trade_date": candidate_trade_date,
+        "display_gate": display_gate,
+        "source": "data_run_manifest_gate",
+        "summary_path": "",
+        "tiers": _tiers_from_status("BLOCKED"),
+        "modules": [],
+        "checks": checks,
+        "health_groups": _build_health_groups_from_checks(
+            checks=checks,
+            latest_market_date=latest_market_date,
+        ),
+        "warnings": combined_warnings,
+        "errors": errors,
+        "missing_data": missing_data,
+        "partial_data": [],
+        "next_actions": _next_actions("BLOCKED", missing_data, []),
+        "dashboard_url": "http://127.0.0.1:5174",
+    }
 
 
 def _build_manifest_readiness(

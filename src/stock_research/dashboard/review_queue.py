@@ -13,6 +13,7 @@ from stock_research.config import SETTINGS
 from stock_research.data_run_manifest import load_latest_data_run_manifest, load_recent_data_run_manifest
 from stock_research.dashboard.display_date_gate import (
     BrowserAcceptanceRolloutConfigError,
+    browser_acceptance_boundary_enabled,
     select_display_date,
     validate_browser_acceptance_rollout_config,
 )
@@ -171,9 +172,9 @@ def build_review_queue(
 
 
 def _default_display_trade_date(summary: dict[str, Any]) -> str:
-    validate_browser_acceptance_rollout_config()
+    boundary_enabled = browser_acceptance_boundary_enabled()
     latest_market_date = str(summary.get("latest_market_date") or "")
-    if latest_market_date:
+    if latest_market_date and not boundary_enabled:
         return latest_market_date
     try:
         gate = select_display_date(
@@ -184,11 +185,10 @@ def _default_display_trade_date(summary: dict[str, Any]) -> str:
         raise
     except Exception:
         gate = {}
-    return str(
-        gate.get("display_trade_date")
-        or summary.get("latest_score_date")
-        or ""
-    )
+    display_trade_date = str(gate.get("display_trade_date") or "")
+    if boundary_enabled:
+        return display_trade_date
+    return str(display_trade_date or summary.get("latest_score_date") or "")
 
 
 def _should_load_scores_for_default_date(summary: dict[str, Any], selected_trade_date: str) -> bool:

@@ -38,6 +38,7 @@ import {
   type PlatformLocation,
   type WorkspaceMode
 } from '../navigation/platformRoutes';
+import { resolvePlatformDisplayDate } from '../utils/platformDisplayDate';
 
 type WorkspaceHandoff = {
   query: string;
@@ -106,10 +107,6 @@ const ADMIN_NAV_ITEMS: Array<{ mode: WorkspaceMode; label: string; ariaLabel: st
 
 const FALLBACK_DISPLAY_TRADE_DATE = '2026-06-18';
 const TECH_BOTTLENECK_REVIEW_UNIVERSE_SOURCE = 'tech_bottleneck_review_universe_frontend_dataset_v1';
-
-function firstDate(...dates: Array<string | null | undefined>) {
-  return dates.map((date) => date?.trim()).find(Boolean) ?? '';
-}
 
 function stockCodeFromTechBottleneckPath(pathname: string) {
   if (!pathname.startsWith(LEGACY_TECH_BOTTLENECK_STOCK_PREFIX)) return '';
@@ -350,14 +347,13 @@ export function AppShell({ currentUser: _currentUser, onLogout, logoutPending = 
       }
       const readiness = readinessResult.status === 'fulfilled' ? readinessResult.value : null;
       const summary = summaryResult.status === 'fulfilled' ? summaryResult.value : null;
-      const latestAvailableDate = firstDate(readiness?.latest_market_date, summary?.latest_market_date, readiness?.latest_trade_date);
-      const readinessDate = firstDate(latestAvailableDate, readiness?.display_trade_date);
-      const summaryDate = summaryResult.status === 'fulfilled' ? summaryResult.value.latest_market_date : undefined;
-      setDisplayTradeDate(readinessDate || summaryDate || FALLBACK_DISPLAY_TRADE_DATE);
-      setStockDefaultTradeDate(
-        firstDate(readiness?.latest_market_date, readiness?.latest_trade_date, summary?.latest_market_date, readinessDate) ||
-          FALLBACK_DISPLAY_TRADE_DATE
+      const resolvedDisplayDate = resolvePlatformDisplayDate(
+        readiness,
+        summary?.latest_market_date,
+        FALLBACK_DISPLAY_TRADE_DATE
       );
+      setDisplayTradeDate(resolvedDisplayDate);
+      setStockDefaultTradeDate(resolvedDisplayDate);
     });
     return () => {
       cancelled = true;
@@ -659,7 +655,7 @@ export function AppShell({ currentUser: _currentUser, onLogout, logoutPending = 
           {workspaceMode === 'market' ? (
             <MarketMonitorWorkspace
               key={`market:${marketHandoff.version}`}
-              initialTradeDate={marketHandoff.tradeDate}
+              initialTradeDate={marketHandoff.tradeDate ?? displayTradeDate}
               initialMonitorTab={marketHandoff.monitorTab}
               initialAssetId={marketHandoff.assetId}
               emotionPresentation="panel"
@@ -680,7 +676,7 @@ export function AppShell({ currentUser: _currentUser, onLogout, logoutPending = 
               initialQuery={researchReportsHandoff.query}
               initialEventKey={researchReportsHandoff.eventKey}
               initialReportId={researchReportsHandoff.reportId}
-              initialTradeDate={researchReportsHandoff.tradeDate}
+              initialTradeDate={researchReportsHandoff.tradeDate ?? displayTradeDate}
               onOpenAsset={(assetId, context) =>
                 openStockWorkspace(assetId, {
                   sourceWorkspace: 'researchReports',

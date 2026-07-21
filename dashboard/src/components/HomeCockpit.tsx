@@ -39,6 +39,7 @@ import type {
   StrategyScoreAuditSummary,
   StrategyCatalogItem
 } from '../api/types';
+import { resolvePlatformDisplayDate } from '../utils/platformDisplayDate';
 
 type WorkspaceMode =
   | 'reviewQueue'
@@ -164,10 +165,6 @@ function policyStatusClass(isReady: boolean | null | undefined) {
   if (isReady === true) return 'ready';
   if (isReady === false) return 'blocked';
   return 'partial';
-}
-
-function firstDate(...dates: Array<string | null | undefined>) {
-  return dates.map((date) => date?.trim()).find(Boolean) ?? '';
 }
 
 function healthGroup(readiness: PlatformReadiness | null, key: string): PlatformReadinessHealthGroup | null {
@@ -610,13 +607,7 @@ export function HomeCockpit({ onNavigate, onOpenStrategy }: HomeCockpitProps) {
   const showPublicationGuard =
     Boolean(policy) &&
     (!policy?.ready_for_publication || (policy?.blocking_reasons ?? []).length > 0 || (policy?.warnings ?? []).length > 0);
-  const displayTradeDate =
-    firstDate(
-      readiness?.latest_market_date,
-      readiness?.latest_trade_date,
-      summary?.latest_market_date,
-      readiness?.display_trade_date
-    ) || '-';
+  const displayTradeDate = resolvePlatformDisplayDate(readiness, summary?.latest_market_date) || '-';
   const openResearchCaseCount = researchCases.filter((item) => item.status.toLowerCase() === 'open').length;
   const evidenceGapCount = researchCases.filter(hasEvidenceGap).length;
   const researchQueueSummary = researchQueueHealth?.summary;

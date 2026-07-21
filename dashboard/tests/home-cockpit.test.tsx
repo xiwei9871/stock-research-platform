@@ -701,6 +701,21 @@ describe('AppShell and HomeCockpit', () => {
     vi.clearAllMocks();
   });
 
+  it('prioritizes readiness display date for cockpit requests', async () => {
+    render(<AppShell />);
+
+    expect(await screen.findByText('策略指挥中心')).toBeVisible();
+    await waitFor(() => {
+      expect(api.fetchStrategyScoreAudit).toHaveBeenCalledWith('2026-06-08');
+      expect(api.fetchResearchCases).toHaveBeenCalledWith(
+        expect.objectContaining({ tradeDate: '2026-06-08' })
+      );
+      expect(api.fetchResearchQueueHealth).toHaveBeenCalledWith(
+        expect.objectContaining({ tradeDate: '2026-06-08' })
+      );
+    });
+  });
+
   it('renders a strategy-centered command center', async () => {
     render(<AppShell />);
 
@@ -797,19 +812,19 @@ describe('AppShell and HomeCockpit', () => {
     expect(researchQueue.getByText('Industry rotation follow-up')).toBeVisible();
     expect(researchQueue.getByText('3 evidence / 1 claims')).toBeVisible();
     expect(api.fetchResearchCases).toHaveBeenCalledWith(
-      expect.objectContaining({ tradeDate: '2026-06-12', status: 'open', limit: 100 })
+      expect.objectContaining({ tradeDate: '2026-06-08', status: 'open', limit: 100 })
     );
     expect(api.fetchResearchEvidence).toHaveBeenCalledWith(
       expect.objectContaining({ limit: 100 })
     );
     expect(api.fetchResearchQueueHealth).toHaveBeenCalledWith(
-      expect.objectContaining({ tradeDate: '2026-06-12' })
+      expect.objectContaining({ tradeDate: '2026-06-08' })
     );
     expect(api.fetchResearchPublishGate).toHaveBeenCalledWith(
-      expect.objectContaining({ tradeDate: '2026-06-12' })
+      expect.objectContaining({ tradeDate: '2026-06-08' })
     );
     expect(api.fetchResearchPublicationSnapshots).toHaveBeenCalledWith(
-      expect.objectContaining({ tradeDate: '2026-06-12', limit: 5 })
+      expect.objectContaining({ tradeDate: '2026-06-08', limit: 5 })
     );
 
     const marketRegime = within(screen.getByRole('region', { name: '市场环境' }));
@@ -934,7 +949,7 @@ describe('AppShell and HomeCockpit', () => {
     expect(preview.getByText('外部发送入口未接入')).toBeVisible();
     expect(preview.getByText('1 gap case has not been reviewed')).toBeVisible();
     expect(api.fetchResearchPublicationPreview).toHaveBeenCalledWith(
-      expect.objectContaining({ tradeDate: '2026-06-12' })
+      expect.objectContaining({ tradeDate: '2026-06-08' })
     );
     expect(researchQueue.queryByRole('button', { name: '立即发布' })).not.toBeInTheDocument();
     expect(researchQueue.queryByRole('button', { name: '发送飞书' })).not.toBeInTheDocument();
@@ -1292,7 +1307,7 @@ describe('AppShell and HomeCockpit', () => {
 
     expect(await screen.findByRole('heading', { name: '策略指挥中心' })).toBeVisible();
     expect(screen.getByText('平台日期')).toBeVisible();
-    expect(screen.getByText('2026-06-12')).toBeVisible();
+    expect(within(screen.getByRole('region', { name: '首页状态' })).getByText('2026-06-08')).toBeVisible();
     expect(screen.getByText('策略持仓状态')).toBeVisible();
     expect(screen.getByText('启用策略表现')).toBeVisible();
     expect(screen.getAllByText('LHB Shortline Combo')[0]).toBeVisible();
@@ -1371,7 +1386,7 @@ describe('AppShell and HomeCockpit', () => {
 
     expect(await screen.findByRole('heading', { name: '策略指挥中心' })).toBeVisible();
     expect(screen.getByText('平台日期')).toBeVisible();
-    expect(screen.getByText('2026-06-12')).toBeVisible();
+    expect(within(screen.getByRole('region', { name: '首页状态' })).getByText('2026-06-08')).toBeVisible();
     expect(screen.getByText('启用策略表现')).toBeVisible();
     expect(screen.getAllByText('LHB Shortline Combo')[0]).toBeVisible();
     expect(screen.getByRole('button', { name: '打开策略实验室' })).toBeVisible();
@@ -1542,7 +1557,7 @@ describe('AppShell and HomeCockpit', () => {
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Generated Reports', level: 1 })).toBeVisible());
     expect(screen.getByText('Local generated artifacts from TopN, risk, factor, backtest, and validation jobs.')).toBeVisible();
     expect(api.fetchOverview).toHaveBeenCalledWith({
-      tradeDate: '2026-06-12',
+      tradeDate: '2026-06-08',
       scoreVersion: 'manual_v1',
       watchlistId: 'default',
       topN: 5
