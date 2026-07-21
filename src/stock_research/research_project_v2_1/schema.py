@@ -24,6 +24,7 @@ SCHEMA_FILES = {
     "manual_import_request_v2_3": "manual_import_request_v2_3.schema.json",
     "acquisition_checkpoint_v2_3": "acquisition_checkpoint_v2_3.schema.json",
     "provider_diagnostic_v2_3": "provider_diagnostic_v2_3.schema.json",
+    "stage_a_scope_correction_v2_4": "stage_a_scope_correction_v2_4.schema.json",
 }
 
 

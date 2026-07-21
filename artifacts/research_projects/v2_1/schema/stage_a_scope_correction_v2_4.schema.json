@@ -1,0 +1,191 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "stage_a_scope_correction_v2_4.schema.json",
+  "type": "object",
+  "required": ["schema_version", "artifact_kind", "decision", "content_hash"],
+  "properties": {
+    "schema_version": {"const": "2.4.0"},
+    "artifact_kind": {"const": "stage_a_scope_correction"},
+    "decision": {
+      "type": "object",
+      "required": [
+        "decision_id",
+        "decision_type",
+        "project_id",
+        "investment_market_scope",
+        "original_stage",
+        "original_checkpoint",
+        "corrected_stage_role",
+        "corrected_status",
+        "global_entities_role",
+        "global_equity_assessment_allowed",
+        "a_share_candidate_coverage_claimed",
+        "evidence_assessment_allowed",
+        "company_level_assessment_allowed",
+        "stage_b_authorized",
+        "next_stage",
+        "entity_classifications",
+        "evidence_use_invariants",
+        "preserved_acquisition_rules",
+        "stage_a2_plan",
+        "provenance"
+      ],
+      "properties": {
+        "decision_id": {"const": "scope_correction:ai_compute_pcb_stage_a_v1"},
+        "decision_type": {"const": "stage_a_scope_correction"},
+        "project_id": {"const": "research_project:ai_compute_pcb_industry_bottleneck"},
+        "investment_market_scope": {"const": "A_share"},
+        "original_stage": {"const": "stage_a_acquisition"},
+        "original_checkpoint": {
+          "type": "object",
+          "required": ["checkpoint_id", "canonical_content_hash", "file_sha256"],
+          "properties": {
+            "checkpoint_id": {"const": "acquisition_checkpoint:a5f7627d8726c9405ba67a75"},
+            "canonical_content_hash": {"const": "a5f7627d8726c9405ba67a7527826edb0cff26ee777287e33cb55442bace660e"},
+            "file_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+          },
+          "additionalProperties": false
+        },
+        "corrected_stage_role": {"const": "global_industry_reference_acquisition"},
+        "corrected_status": {"const": "global_industry_reference_acquisition_complete"},
+        "global_entities_role": {"const": "industry_reference_only"},
+        "global_equity_assessment_allowed": {"const": false},
+        "a_share_candidate_coverage_claimed": {"const": false},
+        "evidence_assessment_allowed": {"const": "industry_claim_level_only"},
+        "company_level_assessment_allowed": {"const": false},
+        "stage_b_authorized": {"const": false},
+        "next_stage": {"const": "stage_a2_a_share_supply_chain_mapping"},
+        "entity_classifications": {
+          "type": "array",
+          "minItems": 6,
+          "maxItems": 6,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "required": [
+              "entity_name",
+              "entity_role",
+              "investment_candidate",
+              "eligible_for_a_share_review_universe",
+              "eligible_for_company_scoring",
+              "eligible_for_signal",
+              "eligible_for_admission"
+            ],
+            "properties": {
+              "entity_name": {"enum": ["NVIDIA", "Intel / Habana", "Cisco", "Broadcom", "Lightmatter", "Supermicro"]},
+              "entity_role": {"const": "global_industry_reference"},
+              "investment_candidate": {"const": false},
+              "eligible_for_a_share_review_universe": {"const": false},
+              "eligible_for_company_scoring": {"const": false},
+              "eligible_for_signal": {"const": false},
+              "eligible_for_admission": {"const": false}
+            },
+            "additionalProperties": false
+          }
+        },
+        "evidence_use_invariants": {
+          "type": "array",
+          "minItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "global_reference_coverage != a_share_candidate_coverage",
+              "primary_source_count != evidence_sufficiency",
+              "industry_claim_support != company_exposure_support"
+            ]
+          }
+        },
+        "preserved_acquisition_rules": {
+          "type": "array",
+          "minItems": 7,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "blocked_attempts_do_not_count_as_acquired_evidence",
+              "exact_duplicates_count_as_one_evidence_chain",
+              "suspected_common_origin_is_one_provisional_chain",
+              "unknown_publication_dates_remain_unknown",
+              "er05_denominator_remains_open",
+              "widen_redirects_remain_fail_closed",
+              "network_mode_remains_direct_http_trust_env_false"
+            ]
+          }
+        },
+        "stage_a2_plan": {
+          "type": "object",
+          "required": [
+            "stage_name",
+            "plan_status",
+            "research_only",
+            "acquisition_started",
+            "company_universe_generated",
+            "object_flow",
+            "candidate_mapping_dimensions",
+            "acceptance_criteria",
+            "forbidden_outputs"
+          ],
+          "properties": {
+            "stage_name": {"const": "Stage A2 — A-share Supply-chain Mapping"},
+            "plan_status": {"const": "planned"},
+            "research_only": {"const": true},
+            "acquisition_started": {"const": false},
+            "company_universe_generated": {"const": false},
+            "object_flow": {
+              "const": [
+                "global_technology_claim",
+                "component_or_process_requirement",
+                "value_chain_segment",
+                "a_share_candidate_hypothesis",
+                "company_specific_evidence_requirement"
+              ]
+            },
+            "candidate_mapping_dimensions": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "high_speed_pcb",
+                  "high_layer_count_pcb",
+                  "hdi",
+                  "high_speed_ccl_and_resin",
+                  "high_speed_connectors",
+                  "copper_and_high_speed_cable_assemblies",
+                  "optical_modules",
+                  "optical_components_and_chips",
+                  "switches_and_network_equipment",
+                  "servers_and_rack_systems",
+                  "power",
+                  "liquid_cooling",
+                  "advanced_packaging",
+                  "testing_and_manufacturing_equipment",
+                  "domestic_switch_interface_or_interconnect_chips",
+                  "evidence_derived_other"
+                ]
+              }
+            },
+            "acceptance_criteria": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {"type": "string", "minLength": 1}
+            },
+            "forbidden_outputs": {
+              "type": "array",
+              "minItems": 7,
+              "uniqueItems": true,
+              "items": {
+                "enum": ["company_score", "stock_recommendation", "signal", "admission", "portfolio", "strategy", "trade"]
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "provenance": {"$ref": "definitions_v2_1.schema.json#/$defs/provenance"}
+      },
+      "additionalProperties": false
+    },
+    "content_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  },
+  "additionalProperties": false
+}
