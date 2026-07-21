@@ -1,8 +1,8 @@
-# Initial Platform Validation Audit — Sealed Authoritative Rerun 2026-07-21
+# Initial Platform Validation Audit — Paired Authoritative Record 2026-07-21
 
 ## Decision And Audit Lineage
 
-Audit `pv-initial-20260721-ba46611` is the sealed authoritative initial audit. It is frozen as `baseline_candidate`, not `trusted_baseline`, with decision `stop_and_plan`.
+The authoritative record is a pair: execution audit `pv-initial-20260721-ba46611` at frozen revision `ba4661144d3a3a12e1934b720d75dd97e04d6e85`, plus security-rescan amendment `pv-initial-20260721-a2c847a-security-rescan` at revision `a2c847a1a1419c9526f93e311ed6c9b67f182f6a`. The pair remains `baseline_candidate`, not `trusted_baseline`, with decision `stop_and_plan`.
 
 Three earlier directories remain unchanged and are superseded:
 
@@ -12,7 +12,27 @@ Three earlier directories remain unchanged and are superseded:
 
 Neither earlier run was reused. Every discovery command, test layer, Playwright result, artifact copy, coverage declaration, report-ready transformation, report, root ledger, safety scan, permission gate, and provenance manifest was generated again from the new frozen revision.
 
-No product code, Dashboard code, tests, or inventory configuration changed after the freeze. `config/platform_validation_routes.json` required no verified correction.
+No product code, Dashboard code, tests, or inventory configuration changed after the execution freeze. `config/platform_validation_routes.json` required no verified correction. The security amendment did not rerun any test layer; it revalidated the source seal, copied the sealed evidence into an independent audit root, and rescanned it with corrected structured dispatch.
+
+## Security-Rescan Amendment
+
+The source execution audit remains immutable. Its seal hashes are:
+
+- core commands: `b01c1ead7d135db8c54a73afdbd4aa7215119d2b50670d895d7fdcdaf2f73409`;
+- artifact manifest: `0f0fa33fa99c934b291bdcffd480bea95892b786c2b50d20f52f6d61beb7688b`;
+- artifact tree: `1916ccdcf3d384cc8c2f1073e92668a11058c7811852a33b827b341bceb97473`.
+
+The independent security-rescan seal hashes are:
+
+- core commands: `7bef47b74fffc0a79e648b0abd8c5e6e32f33e1ac585308fb8bba28b529017e3`;
+- artifact manifest: `6af2740c6dbd856b01ba7a0594e309e30ce543906c1f26c4b241cb7aedce9110`;
+- artifact tree: `1c3a773fdd8db65bd06e2e56b426118ecf3ee49498cbb25012a18b3daf56faf1`.
+
+The amended scanner sends filesystem and ZIP-member `.jsonl`, `.network`, and `.trace` files through per-nonempty-line JSON parsing and recursive structured inspection. Malformed lines become line-specific `scan_error` findings; size-limit skips are counted with reasons; and the fixed framework allowlist must declare the same Playwright version (`1.60.0`) as the source frozen inputs.
+
+The full-entry self-test created `trace.zip!resources/abc-trace.network`, exercised `command_secret_scan`, found cookie, authorization, X-CSRF-token, and password fixtures, kept the synthetic fixture synthetic, and confirmed that one malformed line becomes the expected self-test scan error. The stable formal rescan parsed 189,475 structured records across 727 files and 8,330 ZIP text members: 8,046 synthetic findings, 25 fixed Playwright framework findings, zero potential real credentials, zero scan errors, and zero skipped entries.
+
+The first amended scan surfaced three copies of one old self-test fixture from this rescan's own logged scanner-inspection output. The three locations and fixed match hash are retained in `potential-finding-adjudication.json`; no raw value is stored. The adjudication is `not_a_real_credential`, and no source product, report, trace, copied source-audit path, or safe report evidence matched it. R5 records this fact, and all 46 report issue IDs remain mapped exactly once.
 
 ## Frozen Inputs And Runner Contract
 
@@ -179,16 +199,19 @@ The sandbox environment disposition remains: configure an isolated `stock_resear
 
 ## Stop Decision
 
-Do not mark a trusted baseline. Execute and review the five plans, configure the sandbox service, and rerun under a new audit ID. Preserve all four initial-audit directories; the first three remain superseded and the fourth is the sealed authoritative evidence set.
+Do not mark a trusted baseline. Execute and review the five plans, configure the sandbox service, and rerun under a new audit ID. Preserve all five directories: the first three remain superseded, the fourth is the immutable execution source amended by the fifth security-rescan seal, and the fourth/fifth pair is the authoritative evidence record.
 
 ## Generated Output Locations
 
-- Audit root: `outputs/research/platform_validation/pv-initial-20260721-ba46611/`
+- Execution audit root: `outputs/research/platform_validation/pv-initial-20260721-ba46611/`
+- Security-rescan root: `outputs/research/platform_validation/pv-initial-20260721-a2c847a-security-rescan/`
 - Core commands: `core-commands-manifest.json`; live runner log: `commands-manifest.json`
 - Post-seal commands: `post-seal-commands-manifest.json`
 - Frozen inputs: `frozen-inputs.json`
 - Coverage: `inputs/coverage-results.json`
 - Safety: `safety-scan.json`, `safety-findings.json`
+- Initial potential adjudication: `potential-finding-adjudication.json`
+- Security-rescan summary: `security-rescan-report.json`, `report/evidence/security-rescan-summary.json`
 - Permissions: `permission-gate.json`
 - Root mapping: `root-cause-ledger.json`
 - Artifact provenance: `artifact-manifest.json`
