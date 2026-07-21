@@ -47,6 +47,7 @@ NONREPAIRABLE_FAILURE_CLASSES = frozenset(
 DEFAULT_DASHBOARD_PORT = 5176
 DEFAULT_API_PORT = 8768
 DEFAULT_TIMEOUT_SECONDS = 600.0
+DEFAULT_BROWSER_PROJECT = "eod-chromium"
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _DASHBOARD_ROOT = _REPO_ROOT / "dashboard"
@@ -174,6 +175,9 @@ class BrowserAcceptanceResult:
     trade_date: str
     run_id: str
     duration_seconds: float
+    application_revision: str = ""
+    browser_project: str = DEFAULT_BROWSER_PROJECT
+    report_schema_version: str = REPORT_SCHEMA_VERSION
     failure_classes: tuple[str, ...] = ()
     warnings: tuple[str, ...] = ()
     artifact_paths: tuple[str, ...] = ()
@@ -192,8 +196,6 @@ class BrowserAcceptanceResult:
 def write_browser_acceptance_manifest(
     result: BrowserAcceptanceResult,
     *,
-    application_revision: str,
-    browser_project: str = "eod-chromium",
     manifest_upsert: Callable[[dict[str, Any]], Any] = upsert_data_run_manifest,
 ) -> dict[str, Any]:
     status = result.status.value
@@ -201,17 +203,37 @@ def write_browser_acceptance_manifest(
         raise ValueError(
             "browser acceptance manifest status must be success, degraded, or failed"
         )
+    trade_date = _required_date(
+        _required_string(result.trade_date, "browser_acceptance_trade_date_invalid"),
+        "browser_acceptance_trade_date_invalid",
+    )
+    run_id = _required_string(result.run_id, "browser_acceptance_run_id_invalid")
     revision = _required_string(
-        application_revision, "browser_acceptance_application_revision_invalid"
+        result.application_revision, "browser_acceptance_revision_invalid"
     )
     project = _required_string(
-        browser_project, "browser_acceptance_browser_project_invalid"
+        result.browser_project, "browser_acceptance_browser_project_invalid"
     )
+    if result.report_schema_version != REPORT_SCHEMA_VERSION:
+        raise _error("browser_acceptance_report_schema_version")
+    if result.status in {RepairStatus.SUCCESS, RepairStatus.DEGRADED}:
+        snapshot_schema = _required_string(
+            result.snapshot.get("schemaVersion"),
+            "browser_acceptance_candidate_snapshot_schema_version",
+        )
+        if snapshot_schema != CANDIDATE_SCHEMA_VERSION:
+            raise _error("browser_acceptance_candidate_snapshot_schema_version")
+        snapshot_date = _required_date(
+            result.snapshot.get("tradeDate"),
+            "browser_acceptance_candidate_snapshot_trade_date",
+        )
+        if snapshot_date != trade_date:
+            raise _error("browser_acceptance_candidate_snapshot_trade_date_mismatch")
     artifacts = list(result.artifact_paths)
     entry = build_manifest_entry(
-        run_id=result.run_id,
-        run_date=result.trade_date,
-        trade_date=result.trade_date,
+        run_id=run_id,
+        run_date=trade_date,
+        trade_date=trade_date,
         module="dashboard_browser_acceptance",
         source="eod_browser_acceptance",
         tier="tier1",
@@ -977,6 +999,16 @@ def parse_browser_acceptance_report(
 
     tests = _required_list(report.get("tests"), "browser_acceptance_report_tests")
     _validate_report_tests(tests)
+    browser_projects = {
+        _required_string(
+            test.get("projectName"),
+            "browser_acceptance_browser_project_invalid",
+        )
+        for test in tests
+        if isinstance(test, dict)
+    }
+    if browser_projects != {DEFAULT_BROWSER_PROJECT}:
+        raise _error("browser_acceptance_browser_project_mismatch")
     gate_statuses = _validate_gate_inventory(tests)
     blocking_failures, warning_failures = _test_failure_messages(tests)
     top_level_failures = [
@@ -1055,6 +1087,9 @@ def parse_browser_acceptance_report(
         trade_date=trade_date,
         run_id=run_id,
         duration_seconds=duration,
+        application_revision=revision,
+        browser_project=DEFAULT_BROWSER_PROJECT,
+        report_schema_version=REPORT_SCHEMA_VERSION,
         failure_classes=failure_classes,
         warnings=warning_text,
         artifact_paths=_dedupe(artifact_paths),
@@ -1398,6 +1433,7 @@ def _result_from_attempts(
     started_at: str,
     ended_at: str,
     duration_seconds: float,
+    application_revision: str,
     attempts: Sequence[BrowserAcceptanceAttempt],
     override_status: RepairStatus | None = None,
     override_failure_classes: tuple[str, ...] | None = None,
@@ -1409,6 +1445,9 @@ def _result_from_attempts(
         trade_date=trade_date,
         run_id=run_id,
         duration_seconds=max(0.0, duration_seconds),
+        application_revision=application_revision,
+        browser_project=DEFAULT_BROWSER_PROJECT,
+        report_schema_version=REPORT_SCHEMA_VERSION,
         failure_classes=(
             override_failure_classes
             if override_failure_classes is not None
@@ -1461,6 +1500,7 @@ def run_browser_acceptance(
             trade_date=validated_trade_date,
             run_id=validated_run_id,
             duration_seconds=0.0,
+            application_revision=validated_revision,
             failure_classes=("infrastructure",),
             message=_redact_text(str(exc)),
         )
@@ -1491,6 +1531,7 @@ def run_browser_acceptance(
             trade_date=validated_trade_date,
             run_id=validated_run_id,
             duration_seconds=max(0.0, time.monotonic() - overall_started),
+            application_revision=validated_revision,
             failure_classes=("infrastructure",),
             started_at=started_at,
             ended_at=ended_at,
@@ -1531,6 +1572,7 @@ def run_browser_acceptance(
                 started_at=started_at,
                 ended_at=ended_at,
                 duration_seconds=time.monotonic() - overall_started,
+                application_revision=validated_revision,
                 attempts=attempts,
                 override_status=RepairStatus.FAILED,
                 override_failure_classes=("infrastructure",),
@@ -1561,6 +1603,7 @@ def run_browser_acceptance(
         started_at=started_at,
         ended_at=ended_at,
         duration_seconds=time.monotonic() - overall_started,
+        application_revision=validated_revision,
         attempts=attempts,
     )
 

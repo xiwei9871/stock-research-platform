@@ -13,6 +13,8 @@ VALID_TIERS = {"tier1", "tier2", "tier3"}
 VALID_STATUSES = {"success", "degraded", "partial", "skipped", "failed", "unavailable"}
 BLOCKING_STATUSES = {"failed", "unavailable"}
 PARTIAL_STATUSES = {"partial", "failed", "unavailable"}
+BROWSER_ACCEPTANCE_MODULE = "dashboard_browser_acceptance"
+BROWSER_ACCEPTANCE_SOURCE = "eod_browser_acceptance"
 
 CREATE_DATA_RUN_MANIFEST_SQL = """
 CREATE SCHEMA IF NOT EXISTS ops;
@@ -25,7 +27,14 @@ CREATE TABLE IF NOT EXISTS ops.data_run_manifest (
     module text NOT NULL,
     source text NOT NULL,
     tier text NOT NULL CHECK (tier IN ('tier1', 'tier2', 'tier3')),
-    status text NOT NULL CHECK (status IN ('success', 'degraded', 'partial', 'skipped', 'failed', 'unavailable')),
+    status text NOT NULL CHECK (
+        status IN ('success', 'partial', 'skipped', 'failed', 'unavailable')
+        OR (
+            status = 'degraded'
+            AND module = 'dashboard_browser_acceptance'
+            AND source = 'eod_browser_acceptance'
+        )
+    ),
     started_at timestamptz,
     ended_at timestamptz,
     duration_seconds numeric,
@@ -52,20 +61,31 @@ CREATE INDEX IF NOT EXISTS idx_data_run_manifest_trade_date
     ON ops.data_run_manifest (trade_date DESC, tier, status);
 
 DO $$
+DECLARE
+    status_constraint record;
 BEGIN
-    IF NOT EXISTS (
-        SELECT 1
+    FOR status_constraint IN
+        SELECT conname
         FROM pg_constraint
         WHERE conrelid = 'ops.data_run_manifest'::regclass
-          AND conname = 'data_run_manifest_status_check'
-          AND pg_get_constraintdef(oid) LIKE '%degraded%'
-    ) THEN
-        ALTER TABLE ops.data_run_manifest
-            DROP CONSTRAINT IF EXISTS data_run_manifest_status_check;
-        ALTER TABLE ops.data_run_manifest
-            ADD CONSTRAINT data_run_manifest_status_check
-            CHECK (status IN ('success', 'degraded', 'partial', 'skipped', 'failed', 'unavailable'));
-    END IF;
+          AND contype = 'c'
+          AND pg_get_constraintdef(oid) ~* '(^|[^a-z_])status([^a-z_]|$)'
+    LOOP
+        EXECUTE format(
+            'ALTER TABLE ops.data_run_manifest DROP CONSTRAINT %I',
+            status_constraint.conname
+        );
+    END LOOP;
+    ALTER TABLE ops.data_run_manifest
+        ADD CONSTRAINT data_run_manifest_status_check
+        CHECK (
+            status IN ('success', 'partial', 'skipped', 'failed', 'unavailable')
+            OR (
+                status = 'degraded'
+                AND module = 'dashboard_browser_acceptance'
+                AND source = 'eod_browser_acceptance'
+            )
+        );
 END $$;
 """
 
@@ -105,16 +125,26 @@ def build_manifest_entry(
     config_version: str | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    normalized_module = str(module)
+    normalized_source = str(source)
     normalized_tier = _validate(tier, VALID_TIERS, "tier")
     normalized_status = _validate(status, VALID_STATUSES, "status")
+    if normalized_status == "degraded" and not _browser_acceptance_identity(
+        normalized_module,
+        normalized_source,
+    ):
+        raise ValueError(
+            "degraded status is only valid for dashboard_browser_acceptance "
+            "from eod_browser_acceptance"
+        )
     normalized_warnings = [str(warning) for warning in (warnings or []) if str(warning)]
     return {
         "manifest_id": _manifest_id(run_id, module, source),
         "run_id": str(run_id),
         "run_date": _date_text(run_date),
         "trade_date": _optional_date_text(trade_date),
-        "module": str(module),
-        "source": str(source),
+        "module": normalized_module,
+        "source": normalized_source,
         "tier": normalized_tier,
         "status": normalized_status,
         "started_at": _optional_datetime_text(started_at),
@@ -272,7 +302,13 @@ def summarize_manifest_modules(modules: list[dict[str, Any]]) -> dict[str, Any]:
         if tier == "tier1" and status in BLOCKING_STATUSES:
             tier_statuses["tier1"] = "BLOCKED"
             missing_data.append(module)
-        elif status in PARTIAL_STATUSES:
+        elif status in PARTIAL_STATUSES or (
+            status == "degraded"
+            and not _browser_acceptance_identity(
+                module,
+                str(item.get("source") or ""),
+            )
+        ):
             partial_data.append(module)
             if tier_statuses.get(tier) != "BLOCKED":
                 tier_statuses[tier] = "PARTIAL"
@@ -290,6 +326,13 @@ def summarize_manifest_modules(modules: list[dict[str, Any]]) -> dict[str, Any]:
         "missing_data": _dedupe(missing_data),
         "partial_data": _dedupe(partial_data),
     }
+
+
+def _browser_acceptance_identity(module: str, source: str) -> bool:
+    return (
+        module == BROWSER_ACCEPTANCE_MODULE
+        and source == BROWSER_ACCEPTANCE_SOURCE
+    )
 
 
 def _db_params(entry: dict[str, Any]) -> dict[str, Any]:

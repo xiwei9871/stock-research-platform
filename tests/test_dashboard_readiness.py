@@ -1,5 +1,5 @@
 from fastapi.testclient import TestClient
-from datetime import datetime
+from datetime import date, datetime
 import pytest
 from types import SimpleNamespace
 
@@ -172,6 +172,57 @@ def test_display_gate_rejects_invalid_rollout_boundary_without_manifest_rows(mon
 
     with pytest.raises(ValueError, match="STOCK_RESEARCH_BROWSER_ACCEPTANCE_REQUIRED_FROM"):
         select_display_date([], latest_market_date="2026-07-21")
+
+
+@pytest.mark.parametrize(
+    "trade_date",
+    ("2026-07-21-WRONG", "20260721", datetime(2026, 7, 21, 0, 0)),
+)
+def test_display_gate_rejects_noncanonical_candidate_trade_date(monkeypatch, trade_date):
+    monkeypatch.setattr(
+        display_date_gate,
+        "SETTINGS",
+        SimpleNamespace(browser_acceptance_required_from="2026-07-21"),
+    )
+
+    with pytest.raises(ValueError, match="trade_date must be an ISO date"):
+        select_display_date([], latest_market_date=trade_date)
+
+
+@pytest.mark.parametrize(
+    "trade_date",
+    ("2026-07-21-WRONG", "20260721", datetime(2026, 7, 21, 0, 0)),
+)
+def test_required_review_modules_rejects_noncanonical_trade_date(monkeypatch, trade_date):
+    monkeypatch.setattr(
+        display_date_gate,
+        "SETTINGS",
+        SimpleNamespace(browser_acceptance_required_from="2026-07-21"),
+    )
+
+    with pytest.raises(ValueError, match="trade_date must be an ISO date"):
+        display_date_gate.required_review_modules(trade_date)
+
+
+def test_display_gate_accepts_canonical_database_date_objects(monkeypatch):
+    modules = _display_gate_modules("2026-07-21", run_id="candidate", browser_status="success")
+    for module in modules:
+        module["trade_date"] = date(2026, 7, 21)
+    monkeypatch.setattr(
+        display_date_gate,
+        "SETTINGS",
+        SimpleNamespace(browser_acceptance_required_from="2026-07-21"),
+    )
+    monkeypatch.setattr(display_date_gate, "load_strategy_contracts", lambda profile="balanced": {})
+
+    gate = select_display_date(
+        modules,
+        latest_market_date=date(2026, 7, 21),
+        now=datetime(2026, 7, 21, 21, 0, tzinfo=display_date_gate.LOCAL_ZONE),
+    )
+
+    assert gate["display_trade_date"] == "2026-07-21"
+    assert gate["candidate_status"] == "ready"
 
 
 def test_platform_readiness_rejects_invalid_rollout_boundary_with_empty_manifest(monkeypatch):

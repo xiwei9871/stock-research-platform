@@ -6,7 +6,7 @@ import pytest
 from stock_research import data_run_manifest
 
 
-def test_manifest_schema_and_validator_preserve_degraded_status():
+def test_manifest_schema_and_validator_preserve_browser_acceptance_degraded_status():
     entry = data_run_manifest.build_manifest_entry(
         run_id="browser-run-1",
         run_date="2026-07-21",
@@ -19,12 +19,39 @@ def test_manifest_schema_and_validator_preserve_degraded_status():
 
     assert entry["status"] == "degraded"
     assert "'degraded'" in data_run_manifest.CREATE_DATA_RUN_MANIFEST_SQL
-    assert "DROP CONSTRAINT IF EXISTS data_run_manifest_status_check" in (
+    assert "pg_get_constraintdef(oid)" in (
+        data_run_manifest.CREATE_DATA_RUN_MANIFEST_SQL
+    )
+    assert "status_constraint.conname" in data_run_manifest.CREATE_DATA_RUN_MANIFEST_SQL
+    assert "module = 'dashboard_browser_acceptance'" in (
+        data_run_manifest.CREATE_DATA_RUN_MANIFEST_SQL
+    )
+    assert "source = 'eod_browser_acceptance'" in (
         data_run_manifest.CREATE_DATA_RUN_MANIFEST_SQL
     )
 
 
-def test_degraded_does_not_change_existing_generic_manifest_summary_semantics():
+@pytest.mark.parametrize(
+    ("module", "source"),
+    (
+        ("some_non_browser_module", "eod_browser_acceptance"),
+        ("dashboard_browser_acceptance", "some_other_source"),
+    ),
+)
+def test_manifest_validator_rejects_degraded_for_non_browser_identity(module, source):
+    with pytest.raises(ValueError, match="degraded status is only valid"):
+        data_run_manifest.build_manifest_entry(
+            run_id="browser-run-1",
+            run_date="2026-07-21",
+            trade_date="2026-07-21",
+            module=module,
+            source=source,
+            tier="tier1",
+            status="degraded",
+        )
+
+
+def test_non_browser_degraded_dirty_data_is_partial_not_ok():
     summary = data_run_manifest.summarize_manifest_modules(
         [
             {
@@ -32,6 +59,24 @@ def test_degraded_does_not_change_existing_generic_manifest_summary_semantics():
                 "tier": "tier1",
                 "status": "degraded",
                 "warnings": [],
+            }
+        ]
+    )
+
+    assert summary["status"] == "PARTIAL"
+    assert summary["missing_data"] == []
+    assert summary["partial_data"] == ["some_non_browser_module"]
+
+
+def test_browser_acceptance_degraded_remains_publishable_in_manifest_summary():
+    summary = data_run_manifest.summarize_manifest_modules(
+        [
+            {
+                "module": "dashboard_browser_acceptance",
+                "source": "eod_browser_acceptance",
+                "tier": "tier1",
+                "status": "degraded",
+                "warnings": ["presentation warning"],
             }
         ]
     )

@@ -7,9 +7,12 @@ import signal
 import subprocess
 import hashlib
 from datetime import date, datetime, timezone
+from types import SimpleNamespace
 
 import pytest
 
+from stock_research.dashboard import display_date_gate
+from stock_research.dashboard.display_date_gate import select_display_date
 from stock_research.eod_auto_repair_models import RepairStatus
 from stock_research.eod_browser_acceptance import (
     BrowserAcceptanceAttempt,
@@ -155,30 +158,41 @@ def _candidate_identities(*, run_id: bool = False):
     return identities
 
 
+def _manifest_result(**overrides):
+    values = {
+        "status": RepairStatus.SUCCESS,
+        "trade_date": TRADE_DATE,
+        "run_id": RUN_ID,
+        "application_revision": REVISION,
+        "browser_project": "eod-chromium",
+        "report_schema_version": acceptance.REPORT_SCHEMA_VERSION,
+        "duration_seconds": 3.25,
+        "failure_classes": (),
+        "warnings": ("console warning",),
+        "artifact_paths": ("/tmp/report.json", "/tmp/trace.zip"),
+        "snapshot": _report()["candidateSnapshot"],
+        "started_at": f"{TRADE_DATE}T08:00:00+00:00",
+        "ended_at": f"{TRADE_DATE}T08:00:03+00:00",
+        "message": "",
+    }
+    values.update(overrides)
+    return BrowserAcceptanceResult(**values)
+
+
 @pytest.mark.parametrize(
     "status",
     (RepairStatus.SUCCESS, RepairStatus.DEGRADED, RepairStatus.FAILED),
 )
 def test_write_browser_acceptance_manifest_persists_exact_status_and_evidence(status):
     captured = []
-    result = BrowserAcceptanceResult(
+    result = _manifest_result(
         status=status,
-        trade_date=TRADE_DATE,
-        run_id=RUN_ID,
-        duration_seconds=3.25,
         failure_classes=("presentation_runtime",) if status != RepairStatus.SUCCESS else (),
-        warnings=("console warning",),
-        artifact_paths=("/tmp/report.json", "/tmp/trace.zip"),
-        snapshot={"schemaVersion": "candidate/v1", "tradeDate": TRADE_DATE},
-        started_at=f"{TRADE_DATE}T08:00:00+00:00",
-        ended_at=f"{TRADE_DATE}T08:00:03+00:00",
         message="browser acceptance failed" if status == RepairStatus.FAILED else "",
     )
 
     entry = acceptance.write_browser_acceptance_manifest(
         result,
-        application_revision=REVISION,
-        browser_project="eod-chromium",
         manifest_upsert=captured.append,
     )
 
@@ -214,9 +228,110 @@ def test_write_browser_acceptance_manifest_rejects_non_manifest_status():
     with pytest.raises(ValueError, match="browser acceptance manifest status"):
         acceptance.write_browser_acceptance_manifest(
             result,
-            application_revision=REVISION,
             manifest_upsert=lambda _entry: None,
         )
+
+
+def test_write_browser_acceptance_manifest_rejects_external_revision_override():
+    with pytest.raises(TypeError):
+        acceptance.write_browser_acceptance_manifest(
+            _manifest_result(),
+            application_revision="unrelated-revision",
+            manifest_upsert=lambda _entry: None,
+        )
+
+
+@pytest.mark.parametrize(
+    ("overrides", "error_code"),
+    (
+        ({"trade_date": "2026-07-20-WRONG"}, "browser_acceptance_trade_date_invalid"),
+        ({"trade_date": datetime(2026, 7, 20)}, "browser_acceptance_trade_date_invalid"),
+        ({"run_id": " "}, "browser_acceptance_run_id_invalid"),
+        ({"application_revision": " "}, "browser_acceptance_revision_invalid"),
+        ({"browser_project": " "}, "browser_acceptance_browser_project_invalid"),
+        ({"report_schema_version": "unexpected/v2"}, "browser_acceptance_report_schema_version"),
+    ),
+)
+def test_write_browser_acceptance_manifest_rejects_invalid_result_identity(
+    overrides,
+    error_code,
+):
+    with pytest.raises(BrowserAcceptanceError, match=error_code):
+        acceptance.write_browser_acceptance_manifest(
+            _manifest_result(**overrides),
+            manifest_upsert=lambda _entry: None,
+        )
+
+
+@pytest.mark.parametrize("status", (RepairStatus.SUCCESS, RepairStatus.DEGRADED))
+@pytest.mark.parametrize(
+    "snapshot",
+    (
+        {"schemaVersion": "unexpected/v2", "tradeDate": TRADE_DATE, "publications": []},
+        {
+            "schemaVersion": acceptance.CANDIDATE_SCHEMA_VERSION,
+            "tradeDate": "2026-07-19",
+            "publications": [],
+        },
+    ),
+)
+def test_write_browser_acceptance_manifest_binds_publishable_snapshot_to_result(
+    status,
+    snapshot,
+):
+    with pytest.raises(BrowserAcceptanceError, match="candidate_snapshot"):
+        acceptance.write_browser_acceptance_manifest(
+            _manifest_result(status=status, snapshot=snapshot),
+            manifest_upsert=lambda _entry: None,
+        )
+
+
+def test_writer_browser_manifest_joins_candidate_modules_by_trade_date_and_run_id(monkeypatch):
+    captured = []
+    browser_entry = acceptance.write_browser_acceptance_manifest(
+        _manifest_result(),
+        manifest_upsert=captured.append,
+    )
+    modules = [
+        {"run_id": RUN_ID, "trade_date": TRADE_DATE, "module": "daily_bars", "status": "success"},
+        {"run_id": RUN_ID, "trade_date": TRADE_DATE, "module": "technical_features", "status": "success"},
+        {"run_id": RUN_ID, "trade_date": TRADE_DATE, "module": "score_topn", "status": "success"},
+        {"run_id": RUN_ID, "trade_date": TRADE_DATE, "module": "lhb_features", "status": "success"},
+        {"run_id": RUN_ID, "trade_date": TRADE_DATE, "module": "tech_bottleneck_candidates", "status": "success"},
+        {"run_id": RUN_ID, "trade_date": TRADE_DATE, "module": "strategy_lhb_shortline", "status": "success"},
+        {"run_id": RUN_ID, "trade_date": TRADE_DATE, "module": "strategy_mid_trend", "status": "success"},
+        {
+            "run_id": RUN_ID,
+            "trade_date": TRADE_DATE,
+            "module": "strategy_tech_bottleneck",
+            "status": "success",
+            "metadata": {"candidate_snapshot_latest_date": TRADE_DATE},
+        },
+        {"run_id": RUN_ID, "trade_date": TRADE_DATE, "module": "review_queue_strategy_manifest", "status": "success"},
+    ]
+    monkeypatch.setattr(
+        display_date_gate,
+        "SETTINGS",
+        SimpleNamespace(browser_acceptance_required_from=TRADE_DATE),
+    )
+    monkeypatch.setattr(display_date_gate, "load_strategy_contracts", lambda profile="balanced": {})
+
+    ready = select_display_date(
+        [*modules, browser_entry],
+        latest_market_date=TRADE_DATE,
+        now=datetime(2026, 7, 20, 21, 0, tzinfo=display_date_gate.LOCAL_ZONE),
+    )
+    wrong_run = select_display_date(
+        [*modules, {**browser_entry, "run_id": "different-run"}],
+        latest_market_date=TRADE_DATE,
+        now=datetime(2026, 7, 20, 21, 0, tzinfo=display_date_gate.LOCAL_ZONE),
+    )
+
+    assert captured == [browser_entry]
+    assert browser_entry["run_id"] == RUN_ID
+    assert ready["candidate_status"] == "ready"
+    assert wrong_run["candidate_status"] == "incomplete"
+    assert "missing:dashboard_browser_acceptance" in wrong_run["blocking_reasons"]
 
 
 def test_parse_report_accepts_success_and_collects_safe_artifacts(tmp_path):
@@ -233,9 +348,30 @@ def test_parse_report_accepts_success_and_collects_safe_artifacts(tmp_path):
 
     assert result.status == RepairStatus.SUCCESS
     assert result.snapshot["tradeDate"] == TRADE_DATE
+    assert result.application_revision == REVISION
+    assert result.browser_project == "eod-chromium"
+    assert result.report_schema_version == acceptance.REPORT_SCHEMA_VERSION
     assert result.failure_classes == ()
     assert str(report_path) in result.artifact_paths
     assert "trace.zip" in result.artifact_paths
+
+
+def test_parse_report_rejects_unexpected_browser_project(tmp_path):
+    report_path = tmp_path / "eod-browser-acceptance.json"
+    payload = _report()
+    payload["tests"][0]["projectName"] = "unrelated-browser-project"
+    (tmp_path / "trace.zip").write_bytes(b"trace")
+    report_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(BrowserAcceptanceError, match="browser_project"):
+        parse_browser_acceptance_report(
+            report_path,
+            expected_run_id=RUN_ID,
+            expected_trade_date=TRADE_DATE,
+            expected_revision=REVISION,
+            expected_candidate_publications=_report()["candidateSnapshot"]["publications"],
+            exit_code=0,
+        )
 
 
 def test_browser_acceptance_snapshot_is_deeply_immutable_and_json_serializable(tmp_path):
@@ -765,6 +901,9 @@ def test_runner_uses_exact_command_isolated_env_nonreuse_and_private_logs(tmp_pa
     )
 
     assert result.status == RepairStatus.SUCCESS
+    assert result.application_revision == REVISION
+    assert result.browser_project == "eod-chromium"
+    assert result.report_schema_version == acceptance.REPORT_SCHEMA_VERSION
     assert len(calls) == 1
     command, kwargs = calls[0]
     assert command == ["pnpm", "test:e2e:eod"]

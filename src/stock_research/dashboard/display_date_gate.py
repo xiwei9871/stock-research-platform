@@ -27,7 +27,10 @@ def validate_browser_acceptance_rollout_config() -> date | None:
     if not raw_boundary:
         return None
     try:
-        return date.fromisoformat(raw_boundary)
+        boundary = date.fromisoformat(raw_boundary)
+        if boundary.isoformat() != raw_boundary:
+            raise ValueError
+        return boundary
     except ValueError as exc:
         raise BrowserAcceptanceRolloutConfigError(
             "STOCK_RESEARCH_BROWSER_ACCEPTANCE_REQUIRED_FROM must be an ISO date (YYYY-MM-DD)"
@@ -36,12 +39,29 @@ def validate_browser_acceptance_rollout_config() -> date | None:
 
 def required_review_modules(trade_date: str) -> set[str]:
     required = set(BASE_REQUIRED_REVIEW_MODULES)
+    parsed_trade_date = _strict_trade_date(trade_date)
     boundary = validate_browser_acceptance_rollout_config()
     if boundary is None:
         return required
-    if trade_date >= boundary.isoformat():
+    if parsed_trade_date >= boundary:
         required.add("dashboard_browser_acceptance")
     return required
+
+
+def _strict_trade_date(value: object) -> date:
+    if isinstance(value, datetime):
+        raise ValueError("trade_date must be an ISO date (YYYY-MM-DD)")
+    if isinstance(value, date):
+        return value
+    if not isinstance(value, str) or not value or value != value.strip():
+        raise ValueError("trade_date must be an ISO date (YYYY-MM-DD)")
+    try:
+        parsed = date.fromisoformat(value)
+    except ValueError as exc:
+        raise ValueError("trade_date must be an ISO date (YYYY-MM-DD)") from exc
+    if parsed.isoformat() != value:
+        raise ValueError("trade_date must be an ISO date (YYYY-MM-DD)")
+    return parsed
 
 
 def load_strategy_contracts(*, profile: str = "balanced") -> dict[str, Any]:
@@ -67,7 +87,11 @@ def select_display_date(
     validate_browser_acceptance_rollout_config()
     current_time = now.astimezone(LOCAL_ZONE) if now else datetime.now(LOCAL_ZONE)
     grouped = _modules_by_trade_date(modules)
-    candidate_trade_date = str(latest_market_date or _latest_trade_date(grouped) or "")
+    candidate_trade_date = (
+        _strict_trade_date(latest_market_date).isoformat()
+        if latest_market_date
+        else str(_latest_trade_date(grouped) or "")
+    )
     ready_by_date = {
         trade_date: _evaluate_trade_date(trade_date, rows)
         for trade_date, rows in grouped.items()
@@ -113,8 +137,9 @@ def select_display_date(
 def _modules_by_trade_date(modules: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in modules:
-        trade_date = str(row.get("trade_date") or row.get("latest_trade_date") or "")[:10]
-        if trade_date:
+        raw_trade_date = row.get("trade_date") or row.get("latest_trade_date") or ""
+        if raw_trade_date:
+            trade_date = _strict_trade_date(raw_trade_date).isoformat()
             grouped[trade_date].append(row)
     return dict(grouped)
 

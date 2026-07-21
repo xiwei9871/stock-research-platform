@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from uuid import uuid4
 
 import psycopg
@@ -35,23 +36,38 @@ def _connect(*, autocommit: bool = False):
 
 def _legacy_manifest_schema_sql() -> str:
     create_only = CREATE_DATA_RUN_MANIFEST_SQL.split("DO $$", maxsplit=1)[0]
-    return create_only.replace("'success', 'degraded',", "'success',")
+    return re.sub(
+        r"status text NOT NULL CHECK \(.*?\),\n    started_at",
+        "status text NOT NULL CHECK "
+        "(status IN ('success', 'partial', 'skipped', 'failed', 'unavailable')),\n"
+        "    started_at",
+        create_only,
+        count=1,
+        flags=re.DOTALL,
+    )
 
 
-def _insert_manifest_status(connection, status: str) -> None:
+def _insert_manifest_status(
+    connection,
+    status: str,
+    *,
+    module: str = "migration_probe",
+    source: str = "migration_probe",
+) -> None:
     unique_id = uuid4().hex
     connection.execute(
         """
         INSERT INTO ops.data_run_manifest (
             manifest_id, run_id, run_date, trade_date, module, source, tier, status
         ) VALUES (
-            %s, %s, current_date, current_date, %s, 'migration_probe', 'tier1', %s
+            %s, %s, current_date, current_date, %s, %s, 'tier1', %s
         )
         """,
         (
             f"manifest-migration-{unique_id}",
             f"manifest-migration-{unique_id}",
-            f"migration_probe_{status}",
+            module,
+            source,
             status,
         ),
     )
@@ -62,12 +78,19 @@ def test_apply_schema_migrates_legacy_status_check_and_preserves_validation():
     try:
         connection.execute("DROP SCHEMA IF EXISTS ops CASCADE")
         connection.execute(_legacy_manifest_schema_sql())
+        connection.execute(
+            """
+            ALTER TABLE ops.data_run_manifest
+            RENAME CONSTRAINT data_run_manifest_status_check
+            TO legacy_manifest_state_allowlist
+            """
+        )
         legacy_constraint = connection.execute(
             """
             SELECT pg_get_constraintdef(oid)
             FROM pg_constraint
             WHERE conrelid = 'ops.data_run_manifest'::regclass
-              AND conname = 'data_run_manifest_status_check'
+              AND conname = 'legacy_manifest_state_allowlist'
             """
         ).fetchone()[0]
         assert "degraded" not in legacy_constraint
@@ -78,24 +101,43 @@ def test_apply_schema_migrates_legacy_status_check_and_preserves_validation():
 
     connection = _connect(autocommit=True)
     try:
-        migrated_constraint = connection.execute(
+        check_constraints = connection.execute(
             """
-            SELECT pg_get_constraintdef(oid)
+            SELECT conname, pg_get_constraintdef(oid)
             FROM pg_constraint
             WHERE conrelid = 'ops.data_run_manifest'::regclass
-              AND conname = 'data_run_manifest_status_check'
+              AND contype = 'c'
+            ORDER BY conname
             """
-        ).fetchone()[0]
-        assert "degraded" in migrated_constraint
+        ).fetchall()
+        status_constraints = [
+            (name, definition)
+            for name, definition in check_constraints
+            if "status" in definition
+        ]
+        assert len(status_constraints) == 1
+        assert status_constraints[0][0] == "data_run_manifest_status_check"
+        assert "degraded" in status_constraints[0][1]
+        assert "dashboard_browser_acceptance" in status_constraints[0][1]
+        assert "eod_browser_acceptance" in status_constraints[0][1]
+        assert any("tier" in definition for _, definition in check_constraints)
+        assert all(name != "legacy_manifest_state_allowlist" for name, _ in check_constraints)
         for status in (
             "success",
             "partial",
             "skipped",
             "failed",
             "unavailable",
-            "degraded",
         ):
             _insert_manifest_status(connection, status)
+        _insert_manifest_status(
+            connection,
+            "degraded",
+            module="dashboard_browser_acceptance",
+            source="eod_browser_acceptance",
+        )
+        with pytest.raises(psycopg.errors.CheckViolation):
+            _insert_manifest_status(connection, "degraded")
         with pytest.raises(psycopg.errors.CheckViolation):
             _insert_manifest_status(connection, "invalid")
     finally:
