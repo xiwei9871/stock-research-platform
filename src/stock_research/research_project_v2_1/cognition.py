@@ -28,6 +28,22 @@ ALLOWED_VALUE_STATUSES = {
     "evidence_gap_linked",
     "not_eligible_for_judgment",
 }
+SEMANTIC_OBJECT_ARRAY_FIELDS = (
+    "research_question_tree",
+    "er_assessments",
+    "claim_assessment_ledger",
+    "unverified_system_extensions",
+    "evidence_grounded_mechanisms",
+    "unverified_mechanism_skeletons",
+    "grounded_causal_edges",
+    "hypothesized_causal_edges",
+    "technology_route_comparisons",
+    "limited_system_bottleneck_judgments",
+    "value_change_hypotheses",
+    "contradictions_and_uncertainties",
+    "evidence_gap_referrals",
+    "verification_and_falsification",
+)
 
 
 def _error(message: str, *, code: str, **details: object) -> ResearchProjectV2Error:
@@ -176,6 +192,68 @@ def validate_evidence_locator(
     copied["section_id"] = section.get("section_id")
     copied["section_text"] = section.get("text")
     return copied
+
+
+def validate_evidence_inventory(
+    inventory: dict[str, Any],
+    *,
+    known_artifact_ids: set[str],
+) -> None:
+    for field in (
+        "locators",
+        "exact_duplicate_groups",
+        "source_chains",
+        "suspected_common_origin_groups",
+    ):
+        rows = inventory.get(field, [])
+        if not isinstance(rows, list) or not all(isinstance(row, dict) for row in rows):
+            raise _error(
+                "Cognition evidence inventory must contain object arrays",
+                code="RESEARCH_PROJECT_V2_1_COGNITION_VALIDATION_FAILED",
+                field=f"evidence_inventory.{field}",
+            )
+    for group in inventory.get("exact_duplicate_groups", []):
+        artifact_ids = group.get("artifact_ids")
+        if not isinstance(artifact_ids, list) or len(artifact_ids) < 2:
+            raise _error(
+                "Exact-duplicate group must identify at least two artifacts",
+                code="RESEARCH_PROJECT_V2_1_COGNITION_VALIDATION_FAILED",
+                group_id=group.get("group_id"),
+            )
+        unknown = sorted(set(artifact_ids) - known_artifact_ids)
+        if unknown:
+            raise _error(
+                "Exact-duplicate group references an unknown artifact",
+                code="RESEARCH_PROJECT_V2_1_COGNITION_VALIDATION_FAILED",
+                group_id=group.get("group_id"),
+                unknown_artifact_ids=unknown,
+            )
+
+
+def _validate_semantic_object_arrays(package: dict[str, Any]) -> None:
+    for field in SEMANTIC_OBJECT_ARRAY_FIELDS:
+        rows = package.get(field)
+        if not isinstance(rows, list) or not all(isinstance(row, dict) for row in rows):
+            raise _error(
+                "Cognition semantic collections must contain objects",
+                code="RESEARCH_PROJECT_V2_1_COGNITION_VALIDATION_FAILED",
+                field=field,
+            )
+    model = package.get("grounded_system_model")
+    if not isinstance(model, dict):
+        raise _error(
+            "Grounded system model must be an object",
+            code="RESEARCH_PROJECT_V2_1_COGNITION_VALIDATION_FAILED",
+            field="grounded_system_model",
+        )
+    for field in ("nodes", "edges"):
+        rows = model.get(field)
+        if not isinstance(rows, list) or not all(isinstance(row, dict) for row in rows):
+            raise _error(
+                "Grounded system model collections must contain objects",
+                code="RESEARCH_PROJECT_V2_1_COGNITION_VALIDATION_FAILED",
+                field=f"grounded_system_model.{field}",
+            )
 
 
 def canonical_package_bytes(package: dict[str, Any]) -> bytes:
@@ -477,7 +555,15 @@ def validate_cognition_package(
             field="content_hash",
         )
     validate_baseline_bindings(package, layout=effective)
+    _validate_semantic_object_arrays(package)
     inventory = package.get("evidence_inventory", {})
+    known_artifact_ids = {
+        path.stem for path in effective.evidence_metadata_v2_3_dir.glob("*.json")
+    }
+    validate_evidence_inventory(
+        inventory,
+        known_artifact_ids=known_artifact_ids,
+    )
     locators = inventory.get("locators", []) if isinstance(inventory, dict) else []
     valid_locators: dict[str, dict[str, Any]] = {}
     for locator in locators:

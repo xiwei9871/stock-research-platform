@@ -27,6 +27,8 @@ ACQUISITION_PHASE_C_END = "34210fb"
 STAGE_A_ACQUISITION_BASELINE = ACQUISITION_PHASE_C_END
 STAGE_A_ACQUISITION_END = "ae4e70e"
 STAGE_A_SCOPE_CORRECTION_BASELINE = STAGE_A_ACQUISITION_END
+STAGE_A_SCOPE_CORRECTION_END = "7280ba71b1694f1ac5938d8be258b9803dfc285e"
+INDUSTRY_COGNITION_BASELINE = STAGE_A_SCOPE_CORRECTION_END
 ACQUISITION_RECOVERY_PHASE_A_PATHS = {
     "artifacts/research_projects/v2_1/acquisition/diagnostics/r2b_external_acquisition_phase_a_2026-07-20.json",
     "docs/research_operating_layer_v2_r2b_external_acquisition_recovery_phase_a.md",
@@ -269,11 +271,40 @@ def test_stage_a_scope_correction_uses_an_exact_append_only_allowlist() -> None:
     )
     assert original_checkpoint not in allowed
 
+    assert (
+        _git("merge-base", "--is-ancestor", STAGE_A_SCOPE_CORRECTION_END, "HEAD").returncode
+        == 0
+    )
     result = _git(
-        "diff", "--name-only", f"{STAGE_A_SCOPE_CORRECTION_BASELINE}..HEAD"
+        "diff",
+        "--name-only",
+        f"{STAGE_A_SCOPE_CORRECTION_BASELINE}..{STAGE_A_SCOPE_CORRECTION_END}",
     )
     changed = {path for path in result.stdout.splitlines() if path}
     assert changed <= allowed
     assert not any(
         path.startswith(tuple(payload["forbidden_prefixes"])) for path in changed
+    )
+
+
+def test_industry_cognition_baseline_uses_an_exact_read_only_allowlist() -> None:
+    allowlist_path = (
+        REPOSITORY_ROOT
+        / "artifacts/research_projects/v2_1/governance/industry_cognition_baseline_exact_allowlist.json"
+    )
+    payload = json.loads(allowlist_path.read_text(encoding="utf-8"))
+    assert payload["baseline_commit"] == INDUSTRY_COGNITION_BASELINE
+    allowed = set(payload["paths"])
+    assert len(allowed) == len(payload["paths"])
+
+    result = _git("diff", "--name-only", f"{INDUSTRY_COGNITION_BASELINE}..HEAD")
+    changed = {path for path in result.stdout.splitlines() if path}
+    assert changed <= allowed
+    assert not any(
+        path.startswith(tuple(payload["forbidden_prefixes"])) for path in changed
+    )
+    assert not any(
+        token in path.lower()
+        for path in changed
+        for token in ("company_rating", "stock_rating", "valuation", "portfolio", "strategy")
     )

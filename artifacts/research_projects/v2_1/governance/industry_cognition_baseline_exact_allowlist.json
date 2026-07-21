@@ -1,0 +1,42 @@
+{
+  "allowlist_id": "scope_allowlist:r2b_ai_pcb_industry_cognition_baseline_v1",
+  "baseline_commit": "7280ba71b1694f1ac5938d8be258b9803dfc285e",
+  "phase": "stage_a_industry_cognition_and_evidence_synthesis_baseline_v1",
+  "schema_version": "1.0.0",
+  "forbidden_prefixes": [
+    "artifacts/research_projects/v2/",
+    "artifacts/research_projects/v2_1/acquisition/",
+    "artifacts/research_projects/v2_1/admission/",
+    "artifacts/research_projects/v2_1/company_capture/",
+    "artifacts/research_projects/v2_1/portfolio/",
+    "artifacts/research_projects/v2_1/projects/",
+    "artifacts/research_projects/v2_1/signal/",
+    "artifacts/research_projects/v2_1/stock_evaluation/",
+    "artifacts/research_projects/v2_1/strategy/",
+    "artifacts/research_projects/v2_1/watchlist/",
+    "artifacts/technology_industry_catalog/",
+    "artifacts/theme_decomposition/",
+    "dashboard/",
+    "src/stock_research/dashboard/"
+  ],
+  "paths": [
+    "artifacts/research_projects/v2_1/analysis/ai_pcb_industry_cognition_audit_v1.json",
+    "artifacts/research_projects/v2_1/analysis/ai_pcb_industry_cognition_package_v1.json",
+    "artifacts/research_projects/v2_1/governance/industry_cognition_baseline_exact_allowlist.json",
+    "artifacts/research_projects/v2_1/reports/ai_pcb_industry_cognition_report_v1.md",
+    "artifacts/research_projects/v2_1/schema/industry_cognition_baseline_v2_5.schema.json",
+    "docs/research_operating_layer_v2_r2b_ai_pcb_industry_cognition_baseline.md",
+    "docs/superpowers/plans/2026-07-21-industry-cognition-synthesis-baseline.md",
+    "docs/superpowers/specs/2026-07-21-industry-cognition-synthesis-baseline-design.md",
+    "src/stock_research/research_project_v2_1/cli.py",
+    "src/stock_research/research_project_v2_1/cognition.py",
+    "src/stock_research/research_project_v2_1/cognition_audit.py",
+    "src/stock_research/research_project_v2_1/cognition_render.py",
+    "src/stock_research/research_project_v2_1/layout.py",
+    "src/stock_research/research_project_v2_1/schema.py",
+    "tests/test_research_project_v2_1_cli.py",
+    "tests/test_research_project_v2_1_cognition.py",
+    "tests/test_research_project_v2_1_r2b_scope_guard.py",
+    "tests/test_research_project_v2_1_schema.py"
+  ]
+}

@@ -15,6 +15,7 @@ from stock_research.research_project_v2_1.cognition import (
     load_cognition_package,
     validate_baseline_bindings,
     validate_causal_edges,
+    validate_evidence_inventory,
     validate_evidence_locator,
     validate_grounded_mechanisms,
     validate_judgment_boundaries,
@@ -300,6 +301,22 @@ def test_exact_duplicate_links_count_as_one_chain() -> None:
         valid_locators={"LOC-001": real_locator(), "LOC-002": real_locator()},
     )
     assert result["independent_chain_count"] == 1
+
+
+def test_evidence_inventory_rejects_unknown_duplicate_artifact() -> None:
+    inventory = {
+        "locators": [],
+        "exact_duplicate_groups": [
+            {"group_id": "DUP-1", "artifact_ids": ["evidence_artifact:missing"]}
+        ],
+        "source_chains": [],
+        "suspected_common_origin_groups": [],
+    }
+    with pytest.raises(ResearchProjectV2Error):
+        validate_evidence_inventory(
+            inventory,
+            known_artifact_ids={ARTIFACT_ID},
+        )
 
 
 def test_er_assessment_is_recomputed_from_atomic_claims() -> None:

@@ -3,7 +3,17 @@
   "$id": "industry_cognition_baseline_v2_5.schema.json",
   "$defs": {
     "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
-    "object_array": {"type": "array", "items": {"type": "object"}},
+    "semantic_array": {"type": "array", "items": {}},
+    "string_array": {"type": "array", "items": {"type": "string"}},
+    "binding_ref": {
+      "type": "object",
+      "properties": {
+        "checkpoint_id": {"type": "string"},
+        "relative_path": {"type": "string"},
+        "content_hash": {"$ref": "#/$defs/sha256"}
+      },
+      "additionalProperties": false
+    },
     "package": {
       "type": "object",
       "required": ["schema_version", "artifact_type", "package_id", "project_id", "renderer_version", "baseline_bindings", "research_framing", "research_question_tree", "evidence_inventory", "er_assessments", "claim_assessment_ledger", "grounded_system_model", "unverified_system_extensions", "evidence_grounded_mechanisms", "unverified_mechanism_skeletons", "grounded_causal_edges", "hypothesized_causal_edges", "technology_route_comparisons", "limited_system_bottleneck_judgments", "value_change_hypotheses", "contradictions_and_uncertainties", "evidence_gap_referrals", "verification_and_falsification", "provenance", "content_hash"],
@@ -13,24 +23,61 @@
         "package_id": {"type": "string", "minLength": 1},
         "project_id": {"type": "string", "minLength": 1},
         "renderer_version": {"const": "industry_cognition_markdown_v1"},
-        "baseline_bindings": {"type": "object"},
-        "research_framing": {"type": "object"},
-        "research_question_tree": {"$ref": "#/$defs/object_array"},
-        "evidence_inventory": {"type": "object"},
-        "er_assessments": {"$ref": "#/$defs/object_array"},
-        "claim_assessment_ledger": {"$ref": "#/$defs/object_array"},
-        "grounded_system_model": {"type": "object", "required": ["nodes", "edges"], "properties": {"nodes": {"$ref": "#/$defs/object_array"}, "edges": {"$ref": "#/$defs/object_array"}}, "additionalProperties": true},
-        "unverified_system_extensions": {"$ref": "#/$defs/object_array"},
-        "evidence_grounded_mechanisms": {"$ref": "#/$defs/object_array"},
-        "unverified_mechanism_skeletons": {"$ref": "#/$defs/object_array"},
-        "grounded_causal_edges": {"$ref": "#/$defs/object_array"},
-        "hypothesized_causal_edges": {"$ref": "#/$defs/object_array"},
-        "technology_route_comparisons": {"$ref": "#/$defs/object_array"},
-        "limited_system_bottleneck_judgments": {"$ref": "#/$defs/object_array"},
-        "value_change_hypotheses": {"$ref": "#/$defs/object_array"},
-        "contradictions_and_uncertainties": {"$ref": "#/$defs/object_array"},
-        "evidence_gap_referrals": {"$ref": "#/$defs/object_array"},
-        "verification_and_falsification": {"$ref": "#/$defs/object_array"},
+        "baseline_bindings": {
+          "type": "object",
+          "properties": {
+            "acquisition_checkpoint": {"$ref": "#/$defs/binding_ref"},
+            "scope_correction": {"$ref": "#/$defs/binding_ref"}
+          },
+          "additionalProperties": false
+        },
+        "research_framing": {
+          "type": "object",
+          "properties": {
+            "topic": {"type": "string"},
+            "objective": {"type": "string"},
+            "model_scope": {"type": "string"},
+            "included_scope": {"$ref": "#/$defs/string_array"},
+            "excluded_scope": {"$ref": "#/$defs/string_array"},
+            "er_universe": {"$ref": "#/$defs/string_array"},
+            "core_research_questions": {"$ref": "#/$defs/string_array"},
+            "key_terms": {"$ref": "#/$defs/string_array"},
+            "limitations": {"$ref": "#/$defs/string_array"},
+            "company_mapping_authorized": {"type": "boolean"},
+            "stage_a2_authorized": {"type": "boolean"},
+            "stage_b_authorized": {"type": "boolean"},
+            "bounded_conclusion": {"type": "string"}
+          },
+          "additionalProperties": false
+        },
+        "research_question_tree": {"$ref": "#/$defs/semantic_array"},
+        "evidence_inventory": {
+          "type": "object",
+          "properties": {
+            "blocked_candidate_ids": {"$ref": "#/$defs/string_array"},
+            "exact_duplicate_groups": {"$ref": "#/$defs/semantic_array"},
+            "independent_secondary_coverage": {"type": "string"},
+            "locators": {"$ref": "#/$defs/semantic_array"},
+            "source_chains": {"$ref": "#/$defs/semantic_array"},
+            "suspected_common_origin_groups": {"$ref": "#/$defs/semantic_array"},
+            "unknown_date_artifact_ids": {"$ref": "#/$defs/string_array"}
+          },
+          "additionalProperties": false
+        },
+        "er_assessments": {"$ref": "#/$defs/semantic_array"},
+        "claim_assessment_ledger": {"$ref": "#/$defs/semantic_array"},
+        "grounded_system_model": {"type": "object", "required": ["nodes", "edges"], "properties": {"nodes": {"$ref": "#/$defs/semantic_array"}, "edges": {"$ref": "#/$defs/semantic_array"}}, "additionalProperties": false},
+        "unverified_system_extensions": {"$ref": "#/$defs/semantic_array"},
+        "evidence_grounded_mechanisms": {"$ref": "#/$defs/semantic_array"},
+        "unverified_mechanism_skeletons": {"$ref": "#/$defs/semantic_array"},
+        "grounded_causal_edges": {"$ref": "#/$defs/semantic_array"},
+        "hypothesized_causal_edges": {"$ref": "#/$defs/semantic_array"},
+        "technology_route_comparisons": {"$ref": "#/$defs/semantic_array"},
+        "limited_system_bottleneck_judgments": {"$ref": "#/$defs/semantic_array"},
+        "value_change_hypotheses": {"$ref": "#/$defs/semantic_array"},
+        "contradictions_and_uncertainties": {"$ref": "#/$defs/semantic_array"},
+        "evidence_gap_referrals": {"$ref": "#/$defs/semantic_array"},
+        "verification_and_falsification": {"$ref": "#/$defs/semantic_array"},
         "provenance": {"$ref": "definitions_v2_1.schema.json#/$defs/provenance"},
         "content_hash": {"$ref": "#/$defs/sha256"}
       },
@@ -50,10 +97,36 @@
         "capability_rule_version": {"const": "industry_cognition_capability_v1"},
         "domain_matrix_version": {"const": "industry_cognition_domains_v1"},
         "audit_question_set_version": {"const": "industry_cognition_audit_questions_v1"},
-        "domain_coverage": {"$ref": "#/$defs/object_array"},
-        "computed_capability": {"type": "object"},
-        "coverage_metrics": {"type": "object"},
-        "audit_answers": {"$ref": "#/$defs/object_array"},
+        "domain_coverage": {"$ref": "#/$defs/semantic_array"},
+        "computed_capability": {
+          "type": "object",
+          "properties": {
+            "overall_capability": {"type": "string"},
+            "ai_system_interconnect_cognition": {"type": "string"},
+            "signal_integrity_and_pcb_mechanism_cognition": {"type": "string"},
+            "pcb_material_and_manufacturing_cognition": {"type": "string"},
+            "pcb_industry_bottleneck_judgment": {"type": "string"},
+            "full_ai_pcb_industry_cognition": {"type": "string"},
+            "company_mapping_readiness": {"type": "boolean"},
+            "next_required_action": {"type": "string"},
+            "automatic_gap_acquisition_authorized": {"type": "boolean"}
+          },
+          "additionalProperties": false
+        },
+        "coverage_metrics": {
+          "type": "object",
+          "properties": {
+            "claim_count": {"type": "integer", "minimum": 0},
+            "grounded_mechanism_count": {"type": "integer", "minimum": 0},
+            "skeleton_count": {"type": "integer", "minimum": 0},
+            "grounded_causal_edge_count": {"type": "integer", "minimum": 0},
+            "hypothesized_causal_edge_count": {"type": "integer", "minimum": 0},
+            "bottleneck_judgment_count": {"type": "integer", "minimum": 0},
+            "evidence_gap_count": {"type": "integer", "minimum": 0}
+          },
+          "additionalProperties": false
+        },
+        "audit_answers": {"$ref": "#/$defs/semantic_array"},
         "violations": {"type": "array", "items": {"type": "string"}},
         "warnings": {"type": "array", "items": {"type": "string"}},
         "content_hash": {"$ref": "#/$defs/sha256"}
