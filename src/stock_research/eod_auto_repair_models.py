@@ -121,7 +121,7 @@ class RepairRunSummary:
         browser_check = next(
             (
                 check
-                for check in reversed(self.checks_after or self.checks_before)
+                for check in reversed([*self.checks_before, *self.checks_after])
                 if check.name == "dashboard_browser_acceptance"
             ),
             None,

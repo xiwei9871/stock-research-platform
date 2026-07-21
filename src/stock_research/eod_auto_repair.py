@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import os
 import signal
 import subprocess
@@ -28,32 +27,6 @@ ActionRunner = Callable[[str, str | Path], RepairActionResult]
 ProgressEmitter = Callable[[dict[str, Any]], None]
 _PROGRESS_WRITE_LOCK = threading.Lock()
 ACTION_PROGRESS_HEARTBEAT_SECONDS = 60.0
-
-
-class EodActionRegistry(dict[str, ActionRunner]):
-    def __init__(self) -> None:
-        super().__init__()
-        self._trade_date = ""
-        self._strategy_run_id = ""
-
-    def begin_run(self, trade_date: str) -> None:
-        self._trade_date = str(trade_date)
-        self._strategy_run_id = ""
-
-    def record_strategy_run(self, trade_date: str, run_id: str) -> None:
-        if self._trade_date != str(trade_date):
-            raise ValueError("strategy run context is not active for trade date")
-        normalized_run_id = str(run_id).strip()
-        if not normalized_run_id:
-            raise ValueError("strategy publish result run_id missing")
-        self._strategy_run_id = normalized_run_id
-
-    def consume_strategy_run_id(self, trade_date: str) -> str:
-        if self._trade_date != str(trade_date):
-            return ""
-        run_id = self._strategy_run_id
-        self._strategy_run_id = ""
-        return run_id
 
 
 class ActionTimeoutError(TimeoutError):
@@ -787,9 +760,6 @@ def run_eod_auto_repair(
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
     registry = action_registry if action_registry is not None else build_default_action_registry(output_root="outputs")
-    begin_run = getattr(registry, "begin_run", None)
-    if callable(begin_run):
-        begin_run(trade_date)
     if mode == "loop":
         _reset_progress_files(out)
         summary = _run_eod_auto_repair_loop(
@@ -888,9 +858,6 @@ def run_eod_auto_repair(
     return summary
 
 
-_BROWSER_STRATEGY_IDS = ("lhb_shortline", "mid_trend", "tech_bottleneck")
-
-
 def _browser_revision_value(value: str | Callable[[], str] | None) -> str:
     if callable(value):
         revision = value()
@@ -910,126 +877,6 @@ def _browser_revision_value(value: str | Callable[[], str] | None) -> str:
     if not isinstance(revision, str) or not revision.strip():
         raise ValueError("browser acceptance application revision missing")
     return revision.strip()
-
-
-def _browser_timestamp(value: object, field: str) -> str:
-    if isinstance(value, datetime):
-        parsed = value
-    elif isinstance(value, str) and value.strip():
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    else:
-        raise ValueError(f"browser candidate {field} missing")
-    if parsed.tzinfo is None or parsed.utcoffset() is None:
-        raise ValueError(f"browser candidate {field} must be timezone-aware")
-    return parsed.astimezone(timezone.utc).isoformat()
-
-
-def _browser_candidate_from_manifest(
-    row: dict[str, object],
-    *,
-    strategy_id: str,
-    trade_date: str,
-    run_id: str,
-) -> dict[str, object]:
-    if row.get("status") != "success" or row.get("source") != "strategy_daily_eod":
-        raise ValueError(f"browser candidate manifest not successful: {strategy_id}")
-    if str(row.get("trade_date") or "") != trade_date:
-        raise ValueError(f"browser candidate trade date mismatch: {strategy_id}")
-    if str(row.get("latest_trade_date") or "") != trade_date:
-        raise ValueError(f"browser candidate latest trade date mismatch: {strategy_id}")
-    if str(row.get("run_id") or "") != run_id:
-        raise ValueError(f"browser candidate run mismatch: {strategy_id}")
-    metadata = row.get("metadata")
-    if not isinstance(metadata, dict):
-        raise ValueError(f"browser candidate metadata malformed: {strategy_id}")
-    summary = metadata.get("summary")
-    metadata_identity = metadata.get("publication_identity")
-    if not isinstance(summary, dict) or not isinstance(metadata_identity, dict):
-        raise ValueError(f"browser candidate identity malformed: {strategy_id}")
-    summary_identity = summary.get("publication_identity")
-    if not isinstance(summary_identity, dict):
-        raise ValueError(f"browser candidate summary identity malformed: {strategy_id}")
-    if metadata_identity.get("strategy_id") != strategy_id or summary_identity.get("strategy_id") != strategy_id:
-        raise ValueError(f"browser candidate strategy identity mismatch: {strategy_id}")
-    contract_ids = {
-        str(identity.get("contract_id") or "")
-        for identity in (metadata_identity, summary_identity)
-    }
-    if len(contract_ids) != 1 or "" in contract_ids:
-        raise ValueError(f"browser candidate contract identity mismatch: {strategy_id}")
-    publish_id = metadata.get("publish_id")
-    if not isinstance(publish_id, str) or not publish_id.strip():
-        raise ValueError(f"browser candidate publish identity missing: {strategy_id}")
-    if "publish_id" in summary and summary.get("publish_id") != publish_id:
-        raise ValueError(f"browser candidate publish identity conflict: {strategy_id}")
-    artifact_versions = {
-        str(container.get("artifact_version") or "")
-        for container in (metadata, summary)
-    }
-    if len(artifact_versions) != 1 or "" in artifact_versions:
-        raise ValueError(f"browser candidate artifact version mismatch: {strategy_id}")
-    if "total_return_pct" in summary:
-        total_return_pct = summary.get("total_return_pct")
-    elif "total_return" in summary:
-        total_return_pct = 100.0 * float(summary["total_return"])
-    elif "final_equity" in summary:
-        total_return_pct = 100.0 * (float(summary["final_equity"]) - 1.0)
-    else:
-        raise ValueError(f"browser candidate return missing: {strategy_id}")
-    if isinstance(total_return_pct, bool) or not isinstance(total_return_pct, (int, float)):
-        raise ValueError(f"browser candidate return malformed: {strategy_id}")
-    normalized_return = float(total_return_pct)
-    if not math.isfinite(normalized_return):
-        raise ValueError(f"browser candidate return malformed: {strategy_id}")
-    return {
-        "strategyId": strategy_id,
-        "tradeDate": trade_date,
-        "totalReturnPct": normalized_return,
-        "contractId": next(iter(contract_ids)),
-        "publishId": publish_id.strip(),
-        "publishStartedAt": _browser_timestamp(
-            row.get("started_at"),
-            f"publishStartedAt:{strategy_id}",
-        ),
-        "artifactVersion": next(iter(artifact_versions)),
-        "runId": run_id,
-    }
-
-
-def _load_browser_candidate_publications(
-    trade_date: str,
-    *,
-    manifest_loader: Callable[..., list[dict[str, Any]]],
-    expected_run_id: str | None = None,
-) -> tuple[str, list[dict[str, object]]]:
-    required_modules = {f"strategy_{strategy_id}" for strategy_id in _BROWSER_STRATEGY_IDS}
-    rows = [
-        dict(row)
-        for row in manifest_loader(trade_date=trade_date)
-        if row.get("module") in required_modules
-    ]
-    if expected_run_id:
-        rows = [row for row in rows if row.get("run_id") == expected_run_id]
-    run_ids = {str(row.get("run_id") or "") for row in rows}
-    run_ids.discard("")
-    if len(run_ids) != 1:
-        raise ValueError("browser candidate manifests must identify exactly one strategy run")
-    run_id = next(iter(run_ids))
-    by_module: dict[str, list[dict[str, object]]] = {}
-    for row in rows:
-        by_module.setdefault(str(row.get("module") or ""), []).append(row)
-    if set(by_module) != required_modules or any(len(module_rows) != 1 for module_rows in by_module.values()):
-        raise ValueError("browser candidate manifests incomplete or ambiguous")
-    candidates = [
-        _browser_candidate_from_manifest(
-            by_module[f"strategy_{strategy_id}"][0],
-            strategy_id=strategy_id,
-            trade_date=trade_date,
-            run_id=run_id,
-        )
-        for strategy_id in _BROWSER_STRATEGY_IDS
-    ]
-    return run_id, candidates
 
 
 def _browser_result_payload(result: object) -> dict[str, object]:
@@ -1078,11 +925,12 @@ def build_default_action_registry(
     )
     from stock_research.daily_pipeline import run_daily_factor_pipeline
     from stock_research.data_run_manifest import (
-        load_recent_data_run_manifest,
+        load_strategy_publication_manifests,
         upsert_data_run_manifest,
     )
     from stock_research.eod_browser_acceptance import (
         run_browser_acceptance,
+        select_latest_strategy_candidate_publications,
         write_browser_acceptance_manifest,
     )
     from stock_research.free_enrichment_data import run_free_enrichment_backfill
@@ -1104,14 +952,16 @@ def build_default_action_registry(
 
     selected_browser_runner = browser_runner or run_browser_acceptance
     selected_browser_writer = browser_manifest_writer or write_browser_acceptance_manifest
-    selected_browser_manifest_loader = browser_manifest_loader or load_recent_data_run_manifest
+    selected_browser_manifest_loader = (
+        browser_manifest_loader or load_strategy_publication_manifests
+    )
     selected_strategy_publisher = strategy_publisher or publish_strategy_eod
     selected_browser_output_root = Path(
         browser_output_root
         if browser_output_root is not None
         else Path(output_root) / "research" / "eod_browser_acceptance"
     )
-    registry = EodActionRegistry()
+    registry: dict[str, ActionRunner] = {}
 
     def lhb_action(trade_date: str, output_dir: str | Path) -> RepairActionResult:
         return repair_lhb_source_and_features(
@@ -1122,27 +972,18 @@ def build_default_action_registry(
         )
 
     def strategy_action(trade_date: str, output_dir: str | Path) -> RepairActionResult:
-        def publisher(**kwargs) -> dict[str, Any]:
-            result = selected_strategy_publisher(**kwargs)
-            run_id = str(result.get("run_id") or "")
-            registry.record_strategy_run(trade_date, run_id)
-            return result
-
         return repair_strategy_publish(
             trade_date,
             output_root=output_root,
-            publisher=publisher,
+            publisher=selected_strategy_publisher,
         )
 
     def browser_acceptance_action(trade_date: str, output_dir: str | Path) -> RepairActionResult:
         try:
-            expected_run_id = registry.consume_strategy_run_id(trade_date)
-            if not expected_run_id:
-                raise ValueError("browser acceptance requires strategy publish in the current EOD run")
-            run_id, candidate_publications = _load_browser_candidate_publications(
-                trade_date,
-                manifest_loader=selected_browser_manifest_loader,
-                expected_run_id=expected_run_id,
+            rows = selected_browser_manifest_loader(trade_date=trade_date)
+            run_id, candidate_publications = select_latest_strategy_candidate_publications(
+                rows,
+                trade_date=trade_date,
             )
             revision = _browser_revision_value(browser_revision)
             result = selected_browser_runner(

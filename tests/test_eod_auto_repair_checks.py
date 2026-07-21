@@ -17,18 +17,47 @@ from stock_research.eod_browser_acceptance import REPORT_SCHEMA_VERSION
 
 
 def _browser_manifest_row(**overrides):
+    trade_date = "2026-06-29"
+    run_id = "strategy-eod-2026-06-29-local"
+    candidate_snapshot = {
+        "schemaVersion": "playwright-eod-candidate-snapshot/v1",
+        "tradeDate": trade_date,
+        "publications": [
+            {
+                "strategyId": strategy_id,
+                "tradeDate": trade_date,
+                "totalReturnPct": 50.0 + index,
+                "contractId": f"{strategy_id}:balanced:v1",
+                "publishId": f"{strategy_id}-publish-{trade_date}",
+                "publishStartedAt": f"{trade_date}T0{index + 1}:00:00+00:00",
+                "artifactVersion": "strategy-publication/v1",
+            }
+            for index, strategy_id in enumerate(
+                ("lhb_shortline", "mid_trend", "tech_bottleneck")
+            )
+        ],
+    }
     row = {
         "module": "dashboard_browser_acceptance",
         "source": "eod_browser_acceptance",
         "status": "success",
-        "trade_date": "2026-06-29",
-        "run_id": "strategy-eod-2026-06-29-local",
+        "trade_date": trade_date,
+        "run_id": run_id,
         "ended_at": "2026-06-29T09:00:00+00:00",
+        "duration_seconds": 2.0,
         "warnings": [],
+        "warning_count": 0,
         "artifact_path": "/tmp/eod-browser-acceptance.json",
+        "code_version": "abc123",
         "metadata": {
             "report_schema_version": REPORT_SCHEMA_VERSION,
+            "run_id": run_id,
             "application_revision": "abc123",
+            "browser_project": "eod-chromium",
+            "duration_seconds": 2.0,
+            "failure_classes": [],
+            "warnings": [],
+            "candidate_snapshot": candidate_snapshot,
             "artifact_paths": [
                 "/tmp/eod-browser-acceptance.json",
                 "/tmp/trace.zip",
@@ -36,6 +65,11 @@ def _browser_manifest_row(**overrides):
         },
     }
     row.update(overrides)
+    if "metadata" not in overrides:
+        row["metadata"] = dict(row["metadata"])
+        row["metadata"]["run_id"] = row["run_id"]
+        row["metadata"]["warnings"] = list(row["warnings"])
+        row["warning_count"] = len(row["warnings"])
     return row
 
 
@@ -199,6 +233,27 @@ def test_check_dashboard_browser_acceptance_does_not_use_run_id_to_break_latest_
     assert result.status == RepairStatus.FAILED
     assert result.blocker is True
     assert "ambiguous" in result.message
+
+
+@pytest.mark.parametrize("corruption", ["browser_project", "duration", "snapshot", "artifacts"])
+def test_check_dashboard_browser_acceptance_rejects_corrupt_publishable_manifest(corruption):
+    row = _browser_manifest_row()
+    if corruption == "browser_project":
+        row["metadata"]["browser_project"] = "chromium"
+    elif corruption == "duration":
+        row["metadata"]["duration_seconds"] = float("nan")
+    elif corruption == "snapshot":
+        row["metadata"]["candidate_snapshot"]["publications"].pop()
+    else:
+        row["metadata"]["artifact_paths"] = []
+
+    result = eod_auto_repair_checks.check_dashboard_browser_acceptance(
+        "2026-06-29",
+        manifest_loader=lambda trade_date: [row],
+    )
+
+    assert result.status == RepairStatus.FAILED
+    assert result.blocker is True
 
 
 def test_check_lhb_features_reads_factor_table_with_fetcher():

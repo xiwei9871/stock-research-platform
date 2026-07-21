@@ -14,7 +14,10 @@ from stock_research.data_run_manifest import (
 )
 from stock_research.db import connect, fetch_all
 from stock_research.eod_auto_repair_models import RepairCheckResult, RepairStatus
-from stock_research.eod_browser_acceptance import REPORT_SCHEMA_VERSION
+from stock_research.eod_browser_acceptance import (
+    BrowserAcceptanceError,
+    validate_browser_acceptance_manifest_entry,
+)
 
 
 @dataclass(frozen=True)
@@ -414,36 +417,21 @@ def check_dashboard_browser_acceptance(
     if sum(1 for business_time, _row in ranked if business_time == latest_time) != 1:
         return _browser_acceptance_failure("browser acceptance latest manifest ambiguous")
 
-    metadata = latest.get("metadata")
-    warnings = latest.get("warnings")
-    if not isinstance(metadata, dict) or not isinstance(warnings, list):
-        return _browser_acceptance_failure("browser acceptance manifest malformed")
-    run_id = str(latest.get("run_id") or "")
-    row_trade_date = str(latest.get("trade_date") or "")
-    schema_version = metadata.get("report_schema_version")
-    revision = metadata.get("application_revision")
-    artifact_paths = metadata.get("artifact_paths")
-    if row_trade_date != trade_date:
-        return _browser_acceptance_failure(
-            "browser acceptance manifest wrong trade date",
-            {"run_id": run_id, "trade_date": row_trade_date},
-        )
-    if schema_version != REPORT_SCHEMA_VERSION:
-        return _browser_acceptance_failure(
-            "browser acceptance manifest wrong schema",
-            {"run_id": run_id, "report_schema_version": schema_version},
-        )
-    if not isinstance(revision, str) or not revision.strip() or not isinstance(artifact_paths, list):
-        return _browser_acceptance_failure("browser acceptance manifest malformed")
-    metrics = {
-        "run_id": run_id,
-        "trade_date": row_trade_date,
-        "report_schema_version": schema_version,
-        "application_revision": revision,
-        "warnings": list(warnings),
-        "artifact_paths": [str(path) for path in artifact_paths],
-    }
     status = latest.get("status")
+    if status not in {"success", "degraded"}:
+        return _browser_acceptance_failure(
+            "browser acceptance failed",
+            {"run_id": str(latest.get("run_id") or ""), "status": status},
+        )
+    try:
+        metrics = validate_browser_acceptance_manifest_entry(
+            latest,
+            expected_trade_date=trade_date,
+        )
+    except BrowserAcceptanceError as exc:
+        return _browser_acceptance_failure(
+            f"browser acceptance manifest malformed: {exc}"
+        )
     if status == "success":
         return RepairCheckResult(
             "dashboard_browser_acceptance",
@@ -451,14 +439,12 @@ def check_dashboard_browser_acceptance(
             "ready",
             metrics,
         )
-    if status == "degraded":
-        return RepairCheckResult(
-            "dashboard_browser_acceptance",
-            RepairStatus.DEGRADED,
-            "browser acceptance publishable with warnings",
-            metrics,
-        )
-    return _browser_acceptance_failure("browser acceptance failed", metrics)
+    return RepairCheckResult(
+        "dashboard_browser_acceptance",
+        RepairStatus.DEGRADED,
+        "browser acceptance publishable with warnings",
+        metrics,
+    )
 
 
 def _stale_strategy_performance_modules(

@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timezone
+from decimal import Decimal
 import hashlib
 import json
 import math
@@ -263,6 +264,7 @@ def write_browser_acceptance_manifest(
         code_version=revision,
         metadata={
             "report_schema_version": REPORT_SCHEMA_VERSION,
+            "run_id": run_id,
             "application_revision": revision,
             "browser_project": project,
             "duration_seconds": result.duration_seconds,
@@ -423,6 +425,128 @@ def _validate_candidate_snapshot(value: object, expected_trade_date: str) -> dic
         "schemaVersion": CANDIDATE_SCHEMA_VERSION,
         "tradeDate": trade_date,
         "publications": normalized,
+    }
+
+
+def _manifest_number(value: object, code: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float, Decimal)):
+        raise _error(code)
+    number = float(value)
+    if not math.isfinite(number):
+        raise _error(code)
+    return number
+
+
+def _manifest_string_list(value: object, code: str) -> list[str]:
+    return [
+        _required_string(item, f"{code}:{index}")
+        for index, item in enumerate(_required_list(value, code))
+    ]
+
+
+def _manifest_artifact_paths(value: object) -> list[str]:
+    paths = _manifest_string_list(value, "browser_acceptance_manifest_artifact_paths")
+    if not paths:
+        raise _error("browser_acceptance_manifest_artifact_paths_empty")
+    for path in paths:
+        windows_path = PureWindowsPath(path)
+        if not (PurePosixPath(path).is_absolute() or windows_path.is_absolute()):
+            _safe_report_artifact_path(path)
+    if len(set(paths)) != len(paths):
+        raise _error("browser_acceptance_manifest_artifact_paths_duplicate")
+    return paths
+
+
+def validate_browser_acceptance_manifest_entry(
+    value: Mapping[str, object],
+    *,
+    expected_trade_date: str,
+) -> dict[str, object]:
+    row = dict(value)
+    if row.get("module") != "dashboard_browser_acceptance":
+        raise _error("browser_acceptance_manifest_module")
+    if row.get("source") != "eod_browser_acceptance":
+        raise _error("browser_acceptance_manifest_source")
+    status = _required_string(row.get("status"), "browser_acceptance_manifest_status")
+    if status not in {"success", "degraded"}:
+        raise _error("browser_acceptance_manifest_status", status)
+    trade_date = _required_date(
+        row.get("trade_date"), "browser_acceptance_manifest_trade_date"
+    )
+    if trade_date != expected_trade_date:
+        raise _error(
+            "browser_acceptance_manifest_trade_date_mismatch",
+            f"{trade_date}:{expected_trade_date}",
+        )
+    run_id = _required_string(row.get("run_id"), "browser_acceptance_manifest_run_id")
+    metadata = _required_object(
+        row.get("metadata"), "browser_acceptance_manifest_metadata"
+    )
+    if metadata.get("report_schema_version") != REPORT_SCHEMA_VERSION:
+        raise _error("browser_acceptance_manifest_report_schema_version")
+    if _required_string(
+        metadata.get("run_id"), "browser_acceptance_manifest_metadata_run_id"
+    ) != run_id:
+        raise _error("browser_acceptance_manifest_run_id_mismatch")
+    revision = _required_string(
+        metadata.get("application_revision"),
+        "browser_acceptance_manifest_application_revision",
+    )
+    if _required_string(
+        row.get("code_version"), "browser_acceptance_manifest_code_version"
+    ) != revision:
+        raise _error("browser_acceptance_manifest_revision_mismatch")
+    project = _required_string(
+        metadata.get("browser_project"), "browser_acceptance_manifest_browser_project"
+    )
+    if project != DEFAULT_BROWSER_PROJECT:
+        raise _error("browser_acceptance_manifest_browser_project", project)
+    duration = _manifest_number(
+        metadata.get("duration_seconds"), "browser_acceptance_manifest_duration"
+    )
+    row_duration = _manifest_number(
+        row.get("duration_seconds"), "browser_acceptance_manifest_row_duration"
+    )
+    if duration < 0 or row_duration < 0 or duration != row_duration:
+        raise _error("browser_acceptance_manifest_duration_mismatch")
+    failure_classes = _manifest_string_list(
+        metadata.get("failure_classes"),
+        "browser_acceptance_manifest_failure_classes",
+    )
+    warnings = _manifest_string_list(
+        metadata.get("warnings"), "browser_acceptance_manifest_warnings"
+    )
+    row_warnings = _manifest_string_list(
+        row.get("warnings"), "browser_acceptance_manifest_row_warnings"
+    )
+    if warnings != row_warnings:
+        raise _error("browser_acceptance_manifest_warnings_mismatch")
+    warning_count = row.get("warning_count")
+    if (
+        isinstance(warning_count, bool)
+        or not isinstance(warning_count, int)
+        or warning_count != len(warnings)
+    ):
+        raise _error("browser_acceptance_manifest_warning_count")
+    snapshot = _validate_candidate_snapshot(
+        metadata.get("candidate_snapshot"),
+        expected_trade_date,
+    )
+    artifact_paths = _manifest_artifact_paths(metadata.get("artifact_paths"))
+    if row.get("artifact_path") != artifact_paths[0]:
+        raise _error("browser_acceptance_manifest_artifact_path_mismatch")
+    return {
+        "status": status,
+        "trade_date": trade_date,
+        "run_id": run_id,
+        "report_schema_version": REPORT_SCHEMA_VERSION,
+        "application_revision": revision,
+        "browser_project": project,
+        "duration_seconds": duration,
+        "failure_classes": failure_classes,
+        "warnings": warnings,
+        "candidate_snapshot": snapshot,
+        "artifact_paths": artifact_paths,
     }
 
 
@@ -1759,6 +1883,75 @@ def _validated_publication_row(
         row.get("run_id"), f"previous_publication_run_id:{strategy_id}"
     )
     return publication, started_at, run_id
+
+
+def _strategy_manifest_business_time(row: Mapping[str, object]) -> datetime:
+    value = (
+        row.get("ended_at")
+        or row.get("updated_at")
+        or row.get("created_at")
+        or row.get("started_at")
+    )
+    return _timestamp_value(value, "browser_candidate_manifest_business_time")
+
+
+def select_latest_strategy_candidate_publications(
+    rows: Iterable[Mapping[str, object]],
+    *,
+    trade_date: str,
+) -> tuple[str, list[dict[str, object]]]:
+    expected_trade_date = _required_date(
+        trade_date, "browser_candidate_manifest_trade_date"
+    )
+    required_modules = {
+        f"strategy_{strategy_id}" for strategy_id in OFFICIAL_STRATEGY_IDS
+    }
+    cohorts: dict[str, list[tuple[Mapping[str, object], datetime]]] = {}
+    for raw in rows:
+        row = dict(raw)
+        if row.get("module") not in required_modules:
+            continue
+        run_id = _required_string(
+            row.get("run_id"), "browser_candidate_manifest_run_id"
+        )
+        cohorts.setdefault(run_id, []).append(
+            (row, _strategy_manifest_business_time(row))
+        )
+    if not cohorts:
+        raise _error("browser_candidate_manifest_missing")
+    cohort_times = {
+        run_id: max(timestamp for _row, timestamp in cohort_rows)
+        for run_id, cohort_rows in cohorts.items()
+    }
+    latest_time = max(cohort_times.values())
+    latest_run_ids = [
+        run_id for run_id, timestamp in cohort_times.items() if timestamp == latest_time
+    ]
+    if len(latest_run_ids) != 1:
+        raise _error("browser_candidate_manifest_latest_run_ambiguous")
+    run_id = latest_run_ids[0]
+    latest_rows = [row for row, _timestamp in cohorts[run_id]]
+    by_module: dict[str, list[Mapping[str, object]]] = {}
+    for row in latest_rows:
+        by_module.setdefault(str(row.get("module") or ""), []).append(row)
+    if set(by_module) != required_modules or any(
+        len(module_rows) != 1 for module_rows in by_module.values()
+    ):
+        raise _error("browser_candidate_manifest_latest_run_incomplete")
+    candidates: list[dict[str, object]] = []
+    for strategy_id in OFFICIAL_STRATEGY_IDS:
+        row = by_module[f"strategy_{strategy_id}"][0]
+        if row.get("source") != "strategy_daily_eod":
+            raise _error("browser_candidate_manifest_source", strategy_id)
+        publication, _started_at, row_run_id = _validated_publication_row(
+            row, strategy_id
+        )
+        if row_run_id != run_id:
+            raise _error("browser_candidate_manifest_run_id_mismatch", strategy_id)
+        if publication["tradeDate"] != expected_trade_date:
+            raise _error("browser_candidate_manifest_trade_date_mismatch", strategy_id)
+        candidates.append({**publication, "runId": run_id})
+    return run_id, candidates
 
 
 def _select_unique_latest_prior(

@@ -216,6 +216,7 @@ def test_write_browser_acceptance_manifest_persists_failed_status_and_evidence()
     assert entry["code_version"] == REVISION
     assert entry["metadata"] == {
         "report_schema_version": acceptance.REPORT_SCHEMA_VERSION,
+        "run_id": RUN_ID,
         "application_revision": REVISION,
         "browser_project": "eod-chromium",
         "duration_seconds": 3.25,
@@ -243,6 +244,64 @@ def test_parser_verified_success_result_writes_normalized_manifest(tmp_path):
     assert entry["metadata"]["candidate_snapshot"] == json.loads(
         json.dumps(result.snapshot)
     )
+
+
+def test_validate_browser_acceptance_manifest_entry_accepts_writer_output(tmp_path):
+    entry = acceptance.write_browser_acceptance_manifest(
+        _parsed_success_result(tmp_path),
+        manifest_upsert=lambda _entry: None,
+    )
+
+    normalized = acceptance.validate_browser_acceptance_manifest_entry(
+        entry,
+        expected_trade_date=TRADE_DATE,
+    )
+
+    assert normalized["run_id"] == RUN_ID
+    assert normalized["application_revision"] == REVISION
+    assert normalized["browser_project"] == "eod-chromium"
+    assert normalized["candidate_snapshot"]["tradeDate"] == TRADE_DATE
+    assert normalized["artifact_paths"] == list(entry["metadata"]["artifact_paths"])
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("module", "wrong_module"),
+        ("source", "wrong_source"),
+        ("trade_date", "2026-07-19"),
+        ("metadata.report_schema_version", "wrong/v0"),
+        ("metadata.application_revision", "different-revision"),
+        ("metadata.browser_project", "chromium"),
+        ("metadata.duration_seconds", -1.0),
+        ("metadata.failure_classes", [1]),
+        ("metadata.warnings", [1]),
+        ("metadata.candidate_snapshot.publications", []),
+        ("metadata.artifact_paths", []),
+        ("artifact_path", "/tmp/not-the-first-artifact.json"),
+    ],
+)
+def test_validate_browser_acceptance_manifest_entry_rejects_corruption(
+    tmp_path,
+    field,
+    value,
+):
+    entry = acceptance.write_browser_acceptance_manifest(
+        _parsed_success_result(tmp_path),
+        manifest_upsert=lambda _entry: None,
+    )
+    corrupted = deepcopy(entry)
+    target = corrupted
+    parts = field.split(".")
+    for part in parts[:-1]:
+        target = target[part]
+    target[parts[-1]] = value
+
+    with pytest.raises(BrowserAcceptanceError):
+        acceptance.validate_browser_acceptance_manifest_entry(
+            corrupted,
+            expected_trade_date=TRADE_DATE,
+        )
 
 
 @pytest.mark.parametrize("status", (RepairStatus.SUCCESS, RepairStatus.DEGRADED))
@@ -1545,6 +1604,76 @@ def _manifest_row(
             },
         },
     }
+
+
+def _strategy_cohort(
+    run_id: str,
+    *,
+    started_hour: int,
+    trade_date: str = TRADE_DATE,
+    status_by_strategy: dict[str, str] | None = None,
+):
+    rows = []
+    for index, strategy_id in enumerate(STRATEGY_IDS):
+        started_at = f"{trade_date}T{started_hour:02d}:{index:02d}:00+00:00"
+        row = _manifest_row(
+            strategy_id,
+            trade_date=trade_date,
+            started_at=started_at,
+            publish_id=f"{run_id}-{strategy_id}",
+            status=(status_by_strategy or {}).get(strategy_id, "success"),
+        )
+        row["run_id"] = run_id
+        rows.append(row)
+    return rows
+
+
+def test_select_latest_strategy_candidate_publications_uses_persisted_complete_cohort():
+    older = _strategy_cohort("run-old", started_hour=8)
+    older[0]["metadata"] = "malformed-old-identity"
+    latest = _strategy_cohort("run-latest", started_hour=12)
+
+    run_id, candidates = acceptance.select_latest_strategy_candidate_publications(
+        [*older, *latest],
+        trade_date=TRADE_DATE,
+    )
+
+    assert run_id == "run-latest"
+    assert [candidate["strategyId"] for candidate in candidates] == list(STRATEGY_IDS)
+    assert {candidate["runId"] for candidate in candidates} == {"run-latest"}
+
+
+@pytest.mark.parametrize("latest_problem", ["incomplete", "failed"])
+def test_select_latest_strategy_candidate_publications_does_not_fallback_old_complete_cohort(
+    latest_problem,
+):
+    older = _strategy_cohort("run-old", started_hour=8)
+    latest = _strategy_cohort(
+        "run-latest",
+        started_hour=12,
+        status_by_strategy={"tech_bottleneck": "failed"}
+        if latest_problem == "failed"
+        else None,
+    )
+    if latest_problem == "incomplete":
+        latest.pop()
+
+    with pytest.raises(BrowserAcceptanceError):
+        acceptance.select_latest_strategy_candidate_publications(
+            [*older, *latest],
+            trade_date=TRADE_DATE,
+        )
+
+
+def test_select_latest_strategy_candidate_publications_rejects_tied_latest_runs():
+    run_a = _strategy_cohort("run-a", started_hour=12)
+    run_z = _strategy_cohort("run-z", started_hour=12)
+
+    with pytest.raises(BrowserAcceptanceError, match="ambiguous"):
+        acceptance.select_latest_strategy_candidate_publications(
+            [*run_a, *run_z],
+            trade_date=TRADE_DATE,
+        )
 
 
 def _candidate_identity_from_row(row, strategy_id, *, include_run_id=True):

@@ -301,6 +301,27 @@ def load_browser_acceptance_manifests(
         return list(fetch_all(conn, sql, {"trade_date": trade_date}))
 
 
+def load_strategy_publication_manifests(
+    *,
+    trade_date: str,
+    service: str = SETTINGS.research_service,
+) -> list[dict[str, Any]]:
+    sql = """
+    SELECT *
+    FROM ops.data_run_manifest
+    WHERE trade_date = %(trade_date)s
+      AND source = 'strategy_daily_eod'
+      AND module IN (
+          'strategy_lhb_shortline',
+          'strategy_mid_trend',
+          'strategy_tech_bottleneck'
+      )
+    ORDER BY COALESCE(ended_at, updated_at, created_at, started_at) DESC
+    """
+    with connect(service) as conn:
+        return list(fetch_all(conn, sql, {"trade_date": trade_date}))
+
+
 def summarize_manifest_modules(modules: list[dict[str, Any]]) -> dict[str, Any]:
     warnings: list[str] = []
     errors: list[str] = []

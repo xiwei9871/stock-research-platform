@@ -115,6 +115,33 @@ def test_repair_summary_exposes_final_browser_check_and_action_without_new_canon
     }
 
 
+def test_repair_summary_keeps_latest_known_browser_check_when_recheck_plan_fails():
+    browser = RepairCheckResult(
+        "dashboard_browser_acceptance",
+        RepairStatus.SUCCESS,
+        "ready",
+        metrics={"run_id": "strategy-run-1"},
+    )
+    summary = RepairRunSummary(
+        trade_date="2026-07-20",
+        mode="loop",
+        final_status=RepairStatus.FAILED,
+        checks_before=[browser],
+        checks_after=[
+            RepairCheckResult(
+                "check_plan",
+                RepairStatus.FAILED,
+                "database unavailable",
+                blocker=True,
+            )
+        ],
+    )
+
+    payload = summary.to_dict()
+
+    assert payload["browser_acceptance"]["check"] == browser.to_dict()
+
+
 def test_repair_summary_serializes_stages_and_remaining_issues():
     summary = RepairRunSummary(
         trade_date="2026-07-01",

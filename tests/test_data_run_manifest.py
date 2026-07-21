@@ -309,6 +309,41 @@ def test_load_browser_acceptance_manifests_returns_all_exact_date_candidates(mon
     assert "run_id DESC" not in calls["sql"]
 
 
+def test_load_strategy_publication_manifests_returns_all_exact_date_cohorts(monkeypatch):
+    calls = {}
+
+    class FakeConnection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr(data_run_manifest, "connect", lambda service: FakeConnection())
+
+    def fake_fetch_all(conn, sql, params):
+        calls["sql"] = sql
+        calls["params"] = params
+        return [{"run_id": "run-old"}, {"run_id": "run-latest"}]
+
+    monkeypatch.setattr(data_run_manifest, "fetch_all", fake_fetch_all)
+
+    rows = data_run_manifest.load_strategy_publication_manifests(
+        trade_date="2026-07-20",
+        service="research",
+    )
+
+    assert rows == [{"run_id": "run-old"}, {"run_id": "run-latest"}]
+    assert calls["params"] == {"trade_date": "2026-07-20"}
+    assert "trade_date = %(trade_date)s" in calls["sql"]
+    assert "source = 'strategy_daily_eod'" in calls["sql"]
+    assert "strategy_lhb_shortline" in calls["sql"]
+    assert "strategy_mid_trend" in calls["sql"]
+    assert "strategy_tech_bottleneck" in calls["sql"]
+    assert "status = 'success'" not in calls["sql"]
+    assert "PARTITION BY" not in calls["sql"]
+
+
 def test_apply_schema_creates_manifest_before_publication_contract_schema(monkeypatch):
     calls = []
     connections = []
