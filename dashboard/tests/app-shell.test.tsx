@@ -71,6 +71,7 @@ const apiMocks = vi.hoisted(() => ({
   fetchWatchlistSignals: vi.fn(),
   fetchFactorLibrary: vi.fn(),
   fetchFactorScorePreview: vi.fn(),
+  fetchDailyReviewLite: vi.fn(),
   fetchMarketMonitorEod: vi.fn(),
   fetchMarketAnomalyContext: vi.fn(),
   fetchMarketOverview: vi.fn(),
@@ -1147,6 +1148,16 @@ describe('dashboard app shell', () => {
     apiMocks.fetchShadowFollowUpResolution.mockResolvedValue(makeShadowFollowUpResolution());
     apiMocks.fetchFactorLibrary.mockResolvedValue([]);
     apiMocks.fetchFactorScorePreview.mockResolvedValue({ trade_date: '2026-06-08', selected_factors: [], items: [] });
+    apiMocks.fetchDailyReviewLite.mockResolvedValue({
+      trade_date: '',
+      status: 'unavailable',
+      run: { run_id: '', source: 'display gate blocked', report_type: 'daily_review_lite', status: '' },
+      fallback: true,
+      sections: [],
+      artifacts: [],
+      warnings: ['display trade date unavailable'],
+      theme_research: null
+    });
     apiMocks.fetchMarketMonitorEod.mockResolvedValue(makeMarketMonitorPayload());
     apiMocks.fetchMarketAnomalyContext.mockImplementation((tradeDate: string) =>
       Promise.resolve(makeMarketAnomalyContextPayload({ trade_date: tradeDate }))
@@ -1513,6 +1524,90 @@ describe('dashboard app shell', () => {
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Open Home workspace' })).toHaveAttribute('aria-current', 'page')
     );
+  });
+
+  it.each([
+    {
+      path: '/daily-review',
+      requestMock: () => apiMocks.fetchDailyReviewLite,
+      expectedRequest: {}
+    },
+    {
+      path: '/market-monitor',
+      requestMock: () => apiMocks.fetchMarketMonitorEod,
+      expectedRequest: { topN: 5 }
+    }
+  ])('waits for display-date resolution before mounting $path', async ({ path, requestMock, expectedRequest }) => {
+    window.history.replaceState({}, '', path);
+    let resolveReadiness: (payload: Record<string, unknown>) => void = () => undefined;
+    apiMocks.fetchPlatformReadiness.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveReadiness = resolve;
+      })
+    );
+    apiMocks.fetchPlatformSummary.mockResolvedValueOnce({
+      latest_market_date: '2026-07-21',
+      latest_score_date: '2026-07-21',
+      latest_factor_date: '2026-07-21',
+      market_asset_count: 5207,
+      score_asset_count: 5207,
+      factor_count: 43,
+      score_versions: ['manual_v1'],
+      topn_preview: []
+    });
+
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
+
+    expect(screen.getByText('正在解析平台展示日期...')).toBeInTheDocument();
+    expect(requestMock()).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveReadiness({
+        mode: 'eod_local',
+        status: 'BLOCKED',
+        as_of: '2026-07-21T20:40:00+08:00',
+        display_trade_date: '',
+        latest_market_date: '2026-07-21',
+        checks: [],
+        warnings: ['display trade date unavailable']
+      });
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(requestMock()).toHaveBeenCalledWith(expectedRequest));
+    expect(requestMock()).not.toHaveBeenCalledWith(expect.objectContaining({ tradeDate: '2026-06-18' }));
+    expect(requestMock()).not.toHaveBeenCalledWith(expect.objectContaining({ tradeDate: '2026-07-21' }));
+  });
+
+  it('mounts direct daily review with the resolved prior display date', async () => {
+    window.history.replaceState({}, '', '/daily-review');
+    let resolveReadiness: (payload: Record<string, unknown>) => void = () => undefined;
+    apiMocks.fetchPlatformReadiness.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveReadiness = resolve;
+      })
+    );
+
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
+
+    expect(apiMocks.fetchDailyReviewLite).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveReadiness({
+        mode: 'eod_local',
+        status: 'BLOCKED',
+        as_of: '2026-07-21T20:40:00+08:00',
+        display_trade_date: '2026-07-20',
+        latest_market_date: '2026-07-21',
+        checks: [],
+        warnings: []
+      });
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(apiMocks.fetchDailyReviewLite).toHaveBeenCalledWith({ tradeDate: '2026-07-20' });
+    });
   });
 
   it('preserves theme research source context on direct canonical stock routes', async () => {
@@ -2179,14 +2274,16 @@ describe('dashboard app shell', () => {
 
     const { stockRenders } = await renderMockedAppShellForHandoff();
 
-    expect(stockRenders.at(-1)).toMatchObject({
-      initialAssetId: 'CN:SH:600519',
-      entryContext: {
-        assetId: 'CN:SH:600519',
-        sourceWorkspace: 'search',
-        query: '600519',
-        matchReason: 'Exact code match'
-      }
+    await waitFor(() => {
+      expect(stockRenders.at(-1)).toMatchObject({
+        initialAssetId: 'CN:SH:600519',
+        entryContext: {
+          assetId: 'CN:SH:600519',
+          sourceWorkspace: 'search',
+          query: '600519',
+          matchReason: 'Exact code match'
+        }
+      });
     });
   });
 

@@ -19,7 +19,6 @@ import { SectorFundRankingPanel } from './market-monitor/SectorFundRankingPanel'
 import { SectorHeatmapPanel } from './market-monitor/SectorHeatmapPanel';
 import { StockHeatmapPanel } from './market-monitor/StockHeatmapPanel';
 import {
-  DEFAULT_MARKET_MONITOR_TRADE_DATE,
   createEmptyMarketOverview,
   createEmptySectorFundFlow,
   hasMarketOverviewContent,
@@ -44,8 +43,6 @@ type MarketMonitorWorkspaceProps = {
   emotionPresentation?: 'strip' | 'panel';
   onOpenAsset?: (assetId: string, context: StockEntryContext) => void;
 };
-
-const DEFAULT_TRADE_DATE = DEFAULT_MARKET_MONITOR_TRADE_DATE;
 
 function createFallbackDetail(item: SectorHeatmapItem, tradeDate: string): SectorDetail {
   return {
@@ -75,11 +72,9 @@ export function MarketMonitorWorkspace({
   emotionPresentation = 'strip',
   onOpenAsset
 }: MarketMonitorWorkspaceProps = {}) {
-  const initialDate = initialTradeDate ?? DEFAULT_TRADE_DATE;
   const [tradeDate, setTradeDate] = useState(initialTradeDate ?? '');
-  const [tradeDateInput, setTradeDateInput] = useState(initialDate);
-  const [resolvedTradeDate, setResolvedTradeDate] = useState(initialDate);
-  const [latestAvailableTradeDate, setLatestAvailableTradeDate] = useState(initialDate);
+  const [tradeDateInput, setTradeDateInput] = useState(initialTradeDate ?? '');
+  const [resolvedTradeDate, setResolvedTradeDate] = useState(initialTradeDate ?? '');
   const [sectorType, setSectorType] = useState<SectorType>(initialMonitorTab === 'concept' ? 'concept' : 'industry');
   const [heatmapView, setHeatmapView] = useState<'sector' | 'stock'>('sector');
   const [selectedSectorId, setSelectedSectorId] = useState<string | null>(null);
@@ -99,7 +94,26 @@ export function MarketMonitorWorkspace({
   const [emotionError, setEmotionError] = useState<string | null>(null);
   const [emotionWarnings, setEmotionWarnings] = useState<string[]>([]);
   const [emotionRequestVersion, setEmotionRequestVersion] = useState(0);
-  const activeTradeDate = tradeDate || resolvedTradeDate || DEFAULT_TRADE_DATE;
+  const activeTradeDate = tradeDate || resolvedTradeDate;
+
+  useEffect(() => {
+    const nextTradeDate = initialTradeDate ?? '';
+    setTradeDate(nextTradeDate);
+    setTradeDateInput(nextTradeDate);
+    setResolvedTradeDate(nextTradeDate);
+    setOverviewData(null);
+    setHeatmapData(null);
+    setHeatmapWarnings([]);
+    setStockHeatmapData(null);
+    setStockHeatmapError(null);
+    setAnomalyContext(null);
+    setAnomalyContextError(null);
+    setRankingData(null);
+    setDetailData(null);
+    setEmotionPayload(null);
+    setEmotionError(null);
+    setEmotionWarnings([]);
+  }, [initialTradeDate]);
 
   useEffect(() => {
     setSelectedSectorId(null);
@@ -108,6 +122,7 @@ export function MarketMonitorWorkspace({
   useEffect(() => {
     let cancelled = false;
     setOverviewData(null);
+    if (!activeTradeDate) return undefined;
 
     void fetchMarketOverview(activeTradeDate)
       .then((overview) => {
@@ -130,6 +145,7 @@ export function MarketMonitorWorkspace({
     setHeatmapData(null);
     setHeatmapWarnings([]);
     setRankingData(null);
+    if (!activeTradeDate) return undefined;
 
     void Promise.allSettled([
       fetchSectorHeatmap(activeTradeDate, sectorType),
@@ -163,7 +179,14 @@ export function MarketMonitorWorkspace({
   }, [activeTradeDate, sectorType]);
 
   useEffect(() => {
-    if (heatmapView !== 'stock') return undefined;
+    if (heatmapView !== 'stock' || !activeTradeDate) {
+      if (!activeTradeDate) {
+        setStockHeatmapData(null);
+        setStockHeatmapError(null);
+        setStockHeatmapLoading(false);
+      }
+      return undefined;
+    }
 
     let cancelled = false;
     setStockHeatmapLoading(true);
@@ -193,7 +216,7 @@ export function MarketMonitorWorkspace({
   useEffect(() => {
     let cancelled = false;
 
-    if (!selectedSectorId) {
+    if (!activeTradeDate || !selectedSectorId) {
       setDetailData(null);
       return () => {
         cancelled = true;
@@ -226,12 +249,9 @@ export function MarketMonitorWorkspace({
     void fetchMarketMonitorEod(tradeDate ? { topN: 5, tradeDate } : { topN: 5 })
       .then((payload) => {
         if (cancelled) return;
-        const latestMarketDate =
-          payload.freshness?.latest_market_date?.trim() || payload.trade_date?.trim() || DEFAULT_TRADE_DATE;
-        const nextTradeDate = payload.trade_date?.trim() || latestMarketDate;
+        const nextTradeDate = payload.trade_date?.trim() || '';
         setEmotionPayload(payload);
         setEmotionWarnings(payload.warnings ?? []);
-        setLatestAvailableTradeDate(latestMarketDate);
         setResolvedTradeDate(nextTradeDate);
         setTradeDateInput(nextTradeDate);
       })
@@ -254,6 +274,10 @@ export function MarketMonitorWorkspace({
     let cancelled = false;
     setAnomalyContext(null);
     setAnomalyContextError(null);
+    if (!activeTradeDate) {
+      setAnomalyContextLoading(false);
+      return undefined;
+    }
     setAnomalyContextLoading(true);
 
     void fetchMarketAnomalyContext(activeTradeDate)
@@ -313,7 +337,7 @@ export function MarketMonitorWorkspace({
 
   const handleTradeDateSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const nextTradeDate = tradeDateInput.trim() || DEFAULT_TRADE_DATE;
+    const nextTradeDate = tradeDateInput.trim();
     setTradeDate(nextTradeDate);
     setResolvedTradeDate(nextTradeDate);
     setTradeDateInput(nextTradeDate);
@@ -321,10 +345,9 @@ export function MarketMonitorWorkspace({
   };
 
   const handleLoadLatest = () => {
-    const nextTradeDate = latestAvailableTradeDate || DEFAULT_TRADE_DATE;
     setTradeDate('');
-    setResolvedTradeDate(nextTradeDate);
-    setTradeDateInput(nextTradeDate);
+    setResolvedTradeDate('');
+    setTradeDateInput('');
     setEmotionRequestVersion((current) => current + 1);
   };
 
@@ -382,7 +405,7 @@ export function MarketMonitorWorkspace({
           error={emotionError}
           isLoading={emotionLoading}
           payload={emotionPayload}
-          requestedTradeDate={tradeDate || latestAvailableTradeDate}
+          requestedTradeDate={activeTradeDate}
           warnings={emotionWarnings}
         />
       ) : (
@@ -390,7 +413,7 @@ export function MarketMonitorWorkspace({
           error={emotionError}
           isLoading={emotionLoading}
           payload={emotionPayload}
-          requestedTradeDate={tradeDate || latestAvailableTradeDate}
+          requestedTradeDate={activeTradeDate}
           warnings={emotionWarnings}
         />
       )}

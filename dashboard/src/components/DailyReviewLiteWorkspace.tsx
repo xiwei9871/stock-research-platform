@@ -6,16 +6,12 @@ type DailyReviewLiteWorkspaceProps = {
   initialTradeDate?: string;
 };
 
-function todayDate() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-}
-
 function statusLabel(status: string) {
   const labels: Record<string, string> = {
     ready: '就绪',
     partial: '部分就绪',
     empty: '暂无产物',
+    unavailable: '不可用',
     failed: '失败'
   };
   return labels[status] ?? status;
@@ -76,7 +72,8 @@ function ThemeResearchDigest({ payload }: { payload: DailyReviewLitePayload }) {
 }
 
 export function DailyReviewLiteWorkspace({ initialTradeDate }: DailyReviewLiteWorkspaceProps) {
-  const [tradeDate, setTradeDate] = useState(initialTradeDate || todayDate());
+  const [tradeDate, setTradeDate] = useState(initialTradeDate ?? '');
+  const [dateResolved, setDateResolved] = useState(initialTradeDate !== undefined);
   const [payload, setPayload] = useState<DailyReviewLitePayload | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -88,7 +85,7 @@ export function DailyReviewLiteWorkspace({ initialTradeDate }: DailyReviewLiteWo
     setLoading(true);
     setError(null);
     try {
-      const nextPayload = await fetchDailyReviewLite({ tradeDate: nextTradeDate });
+      const nextPayload = await fetchDailyReviewLite(nextTradeDate ? { tradeDate: nextTradeDate } : {});
       if (requestIdRef.current === requestId) {
         setPayload(nextPayload);
       }
@@ -105,11 +102,21 @@ export function DailyReviewLiteWorkspace({ initialTradeDate }: DailyReviewLiteWo
   }, []);
 
   useEffect(() => {
+    requestIdRef.current += 1;
+    setTradeDate(initialTradeDate ?? '');
+    setDateResolved(initialTradeDate !== undefined);
+    setPayload(null);
+    setError(null);
+    setLoading(false);
+  }, [initialTradeDate]);
+
+  useEffect(() => {
+    if (!dateResolved) return undefined;
     void loadReview(tradeDate);
     return () => {
       requestIdRef.current += 1;
     };
-  }, [loadReview, tradeDate]);
+  }, [dateResolved, loadReview, tradeDate]);
 
   return (
     <section className="workspace-stack daily-review-lite" aria-label="每日复盘">
@@ -125,7 +132,10 @@ export function DailyReviewLiteWorkspace({ initialTradeDate }: DailyReviewLiteWo
             aria-label="daily review trade date"
             type="date"
             value={tradeDate}
-            onChange={(event) => setTradeDate(event.target.value)}
+            onChange={(event) => {
+              setDateResolved(true);
+              setTradeDate(event.target.value);
+            }}
           />
         </label>
         <div>

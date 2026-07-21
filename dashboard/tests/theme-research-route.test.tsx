@@ -143,7 +143,7 @@ describe('Theme research AppShell routing', () => {
     expect(screen.getByText('/theme-research/ai_logic_compute_chips_value_chain_v1')).toBeInTheDocument();
   });
 
-  it('hands a mapped company to the existing tech-bottleneck stock route', () => {
+  it('hands a mapped company to the existing tech-bottleneck stock route', async () => {
     window.history.replaceState({}, '', '/theme-research/ai_power_value_capture_v1/companies');
     render(<AppShell />);
 
@@ -151,7 +151,7 @@ describe('Theme research AppShell routing', () => {
 
     expect(window.location.pathname).toBe('/tech-bottleneck/stock/002837.SZ');
     expect(window.location.search).toBe('?source=theme_research');
-    expect(screen.getByRole('heading', { name: 'Stock Workspace Mock' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Stock Workspace Mock' })).toBeInTheDocument();
     expect(screen.getByText('002837.SZ')).toBeInTheDocument();
     expect(screen.getByTestId('stock-source-workspace')).toHaveTextContent('themeResearch');
     expect(screen.getByTestId('stock-tech-bottleneck-source')).toBeEmptyDOMElement();

@@ -82,7 +82,7 @@ describe('Tech Bottleneck review universe route integration', () => {
     expect(screen.queryByText('Hard-Tech Pool 90')).not.toBeInTheDocument();
   });
 
-  it('opens direct tech bottleneck stock URLs in the existing stock workspace', () => {
+  it('opens direct tech bottleneck stock URLs in the existing stock workspace', async () => {
     window.history.pushState(
       {},
       '',
@@ -91,7 +91,7 @@ describe('Tech Bottleneck review universe route integration', () => {
 
     render(<AppShell />);
 
-    expect(screen.getByRole('heading', { name: 'Stock Workspace' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Stock Workspace' })).toBeInTheDocument();
     expect(screen.getByText('002371.SZ')).toBeInTheDocument();
     expect(screen.getByText('techBottleneck')).toBeInTheDocument();
     expect(routeTestState.stockWorkspaceRenders.at(-1)).toMatchObject({

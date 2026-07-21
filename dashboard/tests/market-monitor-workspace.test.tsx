@@ -590,6 +590,88 @@ describe('MarketMonitorWorkspace', () => {
     vi.unstubAllGlobals();
   });
 
+  it('keeps a blocked empty EOD date from promoting the freshness candidate into active requests', async () => {
+    apiMocks.fetchMarketMonitorEod.mockResolvedValueOnce(
+      makeMarketMonitorPayload({
+        trade_date: '',
+        freshness: {
+          mode: 'eod',
+          label: 'Last Completed Trading Day',
+          is_realtime: false,
+          latest_market_date: '2026-07-21',
+          latest_factor_date: '2026-07-21',
+          latest_score_date: '2026-07-21'
+        },
+        warnings: ['display trade date unavailable: data run manifest missing']
+      })
+    );
+
+    renderWorkspace({ initialTradeDate: '' });
+
+    await waitFor(() => expect(apiMocks.fetchMarketMonitorEod).toHaveBeenCalledWith({ topN: 5 }));
+    expect(await screen.findByText('display trade date unavailable: data run manifest missing')).toBeInTheDocument();
+    expect(screen.getByLabelText('Market monitor trade date')).toHaveValue('');
+    expect(apiMocks.fetchMarketOverview).not.toHaveBeenCalled();
+    expect(apiMocks.fetchSectorHeatmap).not.toHaveBeenCalled();
+    expect(apiMocks.fetchSectorFundFlow).not.toHaveBeenCalled();
+    expect(apiMocks.fetchMarketAnomalyContext).not.toHaveBeenCalled();
+  });
+
+  it('starts date-dependent requests only after receiving a resolved display date', async () => {
+    renderWorkspace({ initialTradeDate: '2026-06-20' });
+
+    await waitFor(() => {
+      expect(apiMocks.fetchMarketMonitorEod).toHaveBeenCalledWith({ topN: 5, tradeDate: '2026-06-20' });
+      expect(apiMocks.fetchMarketOverview).toHaveBeenCalledWith('2026-06-20');
+      expect(apiMocks.fetchSectorHeatmap).toHaveBeenCalledWith('2026-06-20', 'industry');
+      expect(apiMocks.fetchSectorFundFlow).toHaveBeenCalledWith('2026-06-20', 'industry');
+      expect(apiMocks.fetchMarketAnomalyContext).toHaveBeenCalledWith('2026-06-20');
+    });
+  });
+
+  it('clears a previous resolved date when the display prop becomes blocked empty', async () => {
+    const { rerender } = render(<MarketMonitorWorkspace initialTradeDate="2026-06-20" />);
+
+    await waitFor(() => expect(apiMocks.fetchMarketOverview).toHaveBeenCalledWith('2026-06-20'));
+    apiMocks.fetchMarketMonitorEod.mockClear();
+    apiMocks.fetchMarketOverview.mockClear();
+    apiMocks.fetchSectorHeatmap.mockClear();
+    apiMocks.fetchSectorFundFlow.mockClear();
+    apiMocks.fetchMarketAnomalyContext.mockClear();
+    apiMocks.fetchMarketMonitorEod.mockResolvedValueOnce(
+      makeMarketMonitorPayload({
+        trade_date: '',
+        freshness: {
+          mode: 'eod',
+          label: 'Last Completed Trading Day',
+          is_realtime: false,
+          latest_market_date: '2026-07-21',
+          latest_factor_date: '2026-07-21',
+          latest_score_date: '2026-07-21'
+        },
+        warnings: ['display trade date unavailable: no ready manifest date']
+      })
+    );
+
+    rerender(<MarketMonitorWorkspace initialTradeDate="" />);
+
+    await waitFor(() => expect(apiMocks.fetchMarketMonitorEod).toHaveBeenCalledWith({ topN: 5 }));
+    expect(screen.getByLabelText('Market monitor trade date')).toHaveValue('');
+    expect(apiMocks.fetchMarketOverview).not.toHaveBeenCalled();
+    expect(apiMocks.fetchSectorHeatmap).not.toHaveBeenCalled();
+    expect(apiMocks.fetchSectorFundFlow).not.toHaveBeenCalled();
+    expect(apiMocks.fetchMarketAnomalyContext).not.toHaveBeenCalled();
+  });
+
+  it('keeps an explicit historical handoff date authoritative', async () => {
+    renderWorkspace({ initialTradeDate: '2026-06-19' });
+
+    await waitFor(() => {
+      expect(apiMocks.fetchMarketMonitorEod).toHaveBeenCalledWith({ topN: 5, tradeDate: '2026-06-19' });
+      expect(apiMocks.fetchMarketOverview).toHaveBeenCalledWith('2026-06-19');
+    });
+  });
+
   it('orchestrates overview, heatmap, ranking, and emotion APIs without letting mock data overwrite real results', async () => {
     renderWorkspace();
 
@@ -624,7 +706,7 @@ describe('MarketMonitorWorkspace', () => {
 
     const panel = await screen.findByRole('region', { name: '异常热区解释' });
 
-    expect(within(panel).getByText('行业联动排序')).toBeInTheDocument();
+    expect(await within(panel).findByText('行业联动排序')).toBeInTheDocument();
     expect(within(panel).getByText('银行')).toBeInTheDocument();
     expect(within(panel).getByText('1 只成分股出现放量信号。')).toBeInTheDocument();
     expect(within(panel).getByText('异常个股标签')).toBeInTheDocument();
@@ -816,7 +898,7 @@ describe('MarketMonitorWorkspace', () => {
     expect(screen.getByRole('heading', { name: '行业板块热力图' })).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole('heading', { name: '上涨板块热力图' })).toBeInTheDocument());
     expect(echartsMocks.init).not.toHaveBeenCalled();
-    expect(screen.getByLabelText('兼容热力块 上涨 API半导体')).toBeInTheDocument();
+    expect(await screen.findByLabelText('兼容热力块 上涨 API半导体')).toBeInTheDocument();
     expect(screen.getByLabelText('兼容热力块 下跌 API回调')).toBeInTheDocument();
   });
 

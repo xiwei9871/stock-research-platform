@@ -104,6 +104,35 @@ afterEach(() => {
 });
 
 describe('DailyReviewLiteWorkspace', () => {
+  it('does not request or substitute today while the initial date is unresolved', async () => {
+    render(<DailyReviewLiteWorkspace />);
+
+    expect(screen.getByLabelText('daily review trade date')).toHaveValue('');
+    await waitFor(() => expect(apiMocks.fetchDailyReviewLite).not.toHaveBeenCalled());
+  });
+
+  it('uses the backend default endpoint when the resolved display date is empty', async () => {
+    render(<DailyReviewLiteWorkspace initialTradeDate="" />);
+
+    await waitFor(() => expect(apiMocks.fetchDailyReviewLite).toHaveBeenCalledWith({}));
+    expect(screen.getByLabelText('daily review trade date')).toHaveValue('');
+  });
+
+  it('synchronizes a resolved date becoming blocked empty without retaining the old date', async () => {
+    const { rerender } = render(<DailyReviewLiteWorkspace initialTradeDate="2026-06-20" />);
+
+    await waitFor(() => {
+      expect(apiMocks.fetchDailyReviewLite).toHaveBeenCalledWith({ tradeDate: '2026-06-20' });
+    });
+    apiMocks.fetchDailyReviewLite.mockClear();
+
+    rerender(<DailyReviewLiteWorkspace initialTradeDate="" />);
+
+    await waitFor(() => expect(apiMocks.fetchDailyReviewLite).toHaveBeenCalledWith({}));
+    expect(screen.getByLabelText('daily review trade date')).toHaveValue('');
+    expect(apiMocks.fetchDailyReviewLite).not.toHaveBeenCalledWith({ tradeDate: '2026-06-20' });
+  });
+
   it('renders the independent daily review report structure', async () => {
     render(<DailyReviewLiteWorkspace initialTradeDate="2026-06-18" />);
 

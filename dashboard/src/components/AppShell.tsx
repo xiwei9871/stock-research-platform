@@ -105,7 +105,6 @@ const ADMIN_NAV_ITEMS: Array<{ mode: WorkspaceMode; label: string; ariaLabel: st
   { mode: 'userManagement', label: '用户管理', ariaLabel: 'Open User Management workspace' }
 ];
 
-const FALLBACK_DISPLAY_TRADE_DATE = '2026-06-18';
 const TECH_BOTTLENECK_REVIEW_UNIVERSE_SOURCE = 'tech_bottleneck_review_universe_frontend_dataset_v1';
 
 function stockCodeFromTechBottleneckPath(pathname: string) {
@@ -336,8 +335,9 @@ export function AppShell({ currentUser: _currentUser, onLogout, logoutPending = 
       ? strategyIdFromSearch(window.location.search)
       : undefined
   );
-  const [displayTradeDate, setDisplayTradeDate] = useState(FALLBACK_DISPLAY_TRADE_DATE);
-  const [stockDefaultTradeDate, setStockDefaultTradeDate] = useState(FALLBACK_DISPLAY_TRADE_DATE);
+  const [displayTradeDate, setDisplayTradeDate] = useState('');
+  const [stockDefaultTradeDate, setStockDefaultTradeDate] = useState('');
+  const [displayDateResolved, setDisplayDateResolved] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -347,13 +347,10 @@ export function AppShell({ currentUser: _currentUser, onLogout, logoutPending = 
       }
       const readiness = readinessResult.status === 'fulfilled' ? readinessResult.value : null;
       const summary = summaryResult.status === 'fulfilled' ? summaryResult.value : null;
-      const resolvedDisplayDate = resolvePlatformDisplayDate(
-        readiness,
-        summary?.latest_market_date,
-        FALLBACK_DISPLAY_TRADE_DATE
-      );
+      const resolvedDisplayDate = resolvePlatformDisplayDate(readiness, summary?.latest_market_date);
       setDisplayTradeDate(resolvedDisplayDate);
       setStockDefaultTradeDate(resolvedDisplayDate);
+      setDisplayDateResolved(true);
     });
     return () => {
       cancelled = true;
@@ -651,24 +648,34 @@ export function AppShell({ currentUser: _currentUser, onLogout, logoutPending = 
               onOpenMarketMonitor={openMarketMonitorWorkspaceFromStock}
             />
           ) : null}
-          {workspaceMode === 'dailyReview' ? <DailyReviewLiteWorkspace initialTradeDate={displayTradeDate} /> : null}
+          {workspaceMode === 'dailyReview' ? (
+            displayDateResolved ? (
+              <DailyReviewLiteWorkspace initialTradeDate={displayTradeDate} />
+            ) : (
+              <p className="muted" role="status">正在解析平台展示日期...</p>
+            )
+          ) : null}
           {workspaceMode === 'market' ? (
-            <MarketMonitorWorkspace
-              key={`market:${marketHandoff.version}`}
-              initialTradeDate={marketHandoff.tradeDate ?? displayTradeDate}
-              initialMonitorTab={marketHandoff.monitorTab}
-              initialAssetId={marketHandoff.assetId}
-              emotionPresentation="panel"
-              onOpenAsset={(assetId, context) =>
-                openStockWorkspace(assetId, {
-                  sourceWorkspace: 'market',
-                  query: context.query,
-                  matchReason: context.matchReason,
-                  tradeDate: context.tradeDate,
-                  monitorTab: context.monitorTab
-                })
-              }
-            />
+            marketHandoff.tradeDate || displayDateResolved ? (
+              <MarketMonitorWorkspace
+                key={`market:${marketHandoff.version}`}
+                initialTradeDate={marketHandoff.tradeDate ?? displayTradeDate}
+                initialMonitorTab={marketHandoff.monitorTab}
+                initialAssetId={marketHandoff.assetId}
+                emotionPresentation="panel"
+                onOpenAsset={(assetId, context) =>
+                  openStockWorkspace(assetId, {
+                    sourceWorkspace: 'market',
+                    query: context.query,
+                    matchReason: context.matchReason,
+                    tradeDate: context.tradeDate,
+                    monitorTab: context.monitorTab
+                  })
+                }
+              />
+            ) : (
+              <p className="muted" role="status">正在解析平台展示日期...</p>
+            )
           ) : null}
           {workspaceMode === 'researchReports' ? (
             <ResearchReportsWorkspace
@@ -689,15 +696,19 @@ export function AppShell({ currentUser: _currentUser, onLogout, logoutPending = 
             />
           ) : null}
           {workspaceMode === 'stock' ? (
-            <StockWorkspace
-              key={`stock:${stockHandoff.version}`}
-              initialAssetId={stockHandoff.assetId ?? selectedAssetId}
-              defaultTradeDate={stockDefaultTradeDate}
-              entryContext={stockHandoff}
-              onOpenNews={openNewsWorkspaceFromStock}
-              onOpenResearchReports={openResearchReportsWorkspaceFromStock}
-              onOpenMarketMonitor={openMarketMonitorWorkspaceFromStock}
-            />
+            stockHandoff.tradeDate || displayDateResolved ? (
+              <StockWorkspace
+                key={`stock:${stockHandoff.version}`}
+                initialAssetId={stockHandoff.assetId ?? selectedAssetId}
+                defaultTradeDate={stockDefaultTradeDate}
+                entryContext={stockHandoff}
+                onOpenNews={openNewsWorkspaceFromStock}
+                onOpenResearchReports={openResearchReportsWorkspaceFromStock}
+                onOpenMarketMonitor={openMarketMonitorWorkspaceFromStock}
+              />
+            ) : (
+              <p className="muted" role="status">正在解析平台展示日期...</p>
+            )
           ) : null}
           {workspaceMode === 'watchlist' ? (
             <WatchlistWorkspace
