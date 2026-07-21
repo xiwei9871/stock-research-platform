@@ -567,6 +567,9 @@ def _validate_eod_publication_contract(
         or re.fullmatch(r"[A-Za-z0-9._-]+", publish_id) is None
     ):
         return "contract_mismatch", "publish id missing or invalid"
+    publish_started_at = _publication_started_at(module)
+    if publish_started_at is None:
+        return "contract_mismatch", "publish start time missing or invalid"
     actual = metadata.get("publication_identity")
     summary_identity = summary.get("publication_identity")
     if not isinstance(actual, Mapping) or not isinstance(summary_identity, Mapping):
@@ -601,6 +604,11 @@ def _validate_eod_publication_contract(
             return "contract_mismatch", f"{location} artifact version mismatch"
         if "publish_id" in container and container.get("publish_id") != publish_id:
             return "contract_mismatch", f"{location} publish id mismatch"
+        if (
+            "publish_started_at" in container
+            and container.get("publish_started_at") != publish_started_at
+        ):
+            return "contract_mismatch", f"{location} publish start time mismatch"
     if metadata.get("identity_schema_version") != expected["identity_schema_version"]:
         return "contract_mismatch", "identity schema version missing"
     if metadata.get("artifact_version") != ARTIFACT_VERSION:
@@ -644,6 +652,9 @@ def _publication_metadata_metrics(
 ) -> dict[str, Any]:
     metadata = module.get("metadata") if isinstance(module.get("metadata"), Mapping) else {}
     metrics = _metrics_from_eod_summary(dict(summary))
+    publish_started_at = _publication_started_at(module)
+    if publish_started_at is not None:
+        metrics["publish_started_at"] = publish_started_at
     for key in ("publish_id", "artifact_version", "publication_manifest_path"):
         if metadata.get(key) is not None:
             metrics[key] = deepcopy(metadata[key])
@@ -655,6 +666,7 @@ def _publication_metadata_metrics(
             "config_fingerprint",
             "publication_policy",
             "publish_id",
+            "publish_started_at",
             "artifact_version",
             "publication_manifest_path",
             "strategy_version",
@@ -663,6 +675,23 @@ def _publication_metadata_metrics(
         )
         if key in metrics
     }
+
+
+def _publication_started_at(module: Mapping[str, Any]) -> str | None:
+    value = module.get("started_at")
+    if isinstance(value, datetime):
+        if value.tzinfo is None or value.utcoffset() is None:
+            return None
+        return value.isoformat()
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        return None
+    return parsed.isoformat()
 
 
 def _expected_publication_metrics(strategy_id: str) -> dict[str, Any]:
@@ -682,6 +711,7 @@ def _expected_publication_metrics(strategy_id: str) -> dict[str, Any]:
             "config_fingerprint": None,
             "publication_policy": None,
             "publish_id": None,
+            "publish_started_at": None,
             "artifact_version": None,
             "publication_manifest_path": None,
         }
@@ -691,6 +721,7 @@ def _expected_publication_metrics(strategy_id: str) -> dict[str, Any]:
         "config_fingerprint": identity["config_fingerprint"],
         "publication_policy": deepcopy(identity["publication_policy"]),
         "publish_id": None,
+        "publish_started_at": None,
         "artifact_version": None,
         "publication_manifest_path": None,
     }

@@ -481,14 +481,16 @@ def test_registered_strategy_without_versioned_eod_evidence_fails_closed(monkeyp
         "config_fingerprint": expected["config_fingerprint"],
         "publication_policy": expected["publication_policy"],
         "publish_id": None,
+        "publish_started_at": None,
         "artifact_version": None,
         "publication_manifest_path": None,
     }
 
 
-def test_publication_metadata_metrics_preserves_explicit_publish_id():
+def test_publication_metadata_metrics_preserves_explicit_publish_identity_timestamp():
     metrics = backtests._publication_metadata_metrics(
         {
+            "started_at": "2026-07-20T12:30:00+00:00",
             "metadata": {
                 "publish_id": "lhb-shortline-20260719",
                 "artifact_version": "strategy_artifact_v1",
@@ -499,6 +501,7 @@ def test_publication_metadata_metrics_preserves_explicit_publish_id():
     )
 
     assert metrics["publish_id"] == "lhb-shortline-20260719"
+    assert metrics["publish_started_at"] == "2026-07-20T12:30:00+00:00"
 
 
 def test_failed_official_eod_has_complete_fail_closed_contract_shape(monkeypatch):
@@ -533,6 +536,7 @@ def test_failed_official_eod_has_complete_fail_closed_contract_shape(monkeypatch
         "config_fingerprint": expected["config_fingerprint"],
         "publication_policy": expected["publication_policy"],
         "publish_id": None,
+        "publish_started_at": None,
         "artifact_version": None,
         "publication_manifest_path": None,
     }
@@ -549,6 +553,7 @@ def test_lhb_stale_performance_does_not_publish_latest_day_zero_return(monkeypat
         lambda strategy_id: {
             "module": "strategy_lhb_shortline",
             "status": "success",
+            "started_at": "2026-06-29T12:30:00+00:00",
             "row_count": 4,
             "trade_date": "2026-06-29",
             "latest_trade_date": "2026-06-29",
@@ -719,6 +724,7 @@ def test_latest_eod_metrics_fail_closed_per_strategy_for_publication_identity(tm
         modules[strategy_id] = {
             "module": f"strategy_{strategy_id}",
             "status": "success",
+            "started_at": "2026-07-20T12:30:00+00:00",
             "trade_date": "2026-07-18",
             "latest_trade_date": "2026-07-18",
             "row_count": 5,
@@ -766,6 +772,7 @@ def test_latest_eod_metrics_fail_closed_per_strategy_for_publication_identity(tm
         )["contract_id"]
         assert metrics["artifact_version"] == "strategy_artifact_v1"
         assert metrics["publish_id"] == "publish-1"
+        assert metrics["publish_started_at"] == "2026-07-20T12:30:00+00:00"
         assert metrics["publication_manifest_path"].endswith(
             f"/strategy_runs/{strategy_id}/publish-1/publication_manifest.json"
         )
@@ -855,8 +862,61 @@ def test_latest_eod_metrics_fail_closed_per_strategy_for_publication_identity(tm
         assert failed_closed["contract_status"] == "contract_mismatch", label
         assert failed_closed["signal_count"] == 0, label
         assert failed_closed["publish_id"] is None, label
+        assert failed_closed["publish_started_at"] is None, label
         assert "total_return_pct" not in failed_closed, label
     modules["mid_trend"] = original_mid_trend
+
+    for label, started_at, reason_fragment in (
+        ("missing", None, "publish start time missing or invalid"),
+        ("empty", "", "publish start time missing or invalid"),
+        ("malformed", "not-a-time", "publish start time missing or invalid"),
+        ("naive", "2026-07-20T12:30:00", "publish start time missing or invalid"),
+    ):
+        invalid_started_at = copy.deepcopy(original_mid_trend)
+        if started_at is None:
+            del invalid_started_at["started_at"]
+        else:
+            invalid_started_at["started_at"] = started_at
+        status, reason = backtests._validate_eod_publication_contract(
+            "mid_trend",
+            invalid_started_at,
+            invalid_started_at["metadata"]["summary"],
+        )
+        assert status == "contract_mismatch", label
+        assert reason_fragment in reason, label
+
+        modules["mid_trend"] = invalid_started_at
+        failed_closed = backtests._with_latest_eod_strategy_metrics(
+            {
+                "strategy_id": "mid_trend",
+                "strategy_name": "Mid Trend Combo",
+                "latest_metrics": {
+                    "publish_started_at": "2026-07-19T12:30:00+00:00",
+                    "total_return_pct": 175.29,
+                },
+            }
+        )["latest_metrics"]
+        assert failed_closed["contract_status"] == "contract_mismatch", label
+        assert failed_closed["publish_started_at"] is None, label
+        assert "total_return_pct" not in failed_closed, label
+    modules["mid_trend"] = original_mid_trend
+
+    for location in ("module", "metadata", "summary", "config"):
+        conflicting_started_at = copy.deepcopy(original_mid_trend)
+        metadata = conflicting_started_at["metadata"]
+        container = conflicting_started_at if location == "module" else metadata
+        if location == "summary":
+            container = metadata["summary"]
+        if location == "config":
+            container = metadata.setdefault("config", {})
+        container["publish_started_at"] = "2026-07-20T12:31:00+00:00"
+        status, reason = backtests._validate_eod_publication_contract(
+            "mid_trend",
+            conflicting_started_at,
+            conflicting_started_at["metadata"]["summary"],
+        )
+        assert status == "contract_mismatch", location
+        assert "publish start time mismatch" in reason, location
 
     conflicting_publish_identity = copy.deepcopy(original_mid_trend)
     conflicting_publish_identity["metadata"]["summary"]["publish_id"] = "publish-2"

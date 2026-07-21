@@ -1618,6 +1618,7 @@ export type StrategyCatalogItem = {
     performance_as_of_date?: string | null;
     contract_id?: string | null;
     publish_id?: string | null;
+    publish_started_at?: string | null;
     identity_schema_version?: string | null;
     config_fingerprint?: string | null;
     publication_policy?: Record<string, unknown> | null;
