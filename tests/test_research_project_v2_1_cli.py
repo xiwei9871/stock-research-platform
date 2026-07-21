@@ -107,6 +107,49 @@ def test_help_lists_all_eleven_commands(capsys: pytest.CaptureFixture[str]) -> N
         assert command in output
 
 
+def test_cognition_commands_are_read_only_deterministic_projections(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    base = Path("artifacts/research_projects/v2_1")
+    package = base / "analysis/ai_pcb_industry_cognition_package_v1.json"
+    audit = base / "analysis/ai_pcb_industry_cognition_audit_v1.json"
+    report = base / "reports/ai_pcb_industry_cognition_report_v1.md"
+
+    for command in ("validate", "show", "audit"):
+        code, payload = _run(
+            [
+                "cognition",
+                command,
+                "--package",
+                str(package),
+                "--report",
+                str(report),
+                "--audit",
+                str(audit),
+            ],
+            capsys,
+        )
+        assert code == 0
+        assert payload["status"] == "pass"
+
+    code = cli.run_research_project_v2_1_cli(
+        [
+            "cognition",
+            "render",
+            "--package",
+            str(package),
+            "--report",
+            str(report),
+            "--audit",
+            str(audit),
+        ]
+    )
+    captured = capsys.readouterr()
+    assert code == 0
+    assert captured.err == ""
+    assert captured.out.encode("utf-8") == report.read_bytes()
+
+
 def test_root_cli_delegates_raw_argv_before_main_parser(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -12,6 +12,7 @@ from stock_research.research_project_v2.errors import ResearchProjectV2Error
 from stock_research.research_project_v2_1.cognition import (
     calculate_claim_grounding,
     calculate_er_assessment,
+    load_cognition_package,
     validate_baseline_bindings,
     validate_causal_edges,
     validate_evidence_locator,
@@ -640,3 +641,31 @@ def test_repository_ai_pcb_cognition_package_is_valid_and_strictly_bounded() -> 
     assert package["research_framing"]["company_mapping_authorized"] is False
     assert package["research_framing"]["stage_a2_authorized"] is False
     assert package["research_framing"]["stage_b_authorized"] is False
+
+
+def test_repository_report_and_audit_are_deterministic_and_capability_bounded() -> None:
+    layout = LayeredResearchLayout.default()
+    package = load_cognition_package(
+        layout.analysis_dir / "ai_pcb_industry_cognition_package_v1.json",
+        layout=layout,
+    )
+    report = (layout.reports_dir / "ai_pcb_industry_cognition_report_v1.md").read_bytes()
+    audit = json.loads(
+        (layout.analysis_dir / "ai_pcb_industry_cognition_audit_v1.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    validate_persisted_report(package, report)
+    expected = compute_audit(package, report)
+    validate_persisted_audit(audit, expected)
+    assert expected["computed_capability"] == {
+        "overall_capability": "partial_industry_cognition_demand_side_only",
+        "ai_system_interconnect_cognition": "evidence_grounded",
+        "signal_integrity_and_pcb_mechanism_cognition": "unverified_skeleton_only",
+        "pcb_material_and_manufacturing_cognition": "not_assessable",
+        "pcb_industry_bottleneck_judgment": "not_available",
+        "full_ai_pcb_industry_cognition": "not_achieved",
+        "company_mapping_readiness": False,
+        "next_required_action": "evidence_gap_review",
+        "automatic_gap_acquisition_authorized": False,
+    }

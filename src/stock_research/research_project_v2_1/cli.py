@@ -17,6 +17,15 @@ from stock_research.research_project_v2_1.discovery import (
     write_discovery_batch,
 )
 from stock_research.research_project_v2_1.coverage import summarize_evidence_coverage
+from stock_research.research_project_v2_1.cognition import load_cognition_package
+from stock_research.research_project_v2_1.cognition_audit import (
+    compute_audit as compute_cognition_audit,
+    validate_persisted_audit,
+)
+from stock_research.research_project_v2_1.cognition_render import (
+    render_cognition_report,
+    validate_persisted_report,
+)
 from stock_research.research_project_v2_1.acquisition_contracts import AcquisitionContext
 from stock_research.research_project_v2_1.acquisition_doctor import (
     run_provider_doctor,
@@ -183,6 +192,18 @@ def _parser() -> argparse.ArgumentParser:
     show_attempt.add_argument("--project", required=True)
     show_attempt.add_argument("--version", required=True)
     show_attempt.add_argument("--attempt-id", required=True)
+
+    cognition = commands.add_parser(
+        "cognition", help="Validate and inspect an immutable cognition baseline."
+    )
+    cognition_commands = cognition.add_subparsers(
+        dest="cognition_command", required=True
+    )
+    for name in ("validate", "show", "audit", "render"):
+        command = cognition_commands.add_parser(name)
+        command.add_argument("--package", required=True)
+        command.add_argument("--report", required=True)
+        command.add_argument("--audit", required=True)
     return parser
 
 
@@ -822,6 +843,59 @@ def _acquisition_dispatch(
     raise AssertionError(f"Unhandled acquisition command: {args.acquisition_command}")
 
 
+def _read_required_bytes(path: str, *, purpose: str) -> bytes:
+    try:
+        return Path(path).read_bytes()
+    except OSError as exc:
+        raise ResearchProjectV2Error(
+            f"Unable to read cognition {purpose}",
+            code="RESEARCH_PROJECT_V2_1_COGNITION_INPUT_MISSING",
+            details={"path": path, "purpose": purpose},
+        ) from exc
+
+
+def _cognition_dispatch(
+    args: argparse.Namespace,
+    layout: LayeredResearchLayout,
+) -> dict[str, Any]:
+    package = load_cognition_package(Path(args.package).resolve(), layout=layout)
+    report_bytes = _read_required_bytes(args.report, purpose="report")
+    validate_persisted_report(package, report_bytes)
+    persisted_audit = _read_json(args.audit, purpose="cognition audit")
+    validate_v2_1_schema_payload(
+        "industry_cognition_baseline_v2_5", persisted_audit, layout=layout
+    )
+    computed_audit = compute_cognition_audit(package, report_bytes)
+    validate_persisted_audit(persisted_audit, computed_audit)
+
+    if args.cognition_command == "validate":
+        return {
+            "status": "pass",
+            "package_id": package["package_id"],
+            "package_content_hash": package["content_hash"],
+            "report_content_hash": computed_audit["report_content_hash"],
+            "audit_content_hash": computed_audit["content_hash"],
+            "scope_leakage": [],
+        }
+    if args.cognition_command == "show":
+        return {
+            "status": "pass",
+            "package_id": package["package_id"],
+            "computed_capability": computed_audit["computed_capability"],
+            "domain_coverage": computed_audit["domain_coverage"],
+            "er_assessments": package["er_assessments"],
+            "coverage_metrics": computed_audit["coverage_metrics"],
+            "blocking_gap_ids": sorted(
+                row["gap_id"] for row in package["evidence_gap_referrals"]
+            ),
+        }
+    if args.cognition_command == "audit":
+        return {"status": "pass", "audit": computed_audit}
+    if args.cognition_command == "render":
+        return {"status": "pass", "markdown": render_cognition_report(package)}
+    raise AssertionError(f"Unhandled cognition command: {args.cognition_command}")
+
+
 def _dispatch(
     args: argparse.Namespace,
     layout: LayeredResearchLayout,
@@ -871,6 +945,8 @@ def _dispatch(
         return {"status": "pass", **rebuild_layered_index(args.write, layout=layout)}
     if args.command == "acquisition":
         return _acquisition_dispatch(args, layout, clock)
+    if args.command == "cognition":
+        return _cognition_dispatch(args, layout)
     raise AssertionError(f"Unhandled command: {args.command}")
 
 
@@ -884,6 +960,14 @@ def _exit_for_domain_error(
     command: str | None,
 ) -> int:
     code = error.code
+    if command == "cognition":
+        if code == "RESEARCH_PROJECT_V2_1_COGNITION_SCOPE_VIOLATION":
+            return 4
+        if code == "RESEARCH_PROJECT_V2_1_COGNITION_UPSTREAM_DRIFT":
+            return 3
+        if code == "RESEARCH_PROJECT_V2_1_COGNITION_INPUT_MISSING":
+            return 2
+        return 1
     not_found = {
         "RESEARCH_PROJECT_V2_1_PROJECT_NOT_FOUND",
         "RESEARCH_PROJECT_V2_1_VERSION_NOT_FOUND",
@@ -969,7 +1053,16 @@ def run_research_project_v2_1_cli(
         command = args.command
         effective_clock = clock or (lambda: datetime.now(timezone.utc))
         payload = _dispatch(args, LayeredResearchLayout.default(), effective_clock)
-        _print_json(payload)
+        if args.command == "cognition" and args.cognition_command == "render":
+            markdown = payload.get("markdown")
+            if not isinstance(markdown, bytes):
+                raise ResearchProjectV2Error(
+                    "Cognition renderer did not return bytes",
+                    code="RESEARCH_PROJECT_V2_1_COGNITION_VALIDATION_FAILED",
+                )
+            print(markdown.decode("utf-8"), end="")
+        else:
+            _print_json(payload)
         if args.command == "gate" and payload.get("status") == "fail":
             return 4
         if args.command == "audit" and payload.get("status") == "fail":
