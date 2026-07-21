@@ -85,6 +85,12 @@ class Settings:
             "STOCK_RESEARCH_BROWSER_ACCEPTANCE_REQUIRED_FROM", ""
         ).strip()
     )
+    eod_browser_acceptance_enabled: bool = field(
+        default_factory=lambda: _env_bool(
+            "STOCK_RESEARCH_EOD_BROWSER_ACCEPTANCE_ENABLED",
+            False,
+        )
+    )
 
 
 SETTINGS = Settings()

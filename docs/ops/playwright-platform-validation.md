@@ -61,7 +61,7 @@ The examples use ports `5374` and `8966` to avoid the interactive local Dashboar
 Backend focused contracts:
 
 ```bash
-rtk /Users/xiwei/stock_research/.venv/bin/python -m pytest \
+rtk .venv/bin/python -m pytest \
   tests/test_dashboard_backtests.py \
   tests/test_dashboard_review_queue.py \
   tests/test_platform_validation_report.py \
@@ -100,7 +100,7 @@ pnpm test:e2e:real
 Sandbox:
 
 ```bash
-/Users/xiwei/stock_research/.venv/bin/python scripts/run_playwright_sandbox.py
+.venv/bin/python scripts/run_playwright_sandbox.py
 ```
 
 The sandbox runner must resolve `stock_research_e2e_test`, connect, and verify `current_database()` ends in `_test`. Missing service is exit 2 and an environment blocker. A non-test database is a hard refusal. Never set `PLAYWRIGHT_SANDBOX_SERVICE=stock_research`.
@@ -128,7 +128,7 @@ Playwright JSON attachment paths must resolve inside the result JSON's directory
 Generate a candidate report with explicitly labeled inputs:
 
 ```bash
-rtk env PYTHONPATH=src /Users/xiwei/stock_research/.venv/bin/python \
+rtk env PYTHONPATH=src .venv/bin/python \
   scripts/build_platform_validation_report.py \
   config/platform_validation_routes.json \
   --playwright-results "mock=$audit_root/inputs/report-ready/playwright-mock-p0.json" \
@@ -222,7 +222,7 @@ The JSON, Markdown, and HTML files must agree on the EOD run ID, trade date, thr
 
 ### Controlled Boundary
 
-`STOCK_RESEARCH_BROWSER_ACCEPTANCE_REQUIRED_FROM` is the promotion boundary. Empty means disabled. On or after a nonempty ISO date, a missing or failed browser acceptance manifest keeps the prior ready display date. Success or degraded acceptance may advance the display date only when the remaining readiness contracts pass.
+`STOCK_RESEARCH_EOD_BROWSER_ACCEPTANCE_ENABLED` is the EOD execution switch. It defaults to `false`; unless it is explicitly `true`, the cron wrapper and Python loop omit the browser check and action before execution. `STOCK_RESEARCH_BROWSER_ACCEPTANCE_REQUIRED_FROM` is the separate promotion boundary. Empty means disabled. On or after a nonempty ISO date, a missing or failed browser acceptance manifest keeps the prior ready display date. Success or degraded acceptance may advance the display date only when the remaining readiness contracts pass.
 
 Before enabling the boundary:
 
@@ -232,9 +232,17 @@ Before enabling the boundary:
 4. Run an approved candidate and live-observation window only after all authoritative audit blockers have been remediated.
 5. Record the boundary value in both EOD and Dashboard environments and confirm they match before the next scheduled run.
 
-The 2026-07-21 review at revision `1ea8f2f377366c10b38a2a1eee04eaefc87354ff` stopped before steps 4 and 5. The boundary remains disabled; Real/Sandbox profiles were not used as success evidence and live observation did not run. The decision and exact verification evidence are in [EOD browser acceptance rollout review](../reviews/eod-browser-acceptance-rollout-2026-07-20.md).
+When enabling the execution switch, configure an explicit HTTP(S) `DASHBOARD_CACHE_CLEAR_URL`. The default action uses the Dashboard login cookie flow and/or `DASHBOARD_WRITE_TOKEN`; it never logs credential values. Missing URLs, unsafe schemes, network errors, non-2xx responses, and timeouts fail the repair as infrastructure.
 
-Rollback clears the boundary in both services, disables the scheduled browser action (or stops the scheduler until a known action registry without that action is deployed), and preserves the last ready date plus all existing evidence. Rollback must never promote the blocked candidate or delete its reports.
+The 2026-07-21 review at revision `1ea8f2f377366c10b38a2a1eee04eaefc87354ff` stopped before steps 4 and 5. The execution switch remains false/unset and the boundary remains empty; Real/Sandbox profiles were not used as success evidence and live observation did not run. The decision and exact verification evidence are in [EOD browser acceptance rollout review](../reviews/eod-browser-acceptance-rollout-2026-07-20.md).
+
+For a one-shot rollback, run:
+
+```bash
+STOCK_RESEARCH_EOD_BROWSER_ACCEPTANCE_ENABLED=false STOCK_RESEARCH_BROWSER_ACCEPTANCE_REQUIRED_FROM= rtk scripts/run_eod_auto_repair_cron.sh YYYY-MM-DD
+```
+
+For persistent rollback, set the execution switch to `false` and clear the boundary in the actual external scheduler environment; this repository has no managed scheduler unit. Clear the boundary in the Dashboard service environment and restart it with the process manager that actually owns it. Preserve the last ready date plus all existing evidence. Rollback must never promote the blocked candidate or delete its reports.
 
 ## Current Authoritative Initial Audit Pair
 

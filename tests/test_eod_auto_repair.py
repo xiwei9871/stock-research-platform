@@ -1,8 +1,11 @@
 import json
 import hashlib
 import os
+import threading
 import time
 from datetime import date
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from types import SimpleNamespace
 
 import pandas as pd
@@ -22,6 +25,8 @@ from stock_research.eod_auto_repair_models import RepairActionResult, RepairChec
 from stock_research.eod_browser_acceptance import (
     REPORT_SCHEMA_VERSION,
     parse_browser_acceptance_report,
+    run_browser_acceptance,
+    select_latest_strategy_candidate_publications,
     write_browser_acceptance_manifest,
 )
 
@@ -82,7 +87,16 @@ def _strategy_manifest_rows(*, trade_date="2026-07-20", run_id="strategy-run-1")
     return rows
 
 
-def _verified_browser_result(tmp_path, *, candidates, trade_date="2026-07-20", run_id="strategy-run-1"):
+def _write_browser_report(
+    path,
+    *,
+    candidates,
+    trade_date="2026-07-20",
+    run_id="strategy-run-1",
+    status="success",
+    failures=(),
+    failed_gate=None,
+):
     snapshot = {
         "schemaVersion": "playwright-eod-candidate-snapshot/v1",
         "tradeDate": trade_date,
@@ -100,17 +114,17 @@ def _verified_browser_result(tmp_path, *, candidates, trade_date="2026-07-20", r
             "title": f"@eod @eod-gate-{gate_id} gate {gate_id}",
             "projectName": "eod-chromium",
             "retry": 0,
-            "status": "passed",
+            "status": "failed" if gate_id == failed_gate else "passed",
             "durationMs": 25,
-            "failures": [],
+            "failures": list(failures) if gate_id == failed_gate else [],
             "attachments": [],
-            "severity": "blocker-consistency",
+            "severity": "blocker-runtime" if gate_id == failed_gate else "blocker-consistency",
             "attemptHistory": [
                 {
                     "retry": 0,
-                    "status": "passed",
+                    "status": "failed" if gate_id == failed_gate else "passed",
                     "durationMs": 25,
-                    "failures": [],
+                    "failures": list(failures) if gate_id == failed_gate else [],
                     "attachments": [],
                 }
             ],
@@ -130,16 +144,25 @@ def _verified_browser_result(tmp_path, *, candidates, trade_date="2026-07-20", r
         "endedAt": f"{trade_date}T08:00:02+00:00",
         "durationSeconds": 2.0,
         "contractOnly": False,
-        "status": "success",
+        "status": status,
         "tests": tests,
-        "failures": [],
+        "failures": list(failures),
         "attachments": [],
         "candidateSnapshot": snapshot,
         "candidateSnapshotSha256": snapshot_digest,
     }
-    report_path = tmp_path / "browser-run" / "eod-browser-acceptance.json"
-    report_path.parent.mkdir(parents=True, exist_ok=True)
-    report_path.write_text(json.dumps(report), encoding="utf-8")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(report), encoding="utf-8")
+    return path
+
+
+def _verified_browser_result(tmp_path, *, candidates, trade_date="2026-07-20", run_id="strategy-run-1"):
+    report_path = _write_browser_report(
+        tmp_path / "browser-run" / "eod-browser-acceptance.json",
+        candidates=candidates,
+        trade_date=trade_date,
+        run_id=run_id,
+    )
     return parse_browser_acceptance_report(
         report_path,
         expected_run_id=run_id,
@@ -148,6 +171,24 @@ def _verified_browser_result(tmp_path, *, candidates, trade_date="2026-07-20", r
         expected_candidate_publications=candidates,
         exit_code=0,
     )
+
+
+def _previous_browser_publications(candidates, *, trade_date="2026-07-20"):
+    return {
+        "schemaVersion": "playwright-eod-previous-publications/v1",
+        "publications": [
+            {
+                **{key: value for key, value in candidate.items() if key != "runId"},
+                "tradeDate": "2026-07-19",
+                "publishId": candidate["publishId"].replace(trade_date, "2026-07-19"),
+                "publishStartedAt": candidate["publishStartedAt"].replace(
+                    trade_date,
+                    "2026-07-19",
+                ),
+            }
+            for candidate in candidates
+        ],
+    }
 
 
 def test_run_eod_auto_repair_runs_action_for_failed_check_then_rechecks():
@@ -236,6 +277,86 @@ def test_run_eod_auto_repair_uses_injected_run_id_in_all_top_level_modes(tmp_pat
     )
 
     assert summary.run_id == f"eod-fixed-{mode}"
+
+
+def test_loop_default_disabled_filters_browser_before_check_run(tmp_path):
+    browser_check_calls = []
+    browser_action_calls = []
+
+    def check_plan_builder(_trade_date):
+        return [
+            SimpleNamespace(
+                name="dashboard_browser_acceptance",
+                run=lambda: browser_check_calls.append("run")
+                or RepairCheckResult(
+                    "dashboard_browser_acceptance",
+                    RepairStatus.FAILED,
+                    "must stay disabled",
+                    blocker=True,
+                ),
+            ),
+            SimpleNamespace(
+                name="ops_health",
+                run=lambda: RepairCheckResult("ops_health", RepairStatus.SUCCESS, "ready"),
+            ),
+        ]
+
+    summary = run_eod_auto_repair(
+        trade_date="2026-07-20",
+        output_dir=tmp_path,
+        mode="loop",
+        check_plan_builder=check_plan_builder,
+        action_registry={
+            "dashboard_browser_acceptance": lambda *_args: browser_action_calls.append("run")
+            or RepairActionResult("dashboard_browser_acceptance", RepairStatus.SUCCESS)
+        },
+    )
+
+    assert browser_check_calls == []
+    assert browser_action_calls == []
+    assert all(check.name != "dashboard_browser_acceptance" for check in summary.checks_after)
+
+
+def test_loop_enabled_runs_browser_check_and_action(tmp_path):
+    state = {"browser": RepairStatus.FAILED}
+    browser_check_calls = []
+    browser_action_calls = []
+
+    def check_plan_builder(_trade_date):
+        return [
+            SimpleNamespace(
+                name="dashboard_browser_acceptance",
+                run=lambda: browser_check_calls.append("run")
+                or RepairCheckResult(
+                    "dashboard_browser_acceptance",
+                    state["browser"],
+                    "ready" if state["browser"] == RepairStatus.SUCCESS else "missing",
+                    blocker=state["browser"] != RepairStatus.SUCCESS,
+                ),
+            ),
+            SimpleNamespace(
+                name="ops_health",
+                run=lambda: RepairCheckResult("ops_health", RepairStatus.SUCCESS, "ready"),
+            ),
+        ]
+
+    def browser_action(*_args):
+        browser_action_calls.append("run")
+        state["browser"] = RepairStatus.SUCCESS
+        return RepairActionResult("dashboard_browser_acceptance", RepairStatus.SUCCESS)
+
+    summary = run_eod_auto_repair(
+        trade_date="2026-07-20",
+        output_dir=tmp_path,
+        mode="loop",
+        check_plan_builder=check_plan_builder,
+        action_registry={"dashboard_browser_acceptance": browser_action},
+        browser_acceptance_enabled=True,
+    )
+
+    assert len(browser_check_calls) >= 2
+    assert browser_action_calls == ["run"]
+    assert any(action.name == "dashboard_browser_acceptance" for action in summary.actions)
 
 
 @pytest.mark.parametrize("mode", ["check", "repair", "publish-only"])
@@ -1075,6 +1196,7 @@ def test_run_eod_auto_repair_loop_attempts_failed_browser_once_and_blocks_downst
             "dashboard_surface_freshness": downstream_action("dashboard_surface_freshness"),
             "ops_health": downstream_action("ops_health"),
         },
+        browser_acceptance_enabled=True,
     )
 
     assert calls == ["dashboard_browser_acceptance"]
@@ -1167,6 +1289,7 @@ def test_run_eod_auto_repair_loop_keeps_degraded_browser_publishable_and_finaliz
             "dashboard_surface_freshness": success_action("dashboard_surface_freshness"),
             "ops_health": success_action("ops_health"),
         },
+        browser_acceptance_enabled=True,
     )
 
     assert calls == [
@@ -1224,7 +1347,8 @@ def test_run_eod_auto_repair_loop_bounds_individual_action_runtime(tmp_path):
 def test_cli_defaults_output_dir_for_loop_mode(monkeypatch, tmp_path):
     captured = {}
 
-    def fake_registry(*, output_root):
+    def fake_registry(*, output_root, browser_acceptance_enabled):
+        captured["browser_acceptance_enabled"] = browser_acceptance_enabled
         return {}
 
     def fake_run_eod_auto_repair(**kwargs):
@@ -1253,6 +1377,7 @@ def test_cli_defaults_output_dir_for_loop_mode(monkeypatch, tmp_path):
     assert rc == 0
     assert str(captured["output_dir"]).endswith("outputs/research/eod_auto_repair/2026-07-01")
     assert captured["action_timeout_seconds"] == 43200
+    assert captured["browser_acceptance_enabled"] is False
 
 
 def test_run_eod_auto_repair_treats_skipped_checks_as_degraded():
@@ -1392,7 +1517,8 @@ def test_eod_auto_repair_cli_prints_summary_with_path_metrics(monkeypatch, tmp_p
     report_json = tmp_path / "summary.json"
     path_metric = tmp_path / "reports" / "topn.md"
 
-    def fake_registry(output_root):
+    def fake_registry(*, output_root, browser_acceptance_enabled):
+        assert browser_acceptance_enabled is False
         return {}
 
     def fake_run_eod_auto_repair(**kwargs):
@@ -1442,10 +1568,164 @@ def test_default_action_registry_contains_repairable_checks():
     assert "watchlist" in registry
     assert "market_monitor" in registry
     assert "strategy_publish" in registry
-    assert "dashboard_browser_acceptance" in registry
+    assert type(registry) is dict
+    assert "dashboard_browser_acceptance" not in registry
     assert "ops_health" in registry
     assert "reports" in registry
     assert "review_evidence_snapshots" in registry
+
+    enabled = build_default_action_registry(
+        output_root="outputs",
+        browser_acceptance_enabled=True,
+    )
+    assert type(enabled) is dict
+    assert "dashboard_browser_acceptance" in enabled
+
+
+def test_dashboard_cache_clearer_posts_safe_auth_json_and_write_token():
+    requests = []
+
+    class Response:
+        status = 204
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    class Opener:
+        def open(self, request, timeout):
+            requests.append((request, timeout))
+            return Response()
+
+    clearer = eod_auto_repair.build_dashboard_cache_clearer(
+        cache_url="http://dashboard.test/api/dashboard/cache/clear",
+        login_url="https://dashboard.test/api/auth/login",
+        username='admin"name',
+        password="line\nbreak",
+        write_token="write-token",
+        timeout_seconds=3.5,
+        opener=Opener(),
+    )
+
+    clearer()
+
+    assert [request.full_url for request, _timeout in requests] == [
+        "https://dashboard.test/api/auth/login",
+        "http://dashboard.test/api/dashboard/cache/clear",
+    ]
+    assert all(timeout == 3.5 for _request, timeout in requests)
+    assert json.loads(requests[0][0].data) == {
+        "username": 'admin"name',
+        "password": "line\nbreak",
+    }
+    assert requests[1][0].get_header("X-dashboard-write-token") == "write-token"
+
+
+@pytest.mark.parametrize("url", ["", "file:///tmp/cache", "ftp://dashboard/cache"])
+def test_dashboard_cache_clearer_rejects_missing_or_unsafe_url(url):
+    clearer = eod_auto_repair.build_dashboard_cache_clearer(cache_url=url)
+
+    with pytest.raises(RuntimeError, match="cache clear URL"):
+        clearer()
+
+
+def test_dashboard_cache_clearer_rejects_non_2xx_and_redacts_exception():
+    class Response:
+        status = 503
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    class Opener:
+        def open(self, _request, timeout):
+            assert timeout == 5.0
+            return Response()
+
+    clearer = eod_auto_repair.build_dashboard_cache_clearer(
+        cache_url="http://dashboard.test/api/dashboard/cache/clear",
+        write_token="do-not-leak",
+        opener=Opener(),
+    )
+
+    with pytest.raises(RuntimeError, match="http_status_503") as exc_info:
+        clearer()
+
+    assert "do-not-leak" not in str(exc_info.value)
+
+
+def test_dashboard_cache_clearer_redacts_network_exception_details():
+    class Opener:
+        def open(self, _request, timeout):
+            assert timeout == 5.0
+            raise OSError("network failed with password=do-not-leak")
+
+    clearer = eod_auto_repair.build_dashboard_cache_clearer(
+        cache_url="https://dashboard.test/api/dashboard/cache/clear",
+        opener=Opener(),
+    )
+
+    with pytest.raises(RuntimeError, match="request failed:OSError") as exc_info:
+        clearer()
+
+    assert "do-not-leak" not in str(exc_info.value)
+
+
+@pytest.mark.parametrize("redirect_phase", ["login", "cache"])
+def test_dashboard_cache_clearer_rejects_redirect_without_forwarding_token(
+    monkeypatch,
+    redirect_phase,
+):
+    requests = []
+    monkeypatch.setenv("NO_PROXY", "127.0.0.1")
+    monkeypatch.setenv("no_proxy", "127.0.0.1")
+
+    class Handler(BaseHTTPRequestHandler):
+        def _respond(self):
+            requests.append((self.command, self.path, self.headers.get("X-Dashboard-Write-Token")))
+            if self.path == f"/{redirect_phase}":
+                self.send_response(302)
+                self.send_header("Location", "/redirected")
+            else:
+                self.send_response(204)
+            self.end_headers()
+
+        do_GET = _respond
+        do_POST = _respond
+
+        def log_message(self, _format, *_args):
+            return
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        clearer = eod_auto_repair.build_dashboard_cache_clearer(
+            cache_url=f"http://127.0.0.1:{server.server_port}/cache",
+            login_url=f"http://127.0.0.1:{server.server_port}/login",
+            username="admin" if redirect_phase == "login" else "",
+            password="password" if redirect_phase == "login" else "",
+            write_token="redirect-secret",
+        )
+
+        with pytest.raises(RuntimeError, match="request failed"):
+            clearer()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+    assert requests == [
+        (
+            "POST",
+            f"/{redirect_phase}",
+            None if redirect_phase == "login" else "redirect-secret",
+        )
+    ]
 
 
 def test_browser_acceptance_is_ordered_between_strategy_publish_and_downstream_presentation():
@@ -1506,6 +1786,7 @@ def test_default_browser_action_uses_same_run_manifest_identities_and_verified_r
         run_id=run_id,
     )
     captured = {"runner": [], "manifest": []}
+    cache_clearer = lambda: None
 
     def browser_runner(**kwargs):
         captured["runner"].append(kwargs)
@@ -1525,6 +1806,8 @@ def test_default_browser_action_uses_same_run_manifest_identities_and_verified_r
         browser_revision="abc123",
         browser_output_root=tmp_path / "browser-output",
         browser_manifest_loader=lambda trade_date: rows,
+        browser_cache_clearer=cache_clearer,
+        browser_acceptance_enabled=True,
     )
 
     result = registry["dashboard_browser_acceptance"](trade_date, tmp_path)
@@ -1538,12 +1821,176 @@ def test_default_browser_action_uses_same_run_manifest_identities_and_verified_r
         "revision": "abc123",
         "output_dir": tmp_path / "browser-output" / trade_date / run_id,
         "candidate_publications": candidates,
+        "cache_clearer": cache_clearer,
     }
     assert captured["manifest"][0]["run_id"] == run_id
     assert result.status == RepairStatus.SUCCESS
     assert result.artifact_paths == list(parsed_result.artifact_paths)
     assert result.validation_result["evidence"]["parsed_result"]["run_id"] == run_id
     assert result.validation_result["evidence"]["manifest"]["status"] == "success"
+
+
+@pytest.mark.parametrize(
+    ("first_failures", "failed_gate", "expected_clears", "expected_statuses"),
+    [
+        (
+            ["stale_cache: old selector payload"],
+            "runtime-deep-links",
+            1,
+            ["failed", "success"],
+        ),
+        (
+            ["api_ui_mismatch: total return differs"],
+            "candidate-consistency",
+            0,
+            ["failed"],
+        ),
+    ],
+)
+def test_default_browser_action_integration_applies_cache_repair_whitelist(
+    tmp_path,
+    first_failures,
+    failed_gate,
+    expected_clears,
+    expected_statuses,
+):
+    trade_date = "2026-07-20"
+    run_id = "strategy-run-1"
+    rows = _strategy_manifest_rows(trade_date=trade_date, run_id=run_id)
+    candidates = select_latest_strategy_candidate_publications(
+        rows,
+        trade_date=trade_date,
+    )[1]
+    commands = []
+    cache_clears = []
+
+    class FakeProcess:
+        def __init__(self, kwargs, *, attempt):
+            self.kwargs = kwargs
+            self.attempt = attempt
+            self.returncode = 1 if attempt == 1 else 0
+
+        def wait(self, timeout):
+            assert timeout > 0
+            report_path = (
+                Path(self.kwargs["env"]["PLAYWRIGHT_EOD_OUTPUT_DIR"])
+                / "eod-browser-acceptance.json"
+            )
+            if self.attempt == 1:
+                _write_browser_report(
+                    report_path,
+                    candidates=candidates,
+                    trade_date=trade_date,
+                    run_id=run_id,
+                    status="failed",
+                    failures=first_failures,
+                    failed_gate=failed_gate,
+                )
+            else:
+                _write_browser_report(
+                    report_path,
+                    candidates=candidates,
+                    trade_date=trade_date,
+                    run_id=run_id,
+                )
+            return self.returncode
+
+    def popen(command, **kwargs):
+        commands.append(command)
+        return FakeProcess(kwargs, attempt=len(commands))
+
+    def browser_runner(**kwargs):
+        return run_browser_acceptance(
+            **kwargs,
+            previous_publications=_previous_browser_publications(candidates),
+            popen=popen,
+            runtime_checker=lambda _dashboard: None,
+        )
+
+    registry = build_default_action_registry(
+        output_root=tmp_path,
+        browser_runner=browser_runner,
+        browser_manifest_writer=lambda result: {"status": result.status.value},
+        browser_revision="abc123",
+        browser_output_root=tmp_path / "browser-output",
+        browser_manifest_loader=lambda trade_date: rows,
+        browser_cache_clearer=lambda: cache_clears.append("cleared"),
+        browser_acceptance_enabled=True,
+    )
+
+    result = registry["dashboard_browser_acceptance"](trade_date, tmp_path)
+
+    assert cache_clears == ["cleared"] * expected_clears
+    assert commands == [["pnpm", "test:e2e:eod"]] * len(expected_statuses)
+    parsed = result.validation_result["evidence"]["parsed_result"]
+    assert [attempt["status"] for attempt in parsed["attempts"]] == expected_statuses
+    assert result.status == (
+        RepairStatus.SUCCESS if expected_statuses[-1] == "success" else RepairStatus.FAILED
+    )
+
+
+def test_default_browser_action_integration_missing_cache_url_fails_infrastructure(
+    monkeypatch,
+    tmp_path,
+):
+    trade_date = "2026-07-20"
+    run_id = "strategy-run-1"
+    rows = _strategy_manifest_rows(trade_date=trade_date, run_id=run_id)
+    candidates = select_latest_strategy_candidate_publications(
+        rows,
+        trade_date=trade_date,
+    )[1]
+    commands = []
+
+    class FakeProcess:
+        returncode = 1
+
+        def __init__(self, kwargs):
+            self.kwargs = kwargs
+
+        def wait(self, timeout):
+            assert timeout > 0
+            _write_browser_report(
+                Path(self.kwargs["env"]["PLAYWRIGHT_EOD_OUTPUT_DIR"])
+                / "eod-browser-acceptance.json",
+                candidates=candidates,
+                trade_date=trade_date,
+                run_id=run_id,
+                status="failed",
+                failures=["stale_cache: old selector payload"],
+                failed_gate="runtime-deep-links",
+            )
+            return self.returncode
+
+    def popen(command, **kwargs):
+        commands.append(command)
+        return FakeProcess(kwargs)
+
+    def browser_runner(**kwargs):
+        return run_browser_acceptance(
+            **kwargs,
+            previous_publications=_previous_browser_publications(candidates),
+            popen=popen,
+            runtime_checker=lambda _dashboard: None,
+        )
+
+    monkeypatch.delenv("DASHBOARD_CACHE_CLEAR_URL", raising=False)
+    registry = build_default_action_registry(
+        output_root=tmp_path,
+        browser_runner=browser_runner,
+        browser_manifest_writer=lambda result: {"status": result.status.value},
+        browser_revision="abc123",
+        browser_output_root=tmp_path / "browser-output",
+        browser_manifest_loader=lambda trade_date: rows,
+        browser_acceptance_enabled=True,
+    )
+
+    result = registry["dashboard_browser_acceptance"](trade_date, tmp_path)
+
+    assert commands == [["pnpm", "test:e2e:eod"]]
+    assert result.status == RepairStatus.FAILED
+    assert result.metrics["failure_classes"] == ["infrastructure"]
+    assert "cache clear URL missing" in result.message
 
 
 def test_browser_result_payload_preserves_attempt_history():
@@ -1600,6 +2047,7 @@ def test_default_browser_action_fails_closed_before_runner_for_invalid_candidate
         browser_revision="abc123",
         browser_output_root=tmp_path / "browser-output",
         browser_manifest_loader=lambda trade_date: rows,
+        browser_acceptance_enabled=True,
     )
 
     result = registry["dashboard_browser_acceptance"]("2026-07-20", tmp_path)
@@ -1634,6 +2082,7 @@ def test_plain_registry_independent_browser_calls_select_current_persisted_cohor
         browser_revision="abc123",
         browser_output_root=tmp_path / "browser-output",
         browser_manifest_loader=lambda trade_date: rows,
+        browser_acceptance_enabled=True,
     )
 
     first = dict(registry)["dashboard_browser_acceptance"](trade_date, tmp_path / "run-1")
@@ -1691,6 +2140,7 @@ def test_strategy_publish_persistence_makes_new_cohort_supersede_old_run(tmp_pat
         browser_output_root=tmp_path / "browser-output",
         browser_manifest_loader=lambda trade_date: persisted_rows,
         strategy_publisher=strategy_publisher,
+        browser_acceptance_enabled=True,
     )
 
     publish_result = registry["strategy_publish"](trade_date, tmp_path)

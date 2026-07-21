@@ -17,7 +17,7 @@ The security rescan closed the bare-secret evidence finding. It did not rerun ap
 
 Regression, Mock P0, historical failure simulation, and repairable stale-cache simulation passed. Controlled candidate execution, rollout-boundary enablement, and first-live-run observation did not run.
 
-The current shell confirmed `STOCK_RESEARCH_BROWSER_ACCEPTANCE_REQUIRED_FROM` is empty (`disabled`). This review did not change environment variables, service configuration, deployment configuration, databases, or official output directories. Real and Sandbox profiles were not run as success evidence.
+The current shell confirmed `STOCK_RESEARCH_EOD_BROWSER_ACCEPTANCE_ENABLED` is false/unset and `STOCK_RESEARCH_BROWSER_ACCEPTANCE_REQUIRED_FROM` is empty. Both execution and promotion are therefore disabled. This review did not change environment variables, service configuration, deployment configuration, databases, or official output directories. Real and Sandbox profiles were not run as success evidence.
 
 Task 7 status:
 
@@ -26,11 +26,11 @@ Task 7 status:
 | Step 1 complete focused regression | complete | Backend, Vitest, build, and Mock P0 all exited 0. |
 | Step 2 historical 175.29 simulation | complete | Injected temporary fixture failed with `api_ui_mismatch` and `return_unit`; no cache clear; manifest failed; prior ready date remained; EOD exit 2. |
 | Step 3 successful controlled candidate | **not complete** | Blocked by the authoritative audit roots below; no Real/EOD live browser run was started. |
-| Step 4 repairable stale-cache path | complete | One cache clear, one identical-command rerun, final success, and two attempts in the report. |
+| Step 4 repairable stale-cache path | complete | The default action integration fixture proves one cache clear, one identical-command rerun, final success, and two attempts; it also proves nonrepairable and missing-URL fail-safe paths. |
 | Step 5 enable rollout boundary | **not complete** | Boundary intentionally remains disabled. |
 | Step 6 observe first live run | **not complete** | No live rollout occurred, so duration/display/process observations cannot be claimed. |
 | Step 7 evidence and rollback | complete | Recorded here and in the two operations runbooks. |
-| Step 8 documentation commit | pending at document generation | Commit is created only after final document verification. |
+| Step 8 documentation commit | complete | The implementation, rollback commands, and verification record are updated together; the final commit SHA is reported with task handoff. |
 
 ## Fresh Regression Evidence
 
@@ -39,7 +39,7 @@ Task 7 status:
 Exact command:
 
 ```bash
-rtk /Users/xiwei/stock_research/.venv/bin/pytest \
+rtk .venv/bin/pytest \
   tests/test_eod_browser_acceptance.py \
   tests/test_eod_auto_repair.py \
   tests/test_eod_auto_repair_checks.py \
@@ -52,6 +52,26 @@ rtk /Users/xiwei/stock_research/.venv/bin/pytest \
 ```
 
 Result: exit `0`; `455 passed`; 2 existing `py_mini_racer` deprecation warnings; duration `10.48s`.
+
+### Corrective fail-safe regression
+
+The original `455 passed` record above remains the historical Task 7 plan evidence. After adding the real execution kill switch, moving cache clear into the whitelisted default action path, removing the cron-level unconditional clear, and correcting rollback documentation, the commit-preparation worktree ran this expanded focused set:
+
+```bash
+rtk .venv/bin/pytest \
+  tests/test_config_settings.py \
+  tests/test_eod_browser_acceptance.py \
+  tests/test_eod_auto_repair.py \
+  tests/test_eod_auto_repair_checks.py \
+  tests/test_eod_auto_repair_models.py \
+  tests/test_eod_auto_repair_report.py \
+  tests/test_eod_auto_repair_scripts.py \
+  tests/test_dashboard_backtests.py \
+  tests/test_dashboard_readiness.py \
+  tests/test_dashboard_review_queue.py -q
+```
+
+Result: exit `0`; `480 passed`; 2 existing `py_mini_racer` deprecation warnings. The same worktree also passed `git diff --check`, `bash -n scripts/run_eod_auto_repair_cron.sh`, and Python byte-compilation of `config.py` and `eod_auto_repair.py`.
 
 ### Dashboard unit
 
@@ -111,7 +131,7 @@ The command reused `FakeProcess`, report writers, publication fixtures, and disp
 Exact reproducible injected command:
 
 ```bash
-rtk env PYTHONPATH=src /Users/xiwei/stock_research/.venv/bin/python - <<'PY'
+rtk env PYTHONPATH=src .venv/bin/python - <<'PY'
 from contextlib import redirect_stdout
 from datetime import datetime
 import io, json, runpy
@@ -183,12 +203,20 @@ Simulation identity:
 | Attempt 2 | `success`, no failure class |
 | Markdown report | contained both `Attempt 1` and `Attempt 2` |
 
-This was also an injected `FakeProcess`/temporary-directory simulation; it did not start a real browser. Attempt JSON and trace fixture files were removed with the temporary directory. There is deliberately no persistent fixture artifact path.
+The current authoritative implementation proof exercises `build_default_action_registry`, the real `run_browser_acceptance` retry decision, and the configured cache clearer through the default action boundary. It covers the repairable, nonrepairable, and missing-cache-URL branches without starting a real browser:
+
+```bash
+rtk .venv/bin/pytest tests/test_eod_auto_repair.py -q -k 'default_browser_action_integration'
+```
+
+Result: exit `0`; `3 passed`. The fixture proves `stale_cache` performs exactly one clear and one identical `pnpm test:e2e:eod` rerun; `api_ui_mismatch` performs zero clears and zero reruns; and a repairable first failure with no `DASHBOARD_CACHE_CLEAR_URL` returns failed/infrastructure after the first attempt.
+
+The earlier injected `FakeProcess`/temporary-directory simulation below is retained as supplemental report-rendering evidence; it did not start a real browser. Attempt JSON and trace fixture files were removed with the temporary directory. There is deliberately no persistent fixture artifact path.
 
 Exact reproducible injected command:
 
 ```bash
-rtk env PYTHONPATH=src /Users/xiwei/stock_research/.venv/bin/python - <<'PY'
+rtk env PYTHONPATH=src .venv/bin/python - <<'PY'
 import json, runpy
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -251,14 +279,21 @@ Next remediation plans:
 
 ## Boundary And Rollback
 
-Boundary state during review: `disabled` (empty `STOCK_RESEARCH_BROWSER_ACCEPTANCE_REQUIRED_FROM`). No boundary was written to EOD or Dashboard service configuration.
+Execution state during review: `disabled` (false/unset `STOCK_RESEARCH_EOD_BROWSER_ACCEPTANCE_ENABLED`). Boundary state during review: `disabled` (empty `STOCK_RESEARCH_BROWSER_ACCEPTANCE_REQUIRED_FROM`). Neither value was written to EOD, scheduler, or Dashboard service configuration.
 
-If a later candidate rollout must be rolled back:
+If a later candidate rollout must be rolled back, the executable one-shot command is:
 
-1. clear `STOCK_RESEARCH_BROWSER_ACCEPTANCE_REQUIRED_FROM` in both service environments;
-2. disable the scheduled browser action using the deployment/scheduler action-registry override, or stop the scheduled EOD job until a known registry without `dashboard_browser_acceptance` is deployed;
-3. preserve the last ready display date and all existing JSON, Markdown, HTML, manifest, trace, screenshot, and runtime-evidence files;
-4. verify the display gate remains on the prior ready date and that no failed or unvalidated candidate is marked official.
+```bash
+STOCK_RESEARCH_EOD_BROWSER_ACCEPTANCE_ENABLED=false STOCK_RESEARCH_BROWSER_ACCEPTANCE_REQUIRED_FROM= rtk scripts/run_eod_auto_repair_cron.sh YYYY-MM-DD
+```
+
+For persistent rollback:
+
+1. set `STOCK_RESEARCH_EOD_BROWSER_ACCEPTANCE_ENABLED=false` and clear `STOCK_RESEARCH_BROWSER_ACCEPTANCE_REQUIRED_FROM` in the actual external scheduler environment;
+2. clear `STOCK_RESEARCH_BROWSER_ACCEPTANCE_REQUIRED_FROM` in the Dashboard service environment and restart that service with the process manager that actually owns it;
+3. restart the EOD scheduler process only if it caches environment values; this repository does not provide a managed scheduler unit, so no scheduler service name is asserted here;
+4. preserve the last ready display date and all existing JSON, Markdown, HTML, manifest, trace, screenshot, and runtime-evidence files;
+5. verify the display gate remains on the prior ready date and that no failed or unvalidated candidate is marked official.
 
 This rollback does not delete evidence and does not rewrite the failed candidate as successful.
 
@@ -270,4 +305,4 @@ Both injected command blocks above were executed directly from this Markdown fil
 rtk git diff --check
 ```
 
-Only the two operations runbooks and this review are authorized tracked changes for Task 7.
+The implementation, focused tests, cron wrapper, two operations runbooks, and this review are the authorized tracked changes for this Task 7 correction.

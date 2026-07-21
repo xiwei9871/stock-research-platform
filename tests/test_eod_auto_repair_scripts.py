@@ -5,6 +5,11 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+TASK7_DOCS = (
+    Path("docs/ops/platform-hardening-runbook.md"),
+    Path("docs/ops/playwright-platform-validation.md"),
+    Path("docs/reviews/eod-browser-acceptance-rollout-2026-07-20.md"),
+)
 
 
 def _write_executable(path: Path, content: str) -> None:
@@ -101,12 +106,32 @@ def test_eod_auto_repair_cron_uses_module_entrypoint_and_portable_lock():
     assert "run_report.md" in script
     assert "run_report.html" in script
     assert 'PLAYWRIGHT_EOD_OUTPUT_DIR="$OUTPUT_DIR/browser"' in script
+    assert 'STOCK_RESEARCH_EOD_BROWSER_ACCEPTANCE_ENABLED="$EOD_BROWSER_ACCEPTANCE_ENABLED"' in script
     assert "浏览器验收状态" in script
     assert "浏览器证据" in script
     assert "test:e2e" not in script
     assert "pnpm playwright" not in script
     assert 'find "$OUTPUT_DIR/browser"' not in script
+    assert "clear_dashboard_cache" not in script
     assert "lock_mode|$LOCK_MODE" in script
+
+
+def test_task7_docs_use_executable_kill_switch_rollback():
+    rollback_command = (
+        "STOCK_RESEARCH_EOD_BROWSER_ACCEPTANCE_ENABLED=false "
+        "STOCK_RESEARCH_BROWSER_ACCEPTANCE_REQUIRED_FROM= "
+        "rtk scripts/run_eod_auto_repair_cron.sh YYYY-MM-DD"
+    )
+
+    for path in TASK7_DOCS:
+        text = path.read_text()
+        assert rollback_command in text
+        assert "action-registry override" not in text
+        assert "/Users/xiwei/stock_research/.venv/bin/" not in text
+
+    review = TASK7_DOCS[-1].read_text()
+    assert "| Step 8 documentation commit | complete |" in review
+    assert "default_browser_action_integration" in review
 
 
 def test_eod_auto_repair_cron_prints_browser_status_and_evidence(tmp_path):
@@ -197,6 +222,26 @@ def test_eod_auto_repair_cron_malformed_summary_preserves_main_exit_code(tmp_pat
     assert "退出码: 6" in result.stdout
 
 
+def test_eod_auto_repair_cron_return_unit_failure_preserves_rc_without_cache_clear(tmp_path):
+    root, env = _make_cron_harness(
+        tmp_path,
+        python_body=(
+            'printf %s \'{"browser_acceptance":{"action":{"status":"failed","metrics":{"failure_classes":["return_unit"]}},"check":{"status":"failed"}}}\' > "$STOCK_RESEARCH_ROOT/outputs/research/eod_auto_repair/2026-07-02/run_summary.json"\n'
+            "exit 2"
+        ),
+        extra_env={
+            "DASHBOARD_AUTH_PASSWORD": "must-not-be-used",
+            "DASHBOARD_WRITE_TOKEN": "must-not-be-used",
+        },
+    )
+
+    result = _run_cron(env, "2026-07-02")
+
+    assert result.returncode == 2
+    assert "浏览器验收状态: 失败" in result.stdout
+    assert not (root / "curl.log").exists()
+
+
 def test_eod_auto_repair_cron_uses_flock_when_available(tmp_path):
     root, env = _make_cron_harness(
         tmp_path,
@@ -211,15 +256,14 @@ def test_eod_auto_repair_cron_uses_flock_when_available(tmp_path):
     assert "eod_auto_repair|lock_mode|flock" in log_text
     assert "--mode loop" in (root / "python.log").read_text()
     assert "--action-timeout-seconds" in (root / "python.log").read_text()
-    assert "-X POST http://127.0.0.1:8765/api/dashboard/cache/clear" in (root / "curl.log").read_text()
-    assert "eod_auto_repair|dashboard_cache_clear|success" in log_text
+    assert not (root / "curl.log").exists()
     assert "EOD自动修复完成" in result.stdout
     assert "交易日: 2026-07-02" in result.stdout
     assert "详细日志:" in result.stdout
     assert "eod_auto_repair|" not in result.stdout
 
 
-def test_eod_auto_repair_cron_cache_clear_can_use_dashboard_auth(tmp_path):
+def test_eod_auto_repair_cron_does_not_clear_cache_after_success(tmp_path):
     root, env = _make_cron_harness(
         tmp_path,
         extra_env={
@@ -232,12 +276,36 @@ def test_eod_auto_repair_cron_cache_clear_can_use_dashboard_auth(tmp_path):
     result = _run_cron(env, "2026-07-02")
 
     assert result.returncode == 0
-    curl_log = (root / "curl.log").read_text()
-    assert "/api/auth/login" in curl_log
-    assert '{"username":"admin","password":"1234"}' in curl_log
-    assert "-b " in curl_log
-    assert "X-Dashboard-Write-Token: secret-token" in curl_log
-    assert "-X POST http://127.0.0.1:8765/api/dashboard/cache/clear" in curl_log
+    assert not (root / "curl.log").exists()
+
+
+def test_eod_auto_repair_cron_passes_fail_safe_browser_flag(tmp_path):
+    root, env = _make_cron_harness(
+        tmp_path,
+        python_body=(
+            'test "$STOCK_RESEARCH_EOD_BROWSER_ACCEPTANCE_ENABLED" = "false" || exit 9\n'
+            "exit 0"
+        ),
+    )
+
+    result = _run_cron(env, "2026-07-02")
+
+    assert result.returncode == 0
+
+
+def test_eod_auto_repair_cron_passes_explicit_enabled_browser_flag(tmp_path):
+    root, env = _make_cron_harness(
+        tmp_path,
+        python_body=(
+            'test "$STOCK_RESEARCH_EOD_BROWSER_ACCEPTANCE_ENABLED" = "true" || exit 9\n'
+            "exit 0"
+        ),
+        extra_env={"STOCK_RESEARCH_EOD_BROWSER_ACCEPTANCE_ENABLED": "true"},
+    )
+
+    result = _run_cron(env, "2026-07-02")
+
+    assert result.returncode == 0
 
 
 def test_eod_auto_repair_cron_logs_flock_lock_mode_when_already_locked(tmp_path):

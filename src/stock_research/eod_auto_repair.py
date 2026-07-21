@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from http.cookiejar import CookieJar
 import json
 import os
 import signal
@@ -11,8 +12,11 @@ from dataclasses import replace
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
+from urllib.parse import urlsplit
+from urllib.request import HTTPRedirectHandler, HTTPCookieProcessor, Request, build_opener
 from uuid import uuid4
 
+from stock_research.config import Settings
 from stock_research.eod_auto_repair_checks import build_check_plan
 from stock_research.eod_auto_repair_models import (
     RepairActionResult,
@@ -22,6 +26,11 @@ from stock_research.eod_auto_repair_models import (
     RepairStageResult,
     RepairStatus,
 )
+
+
+class _RejectRedirectHandler(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
 
 
 ActionRunner = Callable[[str, str | Path], RepairActionResult]
@@ -490,8 +499,13 @@ def _run_eod_auto_repair_loop(
     max_cycles: int,
     dry_run: bool,
     action_timeout_seconds: int | None,
+    excluded_check_names: frozenset[str] = frozenset(),
 ) -> RepairRunSummary:
-    checks_before = _safe_run_check_plan(check_plan_builder, trade_date)
+    checks_before = _safe_run_check_plan(
+        check_plan_builder,
+        trade_date,
+        excluded_names=excluded_check_names,
+    )
     current_checks = checks_before
     _emit_progress(
         output_dir,
@@ -564,7 +578,11 @@ def _run_eod_auto_repair_loop(
                     failed_action_counts[check_name] = failed_action_counts.get(check_name, 0) + 1
                     if failed_action_counts[check_name] >= failure_limit:
                         stop_reason = f"failed_action_repeat_limit:{check_name}"
-                current_checks = _safe_run_check_plan(check_plan_builder, trade_date)
+                current_checks = _safe_run_check_plan(
+                    check_plan_builder,
+                    trade_date,
+                    excluded_names=excluded_check_names,
+                )
                 action = _action_with_validation(action, component=check_name, checks_after=current_checks)
                 _emit_progress(
                     output_dir,
@@ -667,6 +685,7 @@ def run_eod_auto_repair(
     strict: bool = False,
     action_timeout_seconds: int | None = None,
     run_id: str | None = None,
+    browser_acceptance_enabled: bool | None = None,
 ) -> RepairRunSummary:
     if mode not in {"check", "repair", "publish-only", "loop"}:
         raise ValueError("mode must be check, repair, publish-only, or loop")
@@ -678,7 +697,26 @@ def run_eod_auto_repair(
         eod_run_id = run_id.strip()
     else:
         raise ValueError("run_id must be a non-empty string when provided")
-    registry = action_registry if action_registry is not None else build_default_action_registry(output_root="outputs")
+    enabled = (
+        Settings().eod_browser_acceptance_enabled
+        if browser_acceptance_enabled is None
+        else browser_acceptance_enabled is True
+    )
+    registry = (
+        dict(action_registry)
+        if action_registry is not None
+        else build_default_action_registry(
+            output_root="outputs",
+            browser_acceptance_enabled=enabled,
+        )
+    )
+    excluded_loop_checks = (
+        frozenset()
+        if enabled
+        else frozenset({"dashboard_browser_acceptance"})
+    )
+    if not enabled:
+        registry.pop("dashboard_browser_acceptance", None)
     if mode == "loop":
         _reset_progress_files(out)
         summary = _run_eod_auto_repair_loop(
@@ -689,6 +727,7 @@ def run_eod_auto_repair(
             max_cycles=max_cycles,
             dry_run=dry_run,
             action_timeout_seconds=action_timeout_seconds,
+            excluded_check_names=excluded_loop_checks,
         )
         summary = replace(summary, run_id=eod_run_id)
         if strict and summary.final_status != RepairStatus.SUCCESS:
@@ -842,6 +881,115 @@ def _browser_result_payload(result: object) -> dict[str, object]:
     }
 
 
+def build_dashboard_cache_clearer(
+    *,
+    cache_url: str | None = None,
+    login_url: str | None = None,
+    username: str | None = None,
+    password: str | None = None,
+    write_token: str | None = None,
+    timeout_seconds: float = 5.0,
+    opener: object | None = None,
+) -> Callable[[], None]:
+    selected_cache_url = (
+        os.getenv("DASHBOARD_CACHE_CLEAR_URL", "")
+        if cache_url is None
+        else cache_url
+    ).strip()
+    selected_login_url = (
+        os.getenv("DASHBOARD_AUTH_LOGIN_URL", "")
+        if login_url is None
+        else login_url
+    ).strip()
+    selected_username = (
+        os.getenv("DASHBOARD_AUTH_USERNAME", "")
+        if username is None
+        else username
+    )
+    selected_password = (
+        os.getenv("DASHBOARD_AUTH_PASSWORD", "")
+        if password is None
+        else password
+    )
+    selected_write_token = (
+        os.getenv(
+            "DASHBOARD_WRITE_TOKEN",
+            os.getenv("STOCK_RESEARCH_DASHBOARD_WRITE_TOKEN", ""),
+        )
+        if write_token is None
+        else write_token
+    )
+    timeout = float(timeout_seconds)
+
+    def validate_url(value: str, *, label: str) -> str:
+        if not value:
+            raise RuntimeError(f"dashboard {label} URL missing")
+        parsed = urlsplit(value)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise RuntimeError(
+                f"dashboard {label} URL scheme must be http or https"
+            )
+        return value
+
+    def send(selected_opener: object, request: Request, *, phase: str) -> None:
+        try:
+            with selected_opener.open(request, timeout=timeout) as response:  # type: ignore[attr-defined]
+                status = getattr(response, "status", None)
+                if status is None:
+                    status = response.getcode()
+        except Exception as exc:
+            raise RuntimeError(
+                f"dashboard cache {phase} request failed:{type(exc).__name__}"
+            ) from None
+        if not isinstance(status, int) or not 200 <= status < 300:
+            raise RuntimeError(
+                f"dashboard cache {phase} failed:http_status_{status}"
+            )
+
+    def clear() -> None:
+        validated_cache_url = validate_url(
+            selected_cache_url,
+            label="cache clear",
+        )
+        if bool(selected_username) != bool(selected_password):
+            raise RuntimeError("dashboard cache authentication configuration incomplete")
+        selected_opener = opener or build_opener(
+            HTTPCookieProcessor(CookieJar()),
+            _RejectRedirectHandler(),
+        )
+        if selected_username and selected_password:
+            validated_login_url = validate_url(
+                selected_login_url,
+                label="authentication login",
+            )
+            body = json.dumps(
+                {
+                    "username": selected_username,
+                    "password": selected_password,
+                },
+                ensure_ascii=False,
+            ).encode("utf-8")
+            login_request = Request(
+                validated_login_url,
+                data=body,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            send(selected_opener, login_request, phase="login")
+        headers = {}
+        if selected_write_token:
+            headers["X-Dashboard-Write-Token"] = selected_write_token
+        cache_request = Request(
+            validated_cache_url,
+            data=b"",
+            headers=headers,
+            method="POST",
+        )
+        send(selected_opener, cache_request, phase="clear")
+
+    return clear
+
+
 def build_default_action_registry(
     *,
     output_root: str | Path = "outputs",
@@ -850,6 +998,8 @@ def build_default_action_registry(
     browser_revision: str | Callable[[], str] | None = None,
     browser_output_root: str | Path | None = None,
     browser_manifest_loader: Callable[..., list[dict[str, Any]]] | None = None,
+    browser_cache_clearer: Callable[[], object] | None = None,
+    browser_acceptance_enabled: bool | None = None,
     strategy_publisher: Callable[..., dict[str, Any]] | None = None,
 ) -> dict[str, ActionRunner]:
     from stock_research.eod_auto_repair_actions import (
@@ -891,12 +1041,22 @@ def build_default_action_registry(
         store_watchlist_daily_signals,
     )
 
+    enabled = (
+        Settings().eod_browser_acceptance_enabled
+        if browser_acceptance_enabled is None
+        else browser_acceptance_enabled is True
+    )
     selected_browser_runner = browser_runner or run_browser_acceptance
     selected_browser_writer = browser_manifest_writer or write_browser_acceptance_manifest
     selected_browser_manifest_loader = (
         browser_manifest_loader or load_strategy_publication_manifests
     )
     selected_strategy_publisher = strategy_publisher or publish_strategy_eod
+    selected_browser_cache_clearer = (
+        browser_cache_clearer
+        if browser_cache_clearer is not None
+        else build_dashboard_cache_clearer()
+    )
     configured_browser_output_root = os.getenv("PLAYWRIGHT_EOD_OUTPUT_DIR")
     selected_browser_output_root = Path(
         browser_output_root
@@ -936,6 +1096,7 @@ def build_default_action_registry(
                 revision=revision,
                 output_dir=selected_browser_output_root / trade_date / run_id,
                 candidate_publications=candidate_publications,
+                cache_clearer=selected_browser_cache_clearer,
             )
             manifest = selected_browser_writer(result)
             parsed_result = _browser_result_payload(result)
@@ -1169,11 +1330,12 @@ def build_default_action_registry(
         "strategy_publish": strategy_action,
         "review_queue": strategy_action,
         "strategy_score_audit": strategy_action,
-        "dashboard_browser_acceptance": browser_acceptance_action,
         "ops_health": ops_health_action,
         "reports": reports_action,
         "review_evidence_snapshots": snapshots_action,
     })
+    if enabled:
+        registry["dashboard_browser_acceptance"] = browser_acceptance_action
     return registry
 
 
@@ -1191,16 +1353,21 @@ def _main(argv: list[str] | None = None) -> int:
     parser.add_argument("--action-timeout-seconds", type=int, default=43200)
     args = parser.parse_args(argv)
     output_dir = args.output_dir or str(Path(args.output_root) / "research" / "eod_auto_repair" / args.trade_date)
+    browser_acceptance_enabled = Settings().eod_browser_acceptance_enabled
     summary = run_eod_auto_repair(
         trade_date=args.trade_date,
         output_dir=output_dir,
         mode=args.mode,
-        action_registry=build_default_action_registry(output_root=args.output_root),
+        action_registry=build_default_action_registry(
+            output_root=args.output_root,
+            browser_acceptance_enabled=browser_acceptance_enabled,
+        ),
         write_reports=True,
         max_cycles=args.max_cycles,
         dry_run=args.dry_run,
         strict=args.strict,
         action_timeout_seconds=args.action_timeout_seconds,
+        browser_acceptance_enabled=browser_acceptance_enabled,
     )
     if args.report_json:
         from stock_research.eod_auto_repair_report import (

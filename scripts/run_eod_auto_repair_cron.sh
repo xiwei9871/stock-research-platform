@@ -11,12 +11,7 @@ DETAIL_LOG="$LOG_DIR/$TRADE_DATE.log"
 LOCK_FILE="$ROOT/.locks/eod_auto_repair.lock"
 FLOCK_FILE="$ROOT/.locks/eod_auto_repair.flock"
 ACTION_TIMEOUT_SECONDS="${EOD_AUTO_REPAIR_ACTION_TIMEOUT_SECONDS:-43200}"
-DASHBOARD_CACHE_CLEAR_URL="${DASHBOARD_CACHE_CLEAR_URL:-http://127.0.0.1:8765/api/dashboard/cache/clear}"
-DASHBOARD_AUTH_LOGIN_URL="${DASHBOARD_AUTH_LOGIN_URL:-http://127.0.0.1:8765/api/auth/login}"
-DASHBOARD_AUTH_USERNAME="${DASHBOARD_AUTH_USERNAME:-}"
-DASHBOARD_AUTH_PASSWORD="${DASHBOARD_AUTH_PASSWORD:-}"
-DASHBOARD_WRITE_TOKEN="${DASHBOARD_WRITE_TOKEN:-${STOCK_RESEARCH_DASHBOARD_WRITE_TOKEN:-}}"
-CACHE_STATUS="pending"
+EOD_BROWSER_ACCEPTANCE_ENABLED="${STOCK_RESEARCH_EOD_BROWSER_ACCEPTANCE_ENABLED:-false}"
 BROWSER_STATUS="unknown"
 BROWSER_EVIDENCE_PATHS=""
 
@@ -60,44 +55,6 @@ log_locked() {
   echo "原因: 已有任务运行"
   echo "锁模式: ${LOCK_MODE:-unknown}"
   echo "详细日志: $DETAIL_LOG"
-}
-
-clear_dashboard_cache() {
-  if [[ -z "${DASHBOARD_CACHE_CLEAR_URL:-}" ]]; then
-    CACHE_STATUS="skipped(url_empty)"
-    echo "eod_auto_repair|dashboard_cache_clear|skipped|url_empty" >>"$DETAIL_LOG"
-    return 0
-  fi
-  if ! command -v curl >/dev/null 2>&1; then
-    CACHE_STATUS="skipped(curl_missing)"
-    echo "eod_auto_repair|dashboard_cache_clear|skipped|curl_missing|url|$DASHBOARD_CACHE_CLEAR_URL" >>"$DETAIL_LOG"
-    return 0
-  fi
-  local cookie_jar
-  local curl_args
-  cookie_jar="$(mktemp "${TMPDIR:-/tmp}/stock-research-dashboard-cache.XXXXXX")"
-  curl_args=(-fsS -m 5)
-  if [[ -n "${DASHBOARD_AUTH_USERNAME:-}" && -n "${DASHBOARD_AUTH_PASSWORD:-}" ]]; then
-    local login_payload
-    login_payload="$(printf '{"username":"%s","password":"%s"}' "$DASHBOARD_AUTH_USERNAME" "$DASHBOARD_AUTH_PASSWORD")"
-    if curl -fsS -m 5 -c "$cookie_jar" -H "Content-Type: application/json" -X POST "$DASHBOARD_AUTH_LOGIN_URL" --data "$login_payload" >>"$DETAIL_LOG" 2>&1; then
-      curl_args+=(-b "$cookie_jar")
-      echo "eod_auto_repair|dashboard_cache_clear|auth_login|success|url|$DASHBOARD_AUTH_LOGIN_URL" >>"$DETAIL_LOG"
-    else
-      echo "eod_auto_repair|dashboard_cache_clear|auth_login|failed|url|$DASHBOARD_AUTH_LOGIN_URL" >>"$DETAIL_LOG"
-    fi
-  fi
-  if [[ -n "${DASHBOARD_WRITE_TOKEN:-}" ]]; then
-    curl_args+=(-H "X-Dashboard-Write-Token: $DASHBOARD_WRITE_TOKEN")
-  fi
-  if curl "${curl_args[@]}" -X POST "$DASHBOARD_CACHE_CLEAR_URL" >>"$DETAIL_LOG" 2>&1; then
-    CACHE_STATUS="success"
-    echo "eod_auto_repair|dashboard_cache_clear|success|url|$DASHBOARD_CACHE_CLEAR_URL" >>"$DETAIL_LOG"
-  else
-    CACHE_STATUS="failed"
-    echo "eod_auto_repair|dashboard_cache_clear|failed|url|$DASHBOARD_CACHE_CLEAR_URL" >>"$DETAIL_LOG"
-  fi
-  rm -f "$cookie_jar"
 }
 
 parse_browser_summary() {
@@ -153,7 +110,6 @@ print_summary() {
   echo "$title"
   echo "交易日: $TRADE_DATE"
   echo "锁模式: $LOCK_MODE"
-  echo "Dashboard缓存: $CACHE_STATUS"
   echo "摘要文件: $OUTPUT_DIR/run_summary.json"
   echo "报告文件: $OUTPUT_DIR/run_report.md"
   echo "HTML报告: $OUTPUT_DIR/run_report.html"
@@ -177,7 +133,9 @@ run_repair() {
   echo "=== eod auto repair start: $(date '+%Y-%m-%d %H:%M:%S %z') ===" >>"$DETAIL_LOG"
   echo "eod_auto_repair|lock_mode|$LOCK_MODE" >>"$DETAIL_LOG"
   # Entrypoint: python -m stock_research.eod_auto_repair
-  PLAYWRIGHT_EOD_OUTPUT_DIR="$OUTPUT_DIR/browser" rtk "$PYTHON" -m stock_research.eod_auto_repair \
+  STOCK_RESEARCH_EOD_BROWSER_ACCEPTANCE_ENABLED="$EOD_BROWSER_ACCEPTANCE_ENABLED" \
+  PLAYWRIGHT_EOD_OUTPUT_DIR="$OUTPUT_DIR/browser" \
+  rtk "$PYTHON" -m stock_research.eod_auto_repair \
     --trade-date "$TRADE_DATE" \
     --output-dir "$OUTPUT_DIR" \
     --mode loop \
@@ -207,7 +165,6 @@ run_repair() {
       [[ -n "$evidence_path" ]] && echo "eod_auto_repair|browser_evidence|$evidence_path" >>"$DETAIL_LOG"
     done <<< "$BROWSER_EVIDENCE_PATHS"
   fi
-  clear_dashboard_cache
   echo "=== eod auto repair end: $(date '+%Y-%m-%d %H:%M:%S %z') rc=$rc ===" >>"$DETAIL_LOG"
   set -e
   if [[ "$rc" -ne 0 ]]; then

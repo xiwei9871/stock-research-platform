@@ -168,7 +168,7 @@ The same workflow installs Playwright Chromium and runs `pnpm test:e2e:p0`. On f
 
 ## Playwright-First Daily Auto EOD Repair
 
-The daily EOD loop runs browser acceptance only after the strategy publication cohort is available and upstream blockers are clear. The cron entrypoint remains a single Python orchestration process:
+The daily EOD loop runs browser acceptance only after the strategy publication cohort is available and upstream blockers are clear. Browser acceptance execution is fail-safe disabled unless `STOCK_RESEARCH_EOD_BROWSER_ACCEPTANCE_ENABLED=true`; when disabled, the browser check and action are removed before either can run. The cron entrypoint remains a single Python orchestration process:
 
 ```bash
 rtk scripts/run_eod_auto_repair_cron.sh YYYY-MM-DD
@@ -194,13 +194,24 @@ Operational rules:
 - A failed browser manifest blocks the candidate and preserves the last ready display date. A report or retention infrastructure failure changes the EOD result to failed and the CLI exits `2`.
 - Retention removes only successful, fully evidenced, non-baseline daily directories older than 90 days. Missing, degraded, failed, symlinked, out-of-tree, initial-baseline, or incomplete evidence is retained.
 
-The rollout boundary is disabled when `STOCK_RESEARCH_BROWSER_ACCEPTANCE_REQUIRED_FROM` is empty. Do not set it until the controlled rollout checklist in [Playwright Platform Validation](playwright-platform-validation.md) is complete.
+The execution switch and the promotion boundary are independent and must be changed together during rollout:
+
+- `STOCK_RESEARCH_EOD_BROWSER_ACCEPTANCE_ENABLED=false` (the default) omits browser acceptance from the cron/Python repair loop.
+- An empty `STOCK_RESEARCH_BROWSER_ACCEPTANCE_REQUIRED_FROM` disables the Dashboard display gate boundary.
+
+Do not enable either value until the controlled rollout checklist in [Playwright Platform Validation](playwright-platform-validation.md) is complete. When browser acceptance is enabled, configure `DASHBOARD_CACHE_CLEAR_URL` as an explicit HTTP(S) endpoint; an unset or unsafe URL makes a repairable cache-clear attempt fail as infrastructure rather than silently skipping it.
 
 Rollback procedure:
 
-1. Clear `STOCK_RESEARCH_BROWSER_ACCEPTANCE_REQUIRED_FROM` in both the EOD and Dashboard service environments and restart both processes.
-2. Disable the scheduled browser-acceptance action through the deployment/scheduler action-registry override. If that override is not available, stop the scheduled EOD job and deploy the last known action registry that omits `dashboard_browser_acceptance`; do not improvise a production code edit.
-3. Keep the last ready display date and every existing browser/report evidence directory unchanged.
-4. Verify the display gate still selects the prior ready date and that no unvalidated candidate becomes official.
+1. For a one-shot safe EOD invocation, run the real kill switches together:
+
+   ```bash
+   STOCK_RESEARCH_EOD_BROWSER_ACCEPTANCE_ENABLED=false STOCK_RESEARCH_BROWSER_ACCEPTANCE_REQUIRED_FROM= rtk scripts/run_eod_auto_repair_cron.sh YYYY-MM-DD
+   ```
+
+2. For persistent rollback, set `STOCK_RESEARCH_EOD_BROWSER_ACCEPTANCE_ENABLED=false` and clear `STOCK_RESEARCH_BROWSER_ACCEPTANCE_REQUIRED_FROM` in the actual external scheduler environment. This repository does not define a managed scheduler unit, so use the process manager that owns the deployed cron/job instead of naming an invented service.
+3. Clear `STOCK_RESEARCH_BROWSER_ACCEPTANCE_REQUIRED_FROM` in the Dashboard service environment and restart that service with its actual process manager. Restart the EOD scheduler process only if its environment is cached by the scheduler.
+4. Keep the last ready display date and every existing browser/report evidence directory unchanged.
+5. Verify the display gate still selects the prior ready date and that no unvalidated candidate becomes official.
 
 As of the 2026-07-21 controlled review, rollout remains `BLOCKED / stop_and_plan`; no boundary, environment, or deployment value was changed. See [EOD browser acceptance rollout review](../reviews/eod-browser-acceptance-rollout-2026-07-20.md).
