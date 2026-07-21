@@ -3,11 +3,16 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from copy import deepcopy
 from hashlib import sha256
+import json
+from pathlib import Path
 from typing import Any, Iterable
 from urllib.parse import urlsplit, urlunsplit
 
 from stock_research.research_project_v2.canonical import canonical_bytes, content_sha256
 from stock_research.research_project_v2.errors import ResearchProjectV2Error
+from stock_research.research_project_v2_1.discovery import source_candidate_id
+from stock_research.research_project_v2_1.layout import LayeredResearchLayout
+from stock_research.research_project_v2_1.normalize import validate_normalized_document
 
 
 AUTHORIZED_ER_IDS = (
@@ -87,6 +92,7 @@ def validate_wave_candidate(candidate: dict[str, Any], gate: dict[str, Any]) -> 
     required = (
         "candidate_id",
         "source_title",
+        "provider_source_title",
         "source_owner",
         "source_class",
         "source_url",
@@ -103,6 +109,9 @@ def validate_wave_candidate(candidate: dict[str, Any], gate: dict[str, Any]) -> 
         raise _invalid("Candidate publication date status is invalid")
     if copied["candidate_status"] not in {"eligible", "ineligible", "blocked_lead"}:
         raise _invalid("Candidate status is invalid")
+    normalized_url = _normalized_url(copied["source_url"])
+    if copied["candidate_id"] != source_candidate_id(normalized_url, copied["provider_source_title"]):
+        raise _invalid("Candidate identity does not match the provider candidate contract")
     return copied
 
 
@@ -125,7 +134,7 @@ def to_provider_candidate(
         "query_id": f"wave_1_phase_{candidate['internal_phase']}",
         "normalized_url": normalized_url,
         "original_url": candidate["source_url"],
-        "title": candidate["source_title"],
+        "title": candidate["provider_source_title"],
         "snippet": "",
         "publisher": candidate["source_owner"],
         "publish_date": publish_date,
@@ -208,6 +217,7 @@ def build_wave_checkpoint(
     created_at: str,
     suspected_common_origin_groups: list[list[str]] | None = None,
     out_of_scope_candidate_count: int = 0,
+    engineering_preflight_attempt_ids: list[str] | None = None,
 ) -> dict[str, Any]:
     frozen_gate = validate_gate_decision(gate)
     candidate_map = {row["candidate_id"]: validate_wave_candidate(row, frozen_gate) for row in candidates}
@@ -227,6 +237,8 @@ def build_wave_checkpoint(
         if row.get("content_hash"):
             hash_groups[row["content_hash"]].append(row["artifact_id"])
     duplicates = sorted(sorted(group) for group in hash_groups.values() if len(group) > 1)
+    common_origin_groups = sorted(suspected_common_origin_groups or [])
+    common_origin_reductions = sum(max(0, len(set(group)) - 1) for group in common_origin_groups)
     media_counts = Counter(row.get("content_type") for row in inventory)
     normalized_count = sum(bool(row.get("normalized_document_id")) for row in inventory)
     normalization_failures = sum(row.get("normalization_status") == "failed" for row in inventory)
@@ -254,13 +266,17 @@ def build_wave_checkpoint(
         "normalized_artifact_count": normalized_count,
         "normalization_failure_count": normalization_failures,
         "duplicate_groups": duplicates,
-        "suspected_common_origin_groups": sorted(suspected_common_origin_groups or []),
+        "suspected_common_origin_groups": common_origin_groups,
+        "evidence_chain_count": max(0, len(hash_groups) - common_origin_reductions),
         "unknown_publication_date_count": sum(row.get("publication_date_status") == "unknown" for row in inventory),
         "per_er_attempt_coverage": _coverage(attempts, acquired_only=False),
         "per_er_acquired_coverage": _coverage(attempts, acquired_only=True),
         "per_er_terminal_state": {er_id: _terminal_state(attempts, er_id) for er_id in AUTHORIZED_ER_IDS},
         "out_of_scope_candidate_count": out_of_scope_candidate_count,
         "out_of_scope_coverage_count": 0,
+        "engineering_preflight_attempt_count": len(engineering_preflight_attempt_ids or []),
+        "engineering_preflight_attempt_ids": sorted(engineering_preflight_attempt_ids or []),
+        "engineering_preflight_coverage_count": 0,
         "security_violations": 0,
         "scope_violations": 0,
         "assessment_started": False,
@@ -300,3 +316,75 @@ def validate_wave_checkpoint(checkpoint: dict[str, Any], *, gate: dict[str, Any]
     if any(state not in _TERMINAL_STATES for state in (copied.get("per_er_terminal_state") or {}).values()):
         raise _invalid("Wave checkpoint contains an invalid terminal state")
     return copied
+
+
+def validate_wave_repository_bundle(
+    *,
+    layout: LayeredResearchLayout | None = None,
+    wave_dir: Path | None = None,
+) -> dict[str, Any]:
+    effective = LayeredResearchLayout.default() if layout is None else layout
+    directory = effective.root / "acquisition/wave_1" if wave_dir is None else wave_dir
+    gate = validate_gate_decision(
+        json.loads(
+            (effective.governance_dir / "ai_pcb_targeted_acquisition_gate_decision_v1.json").read_text(encoding="utf-8")
+        )
+    )
+    candidates = [json.loads(line) for line in (directory / "candidates.jsonl").read_text(encoding="utf-8").splitlines() if line]
+    attempts = [json.loads(line) for line in (directory / "attempts.jsonl").read_text(encoding="utf-8").splitlines() if line]
+    inventory_wrapper = json.loads((directory / "evidence_inventory.json").read_text(encoding="utf-8"))
+    inventory = inventory_wrapper["items"]
+    checkpoint = validate_wave_checkpoint(
+        json.loads((directory / "acquisition_checkpoint.json").read_text(encoding="utf-8")),
+        gate=gate,
+    )
+    if inventory_wrapper.get("content_hash") != content_sha256(inventory):
+        raise _invalid("Wave inventory hash mismatch")
+    candidate_map = {row["candidate_id"]: validate_wave_candidate(row, gate) for row in candidates}
+    if len(candidate_map) != len(candidates):
+        raise _invalid("Wave bundle contains duplicate candidate IDs")
+    phases = [row.get("internal_phase") for row in attempts]
+    if phases != sorted(phases):
+        raise _invalid("Wave attempts violate the frozen internal phase order")
+    attempted_ers: set[str] = set()
+    for attempt in attempts:
+        candidate = candidate_map.get(attempt.get("candidate_id"))
+        if candidate is None:
+            raise _invalid("Wave attempt references an unknown candidate")
+        if attempt.get("authorized_er_ids") != candidate["authorized_er_ids"]:
+            raise _invalid("Wave attempt ER scope differs from its candidate")
+        attempted_ers.update(attempt["authorized_er_ids"])
+        if attempt.get("proxy_mode") != "direct" or attempt.get("trust_env") is not False:
+            raise _invalid("Wave attempt did not use the frozen direct network mode")
+        if attempt.get("assessment_started") is not False:
+            raise _invalid("Wave attempt started Evidence Assessment")
+        if attempt.get("status") != "acquired" and attempt.get("raw_artifact_created") is not False:
+            raise _invalid("Non-acquired attempt claims a raw artifact")
+    if attempted_ers != set(AUTHORIZED_ER_IDS):
+        raise _invalid("Not every authorized ER has a Wave attempt")
+    for item in inventory:
+        raw_path = effective.root / item["raw_artifact_path"]
+        data = raw_path.read_bytes()
+        if sha256(data).hexdigest() != item["content_hash"] or len(data) != item["byte_size"]:
+            raise _invalid("Wave raw artifact hash or size mismatch", details={"artifact_id": item["artifact_id"]})
+        if item["published_at"] is not None and item["publication_date_status"] != "known":
+            raise _invalid("Unknown-date artifact was assigned a publication date")
+        document_id = item.get("normalized_document_id")
+        if document_id is None:
+            continue
+        wrapper = json.loads((effective.evidence_normalized_dir / f"{document_id}.json").read_text(encoding="utf-8"))
+        document = validate_normalized_document(wrapper["normalized_document"])
+        legacy_wrapper = json.loads((effective.evidence_metadata_dir / f"{document['artifact_id']}.json").read_text(encoding="utf-8"))
+        legacy = legacy_wrapper["evidence_artifact"]
+        if legacy["content_sha256"] != item["content_hash"] or legacy["raw_path"] != item["raw_artifact_path"]:
+            raise _invalid("Normalized document does not trace to the Wave raw artifact")
+    if checkpoint["attempt_count"] != len(attempts) or checkpoint["raw_artifact_count"] != len(inventory):
+        raise _invalid("Wave checkpoint counts do not match its bundle")
+    return {
+        "valid": True,
+        "checkpoint_id": checkpoint["checkpoint_id"],
+        "checkpoint_hash": checkpoint["content_hash"],
+        "candidate_count": len(candidates),
+        "attempt_count": len(attempts),
+        "raw_artifact_count": len(inventory),
+    }

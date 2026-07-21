@@ -31,6 +31,7 @@ STAGE_A_SCOPE_CORRECTION_END = "7280ba71b1694f1ac5938d8be258b9803dfc285e"
 INDUSTRY_COGNITION_BASELINE = STAGE_A_SCOPE_CORRECTION_END
 INDUSTRY_COGNITION_END = "989b1258c54000990349692f4b07b968e8eaabd5"
 EVIDENCE_GAP_REVIEW_BASELINE = INDUSTRY_COGNITION_END
+EVIDENCE_GAP_REVIEW_END = "16855be"
 ACQUISITION_RECOVERY_PHASE_A_PATHS = {
     "artifacts/research_projects/v2_1/acquisition/diagnostics/r2b_external_acquisition_phase_a_2026-07-20.json",
     "docs/research_operating_layer_v2_r2b_external_acquisition_recovery_phase_a.md",
@@ -326,7 +327,8 @@ def test_evidence_gap_review_uses_an_exact_offline_read_only_allowlist() -> None
     allowed = set(payload["paths"])
     assert len(allowed) == len(payload["paths"])
 
-    result = _git("diff", "--name-only", f"{EVIDENCE_GAP_REVIEW_BASELINE}..HEAD")
+    assert _git("merge-base", "--is-ancestor", EVIDENCE_GAP_REVIEW_END, "HEAD").returncode == 0
+    result = _git("diff", "--name-only", f"{EVIDENCE_GAP_REVIEW_BASELINE}..{EVIDENCE_GAP_REVIEW_END}")
     changed = {path for path in result.stdout.splitlines() if path}
     assert changed <= allowed
     assert not any(
