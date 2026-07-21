@@ -154,6 +154,71 @@ def test_checkpoint_references_attempt_artifact_and_normalization_without_resear
     assert not (layout.project_dir("ai_compute_pcb_industry_bottleneck") / "versions/v0.2.2.json").exists()
 
 
+def test_stage_checkpoint_separates_acquisition_coverage_from_requirement_assessment(
+    tmp_path: Path,
+) -> None:
+    layout = LayeredResearchLayout((tmp_path / "v2_1").resolve())
+    layout.root.mkdir(mode=0o700)
+    acquired = imported_html(tmp_path, layout)
+    outcome = normalize_acquired_artifact(
+        acquired.artifact,
+        adapter=DeterministicNormalizationAdapter(),
+        layout=layout,
+        parsed_at="2026-07-21T01:00:02Z",
+        provenance=PROVENANCE,
+    )
+    universe = [
+        "requirement:ai_compute_pcb_industry_bottleneck:r2b_er01",
+        "requirement:ai_compute_pcb_industry_bottleneck:r2b_er02",
+    ]
+    checkpoint = build_acquisition_checkpoint(
+        project_id="research_project:ai_compute_pcb_industry_bottleneck",
+        research_version_context="research_version:ai_compute_pcb_industry_bottleneck:0.2.1",
+        created_at="2026-07-21T01:00:03Z",
+        attempts=[acquired.attempt],
+        artifacts=[acquired.artifact],
+        normalization_outcomes=[outcome],
+        acquisition_stage="stage_a_system_product_facts",
+        requirement_universe_ids=universe,
+        primary_source_coverage=[
+            {
+                "requirement_id": universe[0],
+                "acquired_candidate_ids": ["source_candidate:primary"],
+                "acquired_artifact_ids": [acquired.artifact["evidence_artifact_id"]],
+            }
+        ],
+        source_role_distribution={"company_primary": 1},
+        suspected_common_origin_groups=[],
+        inaccessible_candidate_ids=[],
+        widen_like_redirect_attempt_ids=[],
+        unresolved_engineering_issues=[],
+        unresolved_acquisition_gaps=["ER02 has not been attempted."],
+        provenance=PROVENANCE,
+    )
+    assert checkpoint["acquisition_stage"] == "stage_a_system_product_facts"
+    assert checkpoint["requirement_universe_ids"] == universe
+    assert checkpoint["attempted_requirement_ids"] == [universe[0]]
+    assert checkpoint["unattempted_requirement_ids"] == [universe[1]]
+    assert checkpoint["successful_attempt_ids"] == [acquired.attempt["attempt_id"]]
+    assert checkpoint["blocked_attempt_ids"] == []
+    assert checkpoint["failed_only_attempt_ids"] == []
+    assert checkpoint["normalization_failure_artifact_ids"] == []
+    assert checkpoint["proxy_mode_distribution"] == {"local_file": 1}
+    assert checkpoint["unknown_publication_date_artifact_ids"] == []
+    assert checkpoint["date_metadata_records"] == [
+        {
+            "artifact_id": acquired.artifact["evidence_artifact_id"],
+            "published_at": "2026-07-01T00:00:00Z",
+            "updated_at": None,
+            "accessed_at": acquired.artifact["accessed_at"],
+            "date_status": "candidate_reported",
+            "date_source": "candidate.publish_date",
+            "date_confidence": "unreviewed",
+        }
+    ]
+    assert "requirement_satisfaction" not in checkpoint
+
+
 def test_optional_docling_adapter_creates_a_distinct_normalized_representation(tmp_path: Path) -> None:
     layout = LayeredResearchLayout((tmp_path / "v2_1").resolve())
     layout.root.mkdir(mode=0o700)

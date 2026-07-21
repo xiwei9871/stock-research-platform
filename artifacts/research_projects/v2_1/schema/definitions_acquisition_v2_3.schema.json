@@ -168,6 +168,76 @@
         "provenance_completeness": {"enum": ["complete", "incomplete"]},
         "security_violations": {"$ref": "#/$defs/string_array"},
         "unresolved_issues": {"$ref": "#/$defs/string_array"},
+        "acquisition_stage": {"type": "string", "minLength": 1},
+        "requirement_universe_ids": {"$ref": "#/$defs/string_array"},
+        "attempted_requirement_ids": {"$ref": "#/$defs/string_array"},
+        "unattempted_requirement_ids": {"$ref": "#/$defs/string_array"},
+        "successful_attempt_ids": {"$ref": "#/$defs/string_array"},
+        "blocked_attempt_ids": {"$ref": "#/$defs/string_array"},
+        "failed_only_attempt_ids": {"$ref": "#/$defs/string_array"},
+        "normalization_failure_artifact_ids": {"$ref": "#/$defs/string_array"},
+        "primary_source_coverage": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["requirement_id", "acquired_candidate_ids", "acquired_artifact_ids"],
+            "properties": {
+              "requirement_id": {"type": "string", "minLength": 1},
+              "acquired_candidate_ids": {"$ref": "#/$defs/string_array"},
+              "acquired_artifact_ids": {"$ref": "#/$defs/string_array"}
+            },
+            "additionalProperties": false
+          }
+        },
+        "source_role_distribution": {
+          "type": "object",
+          "patternProperties": {
+            "^[a-z][a-z0-9_]*$": {"type": "integer", "minimum": 0}
+          },
+          "additionalProperties": false
+        },
+        "proxy_mode_distribution": {
+          "type": "object",
+          "patternProperties": {
+            "^[a-z][a-z0-9_]*$": {"type": "integer", "minimum": 0}
+          },
+          "additionalProperties": false
+        },
+        "unknown_publication_date_artifact_ids": {"$ref": "#/$defs/string_array"},
+        "date_metadata_records": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["artifact_id", "published_at", "updated_at", "accessed_at", "date_status", "date_source", "date_confidence"],
+            "properties": {
+              "artifact_id": {"type": "string", "minLength": 1},
+              "published_at": {"type": ["string", "null"], "format": "date-time"},
+              "updated_at": {"type": ["string", "null"], "format": "date-time"},
+              "accessed_at": {"type": "string", "format": "date-time"},
+              "date_status": {"enum": ["unknown", "candidate_reported"]},
+              "date_source": {"type": ["string", "null"]},
+              "date_confidence": {"enum": ["unknown", "unreviewed"]}
+            },
+            "additionalProperties": false
+          }
+        },
+        "suspected_common_origin_groups": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["group_id", "candidate_ids", "reason"],
+            "properties": {
+              "group_id": {"type": "string", "minLength": 1},
+              "candidate_ids": {"$ref": "#/$defs/string_array"},
+              "reason": {"type": "string", "minLength": 1}
+            },
+            "additionalProperties": false
+          }
+        },
+        "inaccessible_candidate_ids": {"$ref": "#/$defs/string_array"},
+        "widen_like_redirect_attempt_ids": {"$ref": "#/$defs/string_array"},
+        "unresolved_engineering_issues": {"$ref": "#/$defs/string_array"},
+        "unresolved_acquisition_gaps": {"$ref": "#/$defs/string_array"},
         "status": {"enum": ["acquisition_complete", "pending_assessment", "partial", "blocked"]},
         "provenance": {"$ref": "definitions_v2_1.schema.json#/$defs/provenance"},
         "content_hash": {"$ref": "#/$defs/sha256"},

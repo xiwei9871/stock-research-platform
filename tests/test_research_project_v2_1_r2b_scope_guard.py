@@ -23,6 +23,8 @@ R2B_CLOSURE_FILES = {"tests/test_research_project_v2_1_r2b_scope_guard.py"}
 ACQUISITION_RECOVERY_PHASE_A_SEED = "fd057e20ca1d81129ff39f0a253fe122acca99c2"
 ACQUISITION_RECOVERY_PHASE_A_END = "d8b3101149408bfb92cd3733eb737e3ba677ea47"
 ACQUISITION_RECOVERY_PHASE_B_END = "d76c95f"
+ACQUISITION_PHASE_C_END = "34210fb"
+STAGE_A_ACQUISITION_BASELINE = ACQUISITION_PHASE_C_END
 ACQUISITION_RECOVERY_PHASE_A_PATHS = {
     "artifacts/research_projects/v2_1/acquisition/diagnostics/r2b_external_acquisition_phase_a_2026-07-20.json",
     "docs/research_operating_layer_v2_r2b_external_acquisition_recovery_phase_a.md",
@@ -209,7 +211,32 @@ def test_acquisition_phase_c_uses_a_separate_exact_allowlist() -> None:
     assert payload["baseline_commit"] == ACQUISITION_RECOVERY_PHASE_B_END
     allowed = set(payload["paths"])
     assert len(allowed) == len(payload["paths"])
-    result = _git("diff", "--name-only", f"{ACQUISITION_RECOVERY_PHASE_B_END}..HEAD")
+    assert (
+        _git("merge-base", "--is-ancestor", ACQUISITION_PHASE_C_END, "HEAD").returncode
+        == 0
+    )
+    result = _git(
+        "diff",
+        "--name-only",
+        f"{ACQUISITION_RECOVERY_PHASE_B_END}..{ACQUISITION_PHASE_C_END}",
+    )
+    changed = {path for path in result.stdout.splitlines() if path}
+    assert changed <= allowed
+    assert not any(
+        path.startswith(tuple(payload["forbidden_prefixes"])) for path in changed
+    )
+
+
+def test_stage_a_acquisition_uses_a_separate_exact_allowlist() -> None:
+    allowlist_path = (
+        REPOSITORY_ROOT
+        / "artifacts/research_projects/v2_1/acquisition/stage_a_exact_allowlist.json"
+    )
+    payload = json.loads(allowlist_path.read_text(encoding="utf-8"))
+    assert payload["baseline_commit"] == STAGE_A_ACQUISITION_BASELINE
+    allowed = set(payload["paths"])
+    assert len(allowed) == len(payload["paths"])
+    result = _git("diff", "--name-only", f"{STAGE_A_ACQUISITION_BASELINE}..HEAD")
     changed = {path for path in result.stdout.splitlines() if path}
     assert changed <= allowed
     assert not any(

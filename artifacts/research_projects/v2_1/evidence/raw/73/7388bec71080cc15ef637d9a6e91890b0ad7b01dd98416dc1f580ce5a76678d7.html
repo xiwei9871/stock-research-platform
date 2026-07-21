@@ -1,0 +1,2152 @@
+
+<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+    <title>Gaudi Architecture &#8212; Gaudi Documentation 1.24.0 documentation</title>
+    
+    <link href="../_static/styles/theme.css?digest=1999514e3f237ded88cf" rel="stylesheet">
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=1999514e3f237ded88cf" rel="stylesheet">
+  
+    
+    <link rel="stylesheet"
+      href="../_static/vendor/fontawesome/5.13.0/css/all.min.css">
+    <link rel="preload" as="font" type="font/woff2" crossorigin
+      href="../_static/vendor/fontawesome/5.13.0/webfonts/fa-solid-900.woff2">
+    <link rel="preload" as="font" type="font/woff2" crossorigin
+      href="../_static/vendor/fontawesome/5.13.0/webfonts/fa-brands-400.woff2">
+  
+    
+      
+  
+    
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css" />
+    <link rel="stylesheet" href="../_static/styles/sphinx-book-theme.css?digest=5115cc725059bd94278eecd172e13a965bf8f5a9" type="text/css" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.10.23/css/jquery.dataTables.min.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/doxyrest-pygments.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/panels-bootstrap.5fd3999ee7762ccc51105388f4a9d115.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/panels-main.c949a650a448cc0ae9fd3441c0e17fb0.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/panels-variables.46a86ac5104e7a7c1160db91b733aa67.css" />
+    
+    <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=1999514e3f237ded88cf">
+  
+    <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+    <script src="../_static/jquery.js"></script>
+    <script src="../_static/underscore.js"></script>
+    <script src="../_static/doctools.js"></script>
+    <script src="../_static/clipboard.min.js"></script>
+    <script src="../_static/copybutton.js"></script>
+    <script src="../_static/scripts/sphinx-book-theme.js?digest=9c920249402e914e316237a7dbc6769907cce411"></script>
+    <script src="../_static/script.js"></script>
+    <script src="https://developer.habana.ai/js/rtd-gtm.js"></script>
+    <script async="async" src="../_static/custom.js"></script>
+    <script src="../_static/js/custom.js"></script>
+    <script src="https://cdn.datatables.net/1.10.23/js/jquery.dataTables.min.js"></script>
+    <script src="../_static/main.js"></script>
+    <script src="../_static/target-highlight.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Intel Gaudi Software Suite" href="Intel_Gaudi_Software_Suite.html" />
+    <link rel="prev" title="Gaudi Architecture and Software Overview" href="index.html" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="docsearch:language" content="en">
+    
+
+    <!-- Google Analytics -->
+    
+  <script async type="text/javascript" src="/_/static/javascript/readthedocs-addons.js"></script><meta name="readthedocs-project-slug" content="habana-labs-gaudi-docs" /><meta name="readthedocs-version-slug" content="latest" /><meta name="readthedocs-resolver-filename" content="/Gaudi_Overview/Gaudi_Architecture.html" /><meta name="readthedocs-http-status" content="200" /></head>
+  <body data-spy="scroll" data-target="#bd-toc-nav" data-offset="80">
+<!-- Checkboxes to toggle the left sidebar -->
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle navigation sidebar">
+<label class="overlay overlay-navbar" for="__navigation">
+    <div class="visually-hidden">Toggle navigation sidebar</div>
+</label>
+<!-- Checkboxes to toggle the in-page toc -->
+<input type="checkbox" class="sidebar-toggle" name="__page-toc" id="__page-toc" aria-label="Toggle in-page Table of Contents">
+<label class="overlay overlay-pagetoc" for="__page-toc">
+    <div class="visually-hidden">Toggle in-page Table of Contents</div>
+</label>
+<!-- Headers at the top -->
+<div class="announcement header-item noprint"></div>
+<div class="header header-item noprint"></div>
+
+    
+    <div class="container-fluid" id="banner"></div>
+
+    
+
+    <div class="container-xl">
+      <div class="row">
+          
+<!-- Sidebar -->
+<div class="bd-sidebar noprint" id="site-navigation">
+    <div class="bd-sidebar__content">
+        <div class="bd-sidebar__top"><div class="navbar-brand-box">
+    <a class="navbar-brand text-wrap" href="../index.html">
+      
+        <!-- `logo` is deprecated in Sphinx 4.0, so remove this when we stop supporting 3 -->
+        
+      
+      
+      <img src="../_static/Intel_gaudi_logo.png" class="logo" alt="logo">
+      
+      
+      <h1 class="site-logo" id="site-title">Gaudi Documentation 1.24.0 documentation</h1>
+      
+    </a>
+</div><form class="bd-search d-flex align-items-center" action="../search.html" method="get">
+  <i class="icon fas fa-search"></i>
+  <input type="search" class="form-control" name="q" id="search-input" placeholder="Search the docs ..." aria-label="Search the docs ..." autocomplete="off" >
+</form><nav class="bd-links" id="bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item active">
+        
+        <ul class="nav bd-sidenav bd-sidenav__home-link">
+            <li class="toctree-l1">
+                <a class="reference internal" href="../index.html">
+                    Welcome to Intel® Gaudi® v1.24 Documentation
+                </a>
+            </li>
+        </ul>
+        <p aria-level="2" class="caption" role="heading">
+ <span class="caption-text">
+  Getting Started
+ </span>
+</p>
+<ul class="current nav bd-sidenav">
+ <li class="toctree-l1 current active has-children">
+  <a class="reference internal" href="index.html">
+   Gaudi Architecture and Software Overview
+  </a>
+  <input checked="" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" type="checkbox"/>
+  <label for="toctree-checkbox-1">
+   <i class="fas fa-chevron-down">
+   </i>
+  </label>
+  <ul class="current">
+   <li class="toctree-l2 current active">
+    <a class="current reference internal" href="#">
+     Gaudi Architecture
+    </a>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="Intel_Gaudi_Software_Suite.html">
+     Intel Gaudi Software Suite
+    </a>
+   </li>
+  </ul>
+ </li>
+ <li class="toctree-l1">
+  <a class="reference internal" href="../Support_Matrix/Support_Matrix.html">
+   Support Matrix
+  </a>
+ </li>
+ <li class="toctree-l1">
+  <a class="reference internal" href="../Release_Notes/GAUDI_Release_Notes.html">
+   Release Notes
+  </a>
+ </li>
+ <li class="toctree-l1 has-children">
+  <a class="reference internal" href="../Installation_Guide/index.html">
+   Installation
+  </a>
+  <input class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" type="checkbox"/>
+  <label for="toctree-checkbox-2">
+   <i class="fas fa-chevron-down">
+   </i>
+  </label>
+  <ul>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../Installation_Guide/Platform_Readiness.html">
+     Hardware and Network Requirements
+    </a>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../Installation_Guide/Driver_Installation.html">
+     Driver and Software Installation
+    </a>
+   </li>
+   <li class="toctree-l2 has-children">
+    <a class="reference internal" href="../Installation_Guide/Firmware_and_Platform_Components/index.html">
+     Firmware Upgrade and Platform Level Components
+    </a>
+    <input class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" type="checkbox"/>
+    <label for="toctree-checkbox-3">
+     <i class="fas fa-chevron-down">
+     </i>
+    </label>
+    <ul>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Installation_Guide/Firmware_and_Platform_Components/Firmware_Upgrade.html">
+       Firmware Upgrade
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Installation_Guide/Firmware_and_Platform_Components/HL325_InBand_CPLD_Programming.html">
+       HL-325 In-Band (IB) CPLD Programming
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Installation_Guide/Firmware_and_Platform_Components/HL338_InBand_CPLD_Programming.html">
+       HL-338 In-Band (IB) CPLD Programming
+      </a>
+     </li>
+    </ul>
+   </li>
+   <li class="toctree-l2 has-children">
+    <a class="reference internal" href="../Installation_Guide/Additional_Installation/index.html">
+     Additional Installation
+    </a>
+    <input class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" type="checkbox"/>
+    <label for="toctree-checkbox-4">
+     <i class="fas fa-chevron-down">
+     </i>
+    </label>
+    <ul>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Installation_Guide/Additional_Installation/Bare_Metal_Installation.html">
+       Bare Metal Installation
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Installation_Guide/Additional_Installation/Docker_Installation.html">
+       Docker Installation
+      </a>
+     </li>
+     <li class="toctree-l3 has-children">
+      <a class="reference internal" href="../Installation_Guide/Additional_Installation/Kubernetes_Installation/index.html">
+       Kubernetes Installation
+      </a>
+      <input class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" type="checkbox"/>
+      <label for="toctree-checkbox-5">
+       <i class="fas fa-chevron-down">
+       </i>
+      </label>
+      <ul>
+       <li class="toctree-l4">
+        <a class="reference internal" href="../Installation_Guide/Additional_Installation/Kubernetes_Installation/Kubernetes_Operator.html">
+         Intel Gaudi Base Operator for Kubernetes
+        </a>
+       </li>
+       <li class="toctree-l4">
+        <a class="reference internal" href="../Installation_Guide/Additional_Installation/Kubernetes_Installation/Intel_Gaudi_Kubernetes_Device_Plugin.html">
+         Intel Gaudi Device Plugin for Kubernetes
+        </a>
+       </li>
+      </ul>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Installation_Guide/Additional_Installation/OpenShift_Installation/index.html">
+       OpenShift Installation
+      </a>
+     </li>
+    </ul>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../Installation_Guide/System_Verification_and_Final_Tests.html">
+     System Verifications and Final Tests
+    </a>
+   </li>
+  </ul>
+ </li>
+ <li class="toctree-l1 has-children">
+  <a class="reference internal" href="../Quick_Start_Guides/index.html">
+   Quick Start Guides
+  </a>
+  <input class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" type="checkbox"/>
+  <label for="toctree-checkbox-6">
+   <i class="fas fa-chevron-down">
+   </i>
+  </label>
+  <ul>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../Quick_Start_Guides/Intel_DevCloud_Quick_Start.html">
+     Intel Tiber AI Cloud Quick Start Guide
+    </a>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../Quick_Start_Guides/IBM_Quick_Start.html">
+     IBM Cloud Quick Start Guide
+    </a>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../Quick_Start_Guides/Bare_Metal_Quick_Start.html">
+     Running Workloads on Bare Metal
+    </a>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../Quick_Start_Guides/Docker_Quick_Start.html">
+     Running Workloads on Docker
+    </a>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../Quick_Start_Guides/Kubernetes_Quick_Start.html">
+     Running Workloads on Kubernetes
+    </a>
+   </li>
+  </ul>
+ </li>
+</ul>
+<p aria-level="2" class="caption" role="heading">
+ <span class="caption-text">
+  PyTorch
+ </span>
+</p>
+<ul class="nav bd-sidenav">
+ <li class="toctree-l1 has-children">
+  <a class="reference internal" href="../PyTorch/index.html">
+   Training
+  </a>
+  <input class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" type="checkbox"/>
+  <label for="toctree-checkbox-7">
+   <i class="fas fa-chevron-down">
+   </i>
+  </label>
+  <ul>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../PyTorch/Getting_Started_with_PyTorch_and_Gaudi/Getting_Started_with_PyTorch.html">
+     Getting Started with Training on Intel Gaudi
+    </a>
+   </li>
+   <li class="toctree-l2 has-children">
+    <a class="reference internal" href="../PyTorch/PyTorch_Model_Porting/index.html">
+     PyTorch Model Porting
+    </a>
+    <input class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" type="checkbox"/>
+    <label for="toctree-checkbox-8">
+     <i class="fas fa-chevron-down">
+     </i>
+    </label>
+    <ul>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../PyTorch/PyTorch_Model_Porting/GPU_Migration_Toolkit/GPU_Migration_Toolkit.html">
+       GPU Migration Toolkit
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../PyTorch/PyTorch_Model_Porting/Porting_PyTorch_Models_to_Gaudi.html">
+       Importing PyTorch Models Manually
+      </a>
+     </li>
+    </ul>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../PyTorch/PyTorch_Mixed_Precision/index.html">
+     Mixed Precision Training with PyTorch Autocast
+    </a>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../PyTorch/Using_Media_Loader_with_PyTorch/Media_Loader_PT.html">
+     Intel Gaudi Media Loader
+    </a>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../PyTorch/PyTorch_FP8_Training/index.html">
+     FP8 Training with Intel Gaudi Transformer Engine
+    </a>
+   </li>
+   <li class="toctree-l2 has-children">
+    <a class="reference internal" href="../PyTorch/PyTorch_Scaling_Guide/index.html">
+     Distributed Training with PyTorch
+    </a>
+    <input class="toctree-checkbox" id="toctree-checkbox-9" name="toctree-checkbox-9" type="checkbox"/>
+    <label for="toctree-checkbox-9">
+     <i class="fas fa-chevron-down">
+     </i>
+    </label>
+    <ul>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../PyTorch/PyTorch_Scaling_Guide/Scale_Out_Topology.html">
+       Scale-out Topology
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../PyTorch/PyTorch_Scaling_Guide/Distributed_Backend_Initialization.html">
+       Distributed Backend Initialization
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../PyTorch/PyTorch_Scaling_Guide/Gaudi_Assignment.html">
+       Gaudi-to-process Assignment
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../PyTorch/PyTorch_Scaling_Guide/DDP_Based_Scaling.html">
+       DDP-based Scaling of Gaudi on PyTorch
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../PyTorch/PyTorch_Scaling_Guide/Theory_of_Distributed_Training.html">
+       Theory of Distributed Training
+      </a>
+     </li>
+    </ul>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../PyTorch/PyTorch_FSDP/Pytorch_FSDP.html">
+     Using Fully Sharded Data Parallel (FSDP) with Intel Gaudi
+    </a>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../PyTorch/PyTorch_DistributedTensor/PyTorch_DistributedTensor.html">
+     Using DistributedTensor with Intel Gaudi
+    </a>
+   </li>
+  </ul>
+ </li>
+ <li class="toctree-l1 has-children">
+  <a class="reference internal" href="../PyTorch/Inference_on_PyTorch/index.html">
+   Inference
+  </a>
+  <input class="toctree-checkbox" id="toctree-checkbox-10" name="toctree-checkbox-10" type="checkbox"/>
+  <label for="toctree-checkbox-10">
+   <i class="fas fa-chevron-down">
+   </i>
+  </label>
+  <ul>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../PyTorch/Inference_on_PyTorch/Getting_Started_with_Inference.html">
+     Getting Started with Inference on Intel Gaudi
+    </a>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../PyTorch/Inference_on_PyTorch/Model_Serving.html">
+     AI Model Serving with Intel Gaudi
+    </a>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../PyTorch/Inference_on_PyTorch/Inference_Using_HPU_Graphs.html">
+     Run Inference Using HPU Graphs
+    </a>
+   </li>
+   <li class="toctree-l2 has-children">
+    <a class="reference internal" href="../PyTorch/Inference_on_PyTorch/Quantization/index.html">
+     Inference with Quantization
+    </a>
+    <input class="toctree-checkbox" id="toctree-checkbox-11" name="toctree-checkbox-11" type="checkbox"/>
+    <label for="toctree-checkbox-11">
+     <i class="fas fa-chevron-down">
+     </i>
+    </label>
+    <ul>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../PyTorch/Inference_on_PyTorch/Quantization/Inference_Using_FP8.html">
+       Run Inference Using FP8
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../PyTorch/Inference_on_PyTorch/Quantization/Inference_Using_UINT4.html">
+       Run Inference Using UINT4
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../PyTorch/Inference_on_PyTorch/Quantization/Inference_Using_NF4.html">
+       Run Inference Using NF4
+      </a>
+     </li>
+    </ul>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../PyTorch/Inference_on_PyTorch/Inference_Optimization.html">
+     Optimize Inference on PyTorch
+    </a>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../PyTorch/Inference_on_PyTorch/Gaudi_Checkpoints_Xeon.html">
+     Using Gaudi Trained Checkpoints on Xeon
+    </a>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../PyTorch/Inference_on_PyTorch/Triton_Inference.html">
+     Triton Inference Server with Gaudi
+    </a>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../PyTorch/Inference_on_PyTorch/TorchServe_Inference.html">
+     TorchServe Inference Server with Gaudi
+    </a>
+   </li>
+  </ul>
+ </li>
+ <li class="toctree-l1">
+  <a class="reference external" href="https://vllm-gaudi.readthedocs.io/en/latest/index.html">
+   vLLM Plugin
+  </a>
+ </li>
+ <li class="toctree-l1 has-children">
+  <a class="reference internal" href="../PyTorch/SGLang_Inference/index.html">
+   SGLang
+  </a>
+  <input class="toctree-checkbox" id="toctree-checkbox-12" name="toctree-checkbox-12" type="checkbox"/>
+  <label for="toctree-checkbox-12">
+   <i class="fas fa-chevron-down">
+   </i>
+  </label>
+  <ul>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../PyTorch/SGLang_Inference/SGLang_Quick_Start.html">
+     SGLang Quick Start Guide
+    </a>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../PyTorch/SGLang_Inference/SGLang_Inference.html">
+     Inference Using SGLang
+    </a>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../PyTorch/SGLang_Inference/Managing_SGLang_Warmup_Time.html">
+     Managing and Reducing SGLang Warmup Time
+    </a>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../PyTorch/SGLang_Inference/SGLang_Profiling.html">
+     Profiling with SGLang
+    </a>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../PyTorch/SGLang_Inference/SGLang_FAQs.html">
+     SGLang with Gaudi FAQs
+    </a>
+   </li>
+  </ul>
+ </li>
+ <li class="toctree-l1 has-children">
+  <a class="reference internal" href="../PyTorch/DeepSpeed/index.html">
+   DeepSpeed
+  </a>
+  <input class="toctree-checkbox" id="toctree-checkbox-13" name="toctree-checkbox-13" type="checkbox"/>
+  <label for="toctree-checkbox-13">
+   <i class="fas fa-chevron-down">
+   </i>
+  </label>
+  <ul>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../PyTorch/DeepSpeed/Getting_Started_with_DeepSpeed/Getting_Started_with_DeepSpeed.html">
+     Getting Started with DeepSpeed
+    </a>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../PyTorch/DeepSpeed/DeepSpeed_User_Guide/DeepSpeed_User_Guide.html">
+     DeepSpeed Training
+    </a>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../PyTorch/DeepSpeed/Optimizing_LLM.html">
+     Optimizing Large Language Models
+    </a>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../PyTorch/DeepSpeed/Inference_Using_DeepSpeed.html">
+     Inference Using DeepSpeed
+    </a>
+   </li>
+  </ul>
+ </li>
+ <li class="toctree-l1 has-children">
+  <a class="reference internal" href="../PyTorch/Model_Optimization_PyTorch/index.html">
+   Optimization
+  </a>
+  <input class="toctree-checkbox" id="toctree-checkbox-14" name="toctree-checkbox-14" type="checkbox"/>
+  <label for="toctree-checkbox-14">
+   <i class="fas fa-chevron-down">
+   </i>
+  </label>
+  <ul>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../PyTorch/Model_Optimization_PyTorch/Optimization_Getting_Started.html">
+     Model Optimization Checklist
+    </a>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../PyTorch/Model_Optimization_PyTorch/Optimization_in_PyTorch_Models.html">
+     Optimizations of PyTorch Models
+    </a>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../PyTorch/Inference_on_PyTorch/Inference_Optimization.html">
+     Inference Optimizations
+    </a>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../PyTorch/Model_Optimization_PyTorch/Dynamic_Shapes.html">
+     Handling Dynamic Shapes
+    </a>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../PyTorch/Model_Optimization_PyTorch/Custom_Ops_PyTorch.html">
+     Fused Optimizers and Custom Ops for Intel Gaudi
+    </a>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../PyTorch/Model_Optimization_PyTorch/HPU_Graphs_Training.html">
+     HPU Graphs for Training
+    </a>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../PyTorch/Model_Optimization_PyTorch/Optimization_in_Training_Platform.html">
+     Optimizing Training Platform
+    </a>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../PyTorch/Model_Optimization_PyTorch/Parallel_Compilation.html">
+     Parallel Compilation
+    </a>
+   </li>
+  </ul>
+ </li>
+ <li class="toctree-l1 has-children">
+  <a class="reference internal" href="../PyTorch/Reference/index.html">
+   Reference
+  </a>
+  <input class="toctree-checkbox" id="toctree-checkbox-15" name="toctree-checkbox-15" type="checkbox"/>
+  <label for="toctree-checkbox-15">
+   <i class="fas fa-chevron-down">
+   </i>
+  </label>
+  <ul>
+   <li class="toctree-l2 has-children">
+    <a class="reference internal" href="../PyTorch/Reference/Debugging_Guide/index.html">
+     Debugging and Troubleshooting
+    </a>
+    <input class="toctree-checkbox" id="toctree-checkbox-16" name="toctree-checkbox-16" type="checkbox"/>
+    <label for="toctree-checkbox-16">
+     <i class="fas fa-chevron-down">
+     </i>
+    </label>
+    <ul>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../PyTorch/Reference/Debugging_Guide/Debugging_with_Intel_Gaudi_Logs.html">
+       Debugging with Intel Gaudi Logs
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../PyTorch/Reference/Debugging_Guide/Debugging_Model_Divergence.html">
+       Debugging Model Divergence
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../PyTorch/Reference/Debugging_Guide/Debugging_Slow_Convergence.html">
+       Debugging Slow Convergence
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../PyTorch/Reference/Debugging_Guide/Model_Troubleshooting.html">
+       Troubleshooting PyTorch Model
+      </a>
+     </li>
+    </ul>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../PyTorch/Reference/Runtime_Flags.html">
+     Runtime Environment Variables
+    </a>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../PyTorch/Reference/Python_Packages.html">
+     Intel Gaudi PyTorch Python API (habana_frameworks.torch)
+    </a>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../PyTorch/Reference/Pytorch_Operators/Pytorch_Operators.html">
+     PyTorch Operators
+    </a>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../PyTorch/Reference/PyTorch_CustomOp_API/page_index.html">
+     PyTorch CustomOp API
+    </a>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../PyTorch/Reference/PyTorch_Support_Matrix.html">
+     PyTorch Support Matrix
+    </a>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../PyTorch/Reference/PyTorch_Gaudi_Theory_of_Operations.html">
+     PyTorch Gaudi Theory of Operations
+    </a>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../PyTorch/Reference/mark_step.html">
+     mark_step
+    </a>
+   </li>
+  </ul>
+ </li>
+ <li class="toctree-l1">
+  <a class="reference external" href="https://huggingface.co/docs/optimum/habana_index">
+   Hugging Face Optimum for Intel Gaudi
+  </a>
+ </li>
+</ul>
+<p aria-level="2" class="caption" role="heading">
+ <span class="caption-text">
+  Guides
+ </span>
+</p>
+<ul class="nav bd-sidenav">
+ <li class="toctree-l1 has-children">
+  <a class="reference internal" href="../Media_Pipeline/index.html">
+   MediaPipe
+  </a>
+  <input class="toctree-checkbox" id="toctree-checkbox-17" name="toctree-checkbox-17" type="checkbox"/>
+  <label for="toctree-checkbox-17">
+   <i class="fas fa-chevron-down">
+   </i>
+  </label>
+  <ul>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../Media_Pipeline/Media_Pipeline.html">
+     Creating and Executing Media Pipeline
+    </a>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../Media_Pipeline/Pytorch_Resnet_Media_Pipe.html">
+     MediaPipe for PyTorch ResNet
+    </a>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../Media_Pipeline/Pytorch_Resnet3d_Media_Pipe.html">
+     MediaPipe for PyTorch ResNet3d
+    </a>
+   </li>
+   <li class="toctree-l2 has-children">
+    <a class="reference internal" href="../Media_Pipeline/Operators.html">
+     Operators
+    </a>
+    <input class="toctree-checkbox" id="toctree-checkbox-18" name="toctree-checkbox-18" type="checkbox"/>
+    <label for="toctree-checkbox-18">
+     <i class="fas fa-chevron-down">
+     </i>
+    </label>
+    <ul>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Operator_Add.html">
+       fn.Add
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Operator_BasicCrop.html">
+       fn.BasicCrop
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Operator_BitwiseAnd.html">
+       fn.BitwiseAnd
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Operator_BitwiseOr.html">
+       fn.BitwiseOr
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Operator_BitwiseXor.html">
+       fn.BitwiseXor
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Operator_Brightness.html">
+       fn.Brightness
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Operator_Cast.html">
+       fn.Cast
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Operator_Clamp.html">
+       fn.Clamp
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Operator_CocoReader.html">
+       fn.CocoReader
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Operator_CoinFlip.html">
+       fn.CoinFlip
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Operator_ColorSpaceConversion.html">
+       fn.ColorSpaceConversion
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Operator_Concat.html">
+       fn.Concat
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Operator_Constant.html">
+       fn.Constant
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Operator_Contrast.html">
+       fn.Contrast
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Operator_Crop.html">
+       fn.Crop
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Operator_CMN.html">
+       fn.CropMirrorNorm
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Operator_ExtCpuOp.html">
+       fn.ExtCpuOp
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Operator_ExtHpuOp.html">
+       fn.ExtHpuOp
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Operator_Flip.html">
+       fn.Flip
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Operator_GatherND.html">
+       fn.GatherND
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Operator_GaussianBlur.html">
+       fn.GaussianBlur
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Operator_Hue.html">
+       fn.Hue
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Decoder.html">
+       fn.ImageDecoder
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Operator_MediaConst.html">
+       fn.MediaConst
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Reader_MediaExtReaderOp.html">
+       fn.MediaExtReaderOp
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Operator_MediaFunc.html">
+       fn.MediaFunc
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Operator_MemCopy.html">
+       fn.MemCpy
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Operator_Mult.html">
+       fn.Mult
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Operator_Neg.html">
+       fn.Neg
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Operator_Normalize.html">
+       fn.Normalize
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Operator_Pad.html">
+       fn.Pad
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Operator_RandomBiasedCrop.html">
+       fn.RandomBiasedCrop
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Operator_RandomFlip.html">
+       fn.RandomFlip
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Operator_RandomNormal.html">
+       fn.RandomNormal
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Operator_RandomUniform.html">
+       fn.RandomUniform
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Reader_ReadImageDatasetFromDir.html">
+       fn.ReadImageDatasetFromDir
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Reader_Numpy.html">
+       fn.ReadNumpyDatasetFromDir
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Reader_ReadVideoDatasetFromDir.html">
+       fn.ReadVideoDatasetFromDir
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Reader_ReadVideoDatasetFromDirGen.html">
+       fn.ReadVideoDatasetFromDirGen
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Operator_ReduceMax.html">
+       fn.ReduceMax
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Operator_ReduceMin.html">
+       fn.ReduceMin
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Operator_Reshape.html">
+       fn.Reshape
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Operator_Resize.html">
+       fn.Resize
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Operator_Saturation.html">
+       fn.Saturation
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Operator_Slice.html">
+       fn.Slice
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Operator_Split.html">
+       fn.Split
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Operator_SSDBBoxFlip.html">
+       fn.SSDBBoxFlip
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Operator_SSDCropWindowGen.html">
+       fn.SSDCropWindowGen
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Operator_SSDEncode.html">
+       fn.SSDEncode
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Operator_SSDMetadata.html">
+       fn.SSDMetadata
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Operator_Sub.html">
+       fn.Sub
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Operator_Transpose.html">
+       fn.Transpose
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Video_Decoder.html">
+       fn.VideoDecoder
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Operator_Where.html">
+       fn.Where
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Media_Pipeline/Media_Operator_Zoom.html">
+       fn.Zoom
+      </a>
+     </li>
+    </ul>
+   </li>
+  </ul>
+ </li>
+ <li class="toctree-l1 has-children">
+  <a class="reference internal" href="../Profiling/index.html">
+   Profiling
+  </a>
+  <input class="toctree-checkbox" id="toctree-checkbox-19" name="toctree-checkbox-19" type="checkbox"/>
+  <label for="toctree-checkbox-19">
+   <i class="fas fa-chevron-down">
+   </i>
+  </label>
+  <ul>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../Profiling/Profiling_Workflow.html">
+     Profiling Workflow
+    </a>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../Profiling/Profiling_Examples.html">
+     Profiling Real-World Examples
+    </a>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../Profiling/Profiling_with_PyTorch.html">
+     Profiling with PyTorch
+    </a>
+   </li>
+   <li class="toctree-l2 has-children">
+    <a class="reference internal" href="../Profiling/Intel_Gaudi_Profiling/index.html">
+     Profiling with Intel Gaudi Software
+    </a>
+    <input class="toctree-checkbox" id="toctree-checkbox-20" name="toctree-checkbox-20" type="checkbox"/>
+    <label for="toctree-checkbox-20">
+     <i class="fas fa-chevron-down">
+     </i>
+    </label>
+    <ul>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Profiling/Intel_Gaudi_Profiling/Getting_Started_with_Profiler.html">
+       Getting Started with Intel Gaudi Profiler
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Profiling/Intel_Gaudi_Profiling/Configuration.html">
+       Configuration
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Profiling/Intel_Gaudi_Profiling/Analysis.html">
+       Analysis
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Profiling/Intel_Gaudi_Profiling/Remote_Trace_Viewer_Tool.html">
+       Remote Trace Viewer Tool
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Profiling/Intel_Gaudi_Profiling/Offline_Trace_Parser.html">
+       Offline Trace Parser Tool
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Profiling/Intel_Gaudi_Profiling/Profiling_Tips_and_Tricks.html">
+       Tips and Tricks to Accelerate the Training
+      </a>
+     </li>
+    </ul>
+   </li>
+  </ul>
+ </li>
+ <li class="toctree-l1 has-children">
+  <a class="reference internal" href="../Management_and_Monitoring/index.html">
+   Management and Monitoring
+  </a>
+  <input class="toctree-checkbox" id="toctree-checkbox-21" name="toctree-checkbox-21" type="checkbox"/>
+  <label for="toctree-checkbox-21">
+   <i class="fas fa-chevron-down">
+   </i>
+  </label>
+  <ul>
+   <li class="toctree-l2 has-children">
+    <a class="reference internal" href="../Management_and_Monitoring/Qualification_Library/index.html">
+     Qualification Tool Library Guide (hl_qual)
+    </a>
+    <input class="toctree-checkbox" id="toctree-checkbox-22" name="toctree-checkbox-22" type="checkbox"/>
+    <label for="toctree-checkbox-22">
+     <i class="fas fa-chevron-down">
+     </i>
+    </label>
+    <ul>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Management_and_Monitoring/Qualification_Library/Common_Plugin_Switches_and_Parameters.html">
+       hl_qual Common Plugin Switches and Parameters
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Management_and_Monitoring/Qualification_Library/hl_qual_Report_Structure.html">
+       hl_qual Report Structure
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Management_and_Monitoring/Qualification_Library/hl_qual_Expected_Output_and_Failure_Debug.html">
+       hl_qual Expected Output and Failure Debug
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Management_and_Monitoring/Qualification_Library/Memory_Stress_Tests_Plugin.html">
+       Memory Stress Test Plugins Design, Switches and Parameters
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Management_and_Monitoring/Qualification_Library/Power_Stress_Tests_Plugin.html">
+       Power Stress and EDP Tests Plugins Design, Switches and Parameters
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Management_and_Monitoring/Qualification_Library/Connectivity_Serdes_Tests_Plugin.html">
+       Connectivity Serdes Test Plugins Design, Switches and Parameters
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Management_and_Monitoring/Qualification_Library/Functional_Tests_Plugin.html">
+       Functional Test Plugins Design, Switches and Parameters
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Management_and_Monitoring/Qualification_Library/Bandwidth_Tests_Plugin.html">
+       Bandwidth Test Plugins Design, Switches and Parameters
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Management_and_Monitoring/Qualification_Library/hl_qual_Monitor.html">
+       hl_qual Monitor Textual UI
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Management_and_Monitoring/Qualification_Library/Package_Content.html">
+       Package Content
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Management_and_Monitoring/Qualification_Library/hl_qual_Design.html">
+       hl_qual Design
+      </a>
+     </li>
+     <li class="toctree-l3 has-children">
+      <a class="reference internal" href="../Management_and_Monitoring/Qualification_Library/Diagnostic_Tool/index.html">
+       Diagnostic Tool
+      </a>
+      <input class="toctree-checkbox" id="toctree-checkbox-23" name="toctree-checkbox-23" type="checkbox"/>
+      <label for="toctree-checkbox-23">
+       <i class="fas fa-chevron-down">
+       </i>
+      </label>
+      <ul>
+       <li class="toctree-l4">
+        <a class="reference internal" href="../Management_and_Monitoring/Qualification_Library/Diagnostic_Tool/Test_Plan_Automation.html">
+         Test Plan Automation
+        </a>
+       </li>
+       <li class="toctree-l4">
+        <a class="reference internal" href="../Management_and_Monitoring/Qualification_Library/Diagnostic_Tool/Log_Analysis.html">
+         Log Analysis
+        </a>
+       </li>
+       <li class="toctree-l4">
+        <a class="reference internal" href="../Management_and_Monitoring/Qualification_Library/Diagnostic_Tool/Qual_Package_Installation_Validator.html">
+         Qual Package Installation Validator
+        </a>
+       </li>
+       <li class="toctree-l4">
+        <a class="reference internal" href="../Management_and_Monitoring/Qualification_Library/Diagnostic_Tool/Rack_Scale_Script.html">
+         Rack Scale Script
+        </a>
+       </li>
+      </ul>
+     </li>
+    </ul>
+   </li>
+   <li class="toctree-l2 has-children">
+    <a class="reference internal" href="../Management_and_Monitoring/Embedded_System_Tools_Guide/index.html">
+     Embedded System Tools User Guide
+    </a>
+    <input class="toctree-checkbox" id="toctree-checkbox-24" name="toctree-checkbox-24" type="checkbox"/>
+    <label for="toctree-checkbox-24">
+     <i class="fas fa-chevron-down">
+     </i>
+    </label>
+    <ul>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Management_and_Monitoring/Embedded_System_Tools_Guide/Firmware_Update_Tool.html">
+       Firmware Update Tool
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Management_and_Monitoring/Embedded_System_Tools_Guide/System_Management_Interface_Tool.html">
+       System Management Interface Tool (
+       <code class="code docutils literal notranslate">
+        <span class="pre">
+         hl-smi
+        </span>
+       </code>
+       )
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Management_and_Monitoring/Embedded_System_Tools_Guide/Intel_Gaudi_Secure_Firmware.html">
+       Intel Gaudi Secure Firmware Flow
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Management_and_Monitoring/Embedded_System_Tools_Guide/Enable_Secure_Boot.html">
+       Intel Gaudi Secure Boot Flow
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Management_and_Monitoring/Embedded_System_Tools_Guide/Disable_Enable_NICs.html">
+       Disable/Enable NICs
+      </a>
+     </li>
+    </ul>
+   </li>
+   <li class="toctree-l2 has-children">
+    <a class="reference internal" href="../Management_and_Monitoring/Hypervisor_Tools/index.html">
+     Hypervisor Tools Installation and Usage
+    </a>
+    <input class="toctree-checkbox" id="toctree-checkbox-25" name="toctree-checkbox-25" type="checkbox"/>
+    <label for="toctree-checkbox-25">
+     <i class="fas fa-chevron-down">
+     </i>
+    </label>
+    <ul>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Management_and_Monitoring/Hypervisor_Tools/Hpervisor_Tools_Installation.html">
+       Installing Hypervisor Tools Package
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Management_and_Monitoring/Hypervisor_Tools/Memory_Scrub_Verification_Tool.html">
+       Memory Scrub Verification Tool
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Management_and_Monitoring/Hypervisor_Tools/hl_smi_async_Tool.html">
+       hl_smi_async Tool
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Management_and_Monitoring/Hypervisor_Tools/NIC_Masks_Generator_Tool.html">
+       NIC Masks Generator Tool
+      </a>
+     </li>
+    </ul>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../Management_and_Monitoring/RDMA_PerfTest_Tool/RDMA_PerfTest_Tool.html">
+     Intel Gaudi RDMA PerfTest Tool
+    </a>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../Management_and_Monitoring/ReportNCheck_Tool/ReportNCheck_Tool.html">
+     Intel Gaudi ReportNCheck Tool
+    </a>
+   </li>
+   <li class="toctree-l2 has-children">
+    <a class="reference internal" href="../Management_and_Monitoring/Network_Configuration/index.html">
+     Intel Gaudi Network Configuration
+    </a>
+    <input class="toctree-checkbox" id="toctree-checkbox-26" name="toctree-checkbox-26" type="checkbox"/>
+    <label for="toctree-checkbox-26">
+     <i class="fas fa-chevron-down">
+     </i>
+    </label>
+    <ul>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Management_and_Monitoring/Network_Configuration/Configuration_Files_Example_L2.html">
+       Arista Switch L2 Configuration Example
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Management_and_Monitoring/Network_Configuration/Configuration_Files_Example_L3.html">
+       Arista Switch L3 Configuration Example
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Management_and_Monitoring/Network_Configuration/Configure_E2E_Test_in_L3.html">
+       Configure E2E Test in L2/L3 Switching Environment
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Management_and_Monitoring/Network_Configuration/Expected_Switch_Configuration.html">
+       Expected Switch Configuration
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Management_and_Monitoring/Network_Configuration/Monitoring_Switch_and_Gaudi_Accelerator.html">
+       Monitoring Switch and Gaudi 3 Accelerator
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Management_and_Monitoring/Network_Configuration/Collectives_Performance.html">
+       Collectives Performance
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Management_and_Monitoring/Network_Configuration/Congestion_Test.html">
+       Congestion Test
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Management_and_Monitoring/Network_Configuration/Pick_Good_Nodes_in_Datacenter.html">
+       How to Pick Good Nodes in the Datacenter
+      </a>
+     </li>
+    </ul>
+   </li>
+   <li class="toctree-l2 has-children">
+    <a class="reference internal" href="../Management_and_Monitoring/HLML_API/index.html">
+     Habana Labs Management Library (HLML) C API Reference
+    </a>
+    <input class="toctree-checkbox" id="toctree-checkbox-27" name="toctree-checkbox-27" type="checkbox"/>
+    <label for="toctree-checkbox-27">
+     <i class="fas fa-chevron-down">
+     </i>
+    </label>
+    <ul>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Management_and_Monitoring/HLML_API/HLML_C_API.html">
+       C APIs
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Management_and_Monitoring/HLML_API/Common_APIs.html">
+       Common APIs
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Management_and_Monitoring/HLML_API/Per_Device_APIs.html">
+       Per Device APIs
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Management_and_Monitoring/HLML_API/Linkage_HLML.html">
+       Linkage HLML
+      </a>
+     </li>
+    </ul>
+   </li>
+   <li class="toctree-l2 has-children">
+    <a class="reference internal" href="../Management_and_Monitoring/PYHLML_APIs/index.html">
+     Habana Labs Management Library (PYHLML) Python API Reference
+    </a>
+    <input class="toctree-checkbox" id="toctree-checkbox-28" name="toctree-checkbox-28" type="checkbox"/>
+    <label for="toctree-checkbox-28">
+     <i class="fas fa-chevron-down">
+     </i>
+    </label>
+    <ul>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Management_and_Monitoring/PYHLML_APIs/HLML_PY_API.html">
+       Python APIs
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Management_and_Monitoring/PYHLML_APIs/Common_APIs.html">
+       Common APIs
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Management_and_Monitoring/PYHLML_APIs/Per_Device_APIs.html">
+       Per Device APIs
+      </a>
+     </li>
+    </ul>
+   </li>
+   <li class="toctree-l2 has-children">
+    <a class="reference internal" href="../Management_and_Monitoring/Kernel_Module_Diagnostics/index.html">
+     Kernel Module Diagnostics
+    </a>
+    <input class="toctree-checkbox" id="toctree-checkbox-29" name="toctree-checkbox-29" type="checkbox"/>
+    <label for="toctree-checkbox-29">
+     <i class="fas fa-chevron-down">
+     </i>
+    </label>
+    <ul>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Management_and_Monitoring/Kernel_Module_Diagnostics/Dmesg_Error_Causes.html">
+       Dmesg Error Causes
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Management_and_Monitoring/Kernel_Module_Diagnostics/SEI_Error_Causes.html">
+       Scalable Ethernet Interface (SEI) error causes
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Management_and_Monitoring/Kernel_Module_Diagnostics/QP_Error_Causes.html">
+       Queue Pair (QP) error causes
+      </a>
+     </li>
+    </ul>
+   </li>
+  </ul>
+ </li>
+ <li class="toctree-l1 has-children">
+  <a class="reference internal" href="../Orchestration/index.html">
+   Orchestration
+  </a>
+  <input class="toctree-checkbox" id="toctree-checkbox-30" name="toctree-checkbox-30" type="checkbox"/>
+  <label for="toctree-checkbox-30">
+   <i class="fas fa-chevron-down">
+   </i>
+  </label>
+  <ul>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../Quick_Start_Guides/Kubernetes_Quick_Start.html">
+     Running Workloads on Kubernetes
+    </a>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../Orchestration/VMware_Tanzu/VMware_Tanzu_Guide.html">
+     VMware Tanzu User Guide
+    </a>
+   </li>
+   <li class="toctree-l2 has-children">
+    <a class="reference internal" href="../Orchestration/Multiple_Tenants_on_HPU/index.html">
+     Enabling Multiple Tenants on PyTorch
+    </a>
+    <input class="toctree-checkbox" id="toctree-checkbox-31" name="toctree-checkbox-31" type="checkbox"/>
+    <label for="toctree-checkbox-31">
+     <i class="fas fa-chevron-down">
+     </i>
+    </label>
+    <ul>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Orchestration/Multiple_Tenants_on_HPU/Multiple_Workloads_Single_Docker.html">
+       Multiple Workloads on a Single Docker
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../Orchestration/Multiple_Tenants_on_HPU/Multiple_Dockers_each_with_Single_Workload.html">
+       Multiple Dockers Each with a Single Workload
+      </a>
+     </li>
+    </ul>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../Orchestration/BMC_Exporter/BMC_Exporter.html">
+     BMC Exporter User Guide
+    </a>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../Orchestration/BMC_Exporter/Gaudi3_Redfish_Data_Model.html">
+     Redfish Data Model for Gaudi 3
+    </a>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../Orchestration/Prometheus_Metric_Exporter.html">
+     Prometheus Metric Exporter
+    </a>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../Orchestration/SLURM/SLURM.html">
+     Using Slurm Workload Manager with Intel Gaudi
+    </a>
+   </li>
+  </ul>
+ </li>
+ <li class="toctree-l1">
+  <a class="reference internal" href="../Virtualization/Configuring_VMs_on_Gaudi.html">
+   Virtualization
+  </a>
+ </li>
+ <li class="toctree-l1 has-children">
+  <a class="reference internal" href="../API_Reference_Guides/index.html">
+   APIs
+  </a>
+  <input class="toctree-checkbox" id="toctree-checkbox-32" name="toctree-checkbox-32" type="checkbox"/>
+  <label for="toctree-checkbox-32">
+   <i class="fas fa-chevron-down">
+   </i>
+  </label>
+  <ul>
+   <li class="toctree-l2 has-children">
+    <a class="reference internal" href="../API_Reference_Guides/HCCL_APIs/index.html">
+     Habana Collective Communications Library (HCCL) API Reference
+    </a>
+    <input class="toctree-checkbox" id="toctree-checkbox-33" name="toctree-checkbox-33" type="checkbox"/>
+    <label for="toctree-checkbox-33">
+     <i class="fas fa-chevron-down">
+     </i>
+    </label>
+    <ul>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../API_Reference_Guides/HCCL_APIs/Overview.html">
+       Supported Collective Primitives
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../API_Reference_Guides/HCCL_APIs/Using_HCCL.html">
+       Using HCCL
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../API_Reference_Guides/HCCL_APIs/Scale_Out_via_Host_NIC.html">
+       Scale-out via Host NIC
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../API_Reference_Guides/HCCL_APIs/C_API.html">
+       C APIs
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../API_Reference_Guides/HCCL_APIs/Testing_and_Benchmarking.html">
+       Testing and Benchmarking
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../API_Reference_Guides/HCCL_APIs/NIC_Isolation_Configuration.html">
+       NIC Isolation Configuration
+      </a>
+     </li>
+    </ul>
+   </li>
+   <li class="toctree-l2 has-children">
+    <a class="reference internal" href="../API_Reference_Guides/HLML_APIs/index.html">
+     Habana Labs Management Library (HLML) C API Reference
+    </a>
+    <input class="toctree-checkbox" id="toctree-checkbox-34" name="toctree-checkbox-34" type="checkbox"/>
+    <label for="toctree-checkbox-34">
+     <i class="fas fa-chevron-down">
+     </i>
+    </label>
+    <ul>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../API_Reference_Guides/HLML_APIs/HLML_C_API.html">
+       C APIs
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../API_Reference_Guides/HLML_APIs/Common_APIs.html">
+       Common APIs
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../API_Reference_Guides/HLML_APIs/Per_Device_APIs.html">
+       Per Device APIs
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../API_Reference_Guides/HLML_APIs/Linkage_HLML.html">
+       Linkage HLML
+      </a>
+     </li>
+    </ul>
+   </li>
+   <li class="toctree-l2 has-children">
+    <a class="reference internal" href="../API_Reference_Guides/PYHLML_APIs/index.html">
+     Habana Labs Management Library (PYHLML) Python API Reference
+    </a>
+    <input class="toctree-checkbox" id="toctree-checkbox-35" name="toctree-checkbox-35" type="checkbox"/>
+    <label for="toctree-checkbox-35">
+     <i class="fas fa-chevron-down">
+     </i>
+    </label>
+    <ul>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../API_Reference_Guides/PYHLML_APIs/HLML_PY_API.html">
+       Python APIs
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../API_Reference_Guides/PYHLML_APIs/Common_APIs.html">
+       Common APIs
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../API_Reference_Guides/PYHLML_APIs/Per_Device_APIs.html">
+       Per Device APIs
+      </a>
+     </li>
+    </ul>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../PyTorch/Reference/Python_Packages.html">
+     Intel Gaudi PyTorch Python API
+    </a>
+   </li>
+  </ul>
+ </li>
+ <li class="toctree-l1 has-children">
+  <a class="reference internal" href="../TPC/index.html">
+   TPC Programming
+  </a>
+  <input class="toctree-checkbox" id="toctree-checkbox-36" name="toctree-checkbox-36" type="checkbox"/>
+  <label for="toctree-checkbox-36">
+   <i class="fas fa-chevron-down">
+   </i>
+  </label>
+  <ul>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../TPC/TPC_Getting_Started/TPC_Getting_Started.html">
+     TPC Getting Started Guide
+    </a>
+   </li>
+   <li class="toctree-l2">
+    <a class="reference internal" href="../TPC/TPC_Tools_Installation/TPC_Tools_Installation_Guide.html">
+     TPC Tools Installation Guide
+    </a>
+   </li>
+   <li class="toctree-l2 has-children">
+    <a class="reference internal" href="../TPC/TPC_User_Guide/index.html">
+     TPC User Guide
+    </a>
+    <input class="toctree-checkbox" id="toctree-checkbox-37" name="toctree-checkbox-37" type="checkbox"/>
+    <label for="toctree-checkbox-37">
+     <i class="fas fa-chevron-down">
+     </i>
+    </label>
+    <ul>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../TPC/TPC_User_Guide/TPC_Programming_Language.html">
+       TPC Programming Language
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../TPC/TPC_User_Guide/Processor_Architectural_Overview.html">
+       Processor Architectural Overview
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../TPC/TPC_User_Guide/TPC_Programming_Model.html">
+       TPC Programming Model
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../TPC/TPC_User_Guide/TPC_C_Language.html">
+       TPC-C Language
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../TPC/TPC_User_Guide/Built_in_Functions.html">
+       Built-in Functions
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../TPC/TPC_User_Guide/Implementing_and_Integrating_New_lib.html">
+       Implementing and Integrating New lib
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../TPC/TPC_User_Guide/TPC_Coherency.html">
+       TPC Coherency
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../TPC/TPC_User_Guide/Multiple_Kernels_Library.html">
+       Multiple Kernel Libraries
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../TPC/TPC_User_Guide/Abbreviations.html">
+       Abbreviations
+      </a>
+     </li>
+    </ul>
+   </li>
+   <li class="toctree-l2 has-children">
+    <a class="reference internal" href="../TPC/TPC_Debugger/index.html">
+     TPC Tools Debugger
+    </a>
+    <input class="toctree-checkbox" id="toctree-checkbox-38" name="toctree-checkbox-38" type="checkbox"/>
+    <label for="toctree-checkbox-38">
+     <i class="fas fa-chevron-down">
+     </i>
+    </label>
+    <ul>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../TPC/TPC_Debugger/Installation.html">
+       Installation
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../TPC/TPC_Debugger/Start_Debug_Session.html">
+       Starting a Debug Session
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../TPC/TPC_Debugger/Source_Disassembly_Debugging.html">
+       TPC-C Source or Disassembly Level Debugging
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../TPC/TPC_Debugger/Views_and_Operations.html">
+       Debug Session Views and Operations
+      </a>
+     </li>
+    </ul>
+   </li>
+   <li class="toctree-l2 has-children">
+    <a class="reference internal" href="../TPC/TPC_C_Language_Spec/index.html">
+     TPC-C Language Specification
+    </a>
+    <input class="toctree-checkbox" id="toctree-checkbox-39" name="toctree-checkbox-39" type="checkbox"/>
+    <label for="toctree-checkbox-39">
+     <i class="fas fa-chevron-down">
+     </i>
+    </label>
+    <ul>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../TPC/TPC_C_Language_Spec/Supported_Data_Types.html">
+       Supported Data Types
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../TPC/TPC_C_Language_Spec/Conversions_and_Type_Casting.html">
+       Conversions and Type Casting
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../TPC/TPC_C_Language_Spec/Operators.html">
+       Operators
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../TPC/TPC_C_Language_Spec/Vector_Operations.html">
+       Vector Operations
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../TPC/TPC_C_Language_Spec/Address_Space_Qualifiers.html">
+       Address Space Qualifiers
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../TPC/TPC_C_Language_Spec/Storage_Class_Specifiers.html">
+       Storage-Class Specifiers
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../TPC/TPC_C_Language_Spec/Exceptions_to_C99_Standard.html">
+       Exceptions to C99 standard
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../TPC/TPC_C_Language_Spec/Exceptions_to_C_11_Standard.html">
+       Exceptions to C++ 11 Standard
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../TPC/TPC_C_Language_Spec/Preprocessor_Directives_and_Macros.html">
+       Preprocessor Directives and Macros
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../TPC/TPC_C_Language_Spec/Functions.html">
+       Functions
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../TPC/TPC_C_Language_Spec/Built_in_Special_Functions.html">
+       Built-in Special Functions
+      </a>
+     </li>
+    </ul>
+   </li>
+   <li class="toctree-l2 has-children">
+    <a class="reference internal" href="../TPC/TPC_Intrinsics_Guide/index.html">
+     TPC Intrinsics Guide
+    </a>
+    <input class="toctree-checkbox" id="toctree-checkbox-40" name="toctree-checkbox-40" type="checkbox"/>
+    <label for="toctree-checkbox-40">
+     <i class="fas fa-chevron-down">
+     </i>
+    </label>
+    <ul>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../TPC/TPC_Intrinsics_Guide/Arithmetic.html">
+       Arithmetic
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../TPC/TPC_Intrinsics_Guide/Bitwise.html">
+       Bitwise
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../TPC/TPC_Intrinsics_Guide/Cache.html">
+       Cache
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../TPC/TPC_Intrinsics_Guide/Convert.html">
+       Convert
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../TPC/TPC_Intrinsics_Guide/IRF.html">
+       IRF
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../TPC/TPC_Intrinsics_Guide/LUT.html">
+       LUT
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../TPC/TPC_Intrinsics_Guide/Load.html">
+       Load
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../TPC/TPC_Intrinsics_Guide/Logical.html">
+       Logical
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../TPC/TPC_Intrinsics_Guide/Move.html">
+       Move
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../TPC/TPC_Intrinsics_Guide/Pack_Unpack.html">
+       Pack/Unpack
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../TPC/TPC_Intrinsics_Guide/Select.html">
+       Select
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../TPC/TPC_Intrinsics_Guide/Store.html">
+       Store
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../TPC/TPC_Intrinsics_Guide/Miscellaneous.html">
+       Miscellaneous
+      </a>
+     </li>
+    </ul>
+   </li>
+   <li class="toctree-l2 has-children">
+    <a class="reference internal" href="../TPC/TPC_I64_Builtins/index.html">
+     TPC I64 Built-ins Guide
+    </a>
+    <input class="toctree-checkbox" id="toctree-checkbox-41" name="toctree-checkbox-41" type="checkbox"/>
+    <label for="toctree-checkbox-41">
+     <i class="fas fa-chevron-down">
+     </i>
+    </label>
+    <ul>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../TPC/TPC_I64_Builtins/Arithmetic.html">
+       Arithmetic
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../TPC/TPC_I64_Builtins/Load.html">
+       Load
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../TPC/TPC_I64_Builtins/Move.html">
+       Move
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../TPC/TPC_I64_Builtins/Select.html">
+       Select
+      </a>
+     </li>
+     <li class="toctree-l3">
+      <a class="reference internal" href="../TPC/TPC_I64_Builtins/Store.html">
+       Store
+      </a>
+     </li>
+    </ul>
+   </li>
+  </ul>
+ </li>
+</ul>
+<p aria-level="2" class="caption" role="heading">
+ <span class="caption-text">
+  Support
+ </span>
+</p>
+<ul class="nav bd-sidenav">
+ <li class="toctree-l1">
+  <a class="reference internal" href="../Support/index.html">
+   Support and Legal Notice
+  </a>
+ </li>
+</ul>
+
+    </div>
+</nav></div>
+        <div class="bd-sidebar__bottom">
+             <!-- To handle the deprecated key -->
+            
+            <div class="navbar_extra_footer">
+            Theme by the <a href="https://ebp.jupyterbook.org">Executable Book Project</a>
+            </div>
+            
+        </div>
+    </div>
+    <div id="rtd-footer-container"></div>
+</div>
+
+
+          
+
+
+          
+<!-- A tiny helper pixel to detect if we've scrolled -->
+<div class="sbt-scroll-pixel-helper"></div>
+<!-- Main content -->
+<div class="col py-0 content-container">
+    
+    <div class="header-article row sticky-top noprint">
+        
+
+
+
+<div class="col py-1 d-flex header-article-main">
+    <div class="header-article__left">
+        
+        <label for="__navigation"
+  class="headerbtn"
+  data-toggle="tooltip"
+data-placement="right"
+title="Toggle navigation"
+>
+  
+
+<span class="headerbtn__icon-container">
+  <i class="fas fa-bars"></i>
+  </span>
+
+</label>
+
+        
+    </div>
+    <div class="header-article__right">
+<button onclick="toggleFullScreen()"
+  class="headerbtn"
+  data-toggle="tooltip"
+data-placement="bottom"
+title="Fullscreen mode"
+>
+  
+
+<span class="headerbtn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+<label for="__page-toc"
+  class="headerbtn headerbtn-page-toc"
+  
+>
+  
+
+<span class="headerbtn__icon-container">
+  <i class="fas fa-list"></i>
+  </span>
+
+</label>
+
+    </div>
+</div>
+
+<!-- Table of contents -->
+<div class="col-md-3 bd-toc show noprint">
+    <div class="tocsection onthispage pt-5 pb-3">
+        <i class="fas fa-list"></i> On this Page
+    </div>
+    <nav id="bd-toc-nav" aria-label="Page">
+        <ul class="visible nav section-nav flex-column">
+ <li class="toc-h2 nav-item toc-entry">
+  <a class="reference internal nav-link" href="#intel-gaudi-3-ai-accelerator">
+   Intel® Gaudi® 3 AI Accelerator
+  </a>
+ </li>
+ <li class="toc-h2 nav-item toc-entry">
+  <a class="reference internal nav-link" href="#intel-gaudi-2-ai-accelerator">
+   Intel® Gaudi® 2 AI Accelerator
+  </a>
+ </li>
+</ul>
+
+    </nav>
+</div>
+    </div>
+    <div class="article row">
+        <div class="col pl-md-3 pl-lg-5 content-container">
+            <!-- Table of contents that is only displayed when printing the page -->
+            <div id="jb-print-docs-body" class="onlyprint">
+                <h1>Gaudi Architecture</h1>
+                <!-- Table of contents -->
+                <div id="print-main-content">
+                    <div id="jb-print-toc">
+                        
+                        <div>
+                            <h2> On this Page </h2>
+                        </div>
+                        <nav aria-label="Page">
+                            <ul class="visible nav section-nav flex-column">
+ <li class="toc-h2 nav-item toc-entry">
+  <a class="reference internal nav-link" href="#intel-gaudi-3-ai-accelerator">
+   Intel® Gaudi® 3 AI Accelerator
+  </a>
+ </li>
+ <li class="toc-h2 nav-item toc-entry">
+  <a class="reference internal nav-link" href="#intel-gaudi-2-ai-accelerator">
+   Intel® Gaudi® 2 AI Accelerator
+  </a>
+ </li>
+</ul>
+
+                        </nav>
+                    </div>
+                </div>
+            </div>
+            <main id="main-content" role="main">
+                
+              <div>
+                
+  <section id="gaudi-architecture">
+<span id="id1"></span><h1>Gaudi Architecture<a class="headerlink" href="#gaudi-architecture" title="Permalink to this headline">¶</a></h1>
+<p>The Intel® Gaudi® AI accelerator architecture includes three main subsystems - compute, memory, and networking -
+and is designed from the ground up for accelerating DL training workloads.</p>
+<p>The compute architecture is heterogeneous and includes two compute
+engines – a Matrix Multiplication Engine (MME) and a fully programmable
+Tensor Processor Core (TPC) cluster. The MME is responsible for doing all operations
+which can be lowered to Matrix Multiplication (fully connected layers,
+convolutions, batched-GEMM) while the TPC, a VLIW SIMD processor tailor-made
+for deep learning operations, is used to accelerate everything else.</p>
+<p>Its heterogeneous architecture comprises a cluster of fully
+programmable TPC along with its associated
+development tools and libraries, and a configurable Matrix Math engine.
+The TPC core is a VLIW SIMD processor with instruction set and hardware
+tailored to serve training workloads efficiently. It is
+programmable, providing the user with maximum flexibility to innovate,
+coupled with many workload-oriented features, such as:</p>
+<ul class="simple">
+<li><p>GEMM operation acceleration</p></li>
+<li><p>Tensor addressing</p></li>
+<li><p>Latency hiding capabilities</p></li>
+<li><p>Random number generation</p></li>
+<li><p>Advanced implementation of special functions</p></li>
+</ul>
+<p>Gaudi architecture is the first DL training processor that has integrated RDMA over
+Converged Ethernet (RoCE v2) engines on-chip. These engines play a critical role in the
+inter-processor communication needed during the training process. This
+native integration of RoCE allows customers to use the same scaling
+technology, both inside the server and rack (scale-up), as
+well as to scale across racks (scale-out). These can be connected
+directly between Gaudi processors, or through any number of standard
+Ethernet switches.</p>
+<section id="intel-gaudi-3-ai-accelerator">
+<h2>Intel® Gaudi® 3 AI Accelerator<a class="headerlink" href="#intel-gaudi-3-ai-accelerator" title="Permalink to this headline">¶</a></h2>
+<p>Gaudi 3 features two compute dies, which together
+contain 8 MME engines, 64 TPC engines and 24x 200 Gbps RDMA NIC ports. In
+addition, the total of 8 HBM2e chips comprise a 128 GB unified High Bandwidth
+Memory (HBM). The accelerator excels at training and inference with 1.8 PFlops of
+FP8 and BF16 compute, 128 GB of HBM2e memory capacity, and 3.7 TB/s of HBM
+bandwidth.</p>
+<figure class="align-center" id="id2">
+<a class="reference internal image-reference" href="../_images/Gaudi3_Processor_High_Level_Architecture.png"><img alt="../_images/Gaudi3_Processor_High_Level_Architecture.png" src="../_images/Gaudi3_Processor_High_Level_Architecture.png" style="width: 600px;" /></a>
+<figcaption>
+<p><span class="caption-number">Figure 1 </span><span class="caption-text">Gaudi 3 Processor High-level Architecture</span><a class="headerlink" href="#id2" title="Permalink to this image">¶</a></p>
+</figcaption>
+</figure>
+</section>
+<section id="intel-gaudi-2-ai-accelerator">
+<h2>Intel® Gaudi® 2 AI Accelerator<a class="headerlink" href="#intel-gaudi-2-ai-accelerator" title="Permalink to this headline">¶</a></h2>
+<p>Gaudi 2 offers 2.4 Terabits of networking bandwidth with the native
+integration on-chip of 24 x 100 Gbps RoCE V2 RDMA NICs, which enable inter-Gaudi
+communication via direct routing or via standard Ethernet switching.
+The Gaudi 2 memory subsystem includes 96 GB of HBM2E memories delivering 2.45 TB/sec
+bandwidth, in addition to a 48 MB of local SRAM with sufficient bandwidth to
+allow MME, TPC, DMAs and RDMA NICs to operate in parallel.</p>
+<p>Specifically for vision applications, Gaudi 2 has integrated media decoders which
+operate independently and can handle the entire pre-processing pipe in all popular
+formats – HEVC, H.264, VP9 &amp; JPEG as well as post-decode image transformations
+needed to prepare the data for the AI pipeline.</p>
+<p>Gaudi 2 supports all popular data types required for deep learning: FP32, TF32,
+BF16, FP16 &amp; FP8 (both E4M3 and E5M2). In the MME, all data types are accumulated
+into an FP32 accumulator.</p>
+<figure class="align-center" id="id3">
+<a class="reference internal image-reference" href="../_images/Gaudi2_Processor_High_Level_Architecture.png"><img alt="../_images/Gaudi2_Processor_High_Level_Architecture.png" src="../_images/Gaudi2_Processor_High_Level_Architecture.png" style="width: 600px;" /></a>
+<figcaption>
+<p><span class="caption-number">Figure 2 </span><span class="caption-text">Gaudi 2 Processor High-level Architecture</span><a class="headerlink" href="#id3" title="Permalink to this image">¶</a></p>
+</figcaption>
+</figure>
+</section>
+</section>
+
+
+              </div>
+              
+            </main>
+            <footer class="footer-article noprint">
+                
+    <!-- Previous / next buttons -->
+<div class='prev-next-area'>
+    <a class='left-prev' id="prev-link" href="index.html" title="previous page">
+        <i class="fas fa-angle-left"></i>
+        <div class="prev-next-info">
+            <p class="prev-next-subtitle">previous</p>
+            <p class="prev-next-title">Gaudi Architecture and Software Overview</p>
+        </div>
+    </a>
+    <a class='right-next' id="next-link" href="Intel_Gaudi_Software_Suite.html" title="next page">
+    <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Intel Gaudi Software Suite</p>
+    </div>
+    <i class="fas fa-angle-right"></i>
+    </a>
+</div>
+            </footer>
+        </div>
+    </div>
+    <div class="footer-content row">
+        <footer class="col footer"><p>
+  
+    By Habana Labs<br/>
+  
+      &copy; Copyright 2026, Habana Labs.<br/>
+</p>
+        </footer>
+    </div>
+    
+</div>
+
+
+      </div>
+    </div>
+  
+    <script src="../_static/scripts/pydata-sphinx-theme.js?digest=1999514e3f237ded88cf"></script>
+  
+
+  </body>
+</html>

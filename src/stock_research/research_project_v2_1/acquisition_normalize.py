@@ -216,6 +216,15 @@ def build_acquisition_checkpoint(
     provenance_completeness: str | None = None,
     security_violations: list[str] | None = None,
     unresolved_issues: list[str] | None = None,
+    acquisition_stage: str | None = None,
+    requirement_universe_ids: list[str] | None = None,
+    primary_source_coverage: list[dict[str, Any]] | None = None,
+    source_role_distribution: dict[str, int] | None = None,
+    suspected_common_origin_groups: list[dict[str, Any]] | None = None,
+    inaccessible_candidate_ids: list[str] | None = None,
+    widen_like_redirect_attempt_ids: list[str] | None = None,
+    unresolved_engineering_issues: list[str] | None = None,
+    unresolved_acquisition_gaps: list[str] | None = None,
     provenance: dict[str, Any],
 ) -> dict[str, Any]:
     attempt_ids = sorted({row["attempt_id"] for row in attempts})
@@ -231,14 +240,19 @@ def build_acquisition_checkpoint(
         {row["attempt_id"] for row in attempts if row["status"] in {"failed", "blocked", "unavailable"}}
     )
     successful_attempts = [row for row in attempts if row["status"] == "acquired"]
+    blocked_attempts = [row for row in attempts if row["status"] == "blocked"]
+    failed_only_attempts = [row for row in attempts if row["status"] == "failed"]
     provider_distribution: dict[str, int] = {}
     failure_distribution: dict[str, int] = {}
+    proxy_mode_distribution: dict[str, int] = {}
     for row in attempts:
         provider = row["provider"]
         provider_distribution[provider] = provider_distribution.get(provider, 0) + 1
         failure_code = row.get("failure_code")
         if failure_code is not None:
             failure_distribution[failure_code] = failure_distribution.get(failure_code, 0) + 1
+        proxy_mode = row["proxy_mode"]
+        proxy_mode_distribution[proxy_mode] = proxy_mode_distribution.get(proxy_mode, 0) + 1
     normalization_records = [
         {
             "raw_artifact_id": outcome.raw_artifact_id,
@@ -284,6 +298,82 @@ def build_acquisition_checkpoint(
         core["security_violations"] = sorted(set(security_violations))
     if unresolved_issues is not None:
         core["unresolved_issues"] = sorted(set(unresolved_issues))
+    if acquisition_stage is not None:
+        core["acquisition_stage"] = acquisition_stage
+    if requirement_universe_ids is not None:
+        universe = sorted(set(requirement_universe_ids))
+        attempted = sorted(
+            {
+                row["requirement_id"]
+                for row in attempts
+                if row.get("requirement_id") in set(universe)
+            }
+        )
+        core["requirement_universe_ids"] = universe
+        core["attempted_requirement_ids"] = attempted
+        core["unattempted_requirement_ids"] = sorted(set(universe) - set(attempted))
+    core["successful_attempt_ids"] = sorted(
+        row["attempt_id"] for row in successful_attempts
+    )
+    core["blocked_attempt_ids"] = sorted(row["attempt_id"] for row in blocked_attempts)
+    core["failed_only_attempt_ids"] = sorted(
+        row["attempt_id"] for row in failed_only_attempts
+    )
+    core["normalization_failure_artifact_ids"] = sorted(
+        {
+            outcome.raw_artifact_id
+            for outcome in normalization_outcomes
+            if outcome.status == "failed"
+        }
+    )
+    core["proxy_mode_distribution"] = dict(sorted(proxy_mode_distribution.items()))
+    core["unknown_publication_date_artifact_ids"] = sorted(
+        {
+            row["evidence_artifact_id"]
+            for row in artifacts
+            if row.get("published_at") is None
+        }
+    )
+    core["date_metadata_records"] = [
+        {
+            "artifact_id": row["evidence_artifact_id"],
+            "published_at": row.get("published_at"),
+            "updated_at": None,
+            "accessed_at": row["accessed_at"],
+            "date_status": (
+                "unknown" if row.get("published_at") is None else "candidate_reported"
+            ),
+            "date_source": (
+                None if row.get("published_at") is None else "candidate.publish_date"
+            ),
+            "date_confidence": (
+                "unknown" if row.get("published_at") is None else "unreviewed"
+            ),
+        }
+        for row in sorted(artifacts, key=lambda item: item["evidence_artifact_id"])
+    ]
+    if primary_source_coverage is not None:
+        core["primary_source_coverage"] = deepcopy(primary_source_coverage)
+    if source_role_distribution is not None:
+        core["source_role_distribution"] = dict(sorted(source_role_distribution.items()))
+    if suspected_common_origin_groups is not None:
+        core["suspected_common_origin_groups"] = deepcopy(
+            suspected_common_origin_groups
+        )
+    if inaccessible_candidate_ids is not None:
+        core["inaccessible_candidate_ids"] = sorted(set(inaccessible_candidate_ids))
+    if widen_like_redirect_attempt_ids is not None:
+        core["widen_like_redirect_attempt_ids"] = sorted(
+            set(widen_like_redirect_attempt_ids)
+        )
+    if unresolved_engineering_issues is not None:
+        core["unresolved_engineering_issues"] = sorted(
+            set(unresolved_engineering_issues)
+        )
+    if unresolved_acquisition_gaps is not None:
+        core["unresolved_acquisition_gaps"] = sorted(
+            set(unresolved_acquisition_gaps)
+        )
     checkpoint_id, digest = _checkpoint_identity(core)
     checkpoint = {"checkpoint_id": checkpoint_id, **core, "content_hash": digest}
     validate_acquisition_checkpoint(checkpoint)
