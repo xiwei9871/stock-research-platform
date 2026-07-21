@@ -187,7 +187,7 @@ Promote to `trusted_baseline` only when:
 
 - Never archive cookies, passwords, authorization headers, CSRF tokens, API keys, or raw request headers.
 - Keep report ingestion fail-closed on path traversal, symlinks, unsafe archives, oversized JSON, and secret-shaped text.
-- Scan `inputs/raw`, copied artifact/report trees, `inputs/report-ready`, the generated report/evidence, and text members inside ZIP traces. Classify findings as known synthetic sentinels, known noncredential framework code, potential real credentials, or scan errors. Potential real credentials or scan errors block sealing; expected synthetic sentinels keep the candidate untrusted and support the R5 ledger.
+- Before tests, run a scanner self-test that requires four credential-bearing review fixtures to classify as potential real credentials and a synthetic fixture to remain synthetic. Scan `inputs/raw`, copied artifact/report trees, `inputs/report-ready`, the generated report/evidence, recursive JSON/JSONL keys and header name/value pairs, and text members inside ZIP traces. Classify findings as known synthetic sentinels, known noncredential framework code, potential real credentials, or scan errors. Framework classification may use only a fixed token-hash allowlist bound to the discovered Playwright version; path-level framework whitelists are prohibited. Potential real credentials or scan errors block sealing; expected synthetic sentinels keep the candidate untrusted and support the R5 ledger.
 - Generated audit directories stay under ignored `outputs/research/platform_validation/`; do not `git add` them.
 - Retain daily EOD evidence for 90 days, then delete by whole audit directory after confirming it is not a release/trusted baseline or linked incident.
 - Retain initial audits, trusted baselines, release audits, and incident evidence long term.
@@ -195,7 +195,9 @@ Promote to `trusted_baseline` only when:
 
 Create the audit root with mode `0700` under `umask 077`. Normalize all directories to `0700` and all files to `0600`. The final permission gate must record `world_readable=0` and `world_traversable=0`; any nonstandard mode blocks sealing.
 
-Generate `artifact-manifest.json` only after core artifacts, safety outputs, root mapping, and the permission gate are complete. Record every core file's relative path, type, size, mode, and SHA-256; record every directory's mode, file count, total size, and deterministic tree SHA-256. Exclude only `commands-manifest.json`, `artifact-manifest.json`, temporary files, and a documented post-seal `verification/**` chain.
+After all core actions are terminal, freeze the live runner log into immutable `core-commands-manifest.json`. Generate `artifact-manifest.json` only after core artifacts, safety outputs, root mapping, the core permission gate, and that snapshot are complete. Record every core file's relative path, type, size, mode, and SHA-256; record every directory's mode, file count, total size, and deterministic tree SHA-256. Exclude the live core/post-seal manifests, the artifact manifest and final seal, temporary files, and the documented post-seal `verification/**` chain.
+
+Record subsequent verification, documentation, Git, and final read-only permission-stat actions in `post-seal-commands-manifest.json`. Bind the immutable core-command SHA-256, artifact-manifest SHA-256, artifact tree SHA-256, mapping, scan, and core permission results in `seal.json`.
 
 After generating the artifact manifest, do not modify core artifacts. Recompute the complete file and directory manifest into `verification/sealed-verification.json`; require zero file/directory mismatches and a repeated world-permission count of zero.
 
@@ -205,6 +207,6 @@ Auto EOD Repair should run the small `eod` acceptance after repair succeeds. Dai
 
 ## Current Authoritative Initial Audit
 
-The sealed authoritative initial audit is `pv-initial-20260721-796495a` at revision `796495a511646fafc8333c7aac58a3dcc0cab483`.
+The sealed authoritative initial audit is `pv-initial-20260721-ba46611` at revision `ba4661144d3a3a12e1934b720d75dd97e04d6e85`.
 
-The earlier `pv-initial-20260720-372f4a5` and `pv-initial-20260721-5fb90fd` directories are retained unchanged as superseded attempts. Their results must not be used as evidence for the current revision.
+The earlier `pv-initial-20260720-372f4a5`, `pv-initial-20260721-5fb90fd`, and `pv-initial-20260721-796495a` directories are retained unchanged as superseded attempts. Their results must not be used as evidence for the current revision.

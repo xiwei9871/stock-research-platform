@@ -2,12 +2,13 @@
 
 ## Decision And Audit Lineage
 
-Audit `pv-initial-20260721-796495a` is the sealed authoritative initial audit. It is frozen as `baseline_candidate`, not `trusted_baseline`, with decision `stop_and_plan`.
+Audit `pv-initial-20260721-ba46611` is the sealed authoritative initial audit. It is frozen as `baseline_candidate`, not `trusted_baseline`, with decision `stop_and_plan`.
 
-Two earlier directories remain unchanged and are superseded:
+Three earlier directories remain unchanged and are superseded:
 
 - `pv-initial-20260720-372f4a5`: draft with incomplete freeze provenance;
 - `pv-initial-20260721-5fb90fd`: authoritative attempt with incomplete action-level provenance and sealing.
+- `pv-initial-20260721-796495a`: sealed attempt whose scanner used path-level framework classification and whose live command manifest continued changing after the artifact seal.
 
 Neither earlier run was reused. Every discovery command, test layer, Playwright result, artifact copy, coverage declaration, report-ready transformation, report, root ledger, safety scan, permission gate, and provenance manifest was generated again from the new frozen revision.
 
@@ -30,10 +31,10 @@ For each action, the runner atomically wrote `status=started`, command, cwd, and
 
 | Input | Frozen value |
 | --- | --- |
-| Revision | `796495a511646fafc8333c7aac58a3dcc0cab483` |
+| Revision | `ba4661144d3a3a12e1934b720d75dd97e04d6e85` |
 | Inventory SHA-256 | `620a96b51187ff76e72378b01cdbc4af4d146f7878b5fa533bd4b23bcbed537f` |
 | Audit date | `2026-07-21` |
-| Freeze time | `2026-07-21T08:24:03+08:00` |
+| Freeze time | `2026-07-21T09:01:56+08:00` |
 | Timezone | `Asia/Shanghai` |
 | Python / Node / pnpm | `3.14.4` / `v24.14.1` / `10.33.0` |
 | Playwright | `1.60.0` |
@@ -42,7 +43,7 @@ For each action, the runner atomically wrote `status=started`, command, cwd, and
 | Real/Audit URLs | Dashboard `http://127.0.0.1:5374`; API `http://127.0.0.1:8966` |
 | Sandbox URLs | Dashboard `http://127.0.0.1:5274`; API `http://127.0.0.1:8866` |
 
-Runtime, browser, database, revision, time, and inventory discovery each have separate recorded actions and evidence logs. The complete freeze is `outputs/research/platform_validation/pv-initial-20260721-796495a/frozen-inputs.json`.
+Runtime, browser, database, revision, time, and inventory discovery have recorded actions and evidence logs. The complete freeze is `outputs/research/platform_validation/pv-initial-20260721-ba46611/frozen-inputs.json`.
 
 ## Test And Report Results
 
@@ -117,22 +118,22 @@ Machine result:
 
 | Metric | Result |
 | --- | ---: |
-| Text files scanned | 658 |
-| ZIP members scanned | 8,246 |
+| Text files scanned | 636 |
+| ZIP members scanned | 8,330 |
 | Known synthetic sentinel findings | 8,034 |
 | Known noncredential Playwright bundle-code findings | 25 |
 | Potential real credential findings | 0 |
 | Scan errors | 0 |
 | Gate | `pass_with_expected_sentinel` |
 
-The 25 framework findings are password-like tokens inside Playwright's own `playwright-report/index.html` and `trace/sw.bundle.js`; they remain recorded as `known_noncredential_framework_code`, not silently dropped. The synthetic sentinel matches preserve R5. Any potential real credential or scan error would have blocked sealing.
+Before any test command, `scan-selftest.json` proved that four credential-bearing review fixtures classify as potential real credentials and the synthetic fixture remains synthetic. The 25 framework findings are classified only by three fixed raw-token SHA-256 values bound to Playwright `1.60.0`; there is no path-level framework whitelist. The scanner recursively inspects JSON/JSONL keys and header name/value pairs as well as URL/query/path/bare sentinels and ZIP text members. Any potential real credential or scan error blocks sealing.
 
 ## Permissions And Provenance Seal
 
-The final permission normalization/gate recorded:
+The core permission normalization/gate recorded:
 
-- directories: 946;
-- files: 1,977;
+- directories: 945;
+- files: 1,948;
 - nonstandard directory/file modes: 0/0;
 - `world_readable=0`;
 - `world_traversable=0`;
@@ -140,15 +141,19 @@ The final permission normalization/gate recorded:
 
 All audit directories use `0700`; all files use `0600`.
 
-`artifact-manifest.json` records 1,974 core files and 945 directories totaling 107,145,493 bytes. Every file entry has relative path, type, size, mode, and SHA-256. Every directory entry has mode, file count, total size, and deterministic tree SHA-256.
+The terminal post-seal read-only stat runs after the documentation commit and all other verification logs. Its fixed terminal contract is 946 directories and 2,014 files, with zero nonstandard directory/file modes, zero world-readable files, and zero world-traversable directories; this terminal check, not the earlier normalization gate, is the final permission count.
 
-The manifest explicitly excludes only `commands-manifest.json`, `artifact-manifest.json`, temporary files, and the post-seal `verification/**` chain. It includes frozen inputs, helpers, raw JSON/logs, copied artifacts, coverage, report-ready inputs, report files/evidence, root ledger, safety outputs, and permission gate.
+`core-commands-manifest.json` freezes 30 terminal core actions with SHA-256 `b01c1ead7d135db8c54a73afdbd4aa7215119d2b50670d895d7fdcdaf2f73409`. Later validation, documentation, Git, and final permission-stat actions are recorded separately in `post-seal-commands-manifest.json`; the live core command log is not part of the seal.
+
+`artifact-manifest.json` records 1,949 core files and 945 directories totaling 108,853,962 bytes. Every file entry has relative path, type, size, mode, and SHA-256. Every directory entry has mode, file count, total size, and deterministic tree SHA-256.
+
+The manifest explicitly excludes the live core/post-seal command logs, `artifact-manifest.json`, `seal.json`, temporary files, and the post-seal `verification/**` chain. It includes the immutable core-command snapshot, frozen inputs, helpers, scanner self-test and fixed allowlist, raw JSON/logs, copied artifacts, coverage, report-ready inputs, report files/evidence, root ledger, safety outputs, and the core permission gate.
 
 The sealed verification recomputed all manifest entries:
 
 ```json
 {
-  "artifact_manifest_sha256": "beb19e6e70c7f5f1d41044b6a570ce738f7b1caf0f33484f6fb03fdd22d07f8d",
+  "artifact_manifest_sha256": "0f0fa33fa99c934b291bdcffd480bea95892b786c2b50d20f52f6d61beb7688b",
   "file_mismatches": [],
   "directory_mismatches": [],
   "hash_gate": "pass",
@@ -158,7 +163,7 @@ The sealed verification recomputed all manifest entries:
 }
 ```
 
-Intermediate failed scan and first seal attempts remain in `commands-manifest.json`; their corrected successors pass. Core artifacts were not modified after the final artifact manifest was generated.
+`seal.json` binds the immutable core-command hash, artifact-manifest hash, artifact tree hash `1916ccdcf3d384cc8c2f1073e92668a11058c7811852a33b827b341bceb97473`, 46/46 issue mapping, scan counts, and core permission gate. Post-seal diagnostic/argument errors and their corrected successors remain visible in `post-seal-commands-manifest.json`. Core artifacts were not modified after the artifact manifest was generated.
 
 ## Root-Cause Disposition
 
@@ -174,18 +179,20 @@ The sandbox environment disposition remains: configure an isolated `stock_resear
 
 ## Stop Decision
 
-Do not mark a trusted baseline. Execute and review the five plans, configure the sandbox service, and rerun under a new audit ID. Preserve all three initial-audit directories; the first two remain superseded and the third is the sealed authoritative evidence set.
+Do not mark a trusted baseline. Execute and review the five plans, configure the sandbox service, and rerun under a new audit ID. Preserve all four initial-audit directories; the first three remain superseded and the fourth is the sealed authoritative evidence set.
 
 ## Generated Output Locations
 
-- Audit root: `outputs/research/platform_validation/pv-initial-20260721-796495a/`
-- Commands: `commands-manifest.json`
+- Audit root: `outputs/research/platform_validation/pv-initial-20260721-ba46611/`
+- Core commands: `core-commands-manifest.json`; live runner log: `commands-manifest.json`
+- Post-seal commands: `post-seal-commands-manifest.json`
 - Frozen inputs: `frozen-inputs.json`
 - Coverage: `inputs/coverage-results.json`
 - Safety: `safety-scan.json`, `safety-findings.json`
 - Permissions: `permission-gate.json`
 - Root mapping: `root-cause-ledger.json`
 - Artifact provenance: `artifact-manifest.json`
+- Final seal: `seal.json`
 - Sealed verification: `verification/sealed-verification.json`
 - Report: `report/route_inventory.json`, `report/coverage_matrix.json`, `report/issue_ledger.json`, `report/audit_report.html`
 
