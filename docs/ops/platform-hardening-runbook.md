@@ -190,7 +190,7 @@ Operational rules:
 - The report shows the independent EOD orchestration run ID separately from the strategy publication cohort run ID.
 - The final browser status comes from the final `dashboard_browser_acceptance` check. The repair action result and both attempt results are shown separately.
 - Browser evidence is linked with relative, percent-encoded paths. Traces, screenshots, and JSON reports are never inlined.
-- Only `stale_cache` and `presentation_runtime` are eligible for one cache clear and one rerun of the identical `pnpm test:e2e:eod` command. Identity, date, return-unit, contract, or rollback failures never clear cache.
+- Only `stale_cache`, `presentation_runtime`, and `critical_request_transport` are eligible for one cache clear followed by one rerun of the identical `pnpm test:e2e:eod` command. All other consistency, publication-identity, date, return-unit, contract, and rollback failures are nonrepairable and never clear cache.
 - A failed browser manifest blocks the candidate and preserves the last ready display date. A report or retention infrastructure failure changes the EOD result to failed and the CLI exits `2`.
 - Retention removes only successful, fully evidenced, non-baseline daily directories older than 90 days. Missing, degraded, failed, symlinked, out-of-tree, initial-baseline, or incomplete evidence is retained.
 
