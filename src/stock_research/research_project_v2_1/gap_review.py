@@ -3,6 +3,7 @@ from __future__ import annotations
 from hashlib import sha256
 from pathlib import Path
 from typing import Any
+import unicodedata
 
 from stock_research.research_project_v2.errors import ResearchProjectV2Error
 from stock_research.research_project_v2_1.cognition import validate_cognition_package
@@ -359,9 +360,153 @@ def validate_research_design(artifact: dict[str, Any]) -> dict[str, int]:
     }
 
 
+def _values(value: object) -> str:
+    if isinstance(value, list):
+        return "; ".join(str(item) for item in value)
+    return str(value or "")
+
+
+def render_gap_review_report(artifact: dict[str, Any]) -> bytes:
+    policy = artifact.get("execution_policy", {})
+    governance = artifact.get("governance", {})
+    lines = [
+        "# AI PCB 证据缺口审查与定向研究设计基线 v1",
+        "",
+        "> [RESEARCH DESIGN — NOT EVIDENCE] 本报告是集成 artifact 的确定性只读投影，不包含新增证据、瓶颈结论或价值迁移判断。",
+        "",
+        "## 1. Execution boundary",
+        "",
+        f"- Execution mode: {policy.get('execution_mode', '')}",
+        f"- Network access: {policy.get('network_access')}",
+        f"- New acquisition: {policy.get('new_acquisition')}",
+        f"- Evidence assessment of new sources: {policy.get('evidence_assessment_of_new_sources')}",
+        "",
+        "## 2. Fixed research groups",
+        "",
+    ]
+    for group in sorted(artifact.get("group_definitions", []), key=lambda row: row["group_id"]):
+        lines.extend(
+            [
+                f"### {group.get('group_id')}: {group.get('name', '')}",
+                "",
+                str(group.get("purpose", "")),
+                "",
+            ]
+        )
+    lines.extend(["## 3. Gap reviews", ""])
+    for gap in sorted(artifact.get("gap_reviews", []), key=lambda row: row["gap_id"]):
+        lines.extend(
+            [
+                f"### [RESEARCH DESIGN — NOT EVIDENCE] {gap['gap_id']}",
+                "",
+                f"- Group: {gap.get('gap_group')}",
+                f"- Original gap: {gap.get('original_gap_description')}",
+                f"- Current grounded knowledge: {_values(gap.get('current_grounded_knowledge'))}",
+                f"- Current unknowns: {_values(gap.get('current_unknowns'))}",
+                f"- Public evidence availability: {gap.get('public_evidence_availability')}",
+                f"- Public evidence ceiling: {gap.get('public_evidence_ceiling')}",
+                f"- Comparison denominator: {gap.get('comparison_denominator')}",
+                f"- Required evidence types: {_values(gap.get('required_evidence_types'))}",
+                f"- Suggested source classes: {_values(gap.get('suggested_source_classes'))}",
+                f"- Minimum sufficiency: {_values(gap.get('minimum_sufficiency_conditions'))}",
+                f"- Stop conditions: {_values(gap.get('stop_conditions'))}",
+                f"- Non-derivable conclusions: {_values(gap.get('non_derivable_conclusions'))}",
+                f"- Priority: {gap.get('priority')} — {gap.get('priority_reason')}",
+                f"- Dependencies: {_values(gap.get('dependencies'))}",
+                f"- Future acquisition authorized: {gap.get('future_acquisition_authorized')}",
+                "",
+                "Atomic research questions:",
+                "",
+            ]
+        )
+        for question in sorted(
+            gap.get("atomic_research_questions", []), key=lambda row: row["question_id"]
+        ):
+            lines.append(
+                f"- {question['question_id']}: {question.get('question')} "
+                f"[ER: {_values(question.get('evidence_requirement_ids'))}]"
+            )
+        lines.append("")
+    lines.extend(["## 4. Atomic Evidence Requirements", ""])
+    for er in sorted(artifact.get("evidence_requirements", []), key=lambda row: row["er_id"]):
+        lines.extend(
+            [
+                f"### {er['er_id']} ({er.get('gap_id')})",
+                "",
+                str(er.get("research_question", "")),
+                "",
+                f"- Claim scope: {er.get('claim_scope')}",
+                f"- Required fact types: {_values(er.get('required_fact_types'))}",
+                f"- Required source classes: {_values(er.get('required_source_classes'))}",
+                f"- Independent evidence chains: {er.get('minimum_independent_evidence_chains')}",
+                f"- Supplier-independent source required: {er.get('supplier_independent_source_required')}",
+                f"- Freshness: {er.get('freshness_rule')}",
+                f"- Comparison scope: {er.get('comparison_scope')}",
+                f"- Denominator: {er.get('denominator_rule')}",
+                f"- Sufficiency: {er.get('sufficiency_rule')}",
+                f"- Contradiction search: {er.get('contradiction_rule')}",
+                f"- Stop rule: {er.get('stop_rule')}",
+                f"- Maximum supported cognition level: {er.get('maximum_supported_cognition_level')}",
+                f"- Prohibited inferences: {_values(er.get('prohibited_inferences'))}",
+                "",
+            ]
+        )
+    lines.extend(["## 5. Source-class boundaries", ""])
+    for row in sorted(
+        artifact.get("source_class_boundaries", []), key=lambda item: item["source_class"]
+    ):
+        lines.append(
+            f"- {row['source_class']}: can support {_values(row.get('can_support'))}; "
+            f"cannot support {_values(row.get('cannot_support'))}."
+        )
+    lines.extend(["", "## 6. Cross-level inference prohibitions", ""])
+    for row in sorted(
+        artifact.get("cross_level_inference_rules", []), key=lambda item: item["rule_id"]
+    ):
+        lines.append(
+            f"- {row['rule_id']}: {row.get('from_level')} != "
+            f"{row.get('prohibited_target_level')} — {row.get('reason')}"
+        )
+    lines.extend(["", "## 7. Stopping states", ""])
+    for row in sorted(
+        artifact.get("stopping_state_definitions", []), key=lambda item: item["state"]
+    ):
+        lines.append(f"- {row['state']}: {row.get('meaning')}")
+    lines.extend(
+        [
+            "",
+            "## 8. Governance",
+            "",
+            f"- Future acquisition authorized: {governance.get('future_acquisition_authorized')}",
+            f"- Stage A2 authorized: {governance.get('stage_a2_authorized')}",
+            f"- Stage B authorized: {governance.get('stage_b_authorized')}",
+            f"- Company mapping authorized: {governance.get('company_mapping_authorized')}",
+            f"- Bottleneck judgment authorized: {governance.get('bottleneck_judgment_authorized')}",
+            f"- Value migration judgment authorized: {governance.get('value_migration_judgment_authorized')}",
+        ]
+    )
+    normalized = unicodedata.normalize("NFC", "\n".join(lines).replace("\r\n", "\n"))
+    return (normalized.rstrip("\n") + "\n").encode("utf-8")
+
+
+def validate_persisted_gap_review_report(
+    artifact: dict[str, Any], report_bytes: bytes
+) -> None:
+    expected = render_gap_review_report(artifact)
+    if report_bytes != expected:
+        raise _error(
+            "Persisted gap-review report differs from deterministic projection",
+            code="RESEARCH_PROJECT_V2_1_GAP_REVIEW_INVALID",
+            expected_hash=sha256(expected).hexdigest(),
+            actual_hash=sha256(report_bytes).hexdigest(),
+        )
+
+
 __all__ = [
     "FIXED_GAP_GROUPS",
     "validate_gap_universe",
     "validate_input_bindings",
     "validate_research_design",
+    "render_gap_review_report",
+    "validate_persisted_gap_review_report",
 ]

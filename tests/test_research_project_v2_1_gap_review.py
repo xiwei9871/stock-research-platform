@@ -6,6 +6,8 @@ import pytest
 
 from stock_research.research_project_v2.errors import ResearchProjectV2Error
 from stock_research.research_project_v2_1.gap_review import (
+    render_gap_review_report,
+    validate_persisted_gap_review_report,
     validate_gap_universe,
     validate_input_bindings,
     validate_research_design,
@@ -283,3 +285,27 @@ def test_group_a_er_cannot_claim_manufacturing_or_capacity_cognition() -> None:
     ] = "effective_capacity_bounded"
     with pytest.raises(ResearchProjectV2Error):
         validate_research_design(artifact)
+
+
+def test_gap_review_report_is_deterministic_under_array_reordering() -> None:
+    artifact = complete_design_artifact()
+    expected = render_gap_review_report(artifact)
+    artifact["gap_reviews"].reverse()
+    artifact["evidence_requirements"].reverse()
+    artifact["group_definitions"].reverse()
+    assert render_gap_review_report(artifact) == expected
+
+
+def test_gap_review_report_marks_design_ceiling_and_non_derivable_boundaries() -> None:
+    report = render_gap_review_report(complete_design_artifact()).decode("utf-8")
+    assert "[RESEARCH DESIGN — NOT EVIDENCE]" in report
+    assert "Public evidence ceiling" in report
+    assert "Non-derivable conclusions" in report
+    assert "Future acquisition authorized: False" in report
+
+
+def test_persisted_gap_review_report_rejects_added_content() -> None:
+    artifact = complete_design_artifact()
+    report = render_gap_review_report(artifact) + b"\nUnregistered conclusion.\n"
+    with pytest.raises(ResearchProjectV2Error):
+        validate_persisted_gap_review_report(artifact, report)
