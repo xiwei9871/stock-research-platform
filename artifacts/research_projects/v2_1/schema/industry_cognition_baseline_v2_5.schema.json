@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "industry_cognition_baseline_v2_5.schema.json",
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "object_array": {"type": "array", "items": {"type": "object"}},
+    "package": {
+      "type": "object",
+      "required": ["schema_version", "artifact_type", "package_id", "project_id", "renderer_version", "baseline_bindings", "research_framing", "research_question_tree", "evidence_inventory", "er_assessments", "claim_assessment_ledger", "grounded_system_model", "unverified_system_extensions", "evidence_grounded_mechanisms", "unverified_mechanism_skeletons", "grounded_causal_edges", "hypothesized_causal_edges", "technology_route_comparisons", "limited_system_bottleneck_judgments", "value_change_hypotheses", "contradictions_and_uncertainties", "evidence_gap_referrals", "verification_and_falsification", "provenance", "content_hash"],
+      "properties": {
+        "schema_version": {"const": "2.5.0"},
+        "artifact_type": {"const": "industry_cognition_package"},
+        "package_id": {"type": "string", "minLength": 1},
+        "project_id": {"type": "string", "minLength": 1},
+        "renderer_version": {"const": "industry_cognition_markdown_v1"},
+        "baseline_bindings": {"type": "object"},
+        "research_framing": {"type": "object"},
+        "research_question_tree": {"$ref": "#/$defs/object_array"},
+        "evidence_inventory": {"type": "object"},
+        "er_assessments": {"$ref": "#/$defs/object_array"},
+        "claim_assessment_ledger": {"$ref": "#/$defs/object_array"},
+        "grounded_system_model": {"type": "object", "required": ["nodes", "edges"], "properties": {"nodes": {"$ref": "#/$defs/object_array"}, "edges": {"$ref": "#/$defs/object_array"}}, "additionalProperties": true},
+        "unverified_system_extensions": {"$ref": "#/$defs/object_array"},
+        "evidence_grounded_mechanisms": {"$ref": "#/$defs/object_array"},
+        "unverified_mechanism_skeletons": {"$ref": "#/$defs/object_array"},
+        "grounded_causal_edges": {"$ref": "#/$defs/object_array"},
+        "hypothesized_causal_edges": {"$ref": "#/$defs/object_array"},
+        "technology_route_comparisons": {"$ref": "#/$defs/object_array"},
+        "limited_system_bottleneck_judgments": {"$ref": "#/$defs/object_array"},
+        "value_change_hypotheses": {"$ref": "#/$defs/object_array"},
+        "contradictions_and_uncertainties": {"$ref": "#/$defs/object_array"},
+        "evidence_gap_referrals": {"$ref": "#/$defs/object_array"},
+        "verification_and_falsification": {"$ref": "#/$defs/object_array"},
+        "provenance": {"$ref": "definitions_v2_1.schema.json#/$defs/provenance"},
+        "content_hash": {"$ref": "#/$defs/sha256"}
+      },
+      "additionalProperties": false
+    },
+    "audit": {
+      "type": "object",
+      "required": ["schema_version", "artifact_type", "audit_id", "package_id", "package_content_hash", "report_content_hash", "renderer_version", "capability_rule_version", "domain_matrix_version", "audit_question_set_version", "domain_coverage", "computed_capability", "coverage_metrics", "audit_answers", "violations", "warnings", "content_hash"],
+      "properties": {
+        "schema_version": {"const": "2.5.0"},
+        "artifact_type": {"const": "industry_cognition_audit"},
+        "audit_id": {"type": "string", "minLength": 1},
+        "package_id": {"type": "string", "minLength": 1},
+        "package_content_hash": {"$ref": "#/$defs/sha256"},
+        "report_content_hash": {"$ref": "#/$defs/sha256"},
+        "renderer_version": {"const": "industry_cognition_markdown_v1"},
+        "capability_rule_version": {"const": "industry_cognition_capability_v1"},
+        "domain_matrix_version": {"const": "industry_cognition_domains_v1"},
+        "audit_question_set_version": {"const": "industry_cognition_audit_questions_v1"},
+        "domain_coverage": {"$ref": "#/$defs/object_array"},
+        "computed_capability": {"type": "object"},
+        "coverage_metrics": {"type": "object"},
+        "audit_answers": {"$ref": "#/$defs/object_array"},
+        "violations": {"type": "array", "items": {"type": "string"}},
+        "warnings": {"type": "array", "items": {"type": "string"}},
+        "content_hash": {"$ref": "#/$defs/sha256"}
+      },
+      "additionalProperties": false
+    }
+  },
+  "oneOf": [
+    {"$ref": "#/$defs/package"},
+    {"$ref": "#/$defs/audit"}
+  ]
+}
