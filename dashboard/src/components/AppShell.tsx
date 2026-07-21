@@ -347,7 +347,10 @@ export function AppShell({ currentUser: _currentUser, onLogout, logoutPending = 
       }
       const readiness = readinessResult.status === 'fulfilled' ? readinessResult.value : null;
       const summary = summaryResult.status === 'fulfilled' ? summaryResult.value : null;
-      const resolvedDisplayDate = resolvePlatformDisplayDate(readiness, summary?.latest_market_date);
+      const resolvedDisplayDate = resolvePlatformDisplayDate(readiness, {
+        allowLegacyFallback: readinessResult.status === 'fulfilled',
+        legacyFallbackDates: [summary?.latest_market_date]
+      });
       setDisplayTradeDate(resolvedDisplayDate);
       setStockDefaultTradeDate(resolvedDisplayDate);
       setDisplayDateResolved(true);
@@ -696,7 +699,7 @@ export function AppShell({ currentUser: _currentUser, onLogout, logoutPending = 
             />
           ) : null}
           {workspaceMode === 'stock' ? (
-            stockHandoff.tradeDate || displayDateResolved ? (
+            stockHandoff.tradeDate || (displayDateResolved && displayTradeDate) ? (
               <StockWorkspace
                 key={`stock:${stockHandoff.version}`}
                 initialAssetId={stockHandoff.assetId ?? selectedAssetId}
@@ -706,6 +709,8 @@ export function AppShell({ currentUser: _currentUser, onLogout, logoutPending = 
                 onOpenResearchReports={openResearchReportsWorkspaceFromStock}
                 onOpenMarketMonitor={openMarketMonitorWorkspaceFromStock}
               />
+            ) : displayDateResolved ? (
+              <p className="muted" role="status">平台展示日期不可用。</p>
             ) : (
               <p className="muted" role="status">正在解析平台展示日期...</p>
             )

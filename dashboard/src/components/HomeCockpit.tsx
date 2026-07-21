@@ -568,6 +568,8 @@ export function HomeCockpit({ onNavigate, onOpenStrategy }: HomeCockpitProps) {
   const [marketMonitorLoading, setMarketMonitorLoading] = useState(true);
   const [newsItems, setNewsItems] = useState<PublicNewsItem[]>([]);
   const [readiness, setReadiness] = useState<PlatformReadiness | null>(null);
+  const [readinessResolved, setReadinessResolved] = useState(false);
+  const [readinessSucceeded, setReadinessSucceeded] = useState(false);
   const [readinessError, setReadinessError] = useState<string | null>(null);
   const [scoreAudit, setScoreAudit] = useState<StrategyScoreAuditSummary | null>(null);
   const [scoreAuditError, setScoreAuditError] = useState<string | null>(null);
@@ -607,7 +609,13 @@ export function HomeCockpit({ onNavigate, onOpenStrategy }: HomeCockpitProps) {
   const showPublicationGuard =
     Boolean(policy) &&
     (!policy?.ready_for_publication || (policy?.blocking_reasons ?? []).length > 0 || (policy?.warnings ?? []).length > 0);
-  const displayTradeDate = resolvePlatformDisplayDate(readiness, summary?.latest_market_date) || '-';
+  const displayTradeDate =
+    readinessResolved && readinessSucceeded
+      ? resolvePlatformDisplayDate(readiness, {
+          allowLegacyFallback: true,
+          legacyFallbackDates: [summary?.latest_market_date]
+        }) || '-'
+      : '-';
   const openResearchCaseCount = researchCases.filter((item) => item.status.toLowerCase() === 'open').length;
   const evidenceGapCount = researchCases.filter(hasEvidenceGap).length;
   const researchQueueSummary = researchQueueHealth?.summary;
@@ -644,6 +652,8 @@ export function HomeCockpit({ onNavigate, onOpenStrategy }: HomeCockpitProps) {
     setMarketMonitor(null);
     setMarketMonitorLoading(true);
     setReadiness(null);
+    setReadinessResolved(false);
+    setReadinessSucceeded(false);
     setReadinessError(null);
     setScoreAudit(null);
     setScoreAuditError(null);
@@ -698,12 +708,16 @@ export function HomeCockpit({ onNavigate, onOpenStrategy }: HomeCockpitProps) {
       (payload) => {
         if (!ignore) {
           setReadiness(payload);
+          setReadinessResolved(true);
+          setReadinessSucceeded(true);
           setReadinessError(null);
         }
       },
       (err: unknown) => {
         if (!ignore) {
           setReadiness(null);
+          setReadinessResolved(true);
+          setReadinessSucceeded(false);
           setReadinessError(`平台就绪状态不可用：${errorMessage(err)}`);
         }
       }

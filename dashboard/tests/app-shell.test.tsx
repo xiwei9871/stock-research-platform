@@ -1610,6 +1610,91 @@ describe('dashboard app shell', () => {
     });
   });
 
+  it.each([
+    {
+      path: '/daily-review',
+      requestMock: () => apiMocks.fetchDailyReviewLite,
+      expectedRequest: {}
+    },
+    {
+      path: '/market-monitor',
+      requestMock: () => apiMocks.fetchMarketMonitorEod,
+      expectedRequest: { topN: 5 }
+    }
+  ])(
+    'does not promote summary latest date when readiness rejects on $path',
+    async ({ path, requestMock, expectedRequest }) => {
+      window.history.replaceState({}, '', path);
+      apiMocks.fetchPlatformReadiness.mockRejectedValueOnce(new Error('readiness unavailable'));
+      apiMocks.fetchPlatformSummary.mockResolvedValueOnce({
+        latest_market_date: '2026-07-21',
+        latest_score_date: '2026-07-21',
+        latest_factor_date: '2026-07-21',
+        market_asset_count: 5207,
+        score_asset_count: 5207,
+        factor_count: 43,
+        score_versions: ['manual_v1'],
+        topn_preview: []
+      });
+
+      render(<AppShell currentUser={TEST_ADMIN_USER} />);
+
+      await waitFor(() => expect(requestMock()).toHaveBeenCalledWith(expectedRequest));
+      expect(requestMock()).not.toHaveBeenCalledWith(expect.objectContaining({ tradeDate: '2026-07-21' }));
+    }
+  );
+
+  it('does not promote summary latest date when readiness fulfills with null', async () => {
+    window.history.replaceState({}, '', '/daily-review');
+    apiMocks.fetchPlatformReadiness.mockResolvedValueOnce(null as never);
+    apiMocks.fetchPlatformSummary.mockResolvedValueOnce({
+      latest_market_date: '2026-07-21',
+      latest_score_date: '2026-07-21',
+      latest_factor_date: '2026-07-21',
+      market_asset_count: 5207,
+      score_asset_count: 5207,
+      factor_count: 43,
+      score_versions: ['manual_v1'],
+      topn_preview: []
+    });
+
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
+
+    await waitFor(() => expect(apiMocks.fetchDailyReviewLite).toHaveBeenCalledWith({}));
+    expect(apiMocks.fetchDailyReviewLite).not.toHaveBeenCalledWith({ tradeDate: '2026-07-21' });
+  });
+
+  it('keeps direct stock unavailable when readiness rejects and no explicit trade date exists', async () => {
+    window.history.replaceState({}, '', '/stock/000001.SZ');
+    apiMocks.fetchPlatformReadiness.mockRejectedValueOnce(new Error('readiness unavailable'));
+    apiMocks.fetchPlatformSummary.mockResolvedValueOnce({
+      latest_market_date: '2026-07-21',
+      latest_score_date: '2026-07-21',
+      latest_factor_date: '2026-07-21',
+      market_asset_count: 5207,
+      score_asset_count: 5207,
+      factor_count: 43,
+      score_versions: ['manual_v1'],
+      topn_preview: []
+    });
+
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
+
+    expect(await screen.findByText('平台展示日期不可用。')).toBeInTheDocument();
+    expect(apiMocks.fetchAssetProfile).not.toHaveBeenCalled();
+  });
+
+  it('mounts direct stock immediately when the route has an explicit trade date', async () => {
+    window.history.replaceState({}, '', stockPath('000001.SZ', { tradeDate: '2026-07-19' }));
+    apiMocks.fetchPlatformReadiness.mockReturnValueOnce(new Promise(() => undefined));
+    apiMocks.fetchPlatformSummary.mockReturnValueOnce(new Promise(() => undefined));
+
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
+
+    expect(await screen.findByRole('heading', { name: /000001\.SZ/ })).toBeVisible();
+    expect(apiMocks.fetchAssetProfile).toHaveBeenCalled();
+  });
+
   it('preserves theme research source context on direct canonical stock routes', async () => {
     window.history.replaceState({}, '', '/stock/002837.SZ?source=theme_research');
     apiMocks.fetchAssetProfile.mockResolvedValue(makeAssetProfile('002837.SZ'));
@@ -2324,7 +2409,7 @@ describe('dashboard app shell', () => {
     await waitFor(() => expect(stockRenders.at(-1)?.defaultTradeDate).toBe('2026-06-30'));
   });
 
-  it('does not invent a stock default date when the enabled gate has no display date', async () => {
+  it('does not mount stock when the enabled gate has no display date', async () => {
     apiMocks.fetchPlatformReadiness.mockResolvedValueOnce({
       mode: 'eod_local',
       status: 'BLOCKED',
@@ -2351,7 +2436,8 @@ describe('dashboard app shell', () => {
     await waitFor(() => expect(apiMocks.fetchPlatformReadiness).toHaveBeenCalled());
     fireEvent.click(screen.getByRole('button', { name: 'Open Stock Workspace workspace' }));
 
-    await waitFor(() => expect(stockRenders.at(-1)?.defaultTradeDate).toBe(''));
+    expect(await screen.findByText('平台展示日期不可用。')).toBeInTheDocument();
+    expect(stockRenders).toHaveLength(0);
   });
 
   it('resets stale stock source context when opening stock from plain navigation', async () => {
@@ -2810,7 +2896,7 @@ describe('dashboard app shell', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open Market Monitor workspace' }));
 
     expect(await screen.findByRole('heading', { name: 'Market Monitor' })).toBeInTheDocument();
-    expect(screen.getByText('Last Completed Trading Day')).toBeInTheDocument();
+    expect(await screen.findByText('Last Completed Trading Day')).toBeInTheDocument();
     expect(screen.queryByText('Realtime')).not.toBeInTheDocument();
     expect(screen.getByText('Data Mode')).toBeInTheDocument();
     expect(screen.getByText('EOD Snapshot')).toBeInTheDocument();
@@ -2934,7 +3020,7 @@ describe('dashboard app shell', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open Market Monitor workspace' }));
 
     expect(await screen.findByRole('heading', { name: 'Market Monitor' })).toBeInTheDocument();
-    expect(screen.getByText('Last Completed Trading Day')).toBeInTheDocument();
+    expect(await screen.findByText('Last Completed Trading Day')).toBeInTheDocument();
     expect(await screen.findByText('2026-06-10')).toBeInTheDocument();
     expect(screen.getByText('权重表现待接入')).toBeInTheDocument();
     expect(screen.getByText('情绪拆解待接入')).toBeInTheDocument();

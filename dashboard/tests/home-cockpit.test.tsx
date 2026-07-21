@@ -702,18 +702,169 @@ describe('AppShell and HomeCockpit', () => {
   });
 
   it('prioritizes readiness display date for cockpit requests', async () => {
+    vi.mocked(api.fetchPlatformReadiness).mockResolvedValueOnce({
+      mode: 'eod_local',
+      status: 'BLOCKED',
+      as_of: '2026-07-21T20:40:00+08:00',
+      display_trade_date: '2026-07-20',
+      latest_market_date: '2026-07-21',
+      latest_trade_date: '2026-07-21',
+      checks: [],
+      health_groups: [],
+      warnings: []
+    });
+    vi.mocked(api.fetchPlatformSummary).mockResolvedValueOnce({
+      latest_market_date: '2026-07-21',
+      latest_score_date: '2026-07-21',
+      latest_factor_date: '2026-07-21',
+      market_asset_count: 5207,
+      score_asset_count: 5207,
+      factor_count: 43,
+      score_versions: ['manual_v1'],
+      topn_preview: []
+    });
+
     render(<AppShell />);
 
     expect(await screen.findByText('策略指挥中心')).toBeVisible();
     await waitFor(() => {
-      expect(api.fetchStrategyScoreAudit).toHaveBeenCalledWith('2026-06-08');
+      expect(api.fetchStrategyScoreAudit).toHaveBeenCalledWith('2026-07-20');
       expect(api.fetchResearchCases).toHaveBeenCalledWith(
-        expect.objectContaining({ tradeDate: '2026-06-08' })
+        expect.objectContaining({ tradeDate: '2026-07-20' })
       );
       expect(api.fetchResearchQueueHealth).toHaveBeenCalledWith(
-        expect.objectContaining({ tradeDate: '2026-06-08' })
+        expect.objectContaining({ tradeDate: '2026-07-20' })
       );
     });
+  });
+
+  it('does not request candidate-date home data while readiness is pending after summary resolves', async () => {
+    const readinessRequest = deferred<Awaited<ReturnType<typeof api.fetchPlatformReadiness>>>();
+    vi.mocked(api.fetchPlatformReadiness).mockReturnValueOnce(readinessRequest.promise);
+    vi.mocked(api.fetchPlatformSummary).mockResolvedValueOnce({
+      latest_market_date: '2026-07-21',
+      latest_score_date: '2026-07-21',
+      latest_factor_date: '2026-07-21',
+      market_asset_count: 5207,
+      score_asset_count: 5207,
+      factor_count: 43,
+      score_versions: ['manual_v1'],
+      topn_preview: []
+    });
+
+    render(<AppShell />);
+
+    expect((await screen.findAllByText('LHB Shortline Combo')).length).toBeGreaterThan(0);
+    const homeStatus = within(screen.getByRole('region', { name: '首页状态' }));
+    expect(within(homeStatus.getByText('平台日期').closest('div')!).getByText('-')).toBeVisible();
+    expect(api.fetchStrategyScoreAudit).not.toHaveBeenCalled();
+    expect(api.fetchResearchCases).not.toHaveBeenCalled();
+    expect(api.fetchResearchEvidence).not.toHaveBeenCalled();
+    expect(api.fetchResearchQueueHealth).not.toHaveBeenCalled();
+    expect(api.fetchResearchPublishGate).not.toHaveBeenCalled();
+    expect(api.fetchResearchPublicationPreview).not.toHaveBeenCalled();
+    expect(api.fetchResearchPublicationSnapshots).not.toHaveBeenCalled();
+    expect(api.fetchResearchExternalDeliveryPlan).not.toHaveBeenCalled();
+    expect(api.fetchResearchExternalDeliveryAttempts).not.toHaveBeenCalled();
+  });
+
+  it('does not request candidate-date home data when readiness rejects', async () => {
+    vi.mocked(api.fetchPlatformReadiness).mockRejectedValueOnce(new Error('readiness unavailable'));
+    vi.mocked(api.fetchPlatformSummary).mockResolvedValueOnce({
+      latest_market_date: '2026-07-21',
+      latest_score_date: '2026-07-21',
+      latest_factor_date: '2026-07-21',
+      market_asset_count: 5207,
+      score_asset_count: 5207,
+      factor_count: 43,
+      score_versions: ['manual_v1'],
+      topn_preview: []
+    });
+
+    render(<AppShell />);
+
+    expect(await screen.findByText('平台就绪状态不可用：readiness unavailable')).toBeVisible();
+    expect(api.fetchStrategyScoreAudit).not.toHaveBeenCalled();
+    expect(api.fetchResearchCases).not.toHaveBeenCalled();
+    expect(api.fetchResearchEvidence).not.toHaveBeenCalled();
+    expect(api.fetchResearchQueueHealth).not.toHaveBeenCalled();
+    expect(api.fetchResearchPublishGate).not.toHaveBeenCalled();
+    expect(api.fetchResearchPublicationPreview).not.toHaveBeenCalled();
+    expect(api.fetchResearchPublicationSnapshots).not.toHaveBeenCalled();
+    expect(api.fetchResearchExternalDeliveryPlan).not.toHaveBeenCalled();
+    expect(api.fetchResearchExternalDeliveryAttempts).not.toHaveBeenCalled();
+  });
+
+  it('uses legacy latest date only for fulfilled readiness without display field', async () => {
+    vi.mocked(api.fetchPlatformReadiness).mockResolvedValueOnce({
+      mode: 'eod_local',
+      status: 'ready',
+      as_of: '2026-07-21T20:40:00+08:00',
+      latest_market_date: '2026-07-21',
+      checks: [],
+      health_groups: [],
+      warnings: []
+    });
+    vi.mocked(api.fetchPlatformSummary).mockResolvedValueOnce({
+      latest_market_date: '2026-07-21',
+      latest_score_date: '2026-07-21',
+      latest_factor_date: '2026-07-21',
+      market_asset_count: 5207,
+      score_asset_count: 5207,
+      factor_count: 43,
+      score_versions: ['manual_v1'],
+      topn_preview: []
+    });
+
+    render(<AppShell />);
+
+    await waitFor(() => {
+      expect(api.fetchStrategyScoreAudit).toHaveBeenCalledWith('2026-07-21');
+      expect(api.fetchResearchCases).toHaveBeenCalledWith(
+        expect.objectContaining({ tradeDate: '2026-07-21' })
+      );
+      expect(api.fetchResearchQueueHealth).toHaveBeenCalledWith(
+        expect.objectContaining({ tradeDate: '2026-07-21' })
+      );
+    });
+  });
+
+  it('does not request candidate-date home data for fulfilled explicit empty display date', async () => {
+    vi.mocked(api.fetchPlatformReadiness).mockResolvedValueOnce({
+      mode: 'eod_local',
+      status: 'BLOCKED',
+      as_of: '2026-07-21T20:40:00+08:00',
+      display_trade_date: '',
+      latest_market_date: '2026-07-21',
+      latest_trade_date: '2026-07-21',
+      checks: [],
+      health_groups: [],
+      warnings: ['display trade date unavailable']
+    });
+    vi.mocked(api.fetchPlatformSummary).mockResolvedValueOnce({
+      latest_market_date: '2026-07-21',
+      latest_score_date: '2026-07-21',
+      latest_factor_date: '2026-07-21',
+      market_asset_count: 5207,
+      score_asset_count: 5207,
+      factor_count: 43,
+      score_versions: ['manual_v1'],
+      topn_preview: []
+    });
+
+    render(<AppShell />);
+
+    const homeStatus = within(await screen.findByRole('region', { name: '首页状态' }));
+    expect((await homeStatus.findAllByText('阻塞')).length).toBeGreaterThan(0);
+    expect(api.fetchStrategyScoreAudit).not.toHaveBeenCalled();
+    expect(api.fetchResearchCases).not.toHaveBeenCalled();
+    expect(api.fetchResearchEvidence).not.toHaveBeenCalled();
+    expect(api.fetchResearchQueueHealth).not.toHaveBeenCalled();
+    expect(api.fetchResearchPublishGate).not.toHaveBeenCalled();
+    expect(api.fetchResearchPublicationPreview).not.toHaveBeenCalled();
+    expect(api.fetchResearchPublicationSnapshots).not.toHaveBeenCalled();
+    expect(api.fetchResearchExternalDeliveryPlan).not.toHaveBeenCalled();
+    expect(api.fetchResearchExternalDeliveryAttempts).not.toHaveBeenCalled();
   });
 
   it('renders a strategy-centered command center', async () => {
