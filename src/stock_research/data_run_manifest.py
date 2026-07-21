@@ -284,6 +284,23 @@ def load_recent_data_run_manifest(
         return list(fetch_all(conn, sql, {"lookback_days": int(lookback_days)}))
 
 
+def load_browser_acceptance_manifests(
+    *,
+    trade_date: str,
+    service: str = SETTINGS.research_service,
+) -> list[dict[str, Any]]:
+    sql = """
+    SELECT *
+    FROM ops.data_run_manifest
+    WHERE trade_date = %(trade_date)s
+      AND module = 'dashboard_browser_acceptance'
+      AND source = 'eod_browser_acceptance'
+    ORDER BY COALESCE(ended_at, updated_at, created_at) DESC
+    """
+    with connect(service) as conn:
+        return list(fetch_all(conn, sql, {"trade_date": trade_date}))
+
+
 def summarize_manifest_modules(modules: list[dict[str, Any]]) -> dict[str, Any]:
     warnings: list[str] = []
     errors: list[str] = []

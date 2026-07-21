@@ -185,6 +185,22 @@ def test_check_dashboard_browser_acceptance_fails_closed_when_latest_record_is_a
     assert "ambiguous" in result.message
 
 
+def test_check_dashboard_browser_acceptance_does_not_use_run_id_to_break_latest_time_tie():
+    rows = [
+        _browser_manifest_row(run_id="run-a", status="failed"),
+        _browser_manifest_row(run_id="run-z", status="success"),
+    ]
+
+    result = eod_auto_repair_checks.check_dashboard_browser_acceptance(
+        "2026-06-29",
+        manifest_loader=lambda trade_date: rows,
+    )
+
+    assert result.status == RepairStatus.FAILED
+    assert result.blocker is True
+    assert "ambiguous" in result.message
+
+
 def test_check_lhb_features_reads_factor_table_with_fetcher():
     captured = {}
 

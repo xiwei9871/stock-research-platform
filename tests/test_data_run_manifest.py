@@ -276,6 +276,39 @@ def test_load_recent_data_run_manifest_trade_date_fetches_latest_row_per_module(
     assert "run_id = (SELECT run_id FROM latest)" not in calls["sql"]
 
 
+def test_load_browser_acceptance_manifests_returns_all_exact_date_candidates(monkeypatch):
+    calls = {}
+
+    class FakeConnection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr(data_run_manifest, "connect", lambda service: FakeConnection())
+
+    def fake_fetch_all(conn, sql, params):
+        calls["sql"] = sql
+        calls["params"] = params
+        return [{"run_id": "run-a"}, {"run_id": "run-z"}]
+
+    monkeypatch.setattr(data_run_manifest, "fetch_all", fake_fetch_all)
+
+    rows = data_run_manifest.load_browser_acceptance_manifests(
+        trade_date="2026-07-20",
+        service="research",
+    )
+
+    assert rows == [{"run_id": "run-a"}, {"run_id": "run-z"}]
+    assert calls["params"] == {"trade_date": "2026-07-20"}
+    assert "trade_date = %(trade_date)s" in calls["sql"]
+    assert "module = 'dashboard_browser_acceptance'" in calls["sql"]
+    assert "source = 'eod_browser_acceptance'" in calls["sql"]
+    assert "PARTITION BY" not in calls["sql"]
+    assert "run_id DESC" not in calls["sql"]
+
+
 def test_apply_schema_creates_manifest_before_publication_contract_schema(monkeypatch):
     calls = []
     connections = []

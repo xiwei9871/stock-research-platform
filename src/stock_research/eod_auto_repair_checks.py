@@ -8,7 +8,10 @@ from typing import Any, Callable
 import pandas as pd
 
 from stock_research.config import SETTINGS
-from stock_research.data_run_manifest import load_recent_data_run_manifest
+from stock_research.data_run_manifest import (
+    load_browser_acceptance_manifests,
+    load_recent_data_run_manifest,
+)
 from stock_research.db import connect, fetch_all
 from stock_research.eod_auto_repair_models import RepairCheckResult, RepairStatus
 from stock_research.eod_browser_acceptance import REPORT_SCHEMA_VERSION
@@ -367,7 +370,7 @@ def _browser_acceptance_failure(message: str, metrics: dict[str, object] | None 
     )
 
 
-def _browser_manifest_sort_key(row: dict[str, object]) -> tuple[datetime, str]:
+def _browser_manifest_business_time(row: dict[str, object]) -> datetime:
     raw_timestamp = row.get("ended_at") or row.get("updated_at") or row.get("created_at")
     if not isinstance(raw_timestamp, (str, datetime)):
         raise ValueError("browser acceptance manifest timestamp missing")
@@ -380,13 +383,13 @@ def _browser_manifest_sort_key(row: dict[str, object]) -> tuple[datetime, str]:
     run_id = row.get("run_id")
     if not isinstance(run_id, str) or not run_id.strip():
         raise ValueError("browser acceptance manifest run_id missing")
-    return parsed.astimezone(timezone.utc), run_id.strip()
+    return parsed.astimezone(timezone.utc)
 
 
 def check_dashboard_browser_acceptance(
     trade_date: str,
     *,
-    manifest_loader=load_recent_data_run_manifest,
+    manifest_loader=load_browser_acceptance_manifests,
 ) -> RepairCheckResult:
     try:
         rows = [
@@ -401,14 +404,14 @@ def check_dashboard_browser_acceptance(
         return _browser_acceptance_failure("browser acceptance manifest missing")
     try:
         ranked = sorted(
-            ((_browser_manifest_sort_key(row), row) for row in rows),
+            ((_browser_manifest_business_time(row), row) for row in rows),
             key=lambda item: item[0],
             reverse=True,
         )
     except (TypeError, ValueError) as exc:
         return _browser_acceptance_failure(f"browser acceptance manifest malformed: {exc}")
-    latest_key, latest = ranked[0]
-    if sum(1 for key, _row in ranked if key == latest_key) != 1:
+    latest_time, latest = ranked[0]
+    if sum(1 for business_time, _row in ranked if business_time == latest_time) != 1:
         return _browser_acceptance_failure("browser acceptance latest manifest ambiguous")
 
     metadata = latest.get("metadata")

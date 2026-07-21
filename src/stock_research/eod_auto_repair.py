@@ -30,6 +30,32 @@ _PROGRESS_WRITE_LOCK = threading.Lock()
 ACTION_PROGRESS_HEARTBEAT_SECONDS = 60.0
 
 
+class EodActionRegistry(dict[str, ActionRunner]):
+    def __init__(self) -> None:
+        super().__init__()
+        self._trade_date = ""
+        self._strategy_run_id = ""
+
+    def begin_run(self, trade_date: str) -> None:
+        self._trade_date = str(trade_date)
+        self._strategy_run_id = ""
+
+    def record_strategy_run(self, trade_date: str, run_id: str) -> None:
+        if self._trade_date != str(trade_date):
+            raise ValueError("strategy run context is not active for trade date")
+        normalized_run_id = str(run_id).strip()
+        if not normalized_run_id:
+            raise ValueError("strategy publish result run_id missing")
+        self._strategy_run_id = normalized_run_id
+
+    def consume_strategy_run_id(self, trade_date: str) -> str:
+        if self._trade_date != str(trade_date):
+            return ""
+        run_id = self._strategy_run_id
+        self._strategy_run_id = ""
+        return run_id
+
+
 class ActionTimeoutError(TimeoutError):
     pass
 
@@ -93,7 +119,6 @@ STAGE_CHECKS: list[tuple[str, tuple[str, ...]]] = [
         (
             "reports",
             "review_evidence_snapshots",
-            "dashboard_browser_acceptance",
             "dashboard_surface_freshness",
             "ops_health",
         ),
@@ -132,6 +157,7 @@ LOOP_DEPENDENT_REPAIRS: dict[str, list[str]] = {
 }
 ACTION_FAILURE_LIMITS = {"dashboard_browser_acceptance": 1}
 DEFAULT_ACTION_FAILURE_LIMIT = 2
+NON_LOOP_EXCLUDED_CHECKS = frozenset({"dashboard_browser_acceptance"})
 OPS_READY_STATUSES = {"READY", "ready", "success", "DEGRADED_READY", "degraded_ready"}
 
 
@@ -148,9 +174,18 @@ def _safe_run_check(check) -> RepairCheckResult:
         )
 
 
-def _safe_run_check_plan(check_plan_builder, trade_date: str) -> list[RepairCheckResult]:
+def _safe_run_check_plan(
+    check_plan_builder,
+    trade_date: str,
+    *,
+    excluded_names: frozenset[str] = frozenset(),
+) -> list[RepairCheckResult]:
     try:
-        return [_safe_run_check(check) for check in check_plan_builder(trade_date)]
+        return [
+            _safe_run_check(check)
+            for check in check_plan_builder(trade_date)
+            if str(getattr(check, "name", "")) not in excluded_names
+        ]
     except Exception as exc:  # noqa: BLE001 - plan failures belong in the report.
         return [
             RepairCheckResult(
@@ -752,6 +787,9 @@ def run_eod_auto_repair(
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
     registry = action_registry if action_registry is not None else build_default_action_registry(output_root="outputs")
+    begin_run = getattr(registry, "begin_run", None)
+    if callable(begin_run):
+        begin_run(trade_date)
     if mode == "loop":
         _reset_progress_files(out)
         summary = _run_eod_auto_repair_loop(
@@ -782,7 +820,11 @@ def run_eod_auto_repair(
             _write_summary_files(summary, out)
         return summary
 
-    checks_before = _safe_run_check_plan(check_plan_builder, trade_date)
+    checks_before = _safe_run_check_plan(
+        check_plan_builder,
+        trade_date,
+        excluded_names=NON_LOOP_EXCLUDED_CHECKS,
+    )
     current_checks = checks_before
     stages: list[RepairStageResult] = []
     actions: list[RepairActionResult] = []
@@ -795,16 +837,8 @@ def run_eod_auto_repair(
             for check in before:
                 if check.status == RepairStatus.SUCCESS:
                     continue
-                if (
-                    check.name == "dashboard_browser_acceptance"
-                    and check.status == RepairStatus.DEGRADED
-                    and not check.blocker
-                ):
-                    continue
                 runner = registry.get(check.name)
                 if runner is None:
-                    if check.name == "dashboard_browser_acceptance" and check.blocker:
-                        break
                     continue
                 action = _safe_run_action(
                     check.name,
@@ -813,26 +847,14 @@ def run_eod_auto_repair(
                     out,
                     action_timeout_seconds=action_timeout_seconds,
                 )
-                if check.name == "dashboard_browser_acceptance":
-                    current_checks = _safe_run_check_plan(check_plan_builder, trade_date)
-                    action = _action_with_validation(
-                        action,
-                        component=check.name,
-                        checks_after=current_checks,
-                    )
                 stage_actions.append(action)
                 actions.append(action)
-                if check.name == "dashboard_browser_acceptance":
-                    browser_check = _checks_by_name(current_checks).get(check.name)
-                    if (
-                        not _action_is_publishable(action)
-                        or browser_check is None
-                        or browser_check.blocker
-                        or browser_check.status not in {RepairStatus.SUCCESS, RepairStatus.DEGRADED}
-                    ):
-                        break
             if stage_actions:
-                current_checks = _safe_run_check_plan(check_plan_builder, trade_date)
+                current_checks = _safe_run_check_plan(
+                    check_plan_builder,
+                    trade_date,
+                    excluded_names=NON_LOOP_EXCLUDED_CHECKS,
+                )
             after = _stage_checks(current_checks, check_names)
             stages.append(
                 RepairStageResult(
@@ -1089,7 +1111,7 @@ def build_default_action_registry(
         if browser_output_root is not None
         else Path(output_root) / "research" / "eod_browser_acceptance"
     )
-    published_run_ids: dict[str, str] = {}
+    registry = EodActionRegistry()
 
     def lhb_action(trade_date: str, output_dir: str | Path) -> RepairActionResult:
         return repair_lhb_source_and_features(
@@ -1103,9 +1125,7 @@ def build_default_action_registry(
         def publisher(**kwargs) -> dict[str, Any]:
             result = selected_strategy_publisher(**kwargs)
             run_id = str(result.get("run_id") or "")
-            if not run_id:
-                raise ValueError("strategy publish result run_id missing")
-            published_run_ids[trade_date] = run_id
+            registry.record_strategy_run(trade_date, run_id)
             return result
 
         return repair_strategy_publish(
@@ -1116,10 +1136,13 @@ def build_default_action_registry(
 
     def browser_acceptance_action(trade_date: str, output_dir: str | Path) -> RepairActionResult:
         try:
+            expected_run_id = registry.consume_strategy_run_id(trade_date)
+            if not expected_run_id:
+                raise ValueError("browser acceptance requires strategy publish in the current EOD run")
             run_id, candidate_publications = _load_browser_candidate_publications(
                 trade_date,
                 manifest_loader=selected_browser_manifest_loader,
-                expected_run_id=published_run_ids.get(trade_date),
+                expected_run_id=expected_run_id,
             )
             revision = _browser_revision_value(browser_revision)
             result = selected_browser_runner(
@@ -1349,7 +1372,7 @@ def build_default_action_registry(
 
         return repair_review_evidence_snapshots(trade_date, runner=runner)
 
-    return {
+    registry.update({
         "minute5_bars": minute_action,
         "technical_features": technical_features_action,
         "factor_daily": factor_daily_action,
@@ -1365,7 +1388,8 @@ def build_default_action_registry(
         "ops_health": ops_health_action,
         "reports": reports_action,
         "review_evidence_snapshots": snapshots_action,
-    }
+    })
+    return registry
 
 
 def _main(argv: list[str] | None = None) -> int:
