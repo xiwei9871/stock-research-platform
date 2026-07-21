@@ -12,7 +12,9 @@ import pytest
 
 from stock_research.eod_auto_repair_models import RepairStatus
 from stock_research.eod_browser_acceptance import (
+    BrowserAcceptanceAttempt,
     BrowserAcceptanceError,
+    BrowserAcceptanceResult,
     classify_browser_failures,
     load_previous_official_publications,
     parse_browser_acceptance_report,
@@ -183,6 +185,39 @@ def test_browser_acceptance_snapshot_is_deeply_immutable_and_json_serializable(t
     serialized = json.loads(json.dumps(result.snapshot))
     assert serialized["tradeDate"] == TRADE_DATE
     assert serialized["publications"][0]["publishId"].startswith("lhb_shortline")
+
+
+@pytest.mark.parametrize("result_type", [BrowserAcceptanceResult, BrowserAcceptanceAttempt])
+def test_direct_result_construction_deep_freezes_snapshot_and_detaches_source(result_type):
+    source = {
+        "tradeDate": TRADE_DATE,
+        "publications": [{"publishId": "publish-1", "tags": ["official"]}],
+    }
+    if result_type is BrowserAcceptanceResult:
+        result = result_type(
+            status=RepairStatus.SUCCESS,
+            trade_date=TRADE_DATE,
+            run_id=RUN_ID,
+            duration_seconds=1.0,
+            snapshot=source,
+        )
+    else:
+        result = result_type(
+            attempt_number=1,
+            status=RepairStatus.SUCCESS,
+            duration_seconds=1.0,
+            snapshot=source,
+        )
+
+    source["tradeDate"] = "2026-07-19"
+    source["publications"][0]["publishId"] = "mutated-source"
+    source["publications"][0]["tags"].append("mutated")
+
+    assert result.snapshot["tradeDate"] == TRADE_DATE
+    assert result.snapshot["publications"][0]["publishId"] == "publish-1"
+    assert result.snapshot["publications"][0]["tags"] == ("official",)
+    with pytest.raises(TypeError):
+        result.snapshot["publications"][0]["publishId"] = "mutated-result"
 
 
 def test_parse_report_maps_warning_only_failure_to_degraded(tmp_path):

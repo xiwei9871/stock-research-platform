@@ -135,6 +135,11 @@ class BrowserAcceptanceAttempt:
     snapshot: Mapping[str, object] = field(default_factory=_empty_snapshot)
     message: str = ""
 
+    def __post_init__(self) -> None:
+        if not isinstance(self.snapshot, Mapping):
+            raise TypeError("browser acceptance snapshot must be a mapping")
+        object.__setattr__(self, "snapshot", _freeze_json(self.snapshot))
+
 
 @dataclass(frozen=True)
 class BrowserAcceptanceResult:
@@ -150,6 +155,11 @@ class BrowserAcceptanceResult:
     ended_at: str = ""
     message: str = ""
     attempts: tuple[BrowserAcceptanceAttempt, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.snapshot, Mapping):
+            raise TypeError("browser acceptance snapshot must be a mapping")
+        object.__setattr__(self, "snapshot", _freeze_json(self.snapshot))
 
 
 def _error(code: str, detail: object | None = None) -> BrowserAcceptanceError:
