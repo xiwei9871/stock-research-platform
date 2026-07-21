@@ -1034,7 +1034,7 @@ def _redact_text(value: str) -> str:
     )
     text = re.sub(r"(?i)\bBearer\s+[^\s,;]+", "Bearer <redacted>", text)
     text = re.sub(
-        r"(?i)\b([a-z][a-z0-9+.-]*://)[^\s/@:]+:[^\s/@]+@",
+        r"(?i)\b([a-z][a-z0-9+.-]*://)[^\s/@:]*:[^\s/@]+@",
         lambda match: f"{match.group(1)}<redacted>@",
         text,
     )

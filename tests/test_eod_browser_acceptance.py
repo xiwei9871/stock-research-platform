@@ -1036,7 +1036,10 @@ def test_cache_clear_failure_blocks_without_second_attempt(tmp_path):
         popen=popen,
         runtime_checker=lambda _dashboard: None,
         cache_clearer=lambda: (_ for _ in ()).throw(
-            RuntimeError("cache denied GH_TOKEN=cache-secret https://u:url-secret@example.com")
+            RuntimeError(
+                "cache denied GH_TOKEN=cache-secret https://u:url-secret@example.com "
+                "REDIS_URL=redis://:cache-redis-secret@cache/0"
+            )
         ),
     )
 
@@ -1045,6 +1048,7 @@ def test_cache_clear_failure_blocks_without_second_attempt(tmp_path):
     assert "cache denied" in result.message
     assert "cache-secret" not in result.message
     assert "url-secret" not in result.message
+    assert "cache-redis-secret" not in result.message
     assert len(starts) == 1
 
 
@@ -1059,6 +1063,7 @@ def test_runner_redacts_stderr_tail_secrets_and_absolute_paths(tmp_path):
                 "password=super-secret token=api-secret\n"
                 "PGPASSWORD=pg-secret AWS_SECRET_ACCESS_KEY=aws-secret\n"
                 "GH_TOKEN=gh-secret DATABASE_URL=postgresql://alice:url-secret@db.local/app\n"
+                "REDIS_URL=redis://:redis-secret@cache/0\n"
                 "request failed https://bob:web-secret@example.com/private\n"
                 f"failed at {secret_path}\n"
             ).encode()
@@ -1087,6 +1092,7 @@ def test_runner_redacts_stderr_tail_secrets_and_absolute_paths(tmp_path):
     assert "gh-secret" not in result.message
     assert "url-secret" not in result.message
     assert "web-secret" not in result.message
+    assert "redis-secret" not in result.message
     assert secret_path not in result.message
     assert "<redacted>" in result.message
     raw_stderr = (tmp_path / "attempt-1" / "stderr.log").read_text(encoding="utf-8")
@@ -1097,6 +1103,7 @@ def test_runner_redacts_sensitive_runtime_exception_message(tmp_path):
     secret_message = (
         "PGPASSWORD=pg-secret aws_secret_access_key=aws-secret "
         "GH_TOKEN=gh-secret DATABASE_URL=postgresql://alice:url-secret@db.local/app "
+        "REDIS_URL=redis://:runtime-redis-secret@cache/0 "
         "https://bob:web-secret@example.com/private"
     )
 
@@ -1111,7 +1118,14 @@ def test_runner_redacts_sensitive_runtime_exception_message(tmp_path):
     )
 
     assert result.status == RepairStatus.FAILED
-    for secret in ("pg-secret", "aws-secret", "gh-secret", "url-secret", "web-secret"):
+    for secret in (
+        "pg-secret",
+        "aws-secret",
+        "gh-secret",
+        "url-secret",
+        "runtime-redis-secret",
+        "web-secret",
+    ):
         assert secret not in result.message
     assert "<redacted>" in result.message
 
@@ -1124,13 +1138,17 @@ def test_runner_redacts_sensitive_previous_loader_exception_message(tmp_path):
         output_dir=tmp_path,
         candidate_publications=_candidate_identities(),
         previous_publication_loader=lambda: (_ for _ in ()).throw(
-            RuntimeError("DATABASE_URL=postgresql://alice:loader-secret@db.local/app")
+            RuntimeError(
+                "DATABASE_URL=postgresql://alice:loader-secret@db.local/app "
+                "REDIS_URL=redis://:loader-redis-secret@cache/0"
+            )
         ),
         runtime_checker=lambda _dashboard: None,
     )
 
     assert result.status == RepairStatus.FAILED
     assert "loader-secret" not in result.message
+    assert "loader-redis-secret" not in result.message
     assert "DATABASE_URL=<redacted>" in result.message
 
 
