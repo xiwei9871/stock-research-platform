@@ -24,6 +24,14 @@ audit_id="pv-initial-YYYYMMDD-${revision:0:7}"
 audit_root="outputs/research/platform_validation/${audit_id}"
 ```
 
+Before any other audit command or documentation edit, execute and preserve:
+
+```bash
+git status --porcelain=v1 --untracked-files=all
+```
+
+The command must be the first entry in `commands-manifest.json`, with start/end timestamps, exit code, and separate stdout/stderr evidence paths. An authoritative freeze requires exit 0 and empty stdout. If any tracked or untracked path is printed, stop immediately; do not run a layer or describe the audit as frozen.
+
 Before running any layer, save:
 
 - full revision and clean/dirty status;
@@ -33,8 +41,11 @@ Before running any layer, save:
 - PostgreSQL service name and `SELECT current_database()` result;
 - Dashboard/API URLs for Real/Audit plus sandbox URLs;
 - requested baseline status, initially `baseline_candidate`.
+- `worktree.status=clean`, the exact status command, its exit code, evidence paths, and timestamp.
 
 After the freeze, do not edit `src/`, Dashboard product code, tests, or Playwright configuration. Only commands, generated evidence, audit documentation, and stop-rule plans are allowed.
+
+If a draft audit is found to have an invalid freeze or incomplete mapping, retain its output directory unchanged and mark it `superseded` in the next authoritative audit's `frozen-inputs.json` and human summary. Never relabel old results with a new revision.
 
 ## Standard Commands
 
@@ -143,6 +154,16 @@ The generated ledger groups deterministic test evidence but may still contain ma
 - all supporting generated issue IDs and evidence paths;
 - follow-up plan path for each P0/P1 root.
 
+The machine-readable root ledger must map every generated report `issue_id` exactly once. Store each root's sorted `symptom_issue_ids`, identical `supporting_issue_ids`, and the union of every referenced issue's report evidence paths. Its summary must include `report_issue_total`, `mapped`, `unmapped`, and `duplicates`; authoritative output requires `mapped=report_issue_total`, `unmapped=0`, and `duplicates=0`.
+
+Root schema rules:
+
+- `severity`: only `P0`, `P1`, `P2`, or `null`;
+- `classification`: only `product`, `test_infrastructure`, or `environment`;
+- uncertain/candidate state belongs in `confirmation_status`, never `classification`;
+- environment blockers use `severity=null` plus `blocker_kind` and `disposition`;
+- reporting-security roots remain `classification=test_infrastructure` and add `security_category`.
+
 If any P0 or P1 product issue remains, stop. Do not repair during the frozen audit, do not mark `trusted_baseline`, and do not overwrite the audit. Create one focused plan per independent root and rerun under a new audit ID after fixes merge.
 
 Promote to `trusted_baseline` only when:
@@ -166,3 +187,8 @@ Promote to `trusted_baseline` only when:
 
 Auto EOD Repair should run the small `eod` acceptance after repair succeeds. Daily execution is not a substitute for this full audit: it validates critical read-only routes, trade-date coherence, official publication identity, and runtime cleanliness, while the full Audit profile remains the release and regression census.
 
+## Current Authoritative Initial Audit
+
+The authoritative initial audit is `pv-initial-20260721-5fb90fd` at revision `5fb90fd1081269f52c4fef9668d3885ca12ed6cc`.
+
+The earlier `pv-initial-20260720-372f4a5` directory is retained unchanged as a superseded draft. Its results must not be used as evidence for the current revision.
