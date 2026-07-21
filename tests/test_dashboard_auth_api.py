@@ -4,7 +4,8 @@ from stock_research.dashboard import app as dashboard_app
 from stock_research.dashboard.auth_models import CurrentUser
 
 
-def test_auth_me_returns_401_when_not_logged_in():
+def test_auth_me_returns_401_when_not_logged_in(monkeypatch):
+    monkeypatch.setenv("STOCK_RESEARCH_DASHBOARD_AUTH_REQUIRED", "true")
     client = TestClient(dashboard_app.create_app())
 
     response = client.get("/api/auth/me")
@@ -14,6 +15,7 @@ def test_auth_me_returns_401_when_not_logged_in():
 
 
 def test_auth_me_returns_current_user(monkeypatch):
+    monkeypatch.setenv("STOCK_RESEARCH_DASHBOARD_AUTH_REQUIRED", "true")
     monkeypatch.setattr(
         dashboard_app,
         "load_current_user_from_session",

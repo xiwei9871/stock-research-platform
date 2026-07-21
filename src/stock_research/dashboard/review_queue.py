@@ -316,6 +316,7 @@ def _snapshot_publication_contract_valid(
             expected_strategy_id=strategy_id,
             expected_trade_date=snapshot_trade_date,
             approved_research_roots=_approved_research_roots(),
+            legacy_output_root=Path(getattr(SETTINGS, "output_root", "outputs")),
         )
     except ValueError:
         return False
@@ -663,12 +664,14 @@ def _manifest_strategy_artifact_path_valid(module: dict[str, Any]) -> bool:
             expected_strategy_id=strategy_id,
             expected_trade_date=manifest_trade_date,
             approved_research_roots=_approved_research_roots(),
+            legacy_output_root=Path(getattr(SETTINGS, "output_root", "outputs")),
         )
         parsed_output_manifest = parse_publication_manifest_path(
             output_manifest_path,
             expected_strategy_id=strategy_id,
             expected_trade_date=manifest_trade_date,
             approved_research_roots=_approved_research_roots(),
+            legacy_output_root=Path(getattr(SETTINGS, "output_root", "outputs")),
         )
     except ValueError:
         return False

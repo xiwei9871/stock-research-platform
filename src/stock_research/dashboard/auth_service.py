@@ -67,6 +67,16 @@ def current_user_read_model(user: CurrentUser) -> dict:
     }
 
 
+def auth_disabled_current_user() -> CurrentUser:
+    return CurrentUser(
+        user_id="dashboard-auth-disabled",
+        username="local",
+        display_name="Local Operator",
+        role="admin",
+        is_active=True,
+    )
+
+
 def authenticate_user(username: str, password: str, service: str = SETTINGS.research_service) -> CurrentUser:
     with connect(service) as conn:
         with conn.cursor() as cur:

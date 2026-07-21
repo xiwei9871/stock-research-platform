@@ -4,6 +4,30 @@ from stock_research.dashboard import app as dashboard_app
 from stock_research.dashboard.auth_models import CurrentUser
 
 
+def test_auth_me_returns_local_admin_when_auth_is_disabled(monkeypatch):
+    monkeypatch.setenv("STOCK_RESEARCH_DASHBOARD_AUTH_REQUIRED", "false")
+    monkeypatch.setattr(
+        dashboard_app,
+        "load_current_user_from_session",
+        lambda _token: (_ for _ in ()).throw(AssertionError("session lookup must not run")),
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/auth/me")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "user": {
+            "user_id": "dashboard-auth-disabled",
+            "username": "local",
+            "display_name": "Local Operator",
+            "role": "admin",
+            "is_active": True,
+        }
+    }
+    assert "set-cookie" not in response.headers
+
+
 def test_dashboard_api_allows_reads_when_auth_not_required(monkeypatch):
     monkeypatch.setenv("STOCK_RESEARCH_DASHBOARD_AUTH_REQUIRED", "false")
     monkeypatch.setattr(dashboard_app, "load_platform_summary", lambda **kwargs: {"latest_market_date": "2026-07-08"})

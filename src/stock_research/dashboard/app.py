@@ -26,6 +26,7 @@ from stock_research.dashboard.api_guardrails import (
 )
 from stock_research.dashboard.asset_profile import build_asset_profile
 from stock_research.dashboard.auth_service import (
+    auth_disabled_current_user,
     authenticate_user,
     create_session,
     current_user_read_model,
@@ -438,6 +439,8 @@ def create_app() -> FastAPI:
 
     @app.get("/api/auth/me")
     def auth_me(request: Request):
+        if not _dashboard_auth_required():
+            return {"user": current_user_read_model(auth_disabled_current_user())}
         session_token = request.cookies.get(SETTINGS.dashboard_session_cookie, "")
         user = load_current_user_from_session(session_token)
         if user is None:

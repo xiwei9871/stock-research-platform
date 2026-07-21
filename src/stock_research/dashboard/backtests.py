@@ -633,6 +633,7 @@ def _validate_eod_publication_contract(
                 Path(getattr(SETTINGS, "output_root", "outputs")) / "research",
                 *DEFAULT_APPROVED_PUBLICATION_RESEARCH_ROOTS,
             ),
+            legacy_output_root=Path(getattr(SETTINGS, "output_root", "outputs")),
         )
     except ValueError:
         return "contract_mismatch", "publication manifest path mismatch"

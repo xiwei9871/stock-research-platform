@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import datetime, timezone
+from pathlib import Path
 
 import pandas as pd
 import pytest
@@ -80,6 +81,52 @@ def test_writer_creates_immutable_version_hashes_and_compatibility_mirrors(tmp_p
     for name in ("equity", "positions", "trades", "review"):
         mirror = tmp_path / f"strategy_mid_trend_{name}.csv"
         assert mirror.read_bytes() == second["output_paths"][f"{name}_path"].read_bytes()
+
+
+def test_writer_returns_absolute_paths_when_output_dir_is_relative(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+
+    publication = _write(Path("outputs/research/strategy_daily_eod/2026-07-18"))
+
+    assert publication["version_dir"].is_absolute()
+    assert publication["publication_manifest_path"].is_absolute()
+    assert all(path.is_absolute() for path in publication["output_paths"].values())
+
+
+def test_parser_accepts_controlled_legacy_output_root_relative_path(tmp_path):
+    output_root = tmp_path / "outputs"
+    relative_path = (
+        "outputs/research/strategy_daily_eod/2026-07-18/strategy_runs/"
+        "mid_trend/publish-1/publication_manifest.json"
+    )
+
+    parsed = artifacts.parse_publication_manifest_path(
+        relative_path,
+        expected_strategy_id="mid_trend",
+        expected_trade_date="2026-07-18",
+        approved_research_roots=(output_root / "research",),
+        legacy_output_root=output_root,
+    )
+
+    assert parsed.path == output_root / "research/strategy_daily_eod/2026-07-18/strategy_runs/mid_trend/publish-1/publication_manifest.json"
+
+
+@pytest.mark.parametrize(
+    "value",
+    (
+        "other/research/strategy_daily_eod/2026-07-18/strategy_runs/mid_trend/publish-1/publication_manifest.json",
+        "outputs/../research/strategy_daily_eod/2026-07-18/strategy_runs/mid_trend/publish-1/publication_manifest.json",
+    ),
+)
+def test_parser_rejects_uncontrolled_relative_paths(tmp_path, value):
+    output_root = tmp_path / "outputs"
+
+    with pytest.raises(ValueError, match="unsafe publication manifest path"):
+        artifacts.parse_publication_manifest_path(
+            value,
+            approved_research_roots=(output_root / "research",),
+            legacy_output_root=output_root,
+        )
 
 
 def test_failed_version_write_leaves_no_final_version_or_mirrors(tmp_path, monkeypatch):

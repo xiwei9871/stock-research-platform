@@ -42,6 +42,7 @@ def parse_publication_manifest_path(
     expected_strategy_id: str | None = None,
     expected_trade_date: str | None = None,
     approved_research_roots: Iterable[str | Path] = (),
+    legacy_output_root: str | Path | None = None,
 ) -> ParsedPublicationManifestPath:
     """Parse one canonical immutable strategy publication manifest path."""
 
@@ -49,7 +50,6 @@ def parse_publication_manifest_path(
     if (
         not text
         or text != text.strip()
-        or not text.startswith("/")
         or "\\" in text
         or "%" in text
         or "?" in text
@@ -57,6 +57,20 @@ def parse_publication_manifest_path(
         or any(ord(character) < 32 for character in text)
     ):
         raise ValueError("unsafe publication manifest path")
+    if not text.startswith("/"):
+        relative_parts = text.split("/")
+        output_root = (
+            Path(os.path.abspath(Path(legacy_output_root)))
+            if legacy_output_root is not None
+            else None
+        )
+        if (
+            output_root is None
+            or any(part in {"", ".", ".."} for part in relative_parts)
+            or relative_parts[0] != output_root.name
+        ):
+            raise ValueError("unsafe publication manifest path")
+        text = str(output_root.parent.joinpath(*relative_parts))
     parts = text.split("/")[1:]
     if not parts or any(part in {"", ".", ".."} for part in parts):
         raise ValueError("unsafe publication manifest path components")
@@ -157,7 +171,7 @@ def write_strategy_publication_artifacts(
     if not isinstance(publication_identity, Mapping):
         raise ValueError("publication_identity must be a mapping")
 
-    output = Path(output_dir)
+    output = Path(output_dir).resolve()
     strategy_root = output / "strategy_runs" / _safe_component(strategy_id)
     strategy_root.mkdir(parents=True, exist_ok=True)
     publish_id = _build_publish_id(
