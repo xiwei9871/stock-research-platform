@@ -24,6 +24,11 @@ from stock_research.research_project_v2_1.cognition_audit import (
     compute_domain_coverage,
     validate_persisted_audit,
 )
+from stock_research.research_project_v2_1.cognition_render import (
+    canonical_render_hash,
+    render_cognition_report,
+    validate_persisted_report,
+)
 from stock_research.research_project_v2_1.layout import LayeredResearchLayout
 from stock_research.research_project_v2_1.schema import validate_v2_1_schema_payload
 
@@ -489,3 +494,100 @@ def test_eight_audit_answers_include_supporting_and_blocking_ids() -> None:
         "supporting_object_ids" in row and "blocking_object_ids" in row
         for row in audit["audit_answers"]
     )
+
+
+def render_package_fixture() -> dict:
+    package = capability_package_fixture()
+    package["research_framing"] = {
+        "topic": "AI compute interconnect and PCB cognition baseline",
+        "objective": "Bound existing cognition without filling evidence gaps.",
+        "model_scope": "demand_side_and_system_interconnect",
+        "included_scope": ["AI system interconnect"],
+        "excluded_scope": ["company mapping"],
+        "limitations": ["PCB manufacturing evidence is unavailable."],
+    }
+    package["claim_assessment_ledger"] = [
+        {
+            "claim_id": "CLM-002",
+            "claim_text": "Second claim.",
+            "claim_type": "inference",
+            "assessment_status": "insufficient",
+            "assessment_confidence": "low",
+            "grounding_status": "not_grounded",
+            "evidence_links": [],
+            "limitations": ["Limited evidence."],
+        },
+        {
+            "claim_id": "CLM-001",
+            "claim_text": "First grounded claim.",
+            "claim_type": "fact",
+            "assessment_status": "sufficient",
+            "assessment_confidence": "medium",
+            "grounding_status": "grounded",
+            "evidence_links": [
+                {
+                    "artifact_id": ARTIFACT_ID,
+                    "normalized_document_id": DOCUMENT_ID,
+                    "section_index": 43,
+                    "section_hash": SECTION_HASH,
+                }
+            ],
+            "limitations": ["Product-specific evidence."],
+        },
+    ]
+    package["unverified_mechanism_skeletons"] = [
+        {
+            "skeleton_id": "SKEL-001",
+            "domain": "signal_integrity",
+            "research_question": "How does rate affect signal integrity?",
+            "status": "unverified_hypothesis",
+            "evidence_gap_ids": ["GAP-001"],
+        }
+    ]
+    package["evidence_gap_referrals"] = [
+        {
+            "gap_id": "GAP-001",
+            "domain": "signal_integrity",
+            "blocked_question": "Signal integrity mechanism",
+            "why_insufficient": "No engineering evidence was acquired.",
+            "required_evidence_types": ["signal integrity standard"],
+            "automatic_acquisition_authorized": False,
+        }
+    ]
+    package["contradictions_and_uncertainties"] = [
+        {
+            "uncertainty_id": "UNC-001",
+            "domain": "network_fabric",
+            "uncertainty_type": "unknown_date",
+            "summary": "Publication date remains unknown.",
+        }
+    ]
+    return package
+
+
+def test_render_report_is_canonical_and_order_independent() -> None:
+    first = render_package_fixture()
+    second = deepcopy(first)
+    second["claim_assessment_ledger"].reverse()
+    rendered = render_cognition_report(first)
+    assert rendered == render_cognition_report(second)
+    assert rendered.endswith(b"\n") and not rendered.endswith(b"\n\n")
+    assert b"\r" not in rendered
+    assert canonical_render_hash(first) == canonical_render_hash(second)
+
+
+def test_render_report_contains_clear_grounded_skeleton_gap_labels() -> None:
+    text = render_cognition_report(render_package_fixture()).decode("utf-8")
+    assert "[GROUNDED]" in text
+    assert "[SKELETON — NOT VERIFIED]" in text
+    assert "[EVIDENCE GAP]" in text
+    assert "[UNCERTAINTY]" in text
+    assert "Evidence: evidence_artifact:" in text
+
+
+def test_validate_report_rejects_added_claim_or_hash_drift() -> None:
+    package = render_package_fixture()
+    report = render_cognition_report(package)
+    validate_persisted_report(package, report)
+    with pytest.raises(ResearchProjectV2Error):
+        validate_persisted_report(package, report + b"Unregistered conclusion.\n")
