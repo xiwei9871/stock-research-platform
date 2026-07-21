@@ -133,6 +133,21 @@ def _previous_json():
     }
 
 
+def _candidate_identities(*, run_id: bool = False):
+    identities = []
+    for index, strategy_id in enumerate(STRATEGY_IDS):
+        item = {
+            "strategyId": strategy_id,
+            "tradeDate": TRADE_DATE,
+            "publishId": f"{strategy_id}-publish-{TRADE_DATE}",
+            "publishStartedAt": f"{TRADE_DATE}T{index + 1:02d}:00:00+00:00",
+        }
+        if run_id:
+            item["runId"] = f"run-{item['publishId']}"
+        identities.append(item)
+    return identities
+
+
 def test_parse_report_accepts_success_and_collects_safe_artifacts(tmp_path):
     report_path = _write_report(tmp_path / "attempt-1" / "eod-browser-acceptance.json")
 
@@ -148,6 +163,26 @@ def test_parse_report_accepts_success_and_collects_safe_artifacts(tmp_path):
     assert result.failure_classes == ()
     assert str(report_path) in result.artifact_paths
     assert "test-results/eod/trace.zip" in result.artifact_paths
+
+
+def test_browser_acceptance_snapshot_is_deeply_immutable_and_json_serializable(tmp_path):
+    report_path = _write_report(tmp_path / "eod-browser-acceptance.json")
+    result = parse_browser_acceptance_report(
+        report_path,
+        expected_run_id=RUN_ID,
+        expected_trade_date=TRADE_DATE,
+        exit_code=0,
+    )
+
+    with pytest.raises(TypeError):
+        result.snapshot["tradeDate"] = "2026-07-19"
+    with pytest.raises(TypeError):
+        result.snapshot["publications"][0]["publishId"] = "mutated"
+    with pytest.raises((AttributeError, TypeError)):
+        result.snapshot["publications"].append({})
+    serialized = json.loads(json.dumps(result.snapshot))
+    assert serialized["tradeDate"] == TRADE_DATE
+    assert serialized["publications"][0]["publishId"].startswith("lhb_shortline")
 
 
 def test_parse_report_maps_warning_only_failure_to_degraded(tmp_path):
@@ -229,6 +264,71 @@ def test_success_report_requires_every_required_gate_to_have_passed(tmp_path):
         )
 
 
+def test_degraded_report_requires_every_required_gate_to_have_passed(tmp_path):
+    payload = _report(status="degraded", failures=["optional chart drift"])
+    payload["tests"][0]["status"] = "failed"
+    payload["tests"][0]["severity"] = "warning"
+    payload["tests"][0]["failures"] = ["optional chart drift"]
+    payload["tests"][0]["attemptHistory"][0]["status"] = "failed"
+    payload["tests"][0]["attemptHistory"][0]["failures"] = ["optional chart drift"]
+    path = tmp_path / "eod-browser-acceptance.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(BrowserAcceptanceError, match="gate_status"):
+        parse_browser_acceptance_report(
+            path,
+            expected_run_id=RUN_ID,
+            expected_trade_date=TRADE_DATE,
+            exit_code=0,
+        )
+
+
+@pytest.mark.parametrize(
+    "top_level_failure",
+    [
+        "api_ui_mismatch: hidden consistency failure",
+        "publish_id mismatch hidden as warning",
+        "performance_date_mismatch",
+        "175.29 return unit regression",
+        "contract_mismatch",
+        "publication rollback",
+    ],
+)
+def test_degraded_report_rejects_nonwarning_or_nonrepairable_top_level_failures(
+    tmp_path, top_level_failure
+):
+    path = _write_report(
+        tmp_path / "eod-browser-acceptance.json",
+        status="degraded",
+        failures=["optional chart label drift"],
+    )
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["tests"].append(
+        {
+            "testId": "warning-test",
+            "title": "@eod @warning optional chart",
+            "projectName": "eod-chromium",
+            "retry": 0,
+            "status": "failed",
+            "durationMs": 1,
+            "failures": ["optional chart label drift"],
+            "attachments": [],
+            "severity": "warning",
+            "attemptHistory": [],
+        }
+    )
+    payload["failures"].append(top_level_failure)
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(BrowserAcceptanceError, match="degraded_failure_shape"):
+        parse_browser_acceptance_report(
+            path,
+            expected_run_id=RUN_ID,
+            expected_trade_date=TRADE_DATE,
+            exit_code=0,
+        )
+
+
 @pytest.mark.parametrize(
     ("mutation", "code"),
     [
@@ -287,7 +387,10 @@ def test_parse_report_rejects_exit_status_mismatch(tmp_path, status, exit_code):
         ("pageerror: white screen", "presentation_runtime"),
         ("critical_request_http_status:/api/foo:503", "critical_request_transport"),
         ("stale_cache: old selector payload", "stale_cache"),
-        ("api_ui_mismatch: 52.40 vs 175.29", "api_ui_mismatch"),
+        (
+            "api_ui_mismatch: 52.40 vs 175.29",
+            ("api_ui_mismatch", "return_unit"),
+        ),
         ("publish_id mismatch", "publication_identity"),
         ("performance date regression", "date_regression"),
         ("total return unit regression 175.29%", "return_unit"),
@@ -297,7 +400,9 @@ def test_parse_report_rejects_exit_status_mismatch(tmp_path, status, exit_code):
     ],
 )
 def test_failure_classification_is_fixed_and_unknown_is_nonrepairable(failure, expected):
-    assert classify_browser_failures([failure]) == (expected,)
+    assert classify_browser_failures([failure]) == (
+        expected if isinstance(expected, tuple) else (expected,)
+    )
 
 
 @pytest.mark.parametrize(
@@ -320,6 +425,36 @@ def test_failure_classification_is_fixed_and_unknown_is_nonrepairable(failure, e
 )
 def test_failure_classification_uses_gate_context_as_a_fail_closed_fallback(failure, expected):
     assert classify_browser_failures([failure]) == (expected,)
+
+
+@pytest.mark.parametrize(
+    ("failure", "expected"),
+    [
+        (
+            "@eod-gate-candidate-consistency: pageerror while comparing values",
+            ("api_ui_mismatch",),
+        ),
+        (
+            "stale_cache api_ui_mismatch: old cache and wrong value",
+            ("api_ui_mismatch", "stale_cache"),
+        ),
+        (
+            "pageerror plus publication rollback",
+            ("publish_rollback", "presentation_runtime"),
+        ),
+    ],
+)
+def test_failure_classification_preserves_nonrepairable_matches_and_gate_priority(
+    failure, expected
+):
+    assert classify_browser_failures([failure]) == expected
+
+
+def test_failure_classification_keeps_unknown_alongside_repairable_failure():
+    assert classify_browser_failures(["pageerror", "unclassified browser failure"]) == (
+        "unknown",
+        "presentation_runtime",
+    )
 
 
 class FakeProcess:
@@ -364,6 +499,7 @@ def test_runner_uses_exact_command_isolated_env_nonreuse_and_private_logs(tmp_pa
         run_id=RUN_ID,
         revision=REVISION,
         output_dir=tmp_path,
+        candidate_publications=_report()["candidateSnapshot"]["publications"],
         previous_publications=_previous_json(),
         popen=popen,
         runtime_checker=lambda _dashboard: None,
@@ -402,6 +538,7 @@ def test_missing_runtime_is_an_infrastructure_blocker_without_starting_process(t
         run_id=RUN_ID,
         revision=REVISION,
         output_dir=tmp_path,
+        candidate_publications=_candidate_identities(),
         previous_publications=_previous_json(),
         popen=lambda *args, **kwargs: starts.append((args, kwargs)),
         runtime_checker=lambda _dashboard: (_ for _ in ()).throw(
@@ -446,6 +583,7 @@ def test_runner_refuses_a_preexisting_attempt_directory_to_avoid_stale_report_re
         run_id=RUN_ID,
         revision=REVISION,
         output_dir=tmp_path,
+        candidate_publications=_candidate_identities(),
         previous_publications=_previous_json(),
         popen=lambda *args, **kwargs: starts.append((args, kwargs)),
         runtime_checker=lambda _dashboard: None,
@@ -466,6 +604,7 @@ def test_runner_validates_explicit_previous_publication_schema_before_process_st
         run_id=RUN_ID,
         revision=REVISION,
         output_dir=tmp_path,
+        candidate_publications=_candidate_identities(),
         previous_publications={},
         previous_publication_loader=lambda: loader_calls.append("called") or _previous_json(),
         popen=lambda *args, **kwargs: starts.append((args, kwargs)),
@@ -477,6 +616,41 @@ def test_runner_validates_explicit_previous_publication_schema_before_process_st
     assert "previous_publication" in result.message
     assert loader_calls == []
     assert starts == []
+
+
+def test_runner_passes_explicit_candidate_identity_to_default_previous_loader(
+    tmp_path, monkeypatch
+):
+    observed = []
+    candidate_identities = _candidate_identities(run_id=True)
+
+    def previous_loader(**kwargs):
+        observed.append(kwargs)
+        return _previous_json()
+
+    def popen(_command, **kwargs):
+        def write_success(call_kwargs):
+            _write_report(
+                Path(call_kwargs["env"]["PLAYWRIGHT_EOD_OUTPUT_DIR"])
+                / "eod-browser-acceptance.json"
+            )
+
+        return FakeProcess(kwargs, write_success)
+
+    monkeypatch.setattr(acceptance, "load_previous_official_publications", previous_loader)
+
+    result = run_browser_acceptance(
+        trade_date=TRADE_DATE,
+        run_id=RUN_ID,
+        revision=REVISION,
+        output_dir=tmp_path,
+        candidate_publications=candidate_identities,
+        popen=popen,
+        runtime_checker=lambda _dashboard: None,
+    )
+
+    assert result.status == RepairStatus.SUCCESS
+    assert observed == [{"candidate_publications": candidate_identities}]
 
 
 def test_timeout_terminates_then_kills_process_group_and_keeps_logs(tmp_path, monkeypatch):
@@ -498,6 +672,7 @@ def test_timeout_terminates_then_kills_process_group_and_keeps_logs(tmp_path, mo
         run_id=RUN_ID,
         revision=REVISION,
         output_dir=tmp_path,
+        candidate_publications=_candidate_identities(),
         previous_publications=_previous_json(),
         popen=lambda *args, **kwargs: process,
         runtime_checker=lambda _dashboard: None,
@@ -540,6 +715,7 @@ def test_repairable_failure_clears_cache_once_and_reruns_same_command(tmp_path):
         run_id=RUN_ID,
         revision=REVISION,
         output_dir=tmp_path,
+        candidate_publications=_candidate_identities(),
         previous_publications=_previous_json(),
         popen=popen,
         runtime_checker=lambda _dashboard: None,
@@ -563,6 +739,7 @@ def test_repairable_failure_clears_cache_once_and_reruns_same_command(tmp_path):
     "failures",
     [
         ["api_ui_mismatch: total return differs"],
+        ["stale_cache api_ui_mismatch: mixed single failure"],
         ["pageerror", "publish_id mismatch"],
         ["publication rollback"],
     ],
@@ -590,6 +767,7 @@ def test_nonrepairable_or_mixed_failures_never_clear_cache(tmp_path, failures):
         run_id=RUN_ID,
         revision=REVISION,
         output_dir=tmp_path,
+        candidate_publications=_candidate_identities(),
         previous_publications=_previous_json(),
         popen=popen,
         runtime_checker=lambda _dashboard: None,
@@ -624,6 +802,7 @@ def test_cache_clear_failure_blocks_without_second_attempt(tmp_path):
         run_id=RUN_ID,
         revision=REVISION,
         output_dir=tmp_path,
+        candidate_publications=_candidate_identities(),
         previous_publications=_previous_json(),
         popen=popen,
         runtime_checker=lambda _dashboard: None,
@@ -656,6 +835,7 @@ def test_runner_redacts_stderr_tail_secrets_and_absolute_paths(tmp_path):
         run_id=RUN_ID,
         revision=REVISION,
         output_dir=tmp_path,
+        candidate_publications=_candidate_identities(),
         previous_publications=_previous_json(),
         popen=popen,
         runtime_checker=lambda _dashboard: None,
@@ -670,6 +850,63 @@ def test_runner_redacts_stderr_tail_secrets_and_absolute_paths(tmp_path):
     assert "<redacted>" in result.message
     raw_stderr = (tmp_path / "attempt-1" / "stderr.log").read_text(encoding="utf-8")
     assert "hidden-token" in raw_stderr
+
+
+def test_runner_missing_report_is_explicit_infrastructure_failure_with_logs_only(tmp_path):
+    result = run_browser_acceptance(
+        trade_date=TRADE_DATE,
+        run_id=RUN_ID,
+        revision=REVISION,
+        output_dir=tmp_path,
+        candidate_publications=_candidate_identities(),
+        previous_publications=_previous_json(),
+        popen=lambda _command, **kwargs: FakeProcess(kwargs, exit_code=2),
+        runtime_checker=lambda _dashboard: None,
+    )
+
+    assert result.status == RepairStatus.FAILED
+    assert result.failure_classes == ("infrastructure",)
+    assert "browser_acceptance_report_missing" in result.message
+    assert len(result.attempts) == 1
+    assert result.attempts[0].exit_code == 2
+    assert set(Path(path).name for path in result.artifact_paths) == {
+        "stdout.log",
+        "stderr.log",
+    }
+
+
+def test_runner_malformed_report_is_explicit_infrastructure_failure_and_keeps_report(tmp_path):
+    def popen(_command, **kwargs):
+        def write_malformed(call_kwargs):
+            report = (
+                Path(call_kwargs["env"]["PLAYWRIGHT_EOD_OUTPUT_DIR"])
+                / "eod-browser-acceptance.json"
+            )
+            report.write_text("{not-json", encoding="utf-8")
+
+        return FakeProcess(kwargs, write_malformed, exit_code=1)
+
+    result = run_browser_acceptance(
+        trade_date=TRADE_DATE,
+        run_id=RUN_ID,
+        revision=REVISION,
+        output_dir=tmp_path,
+        candidate_publications=_candidate_identities(),
+        previous_publications=_previous_json(),
+        popen=popen,
+        runtime_checker=lambda _dashboard: None,
+    )
+
+    assert result.status == RepairStatus.FAILED
+    assert result.failure_classes == ("infrastructure",)
+    assert "browser_acceptance_report_malformed" in result.message
+    assert len(result.attempts) == 1
+    assert result.attempts[0].exit_code == 1
+    assert {Path(path).name for path in result.artifact_paths} == {
+        "stdout.log",
+        "stderr.log",
+        "eod-browser-acceptance.json",
+    }
 
 
 def _manifest_row(
@@ -708,6 +945,18 @@ def _manifest_row(
             },
         },
     }
+
+
+def _candidate_identity_from_row(row, strategy_id, *, include_run_id=True):
+    identity = {
+        "strategyId": strategy_id,
+        "tradeDate": str(row["trade_date"]),
+        "publishId": row["metadata"]["publish_id"],
+        "publishStartedAt": str(row["started_at"]),
+    }
+    if include_run_id:
+        identity["runId"] = row["run_id"]
+    return identity
 
 
 def test_previous_publication_loader_selects_latest_successful_identity_without_path_inference():
@@ -771,13 +1020,132 @@ def test_previous_loader_excludes_the_newest_candidate_version_for_the_runner(pr
 
     payload = load_previous_official_publications(
         reader=lambda: rows,
-        candidate_trade_date=TRADE_DATE,
+        candidate_publications=[
+            {
+                "strategyId": strategy_id,
+                "tradeDate": TRADE_DATE,
+                "publishId": f"{strategy_id}-candidate",
+                "publishStartedAt": f"{TRADE_DATE}T1{index + 1}:00:00+00:00",
+                "runId": f"run-{strategy_id}-candidate",
+            }
+            for index, strategy_id in enumerate(STRATEGY_IDS)
+        ],
     )
 
     assert [item["publishId"] for item in payload["publications"]] == [
         f"{strategy_id}-official" for strategy_id in STRATEGY_IDS
     ]
     assert all(item["tradeDate"] == prior_trade_date for item in payload["publications"])
+
+
+def test_previous_loader_matches_candidate_identity_not_latest_row_on_date():
+    rows = []
+    candidate_identities = []
+    for index, strategy_id in enumerate(STRATEGY_IDS):
+        prior = _manifest_row(
+            strategy_id,
+            trade_date="2026-07-19",
+            started_at=f"2026-07-19T0{index + 1}:00:00+00:00",
+            publish_id=f"{strategy_id}-official",
+        )
+        candidate = _manifest_row(
+            strategy_id,
+            trade_date=TRADE_DATE,
+            started_at=f"{TRADE_DATE}T1{index + 1}:00:00+00:00",
+            publish_id=f"{strategy_id}-candidate",
+        )
+        unrelated_later = _manifest_row(
+            strategy_id,
+            trade_date=TRADE_DATE,
+            started_at=f"{TRADE_DATE}T2{index + 1}:00:00+00:00",
+            publish_id=f"{strategy_id}-unexpected-later",
+        )
+        rows.extend([prior, candidate, unrelated_later])
+        candidate_identities.append(_candidate_identity_from_row(candidate, strategy_id))
+
+    with pytest.raises(BrowserAcceptanceError, match="candidate_not_latest"):
+        load_previous_official_publications(
+            reader=lambda: rows,
+            candidate_publications=candidate_identities,
+        )
+
+
+@pytest.mark.parametrize("conflict_kind", ["missing", "publish_started_at", "run_id"])
+def test_previous_loader_fails_closed_when_candidate_identity_cannot_match_uniquely(conflict_kind):
+    rows = []
+    candidate_identities = []
+    for index, strategy_id in enumerate(STRATEGY_IDS):
+        prior = _manifest_row(
+            strategy_id,
+            trade_date="2026-07-19",
+            started_at=f"2026-07-19T0{index + 1}:00:00+00:00",
+            publish_id=f"{strategy_id}-official",
+        )
+        candidate = _manifest_row(
+            strategy_id,
+            trade_date=TRADE_DATE,
+            started_at=f"{TRADE_DATE}T1{index + 1}:00:00+00:00",
+            publish_id=f"{strategy_id}-candidate",
+        )
+        rows.extend([prior, candidate])
+        candidate_identities.append(_candidate_identity_from_row(candidate, strategy_id))
+    if conflict_kind == "missing":
+        candidate_identities[0].pop("publishId")
+    elif conflict_kind == "publish_started_at":
+        candidate_identities[0]["publishStartedAt"] = f"{TRADE_DATE}T23:59:00+00:00"
+    else:
+        candidate_identities[0]["runId"] = "different-run"
+
+    with pytest.raises(BrowserAcceptanceError, match="previous_publication_candidate"):
+        load_previous_official_publications(
+            reader=lambda: rows,
+            candidate_publications=candidate_identities,
+        )
+
+
+def test_previous_loader_rejects_tied_prior_identity_and_selects_each_strategy_independently():
+    rows = []
+    candidates = []
+    for index, strategy_id in enumerate(STRATEGY_IDS):
+        prior_date = TRADE_DATE if index == 0 else "2026-07-19"
+        prior = _manifest_row(
+            strategy_id,
+            trade_date=prior_date,
+            started_at=f"{prior_date}T0{index + 1}:00:00+00:00",
+            publish_id=f"{strategy_id}-official",
+        )
+        candidate = _manifest_row(
+            strategy_id,
+            trade_date=TRADE_DATE,
+            started_at=f"{TRADE_DATE}T1{index + 1}:00:00+00:00",
+            publish_id=f"{strategy_id}-candidate",
+        )
+        rows.extend([prior, candidate])
+        candidates.append(_candidate_identity_from_row(candidate, strategy_id))
+
+    payload = load_previous_official_publications(
+        reader=lambda: rows,
+        candidate_publications=candidates,
+    )
+
+    assert payload["publications"][0]["tradeDate"] == TRADE_DATE
+    assert [item["tradeDate"] for item in payload["publications"][1:]] == [
+        "2026-07-19",
+        "2026-07-19",
+    ]
+
+    tied = dict(rows[0])
+    tied["metadata"] = json.loads(json.dumps(rows[0]["metadata"]))
+    tied["metadata"]["publish_id"] = "lhb-shortline-tied"
+    tied["metadata"]["summary"]["publish_id"] = "lhb-shortline-tied"
+    tied["run_id"] = "run-lhb-shortline-tied"
+    rows.append(tied)
+
+    with pytest.raises(BrowserAcceptanceError, match="prior_ambiguous"):
+        load_previous_official_publications(
+            reader=lambda: rows,
+            candidate_publications=candidates,
+        )
 
 
 def test_previous_loader_accepts_native_database_date_timestamp_and_decimal_like_values():

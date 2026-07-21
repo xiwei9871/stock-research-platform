@@ -79,11 +79,48 @@ _PUBLICATION_KEYS = frozenset(
     }
 )
 _PREVIOUS_KEYS = frozenset({"schemaVersion", "publications"})
+_CANDIDATE_IDENTITY_REQUIRED_KEYS = frozenset(
+    {"strategyId", "tradeDate", "publishId", "publishStartedAt"}
+)
+_CANDIDATE_IDENTITY_ALLOWED_KEYS = _PUBLICATION_KEYS | {"runId"}
 _GATE_PATTERN = re.compile(r"(?:^|\s)@eod-gate-([a-z0-9_-]+)(?=\s|$)")
 
 
 class BrowserAcceptanceError(RuntimeError):
     """Fail-closed browser acceptance contract or infrastructure error."""
+
+
+class FrozenJsonDict(dict[str, object]):
+    """A JSON-serializable mapping that rejects mutation at every exposed layer."""
+
+    def _immutable(self, *_args: object, **_kwargs: object) -> None:
+        raise TypeError("browser acceptance snapshot is immutable")
+
+    __setitem__ = _immutable
+    __delitem__ = _immutable
+    clear = _immutable
+    pop = _immutable
+    popitem = _immutable
+    setdefault = _immutable
+    update = _immutable
+    __ior__ = _immutable
+
+    def __deepcopy__(self, _memo: dict[int, object]) -> FrozenJsonDict:
+        return self
+
+
+def _freeze_json(value: object) -> object:
+    if isinstance(value, Mapping):
+        return FrozenJsonDict(
+            {str(key): _freeze_json(nested) for key, nested in value.items()}
+        )
+    if isinstance(value, (list, tuple)):
+        return tuple(_freeze_json(item) for item in value)
+    return value
+
+
+def _empty_snapshot() -> FrozenJsonDict:
+    return FrozenJsonDict()
 
 
 @dataclass(frozen=True)
@@ -95,7 +132,7 @@ class BrowserAcceptanceAttempt:
     failure_classes: tuple[str, ...] = ()
     warnings: tuple[str, ...] = ()
     artifact_paths: tuple[str, ...] = ()
-    snapshot: dict[str, object] = field(default_factory=dict)
+    snapshot: Mapping[str, object] = field(default_factory=_empty_snapshot)
     message: str = ""
 
 
@@ -108,7 +145,7 @@ class BrowserAcceptanceResult:
     failure_classes: tuple[str, ...] = ()
     warnings: tuple[str, ...] = ()
     artifact_paths: tuple[str, ...] = ()
-    snapshot: dict[str, object] = field(default_factory=dict)
+    snapshot: Mapping[str, object] = field(default_factory=_empty_snapshot)
     started_at: str = ""
     ended_at: str = ""
     message: str = ""
@@ -318,6 +355,79 @@ def _validate_previous_publications_payload(value: object) -> dict[str, object]:
     return {"schemaVersion": PREVIOUS_SCHEMA_VERSION, "publications": normalized}
 
 
+def _validate_candidate_publication_identities(
+    value: object,
+    *,
+    expected_trade_date: str | None = None,
+) -> tuple[dict[str, str], ...]:
+    if not isinstance(value, (list, tuple)):
+        raise _error("previous_publication_candidate_identity_schema")
+    if len(value) != len(OFFICIAL_STRATEGY_IDS):
+        raise _error("previous_publication_candidate_identity_count")
+    normalized: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for index, raw in enumerate(value):
+        candidate = _required_object(
+            raw, f"previous_publication_candidate_identity:{index}"
+        )
+        keys = frozenset(candidate)
+        if (
+            not _CANDIDATE_IDENTITY_REQUIRED_KEYS.issubset(keys)
+            or not keys.issubset(_CANDIDATE_IDENTITY_ALLOWED_KEYS)
+        ):
+            raise _error("previous_publication_candidate_identity_schema", index)
+        strategy_id = _required_string(
+            candidate.get("strategyId"),
+            f"previous_publication_candidate_strategy_id:{index}",
+        )
+        if strategy_id not in OFFICIAL_STRATEGY_IDS or strategy_id in seen:
+            raise _error("previous_publication_candidate_strategy_inventory", strategy_id)
+        seen.add(strategy_id)
+        trade_date = _required_date(
+            candidate.get("tradeDate"),
+            f"previous_publication_candidate_trade_date:{strategy_id}",
+        )
+        if expected_trade_date is not None and trade_date != expected_trade_date:
+            raise _error(
+                "previous_publication_candidate_trade_date_mismatch", strategy_id
+            )
+        item = {
+            "strategyId": strategy_id,
+            "tradeDate": trade_date,
+            "publishId": _required_string(
+                candidate.get("publishId"),
+                f"previous_publication_candidate_publish_id:{strategy_id}",
+            ),
+            "publishStartedAt": _required_timestamp(
+                candidate.get("publishStartedAt"),
+                f"previous_publication_candidate_publish_started_at:{strategy_id}",
+            ),
+        }
+        if "runId" in candidate:
+            item["runId"] = _required_string(
+                candidate.get("runId"),
+                f"previous_publication_candidate_run_id:{strategy_id}",
+            )
+        if "totalReturnPct" in candidate:
+            _required_number(
+                candidate.get("totalReturnPct"),
+                f"previous_publication_candidate_total_return_pct:{strategy_id}",
+            )
+        for optional_key in ("contractId", "artifactVersion"):
+            if optional_key in candidate:
+                _required_string(
+                    candidate.get(optional_key),
+                    f"previous_publication_candidate_{optional_key}:{strategy_id}",
+                )
+        normalized.append(item)
+    if seen != set(OFFICIAL_STRATEGY_IDS):
+        raise _error("previous_publication_candidate_strategy_inventory")
+    return tuple(
+        next(item for item in normalized if item["strategyId"] == strategy_id)
+        for strategy_id in OFFICIAL_STRATEGY_IDS
+    )
+
+
 def _safe_report_artifact_path(value: object) -> str:
     text = _required_string(value, "browser_acceptance_artifact_path_invalid")
     if PurePosixPath(text).is_absolute() or PureWindowsPath(text).is_absolute():
@@ -391,27 +501,33 @@ def classify_browser_failures(failures: Iterable[str] | Mapping[str, object]) ->
         values = raw_failures if isinstance(raw_failures, list) else [raw_failures]
     else:
         values = list(failures)
-    classes: list[str] = []
+    classes: set[str] = set()
     for value in values:
         text = str(value).lower()
-        if "stale_cache" in text or "stale cache" in text or "cached selector" in text:
-            failure_class = "stale_cache"
-        elif "publish_rollback" in text or "publication rollback" in text or "not_newer" in text:
-            failure_class = "publish_rollback"
-        elif "contract_mismatch" in text or "contract mismatch" in text:
-            failure_class = "contract_mismatch"
-        elif "api_ui_mismatch" in text or "api/ui mismatch" in text or "api ui mismatch" in text:
-            failure_class = "api_ui_mismatch"
-        elif (
+        matches: set[str] = set()
+        candidate_gate = "eod-gate-candidate-consistency" in text
+        publication_gate = "eod-gate-publication-consistency" in text
+        runtime_gate = "eod-gate-runtime-deep-links" in text
+        if candidate_gate:
+            matches.add("api_ui_mismatch")
+        if publication_gate:
+            matches.add("publication_identity")
+        if "publish_rollback" in text or "publication rollback" in text or "not_newer" in text:
+            matches.add("publish_rollback")
+        if "contract_mismatch" in text or "contract mismatch" in text:
+            matches.add("contract_mismatch")
+        if "api_ui_mismatch" in text or "api/ui mismatch" in text or "api ui mismatch" in text:
+            matches.add("api_ui_mismatch")
+        if (
             "175.29" in text
             or "return_unit" in text
             or "return unit" in text
             or ("total return" in text and "unit" in text)
         ):
-            failure_class = "return_unit"
-        elif "date_regression" in text or "date regression" in text:
-            failure_class = "date_regression"
-        elif any(
+            matches.add("return_unit")
+        if "date_regression" in text or "date regression" in text:
+            matches.add("date_regression")
+        if any(
             token in text
             for token in (
                 "performance_date_mismatch",
@@ -420,8 +536,8 @@ def classify_browser_failures(failures: Iterable[str] | Mapping[str, object]) ->
                 "trade_date_mismatch",
             )
         ):
-            failure_class = "date_regression"
-        elif any(
+            matches.add("date_regression")
+        if any(
             token in text
             for token in (
                 "publish_id",
@@ -434,42 +550,57 @@ def classify_browser_failures(failures: Iterable[str] | Mapping[str, object]) ->
                 "publication identity",
             )
         ):
-            failure_class = "publication_identity"
-        elif any(
-            token in text
-            for token in (
-                "critical_request",
-                "requestfailed",
-                "request failed",
-                "transport error",
-                "network error",
-            )
-        ):
-            failure_class = "critical_request_transport"
-        elif any(
-            token in text
-            for token in (
-                "pageerror",
-                "page error",
-                "console error",
-                "white screen",
-                "wrong route context",
-                "route context",
-                "presentation_runtime",
-            )
-        ):
-            failure_class = "presentation_runtime"
-        elif "eod-gate-publication-consistency" in text:
-            failure_class = "publication_identity"
-        elif "eod-gate-candidate-consistency" in text:
-            failure_class = "api_ui_mismatch"
-        elif "eod-gate-runtime-deep-links" in text:
-            failure_class = "presentation_runtime"
-        else:
-            failure_class = "unknown"
-        if failure_class not in classes:
-            classes.append(failure_class)
-    return tuple(classes)
+            matches.add("publication_identity")
+        consistency_gate = candidate_gate or publication_gate
+        if not consistency_gate:
+            if "stale_cache" in text or "stale cache" in text or "cached selector" in text:
+                matches.add("stale_cache")
+            if any(
+                token in text
+                for token in (
+                    "critical_request",
+                    "requestfailed",
+                    "request failed",
+                    "transport error",
+                    "network error",
+                )
+            ):
+                matches.add("critical_request_transport")
+            if any(
+                token in text
+                for token in (
+                    "pageerror",
+                    "page error",
+                    "console error",
+                    "white screen",
+                    "wrong route context",
+                    "route context",
+                    "presentation_runtime",
+                )
+            ):
+                matches.add("presentation_runtime")
+            if runtime_gate and not matches:
+                matches.add("presentation_runtime")
+        if not matches:
+            matches.add("unknown")
+        classes.update(matches)
+    classification_order = (
+        "api_ui_mismatch",
+        "publication_identity",
+        "date_regression",
+        "return_unit",
+        "contract_mismatch",
+        "publish_rollback",
+        "unknown",
+        "stale_cache",
+        "critical_request_transport",
+        "presentation_runtime",
+    )
+    return tuple(item for item in classification_order if item in classes)
+
+
+def _failure_corresponds_to_warning(failure: str, warning: str) -> bool:
+    return failure == warning or failure.endswith(f": {warning}")
 
 
 def parse_browser_acceptance_report(
@@ -530,10 +661,31 @@ def parse_browser_acceptance_report(
     ]
     if status_text == "success" and (blocking_failures or warning_failures or top_level_failures):
         raise _error("browser_acceptance_report_success_has_failures")
-    if status_text == "success" and any(status != "passed" for status in gate_statuses.values()):
+    if status_text in {"success", "degraded"} and any(
+        status != "passed" for status in gate_statuses.values()
+    ):
         raise _error("browser_acceptance_gate_status")
-    if status_text == "degraded" and (blocking_failures or not warning_failures):
-        raise _error("browser_acceptance_report_degraded_failure_shape")
+    if status_text == "degraded":
+        top_level_classes = classify_browser_failures(top_level_failures)
+        degraded_forbidden = NONREPAIRABLE_FAILURE_CLASSES - {"unknown", "infrastructure"}
+        nonrepairable_top_level = set(top_level_classes) & degraded_forbidden
+        top_matches_warnings = all(
+            any(_failure_corresponds_to_warning(failure, warning) for warning in warning_failures)
+            for failure in top_level_failures
+        )
+        warnings_have_top_match = all(
+            any(_failure_corresponds_to_warning(failure, warning) for failure in top_level_failures)
+            for warning in warning_failures
+        )
+        if (
+            blocking_failures
+            or not warning_failures
+            or not top_level_failures
+            or nonrepairable_top_level
+            or not top_matches_warnings
+            or not warnings_have_top_match
+        ):
+            raise _error("browser_acceptance_report_degraded_failure_shape")
     if status_text == "failed" and not (blocking_failures or top_level_failures):
         raise _error("browser_acceptance_report_failed_without_failure")
 
@@ -575,7 +727,7 @@ def parse_browser_acceptance_report(
         failure_classes=failure_classes,
         warnings=warning_text,
         artifact_paths=_dedupe(artifact_paths),
-        snapshot=snapshot,
+        snapshot=_freeze_json(snapshot),
         started_at=started_at,
         ended_at=ended_at,
         message="; ".join(message_parts) or f"browser acceptance {status.value}",
@@ -842,7 +994,7 @@ def _result_from_attempts(
         artifact_paths=_dedupe(
             path for attempt in attempts for path in attempt.artifact_paths
         ),
-        snapshot=final.snapshot if final else {},
+        snapshot=final.snapshot if final else _empty_snapshot(),
         started_at=started_at,
         ended_at=ended_at,
         message=override_message or (final.message if final else "browser acceptance failed"),
@@ -856,6 +1008,7 @@ def run_browser_acceptance(
     run_id: str,
     revision: str,
     output_dir: str | Path,
+    candidate_publications: Sequence[Mapping[str, object]],
     previous_publications: Mapping[str, object] | None = None,
     cache_clearer: Callable[[], object] | None = None,
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
@@ -880,6 +1033,10 @@ def run_browser_acceptance(
     started_at = _utc_now()
     overall_started = time.monotonic()
     try:
+        validated_candidates = _validate_candidate_publication_identities(
+            candidate_publications,
+            expected_trade_date=validated_trade_date,
+        )
         runtime_checker(Path(dashboard_root))
         if previous_publications is not None:
             previous = previous_publications
@@ -887,7 +1044,7 @@ def run_browser_acceptance(
             previous = previous_publication_loader()
         else:
             previous = load_previous_official_publications(
-                candidate_trade_date=validated_trade_date
+                candidate_publications=list(validated_candidates)
             )
         previous = _validate_previous_publications_payload(previous)
         previous_json = _stable_json(previous)
@@ -999,6 +1156,10 @@ def _row_trade_date(row: Mapping[str, object], strategy_id: str) -> str:
     return trade_date
 
 
+def _timestamp_value(value: object, code: str) -> datetime:
+    return datetime.fromisoformat(_required_timestamp(value, code))
+
+
 def _same_explicit_value(
     containers: Sequence[Mapping[str, object]], key: str, code: str
 ) -> str:
@@ -1085,12 +1246,44 @@ def _previous_publication_from_row(
     }
 
 
+def _validated_publication_row(
+    row: Mapping[str, object], strategy_id: str
+) -> tuple[dict[str, object], datetime, str]:
+    publication = _previous_publication_from_row(row, strategy_id)
+    started_at = _timestamp_value(
+        row.get("started_at"), f"previous_publication_publish_started_at:{strategy_id}"
+    )
+    run_id = _required_string(
+        row.get("run_id"), f"previous_publication_run_id:{strategy_id}"
+    )
+    return publication, started_at, run_id
+
+
+def _select_unique_latest_prior(
+    rows: Sequence[tuple[Mapping[str, object], dict[str, object], datetime, str]],
+    strategy_id: str,
+) -> Mapping[str, object]:
+    if not rows:
+        raise _error("previous_publication_missing_before_candidate", strategy_id)
+    latest_trade_date = max(str(publication["tradeDate"]) for _, publication, _, _ in rows)
+    latest_date_rows = [
+        item for item in rows if str(item[1]["tradeDate"]) == latest_trade_date
+    ]
+    latest_started_at = max(started_at for _, _, started_at, _ in latest_date_rows)
+    latest = [
+        item for item in latest_date_rows if item[2] == latest_started_at
+    ]
+    if len(latest) != 1:
+        raise _error("previous_publication_prior_ambiguous", strategy_id)
+    return latest[0][0]
+
+
 def load_previous_official_publications(
     *,
     reader: Callable[[], Iterable[Mapping[str, object]]] | None = None,
     connection: object | None = None,
     connection_reader: Callable[[object, str], Iterable[Mapping[str, object]]] | None = None,
-    candidate_trade_date: str | None = None,
+    candidate_publications: Sequence[Mapping[str, object]] | None = None,
 ) -> dict[str, object]:
     if reader is not None and connection is not None:
         raise _error("previous_publication_loader_ambiguous")
@@ -1107,9 +1300,9 @@ def load_previous_official_publications(
         from stock_research.data_run_manifest import load_recent_data_run_manifest
 
         rows = list(load_recent_data_run_manifest())
-    candidate_date = (
-        _required_date(candidate_trade_date, "previous_publication_candidate_trade_date")
-        if candidate_trade_date is not None
+    validated_candidates = (
+        _validate_candidate_publication_identities(candidate_publications)
+        if candidate_publications is not None
         else None
     )
     selected: list[dict[str, object]] = []
@@ -1125,34 +1318,63 @@ def load_previous_official_publications(
         ]
         if not candidates:
             raise _error("previous_publication_missing", strategy_id)
-        if candidate_date is not None:
-            candidate_versions = [
-                row
-                for row in candidates
-                if str(row.get("trade_date") or "")[:10] == candidate_date
-            ]
-            if not candidate_versions:
-                raise _error("previous_publication_candidate_missing", strategy_id)
-            newest_candidate = max(
-                candidate_versions,
-                key=lambda row: (
-                    str(row.get("started_at") or ""),
-                    str(row.get("ended_at") or row.get("updated_at") or ""),
-                    str(row.get("run_id") or ""),
-                ),
-            )
-            candidates = [row for row in candidates if row is not newest_candidate]
-            if not candidates:
-                raise _error("previous_publication_missing_before_candidate", strategy_id)
-        latest = max(
-            candidates,
-            key=lambda row: (
-                str(row.get("trade_date") or ""),
-                str(row.get("started_at") or ""),
-                str(row.get("ended_at") or row.get("updated_at") or ""),
-                str(row.get("run_id") or ""),
-            ),
+        validated_rows = [
+            (row, *_validated_publication_row(row, strategy_id))
+            for row in candidates
+        ]
+        if validated_candidates is None:
+            latest = _select_unique_latest_prior(validated_rows, strategy_id)
+            selected.append(_previous_publication_from_row(latest, strategy_id))
+            continue
+        candidate = next(
+            item for item in validated_candidates if item["strategyId"] == strategy_id
         )
+        candidate_started_at = _timestamp_value(
+            candidate["publishStartedAt"],
+            f"previous_publication_candidate_publish_started_at:{strategy_id}",
+        )
+        matches = [
+            item
+            for item in validated_rows
+            if item[1]["tradeDate"] == candidate["tradeDate"]
+            and item[1]["publishId"] == candidate["publishId"]
+            and item[2] == candidate_started_at
+            and ("runId" not in candidate or item[3] == candidate["runId"])
+        ]
+        if len(matches) != 1:
+            raise _error("previous_publication_candidate_match_not_unique", strategy_id)
+        matched = matches[0]
+        later_or_tied = [
+            item
+            for item in validated_rows
+            if item is not matched
+            and (
+                str(item[1]["tradeDate"]) > str(candidate["tradeDate"])
+                or (
+                    item[1]["tradeDate"] == candidate["tradeDate"]
+                    and item[2] >= candidate_started_at
+                )
+            )
+        ]
+        if later_or_tied:
+            raise _error("previous_publication_candidate_not_latest", strategy_id)
+        same_day_priors = [
+            item
+            for item in validated_rows
+            if item is not matched
+            and item[1]["tradeDate"] == candidate["tradeDate"]
+            and item[2] < candidate_started_at
+        ]
+        if same_day_priors:
+            prior_rows = same_day_priors
+        else:
+            prior_rows = [
+                item
+                for item in validated_rows
+                if item is not matched
+                and str(item[1]["tradeDate"]) < str(candidate["tradeDate"])
+            ]
+        latest = _select_unique_latest_prior(prior_rows, strategy_id)
         selected.append(_previous_publication_from_row(latest, strategy_id))
     return {
         "schemaVersion": PREVIOUS_SCHEMA_VERSION,
