@@ -1721,6 +1721,29 @@ def test_dashboard_cache_clearer_rejects_login_outside_cache_origin(login_url):
         clearer()
 
 
+def test_dashboard_cache_clearer_rejects_scoped_ipv6_cache_url():
+    clearer = eod_auto_repair.build_dashboard_cache_clearer(
+        cache_url="http://[::1%25lo0]:8765/api/dashboard/cache/clear",
+        opener=object(),
+    )
+
+    with pytest.raises(RuntimeError, match="cache clear URL"):
+        clearer()
+
+
+def test_dashboard_cache_clearer_rejects_scoped_ipv6_login_url():
+    clearer = eod_auto_repair.build_dashboard_cache_clearer(
+        cache_url="http://[::1]:8765/api/dashboard/cache/clear",
+        login_url="http://[::1%25lo0]:8765/api/auth/login",
+        username="admin",
+        password="password",
+        opener=object(),
+    )
+
+    with pytest.raises(RuntimeError, match="authentication login URL"):
+        clearer()
+
+
 @pytest.mark.parametrize(
     ("cache_url", "login_url"),
     [

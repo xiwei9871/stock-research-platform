@@ -958,6 +958,8 @@ def build_dashboard_cache_clearer(
             host_address = ip_address(hostname)
         except ValueError:
             raise RuntimeError(f"dashboard {label} URL host must be a literal IP") from None
+        if getattr(host_address, "scope_id", None) is not None:
+            raise RuntimeError(f"dashboard {label} URL scoped IPv6 forbidden")
         if not host_address.is_loopback:
             raise RuntimeError(f"dashboard {label} URL host must be loopback")
         effective_port = port if port is not None else 443 if parsed.scheme == "https" else 80
