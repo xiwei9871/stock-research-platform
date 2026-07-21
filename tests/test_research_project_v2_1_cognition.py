@@ -17,6 +17,7 @@ from stock_research.research_project_v2_1.cognition import (
     validate_evidence_locator,
     validate_grounded_mechanisms,
     validate_judgment_boundaries,
+    validate_cognition_package,
 )
 from stock_research.research_project_v2_1.cognition_audit import (
     compute_audit,
@@ -591,3 +592,36 @@ def test_validate_report_rejects_added_claim_or_hash_drift() -> None:
     validate_persisted_report(package, report)
     with pytest.raises(ResearchProjectV2Error):
         validate_persisted_report(package, report + b"Unregistered conclusion.\n")
+
+
+def test_validate_cognition_package_recomputes_grounding_and_scope(tmp_path: Path) -> None:
+    layout = temporary_real_layout(tmp_path)
+    package = package_with_real_bindings()
+    locator = {"locator_id": "LOC-001", **real_locator()}
+    package["evidence_inventory"] = {
+        "locators": [locator],
+        "source_chains": [{"source_chain_id": "CHAIN-001"}],
+    }
+    claim = grounded_claim_fixture()
+    claim["evidence_links"][0].update(
+        {
+            "artifact_id": ARTIFACT_ID,
+            "normalized_document_id": DOCUMENT_ID,
+            "section_index": 43,
+            "section_hash": SECTION_HASH,
+            "source_date_status": "unknown",
+        }
+    )
+    package["claim_assessment_ledger"] = [claim]
+    package["research_framing"] = {
+        "model_scope": "demand_side_and_system_interconnect",
+        "company_mapping_authorized": False,
+        "stage_a2_authorized": False,
+        "stage_b_authorized": False,
+    }
+    package["content_hash"] = content_sha256(
+        package, excluded_paths={("content_hash",)}
+    )
+    result = validate_cognition_package(package, layout=layout)
+    assert result["grounded_claim_ids"] == ["CLM-001"]
+    assert result["scope_leakage"] == []

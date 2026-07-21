@@ -458,3 +458,83 @@ def validate_judgment_boundaries(package: dict[str, Any]) -> None:
                 code="RESEARCH_PROJECT_V2_1_COGNITION_SCOPE_VIOLATION",
                 hypothesis_id=hypothesis.get("hypothesis_id"),
             )
+
+
+def validate_cognition_package(
+    package: dict[str, Any],
+    *,
+    layout: LayeredResearchLayout | None = None,
+) -> dict[str, Any]:
+    effective = LayeredResearchLayout.default() if layout is None else layout
+    validate_v2_1_schema_payload(
+        "industry_cognition_baseline_v2_5", package, layout=effective
+    )
+    expected_hash = content_sha256(package, excluded_paths={("content_hash",)})
+    if package.get("content_hash") != expected_hash:
+        raise _error(
+            "Cognition package content hash mismatch",
+            code="RESEARCH_PROJECT_V2_1_COGNITION_VALIDATION_FAILED",
+            field="content_hash",
+        )
+    validate_baseline_bindings(package, layout=effective)
+    inventory = package.get("evidence_inventory", {})
+    locators = inventory.get("locators", []) if isinstance(inventory, dict) else []
+    valid_locators: dict[str, dict[str, Any]] = {}
+    for locator in locators:
+        locator_id = locator.get("locator_id") if isinstance(locator, dict) else None
+        if not isinstance(locator_id, str) or locator_id in valid_locators:
+            raise _error(
+                "Cognition evidence locator IDs must be unique",
+                code="RESEARCH_PROJECT_V2_1_COGNITION_VALIDATION_FAILED",
+                field="locator_id",
+            )
+        valid_locators[locator_id] = validate_evidence_locator(
+            locator, layout=effective
+        )
+    claims_by_id: dict[str, dict[str, Any]] = {}
+    grounded_ids: list[str] = []
+    for claim in package.get("claim_assessment_ledger", []):
+        claim_id = claim.get("claim_id")
+        if not isinstance(claim_id, str) or claim_id in claims_by_id:
+            raise _error(
+                "Cognition claim IDs must be unique",
+                code="RESEARCH_PROJECT_V2_1_COGNITION_VALIDATION_FAILED",
+                field="claim_id",
+            )
+        calculation = calculate_claim_grounding(
+            claim,
+            inventory=inventory,
+            valid_locators=valid_locators,
+        )
+        claims_by_id[claim_id] = claim
+        if calculation["grounding_status"] == "grounded":
+            grounded_ids.append(claim_id)
+    for er in package.get("er_assessments", []):
+        calculate_er_assessment(er, claims_by_id)
+    validate_grounded_mechanisms(package, claims_by_id)
+    validate_causal_edges(package, claims_by_id)
+    validate_judgment_boundaries(package)
+    framing = package.get("research_framing", {})
+    leakage: list[str] = []
+    if framing.get("model_scope") != "demand_side_and_system_interconnect":
+        leakage.append("model_scope")
+    for field in (
+        "company_mapping_authorized",
+        "stage_a2_authorized",
+        "stage_b_authorized",
+    ):
+        if framing.get(field) is not False:
+            leakage.append(field)
+    if leakage:
+        raise _error(
+            "Cognition package exceeds the authorized research scope",
+            code="RESEARCH_PROJECT_V2_1_COGNITION_SCOPE_VIOLATION",
+            fields=leakage,
+        )
+    return {
+        "status": "valid",
+        "grounded_claim_ids": sorted(grounded_ids),
+        "claim_count": len(claims_by_id),
+        "locator_count": len(valid_locators),
+        "scope_leakage": [],
+    }
