@@ -376,19 +376,18 @@ def write_summary_files(
 
 
 def _retention_run_ids(payload: JsonObject) -> list[str]:
-    run_id_keys = {
-        "run_id",
-        "runId",
-        "eod_run_id",
-        "strategy_cohort_run_id",
-        "browser_run_id",
-    }
     values: list[str] = []
+
+    def is_run_id_key(key: object) -> bool:
+        if not isinstance(key, str):
+            return False
+        normalized = key.lower().replace("_", "").replace("-", "")
+        return normalized == "runid" or normalized.endswith("runid")
 
     def collect(value: object) -> None:
         if isinstance(value, dict):
             for key, nested in value.items():
-                if key in run_id_keys and isinstance(nested, str) and nested.strip():
+                if is_run_id_key(key) and isinstance(nested, str) and nested.strip():
                     values.append(nested.strip())
                 collect(nested)
         elif isinstance(value, list):

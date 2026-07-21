@@ -288,6 +288,47 @@ def test_retention_dry_run_reports_candidate_without_deleting(tmp_path):
     assert target.exists()
 
 
+def test_retention_normalizes_semantic_run_id_keys_without_matching_ordinary_fields(tmp_path):
+    report = _report_module()
+    root = tmp_path / "daily"
+    _write_retention_summary(
+        root / "2026-04-05",
+        status="success",
+        metadata={"strategy_run_id": "pv-initial"},
+    )
+    _write_retention_summary(
+        root / "2026-04-04",
+        status="success",
+        metadata={"strategyRunId": "pv-initial-camel"},
+    )
+    _write_retention_summary(
+        root / "2026-04-03",
+        status="success",
+        metadata={"strategy-run-id": "pv-initial-kebab"},
+    )
+    ordinary = root / "2026-04-02"
+    _write_retention_summary(
+        ordinary,
+        status="success",
+        metadata={
+            "strategy_run_id_status": "pv-initial",
+            "runtime_id": "pv-initial",
+            "run_identifier": "pv-initial",
+        },
+    )
+
+    removed = report.prune_report_retention(
+        root,
+        current_run_dir=root / "2026-07-20",
+        now=datetime(2026, 7, 20, 12, tzinfo=timezone.utc),
+    )
+
+    assert removed == [ordinary]
+    assert not ordinary.exists()
+    for name in ("2026-04-05", "2026-04-04", "2026-04-03"):
+        assert (root / name).exists()
+
+
 def test_retention_keeps_untrusted_or_incomplete_browser_evidence(tmp_path):
     report = _report_module()
     root = tmp_path / "daily"
