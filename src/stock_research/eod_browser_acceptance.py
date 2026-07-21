@@ -48,6 +48,7 @@ DEFAULT_DASHBOARD_PORT = 5176
 DEFAULT_API_PORT = 8768
 DEFAULT_TIMEOUT_SECONDS = 600.0
 DEFAULT_BROWSER_PROJECT = "eod-chromium"
+_VERIFIED_RESULT_PROVENANCE = object()
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _DASHBOARD_ROOT = _REPO_ROOT / "dashboard"
@@ -186,11 +187,28 @@ class BrowserAcceptanceResult:
     ended_at: str = ""
     message: str = ""
     attempts: tuple[BrowserAcceptanceAttempt, ...] = ()
+    _verified_provenance: object | None = field(
+        default=None,
+        init=False,
+        repr=False,
+        compare=False,
+    )
 
     def __post_init__(self) -> None:
         if not isinstance(self.snapshot, Mapping):
             raise TypeError("browser acceptance snapshot must be a mapping")
         object.__setattr__(self, "snapshot", _freeze_json(self.snapshot))
+
+
+def _mark_result_verified(
+    result: BrowserAcceptanceResult,
+) -> BrowserAcceptanceResult:
+    object.__setattr__(
+        result,
+        "_verified_provenance",
+        _VERIFIED_RESULT_PROVENANCE,
+    )
+    return result
 
 
 def write_browser_acceptance_manifest(
@@ -203,6 +221,11 @@ def write_browser_acceptance_manifest(
         raise ValueError(
             "browser acceptance manifest status must be success, degraded, or failed"
         )
+    if (
+        result.status in {RepairStatus.SUCCESS, RepairStatus.DEGRADED}
+        and result._verified_provenance is not _VERIFIED_RESULT_PROVENANCE
+    ):
+        raise _error("browser_acceptance_result_unverified")
     trade_date = _required_date(
         _required_string(result.trade_date, "browser_acceptance_trade_date_invalid"),
         "browser_acceptance_trade_date_invalid",
@@ -216,19 +239,12 @@ def write_browser_acceptance_manifest(
     )
     if result.report_schema_version != REPORT_SCHEMA_VERSION:
         raise _error("browser_acceptance_report_schema_version")
+    snapshot_for_metadata: Mapping[str, object] = result.snapshot
     if result.status in {RepairStatus.SUCCESS, RepairStatus.DEGRADED}:
-        snapshot_schema = _required_string(
-            result.snapshot.get("schemaVersion"),
-            "browser_acceptance_candidate_snapshot_schema_version",
+        snapshot_for_metadata = _validate_candidate_snapshot(
+            json.loads(_stable_json(result.snapshot)),
+            trade_date,
         )
-        if snapshot_schema != CANDIDATE_SCHEMA_VERSION:
-            raise _error("browser_acceptance_candidate_snapshot_schema_version")
-        snapshot_date = _required_date(
-            result.snapshot.get("tradeDate"),
-            "browser_acceptance_candidate_snapshot_trade_date",
-        )
-        if snapshot_date != trade_date:
-            raise _error("browser_acceptance_candidate_snapshot_trade_date_mismatch")
     artifacts = list(result.artifact_paths)
     entry = build_manifest_entry(
         run_id=run_id,
@@ -252,7 +268,7 @@ def write_browser_acceptance_manifest(
             "duration_seconds": result.duration_seconds,
             "failure_classes": list(result.failure_classes),
             "warnings": list(result.warnings),
-            "candidate_snapshot": result.snapshot,
+            "candidate_snapshot": snapshot_for_metadata,
             "artifact_paths": artifacts,
         },
     )
@@ -1082,7 +1098,7 @@ def parse_browser_acceptance_report(
         "failed": RepairStatus.FAILED,
     }[status_text]
     message_parts = blocking_text if status == RepairStatus.FAILED else warning_text
-    return BrowserAcceptanceResult(
+    result = BrowserAcceptanceResult(
         status=status,
         trade_date=trade_date,
         run_id=run_id,
@@ -1098,6 +1114,9 @@ def parse_browser_acceptance_report(
         ended_at=ended_at,
         message="; ".join(message_parts) or f"browser acceptance {status.value}",
     )
+    if result.status in {RepairStatus.SUCCESS, RepairStatus.DEGRADED}:
+        return _mark_result_verified(result)
+    return result
 
 
 def _redact_text(value: str) -> str:
@@ -1440,7 +1459,7 @@ def _result_from_attempts(
     override_message: str | None = None,
 ) -> BrowserAcceptanceResult:
     final = attempts[-1] if attempts else None
-    return BrowserAcceptanceResult(
+    result = BrowserAcceptanceResult(
         status=override_status or (final.status if final else RepairStatus.FAILED),
         trade_date=trade_date,
         run_id=run_id,
@@ -1463,6 +1482,9 @@ def _result_from_attempts(
         message=override_message or (final.message if final else "browser acceptance failed"),
         attempts=tuple(attempts),
     )
+    if result.status in {RepairStatus.SUCCESS, RepairStatus.DEGRADED}:
+        return _mark_result_verified(result)
+    return result
 
 
 def run_browser_acceptance(

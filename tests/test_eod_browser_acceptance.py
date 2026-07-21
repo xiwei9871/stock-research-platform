@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 import json
 import os
 from pathlib import Path
@@ -179,16 +180,24 @@ def _manifest_result(**overrides):
     return BrowserAcceptanceResult(**values)
 
 
-@pytest.mark.parametrize(
-    "status",
-    (RepairStatus.SUCCESS, RepairStatus.DEGRADED, RepairStatus.FAILED),
-)
-def test_write_browser_acceptance_manifest_persists_exact_status_and_evidence(status):
+def _parsed_success_result(tmp_path):
+    report_path = _write_report(tmp_path / "eod-browser-acceptance.json")
+    return parse_browser_acceptance_report(
+        report_path,
+        expected_run_id=RUN_ID,
+        expected_trade_date=TRADE_DATE,
+        expected_revision=REVISION,
+        expected_candidate_publications=_report()["candidateSnapshot"]["publications"],
+        exit_code=0,
+    )
+
+
+def test_write_browser_acceptance_manifest_persists_failed_status_and_evidence():
     captured = []
     result = _manifest_result(
-        status=status,
-        failure_classes=("presentation_runtime",) if status != RepairStatus.SUCCESS else (),
-        message="browser acceptance failed" if status == RepairStatus.FAILED else "",
+        status=RepairStatus.FAILED,
+        failure_classes=("presentation_runtime",),
+        message="browser acceptance failed",
     )
 
     entry = acceptance.write_browser_acceptance_manifest(
@@ -200,7 +209,7 @@ def test_write_browser_acceptance_manifest_persists_exact_status_and_evidence(st
     assert entry["module"] == "dashboard_browser_acceptance"
     assert entry["source"] == "eod_browser_acceptance"
     assert entry["tier"] == "tier1"
-    assert entry["status"] == status.value
+    assert entry["status"] == "failed"
     assert entry["duration_seconds"] == 3.25
     assert entry["warnings"] == ["console warning"]
     assert entry["artifact_path"] == "/tmp/report.json"
@@ -215,6 +224,45 @@ def test_write_browser_acceptance_manifest_persists_exact_status_and_evidence(st
         "candidate_snapshot": result.snapshot,
         "artifact_paths": ["/tmp/report.json", "/tmp/trace.zip"],
     }
+
+
+def test_parser_verified_success_result_writes_normalized_manifest(tmp_path):
+    captured = []
+    result = _parsed_success_result(tmp_path)
+
+    entry = acceptance.write_browser_acceptance_manifest(
+        result,
+        manifest_upsert=captured.append,
+    )
+
+    assert captured == [entry]
+    assert entry["status"] == "success"
+    assert entry["code_version"] == REVISION
+    assert entry["metadata"]["application_revision"] == REVISION
+    assert entry["metadata"]["browser_project"] == "eod-chromium"
+    assert entry["metadata"]["candidate_snapshot"] == json.loads(
+        json.dumps(result.snapshot)
+    )
+
+
+@pytest.mark.parametrize("status", (RepairStatus.SUCCESS, RepairStatus.DEGRADED))
+def test_hand_constructed_publishable_result_cannot_write_manifest(status):
+    with pytest.raises(BrowserAcceptanceError, match="result_unverified"):
+        acceptance.write_browser_acceptance_manifest(
+            _manifest_result(status=status),
+            manifest_upsert=lambda _entry: None,
+        )
+
+
+def test_hand_constructed_success_with_unrelated_identity_cannot_write_manifest():
+    with pytest.raises(BrowserAcceptanceError, match="result_unverified"):
+        acceptance.write_browser_acceptance_manifest(
+            _manifest_result(
+                application_revision="unrelated-revision",
+                browser_project="unrelated-browser-project",
+            ),
+            manifest_upsert=lambda _entry: None,
+        )
 
 
 def test_write_browser_acceptance_manifest_rejects_non_manifest_status():
@@ -258,38 +306,45 @@ def test_write_browser_acceptance_manifest_rejects_invalid_result_identity(
 ):
     with pytest.raises(BrowserAcceptanceError, match=error_code):
         acceptance.write_browser_acceptance_manifest(
-            _manifest_result(**overrides),
+            _manifest_result(status=RepairStatus.FAILED, **overrides),
             manifest_upsert=lambda _entry: None,
         )
 
 
-@pytest.mark.parametrize("status", (RepairStatus.SUCCESS, RepairStatus.DEGRADED))
 @pytest.mark.parametrize(
-    "snapshot",
-    (
-        {"schemaVersion": "unexpected/v2", "tradeDate": TRADE_DATE, "publications": []},
-        {
-            "schemaVersion": acceptance.CANDIDATE_SCHEMA_VERSION,
-            "tradeDate": "2026-07-19",
-            "publications": [],
-        },
-    ),
+    "corruption",
+    ("empty_publications", "missing_strategies", "incomplete_field", "wrong_date"),
 )
-def test_write_browser_acceptance_manifest_binds_publishable_snapshot_to_result(
-    status,
-    snapshot,
+def test_write_browser_acceptance_manifest_runs_full_snapshot_validation(
+    tmp_path,
+    corruption,
 ):
+    result = _parsed_success_result(tmp_path)
+    snapshot = deepcopy(json.loads(json.dumps(result.snapshot)))
+    if corruption == "empty_publications":
+        snapshot["publications"] = []
+    elif corruption == "missing_strategies":
+        snapshot["publications"] = snapshot["publications"][:1]
+    elif corruption == "incomplete_field":
+        snapshot["publications"][0].pop("contractId")
+    else:
+        snapshot["tradeDate"] = "2026-07-19"
+    object.__setattr__(result, "snapshot", snapshot)
+
     with pytest.raises(BrowserAcceptanceError, match="candidate_snapshot"):
         acceptance.write_browser_acceptance_manifest(
-            _manifest_result(status=status, snapshot=snapshot),
+            result,
             manifest_upsert=lambda _entry: None,
         )
 
 
-def test_writer_browser_manifest_joins_candidate_modules_by_trade_date_and_run_id(monkeypatch):
+def test_writer_browser_manifest_joins_candidate_modules_by_trade_date_and_run_id(
+    tmp_path,
+    monkeypatch,
+):
     captured = []
     browser_entry = acceptance.write_browser_acceptance_manifest(
-        _manifest_result(),
+        _parsed_success_result(tmp_path),
         manifest_upsert=captured.append,
     )
     modules = [
@@ -472,6 +527,11 @@ def test_parse_report_maps_warning_only_failure_to_degraded(tmp_path):
 
     assert result.status == RepairStatus.DEGRADED
     assert result.warnings == ("optional chart label drift",)
+    entry = acceptance.write_browser_acceptance_manifest(
+        result,
+        manifest_upsert=lambda _entry: None,
+    )
+    assert entry["status"] == "degraded"
 
 
 def test_parse_report_validates_digest_against_reported_snapshot_before_timestamp_normalization(
