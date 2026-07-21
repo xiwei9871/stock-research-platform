@@ -104,6 +104,10 @@ Result: exit `0`; `502 passed`; 2 existing `py_mini_racer` deprecation warnings;
 
 A final delimiter edge-case pass added explicit rejection of empty `?` and `#` components for both endpoints. Re-running the same command exited `0` with `506 passed`, the same 2 deprecation warnings, and duration `10.90s`.
 
+### Scoped loopback correction
+
+Correction `f130fac` closed the remaining scoped-IPv6 edge case by rejecting loopback literals with a nonempty scope ID, such as `::1%lo0`, for both cache-clear and login endpoints. The `506 passed` result above is the immediately preceding delimiter-hardening stage. A fresh rerun of the same ten-file command after the scoped-loopback correction exited `0` with `508 passed` and the same 2 existing `py_mini_racer` deprecation warnings; `508 passed` is the current final focused result. This correction remains local fixture/unit evidence and does not change the `BLOCKED / stop_and_plan` decision.
+
 ### Dashboard unit
 
 Exact command from `dashboard/`:
