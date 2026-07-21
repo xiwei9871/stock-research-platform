@@ -1,6 +1,6 @@
 # Platform Hardening Runbook
 
-Updated: 2026-07-20
+Updated: 2026-07-21
 
 ## Scope
 
@@ -165,3 +165,42 @@ The shared runtime fixture records console errors, page errors, failed requests,
 The GitHub Actions workflow `.github/workflows/platform-smoke.yml` runs backend-focused and dashboard-focused smoke jobs on pull requests and pushes to `main` or `lhb-shortline-strategy-dev-20260609`.
 
 The same workflow installs Playwright Chromium and runs `pnpm test:e2e:p0`. On failure it uploads `dashboard/playwright-report` and `dashboard/test-results/mock`, including the structured runtime evidence used to classify the failure.
+
+## Playwright-First Daily Auto EOD Repair
+
+The daily EOD loop runs browser acceptance only after the strategy publication cohort is available and upstream blockers are clear. The cron entrypoint remains a single Python orchestration process:
+
+```bash
+rtk scripts/run_eod_auto_repair_cron.sh YYYY-MM-DD
+```
+
+The wrapper exports the browser evidence root to the same daily directory and does not start a second Playwright command:
+
+```text
+outputs/research/eod_auto_repair/<trade-date>/
+├── run_summary.json
+├── run_report.md
+├── run_report.html
+└── browser/
+```
+
+Operational rules:
+
+- `run_summary.json`, Markdown, and HTML are generated from the same canonical `RepairRunSummary` and written atomically with file mode `0600`; the daily output directory is `0700`.
+- The report shows the independent EOD orchestration run ID separately from the strategy publication cohort run ID.
+- The final browser status comes from the final `dashboard_browser_acceptance` check. The repair action result and both attempt results are shown separately.
+- Browser evidence is linked with relative, percent-encoded paths. Traces, screenshots, and JSON reports are never inlined.
+- Only `stale_cache` and `presentation_runtime` are eligible for one cache clear and one rerun of the identical `pnpm test:e2e:eod` command. Identity, date, return-unit, contract, or rollback failures never clear cache.
+- A failed browser manifest blocks the candidate and preserves the last ready display date. A report or retention infrastructure failure changes the EOD result to failed and the CLI exits `2`.
+- Retention removes only successful, fully evidenced, non-baseline daily directories older than 90 days. Missing, degraded, failed, symlinked, out-of-tree, initial-baseline, or incomplete evidence is retained.
+
+The rollout boundary is disabled when `STOCK_RESEARCH_BROWSER_ACCEPTANCE_REQUIRED_FROM` is empty. Do not set it until the controlled rollout checklist in [Playwright Platform Validation](playwright-platform-validation.md) is complete.
+
+Rollback procedure:
+
+1. Clear `STOCK_RESEARCH_BROWSER_ACCEPTANCE_REQUIRED_FROM` in both the EOD and Dashboard service environments and restart both processes.
+2. Disable the scheduled browser-acceptance action through the deployment/scheduler action-registry override. If that override is not available, stop the scheduled EOD job and deploy the last known action registry that omits `dashboard_browser_acceptance`; do not improvise a production code edit.
+3. Keep the last ready display date and every existing browser/report evidence directory unchanged.
+4. Verify the display gate still selects the prior ready date and that no unvalidated candidate becomes official.
+
+As of the 2026-07-21 controlled review, rollout remains `BLOCKED / stop_and_plan`; no boundary, environment, or deployment value was changed. See [EOD browser acceptance rollout review](../reviews/eod-browser-acceptance-rollout-2026-07-20.md).

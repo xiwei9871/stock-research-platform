@@ -205,6 +205,37 @@ After generating the artifact manifest, do not modify core artifacts. Recompute 
 
 Auto EOD Repair should run the small `eod` acceptance after repair succeeds. Daily execution is not a substitute for this full audit: it validates critical read-only routes, trade-date coherence, official publication identity, and runtime cleanliness, while the full Audit profile remains the release and regression census.
 
+Run the operational loop through the cron wrapper, not by starting an additional browser command:
+
+```bash
+rtk scripts/run_eod_auto_repair_cron.sh YYYY-MM-DD
+```
+
+The daily canonical reports are:
+
+- `outputs/research/eod_auto_repair/<trade-date>/run_summary.json`
+- `outputs/research/eod_auto_repair/<trade-date>/run_report.md`
+- `outputs/research/eod_auto_repair/<trade-date>/run_report.html`
+- browser evidence under `outputs/research/eod_auto_repair/<trade-date>/browser/`
+
+The JSON, Markdown, and HTML files must agree on the EOD run ID, trade date, three explicit publication identities, final browser check, action result, repair attempt history, evidence links, and final publication decision. Paths in human reports are relative and percent encoded; raw trace/image content is not embedded.
+
+### Controlled Boundary
+
+`STOCK_RESEARCH_BROWSER_ACCEPTANCE_REQUIRED_FROM` is the promotion boundary. Empty means disabled. On or after a nonempty ISO date, a missing or failed browser acceptance manifest keeps the prior ready display date. Success or degraded acceptance may advance the display date only when the remaining readiness contracts pass.
+
+Before enabling the boundary:
+
+1. Run the focused backend, full Dashboard unit suite, production build, and Mock P0 commands.
+2. Prove nonrepairable return-unit failures do not clear cache and keep the prior ready date.
+3. Prove a repairable `stale_cache` failure clears cache exactly once, reruns the identical EOD command exactly once, and records two attempts.
+4. Run an approved candidate and live-observation window only after all authoritative audit blockers have been remediated.
+5. Record the boundary value in both EOD and Dashboard environments and confirm they match before the next scheduled run.
+
+The 2026-07-21 review at revision `1ea8f2f377366c10b38a2a1eee04eaefc87354ff` stopped before steps 4 and 5. The boundary remains disabled; Real/Sandbox profiles were not used as success evidence and live observation did not run. The decision and exact verification evidence are in [EOD browser acceptance rollout review](../reviews/eod-browser-acceptance-rollout-2026-07-20.md).
+
+Rollback clears the boundary in both services, disables the scheduled browser action (or stops the scheduler until a known action registry without that action is deployed), and preserves the last ready date plus all existing evidence. Rollback must never promote the blocked candidate or delete its reports.
+
 ## Current Authoritative Initial Audit Pair
 
 The authoritative record pairs execution audit `pv-initial-20260721-ba46611` at frozen revision `ba4661144d3a3a12e1934b720d75dd97e04d6e85` with security-rescan amendment `pv-initial-20260721-a2c847a-security-rescan` at revision `a2c847a1a1419c9526f93e311ed6c9b67f182f6a`. The rescan does not claim that any test layer was rerun.
