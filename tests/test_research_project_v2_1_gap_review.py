@@ -8,6 +8,7 @@ from stock_research.research_project_v2.errors import ResearchProjectV2Error
 from stock_research.research_project_v2_1.gap_review import (
     validate_gap_universe,
     validate_input_bindings,
+    validate_research_design,
 )
 from stock_research.research_project_v2_1.layout import LayeredResearchLayout
 from stock_research.research_project_v2_1.schema import validate_v2_1_schema_payload
@@ -129,3 +130,156 @@ def test_input_binding_rejects_cognition_package_hash_drift() -> None:
     with pytest.raises(ResearchProjectV2Error) as exc_info:
         validate_input_bindings(artifact, layout=LayeredResearchLayout.default())
     assert exc_info.value.code == "RESEARCH_PROJECT_V2_1_GAP_REVIEW_UPSTREAM_DRIFT"
+
+
+def complete_design_artifact() -> dict:
+    artifact = minimal_gap_review()
+    artifact["group_definitions"] = [
+        {"group_id": group_id, "name": group_id}
+        for group_id in sorted(set(EXPECTED_GROUPS.values()))
+    ]
+    reviews = []
+    requirements = []
+    for index, (gap_id, group_id) in enumerate(EXPECTED_GROUPS.items(), 1):
+        er_id = f"PCB-ER-{index:02d}"
+        availability = (
+            "structurally_limited"
+            if gap_id in {"GAP-YIELD", "GAP-CAPACITY"}
+            else "likely_publicly_available"
+        )
+        ceiling = (
+            "structurally_limited"
+            if availability == "structurally_limited"
+            else "technical_understanding_only"
+        )
+        reviews.append(
+            {
+                "gap_id": gap_id,
+                "gap_group": group_id,
+                "original_gap_description": f"Original {gap_id}",
+                "current_grounded_knowledge": ["Existing demand-side boundary only."],
+                "current_unknowns": ["The PCB-side mechanism remains unknown."],
+                "atomic_research_questions": [
+                    {
+                        "question_id": f"Q-{index:02d}",
+                        "question": f"What evidence is required for {gap_id}?",
+                        "target_cognition_level": "technical_understanding",
+                        "evidence_requirement_ids": [er_id],
+                    }
+                ],
+                "new_evidence_requirement_ids": [er_id],
+                "required_atomic_facts": ["A scoped engineering fact."],
+                "required_evidence_types": ["engineering_measurement"],
+                "suggested_source_classes": ["technical_standard"],
+                "suggested_search_concepts": ["scoped engineering measurement"],
+                "public_evidence_availability": availability,
+                "public_evidence_ceiling": ceiling,
+                "source_independence_requirements": ["One supplier-independent chain."],
+                "freshness_requirements": ["Match the relevant product generation."],
+                "scope_and_generation_requirements": ["Record speed and topology."],
+                "comparison_denominator": "per specified channel and generation",
+                "minimum_sufficiency_conditions": ["Required measurement is available."],
+                "contradiction_search_requirements": ["Search a conflicting measurement."],
+                "stop_conditions": ["Stop at the public evidence ceiling."],
+                "non_derivable_conclusions": ["Does not establish a commercial bottleneck."],
+                "priority": "high",
+                "priority_reason": "Blocks later cognition.",
+                "dependencies": [],
+                "future_acquisition_authorized": False,
+            }
+        )
+        requirements.append(
+            {
+                "er_id": er_id,
+                "gap_id": gap_id,
+                "research_question": f"What scoped fact resolves {gap_id}?",
+                "claim_scope": "atomic_engineering_fact",
+                "required_fact_types": ["measured_parameter"],
+                "required_source_classes": ["technical_standard"],
+                "minimum_independent_evidence_chains": 1,
+                "supplier_independent_source_required": True,
+                "freshness_rule": "Same interface generation or explicitly comparable.",
+                "comparison_scope": "Specified channel, speed and topology.",
+                "denominator_rule": "Per specified channel and generation.",
+                "sufficiency_rule": "A direct scoped measurement and method are present.",
+                "contradiction_rule": "Search for conflicting measurements or scope limits.",
+                "stop_rule": "Stop when the minimum condition or public ceiling is reached.",
+                "maximum_supported_cognition_level": "technical_understanding",
+                "prohibited_inferences": ["Cannot establish a manufacturing bottleneck."],
+            }
+        )
+    artifact["gap_reviews"] = reviews
+    artifact["evidence_requirements"] = requirements
+    artifact["source_class_boundaries"] = [
+        {
+            "source_class": "technical_standard",
+            "can_support": ["technical mechanism"],
+            "cannot_support": ["commercial bottleneck"],
+        }
+    ]
+    artifact["cross_level_inference_rules"] = [
+        {
+            "rule_id": "RULE-01",
+            "from_level": "technical_understanding",
+            "prohibited_target_level": "manufacturing_bottleneck",
+            "reason": "Additional manufacturing evidence is required.",
+        }
+    ]
+    artifact["stopping_state_definitions"] = [
+        {"state": "resolved", "meaning": "Minimum sufficiency reached."},
+        {
+            "state": "stopped_due_to_structural_limit",
+            "meaning": "Public evidence ceiling reached without resolution.",
+        },
+    ]
+    return artifact
+
+
+def test_complete_atomic_research_design_is_valid() -> None:
+    result = validate_research_design(complete_design_artifact())
+    assert result["gap_count"] == 10
+    assert result["evidence_requirement_count"] == 10
+
+
+@pytest.mark.parametrize(
+    ("target", "field"),
+    [
+        ("gap", "atomic_research_questions"),
+        ("gap", "stop_conditions"),
+        ("gap", "non_derivable_conclusions"),
+        ("er", "required_fact_types"),
+        ("er", "denominator_rule"),
+        ("er", "stop_rule"),
+        ("er", "prohibited_inferences"),
+    ],
+)
+def test_research_design_rejects_missing_required_boundary(target: str, field: str) -> None:
+    artifact = complete_design_artifact()
+    row = artifact["gap_reviews"][0] if target == "gap" else artifact["evidence_requirements"][0]
+    row[field] = [] if isinstance(row[field], list) else ""
+    with pytest.raises(ResearchProjectV2Error):
+        validate_research_design(artifact)
+
+
+def test_structurally_limited_gap_cannot_promise_full_resolution() -> None:
+    artifact = complete_design_artifact()
+    yield_gap = next(row for row in artifact["gap_reviews"] if row["gap_id"] == "GAP-YIELD")
+    yield_gap["public_evidence_ceiling"] = "fully_resolvable"
+    with pytest.raises(ResearchProjectV2Error):
+        validate_research_design(artifact)
+
+
+def test_future_acquisition_and_stage_authorization_are_rejected() -> None:
+    artifact = complete_design_artifact()
+    artifact["gap_reviews"][0]["future_acquisition_authorized"] = True
+    with pytest.raises(ResearchProjectV2Error):
+        validate_research_design(artifact)
+
+
+def test_group_a_er_cannot_claim_manufacturing_or_capacity_cognition() -> None:
+    artifact = complete_design_artifact()
+    artifact["evidence_requirements"][0][
+        "maximum_supported_cognition_level"
+    ] = "effective_capacity_bounded"
+    with pytest.raises(ResearchProjectV2Error):
+        validate_research_design(artifact)
