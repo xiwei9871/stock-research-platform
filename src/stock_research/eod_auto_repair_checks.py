@@ -374,19 +374,24 @@ def _browser_acceptance_failure(message: str, metrics: dict[str, object] | None 
 
 
 def _browser_manifest_business_time(row: dict[str, object]) -> datetime:
-    raw_timestamp = row.get("ended_at") or row.get("updated_at") or row.get("created_at")
-    if not isinstance(raw_timestamp, (str, datetime)):
-        raise ValueError("browser acceptance manifest timestamp missing")
-    if isinstance(raw_timestamp, datetime):
-        parsed = raw_timestamp
-    else:
-        parsed = datetime.fromisoformat(raw_timestamp.replace("Z", "+00:00"))
-    if parsed.tzinfo is None or parsed.utcoffset() is None:
-        raise ValueError("browser acceptance manifest timestamp must be timezone-aware")
     run_id = row.get("run_id")
     if not isinstance(run_id, str) or not run_id.strip():
         raise ValueError("browser acceptance manifest run_id missing")
-    return parsed.astimezone(timezone.utc)
+    for field in ("ended_at", "updated_at", "created_at"):
+        raw_timestamp = row.get(field)
+        if isinstance(raw_timestamp, datetime):
+            parsed = raw_timestamp
+        elif isinstance(raw_timestamp, str) and raw_timestamp:
+            try:
+                parsed = datetime.fromisoformat(raw_timestamp.replace("Z", "+00:00"))
+            except ValueError:
+                continue
+        else:
+            continue
+        if parsed.tzinfo is None or parsed.utcoffset() is None:
+            continue
+        return parsed.astimezone(timezone.utc)
+    raise ValueError("browser acceptance manifest timestamp missing or invalid")
 
 
 def check_dashboard_browser_acceptance(

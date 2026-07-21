@@ -235,7 +235,19 @@ def test_check_dashboard_browser_acceptance_does_not_use_run_id_to_break_latest_
     assert "ambiguous" in result.message
 
 
-@pytest.mark.parametrize("corruption", ["browser_project", "duration", "snapshot", "artifacts"])
+@pytest.mark.parametrize(
+    "corruption",
+    [
+        "browser_project",
+        "duration",
+        "snapshot",
+        "artifacts",
+        "success_failure_class",
+        "success_warnings",
+        "degraded_empty_warnings",
+        "publishable_error_message",
+    ],
+)
 def test_check_dashboard_browser_acceptance_rejects_corrupt_publishable_manifest(corruption):
     row = _browser_manifest_row()
     if corruption == "browser_project":
@@ -244,8 +256,18 @@ def test_check_dashboard_browser_acceptance_rejects_corrupt_publishable_manifest
         row["metadata"]["duration_seconds"] = float("nan")
     elif corruption == "snapshot":
         row["metadata"]["candidate_snapshot"]["publications"].pop()
-    else:
+    elif corruption == "artifacts":
         row["metadata"]["artifact_paths"] = []
+    elif corruption == "success_failure_class":
+        row["metadata"]["failure_classes"] = ["api_ui_mismatch"]
+    elif corruption == "success_warnings":
+        row["warnings"] = ["unexpected warning"]
+        row["warning_count"] = 1
+        row["metadata"]["warnings"] = ["unexpected warning"]
+    elif corruption == "degraded_empty_warnings":
+        row["status"] = "degraded"
+    else:
+        row["error_message"] = "publishable row must not carry an error"
 
     result = eod_auto_repair_checks.check_dashboard_browser_acceptance(
         "2026-06-29",
@@ -254,6 +276,68 @@ def test_check_dashboard_browser_acceptance_rejects_corrupt_publishable_manifest
 
     assert result.status == RepairStatus.FAILED
     assert result.blocker is True
+
+
+def test_check_browser_acceptance_uses_valid_updated_at_when_old_ended_at_is_bad():
+    latest = _browser_manifest_row(
+        run_id="latest-run",
+        ended_at="2026-06-29T09:00:00+00:00",
+    )
+    older = _browser_manifest_row(
+        run_id="older-run",
+        ended_at="not-a-timestamp",
+        updated_at="2026-06-29T08:00:00+00:00",
+        created_at="2026-06-29T07:00:00+00:00",
+    )
+
+    result = eod_auto_repair_checks.check_dashboard_browser_acceptance(
+        "2026-06-29",
+        manifest_loader=lambda trade_date: [older, latest],
+    )
+
+    assert result.status == RepairStatus.SUCCESS
+    assert result.metrics["run_id"] == "latest-run"
+
+
+def test_check_browser_acceptance_fails_when_any_row_has_no_valid_business_time():
+    invalid = _browser_manifest_row(
+        run_id="invalid-time-run",
+        ended_at="bad-ended",
+        updated_at="bad-updated",
+        created_at="bad-created",
+    )
+    latest = _browser_manifest_row(run_id="latest-run")
+
+    result = eod_auto_repair_checks.check_dashboard_browser_acceptance(
+        "2026-06-29",
+        manifest_loader=lambda trade_date: [invalid, latest],
+    )
+
+    assert result.status == RepairStatus.FAILED
+    assert result.blocker is True
+    assert "timestamp" in result.message
+
+
+def test_check_browser_acceptance_fails_when_fallback_time_ties_highest_time():
+    direct = _browser_manifest_row(
+        run_id="direct-run",
+        ended_at="2026-06-29T09:00:00+00:00",
+    )
+    fallback = _browser_manifest_row(
+        run_id="fallback-run",
+        ended_at="bad-ended",
+        updated_at="2026-06-29T09:00:00+00:00",
+        created_at="2026-06-29T08:00:00+00:00",
+    )
+
+    result = eod_auto_repair_checks.check_dashboard_browser_acceptance(
+        "2026-06-29",
+        manifest_loader=lambda trade_date: [direct, fallback],
+    )
+
+    assert result.status == RepairStatus.FAILED
+    assert result.blocker is True
+    assert "ambiguous" in result.message
 
 
 def test_check_lhb_features_reads_factor_table_with_fetcher():

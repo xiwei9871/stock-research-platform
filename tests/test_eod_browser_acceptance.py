@@ -192,6 +192,47 @@ def _parsed_success_result(tmp_path):
     )
 
 
+def _parsed_degraded_result(tmp_path):
+    report_path = _write_report(
+        tmp_path / "eod-browser-acceptance.json",
+        status="degraded",
+        failures=["optional chart label drift"],
+        failed_gate=None,
+    )
+    payload = json.loads(report_path.read_text(encoding="utf-8"))
+    payload["tests"].append(
+        {
+            "testId": "warning-test",
+            "title": "@eod @warning optional chart",
+            "projectName": "eod-chromium",
+            "retry": 0,
+            "status": "failed",
+            "durationMs": 1,
+            "failures": ["optional chart label drift"],
+            "attachments": [],
+            "severity": "warning",
+            "attemptHistory": [
+                {
+                    "retry": 0,
+                    "status": "failed",
+                    "durationMs": 1,
+                    "failures": ["optional chart label drift"],
+                    "attachments": [],
+                }
+            ],
+        }
+    )
+    report_path.write_text(json.dumps(payload), encoding="utf-8")
+    return parse_browser_acceptance_report(
+        report_path,
+        expected_run_id=RUN_ID,
+        expected_trade_date=TRADE_DATE,
+        expected_revision=REVISION,
+        expected_candidate_publications=_report()["candidateSnapshot"]["publications"],
+        exit_code=0,
+    )
+
+
 def test_write_browser_acceptance_manifest_persists_failed_status_and_evidence():
     captured = []
     result = _manifest_result(
@@ -262,6 +303,69 @@ def test_validate_browser_acceptance_manifest_entry_accepts_writer_output(tmp_pa
     assert normalized["browser_project"] == "eod-chromium"
     assert normalized["candidate_snapshot"]["tradeDate"] == TRADE_DATE
     assert normalized["artifact_paths"] == list(entry["metadata"]["artifact_paths"])
+
+
+@pytest.mark.parametrize(
+    "corruption",
+    ("success_failure_class", "success_warnings", "degraded_empty_warnings"),
+)
+def test_writer_rejects_corrupt_publishable_status_invariants(tmp_path, corruption):
+    result = (
+        _parsed_degraded_result(tmp_path)
+        if corruption == "degraded_empty_warnings"
+        else _parsed_success_result(tmp_path)
+    )
+    if corruption == "success_failure_class":
+        object.__setattr__(result, "failure_classes", ("api_ui_mismatch",))
+    elif corruption == "success_warnings":
+        object.__setattr__(result, "warnings", ("unexpected warning",))
+    else:
+        object.__setattr__(result, "warnings", ())
+    captured = []
+
+    with pytest.raises(BrowserAcceptanceError, match="manifest"):
+        acceptance.write_browser_acceptance_manifest(
+            result,
+            manifest_upsert=captured.append,
+        )
+    assert captured == []
+
+
+@pytest.mark.parametrize(
+    "corruption",
+    ("success_failure_class", "success_warnings", "degraded_empty_warnings", "error_message"),
+)
+def test_validate_manifest_entry_rejects_publishable_status_invariant_corruption(
+    tmp_path,
+    corruption,
+):
+    result = (
+        _parsed_degraded_result(tmp_path)
+        if corruption == "degraded_empty_warnings"
+        else _parsed_success_result(tmp_path)
+    )
+    entry = acceptance.write_browser_acceptance_manifest(
+        result,
+        manifest_upsert=lambda _entry: None,
+    )
+    if corruption == "success_failure_class":
+        entry["metadata"]["failure_classes"] = ["api_ui_mismatch"]
+    elif corruption == "success_warnings":
+        entry["warnings"] = ["unexpected warning"]
+        entry["warning_count"] = 1
+        entry["metadata"]["warnings"] = ["unexpected warning"]
+    elif corruption == "degraded_empty_warnings":
+        entry["warnings"] = []
+        entry["warning_count"] = 0
+        entry["metadata"]["warnings"] = []
+    else:
+        entry["error_message"] = "publishable row must not carry an error"
+
+    with pytest.raises(BrowserAcceptanceError, match="manifest"):
+        acceptance.validate_browser_acceptance_manifest_entry(
+            entry,
+            expected_trade_date=TRADE_DATE,
+        )
 
 
 @pytest.mark.parametrize(
@@ -544,45 +648,7 @@ def test_direct_result_construction_deep_freezes_snapshot_and_detaches_source(re
 
 
 def test_parse_report_maps_warning_only_failure_to_degraded(tmp_path):
-    report_path = _write_report(
-        tmp_path / "eod-browser-acceptance.json",
-        status="degraded",
-        failures=["optional chart label drift"],
-        failed_gate=None,
-    )
-    payload = json.loads(report_path.read_text(encoding="utf-8"))
-    payload["tests"].append(
-        {
-            "testId": "warning-test",
-            "title": "@eod @warning optional chart",
-            "projectName": "eod-chromium",
-            "retry": 0,
-            "status": "failed",
-            "durationMs": 1,
-            "failures": ["optional chart label drift"],
-            "attachments": [],
-            "severity": "warning",
-            "attemptHistory": [
-                {
-                    "retry": 0,
-                    "status": "failed",
-                    "durationMs": 1,
-                    "failures": ["optional chart label drift"],
-                    "attachments": [],
-                }
-            ],
-        }
-    )
-    report_path.write_text(json.dumps(payload), encoding="utf-8")
-
-    result = parse_browser_acceptance_report(
-        report_path,
-        expected_run_id=RUN_ID,
-        expected_trade_date=TRADE_DATE,
-        expected_revision=REVISION,
-        expected_candidate_publications=_report()["candidateSnapshot"]["publications"],
-        exit_code=0,
-    )
+    result = _parsed_degraded_result(tmp_path)
 
     assert result.status == RepairStatus.DEGRADED
     assert result.warnings == ("optional chart label drift",)

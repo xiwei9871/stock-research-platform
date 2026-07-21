@@ -274,6 +274,11 @@ def write_browser_acceptance_manifest(
             "artifact_paths": artifacts,
         },
     )
+    if result.status in {RepairStatus.SUCCESS, RepairStatus.DEGRADED}:
+        validate_browser_acceptance_manifest_entry(
+            entry,
+            expected_trade_date=trade_date,
+        )
     manifest_upsert(entry)
     return entry
 
@@ -528,6 +533,15 @@ def validate_browser_acceptance_manifest_entry(
         or warning_count != len(warnings)
     ):
         raise _error("browser_acceptance_manifest_warning_count")
+    if failure_classes:
+        raise _error("browser_acceptance_manifest_publishable_failure_classes")
+    if status == "success" and warnings:
+        raise _error("browser_acceptance_manifest_success_warnings")
+    if status == "degraded" and not warnings:
+        raise _error("browser_acceptance_manifest_degraded_warnings_missing")
+    error_message = row.get("error_message")
+    if error_message is not None and error_message != "":
+        raise _error("browser_acceptance_manifest_publishable_error_message")
     snapshot = _validate_candidate_snapshot(
         metadata.get("candidate_snapshot"),
         expected_trade_date,
