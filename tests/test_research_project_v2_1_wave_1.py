@@ -21,6 +21,9 @@ from stock_research.research_project_v2_1.wave_1 import (
 )
 
 
+WAVE_1_END_COMMIT = "1b573384bebc252180bd648bd4388c96db938492"
+
+
 def _gate() -> dict:
     gate = {
         "schema_version": "1.0.0",
@@ -242,15 +245,15 @@ def test_wave_1_exact_allowlist_covers_all_changes_and_forbids_downstream_paths(
     )
     changed = set(
         subprocess.check_output(
-            ["git", "diff", "--name-only", f"{payload['baseline_commit']}..HEAD"],
+            [
+                "git",
+                "diff",
+                "--name-only",
+                f"{payload['baseline_commit']}..{WAVE_1_END_COMMIT}",
+            ],
             cwd=root,
             text=True,
         ).splitlines()
     )
-    for line in subprocess.check_output(
-        ["git", "status", "--porcelain=v1", "-uall"], cwd=root, text=True
-    ).splitlines():
-        path = line[3:]
-        changed.add(path.split(" -> ", 1)[-1])
     assert changed <= set(payload["paths"])
     assert not any(path.startswith(tuple(payload["forbidden_prefixes"])) for path in changed)

@@ -14,7 +14,8 @@
     "src/stock_research/research_project_v2_1/schema.py",
     "src/stock_research/research_project_v2_1/targeted_assessment.py",
     "tests/test_research_project_v2_1_schema.py",
-    "tests/test_research_project_v2_1_targeted_assessment_wave_1.py"
+    "tests/test_research_project_v2_1_targeted_assessment_wave_1.py",
+    "tests/test_research_project_v2_1_wave_1.py"
   ],
   "forbidden_prefixes": [
     "artifacts/research_projects/v2_1/acquisition/",
