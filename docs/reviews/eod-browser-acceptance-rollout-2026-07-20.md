@@ -108,7 +108,28 @@ A final delimiter edge-case pass added explicit rejection of empty `?` and `#` c
 
 ### Scoped loopback correction
 
-Correction `f130fac` closed the remaining scoped-IPv6 edge case by rejecting loopback literals with a nonempty scope ID, such as `::1%lo0`, for both cache-clear and login endpoints. The `506 passed` result above is the immediately preceding delimiter-hardening stage. A fresh rerun of the same ten-file command after the scoped-loopback correction exited `0` with `508 passed` and the same 2 existing `py_mini_racer` deprecation warnings; `508 passed` is the current final focused result. This correction remains local fixture/unit evidence and does not change the `BLOCKED / stop_and_plan` decision.
+Correction `f130fac` closed the remaining scoped-IPv6 edge case by rejecting loopback literals with a nonempty scope ID, such as `::1%lo0`, for both cache-clear and login endpoints. The `506 passed` result above is the immediately preceding delimiter-hardening stage. A fresh rerun of the same ten-file command after the scoped-loopback correction exited `0` with `508 passed` and the same 2 existing `py_mini_racer` deprecation warnings; `508 passed` was the final focused result at that hardening stage. This correction remains local fixture/unit evidence and does not change the `BLOCKED / stop_and_plan` decision.
+
+### Display-gate integration correction
+
+The later display-gate integration review found and closed backend and frontend paths that could still bypass the manifest-backed display decision. The correction sequence was:
+
+- `966009a` — `fix: enforce browser acceptance display gate`;
+- `2c96e46` — `fix: gate backend default trade dates`;
+- `ac545db` — `fix: ignore future display manifests`;
+- `7564561` — `fix: gate frontend date-driven workspaces`;
+- `205bcfe` — `fix: require readiness for frontend display dates`.
+
+Together these commits close the remaining backend/frontend no-parameter default-date bypasses, reject future-dated manifests as display authority, prevent unresolved or failed readiness requests from promoting `latest_market_date`, and keep date-driven frontend workspaces from mounting or requesting candidate data before the display decision is resolved. Explicit historical dates remain available; an explicitly empty display date remains blocked/empty rather than being replaced with a candidate date.
+
+Current fresh regression evidence after this integration sequence:
+
+- backend ten-file focused regression, run fresh by the main thread: exit `0`; `521 passed`; 2 existing `py_mini_racer` deprecation warnings;
+- dashboard Vitest: exit `0`; 41 files; `548 passed`;
+- dashboard TypeScript/Vite build: exit `0`; 2,238 modules transformed; only the existing chunk-size warning remained;
+- Mock P0 Playwright: exit `0`; `59 passed`.
+
+This evidence does not include a Real, EOD, Sandbox, controlled-candidate, or live rollout run. The decision therefore remains **BLOCKED / stop_and_plan**. `STOCK_RESEARCH_EOD_BROWSER_ACCEPTANCE_ENABLED` remains false/unset by default, `STOCK_RESEARCH_BROWSER_ACCEPTANCE_REQUIRED_FROM` remains empty, and no rollout boundary was enabled.
 
 ### Dashboard unit
 
