@@ -139,6 +139,7 @@ class _VisibleHTMLParser(HTMLParser):
     def __init__(self, limits: ParserLimits) -> None:
         super().__init__(convert_charrefs=True)
         self.sections: list[tuple[int, ParsedSection]] = []
+        self.metadata_sections: list[ParsedSection] = []
         self.title_chunks: list[str] = []
         self._elements: list[_HtmlElement] = []
         self._counts: dict[str, int] = {}
@@ -149,6 +150,8 @@ class _VisibleHTMLParser(HTMLParser):
         self._capture_count = 0
         self._visible_text_chars = 0
         self._captured_text_chars = 0
+        self._metadata_text_chars = 0
+        self._metadata_text_seen: set[str] = set()
 
     @property
     def hidden(self) -> bool:
@@ -241,6 +244,25 @@ class _VisibleHTMLParser(HTMLParser):
         inherited_hidden = self.hidden
         if not inherited_hidden:
             self._implicitly_close_before_start(tag)
+        if tag == "meta" and not inherited_hidden and not own_hidden:
+            metadata_key = None
+            if (attr.get("name") or "").strip().lower() == "description":
+                metadata_key = "name:description"
+            elif (attr.get("property") or "").strip().lower() == "og:description":
+                metadata_key = "property:og:description"
+            content = _clean(attr.get("content") or "")
+            if metadata_key is not None and content and content not in self._metadata_text_seen:
+                if len(self.metadata_sections) >= self._limits.max_sections:
+                    raise _limit("section count", max_sections=self._limits.max_sections)
+                self._metadata_text_chars += len(content)
+                if self._metadata_text_chars > self._limits.max_text_chars:
+                    raise _limit(
+                        "text characters", max_text_chars=self._limits.max_text_chars
+                    )
+                self._metadata_text_seen.add(content)
+                self.metadata_sections.append(
+                    ParsedSection(None, f"html:meta:{metadata_key}", content)
+                )
         if tag in _VOID_TAGS:
             if (
                 not inherited_hidden
@@ -361,9 +383,14 @@ def _parse_html(data: bytes, title_hint: str | None, limits: ParserLimits) -> Pa
         raise
     except Exception as exc:
         raise _invalid("unreadable HTML") from exc
-    if not parser.sections:
+    if parser.sections:
+        sections = [
+            section for _, section in sorted(parser.sections, key=lambda item: item[0])
+        ]
+    elif parser.metadata_sections:
+        sections = list(parser.metadata_sections)
+    else:
         raise _invalid("HTML has no visible semantic content")
-    sections = [section for _, section in sorted(parser.sections, key=lambda item: item[0])]
     _check_totals(sections, limits)
     title = _clean(title_hint) if title_hint else _clean("".join(parser.title_chunks)) or None
     return ParsedDocument("stdlib.html.parser", "text/html", title, tuple(sections))

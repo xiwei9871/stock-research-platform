@@ -66,6 +66,20 @@ def test_html_parser_keeps_visible_semantic_content_without_parent_duplicates() 
     assert "not evidence" not in combined
 
 
+def test_html_parser_uses_auditable_description_metadata_for_script_shell() -> None:
+    parsed = parse_document_bytes(
+        (FIXTURES / "sample_script_shell_product.html").read_bytes(),
+        media_type="text/html",
+    )
+    assert parsed.title == "BCM78900 Product Fixture"
+    assert [(section.locator, section.text) for section in parsed.sections] == [
+        (
+            "html:meta:name:description",
+            "A 51.2 Tb/s switch for data-center and AI cluster applications.",
+        )
+    ]
+
+
 @pytest.mark.parametrize("payload", [b"\xff", b"<html><body></body></html>"])
 def test_html_parser_wraps_invalid_or_empty_documents(payload: bytes) -> None:
     with pytest.raises(ResearchProjectV2Error) as exc:
