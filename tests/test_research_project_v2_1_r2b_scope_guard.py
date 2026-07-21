@@ -25,6 +25,8 @@ ACQUISITION_RECOVERY_PHASE_A_END = "d8b3101149408bfb92cd3733eb737e3ba677ea47"
 ACQUISITION_RECOVERY_PHASE_B_END = "d76c95f"
 ACQUISITION_PHASE_C_END = "34210fb"
 STAGE_A_ACQUISITION_BASELINE = ACQUISITION_PHASE_C_END
+STAGE_A_ACQUISITION_END = "ae4e70e"
+STAGE_A_SCOPE_CORRECTION_BASELINE = STAGE_A_ACQUISITION_END
 ACQUISITION_RECOVERY_PHASE_A_PATHS = {
     "artifacts/research_projects/v2_1/acquisition/diagnostics/r2b_external_acquisition_phase_a_2026-07-20.json",
     "docs/research_operating_layer_v2_r2b_external_acquisition_recovery_phase_a.md",
@@ -236,7 +238,40 @@ def test_stage_a_acquisition_uses_a_separate_exact_allowlist() -> None:
     assert payload["baseline_commit"] == STAGE_A_ACQUISITION_BASELINE
     allowed = set(payload["paths"])
     assert len(allowed) == len(payload["paths"])
-    result = _git("diff", "--name-only", f"{STAGE_A_ACQUISITION_BASELINE}..HEAD")
+    assert (
+        _git("merge-base", "--is-ancestor", STAGE_A_ACQUISITION_END, "HEAD").returncode
+        == 0
+    )
+    result = _git(
+        "diff",
+        "--name-only",
+        f"{STAGE_A_ACQUISITION_BASELINE}..{STAGE_A_ACQUISITION_END}",
+    )
+    changed = {path for path in result.stdout.splitlines() if path}
+    assert changed <= allowed
+    assert not any(
+        path.startswith(tuple(payload["forbidden_prefixes"])) for path in changed
+    )
+
+
+def test_stage_a_scope_correction_uses_an_exact_append_only_allowlist() -> None:
+    allowlist_path = (
+        REPOSITORY_ROOT
+        / "artifacts/research_projects/v2_1/governance/stage_a_scope_correction_exact_allowlist.json"
+    )
+    payload = json.loads(allowlist_path.read_text(encoding="utf-8"))
+    assert payload["baseline_commit"] == STAGE_A_SCOPE_CORRECTION_BASELINE
+    allowed = set(payload["paths"])
+    assert len(allowed) == len(payload["paths"])
+    original_checkpoint = (
+        "artifacts/research_projects/v2_1/acquisition/checkpoints/"
+        "acquisition_checkpoint:a5f7627d8726c9405ba67a75.json"
+    )
+    assert original_checkpoint not in allowed
+
+    result = _git(
+        "diff", "--name-only", f"{STAGE_A_SCOPE_CORRECTION_BASELINE}..HEAD"
+    )
     changed = {path for path in result.stdout.splitlines() if path}
     assert changed <= allowed
     assert not any(

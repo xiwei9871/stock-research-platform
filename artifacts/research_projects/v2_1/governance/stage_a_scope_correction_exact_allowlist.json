@@ -1,0 +1,35 @@
+{
+  "allowlist_id": "scope_allowlist:r2b_ai_pcb_stage_a_scope_correction",
+  "baseline_commit": "ae4e70e",
+  "forbidden_prefixes": [
+    "artifacts/research_projects/v2/",
+    "artifacts/research_projects/v2_1/acquisition/",
+    "artifacts/research_projects/v2_1/admission/",
+    "artifacts/research_projects/v2_1/portfolio/",
+    "artifacts/research_projects/v2_1/projects/",
+    "artifacts/research_projects/v2_1/signal/",
+    "artifacts/research_projects/v2_1/stock_rating/",
+    "artifacts/research_projects/v2_1/strategy/",
+    "artifacts/research_projects/v2_1/watchlist/",
+    "artifacts/technology_industry_catalog/",
+    "artifacts/theme_decomposition/",
+    "dashboard/",
+    "src/stock_research/dashboard/"
+  ],
+  "paths": [
+    "artifacts/research_projects/v2_1/governance/stage_a_scope_correction_exact_allowlist.json",
+    "artifacts/research_projects/v2_1/governance/stage_a_scope_correction_v1.json",
+    "artifacts/research_projects/v2_1/schema/stage_a_scope_correction_v2_4.schema.json",
+    "docs/research_operating_layer_v2_r2b_ai_pcb_scope_correction_and_stage_a2_plan.md",
+    "docs/research_operating_layer_v2_r2b_ai_pcb_stage_a_acquisition.md",
+    "docs/superpowers/plans/2026-07-21-ai-pcb-stage-a-scope-correction.md",
+    "docs/superpowers/specs/2026-07-21-ai-pcb-stage-a-scope-correction-design.md",
+    "src/stock_research/research_project_v2_1/governance.py",
+    "src/stock_research/research_project_v2_1/layout.py",
+    "src/stock_research/research_project_v2_1/schema.py",
+    "tests/test_research_project_v2_1_r2b_scope_guard.py",
+    "tests/test_research_project_v2_1_scope_correction.py"
+  ],
+  "phase": "r2b_ai_compute_pcb_stage_a_scope_correction",
+  "schema_version": "1.0.0"
+}

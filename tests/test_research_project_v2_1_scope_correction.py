@@ -166,6 +166,31 @@ def test_schema_v2_4_rejects_unknown_fields() -> None:
         validate_v2_1_schema_payload("stage_a_scope_correction_v2_4", payload)
 
 
+@pytest.mark.parametrize("entity_name", GLOBAL_ENTITIES)
+@pytest.mark.parametrize(
+    "field",
+    [
+        "investment_candidate",
+        "eligible_for_a_share_review_universe",
+        "eligible_for_company_scoring",
+        "eligible_for_signal",
+        "eligible_for_admission",
+    ],
+)
+def test_schema_v2_4_rejects_any_global_entity_downstream_eligibility(
+    entity_name: str, field: str
+) -> None:
+    payload = scope_correction_payload()
+    entity = next(
+        item
+        for item in payload["decision"]["entity_classifications"]
+        if item["entity_name"] == entity_name
+    )
+    entity[field] = True
+    with pytest.raises(ResearchProjectV2Error):
+        validate_v2_1_schema_payload("stage_a_scope_correction_v2_4", payload)
+
+
 def _layout_with_checkpoint(tmp_path: Path) -> LayeredResearchLayout:
     root = tmp_path / "v2_1"
     checkpoint_dir = root / "acquisition/checkpoints"
