@@ -16,6 +16,8 @@ DASHBOARD_AUTH_USERNAME="${DASHBOARD_AUTH_USERNAME:-}"
 DASHBOARD_AUTH_PASSWORD="${DASHBOARD_AUTH_PASSWORD:-}"
 DASHBOARD_WRITE_TOKEN="${DASHBOARD_WRITE_TOKEN:-${STOCK_RESEARCH_DASHBOARD_WRITE_TOKEN:-}}"
 CACHE_STATUS="pending"
+BROWSER_STATUS="unknown"
+BROWSER_EVIDENCE_PATHS=""
 
 source "$ROOT/scripts/stock_cron_guard.sh"
 clear_stock_proxy_env
@@ -106,6 +108,15 @@ print_summary() {
   echo "Dashboard缓存: $CACHE_STATUS"
   echo "摘要文件: $OUTPUT_DIR/run_summary.json"
   echo "报告文件: $OUTPUT_DIR/run_report.md"
+  echo "HTML报告: $OUTPUT_DIR/run_report.html"
+  echo "浏览器验收状态: $BROWSER_STATUS"
+  if [[ -n "$BROWSER_EVIDENCE_PATHS" ]]; then
+    while IFS= read -r evidence_path; do
+      [[ -n "$evidence_path" ]] && echo "浏览器证据: $evidence_path"
+    done <<< "$BROWSER_EVIDENCE_PATHS"
+  else
+    echo "浏览器证据: none"
+  fi
   if [[ "$rc" -ne 0 ]]; then
     echo "退出码: $rc"
   fi
@@ -118,7 +129,7 @@ run_repair() {
   echo "=== eod auto repair start: $(date '+%Y-%m-%d %H:%M:%S %z') ===" >>"$DETAIL_LOG"
   echo "eod_auto_repair|lock_mode|$LOCK_MODE" >>"$DETAIL_LOG"
   # Entrypoint: python -m stock_research.eod_auto_repair
-  rtk "$PYTHON" -m stock_research.eod_auto_repair \
+  PLAYWRIGHT_EOD_OUTPUT_DIR="$OUTPUT_DIR/browser" rtk "$PYTHON" -m stock_research.eod_auto_repair \
     --trade-date "$TRADE_DATE" \
     --output-dir "$OUTPUT_DIR" \
     --mode loop \
@@ -126,6 +137,20 @@ run_repair() {
   rc=$?
   echo "eod_auto_repair|summary|$OUTPUT_DIR/run_summary.json" >>"$DETAIL_LOG"
   echo "eod_auto_repair|report|$OUTPUT_DIR/run_report.md" >>"$DETAIL_LOG"
+  echo "eod_auto_repair|html_report|$OUTPUT_DIR/run_report.html" >>"$DETAIL_LOG"
+  if [[ -f "$OUTPUT_DIR/run_summary.json" ]]; then
+    BROWSER_STATUS="$(tr -d '\n' < "$OUTPUT_DIR/run_summary.json" | sed -n 's/.*"browser_acceptance".*"action".*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
+    BROWSER_STATUS="${BROWSER_STATUS:-unknown}"
+  fi
+  if [[ -d "$OUTPUT_DIR/browser" && ! -L "$OUTPUT_DIR/browser" ]]; then
+    BROWSER_EVIDENCE_PATHS="$(find "$OUTPUT_DIR/browser" -type f -print 2>/dev/null | sort || true)"
+  fi
+  echo "eod_auto_repair|browser_status|$BROWSER_STATUS" >>"$DETAIL_LOG"
+  if [[ -n "$BROWSER_EVIDENCE_PATHS" ]]; then
+    while IFS= read -r evidence_path; do
+      [[ -n "$evidence_path" ]] && echo "eod_auto_repair|browser_evidence|$evidence_path" >>"$DETAIL_LOG"
+    done <<< "$BROWSER_EVIDENCE_PATHS"
+  fi
   clear_dashboard_cache
   echo "=== eod auto repair end: $(date '+%Y-%m-%d %H:%M:%S %z') rc=$rc ===" >>"$DETAIL_LOG"
   set -e

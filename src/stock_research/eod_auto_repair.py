@@ -471,102 +471,13 @@ def _recommended_followups(checks: list[RepairCheckResult]) -> list[str]:
     return followups
 
 
-def _write_summary_files(summary: RepairRunSummary, output_dir: str | Path) -> None:
-    out = Path(output_dir)
-    out.mkdir(parents=True, exist_ok=True)
-    payload = summary.to_dict()
-    (out / "run_summary.json").write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2, default=str),
-        encoding="utf-8",
-    )
-    lines = [
-        f"# EOD Auto Repair Report {summary.trade_date}",
-        "",
-        f"- Report path: {out / 'run_report.md'}",
-        f"- Mode: {summary.mode}",
-        f"- Initial status: {_final_status(summary.checks_before).value}",
-        f"- Final status: {summary.final_status.value}",
-        f"- Loop stop reason: {summary.loop_stop_reason or 'n/a'}",
-        f"- Dry run: {summary.dry_run}",
-        f"- Remaining blockers: {', '.join(summary.remaining_blockers) if summary.remaining_blockers else 'none'}",
-        f"- Remaining non-blockers: {', '.join(summary.remaining_non_blockers) if summary.remaining_non_blockers else 'none'}",
-        f"- Initial blocker count: {sum(1 for value in summary.initial_classification.values() if value == 'blocker')}",
-        f"- Final blocker count: {len(summary.remaining_blockers)}",
-        "",
-        "## Stages",
-    ]
-    if summary.stages:
-        for stage in summary.stages:
-            blockers = ", ".join(stage.remaining_blockers) if stage.remaining_blockers else "none"
-            lines.append(f"- {stage.name}: blockers={blockers}")
-            for action in stage.actions:
-                lines.append(f"  - action {action.name}: {action.status.value} {action.message}")
-    else:
-        lines.append("- none")
-    if summary.loop_cycles:
-        lines.extend(["", "## Loop Cycles"])
-        for cycle in summary.loop_cycles:
-            blockers = ", ".join(cycle.remaining_blockers) if cycle.remaining_blockers else "none"
-            lines.append(f"- Cycle {cycle.cycle_number}: actions={len(cycle.actions)} blockers={blockers} stop={cycle.stop_reason or 'continue'}")
-            for action in cycle.actions:
-                lines.append(
-                    f"  - {action.name}: {action.status.value} exit_code={action.exit_code} "
-                    f"started={action.started_at} ended={action.ended_at} "
-                    f"validation={json.dumps(action.validation_result, ensure_ascii=False, default=str)} {action.message}"
-                )
-    lines.extend([
-        "",
-        "## Checks Before",
-    ])
-    for check in summary.checks_before:
-        lines.append(f"- {check.name}: {check.status.value} {json.dumps(check.metrics, ensure_ascii=False, default=str)}")
-    lines.append("")
-    lines.append("## Actions")
-    for action in summary.actions:
-        lines.append(
-            f"- {action.name}: {action.status.value} exit_code={action.exit_code} "
-            f"started={action.started_at} ended={action.ended_at} "
-            f"metrics={json.dumps(action.metrics, ensure_ascii=False, default=str)} "
-            f"validation={json.dumps(action.validation_result, ensure_ascii=False, default=str)}"
-        )
-    if not summary.actions:
-        lines.append("- none")
-    lines.append("")
-    lines.append("## Checks After")
-    for check in summary.checks_after:
-        lines.append(f"- {check.name}: {check.status.value} {json.dumps(check.metrics, ensure_ascii=False, default=str)}")
-    lines.append("")
-    lines.append("## Next actions")
-    if summary.next_actions:
-        lines.extend(f"- {item}" for item in summary.next_actions)
-    else:
-        lines.append("- none")
-    lines.append("")
-    lines.append("## Warnings")
-    if summary.warnings:
-        lines.extend(f"- {item}" for item in summary.warnings)
-    else:
-        lines.append("- none")
-    lines.append("")
-    lines.append("## Infrastructure issues")
-    if summary.infrastructure_issues:
-        lines.extend(f"- {item}" for item in summary.infrastructure_issues)
-    else:
-        lines.append("- none")
-    lines.append("")
-    lines.append("## Final decision")
-    if not summary.remaining_blockers and summary.final_status in {RepairStatus.SUCCESS, RepairStatus.DEGRADED}:
-        lines.append(
-            "System is usable for dashboard, watchlist, strategy publish, review queue, "
-            "and market monitor surfaces. No blocking EOD issue remains. Remaining issues "
-            "are degraded-only and should be handled by separate data gap or report generation loops."
-        )
-    else:
-        lines.append("Blocking EOD issues remain; review failed actions and external data availability.")
-    if summary.recommended_followups:
-        lines.extend(["", "## Recommended follow-ups"])
-        lines.extend(f"- {item}" for item in summary.recommended_followups)
-    (out / "run_report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+def _write_summary_files(
+    summary: RepairRunSummary,
+    output_dir: str | Path,
+) -> RepairRunSummary:
+    from stock_research.eod_auto_repair_report import write_summary_files
+
+    return write_summary_files(summary, output_dir)
 
 
 def _run_eod_auto_repair_loop(
@@ -787,7 +698,7 @@ def run_eod_auto_repair(
             },
         )
         if write_reports:
-            _write_summary_files(summary, out)
+            summary = _write_summary_files(summary, out)
         return summary
 
     checks_before = _safe_run_check_plan(
@@ -854,7 +765,7 @@ def run_eod_auto_repair(
         recommended_followups=_recommended_followups(checks_after),
     )
     if write_reports:
-        _write_summary_files(summary, out)
+        summary = _write_summary_files(summary, out)
     return summary
 
 
@@ -883,6 +794,25 @@ def _browser_result_payload(result: object) -> dict[str, object]:
     status = getattr(result, "status")
     status_value = status.value if isinstance(status, RepairStatus) else str(status)
     snapshot = json.loads(json.dumps(getattr(result, "snapshot", {}), default=str))
+    attempts = []
+    for attempt in getattr(result, "attempts", ()) or ():
+        attempt_status = getattr(attempt, "status", "")
+        attempt_status_value = (
+            attempt_status.value if isinstance(attempt_status, RepairStatus) else str(attempt_status)
+        )
+        attempts.append(
+            {
+                "attempt_number": int(getattr(attempt, "attempt_number", 0) or 0),
+                "status": attempt_status_value,
+                "duration_seconds": float(getattr(attempt, "duration_seconds", 0.0) or 0.0),
+                "exit_code": getattr(attempt, "exit_code", None),
+                "failure_classes": list(getattr(attempt, "failure_classes", ()) or ()),
+                "warnings": list(getattr(attempt, "warnings", ()) or ()),
+                "artifact_paths": list(getattr(attempt, "artifact_paths", ()) or ()),
+                "snapshot": json.loads(json.dumps(getattr(attempt, "snapshot", {}), default=str)),
+                "message": str(getattr(attempt, "message", "")),
+            }
+        )
     return {
         "status": status_value,
         "trade_date": str(getattr(result, "trade_date", "")),
@@ -898,6 +828,7 @@ def _browser_result_payload(result: object) -> dict[str, object]:
         "started_at": str(getattr(result, "started_at", "")),
         "ended_at": str(getattr(result, "ended_at", "")),
         "message": str(getattr(result, "message", "")),
+        "attempts": attempts,
     }
 
 
@@ -956,9 +887,12 @@ def build_default_action_registry(
         browser_manifest_loader or load_strategy_publication_manifests
     )
     selected_strategy_publisher = strategy_publisher or publish_strategy_eod
+    configured_browser_output_root = os.getenv("PLAYWRIGHT_EOD_OUTPUT_DIR")
     selected_browser_output_root = Path(
         browser_output_root
         if browser_output_root is not None
+        else configured_browser_output_root
+        if configured_browser_output_root
         else Path(output_root) / "research" / "eod_browser_acceptance"
     )
     registry: dict[str, ActionRunner] = {}

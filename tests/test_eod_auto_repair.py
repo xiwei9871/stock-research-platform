@@ -14,6 +14,7 @@ from stock_research.data_run_manifest import build_manifest_entry
 import stock_research.eod_auto_repair as eod_auto_repair
 import stock_research.eod_auto_repair_actions as eod_auto_repair_actions
 import stock_research.eod_auto_repair_checks as eod_auto_repair_checks
+import stock_research.eod_auto_repair_report as eod_auto_repair_report
 import stock_research.daily_close_pipeline as daily_close_pipeline
 from stock_research.eod_auto_repair import build_default_action_registry, run_eod_auto_repair
 from stock_research.eod_auto_repair_models import RepairActionResult, RepairCheckResult, RepairRunSummary, RepairStatus
@@ -575,6 +576,69 @@ def test_run_eod_auto_repair_loop_repairs_blockers_in_cycles_and_does_not_chase_
     assert summary.loop_stop_reason == "ready_with_no_blockers"
     assert summary.loop_cycles[0].cycle_number == 1
     assert "System is usable" in (tmp_path / "run_report.md").read_text()
+    assert (tmp_path / "run_report.html").exists()
+
+
+def test_run_eod_auto_repair_surfaces_html_report_failure(monkeypatch, tmp_path):
+    def fail_html(_summary, _output_dir):
+        raise OSError("html unavailable")
+
+    monkeypatch.setattr(eod_auto_repair_report, "render_html_report", fail_html)
+
+    summary = run_eod_auto_repair(
+        trade_date="2026-07-01",
+        output_dir=tmp_path,
+        mode="check",
+        check_plan_builder=lambda _trade_date: [
+            SimpleNamespace(
+                name="ops_health",
+                run=lambda: RepairCheckResult("ops_health", RepairStatus.SUCCESS, "ready"),
+            )
+        ],
+        action_registry={},
+        write_reports=True,
+    )
+
+    assert summary.final_status == RepairStatus.FAILED
+    assert any("run_report_html_failed" in issue for issue in summary.infrastructure_issues)
+    assert (tmp_path / "run_summary.json").exists()
+    assert (tmp_path / "run_report.md").exists()
+    assert not (tmp_path / "run_report.html").exists()
+
+
+def test_cli_returns_failure_when_report_generation_fails(monkeypatch, tmp_path):
+    original_run = run_eod_auto_repair
+
+    def fail_html(_summary, _output_dir):
+        raise OSError("html unavailable")
+
+    def run_with_controlled_checks(**kwargs):
+        return original_run(
+            **kwargs,
+            check_plan_builder=lambda _trade_date: [
+                SimpleNamespace(
+                    name="ops_health",
+                    run=lambda: RepairCheckResult("ops_health", RepairStatus.SUCCESS, "ready"),
+                )
+            ],
+        )
+
+    monkeypatch.setattr(eod_auto_repair_report, "render_html_report", fail_html)
+    monkeypatch.setattr(eod_auto_repair, "build_default_action_registry", lambda **_kwargs: {})
+    monkeypatch.setattr(eod_auto_repair, "run_eod_auto_repair", run_with_controlled_checks)
+
+    rc = eod_auto_repair._main(
+        [
+            "--trade-date",
+            "2026-07-01",
+            "--output-dir",
+            str(tmp_path),
+            "--mode",
+            "check",
+        ]
+    )
+
+    assert rc == 2
 
 
 def test_run_eod_auto_repair_loop_runs_factor_dependents_before_stopping(tmp_path):
@@ -1334,6 +1398,42 @@ def test_default_browser_action_uses_same_run_manifest_identities_and_verified_r
     assert result.artifact_paths == list(parsed_result.artifact_paths)
     assert result.validation_result["evidence"]["parsed_result"]["run_id"] == run_id
     assert result.validation_result["evidence"]["manifest"]["status"] == "success"
+
+
+def test_browser_result_payload_preserves_attempt_history():
+    result = SimpleNamespace(
+        status=RepairStatus.DEGRADED,
+        attempts=(
+            SimpleNamespace(
+                attempt_number=1,
+                status=RepairStatus.FAILED,
+                duration_seconds=1.5,
+                exit_code=1,
+                failure_classes=("runtime",),
+                warnings=(),
+                artifact_paths=("attempt-1/trace.zip",),
+                snapshot={"phase": "initial"},
+                message="runtime retry",
+            ),
+            SimpleNamespace(
+                attempt_number=2,
+                status=RepairStatus.SUCCESS,
+                duration_seconds=0.5,
+                exit_code=0,
+                failure_classes=(),
+                warnings=(),
+                artifact_paths=("attempt-2/trace.zip",),
+                snapshot={"phase": "rerun"},
+                message="rerun passed",
+            ),
+        ),
+    )
+
+    payload = eod_auto_repair._browser_result_payload(result)
+
+    assert [attempt["attempt_number"] for attempt in payload["attempts"]] == [1, 2]
+    assert payload["attempts"][0]["status"] == "failed"
+    assert payload["attempts"][1]["message"] == "rerun passed"
 
 
 @pytest.mark.parametrize("row_mutation", ["missing_strategy", "wrong_run"])

@@ -97,7 +97,36 @@ def test_eod_auto_repair_cron_uses_module_entrypoint_and_portable_lock():
     assert "logs/eod_auto_repair" in script
     assert "run_summary.json" in script
     assert "run_report.md" in script
+    assert "run_report.html" in script
+    assert 'PLAYWRIGHT_EOD_OUTPUT_DIR="$OUTPUT_DIR/browser"' in script
+    assert "浏览器验收状态" in script
+    assert "浏览器证据" in script
+    assert "test:e2e" not in script
+    assert "pnpm playwright" not in script
     assert "lock_mode|$LOCK_MODE" in script
+
+
+def test_eod_auto_repair_cron_prints_browser_status_and_evidence(tmp_path):
+    root, env = _make_cron_harness(
+        tmp_path,
+        python_body=(
+            'test "$PLAYWRIGHT_EOD_OUTPUT_DIR" = "$STOCK_RESEARCH_ROOT/outputs/research/eod_auto_repair/2026-07-02/browser" || exit 9\n'
+            'mkdir -p "$PLAYWRIGHT_EOD_OUTPUT_DIR/attempt-2"\n'
+            'printf %s \'{"browser_acceptance":{"action":{"status":"success"}}}\' > "$STOCK_RESEARCH_ROOT/outputs/research/eod_auto_repair/2026-07-02/run_summary.json"\n'
+            'touch "$STOCK_RESEARCH_ROOT/outputs/research/eod_auto_repair/2026-07-02/run_report.html"\n'
+            'touch "$PLAYWRIGHT_EOD_OUTPUT_DIR/attempt-2/trace.zip"\n'
+            "exit 0"
+        ),
+    )
+
+    result = _run_cron(env, "2026-07-02")
+
+    assert result.returncode == 0
+    assert "浏览器验收状态: success" in result.stdout
+    assert "HTML报告:" in result.stdout
+    assert "run_report.html" in result.stdout
+    assert "浏览器证据:" in result.stdout
+    assert "browser/attempt-2/trace.zip" in result.stdout
 
 
 def test_eod_auto_repair_cron_uses_flock_when_available(tmp_path):
@@ -198,6 +227,7 @@ def test_eod_auto_repair_cron_ignores_stale_lock_file_and_preserves_exit_code(tm
     assert "eod_auto_repair|locked" not in log_text
     assert f"eod_auto_repair|summary|{root}/outputs/research/eod_auto_repair/{trade_date}/run_summary.json" in log_text
     assert f"eod_auto_repair|report|{root}/outputs/research/eod_auto_repair/{trade_date}/run_report.md" in log_text
+    assert f"eod_auto_repair|html_report|{root}/outputs/research/eod_auto_repair/{trade_date}/run_report.html" in log_text
     proxy_log = root / "proxy.log"
     assert not proxy_log.exists() or proxy_log.read_text() == ""
 
