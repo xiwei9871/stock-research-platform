@@ -25,6 +25,8 @@ import {
 import { stockCodeToAssetId } from '../../../src/navigation/platformRoutes';
 import {
   buildEodAcceptanceReport,
+  acquireEodReportLock,
+  classifyExistingEodReportLock,
   playwrightStatusForReportStatus,
   safeAttachmentReference,
   sanitizeEodText,
@@ -556,8 +558,7 @@ contractTest.describe('EOD reporter contracts', () => {
       startedAt: '2026-07-20T01:00:00.000Z',
       endedAt: '2026-07-20T01:00:02.000Z',
       tests,
-      candidateSnapshots: [snapshot],
-      gateValidationRequired: true
+      candidateSnapshots: [snapshot]
     });
   }
 
@@ -567,6 +568,69 @@ contractTest.describe('EOD reporter contracts', () => {
     contractExpect(report.status).toBe('failed');
     contractExpect(report.failures).toContain(
       `eod_report_gate_missing:${REQUIRED_EOD_GATE_IDS[2]}`
+    );
+  });
+
+  contractTest('normal mode requires all gates and the candidate even when no tags were observed', () => {
+    const report = buildEodAcceptanceReport({
+      runId: 'zero-gate-run',
+      tradeDate: TARGET_DATE,
+      revision: 'abc123',
+      startedAt: '2026-07-20T01:00:00.000Z',
+      endedAt: '2026-07-20T01:00:02.000Z',
+      tests: [],
+      candidateSnapshots: []
+    });
+    contractExpect(report.contractOnly).toBe(false);
+    contractExpect(report.status).toBe('failed');
+    for (const gateId of REQUIRED_EOD_GATE_IDS) {
+      contractExpect(report.failures).toContain(`eod_report_gate_missing:${gateId}`);
+    }
+    contractExpect(report.failures).toContain('eod_report_candidate_snapshot_missing');
+  });
+
+  contractTest('contract-only mode is explicit and rejects any mixed daily gate', () => {
+    const clean = buildEodAcceptanceReport({
+      runId: 'contract-only-clean',
+      tradeDate: TARGET_DATE,
+      revision: 'abc123',
+      startedAt: '2026-07-20T01:00:00.000Z',
+      endedAt: '2026-07-20T01:00:02.000Z',
+      tests: [],
+      candidateSnapshots: [],
+      contractOnly: true
+    });
+    contractExpect(clean.contractOnly).toBe(true);
+    contractExpect(clean.status).toBe('success');
+
+    const mixed = buildEodAcceptanceReport({
+      runId: 'contract-only-mixed',
+      tradeDate: TARGET_DATE,
+      revision: 'abc123',
+      startedAt: '2026-07-20T01:00:00.000Z',
+      endedAt: '2026-07-20T01:00:02.000Z',
+      tests: [passingGateTests()[0]],
+      candidateSnapshots: [],
+      contractOnly: true
+    });
+    contractExpect(mixed.status).toBe('failed');
+    contractExpect(mixed.failures).toContain(
+      `eod_report_contract_only_contains_gate:${REQUIRED_EOD_GATE_IDS[0]}`
+    );
+  });
+
+  contractTest('fails when one test identity claims multiple required gate IDs', () => {
+    const [first, ...rest] = passingGateTests();
+    const report = gateReport([
+      {
+        ...first,
+        title: `combined ${eodGateTag(REQUIRED_EOD_GATE_IDS[0])} ${eodGateTag(REQUIRED_EOD_GATE_IDS[1])}`
+      },
+      ...rest.slice(1)
+    ]);
+    contractExpect(report.status).toBe('failed');
+    contractExpect(report.failures).toContain(
+      `eod_report_gate_test_claims_multiple:${first.testId}:${REQUIRED_EOD_GATE_IDS[0]},${REQUIRED_EOD_GATE_IDS[1]}`
     );
   });
 
@@ -633,8 +697,7 @@ contractTest.describe('EOD reporter contracts', () => {
           attachments: []
         }
       ],
-      candidateSnapshots: [snapshot],
-      gateValidationRequired: true
+      candidateSnapshots: [snapshot]
     });
     contractExpect(report.status).toBe('degraded');
     contractExpect(report.tests.find((test) => test.testId === 'warning-test')?.severity).toBe(
@@ -661,8 +724,7 @@ contractTest.describe('EOD reporter contracts', () => {
           attachments: []
         }
       ],
-      candidateSnapshots: [snapshot],
-      gateValidationRequired: true
+      candidateSnapshots: [snapshot]
     });
     contractExpect(report.status).toBe('failed');
     contractExpect(report.tests.find((test) => test.testId === 'blocker-test')?.severity).toBe(
@@ -706,6 +768,86 @@ contractTest.describe('EOD reporter contracts', () => {
     contractExpect(
       sanitizeEodText('critical_request_http_status:stock:auth-me:GET:/api/auth/me:401')
     ).toBe('critical_request_http_status:stock:auth-me:GET:/api/auth/me:401');
+    for (const fileUrl of [
+      'file:///srv/private/report.json',
+      'file://server/share/private/report.json',
+      'file:///C:/Users/operator/private/report.json'
+    ]) {
+      const sanitized = sanitizeEodText(fileUrl);
+      contractExpect(sanitized).not.toContain('private');
+      contractExpect(sanitized).not.toContain('Users');
+      contractExpect(sanitized).not.toContain('server/share');
+    }
+  });
+
+  contractTest('classifies active, stale, and invalid report locks fail closed', () => {
+    const lock = JSON.stringify({
+      pid: 123,
+      run_id: 'run-123',
+      startedAt: '2026-07-20T01:00:00.000Z'
+    });
+    contractExpect(classifyExistingEodReportLock(lock, () => true)).toBe('active');
+    contractExpect(classifyExistingEodReportLock(lock, () => false)).toBe('stale');
+    contractExpect(classifyExistingEodReportLock('{"pid":"bad"}', () => false)).toBe(
+      'invalid'
+    );
+    contractExpect(
+      classifyExistingEodReportLock(lock, () => {
+        throw new Error('EPERM');
+      })
+    ).toBe('invalid');
+  });
+
+  contractTest('stale lock acquisition removes once and recreates while active lock stays intact', () => {
+    const existing = JSON.stringify({
+      pid: 123,
+      run_id: 'old-run',
+      startedAt: '2026-07-20T01:00:00.000Z'
+    });
+    let openAttempts = 0;
+    let removes = 0;
+    let written = '';
+    const operations = {
+      openExclusive() {
+        openAttempts += 1;
+        if (openAttempts === 1) throw Object.assign(new Error('exists'), { code: 'EEXIST' });
+        return 9;
+      },
+      read: () => existing,
+      remove: () => {
+        removes += 1;
+      },
+      write: (_fd: number, value: string) => {
+        written = value;
+      },
+      close: () => undefined
+    };
+    contractExpect(
+      acquireEodReportLock(
+        '/tmp/eod.lock',
+        { pid: 456, run_id: 'new-run', startedAt: '2026-07-20T02:00:00.000Z' },
+        operations,
+        () => false
+      )
+    ).toBe(9);
+    contractExpect(removes).toBe(1);
+    contractExpect(JSON.parse(written)).toEqual({
+      pid: 456,
+      run_id: 'new-run',
+      startedAt: '2026-07-20T02:00:00.000Z'
+    });
+
+    openAttempts = 0;
+    removes = 0;
+    contractExpect(() =>
+      acquireEodReportLock(
+        '/tmp/eod.lock',
+        { pid: 456, run_id: 'new-run', startedAt: '2026-07-20T02:00:00.000Z' },
+        operations,
+        () => true
+      )
+    ).toThrow('eod_report_output_lock_held');
+    contractExpect(removes).toBe(0);
   });
 
   contractTest('keeps safe relative attachment locations and hashes external paths', () => {

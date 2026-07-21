@@ -42,8 +42,7 @@ export type EodAcceptanceReportInput = {
   endedAt: string;
   tests: EodCollectedTest[];
   candidateSnapshots: CandidateSnapshot[];
-  candidateSnapshotRequired?: boolean;
-  gateValidationRequired?: boolean;
+  contractOnly?: boolean;
   candidateSnapshotErrors?: string[];
   globalFailures?: string[];
 };
@@ -56,6 +55,7 @@ export type EodAcceptanceReport = {
   startedAt: string;
   endedAt: string;
   durationSeconds: number;
+  contractOnly: boolean;
   status: 'success' | 'degraded' | 'failed';
   tests: EodReportedTest[];
   failures: string[];
@@ -100,6 +100,7 @@ declare const process: {
   env: Record<string, string | undefined>;
   pid: number;
   cwd(): string;
+  kill(pid: number, signal: number): void;
 };
 
 function stableValue(value: unknown): unknown {
@@ -130,6 +131,7 @@ function sanitizeDeep<T>(value: T): T {
 
 export function sanitizeEodText(value: string): string {
   return sanitizeRuntimeEvidenceText(value.replace(/\u001B\[[0-?]*[ -/]*[@-~]/g, ''))
+    .replace(/\bfile:\/\/[^\s"'<>()[\]{}]+/gi, 'file://<path>')
     .replace(/\\\\[^\\\s]+\\[^\s)\]}]+/g, '<path>')
     .replace(/(?<![A-Za-z0-9_])[A-Za-z]:[\\/][^\s)\]}]+/g, '<path>')
     .replace(
@@ -170,10 +172,8 @@ function severityFor(title: string): string {
   return 'error';
 }
 
-function gateIdForTitle(title: string): RequiredEodGateId | null {
-  return (
-    REQUIRED_EOD_GATE_IDS.find((gateId) => title.includes(eodGateTag(gateId))) ?? null
-  );
+function gateIdsForTitle(title: string): RequiredEodGateId[] {
+  return REQUIRED_EOD_GATE_IDS.filter((gateId) => title.includes(eodGateTag(gateId)));
 }
 
 function isFailureStatus(status: string): boolean {
@@ -232,10 +232,25 @@ function validateRequiredGates(
   finalTests: EodReportedTest[],
   failures: string[]
 ): void {
+  const claimsByTestId = new Map<string, Set<RequiredEodGateId>>();
+  for (const test of collected) {
+    const testId = test.testId ?? `${test.projectName}:${test.title}`;
+    const claims = claimsByTestId.get(testId) ?? new Set<RequiredEodGateId>();
+    for (const gateId of gateIdsForTitle(test.title)) claims.add(gateId);
+    claimsByTestId.set(testId, claims);
+  }
+  for (const [testId, claims] of claimsByTestId) {
+    if (claims.size > 1) {
+      failures.push(
+        `eod_report_gate_test_claims_multiple:${testId}:${[...claims].join(',')}`
+      );
+    }
+  }
+  const distinctFinalTestIds = new Set<string>();
   for (const gateId of REQUIRED_EOD_GATE_IDS) {
     const claimedTestIds = new Set(
       collected
-        .filter((test) => gateIdForTitle(test.title) === gateId)
+        .filter((test) => gateIdsForTitle(test.title).includes(gateId))
         .map((test) => test.testId ?? `${test.projectName}:${test.title}`)
     );
     if (claimedTestIds.size === 0) {
@@ -247,6 +262,7 @@ function validateRequiredGates(
       continue;
     }
     const [testId] = claimedTestIds;
+    distinctFinalTestIds.add(testId);
     const final = finalTests.find((test) => test.testId === testId);
     if (!final) {
       failures.push(`eod_report_gate_missing_final:${gateId}`);
@@ -255,6 +271,9 @@ function validateRequiredGates(
     if (final.status !== 'passed') {
       failures.push(`eod_report_gate_final_status:${gateId}:${final.status}`);
     }
+  }
+  if (distinctFinalTestIds.size !== REQUIRED_EOD_GATE_IDS.length) {
+    failures.push('eod_report_gate_test_ids_not_distinct');
   }
 }
 
@@ -333,13 +352,19 @@ export function buildEodAcceptanceReport(
     ...(input.candidateSnapshotErrors ?? []).map(sanitizeEodText)
   ];
   const tests = normalizeTests(input.tests, failures);
-  const gateValidationRequired =
-    input.gateValidationRequired ?? input.tests.some((test) => gateIdForTitle(test.title));
-  if (gateValidationRequired) validateRequiredGates(input.tests, tests, failures);
+  const contractOnly = input.contractOnly === true;
+  if (contractOnly) {
+    const mixedGateIds = new Set(input.tests.flatMap((test) => gateIdsForTitle(test.title)));
+    for (const gateId of mixedGateIds) {
+      failures.push(`eod_report_contract_only_contains_gate:${gateId}`);
+    }
+  } else {
+    validateRequiredGates(input.tests, tests, failures);
+  }
   const candidateSnapshot = canonicalCandidate(
     input.candidateSnapshots,
     failures,
-    input.candidateSnapshotRequired ?? true,
+    !contractOnly,
     input.tradeDate
   );
   let hasWarningFailure = false;
@@ -365,6 +390,7 @@ export function buildEodAcceptanceReport(
     startedAt: input.startedAt,
     endedAt: input.endedAt,
     durationSeconds,
+    contractOnly,
     status,
     tests,
     failures,
@@ -382,6 +408,86 @@ export function buildEodAcceptanceReport(
       ? createHash('sha256').update(stableJson(sanitizedCandidate)).digest('hex')
       : null
   };
+}
+
+export type ExistingEodReportLockState = 'active' | 'stale' | 'invalid';
+export type EodReportLockMetadata = { pid: number; run_id: string; startedAt: string };
+export type EodReportLockOperations = {
+  openExclusive(pathname: string): number;
+  read(pathname: string): string;
+  remove(pathname: string): void;
+  write(fileDescriptor: number, value: string): void;
+  close(fileDescriptor: number): void;
+};
+
+export function classifyExistingEodReportLock(
+  raw: string,
+  isPidAlive: (pid: number) => boolean
+): ExistingEodReportLockState {
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if (
+      typeof parsed !== 'object' ||
+      parsed === null ||
+      Array.isArray(parsed) ||
+      Object.keys(parsed).sort().join(',') !== 'pid,run_id,startedAt' ||
+      typeof parsed.pid !== 'number' ||
+      !Number.isInteger(parsed.pid) ||
+      parsed.pid <= 0 ||
+      typeof parsed.run_id !== 'string' ||
+      parsed.run_id.trim() === '' ||
+      typeof parsed.startedAt !== 'string' ||
+      Number.isNaN(Date.parse(parsed.startedAt))
+    ) {
+      return 'invalid';
+    }
+    return isPidAlive(parsed.pid) ? 'active' : 'stale';
+  } catch {
+    return 'invalid';
+  }
+}
+
+export function acquireEodReportLock(
+  lockPath: string,
+  metadata: EodReportLockMetadata,
+  operations: EodReportLockOperations,
+  isPidAlive: (pid: number) => boolean
+): number {
+  let fileDescriptor: number;
+  try {
+    fileDescriptor = operations.openExclusive(lockPath);
+  } catch (error) {
+    if ((error as { code?: string }).code !== 'EEXIST') {
+      throw new Error('eod_report_output_lock_invalid');
+    }
+    let state: ExistingEodReportLockState;
+    try {
+      state = classifyExistingEodReportLock(operations.read(lockPath), isPidAlive);
+    } catch {
+      state = 'invalid';
+    }
+    if (state === 'active') throw new Error('eod_report_output_lock_held');
+    if (state === 'invalid') throw new Error('eod_report_output_lock_invalid');
+    try {
+      operations.remove(lockPath);
+      fileDescriptor = operations.openExclusive(lockPath);
+    } catch {
+      throw new Error('eod_report_output_lock_invalid');
+    }
+  }
+
+  try {
+    operations.write(fileDescriptor, `${JSON.stringify(metadata)}\n`);
+  } catch {
+    try {
+      operations.close(fileDescriptor);
+      operations.remove(lockPath);
+    } catch {
+      // The original write failure remains the authoritative fail-closed result.
+    }
+    throw new Error('eod_report_output_lock_invalid');
+  }
+  return fileDescriptor;
 }
 
 export function playwrightStatusForReportStatus(
@@ -433,6 +539,23 @@ function writeAtomicJson(outputDir: string, report: EodAcceptanceReport): void {
   renameSync(temporaryPath, outputPath);
 }
 
+function processIdAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    if ((error as { code?: string }).code === 'ESRCH') return false;
+    throw error;
+  }
+}
+
+function reportRunId(startedAt: string): string {
+  return (
+    process.env.PLAYWRIGHT_EOD_RUN_ID ??
+    `playwright-eod-${process.env.PLAYWRIGHT_EOD_TRADE_DATE ?? 'unknown'}-${startedAt}`
+  );
+}
+
 export default class EodReporter implements Reporter {
   private readonly outputDir: string;
   private readonly tests: EodCollectedTest[] = [];
@@ -450,27 +573,36 @@ export default class EodReporter implements Reporter {
     this.lockPath = resolve(this.outputDir, 'eod-browser-acceptance.json.lock');
   }
 
-  onBegin(_config: FullConfig, _suite: Suite): void {
-    mkdirSync(this.outputDir, { recursive: true });
+  private releaseLock(): void {
+    if (this.lockFileDescriptor === null) return;
+    closeSync(this.lockFileDescriptor);
+    this.lockFileDescriptor = null;
     try {
-      this.lockFileDescriptor = openSync(this.lockPath, 'wx', 0o600);
-      writeFileSync(
-        this.lockFileDescriptor,
-        `${JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() })}\n`
-      );
+      unlinkSync(this.lockPath);
     } catch {
-      if (this.lockFileDescriptor !== null) {
-        closeSync(this.lockFileDescriptor);
-        this.lockFileDescriptor = null;
-        try {
-          unlinkSync(this.lockPath);
-        } catch {
-          // A failed lock initialization must not leave a stale partial lock behind.
-        }
-      }
-      throw new Error('eod_report_output_lock_held');
+      // A missing lock is already released; other cleanup failures remain fail-closed on next run.
     }
+  }
+
+  private acquireLock(runId: string): void {
+    mkdirSync(this.outputDir, { recursive: true });
+    this.lockFileDescriptor = acquireEodReportLock(
+      this.lockPath,
+      { pid: process.pid, run_id: runId, startedAt: this.startedAt },
+      {
+        openExclusive: (pathname) => openSync(pathname, 'wx', 0o600),
+        read: (pathname) => readFileSync(pathname, 'utf8'),
+        remove: (pathname) => unlinkSync(pathname),
+        write: (fileDescriptor, value) => writeFileSync(fileDescriptor, value),
+        close: (fileDescriptor) => closeSync(fileDescriptor)
+      },
+      processIdAlive
+    );
+  }
+
+  onBegin(_config: FullConfig, _suite: Suite): void {
     this.startedAt = new Date().toISOString();
+    this.acquireLock(reportRunId(this.startedAt));
   }
 
   onTestEnd(test: TestCase, result: TestResult): void {
@@ -513,9 +645,7 @@ export default class EodReporter implements Reporter {
       this.globalFailures.push(`playwright_run_status:${result.status}`);
     }
     const report = buildEodAcceptanceReport({
-      runId:
-        process.env.PLAYWRIGHT_EOD_RUN_ID ??
-        `playwright-eod-${process.env.PLAYWRIGHT_EOD_TRADE_DATE ?? 'unknown'}-${this.startedAt}`,
+      runId: reportRunId(this.startedAt),
       tradeDate: process.env.PLAYWRIGHT_EOD_TRADE_DATE ?? '',
       revision:
         process.env.PLAYWRIGHT_EOD_REVISION ?? process.env.GITHUB_SHA ?? 'unknown',
@@ -523,8 +653,7 @@ export default class EodReporter implements Reporter {
       endedAt,
       tests: this.tests,
       candidateSnapshots: this.candidateSnapshots,
-      candidateSnapshotRequired: this.tests.some((test) => gateIdForTitle(test.title)),
-      gateValidationRequired: this.tests.some((test) => gateIdForTitle(test.title)),
+      contractOnly: process.env.PLAYWRIGHT_EOD_CONTRACT_ONLY === 'true',
       candidateSnapshotErrors: this.candidateSnapshotErrors,
       globalFailures: this.globalFailures
     });
@@ -532,15 +661,11 @@ export default class EodReporter implements Reporter {
       writeAtomicJson(this.outputDir, report);
       return { status: playwrightStatusForReportStatus(report.status) };
     } finally {
-      if (this.lockFileDescriptor !== null) {
-        closeSync(this.lockFileDescriptor);
-        this.lockFileDescriptor = null;
-        try {
-          unlinkSync(this.lockPath);
-        } catch {
-          // The report is already durable; lock cleanup is best-effort on process teardown.
-        }
-      }
+      this.releaseLock();
     }
+  }
+
+  async onExit(): Promise<void> {
+    this.releaseLock();
   }
 }
