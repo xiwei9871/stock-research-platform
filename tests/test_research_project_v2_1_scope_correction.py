@@ -303,3 +303,16 @@ def test_checkpoint_fixture_hashes_match_the_immutable_baseline() -> None:
     wrapper = json.loads(checkpoint.read_text(encoding="utf-8"))
     assert wrapper["acquisition_checkpoint"]["content_hash"] == CHECKPOINT_CANONICAL_HASH
     assert sha256(checkpoint.read_bytes()).hexdigest() == CHECKPOINT_FILE_SHA256
+
+
+def test_repository_scope_correction_artifact_is_valid_and_checkpoint_is_unchanged() -> None:
+    layout = LayeredResearchLayout.default()
+    path = layout.governance_dir / "stage_a_scope_correction_v1.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    validated = validate_stage_a_scope_correction(payload, layout=layout)
+    assert canonical_bytes(validated) == path.read_bytes()
+
+    checkpoint = layout.acquisition_checkpoints_dir / CHECKPOINT_NAME
+    wrapper = json.loads(checkpoint.read_text(encoding="utf-8"))
+    assert wrapper["acquisition_checkpoint"]["content_hash"] == CHECKPOINT_CANONICAL_HASH
+    assert sha256(checkpoint.read_bytes()).hexdigest() == CHECKPOINT_FILE_SHA256
