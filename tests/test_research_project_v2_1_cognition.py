@@ -625,3 +625,18 @@ def test_validate_cognition_package_recomputes_grounding_and_scope(tmp_path: Pat
     result = validate_cognition_package(package, layout=layout)
     assert result["grounded_claim_ids"] == ["CLM-001"]
     assert result["scope_leakage"] == []
+
+
+def test_repository_ai_pcb_cognition_package_is_valid_and_strictly_bounded() -> None:
+    layout = LayeredResearchLayout.default()
+    path = layout.analysis_dir / "ai_pcb_industry_cognition_package_v1.json"
+    package = json.loads(path.read_text(encoding="utf-8"))
+    result = validate_cognition_package(package, layout=layout)
+    assert result["scope_leakage"] == []
+    assert len(package["er_assessments"]) == 5
+    assert package["research_framing"]["model_scope"] == (
+        "demand_side_and_system_interconnect"
+    )
+    assert package["research_framing"]["company_mapping_authorized"] is False
+    assert package["research_framing"]["stage_a2_authorized"] is False
+    assert package["research_framing"]["stage_b_authorized"] is False
