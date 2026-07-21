@@ -10,15 +10,26 @@ import { expectPublicationConsistency, expectRouteContext } from '../assertions/
 import { expect, test } from '../fixtures/test';
 import {
   candidateDisplayDecision,
+  createCriticalResponseLedger,
   installCandidateDisplayOverride,
   loadCandidateSnapshot,
   loadCandidateSnapshotWithPrevious,
+  eodGateTag,
+  REQUIRED_EOD_GATE_IDS,
   parseCandidateSnapshot,
   parsePreviousPublicationsJson,
   rewriteCandidateDisplayPayload,
-  type CandidatePayloads
+  type CandidatePayloads,
+  type CriticalResponseRequirement
 } from './candidateDisplay';
-import { buildEodAcceptanceReport, sanitizeEodText } from './eodReporter';
+import { stockCodeToAssetId } from '../../../src/navigation/platformRoutes';
+import {
+  buildEodAcceptanceReport,
+  playwrightStatusForReportStatus,
+  safeAttachmentReference,
+  sanitizeEodText,
+  type EodCollectedTest
+} from './eodReporter';
 
 const TARGET_DATE = '2026-07-20';
 const STRATEGY_IDS = ['lhb_shortline', 'mid_trend', 'tech_bottleneck'] as const;
@@ -485,12 +496,123 @@ contractTest.describe('EOD candidate display rewrite contracts', () => {
   });
 });
 
+contractTest.describe('EOD critical response ledger contracts', () => {
+  const requirements = [
+    { id: 'auth', method: 'GET', pathname: '/api/auth/me' },
+    { id: 'profile', method: 'GET', pathname: '/api/assets/000001.SZ/profile' }
+  ];
+
+  contractTest('requires one successful response for every critical endpoint', () => {
+    const ledger = createCriticalResponseLedger('stock', requirements);
+    ledger.record('GET', '/api/auth/me', 200);
+    contractExpect(() => ledger.assertComplete()).toThrow(
+      'critical_request_missing_success:stock:profile:GET:/api/assets/000001.SZ/profile'
+    );
+  });
+
+  contractTest('fails a critical endpoint on any HTTP 4xx or 5xx', () => {
+    const ledger = createCriticalResponseLedger('stock', requirements);
+    ledger.record('GET', '/api/auth/me', 401);
+    ledger.record('GET', '/api/assets/000001.SZ/profile', 200);
+    contractExpect(() => ledger.assertComplete()).toThrow(
+      'critical_request_http_status:stock:auth:GET:/api/auth/me:401'
+    );
+  });
+
+  contractTest('ignores optional endpoint failures outside the explicit requirement list', () => {
+    const ledger = createCriticalResponseLedger('stock', requirements);
+    ledger.record('GET', '/api/auth/me', 204);
+    ledger.record('GET', '/api/assets/000001.SZ/profile', 304);
+    ledger.record('GET', '/api/assets/000001.SZ/news', 404);
+    contractExpect(() => ledger.assertComplete()).not.toThrow();
+  });
+});
+
 contractTest.describe('EOD reporter contracts', () => {
   const snapshot = {
     schemaVersion: 'playwright-eod-candidate-snapshot/v1' as const,
     tradeDate: TARGET_DATE,
     publications: STRATEGY_IDS.map(publication)
   };
+
+  function passingGateTests(): EodCollectedTest[] {
+    return REQUIRED_EOD_GATE_IDS.map((gateId) => ({
+      testId: `test-${gateId}`,
+      title: `gate ${gateId} ${eodGateTag(gateId)}`,
+      projectName: 'chromium-desktop',
+      retry: 0,
+      status: 'passed',
+      durationMs: 10,
+      failures: [],
+      attachments: []
+    }));
+  }
+
+  function gateReport(tests: EodCollectedTest[]) {
+    return buildEodAcceptanceReport({
+      runId: 'gate-run',
+      tradeDate: TARGET_DATE,
+      revision: 'abc123',
+      startedAt: '2026-07-20T01:00:00.000Z',
+      endedAt: '2026-07-20T01:00:02.000Z',
+      tests,
+      candidateSnapshots: [snapshot],
+      gateValidationRequired: true
+    });
+  }
+
+  contractTest('fails when a required gate is missing', () => {
+    const tests = passingGateTests().slice(0, 2);
+    const report = gateReport(tests);
+    contractExpect(report.status).toBe('failed');
+    contractExpect(report.failures).toContain(
+      `eod_report_gate_missing:${REQUIRED_EOD_GATE_IDS[2]}`
+    );
+  });
+
+  contractTest('fails when two test identities claim one required gate', () => {
+    const tests = passingGateTests();
+    tests.push({ ...tests[0], testId: 'duplicate-gate-test' });
+    const report = gateReport(tests);
+    contractExpect(report.status).toBe('failed');
+    contractExpect(report.failures).toContain(
+      `eod_report_gate_duplicate:${REQUIRED_EOD_GATE_IDS[0]}`
+    );
+  });
+
+  contractTest('fails when a required gate final result is skipped', () => {
+    const tests = passingGateTests();
+    tests[1].status = 'skipped';
+    const report = gateReport(tests);
+    contractExpect(report.status).toBe('failed');
+    contractExpect(report.failures).toContain(
+      `eod_report_gate_final_status:${REQUIRED_EOD_GATE_IDS[1]}:skipped`
+    );
+  });
+
+  contractTest('uses the highest retry as final and keeps prior failure only in attempt history', () => {
+    const tests = passingGateTests();
+    tests.push({
+      ...tests[0],
+      retry: 1,
+      status: 'passed',
+      failures: []
+    });
+    tests[0].status = 'failed';
+    tests[0].failures = ['first attempt failed'];
+    const report = gateReport(tests);
+    contractExpect(report.status).toBe('success');
+    const final = report.tests.find((test) => test.testId === tests[0].testId);
+    contractExpect(final?.retry).toBe(1);
+    contractExpect(final?.attemptHistory).toHaveLength(2);
+    contractExpect(report.failures.join('\n')).not.toContain('first attempt failed');
+  });
+
+  contractTest('maps degraded to Playwright passed and failed to Playwright failed', () => {
+    contractExpect(playwrightStatusForReportStatus('success')).toBe('passed');
+    contractExpect(playwrightStatusForReportStatus('degraded')).toBe('passed');
+    contractExpect(playwrightStatusForReportStatus('failed')).toBe('failed');
+  });
 
   contractTest('classifies warning-only failures as degraded', () => {
     const report = buildEodAcceptanceReport({
@@ -500,7 +622,9 @@ contractTest.describe('EOD reporter contracts', () => {
       startedAt: '2026-07-20T01:00:00.000Z',
       endedAt: '2026-07-20T01:00:02.000Z',
       tests: [
+        ...passingGateTests(),
         {
+          testId: 'warning-test',
           title: 'visual drift @warning',
           projectName: 'chromium-desktop',
           status: 'failed',
@@ -509,10 +633,13 @@ contractTest.describe('EOD reporter contracts', () => {
           attachments: []
         }
       ],
-      candidateSnapshots: [snapshot]
+      candidateSnapshots: [snapshot],
+      gateValidationRequired: true
     });
     contractExpect(report.status).toBe('degraded');
-    contractExpect(report.tests[0].severity).toBe('warning');
+    contractExpect(report.tests.find((test) => test.testId === 'warning-test')?.severity).toBe(
+      'warning'
+    );
   });
 
   contractTest('classifies blocker failures as failed', () => {
@@ -523,7 +650,9 @@ contractTest.describe('EOD reporter contracts', () => {
       startedAt: '2026-07-20T01:00:00.000Z',
       endedAt: '2026-07-20T01:00:02.000Z',
       tests: [
+        ...passingGateTests(),
         {
+          testId: 'blocker-test',
           title: 'identity mismatch @blocker-consistency',
           projectName: 'chromium-desktop',
           status: 'failed',
@@ -532,10 +661,13 @@ contractTest.describe('EOD reporter contracts', () => {
           attachments: []
         }
       ],
-      candidateSnapshots: [snapshot]
+      candidateSnapshots: [snapshot],
+      gateValidationRequired: true
     });
     contractExpect(report.status).toBe('failed');
-    contractExpect(report.tests[0].severity).toBe('blocker-consistency');
+    contractExpect(report.tests.find((test) => test.testId === 'blocker-test')?.severity).toBe(
+      'blocker-consistency'
+    );
   });
 
   contractTest('fails the report when the candidate snapshot is missing or conflicting', () => {
@@ -563,8 +695,34 @@ contractTest.describe('EOD reporter contracts', () => {
       sanitizeEodText(
         'authorization=Bearer abc123 /Users/xiwei/stock_research/dashboard/token/private-value'
       )
-    ).toBe('authorization=[REDACTED] <path>/token/[REDACTED]');
+    ).toBe('authorization=[REDACTED] <path>');
     contractExpect(sanitizeEodText('\u001b[31mError\u001b[0m')).toBe('Error');
+    const broadPaths = sanitizeEodText(
+      '/srv/tenant/private/report.json C:\\Users\\operator\\secret\\trace.zip \\\\server\\share\\secret\\video.webm'
+    );
+    contractExpect(broadPaths).not.toContain('/srv/tenant');
+    contractExpect(broadPaths).not.toContain('C:\\Users');
+    contractExpect(broadPaths).not.toContain('\\\\server\\share');
+    contractExpect(
+      sanitizeEodText('critical_request_http_status:stock:auth-me:GET:/api/auth/me:401')
+    ).toBe('critical_request_http_status:stock:auth-me:GET:/api/auth/me:401');
+  });
+
+  contractTest('keeps safe relative attachment locations and hashes external paths', () => {
+    contractExpect(
+      safeAttachmentReference(
+        '/repo/dashboard/test-results/eod/gate/trace.zip',
+        '/repo/dashboard',
+        '/repo/dashboard/eod-output'
+      )
+    ).toBe('test-results/eod/gate/trace.zip');
+    contractExpect(
+      safeAttachmentReference(
+        '/outside/private/run/trace.zip',
+        '/repo/dashboard',
+        '/repo/dashboard/eod-output'
+      )
+    ).toMatch(/^external-[a-f0-9]{16}-trace\.zip$/);
   });
 
   contractTest('rejects a candidate snapshot for a different trade date', () => {
@@ -641,7 +799,12 @@ async function apiJson(
   requestId: string
 ): Promise<unknown> {
   const response = await request.get(path, { headers: { 'x-request-id': requestId } });
-  if (!response.ok()) throw new Error(`playwright_eod_api_error:${path}:${response.status()}`);
+  if (!response.ok()) {
+    const pathname = new URL(path, 'http://playwright.local').pathname;
+    throw new Error(
+      `critical_request_http_status:preflight:${requestId}:GET:${pathname}:${response.status()}`
+    );
+  }
   return response.json() as Promise<unknown>;
 }
 
@@ -706,6 +869,49 @@ async function expectRenderedShell(page: Page): Promise<void> {
   expect(visibleText.length).toBeGreaterThan(40);
 }
 
+function watchCriticalResponses(
+  page: Page,
+  journey: string,
+  requirements: readonly CriticalResponseRequirement[]
+) {
+  const ledger = createCriticalResponseLedger(journey, requirements);
+  const onResponse = (response: {
+    status(): number;
+    url(): string;
+    request(): { method(): string };
+  }) => {
+    const url = new URL(response.url());
+    ledger.record(response.request().method(), url.pathname, response.status());
+  };
+  page.on('response', onResponse);
+  return {
+    async assertComplete() {
+      try {
+        await expect
+          .poll(
+            () => {
+              const evidence = ledger.evidence();
+              return evidence.requirements.every((requirement) =>
+                evidence.exchanges.some(
+                  (exchange) => exchange.requirementId === requirement.id
+                )
+              );
+            },
+            { timeout: 5000, intervals: [50, 100, 250] }
+          )
+          .toBe(true);
+      } catch {
+        // The structured ledger assertion below reports the exact missing or failed endpoint.
+      }
+      ledger.assertComplete();
+    },
+    evidence: () => ledger.evidence(),
+    stop() {
+      page.off('response', onResponse);
+    }
+  };
+}
+
 async function loadDynamicDeepLinks(request: APIRequestContext, tradeDate: string) {
   const reviewPayload = objectValue(
     await apiJson(
@@ -767,7 +973,7 @@ async function loadDynamicDeepLinks(request: APIRequestContext, tradeDate: strin
   return { stockAssetId, themeId, techStockCode };
 }
 
-test('home strategy cards exactly match the candidate snapshot @eod @blocker-consistency', async ({
+test(`home strategy cards exactly match the candidate snapshot @eod @blocker-consistency ${eodGateTag(REQUIRED_EOD_GATE_IDS[0])}`, async ({
   page,
   request
 }, testInfo) => {
@@ -790,7 +996,7 @@ test('home strategy cards exactly match the candidate snapshot @eod @blocker-con
   }
 });
 
-test('home strategy and review queue publication identities agree @eod @blocker-consistency', async ({
+test(`home strategy and review queue publication identities agree @eod @blocker-consistency ${eodGateTag(REQUIRED_EOD_GATE_IDS[1])}`, async ({
   page,
   request
 }, testInfo) => {
@@ -835,15 +1041,30 @@ test('home strategy and review queue publication identities agree @eod @blocker-
   }
 });
 
-test('dynamic stock theme and technology deep links render safely @eod @blocker-runtime', async ({
+test(`dynamic stock theme and technology deep links render safely @eod @blocker-runtime ${eodGateTag(REQUIRED_EOD_GATE_IDS[2])}`, async ({
   page,
   request
 }, testInfo) => {
   const tradeDate = targetTradeDate();
   const links = await loadDynamicDeepLinks(request, tradeDate);
   const overrideEvidence = await installCandidateDisplayOverride(page, tradeDate);
+  const criticalEvidence: unknown[] = [];
   try {
-    await page.goto(`/stock/${encodeURIComponent(links.stockAssetId)}?source=review_queue`);
+    const stockLedger = watchCriticalResponses(page, 'stock', [
+      { id: 'auth-me', method: 'GET', pathname: '/api/auth/me' },
+      {
+        id: 'asset-profile',
+        method: 'GET',
+        pathname: `/api/assets/${encodeURIComponent(links.stockAssetId)}/profile`
+      }
+    ]);
+    try {
+      await page.goto(`/stock/${encodeURIComponent(links.stockAssetId)}?source=review_queue`);
+      await stockLedger.assertComplete();
+    } finally {
+      criticalEvidence.push(stockLedger.evidence());
+      stockLedger.stop();
+    }
     await expectRouteContext(page, {
       path: new RegExp(`/stock/${links.stockAssetId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`),
       assetId: links.stockAssetId,
@@ -852,7 +1073,22 @@ test('dynamic stock theme and technology deep links render safely @eod @blocker-
     await expect(page.getByRole('region', { name: '个股复盘工作台' })).toBeVisible();
     await expectRenderedShell(page);
 
-    await page.goto(`/theme-research/${encodeURIComponent(links.themeId)}`);
+    const encodedThemeId = encodeURIComponent(links.themeId);
+    const themeLedger = watchCriticalResponses(page, 'theme', [
+      { id: 'auth-me', method: 'GET', pathname: '/api/auth/me' },
+      { id: 'theme-detail', method: 'GET', pathname: `/api/research/theme-decomposition/themes/${encodedThemeId}` },
+      { id: 'theme-nodes', method: 'GET', pathname: `/api/research/theme-decomposition/themes/${encodedThemeId}/nodes` },
+      { id: 'theme-sources', method: 'GET', pathname: `/api/research/theme-decomposition/themes/${encodedThemeId}/sources` },
+      { id: 'theme-claims', method: 'GET', pathname: `/api/research/theme-decomposition/themes/${encodedThemeId}/claims` },
+      { id: 'theme-companies', method: 'GET', pathname: `/api/research/theme-decomposition/themes/${encodedThemeId}/companies` }
+    ]);
+    try {
+      await page.goto(`/theme-research/${encodedThemeId}`);
+      await themeLedger.assertComplete();
+    } finally {
+      criticalEvidence.push(themeLedger.evidence());
+      themeLedger.stop();
+    }
     await expectRouteContext(page, {
       path: new RegExp(
         `^/theme-research/${links.themeId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`
@@ -861,9 +1097,24 @@ test('dynamic stock theme and technology deep links render safely @eod @blocker-
     await expect(page.getByRole('region', { name: '主题研究详情' })).toBeVisible();
     await expectRenderedShell(page);
 
-    await page.goto(
-      `/stock/${encodeURIComponent(links.techStockCode)}?source=tech_bottleneck_review_universe`
-    );
+    const techAssetId = stockCodeToAssetId(links.techStockCode);
+    const techLedger = watchCriticalResponses(page, 'technology-bottleneck', [
+      { id: 'auth-me', method: 'GET', pathname: '/api/auth/me' },
+      {
+        id: 'asset-profile',
+        method: 'GET',
+        pathname: `/api/assets/${encodeURIComponent(techAssetId)}/profile`
+      }
+    ]);
+    try {
+      await page.goto(
+        `/stock/${encodeURIComponent(links.techStockCode)}?source=tech_bottleneck_review_universe`
+      );
+      await techLedger.assertComplete();
+    } finally {
+      criticalEvidence.push(techLedger.evidence());
+      techLedger.stop();
+    }
     await expectRouteContext(page, {
       path: new RegExp(
         `/stock/${links.techStockCode.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:\\.(?:SZ|SH))?$`
@@ -874,5 +1125,6 @@ test('dynamic stock theme and technology deep links render safely @eod @blocker-
     await expectRenderedShell(page);
   } finally {
     await attachJson(testInfo, 'eod-display-override.json', overrideEvidence);
+    await attachJson(testInfo, 'eod-critical-responses.json', criticalEvidence);
   }
 });

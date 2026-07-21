@@ -67,6 +67,10 @@ export function buildProjects(profile: PlaywrightProfile): Project[] {
     ];
   }
 
+  if (profile === 'eod') {
+    return [{ ...chromiumDesktop(), retries: 0 }];
+  }
+
   return [chromiumDesktop()];
 }
 

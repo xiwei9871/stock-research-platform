@@ -6,6 +6,18 @@ export const OFFICIAL_EOD_STRATEGY_IDS = [
   'tech_bottleneck'
 ] as const;
 
+export const REQUIRED_EOD_GATE_IDS = [
+  'candidate-consistency',
+  'publication-consistency',
+  'runtime-deep-links'
+] as const;
+
+export type RequiredEodGateId = (typeof REQUIRED_EOD_GATE_IDS)[number];
+
+export function eodGateTag(gateId: RequiredEodGateId): string {
+  return `@eod-gate-${gateId}`;
+}
+
 export type OfficialEodStrategyId = (typeof OFFICIAL_EOD_STRATEGY_IDS)[number];
 
 export type CandidatePublication = {
@@ -37,6 +49,25 @@ export type CandidateDisplayEvidence = {
   overriddenEndpoints: string[];
   effectiveQueries: Array<{ endpoint: string; query: string }>;
   rejectedWrites: Array<{ method: string; endpoint: string }>;
+};
+
+export type CriticalResponseRequirement = {
+  id: string;
+  method: string;
+  pathname: string;
+};
+
+export type CriticalResponseExchange = {
+  requirementId: string;
+  method: string;
+  pathname: string;
+  status: number;
+};
+
+export type CriticalResponseLedger = {
+  record(method: string, pathname: string, status: number): void;
+  assertComplete(): void;
+  evidence(): { journey: string; requirements: CriticalResponseRequirement[]; exchanges: CriticalResponseExchange[] };
 };
 
 type JsonObject = Record<string, unknown>;
@@ -114,6 +145,59 @@ function environmentValue(name: string): string | undefined {
 
 function fail(code: string, detail?: string): never {
   throw new Error(detail ? `${code}:${detail}` : code);
+}
+
+export function createCriticalResponseLedger(
+  journey: string,
+  requirements: readonly CriticalResponseRequirement[]
+): CriticalResponseLedger {
+  const stableRequirements = requirements.map((requirement) => ({
+    ...requirement,
+    method: requirement.method.toUpperCase()
+  }));
+  const exchanges: CriticalResponseExchange[] = [];
+  return {
+    record(method, pathname, status) {
+      const normalizedMethod = method.toUpperCase();
+      for (const requirement of stableRequirements) {
+        if (requirement.method === normalizedMethod && requirement.pathname === pathname) {
+          exchanges.push({
+            requirementId: requirement.id,
+            method: normalizedMethod,
+            pathname,
+            status
+          });
+        }
+      }
+    },
+    assertComplete() {
+      for (const requirement of stableRequirements) {
+        const matches = exchanges.filter(
+          (exchange) => exchange.requirementId === requirement.id
+        );
+        const failed = matches.find((exchange) => exchange.status >= 400);
+        if (failed) {
+          fail(
+            'critical_request_http_status',
+            `${journey}:${requirement.id}:${requirement.method}:${requirement.pathname}:${failed.status}`
+          );
+        }
+        if (!matches.some((exchange) => exchange.status >= 200 && exchange.status < 400)) {
+          fail(
+            'critical_request_missing_success',
+            `${journey}:${requirement.id}:${requirement.method}:${requirement.pathname}`
+          );
+        }
+      }
+    },
+    evidence() {
+      return {
+        journey,
+        requirements: stableRequirements.map((requirement) => ({ ...requirement })),
+        exchanges: exchanges.map((exchange) => ({ ...exchange }))
+      };
+    }
+  };
 }
 
 function objectValue(value: unknown, code: string): JsonObject {

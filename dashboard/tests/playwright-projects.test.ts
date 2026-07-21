@@ -117,6 +117,10 @@ describe('buildProjects', () => {
     expect(buildProjects('eod').map((project) => project.name)).toEqual(['chromium-desktop']);
   });
 
+  test('disables Playwright retries for the EOD project', () => {
+    expect(buildProjects('eod')[0].retries).toBe(0);
+  });
+
   test('returns fresh viewport objects for separate project builds', () => {
     const firstUse = buildProjects('legacy')[0].use as { viewport: { width: number } };
     const secondUse = buildProjects('legacy')[0].use as { viewport: { width: number } };
