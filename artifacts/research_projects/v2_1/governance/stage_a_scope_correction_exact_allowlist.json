@@ -28,6 +28,7 @@
     "src/stock_research/research_project_v2_1/layout.py",
     "src/stock_research/research_project_v2_1/schema.py",
     "tests/test_research_project_v2_1_r2b_scope_guard.py",
+    "tests/test_research_project_v2_1_schema.py",
     "tests/test_research_project_v2_1_scope_correction.py"
   ],
   "phase": "r2b_ai_compute_pcb_stage_a_scope_correction",
