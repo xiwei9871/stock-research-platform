@@ -10,8 +10,13 @@ import pytest
 from stock_research.research_project_v2.canonical import canonical_bytes, content_sha256
 from stock_research.research_project_v2.errors import ResearchProjectV2Error
 from stock_research.research_project_v2_1.cognition import (
+    calculate_claim_grounding,
+    calculate_er_assessment,
     validate_baseline_bindings,
+    validate_causal_edges,
     validate_evidence_locator,
+    validate_grounded_mechanisms,
+    validate_judgment_boundaries,
 )
 from stock_research.research_project_v2_1.layout import LayeredResearchLayout
 from stock_research.research_project_v2_1.schema import validate_v2_1_schema_payload
@@ -193,3 +198,212 @@ def test_validate_locator_rejects_section_hash_drift(tmp_path: Path) -> None:
     with pytest.raises(ResearchProjectV2Error) as exc_info:
         validate_evidence_locator(locator, layout=layout)
     assert exc_info.value.code == "RESEARCH_PROJECT_V2_1_COGNITION_LOCATOR_INVALID"
+
+
+def grounded_claim_fixture() -> dict:
+    return {
+        "claim_id": "CLM-001",
+        "claim_type": "fact",
+        "claim_scope": "product_fact",
+        "assessment_status": "sufficient",
+        "assessment_confidence": "medium",
+        "unresolved_contradiction": False,
+        "evidence_links": [
+            {
+                "link_id": "EL-001",
+                "evidence_stance": "support",
+                "source_chain_id": "CHAIN-001",
+                "freshness_status": "unknown",
+                "locator_id": "LOC-001",
+            }
+        ],
+        "grounding_status": "grounded",
+    }
+
+
+def test_calculate_claim_grounding_uses_direct_support_and_chain_count() -> None:
+    result = calculate_claim_grounding(
+        grounded_claim_fixture(),
+        inventory={"source_chains": [{"source_chain_id": "CHAIN-001"}]},
+        valid_locators={"LOC-001": real_locator()},
+    )
+    assert result == {
+        "grounding_status": "grounded",
+        "independent_chain_count": 1,
+        "confidence_ceiling": "medium",
+        "blockers": [],
+    }
+
+
+def test_contextual_only_evidence_does_not_ground_claim() -> None:
+    claim = grounded_claim_fixture()
+    claim["evidence_links"][0]["evidence_stance"] = "contextual"
+    claim["grounding_status"] = "not_grounded"
+    result = calculate_claim_grounding(
+        claim,
+        inventory={"source_chains": [{"source_chain_id": "CHAIN-001"}]},
+        valid_locators={"LOC-001": real_locator()},
+    )
+    assert result["grounding_status"] == "not_grounded"
+    assert "no_direct_support" in result["blockers"]
+
+
+def test_unknown_date_cannot_receive_definite_freshness() -> None:
+    claim = grounded_claim_fixture()
+    claim["evidence_links"][0]["freshness_status"] = "confirmed_current"
+    claim["evidence_links"][0]["source_date_status"] = "unknown"
+    with pytest.raises(ResearchProjectV2Error) as exc_info:
+        calculate_claim_grounding(
+            claim,
+            inventory={"source_chains": [{"source_chain_id": "CHAIN-001"}]},
+            valid_locators={"LOC-001": real_locator()},
+        )
+    assert exc_info.value.code == "RESEARCH_PROJECT_V2_1_COGNITION_VALIDATION_FAILED"
+
+
+def test_claim_confidence_cannot_exceed_calculated_ceiling() -> None:
+    claim = grounded_claim_fixture()
+    claim["assessment_confidence"] = "high"
+    with pytest.raises(ResearchProjectV2Error):
+        calculate_claim_grounding(
+            claim,
+            inventory={"source_chains": [{"source_chain_id": "CHAIN-001"}]},
+            valid_locators={"LOC-001": real_locator()},
+        )
+
+
+def test_exact_duplicate_links_count_as_one_chain() -> None:
+    claim = grounded_claim_fixture()
+    claim["evidence_links"].append(
+        {
+            **claim["evidence_links"][0],
+            "link_id": "EL-002",
+            "locator_id": "LOC-002",
+        }
+    )
+    result = calculate_claim_grounding(
+        claim,
+        inventory={"source_chains": [{"source_chain_id": "CHAIN-001"}]},
+        valid_locators={"LOC-001": real_locator(), "LOC-002": real_locator()},
+    )
+    assert result["independent_chain_count"] == 1
+
+
+def test_er_assessment_is_recomputed_from_atomic_claims() -> None:
+    er = {
+        "requirement_id": "ER01",
+        "assessed_claim_ids": ["CLM-001", "CLM-002"],
+        "sufficient_claim_ids": ["CLM-001"],
+        "open_claim_ids": ["CLM-002"],
+        "conflicted_claim_ids": [],
+        "missing_claim_ids": [],
+        "governance_requirements": {"independent_secondary_required": True},
+        "unresolved_requirements": ["independent_secondary_missing"],
+        "overall_status": "insufficient",
+    }
+    claims = {
+        "CLM-001": {"assessment_status": "sufficient"},
+        "CLM-002": {"assessment_status": "open"},
+    }
+    result = calculate_er_assessment(er, claims)
+    assert result["overall_status"] == "insufficient"
+    assert result["open_claim_ids"] == ["CLM-002"]
+
+
+def semantic_package_fixture() -> dict:
+    package = minimal_package()
+    package["claim_assessment_ledger"] = [
+        {
+            "claim_id": "CLM-REL",
+            "claim_scope": "relationship",
+            "grounding_status": "grounded",
+            "assessment_confidence": "medium",
+        },
+        {
+            "claim_id": "CLM-CTX",
+            "claim_scope": "context",
+            "grounding_status": "not_grounded",
+            "assessment_confidence": "low",
+        },
+    ]
+    package["evidence_grounded_mechanisms"] = [
+        {
+            "mechanism_id": "MECH-001",
+            "confidence": "medium",
+            "explanation_steps": [
+                {"statement": "Relationship step", "supporting_claim_ids": ["CLM-REL"]}
+            ],
+            "key_variable_grounding": [
+                {"variable": "bandwidth", "supporting_claim_ids": ["CLM-REL"]}
+            ],
+        }
+    ]
+    package["grounded_system_model"] = {
+        "nodes": [
+            {"node_id": "NODE-A", "grounding_status": "grounded"},
+            {"node_id": "NODE-B", "grounding_status": "grounded"},
+        ],
+        "edges": [],
+    }
+    package["grounded_causal_edges"] = [
+        {
+            "edge_id": "EDGE-001",
+            "from_node": "NODE-A",
+            "to_node": "NODE-B",
+            "mechanism_id": "MECH-001",
+            "supporting_claim_ids": ["CLM-REL"],
+            "necessary_conditions": ["condition"],
+            "alternative_explanations": ["alternative"],
+            "failure_conditions": ["failure"],
+            "confidence": "medium",
+        }
+    ]
+    return package
+
+
+def test_grounded_mechanism_rejects_skeleton_or_contextual_claims() -> None:
+    package = semantic_package_fixture()
+    package["evidence_grounded_mechanisms"][0]["explanation_steps"][0][
+        "supporting_claim_ids"
+    ] = ["CLM-CTX"]
+    claims = {row["claim_id"]: row for row in package["claim_assessment_ledger"]}
+    with pytest.raises(ResearchProjectV2Error):
+        validate_grounded_mechanisms(package, claims)
+
+
+def test_grounded_edge_requires_relationship_claim_not_endpoint_facts_only() -> None:
+    package = semantic_package_fixture()
+    package["claim_assessment_ledger"][0]["claim_scope"] = "product_fact"
+    claims = {row["claim_id"]: row for row in package["claim_assessment_ledger"]}
+    validate_grounded_mechanisms(package, claims)
+    with pytest.raises(ResearchProjectV2Error):
+        validate_causal_edges(package, claims)
+
+
+def test_hypothesized_edges_cannot_compose_into_grounded_chain() -> None:
+    package = semantic_package_fixture()
+    package["grounded_causal_edges"][0]["depends_on_edge_ids"] = ["HEDGE-001"]
+    package["hypothesized_causal_edges"] = [
+        {"edge_id": "HEDGE-001", "status": "unverified_hypothesis", "evidence_gap_ids": ["GAP-001"]}
+    ]
+    claims = {row["claim_id"]: row for row in package["claim_assessment_ledger"]}
+    with pytest.raises(ResearchProjectV2Error):
+        validate_causal_edges(package, claims)
+
+
+def test_pcb_domains_are_forbidden_in_limited_bottleneck_judgments() -> None:
+    package = semantic_package_fixture()
+    package["limited_system_bottleneck_judgments"] = [
+        {"bottleneck_id": "BOT-001", "domain": "pcb_manufacturing", "assessment_reason": "unsupported"}
+    ]
+    with pytest.raises(ResearchProjectV2Error):
+        validate_judgment_boundaries(package)
+
+
+def test_value_hypotheses_have_only_open_gap_linked_or_ineligible_status() -> None:
+    package = semantic_package_fixture()
+    package["value_change_hypotheses"] = [
+        {"hypothesis_id": "VAL-001", "status": "supported", "target_scope": "industry_segment"}
+    ]
+    with pytest.raises(ResearchProjectV2Error):
+        validate_judgment_boundaries(package)

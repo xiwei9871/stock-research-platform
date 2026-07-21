@@ -16,6 +16,18 @@ from stock_research.research_project_v2_1.schema import validate_v2_1_schema_pay
 
 
 CONFIDENCE_ORDER = {"very_low": 0, "low": 1, "medium": 2, "high": 3}
+ALLOWED_LIMITED_BOTTLENECK_DOMAINS = {
+    "ai_system_architecture",
+    "accelerator_interconnect",
+    "network_fabric",
+    "dpu",
+    "optical_boundary",
+}
+ALLOWED_VALUE_STATUSES = {
+    "open",
+    "evidence_gap_linked",
+    "not_eligible_for_judgment",
+}
 
 
 def _error(message: str, *, code: str, **details: object) -> ResearchProjectV2Error:
@@ -168,3 +180,281 @@ def validate_evidence_locator(
 
 def canonical_package_bytes(package: dict[str, Any]) -> bytes:
     return canonical_bytes(package)
+
+
+def calculate_claim_grounding(
+    claim: dict[str, Any],
+    *,
+    inventory: dict[str, Any],
+    valid_locators: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    links = claim.get("evidence_links")
+    if not isinstance(links, list):
+        links = []
+    direct_chains: set[str] = set()
+    blockers: list[str] = []
+    for link in links:
+        if not isinstance(link, dict):
+            continue
+        if link.get("source_date_status") == "unknown" and link.get(
+            "freshness_status"
+        ) == "confirmed_current":
+            raise _error(
+                "Unknown-date evidence cannot be assigned definite freshness",
+                code="RESEARCH_PROJECT_V2_1_COGNITION_VALIDATION_FAILED",
+                field="freshness_status",
+            )
+        if link.get("evidence_stance") == "support" and link.get(
+            "locator_id"
+        ) in valid_locators:
+            chain_id = link.get("source_chain_id")
+            if isinstance(chain_id, str):
+                direct_chains.add(chain_id)
+    if not direct_chains:
+        blockers.append("no_direct_support")
+    if claim.get("claim_type") == "hypothesis":
+        blockers.append("hypothesis_not_grounded")
+    if claim.get("assessment_status") != "sufficient":
+        blockers.append("assessment_not_sufficient")
+    ceiling = "high"
+    if len(direct_chains) < 2 or any(
+        link.get("freshness_status") == "unknown"
+        for link in links
+        if isinstance(link, dict)
+    ):
+        ceiling = "medium"
+    if claim.get("unresolved_contradiction"):
+        ceiling = "low"
+        blockers.append("unresolved_contradiction")
+    declared_confidence = claim.get("assessment_confidence")
+    if declared_confidence not in CONFIDENCE_ORDER:
+        raise _error(
+            "Claim assessment confidence is invalid",
+            code="RESEARCH_PROJECT_V2_1_COGNITION_VALIDATION_FAILED",
+            field="assessment_confidence",
+        )
+    if CONFIDENCE_ORDER[declared_confidence] > CONFIDENCE_ORDER[ceiling]:
+        raise _error(
+            "Claim confidence exceeds the calculated ceiling",
+            code="RESEARCH_PROJECT_V2_1_COGNITION_VALIDATION_FAILED",
+            field="assessment_confidence",
+            ceiling=ceiling,
+        )
+    grounding_status = "grounded" if not blockers else "not_grounded"
+    if claim.get("grounding_status") != grounding_status:
+        raise _error(
+            "Claim grounding status does not match calculation",
+            code="RESEARCH_PROJECT_V2_1_COGNITION_VALIDATION_FAILED",
+            field="grounding_status",
+            calculated=grounding_status,
+        )
+    known_chains = {
+        row.get("source_chain_id")
+        for row in inventory.get("source_chains", [])
+        if isinstance(row, dict)
+    }
+    if not direct_chains <= known_chains:
+        raise _error(
+            "Claim references an unknown evidence chain",
+            code="RESEARCH_PROJECT_V2_1_COGNITION_VALIDATION_FAILED",
+            field="source_chain_id",
+        )
+    return {
+        "grounding_status": grounding_status,
+        "independent_chain_count": len(direct_chains),
+        "confidence_ceiling": ceiling,
+        "blockers": blockers,
+    }
+
+
+def calculate_er_assessment(
+    er: dict[str, Any],
+    claims_by_id: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    assessed = list(er.get("assessed_claim_ids", []))
+    missing = [claim_id for claim_id in assessed if claim_id not in claims_by_id]
+    sufficient = [
+        claim_id
+        for claim_id in assessed
+        if claims_by_id.get(claim_id, {}).get("assessment_status") == "sufficient"
+    ]
+    opened = [
+        claim_id
+        for claim_id in assessed
+        if claims_by_id.get(claim_id, {}).get("assessment_status")
+        in {"open", "insufficient", "not_assessable"}
+    ]
+    conflicted = [
+        claim_id
+        for claim_id in assessed
+        if claims_by_id.get(claim_id, {}).get("assessment_status") == "conflicted"
+    ]
+    unresolved = list(er.get("unresolved_requirements", []))
+    if conflicted:
+        status = "conflicted"
+    elif missing or opened or unresolved:
+        status = "insufficient"
+    else:
+        status = "sufficient"
+    if er.get("resolution_code") == "denominator_unresolved":
+        status = "open"
+    if er.get("overall_status") != status:
+        raise _error(
+            "ER overall status does not match atomic claims",
+            code="RESEARCH_PROJECT_V2_1_COGNITION_VALIDATION_FAILED",
+            field="overall_status",
+            calculated=status,
+        )
+    return {
+        "overall_status": status,
+        "sufficient_claim_ids": sufficient,
+        "open_claim_ids": opened,
+        "conflicted_claim_ids": conflicted,
+        "missing_claim_ids": missing,
+    }
+
+
+def validate_grounded_mechanisms(
+    package: dict[str, Any],
+    claims_by_id: dict[str, dict[str, Any]],
+) -> None:
+    for mechanism in package.get("evidence_grounded_mechanisms", []):
+        claim_ids: set[str] = set()
+        for step in mechanism.get("explanation_steps", []):
+            if not step.get("statement") or not step.get("supporting_claim_ids"):
+                raise _error(
+                    "Grounded mechanism step lacks a statement or claims",
+                    code="RESEARCH_PROJECT_V2_1_COGNITION_VALIDATION_FAILED",
+                    mechanism_id=mechanism.get("mechanism_id"),
+                )
+            claim_ids.update(step["supporting_claim_ids"])
+        for variable in mechanism.get("key_variable_grounding", []):
+            claim_ids.update(variable.get("supporting_claim_ids", []))
+        if not claim_ids:
+            raise _error(
+                "Grounded mechanism has no grounded claims",
+                code="RESEARCH_PROJECT_V2_1_COGNITION_VALIDATION_FAILED",
+                mechanism_id=mechanism.get("mechanism_id"),
+            )
+        ceilings: list[int] = []
+        for claim_id in claim_ids:
+            claim = claims_by_id.get(claim_id)
+            if not claim or claim.get("grounding_status") != "grounded":
+                raise _error(
+                    "Grounded mechanism references an ungrounded claim",
+                    code="RESEARCH_PROJECT_V2_1_COGNITION_VALIDATION_FAILED",
+                    claim_id=claim_id,
+                )
+            ceilings.append(CONFIDENCE_ORDER[claim["assessment_confidence"]])
+        confidence = mechanism.get("confidence")
+        if confidence not in CONFIDENCE_ORDER or CONFIDENCE_ORDER[confidence] > min(
+            ceilings
+        ):
+            raise _error(
+                "Mechanism confidence exceeds its claim ceiling",
+                code="RESEARCH_PROJECT_V2_1_COGNITION_VALIDATION_FAILED",
+                mechanism_id=mechanism.get("mechanism_id"),
+            )
+
+
+def validate_causal_edges(
+    package: dict[str, Any],
+    claims_by_id: dict[str, dict[str, Any]],
+) -> None:
+    grounded_nodes = {
+        row.get("node_id")
+        for row in package.get("grounded_system_model", {}).get("nodes", [])
+        if row.get("grounding_status") == "grounded"
+    }
+    grounded_mechanisms = {
+        row.get("mechanism_id")
+        for row in package.get("evidence_grounded_mechanisms", [])
+    }
+    hypothesized_ids = {
+        row.get("edge_id") for row in package.get("hypothesized_causal_edges", [])
+    }
+    for edge in package.get("grounded_causal_edges", []):
+        if edge.get("from_node") not in grounded_nodes or edge.get(
+            "to_node"
+        ) not in grounded_nodes:
+            raise _error(
+                "Grounded causal edge has an ungrounded endpoint",
+                code="RESEARCH_PROJECT_V2_1_COGNITION_VALIDATION_FAILED",
+                edge_id=edge.get("edge_id"),
+            )
+        if edge.get("mechanism_id") not in grounded_mechanisms:
+            raise _error(
+                "Grounded causal edge has no grounded mechanism",
+                code="RESEARCH_PROJECT_V2_1_COGNITION_VALIDATION_FAILED",
+                edge_id=edge.get("edge_id"),
+            )
+        if hypothesized_ids.intersection(edge.get("depends_on_edge_ids", [])):
+            raise _error(
+                "Grounded causal edge depends on a hypothesized bridge",
+                code="RESEARCH_PROJECT_V2_1_COGNITION_VALIDATION_FAILED",
+                edge_id=edge.get("edge_id"),
+            )
+        supporting = [claims_by_id.get(cid) for cid in edge.get("supporting_claim_ids", [])]
+        if not any(
+            claim
+            and claim.get("grounding_status") == "grounded"
+            and claim.get("claim_scope") == "relationship"
+            for claim in supporting
+        ):
+            raise _error(
+                "Grounded causal edge lacks relationship evidence",
+                code="RESEARCH_PROJECT_V2_1_COGNITION_VALIDATION_FAILED",
+                edge_id=edge.get("edge_id"),
+            )
+        for field in ("necessary_conditions", "alternative_explanations", "failure_conditions"):
+            if not edge.get(field):
+                raise _error(
+                    "Grounded causal edge is missing a boundary field",
+                    code="RESEARCH_PROJECT_V2_1_COGNITION_VALIDATION_FAILED",
+                    edge_id=edge.get("edge_id"),
+                    field=field,
+                )
+
+
+def validate_judgment_boundaries(package: dict[str, Any]) -> None:
+    for judgment in package.get("limited_system_bottleneck_judgments", []):
+        if judgment.get("domain") not in ALLOWED_LIMITED_BOTTLENECK_DOMAINS:
+            raise _error(
+                "PCB-domain bottleneck judgment is not authorized",
+                code="RESEARCH_PROJECT_V2_1_COGNITION_SCOPE_VIOLATION",
+                bottleneck_id=judgment.get("bottleneck_id"),
+            )
+        for field in (
+            "assessment_reason",
+            "counterarguments",
+            "verification_metrics",
+            "invalidation_conditions",
+        ):
+            if not judgment.get(field):
+                raise _error(
+                    "Limited bottleneck judgment is incomplete",
+                    code="RESEARCH_PROJECT_V2_1_COGNITION_VALIDATION_FAILED",
+                    bottleneck_id=judgment.get("bottleneck_id"),
+                    field=field,
+                )
+    forbidden_terms = {"winner", "profit", "valuation", "recommendation"}
+    for hypothesis in package.get("value_change_hypotheses", []):
+        if hypothesis.get("status") not in ALLOWED_VALUE_STATUSES:
+            raise _error(
+                "Value-change hypothesis status is not allowed",
+                code="RESEARCH_PROJECT_V2_1_COGNITION_SCOPE_VIOLATION",
+                hypothesis_id=hypothesis.get("hypothesis_id"),
+            )
+        if hypothesis.get("target_scope") != "industry_segment":
+            raise _error(
+                "Value-change hypothesis must remain industry-segment scoped",
+                code="RESEARCH_PROJECT_V2_1_COGNITION_SCOPE_VIOLATION",
+                hypothesis_id=hypothesis.get("hypothesis_id"),
+            )
+        text = str(hypothesis.get("hypothesis_text", "")).lower()
+        if forbidden_terms.intersection(text.split()):
+            raise _error(
+                "Value-change hypothesis contains downstream semantics",
+                code="RESEARCH_PROJECT_V2_1_COGNITION_SCOPE_VIOLATION",
+                hypothesis_id=hypothesis.get("hypothesis_id"),
+            )
