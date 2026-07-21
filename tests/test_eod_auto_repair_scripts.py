@@ -132,6 +132,17 @@ def test_task7_docs_use_executable_kill_switch_rollback():
     review = TASK7_DOCS[-1].read_text()
     assert "| Step 8 documentation commit | complete |" in review
     assert "default_browser_action_integration" in review
+    assert (
+        'PYTHON_BIN="${STOCK_RESEARCH_PYTHON:-$(cd "$(git rev-parse '
+        '--git-common-dir)/.." && pwd)/.venv/bin/python}"'
+    ) in review
+    assert 'PYTHONPATH=src rtk "$PYTHON_BIN" -m pytest' in review
+    assert 'PYTHONPATH=src rtk "$PYTHON_BIN" - <<\'PY\'' in review
+    assert "rtk .venv/bin/" not in review
+    assert "main repository virtual environment" in review
+    assert "### Local target hardening regression" in review
+    assert "`502 passed`" in review
+    assert "`506 passed`" in review
 
 
 def test_eod_auto_repair_cron_prints_browser_status_and_evidence(tmp_path):

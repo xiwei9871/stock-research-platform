@@ -1600,8 +1600,8 @@ def test_dashboard_cache_clearer_posts_safe_auth_json_and_write_token():
             return Response()
 
     clearer = eod_auto_repair.build_dashboard_cache_clearer(
-        cache_url="http://dashboard.test/api/dashboard/cache/clear",
-        login_url="https://dashboard.test/api/auth/login",
+        cache_url="http://127.0.0.1:8765/api/dashboard/cache/clear",
+        login_url="http://127.0.0.1:8765/api/auth/login",
         username='admin"name',
         password="line\nbreak",
         write_token="write-token",
@@ -1612,8 +1612,8 @@ def test_dashboard_cache_clearer_posts_safe_auth_json_and_write_token():
     clearer()
 
     assert [request.full_url for request, _timeout in requests] == [
-        "https://dashboard.test/api/auth/login",
-        "http://dashboard.test/api/dashboard/cache/clear",
+        "http://127.0.0.1:8765/api/auth/login",
+        "http://127.0.0.1:8765/api/dashboard/cache/clear",
     ]
     assert all(timeout == 3.5 for _request, timeout in requests)
     assert json.loads(requests[0][0].data) == {
@@ -1623,7 +1623,25 @@ def test_dashboard_cache_clearer_posts_safe_auth_json_and_write_token():
     assert requests[1][0].get_header("X-dashboard-write-token") == "write-token"
 
 
-@pytest.mark.parametrize("url", ["", "file:///tmp/cache", "ftp://dashboard/cache"])
+@pytest.mark.parametrize(
+    "url",
+    [
+        "",
+        "file:///tmp/cache",
+        "ftp://127.0.0.1/api/dashboard/cache/clear",
+        "http://8.8.8.8/api/dashboard/cache/clear",
+        "http://localhost/api/dashboard/cache/clear",
+        "http://dashboard.test/api/dashboard/cache/clear",
+        "http://127.0.0.1:0/api/dashboard/cache/clear",
+        "http://127.0.0.1:65536/api/dashboard/cache/clear",
+        "http://user:pass@127.0.0.1/api/dashboard/cache/clear",
+        "http://127.0.0.1/wrong",
+        "http://127.0.0.1/api/dashboard/cache/clear?force=1",
+        "http://127.0.0.1/api/dashboard/cache/clear?",
+        "http://127.0.0.1/api/dashboard/cache/clear#fragment",
+        "http://127.0.0.1/api/dashboard/cache/clear#",
+    ],
+)
 def test_dashboard_cache_clearer_rejects_missing_or_unsafe_url(url):
     clearer = eod_auto_repair.build_dashboard_cache_clearer(cache_url=url)
 
@@ -1647,7 +1665,7 @@ def test_dashboard_cache_clearer_rejects_non_2xx_and_redacts_exception():
             return Response()
 
     clearer = eod_auto_repair.build_dashboard_cache_clearer(
-        cache_url="http://dashboard.test/api/dashboard/cache/clear",
+        cache_url="http://127.0.0.1:8765/api/dashboard/cache/clear",
         write_token="do-not-leak",
         opener=Opener(),
     )
@@ -1665,7 +1683,7 @@ def test_dashboard_cache_clearer_redacts_network_exception_details():
             raise OSError("network failed with password=do-not-leak")
 
     clearer = eod_auto_repair.build_dashboard_cache_clearer(
-        cache_url="https://dashboard.test/api/dashboard/cache/clear",
+        cache_url="https://127.0.0.1:8765/api/dashboard/cache/clear",
         opener=Opener(),
     )
 
@@ -1673,6 +1691,117 @@ def test_dashboard_cache_clearer_redacts_network_exception_details():
         clearer()
 
     assert "do-not-leak" not in str(exc_info.value)
+
+
+@pytest.mark.parametrize(
+    "login_url",
+    [
+        "https://127.0.0.1:8765/api/auth/login",
+        "http://127.0.0.2:8765/api/auth/login",
+        "http://127.0.0.1:8766/api/auth/login",
+        "http://localhost:8765/api/auth/login",
+        "http://user:pass@127.0.0.1:8765/api/auth/login",
+        "http://127.0.0.1:8765/wrong",
+        "http://127.0.0.1:8765/api/auth/login?next=/",
+        "http://127.0.0.1:8765/api/auth/login?",
+        "http://127.0.0.1:8765/api/auth/login#fragment",
+        "http://127.0.0.1:8765/api/auth/login#",
+    ],
+)
+def test_dashboard_cache_clearer_rejects_login_outside_cache_origin(login_url):
+    clearer = eod_auto_repair.build_dashboard_cache_clearer(
+        cache_url="http://127.0.0.1:8765/api/dashboard/cache/clear",
+        login_url=login_url,
+        username="admin",
+        password="password",
+        opener=object(),
+    )
+
+    with pytest.raises(RuntimeError, match="authentication login URL"):
+        clearer()
+
+
+@pytest.mark.parametrize(
+    ("cache_url", "login_url"),
+    [
+        (
+            "http://127.0.0.1:8765/api/dashboard/cache/clear",
+            "http://127.0.0.1:8765/api/auth/login",
+        ),
+        (
+            "http://[::1]:8765/api/dashboard/cache/clear",
+            "http://[::1]:8765/api/auth/login",
+        ),
+        (
+            "http://127.0.0.1/api/dashboard/cache/clear",
+            "http://127.0.0.1:80/api/auth/login",
+        ),
+        (
+            "https://[::1]/api/dashboard/cache/clear",
+            "https://[::1]:443/api/auth/login",
+        ),
+    ],
+)
+def test_dashboard_cache_clearer_accepts_ipv4_and_ipv6_loopback(cache_url, login_url):
+    requests = []
+
+    class Response:
+        status = 204
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    class Opener:
+        def open(self, request, timeout):
+            requests.append(request.full_url)
+            return Response()
+
+    clearer = eod_auto_repair.build_dashboard_cache_clearer(
+        cache_url=cache_url,
+        login_url=login_url,
+        username="admin",
+        password="password",
+        opener=Opener(),
+    )
+
+    clearer()
+
+    assert requests == [login_url, cache_url]
+
+
+def test_dashboard_cache_clearer_default_opener_disables_environment_proxies(monkeypatch):
+    handlers = []
+
+    class Response:
+        status = 204
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    class Opener:
+        def open(self, _request, timeout):
+            return Response()
+
+    def fake_build_opener(*selected_handlers):
+        handlers.extend(selected_handlers)
+        return Opener()
+
+    monkeypatch.setenv("HTTP_PROXY", "http://attacker.invalid:8080")
+    monkeypatch.setenv("HTTPS_PROXY", "http://attacker.invalid:8080")
+    monkeypatch.setattr(eod_auto_repair, "build_opener", fake_build_opener)
+    clearer = eod_auto_repair.build_dashboard_cache_clearer(
+        cache_url="http://127.0.0.1:8765/api/dashboard/cache/clear",
+    )
+
+    clearer()
+
+    assert handlers[0].proxies == {}
 
 
 @pytest.mark.parametrize("redirect_phase", ["login", "cache"])
@@ -1687,7 +1816,11 @@ def test_dashboard_cache_clearer_rejects_redirect_without_forwarding_token(
     class Handler(BaseHTTPRequestHandler):
         def _respond(self):
             requests.append((self.command, self.path, self.headers.get("X-Dashboard-Write-Token")))
-            if self.path == f"/{redirect_phase}":
+            if self.path == (
+                "/api/auth/login"
+                if redirect_phase == "login"
+                else "/api/dashboard/cache/clear"
+            ):
                 self.send_response(302)
                 self.send_header("Location", "/redirected")
             else:
@@ -1705,8 +1838,10 @@ def test_dashboard_cache_clearer_rejects_redirect_without_forwarding_token(
     thread.start()
     try:
         clearer = eod_auto_repair.build_dashboard_cache_clearer(
-            cache_url=f"http://127.0.0.1:{server.server_port}/cache",
-            login_url=f"http://127.0.0.1:{server.server_port}/login",
+            cache_url=(
+                f"http://127.0.0.1:{server.server_port}/api/dashboard/cache/clear"
+            ),
+            login_url=f"http://127.0.0.1:{server.server_port}/api/auth/login",
             username="admin" if redirect_phase == "login" else "",
             password="password" if redirect_phase == "login" else "",
             write_token="redirect-secret",
@@ -1722,7 +1857,9 @@ def test_dashboard_cache_clearer_rejects_redirect_without_forwarding_token(
     assert requests == [
         (
             "POST",
-            f"/{redirect_phase}",
+            "/api/auth/login"
+            if redirect_phase == "login"
+            else "/api/dashboard/cache/clear",
             None if redirect_phase == "login" else "redirect-secret",
         )
     ]

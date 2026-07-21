@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from http.cookiejar import CookieJar
+from ipaddress import ip_address
 import json
 import os
 import signal
@@ -13,7 +14,13 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import urlsplit
-from urllib.request import HTTPRedirectHandler, HTTPCookieProcessor, Request, build_opener
+from urllib.request import (
+    HTTPRedirectHandler,
+    HTTPCookieProcessor,
+    ProxyHandler,
+    Request,
+    build_opener,
+)
 from uuid import uuid4
 
 from stock_research.config import Settings
@@ -921,15 +928,42 @@ def build_dashboard_cache_clearer(
     )
     timeout = float(timeout_seconds)
 
-    def validate_url(value: str, *, label: str) -> str:
+    def validate_url(
+        value: str,
+        *,
+        label: str,
+        expected_path: str,
+    ) -> tuple[str, tuple[str, object, int]]:
         if not value:
             raise RuntimeError(f"dashboard {label} URL missing")
-        parsed = urlsplit(value)
+        try:
+            parsed = urlsplit(value)
+            port = parsed.port
+        except ValueError:
+            raise RuntimeError(f"dashboard {label} URL invalid") from None
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:
             raise RuntimeError(
                 f"dashboard {label} URL scheme must be http or https"
             )
-        return value
+        if parsed.username is not None or parsed.password is not None:
+            raise RuntimeError(f"dashboard {label} URL userinfo forbidden")
+        if "?" in value or "#" in value:
+            raise RuntimeError(f"dashboard {label} URL query and fragment forbidden")
+        if parsed.path != expected_path:
+            raise RuntimeError(f"dashboard {label} URL path invalid")
+        hostname = parsed.hostname
+        if hostname is None:
+            raise RuntimeError(f"dashboard {label} URL host missing")
+        try:
+            host_address = ip_address(hostname)
+        except ValueError:
+            raise RuntimeError(f"dashboard {label} URL host must be a literal IP") from None
+        if not host_address.is_loopback:
+            raise RuntimeError(f"dashboard {label} URL host must be loopback")
+        effective_port = port if port is not None else 443 if parsed.scheme == "https" else 80
+        if not 1 <= effective_port <= 65535:
+            raise RuntimeError(f"dashboard {label} URL port invalid")
+        return value, (parsed.scheme, host_address, effective_port)
 
     def send(selected_opener: object, request: Request, *, phase: str) -> None:
         try:
@@ -947,21 +981,30 @@ def build_dashboard_cache_clearer(
             )
 
     def clear() -> None:
-        validated_cache_url = validate_url(
+        validated_cache_url, cache_origin = validate_url(
             selected_cache_url,
             label="cache clear",
+            expected_path="/api/dashboard/cache/clear",
         )
         if bool(selected_username) != bool(selected_password):
             raise RuntimeError("dashboard cache authentication configuration incomplete")
+        validated_login_url = ""
+        if selected_username and selected_password:
+            validated_login_url, login_origin = validate_url(
+                selected_login_url,
+                label="authentication login",
+                expected_path="/api/auth/login",
+            )
+            if login_origin != cache_origin:
+                raise RuntimeError(
+                    "dashboard authentication login URL must match cache clear origin"
+                )
         selected_opener = opener or build_opener(
+            ProxyHandler({}),
             HTTPCookieProcessor(CookieJar()),
             _RejectRedirectHandler(),
         )
         if selected_username and selected_password:
-            validated_login_url = validate_url(
-                selected_login_url,
-                label="authentication login",
-            )
             body = json.dumps(
                 {
                     "username": selected_username,

@@ -199,7 +199,7 @@ The execution switch and the promotion boundary are independent and must be chan
 - `STOCK_RESEARCH_EOD_BROWSER_ACCEPTANCE_ENABLED=false` (the default) omits browser acceptance from the cron/Python repair loop.
 - An empty `STOCK_RESEARCH_BROWSER_ACCEPTANCE_REQUIRED_FROM` disables the Dashboard display gate boundary.
 
-Do not enable either value until the controlled rollout checklist in [Playwright Platform Validation](playwright-platform-validation.md) is complete. When browser acceptance is enabled, configure `DASHBOARD_CACHE_CLEAR_URL` as an explicit HTTP(S) endpoint; an unset or unsafe URL makes a repairable cache-clear attempt fail as infrastructure rather than silently skipping it.
+Do not enable either value until the controlled rollout checklist in [Playwright Platform Validation](playwright-platform-validation.md) is complete. When browser acceptance is enabled, `DASHBOARD_CACHE_CLEAR_URL` must target the exact local-only path `/api/dashboard/cache/clear` on a literal IPv4/IPv6 loopback address. If login credentials are configured, `DASHBOARD_AUTH_LOGIN_URL` must use the same scheme, literal address, and effective port with the exact path `/api/auth/login`. Userinfo, query strings, fragments, DNS names (including `localhost`), cross-origin login, redirects, invalid ports, and environment proxies are rejected. Any unset or unsafe URL makes a repairable cache-clear attempt fail as infrastructure rather than silently skipping it.
 
 Rollback procedure:
 

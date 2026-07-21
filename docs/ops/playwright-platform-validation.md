@@ -232,7 +232,7 @@ Before enabling the boundary:
 4. Run an approved candidate and live-observation window only after all authoritative audit blockers have been remediated.
 5. Record the boundary value in both EOD and Dashboard environments and confirm they match before the next scheduled run.
 
-When enabling the execution switch, configure an explicit HTTP(S) `DASHBOARD_CACHE_CLEAR_URL`. The default action uses the Dashboard login cookie flow and/or `DASHBOARD_WRITE_TOKEN`; it never logs credential values. Missing URLs, unsafe schemes, network errors, non-2xx responses, and timeouts fail the repair as infrastructure.
+When enabling the execution switch, configure `DASHBOARD_CACHE_CLEAR_URL` with the exact path `/api/dashboard/cache/clear` on a literal IPv4/IPv6 loopback address. When credentials are present, `DASHBOARD_AUTH_LOGIN_URL` must match its scheme, address, and effective port and use exactly `/api/auth/login`. DNS names (including `localhost`), remote IPs, userinfo, query strings, fragments, invalid ports, cross-origin login, redirects, and environment proxies are rejected. The default action uses the Dashboard login cookie flow and/or `DASHBOARD_WRITE_TOKEN`; it never logs credential values. Missing or unsafe URLs, network errors, non-2xx responses, and timeouts fail the repair as infrastructure.
 
 The 2026-07-21 review at revision `1ea8f2f377366c10b38a2a1eee04eaefc87354ff` stopped before steps 4 and 5. The execution switch remains false/unset and the boundary remains empty; Real/Sandbox profiles were not used as success evidence and live observation did not run. The decision and exact verification evidence are in [EOD browser acceptance rollout review](../reviews/eod-browser-acceptance-rollout-2026-07-20.md).
 

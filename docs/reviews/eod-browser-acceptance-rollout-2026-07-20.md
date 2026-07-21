@@ -34,12 +34,21 @@ Task 7 status:
 
 ## Fresh Regression Evidence
 
+Run the Python commands below from either the main checkout or a linked worktree after resolving the shared main-repository virtual environment:
+
+```bash
+PYTHON_BIN="${STOCK_RESEARCH_PYTHON:-$(cd "$(git rev-parse --git-common-dir)/.." && pwd)/.venv/bin/python}"
+test -x "$PYTHON_BIN"
+```
+
+`git rev-parse --git-common-dir` returns `.git` in the main checkout and the main repository's absolute `.git` path in a linked worktree, so both forms resolve the same interpreter. `STOCK_RESEARCH_PYTHON` remains the explicit override. The historical `455 passed` and corrective regression results were executed with this main repository virtual environment; this review does not claim that the linked worktree contains its own `.venv`.
+
 ### Backend focused
 
 Exact command:
 
 ```bash
-rtk .venv/bin/pytest \
+PYTHONPATH=src rtk "$PYTHON_BIN" -m pytest \
   tests/test_eod_browser_acceptance.py \
   tests/test_eod_auto_repair.py \
   tests/test_eod_auto_repair_checks.py \
@@ -58,7 +67,7 @@ Result: exit `0`; `455 passed`; 2 existing `py_mini_racer` deprecation warnings;
 The original `455 passed` record above remains the historical Task 7 plan evidence. After adding the real execution kill switch, moving cache clear into the whitelisted default action path, removing the cron-level unconditional clear, and correcting rollback documentation, the commit-preparation worktree ran this expanded focused set:
 
 ```bash
-rtk .venv/bin/pytest \
+PYTHONPATH=src rtk "$PYTHON_BIN" -m pytest \
   tests/test_config_settings.py \
   tests/test_eod_browser_acceptance.py \
   tests/test_eod_auto_repair.py \
@@ -72,6 +81,28 @@ rtk .venv/bin/pytest \
 ```
 
 Result: exit `0`; `480 passed`; 2 existing `py_mini_racer` deprecation warnings. The same worktree also passed `git diff --check`, `bash -n scripts/run_eod_auto_repair_cron.sh`, and Python byte-compilation of `config.py` and `eod_auto_repair.py`.
+
+### Local target hardening regression
+
+The subsequent local-target correction kept the same ten-file focused set and added fail-closed coverage for literal loopback addressing, exact cache/login paths, ports and effective-port origin matching, DNS and remote-IP rejection, userinfo/query/fragment rejection, disabled environment proxies, and redirect non-forwarding for both login and cache POST requests:
+
+```bash
+PYTHONPATH=src rtk "$PYTHON_BIN" -m pytest \
+  tests/test_config_settings.py \
+  tests/test_eod_browser_acceptance.py \
+  tests/test_eod_auto_repair.py \
+  tests/test_eod_auto_repair_checks.py \
+  tests/test_eod_auto_repair_models.py \
+  tests/test_eod_auto_repair_report.py \
+  tests/test_eod_auto_repair_scripts.py \
+  tests/test_dashboard_backtests.py \
+  tests/test_dashboard_readiness.py \
+  tests/test_dashboard_review_queue.py -q
+```
+
+Result: exit `0`; `502 passed`; 2 existing `py_mini_racer` deprecation warnings; duration `14.28s`. This is a local fixture/unit regression only and does not change the `BLOCKED / stop_and_plan` rollout decision.
+
+A final delimiter edge-case pass added explicit rejection of empty `?` and `#` components for both endpoints. Re-running the same command exited `0` with `506 passed`, the same 2 deprecation warnings, and duration `10.90s`.
 
 ### Dashboard unit
 
@@ -131,7 +162,7 @@ The command reused `FakeProcess`, report writers, publication fixtures, and disp
 Exact reproducible injected command:
 
 ```bash
-rtk env PYTHONPATH=src .venv/bin/python - <<'PY'
+PYTHONPATH=src rtk "$PYTHON_BIN" - <<'PY'
 from contextlib import redirect_stdout
 from datetime import datetime
 import io, json, runpy
@@ -206,7 +237,7 @@ Simulation identity:
 The current authoritative implementation proof exercises `build_default_action_registry`, the real `run_browser_acceptance` retry decision, and the configured cache clearer through the default action boundary. It covers the repairable, nonrepairable, and missing-cache-URL branches without starting a real browser:
 
 ```bash
-rtk .venv/bin/pytest tests/test_eod_auto_repair.py -q -k 'default_browser_action_integration'
+PYTHONPATH=src rtk "$PYTHON_BIN" -m pytest tests/test_eod_auto_repair.py -q -k 'default_browser_action_integration'
 ```
 
 Result: exit `0`; `3 passed`. The fixture proves `stale_cache` performs exactly one clear and one identical `pnpm test:e2e:eod` rerun; `api_ui_mismatch` performs zero clears and zero reruns; and a repairable first failure with no `DASHBOARD_CACHE_CLEAR_URL` returns failed/infrastructure after the first attempt.
@@ -216,7 +247,7 @@ The earlier injected `FakeProcess`/temporary-directory simulation below is retai
 Exact reproducible injected command:
 
 ```bash
-rtk env PYTHONPATH=src .venv/bin/python - <<'PY'
+PYTHONPATH=src rtk "$PYTHON_BIN" - <<'PY'
 import json, runpy
 from pathlib import Path
 from tempfile import TemporaryDirectory
