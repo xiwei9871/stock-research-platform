@@ -78,6 +78,7 @@ from stock_research.dashboard.observability import install_request_id_middleware
 from stock_research.dashboard.outcome_analytics import load_outcome_analytics_summary
 from stock_research.dashboard.outcomes import load_asset_outcome_history
 from stock_research.dashboard.display_date_gate import (
+    browser_acceptance_boundary_cache_key,
     browser_acceptance_boundary_enabled,
     validate_browser_acceptance_rollout_config,
 )
@@ -529,7 +530,7 @@ def create_app() -> FastAPI:
     def platform_readiness(score_version: str = "manual_v1"):
         validate_browser_acceptance_rollout_config()
         return app.state.eod_response_cache.get_or_set(
-            ("platform_readiness", score_version),
+            ("platform_readiness", score_version, browser_acceptance_boundary_cache_key()),
             lambda: build_platform_readiness(score_version=score_version),
         )
 
@@ -566,7 +567,7 @@ def create_app() -> FastAPI:
             }
 
         return app.state.eod_response_cache.get_or_set(
-            ("platform_display_date", score_version),
+            ("platform_display_date", score_version, browser_acceptance_boundary_cache_key()),
             build_payload,
         )
 
@@ -902,7 +903,13 @@ def create_app() -> FastAPI:
         top_n: int = 5,
     ):
         return app.state.eod_response_cache.get_or_set(
-            ("market_monitor_eod", trade_date or "", score_version, top_n),
+            (
+                "market_monitor_eod",
+                trade_date or "",
+                score_version,
+                top_n,
+                "" if trade_date else browser_acceptance_boundary_cache_key(),
+            ),
             lambda: build_market_monitor_eod(
                 trade_date=trade_date,
                 score_version=score_version,
@@ -1160,7 +1167,14 @@ def create_app() -> FastAPI:
         lookback_days: int = 90,
     ):
         return app.state.eod_response_cache.get_or_set(
-            ("review_queue", trade_date or "", score_version, limit, lookback_days),
+            (
+                "review_queue",
+                trade_date or "",
+                score_version,
+                limit,
+                lookback_days,
+                "" if trade_date else browser_acceptance_boundary_cache_key(),
+            ),
             lambda: build_review_queue(
                 trade_date=trade_date,
                 score_version=score_version,
@@ -1172,7 +1186,11 @@ def create_app() -> FastAPI:
     @app.get("/api/daily-review-lite")
     def daily_review_lite_route(trade_date: str | None = None):
         return app.state.eod_response_cache.get_or_set(
-            ("daily_review_lite", trade_date or ""),
+            (
+                "daily_review_lite",
+                trade_date or "",
+                "" if trade_date else browser_acceptance_boundary_cache_key(),
+            ),
             lambda: build_daily_review_lite(trade_date=trade_date),
         )
 

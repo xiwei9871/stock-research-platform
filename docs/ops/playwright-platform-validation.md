@@ -224,6 +224,8 @@ The JSON, Markdown, and HTML files must agree on the EOD run ID, trade date, thr
 
 `STOCK_RESEARCH_EOD_BROWSER_ACCEPTANCE_ENABLED` is the EOD execution switch. It defaults to `false`; unless it is explicitly `true`, the cron wrapper and Python loop omit the browser check and action before execution. `STOCK_RESEARCH_BROWSER_ACCEPTANCE_REQUIRED_FROM` is the separate promotion boundary. Empty means disabled. On or after a nonempty ISO date, a missing or failed browser acceptance manifest keeps the prior ready display date. Success or degraded acceptance may advance the display date only when the remaining readiness contracts pass.
 
+The promotion boundary applies to every formal read API that selects a trade date when the caller omits one: Review Queue, Market Monitor EOD, Daily Review Lite, Evidence Digest, and the Generated Reports group in Global Search. A blocked manifest leaves these defaults on the prior ready date or returns a local unavailable/empty payload when no ready date exists; it must not read, generate, register, or link candidate-date artifacts. Explicit historical dates remain explicit. Boundary-dependent response-cache keys include the configured boundary so an enable/disable change cannot reuse a cached legacy default.
+
 Before enabling the boundary:
 
 1. Run `apply_data_run_manifest_schema()` against the deployment database and verify it completes the `dashboard_browser_acceptance` degraded-status CHECK migration. If this migration has not completed successfully, rollout remains `BLOCKED`.

@@ -119,11 +119,15 @@ def test_build_market_monitor_eod_defaults_to_latest_market_date_when_display_ga
             ],
         },
     )
-    monkeypatch.setattr(market_monitor, "load_latest_data_run_manifest", lambda: [{"trade_date": "2026-06-18"}])
     monkeypatch.setattr(
-        market_monitor,
+        display_date_gate,
+        "load_recent_data_run_manifest",
+        lambda **_kwargs: [{"trade_date": "2026-06-18"}],
+    )
+    monkeypatch.setattr(
+        display_date_gate,
         "select_display_date",
-        lambda modules, latest_market_date: {
+        lambda modules, *, latest_market_date: {
             "display_trade_date": "2026-06-17",
             "candidate_trade_date": latest_market_date,
             "display_status": "ready",
@@ -162,7 +166,7 @@ def test_market_monitor_keeps_latest_market_date_when_boundary_disabled(monkeypa
         SimpleNamespace(browser_acceptance_required_from=""),
     )
     monkeypatch.setattr(
-        market_monitor,
+        display_date_gate,
         "select_display_date",
         lambda *_args, **_kwargs: pytest.fail("disabled boundary must keep legacy latest fallback"),
     )

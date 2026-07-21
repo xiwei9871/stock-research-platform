@@ -5,6 +5,7 @@ from typing import Any
 
 from stock_research.data_run_manifest import load_latest_data_run_manifest
 from stock_research.dashboard.asset_profile import build_asset_profile
+from stock_research.dashboard.display_date_gate import resolve_default_trade_date
 from stock_research.dashboard.market_monitor import build_market_monitor_eod
 from stock_research.dashboard.news import load_public_news_for_dashboard
 from stock_research.dashboard.platform import load_platform_summary
@@ -42,7 +43,9 @@ def build_evidence_digest(
     start_date = _start_date(selected_trade_date, bounded_lookback_days)
     news_start_date = _start_date(selected_trade_date, min(bounded_lookback_days, 7))
     if not selected_trade_date:
-        warnings.append("market date unavailable")
+        if "market date unavailable" not in warnings:
+            warnings.append("market date unavailable")
+        return _unavailable_evidence_digest(asset_id, score_version, warnings)
     try:
         profile = build_asset_profile(
             asset_id=asset_id,
@@ -184,10 +187,74 @@ def _selected_trade_date(trade_date: str | None, score_version: str, warnings: l
     try:
         summary = load_platform_summary(score_version=score_version, top_n=5)
     except Exception as exc:
-        warnings.append(f"platform summary unavailable: {exc}")
+        warnings.append(f"platform summary unavailable: {type(exc).__name__}")
         return ""
-    latest_market_date = str(summary.get("latest_market_date") or "")
-    return latest_market_date
+    resolution = resolve_default_trade_date(summary)
+    warning = str(resolution.get("warning") or "")
+    if warning:
+        warnings.append(warning)
+    return str(resolution.get("trade_date") or "")
+
+
+def _unavailable_evidence_digest(
+    asset_id: str,
+    score_version: str,
+    warnings: list[str],
+) -> dict[str, Any]:
+    empty_profile = {
+        "asset": None,
+        "score": {},
+        "signals": [],
+        "decisions": [],
+        "outcomes": [],
+        "factor_values": [],
+    }
+    sections = _build_sections(
+        asset_id=asset_id,
+        trade_date="",
+        score_version=score_version,
+        profile=empty_profile,
+        news=_empty_optional_source(),
+        reports=_empty_optional_source(),
+        market=_empty_market_source(),
+        risk_flags=[],
+        manifest_modules=[],
+    )
+    missing_evidence = _evidence_by_status(sections, {"missing", "error"})
+    partial_evidence = _evidence_by_status(sections, {"partial", "unavailable"})
+    return {
+        "asset_id": asset_id,
+        "canonical_asset_id": asset_id,
+        "stock_code": asset_id,
+        "stock_name": "",
+        "trade_date": "",
+        "latest_trade_date": "",
+        "run_id": "",
+        "digest_key": _digest_key("", score_version, asset_id),
+        "generated_at": "",
+        "overall_status": "BLOCKED",
+        "title": _title("thin", {}, asset_id),
+        "score": 0,
+        "bucket": "thin",
+        "sections": sections,
+        "missing_evidence": missing_evidence,
+        "partial_evidence": partial_evidence,
+        "lineage": {
+            "run_id": "",
+            "latest_trade_date": "",
+            "score_version": score_version,
+            "topn_rank": None,
+            "score": None,
+            "factor_as_of": "",
+            "manifest_modules": [],
+        },
+        "errors": _section_errors(sections),
+        "facts": [],
+        "risk_flags": [],
+        "source_refs": {},
+        "next_actions": [],
+        "warnings": list(dict.fromkeys(warnings)),
+    }
 
 
 def _start_date(end_date: str, lookback_days: int) -> str:

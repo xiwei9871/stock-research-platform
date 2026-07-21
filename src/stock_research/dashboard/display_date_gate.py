@@ -6,6 +6,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from stock_research.config import SETTINGS
+from stock_research.data_run_manifest import load_recent_data_run_manifest
 
 REQUIRED_BASE_MODULES = {"daily_bars", "technical_features", "score_topn", "lhb_features", "tech_bottleneck_candidates"}
 BASE_REQUIRED_REVIEW_MODULES = {"review_queue_strategy_manifest"}
@@ -39,6 +40,113 @@ def validate_browser_acceptance_rollout_config() -> date | None:
 
 def browser_acceptance_boundary_enabled() -> bool:
     return validate_browser_acceptance_rollout_config() is not None
+
+
+def browser_acceptance_boundary_cache_key() -> str:
+    boundary = validate_browser_acceptance_rollout_config()
+    return boundary.isoformat() if boundary else ""
+
+
+def resolve_default_trade_date(
+    summary: dict[str, Any],
+    *,
+    service: str = SETTINGS.research_service,
+) -> dict[str, Any]:
+    boundary = validate_browser_acceptance_rollout_config()
+    raw_latest_market_date = str(summary.get("latest_market_date") or "")
+    if not raw_latest_market_date:
+        return _default_trade_date_resolution(
+            status="blocked",
+            boundary=boundary,
+            warning="display trade date unavailable: latest market date missing",
+        )
+    try:
+        latest_market_date = _strict_trade_date(raw_latest_market_date).isoformat()
+    except ValueError:
+        return _default_trade_date_resolution(
+            status="blocked",
+            boundary=boundary,
+            candidate_trade_date=raw_latest_market_date,
+            warning="display trade date unavailable: invalid latest market date",
+        )
+    if boundary is None:
+        return _default_trade_date_resolution(
+            status="legacy",
+            boundary=None,
+            trade_date=latest_market_date,
+            candidate_trade_date=latest_market_date,
+        )
+    try:
+        modules = list(load_recent_data_run_manifest(service=service))
+    except Exception as exc:
+        return _default_trade_date_resolution(
+            status="blocked",
+            boundary=boundary,
+            candidate_trade_date=latest_market_date,
+            warning=f"display trade date unavailable: data run manifest {type(exc).__name__}",
+        )
+    if not modules:
+        return _default_trade_date_resolution(
+            status="blocked",
+            boundary=boundary,
+            candidate_trade_date=latest_market_date,
+            warning="display trade date unavailable: data run manifest missing",
+        )
+    try:
+        gate = select_display_date(modules, latest_market_date=latest_market_date)
+    except Exception as exc:
+        return _default_trade_date_resolution(
+            status="blocked",
+            boundary=boundary,
+            candidate_trade_date=latest_market_date,
+            warning=f"display trade date unavailable: invalid data run manifest ({type(exc).__name__})",
+        )
+    display_trade_date = str(gate.get("display_trade_date") or "")
+    if not display_trade_date:
+        return _default_trade_date_resolution(
+            status="blocked",
+            boundary=boundary,
+            candidate_trade_date=latest_market_date,
+            warning="display trade date unavailable: no ready manifest date",
+            display_gate=gate,
+        )
+    try:
+        display_trade_date = _strict_trade_date(display_trade_date).isoformat()
+    except ValueError:
+        return _default_trade_date_resolution(
+            status="blocked",
+            boundary=boundary,
+            candidate_trade_date=latest_market_date,
+            warning="display trade date unavailable: invalid selected manifest date",
+            display_gate=gate,
+        )
+    return _default_trade_date_resolution(
+        status="ready",
+        boundary=boundary,
+        trade_date=display_trade_date,
+        candidate_trade_date=latest_market_date,
+        display_gate=gate,
+    )
+
+
+def _default_trade_date_resolution(
+    *,
+    status: str,
+    boundary: date | None,
+    trade_date: str = "",
+    candidate_trade_date: str = "",
+    warning: str = "",
+    display_gate: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    return {
+        "trade_date": trade_date,
+        "status": status,
+        "boundary_enabled": boundary is not None,
+        "boundary": boundary.isoformat() if boundary else "",
+        "candidate_trade_date": candidate_trade_date,
+        "warning": warning,
+        "display_gate": dict(display_gate or {}),
+    }
 
 
 def required_review_modules(trade_date: str) -> set[str]:

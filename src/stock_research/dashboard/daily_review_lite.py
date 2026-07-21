@@ -8,6 +8,7 @@ from stock_research.dashboard.daily_review_artifacts import (
     load_daily_review_payload,
     write_daily_review_artifacts,
 )
+from stock_research.dashboard.display_date_gate import resolve_default_trade_date
 from stock_research.dashboard.market_monitor import build_market_monitor_eod
 from stock_research.dashboard.platform import load_platform_summary
 from stock_research.dashboard.reports import load_report_links
@@ -38,18 +39,25 @@ def build_daily_review_lite(
     *,
     service: str = SETTINGS.research_service,
 ) -> dict[str, Any]:
-    summary = _safe_call(lambda: load_platform_summary(service=service), default={})
-    selected_trade_date = str(trade_date or summary.get("latest_market_date") or "")[:10]
+    resolution: dict[str, Any] = {}
+    if trade_date:
+        selected_trade_date = str(trade_date)
+    else:
+        summary = _safe_call(lambda: load_platform_summary(service=service), default={})
+        resolution = resolve_default_trade_date(summary, service=service)
+        selected_trade_date = str(resolution.get("trade_date") or "")
     if not selected_trade_date:
         theme_research = unavailable_daily_theme_research_digest("")
+        boundary_enabled = bool(resolution.get("boundary_enabled"))
+        warning = str(resolution.get("warning") or "no display trade date available")
         return _payload(
             trade_date="",
-            status="empty",
-            run=_run_payload(None, source="no run selected"),
+            status="unavailable" if boundary_enabled else "empty",
+            run=_run_payload(None, source="display gate blocked" if boundary_enabled else "no run selected"),
             fallback=True,
             sections=_empty_sections(),
             artifacts=[],
-            warnings=["no display trade date available"],
+            warnings=[warning],
             theme_research=theme_research,
         )
 

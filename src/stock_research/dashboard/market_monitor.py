@@ -9,11 +9,8 @@ from typing import Any
 
 from stock_research.config import SETTINGS
 from stock_research.dashboard.amount_units import storage_amount_to_yuan
-from stock_research.data_run_manifest import load_recent_data_run_manifest
 from stock_research.dashboard.display_date_gate import (
-    BrowserAcceptanceRolloutConfigError,
-    browser_acceptance_boundary_enabled,
-    select_display_date,
+    resolve_default_trade_date,
     validate_browser_acceptance_rollout_config,
 )
 from stock_research.dashboard.platform import load_platform_summary
@@ -24,9 +21,6 @@ from stock_research.market_emotion_state_v1 import (
     build_market_emotion_state_from_frames,
     load_market_emotion_source_frames,
 )
-
-load_latest_data_run_manifest = load_recent_data_run_manifest
-
 
 _MISSING_TABLE_SQLSTATES = {"3F000", "42P01"}
 
@@ -333,10 +327,48 @@ def build_market_monitor_eod(
     latest_factor_date = str(summary.get("latest_factor_date") or "")
     latest_score_date = str(summary.get("latest_score_date") or "")
     explicit_trade_date = bool(trade_date)
-    selected_trade_date = str(trade_date) if explicit_trade_date else _default_display_trade_date(summary)
+    resolution = {} if explicit_trade_date else resolve_default_trade_date(summary)
+    selected_trade_date = str(trade_date) if explicit_trade_date else str(resolution.get("trade_date") or "")
     warnings: list[str] = []
     if not latest_market_date:
         warnings.append("latest complete market date is unavailable")
+    if not selected_trade_date:
+        warning = str(resolution.get("warning") or "display trade date unavailable")
+        if warning not in warnings:
+            warnings.append(warning)
+        emotion_payload = build_market_emotion_payload(None)
+        emotion_stock_lists = _empty_emotion_stock_lists()
+        emotion_stock_lists["auction_status"] = "pending_source"
+        return {
+            "trade_date": "",
+            "freshness": {
+                "mode": "eod",
+                "label": "Last Completed Trading Day",
+                "is_realtime": False,
+                "latest_market_date": latest_market_date,
+                "latest_factor_date": latest_factor_date,
+                "latest_score_date": latest_score_date,
+            },
+            "coverage": {
+                "market_assets": int(summary.get("market_asset_count") or 0),
+                "score_assets": int(summary.get("score_asset_count") or 0),
+                "factor_count": int(summary.get("factor_count") or 0),
+            },
+            "market_breadth": _market_breadth_from_emotion(emotion_payload),
+            "market_emotion": emotion_payload,
+            "emotion_stock_lists": emotion_stock_lists,
+            "index_snapshot": [],
+            "sector_strength": {"strongest": [], "weakest": [], "status": "pending_source"},
+            "unusual_moves": [],
+            "watchlist_alerts": [],
+            "strategy_signal_summary": {
+                "topn_preview_count": 0,
+                "topn_preview": [],
+                "risk_filter_counts": {},
+            },
+            "generated_reports": [],
+            "warnings": warnings,
+        }
     if (
         not explicit_trade_date
         and latest_score_date
@@ -417,27 +449,7 @@ def build_market_monitor_eod(
 
 
 def _default_display_trade_date(summary: dict[str, Any]) -> str:
-    boundary_enabled = browser_acceptance_boundary_enabled()
-    latest_market_date = str(summary.get("latest_market_date") or "")
-    if latest_market_date and not boundary_enabled:
-        return latest_market_date
-    try:
-        gate = select_display_date(
-            list(load_latest_data_run_manifest()),
-            latest_market_date=latest_market_date,
-        )
-    except BrowserAcceptanceRolloutConfigError:
-        raise
-    except Exception:
-        gate = {}
-    display_trade_date = str(gate.get("display_trade_date") or "")
-    if not latest_market_date:
-        display_trade_date = ""
-    if latest_market_date and display_trade_date and display_trade_date > latest_market_date:
-        display_trade_date = latest_market_date
-    if boundary_enabled:
-        return display_trade_date
-    return str(display_trade_date or summary.get("latest_score_date") or "")
+    return str(resolve_default_trade_date(summary).get("trade_date") or "")
 
 
 def _should_load_scores_for_default_date(summary: dict[str, Any], selected_trade_date: str) -> bool:

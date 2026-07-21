@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+from stock_research.dashboard.display_date_gate import resolve_default_trade_date
 from stock_research.dashboard.news import load_public_news_for_dashboard
 from stock_research.dashboard.platform import load_platform_summary
 from stock_research.dashboard.reports import load_report_links
@@ -311,9 +312,10 @@ def _research_report_item(row: dict[str, Any], query: str) -> dict[str, Any]:
 
 def _generated_report_results(query: str, limit: int) -> list[dict[str, Any]]:
     summary = load_platform_summary()
-    trade_date = str(summary.get("latest_market_date") or "")
+    resolution = resolve_default_trade_date(summary)
+    trade_date = str(resolution.get("trade_date") or "")
     if not trade_date:
-        raise RuntimeError("latest market date unavailable")
+        raise RuntimeError(str(resolution.get("warning") or "display trade date unavailable"))
     matches = [
         _generated_report_item(row, query)
         for row in load_report_links(trade_date)

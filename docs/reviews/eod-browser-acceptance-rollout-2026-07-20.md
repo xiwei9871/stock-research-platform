@@ -32,6 +32,8 @@ Task 7 status:
 | Step 7 evidence and rollback | complete | Recorded here and in the two operations runbooks. |
 | Step 8 documentation commit | complete | The implementation, rollback commands, and verification record are updated together; the final commit SHA is reported with task handoff. |
 
+All formal no-parameter read defaults now share the same manifest-backed display-date decision: Review Queue, Market Monitor EOD, Daily Review Lite, Evidence Digest, and the Generated Reports search group. When the boundary is enabled, missing/error/no-ready manifest state cannot promote or access candidate-date artifacts; Global Search degrades only the generated-report group, while explicit historical dates remain available.
+
 ## Fresh Regression Evidence
 
 Run the Python commands below from either the main checkout or a linked worktree after resolving the shared main-repository virtual environment:

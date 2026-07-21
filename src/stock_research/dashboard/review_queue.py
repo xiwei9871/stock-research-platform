@@ -10,11 +10,9 @@ from urllib.parse import urlencode
 from typing import Any
 
 from stock_research.config import SETTINGS
-from stock_research.data_run_manifest import load_latest_data_run_manifest, load_recent_data_run_manifest
+from stock_research.data_run_manifest import load_latest_data_run_manifest
 from stock_research.dashboard.display_date_gate import (
-    BrowserAcceptanceRolloutConfigError,
-    browser_acceptance_boundary_enabled,
-    select_display_date,
+    resolve_default_trade_date,
     validate_browser_acceptance_rollout_config,
 )
 from stock_research.dashboard.evidence_digest import build_evidence_digest
@@ -81,7 +79,21 @@ def build_review_queue(
     summary_top_n = 10 if normalized_review_mode == "strategy_topn" else bounded_limit
     summary = load_platform_summary(score_version=score_version, top_n=summary_top_n)
     explicit_trade_date = bool(trade_date)
-    selected_trade_date = str(trade_date) if explicit_trade_date else _default_display_trade_date(summary)
+    resolution = {} if explicit_trade_date else resolve_default_trade_date(summary)
+    selected_trade_date = str(trade_date) if explicit_trade_date else str(resolution.get("trade_date") or "")
+    if not selected_trade_date:
+        warning = str(resolution.get("warning") or "display trade date unavailable")
+        return {
+            "trade_date": "",
+            "score_version": score_version,
+            "review_mode": normalized_review_mode,
+            "generated_at": "",
+            "groups": [
+                {"bucket": bucket, "label": BUCKET_LABELS[bucket], "count": 0, "items": []}
+                for bucket in BUCKET_ORDER
+            ],
+            "warnings": [warning],
+        }
     if normalized_review_mode == "strategy_topn":
         manifest_rows, blocked_strategy_ids = _load_strategy_manifest_snapshot(
             trade_date=selected_trade_date,
@@ -172,23 +184,7 @@ def build_review_queue(
 
 
 def _default_display_trade_date(summary: dict[str, Any]) -> str:
-    boundary_enabled = browser_acceptance_boundary_enabled()
-    latest_market_date = str(summary.get("latest_market_date") or "")
-    if latest_market_date and not boundary_enabled:
-        return latest_market_date
-    try:
-        gate = select_display_date(
-            list(load_recent_data_run_manifest()),
-            latest_market_date=latest_market_date,
-        )
-    except BrowserAcceptanceRolloutConfigError:
-        raise
-    except Exception:
-        gate = {}
-    display_trade_date = str(gate.get("display_trade_date") or "")
-    if boundary_enabled:
-        return display_trade_date
-    return str(display_trade_date or summary.get("latest_score_date") or "")
+    return str(resolve_default_trade_date(summary).get("trade_date") or "")
 
 
 def _should_load_scores_for_default_date(summary: dict[str, Any], selected_trade_date: str) -> bool:
