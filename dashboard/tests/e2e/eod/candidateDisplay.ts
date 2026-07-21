@@ -1,0 +1,519 @@
+import type { Page, Route } from '@playwright/test';
+
+export const OFFICIAL_EOD_STRATEGY_IDS = [
+  'lhb_shortline',
+  'mid_trend',
+  'tech_bottleneck'
+] as const;
+
+export type OfficialEodStrategyId = (typeof OFFICIAL_EOD_STRATEGY_IDS)[number];
+
+export type CandidatePublication = {
+  strategyId: OfficialEodStrategyId;
+  tradeDate: string;
+  totalReturnPct: number;
+  contractId: string;
+  publishId: string;
+  publishStartedAt: string;
+  artifactVersion: string;
+};
+
+export type CandidateSnapshot = {
+  schemaVersion: 'playwright-eod-candidate-snapshot/v1';
+  tradeDate: string;
+  publications: CandidatePublication[];
+};
+
+export type CandidatePayloads = {
+  catalog: unknown;
+  reviewQueue: unknown;
+  readiness: unknown;
+  summary: unknown;
+};
+
+export type CandidateJsonFetcher = (path: string) => Promise<unknown>;
+
+export type CandidateDisplayEvidence = {
+  overriddenEndpoints: string[];
+  effectiveQueries: Array<{ endpoint: string; query: string }>;
+  rejectedWrites: Array<{ method: string; endpoint: string }>;
+};
+
+type JsonObject = Record<string, unknown>;
+
+type PreviousPublications = {
+  schemaVersion: 'playwright-eod-previous-publications/v1';
+  publications: CandidatePublication[];
+};
+
+type CandidateDisplayDecision =
+  | { action: 'continue' }
+  | { action: 'reject-write'; endpoint: string; method: string }
+  | { action: 'override'; endpoint: string; effectiveUrl: string };
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const ISO_TIMESTAMP_WITH_ZONE = /^\d{4}-\d{2}-\d{2}T.+(?:Z|[+-]\d{2}:\d{2})$/;
+const ALLOWED_API_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+const OVERRIDDEN_EXACT_ENDPOINTS = new Set([
+  '/api/platform/readiness',
+  '/api/platform/summary',
+  '/api/platform/display-date',
+  '/api/review-queue'
+]);
+const DISPLAY_DATE_FIELDS = new Set([
+  'display_trade_date',
+  'candidate_trade_date',
+  'latest_market_date',
+  'latest_trade_date',
+  'trade_date'
+]);
+const PREVIOUS_ROOT_KEYS = ['publications', 'schemaVersion'];
+const PUBLICATION_KEYS = [
+  'artifactVersion',
+  'contractId',
+  'publishId',
+  'publishStartedAt',
+  'strategyId',
+  'totalReturnPct',
+  'tradeDate'
+];
+
+function environmentValue(name: string): string | undefined {
+  return (
+    globalThis as typeof globalThis & {
+      process?: { env?: Record<string, string | undefined> };
+    }
+  ).process?.env?.[name];
+}
+
+function fail(code: string, detail?: string): never {
+  throw new Error(detail ? `${code}:${detail}` : code);
+}
+
+function objectValue(value: unknown, code: string): JsonObject {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) fail(code);
+  return value as JsonObject;
+}
+
+function arrayValue(value: unknown, code: string): unknown[] {
+  if (!Array.isArray(value)) fail(code);
+  return value;
+}
+
+function exactKeys(value: JsonObject, expected: readonly string[], code: string): void {
+  const actual = Object.keys(value).sort();
+  const stableExpected = [...expected].sort();
+  if (JSON.stringify(actual) !== JSON.stringify(stableExpected)) fail(code);
+}
+
+function requiredString(value: unknown, code: string): string {
+  if (typeof value !== 'string' || value.trim() === '' || value.trim() !== value) fail(code);
+  return value;
+}
+
+function requiredDate(value: unknown, code: string): string {
+  const date = requiredString(value, code);
+  if (!ISO_DATE.test(date)) fail(code);
+  const parsed = new Date(`${date}T00:00:00Z`);
+  if (Number.isNaN(parsed.valueOf()) || parsed.toISOString().slice(0, 10) !== date) fail(code);
+  return date;
+}
+
+function requiredTimestamp(value: unknown, code: string): string {
+  const timestamp = requiredString(value, code);
+  if (!ISO_TIMESTAMP_WITH_ZONE.test(timestamp) || Number.isNaN(Date.parse(timestamp))) fail(code);
+  return timestamp;
+}
+
+function requiredFiniteNumber(value: unknown, code: string): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) fail(code);
+  return value;
+}
+
+function isOfficialStrategyId(value: string): value is OfficialEodStrategyId {
+  return (OFFICIAL_EOD_STRATEGY_IDS as readonly string[]).includes(value);
+}
+
+function parseStrictPublication(value: unknown, codePrefix: string): CandidatePublication {
+  const publication = objectValue(value, `${codePrefix}_invalid`);
+  exactKeys(publication, PUBLICATION_KEYS, `${codePrefix}_schema_invalid`);
+  const strategyId = requiredString(publication.strategyId, `${codePrefix}_strategy_id_missing`);
+  if (!isOfficialStrategyId(strategyId)) fail(`${codePrefix}_strategy_id_invalid`, strategyId);
+  return {
+    strategyId,
+    tradeDate: requiredDate(publication.tradeDate, `${codePrefix}_trade_date_invalid`),
+    totalReturnPct: requiredFiniteNumber(
+      publication.totalReturnPct,
+      `${codePrefix}_total_return_invalid`
+    ),
+    contractId: requiredString(publication.contractId, `${codePrefix}_contract_id_missing`),
+    publishId: requiredString(publication.publishId, `${codePrefix}_publish_id_missing`),
+    publishStartedAt: requiredTimestamp(
+      publication.publishStartedAt,
+      `${codePrefix}_publish_started_at_invalid`
+    ),
+    artifactVersion: requiredString(
+      publication.artifactVersion,
+      `${codePrefix}_artifact_version_missing`
+    )
+  };
+}
+
+export function parsePreviousPublicationsJson(raw: string): PreviousPublications {
+  let value: unknown;
+  try {
+    value = JSON.parse(raw);
+  } catch {
+    fail('eod_previous_publications_json_invalid');
+  }
+  const root = objectValue(value, 'eod_previous_publications_schema_invalid:root');
+  exactKeys(root, PREVIOUS_ROOT_KEYS, 'eod_previous_publications_schema_invalid:root_keys');
+  if (root.schemaVersion !== 'playwright-eod-previous-publications/v1') {
+    fail('eod_previous_publications_schema_invalid:schema_version');
+  }
+  const rawPublications = arrayValue(
+    root.publications,
+    'eod_previous_publications_schema_invalid:publications'
+  );
+  if (rawPublications.length !== OFFICIAL_EOD_STRATEGY_IDS.length) {
+    fail('eod_previous_publications_schema_invalid:publication_count');
+  }
+  const publications = rawPublications.map((publication, index) =>
+    parseStrictPublication(publication, `eod_previous_publications:${index}`)
+  );
+  for (const strategyId of OFFICIAL_EOD_STRATEGY_IDS) {
+    const count = publications.filter((publication) => publication.strategyId === strategyId).length;
+    if (count !== 1) {
+      fail('eod_previous_publications_schema_invalid:strategy_count', `${strategyId}:${count}`);
+    }
+  }
+  return { schemaVersion: 'playwright-eod-previous-publications/v1', publications };
+}
+
+function matchingObjects(items: unknown[], strategyId: OfficialEodStrategyId): JsonObject[] {
+  return items.flatMap((value) => {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) return [];
+    const object = value as JsonObject;
+    return object.strategy_id === strategyId ? [object] : [];
+  });
+}
+
+function queueItems(payload: JsonObject): unknown[] {
+  const groups = arrayValue(payload.groups, 'eod_candidate_review_queue_groups_invalid');
+  return groups.flatMap((group, index) =>
+    arrayValue(
+      objectValue(group, `eod_candidate_review_queue_group_invalid:${index}`).items,
+      `eod_candidate_review_queue_items_invalid:${index}`
+    )
+  );
+}
+
+function parseCatalogPublication(
+  strategyId: OfficialEodStrategyId,
+  catalogItems: unknown[],
+  targetTradeDate: string
+): CandidatePublication {
+  const matches = matchingObjects(catalogItems, strategyId);
+  if (matches.length !== 1) {
+    fail('eod_candidate_catalog_strategy_count', `${strategyId}:${matches.length}`);
+  }
+  const metrics = objectValue(
+    matches[0].latest_metrics,
+    `eod_candidate_catalog_metrics_missing:${strategyId}`
+  );
+  if (metrics.contract_status !== 'success') {
+    fail('eod_candidate_catalog_contract_mismatch', strategyId);
+  }
+  const tradeDate = requiredDate(
+    metrics.performance_as_of_date,
+    `eod_candidate_catalog_performance_date_missing:${strategyId}`
+  );
+  if (tradeDate !== targetTradeDate) {
+    fail('eod_candidate_performance_date_mismatch', `${strategyId}:${tradeDate}:${targetTradeDate}`);
+  }
+  return {
+    strategyId,
+    tradeDate,
+    totalReturnPct: requiredFiniteNumber(
+      metrics.total_return_pct,
+      `eod_candidate_catalog_total_return_invalid:${strategyId}`
+    ),
+    contractId: requiredString(
+      metrics.contract_id,
+      `eod_candidate_catalog_contract_id_missing:${strategyId}`
+    ),
+    publishId: requiredString(
+      metrics.publish_id,
+      `eod_candidate_catalog_publish_id_missing:${strategyId}`
+    ),
+    publishStartedAt: requiredTimestamp(
+      metrics.publish_started_at,
+      `eod_candidate_catalog_publish_started_at_missing:${strategyId}`
+    ),
+    artifactVersion: requiredString(
+      metrics.artifact_version,
+      `eod_candidate_catalog_artifact_version_missing:${strategyId}`
+    )
+  };
+}
+
+function queueIdentity(item: JsonObject, strategyId: OfficialEodStrategyId) {
+  if (item.contract_status !== 'success') {
+    fail('eod_candidate_review_queue_contract_mismatch', strategyId);
+  }
+  return {
+    strategyId,
+    tradeDate: requiredDate(
+      item.performance_as_of_date,
+      `eod_candidate_review_queue_performance_date_missing:${strategyId}`
+    ),
+    totalReturnPct: requiredFiniteNumber(
+      item.total_return_pct,
+      `eod_candidate_review_queue_total_return_invalid:${strategyId}`
+    ),
+    contractId: requiredString(
+      item.contract_id,
+      `eod_candidate_review_queue_contract_id_missing:${strategyId}`
+    ),
+    publishId: requiredString(
+      item.publish_id,
+      `eod_candidate_review_queue_publish_id_missing:${strategyId}`
+    ),
+    artifactVersion: requiredString(
+      item.artifact_version,
+      `eod_candidate_review_queue_artifact_version_missing:${strategyId}`
+    )
+  };
+}
+
+function comparableIdentity(publication: CandidatePublication) {
+  return {
+    strategyId: publication.strategyId,
+    tradeDate: publication.tradeDate,
+    totalReturnPct: publication.totalReturnPct,
+    contractId: publication.contractId,
+    publishId: publication.publishId,
+    artifactVersion: publication.artifactVersion
+  };
+}
+
+function assertReviewQueueIdentity(
+  candidate: CandidatePublication,
+  allQueueItems: unknown[]
+): void {
+  const matches = matchingObjects(allQueueItems, candidate.strategyId);
+  if (matches.length === 0) {
+    fail('eod_candidate_review_queue_strategy_missing', candidate.strategyId);
+  }
+  const expected = JSON.stringify(comparableIdentity(candidate));
+  if (
+    matches.some(
+      (item) => JSON.stringify(queueIdentity(item, candidate.strategyId)) !== expected
+    )
+  ) {
+    fail('eod_candidate_review_queue_identity_mismatch', candidate.strategyId);
+  }
+}
+
+function assertPayloadDate(
+  payload: JsonObject,
+  field: string,
+  targetTradeDate: string,
+  code: string
+): void {
+  const actual = requiredDate(payload[field], `${code}_missing`);
+  if (actual !== targetTradeDate) fail(`${code}_mismatch`, `${actual}:${targetTradeDate}`);
+}
+
+function assertNoRollback(
+  candidate: CandidatePublication,
+  previous: CandidatePublication
+): void {
+  if (candidate.tradeDate < previous.tradeDate) {
+    fail(
+      'eod_candidate_publication_rollback',
+      `${candidate.strategyId}:${candidate.tradeDate}:${previous.tradeDate}`
+    );
+  }
+  if (
+    candidate.tradeDate === previous.tradeDate &&
+    Date.parse(candidate.publishStartedAt) <= Date.parse(previous.publishStartedAt)
+  ) {
+    fail('eod_candidate_publish_started_at_not_newer', candidate.strategyId);
+  }
+}
+
+export function parseCandidateSnapshot(
+  targetTradeDate: string,
+  payloads: CandidatePayloads,
+  previousPublicationsJson?: string
+): CandidateSnapshot {
+  const target = requiredDate(targetTradeDate, 'eod_candidate_target_trade_date_missing');
+  const catalog = objectValue(payloads.catalog, 'eod_candidate_catalog_invalid');
+  const reviewQueue = objectValue(payloads.reviewQueue, 'eod_candidate_review_queue_invalid');
+  const readiness = objectValue(payloads.readiness, 'eod_candidate_readiness_invalid');
+  const summary = objectValue(payloads.summary, 'eod_candidate_summary_invalid');
+  assertPayloadDate(reviewQueue, 'trade_date', target, 'eod_candidate_review_queue_trade_date');
+  assertPayloadDate(readiness, 'candidate_trade_date', target, 'eod_candidate_readiness_candidate_date');
+  assertPayloadDate(readiness, 'latest_market_date', target, 'eod_candidate_readiness_latest_date');
+  assertPayloadDate(summary, 'latest_market_date', target, 'eod_candidate_summary_latest_date');
+
+  const catalogItems = arrayValue(catalog.items, 'eod_candidate_catalog_items_invalid');
+  const allQueueItems = queueItems(reviewQueue);
+  const publications = OFFICIAL_EOD_STRATEGY_IDS.map((strategyId) =>
+    parseCatalogPublication(strategyId, catalogItems, target)
+  );
+  for (const publication of publications) {
+    assertReviewQueueIdentity(publication, allQueueItems);
+  }
+
+  if (previousPublicationsJson !== undefined && previousPublicationsJson.trim() !== '') {
+    const previous = parsePreviousPublicationsJson(previousPublicationsJson);
+    for (const candidate of publications) {
+      const prior = previous.publications.find(
+        (publication) => publication.strategyId === candidate.strategyId
+      );
+      if (!prior) fail('eod_previous_publications_strategy_missing', candidate.strategyId);
+      assertNoRollback(candidate, prior);
+    }
+  }
+
+  return {
+    schemaVersion: 'playwright-eod-candidate-snapshot/v1',
+    tradeDate: target,
+    publications
+  };
+}
+
+export async function loadCandidateSnapshot(
+  targetTradeDate: string,
+  fetchJson: CandidateJsonFetcher,
+  previousPublicationsJson = environmentValue('PLAYWRIGHT_EOD_PREVIOUS_PUBLICATIONS_JSON')
+): Promise<CandidateSnapshot> {
+  const encodedDate = encodeURIComponent(targetTradeDate);
+  const [catalog, reviewQueue, readiness, summary] = await Promise.all([
+    fetchJson('/api/strategies/catalog'),
+    fetchJson(`/api/review-queue?trade_date=${encodedDate}`),
+    fetchJson('/api/platform/readiness'),
+    fetchJson('/api/platform/summary')
+  ]);
+  return parseCandidateSnapshot(
+    targetTradeDate,
+    { catalog, reviewQueue, readiness, summary },
+    previousPublicationsJson
+  );
+}
+
+function isOverriddenEndpoint(pathname: string): boolean {
+  return OVERRIDDEN_EXACT_ENDPOINTS.has(pathname) || pathname.startsWith('/api/market-monitor/');
+}
+
+export function candidateDisplayDecision(
+  method: string,
+  rawUrl: string,
+  targetTradeDate: string
+): CandidateDisplayDecision {
+  const normalizedMethod = method.toUpperCase();
+  const url = new URL(rawUrl);
+  const endpoint = url.pathname;
+  if (
+    (endpoint === '/api' || endpoint.startsWith('/api/')) &&
+    !ALLOWED_API_METHODS.has(normalizedMethod)
+  ) {
+    return { action: 'reject-write', endpoint, method: normalizedMethod };
+  }
+  if (normalizedMethod !== 'GET' || !isOverriddenEndpoint(endpoint)) {
+    return { action: 'continue' };
+  }
+  if (endpoint === '/api/review-queue') {
+    url.searchParams.set('trade_date', targetTradeDate);
+  }
+  return { action: 'override', endpoint, effectiveUrl: url.toString() };
+}
+
+function rewriteDateFields(value: unknown, targetTradeDate: string): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => rewriteDateFields(item, targetTradeDate));
+  }
+  if (typeof value !== 'object' || value === null) return value;
+  return Object.fromEntries(
+    Object.entries(value as JsonObject).map(([key, nestedValue]) => [
+      key,
+      DISPLAY_DATE_FIELDS.has(key)
+        ? targetTradeDate
+        : rewriteDateFields(nestedValue, targetTradeDate)
+    ])
+  );
+}
+
+export function rewriteCandidateDisplayPayload(
+  pathname: string,
+  payload: unknown,
+  targetTradeDate: string
+): unknown {
+  if (!isOverriddenEndpoint(pathname)) return payload;
+  return rewriteDateFields(payload, targetTradeDate);
+}
+
+function stableQuery(rawUrl: string): string {
+  const url = new URL(rawUrl);
+  const entries = [...url.searchParams.entries()].sort(([leftKey, leftValue], [rightKey, rightValue]) =>
+    leftKey === rightKey ? leftValue.localeCompare(rightValue) : leftKey.localeCompare(rightKey)
+  );
+  return new URLSearchParams(entries).toString();
+}
+
+async function handleCandidateRoute(
+  route: Route,
+  targetTradeDate: string,
+  evidence: CandidateDisplayEvidence
+): Promise<void> {
+  const request = route.request();
+  const decision = candidateDisplayDecision(request.method(), request.url(), targetTradeDate);
+  if (decision.action === 'continue') {
+    await route.continue();
+    return;
+  }
+  if (decision.action === 'reject-write') {
+    evidence.rejectedWrites.push({ method: decision.method, endpoint: decision.endpoint });
+    await route.fulfill({
+      status: 405,
+      contentType: 'application/json',
+      body: JSON.stringify({ detail: 'playwright_eod_read_only_api_guard' })
+    });
+    return;
+  }
+
+  evidence.overriddenEndpoints.push(decision.endpoint);
+  evidence.effectiveQueries.push({
+    endpoint: decision.endpoint,
+    query: stableQuery(decision.effectiveUrl)
+  });
+  const response = await route.fetch({ url: decision.effectiveUrl });
+  const contentType = response.headers()['content-type'] ?? '';
+  if (!response.ok() || !contentType.includes('application/json')) {
+    await route.fulfill({ response });
+    return;
+  }
+  const payload = await response.json();
+  const rewritten = rewriteCandidateDisplayPayload(
+    decision.endpoint,
+    payload,
+    targetTradeDate
+  );
+  await route.fulfill({ response, body: JSON.stringify(rewritten) });
+}
+
+export async function installCandidateDisplayOverride(
+  page: Page,
+  targetTradeDate: string
+): Promise<CandidateDisplayEvidence> {
+  const target = requiredDate(targetTradeDate, 'eod_candidate_target_trade_date_missing');
+  const evidence: CandidateDisplayEvidence = {
+    overriddenEndpoints: [],
+    effectiveQueries: [],
+    rejectedWrites: []
+  };
+  await page.route('**/api/**', (route) => handleCandidateRoute(route, target, evidence));
+  return evidence;
+}

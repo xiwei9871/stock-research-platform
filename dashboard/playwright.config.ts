@@ -1,7 +1,7 @@
 import { accessSync, constants } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import { defineConfig } from '@playwright/test';
+import { defineConfig, type ReporterDescription } from '@playwright/test';
 
 import {
   buildConfiguredWebServers,
@@ -44,6 +44,28 @@ const webServer = buildConfiguredWebServers(
   },
   process.env.PLAYWRIGHT_EXTERNAL_SERVERS
 );
+const standardReporters: ReporterDescription[] = [
+  ['html', { outputFolder: `playwright-report/${profile}`, open: 'never' }],
+  [
+    'json',
+    {
+      outputFile:
+        process.env.PLAYWRIGHT_JSON_OUTPUT_NAME ?? `test-results/${profile}/results.json`
+    }
+  ]
+];
+const reporter: ReporterDescription[] =
+  profile === 'eod'
+    ? [
+        [
+          './tests/e2e/eod/eodReporter.ts',
+          {
+            outputDir: process.env.PLAYWRIGHT_EOD_OUTPUT_DIR ?? 'test-results/eod'
+          }
+        ],
+        ...standardReporters
+      ]
+    : standardReporters;
 
 export default defineConfig({
   testDir: './tests',
@@ -58,16 +80,7 @@ export default defineConfig({
     }
   },
   outputDir: `test-results/${profile}`,
-  reporter: [
-    ['html', { outputFolder: `playwright-report/${profile}`, open: 'never' }],
-    [
-      'json',
-      {
-        outputFile:
-          process.env.PLAYWRIGHT_JSON_OUTPUT_NAME ?? `test-results/${profile}/results.json`
-      }
-    ]
-  ],
+  reporter,
   use: {
     baseURL: `http://127.0.0.1:${dashboardPort}`,
     trace: 'retain-on-failure',
