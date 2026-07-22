@@ -4,6 +4,7 @@ import {
   expectApiUiConsistency,
   expectPublicationConsistency,
   expectRouteContext,
+  expectStrategyPresentationConsistency,
   expectStateRestored
 } from '../assertions/consistency';
 import { officialStrategies } from '../fixtures/officialStrategies';
@@ -309,6 +310,28 @@ test('publication identity matches official fixture and visible card @p0 @consis
   await expectPublicationConsistency(page.locator('article'), {
     contractId: strategy.contractId,
     publishId: strategy.publishId,
+    tradeDate: strategy.performanceDate,
+    totalReturnPct: strategy.totalReturn
+  });
+});
+
+test('human strategy presentation matches without technical publication fields @p0 @consistency-contract', async ({
+  page,
+  baseURL
+}) => {
+  const strategy = officialStrategies.lhb_shortline;
+  await setContractContent(
+    page,
+    baseURL,
+    '/__consistency-human-strategy__',
+    `<main><article data-strategy-id="${strategy.strategyId}">` +
+      `<time data-testid="strategy-performance-date">${strategy.performanceDate}</time> ` +
+      '<strong data-testid="strategy-total-return">+52.40%</strong>' +
+      '<span>数据正常</span></article></main>'
+  );
+
+  await expectStrategyPresentationConsistency(page.locator('article'), {
+    strategyId: strategy.strategyId,
     tradeDate: strategy.performanceDate,
     totalReturnPct: strategy.totalReturn
   });

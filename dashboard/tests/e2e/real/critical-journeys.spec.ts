@@ -1,9 +1,9 @@
 import type { APIRequestContext, Page } from '@playwright/test';
 
 import {
-  expectPublicationConsistency,
   expectRouteContext,
-  expectStateRestored
+  expectStateRestored,
+  expectStrategyPresentationConsistency
 } from '../assertions/consistency';
 import { loadAuthoritativeSnapshot } from './authoritativeSnapshot';
 import { expect, test } from './test';
@@ -285,11 +285,10 @@ test('home official strategy cards match the authoritative publication snapshot 
   }
 
   for (const publication of snapshot.strategies) {
-    await expectPublicationConsistency(
+    await expectStrategyPresentationConsistency(
       page.locator(`article[data-strategy-id="${publication.strategyId}"]`),
       {
-        contractId: publication.contractId,
-        publishId: publication.publishId,
+        strategyId: publication.strategyId,
         tradeDate: publication.tradeDate,
         totalReturnPct: publication.totalReturnPct
       }

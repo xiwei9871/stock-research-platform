@@ -874,7 +874,7 @@ def _read_manifest_strategy_artifact(
         "artifact_version": metadata.get("artifact_version"),
         "publication_manifest_path": metadata.get("publication_manifest_path"),
         "performance_as_of_date": _manifest_performance_as_of_date(manifest),
-        "total_return_pct": round(total_return * 100, 10) if total_return is not None else None,
+        "total_return_pct": round(total_return * 100, 2) if total_return is not None else None,
         "contract_status": "success",
     }
     normalized: list[dict[str, Any]] = []

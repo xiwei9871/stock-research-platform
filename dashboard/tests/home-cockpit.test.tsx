@@ -915,8 +915,8 @@ describe('AppShell and HomeCockpit', () => {
     expect(strategyPerformance.getAllByText('最新持仓 5')).toHaveLength(2);
     expect(strategyPerformance.getAllByTestId('strategy-performance-date').filter((node) => node.textContent === '2026-06-08')).toHaveLength(2);
     expect(
-      within(strategyPerformance.getByText('LHB Shortline Combo').closest('article')!).getByTestId('strategy-publish-id')
-    ).toHaveTextContent('lhb-shortline-20260608');
+      within(strategyPerformance.getByText('LHB Shortline Combo').closest('article')!).getByText('数据正常')
+    ).toBeVisible();
 
     await screen.findByText('策略指挥中心');
     const researchQueueRegion = screen.getByRole('region', { name: '今日研究队列' });
@@ -1574,7 +1574,9 @@ describe('AppShell and HomeCockpit', () => {
     expect(strategyPerformance.getByText('Tech Bottleneck Combo')).toBeVisible();
     expect(strategyPerformance.getByText('未就绪')).toBeVisible();
     expect(strategyPerformance.getByText('正式产物失败')).toBeVisible();
-    expect(strategyPerformance.getByText(/base candidate source freshness metadata missing/)).toBeVisible();
+    expect(strategyPerformance.getByText('数据异常')).toBeVisible();
+    expect(strategyPerformance.getByText('最新策略数据暂不可用，请稍后复查')).toBeVisible();
+    expect(strategyPerformance.queryByText(/base candidate source freshness metadata missing/)).not.toBeInTheDocument();
     expect(strategyPerformance.queryByText('+60.10%')).not.toBeInTheDocument();
   });
 
@@ -1643,19 +1645,17 @@ describe('AppShell and HomeCockpit', () => {
     const midCard = strategyPerformance.getByText('Mid Trend Combo').closest('article');
     expect(lhbCard).not.toBeNull();
     expect(midCard).not.toBeNull();
-    expect(within(lhbCard!).getByText('正式合同')).toBeVisible();
-    expect(within(lhbCard!).getByText('发布编号')).toBeVisible();
-    expect(within(lhbCard!).getByText('产物版本')).toBeVisible();
-    expect(within(lhbCard!).getByText('校验状态')).toBeVisible();
-    expect(within(lhbCard!).getByText('lhb_shortline:balanced:auction_enhanced_rerank:balanced')).toBeVisible();
-    expect(within(lhbCard!).getByTestId('strategy-publish-id')).toHaveTextContent('lhb-shortline-20260718');
-    expect(within(lhbCard!).getByText('strategy_artifact_v1')).toBeVisible();
-    expect(within(lhbCard!).getByText('通过')).toBeVisible();
+    expect(within(lhbCard!).queryByText('正式合同')).not.toBeInTheDocument();
+    expect(within(lhbCard!).queryByText('发布编号')).not.toBeInTheDocument();
+    expect(within(lhbCard!).queryByText('产物版本')).not.toBeInTheDocument();
+    expect(within(lhbCard!).queryByText('lhb_shortline:balanced:auction_enhanced_rerank:balanced')).not.toBeInTheDocument();
+    expect(within(lhbCard!).queryByText('lhb-shortline-20260718')).not.toBeInTheDocument();
+    expect(within(lhbCard!).queryByText('strategy_artifact_v1')).not.toBeInTheDocument();
+    expect(within(lhbCard!).getByText('数据正常')).toBeVisible();
     expect(within(lhbCard!).getByText('Top5 先选后校验，不补位')).toBeVisible();
-    expect(within(midCard!).getByText('正式合同')).toBeVisible();
-    expect(within(midCard!).getByText('校验状态')).toBeVisible();
-    expect(within(midCard!).getByText('合同不匹配')).toBeVisible();
-    expect(within(midCard!).getByText('正式合同不匹配')).toBeVisible();
+    expect(within(midCard!).queryByText('正式合同')).not.toBeInTheDocument();
+    expect(within(midCard!).getByText('数据异常')).toBeVisible();
+    expect(within(midCard!).getByText('最新策略数据暂不可用，请稍后复查')).toBeVisible();
     expect(within(midCard!).queryByText('+88.8%')).not.toBeInTheDocument();
     expect(within(midCard!).queryByText('-12.3%')).not.toBeInTheDocument();
     expect(within(midCard!).queryByText('Top5 先选后校验，不补位')).not.toBeInTheDocument();

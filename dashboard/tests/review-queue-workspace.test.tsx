@@ -176,20 +176,12 @@ describe('ReviewQueueWorkspace', () => {
     expect(within(preview).getByText('Recent accepted news')).toBeInTheDocument();
     expect(within(sourceChips).getByText('策略')).toBeInTheDocument();
     expect(within(sourceChips).getByText('研报')).toBeInTheDocument();
-    expect(within(preview).getByText('正式合同')).toBeVisible();
-    expect(within(preview).getByText('发布编号')).toBeVisible();
-    expect(within(preview).getByText('产物版本')).toBeVisible();
-    expect(within(preview).getByText('校验状态')).toBeVisible();
-    expect(
-      within(preview).getByText(
-        'mid_trend:balanced:top5_weekly_max2_selective_trend_holding_protection_v1'
-      )
-    ).toBeVisible();
-    expect(within(preview).getByText('strategy_artifact_v1')).toBeVisible();
-    expect(within(preview).getByTestId('strategy-publish-id')).toHaveTextContent('mid-trend-20260608');
+    expect(within(preview).queryByText('正式合同')).not.toBeInTheDocument();
+    expect(within(preview).queryByText('发布编号')).not.toBeInTheDocument();
+    expect(within(preview).queryByText('产物版本')).not.toBeInTheDocument();
+    expect(within(preview).getByText('数据正常')).toBeVisible();
     expect(within(preview).getByTestId('strategy-total-return')).toHaveTextContent('+49.12%');
     expect(within(preview).getByText('2026-06-08')).toBeVisible();
-    expect(within(preview).getByText('通过')).toBeVisible();
   });
 
   it('shows platform and per-strategy freshness when review queue is stale', async () => {

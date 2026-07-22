@@ -206,12 +206,12 @@ describe('BacktestLabWorkspace', () => {
     render(<BacktestLabWorkspace initialStrategyId="mid_trend" />);
 
     await waitFor(() => expect(screen.getByLabelText('strategy')).toHaveValue('mid_trend'));
-    const publication = screen.getByRole('region', { name: 'Mid Trend Combo 正式发布合同' });
+    const publication = screen.getByRole('region', { name: 'Mid Trend Combo 策略数据状态' });
     expect(publication).toHaveAttribute('data-strategy-id', 'mid_trend');
-    expect(within(publication).getByTestId('strategy-contract-id')).toHaveTextContent(
-      'mid_trend:balanced:top5_weekly_max2_selective_trend_holding_protection_v1'
-    );
-    expect(within(publication).getByTestId('strategy-publish-id')).toHaveTextContent('mid-trend-20260718');
+    expect(within(publication).queryByText('正式合同')).not.toBeInTheDocument();
+    expect(within(publication).queryByText('发布编号')).not.toBeInTheDocument();
+    expect(within(publication).queryByText('产物版本')).not.toBeInTheDocument();
+    expect(within(publication).getByText('数据正常')).toBeVisible();
     expect(within(publication).getByTestId('strategy-performance-date')).toHaveTextContent('2026-07-18');
     expect(within(publication).getByTestId('strategy-total-return')).toHaveTextContent('+49.12%');
     expect(apiMocks.runBacktest).not.toHaveBeenCalled();
@@ -223,7 +223,7 @@ describe('BacktestLabWorkspace', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('未知策略 unknown_strategy');
     expect(screen.getByLabelText('strategy')).toHaveValue('');
-    expect(screen.queryByRole('region', { name: /正式发布合同/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: /策略数据状态/ })).not.toBeInTheDocument();
     expect(apiMocks.runBacktest).not.toHaveBeenCalled();
     expect(apiMocks.runFreshBacktest).not.toHaveBeenCalled();
   });

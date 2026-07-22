@@ -19,6 +19,12 @@ function formatSignedPercent(value: number | null | undefined) {
   return `${value > 0 ? '+' : ''}${value.toFixed(2)}%`;
 }
 
+function publicationHealth(status: string | null | undefined) {
+  if (status === 'success') return { label: '数据正常', detail: '策略数据已完成更新' };
+  if (!status) return { label: '数据更新中', detail: '等待最新策略数据' };
+  return { label: '数据异常', detail: '最新策略数据暂不可用，请稍后复查' };
+}
+
 function findInitialSelection(queue: ReviewQueueResponse) {
   const selectedGroup = queue.groups.find((group) => group.items.length > 0) ?? queue.groups[0] ?? null;
   return {
@@ -398,28 +404,11 @@ export function ReviewQueueWorkspace({
                   <span className="status-chip">{selectedDigest.bucket}</span>
                 </div>
 
-                <div className="strategy-metric-grid" aria-label="正式发布合同">
+                <div className="strategy-metric-grid" aria-label="策略数据状态">
                   <div>
-                    <span>正式合同</span>
-                    <strong data-testid="strategy-contract-id">{selectedItem.contract_id ?? '-'}</strong>
-                  </div>
-                  <div>
-                    <span>发布编号</span>
-                    <strong data-testid="strategy-publish-id">{selectedItem.publish_id ?? '-'}</strong>
-                  </div>
-                  <div>
-                    <span>产物版本</span>
-                    <strong>{selectedItem.artifact_version ?? '-'}</strong>
-                  </div>
-                  <div>
-                    <span>校验状态</span>
-                    <strong>
-                      {selectedItem.contract_status === 'success'
-                        ? '通过'
-                        : selectedItem.contract_status === 'contract_mismatch'
-                          ? '合同不匹配'
-                          : '未校验'}
-                    </strong>
+                    <span>数据状态</span>
+                    <strong>{publicationHealth(selectedItem.contract_status).label}</strong>
+                    <small>{publicationHealth(selectedItem.contract_status).detail}</small>
                   </div>
                   <div>
                     <span>表现日期</span>

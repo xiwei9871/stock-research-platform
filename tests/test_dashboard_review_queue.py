@@ -654,6 +654,7 @@ def test_v1_manifest_rows_expose_generic_publication_evidence(tmp_path, monkeypa
             "benchmark_variant": (
                 "top5_weekly_max2_selective_trend_holding_protection_v1"
             ),
+            "total_return": 0.49123456,
         }
     )
     monkeypatch.setattr(

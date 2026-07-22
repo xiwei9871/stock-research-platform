@@ -233,6 +233,51 @@ export async function expectApiUiConsistency(
   }
 }
 
+export async function expectStrategyPresentationConsistency(
+  card: Locator,
+  expected: {
+    strategyId: string;
+    tradeDate: string;
+    totalReturnPct: number;
+  }
+): Promise<void> {
+  const numericValue = finiteValue(expected.totalReturnPct);
+  const publication = await readPublication(card);
+  const mismatches: string[] = [];
+
+  if (publication.cardCount !== 1 || !publication.cardVisible) {
+    mismatches.push(`- card: expected one visible card, rendered ${publication.cardCount}`);
+  }
+  if (publication.strategyId !== expected.strategyId) {
+    mismatches.push(
+      `- strategyId: expected ${quoted(expected.strategyId)}, rendered ${quoted(publication.strategyId)}`
+    );
+  }
+  if (!isUniqueVisible(publication.tradeDate)) {
+    mismatches.push(`- tradeDate: expected a unique visible field, rendered ${quoted(publication.tradeDate.rendered)}`);
+  } else if (publication.tradeDate.rendered !== expected.tradeDate) {
+    mismatches.push(
+      `- tradeDate: expected ${quoted(expected.tradeDate)}, rendered ${quoted(publication.tradeDate.rendered)}`
+    );
+  }
+  if (
+    !isUniqueVisible(publication.totalReturn) ||
+    numericValue === null ||
+    !valueMatches(publication.totalReturn.rendered, numericValue, 'percent')
+  ) {
+    mismatches.push(
+      `- totalReturnPct: raw value ${rawValueText(expected.totalReturnPct)}; rendered text ` +
+        `${quoted(publication.totalReturn.rendered)}; rule percent.`
+    );
+  }
+
+  if (mismatches.length > 0) {
+    throw new Error(
+      `Strategy presentation consistency mismatch for ${quoted(expected.strategyId)}:\n${mismatches.join('\n')}`
+    );
+  }
+}
+
 export async function expectPublicationConsistency(
   card: Locator,
   expected: {

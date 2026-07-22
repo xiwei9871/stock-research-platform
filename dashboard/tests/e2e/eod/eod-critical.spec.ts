@@ -6,7 +6,7 @@ import {
   type TestInfo
 } from '@playwright/test';
 
-import { expectPublicationConsistency, expectRouteContext } from '../assertions/consistency';
+import { expectRouteContext, expectStrategyPresentationConsistency } from '../assertions/consistency';
 import { expect, test } from '../fixtures/test';
 import {
   candidateDisplayDecision,
@@ -995,13 +995,15 @@ async function expectFullPublication(
   container: ReturnType<Page['locator']>,
   publication: Awaited<ReturnType<typeof candidateSnapshot>>['publications'][number]
 ): Promise<void> {
-  await expectPublicationConsistency(container, {
-    contractId: publication.contractId,
-    publishId: publication.publishId,
+  await expectStrategyPresentationConsistency(container, {
+    strategyId: publication.strategyId,
     tradeDate: publication.tradeDate,
     totalReturnPct: publication.totalReturnPct
   });
-  await expect(container.getByText(publication.artifactVersion, { exact: true })).toBeVisible();
+  await expect(container.getByText('数据正常', { exact: true })).toBeVisible();
+  await expect(container.getByText(publication.contractId, { exact: true })).toHaveCount(0);
+  await expect(container.getByText(publication.publishId, { exact: true })).toHaveCount(0);
+  await expect(container.getByText(publication.artifactVersion, { exact: true })).toHaveCount(0);
 }
 
 async function expectRenderedShell(page: Page): Promise<void> {
@@ -1158,10 +1160,9 @@ test(`home strategy and review queue publication identities agree @eod @blocker-
       await homeCard.getByRole('button', { name: /打开策略/ }).click();
       await expectRouteContext(page, { path: /^\/strategy-lab$/ });
       await expect(page).toHaveURL(new RegExp(`strategy_id=${publication.strategyId}$`));
-      const strategyContract = page
-        .locator(`[data-strategy-id="${publication.strategyId}"]`)
-        .filter({ has: page.getByTestId('strategy-publish-id') })
-        .first();
+      const strategyContract = page.getByRole('region', {
+        name: new RegExp(`${publication.strategyId === 'lhb_shortline' ? 'LHB Shortline Combo' : publication.strategyId === 'mid_trend' ? 'Mid Trend Combo' : 'Tech Bottleneck Combo'} 策略数据状态`)
+      });
       await expectFullPublication(strategyContract, publication);
       await page.goto('/');
     }

@@ -76,6 +76,12 @@ function formatPublicationPercent(value: number | null | undefined) {
   return `${value > 0 ? '+' : ''}${value.toFixed(2)}%`;
 }
 
+function publicationHealth(status: string | null | undefined) {
+  if (status === 'success') return { label: '数据正常', detail: '策略数据已完成更新' };
+  if (!status) return { label: '数据更新中', detail: '等待最新策略数据' };
+  return { label: '数据异常', detail: '最新策略数据暂不可用，请稍后复查' };
+}
+
 function metricValue(result: BacktestRunResult | null, keys: string[]) {
   if (!result) {
     return null;
@@ -483,22 +489,14 @@ export function BacktestLabWorkspace({
         <section
           className="workspace-band"
           role="region"
-          aria-label={`${selectedStrategy.strategy_name} 正式发布合同`}
+          aria-label={`${selectedStrategy.strategy_name} 策略数据状态`}
           data-strategy-id={selectedStrategy.strategy_id}
         >
+          <div className="section-heading">
+            <strong>{publicationHealth(selectedStrategy.latest_metrics?.contract_status).label}</strong>
+            <span className="muted">{publicationHealth(selectedStrategy.latest_metrics?.contract_status).detail}</span>
+          </div>
           <div className="strategy-metric-grid">
-            <div>
-              <span>正式合同</span>
-              <strong data-testid="strategy-contract-id">{selectedStrategy.latest_metrics?.contract_id ?? '-'}</strong>
-            </div>
-            <div>
-              <span>发布编号</span>
-              <strong data-testid="strategy-publish-id">{selectedStrategy.latest_metrics?.publish_id ?? '-'}</strong>
-            </div>
-            <div>
-              <span>产物版本</span>
-              <strong>{selectedStrategy.latest_metrics?.artifact_version ?? '-'}</strong>
-            </div>
             <div>
               <span>表现日期</span>
               <strong data-testid="strategy-performance-date">
@@ -509,16 +507,6 @@ export function BacktestLabWorkspace({
               <span>累计收益</span>
               <strong data-testid="strategy-total-return">
                 {formatPublicationPercent(selectedStrategy.latest_metrics?.total_return_pct)}
-              </strong>
-            </div>
-            <div>
-              <span>校验状态</span>
-              <strong>
-                {selectedStrategy.latest_metrics?.contract_status === 'success'
-                  ? '通过'
-                  : selectedStrategy.latest_metrics?.contract_status === 'contract_mismatch'
-                    ? '合同不匹配'
-                    : '未校验'}
               </strong>
             </div>
           </div>

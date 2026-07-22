@@ -319,6 +319,12 @@ function strategyVersionLabel(version: string | null) {
   return version;
 }
 
+function publicationHealth(status: string | null | undefined) {
+  if (status === 'success') return { label: '数据正常', detail: '策略数据已完成更新' };
+  if (!status) return { label: '数据更新中', detail: '等待最新策略数据' };
+  return { label: '数据异常', detail: '最新策略数据暂不可用，请稍后复查' };
+}
+
 function activeStrategies(strategies: StrategyCatalogItem[]) {
   const byId = new Map(strategies.map((strategy) => [strategy.strategy_id, strategy]));
   return ACTIVE_STRATEGY_IDS.flatMap((strategyId) => {
@@ -1711,6 +1717,7 @@ export function HomeCockpit({ onNavigate, onOpenStrategy }: HomeCockpitProps) {
         <div className="strategy-command-grid">
           {visibleStrategies.map((strategy) => {
             const metrics = strategyEvidenceMetrics(strategy);
+            const health = publicationHealth(metrics.contractStatus);
             return (
               <article className="strategy-command-card" data-strategy-id={strategy.strategy_id} key={strategy.strategy_id}>
                 <div className="strategy-command-card-header">
@@ -1738,23 +1745,9 @@ export function HomeCockpit({ onNavigate, onOpenStrategy }: HomeCockpitProps) {
                     </strong>
                   </div>
                 </div>
-                <div className="strategy-metric-grid" aria-label={`${strategy.strategy_name} 正式发布合同`}>
-                  <div>
-                    <span>正式合同</span>
-                    <strong data-testid="strategy-contract-id">{metrics.contractId ?? '-'}</strong>
-                  </div>
-                  <div>
-                    <span>发布编号</span>
-                    <strong data-testid="strategy-publish-id">{metrics.publishId ?? '-'}</strong>
-                  </div>
-                  <div>
-                    <span>产物版本</span>
-                    <strong>{metrics.artifactVersion ?? '-'}</strong>
-                  </div>
-                  <div>
-                    <span>校验状态</span>
-                    <strong>{metrics.contractStatus === 'success' ? '通过' : metrics.contractStatus === 'contract_mismatch' ? '合同不匹配' : '未校验'}</strong>
-                  </div>
+                <div className="strategy-card-footer" aria-label={`${strategy.strategy_name} 策略数据状态`}>
+                  <strong>{health.label}</strong>
+                  <span>{health.detail}</span>
                 </div>
                 {metrics.isLhbPolicy ? <p className="muted">Top5 先选后校验，不补位</p> : null}
                 <div className="strategy-card-footer">
@@ -1764,7 +1757,7 @@ export function HomeCockpit({ onNavigate, onOpenStrategy }: HomeCockpitProps) {
                   </span>
                   <span>{signalLabel(metrics)}</span>
                 </div>
-                <p>{metrics.evidence || strategy.description}</p>
+                {metrics.contractStatus === 'success' ? <p>{metrics.evidence || strategy.description}</p> : null}
                 <button type="button" onClick={() => onOpenStrategy?.(strategy.strategy_id)}>
                   打开策略 {strategy.strategy_name}
                 </button>
