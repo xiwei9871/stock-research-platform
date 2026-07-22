@@ -1872,19 +1872,20 @@ describe('dashboard app shell', () => {
 
     expect(await screen.findByRole('heading', { name: /平安银行/ })).toBeInTheDocument();
     expect(screen.getByText((_content, element) => element?.textContent === '来源工作台：Review Queue')).toBeInTheDocument();
+    expect(screen.getByText('Trade Date 2026-06-10')).toBeInTheDocument();
     await waitFor(() =>
       expect(apiMocks.fetchAssetProfile).toHaveBeenCalledWith(
         '000001.SZ',
-        '2026-06-10',
-        '2025-12-12',
-        '2026-06-10',
+        '2026-06-12',
+        '2025-12-14',
+        '2026-06-12',
         'manual_v1',
         'qfq'
       )
     );
     await waitFor(() =>
       expect(apiMocks.fetchEvidenceDigest).toHaveBeenCalledWith('000001.SZ', {
-        tradeDate: '2026-06-10',
+        tradeDate: '2026-06-12',
         lookbackDays: 90
       })
     );
