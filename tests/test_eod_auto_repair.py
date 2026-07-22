@@ -112,7 +112,7 @@ def _write_browser_report(
         {
             "testId": f"test-{gate_id}",
             "title": f"@eod @eod-gate-{gate_id} gate {gate_id}",
-            "projectName": "eod-chromium",
+            "projectName": "chromium-desktop",
             "retry": 0,
             "status": "failed" if gate_id == failed_gate else "passed",
             "durationMs": 25,

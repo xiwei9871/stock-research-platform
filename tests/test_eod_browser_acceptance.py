@@ -67,7 +67,7 @@ def _report(
             {
                 "testId": f"test-{gate_id}",
                 "title": f"@eod @eod-gate-{gate_id} gate {gate_id}",
-                "projectName": "eod-chromium",
+                "projectName": "chromium-desktop",
                 "retry": 0,
                 "status": "failed" if failed else "passed",
                 "durationMs": 25,
@@ -165,7 +165,7 @@ def _manifest_result(**overrides):
         "trade_date": TRADE_DATE,
         "run_id": RUN_ID,
         "application_revision": REVISION,
-        "browser_project": "eod-chromium",
+        "browser_project": "chromium-desktop",
         "report_schema_version": acceptance.REPORT_SCHEMA_VERSION,
         "duration_seconds": 3.25,
         "failure_classes": (),
@@ -204,7 +204,7 @@ def _parsed_degraded_result(tmp_path):
         {
             "testId": "warning-test",
             "title": "@eod @warning optional chart",
-            "projectName": "eod-chromium",
+            "projectName": "chromium-desktop",
             "retry": 0,
             "status": "failed",
             "durationMs": 1,
@@ -259,7 +259,7 @@ def test_write_browser_acceptance_manifest_persists_failed_status_and_evidence()
         "report_schema_version": acceptance.REPORT_SCHEMA_VERSION,
         "run_id": RUN_ID,
         "application_revision": REVISION,
-        "browser_project": "eod-chromium",
+        "browser_project": "chromium-desktop",
         "duration_seconds": 3.25,
         "failure_classes": list(result.failure_classes),
         "warnings": ["console warning"],
@@ -281,7 +281,7 @@ def test_parser_verified_success_result_writes_normalized_manifest(tmp_path):
     assert entry["status"] == "success"
     assert entry["code_version"] == REVISION
     assert entry["metadata"]["application_revision"] == REVISION
-    assert entry["metadata"]["browser_project"] == "eod-chromium"
+    assert entry["metadata"]["browser_project"] == "chromium-desktop"
     assert entry["metadata"]["candidate_snapshot"] == json.loads(
         json.dumps(result.snapshot)
     )
@@ -300,7 +300,7 @@ def test_validate_browser_acceptance_manifest_entry_accepts_writer_output(tmp_pa
 
     assert normalized["run_id"] == RUN_ID
     assert normalized["application_revision"] == REVISION
-    assert normalized["browser_project"] == "eod-chromium"
+    assert normalized["browser_project"] == "chromium-desktop"
     assert normalized["candidate_snapshot"]["tradeDate"] == TRADE_DATE
     assert normalized["artifact_paths"] == list(entry["metadata"]["artifact_paths"])
 
@@ -567,7 +567,7 @@ def test_parse_report_accepts_success_and_collects_safe_artifacts(tmp_path):
     assert result.status == RepairStatus.SUCCESS
     assert result.snapshot["tradeDate"] == TRADE_DATE
     assert result.application_revision == REVISION
-    assert result.browser_project == "eod-chromium"
+    assert result.browser_project == "chromium-desktop"
     assert result.report_schema_version == acceptance.REPORT_SCHEMA_VERSION
     assert result.failure_classes == ()
     assert str(report_path) in result.artifact_paths
@@ -726,6 +726,27 @@ def test_parse_report_binds_candidate_snapshot_to_expected_candidate(tmp_path, f
         )
 
 
+def test_parse_report_compares_candidate_return_at_dashboard_precision(tmp_path):
+    payload = _report()
+    expected_candidates = json.loads(json.dumps(payload["candidateSnapshot"]["publications"]))
+    expected_candidates[0]["totalReturnPct"] = (
+        payload["candidateSnapshot"]["publications"][0]["totalReturnPct"] + 0.004
+    )
+    path = tmp_path / "eod-browser-acceptance.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    result = parse_browser_acceptance_report(
+        path,
+        expected_run_id=RUN_ID,
+        expected_trade_date=TRADE_DATE,
+        expected_revision=REVISION,
+        expected_candidate_publications=expected_candidates,
+        exit_code=0,
+    )
+
+    assert result.status == RepairStatus.SUCCESS
+
+
 def test_parse_report_binds_application_revision(tmp_path):
     path = _write_report(tmp_path / "eod-browser-acceptance.json")
 
@@ -859,7 +880,7 @@ def test_degraded_report_rejects_nonwarning_or_nonrepairable_top_level_failures(
         {
             "testId": "warning-test",
             "title": "@eod @warning optional chart",
-            "projectName": "eod-chromium",
+            "projectName": "chromium-desktop",
             "retry": 0,
             "status": "failed",
             "durationMs": 1,
@@ -1087,7 +1108,7 @@ def test_runner_uses_exact_command_isolated_env_nonreuse_and_private_logs(tmp_pa
 
     assert result.status == RepairStatus.SUCCESS
     assert result.application_revision == REVISION
-    assert result.browser_project == "eod-chromium"
+    assert result.browser_project == "chromium-desktop"
     assert result.report_schema_version == acceptance.REPORT_SCHEMA_VERSION
     assert len(calls) == 1
     command, kwargs = calls[0]
@@ -1790,6 +1811,35 @@ def test_previous_publication_loader_selects_latest_successful_identity_without_
     ]
     assert all(item["tradeDate"] == "2026-07-19" for item in payload["publications"])
     assert payload["publications"][0]["totalReturnPct"] == pytest.approx(52.4)
+
+
+def test_previous_publication_loader_ignores_pre_contract_legacy_success_rows():
+    rows = []
+    for index, strategy_id in enumerate(STRATEGY_IDS):
+        legacy = _manifest_row(
+            strategy_id,
+            trade_date="2026-07-16",
+            started_at=f"2026-07-16T0{index + 1}:00:00+00:00",
+            publish_id=f"{strategy_id}-legacy",
+        )
+        legacy["metadata"] = {"summary": {"total_return": 0.25}}
+        rows.extend(
+            [
+                legacy,
+                _manifest_row(
+                    strategy_id,
+                    trade_date="2026-07-19",
+                    started_at=f"2026-07-19T0{index + 1}:00:00+00:00",
+                    publish_id=f"{strategy_id}-latest",
+                ),
+            ]
+        )
+
+    payload = load_previous_official_publications(reader=lambda: rows)
+
+    assert [item["publishId"] for item in payload["publications"]] == [
+        f"{strategy_id}-latest" for strategy_id in STRATEGY_IDS
+    ]
 
 
 @pytest.mark.parametrize("prior_trade_date", ["2026-07-19", TRADE_DATE])

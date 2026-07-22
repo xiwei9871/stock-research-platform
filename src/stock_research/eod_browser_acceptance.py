@@ -48,7 +48,7 @@ NONREPAIRABLE_FAILURE_CLASSES = frozenset(
 DEFAULT_DASHBOARD_PORT = 5176
 DEFAULT_API_PORT = 8768
 DEFAULT_TIMEOUT_SECONDS = 600.0
-DEFAULT_BROWSER_PROJECT = "eod-chromium"
+DEFAULT_BROWSER_PROJECT = "chromium-desktop"
 _VERIFIED_RESULT_PROVENANCE = object()
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -1085,14 +1085,20 @@ def _assert_candidate_snapshot_matches_expected(
                     "browser_acceptance_candidate_snapshot_expected_mismatch",
                     f"{strategy_id}:{field}",
                 )
-        if "totalReturnPct" in raw_expected and actual.get("totalReturnPct") != _required_number(
-            raw_expected.get("totalReturnPct"),
-            f"browser_acceptance_expected_candidate_total_return_pct:{strategy_id}",
-        ):
-            raise _error(
-                "browser_acceptance_candidate_snapshot_expected_mismatch",
-                f"{strategy_id}:totalReturnPct",
+        if "totalReturnPct" in raw_expected:
+            expected_return = _required_number(
+                raw_expected.get("totalReturnPct"),
+                f"browser_acceptance_expected_candidate_total_return_pct:{strategy_id}",
             )
+            actual_return = _required_number(
+                actual.get("totalReturnPct"),
+                f"browser_acceptance_candidate_total_return_pct:{strategy_id}",
+            )
+            if round(actual_return, 2) != round(expected_return, 2):
+                raise _error(
+                    "browser_acceptance_candidate_snapshot_expected_mismatch",
+                    f"{strategy_id}:totalReturnPct",
+                )
 
 
 def parse_browser_acceptance_report(
@@ -1899,6 +1905,23 @@ def _validated_publication_row(
     return publication, started_at, run_id
 
 
+def _has_publication_contract_markers(row: Mapping[str, object]) -> bool:
+    metadata = row.get("metadata")
+    if not isinstance(metadata, Mapping):
+        return False
+    summary = metadata.get("summary")
+    return any(
+        key in metadata
+        for key in ("publish_id", "publication_identity", "artifact_version")
+    ) or (
+        isinstance(summary, Mapping)
+        and any(
+            key in summary
+            for key in ("publish_id", "publication_identity", "artifact_version")
+        )
+    )
+
+
 def _strategy_manifest_business_time(row: Mapping[str, object]) -> datetime:
     value = (
         row.get("ended_at")
@@ -2024,6 +2047,7 @@ def load_previous_official_publications(
             and row.get("module") == module
             and row.get("status") == "success"
             and row.get("source") in {None, "", "strategy_daily_eod"}
+            and _has_publication_contract_markers(row)
         ]
         if not candidates:
             raise _error("previous_publication_missing", strategy_id)

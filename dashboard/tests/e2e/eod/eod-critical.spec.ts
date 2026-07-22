@@ -995,6 +995,7 @@ async function expectFullPublication(
   container: ReturnType<Page['locator']>,
   publication: Awaited<ReturnType<typeof candidateSnapshot>>['publications'][number]
 ): Promise<void> {
+  await expect(container).toBeVisible();
   await expectStrategyPresentationConsistency(container, {
     strategyId: publication.strategyId,
     tradeDate: publication.tradeDate,
@@ -1136,6 +1137,7 @@ test(`home strategy cards exactly match the candidate snapshot @eod @blocker-con
     await expect(page.getByText('+175.29%', { exact: true })).toHaveCount(0);
     await expect(page.getByText('175.29%', { exact: true })).toHaveCount(0);
   } finally {
+    await page.context().unrouteAll({ behavior: 'wait' });
     await attachJson(testInfo, 'eod-display-override.json', overrideEvidence);
   }
 });
@@ -1180,6 +1182,7 @@ test(`home strategy and review queue publication identities agree @eod @blocker-
     }
     await expect(page.getByText('+175.29%', { exact: true })).toHaveCount(0);
   } finally {
+    await page.context().unrouteAll({ behavior: 'wait' });
     await attachJson(testInfo, 'eod-display-override.json', overrideEvidence);
   }
 });
@@ -1215,6 +1218,7 @@ test(`dynamic stock theme and technology deep links render safely @eod @blocker-
     });
     await expect(page.getByRole('region', { name: '个股复盘工作台' })).toBeVisible();
     await expectRenderedShell(page);
+    await page.waitForLoadState('networkidle');
 
     const encodedThemeId = encodeURIComponent(links.themeId);
     const themeLedger = watchCriticalResponses(page, 'theme', [
@@ -1239,6 +1243,7 @@ test(`dynamic stock theme and technology deep links render safely @eod @blocker-
     });
     await expect(page.getByRole('region', { name: '主题研究详情' })).toBeVisible();
     await expectRenderedShell(page);
+    await page.waitForLoadState('networkidle');
 
     const techAssetId = stockCodeToAssetId(links.techStockCode);
     const techLedger = watchCriticalResponses(page, 'technology-bottleneck', [
@@ -1267,6 +1272,7 @@ test(`dynamic stock theme and technology deep links render safely @eod @blocker-
     await expect(page.getByRole('region', { name: '个股复盘工作台' })).toBeVisible();
     await expectRenderedShell(page);
   } finally {
+    await page.context().unrouteAll({ behavior: 'wait' });
     await attachJson(testInfo, 'eod-display-override.json', overrideEvidence);
     await attachJson(testInfo, 'eod-critical-responses.json', criticalEvidence);
   }

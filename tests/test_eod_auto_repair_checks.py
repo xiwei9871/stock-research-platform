@@ -53,7 +53,7 @@ def _browser_manifest_row(**overrides):
             "report_schema_version": REPORT_SCHEMA_VERSION,
             "run_id": run_id,
             "application_revision": "abc123",
-            "browser_project": "eod-chromium",
+            "browser_project": "chromium-desktop",
             "duration_seconds": 2.0,
             "failure_classes": [],
             "warnings": [],
