@@ -176,7 +176,7 @@ describe('StockWorkspace A layout', () => {
 
     const strategyEvidence = await screen.findByRole('region', { name: '策略证据摘要' });
     const workspaceTools = await screen.findByRole('region', { name: '工作台工具' });
-    const replayControls = screen.getByText('回放 / 切换设置').closest('details');
+    const replayControls = screen.getByText('历史复盘 / 切换股票').closest('details');
 
     expect(replayControls).not.toBeNull();
     expect(replayControls).not.toHaveAttribute('open');

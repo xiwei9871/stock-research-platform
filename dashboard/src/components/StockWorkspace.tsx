@@ -1060,9 +1060,9 @@ export function StockWorkspace({
   const replayControls = (
     <details className="stock-load-settings">
       <summary>
-        <span>回放 / 切换设置</span>
+        <span>历史复盘 / 切换股票</span>
         <small>
-          {assetId} · 复盘日 {tradeDate} · 图表 {startDate} 至 {endDate}
+          {assetId} · 复盘日 {tradeDate} · 行情截至 {endDate}
         </small>
       </summary>
       <form className="compact-toolbar" onSubmit={handleSubmit}>
@@ -1079,25 +1079,7 @@ export function StockWorkspace({
             onChange={(event) => setTradeDate(event.target.value)}
           />
         </label>
-        <label>
-          图表开始
-          <input
-            aria-label="stock workspace start date"
-            type="date"
-            value={startDate}
-            onChange={(event) => setStartDate(event.target.value)}
-          />
-        </label>
-        <label>
-          图表结束
-          <input
-            aria-label="stock workspace end date"
-            type="date"
-            value={endDate}
-            onChange={(event) => setEndDate(event.target.value)}
-          />
-        </label>
-        <button type="submit">加载回放</button>
+        <button type="submit">加载历史复盘</button>
         {isLoading ? <span className="muted">正在加载...</span> : null}
       </form>
     </details>

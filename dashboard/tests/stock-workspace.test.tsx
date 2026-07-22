@@ -571,7 +571,7 @@ describe('StockWorkspace', () => {
     const quote = await screen.findByRole('region', { name: '今日价格行为' });
     const companyBasics = await screen.findByRole('region', { name: '公司基础信息' });
     const businessQuality = await screen.findByRole('region', { name: '主营构成与经营质量' });
-    expect(screen.getByText('回放 / 切换设置')).toBeInTheDocument();
+    expect(screen.getByText('历史复盘 / 切换股票')).toBeInTheDocument();
     expect(screen.getAllByText(/000001\.SZ · 复盘日/).length).toBeGreaterThan(0);
     expect(screen.queryByText('Load Stock')).not.toBeInTheDocument();
     expect(screen.queryByText('Trade Date')).not.toBeInTheDocument();
@@ -1029,6 +1029,65 @@ describe('StockWorkspace', () => {
       )
     );
     expect(screen.getByText(/结论更新 2026-07-21/)).toBeInTheDocument();
+  });
+
+  it('replays a historical review without rolling market data backward', async () => {
+    render(<StockWorkspace initialAssetId="000001.SZ" defaultTradeDate="2026-07-21" />);
+
+    await screen.findByRole('heading', { name: /平安银行/ });
+    fireEvent.change(screen.getByLabelText('stock workspace trade date'), {
+      target: { value: '2026-05-18' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: '加载历史复盘' }));
+
+    await waitFor(() =>
+      expect(apiMocks.fetchAssetProfile).toHaveBeenLastCalledWith(
+        '000001.SZ',
+        '2026-05-18',
+        '2026-01-22',
+        '2026-07-21',
+        'manual_v1',
+        'qfq'
+      )
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '周K' }));
+    await waitFor(() =>
+      expect(apiMocks.fetchDailyBars).toHaveBeenLastCalledWith(
+        '000001.SZ',
+        undefined,
+        '2026-07-21',
+        { resolution: '1W', adjustType: 'qfq' }
+      )
+    );
+    fireEvent.click(screen.getByRole('button', { name: '月K' }));
+    await waitFor(() =>
+      expect(apiMocks.fetchDailyBars).toHaveBeenLastCalledWith(
+        '000001.SZ',
+        undefined,
+        '2026-07-21',
+        { resolution: '1M', adjustType: 'qfq' }
+      )
+    );
+    fireEvent.click(screen.getByRole('button', { name: '分时' }));
+    await waitFor(() =>
+      expect(apiMocks.fetchDailyBars).toHaveBeenLastCalledWith(
+        '000001.SZ',
+        '2026-01-22',
+        '2026-07-21',
+        { resolution: '60m', adjustType: 'raw' }
+      )
+    );
+  });
+
+  it('exposes historical review controls without editable market dates', async () => {
+    render(<StockWorkspace initialAssetId="000001.SZ" defaultTradeDate="2026-07-21" />);
+
+    await screen.findByRole('heading', { name: /平安银行/ });
+    expect(screen.getByText('历史复盘 / 切换股票')).toBeInTheDocument();
+    expect(screen.queryByLabelText('stock workspace start date')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('stock workspace end date')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '加载历史复盘' })).toBeInTheDocument();
   });
 
   it('renders a decision-first layout with price state and collapsed secondary evidence', async () => {
@@ -1657,7 +1716,7 @@ describe('StockWorkspace', () => {
     expect(await screen.findByRole('heading', { name: /平安银行/ })).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('stock workspace asset'), { target: { value: '600000' } });
-    fireEvent.click(screen.getByRole('button', { name: '加载回放' }));
+    fireEvent.click(screen.getByRole('button', { name: '加载历史复盘' }));
 
     expect(await screen.findByRole('heading', { name: /浦发银行/ })).toBeInTheDocument();
     expect(screen.queryByText('来源工作台：News')).not.toBeInTheDocument();
@@ -1869,7 +1928,7 @@ describe('StockWorkspace', () => {
     );
 
     fireEvent.change(screen.getByLabelText('stock workspace asset'), { target: { value: '600000' } });
-    fireEvent.click(screen.getByRole('button', { name: '加载回放' }));
+    fireEvent.click(screen.getByRole('button', { name: '加载历史复盘' }));
 
     expect(await screen.findByRole('heading', { name: /浦发银行/ })).toBeInTheDocument();
     await waitFor(() =>
@@ -2047,7 +2106,7 @@ describe('StockWorkspace', () => {
     expect(await screen.findByText('平安银行相关新闻')).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('stock workspace asset'), { target: { value: '600000' } });
-    fireEvent.click(screen.getByRole('button', { name: '加载回放' }));
+    fireEvent.click(screen.getByRole('button', { name: '加载历史复盘' }));
 
     expect(await screen.findByRole('heading', { name: /浦发银行/ })).toBeInTheDocument();
     expect(screen.queryByText('平安银行相关新闻')).not.toBeInTheDocument();
@@ -2083,7 +2142,7 @@ describe('StockWorkspace', () => {
     await waitFor(() => expect(apiMocks.fetchAssetNews).toHaveBeenCalledWith('000001.SZ', { limit: 8, lookbackDays: 7 }));
 
     fireEvent.change(screen.getByLabelText('stock workspace asset'), { target: { value: '600000' } });
-    fireEvent.click(screen.getByRole('button', { name: '加载回放' }));
+    fireEvent.click(screen.getByRole('button', { name: '加载历史复盘' }));
 
     expect(await screen.findByRole('heading', { name: /浦发银行/ })).toBeInTheDocument();
 
@@ -2105,7 +2164,7 @@ describe('StockWorkspace', () => {
 
     await screen.findByRole('heading', { name: /平安银行/ });
     fireEvent.change(screen.getByLabelText('stock workspace asset'), { target: { value: '600000' } });
-    fireEvent.click(screen.getByRole('button', { name: '加载回放' }));
+    fireEvent.click(screen.getByRole('button', { name: '加载历史复盘' }));
 
     await waitFor(() => {
       expect(apiMocks.fetchAssetProfile).toHaveBeenLastCalledWith(
@@ -2139,7 +2198,7 @@ describe('StockWorkspace', () => {
 
     expect(apiMocks.searchAssets).toHaveBeenCalledTimes(initialSearchCallCount);
 
-    fireEvent.click(screen.getByRole('button', { name: '加载回放' }));
+    fireEvent.click(screen.getByRole('button', { name: '加载历史复盘' }));
 
     await waitFor(() => {
       expect(apiMocks.searchAssets).toHaveBeenCalledWith('600000.SH', 8);
@@ -2198,7 +2257,7 @@ describe('StockWorkspace', () => {
     await waitFor(() => expect(apiMocks.fetchAssetNews).toHaveBeenCalledTimes(1));
 
     fireEvent.change(screen.getByLabelText('stock workspace asset'), { target: { value: '600000' } });
-    fireEvent.click(screen.getByRole('button', { name: '加载回放' }));
+    fireEvent.click(screen.getByRole('button', { name: '加载历史复盘' }));
 
     expect(await screen.findByText('profile failed')).toBeInTheDocument();
 
@@ -2209,7 +2268,7 @@ describe('StockWorkspace', () => {
 
     expect(screen.queryByText('平安银行相关新闻')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: '加载回放' }));
+    fireEvent.click(screen.getByRole('button', { name: '加载历史复盘' }));
 
     expect(await screen.findByRole('heading', { name: /浦发银行/ })).toBeInTheDocument();
     await waitFor(() => expect(apiMocks.fetchAssetNews).toHaveBeenCalledTimes(2));
@@ -2254,7 +2313,7 @@ describe('StockWorkspace', () => {
     expect(screen.getByText('90d reports 4')).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('stock workspace asset'), { target: { value: '600000' } });
-    fireEvent.click(screen.getByRole('button', { name: '加载回放' }));
+    fireEvent.click(screen.getByRole('button', { name: '加载历史复盘' }));
 
     expect(await screen.findByRole('heading', { name: /浦发银行/ })).toBeInTheDocument();
     expect(Boolean(staleReportVisibleWhenSecondFetchStarted)).toBe(false);
@@ -2309,7 +2368,7 @@ describe('StockWorkspace', () => {
     await screen.findByRole('heading', { name: /平安银行/ });
 
     fireEvent.change(screen.getByLabelText('stock workspace asset'), { target: { value: '600000' } });
-    fireEvent.click(screen.getByRole('button', { name: '加载回放' }));
+    fireEvent.click(screen.getByRole('button', { name: '加载历史复盘' }));
 
     await screen.findByText('not found');
 
