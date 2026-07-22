@@ -337,6 +337,14 @@ test('old stock handoff dates do not roll back current review or chart data @rea
     await page.getByRole('button', { name: period, exact: true }).click();
     await expect(chart).toContainText(latestDate);
   }
+
+  await page.getByText('历史复盘 / 切换股票', { exact: true }).click();
+  const replayDate = page.getByLabel('stock workspace trade date', { exact: true });
+  await replayDate.fill('2026-05-18');
+  await expect(replayDate).toHaveValue('2026-05-18');
+  await page.getByRole('button', { name: '加载历史复盘', exact: true }).click();
+  await expect(review).toContainText('结论更新 2026-05-18');
+  await expect(chart).toContainText(latestDate);
 });
 
 test('global search opens a dynamically selected stock and restores Back and Forward state @real @critical', async ({
