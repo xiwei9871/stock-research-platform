@@ -1,0 +1,163 @@
+{
+  "schema_version": "1.0.0",
+  "artifact_type": "wave_1b_recovery_pilot_review_decision",
+  "decision_id": "wave_1b_recovery_pilot_review_decision:ai_pcb:v1",
+  "decision_status": "frozen",
+  "decided_at": "2026-07-22T07:37:38Z",
+  "decision_actor": "human_reviewer",
+  "project_id": "research_project:ai_compute_pcb_industry_bottleneck",
+  "review_decision": "accepted_with_limits",
+  "recovery_pilot_status": "completed_with_low_yield_and_one_valid_evidence_gain",
+  "input_bindings": {
+    "recovery_checkpoint_id": "wave_1b_recovery_checkpoint:eb5ac1cd5e37481dcd2df2dc",
+    "recovery_checkpoint_hash": "96949222f5697c1074e4ac60ee230fd814e9f8cc95cecbb112c0e14982290f54",
+    "recovery_pilot_gate_id": "wave_1b_recovery_pilot_gate_decision:ai_pcb:v1",
+    "recovery_pilot_gate_hash": "666243770b40ed1af4b928292f0295398443767f0781083073fe65ebb4dc7bcd",
+    "execution_authorization_id": "wave_1b_recovery_pilot_execution_authorization:ai_pcb:v1",
+    "execution_authorization_hash": "5ebe690a4e3b1925eb45f7ce41c80bbe0bc0830bc65a86d1619d52da8e0fbde5",
+    "capability_checkpoint_hash": "dd8029682394c29c81af084e77ea459089d65bad2735f1882ebbe694fcfe8809",
+    "wave_1b_checkpoint_hash": "a4690962e23c07e238dd2f4dfeb5d081fd1c93a0b95a89a2509e23ae4f9ceec2"
+  },
+  "recovery_pilot_accepted": true,
+  "general_recovery_capability_mature": false,
+  "additional_automated_recovery_recommended": false,
+  "recovery_execution_authorized": false,
+  "consolidated_wave_1b_assessment_recommended": true,
+  "consolidated_wave_1b_assessment_authorized": false,
+  "pilot_result_counts": {
+    "formal_target_count": 7,
+    "acquired_count": 2,
+    "eligible_recovery_evidence_count": 1,
+    "ineligible_identity_mismatch_count": 1,
+    "manual_source_resolution_target_count": 5
+  },
+  "eligible_recovery_evidence": [
+    {
+      "recovery_target_id": "recovery_target:ai_pcb:wave_1b:a02:ieee_802_3ck_index_to_fulltext:v1",
+      "authorized_er_id": "PCB-ER-A02",
+      "artifact_id": "evidence_artifact:5cf8a72e4f4c6a9043a474c5",
+      "raw_content_hash": "701d2fbd43167f5f40a02e51c6ad58bef346dcc49c5fb502d5a268dc195cdad4",
+      "canonical_normalized_document_id": "normalized_document:019803185d3da18b4d1f2486",
+      "eligibility": "eligible_for_strict_assessment",
+      "assessment_limit": "must be assessed only for the explicit IEEE 802.3ck measurement scope and recorded denominator"
+    }
+  ],
+  "ineligible_identity_mismatch": [
+    {
+      "recovery_target_id": "recovery_target:ai_pcb:wave_1b:b02:usc_repository_alternative:v1",
+      "authorized_er_id": "PCB-ER-B02",
+      "artifact_id": "evidence_artifact:a906a111c3b689ac19c58f3a",
+      "raw_content_hash": "50983b38c26460255f89668f3fe76eb9759b879c3ea6cce31483f468e61c97e2",
+      "canonical_normalized_document_id": "normalized_document:22497cde16ab00ae7b720c87",
+      "eligibility": "ineligible_identity_mismatch",
+      "exclusion_reason": "the acquired USC page does not match the frozen target publication identity"
+    }
+  ],
+  "manual_source_resolution_queue": [
+    {
+      "recovery_target_id": "recovery_target:ai_pcb:wave_1b:a04:keysight_deembedding:v1",
+      "authorized_er_id": "PCB-ER-A04",
+      "terminal_reason": "manually_unavailable",
+      "automatic_recovery_authorized": false
+    },
+    {
+      "recovery_target_id": "recovery_target:ai_pcb:wave_1b:a04:anritsu_deembedding:v1",
+      "authorized_er_id": "PCB-ER-A04",
+      "terminal_reason": "manually_unavailable",
+      "automatic_recovery_authorized": false
+    },
+    {
+      "recovery_target_id": "recovery_target:ai_pcb:wave_1b:b01:ipc_equivalent_method:v1",
+      "authorized_er_id": "PCB-ER-B01",
+      "terminal_reason": "manually_unavailable",
+      "automatic_recovery_authorized": false
+    },
+    {
+      "recovery_target_id": "recovery_target:ai_pcb:wave_1b:b01:panasonic_bounded_retry:v1",
+      "authorized_er_id": "PCB-ER-B01",
+      "terminal_reason": "connection_timeout_after_authorized_bounded_retry",
+      "automatic_recovery_authorized": false
+    },
+    {
+      "recovery_target_id": "recovery_target:ai_pcb:wave_1b:a02:etc_800g_migrated_entry:v1",
+      "authorized_er_id": "PCB-ER-A02",
+      "terminal_reason": "manually_unavailable",
+      "automatic_recovery_authorized": false
+    }
+  ],
+  "consolidated_assessment_scope": {
+    "included_batches_if_later_authorized": [
+      "targeted_evidence_acquisition_wave_1",
+      "targeted_evidence_acquisition_wave_1b",
+      "wave_1b_recovery_pilot_acquisition"
+    ],
+    "eligible_new_recovery_target_ids": [
+      "recovery_target:ai_pcb:wave_1b:a02:ieee_802_3ck_index_to_fulltext:v1"
+    ],
+    "strictly_excluded": [
+      "identity-mismatched USC content",
+      "five failed or manually unavailable recovery targets",
+      "preflight discovery records",
+      "landing pages, overview pages, and index pages",
+      "failed entry URLs and alternative-entry plans"
+    ],
+    "assessment_started": false
+  },
+  "per_er_expected_effect": {
+    "PCB-ER-A04": {
+      "eligible_new_recovery_evidence_count": 0,
+      "expected_assessment_change": "none_from_recovery_pilot"
+    },
+    "PCB-ER-B01": {
+      "eligible_new_recovery_evidence_count": 0,
+      "expected_assessment_change": "none_from_recovery_pilot"
+    },
+    "PCB-ER-B02": {
+      "eligible_new_recovery_evidence_count": 0,
+      "expected_assessment_change": "none_from_recovery_pilot_due_to_identity_mismatch"
+    },
+    "PCB-ER-A02": {
+      "eligible_new_recovery_evidence_count": 1,
+      "expected_assessment_change": "strict_review_required_for_limited_standard_or_measurement_facts"
+    }
+  },
+  "normalization_resume_duplicate_policy": {
+    "known_non_blocking_engineering_issue": "resume_normalization_not_idempotent",
+    "current_bundle_append_only": true,
+    "fix_required_before_next_formal_acquisition": true,
+    "evidence_identity_rule": "same raw hash plus same document identity plus equivalent normalized content equals one evidence document and one provisional evidence chain",
+    "canonical_selection_rule": "use the normalized document referenced by evidence_inventory as canonical; preserve later equivalent representations as resume duplicates",
+    "duplicate_groups": [
+      {
+        "raw_content_hash": "50983b38c26460255f89668f3fe76eb9759b879c3ea6cce31483f468e61c97e2",
+        "canonical_normalized_document_id": "normalized_document:22497cde16ab00ae7b720c87",
+        "resume_duplicate_normalized_document_ids": [
+          "normalized_document:c3ff111a56925e8c6836494f"
+        ]
+      },
+      {
+        "raw_content_hash": "701d2fbd43167f5f40a02e51c6ad58bef346dcc49c5fb502d5a268dc195cdad4",
+        "canonical_normalized_document_id": "normalized_document:019803185d3da18b4d1f2486",
+        "resume_duplicate_normalized_document_ids": [
+          "normalized_document:500ae7dcaae88360df0e9c72"
+        ]
+      }
+    ],
+    "duplicates_increase_evidence_document_count": false,
+    "duplicates_increase_locator_independence": false,
+    "duplicates_increase_evidence_chain_count": false
+  },
+  "decision_rationale": [
+    "the pilot improved evidence precision by excluding acquired content whose identity did not match the frozen target",
+    "only one of seven formal targets produced content eligible for strict assessment",
+    "the five unresolved targets exhausted their one-time automated recovery authorization and now require manual source resolution",
+    "repeating automated recovery without a new search channel, document identifier, or entry signal is not recommended",
+    "the next appropriate research action is a separately authorized consolidated Wave 1b assessment focused on the incremental IEEE 802.3ck evidence"
+  ],
+  "cognition_update_authorized": false,
+  "wave_2_authorized": false,
+  "company_mapping_authorized": false,
+  "stage_a2_authorized": false,
+  "stage_b_authorized": false,
+  "content_hash": "51f0d1415b8240f8b3bca96ca5187026af05094426d50c9376d72b82fd4014fd"
+}
