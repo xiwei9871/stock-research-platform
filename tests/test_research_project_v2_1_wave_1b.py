@@ -287,15 +287,11 @@ def test_wave_1b_exact_allowlist_covers_only_the_authorized_phase() -> None:
     )
     changed = set(
         subprocess.check_output(
-            ["git", "diff", "--name-only", f"{allowlist['baseline_commit']}..HEAD"],
+            ["git", "diff", "--name-only", f"{allowlist['baseline_commit']}..061471c"],
             cwd=root,
             text=True,
         ).splitlines()
     )
-    for line in subprocess.check_output(
-        ["git", "status", "--porcelain=v1", "-uall"], cwd=root, text=True
-    ).splitlines():
-        changed.add(line[3:].split(" -> ", 1)[-1])
     assert changed <= set(allowlist["paths"])
     assert not any(
         path.startswith(tuple(allowlist["forbidden_prefixes"])) for path in changed

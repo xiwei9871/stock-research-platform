@@ -37,6 +37,11 @@ from stock_research.research_project_v2_1.acquisition_doctor import (
 from stock_research.research_project_v2_1.acquisition_http import DirectHttpProvider
 from stock_research.research_project_v2_1.acquisition_import import LocalFileProvider
 from stock_research.research_project_v2_1.acquisition_storage import read_acquisition_attempt
+from stock_research.research_project_v2_1.acquisition_capability import (
+    build_discovery_plan as build_capability_discovery_plan,
+    load_capability_artifact,
+    validate_capability_repository_bundle,
+)
 from stock_research.research_project_v2_1.diff import diff_industry_versions
 from stock_research.research_project_v2_1.evidence import (
     validate_industry_evidence_assessment,
@@ -207,6 +212,24 @@ def _parser() -> argparse.ArgumentParser:
         command.add_argument("--package", required=True)
         command.add_argument("--report", required=True)
         command.add_argument("--audit", required=True)
+
+    capability = commands.add_parser(
+        "acquisition-capability",
+        help="Read-only diagnosis and benchmark views for acquisition capability.",
+    )
+    capability_commands = capability.add_subparsers(
+        dest="acquisition_capability_command", required=True
+    )
+    capability_commands.add_parser("diagnose")
+    capability_commands.add_parser("benchmark")
+    inspect = capability_commands.add_parser("inspect-candidate")
+    inspect.add_argument("--candidate-id", required=True)
+    discovery_plan = capability_commands.add_parser("plan-discovery")
+    discovery_plan.add_argument(
+        "--er",
+        choices=("PCB-ER-A04", "PCB-ER-B01", "PCB-ER-B02", "PCB-ER-A02"),
+        required=True,
+    )
     return parser
 
 
@@ -900,6 +923,41 @@ def _cognition_dispatch(
     raise AssertionError(f"Unhandled cognition command: {args.cognition_command}")
 
 
+def _acquisition_capability_dispatch(
+    args: argparse.Namespace,
+    layout: LayeredResearchLayout,
+) -> dict[str, Any]:
+    if args.acquisition_capability_command == "plan-discovery":
+        return {"status": "pass", "discovery_plan": build_capability_discovery_plan(args.er)}
+    if args.acquisition_capability_command == "diagnose":
+        diagnosis = load_capability_artifact("diagnosis.json", layout=layout)
+        return {"status": "pass", "diagnosis": diagnosis}
+    if args.acquisition_capability_command == "benchmark":
+        validation = validate_capability_repository_bundle(layout=layout)
+        return {
+            **validation,
+            "benchmark_results": load_capability_artifact(
+                "benchmark_results.json", layout=layout
+            ),
+        }
+    if args.acquisition_capability_command == "inspect-candidate":
+        diagnosis = load_capability_artifact("diagnosis.json", layout=layout)
+        matches = [
+            row for row in diagnosis.get("attempt_diagnoses") or []
+            if row.get("candidate_id") == args.candidate_id
+        ]
+        if not matches:
+            raise ResearchProjectV2Error(
+                "Capability candidate diagnosis not found",
+                code="RESEARCH_PROJECT_V2_1_ACQUISITION_CAPABILITY_NOT_FOUND",
+                details={"candidate_id": args.candidate_id},
+            )
+        return {"status": "pass", "candidate_diagnoses": matches}
+    raise AssertionError(
+        f"Unhandled acquisition capability command: {args.acquisition_capability_command}"
+    )
+
+
 def _dispatch(
     args: argparse.Namespace,
     layout: LayeredResearchLayout,
@@ -951,6 +1009,8 @@ def _dispatch(
         return _acquisition_dispatch(args, layout, clock)
     if args.command == "cognition":
         return _cognition_dispatch(args, layout)
+    if args.command == "acquisition-capability":
+        return _acquisition_capability_dispatch(args, layout)
     raise AssertionError(f"Unhandled command: {args.command}")
 
 

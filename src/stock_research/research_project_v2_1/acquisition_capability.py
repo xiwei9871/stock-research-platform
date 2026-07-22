@@ -152,16 +152,21 @@ def extract_document_identity(
     candidate: dict[str, Any], normalized_document: dict[str, Any] | None
 ) -> dict[str, Any]:
     text = _document_text(normalized_document)
+    immutable_identity_source = normalized_document is not None
     title = (
         (normalized_document or {}).get("title")
         or candidate.get("source_title")
         or None
     )
     doi_match = re.search(r"\b10\.\d{4,9}/[-._;()/:A-Z0-9]+", text, re.I)
-    nist_match = re.search(r"NIST\s+Technical\s+Note\s+(\d+)", text, re.I)
-    ieee_match = re.search(r"\bIEEE\s+(?:Std\s+)?(370(?:[-–]\d{4})?|802\.3[a-z]+)", f"{title or ''}\n{text}", re.I)
+    nist_match = re.search(r"NIST\s*Technical\s*Note\s*(\d+)", text, re.I)
+    ieee_match = re.search(
+        r"\bIEEE\s+(?:Std\s+)?P?((?:802\.3[a-z]+|\d{3,4}(?:\.\d+)?)(?:[-–]\d{4})?)",
+        f"{title or ''}\n{text}",
+        re.I,
+    )
     pci_match = re.search(r"PCI(?:\s+Express|e)\s*(\d+(?:\.\d+)?)", f"{title or ''}\n{text}", re.I)
-    revision_match = re.search(r"\b(?:Revision|Rev\.?|Version)\s*([A-Z0-9.-]+)", text, re.I)
+    revision_match = re.search(r"\b(?:Revision|Rev\.?|Version)\b\s*([A-Z0-9.-]+)", text, re.I)
     author_match = re.search(r"Authors?\s*:\s*([^\n]{3,300})", text, re.I)
     explicit_date = None
     explicit_date_match = re.search(
@@ -179,20 +184,40 @@ def extract_document_identity(
         identifier_evidence.append("body:nist_technical_note_number")
     elif ieee_match:
         standard_number = f"IEEE {ieee_match.group(1)}"
-        identifier_evidence.append("title_or_body:ieee_standard_number")
+        identifier_evidence.append(
+            "normalized_title_or_body:ieee_standard_number"
+            if immutable_identity_source
+            else "candidate_title:ieee_standard_number"
+        )
     elif pci_match:
         standard_number = f"PCI Express {pci_match.group(1)}"
-        identifier_evidence.append("title_or_body:pci_specification_number")
+        identifier_evidence.append(
+            "normalized_title_or_body:pci_specification_number"
+            if immutable_identity_source
+            else "candidate_title:pci_specification_number"
+        )
     doi = doi_match.group(0).rstrip(".,;)") if doi_match else None
     if doi:
         identifier_evidence.append("body:doi")
     authors = []
     if author_match:
         authors = [item.strip() for item in re.split(r",|\band\b", author_match.group(1)) if item.strip()]
+    elif title and text.lower().startswith(str(title).lower()):
+        # A number of conference PDFs put ``title + author + organization`` on
+        # the first page without an ``Authors:`` label.  Accept only a compact
+        # proper-name immediately following the exact title; this creates a
+        # provisional identity candidate, never a resolved publication record.
+        remainder = text[len(str(title)):].strip()
+        inline_author = re.match(
+            r"([A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){1,4})(?:,|\n|$)",
+            remainder,
+        )
+        if inline_author:
+            authors = [inline_author.group(1).strip()]
     organizations = [candidate["source_owner"]] if candidate.get("source_owner") else []
-    if doi or standard_number or document_number:
+    if immutable_identity_source and (doi or standard_number or document_number):
         confidence = "resolved"
-    elif title and authors:
+    elif title and (authors or doi or standard_number or document_number):
         confidence = "provisional"
     else:
         confidence = "unresolved"
@@ -227,7 +252,7 @@ _DISCOVERY_PLANS: dict[str, dict[str, Any]] = {
         "expected_document_types": ["full_text_pdf", "formal_standard_text", "official_technical_document"],
         "required_denominator_terms": ["measurement uncertainty", "frequency range", "channel length", "differential", "reference plane"],
         "exclusion_terms": ["overview only", "purchase page", "marketing summary"],
-        "qualification_rules": ["must expose method正文 or measurable procedure", "must identify reference plane or fixture scope"],
+        "qualification_rules": ["must expose method text or a measurable procedure", "must identify reference plane or fixture scope"],
         "stop_rules": ["method classes covered", "new results are common-origin", "only purchase/landing pages remain"],
     },
     "PCB-ER-B01": {
@@ -241,7 +266,7 @@ _DISCOVERY_PLANS: dict[str, dict[str, Any]] = {
         "required_denominator_terms": ["frequency", "temperature", "humidity", "direction", "sample thickness", "resin content", "glass style"],
         "exclusion_terms": ["best material", "marketing comparison", "no test method"],
         "qualification_rules": ["must name test method", "supplier comparison requires matched or convertible method"],
-        "stop_rules": ["formal method and independent comparison acquired", "public method正文 unavailable", "only unmatched supplier tables remain"],
+        "stop_rules": ["formal method and independent comparison acquired", "public method text unavailable", "only unmatched supplier tables remain"],
     },
     "PCB-ER-B02": {
         "research_question": "How do copper surface profile metrics and treatment affect measured conductor loss under controlled geometry and frequency?",
@@ -516,3 +541,84 @@ def capability_artifact_envelope(
 
 def checkpoint_identity(core: dict[str, Any]) -> str:
     return f"acquisition_capability_checkpoint:{sha256(canonical_bytes(core)).hexdigest()[:24]}"
+
+
+def load_capability_artifact(name: str, *, layout: LayeredResearchLayout) -> dict[str, Any]:
+    path = layout.root / CAPABILITY_DIRNAME / name
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise _invalid("Capability artifact is missing or invalid", path=str(path)) from exc
+    validate_non_evidence_artifact(payload)
+    return payload
+
+
+def validate_capability_repository_bundle(
+    *, layout: LayeredResearchLayout | None = None,
+) -> dict[str, Any]:
+    effective = layout or LayeredResearchLayout.default()
+    diagnosis = load_capability_artifact("diagnosis.json", layout=effective)
+    manifest = load_capability_artifact("benchmark_manifest.json", layout=effective)
+    results = load_capability_artifact("benchmark_results.json", layout=effective)
+    checkpoint = load_capability_artifact("capability_checkpoint.json", layout=effective)
+    validate_capability_checkpoint(checkpoint)
+
+    upstream = {
+        "wave_1b_checkpoint_hash": (
+            effective.root / "acquisition/wave_1b/acquisition_checkpoint.json"
+        ),
+        "wave_1b_gate_hash": (
+            effective.governance_dir / "ai_pcb_targeted_acquisition_wave_1b_gate_decision_v1.json"
+        ),
+        "wave_1_assessment_hash": (
+            effective.analysis_dir / "ai_pcb_targeted_evidence_assessment_wave_1_v1.json"
+        ),
+        "wave_1_checkpoint_hash": (
+            effective.root / "acquisition/wave_1/acquisition_checkpoint.json"
+        ),
+    }
+    for field, path in upstream.items():
+        try:
+            actual = json.loads(path.read_text(encoding="utf-8"))["content_hash"]
+        except (OSError, UnicodeError, json.JSONDecodeError, KeyError) as exc:
+            raise _invalid("Upstream capability binding is unavailable", field=field, path=str(path)) from exc
+        if checkpoint.get(field) != actual or diagnosis.get("bindings", {}).get(field) != actual:
+            raise _invalid("Upstream capability binding drift", field=field, expected=checkpoint.get(field), actual=actual)
+
+    if results.get("benchmark_manifest_hash") != manifest.get("content_hash"):
+        raise _invalid("Benchmark manifest binding drift")
+    manifest_ids = [row.get("case_id") for row in manifest.get("cases") or []]
+    result_ids = [row.get("case_id") for row in results.get("cases") or []]
+    if manifest_ids != result_ids or len(set(result_ids)) != len(result_ids):
+        raise _invalid("Benchmark case universe drift")
+    recomputed_passes = sum(
+        bool(row.get("passed"))
+        and all(row.get("actual", {}).get(key) == value for key, value in (row.get("expected") or {}).items())
+        for row in results.get("cases") or []
+    )
+    if (
+        recomputed_passes != results.get("passed_case_count")
+        or results.get("failed_case_count") != len(result_ids) - recomputed_passes
+        or checkpoint.get("offline_fixture_pass_count") != recomputed_passes
+        or checkpoint.get("benchmark_case_count") != len(result_ids)
+    ):
+        raise _invalid("Benchmark result is not deterministically reproducible")
+    for field in (
+        "landing_or_index_false_positive_count", "formal_research_coverage_change",
+        "security_policy_violation_count",
+    ):
+        if checkpoint.get(field) != results.get("metrics", {}).get(field):
+            raise _invalid("Benchmark metric drift", field=field)
+    if checkpoint.get("diagnosis_hash") != diagnosis.get("content_hash"):
+        raise _invalid("Diagnosis binding drift")
+    if checkpoint.get("benchmark_results_hash") != results.get("content_hash"):
+        raise _invalid("Benchmark results binding drift")
+    return {
+        "status": "pass",
+        "checkpoint_id": checkpoint["checkpoint_id"],
+        "checkpoint_hash": checkpoint["content_hash"],
+        "benchmark_case_count": len(result_ids),
+        "passed_case_count": recomputed_passes,
+        "formal_research_coverage_change": checkpoint["formal_research_coverage_change"],
+        "security_policy_violations": checkpoint["security_policy_violations"],
+    }

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import json
+from pathlib import Path
+import subprocess
 
 import pytest
 
@@ -14,7 +17,9 @@ from stock_research.research_project_v2_1.acquisition_capability import (
     match_evidence_shape,
     plan_alternative_entry,
     validate_capability_checkpoint,
+    validate_capability_repository_bundle,
 )
+from stock_research.research_project_v2_1.cli import run_research_project_v2_1_cli
 
 
 def _candidate(title: str, *, source_class: str = "technical_standard") -> dict:
@@ -126,6 +131,13 @@ def test_document_identity_extracts_formal_identifiers_without_inferring_url_dat
     )
     assert provisional["document_identity_confidence"] == "provisional"
 
+    candidate_only = extract_document_identity(
+        _candidate("IEEE 370 standard landing page"), None
+    )
+    assert candidate_only["standard_number"] == "IEEE 370"
+    assert candidate_only["document_identity_confidence"] == "provisional"
+    assert candidate_only["identity_evidence"] == ["candidate_title:ieee_standard_number"]
+
 
 def test_discovery_plans_are_er_aware_and_denominator_aware() -> None:
     a04 = build_discovery_plan("PCB-ER-A04")
@@ -195,3 +207,55 @@ def test_capability_checkpoint_rejects_research_coverage_or_downstream_authoriza
     invalid["content_hash"] = content_sha256(invalid, excluded_paths=(("content_hash",),))
     with pytest.raises(ResearchProjectV2Error, match="coverage"):
         validate_capability_checkpoint(invalid, validate_schema=False)
+
+
+def test_materialized_capability_bundle_is_recomputable_and_non_evidence() -> None:
+    result = validate_capability_repository_bundle()
+    assert result["status"] == "pass"
+    assert result["benchmark_case_count"] == 10
+    assert result["formal_research_coverage_change"] == 0
+    assert result["security_policy_violations"] == 0
+
+
+def test_capability_cli_is_read_only_and_uses_persisted_results(capsys: pytest.CaptureFixture[str]) -> None:
+    assert run_research_project_v2_1_cli(["acquisition-capability", "benchmark"]) == 0
+    benchmark = capsys.readouterr().out
+    assert '"passed_case_count": 10' in benchmark
+
+    assert run_research_project_v2_1_cli([
+        "acquisition-capability", "plan-discovery", "--er", "PCB-ER-A04"
+    ]) == 0
+    discovery = capsys.readouterr().out
+    assert '"formal_acquisition_authorized": false' in discovery
+
+    assert run_research_project_v2_1_cli([
+        "acquisition-capability", "inspect-candidate",
+        "--candidate-id", "source_candidate:2a2377d10cb01b3e4d1fce70",
+    ]) == 0
+    inspected = capsys.readouterr().out
+    assert '"candidate_content_class": "standard_landing_page"' in inspected
+
+
+def test_capability_hardening_exact_allowlist_contains_all_current_changes() -> None:
+    root = Path(__file__).resolve().parents[1]
+    allowlist = json.loads(
+        (
+            root
+            / "artifacts/research_projects/v2_1/acquisition/capability_hardening_v1_exact_allowlist.json"
+        ).read_text(encoding="utf-8")
+    )
+    changed = set(
+        subprocess.check_output(
+            ["git", "diff", "--name-only", f"{allowlist['baseline_commit']}..HEAD"],
+            cwd=root,
+            text=True,
+        ).splitlines()
+    )
+    for line in subprocess.check_output(
+        ["git", "status", "--porcelain=v1", "-uall"], cwd=root, text=True
+    ).splitlines():
+        changed.add(line[3:].split(" -> ", 1)[-1])
+    assert changed <= set(allowlist["paths"])
+    assert not any(
+        path.startswith(tuple(allowlist["forbidden_prefixes"])) for path in changed
+    )

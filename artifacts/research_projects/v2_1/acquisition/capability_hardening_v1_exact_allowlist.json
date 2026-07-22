@@ -1,0 +1,32 @@
+{
+  "baseline_commit": "061471ccbe52b6b18d11c91e68298725fe816e4d",
+  "phase": "evidence_acquisition_capability_hardening_v1",
+  "paths": [
+    "artifacts/research_projects/v2_1/acquisition/capability_hardening_v1/benchmark_manifest.json",
+    "artifacts/research_projects/v2_1/acquisition/capability_hardening_v1/benchmark_results.json",
+    "artifacts/research_projects/v2_1/acquisition/capability_hardening_v1/capability_checkpoint.json",
+    "artifacts/research_projects/v2_1/acquisition/capability_hardening_v1/diagnosis.json",
+    "artifacts/research_projects/v2_1/acquisition/capability_hardening_v1/summary.md",
+    "artifacts/research_projects/v2_1/acquisition/capability_hardening_v1_exact_allowlist.json",
+    "docs/research_operating_layer_v2_1_evidence_acquisition_capability_hardening_v1.md",
+    "docs/superpowers/plans/2026-07-22-evidence-acquisition-capability-hardening-v1.md",
+    "docs/superpowers/specs/2026-07-22-evidence-acquisition-capability-hardening-v1-design.md",
+    "scripts/build_evidence_acquisition_capability_hardening_v1.py",
+    "src/stock_research/research_project_v2_1/acquisition_capability.py",
+    "src/stock_research/research_project_v2_1/cli.py",
+    "tests/test_research_project_v2_1_acquisition_capability.py",
+    "tests/test_research_project_v2_1_wave_1b.py"
+  ],
+  "forbidden_prefixes": [
+    "artifacts/research_projects/v2_1/acquisition/wave_1/",
+    "artifacts/research_projects/v2_1/acquisition/wave_1b/",
+    "artifacts/research_projects/v2_1/analysis/ai_pcb_targeted_evidence_assessment_wave_1_v1.json",
+    "artifacts/research_projects/v2_1/governance/",
+    "artifacts/research_projects/v2_1/company_capture/",
+    "artifacts/research_projects/v2_1/stock_evaluation/",
+    "dashboard/",
+    "src/stock_research/dashboard/",
+    "src/stock_research/api/",
+    "migrations/"
+  ]
+}
