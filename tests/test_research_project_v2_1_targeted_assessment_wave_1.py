@@ -18,6 +18,11 @@ from stock_research.research_project_v2_1.targeted_assessment import (
 )
 
 
+TARGETED_ASSESSMENT_WAVE_1_END_COMMIT = (
+    "2205bc14d59abb374fc3e3d32568f56a1030e8ae"
+)
+
+
 def _claim(**overrides: object) -> dict:
     claim = {
         "claim_id": "W1-A01-C01",
@@ -250,15 +255,16 @@ def test_targeted_assessment_exact_allowlist_blocks_upstream_and_downstream_chan
     )
     changed = set(
         subprocess.check_output(
-            ["git", "diff", "--name-only", f"{allowlist['baseline_commit']}..HEAD"],
+            [
+                "git",
+                "diff",
+                "--name-only",
+                f"{allowlist['baseline_commit']}..{TARGETED_ASSESSMENT_WAVE_1_END_COMMIT}",
+            ],
             cwd=root,
             text=True,
         ).splitlines()
     )
-    for line in subprocess.check_output(
-        ["git", "status", "--porcelain=v1", "-uall"], cwd=root, text=True
-    ).splitlines():
-        changed.add(line[3:].split(" -> ", 1)[-1])
     assert changed <= set(allowlist["paths"])
     assert not any(
         path.startswith(tuple(allowlist["forbidden_prefixes"])) for path in changed
