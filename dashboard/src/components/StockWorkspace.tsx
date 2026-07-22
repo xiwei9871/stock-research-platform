@@ -518,7 +518,7 @@ export function StockWorkspace({
   onOpenMarketMonitor,
   onOpenAsset
 }: StockWorkspaceProps) {
-  const initialTradeDate = entryContext?.tradeDate ?? defaultTradeDate ?? DEFAULT_TRADE_DATE;
+  const initialTradeDate = defaultTradeDate || DEFAULT_TRADE_DATE;
   const initialStartDate = offsetDate(initialTradeDate, -180);
   const [assetId, setAssetId] = useState(initialAssetId);
   const [tradeDate, setTradeDate] = useState(initialTradeDate);

@@ -699,11 +699,11 @@ export function AppShell({ currentUser: _currentUser, onLogout, logoutPending = 
             />
           ) : null}
           {workspaceMode === 'stock' ? (
-            stockHandoff.tradeDate || (displayDateResolved && displayTradeDate) ? (
+            displayDateResolved && displayTradeDate ? (
               <StockWorkspace
                 key={`stock:${stockHandoff.version}`}
                 initialAssetId={stockHandoff.assetId ?? selectedAssetId}
-                defaultTradeDate={stockDefaultTradeDate}
+                defaultTradeDate={displayTradeDate}
                 entryContext={stockHandoff}
                 onOpenNews={openNewsWorkspaceFromStock}
                 onOpenResearchReports={openResearchReportsWorkspaceFromStock}

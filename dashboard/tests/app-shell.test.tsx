@@ -1684,15 +1684,47 @@ describe('dashboard app shell', () => {
     expect(apiMocks.fetchAssetProfile).not.toHaveBeenCalled();
   });
 
-  it('mounts direct stock immediately when the route has an explicit trade date', async () => {
-    window.history.replaceState({}, '', stockPath('000001.SZ', { tradeDate: '2026-07-19' }));
-    apiMocks.fetchPlatformReadiness.mockReturnValueOnce(new Promise(() => undefined));
-    apiMocks.fetchPlatformSummary.mockReturnValueOnce(new Promise(() => undefined));
+  it('waits for the platform date before mounting stock when the route carries a source date', async () => {
+    window.history.replaceState(
+      {},
+      '',
+      stockPath('000001.SZ', { sourceWorkspace: 'reviewQueue', tradeDate: '2026-05-18' })
+    );
+    let resolveReadiness!: (value: Awaited<ReturnType<typeof apiMocks.fetchPlatformReadiness>>) => void;
+    apiMocks.fetchPlatformReadiness.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveReadiness = resolve;
+      })
+    );
 
     render(<AppShell currentUser={TEST_ADMIN_USER} />);
 
-    expect(await screen.findByRole('heading', { name: /000001\.SZ/ })).toBeVisible();
-    expect(apiMocks.fetchAssetProfile).toHaveBeenCalled();
+    expect(screen.getByRole('status')).toHaveTextContent('正在解析平台展示日期');
+    expect(apiMocks.fetchAssetProfile).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveReadiness({
+        mode: 'eod_local',
+        status: 'ready',
+        as_of: '2026-07-21T16:00:00+08:00',
+        display_trade_date: '2026-07-21',
+        latest_trade_date: '2026-07-21',
+        latest_market_date: '2026-07-21',
+        checks: [],
+        warnings: []
+      });
+    });
+
+    await waitFor(() =>
+      expect(apiMocks.fetchAssetProfile).toHaveBeenCalledWith(
+        '000001.SZ',
+        '2026-07-21',
+        '2026-01-22',
+        '2026-07-21',
+        'manual_v1',
+        'qfq'
+      )
+    );
   });
 
   it('preserves theme research source context on direct canonical stock routes', async () => {

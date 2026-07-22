@@ -1001,6 +1001,36 @@ describe('StockWorkspace', () => {
     expect(await screen.findByTestId('asset-chart')).toHaveTextContent('intraday');
   });
 
+  it('uses the latest platform date instead of an old source handoff date', async () => {
+    render(
+      <StockWorkspace
+        initialAssetId="000001.SZ"
+        defaultTradeDate="2026-07-21"
+        entryContext={{ sourceWorkspace: 'reviewQueue', tradeDate: '2026-05-18' }}
+      />
+    );
+
+    await waitFor(() =>
+      expect(apiMocks.fetchAssetProfile).toHaveBeenCalledWith(
+        '000001.SZ',
+        '2026-07-21',
+        '2026-01-22',
+        '2026-07-21',
+        'manual_v1',
+        'qfq'
+      )
+    );
+    await waitFor(() =>
+      expect(apiMocks.fetchDailyBars).toHaveBeenCalledWith(
+        '000001.SZ',
+        undefined,
+        '2026-07-21',
+        { resolution: '1D', adjustType: 'qfq' }
+      )
+    );
+    expect(screen.getByText(/结论更新 2026-07-21/)).toBeInTheDocument();
+  });
+
   it('renders a decision-first layout with price state and collapsed secondary evidence', async () => {
     apiMocks.fetchAssetProfile.mockResolvedValueOnce(
       makeProfile({
@@ -1025,7 +1055,7 @@ describe('StockWorkspace', () => {
     const summary = await screen.findByRole('region', { name: '明日处理结论' });
     expect(summary).toHaveTextContent('平安银行');
     expect(within(summary).getByText('LHB Shortline Combo')).toBeInTheDocument();
-    expect(within(summary).getByText('2026-06-05')).toBeInTheDocument();
+    expect(within(summary).getByText('2026-06-18')).toBeInTheDocument();
     expect(within(summary).getByText('第 1 名')).toBeInTheDocument();
     expect(within(summary).getByText('当日涨跌幅')).toBeInTheDocument();
     expect(within(summary).getByText('+1.85%')).toBeInTheDocument();
@@ -1527,16 +1557,16 @@ describe('StockWorkspace', () => {
     await waitFor(() =>
       expect(apiMocks.fetchAssetProfile).toHaveBeenCalledWith(
         '000001.SZ',
-        '2026-06-12',
-        '2025-12-14',
-        '2026-06-12',
+        '2026-06-18',
+        '2025-12-20',
+        '2026-06-18',
         'manual_v1',
         'qfq'
       )
     );
     await waitFor(() =>
       expect(apiMocks.fetchEvidenceDigest).toHaveBeenCalledWith('000001.SZ', {
-        tradeDate: '2026-06-12',
+        tradeDate: '2026-06-18',
         lookbackDays: 90
       })
     );
