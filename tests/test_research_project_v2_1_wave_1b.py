@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import json
+from pathlib import Path
+import subprocess
 
 import pytest
 
@@ -13,9 +16,11 @@ from stock_research.research_project_v2_1.wave_1b import (
     INTERNAL_EXECUTION_ORDER,
     REQUIRED_DENOMINATOR_FIELDS,
     build_wave_1b_checkpoint,
+    to_wave_1b_provider_candidate,
     validate_wave_1b_candidate,
     validate_wave_1b_checkpoint,
     validate_wave_1b_gate,
+    validate_wave_1b_repository_bundle,
 )
 
 
@@ -133,6 +138,18 @@ def test_candidate_requires_er_specific_denominator_fields() -> None:
         validate_wave_1b_candidate(candidate, gate)
 
 
+def test_provider_candidate_preserves_wave_1b_discovery_identity() -> None:
+    candidate = _candidate("PCB-ER-A04")
+    provider = to_wave_1b_provider_candidate(
+        candidate,
+        discovered_at="2026-07-22T02:00:00Z",
+        provenance={"created_by": "Codex"},
+    )
+    assert provider["search_plan_id"] == "search_plan:ai_pcb_targeted_wave_1b"
+    assert provider["query_id"] == "wave_1b_phase_1"
+    assert provider["snippet"] == ""
+
+
 def test_checkpoint_counts_only_formal_authorized_coverage() -> None:
     gate = validate_wave_1b_gate(_gate())
     candidates = [_candidate(er_id) for er_id in AUTHORIZED_ER_IDS]
@@ -181,6 +198,46 @@ def test_checkpoint_counts_only_formal_authorized_coverage() -> None:
     assert validated["out_of_scope_coverage"] == 0
     assert validated["assessment_started"] is False
     assert validated["cognition_update_started"] is False
+    assert set(validated["per_er_terminal_state"].values()) == {
+        "acquisition_complete_for_assessment"
+    }
+
+
+def test_checkpoint_marks_acquired_but_denominator_incomplete_er_partial() -> None:
+    gate = validate_wave_1b_gate(_gate())
+    candidate = _candidate("PCB-ER-A04")
+    attempt = {
+        "attempt_id": "attempt:a04",
+        "candidate_id": candidate["candidate_id"],
+        "authorized_er_ids": ["PCB-ER-A04"],
+        "internal_phase": 1,
+        "status": "acquired",
+        "raw_artifact_id": "artifact:a04",
+        "content_hash": "1" * 64,
+        "content_type": "application/pdf",
+        "normalization_status": "normalized",
+    }
+    inventory = [{
+        "artifact_id": "artifact:a04",
+        "authorized_er_ids": ["PCB-ER-A04"],
+        "content_hash": "1" * 64,
+        "content_type": "application/pdf",
+        "publication_date_status": "unknown",
+        "normalized_document_id": "normalized:a04",
+        "normalization_status": "normalized",
+        "source_class": "national_metrology",
+        "denominator_fields_present": ["frequency_range"],
+    }]
+    checkpoint = build_wave_1b_checkpoint(
+        gate=gate,
+        candidates=[candidate],
+        attempts=[attempt],
+        inventory=inventory,
+        created_at="2026-07-22T02:00:00Z",
+    )
+    assert checkpoint["per_er_terminal_state"]["PCB-ER-A04"] == (
+        "acquisition_partial_with_gaps"
+    )
 
 
 def test_checkpoint_rejects_unauthorized_coverage_and_downstream_flags() -> None:
@@ -206,3 +263,40 @@ def test_checkpoint_rejects_unauthorized_coverage_and_downstream_flags() -> None
     checkpoint["assessment_started"] = True
     with pytest.raises(ResearchProjectV2Error, match="downstream"):
         validate_wave_1b_checkpoint(_rehash_checkpoint(checkpoint), gate=gate)
+
+
+def test_materialized_wave_1b_bundle_is_fail_closed_and_traceable() -> None:
+    result = validate_wave_1b_repository_bundle()
+    assert result == {
+        "valid": True,
+        "checkpoint_id": "targeted_acquisition_checkpoint:a4690962e23c07e238dd2f4d",
+        "checkpoint_hash": "a4690962e23c07e238dd2f4dfeb5d081fd1c93a0b95a89a2509e23ae4f9ceec2",
+        "candidate_count": 17,
+        "formal_attempt_count": 17,
+        "raw_artifact_count": 6,
+    }
+
+
+def test_wave_1b_exact_allowlist_covers_only_the_authorized_phase() -> None:
+    root = Path(__file__).resolve().parents[1]
+    allowlist = json.loads(
+        (
+            root
+            / "artifacts/research_projects/v2_1/acquisition/wave_1b_exact_allowlist.json"
+        ).read_text(encoding="utf-8")
+    )
+    changed = set(
+        subprocess.check_output(
+            ["git", "diff", "--name-only", f"{allowlist['baseline_commit']}..HEAD"],
+            cwd=root,
+            text=True,
+        ).splitlines()
+    )
+    for line in subprocess.check_output(
+        ["git", "status", "--porcelain=v1", "-uall"], cwd=root, text=True
+    ).splitlines():
+        changed.add(line[3:].split(" -> ", 1)[-1])
+    assert changed <= set(allowlist["paths"])
+    assert not any(
+        path.startswith(tuple(allowlist["forbidden_prefixes"])) for path in changed
+    )

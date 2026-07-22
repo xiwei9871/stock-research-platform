@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr" style="--color--primary-hue:235;--color--primary-saturation:37%;--color--primary-lightness:45;--color--secondary-hue:173;--color--secondary-saturation:40%;--color--secondary-lightness:69;">
+  <head>
+    <meta charset="utf-8" />
+<meta name="Generator" content="Drupal 10 (https://www.drupal.org)" />
+<meta name="MobileOptimized" content="width" />
+<meta name="HandheldFriendly" content="true" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" href="/themes/custom/pcisig_d10_olivero/favicon.ico" type="image/gif" />
+<link rel="canonical" href="https://pcisig.com/pci-express-6.0-specification" />
+<link rel="shortlink" href="https://pcisig.com/node/23" />
+
+    <title>PCI Express 6.0 Specification | PCI-SIG</title>
+    <link rel="stylesheet" media="all" href="/core/misc/components/progress.module.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/components/ajax-progress.module.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/core/modules/system/css/components/align.module.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/core/modules/system/css/components/fieldgroup.module.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/core/modules/system/css/components/container-inline.module.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/core/modules/system/css/components/clearfix.module.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/core/modules/system/css/components/details.module.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/core/modules/system/css/components/hidden.module.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/core/modules/system/css/components/item-list.module.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/core/modules/system/css/components/js.module.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/core/modules/system/css/components/nowrap.module.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/core/modules/system/css/components/position-container.module.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/core/modules/system/css/components/reset-appearance.module.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/core/modules/system/css/components/resize.module.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/core/modules/system/css/components/system-status-counter.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/core/modules/system/css/components/system-status-report-counters.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/core/modules/system/css/components/system-status-report-general-info.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/core/modules/system/css/components/tablesort.module.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/modules/contrib/eu_cookie_compliance/css/eu_cookie_compliance.bare.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/core/modules/layout_discovery/layouts/onecol/onecol.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/base/fonts.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/base/variables.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/base/base.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/layout/layout.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/layout/grid.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/layout/layout-content-narrow.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/layout/layout-content-medium.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/layout/layout-footer.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/layout/region.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/layout/region-content.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/layout/region-hero.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/layout/region-secondary-menu.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/layout/social-bar.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/layout/views.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/layout/layout-discovery-section-layout.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/components/progress.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/components/accordion.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/components/block.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/components/breadcrumb.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/components/embedded-media.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/components/footer.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/components/button.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/components/container-inline.module.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/components/fieldset.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/components/field.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/components/form.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/components/form-boolean.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/components/form-text.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/components/form-textarea.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/components/form-select.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/components/header-buttons-mobile.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/components/header-navigation.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/components/header-site-branding.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/components/header-sticky-toggle.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/components/hero.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/components/links.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/components/messages.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/components/navigation/nav-button-mobile.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/components/node.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/components/node-teaser.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/components/page-title.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/components/site-header.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/components/skip-link.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/components/pager.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/components/table.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/components/text-content.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/components/tabledrag.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/components/wide-image.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/pcisig/blog/blog.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/pcisig/cookie-consent/cookie-banner.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/pcisig/events/events.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/pcisig/frontpage/slider.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/pcisig/frontpage/callouts.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/pcisig/frontpage/front-page-layout.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/pcisig/jquery-ui-reset/jquery-ui-reset.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/pcisig/lifetime-contribution-award/award-table.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/pcisig/login/causeway-cas.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/pcisig/newsroom/newsroom.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/pcisig/social/social-links.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/pcisig/table/responsive-tables.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/pcisig/videos/videos.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/pcisig/webform/webform.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/pcisig/webinars/webinars.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/pcisig/layout-tabs/layout-tabs.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/pcisig/frontpage/tabs.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/pcisig/specifications/table.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/components/header-search-narrow.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/components/navigation/nav-primary.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/components/navigation/nav-primary-button.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/components/navigation/nav-primary-wide.css?th3c6l" />
+<link rel="stylesheet" media="all" href="/themes/custom/pcisig_d10_olivero/css/components/header-search-wide.css?th3c6l" />
+
+    <script type="application/json" data-drupal-selector="drupal-settings-json">{"path":{"baseUrl":"\/","pathPrefix":"","currentPath":"node\/23","currentPathIsAdmin":false,"isFront":false,"currentLanguage":"en"},"pluralDelimiter":"\u0003","suppressDeprecationErrors":true,"gtag":{"tagId":"G-8NBLFSEZCS","consentMode":false,"otherIds":[],"events":[],"additionalConfigInfo":[]},"ajaxPageState":{"libraries":"eJx9ilEOwjAMQy9UKJwoylKrZHTN1HSM3p5-I8SPrednHCRmT8WsbS_KVRDxY6SFG0I2ywXUOcc845uvvPI7FB52dErqYi-0Ea1CrIRd1DVTut_Iik5j0cFNHpfKrdn553BqQvDhHVtc2PEBxZpHDg","theme":"pcisig_d10_olivero","theme_token":null},"ajaxTrustedUrl":{"\/search\/node":true},"eu_cookie_compliance":{"cookie_policy_version":"1.0.0","popup_enabled":true,"popup_agreed_enabled":false,"popup_hide_agreed":false,"popup_clicking_confirmation":false,"popup_scrolling_confirmation":false,"popup_html_info":"\u003Cdiv aria-labelledby=\u0022popup-text\u0022  class=\u0022eu-cookie-compliance-banner eu-cookie-compliance-banner-info eu-cookie-compliance-banner--opt-in\u0022\u003E\n  \u003Cdiv class=\u0022popup-content info eu-cookie-compliance-content\u0022\u003E\n        \u003Cdiv id=\u0022popup-text\u0022 class=\u0022eu-cookie-compliance-message\u0022 role=\u0022document\u0022\u003E\n      \u003Cp\u003E\u003Cstrong\u003EWe use cookies on this site to enhance your user experience\u003C\/strong\u003E\u003C\/p\u003E\u003Cp\u003EBy clicking the Accept button, you agree to our \u003Ca href=\u0022\/pci-sig-online-privacy-policy\u0022\u003EPrivacy Policy\u003C\/a\u003E.\u003C\/p\u003E\n          \u003C\/div\u003E\n\n    \n    \u003Cdiv id=\u0022popup-buttons\u0022 class=\u0022eu-cookie-compliance-buttons\u0022\u003E\n            \u003Cbutton type=\u0022button\u0022 class=\u0022agree-button eu-cookie-compliance-secondary-button button button--small\u0022\u003EAccept\u003C\/button\u003E\n              \u003Cbutton type=\u0022button\u0022 class=\u0022decline-button eu-cookie-compliance-default-button button button--small button--primary\u0022\u003ENo, thanks\u003C\/button\u003E\n          \u003C\/div\u003E\n  \u003C\/div\u003E\n\u003C\/div\u003E","use_mobile_message":false,"mobile_popup_html_info":"\u003Cdiv aria-labelledby=\u0022popup-text\u0022  class=\u0022eu-cookie-compliance-banner eu-cookie-compliance-banner-info eu-cookie-compliance-banner--opt-in\u0022\u003E\n  \u003Cdiv class=\u0022popup-content info eu-cookie-compliance-content\u0022\u003E\n        \u003Cdiv id=\u0022popup-text\u0022 class=\u0022eu-cookie-compliance-message\u0022 role=\u0022document\u0022\u003E\n      \n          \u003C\/div\u003E\n\n    \n    \u003Cdiv id=\u0022popup-buttons\u0022 class=\u0022eu-cookie-compliance-buttons\u0022\u003E\n            \u003Cbutton type=\u0022button\u0022 class=\u0022agree-button eu-cookie-compliance-secondary-button button button--small\u0022\u003EAccept\u003C\/button\u003E\n              \u003Cbutton type=\u0022button\u0022 class=\u0022decline-button eu-cookie-compliance-default-button button button--small button--primary\u0022\u003ENo, thanks\u003C\/button\u003E\n          \u003C\/div\u003E\n  \u003C\/div\u003E\n\u003C\/div\u003E","mobile_breakpoint":768,"popup_html_agreed":false,"popup_use_bare_css":true,"popup_height":"auto","popup_width":"100%","popup_delay":1000,"popup_link":"\/pci-sig-online-privacy-policy","popup_link_new_window":true,"popup_position":false,"fixed_top_position":true,"popup_language":"en","store_consent":false,"better_support_for_screen_readers":false,"cookie_name":"","reload_page":false,"domain":"","domain_all_sites":false,"popup_eu_only":false,"popup_eu_only_js":false,"cookie_lifetime":100,"cookie_session":0,"set_cookie_session_zero_on_disagree":0,"disagree_do_not_show_popup":false,"method":"opt_in","automatic_cookies_removal":true,"allowed_cookies":"","withdraw_markup":"\u003Cbutton type=\u0022button\u0022 class=\u0022eu-cookie-withdraw-tab\u0022\u003EPrivacy settings\u003C\/button\u003E\n\u003Cdiv aria-labelledby=\u0022popup-text\u0022 class=\u0022eu-cookie-withdraw-banner\u0022\u003E\n  \u003Cdiv class=\u0022popup-content info eu-cookie-compliance-content\u0022\u003E\n    \u003Cdiv id=\u0022popup-text\u0022 class=\u0022eu-cookie-compliance-message\u0022 role=\u0022document\u0022\u003E\n      \u003Cp\u003E\u003Cstrong\u003EWe use cookies on this site to enhance your user experience\u003C\/strong\u003E\u003C\/p\u003E\u003Cp\u003EYou have given your consent for us to set cookies.\u003C\/p\u003E\n    \u003C\/div\u003E\n    \u003Cdiv id=\u0022popup-buttons\u0022 class=\u0022eu-cookie-compliance-buttons\u0022\u003E\n      \u003Cbutton type=\u0022button\u0022 class=\u0022eu-cookie-withdraw-button  button button--small button--primary\u0022\u003EWithdraw consent\u003C\/button\u003E\n    \u003C\/div\u003E\n  \u003C\/div\u003E\n\u003C\/div\u003E","withdraw_enabled":false,"reload_options":0,"reload_routes_list":"","withdraw_button_on_info_popup":false,"cookie_categories":[],"cookie_categories_details":[],"enable_save_preferences_button":true,"cookie_value_disagreed":"0","cookie_value_agreed_show_thank_you":"1","cookie_value_agreed":"2","containing_element":"body","settings_tab_enabled":false,"olivero_primary_button_classes":" button button--small button--primary","olivero_secondary_button_classes":" button button--small","close_button_action":"close_banner","open_by_default":true,"modules_allow_popup":true,"hide_the_banner":false,"geoip_match":true,"unverified_scripts":[]},"user":{"uid":0,"permissionsHash":"dbcb13721ffafc32caa270b3beb6780fafa06c360de5f1d052d574adad5fac2c"}}</script>
+<script src="/core/misc/drupalSettingsLoader.js?v=10.6.12"></script>
+<script src="/modules/contrib/google_tag/js/gtag.js?th3c6l"></script>
+
+    
+<link rel="preload" href="/themes/custom/pcisig_d10_olivero/fonts/metropolis/Metropolis-Regular.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/themes/custom/pcisig_d10_olivero/fonts/metropolis/Metropolis-SemiBold.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/themes/custom/pcisig_d10_olivero/fonts/metropolis/Metropolis-Bold.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/themes/custom/pcisig_d10_olivero/fonts/lora/lora-v14-latin-regular.woff2" as="font" type="font/woff2" crossorigin>
+    <noscript><link rel="stylesheet" href="/themes/custom/pcisig_d10_olivero/css/components/navigation/nav-primary-no-js.css?th3c6l" />
+</noscript>
+  </head>
+  <body class="path-node page-node-type-page">
+        <a href="#main-content" class="visually-hidden focusable skip-link">
+      Skip to main content
+    </a>
+    
+      <div class="dialog-off-canvas-main-canvas" data-off-canvas-main-canvas>
+    
+<div id="page-wrapper" class="page-wrapper">
+  <div id="page">
+
+          <header id="header" class="site-header" data-drupal-selector="site-header" role="banner">
+
+                <div class="site-header__fixable" data-drupal-selector="site-header-fixable">
+          <div class="site-header__initial">
+            <button class="sticky-header-toggle" data-drupal-selector="sticky-header-toggle" role="switch" aria-controls="site-header__inner" aria-label="Sticky header" aria-checked="false">
+              <span class="sticky-header-toggle__icon">
+                <span></span>
+                <span></span>
+                <span></span>
+              </span>
+            </button>
+          </div>
+
+                    <div id="site-header__inner" class="site-header__inner" data-drupal-selector="site-header-inner">
+            <div class="container site-header__inner__container">
+
+              
+
+
+<div id="block-pcisig-d10-olivero-site-branding" class="site-branding block block-system block-system-branding-block">
+  
+    
+    <div class="site-branding__inner">
+          <a href="/" rel="home" class="site-branding__logo">
+        <img src="/themes/custom/pcisig_d10_olivero/pci_sig_logo_CMYK_60.gif" alt="Home" />
+      </a>
+              <div class="site-branding__text">
+        <div class="site-branding__name">
+          <a href="/" title="Home" rel="home">PCI-SIG</a>
+        </div>
+      </div>
+      </div>
+</div>
+
+
+<div id="block-pcisig-d10-olivero-socialmedia" class="block block-block-content block-block-content07da623d-5a48-4522-88e4-cdaeae3827b0">
+  
+    
+      <div class="block__content">
+      
+            <div class="text-content clearfix field field--name-body field--type-text-with-summary field--label-hidden field__item"><div class="social-media-links"><div class="social-link"><a href="https://www.linkedin.com/company/15437558/"><img class="pcisig-social-logo linkedin-logo" src="/sites/default/files/theme-icons/linkedin.svg" width="40" height="40" loading="lazy"></a></div><div class="social-link"><a href="https://twitter.com/pci_sig"><img class="pcisig-social-logo x-logo" src="/sites/default/files/theme-icons/twitter.svg" width="40" height="41" loading="lazy"></a></div><div class="social-link"><a href="https://www.youtube.com/channel/UCPNgzqj-ouRy3r_ml23mscA"><img class="pcisig-social-logo youtube-logo" src="/sites/default/files/theme-icons/youtube.svg" width="40" height="40" loading="lazy"></a></div></div></div>
+      
+    </div>
+  </div>
+
+<div class="header-nav-overlay" data-drupal-selector="header-nav-overlay"></div>
+
+
+                              <div class="mobile-buttons" data-drupal-selector="mobile-buttons">
+                  <button class="mobile-nav-button" data-drupal-selector="mobile-nav-button" aria-label="Main Menu" aria-controls="header-nav" aria-expanded="false">
+                    <span class="mobile-nav-button__label">Menu</span>
+                    <span class="mobile-nav-button__icon"></span>
+                  </button>
+                </div>
+
+                <div id="header-nav" class="header-nav" data-drupal-selector="header-nav">
+                  
+<div class="search-block-form block block-search-narrow" data-drupal-selector="search-block-form" id="block-pcisig-d10-olivero-search-form-narrow" role="search">
+  
+    
+      <div class="content">
+      <form action="/search/node" method="get" id="search-block-form" accept-charset="UTF-8" class="search-form search-block-form">
+  <div class="js-form-item form-item js-form-type-search form-item-keys js-form-item-keys form-no-label">
+      <label for="edit-keys" class="form-item__label visually-hidden">Search</label>
+        <input title="Enter the terms you wish to search for." placeholder="Search by keyword or phrase." data-drupal-selector="edit-keys" type="search" id="edit-keys" name="keys" value="" size="15" maxlength="128" class="form-search form-element form-element--type-search form-element--api-search" />
+
+        </div>
+<div data-drupal-selector="edit-actions" class="form-actions js-form-wrapper form-wrapper" id="edit-actions"><button class="button--primary search-form__submit button js-form-submit form-submit" data-drupal-selector="edit-submit" type="submit" id="edit-submit" value="Search">
+    <span class="icon--search"></span>
+    <span class="visually-hidden">Search</span>
+</button>
+
+</div>
+
+</form>
+
+    </div>
+  </div>
+<nav  id="block-pcisig-d10-olivero-main-menu" class="primary-nav block block-menu navigation menu--main" aria-labelledby="block-pcisig-d10-olivero-main-menu-menu" role="navigation">
+            
+  <h2 class="visually-hidden block__title" id="block-pcisig-d10-olivero-main-menu-menu">Main navigation</h2>
+  
+        
+
+
+          
+        
+    <ul  class="menu primary-nav__menu primary-nav__menu--level-1" data-drupal-selector="primary-nav-menu--level-1">
+            
+                          
+        
+        
+        <li class="primary-nav__menu-item primary-nav__menu-item--link primary-nav__menu-item--level-1 primary-nav__menu-item--active-trail primary-nav__menu-item--has-children" data-drupal-selector="primary-nav-menu-item-has-children">
+                              
+                      <a href="/specifications" class="primary-nav__menu-link primary-nav__menu-link--link primary-nav__menu-link--level-1 primary-nav__menu-link--active-trail primary-nav__menu-link--has-children" data-drupal-selector="primary-nav-menu-link-has-children" data-drupal-link-system-path="node/6">            <span class="primary-nav__menu-link-inner primary-nav__menu-link-inner--level-1">Specifications</span>
+          </a>
+
+                                                        
+                <button class="primary-nav__button-toggle" data-drupal-selector="primary-nav-submenu-toggle-button" aria-controls="primary-menu-item-1" aria-expanded="false" aria-hidden="true" tabindex="-1">
+                  <span class="visually-hidden">Specifications sub-navigation</span>
+                  <span class="icon--menu-toggle"></span>
+                </button>
+              
+                                      
+              <span data-drupal-selector="primary-nav-menu-🥕" class="primary-nav__menu-🥕"></span>
+    
+    <ul  class="menu primary-nav__menu primary-nav__menu--level-2" data-drupal-selector="primary-nav-menu--level-2" id="primary-menu-item-1">
+            
+                          
+        
+        
+        <li class="primary-nav__menu-item primary-nav__menu-item--link primary-nav__menu-item--level-2">
+                              
+                      <a href="/specifications" class="primary-nav__menu-link primary-nav__menu-link--link primary-nav__menu-link--level-2" data-drupal-link-system-path="node/6">            <span class="primary-nav__menu-link-inner primary-nav__menu-link-inner--level-2">Specification Library</span>
+          </a>
+
+            
+                  </li>
+      
+                          
+        
+        
+        <li class="primary-nav__menu-item primary-nav__menu-item--link primary-nav__menu-item--level-2">
+                              
+                      <a href="/specifications/pcier-80-specification-draft-05-now-available-members" class="primary-nav__menu-link primary-nav__menu-link--link primary-nav__menu-link--level-2" data-drupal-link-system-path="node/7203">            <span class="primary-nav__menu-link-inner primary-nav__menu-link-inner--level-2">PCI Express® 8.0 Specification</span>
+          </a>
+
+            
+                  </li>
+      
+                          
+        
+        
+        <li class="primary-nav__menu-item primary-nav__menu-item--link primary-nav__menu-item--level-2">
+                              
+                      <a href="/specifications/pcie-70-specification-version-03-now-available-members" class="primary-nav__menu-link primary-nav__menu-link--link primary-nav__menu-link--level-2" data-drupal-link-system-path="node/11">            <span class="primary-nav__menu-link-inner primary-nav__menu-link-inner--level-2">PCI Express 7.0 Specification</span>
+          </a>
+
+            
+                  </li>
+      
+                          
+        
+        
+        <li class="primary-nav__menu-item primary-nav__menu-item--link primary-nav__menu-item--level-2 primary-nav__menu-item--active-trail">
+                              
+                      <a href="/pci-express-6.0-specification" class="primary-nav__menu-link primary-nav__menu-link--link primary-nav__menu-link--level-2 primary-nav__menu-link--active-trail is-active" data-drupal-link-system-path="node/23" aria-current="page">            <span class="primary-nav__menu-link-inner primary-nav__menu-link-inner--level-2">PCI Express 6.0 Specification</span>
+          </a>
+
+            
+                  </li>
+      
+                          
+        
+        
+        <li class="primary-nav__menu-item primary-nav__menu-item--link primary-nav__menu-item--level-2">
+                              
+                      <a href="/specifications/review-zone" class="primary-nav__menu-link primary-nav__menu-link--link primary-nav__menu-link--level-2" data-drupal-link-system-path="node/21">            <span class="primary-nav__menu-link-inner primary-nav__menu-link-inner--level-2">Review Zone</span>
+          </a>
+
+            
+                  </li>
+      
+                          
+        
+        
+        <li class="primary-nav__menu-item primary-nav__menu-item--link primary-nav__menu-item--level-2">
+                              
+                      <a href="/specifications/order-form" class="primary-nav__menu-link primary-nav__menu-link--link primary-nav__menu-link--level-2" data-drupal-link-system-path="webform/specification_order_form">            <span class="primary-nav__menu-link-inner primary-nav__menu-link-inner--level-2">Specification Ordering Information</span>
+          </a>
+
+            
+                  </li>
+      
+                          
+        
+        
+        <li class="primary-nav__menu-item primary-nav__menu-item--link primary-nav__menu-item--level-2">
+                              
+                      <a href="/specifications/fixture-order-form" class="primary-nav__menu-link primary-nav__menu-link--link primary-nav__menu-link--level-2" data-drupal-link-system-path="webform/hardware_order_form">            <span class="primary-nav__menu-link-inner primary-nav__menu-link-inner--level-2">Fixture Ordering Information</span>
+          </a>
+
+            
+                  </li>
+      
+                          
+        
+        
+        <li class="primary-nav__menu-item primary-nav__menu-item--link primary-nav__menu-item--level-2">
+                              
+                      <a href="/faq" class="primary-nav__menu-link primary-nav__menu-link--link primary-nav__menu-link--level-2" data-drupal-link-system-path="faq">            <span class="primary-nav__menu-link-inner primary-nav__menu-link-inner--level-2">FAQ</span>
+          </a>
+
+            
+                  </li>
+          </ul>
+  
+            
+                  </li>
+      
+                          
+        
+        
+        <li class="primary-nav__menu-item primary-nav__menu-item--link primary-nav__menu-item--level-1 primary-nav__menu-item--has-children" data-drupal-selector="primary-nav-menu-item-has-children">
+                              
+                      <a href="/events" class="primary-nav__menu-link primary-nav__menu-link--link primary-nav__menu-link--level-1 primary-nav__menu-link--has-children" data-drupal-selector="primary-nav-menu-link-has-children" data-drupal-link-system-path="node/7">            <span class="primary-nav__menu-link-inner primary-nav__menu-link-inner--level-1">Events</span>
+          </a>
+
+                                                        
+                <button class="primary-nav__button-toggle" data-drupal-selector="primary-nav-submenu-toggle-button" aria-controls="primary-menu-item-12" aria-expanded="false" aria-hidden="true" tabindex="-1">
+                  <span class="visually-hidden">Events sub-navigation</span>
+                  <span class="icon--menu-toggle"></span>
+                </button>
+              
+                                      
+              <span data-drupal-selector="primary-nav-menu-🥕" class="primary-nav__menu-🥕"></span>
+    
+    <ul  class="menu primary-nav__menu primary-nav__menu--level-2" data-drupal-selector="primary-nav-menu--level-2" id="primary-menu-item-12">
+            
+                          
+        
+        
+        <li class="primary-nav__menu-item primary-nav__menu-item--link primary-nav__menu-item--level-2">
+                              
+                      <a href="https://pcisig.com/events/pci-sig-developers-conference-asia-pacific-2026" class="primary-nav__menu-link primary-nav__menu-link--link primary-nav__menu-link--level-2">            <span class="primary-nav__menu-link-inner primary-nav__menu-link-inner--level-2">PCI-SIG® Developers Conference Asia-Pacific 2026</span>
+          </a>
+
+            
+                  </li>
+      
+                          
+        
+        
+        <li class="primary-nav__menu-item primary-nav__menu-item--link primary-nav__menu-item--level-2">
+                              
+                      <a href="https://pcisig.com/pci-sig-developers-conference-2026" class="primary-nav__menu-link primary-nav__menu-link--link primary-nav__menu-link--level-2">            <span class="primary-nav__menu-link-inner primary-nav__menu-link-inner--level-2">PCI-SIG Developers Conference 2026</span>
+          </a>
+
+            
+                  </li>
+      
+                          
+        
+        
+        <li class="primary-nav__menu-item primary-nav__menu-item--link primary-nav__menu-item--level-2">
+                              
+                      <a href="/events/pci-sig-developers-conference-taiwan-2026" class="primary-nav__menu-link primary-nav__menu-link--link primary-nav__menu-link--level-2" data-drupal-link-system-path="node/7233">            <span class="primary-nav__menu-link-inner primary-nav__menu-link-inner--level-2">PCI-SIG Developers Conference Taiwan 2026</span>
+          </a>
+
+            
+                  </li>
+      
+                          
+        
+        
+        <li class="primary-nav__menu-item primary-nav__menu-item--link primary-nav__menu-item--level-2">
+                              
+                      <a href="/events/2026-sponsorship-opportunities" class="primary-nav__menu-link primary-nav__menu-link--link primary-nav__menu-link--level-2" data-drupal-link-system-path="node/7202">            <span class="primary-nav__menu-link-inner primary-nav__menu-link-inner--level-2">2026 Sponsorship Opportunities</span>
+          </a>
+
+            
+                  </li>
+      
+                          
+        
+        
+        <li class="primary-nav__menu-item primary-nav__menu-item--link primary-nav__menu-item--level-2">
+                              
+                      <a href="/events/training-events-resources" class="primary-nav__menu-link primary-nav__menu-link--link primary-nav__menu-link--level-2" data-drupal-link-system-path="events/training-events-resources">            <span class="primary-nav__menu-link-inner primary-nav__menu-link-inner--level-2">Training Events Resources</span>
+          </a>
+
+            
+                  </li>
+      
+                          
+        
+        
+        <li class="primary-nav__menu-item primary-nav__menu-item--link primary-nav__menu-item--level-2">
+                              
+                      <a href="/events/industry-events" class="primary-nav__menu-link primary-nav__menu-link--link primary-nav__menu-link--level-2" data-drupal-link-system-path="node/33">            <span class="primary-nav__menu-link-inner primary-nav__menu-link-inner--level-2">Industry Events</span>
+          </a>
+
+            
+                  </li>
+      
+                          
+        
+        
+        <li class="primary-nav__menu-item primary-nav__menu-item--link primary-nav__menu-item--level-2">
+                              
+                      <a href="/events/call-papers-developers-conference-2026" class="primary-nav__menu-link primary-nav__menu-link--link primary-nav__menu-link--level-2" data-drupal-link-system-path="node/7315">            <span class="primary-nav__menu-link-inner primary-nav__menu-link-inner--level-2">Call for Papers Developers Conference 2026</span>
+          </a>
+
+            
+                  </li>
+      
+                          
+        
+        
+        <li class="primary-nav__menu-item primary-nav__menu-item--link primary-nav__menu-item--level-2">
+                              
+                      <a href="/events/pci-sig-compliance-workshop-140" class="primary-nav__menu-link primary-nav__menu-link--link primary-nav__menu-link--level-2" data-drupal-link-system-path="node/7405">            <span class="primary-nav__menu-link-inner primary-nav__menu-link-inner--level-2">PCI-SIG Compliance Workshop #140</span>
+          </a>
+
+            
+                  </li>
+      
+                          
+        
+        
+        <li class="primary-nav__menu-item primary-nav__menu-item--link primary-nav__menu-item--level-2">
+                              
+                      <a href="/events/pci-sig-compliance-workshop-141" class="primary-nav__menu-link primary-nav__menu-link--link primary-nav__menu-link--level-2" data-drupal-link-system-path="node/7474">            <span class="primary-nav__menu-link-inner primary-nav__menu-link-inner--level-2">PCI-SIG Compliance Workshop #141</span>
+          </a>
+
+            
+                  </li>
+      
+                          
+        
+        
+        <li class="primary-nav__menu-item primary-nav__menu-item--link primary-nav__menu-item--level-2">
+                              
+                      <a href="/events/pci-sigr-developers-conference-india-2026" class="primary-nav__menu-link primary-nav__menu-link--link primary-nav__menu-link--level-2" data-drupal-link-system-path="node/7478">            <span class="primary-nav__menu-link-inner primary-nav__menu-link-inner--level-2">PCI-SIG® Developers Conference India 2026</span>
+          </a>
+
+            
+                  </li>
+          </ul>
+  
+            
+                  </li>
+      
+                          
+        
+        
+        <li class="primary-nav__menu-item primary-nav__menu-item--link primary-nav__menu-item--level-1 primary-nav__menu-item--has-children" data-drupal-selector="primary-nav-menu-item-has-children">
+                              
+                      <a href="/developers" class="primary-nav__menu-link primary-nav__menu-link--link primary-nav__menu-link--level-1 primary-nav__menu-link--has-children" data-drupal-selector="primary-nav-menu-link-has-children" data-drupal-link-system-path="node/8">            <span class="primary-nav__menu-link-inner primary-nav__menu-link-inner--level-1">Developers</span>
+          </a>
+
+                                                        
+                <button class="primary-nav__button-toggle" data-drupal-selector="primary-nav-submenu-toggle-button" aria-controls="primary-menu-item-123" aria-expanded="false" aria-hidden="true" tabindex="-1">
+                  <span class="visually-hidden">Developers sub-navigation</span>
+                  <span class="icon--menu-toggle"></span>
+                </button>
+              
+                                      
+              <span data-drupal-selector="primary-nav-menu-🥕" class="primary-nav__menu-🥕"></span>
+    
+    <ul  class="menu primary-nav__menu primary-nav__menu--level-2" data-drupal-selector="primary-nav-menu--level-2" id="primary-menu-item-123">
+            
+                          
+        
+        
+        <li class="primary-nav__menu-item primary-nav__menu-item--link primary-nav__menu-item--level-2">
+                              
+                      <a href="/developers/compliance-program" class="primary-nav__menu-link primary-nav__menu-link--link primary-nav__menu-link--level-2" data-drupal-link-system-path="node/12">            <span class="primary-nav__menu-link-inner primary-nav__menu-link-inner--level-2">Compliance Program</span>
+          </a>
+
+            
+                  </li>
+      
+                          
+        
+        
+        <li class="primary-nav__menu-item primary-nav__menu-item--link primary-nav__menu-item--level-2">
+                              
+                      <a href="/developers/technical-support" class="primary-nav__menu-link primary-nav__menu-link--link primary-nav__menu-link--level-2" data-drupal-link-system-path="node/16">            <span class="primary-nav__menu-link-inner primary-nav__menu-link-inner--level-2">Technical Support</span>
+          </a>
+
+            
+                  </li>
+      
+                          
+        
+        
+        <li class="primary-nav__menu-item primary-nav__menu-item--link primary-nav__menu-item--level-2">
+                              
+                      <a href="/developers/integrators-list" class="primary-nav__menu-link primary-nav__menu-link--link primary-nav__menu-link--level-2" data-drupal-link-system-path="developers/integrators-list">            <span class="primary-nav__menu-link-inner primary-nav__menu-link-inner--level-2">Integrators List</span>
+          </a>
+
+            
+                  </li>
+      
+                          
+        
+        
+        <li class="primary-nav__menu-item primary-nav__menu-item--link primary-nav__menu-item--level-2">
+                              
+                      <a href="/developers/authorized-test-lab-program" class="primary-nav__menu-link primary-nav__menu-link--link primary-nav__menu-link--level-2" data-drupal-link-system-path="node/17">            <span class="primary-nav__menu-link-inner primary-nav__menu-link-inner--level-2">Authorized Test Lab Program</span>
+          </a>
+
+            
+                  </li>
+          </ul>
+  
+            
+                  </li>
+      
+                          
+        
+        
+        <li class="primary-nav__menu-item primary-nav__menu-item--link primary-nav__menu-item--level-1 primary-nav__menu-item--has-children" data-drupal-selector="primary-nav-menu-item-has-children">
+                              
+                      <a href="/membership" class="primary-nav__menu-link primary-nav__menu-link--link primary-nav__menu-link--level-1 primary-nav__menu-link--has-children" data-drupal-selector="primary-nav-menu-link-has-children" data-drupal-link-system-path="node/9">            <span class="primary-nav__menu-link-inner primary-nav__menu-link-inner--level-1">Membership</span>
+          </a>
+
+                                                        
+                <button class="primary-nav__button-toggle" data-drupal-selector="primary-nav-submenu-toggle-button" aria-controls="primary-menu-item-1234" aria-expanded="false" aria-hidden="true" tabindex="-1">
+                  <span class="visually-hidden">Membership sub-navigation</span>
+                  <span class="icon--menu-toggle"></span>
+                </button>
+              
+                                      
+              <span data-drupal-selector="primary-nav-menu-🥕" class="primary-nav__menu-🥕"></span>
+    
+    <ul  class="menu primary-nav__menu primary-nav__menu--level-2" data-drupal-selector="primary-nav-menu--level-2" id="primary-menu-item-1234">
+            
+                          
+        
+        
+        <li class="primary-nav__menu-item primary-nav__menu-item--link primary-nav__menu-item--level-2">
+                              
+                      <a href="/membership/become-member" class="primary-nav__menu-link primary-nav__menu-link--link primary-nav__menu-link--level-2" data-drupal-link-system-path="node/19">            <span class="primary-nav__menu-link-inner primary-nav__menu-link-inner--level-2">Become a Member</span>
+          </a>
+
+            
+                  </li>
+      
+                          
+        
+        
+        <li class="primary-nav__menu-item primary-nav__menu-item--link primary-nav__menu-item--level-2">
+                              
+                      <a href="/membership/bylaws-organizational-documents" class="primary-nav__menu-link primary-nav__menu-link--link primary-nav__menu-link--level-2" data-drupal-link-system-path="node/18">            <span class="primary-nav__menu-link-inner primary-nav__menu-link-inner--level-2">Bylaws &amp; Organizational Documents</span>
+          </a>
+
+            
+                  </li>
+      
+                          
+        
+        
+        <li class="primary-nav__menu-item primary-nav__menu-item--link primary-nav__menu-item--level-2">
+                              
+                      <a href="/membership/about-us/board-directors" class="primary-nav__menu-link primary-nav__menu-link--link primary-nav__menu-link--level-2" data-drupal-link-system-path="membership/about-us/board-directors">            <span class="primary-nav__menu-link-inner primary-nav__menu-link-inner--level-2">Board of Directors</span>
+          </a>
+
+            
+                  </li>
+      
+                          
+        
+        
+        <li class="primary-nav__menu-item primary-nav__menu-item--link primary-nav__menu-item--level-2">
+                              
+                      <a href="/membership/member-companies" class="primary-nav__menu-link primary-nav__menu-link--link primary-nav__menu-link--level-2" data-drupal-link-system-path="node/3250">            <span class="primary-nav__menu-link-inner primary-nav__menu-link-inner--level-2">Member Companies</span>
+          </a>
+
+            
+                  </li>
+      
+                          
+        
+        
+        <li class="primary-nav__menu-item primary-nav__menu-item--link primary-nav__menu-item--level-2">
+                              
+                      <a href="https://members.pcisig.com/site/login" class="primary-nav__menu-link primary-nav__menu-link--link primary-nav__menu-link--level-2">            <span class="primary-nav__menu-link-inner primary-nav__menu-link-inner--level-2">Members Log In</span>
+          </a>
+
+            
+                  </li>
+      
+                          
+        
+        
+        <li class="primary-nav__menu-item primary-nav__menu-item--link primary-nav__menu-item--level-2">
+                              
+                      <a href="/membership/contact-us" class="primary-nav__menu-link primary-nav__menu-link--link primary-nav__menu-link--level-2" data-drupal-link-system-path="webform/contact_us">            <span class="primary-nav__menu-link-inner primary-nav__menu-link-inner--level-2">Contact Us</span>
+          </a>
+
+            
+                  </li>
+          </ul>
+  
+            
+                  </li>
+      
+                          
+        
+        
+        <li class="primary-nav__menu-item primary-nav__menu-item--link primary-nav__menu-item--level-1 primary-nav__menu-item--has-children" data-drupal-selector="primary-nav-menu-item-has-children">
+                              
+                      <a href="https://pcisig.com/blog" class="primary-nav__menu-link primary-nav__menu-link--link primary-nav__menu-link--level-1 primary-nav__menu-link--has-children" data-drupal-selector="primary-nav-menu-link-has-children">            <span class="primary-nav__menu-link-inner primary-nav__menu-link-inner--level-1">Resources</span>
+          </a>
+
+                                                        
+                <button class="primary-nav__button-toggle" data-drupal-selector="primary-nav-submenu-toggle-button" aria-controls="primary-menu-item-12345" aria-expanded="false" aria-hidden="true" tabindex="-1">
+                  <span class="visually-hidden">Resources sub-navigation</span>
+                  <span class="icon--menu-toggle"></span>
+                </button>
+              
+                                      
+              <span data-drupal-selector="primary-nav-menu-🥕" class="primary-nav__menu-🥕"></span>
+    
+    <ul  class="menu primary-nav__menu primary-nav__menu--level-2" data-drupal-selector="primary-nav-menu--level-2" id="primary-menu-item-12345">
+            
+                          
+        
+        
+        <li class="primary-nav__menu-item primary-nav__menu-item--link primary-nav__menu-item--level-2">
+                              
+                      <a href="/blog" class="primary-nav__menu-link primary-nav__menu-link--link primary-nav__menu-link--level-2" data-drupal-link-system-path="blog">            <span class="primary-nav__menu-link-inner primary-nav__menu-link-inner--level-2">Blog</span>
+          </a>
+
+            
+                  </li>
+      
+                          
+        
+        
+        <li class="primary-nav__menu-item primary-nav__menu-item--link primary-nav__menu-item--level-2">
+                              
+                      <a href="/videos" class="primary-nav__menu-link primary-nav__menu-link--link primary-nav__menu-link--level-2" data-drupal-link-system-path="videos">            <span class="primary-nav__menu-link-inner primary-nav__menu-link-inner--level-2">Videos</span>
+          </a>
+
+            
+                  </li>
+      
+                          
+        
+        
+        <li class="primary-nav__menu-item primary-nav__menu-item--link primary-nav__menu-item--level-2">
+                              
+                      <a href="/videos/webinars" class="primary-nav__menu-link primary-nav__menu-link--link primary-nav__menu-link--level-2" data-drupal-link-system-path="node/14">            <span class="primary-nav__menu-link-inner primary-nav__menu-link-inner--level-2">Webinars</span>
+          </a>
+
+            
+                  </li>
+          </ul>
+  
+            
+                  </li>
+      
+                          
+        
+        
+        <li class="primary-nav__menu-item primary-nav__menu-item--link primary-nav__menu-item--level-1 primary-nav__menu-item--has-children" data-drupal-selector="primary-nav-menu-item-has-children">
+                              
+                      <a href="/newsroom" class="primary-nav__menu-link primary-nav__menu-link--link primary-nav__menu-link--level-1 primary-nav__menu-link--has-children" data-drupal-selector="primary-nav-menu-link-has-children" data-drupal-link-system-path="node/26">            <span class="primary-nav__menu-link-inner primary-nav__menu-link-inner--level-1">Newsroom</span>
+          </a>
+
+                                                        
+                <button class="primary-nav__button-toggle" data-drupal-selector="primary-nav-submenu-toggle-button" aria-controls="primary-menu-item-123456" aria-expanded="false" aria-hidden="true" tabindex="-1">
+                  <span class="visually-hidden">Newsroom sub-navigation</span>
+                  <span class="icon--menu-toggle"></span>
+                </button>
+              
+                                      
+              <span data-drupal-selector="primary-nav-menu-🥕" class="primary-nav__menu-🥕"></span>
+    
+    <ul  class="menu primary-nav__menu primary-nav__menu--level-2" data-drupal-selector="primary-nav-menu--level-2" id="primary-menu-item-123456">
+            
+                          
+        
+        
+        <li class="primary-nav__menu-item primary-nav__menu-item--link primary-nav__menu-item--level-2">
+                              
+                      <a href="/newsroom/in-the-news" class="primary-nav__menu-link primary-nav__menu-link--link primary-nav__menu-link--level-2" data-drupal-link-system-path="newsroom/in-the-news">            <span class="primary-nav__menu-link-inner primary-nav__menu-link-inner--level-2">In the News</span>
+          </a>
+
+            
+                  </li>
+      
+                          
+        
+        
+        <li class="primary-nav__menu-item primary-nav__menu-item--link primary-nav__menu-item--level-2">
+                              
+                      <a href="/newsroom/news-releases" class="primary-nav__menu-link primary-nav__menu-link--link primary-nav__menu-link--level-2" data-drupal-link-system-path="newsroom/news-releases">            <span class="primary-nav__menu-link-inner primary-nav__menu-link-inner--level-2">News Releases</span>
+          </a>
+
+            
+                  </li>
+      
+                          
+        
+        
+        <li class="primary-nav__menu-item primary-nav__menu-item--link primary-nav__menu-item--level-2">
+                              
+                      <a href="/newsroom/pci-sig-chairperson%E2%80%99s-award" class="primary-nav__menu-link primary-nav__menu-link--link primary-nav__menu-link--level-2" data-drupal-link-system-path="node/24">            <span class="primary-nav__menu-link-inner primary-nav__menu-link-inner--level-2">PCI-SIG Chairperson’s Award</span>
+          </a>
+
+            
+                  </li>
+      
+                          
+        
+        
+        <li class="primary-nav__menu-item primary-nav__menu-item--link primary-nav__menu-item--level-2">
+                              
+                      <a href="/newsroom/lifetime-contribution-award" class="primary-nav__menu-link primary-nav__menu-link--link primary-nav__menu-link--level-2" data-drupal-link-system-path="node/25">            <span class="primary-nav__menu-link-inner primary-nav__menu-link-inner--level-2">Lifetime Contribution Award</span>
+          </a>
+
+            
+                  </li>
+          </ul>
+  
+            
+                  </li>
+          </ul>
+  
+
+
+  </nav>
+
+
+                  
+
+  <div class="region region--secondary-menu">
+    <div class="search-block-form block block-search-wide" data-drupal-selector="search-block-form-2" id="block-pcisig-d10-olivero-search-form-wide" role="search">
+  
+    
+      <button class="block-search-wide__button" aria-label="Search Form" data-drupal-selector="block-search-wide-button">
+      <svg xmlns="http://www.w3.org/2000/svg" width="22" height="23" viewBox="0 0 22 23">
+  <path fill="currentColor" d="M21.7,21.3l-4.4-4.4C19,15.1,20,12.7,20,10c0-5.5-4.5-10-10-10S0,4.5,0,10s4.5,10,10,10c2.1,0,4.1-0.7,5.8-1.8l4.5,4.5c0.4,0.4,1,0.4,1.4,0S22.1,21.7,21.7,21.3z M10,18c-4.4,0-8-3.6-8-8s3.6-8,8-8s8,3.6,8,8S14.4,18,10,18z"/>
+</svg>
+      <span class="block-search-wide__button-close"></span>
+    </button>
+
+        <div class="block-search-wide__wrapper" data-drupal-selector="block-search-wide-wrapper" tabindex="-1">
+      <div class="block-search-wide__container">
+        <div class="block-search-wide__grid">
+          <form action="/search/node" method="get" id="search-block-form--2" accept-charset="UTF-8" class="search-form search-block-form">
+  <div class="js-form-item form-item js-form-type-search form-item-keys js-form-item-keys form-no-label">
+      <label for="edit-keys--2" class="form-item__label visually-hidden">Search</label>
+        <input title="Enter the terms you wish to search for." placeholder="Search by keyword or phrase." data-drupal-selector="edit-keys" type="search" id="edit-keys--2" name="keys" value="" size="15" maxlength="128" class="form-search form-element form-element--type-search form-element--api-search" />
+
+        </div>
+<div data-drupal-selector="edit-actions" class="form-actions js-form-wrapper form-wrapper" id="edit-actions--2"><button class="button--primary search-form__submit button js-form-submit form-submit" data-drupal-selector="edit-submit" type="submit" id="edit-submit--2" value="Search">
+    <span class="icon--search"></span>
+    <span class="visually-hidden">Search</span>
+</button>
+
+</div>
+
+</form>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  </div>
+
+                </div>
+                          </div>
+          </div>
+        </div>
+      </header>
+    
+    <div id="main-wrapper" class="layout-main-wrapper layout-container">
+      <div id="main" class="layout-main">
+                  <div class="main-content page-node-23">
+                  <a id="main-content" tabindex="-1"></a>
+          
+          <div class="main-content__container container">
+            
+
+  <div class="region region--highlighted grid-full layout--pass--content-medium">
+    <div data-drupal-messages-fallback class="hidden messages-list"></div>
+
+  </div>
+
+            
+
+  <div class="region region--breadcrumb grid-full layout--pass--content-medium">
+    
+
+<div id="block-pcisig-d10-olivero-breadcrumbs" class="block block-system block-system-breadcrumb-block">
+  
+    
+      <div class="block__content">
+        <nav class="breadcrumb" role="navigation" aria-labelledby="system-breadcrumb">
+    <h2 id="system-breadcrumb" class="visually-hidden">Breadcrumb</h2>
+    <div class="breadcrumb__content">
+      <ol class="breadcrumb__list">
+                  <li class="breadcrumb__item">
+                          <a href="/" class="breadcrumb__link">Home</a>
+                      </li>
+                  <li class="breadcrumb__item">
+                          <a href="/specifications" class="breadcrumb__link">Specifications</a>
+                      </li>
+              </ol>
+    </div>
+  </nav>
+
+    </div>
+  </div>
+
+  </div>
+
+
+                          <main role="main">
+                
+
+  <div class="region region--content-above grid-full layout--pass--content-medium">
+    
+
+
+<div id="block-pcisig-d10-olivero-page-title" class="block block-core block-page-title-block">
+  
+  
+
+  <h1 class="title page-title">
+<span>PCI Express 6.0 Specification</span>
+</h1>
+
+
+  
+</div>
+
+  </div>
+
+                
+
+  <div class="region region--content grid-full layout--pass--content-medium" id="content">
+    
+
+<div id="block-pcisig-d10-olivero-content" class="block block-system block-system-main-block">
+  
+    
+      <div class="block__content">
+      
+
+<article class="node node--type-page node--view-mode-full">
+  <header class="">
+    
+          
+      </header>
+  <div class="node__content">
+          <div class="layout layout--onecol">
+    <div  class="layout__region layout__region--content">
+      
+
+<div class="block block-layout-builder block-field-blocknodepagebody">
+  
+    
+      <div class="block__content">
+      
+            <div class="text-content clearfix field field--name-body field--type-text-with-summary field--label-hidden field__item"><p><img src="/sites/default/files/pictures/The%20PCIe%206.0%20Specification_rev.png" alt width="937" height="160" loading="lazy"></p><p>PCI Express® (PCIe®) specification has served as the de facto interconnect of choice for nearly two decades. The PCIe 6.0 specification doubles the bandwidth and power efficiency of the PCIe 5.0 specification (32.0 GT/s), while continuing to meet industry demand for a high-speed, low-latency interconnect. PCIe 6.0 technology is the cost-effective and scalable interconnect solution for data-intensive markets like Data Center, Artificial Intelligence/Machine Learning, HPC, Automotive, IoT, and Military/Aerospace. The latest draft is<a href="https://members.pcisig.com/wg/PCI-SIG/document/22470"> PCI Express Base Specification Revision 6.4</a>&nbsp;which includes 6.0 plus errata and approved ECNs.</p><p><strong>PCIe 6.0 Specification Features&nbsp;</strong></p><ul><li>64.0 GT/s raw data rate and up to 256.0 GB/s via x16 configuration</li><li>Pulse Amplitude Modulation with 4 levels (PAM4) signaling, levraging existing PAM4 already available in the industry</li><li>Lightweight Forward Error Correct (FEC) and Cyclic Redundancy Check (CRC) mitigate the bit error rate increase associated with PAM4 signaling</li><li>Flit (flow control unit) based encoding supports PAM4 modulation and works in conjunction with the FEC and CRC to enable double the bandwidth gain</li><li>Updated Packet layout used in Flit Mode to provide additional functionality and simplify processing</li><li>Maintains backwards compatibility with all previous generations of PCIe technology</li></ul><p>We invite members to <a href="https://pcisig.com/specifications">download the PCIe 6.0 specification</a>.</p><p><strong>PCIe 6.0 Specification Resources&nbsp;</strong></p><ul><li><a href="https://www.businesswire.com/news/home/20220111005011/en/PCI-SIG%C2%AE-Releases-PCIe%C2%AE-6.0-Specification-Delivering-Record-Performance-to-Power-Big-Data-Applications">Press Release</a> <ul><li><a href="https://pcisig.com/sites/default/files/files/PCIe%206.0%20Specification%20Contributed%20Member%20Company%20Quotes_Final_v2.pdf">Member Company Quote Sheet </a></li></ul></li><li><a href="https://pcisig.com/faq?field_category_value%5B%5D=pci_express_6.0&amp;keys=">FAQ</a></li><li><a href="https://pcisig.com/blog/pcie-60-architecture-future-pcie-technology">Infographic: PCIe 6.0 Architecture: The Future of PCIe Technology</a></li><li><a href="https://www.youtube.com/watch?v=jiufIIYdao8">Animated Video: PCIe 6.0 Specification: Evolving Performance for Data Centric Application</a></li><li><a href="https://pcisig.com/blog/pcie%C2%AE-60-specification-released-members-double-bandwidth-next-generation-applications">PCIe&nbsp;6.0 Specification Released to Members: Double the Bandwidth for Next-Generation Applications Blog</a></li><li>Webinar: <a href="https://www.brighttalk.com/webcast/17656/426619?utm_source=PCISIG&amp;utm_medium=brighttalk&amp;utm_campaign=426619">PCIe 6.0 Specification: The Interconnect for I/O Needs of the Future</a><ul><li>Webinar Q&amp;A Recap Blogs: <ul><li><a href="https://pcisig.com/blog/pcie%C2%AE-60-specification-webinar-qa-deeper-dive-flit-mode-pam4-and-forward-error-correction-fec">The PCIe 6.0 Specification Webinar Q&amp;A: A Deeper Dive into FLIT Mode, PAM4, and Forward Error Correction (FEC)</a></li><li><a href="https://pcisig.com/blog/pcie%C2%AE-60-specification-webinar-qa-supported-features-pcie-60-specification">The PCIe 6.0 Specification Webinar Q&amp;A: Supported Features in PCIe 6.0 Specification</a></li><li><a href="https://pcisig.com/blog/pcie%C2%AE-60-specification-webinar-qa-error-detection-and-correction-fec">The PCIe 6.0 Specification Webinar Q&amp;A: Error Detection and Correction with FEC</a></li><li><a href="https://pcisig.com/blog/pcie%C2%AE-60-specification-webinar-qa-leveling-l0p">The PCIe 6.0 Specification Webinar Q&amp;A: Leveling Up with L0p</a></li><li><a href="https://pcisig.com/blog/pcie%C2%AE-60-specification-webinar-qa-impact-pam4-signaling">The PCIe 6.0 Specification Webinar Q&amp;A: The Impact of PAM4 Signaling</a></li><li><a href="https://pcisig.com/blog/pcie%C2%AE-60-specification-webinar-recap-features-future">PCIe 6.0 Specification Webinar Recap: Features of the Future</a></li></ul></li></ul></li><li>Contributed Articles:<ul><li><a href="https://www.electronicdesign.com/industrial-automation/article/21136215/intel-whats-the-difference-going-from-pcie-30-to-pcie-60">What’s the Difference Going from PCIe 3.0 to PCIe 6.0?</a></li><li><a href="https://pcisig.com/blog/evolution-pci-express-specification-its-sixth-generation-third-decade-and-still-going-strong">The Evolution of the PCI Express&nbsp;Specification: On its Sixth Generation, Third Decade and Still Going Strong</a></li></ul></li></ul><p><strong>For More Information about PCI-SIG</strong></p><ul><li>Follow us on<strong>&nbsp;</strong><a href="https://www.linkedin.com/company/15437558/"><u>LinkedIn</u></a>&nbsp;and&nbsp;<a href="https://twitter.com/pci_sig"><u>X</u></a>&nbsp;for the latest information about the PCIe specifications and future announcements. Join the conversation using the #PCISIG and #PCIe hashtags in your social media posts.</li><li>If you are not yet a PCI-SIG member, we invite you to help drive PCIe specification development by&nbsp;<a href="https://pcisig.com/membership/become-member"><u>joining PCI-SIG</u></a>&nbsp;today.</li></ul></div>
+      
+    </div>
+  </div>
+
+
+<div class="block block-layout-builder block-extra-field-blocknodepagelinks">
+  
+    
+      <div class="block__content">
+      
+    </div>
+  </div>
+
+    </div>
+  </div>
+
+  </div>
+  </article>
+
+    </div>
+  </div>
+
+  </div>
+
+              </main>
+                        
+          </div>
+        </div>
+              </div>
+    </div>
+
+    <footer class="site-footer">
+      <div class="site-footer__inner container">
+        
+
+
+<div class="region region--footer-top grid-full layout--pass--content-medium">
+  <div class="region--footer_top__inner">
+          <nav  id="block-pcisig-d10-olivero-footer" class="block block-menu navigation menu--footer" aria-labelledby="block-pcisig-d10-olivero-footer-menu" role="navigation">
+            
+  <h2 class="visually-hidden block__title" id="block-pcisig-d10-olivero-footer-menu">Footer</h2>
+  
+        
+          <ul  class="menu menu--level-1">
+            
+                          
+        
+        
+        <li class="menu__item menu__item--link menu__item--level-1">
+                    
+          <a href="/pci-sig-online-privacy-policy" class="menu__link menu__link--link menu__link--level-1" data-drupal-link-system-path="node/3532">Privacy Policy</a>
+
+          
+        </li>
+      
+                          
+        
+        
+        <li class="menu__item menu__item--link menu__item--level-1">
+                    
+          <a href="/membership/contact-us" class="menu__link menu__link--link menu__link--level-1" data-drupal-link-system-path="webform/contact_us">Contact Us</a>
+
+          
+        </li>
+          </ul>
+  
+
+
+  </nav>
+
+        <div class="copyright">Copyright</span> &copy; 2026 PCI-SIG. All rights reserved.</div>
+  </div>
+</div>
+
+
+
+        
+      </div>
+    </footer>
+
+    <div class="overlay" data-drupal-selector="overlay"></div>
+
+  </div>
+</div>
+
+  </div>
+
+    
+    <script src="/core/assets/vendor/jquery/jquery.min.js?v=3.7.1"></script>
+<script src="/core/assets/vendor/once/once.min.js?v=1.0.1"></script>
+<script src="/core/misc/drupal.js?v=10.6.12"></script>
+<script src="/core/misc/drupal.init.js?v=10.6.12"></script>
+<script src="/core/assets/vendor/tabbable/index.umd.min.js?v=6.3.0"></script>
+<script src="/modules/contrib/eu_cookie_compliance/js/eu_cookie_compliance.min.js?th3c6l"></script>
+<script src="/core/misc/progress.js?v=10.6.12"></script>
+<script src="/core/assets/vendor/loadjs/loadjs.min.js?v=4.3.0"></script>
+<script src="/core/misc/debounce.js?v=10.6.12"></script>
+<script src="/core/misc/announce.js?v=10.6.12"></script>
+<script src="/themes/custom/pcisig_d10_olivero/js/navigation-utils.js?v=10.6.12"></script>
+<script src="/themes/custom/pcisig_d10_olivero/js/checkbox.js?v=10.6.12"></script>
+<script src="/themes/custom/pcisig_d10_olivero/js/accordion.js?v=10.6.12"></script>
+<script src="/themes/custom/pcisig_d10_olivero/js/messages.js?v=10.6.12"></script>
+<script src="/core/misc/message.js?v=10.6.12"></script>
+<script src="/themes/custom/pcisig_d10_olivero/js/message.theme.js?v=10.6.12"></script>
+<script src="/core/misc/ajax.js?v=10.6.12"></script>
+<script src="/modules/contrib/google_tag/js/gtag.ajax.js?th3c6l"></script>
+<script src="/themes/custom/pcisig_d10_olivero/js/navigation.js?v=10.6.12"></script>
+<script src="/themes/custom/pcisig_d10_olivero/js/second-level-navigation.js?v=10.6.12"></script>
+<script src="/themes/custom/pcisig_d10_olivero/js/nav-resize.js?v=10.6.12"></script>
+<script src="/themes/custom/pcisig_d10_olivero/js/search.js?v=10.6.12"></script>
+
+    <script src="https://cdn.userway.org/widget.js" data-account="g86UcnRarW"></script>
+  <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a1eec560288c0574',t:'MTc4NDY4NDc3OQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>

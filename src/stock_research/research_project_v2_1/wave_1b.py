@@ -6,6 +6,7 @@ from hashlib import sha256
 import json
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 from stock_research.research_project_v2.canonical import canonical_bytes, content_sha256
 from stock_research.research_project_v2.errors import ResearchProjectV2Error
@@ -177,6 +178,37 @@ def validate_wave_1b_candidate(
     return copied
 
 
+def to_wave_1b_provider_candidate(
+    candidate: dict[str, Any], *, discovered_at: str, provenance: dict[str, Any]
+) -> dict[str, Any]:
+    parts = urlsplit(candidate["source_url"])
+    normalized_url = urlunsplit(
+        (parts.scheme.lower(), parts.netloc.lower(), parts.path, parts.query, "")
+    )
+    return {
+        "candidate_id": candidate["candidate_id"],
+        "search_plan_id": "search_plan:ai_pcb_targeted_wave_1b",
+        "query_id": f"wave_1b_phase_{candidate['internal_phase']}",
+        "normalized_url": normalized_url,
+        "original_url": candidate["source_url"],
+        "title": candidate["provider_source_title"],
+        "snippet": "",
+        "publisher": candidate["source_owner"],
+        "publish_date": (
+            candidate.get("publication_date")
+            if candidate.get("publication_date_status") == "known"
+            else None
+        ),
+        "source_class": candidate["source_class"],
+        "rank": int(candidate.get("rank", 1)),
+        "exclusion_status": "included",
+        "exclusion_reasons": [],
+        "dedup_key": normalized_url,
+        "provenance": deepcopy(provenance),
+        "discovered_at": discovered_at,
+    }
+
+
 def build_wave_1b_attempt_record(
     *,
     candidate: dict[str, Any],
@@ -325,7 +357,16 @@ def build_wave_1b_checkpoint(
         "per_er_acquired_coverage": _coverage(attempts, acquired_only=True),
         "per_er_source_class_coverage": source_coverage,
         "per_er_denominator_completeness": denominator_coverage,
-        "per_er_terminal_state": {er_id: _terminal_state(attempts, er_id) for er_id in AUTHORIZED_ER_IDS},
+        "per_er_terminal_state": {
+            er_id: (
+                "acquisition_partial_with_gaps"
+                if _terminal_state(attempts, er_id)
+                == "acquisition_complete_for_assessment"
+                and denominator_coverage[er_id]["missing_fields"]
+                else _terminal_state(attempts, er_id)
+            )
+            for er_id in AUTHORIZED_ER_IDS
+        },
         "out_of_scope_candidate_count": out_of_scope_candidate_count,
         "out_of_scope_coverage": 0,
         "security_policy_blocked_count": sum(row.get("failure_class") == "security_policy_blocked" for row in attempts),
