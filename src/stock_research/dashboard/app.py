@@ -1713,7 +1713,7 @@ def create_app() -> FastAPI:
 
     @app.get("/api/strategies/catalog")
     def strategies_catalog():
-        return {"items": list_strategy_catalog()}
+        return {"items": list_backtest_strategies()}
 
     @app.get("/api/backtests/strategies")
     def backtest_strategies():

@@ -1059,6 +1059,30 @@ def test_dashboard_api_cli_parser_accepts_host_and_port():
     assert args.port == 9999
 
 
+def test_strategy_catalog_uses_authoritative_publication_read_model(monkeypatch):
+    items = [
+        {
+            "strategy_id": "lhb_shortline",
+            "status": "runnable",
+            "latest_metrics": {
+                "performance_as_of_date": "2026-07-21",
+                "total_return_pct": 79.43,
+                "contract_id": "lhb:contract",
+                "publish_id": "publish-lhb",
+                "artifact_version": "strategy_artifact_v1",
+                "contract_status": "success",
+            },
+        }
+    ]
+    monkeypatch.setattr(dashboard_app, "list_backtest_strategies", lambda: items)
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/strategies/catalog")
+
+    assert response.status_code == 200
+    assert response.json() == {"items": items}
+
+
 def test_dashboard_api_cli_parser_does_not_resolve_unrelated_artifacts(monkeypatch):
     from stock_research import mid_trend_strategy_validation
 
