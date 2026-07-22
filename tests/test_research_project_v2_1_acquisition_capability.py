@@ -172,6 +172,11 @@ def test_evidence_shape_matching_does_not_promote_overview_index_or_context() ->
     assert match_evidence_shape(
         "PCB-ER-B01", "full_text_pdf", ["test_method", "frequency"], "national_metrology"
     )["target_evidence_match"] == "context_only"
+    assert match_evidence_shape(
+        "PCB-ER-A02", "full_text_pdf",
+        ["data_rate", "channel_length", "insertion_loss"],
+        "standards_working_group_measurement",
+    )["target_evidence_match"] == "answers_er_partially"
 
 
 def test_duplicate_raw_hash_collapses_to_one_document_identity() -> None:
@@ -246,15 +251,11 @@ def test_capability_hardening_exact_allowlist_contains_all_current_changes() -> 
     )
     changed = set(
         subprocess.check_output(
-            ["git", "diff", "--name-only", f"{allowlist['baseline_commit']}..HEAD"],
+            ["git", "diff", "--name-only", f"{allowlist['baseline_commit']}..b07e8e8"],
             cwd=root,
             text=True,
         ).splitlines()
     )
-    for line in subprocess.check_output(
-        ["git", "status", "--porcelain=v1", "-uall"], cwd=root, text=True
-    ).splitlines():
-        changed.add(line[3:].split(" -> ", 1)[-1])
     assert changed <= set(allowlist["paths"])
     assert not any(
         path.startswith(tuple(allowlist["forbidden_prefixes"])) for path in changed

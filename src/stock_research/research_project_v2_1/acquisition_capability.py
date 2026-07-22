@@ -370,7 +370,10 @@ def match_evidence_shape(
         else:
             match = "context_only"
     elif er_id == "PCB-ER-A02":
-        if source_class in {"engineering_measurement", "peer_reviewed_link_measurement", "independent_laboratory"}:
+        if source_class in {
+            "engineering_measurement", "peer_reviewed_link_measurement",
+            "independent_laboratory", "standards_working_group_measurement",
+        }:
             match = "answers_er_directly" if {"data_rate", "channel_length", "insertion_loss", "deembedding_method"} <= fields else "answers_er_partially"
         else:
             match = "context_only"
