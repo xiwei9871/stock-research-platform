@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 from types import SimpleNamespace
 
+from stock_research import data_run_manifest
 from stock_research.dashboard import backtests, display_date_gate, review_queue
 from stock_research.strategy_publication_contracts import (
     build_publication_identity,
@@ -36,6 +37,53 @@ def test_review_queue_defaults_to_latest_market_date_when_display_gate_lags(monk
     )
 
     assert selected == "2026-07-03"
+
+
+def test_strategy_manifest_snapshot_uses_exact_publication_cohort_loader():
+    assert (
+        review_queue.load_latest_data_run_manifest
+        is data_run_manifest.load_strategy_publication_manifests
+    )
+
+
+def test_resolve_v1_output_path_maps_controlled_relative_path(tmp_path, monkeypatch):
+    output_root = tmp_path / "outputs"
+    monkeypatch.setattr(
+        review_queue,
+        "SETTINGS",
+        SimpleNamespace(output_root=output_root),
+    )
+
+    resolved = review_queue._resolve_v1_strategy_output_path(
+        "outputs/research/strategy_daily_eod/2026-07-21/strategy_runs/"
+        "mid_trend/publish-1/review.csv"
+    )
+
+    assert resolved == output_root / (
+        "research/strategy_daily_eod/2026-07-21/strategy_runs/"
+        "mid_trend/publish-1/review.csv"
+    )
+
+
+@pytest.mark.parametrize(
+    "value",
+    (
+        "other/research/strategy_daily_eod/2026-07-21/strategy_runs/mid_trend/publish-1/review.csv",
+        "outputs/../research/strategy_daily_eod/2026-07-21/strategy_runs/mid_trend/publish-1/review.csv",
+        "outputs//research/strategy_daily_eod/2026-07-21/strategy_runs/mid_trend/publish-1/review.csv",
+        r"outputs\research\strategy_daily_eod\2026-07-21\review.csv",
+    ),
+)
+def test_resolve_v1_output_path_rejects_uncontrolled_relative_path(
+    tmp_path, monkeypatch, value
+):
+    monkeypatch.setattr(
+        review_queue,
+        "SETTINGS",
+        SimpleNamespace(output_root=tmp_path / "outputs"),
+    )
+
+    assert review_queue._resolve_v1_strategy_output_path(value) == Path()
 
 
 def test_review_queue_uses_prior_display_date_when_boundary_enabled(monkeypatch):

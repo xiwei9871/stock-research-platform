@@ -10,7 +10,10 @@ from urllib.parse import urlencode
 from typing import Any
 
 from stock_research.config import SETTINGS
-from stock_research.data_run_manifest import load_latest_data_run_manifest
+from stock_research.data_run_manifest import (
+    load_latest_data_run_manifest as load_latest_run_manifest,
+    load_strategy_publication_manifests as load_latest_data_run_manifest,
+)
 from stock_research.dashboard.display_date_gate import (
     resolve_default_trade_date,
     validate_browser_acceptance_rollout_config,
@@ -765,12 +768,20 @@ def _trusted_strategy_output_root() -> Path:
 
 
 def _resolve_v1_strategy_output_path(value: Any) -> Path:
-    declared = Path(str(value or ""))
+    raw = str(value or "")
+    declared = Path(raw)
     current_output_root = Path(
         os.path.abspath(Path(getattr(SETTINGS, "output_root", "outputs")))
     )
     if not declared.is_absolute():
-        return Path(os.path.abspath(declared))
+        parts = raw.split("/")
+        if (
+            "\\" in raw
+            or any(part in {"", ".", ".."} for part in parts)
+            or parts[0] != current_output_root.name
+        ):
+            return Path()
+        declared = current_output_root.parent.joinpath(*parts)
     declared = Path(os.path.abspath(declared))
     approved_roots = (current_output_root, *_APPROVED_SYNCED_OUTPUT_ROOTS)
     for source_root in approved_roots:
@@ -2024,7 +2035,7 @@ def _manifest_context(selected_trade_date: str, warnings: list[str]) -> dict[str
     if not selected_trade_date:
         return {"run_id": "", "latest_trade_date": "", "modules": []}
     try:
-        modules = list(load_latest_data_run_manifest(trade_date=selected_trade_date))
+        modules = list(load_latest_run_manifest(trade_date=selected_trade_date))
     except Exception as exc:
         warnings.append(f"data run manifest unavailable: {exc}")
         return {"run_id": "", "latest_trade_date": selected_trade_date, "modules": []}
