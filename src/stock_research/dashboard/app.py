@@ -515,12 +515,13 @@ def create_app() -> FastAPI:
 
     @app.get("/api/dashboard/overview")
     def dashboard_overview(
-        trade_date: str,
+        trade_date: str | None = None,
         score_version: str = "manual_v1",
         watchlist_id: str = "default",
         top_n: int = 10,
     ):
-        return build_dashboard_overview(trade_date, score_version, watchlist_id, top_n)
+        selected_date = _resolve_dashboard_trade_date(trade_date).isoformat()
+        return build_dashboard_overview(selected_date, score_version, watchlist_id, top_n)
 
     @app.get("/api/platform/summary")
     def platform_summary(score_version: str = "manual_v1", top_n: int = 5):

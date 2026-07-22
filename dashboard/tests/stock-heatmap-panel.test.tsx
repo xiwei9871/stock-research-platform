@@ -124,6 +124,26 @@ describe('StockHeatmapPanel', () => {
     expect(canvasContext.fillRect).toHaveBeenCalled();
   });
 
+  it('renders an asset repeated across heatmap groups without duplicate React keys', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const payload = makePayload();
+    const repeated = payload.groups[0].children[0];
+    payload.groups = [
+      payload.groups[0],
+      {
+        ...payload.groups[0],
+        group_id: 'BK_REPEAT',
+        group_name: '重复分组',
+        children: [{ ...repeated, group_id: 'BK_REPEAT', group_name: '重复分组' }]
+      }
+    ];
+
+    render(<StockHeatmapPanel payload={payload} loading={false} error={null} onSelectStock={vi.fn()} />);
+
+    expect(errorSpy.mock.calls.flat().join(' ')).not.toContain('same key');
+    errorSpy.mockRestore();
+  });
+
   it('calls onSelectStock from the accessible stock list', () => {
     const onSelectStock = vi.fn();
 

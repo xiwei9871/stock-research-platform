@@ -471,7 +471,7 @@ for (const item of REAL_ROUTE_ITEMS) {
       try {
         await page.goto(resolved.route);
         await expect(
-          page.getByRole(item.landmark.role, { name: item.landmark.name })
+          page.getByRole(item.landmark.role, { name: item.landmark.name, exact: true })
         ).toBeVisible();
         await expect
           .poll(

@@ -226,9 +226,9 @@ export function StockHeatmapPanel({ payload, loading, error, onSelectStock }: St
       </div>
       <canvas ref={canvasRef} role="img" aria-label="全市场个股云图" className="market-monitor-stock-heatmap-canvas" />
       <section className="market-monitor-stock-heatmap-list" aria-label="热区个股 Top N">
-        {stocks.map((stock) => (
+        {stocks.map((stock, index) => (
           <button
-            key={stock.asset_id}
+            key={`${stock.asset_id}:${stock.group_id}:${index}`}
             type="button"
             aria-label={`打开 ${stock.name}`}
             onClick={() => onSelectStock(stock.asset_id)}

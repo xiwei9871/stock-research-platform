@@ -4,6 +4,7 @@ import {
   expectNoFatalRuntimeErrors,
   expectNoHorizontalOverflow,
   expectNoUnhandledApiRoutes,
+  isExpectedNavigationCancellation,
   serializeRuntimeEvidence
 } from '../assertions/runtime';
 import { installMockPlatformApi } from '../fixtures/mockPlatformApi';
@@ -28,6 +29,19 @@ function captureErrorMessage(assertion: () => void): string {
   }
   throw new Error('Expected runtime assertion to fail');
 }
+
+test('only stock profile GET aborts are expected navigation cancellation @p0 @runtime-contract', async () => {
+  expect(
+    isExpectedNavigationCancellation(
+      'GET',
+      'http://127.0.0.1:5374/api/assets/CN%3ASZ%3A000049/profile',
+      'net::ERR_ABORTED'
+    )
+  ).toBe(true);
+  expect(isExpectedNavigationCancellation('POST', '/api/assets/A/profile', 'net::ERR_ABORTED')).toBe(false);
+  expect(isExpectedNavigationCancellation('GET', '/api/assets/A/bars', 'net::ERR_ABORTED')).toBe(false);
+  expect(isExpectedNavigationCancellation('GET', '/api/assets/A/profile', 'net::ERR_FAILED')).toBe(false);
+});
 
 test('clean control passes @p0 @runtime-contract', async ({ page, baseURL, runtimeEvidence }) => {
   await setContractContent(page, baseURL, '<main>runtime contract control</main>');

@@ -96,9 +96,9 @@ export function MarketAnomalyContextPanel({ payload, loading, error, onOpenStock
         <article className="market-anomaly-block">
           <h3>异常个股标签</h3>
           <div className="market-anomaly-stock-list">
-            {payload.hot_stocks.slice(0, 6).map((stock) => (
+            {payload.hot_stocks.slice(0, 6).map((stock, index) => (
               <button
-                key={stock.asset_id}
+                key={`${stock.asset_id}:${stock.industry_id}:${index}`}
                 type="button"
                 aria-label={`打开异常个股 ${stock.name}`}
                 className="market-anomaly-stock-row"

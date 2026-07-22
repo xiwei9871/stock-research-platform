@@ -156,6 +156,20 @@ function failedRequestLabel(entry: RuntimeEvidence['failedRequests'][number]): s
   return `${entry.method} ${entry.url} — ${entry.failure}`;
 }
 
+export function isExpectedNavigationCancellation(
+  method: string,
+  rawUrl: string,
+  failure: string
+): boolean {
+  if (method.toUpperCase() !== 'GET' || failure !== 'net::ERR_ABORTED') return false;
+  try {
+    const pathname = new URL(rawUrl, 'http://playwright.local').pathname;
+    return /^\/api\/assets\/[^/]+\/profile$/.test(pathname);
+  } catch {
+    return false;
+  }
+}
+
 function listUnexpected(label: string, values: readonly string[]): string[] {
   return values.length === 0 ? [] : [`${label}:`, ...values.map((value) => `- ${value}`)];
 }

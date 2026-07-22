@@ -354,6 +354,7 @@ test('theme-research company handoff returns to its dynamically selected company
   await expectRouteContext(page, {
     path: new RegExp(`^/theme-research/${choice.themeId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/companies$`)
   });
+  await expect(page.getByRole('heading', { name: '公司映射' })).toBeVisible();
   await expectStateRestored(page, { selectedText: '公司映射' });
   await expect(companyRow).toBeVisible();
 });

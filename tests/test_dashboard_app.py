@@ -148,6 +148,27 @@ def test_public_news_route_returns_filtered_items(monkeypatch):
     assert response.json()["items"][0]["title"] == "全球快讯"
 
 
+def test_dashboard_overview_defaults_trade_date(monkeypatch):
+    monkeypatch.setattr(
+        dashboard_app,
+        "_resolve_dashboard_trade_date",
+        lambda value: date(2026, 7, 21),
+    )
+    monkeypatch.setattr(
+        dashboard_app,
+        "build_dashboard_overview",
+        lambda trade_date, score_version, watchlist_id, top_n: {
+            "trade_date": str(trade_date)
+        },
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/dashboard/overview")
+
+    assert response.status_code == 200
+    assert response.json()["trade_date"] == "2026-07-21"
+
+
 def test_public_news_refresh_route_returns_counts(monkeypatch):
     monkeypatch.setattr(
         dashboard_app,

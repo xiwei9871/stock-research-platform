@@ -3,6 +3,7 @@ import { expect, test as base } from '@playwright/test';
 import {
   expectNoFatalRuntimeErrors,
   expectNoUnhandledApiRoutes,
+  isExpectedNavigationCancellation,
   sanitizeRuntimeEvidenceText,
   serializeRuntimeEvidence
 } from '../assertions/runtime';
@@ -81,10 +82,14 @@ export const test = base.extend<RuntimeFixtures>({
         url(): string;
         failure(): { errorText: string } | null;
       }) => {
+        const method = request.method().toUpperCase();
+        const url = request.url();
+        const failure = request.failure()?.errorText ?? 'request_failed';
+        if (isExpectedNavigationCancellation(method, url, failure)) return;
         evidence.failedRequests.push({
-          method: request.method().toUpperCase(),
-          url: sanitizeRuntimeEvidenceText(safeUrl(request.url())),
-          failure: sanitizeRuntimeEvidenceText(request.failure()?.errorText ?? 'request_failed')
+          method,
+          url: sanitizeRuntimeEvidenceText(safeUrl(url)),
+          failure: sanitizeRuntimeEvidenceText(failure)
         });
       };
       const onResponse = (response: {

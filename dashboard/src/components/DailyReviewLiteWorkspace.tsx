@@ -175,8 +175,8 @@ export function DailyReviewLiteWorkspace({ initialTradeDate }: DailyReviewLiteWo
               </div>
               {section.items.length > 0 ? (
                 <dl className="daily-review-item-grid">
-                  {section.items.map((item) => (
-                    <div key={`${section.key}:${item.label}`}>
+                  {section.items.map((item, index) => (
+                    <div key={`${section.key}:${item.label}:${index}`}>
                       <dt>{item.label}</dt>
                       <dd>{item.value || '-'}</dd>
                     </div>
