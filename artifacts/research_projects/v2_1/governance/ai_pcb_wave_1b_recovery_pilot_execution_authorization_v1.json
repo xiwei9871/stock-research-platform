@@ -1,0 +1,112 @@
+{
+  "schema_version": "1.0.0",
+  "artifact_type": "wave_1b_recovery_pilot_execution_authorization",
+  "authorization_id": "wave_1b_recovery_pilot_execution_authorization:ai_pcb:v1",
+  "authorization_status": "frozen",
+  "authorized_at": "2026-07-22T06:54:54Z",
+  "authorization_actor": "human_reviewer",
+  "project_id": "research_project:ai_compute_pcb_industry_bottleneck",
+  "input_bindings": {
+    "recovery_pilot_gate_id": "wave_1b_recovery_pilot_gate_decision:ai_pcb:v1",
+    "recovery_pilot_gate_hash": "666243770b40ed1af4b928292f0295398443767f0781083073fe65ebb4dc7bcd",
+    "capability_checkpoint_id": "acquisition_capability_checkpoint:1951ded60c95381391c13e82",
+    "capability_checkpoint_hash": "dd8029682394c29c81af084e77ea459089d65bad2735f1882ebbe694fcfe8809",
+    "wave_1b_checkpoint_id": "targeted_acquisition_checkpoint:a4690962e23c07e238dd2f4d",
+    "wave_1b_checkpoint_hash": "a4690962e23c07e238dd2f4dfeb5d081fd1c93a0b95a89a2509e23ae4f9ceec2"
+  },
+  "execution_authorized": true,
+  "authorization_scope": "exact_candidate_and_action_list_only",
+  "authorized_target_count": 7,
+  "unlisted_target_authorized": false,
+  "target_substitution_authorized": false,
+  "automatic_scope_expansion_authorized": false,
+  "maximum_total_formal_attempts": 7,
+  "one_time_authorization": true,
+  "authorization_consumed": false,
+  "execution_requirements": [
+    "the frozen Recovery Pilot Gate ID and canonical hash must match",
+    "the Capability checkpoint and Wave 1b checkpoint hashes must match",
+    "the recovery target ID must be present in authorized_targets",
+    "the original candidate ID, authorized ER, recovery action, and attempt policy must match the frozen Gate target",
+    "no target may create coverage for an unlisted ER",
+    "each formal attempt must be recorded independently and preserve fail-closed security behavior",
+    "execution must produce one standalone Recovery Acquisition checkpoint and then pause"
+  ],
+  "authorized_targets": [
+    {
+      "recovery_target_id": "recovery_target:ai_pcb:wave_1b:a04:keysight_deembedding:v1",
+      "original_candidate_id": "source_candidate:8c101fbf12d20e0f52223d70",
+      "authorized_er_id": "PCB-ER-A04",
+      "authorized_recovery_action": "resolve_migrated_official_document_by_exact_title_or_document_identifier",
+      "formal_acquisition_authorized": true,
+      "same_failed_url_retry_allowed": false,
+      "maximum_formal_attempts": 1
+    },
+    {
+      "recovery_target_id": "recovery_target:ai_pcb:wave_1b:a04:anritsu_deembedding:v1",
+      "original_candidate_id": "source_candidate:898ac3188ac0d3bdc87901c6",
+      "authorized_er_id": "PCB-ER-A04",
+      "authorized_recovery_action": "resolve_migrated_official_document_by_exact_title_or_document_identifier",
+      "formal_acquisition_authorized": true,
+      "same_failed_url_retry_allowed": false,
+      "maximum_formal_attempts": 1
+    },
+    {
+      "recovery_target_id": "recovery_target:ai_pcb:wave_1b:b01:ipc_equivalent_method:v1",
+      "original_candidate_id": "source_candidate:5f5ace3e19b74dcde9070b69",
+      "authorized_er_id": "PCB-ER-B01",
+      "authorized_recovery_action": "discover_one_safe_public_test_method_or_independent_equivalent_with_matching_measurement_scope",
+      "formal_acquisition_authorized": true,
+      "same_failed_url_retry_allowed": false,
+      "maximum_formal_attempts": 1
+    },
+    {
+      "recovery_target_id": "recovery_target:ai_pcb:wave_1b:b01:panasonic_bounded_retry:v1",
+      "original_candidate_id": "source_candidate:ad570b0c6b8dc3b79fd7f260",
+      "authorized_er_id": "PCB-ER-B01",
+      "authorized_recovery_action": "bounded_retry_of_same_official_url_once",
+      "formal_acquisition_authorized": true,
+      "same_failed_url_retry_allowed": true,
+      "maximum_formal_attempts": 1
+    },
+    {
+      "recovery_target_id": "recovery_target:ai_pcb:wave_1b:b02:usc_repository_alternative:v1",
+      "original_candidate_id": "source_candidate:0d8d657d4976896667a1347e",
+      "authorized_er_id": "PCB-ER-B02",
+      "authorized_recovery_action": "resolve_publisher_record_author_repository_or_full_text_replication_by_exact_title",
+      "formal_acquisition_authorized": true,
+      "same_failed_url_retry_allowed": false,
+      "maximum_formal_attempts": 1
+    },
+    {
+      "recovery_target_id": "recovery_target:ai_pcb:wave_1b:a02:etc_800g_migrated_entry:v1",
+      "original_candidate_id": "source_candidate:253579a6c8ecff1dbb22d4c8",
+      "authorized_er_id": "PCB-ER-A02",
+      "authorized_recovery_action": "resolve_migrated_official_document_by_exact_title_and_revision",
+      "formal_acquisition_authorized": true,
+      "same_failed_url_retry_allowed": false,
+      "maximum_formal_attempts": 1
+    },
+    {
+      "recovery_target_id": "recovery_target:ai_pcb:wave_1b:a02:ieee_802_3ck_index_to_fulltext:v1",
+      "original_candidate_id": "source_candidate:ea89ed4515c8dca17d910223",
+      "authorized_er_id": "PCB-ER-A02",
+      "authorized_recovery_action": "extract_one_explicit_measurement_document_identifier_from_frozen_index_then_resolve_matching_public_full_text",
+      "formal_acquisition_authorized": true,
+      "same_failed_url_retry_allowed": false,
+      "maximum_formal_attempts": 1
+    }
+  ],
+  "post_execution_requirement": {
+    "single_recovery_checkpoint_required": true,
+    "pause_after_checkpoint": true,
+    "automatic_assessment_authorized": false
+  },
+  "automatic_assessment_authorized": false,
+  "cognition_update_authorized": false,
+  "wave_2_authorized": false,
+  "company_mapping_authorized": false,
+  "stage_a2_authorized": false,
+  "stage_b_authorized": false,
+  "content_hash": "5ebe690a4e3b1925eb45f7ce41c80bbe0bc0830bc65a86d1619d52da8e0fbde5"
+}
