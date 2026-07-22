@@ -218,6 +218,7 @@ function sharedRoutes(): MockPlatformApiRoutes {
 }
 
 async function expectFullPublication(card: ReturnType<Page['locator']>, strategy: OfficialStrategyFixture) {
+  await expect(card).toBeVisible();
   await expectStrategyPresentationConsistency(card, {
     strategyId: strategy.strategyId,
     tradeDate: strategy.performanceDate,
@@ -233,7 +234,7 @@ test.beforeEach(async ({ page }) => {
   await installMockPlatformApi(page, sharedRoutes());
 });
 
-test('official publication identity is stable across home, strategy deep links, and review queue @p0 @mock @publication', async ({
+test('official publication identity is stable across home and strategy-specific review deep links @p0 @mock @publication', async ({
   page
 }) => {
   const runRequests: string[] = [];
@@ -262,23 +263,29 @@ test('official publication identity is stable across home, strategy deep links, 
     }
     await expect(page.getByText('+175.29%', { exact: true })).toHaveCount(0);
 
-    await homeCard.getByRole('button', { name: `打开策略 ${strategyNames[strategy.strategyId]}` }).click();
-    await expectRouteContext(page, { path: /^\/strategy-lab$/ });
+    await homeCard.getByRole('button', { name: `查看 ${strategyNames[strategy.strategyId]} 复盘` }).click();
+    await expectRouteContext(page, { path: /^\/review-queue$/ });
     await expect(page).toHaveURL(new RegExp(`strategy_id=${strategy.strategyId}$`));
-    await expect(page.getByLabel('strategy', { exact: true })).toHaveValue(strategy.strategyId);
-    const strategyContract = page.getByRole('region', {
-      name: `${strategyNames[strategy.strategyId]} 策略数据状态`
-    });
-    await expectFullPublication(strategyContract, strategy);
+    await expect(page.getByRole('button', { name: `${strategyNames[strategy.strategyId]} 1` })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    const reviewContract = page.locator(
+      `[aria-label="选中标的证据"] [data-strategy-id="${strategy.strategyId}"]`
+    );
+    await expectFullPublication(reviewContract, strategy);
     await expect(page.getByText('+175.29%', { exact: true })).toHaveCount(0);
     await expect(runRequests).toEqual([]);
 
     await page.reload();
-    await expectRouteContext(page, { path: /^\/strategy-lab$/ });
+    await expectRouteContext(page, { path: /^\/review-queue$/ });
     await expect(page).toHaveURL(new RegExp(`strategy_id=${strategy.strategyId}$`));
-    await expect(page.getByLabel('strategy', { exact: true })).toHaveValue(strategy.strategyId);
+    await expect(page.getByRole('button', { name: `${strategyNames[strategy.strategyId]} 1` })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
     await expectFullPublication(
-      page.getByRole('region', { name: `${strategyNames[strategy.strategyId]} 策略数据状态` }),
+      page.locator(`[aria-label="选中标的证据"] [data-strategy-id="${strategy.strategyId}"]`),
       strategy
     );
     await expect(runRequests).toEqual([]);

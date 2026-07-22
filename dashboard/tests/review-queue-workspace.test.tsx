@@ -239,6 +239,17 @@ describe('ReviewQueueWorkspace', () => {
     expect(screen.queryByText('Recent accepted news')).not.toBeInTheDocument();
   });
 
+  it('selects the requested strategy group after loading the queue', async () => {
+    render(<ReviewQueueWorkspace initialStrategyId="tech_bottleneck" />);
+
+    expect(await screen.findByRole('button', { name: 'Tech Bottleneck Combo 0' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    expect(screen.getByText('2026-06-08 暂无 Tech Bottleneck Combo 复盘标的。')).toBeInTheDocument();
+    expect(screen.queryByText('Recent accepted news')).not.toBeInTheDocument();
+  });
+
   it('replays the review queue for a selected trade date', async () => {
     const replayQueue = makeQueue({
       trade_date: '2026-06-24',

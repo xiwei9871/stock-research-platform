@@ -11,6 +11,7 @@ import { expect, test } from '../fixtures/test';
 import {
   candidateDisplayDecision,
   createCriticalResponseLedger,
+  isHandledRouteLifecycleError,
   installCandidateDisplayOverride,
   loadCandidateSnapshot,
   loadCandidateSnapshotWithPrevious,
@@ -336,6 +337,12 @@ contractTest.describe('EOD candidate snapshot contracts', () => {
 });
 
 contractTest.describe('EOD candidate display rewrite contracts', () => {
+  contractTest('only classifies an already-handled route as a benign lifecycle race', () => {
+    contractExpect(isHandledRouteLifecycleError(new Error('route.fulfill: Route is already handled!'))).toBe(true);
+    contractExpect(isHandledRouteLifecycleError(new Error('route.fulfill: socket closed'))).toBe(false);
+    contractExpect(isHandledRouteLifecycleError('Route is already handled!')).toBe(false);
+  });
+
   contractTest('rejects API writes locally and forces the review queue target query', () => {
     contractExpect(
       candidateDisplayDecision('POST', 'http://127.0.0.1:5176/api/review-queue', TARGET_DATE)
@@ -1156,33 +1163,31 @@ test(`home strategy and review queue publication identities agree @eod @blocker-
   const overrideEvidence = await installCandidateDisplayOverride(page, snapshot.tradeDate);
   try {
     await page.goto('/');
-    for (const publication of snapshot.publications) {
+    for (const [index, publication] of snapshot.publications.entries()) {
       const homeCard = page.locator(`article[data-strategy-id="${publication.strategyId}"]`);
       await expectFullPublication(homeCard, publication);
-      await homeCard.getByRole('button', { name: /打开策略/ }).click();
-      await expectRouteContext(page, { path: /^\/strategy-lab$/ });
+      await homeCard.getByRole('button', { name: /查看 .* 复盘/ }).click();
+      await expectRouteContext(page, { path: /^\/review-queue$/ });
       await expect(page).toHaveURL(new RegExp(`strategy_id=${publication.strategyId}$`));
-      const strategyContract = page.getByRole('region', {
-        name: new RegExp(`${publication.strategyId === 'lhb_shortline' ? 'LHB Shortline Combo' : publication.strategyId === 'mid_trend' ? 'Mid Trend Combo' : 'Tech Bottleneck Combo'} 策略数据状态`)
-      });
-      await expectFullPublication(strategyContract, publication);
-      await page.goto('/');
-    }
-
-    await page.goto('/review-queue');
-    await expect(page.getByRole('region', { name: '策略复盘队列' })).toBeVisible();
-    for (const publication of snapshot.publications) {
       const choice = reviewChoices.get(publication.strategyId);
       if (!choice) throw new Error(`playwright_eod_review_choice_missing:${publication.strategyId}`);
-      await page.getByRole('button', { name: choice.buttonName, exact: true }).click();
+      await expect(page.getByRole('button', { name: choice.buttonName, exact: true })).toHaveAttribute(
+        'aria-pressed',
+        'true'
+      );
       const reviewContract = page.locator(
         `[aria-label="选中标的证据"] [data-strategy-id="${publication.strategyId}"]`
       );
       await expectFullPublication(reviewContract, publication);
+      if (index < snapshot.publications.length - 1) {
+        await page.getByRole('button', { name: 'Open Home workspace' }).click();
+        await expectRouteContext(page, { path: /^\/$/ });
+      }
     }
+    await expect(page.getByText('复盘队列与平台市场日期一致。')).toBeVisible();
     await expect(page.getByText('+175.29%', { exact: true })).toHaveCount(0);
   } finally {
-    await page.context().unrouteAll({ behavior: 'wait' });
+    await page.context().unrouteAll({ behavior: 'ignoreErrors' });
     await attachJson(testInfo, 'eod-display-override.json', overrideEvidence);
   }
 });

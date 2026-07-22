@@ -633,6 +633,19 @@ function stableQuery(rawUrl: string): string {
   return new URLSearchParams(entries).toString();
 }
 
+export function isHandledRouteLifecycleError(error: unknown): boolean {
+  return error instanceof Error && error.message.includes('route.fulfill: Route is already handled!');
+}
+
+async function fulfillCandidateRoute(route: Route, options: Parameters<Route['fulfill']>[0]): Promise<void> {
+  try {
+    await route.fulfill(options);
+  } catch (error) {
+    if (isHandledRouteLifecycleError(error)) return;
+    throw error;
+  }
+}
+
 async function handleCandidateRoute(
   route: Route,
   targetTradeDate: string,
@@ -662,7 +675,7 @@ async function handleCandidateRoute(
   const response = await route.fetch({ url: decision.effectiveUrl });
   const contentType = response.headers()['content-type'] ?? '';
   if (!response.ok() || !contentType.includes('application/json')) {
-    await route.fulfill({ response });
+    await fulfillCandidateRoute(route, { response });
     return;
   }
   const payload = await response.json();
@@ -671,7 +684,7 @@ async function handleCandidateRoute(
     payload,
     targetTradeDate
   );
-  await route.fulfill({ response, body: JSON.stringify(rewritten) });
+  await fulfillCandidateRoute(route, { response, body: JSON.stringify(rewritten) });
 }
 
 export async function installCandidateDisplayOverride(

@@ -4,6 +4,7 @@ import type { EvidenceDigestAction, PlatformSummary, ReviewQueueGroup, ReviewQue
 import type { StockEntryContext } from './StockWorkspace';
 
 type ReviewQueueWorkspaceProps = {
+  initialStrategyId?: string;
   onOpenStock?: (assetId: string, context?: StockEntryContext) => void;
   onOpenNews?: (context: StockEntryContext) => void;
   onOpenResearchReports?: (context: StockEntryContext) => void;
@@ -25,8 +26,14 @@ function publicationHealth(status: string | null | undefined) {
   return { label: '数据异常', detail: '最新策略数据暂不可用，请稍后复查' };
 }
 
-function findInitialSelection(queue: ReviewQueueResponse) {
-  const selectedGroup = queue.groups.find((group) => group.items.length > 0) ?? queue.groups[0] ?? null;
+function findInitialSelection(queue: ReviewQueueResponse, strategyId?: string) {
+  const requestedGroup = strategyId
+    ? queue.groups.find(
+        (group) =>
+          group.bucket === `strategy:${strategyId}` || group.items.some((item) => item.strategy_id === strategyId)
+      )
+    : null;
+  const selectedGroup = requestedGroup ?? queue.groups.find((group) => group.items.length > 0) ?? queue.groups[0] ?? null;
   return {
     selectedBucket: selectedGroup?.bucket ?? 'strong',
     selectedQueueId: selectedGroup?.items[0]?.queue_id ?? null
@@ -113,6 +120,7 @@ function actionContext(
 }
 
 export function ReviewQueueWorkspace({
+  initialStrategyId,
   onOpenStock,
   onOpenNews,
   onOpenResearchReports,
@@ -141,7 +149,7 @@ export function ReviewQueueWorkspace({
         lookbackDays: 90
       });
       if (requestIdRef.current !== requestId) return;
-      const selection = findInitialSelection(nextQueue);
+      const selection = findInitialSelection(nextQueue, initialStrategyId);
       setQueue(nextQueue);
       setReplayTradeDate(nextQueue.trade_date);
       setSelectedBucket(selection.selectedBucket);
@@ -165,7 +173,7 @@ export function ReviewQueueWorkspace({
         setLoading(false);
       }
     }
-  }, []);
+  }, [initialStrategyId]);
 
   useEffect(() => {
     void loadQueue();

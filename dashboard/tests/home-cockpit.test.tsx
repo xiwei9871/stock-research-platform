@@ -1661,15 +1661,15 @@ describe('AppShell and HomeCockpit', () => {
     expect(within(midCard!).queryByText('Top5 先选后校验，不补位')).not.toBeInTheDocument();
   });
 
-  it('opens an official strategy deep link and selects it without running a backtest', async () => {
+  it('opens an official strategy review queue deep link', async () => {
     render(<AppShell />);
 
     const strategyPerformance = within(await screen.findByRole('region', { name: '启用策略表现' }));
-    fireEvent.click(strategyPerformance.getByRole('button', { name: '打开策略 Mid Trend Combo' }));
+    fireEvent.click(strategyPerformance.getByRole('button', { name: '查看 Mid Trend Combo 复盘' }));
 
-    expect(window.location.pathname).toBe('/strategy-lab');
+    expect(window.location.pathname).toBe('/review-queue');
     expect(window.location.search).toBe('?strategy_id=mid_trend');
-    await waitFor(() => expect(screen.getByLabelText('strategy')).toHaveValue('mid_trend'));
+    expect(await screen.findByRole('heading', { name: '策略复盘队列' })).toBeInTheDocument();
   });
 
   it('does not expose Data Explorer in primary navigation', async () => {

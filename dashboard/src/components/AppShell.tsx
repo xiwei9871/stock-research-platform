@@ -335,6 +335,11 @@ export function AppShell({ currentUser: _currentUser, onLogout, logoutPending = 
       ? strategyIdFromSearch(window.location.search)
       : undefined
   );
+  const [initialReviewStrategyId, setInitialReviewStrategyId] = useState(() =>
+    typeof window !== 'undefined' && initialPlatformLocation.workspace === 'reviewQueue'
+      ? strategyIdFromSearch(window.location.search)
+      : undefined
+  );
   const [displayTradeDate, setDisplayTradeDate] = useState('');
   const [stockDefaultTradeDate, setStockDefaultTradeDate] = useState('');
   const [displayDateResolved, setDisplayDateResolved] = useState(false);
@@ -382,6 +387,9 @@ export function AppShell({ currentUser: _currentUser, onLogout, logoutPending = 
       }
       setInitialStrategyId(
         nextLocation.workspace === 'strategyLab' ? strategyIdFromSearch(window.location.search) : undefined
+      );
+      setInitialReviewStrategyId(
+        nextLocation.workspace === 'reviewQueue' ? strategyIdFromSearch(window.location.search) : undefined
       );
       setGlobalSearchQuery(nextLocation.workspace === 'home' ? searchQueryFromHistoryState() : '');
       setWorkspaceMode(workspaceModeForCurrentUser(nextLocation.workspace, currentUser));
@@ -474,12 +482,12 @@ export function AppShell({ currentUser: _currentUser, onLogout, logoutPending = 
     setWorkspaceMode(mode);
   }
 
-  function openStrategyWorkspace(strategyId: string) {
+  function openStrategyReviewQueue(strategyId: string) {
     if (!OFFICIAL_STRATEGY_IDS.has(strategyId)) return;
-    const path = `${pathForWorkspace('strategyLab')}?strategy_id=${encodeURIComponent(strategyId)}`;
+    const path = `${pathForWorkspace('reviewQueue')}?strategy_id=${encodeURIComponent(strategyId)}`;
     pushLocation(path);
-    setInitialStrategyId(strategyId);
-    setWorkspaceMode('strategyLab');
+    setInitialReviewStrategyId(strategyId);
+    setWorkspaceMode('reviewQueue');
   }
 
   function navigateThemeResearch(path: string) {
@@ -641,10 +649,11 @@ export function AppShell({ currentUser: _currentUser, onLogout, logoutPending = 
         </header>
         <section className="platform-workspace">
           {workspaceMode === 'home' ? (
-            <HomeCockpit onNavigate={openWorkspaceMode} onOpenStrategy={openStrategyWorkspace} />
+            <HomeCockpit onNavigate={openWorkspaceMode} onOpenStrategy={openStrategyReviewQueue} />
           ) : null}
           {workspaceMode === 'reviewQueue' ? (
             <ReviewQueueWorkspace
+              initialStrategyId={initialReviewStrategyId}
               onOpenStock={openStockWorkspaceFromReviewQueue}
               onOpenNews={openNewsWorkspaceFromStock}
               onOpenResearchReports={openResearchReportsWorkspaceFromStock}

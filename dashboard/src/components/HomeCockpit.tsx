@@ -1759,7 +1759,7 @@ export function HomeCockpit({ onNavigate, onOpenStrategy }: HomeCockpitProps) {
                 </div>
                 {metrics.contractStatus === 'success' ? <p>{metrics.evidence || strategy.description}</p> : null}
                 <button type="button" onClick={() => onOpenStrategy?.(strategy.strategy_id)}>
-                  打开策略 {strategy.strategy_name}
+                  查看 {strategy.strategy_name} 复盘
                 </button>
               </article>
             );
