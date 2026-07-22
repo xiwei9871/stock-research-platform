@@ -1,0 +1,106 @@
+{
+  "schema_version": "1.0.0",
+  "artifact_type": "targeted_acquisition_wave_1b_gate_decision",
+  "decision_id": "targeted_acquisition_wave_1b_gate_decision:ai_pcb:v1",
+  "decision_status": "frozen",
+  "project_id": "research_project:ai_compute_pcb_industry_bottleneck",
+  "gate_decision": "approved_with_revisions",
+  "wave_1_assessment_accepted": true,
+  "input_bindings": {
+    "wave_1_assessment_id": "targeted_evidence_assessment:ai_pcb:wave_1:v1",
+    "wave_1_assessment_hash": "8e80bc8994f6f1fd20ae7c46fe5d3669be13a08b86162f7c5d7f2729788367cd",
+    "wave_1_checkpoint_id": "targeted_acquisition_checkpoint:b53ab0a0143b89f9914842f5",
+    "wave_1_checkpoint_hash": "b53ab0a0143b89f9914842f5848ed606b86de3dc1a4a7f5f08a05c6afcf81013",
+    "prior_gate_decision_id": "targeted_acquisition_gate_decision:ai_pcb:v1",
+    "prior_gate_hash": "38f48163bfdc825b6f3afc12e95a9cc99c59c0fccc809fbe4e86460405d509ea"
+  },
+  "no_additional_acquisition": [
+    {
+      "er_id": "PCB-ER-A01",
+      "reason": "OIF-specific channel, reach, lane and topology definitions are already evidence-grounded; cross-standard generalization is a separate future research question.",
+      "current_understanding": {
+        "status": "evidence_grounded",
+        "scope": "OIF_specific_definition_baseline"
+      },
+      "cross_standard_generalization": {
+        "status": "not_achieved"
+      }
+    }
+  ],
+  "deferred": [
+    {
+      "er_id": "PCB-ER-A03",
+      "reason": "Route comparison depends on measurement methods, denominators and scenario definitions that are not yet established.",
+      "depends_on": [
+        "PCB-ER-A04",
+        "PCB-ER-B01",
+        "PCB-ER-B02",
+        "PCB-ER-A02"
+      ]
+    }
+  ],
+  "authorized_for_wave_1b": [
+    "PCB-ER-A04",
+    "PCB-ER-B01",
+    "PCB-ER-B02",
+    "PCB-ER-A02"
+  ],
+  "internal_execution_order": {
+    "phase_1": [
+      "PCB-ER-A04",
+      "PCB-ER-B01",
+      "PCB-ER-B02"
+    ],
+    "phase_2": [
+      "PCB-ER-A02"
+    ]
+  },
+  "research_objectives": [
+    {
+      "er_id": "PCB-ER-A04",
+      "objective": "Establish bounded understanding of S-parameter and insertion-loss measurement, fixture removal, de-embedding, test coupons, uncertainty and reference-plane conventions.",
+      "maximum_supported_cognition": "measurement_method_understanding"
+    },
+    {
+      "er_id": "PCB-ER-B01",
+      "objective": "Establish when Dk and Df declarations are comparable across method, frequency, direction, environment, sample construction and supplier status.",
+      "maximum_supported_cognition": "material_parameter_comparability_understanding"
+    },
+    {
+      "er_id": "PCB-ER-B02",
+      "objective": "Verify the existing experiment's publication provenance and seek independent matched-condition evidence on copper profile and roughness variables.",
+      "maximum_supported_cognition": "bounded_roughness_mechanism_understanding"
+    },
+    {
+      "er_id": "PCB-ER-A02",
+      "objective": "Assess scoped rate, frequency, distance and channel-metric relationships only after measurement denominators are established.",
+      "maximum_supported_cognition": "scoped_rate_distance_measurement_relationship"
+    }
+  ],
+  "authorization": {
+    "wave_1b_targeted_acquisition_authorized": true,
+    "authorization_scope": "exact_list_only",
+    "unlisted_er_authorized": false,
+    "fail_closed_conditions": [
+      "wave_1b_targeted_acquisition_authorized == true",
+      "authorization_scope == exact_list_only",
+      "er_id in authorized_for_wave_1b"
+    ],
+    "failure_result": "acquisition_allowed = false"
+  },
+  "prohibited_inferences": [
+    "Measurement-method understanding does not establish PCB manufacturing bottlenecks.",
+    "Material-parameter comparability does not rank materials or suppliers.",
+    "A bounded copper-roughness experiment does not establish an industry-wide rule.",
+    "Rate-distance measurement relationships do not establish material upgrades, capacity constraints or value migration.",
+    "Industry evidence does not establish company exposure or stock investment value."
+  ],
+  "wave_1b_acquisition_started": false,
+  "cognition_update_authorized": false,
+  "company_mapping_authorized": false,
+  "stage_a2_authorized": false,
+  "stage_b_authorized": false,
+  "decided_at": "2026-07-22T01:19:53Z",
+  "decision_actor": "human_reviewer",
+  "content_hash": "ce6746d0806dbd80a40e7a0a432265d6da6212bcae034bae56e1fb94be335b1b"
+}
