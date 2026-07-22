@@ -312,6 +312,33 @@ test('review queue renders a current real strategy group and item @real @critica
   await expect(page.getByText(choice.itemLabel, { exact: true }).first()).toBeVisible();
 });
 
+test('old stock handoff dates do not roll back current review or chart data @real @critical', async ({
+  page,
+  request
+}) => {
+  const readiness = objectValue(
+    await apiJson(request, '/api/platform/readiness', 'playwright-real-stock-latest-readiness'),
+    'real_critical_stock_latest_readiness_invalid'
+  );
+  const latestDate = nonEmptyString(
+    readiness.display_trade_date,
+    'real_critical_stock_latest_display_date_missing'
+  );
+
+  await page.goto('/stock/CN%3ASZ%3A300760?source=review_queue&trade_date=2026-05-18');
+  const review = page.getByRole('region', { name: '明日处理结论' });
+  const chart = page.getByRole('region', { name: '价格走势' });
+
+  await expect(review).toContainText(`结论更新 ${latestDate}`);
+  await expect(review).not.toContainText('结论更新 2026-05-18');
+  await expect(chart).toContainText(latestDate);
+
+  for (const period of ['周K', '月K', '分时']) {
+    await page.getByRole('button', { name: period, exact: true }).click();
+    await expect(chart).toContainText(latestDate);
+  }
+});
+
 test('global search opens a dynamically selected stock and restores Back and Forward state @real @critical', async ({
   page,
   request
