@@ -2,8 +2,8 @@ import type { Page } from '@playwright/test';
 
 import {
   expectApiUiConsistency,
-  expectPublicationConsistency,
-  expectRouteContext
+  expectRouteContext,
+  expectStrategyPresentationConsistency
 } from '../assertions/consistency';
 import { installMockPlatformApi, type MockPlatformApiRoutes } from '../fixtures/mockPlatformApi';
 import {
@@ -218,14 +218,15 @@ function sharedRoutes(): MockPlatformApiRoutes {
 }
 
 async function expectFullPublication(card: ReturnType<Page['locator']>, strategy: OfficialStrategyFixture) {
-  await expectPublicationConsistency(card, {
-    contractId: strategy.contractId,
-    publishId: strategy.publishId,
+  await expectStrategyPresentationConsistency(card, {
+    strategyId: strategy.strategyId,
     tradeDate: strategy.performanceDate,
     totalReturnPct: strategy.totalReturn
   });
-  await expect(card.getByText(strategy.artifactVersion, { exact: true })).toBeVisible();
-  await expect(card.getByText('通过', { exact: true })).toBeVisible();
+  await expect(card.getByText('数据正常', { exact: true })).toBeVisible();
+  await expect(card.getByText(strategy.contractId, { exact: true })).toHaveCount(0);
+  await expect(card.getByText(strategy.publishId, { exact: true })).toHaveCount(0);
+  await expect(card.getByText(strategy.artifactVersion, { exact: true })).toHaveCount(0);
 }
 
 test.beforeEach(async ({ page }) => {
@@ -266,7 +267,7 @@ test('official publication identity is stable across home, strategy deep links, 
     await expect(page).toHaveURL(new RegExp(`strategy_id=${strategy.strategyId}$`));
     await expect(page.getByLabel('strategy', { exact: true })).toHaveValue(strategy.strategyId);
     const strategyContract = page.getByRole('region', {
-      name: `${strategyNames[strategy.strategyId]} 正式发布合同`
+      name: `${strategyNames[strategy.strategyId]} 策略数据状态`
     });
     await expectFullPublication(strategyContract, strategy);
     await expect(page.getByText('+175.29%', { exact: true })).toHaveCount(0);
@@ -277,7 +278,7 @@ test('official publication identity is stable across home, strategy deep links, 
     await expect(page).toHaveURL(new RegExp(`strategy_id=${strategy.strategyId}$`));
     await expect(page.getByLabel('strategy', { exact: true })).toHaveValue(strategy.strategyId);
     await expectFullPublication(
-      page.getByRole('region', { name: `${strategyNames[strategy.strategyId]} 正式发布合同` }),
+      page.getByRole('region', { name: `${strategyNames[strategy.strategyId]} 策略数据状态` }),
       strategy
     );
     await expect(runRequests).toEqual([]);
@@ -316,6 +317,6 @@ test('unknown strategy deep links fail closed without selecting or running an of
   await expect(page).toHaveURL(/\/strategy-lab\?strategy_id=unknown_strategy$/);
   await expect(page.getByRole('alert')).toHaveText('未知策略 unknown_strategy');
   await expect(page.getByLabel('strategy', { exact: true })).toHaveValue('');
-  await expect(page.getByRole('region', { name: /正式发布合同/ })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: /策略数据状态/ })).toHaveCount(0);
   await expect(runRequests).toEqual([]);
 });

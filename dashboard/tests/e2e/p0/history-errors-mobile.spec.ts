@@ -374,7 +374,9 @@ test('one failed official strategy remains isolated from two usable publications
   const failedCard = performance.locator('article[data-strategy-id="tech_bottleneck"]');
   await expect(failedCard.getByText('未就绪', { exact: true })).toBeVisible();
   await expect(failedCard.getByText('正式产物失败', { exact: true })).toBeVisible();
-  await expect(failedCard.getByText(/candidate source freshness metadata missing/)).toBeVisible();
+  await expect(failedCard.getByText('数据异常', { exact: true })).toBeVisible();
+  await expect(failedCard.getByText('最新策略数据暂不可用，请稍后复查', { exact: true })).toBeVisible();
+  await expect(failedCard.getByText(/candidate source freshness metadata missing/)).toHaveCount(0);
   await expect(failedCard.getByTestId('strategy-total-return')).toHaveText('-');
   await expect(performance.locator('article[data-strategy-id="lhb_shortline"]')).toContainText('+52.40%');
   await expect(performance.locator('article[data-strategy-id="mid_trend"]')).toContainText('+49.12%');
