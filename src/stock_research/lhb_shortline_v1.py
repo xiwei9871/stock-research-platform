@@ -742,6 +742,29 @@ def _extend_lhb_shortline_account_curve_to_end_date(
     return extended.reindex(columns=account_curve.columns)
 
 
+def _extend_lhb_shortline_stable_account_to_end_date(
+    *,
+    summary: dict[str, Any],
+    account_trades: pd.DataFrame,
+    account_curve: pd.DataFrame,
+    daily_bars: pd.DataFrame,
+    end_date: str,
+) -> tuple[dict[str, Any], pd.DataFrame]:
+    extended_curve = _extend_lhb_shortline_account_curve_to_end_date(
+        account_curve=account_curve,
+        daily_bars=daily_bars,
+        end_date=end_date,
+    )
+    next_summary = dict(summary)
+    next_summary.update(
+        _summarize_lhb_shortline_market_regime_account(
+            account_trades=account_trades,
+            account_curve=extended_curve,
+        )
+    )
+    return next_summary, extended_curve
+
+
 def _canonical_ts_code(value: Any) -> str:
     code = str(value).upper().strip()
     parts = code.split(":")
@@ -2061,6 +2084,13 @@ def run_lhb_shortline_v1_lifecycle_from_frames(
         summary = stable_account["summary"]
         account_trades = stable_account["account_trades"]
         account_curve = stable_account["account_curve"]
+        summary, account_curve = _extend_lhb_shortline_stable_account_to_end_date(
+            summary=summary,
+            account_trades=account_trades,
+            account_curve=account_curve,
+            daily_bars=frames.daily_bars,
+            end_date=config.end_date,
+        )
         existing_sharpe = pd.to_numeric(
             pd.Series([summary.get("sharpe_ratio")]), errors="coerce"
         ).iloc[0]

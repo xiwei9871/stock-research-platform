@@ -349,3 +349,45 @@ def test_cash_account_summary_uses_curve_end_as_performance_effective_date():
     assert summary["actual_end_date"] == "2026-06-29"
     assert summary["performance_effective_date"] == "2026-06-29"
     assert summary["latest_closed_trade_date"] == "2026-06-26"
+
+
+def test_stable_account_extends_flat_cash_curve_to_requested_end_date():
+    summary = {
+        "performance_effective_date": "2026-07-15",
+        "actual_end_date": "2026-07-15",
+        "strategy_version": "lhb_v1_stable_safe_top5",
+    }
+    account_curve = pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-07-15",
+                "cash": 1.0,
+                "invested_notional": 0.0,
+                "equity": 1.0,
+                "drawdown": 0.0,
+                "open_position_count": 0,
+                "opened_count": 0,
+                "closed_count": 0,
+                "daily_realized_pnl": 0.0,
+            }
+        ]
+    )
+    daily_bars = pd.DataFrame(
+        [
+            {"trade_date": "2026-07-15"},
+            {"trade_date": "2026-07-16"},
+        ]
+    )
+
+    next_summary, next_curve = lhb_shortline_v1._extend_lhb_shortline_stable_account_to_end_date(
+        summary=summary,
+        account_trades=pd.DataFrame(),
+        account_curve=account_curve,
+        daily_bars=daily_bars,
+        end_date="2026-07-16",
+    )
+
+    assert next_curve["trade_date"].tolist() == ["2026-07-15", "2026-07-16"]
+    assert next_summary["actual_end_date"] == "2026-07-16"
+    assert next_summary["performance_effective_date"] == "2026-07-16"
+    assert next_summary["strategy_version"] == "lhb_v1_stable_safe_top5"
