@@ -3068,7 +3068,7 @@ describe('dashboard app shell', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open Market Monitor workspace' }));
 
     await screen.findByRole('heading', { name: 'Market Monitor' });
-    const auctionTab = screen.getByRole('tab', { name: '竞价 0' });
+    const auctionTab = await screen.findByRole('tab', { name: '竞价 0' });
     const limitUpTab = screen.getByRole('tab', { name: '涨停 1' });
     const brokenTab = screen.getByRole('tab', { name: '炸板 0' });
     const limitDownTab = screen.getByRole('tab', { name: '跌停 0' });

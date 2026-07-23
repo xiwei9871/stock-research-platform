@@ -12,7 +12,7 @@ import sys
 import time
 from typing import Any, Callable
 from urllib.error import URLError
-from urllib.request import urlopen
+from urllib.request import ProxyHandler, build_opener
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -46,15 +46,16 @@ def wait_for_http(
     *,
     timeout: float = 120.0,
     readiness: str,
-    opener: Callable[..., Any] = urlopen,
+    opener: Callable[..., Any] | None = None,
 ) -> None:
+    selected_opener = opener or build_opener(ProxyHandler({})).open
     deadline = time.monotonic() + timeout
     while True:
         return_code = process.poll()
         if return_code is not None:
             raise RuntimeError(f"server exited before readiness: {url} (exit {return_code})")
         try:
-            with opener(url, timeout=1.0) as response:
+            with selected_opener(url, timeout=1.0) as response:
                 body = response.read().decode("utf-8", errors="replace")
                 if _response_is_ready(readiness, response.status, body):
                     if process.poll() is not None:
@@ -111,16 +112,33 @@ def _signal_process_group(pgid: int, signum: int) -> bool:
 def _stop_process_group(process: Any) -> None:
     if process is None:
         return
+    poll = getattr(process, "poll", None)
+    if callable(poll) and poll() is not None:
+        return
     pgid = int(process.pid)
-    group_found = _signal_process_group(pgid, signal.SIGTERM)
+    try:
+        group_found = _signal_process_group(pgid, signal.SIGTERM)
+    except PermissionError:
+        process.terminate()
+        try:
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=5)
+        return
     try:
         process.wait(timeout=10)
     except subprocess.TimeoutExpired:
         _signal_process_group(pgid, signal.SIGKILL)
         process.wait(timeout=5)
         return
-    if group_found and _signal_process_group(pgid, 0):
-        _signal_process_group(pgid, signal.SIGKILL)
+    if group_found:
+        try:
+            group_still_alive = _signal_process_group(pgid, 0)
+        except PermissionError:
+            return
+        if group_still_alive:
+            _signal_process_group(pgid, signal.SIGKILL)
 
 
 def _run_lifecycle_step(

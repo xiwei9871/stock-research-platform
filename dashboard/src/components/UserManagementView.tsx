@@ -123,9 +123,10 @@ export function UserManagementView() {
                           aria-label={`重置 ${user.username} 密码`}
                           type="password"
                           value={resetPasswords[user.user_id] ?? ''}
-                          onChange={(event) =>
-                            setResetPasswords((current) => ({ ...current, [user.user_id]: event.currentTarget.value }))
-                          }
+                          onChange={(event) => {
+                            const password = event.currentTarget.value;
+                            setResetPasswords((current) => ({ ...current, [user.user_id]: password }));
+                          }}
                         />
                       </label>
                       <button

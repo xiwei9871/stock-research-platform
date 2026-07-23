@@ -9,7 +9,8 @@ This runbook defines how to execute, preserve, classify, and promote the platfor
 | `mock` | Deterministic P0 routes, state, publication, auth, error isolation | Chromium desktop; tagged mobile subset | Mock-only | Every PR |
 | `real` | Authoritative local APIs, DB-backed read models, publication identity | Chromium desktop | Read-only fixture rejects API writes | Before release and full audit |
 | `sandbox` | Login, admin, operator decision, and other write journeys | Chromium desktop | Only isolated PostgreSQL database ending `_test` | Before release when service exists |
-| `audit` | P0 + Real + accessibility + visual + cross-browser census | Chromium desktop/mobile, Firefox desktop, WebKit critical | Read-only except mocked tests | Initial audit and release audit |
+| `audit` | Accessibility and approved visual contracts without rerunning Mock/Real | Chromium desktop/mobile | Read-only mocked tests | Initial audit and release audit |
+| `compat` | Advisory compatibility census for browsers outside the operational support target | Firefox desktop, WebKit critical | Read-only except mocked tests | Advisory; does not block strategy publication |
 | `eod` | Small daily operational acceptance | Chromium desktop | Read-only | Auto EOD Repair after data repair |
 
 Priority tags are `@p0`, `@p1`, and `@p2`. Capability tags include `@mock`, `@real`, `@route-census`, `@critical`, `@mobile`, `@visual`, `@webkit-critical`, `@publication`, and `@runtime-contract`. The CI workflow keeps the full P0 Mock profile mandatory; affected-test selection may add tests but may not replace it.
@@ -105,7 +106,17 @@ Sandbox:
 
 The sandbox runner must resolve `stock_research_e2e_test`, connect, and verify `current_database()` ends in `_test`. Missing service is exit 2 and an environment blocker. A non-test database is a hard refusal. Never set `PLAYWRIGHT_SANDBOX_SERVICE=stock_research`.
 
-Full Audit:
+For a new local environment, create a separate database named `stock_research_e2e_test`, add a private libpq service with that exact name using the same local connection topology but the test database name, and initialize it with:
+
+```bash
+STOCK_RESEARCH_SERVICE=stock_research_e2e_test \
+PYTHONPATH=src \
+rtk .venv/bin/python -m stock_research.cli apply-schema
+```
+
+Keep credentials only in the operator-owned PostgreSQL service configuration; never write them into the repository or Playwright artifacts.
+
+Chromium Audit:
 
 ```bash
 cd dashboard
@@ -114,6 +125,18 @@ PLAYWRIGHT_API_PORT=8966 \
 PLAYWRIGHT_JSON_OUTPUT_NAME="$audit_root/inputs/raw/playwright-audit-matrix.json" \
 pnpm test:e2e:audit
 ```
+
+Advisory browser compatibility census:
+
+```bash
+cd dashboard
+PLAYWRIGHT_DASHBOARD_PORT=5374 \
+PLAYWRIGHT_API_PORT=8966 \
+PLAYWRIGHT_JSON_OUTPUT_NAME="$audit_root/inputs/raw/playwright-compat.json" \
+pnpm test:e2e:compat
+```
+
+Mock, Real, Audit, Sandbox, and eligible EOD results are release gates. Compat results must be preserved and triaged, but Firefox/WebKit failures do not block strategy calculation or publication because Chromium is the operationally supported browser. Do not hide Compat failures inside a required aggregate result.
 
 Use distinct JSON names and profile artifact directories. After every Playwright command, copy the matching `dashboard/test-results/<profile>` and `dashboard/playwright-report/<profile>` trees into that audit's `inputs/raw/` before a later command can overwrite them.
 
@@ -204,6 +227,8 @@ After generating the artifact manifest, do not modify core artifacts. Recompute 
 ## Daily EOD Use
 
 Auto EOD Repair should run the small `eod` acceptance after repair succeeds. Daily execution is not a substitute for this full audit: it validates critical read-only routes, trade-date coherence, official publication identity, and runtime cleanliness, while the full Audit profile remains the release and regression census.
+
+Treat timing explicitly. Before the scheduled close workflow has produced a complete candidate, `candidate_trade_date` may be newer than `display_trade_date`; that is a deferred/blocked operational state, not a browser-product regression. The prior completed display date must remain visible and no incomplete candidate may be promoted. Once the scheduled Auto EOD Repair run is eligible, any missing Tier-1 source, failed publication identity, or failed browser acceptance is a real blocking EOD failure and must remain fail-closed.
 
 Run the operational loop through the cron wrapper, not by starting an additional browser command:
 

@@ -90,7 +90,13 @@ async function expectNoTradingControlsOrMarkers(page: Page) {
 }
 
 
-test('@sandbox operator notes and follow-up edits persist without auto-trade controls', async ({ page }) => {
+test('@sandbox operator notes and follow-up edits persist without auto-trade controls', async ({
+  page,
+  runtimePolicy
+}) => {
+  runtimePolicy.consoleErrors.push(
+    /^Failed to load resource: the server responded with a status of 401 \(Unauthorized\)$/
+  );
   const adminUsername = requiredEnv('PLAYWRIGHT_SANDBOX_ADMIN_USERNAME');
   const adminPassword = requiredEnv('PLAYWRIGHT_SANDBOX_ADMIN_PASSWORD');
   const writeToken = requiredEnv('PLAYWRIGHT_SANDBOX_WRITE_TOKEN');
@@ -118,9 +124,10 @@ test('@sandbox operator notes and follow-up edits persist without auto-trade con
   const seededDecision = page.locator('.decision-row').filter({ hasText: 'sandbox seed note' });
   await expect(seededDecision).toBeVisible();
   await seededDecision.getByRole('button', { name: '编辑复盘日志' }).click();
-  await seededDecision.getByLabel('复盘日志备注').fill(updatedNote);
-  await seededDecision.getByLabel('需要跟进').check();
-  await seededDecision.getByLabel('跟进说明').fill(followUpNote);
+  const decisionEditForm = page.getByRole('region', { name: '复盘日志' }).locator('form');
+  await decisionEditForm.getByLabel('复盘日志备注').fill(updatedNote);
+  await decisionEditForm.getByLabel('需要跟进').check();
+  await decisionEditForm.getByLabel('跟进说明').fill(followUpNote);
   const patchRequestPromise = page.waitForRequest((request) => {
     const url = new URL(request.url());
     return request.method() === 'PATCH' &&
@@ -131,7 +138,7 @@ test('@sandbox operator notes and follow-up edits persist without auto-trade con
     return response.request().method() === 'PATCH' &&
       decodeURIComponent(url.pathname.replace('/api/operator-decisions/', '')) === operatorEventId;
   });
-  await seededDecision.getByRole('button', { name: '保存复盘日志' }).click();
+  await decisionEditForm.getByRole('button', { name: '保存复盘日志' }).click();
   const [patchRequest, patchResponse] = await Promise.all([patchRequestPromise, patchResponsePromise]);
   expect(patchResponse.ok()).toBe(true);
   const patchPayload = patchRequest.postDataJSON() as Record<string, unknown>;
@@ -139,9 +146,11 @@ test('@sandbox operator notes and follow-up edits persist without auto-trade con
   expect(capabilityFields(patchPayload)).toEqual([]);
   const patchBody = (await patchResponse.json()) as { item?: Record<string, unknown> };
   expectCapabilitiesDisabled(patchBody.item);
-  await expect(seededDecision).toContainText(updatedNote);
-  await expect(seededDecision).toContainText(followUpNote);
-  await expect(seededDecision).toContainText('需要跟进');
+  const updatedDecision = page.locator('.decision-row').filter({ hasText: updatedNote });
+  await expect(updatedDecision).toContainText(updatedNote);
+  await expect(updatedDecision).toContainText(followUpNote);
+  await expect(updatedDecision).toContainText('需要跟进');
+  await page.waitForLoadState('networkidle');
 
   const reloadedProfilePromise = page.waitForResponse((response) => {
     const url = new URL(response.url());

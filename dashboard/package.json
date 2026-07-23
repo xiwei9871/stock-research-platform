@@ -12,7 +12,8 @@
     "test:e2e:p0": "cross-env PLAYWRIGHT_PROFILE=mock playwright test tests/e2e/p0",
     "test:e2e:real": "cross-env PLAYWRIGHT_PROFILE=real playwright test tests/e2e/real",
     "test:e2e:sandbox": "cross-env PLAYWRIGHT_PROFILE=sandbox playwright test tests/e2e/sandbox",
-    "test:e2e:audit": "cross-env PLAYWRIGHT_PROFILE=audit playwright test tests/e2e/p0 tests/e2e/real tests/e2e/audit tests/e2e/visual",
+    "test:e2e:audit": "cross-env PLAYWRIGHT_PROFILE=audit playwright test tests/e2e/audit tests/e2e/visual",
+    "test:e2e:compat": "cross-env PLAYWRIGHT_PROFILE=compat playwright test tests/e2e/p0 tests/e2e/real tests/e2e/audit",
     "test:e2e:eod": "cross-env PLAYWRIGHT_PROFILE=eod playwright test tests/e2e/eod"
   },
   "dependencies": {

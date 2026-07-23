@@ -21,7 +21,15 @@ function projectBrowser(project: ReturnType<typeof buildProjects>[number]) {
 
 describe('parsePlaywrightProfile', () => {
   test('uses one stable readonly profile list', () => {
-    expect(PLAYWRIGHT_PROFILES).toEqual(['legacy', 'mock', 'real', 'sandbox', 'audit', 'eod']);
+    expect(PLAYWRIGHT_PROFILES).toEqual([
+      'legacy',
+      'mock',
+      'real',
+      'sandbox',
+      'audit',
+      'compat',
+      'eod'
+    ]);
   });
 
   test.each(PLAYWRIGHT_PROFILES)('accepts the %s profile', (profile) => {
@@ -34,7 +42,7 @@ describe('parsePlaywrightProfile', () => {
 
   test('rejects unknown nonempty profiles with the accepted values', () => {
     expect(() => parsePlaywrightProfile('nightly')).toThrow(
-      'Unknown Playwright profile "nightly". Expected one of: legacy, mock, real, sandbox, audit, eod.'
+      'Unknown Playwright profile "nightly". Expected one of: legacy, mock, real, sandbox, audit, compat, eod.'
     );
   });
 });
@@ -50,7 +58,9 @@ describe('buildProjects', () => {
     sandbox: [['chromium-desktop', 'chromium']],
     audit: [
       ['chromium-desktop', 'chromium'],
-      ['chromium-mobile', 'chromium'],
+      ['chromium-mobile', 'chromium']
+    ],
+    compat: [
       ['firefox-desktop', 'firefox'],
       ['webkit-critical', 'webkit']
     ],
@@ -74,8 +84,8 @@ describe('buildProjects', () => {
     expect(mobile?.grep).toEqual(/@mobile/);
   });
 
-  test('restricts audit WebKit coverage to @webkit-critical tests', () => {
-    const webkit = buildProjects('audit').find((project) => project.name === 'webkit-critical');
+  test('restricts compatibility WebKit coverage to @webkit-critical tests', () => {
+    const webkit = buildProjects('compat').find((project) => project.name === 'webkit-critical');
 
     expect(webkit?.grep).toEqual(/@webkit-critical/);
   });
@@ -84,15 +94,13 @@ describe('buildProjects', () => {
     const projects = buildProjects('audit');
     const chromiumDesktopProject = projects.find((project) => project.name === 'chromium-desktop');
     const chromiumMobileProject = projects.find((project) => project.name === 'chromium-mobile');
-    const firefoxProject = projects.find((project) => project.name === 'firefox-desktop');
 
     expect(chromiumDesktopProject?.grepInvert).toBeUndefined();
     expect(chromiumMobileProject?.grepInvert).toEqual(/@visual/);
-    expect(firefoxProject?.grepInvert).toEqual(/@visual/);
   });
 
-  test('forces the audit Firefox project to connect directly to local test servers', () => {
-    const firefox = buildProjects('audit').find((project) => project.name === 'firefox-desktop');
+  test('forces the compatibility Firefox project to connect directly to local test servers', () => {
+    const firefox = buildProjects('compat').find((project) => project.name === 'firefox-desktop');
     const launchOptions = (firefox?.use as {
       launchOptions?: { firefoxUserPrefs?: Record<string, string | number | boolean> };
     })?.launchOptions;
@@ -103,7 +111,7 @@ describe('buildProjects', () => {
   });
 
   test('makes Firefox keyboard traversal include links and form controls on macOS', () => {
-    const firefox = buildProjects('audit').find((project) => project.name === 'firefox-desktop');
+    const firefox = buildProjects('compat').find((project) => project.name === 'firefox-desktop');
     const launchOptions = (firefox?.use as {
       launchOptions?: { firefoxUserPrefs?: Record<string, string | number | boolean> };
     })?.launchOptions;
@@ -142,6 +150,7 @@ test('only the mock profile runs without the API server', () => {
     real: true,
     sandbox: true,
     audit: true,
+    compat: true,
     eod: true
   });
 });
@@ -155,6 +164,7 @@ test('blocks service workers only in read-only API profiles', () => {
     real: 'block',
     sandbox: 'allow',
     audit: 'block',
+    compat: 'block',
     eod: 'block'
   });
 });

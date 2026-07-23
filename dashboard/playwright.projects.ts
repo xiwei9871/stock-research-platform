@@ -1,6 +1,14 @@
 import { devices, type Project } from '@playwright/test';
 
-export const PLAYWRIGHT_PROFILES = ['legacy', 'mock', 'real', 'sandbox', 'audit', 'eod'] as const;
+export const PLAYWRIGHT_PROFILES = [
+  'legacy',
+  'mock',
+  'real',
+  'sandbox',
+  'audit',
+  'compat',
+  'eod'
+] as const;
 export type PlaywrightProfile = (typeof PLAYWRIGHT_PROFILES)[number];
 
 export function parsePlaywrightProfile(raw?: string): PlaywrightProfile {
@@ -43,9 +51,11 @@ export function buildProjects(profile: PlaywrightProfile): Project[] {
   }
 
   if (profile === 'audit') {
+    return [chromiumDesktop(), chromiumMobile(undefined, /@visual/)];
+  }
+
+  if (profile === 'compat') {
     return [
-      chromiumDesktop(),
-      chromiumMobile(undefined, /@visual/),
       {
         name: 'firefox-desktop',
         grepInvert: /@visual/,
@@ -79,7 +89,9 @@ export function profileNeedsApi(profile: PlaywrightProfile): boolean {
 }
 
 export function profileServiceWorkers(profile: PlaywrightProfile): 'allow' | 'block' {
-  return profile === 'real' || profile === 'audit' || profile === 'eod' ? 'block' : 'allow';
+  return profile === 'real' || profile === 'audit' || profile === 'compat' || profile === 'eod'
+    ? 'block'
+    : 'allow';
 }
 
 export function profileTestMatch(profile: PlaywrightProfile): string | RegExp {

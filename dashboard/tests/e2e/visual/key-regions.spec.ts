@@ -523,14 +523,14 @@ test('home strategy performance stable region @audit @visual', async ({ page }) 
   );
 });
 
-test('selected review queue formal contract stable region @audit @visual', async ({ page }) => {
+test('selected review queue strategy state stable region @audit @visual', async ({ page }) => {
   await installMockPlatformApi(page, authenticatedRoutes());
   await page.goto('/review-queue');
 
   const selectedEvidence = page.getByRole('region', { name: '选中标的证据' });
-  const formalContract = selectedEvidence.getByLabel('正式发布合同');
-  await expectRegionScreenshot(page, formalContract, 'review-queue-formal-contract.png', [
-    formalContract.getByTestId('strategy-total-return')
+  const strategyState = selectedEvidence.getByLabel('策略数据状态');
+  await expectRegionScreenshot(page, strategyState, 'review-queue-strategy-state.png', [
+    strategyState.getByTestId('strategy-total-return')
   ]);
 });
 

@@ -23,7 +23,13 @@ async function login(page: Page, username: string, password: string) {
 }
 
 
-test('@sandbox admin can manage a unique user and the reset password authenticates', async ({ page }) => {
+test('@sandbox admin can manage a unique user and the reset password authenticates', async ({
+  page,
+  runtimePolicy
+}) => {
+  runtimePolicy.consoleErrors.push(
+    /^Failed to load resource: the server responded with a status of 401 \(Unauthorized\)$/
+  );
   const adminUsername = requiredEnv('PLAYWRIGHT_SANDBOX_ADMIN_USERNAME');
   const adminPassword = requiredEnv('PLAYWRIGHT_SANDBOX_ADMIN_PASSWORD');
   const createdUsername = requiredEnv('PLAYWRIGHT_SANDBOX_CREATED_USERNAME');

@@ -633,6 +633,40 @@ def test_api_readiness_requires_2xx_openapi_json_and_live_process():
     )
 
 
+def test_default_readiness_opener_bypasses_environment_proxies(monkeypatch):
+    runner = load_runner()
+    process = FakeProcess(["api"])
+    response = FakeHttpResponse(
+        200,
+        json.dumps({"openapi": "3.1.0", "info": {"title": "Stock Research Dashboard API"}}),
+    )
+    proxy_configs = []
+    opened = []
+
+    class DirectOpener:
+        def open(self, url, *, timeout):
+            opened.append((url, timeout))
+            return response
+
+    monkeypatch.setattr(
+        runner,
+        "ProxyHandler",
+        lambda proxies: proxy_configs.append(proxies) or ("proxy-handler", proxies),
+        raising=False,
+    )
+    monkeypatch.setattr(runner, "build_opener", lambda *_: DirectOpener(), raising=False)
+
+    runner.wait_for_http(
+        "http://127.0.0.1:8866/openapi.json",
+        process,
+        timeout=0,
+        readiness="api",
+    )
+
+    assert proxy_configs == [{}]
+    assert opened == [("http://127.0.0.1:8866/openapi.json", 1.0)]
+
+
 @pytest.mark.parametrize(
     "response",
     [
@@ -705,6 +739,82 @@ def test_stop_process_group_terms_then_kills_group_and_waits_direct_child(monkey
         ("killpg", 43210, signal.SIGKILL),
         ("wait", 5),
     ]
+
+
+def test_stop_process_group_falls_back_to_direct_child_when_group_signal_is_denied(monkeypatch):
+    runner = load_runner()
+    events = []
+
+    class DeniedGroupProcess:
+        pid = 43211
+
+        def poll(self):
+            return None
+
+        def terminate(self):
+            events.append("terminate")
+
+        def kill(self):
+            events.append("kill")
+
+        def wait(self, timeout=None):
+            events.append(("wait", timeout))
+            if timeout == 10:
+                return -15
+            return -9
+
+    monkeypatch.setattr(
+        runner.os,
+        "killpg",
+        lambda *_: (_ for _ in ()).throw(PermissionError("denied")),
+    )
+
+    runner._stop_process_group(DeniedGroupProcess())
+
+    assert events == ["terminate", ("wait", 10)]
+
+
+def test_stop_process_group_ignores_a_completed_process(monkeypatch):
+    runner = load_runner()
+    signals = []
+
+    class CompletedProcess:
+        pid = 43212
+
+        def poll(self):
+            return 0
+
+    monkeypatch.setattr(runner.os, "killpg", lambda *args: signals.append(args))
+
+    runner._stop_process_group(CompletedProcess())
+
+    assert signals == []
+
+
+def test_stop_process_group_ignores_denied_post_wait_group_probe(monkeypatch):
+    runner = load_runner()
+    events = []
+
+    class ExitingProcess:
+        pid = 43213
+
+        def poll(self):
+            return None
+
+        def wait(self, timeout=None):
+            events.append(("wait", timeout))
+            return -15
+
+    def killpg(_pgid, signum):
+        events.append(("killpg", signum))
+        if signum == 0:
+            raise PermissionError("denied")
+
+    monkeypatch.setattr(runner.os, "killpg", killpg)
+
+    runner._stop_process_group(ExitingProcess())
+
+    assert events == [("killpg", signal.SIGTERM), ("wait", 10), ("killpg", 0)]
 
 
 def test_stop_process_group_treats_missing_group_as_safe_and_reaps_child(monkeypatch):
