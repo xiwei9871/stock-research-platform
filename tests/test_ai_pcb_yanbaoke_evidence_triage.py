@@ -16,6 +16,7 @@ from stock_research.ai_pcb_yanbaoke_evidence_triage import (
     classify_utility,
     collapse_content_identities,
     map_er_dispositions,
+    render_summary,
     run_triage,
     validate_er_disposition,
     validate_primary_classification,
@@ -326,6 +327,40 @@ def test_run_triage_writes_reconciled_outputs_without_mutating_inputs(tmp_path):
     assert audit["validation"]["counts_reconciled"] is True
     assert audit["evidence_assessment_updated"] is False
     assert audit["network_access_used"] is False
+
+
+def test_summary_projects_manual_source_resolution_shortlist():
+    audit = {
+        "queue_rows_considered": 474,
+        "selected_source_records": 1,
+        "selected_content_identities": 1,
+        "duplicate_source_records": 0,
+        "primary_classification_distribution": {"company_evidence_lead": 1},
+        "er_disposition_distribution": {
+            "PCB-ER-A02": {"not_relevant": 1},
+            "PCB-ER-A04": {"not_relevant": 1},
+            "PCB-ER-B01": {"contextual_candidate": 1},
+            "PCB-ER-B02": {"source_discovery_only": 1},
+        },
+        "selected_records": [
+            {
+                "stock_name": "铜冠铜箔",
+                "report_title": "AI铜箔领跑者",
+                "manual_review_priority": "P1",
+                "primary_classification": "company_evidence_lead",
+                "PCB-ER-A02": "not_relevant",
+                "PCB-ER-A04": "not_relevant",
+                "PCB-ER-B01": "contextual_candidate",
+                "PCB-ER-B02": "source_discovery_only",
+            }
+        ],
+    }
+
+    summary = render_summary(audit)
+
+    assert "Manual original-source resolution shortlist" in summary
+    assert "铜冠铜箔 — AI铜箔领跑者" in summary
+    assert "PCB-ER-B02=source_discovery_only" in summary
 
 
 def test_script_help_uses_current_repository_source_without_pythonpath():

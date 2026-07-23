@@ -777,6 +777,44 @@ def render_summary(audit: Mapping[str, object]) -> str:
     lines.extend(
         [
             "",
+            "## Manual original-source resolution shortlist",
+            "",
+        ]
+    )
+    shortlist = sorted(
+        (
+            record
+            for record in audit.get("selected_records", [])
+            if str(record.get("manual_review_priority") or "") in {"P0", "P1"}
+        ),
+        key=lambda record: (
+            str(record.get("manual_review_priority") or ""),
+            str(record.get("stock_name") or ""),
+            str(record.get("report_title") or ""),
+        ),
+    )
+    if shortlist:
+        for record in shortlist:
+            er_notes = [
+                f"{er_id}={record.get(er_id)}"
+                for er_id in (
+                    "PCB-ER-A02",
+                    "PCB-ER-A04",
+                    "PCB-ER-B01",
+                    "PCB-ER-B02",
+                )
+                if str(record.get(er_id) or "") != "not_relevant"
+            ]
+            lines.append(
+                "- "
+                f"{record.get('stock_name')} — {record.get('report_title')} "
+                f"[{record.get('primary_classification')}; {', '.join(er_notes)}]"
+            )
+    else:
+        lines.append("- None.")
+    lines.extend(
+        [
+            "",
             "## Evidence boundary",
             "",
             "All mappings are source-discovery or contextual leads. No selected broker report is treated as direct technical evidence, an independent evidence chain, or proof that an Evidence Requirement is sufficient.",
