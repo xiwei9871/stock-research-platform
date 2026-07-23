@@ -1,0 +1,105 @@
+{
+  "schema_version": "1.0.0",
+  "artifact_type": "ai_pcb_primary_source_traceback_execution_authorization",
+  "authorization_id": "primary_source_traceback_execution_authorization:ai_pcb:broker_reports:v1",
+  "authorization_status": "frozen",
+  "authorized_at": "2026-07-23T09:05:00Z",
+  "authorization_actor": "human_reviewer",
+  "project_id": "research_project:ai_compute_pcb_industry_bottleneck",
+  "input_bindings": {
+    "traceback_gate_id": "primary_source_traceback_gate_decision:ai_pcb:broker_reports:v1",
+    "traceback_gate_hash": "6082249e201e97421ea0d7107217b044d376abfb32da93e0b68d779854e6e6d5",
+    "triage_csv_hash": "933839f178924d5d095740e75b3a4239ceff8d607deb756e13fee115334e18f3",
+    "triage_audit_hash": "5feeb41f16f9da5dfc7e0959735793e470b870db686be88e6db28bb3858f6ca4",
+    "triage_summary_hash": "da612de4b6152cd957fbfe79bff43ee8ea10a901a63768c971554ba0831ba095"
+  },
+  "execution_authorized": true,
+  "one_time_authorization": true,
+  "authorization_scope": "exact_report_list_only",
+  "maximum_report_count": 5,
+  "machine_first_traceback": true,
+  "human_assistance_required": false,
+  "manual_source_resolution_required": false,
+  "unresolved_is_valid_terminal_state": true,
+  "network_traceback_authorized": true,
+  "bounded_primary_source_acquisition_authorized": true,
+  "maximum_unique_primary_source_candidates": 25,
+  "maximum_formal_acquisition_attempts": 30,
+  "authorization_consumed": false,
+  "authorized_er_ids": [
+    "PCB-ER-A02",
+    "PCB-ER-B01",
+    "PCB-ER-B02"
+  ],
+  "prohibited_er_ids": [
+    "PCB-ER-A01",
+    "PCB-ER-A03",
+    "PCB-ER-A04",
+    "PCB-ER-A05",
+    "PCB-ER-A06",
+    "PCB-ER-A07",
+    "PCB-ER-A08",
+    "PCB-ER-A09",
+    "PCB-ER-B03",
+    "PCB-ER-B04",
+    "PCB-ER-C01_to_C15",
+    "PCB-ER-D01_to_D04"
+  ],
+  "authorized_targets": [
+    {
+      "traceback_target_id": "traceback_target:ai_pcb:broker_report:tongguan_copper_foil_deep:v1",
+      "report_content_sha256": "0e65e812de2abb18761fdaa5c9e0c42137f64125f09a5ba78a88db664523920d"
+    },
+    {
+      "traceback_target_id": "traceback_target:ai_pcb:broker_report:fastprint_deep:v1",
+      "report_content_sha256": "6d866e6380d40849f8c72c76bc0b8317dd493933bdcc31f7bc5ec72a12520f6c"
+    },
+    {
+      "traceback_target_id": "traceback_target:ai_pcb:broker_report:novoray_deep_20260615:v1",
+      "report_content_sha256": "43370b67292abbed56df68556cc0337053e93f584c76eda10de99c9a559111f1"
+    },
+    {
+      "traceback_target_id": "traceback_target:ai_pcb:broker_report:novoray_deep_20260614:v1",
+      "report_content_sha256": "3b697a2a00bf2ac055ba5a3b7cb28ce8565858cf1d8048543d1c25566bf7f22f"
+    },
+    {
+      "traceback_target_id": "traceback_target:ai_pcb:broker_report:shennan_circuit_cmbi:v1",
+      "report_content_sha256": "cad85397cbd9bd34206b34160ed8b3dcb9f7c14486284d67e17a2fbf63547492"
+    }
+  ],
+  "authorized_target_ids": [
+    "traceback_target:ai_pcb:broker_report:tongguan_copper_foil_deep:v1",
+    "traceback_target:ai_pcb:broker_report:fastprint_deep:v1",
+    "traceback_target:ai_pcb:broker_report:novoray_deep_20260615:v1",
+    "traceback_target:ai_pcb:broker_report:novoray_deep_20260614:v1",
+    "traceback_target:ai_pcb:broker_report:shennan_circuit_cmbi:v1"
+  ],
+  "authorized_report_hashes": [
+    "0e65e812de2abb18761fdaa5c9e0c42137f64125f09a5ba78a88db664523920d",
+    "3b697a2a00bf2ac055ba5a3b7cb28ce8565858cf1d8048543d1c25566bf7f22f",
+    "43370b67292abbed56df68556cc0337053e93f584c76eda10de99c9a559111f1",
+    "6d866e6380d40849f8c72c76bc0b8317dd493933bdcc31f7bc5ec72a12520f6c",
+    "cad85397cbd9bd34206b34160ed8b3dcb9f7c14486284d67e17a2fbf63547492"
+  ],
+  "common_origin_constraints": [
+    {
+      "group_id": "common_origin:38c17ff3d93a0941",
+      "member_target_ids": [
+        "traceback_target:ai_pcb:broker_report:novoray_deep_20260615:v1",
+        "traceback_target:ai_pcb:broker_report:novoray_deep_20260614:v1"
+      ],
+      "maximum_provisional_source_chain_count": 1
+    }
+  ],
+  "unlisted_target_authorized": false,
+  "target_substitution_authorized": false,
+  "automatic_scope_expansion_authorized": false,
+  "automatic_consolidated_assessment_authorized": false,
+  "consolidated_assessment_authorized": false,
+  "cognition_update_authorized": false,
+  "company_mapping_authorized": false,
+  "company_claim_assessment_authorized": false,
+  "stage_a2_authorized": false,
+  "stage_b_authorized": false,
+  "content_hash": "6723770b1a037fa918c6fe69ea55499fd4dd65110f8d3e81d4ee9156795d1bc3"
+}
