@@ -1,0 +1,272 @@
+{
+  "schema_version": "1.0.0",
+  "artifact_type": "ai_pcb_primary_source_traceback_gate_decision",
+  "decision_id": "primary_source_traceback_gate_decision:ai_pcb:broker_reports:v1",
+  "decision_status": "frozen",
+  "decided_at": "2026-07-23T08:45:55Z",
+  "decision_actor": "human_reviewer",
+  "project_id": "research_project:ai_compute_pcb_industry_bottleneck",
+  "gate_decision": "approved_in_principle_execution_not_authorized",
+  "triage_review_status": "accepted_as_source_discovery_only",
+  "input_bindings": {
+    "validation_worktree_baseline_commit": "f9d35c6af93522fdc55995edd2ab13ab89f12fbd",
+    "triage_implementation_commit": "53dca8d98b70080a956a95764057cd8e14e73533",
+    "triage_csv_path": "outputs/research/theme_company_yanbaoke_20260723/ai_pcb_evidence_triage_v1.csv",
+    "triage_csv_sha256": "933839f178924d5d095740e75b3a4239ceff8d607deb756e13fee115334e18f3",
+    "triage_audit_path": "outputs/research/theme_company_yanbaoke_20260723/ai_pcb_evidence_triage_audit_v1.json",
+    "triage_audit_sha256": "5feeb41f16f9da5dfc7e0959735793e470b870db686be88e6db28bb3858f6ca4",
+    "triage_summary_path": "outputs/research/theme_company_yanbaoke_20260723/ai_pcb_evidence_triage_summary_v1.md",
+    "triage_summary_sha256": "da612de4b6152cd957fbfe79bff43ee8ea10a901a63768c971554ba0831ba095",
+    "consolidated_assessment_execution_authorization_id": "consolidated_assessment_execution_authorization:ai_pcb:wave_1b:v1",
+    "consolidated_assessment_execution_authorization_hash": "5eb4b45d600a7618f59243af5560bac4c0d320bde86cebdee49e1378361dd4d2"
+  },
+  "append_only_governance_artifact": true,
+  "triage_accepted": true,
+  "report_artifact_role": "source_discovery_only",
+  "direct_technical_evidence_admitted": 0,
+  "er_status_changed": false,
+  "manual_traceback_authorized_in_principle": true,
+  "traceback_execution_authorized": false,
+  "traceback_started": false,
+  "authorization_scope": "exact_report_list_only",
+  "selected_target_count": 5,
+  "unlisted_report_authorized": false,
+  "target_substitution_authorized": false,
+  "additional_broker_report_triage_authorized": false,
+  "traceback_objective": "identify the original source, document identity, and attribution chain for narrowly scoped technical or product claims without validating broker opinions",
+  "claim_layer_policy": {
+    "technical_or_product_fact": {
+      "traceback_allowed": true,
+      "examples": [
+        "Dk or Df parameter and its test conditions",
+        "copper-foil profile or roughness metric",
+        "insertion-loss or signal-integrity parameter",
+        "product structure or material system",
+        "test method, frequency, length, or board stack-up"
+      ]
+    },
+    "original_source_identity": {
+      "traceback_allowed": true,
+      "preferred_source_classes": [
+        "company_announcement",
+        "company_product_datasheet",
+        "material_or_copper_foil_technical_document",
+        "patent",
+        "formal_standard",
+        "peer_reviewed_paper",
+        "technical_conference_material",
+        "customer_or_supplier_formal_document"
+      ]
+    },
+    "broker_inference_or_investment_opinion": {
+      "traceback_allowed": false,
+      "classification": "investment_opinion_non_evidence",
+      "examples": [
+        "market size forecast",
+        "domestic substitution conclusion",
+        "competitive advantage conclusion",
+        "beneficiary logic",
+        "earnings forecast",
+        "valuation or investment recommendation"
+      ]
+    }
+  },
+  "allowed_traceback_terminal_states": [
+    "primary_source_confirmed",
+    "primary_source_candidate_found",
+    "secondary_source_only",
+    "citation_present_but_unresolved",
+    "unattributed_claim",
+    "analyst_inference",
+    "investment_opinion",
+    "identity_mismatch"
+  ],
+  "primary_source_admission_rule": "only an independently acquired and identity-confirmed original document may become eligible for later formal evidence acquisition; the broker report remains source-discovery-only",
+  "per_er_traceback_policy": {
+    "PCB-ER-A04": {
+      "traceback_priority": "none",
+      "traceback_authorized": false,
+      "reason": "the triaged broker reports contain no valid A04 measurement-method lead; A04 requires metrology, formal standards, or measurement-method sources"
+    },
+    "PCB-ER-A02": {
+      "traceback_priority": "conditional",
+      "traceback_authorized": true,
+      "required_claim_shape": [
+        "explicit data rate or baud rate",
+        "channel distance or reach",
+        "PCB, connector, or cable composition",
+        "insertion-loss budget or measurable channel metric",
+        "Nyquist frequency",
+        "retimer or equalization condition",
+        "measurement or compliance data"
+      ],
+      "excluded_claim_shape": [
+        "general AI server speed increase",
+        "general high-speed trend",
+        "unattributed material-upgrade assertion"
+      ]
+    },
+    "PCB-ER-B01": {
+      "traceback_priority": "high_if_explicit_parameter_or_method",
+      "traceback_authorized": true,
+      "required_claim_shape": [
+        "Dk or Df value",
+        "named test method",
+        "test frequency",
+        "design Dk versus test Dk",
+        "nominal, typical, or guaranteed status",
+        "resin content, glass style, directionality, temperature, or humidity condition"
+      ],
+      "admission_limit": "company promotional material alone cannot resolve B01 method comparability"
+    },
+    "PCB-ER-B02": {
+      "traceback_priority": "highest",
+      "traceback_authorized": true,
+      "required_claim_shape": [
+        "copper-foil model or treatment type",
+        "VLP, HVLP, or RTF classification basis",
+        "Rz, Ra, Rq, RMS, or another explicit roughness metric",
+        "roughness measurement method",
+        "surface treatment",
+        "experiment, paper, or original chart relating roughness to insertion loss",
+        "original source of quoted data"
+      ],
+      "prohibited_inference": "supplier or broker claims cannot be generalized into an industry-wide roughness-loss rule without independent experimental evidence"
+    }
+  },
+  "selected_targets": [
+    {
+      "traceback_target_id": "traceback_target:ai_pcb:broker_report:tongguan_copper_foil_deep:v1",
+      "report_uuid": "mCemP8SbwQNUVCM2ZMg8wB",
+      "report_title": "深度报告 20250808 AI铜箔领跑者",
+      "report_owner": "国金证券",
+      "covered_entity": "铜冠铜箔",
+      "report_publish_date": "2025-08-10",
+      "publication_date_status": "provided_in_queue",
+      "report_content_sha256": "0e65e812de2abb18761fdaa5c9e0c42137f64125f09a5ba78a88db664523920d",
+      "report_path": "outputs/research/theme_company_yanbaoke_20260723/download/pdfs/深度报告-20250808-国金证券-铜冠铜箔-301217.SZ-AI铜箔领跑者_20页_2mb.pdf",
+      "triage_role": "company_evidence_lead",
+      "authorized_er_traceback_scope": ["PCB-ER-A02", "PCB-ER-B01", "PCB-ER-B02"],
+      "primary_traceback_focus": "PCB-ER-B02",
+      "common_origin_group": null,
+      "traceback_execution_authorized": false
+    },
+    {
+      "traceback_target_id": "traceback_target:ai_pcb:broker_report:fastprint_deep:v1",
+      "report_uuid": "6reEgaySewfnaortDmsWER",
+      "report_title": "深度报告 20251228 深度报告 风雨扩张数十载 枕戈待旦百径开",
+      "report_owner": "浙商证券",
+      "covered_entity": "兴森科技",
+      "report_publish_date": "2025-12-29",
+      "publication_date_status": "provided_in_queue",
+      "report_content_sha256": "6d866e6380d40849f8c72c76bc0b8317dd493933bdcc31f7bc5ec72a12520f6c",
+      "report_path": "outputs/research/theme_company_yanbaoke_20260723/download/pdfs/深度报告-20251228-浙商证券-兴森科技-002436.SZ-兴森科技深度报告_风雨扩张数十载_枕戈待旦百径开_56页_4mb.pdf",
+      "triage_role": "company_evidence_lead",
+      "authorized_er_traceback_scope": ["PCB-ER-A02", "PCB-ER-B01", "PCB-ER-B02"],
+      "primary_traceback_focus": "PCB-ER-B02",
+      "common_origin_group": null,
+      "traceback_execution_authorized": false
+    },
+    {
+      "traceback_target_id": "traceback_target:ai_pcb:broker_report:novoray_deep_20260615:v1",
+      "report_uuid": "CSwDPaHCzCNtRzu3wkt2de",
+      "report_title": "深度报告 2026 06 15 （） 填料艺术家 积淀深厚 充分受益于AI浪潮",
+      "report_owner": "西南证券",
+      "covered_entity": "联瑞新材",
+      "report_publish_date": "2026-06-15",
+      "publication_date_status": "provided_in_queue",
+      "report_content_sha256": "43370b67292abbed56df68556cc0337053e93f584c76eda10de99c9a559111f1",
+      "report_path": "outputs/research/theme_company_yanbaoke_20260723/download/pdfs/深度报告-2026-06-15-西南证券-联瑞新材（688300）_填料艺术家_积淀深厚_充分受益于AI浪潮_33页_4mb.pdf",
+      "triage_role": "company_evidence_lead",
+      "authorized_er_traceback_scope": ["PCB-ER-A02", "PCB-ER-B01", "PCB-ER-B02"],
+      "primary_traceback_focus": "PCB-ER-B01",
+      "common_origin_group": "common_origin:38c17ff3d93a0941",
+      "traceback_execution_authorized": false
+    },
+    {
+      "traceback_target_id": "traceback_target:ai_pcb:broker_report:novoray_deep_20260614:v1",
+      "report_uuid": "etbyG3Lau4ijKKmnuWocPs",
+      "report_title": "深度报告 20260614 填料艺术家 积淀深厚 充分受益于AI浪潮",
+      "report_owner": "西南证券",
+      "covered_entity": "联瑞新材",
+      "report_publish_date": "2026-06-16",
+      "publication_date_status": "provided_in_queue",
+      "report_content_sha256": "3b697a2a00bf2ac055ba5a3b7cb28ce8565858cf1d8048543d1c25566bf7f22f",
+      "report_path": "outputs/research/theme_company_yanbaoke_20260723/download/pdfs/深度报告-20260614-西南证券-联瑞新材-688300.SH-_填料艺术家_积淀深厚_充分受益于AI浪潮_33页_4mb.pdf",
+      "triage_role": "company_evidence_lead",
+      "authorized_er_traceback_scope": ["PCB-ER-A02", "PCB-ER-B01", "PCB-ER-B02"],
+      "primary_traceback_focus": "PCB-ER-B01",
+      "common_origin_group": "common_origin:38c17ff3d93a0941",
+      "traceback_execution_authorized": false
+    },
+    {
+      "traceback_target_id": "traceback_target:ai_pcb:broker_report:shennan_circuit_cmbi:v1",
+      "report_uuid": "mQHJCnmt5u8Aco4Ct2fFEX",
+      "report_title": "AI led PCB growth with substrate upside ahead",
+      "report_owner": "招银国际",
+      "covered_entity": "深南电路",
+      "report_publish_date": "2026-03-16",
+      "publication_date_status": "provided_in_queue",
+      "report_content_sha256": "cad85397cbd9bd34206b34160ed8b3dcb9f7c14486284d67e17a2fbf63547492",
+      "report_path": "outputs/research/theme_company_yanbaoke_20260723/download/pdfs/20260316-招银国际-深南电路-002916.SZ-AI-led_PCB_growth_with_substrate_upside_ahead_5页_745kb.pdf",
+      "triage_role": "contextual_industry",
+      "authorized_er_traceback_scope": ["PCB-ER-B02"],
+      "primary_traceback_focus": "PCB-ER-B02",
+      "common_origin_group": null,
+      "traceback_execution_authorized": false
+    }
+  ],
+  "common_origin_policy": {
+    "group_id": "common_origin:38c17ff3d93a0941",
+    "member_target_ids": [
+      "traceback_target:ai_pcb:broker_report:novoray_deep_20260615:v1",
+      "traceback_target:ai_pcb:broker_report:novoray_deep_20260614:v1"
+    ],
+    "provisional_evidence_chain_count": 1,
+    "independent_chain_count_must_not_increase_without_distinct_original_data_or_method": true
+  },
+  "future_company_primary_source_leads": {
+    "retained_count": 19,
+    "current_role": "future_company_primary_source_leads",
+    "company_mapping_authorized": false,
+    "company_claim_assessment_authorized": false,
+    "permitted_future_uses": [
+      "announcement title discovery",
+      "product name discovery",
+      "technical keyword discovery",
+      "customer qualification lead discovery",
+      "production line or capacity document lead discovery"
+    ]
+  },
+  "traceback_output_requirements_if_later_authorized": {
+    "one_record_per_broker_claim": true,
+    "required_fields": [
+      "traceback_target_id",
+      "broker_claim_text",
+      "claim_layer",
+      "broker_locator",
+      "claimed_original_source",
+      "resolved_original_document_identity",
+      "resolution_status",
+      "source_url_or_identifier",
+      "identity_evidence",
+      "applicable_er_ids",
+      "limitations",
+      "eligible_for_formal_acquisition"
+    ],
+    "broker_report_remains_evidence_ineligible": true,
+    "automatic_formal_acquisition_authorized": false
+  },
+  "consolidated_assessment_control": {
+    "consolidated_assessment_recommended": true,
+    "consolidated_assessment_deferred_until_traceback_complete": true,
+    "existing_execution_authorization_must_remain_unconsumed": true,
+    "assessment_started": false
+  },
+  "cognition_update_authorized": false,
+  "company_mapping_authorized": false,
+  "company_claim_assessment_authorized": false,
+  "stage_a2_authorized": false,
+  "stage_b_authorized": false,
+  "content_hash": "6082249e201e97421ea0d7107217b044d376abfb32da93e0b68d779854e6e6d5"
+}
