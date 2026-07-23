@@ -270,15 +270,15 @@ def query_baostock_minute_rows(
                 frequency=baostock_frequency(freq),
                 adjustflag=adjustflag_for_adjust_type(adjust_type),
             )
-        if rs.error_code != "0":
-            raise RuntimeError(
-                f"baostock minute query failed for {code}: {rs.error_code} {rs.error_msg}"
-            )
+            if rs.error_code != "0":
+                raise RuntimeError(
+                    f"baostock minute query failed for {code}: {rs.error_code} {rs.error_msg}"
+                )
 
-        rows: list[dict[str, str]] = []
-        while rs.next():
-            rows.append(dict(zip(rs.fields, rs.get_row_data(), strict=True)))
-        return rows
+            rows: list[dict[str, str]] = []
+            while rs.next():
+                rows.append(dict(zip(rs.fields, rs.get_row_data(), strict=True)))
+            return rows
 
     return run_with_baostock_retry(operation, timeout_seconds=timeout_seconds)
 
@@ -481,6 +481,13 @@ def login_or_raise(timeout_seconds: float | None = None) -> None:
     raise RuntimeError(f"baostock login failed: {last_error}")
 
 
+def logout_safely() -> None:
+    try:
+        bs.logout()
+    except Exception:
+        pass
+
+
 def sync_baostock_stock_minute_bars(
     start_date: str,
     end_date: str,
@@ -516,8 +523,5 @@ def sync_baostock_stock_minute_bars(
                 if sleep_seconds:
                     time.sleep(sleep_seconds)
     finally:
-        try:
-            bs.logout()
-        except Exception:
-            pass
+        logout_safely()
     return counts

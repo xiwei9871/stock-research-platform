@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -38,6 +39,7 @@ CHECK_SQL = {
     """,
     "minute5_quality": """
         SELECT
+          dataset_name,
           status,
           expected_count,
           actual_count,
@@ -45,9 +47,8 @@ CHECK_SQL = {
           jsonb_array_length(abnormal_symbols) AS abnormal_count
         FROM ops.daily_pipeline_quality
         WHERE trade_date = %s
-          AND dataset_name = 'minute5_bar'
-        ORDER BY updated_at DESC
-        LIMIT 1
+          AND dataset_name IN ('minute5_bar', 'minute5_qfq_bar')
+        ORDER BY dataset_name, updated_at DESC
     """,
     "deps_job": """
         SELECT status
@@ -184,13 +185,46 @@ def run_platform_ready_check(
 
 
 def render_platform_ready_message(result: dict[str, Any]) -> str:
+    checks = list(result.get("checks", []))
+    failed = [item for item in checks if item.get("status") != "pass"]
     lines = [
-        f"平台数据状态：{result['status']}",
+        f"平台状态：{result['status']}",
         f"交易日：{result['trade_date']}",
+        f"待处理：{len(failed)}项" if failed else "待处理：0项",
     ]
-    for item in result.get("checks", []):
-        lines.append(f"- {item['name']}: {item['status']} {item['detail']}")
-    return "\n".join(lines)[:1800]
+    minute5 = next((item for item in checks if item.get("name") == "minute5"), None)
+    if minute5:
+        lines.append(_compact_minute5_line(str(minute5.get("detail") or "")))
+    for item in failed[:6]:
+        if item.get("name") == "minute5":
+            continue
+        lines.append(f"- {item.get('name')}：{_compact_detail(str(item.get('detail') or ''))}")
+    if len(failed) > 6:
+        lines.append(f"- 其余：{len(failed) - 6}项，见 run_summary.json")
+    return "\n".join(lines)[:800]
+
+
+def _detail_value(detail: str, key: str) -> str | None:
+    match = re.search(rf"(?:^|\s){re.escape(key)}=([^\s]+)", detail)
+    return match.group(1) if match else None
+
+
+def _compact_minute5_line(detail: str) -> str:
+    actual = _detail_value(detail, "actual") or "?"
+    expected = _detail_value(detail, "expected") or "?"
+    missing = _detail_value(detail, "missing") or "?"
+    abnormal = _detail_value(detail, "abnormal") or "?"
+    return f"5mins：{actual}/{expected}，缺口{missing}，异常{abnormal}"
+
+
+def _compact_detail(detail: str, *, limit: int = 96) -> str:
+    cleaned = " ".join(detail.split())
+    for key in ("gap_ratio", "max_gap_ratio", "policy_status", "blocking_reasons"):
+        cleaned = re.sub(rf"(?:^|\s){re.escape(key)}=[^\s]+", "", cleaned)
+    cleaned = " ".join(cleaned.split())
+    if len(cleaned) <= limit:
+        return cleaned
+    return cleaned[: limit - 1].rstrip() + "…"
 
 
 def _check_daily_quality(
@@ -216,11 +250,39 @@ def _check_minute5(service: str, trade_date: str, min_rows: int, *, max_gap_rati
     rows = _fetch_check_rows(service, "minute5_quality", trade_date)
     if not rows:
         return _fail("minute5", "missing minute5 quality row")
-    return _check_external_quality_row(
-        name="minute5",
-        row=rows[0],
+    if any(row.get("dataset_name") for row in rows):
+        by_dataset = {str(row.get("dataset_name")): row for row in rows}
+        missing = [
+            dataset_name
+            for dataset_name in ("minute5_bar", "minute5_qfq_bar")
+            if dataset_name not in by_dataset
+        ]
+        if missing:
+            return _fail("minute5", f"missing quality rows: {','.join(missing)}")
+        raw_row = by_dataset["minute5_bar"]
+        qfq_row = by_dataset["minute5_qfq_bar"]
+    else:
+        raw_row = rows[0]
+        qfq_row = rows[0]
+    raw_check = _check_external_quality_row(
+        name="minute5_bar",
+        row=raw_row,
         min_rows=min_rows,
         max_gap_ratio=max_gap_ratio,
+    )
+    qfq_check = _check_external_quality_row(
+        name="minute5_qfq_bar",
+        row=qfq_row,
+        min_rows=min_rows,
+        max_gap_ratio=max_gap_ratio,
+    )
+    detail = f"minute5_bar=[{raw_check['detail']}] minute5_qfq_bar=[{qfq_check['detail']}]"
+    if raw_check["status"] != "pass" or qfq_check["status"] != "pass":
+        return _fail("minute5", detail)
+    return _pass(
+        "minute5",
+        detail,
+        degraded=bool(raw_check.get("degraded") or qfq_check.get("degraded")),
     )
 
 

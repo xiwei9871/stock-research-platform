@@ -1615,6 +1615,9 @@ export type StrategyCatalogItem = {
     signal_status: 'connected' | 'no_position_rows' | string;
     signal_count: number | null;
     signal_as_of_date?: string | null;
+    strategy_version?: string | null;
+    selection_policy?: string | null;
+    cash_slot_count?: number | null;
     error_message?: string | null;
   };
   primary_action: string;

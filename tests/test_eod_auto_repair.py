@@ -1,8 +1,10 @@
 import json
 import time
+from datetime import date
 from types import SimpleNamespace
 
 import pandas as pd
+import pytest
 
 import stock_research.reports.daily_research_report_cli as daily_research_report_cli
 import stock_research.strategy_eod_publish as strategy_eod_publish
@@ -10,6 +12,8 @@ import stock_research.watchlist.workflow as watchlist_workflow
 from stock_research.data_run_manifest import build_manifest_entry
 import stock_research.eod_auto_repair as eod_auto_repair
 import stock_research.eod_auto_repair_actions as eod_auto_repair_actions
+import stock_research.eod_auto_repair_checks as eod_auto_repair_checks
+import stock_research.daily_close_pipeline as daily_close_pipeline
 from stock_research.eod_auto_repair import build_default_action_registry, run_eod_auto_repair
 from stock_research.eod_auto_repair_models import RepairActionResult, RepairCheckResult, RepairRunSummary, RepairStatus
 
@@ -43,6 +47,37 @@ def test_run_eod_auto_repair_runs_action_for_failed_check_then_rechecks():
     assert calls == ["check", "repair_lhb", "check"]
     assert summary.final_status == RepairStatus.SUCCESS
     assert summary.actions[0].name == "repair_lhb_source_and_features"
+
+
+def test_check_minute5_bars_requires_raw_and_qfq_quality():
+    captured = {}
+
+    def fake_fetcher(sql, params):
+        captured["sql"] = sql
+        captured["params"] = params
+        return [
+            {
+                "raw_expected_count": 5190,
+                "raw_actual_count": 5190,
+                "raw_missing_count": 0,
+                "raw_abnormal_count": 0,
+                "qfq_expected_count": 5190,
+                "qfq_actual_count": 5000,
+                "qfq_missing_count": 190,
+                "qfq_abnormal_count": 0,
+            }
+        ]
+
+    result = eod_auto_repair_checks.check_minute5_bars(
+        "2026-07-10",
+        fetcher=fake_fetcher,
+    )
+
+    assert "minute5_qfq_bar" in captured["sql"]
+    assert captured["params"] == ["2026-07-10"]
+    assert result.status == RepairStatus.FAILED
+    assert result.metrics["raw_missing_count"] == 0
+    assert result.metrics["qfq_missing_count"] == 190
 
 
 def test_run_eod_auto_repair_check_mode_does_not_run_actions():
@@ -810,7 +845,207 @@ def test_default_minute5_action_uses_direct_raw_repair(monkeypatch, tmp_path):
     assert callable(captured["kwargs"]["upserter"])
     assert callable(captured["kwargs"]["qfq_deriver"])
     assert callable(captured["kwargs"]["quality_refresher"])
+    assert callable(captured["kwargs"]["progress"])
     assert captured["kwargs"]["symbol_sleep_seconds"] == 0.75
+
+
+def test_default_minute5_action_refreshes_raw_and_qfq_quality(monkeypatch, tmp_path):
+    captured = {}
+
+    def fake_repair_minute5_raw_bars(_trade_date, **kwargs):
+        captured.update(kwargs)
+        return RepairActionResult("repair_minute5_raw_bars", RepairStatus.SUCCESS)
+
+    monkeypatch.setattr(
+        eod_auto_repair_actions,
+        "repair_minute5_raw_bars",
+        fake_repair_minute5_raw_bars,
+    )
+    monkeypatch.setattr(
+        daily_close_pipeline,
+        "load_minute5_expected_ts_codes",
+        lambda _service, _trade_date: ["600000.SH"],
+    )
+    inspected = []
+    monkeypatch.setattr(
+        daily_close_pipeline,
+        "inspect_minute5_quality_from_db",
+        lambda _service, _codes, _trade_date, *, adjust_type="raw": inspected.append(
+            adjust_type
+        )
+        or {
+            "status": "pass",
+            "expected_count": 1,
+            "actual_count": 1,
+            "missing_symbols": [],
+            "abnormal_symbols": [],
+            "check_summary": f"{adjust_type} pass",
+        },
+    )
+    persisted = []
+    monkeypatch.setattr(
+        daily_close_pipeline,
+        "upsert_quality",
+        lambda **kwargs: persisted.append(kwargs["dataset_name"]),
+    )
+
+    build_default_action_registry(output_root="outputs")["minute5_bars"](
+        "2026-07-10", tmp_path
+    )
+    result = captured["quality_refresher"]("test", date(2026, 7, 10))
+
+    assert inspected == ["raw", "qfq"]
+    assert persisted == ["minute5_bar", "minute5_qfq_bar"]
+    assert result["raw"]["status"] == "pass"
+    assert result["qfq"]["status"] == "pass"
+
+
+def test_repair_minute5_raw_bars_persists_each_symbol_before_later_interrupt(monkeypatch):
+    monkeypatch.setattr(eod_auto_repair_actions.time, "sleep", lambda _seconds: None)
+    upserted_batches = []
+
+    def fake_fetcher(ts_code, start_date, end_date, timeout_seconds):
+        if ts_code == "000001.SZ":
+            raise KeyboardInterrupt("external timeout")
+        return [
+            {
+                "ts_code": ts_code,
+                "adjust_type": "raw",
+                "trade_date": start_date,
+            }
+        ]
+
+    def fake_upserter(_service, rows):
+        upserted_batches.append(list(rows))
+        return len(rows)
+
+    with pytest.raises(KeyboardInterrupt):
+        eod_auto_repair_actions.repair_minute5_raw_bars(
+            "2026-07-09",
+            service="test",
+            missing_symbols_loader=lambda _trade_date: ["600000.SH", "000001.SZ"],
+            raw_fetcher=fake_fetcher,
+            upserter=fake_upserter,
+            qfq_deriver=lambda _service, _trade_date: {"inserted_rows": 0},
+            quality_refresher=lambda _service, _trade_date: {},
+        )
+
+    assert [[row["ts_code"] for row in batch] for batch in upserted_batches] == [["600000.SH"]]
+
+
+def test_repair_minute5_raw_bars_rederives_qfq_when_raw_has_no_missing_symbols():
+    qfq_calls = []
+    quality_calls = []
+
+    result = eod_auto_repair_actions.repair_minute5_raw_bars(
+        "2026-07-10",
+        service="test",
+        missing_symbols_loader=lambda _trade_date: [],
+        raw_fetcher=lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("raw-complete repair must not fetch remotely")
+        ),
+        upserter=lambda *_args, **_kwargs: 0,
+        qfq_deriver=lambda service, trade_date: qfq_calls.append(
+            (service, trade_date)
+        )
+        or {"inserted_rows": 48},
+        quality_refresher=lambda service, trade_date: quality_calls.append(
+            (service, trade_date)
+        )
+        or {
+            "raw": {
+                "status": "pass",
+                "expected_count": 1,
+                "actual_count": 1,
+                "missing_symbols": [],
+                "abnormal_symbols": [],
+            },
+            "qfq": {
+                "status": "pass",
+                "expected_count": 1,
+                "actual_count": 1,
+                "missing_symbols": [],
+                "abnormal_symbols": [],
+            },
+        },
+    )
+
+    assert result.status == RepairStatus.SUCCESS
+    assert result.metrics["attempted"] == 0
+    assert result.metrics["qfq_rows"] == 48
+    assert qfq_calls == [("test", date(2026, 7, 10))]
+    assert quality_calls == [("test", date(2026, 7, 10))]
+
+
+def test_repair_minute5_raw_bars_emits_progress_events(monkeypatch):
+    monkeypatch.setattr(eod_auto_repair_actions.time, "sleep", lambda _seconds: None)
+    events = []
+
+    def fake_fetcher(ts_code, start_date, end_date, timeout_seconds):
+        return [
+            {
+                "ts_code": ts_code,
+                "adjust_type": "raw",
+                "trade_date": start_date,
+            }
+        ]
+
+    result = eod_auto_repair_actions.repair_minute5_raw_bars(
+        "2026-07-09",
+        service="test",
+        missing_symbols_loader=lambda _trade_date: ["600000.SH", "000001.SZ"],
+        raw_fetcher=fake_fetcher,
+        upserter=lambda _service, rows: len(rows),
+        qfq_deriver=lambda _service, _trade_date: {"inserted_rows": 2},
+        quality_refresher=lambda _service, _trade_date: {
+            "expected_count": 2,
+            "actual_count": 2,
+            "missing_symbols": [],
+            "abnormal_symbols": [],
+        },
+        progress=events.append,
+    )
+
+    assert result.status == RepairStatus.SUCCESS
+    assert [event["event"] for event in events] == [
+        "minute5_raw_repair_started",
+        "minute5_raw_repair_progress",
+        "minute5_raw_repair_progress",
+        "minute5_raw_repair_completed",
+    ]
+    assert events[-1]["completed"] == 2
+    assert events[-1]["total"] == 2
+    assert events[-1]["rows"] == 2
+
+
+def test_repair_minute5_raw_bars_refreshes_quality_at_progress_checkpoint(monkeypatch):
+    monkeypatch.setattr(eod_auto_repair_actions.time, "sleep", lambda _seconds: None)
+    quality_refreshes = []
+    symbols = [f"60{i:04d}.SH" for i in range(50)] + ["000001.SZ"]
+
+    def fake_fetcher(ts_code, start_date, end_date, timeout_seconds):
+        if ts_code == "000001.SZ":
+            raise KeyboardInterrupt("external timeout")
+        return [
+            {
+                "ts_code": ts_code,
+                "adjust_type": "raw",
+                "trade_date": start_date,
+            }
+        ]
+
+    with pytest.raises(KeyboardInterrupt):
+        eod_auto_repair_actions.repair_minute5_raw_bars(
+            "2026-07-09",
+            service="test",
+            missing_symbols_loader=lambda _trade_date: symbols,
+            raw_fetcher=fake_fetcher,
+            upserter=lambda _service, rows: len(rows),
+            qfq_deriver=lambda _service, _trade_date: {"inserted_rows": 0},
+            quality_refresher=lambda service, trade_date: quality_refreshes.append((service, trade_date)) or {},
+        )
+
+    assert quality_refreshes == [("test", date(2026, 7, 9))]
 
 
 def test_default_market_monitor_action_runs_source_stage_before_dashboard(monkeypatch, tmp_path):

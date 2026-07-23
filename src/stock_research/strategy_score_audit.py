@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
+import json
 from typing import Any
 
 import pandas as pd
@@ -12,6 +13,24 @@ DETAIL_COLUMNS = [
     "strategy_name",
     "asset_id",
     "stock_name",
+    "stock_name_source",
+    "confirmation_state",
+    "phase12a_rule_layer",
+    "phase12a_rule_action",
+    "fill_status",
+    "eligibility_status",
+    "top5_eligible",
+    "backtest_entry_eligible",
+    "eligibility_reason_codes",
+    "eligibility_warning_codes",
+    "buy_signal_status",
+    "eligibility_contract_version",
+    "risk_gate_code",
+    "risk_gate_reason",
+    "price_limit_regime",
+    "near_limit_down_threshold",
+    "data_quality_status",
+    "pct_chg",
     "selected_flag",
     "selected_rank",
     "source_rank",
@@ -142,7 +161,11 @@ def _build_audit_row(
         )
     elif display_score == published_score:
         display_score_source = normalized_published_source
-    stock_name = _text((lineage_row or {}).get("stock_name") or (lineage_row or {}).get("name"))
+    stock_name = _text(
+        (lineage_row or {}).get("stock_name")
+        or (lineage_row or {}).get("name")
+        or review_row.get("stock_name")
+    )
     selection_reason = _selection_reason(lineage_row)
     eligibility_layer = _text((lineage_row or {}).get("phase12a_rule_layer") or (lineage_row or {}).get("eligibility_layer"))
     data_date_used = _lineage_trade_date(lineage_row) or _text(review_row.get("trade_date") or trade_date)[:10]
@@ -153,6 +176,24 @@ def _build_audit_row(
         "strategy_name": _text(review_row.get("strategy_name")),
         "asset_id": _text(review_row.get("asset_id")),
         "stock_name": stock_name,
+        "stock_name_source": _text(review_row.get("stock_name_source")),
+        "confirmation_state": _text(review_row.get("confirmation_state")),
+        "phase12a_rule_layer": _text(review_row.get("phase12a_rule_layer")),
+        "phase12a_rule_action": _text(review_row.get("phase12a_rule_action")),
+        "fill_status": _text(review_row.get("fill_status")),
+        "eligibility_status": _text(review_row.get("eligibility_status")),
+        "top5_eligible": review_row.get("top5_eligible"),
+        "backtest_entry_eligible": review_row.get("backtest_entry_eligible"),
+        "eligibility_reason_codes": _list_field(review_row.get("eligibility_reason_codes")),
+        "eligibility_warning_codes": _list_field(review_row.get("eligibility_warning_codes")),
+        "buy_signal_status": str(review_row.get("buy_signal_status") or ""),
+        "eligibility_contract_version": _text(review_row.get("eligibility_contract_version")),
+        "risk_gate_code": _text(review_row.get("risk_gate_code")),
+        "risk_gate_reason": _text(review_row.get("risk_gate_reason")),
+        "price_limit_regime": _text(review_row.get("price_limit_regime")),
+        "near_limit_down_threshold": _optional_float(review_row.get("near_limit_down_threshold")),
+        "data_quality_status": _text(review_row.get("data_quality_status")),
+        "pct_chg": _optional_float(review_row.get("pct_chg")),
         "selected_flag": True,
         "selected_rank": _optional_int(review_row.get("rank")),
         "source_rank": _optional_int(review_row.get("source_rank") or review_row.get("rank")),
@@ -330,7 +371,7 @@ def _raw_score_for_strategy(
 ) -> tuple[float | None, str]:
     source_row = lineage_row or {}
     if strategy_id == "lhb_shortline":
-        for column in ("final_score", "score_total", "lhb_shortline_score"):
+        for column in ("final_score", "score_total", "lhb_shortline_score", "auction_enhanced_score"):
             value = _optional_float(source_row.get(column))
             if value is not None:
                 return value, column
@@ -458,3 +499,19 @@ def _optional_int(value: Any) -> int | None:
 
 def _text(value: Any) -> str:
     return str(value or "").strip()
+
+
+def _list_field(value: Any) -> list[str]:
+    if isinstance(value, (list, tuple)):
+        return [str(item) for item in value]
+    text = _text(value)
+    if not text or text.lower() == "nan":
+        return []
+    if text.startswith("["):
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError:
+            return [text]
+        if isinstance(parsed, list):
+            return [str(item) for item in parsed]
+    return [text]

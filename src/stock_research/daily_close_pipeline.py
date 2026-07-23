@@ -6,6 +6,7 @@ import json
 import logging
 import math
 import os
+import signal
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -26,6 +27,7 @@ from stock_research.loaders.baostock_ingestion import sync_index_daily_bars
 from stock_research.market_emotion_state_v1 import DAILY_OUTPUT_COLUMNS
 from stock_research.minute_data import (
     login_or_raise as baostock_login_or_raise,
+    logout_safely as baostock_logout_safely,
     minute_market_row as baostock_minute_market_row,
     query_baostock_minute_rows,
 )
@@ -356,7 +358,10 @@ def upsert_job(
     )
     ON CONFLICT (trade_date, job_name, stage, source) DO UPDATE SET
         status = EXCLUDED.status,
-        started_at = COALESCE(ops.daily_pipeline_job.started_at, EXCLUDED.started_at),
+        started_at = CASE
+            WHEN EXCLUDED.status = 'running' THEN EXCLUDED.started_at
+            ELSE COALESCE(ops.daily_pipeline_job.started_at, EXCLUDED.started_at)
+        END,
         finished_at = EXCLUDED.finished_at,
         duration_seconds = EXCLUDED.duration_seconds,
         attempt_count = EXCLUDED.attempt_count,
@@ -390,6 +395,31 @@ def upsert_job(
         execute(conn, sql, payload)
 
 
+def mark_stale_running_jobs_interrupted(
+    *, service: str, trade_date: date, stage: str, job_name: str
+) -> None:
+    sql = """
+    UPDATE ops.daily_pipeline_job
+    SET status = 'failed',
+        finished_at = now(),
+        duration_seconds = EXTRACT(EPOCH FROM (now() - started_at)),
+        error_summary = %(error_summary)s,
+        updated_at = now()
+    WHERE trade_date = %(trade_date)s
+      AND stage = %(stage)s
+      AND job_name = %(job_name)s
+      AND status = 'running'
+    """
+    payload = {
+        "trade_date": trade_date,
+        "stage": stage,
+        "job_name": job_name,
+        "error_summary": "interrupted: stale running attempt superseded",
+    }
+    with connect(service) as conn:
+        execute(conn, sql, payload)
+
+
 def upsert_quality(
     *,
     service: str,
@@ -399,6 +429,7 @@ def upsert_quality(
     expected_count: int | None = None,
     actual_count: int | None = None,
     missing_symbols: list[str] | None = None,
+    exempt_symbols: list[str] | None = None,
     abnormal_symbols: list[str] | None = None,
     check_summary: str | None = None,
 ) -> None:
@@ -575,7 +606,7 @@ def load_retry_failed_symbols(service: str, trade_date: date, stage: str = "minu
 
 def load_latest_minute5_missing_symbols(service: str, trade_date: date) -> list[str]:
     sql = """
-    SELECT missing_symbols
+    SELECT missing_symbols, abnormal_symbols
     FROM ops.daily_pipeline_quality
     WHERE trade_date = %s
       AND dataset_name = 'minute5_bar'
@@ -586,11 +617,21 @@ def load_latest_minute5_missing_symbols(service: str, trade_date: date) -> list[
         rows = fetch_all(conn, sql, [trade_date])
     if not rows:
         return []
-    return [str(ts_code) for ts_code in rows[0].get("missing_symbols") or []]
+    return sorted(
+        {
+            str(ts_code)
+            for key in ("missing_symbols", "abnormal_symbols")
+            for ts_code in rows[0].get(key) or []
+        }
+    )
 
 
 def inspect_minute5_quality_from_db(
-    service: str, expected_ts_codes: list[str], target_date: date
+    service: str,
+    expected_ts_codes: list[str],
+    target_date: date,
+    *,
+    adjust_type: str = "raw",
 ) -> dict[str, Any]:
     sql = """
     SELECT
@@ -601,12 +642,12 @@ def inspect_minute5_quality_from_db(
     FROM market.stock_minute_bar
     WHERE trade_date = %s
       AND freq = '5min'
-      AND adjust_type = 'raw'
+      AND adjust_type = %s
       AND ts_code = ANY(%s)
     GROUP BY ts_code
     """
     with connect(service) as conn:
-        rows = fetch_all(conn, sql, [target_date, expected_ts_codes])
+        rows = fetch_all(conn, sql, [target_date, adjust_type, expected_ts_codes])
     by_code = {str(row["ts_code"]): row for row in rows}
     missing, abnormal = [], []
     for ts_code in expected_ts_codes:
@@ -1010,16 +1051,13 @@ def ts_code_to_baostock_code(ts_code: str) -> str:
 def fetch_baostock_minute5_rows(
     ts_code: str, *, start_date: date, end_date: date, timeout_seconds: int
 ) -> list[dict[str, Any]]:
-    raw_rows = call_with_timeout(
-        lambda: query_baostock_minute_rows(
-            ts_code_to_baostock_code(ts_code),
-            start_date,
-            end_date,
-            freq="5min",
-            adjust_type="raw",
-            timeout_seconds=timeout_seconds,
-        ),
-        timeout_seconds,
+    raw_rows = query_baostock_minute_rows(
+        ts_code_to_baostock_code(ts_code),
+        start_date,
+        end_date,
+        freq="5min",
+        adjust_type="raw",
+        timeout_seconds=timeout_seconds,
     )
     return [
         baostock_minute_market_row(row, freq="5min", adjust_type="raw")
@@ -1204,6 +1242,7 @@ def inspect_daily_quality(
     expected_ts_codes: list[str],
     trade_date: date,
     adjust_types: tuple[str, ...] = DAILY_ADJUST_TYPES,
+    exempt_absent_symbols: bool = True,
 ) -> dict[str, Any]:
     by_key = {
         (str(row["ts_code"]), str(row.get("adjust_type") or "raw")): row
@@ -1211,9 +1250,21 @@ def inspect_daily_quality(
         if row.get("trade_date") == trade_date
     }
     expected_keys = {(ts_code, adjust_type) for ts_code in expected_ts_codes for adjust_type in adjust_types}
-    missing = [f"{ts_code}:{adjust_type}" for ts_code, adjust_type in sorted(expected_keys - set(by_key))]
+    exempt_keys: set[tuple[str, str]] = set()
+    if exempt_absent_symbols:
+        present_ts_codes = {ts_code for ts_code, _adjust_type in by_key}
+        absent_ts_codes = set(expected_ts_codes) - present_ts_codes
+        exempt_keys = {(ts_code, adjust_type) for ts_code in absent_ts_codes for adjust_type in adjust_types}
+    effective_expected_keys = expected_keys - exempt_keys
+    actual_keys = set(by_key) & effective_expected_keys
+    missing = [
+        f"{ts_code}:{adjust_type}"
+        for ts_code, adjust_type in sorted(effective_expected_keys - set(by_key))
+    ]
     abnormal = []
     for (ts_code, adjust_type), row in by_key.items():
+        if (ts_code, adjust_type) not in effective_expected_keys:
+            continue
         open_, high, low, close = row.get("open"), row.get("high"), row.get("low"), row.get("close")
         if any(value in (None, 0) for value in [open_, high, low, close]):
             abnormal.append(f"{ts_code}:{adjust_type}")
@@ -1228,11 +1279,17 @@ def inspect_daily_quality(
         status = "warning" if by_key else "fail"
     return {
         "status": status,
-        "expected_count": len(expected_keys),
-        "actual_count": len(by_key),
+        "expected_count": len(effective_expected_keys),
+        "actual_count": len(actual_keys),
         "missing_symbols": missing,
+        "exempt_symbols": [
+            f"{ts_code}:{adjust_type}" for ts_code, adjust_type in sorted(exempt_keys)
+        ],
         "abnormal_symbols": sorted(set(abnormal)),
-        "check_summary": f"daily rows={len(by_key)} missing={len(missing)} abnormal={len(set(abnormal))}",
+        "check_summary": (
+            f"daily rows={len(actual_keys)} expected={len(effective_expected_keys)} "
+            f"missing={len(missing)} abnormal={len(set(abnormal))} exempt={len(exempt_keys)}"
+        ),
     }
 
 
@@ -1425,7 +1482,11 @@ def run_daily_stage(
     rows_upserted = daily_upserter(config.service, final_rows)
     emit_progress("daily_upsert_completed", 4, rows=rows_upserted)
     quality = inspect_daily_quality(
-        final_rows, expected_ts_codes, trade_date, config.daily_adjust_types
+        final_rows,
+        expected_ts_codes,
+        trade_date,
+        config.daily_adjust_types,
+        exempt_absent_symbols=ts_codes is None,
     )
     upsert_quality(service=config.service, trade_date=trade_date, dataset_name="daily_bar", **quality)
     finished = datetime.now(ZoneInfo(config.timezone))
@@ -1491,9 +1552,27 @@ def run_minute5_stage(
     logger, log_path = setup_stage_logger(trade_date, "minute5")
     started = datetime.now(ZoneInfo(config.timezone))
     expected_ts_codes = ts_codes or load_minute5_expected_ts_codes(config.service, trade_date)
-    lookback_start = trade_date - timedelta(days=max(config.minute5_lookback_days - 1, 0))
+    resume_from_persisted = ts_codes is None
+    initial_raw_quality = (
+        inspect_minute5_quality_from_db(
+            config.service,
+            expected_ts_codes,
+            trade_date,
+            adjust_type="raw",
+        )
+        if resume_from_persisted
+        else None
+    )
+    pending_ts_codes = (
+        sorted(
+            set(initial_raw_quality["missing_symbols"])
+            | set(initial_raw_quality["abnormal_symbols"])
+        )
+        if initial_raw_quality is not None
+        else expected_ts_codes
+    )
     rows_by_symbol: dict[str, list[dict[str, Any]]] = {}
-    source_codes = split_minute5_sources(expected_ts_codes)
+    source_codes = split_minute5_sources(pending_ts_codes)
     failures_by_source: dict[str, dict[str, str]] = {source: {} for source in MINUTE5_SOURCES}
     attempts_by_source: dict[str, dict[str, int]] = {source: {} for source in MINUTE5_SOURCES}
     source_rows_by_symbol: dict[str, dict[str, list[dict[str, Any]]]] = {
@@ -1501,6 +1580,7 @@ def run_minute5_stage(
     }
     source_fetchers = {source: baostock_fetcher for source in MINUTE5_SOURCES}
     total_symbols = sum(len(codes) for codes in source_codes.values())
+    rows_upserted = 0
 
     def emit_progress(event: str, completed: int, *, rows: int = 0) -> None:
         if progress is None:
@@ -1520,6 +1600,12 @@ def run_minute5_stage(
 
     emit_progress("minute5_started", 0)
 
+    mark_stale_running_jobs_interrupted(
+        service=config.service,
+        trade_date=trade_date,
+        stage="minute5",
+        job_name="minute5_bar",
+    )
     for source in MINUTE5_SOURCES:
         upsert_job(
             service=config.service,
@@ -1537,7 +1623,7 @@ def run_minute5_stage(
         rows, attempt_count, error = retry_call(
             lambda: source_fetchers[source](
                 ts_code,
-                start_date=lookback_start,
+                start_date=trade_date,
                 end_date=trade_date,
                 timeout_seconds=config.request_timeout_seconds,
             ),
@@ -1545,7 +1631,25 @@ def run_minute5_stage(
         )
         return source, ts_code, rows, attempt_count, error
 
+    def _refresh_persisted_quality() -> None:
+        try:
+            persisted_quality = inspect_minute5_quality_from_db(
+                config.service,
+                expected_ts_codes,
+                trade_date,
+                adjust_type="raw",
+            )
+            upsert_quality(
+                service=config.service,
+                trade_date=trade_date,
+                dataset_name="minute5_bar",
+                **persisted_quality,
+            )
+        except Exception as exc:  # noqa: BLE001 - progress quality refresh is best-effort.
+            logger.warning("minute5 persisted quality refresh failed: %s", exc)
+
     def _run_source(source: str, codes: list[str]) -> None:
+        nonlocal rows_upserted
         if not codes:
             return
         logger.info(
@@ -1574,6 +1678,8 @@ def run_minute5_stage(
             else:
                 source_rows_by_symbol[source_name][ts_code] = rows
                 rows_by_symbol.setdefault(ts_code, []).extend(rows)
+                if rows:
+                    rows_upserted += int(upserter(config.service, rows) or 0)
                 success_count += 1
             if config.minute5_symbol_sleep_seconds > 0:
                 time.sleep(config.minute5_symbol_sleep_seconds)
@@ -1587,22 +1693,131 @@ def run_minute5_stage(
                 logger.info(progress_line)
             completed_total = sum(len(attempts_by_source[item]) for item in MINUTE5_SOURCES)
             if completed_total and (completed_total % 50 == 0 or completed_total == total_symbols):
-                fetched_rows = sum(len(rows) for rows in rows_by_symbol.values())
-                emit_progress("minute5_progress", completed_total, rows=fetched_rows)
+                emit_progress("minute5_progress", completed_total, rows=rows_upserted)
+            if completed_total and completed_total % 50 == 0:
+                _refresh_persisted_quality()
 
-    for source in MINUTE5_SOURCES:
-        _run_source(source, source_codes[source])
+    def _record_abnormal_exit(
+        exc: BaseException, *, qfq_derivation_failed: bool = False
+    ) -> None:
+        finished = datetime.now(ZoneInfo(config.timezone))
+        interrupted_quality = initial_raw_quality or {
+            "status": "fail",
+            "expected_count": len(expected_ts_codes),
+            "actual_count": 0,
+            "missing_symbols": expected_ts_codes,
+            "abnormal_symbols": [],
+            "check_summary": "minute5 interrupted before quality inspection",
+        }
+        try:
+            interrupted_quality = inspect_minute5_quality_from_db(
+                config.service,
+                expected_ts_codes,
+                trade_date,
+                adjust_type="raw",
+            )
+            upsert_quality(
+                service=config.service,
+                trade_date=trade_date,
+                dataset_name="minute5_bar",
+                **interrupted_quality,
+            )
+        except Exception as quality_exc:  # noqa: BLE001 - preserve original failure.
+            logger.warning("minute5 interrupted quality refresh failed: %s", quality_exc)
+        if qfq_derivation_failed:
+            qfq_failure_quality = {
+                "status": "fail",
+                "expected_count": len(expected_ts_codes),
+                "actual_count": 0,
+                "missing_symbols": list(expected_ts_codes),
+                "abnormal_symbols": [],
+                "check_summary": f"minute5 qfq derivation failed: {type(exc).__name__}: {exc}",
+            }
+            try:
+                upsert_quality(
+                    service=config.service,
+                    trade_date=trade_date,
+                    dataset_name="minute5_qfq_bar",
+                    **qfq_failure_quality,
+                )
+            except Exception as quality_exc:  # noqa: BLE001 - preserve original failure.
+                logger.warning("minute5 qfq failure quality persist failed: %s", quality_exc)
+        failure_prefix = "interrupted" if isinstance(exc, KeyboardInterrupt) else "failed"
+        error_summary = f"{failure_prefix}: {type(exc).__name__}: {exc}"
+        for source in MINUTE5_SOURCES:
+            source_attempts = attempts_by_source[source]
+            upsert_job(
+                service=config.service,
+                trade_date=trade_date,
+                job_name="minute5_bar",
+                stage="minute5",
+                source=source,
+                status="failed",
+                started_at=started,
+                finished_at=finished,
+                attempt_count=max(source_attempts.values(), default=0),
+                rows_inserted=sum(
+                    len(rows) for rows in source_rows_by_symbol[source].values()
+                ),
+                rows_failed=len(failures_by_source[source]),
+                missing_symbols_count=len(interrupted_quality["missing_symbols"]),
+                error_summary=error_summary,
+                error_detail_path=str(log_path),
+            )
+
+    try:
+        if pending_ts_codes:
+            baostock_login_or_raise(timeout_seconds=config.request_timeout_seconds)
+            try:
+                for source in MINUTE5_SOURCES:
+                    _run_source(source, source_codes[source])
+            finally:
+                baostock_logout_safely()
+    except BaseException as exc:
+        _record_abnormal_exit(exc)
+        raise
 
     all_rows = [row for rows in rows_by_symbol.values() for row in rows]
-    rows_upserted = upserter(config.service, all_rows)
     qfq_deriver = qfq_deriver or derive_qfq_minute5_from_daily_factor
-    qfq_result = qfq_deriver(config.service, trade_date) if rows_upserted else {
-        "raw_rows": 0,
-        "inserted_rows": 0,
-    }
-    emit_progress("minute5_completed", total_symbols, rows=rows_upserted)
-    quality = inspect_minute5_quality(rows_by_symbol, expected_ts_codes, trade_date)
-    upsert_quality(service=config.service, trade_date=trade_date, dataset_name="minute5_bar", **quality)
+    try:
+        qfq_result = (
+            qfq_deriver(config.service, trade_date)
+            if resume_from_persisted or rows_upserted
+            else {"raw_rows": 0, "inserted_rows": 0}
+        )
+        emit_progress("minute5_completed", total_symbols, rows=rows_upserted)
+        if resume_from_persisted:
+            quality = inspect_minute5_quality_from_db(
+                config.service,
+                expected_ts_codes,
+                trade_date,
+                adjust_type="raw",
+            )
+            qfq_quality = inspect_minute5_quality_from_db(
+                config.service,
+                expected_ts_codes,
+                trade_date,
+                adjust_type="qfq",
+            )
+        else:
+            quality = inspect_minute5_quality(rows_by_symbol, expected_ts_codes, trade_date)
+            qfq_quality = quality
+        upsert_quality(
+            service=config.service,
+            trade_date=trade_date,
+            dataset_name="minute5_bar",
+            **quality,
+        )
+        if resume_from_persisted:
+            upsert_quality(
+                service=config.service,
+                trade_date=trade_date,
+                dataset_name="minute5_qfq_bar",
+                **qfq_quality,
+            )
+    except BaseException as exc:
+        _record_abnormal_exit(exc, qfq_derivation_failed=True)
+        raise
 
     finished = datetime.now(ZoneInfo(config.timezone))
 
@@ -1662,7 +1877,13 @@ def run_minute5_stage(
         for ts_code, error in source_failures.items()
     }
     coverage = quality["actual_count"] / quality["expected_count"] if quality["expected_count"] else 1.0
-    if not all_rows:
+    if resume_from_persisted:
+        status = (
+            "success"
+            if quality["status"] == "pass" and qfq_quality["status"] == "pass"
+            else "failed"
+        )
+    elif not all_rows:
         status = "failed"
     elif failures or coverage < 1.0:
         status = "partial_success" if coverage >= config.minute5_min_coverage_ratio else "failed"
@@ -1685,6 +1906,7 @@ def run_minute5_stage(
         "failed_symbols": sorted(failures),
         "source_symbols": {source: len(codes) for source, codes in source_codes.items()},
         "quality": quality,
+        "qfq_quality": qfq_quality,
     }
 
 
@@ -1694,11 +1916,9 @@ def run_retry_failed_stage(
     config: PipelineConfig,
     fetcher: Callable[..., list[dict[str, Any]]] = fetch_akshare_minute5_rows,
     upserter: Callable[[str, list[dict[str, Any]]], int] = upsert_minute5_bars,
+    qfq_deriver: Callable[[str, date], dict[str, int]] = derive_qfq_minute5_from_daily_factor,
 ) -> dict[str, Any]:
     missing_symbols = load_latest_minute5_missing_symbols(config.service, trade_date)
-    if not missing_symbols:
-        return {"stage": "retry_failed", "status": "skipped", "rows": 0, "failed_symbols": []}
-
     rows_by_symbol: dict[str, list[dict[str, Any]]] = {}
     failures: dict[str, str] = {}
     attempts: dict[str, int] = {}
@@ -1730,7 +1950,7 @@ def run_retry_failed_stage(
                 rows_by_symbol[ts_code] = rows
 
     rows = [row for symbol_rows in rows_by_symbol.values() for row in symbol_rows]
-    rows_upserted = upserter(config.service, rows)
+    rows_upserted = upserter(config.service, rows) if rows else 0
     for ts_code in missing_symbols:
         if ts_code not in failures and ts_code in rows_by_symbol:
             for source in minute5_success_sources(ts_code):
@@ -1738,14 +1958,39 @@ def run_retry_failed_stage(
                     config.service, trade_date, "minute5", "minute5_bar", ts_code, source
                 )
     expected_ts_codes = load_minute5_expected_ts_codes(config.service, trade_date)
-    quality = inspect_minute5_quality_from_db(config.service, expected_ts_codes, trade_date)
+    qfq_result = qfq_deriver(config.service, trade_date)
+    quality = inspect_minute5_quality_from_db(
+        config.service,
+        expected_ts_codes,
+        trade_date,
+        adjust_type="raw",
+    )
+    qfq_quality = inspect_minute5_quality_from_db(
+        config.service,
+        expected_ts_codes,
+        trade_date,
+        adjust_type="qfq",
+    )
     upsert_quality(service=config.service, trade_date=trade_date, dataset_name="minute5_bar", **quality)
+    upsert_quality(
+        service=config.service,
+        trade_date=trade_date,
+        dataset_name="minute5_qfq_bar",
+        **qfq_quality,
+    )
     coverage = quality["actual_count"] / quality["expected_count"] if quality["expected_count"] else 1.0
+    qfq_coverage = (
+        qfq_quality["actual_count"] / qfq_quality["expected_count"]
+        if qfq_quality["expected_count"]
+        else 1.0
+    )
     status = (
         "success"
-        if not quality["missing_symbols"] and not quality["abnormal_symbols"]
+        if quality["status"] == "pass" and qfq_quality["status"] == "pass"
         else "partial_success"
-        if rows_upserted and coverage >= config.minute5_min_coverage_ratio
+        if rows_upserted
+        and coverage >= config.minute5_min_coverage_ratio
+        and qfq_coverage >= config.minute5_min_coverage_ratio
         else "failed"
     )
     now = datetime.now(ZoneInfo(config.timezone))
@@ -1761,15 +2006,21 @@ def run_retry_failed_stage(
         attempt_count=max(attempts.values(), default=0),
         rows_inserted=rows_upserted,
         rows_failed=len(failures),
-        missing_symbols_count=len(quality["missing_symbols"]),
+        missing_symbols_count=max(
+            len(quality["missing_symbols"]),
+            len(qfq_quality["missing_symbols"]),
+        ),
         error_summary="; ".join(f"{code}:{err}" for code, err in list(failures.items())[:5]) or None,
     )
     return {
         "stage": "retry_failed",
         "status": status,
         "rows": rows_upserted,
+        "qfq_rows": qfq_result["inserted_rows"],
         "failed_symbols": sorted(failures),
         "attempts": max(attempts.values(), default=0),
+        "quality": quality,
+        "qfq_quality": qfq_quality,
     }
 
 
@@ -2153,7 +2404,7 @@ def _load_latest_external_quality(service: str, trade_date: date) -> dict[str, d
         jsonb_array_length(abnormal_symbols) AS abnormal_count
     FROM ops.daily_pipeline_quality
     WHERE trade_date = %s
-      AND dataset_name IN ('daily_bar', 'minute5_bar')
+      AND dataset_name IN ('daily_bar', 'minute5_bar', 'minute5_qfq_bar')
     ORDER BY dataset_name, updated_at DESC
     """
     with connect(service) as conn:
@@ -2180,6 +2431,16 @@ def _quality_status(
     return "success" if gap == 0 else "partial_success"
 
 
+def _combine_required_quality_statuses(*statuses: str) -> str:
+    if any(status == "failed" for status in statuses):
+        return "failed"
+    if any(status == "partial_success" for status in statuses):
+        return "partial_success"
+    if statuses and all(status == "success" for status in statuses):
+        return "success"
+    return "failed"
+
+
 def finalize_pipeline_status(trade_date: date, *, config: PipelineConfig) -> dict[str, Any]:
     calendar_status = trading_calendar_status(config.service, trade_date)
     sql = """
@@ -2196,18 +2457,43 @@ def finalize_pipeline_status(trade_date: date, *, config: PipelineConfig) -> dic
         quality_by_dataset.get("daily_bar"),
         max_gap_ratio=config.external_data_max_quality_gap_ratio,
     )
-    minute5_status = _quality_status(
-        _stage_status_from_jobs(rows, "minute5"),
-        quality_by_dataset.get("minute5_bar"),
-        max_gap_ratio=config.external_data_max_quality_gap_ratio,
-    )
+    minute5_job_status = _stage_status_from_jobs(rows, "minute5")
+    minute5_raw_quality = quality_by_dataset.get("minute5_bar")
+    minute5_qfq_quality = quality_by_dataset.get("minute5_qfq_bar")
+    if minute5_raw_quality or minute5_qfq_quality:
+        minute5_raw_status = _quality_status(
+            minute5_job_status,
+            minute5_raw_quality,
+            max_gap_ratio=config.external_data_max_quality_gap_ratio,
+        )
+        minute5_qfq_status = _quality_status(
+            "failed",
+            minute5_qfq_quality,
+            max_gap_ratio=config.external_data_max_quality_gap_ratio,
+        )
+        minute5_status = _combine_required_quality_statuses(
+            minute5_raw_status,
+            minute5_qfq_status,
+        )
+    else:
+        minute5_status = minute5_job_status
     market_monitor_status = _stage_status_from_jobs(rows, "market_monitor")
+    market_monitor_sources = check_market_monitor_sources(trade_date.isoformat(), config.service)
+    if market_monitor_sources.get("status") == "success":
+        market_monitor_status = "success"
     deps_status = _stage_status_from_jobs(rows, "deps")
     quality_success_stages = set()
     if daily_status == "success" and quality_by_dataset.get("daily_bar"):
         quality_success_stages.add("daily")
-    if minute5_status == "success" and quality_by_dataset.get("minute5_bar"):
+    if (
+        minute5_status == "success"
+        and quality_by_dataset.get("minute5_bar")
+        and quality_by_dataset.get("minute5_qfq_bar")
+    ):
         quality_success_stages.add("minute5")
+    if market_monitor_status == "success" and market_monitor_sources.get("status") == "success":
+        quality_success_stages.add("market_monitor")
+    unsuperseded_rows = [row for row in rows if row["stage"] not in quality_success_stages]
     failed_jobs = [
         {
             "stage": row["stage"],
@@ -2216,9 +2502,8 @@ def finalize_pipeline_status(trade_date: date, *, config: PipelineConfig) -> dic
             "status": row["status"],
             "error_summary": row.get("error_summary"),
         }
-        for row in rows
+        for row in unsuperseded_rows
         if row["status"] in {"failed", "partial_success"}
-        and row["stage"] not in quality_success_stages
     ]
     non_trading_day = calendar_status == "closed"
     critical_ok = (
@@ -2237,7 +2522,7 @@ def finalize_pipeline_status(trade_date: date, *, config: PipelineConfig) -> dic
     ):
         pipeline_status = "NOT_READY"
     elif daily_status == "partial_success" or minute5_status == "partial_success" or any(
-        row["status"] == "partial_success" for row in rows
+        row["status"] == "partial_success" for row in unsuperseded_rows
     ):
         pipeline_status = "DEGRADED_READY"
     else:
@@ -2380,7 +2665,20 @@ def run_pipeline_stage(
     if stage == "daily":
         return run_daily_stage(trade_date, config=config, progress=progress)
     if stage == "minute5":
-        return run_minute5_stage(trade_date, config=config, progress=progress)
+        result = run_minute5_stage(trade_date, config=config, progress=progress)
+        if result["status"] == "success":
+            return result
+        rescue = run_retry_failed_stage(trade_date, config=config)
+        result.update(
+            status="success" if rescue["status"] == "success" else result["status"],
+            rescue_status=rescue["status"],
+            rescue_rows=rescue["rows"],
+            rescue_qfq_rows=rescue["qfq_rows"],
+            quality=rescue["quality"],
+            qfq_quality=rescue["qfq_quality"],
+            failed_symbols=rescue["failed_symbols"],
+        )
+        return result
     if stage == "deps":
         return run_deps_stage(trade_date, config=config)
     if stage == "market_monitor":
@@ -2426,6 +2724,23 @@ def compact_cron_result(result: Any) -> Any:
     return result
 
 
+@contextmanager
+def interrupt_signals_as_keyboard_interrupt():
+    previous_handlers: dict[signal.Signals, Any] = {}
+
+    def _raise_keyboard_interrupt(signum, _frame):
+        raise KeyboardInterrupt(signal.Signals(signum).name)
+
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        previous_handlers[sig] = signal.getsignal(sig)
+        signal.signal(sig, _raise_keyboard_interrupt)
+    try:
+        yield
+    finally:
+        for sig, handler in previous_handlers.items():
+            signal.signal(sig, handler)
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m scripts.daily_pipeline")
     parser.add_argument("--date", help="Trade date in YYYYMMDD or YYYY-MM-DD")
@@ -2460,12 +2775,21 @@ def main(argv: list[str] | None = None) -> None:
     if args.force:
         config = PipelineConfig(**{**config.__dict__, "force_non_trading_day": True})
     trade_date = parse_trade_date(args.date, config.timezone)
-    result = run_pipeline_stage(
-        args.stage,
-        trade_date,
-        config,
-        progress=_daily_pipeline_progress_renderer(args.stage, ProgressRenderer),
-    )
+    if args.stage in {"minute5", "all"}:
+        with interrupt_signals_as_keyboard_interrupt():
+            result = run_pipeline_stage(
+                args.stage,
+                trade_date,
+                config,
+                progress=_daily_pipeline_progress_renderer(args.stage, ProgressRenderer),
+            )
+    else:
+        result = run_pipeline_stage(
+            args.stage,
+            trade_date,
+            config,
+            progress=_daily_pipeline_progress_renderer(args.stage, ProgressRenderer),
+        )
     if os.getenv("DAILY_PIPELINE_CRON_OUTPUT") == "compact":
         result = compact_cron_result(result)
     print(json.dumps(result, ensure_ascii=False, default=str, indent=2))

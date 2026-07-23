@@ -8,6 +8,7 @@ PYTHON_BIN="${PYTHON_BIN:-.venv/bin/python}"
 TRADE_DATE="${TRADE_DATE:-}"
 STAGE="${1:-all}"
 SMOKE_ONLY="${DAILY_CLOSE_SMOKE_ONLY:-0}"
+HEARTBEAT_SECONDS="${DAILY_CLOSE_HEARTBEAT_SECONDS:-300}"
 LOG_DIR="${DAILY_CLOSE_CRON_LOG_DIR:-$ROOT/logs/cron}"
 RUN_TS="$(date '+%Y%m%d_%H%M%S')"
 DETAIL_LOG="$LOG_DIR/daily_close_pipeline_${STAGE}_${TRADE_DATE:-auto}_${RUN_TS}.log"
@@ -61,15 +62,63 @@ print_summary() {
   echo "详细日志: $DETAIL_LOG"
 }
 
+PIPELINE_PID=""
+HEARTBEAT_PID=""
+
+cleanup_heartbeat() {
+  if [[ -n "$HEARTBEAT_PID" ]]; then
+    kill "$HEARTBEAT_PID" 2>/dev/null || true
+    wait "$HEARTBEAT_PID" 2>/dev/null || true
+    HEARTBEAT_PID=""
+  fi
+}
+
+forward_signal() {
+  if [[ -n "$PIPELINE_PID" ]]; then
+    kill -TERM "$PIPELINE_PID" 2>/dev/null || true
+  fi
+}
+
+trap forward_signal TERM INT
+trap cleanup_heartbeat EXIT
+
+echo "daily_close_pipeline|started|stage=${STAGE}|trade_date=${TRADE_DATE:-auto}|detail_log=${DETAIL_LOG}" >>"$DETAIL_LOG"
+
 set +e
 if [[ -n "${TRADE_DATE}" ]]; then
-  "${PYTHON_BIN}" -m scripts.daily_pipeline --date "${TRADE_DATE}" --stage "${STAGE}" >>"$DETAIL_LOG" 2>&1
-  rc=$?
+  "${PYTHON_BIN}" -m scripts.daily_pipeline --date "${TRADE_DATE}" --stage "${STAGE}" >>"$DETAIL_LOG" 2>&1 &
 else
-  "${PYTHON_BIN}" -m scripts.daily_pipeline --stage "${STAGE}" >>"$DETAIL_LOG" 2>&1
-  rc=$?
+  "${PYTHON_BIN}" -m scripts.daily_pipeline --stage "${STAGE}" >>"$DETAIL_LOG" 2>&1 &
 fi
+PIPELINE_PID=$!
+
+(
+  HEARTBEAT_SLEEP_PID=""
+  stop_heartbeat_loop() {
+    if [[ -n "$HEARTBEAT_SLEEP_PID" ]]; then
+      kill "$HEARTBEAT_SLEEP_PID" 2>/dev/null || true
+    fi
+    exit 0
+  }
+  trap stop_heartbeat_loop TERM INT
+  started_epoch="$(date +%s)"
+  while kill -0 "$PIPELINE_PID" 2>/dev/null; do
+    sleep "$HEARTBEAT_SECONDS" &
+    HEARTBEAT_SLEEP_PID=$!
+    wait "$HEARTBEAT_SLEEP_PID" || exit 0
+    HEARTBEAT_SLEEP_PID=""
+    kill -0 "$PIPELINE_PID" 2>/dev/null || break
+    now_epoch="$(date +%s)"
+    last_progress="$(grep -E '^(progress\|minute5_bar|minute5\|progress)' "$DETAIL_LOG" | tail -n 1 || true)"
+    echo "daily_close_pipeline|heartbeat|stage=${STAGE}|trade_date=${TRADE_DATE:-auto}|elapsed_seconds=$((now_epoch-started_epoch))|last_progress=${last_progress:-waiting}" >>"$DETAIL_LOG"
+  done
+) &
+HEARTBEAT_PID=$!
+
+wait "$PIPELINE_PID"
+rc=$?
 set -e
+cleanup_heartbeat
 
 if [[ "$rc" -ne 0 ]]; then
   print_summary "股票日终阶段失败" "$rc"

@@ -5,6 +5,172 @@ from stock_research.strategy_eod_publish import _review_rows_from_result
 import pytest
 
 
+def _lhb_result_for_review_test():
+    candidates = []
+    for rank, (asset_id, score) in enumerate(
+        [
+            ("CN:SZ:002463", 77.0),
+            ("CN:SZ:000636", 76.3),
+            ("CN:SZ:002384", 75.5),
+            ("CN:SZ:001399", 69.3698),
+            ("CN:SZ:000078", 66.0),
+            ("CN:SZ:000001", 65.0),
+        ],
+        start=1,
+    ):
+        candidates.append(
+            {
+                "trade_date": "2026-07-14",
+                "asset_id": asset_id,
+                "rank": rank,
+                "auction_enhanced_score": score,
+                "phase12a_rule_layer": "pending_intraday",
+                "stock_name": "候选原名" if rank == 1 else "",
+            }
+        )
+    return {
+        "strategy_id": "lhb_shortline",
+        "strategy_name": "LHB Shortline Combo",
+        "positions": [],
+        "candidates": candidates,
+    }
+
+
+def test_lhb_review_publishes_original_top5_after_gate_without_refill(monkeypatch):
+    lookup = {
+        "CN:SZ:002463": {"score_total": 77.0, "stock_name": "沪电股份", "pct_chg": 2.0},
+        "CN:SZ:000636": {"score_total": 76.3, "stock_name": "风华高科", "pct_chg": 1.0},
+        "CN:SZ:002384": {"score_total": 75.5, "stock_name": "东山精密", "pct_chg": 0.5},
+        "CN:SZ:001399": {
+            "score_total": 69.3698,
+            "stock_name": "惠科股份",
+            "stock_name_source": "lhb_top_list_daily",
+            "pct_chg": -9.991,
+        },
+        "CN:SZ:000078": {"score_total": 66.0, "stock_name": "ST海王", "pct_chg": 1.0},
+        "CN:SZ:000001": {"score_total": 65.0, "stock_name": "平安银行", "pct_chg": 1.0},
+    }
+    monkeypatch.setattr(strategy_eod_publish, "_lhb_base_score_lookup_for_trade_date", lambda trade_date: lookup)
+
+    review = _review_rows_from_result(_lhb_result_for_review_test(), trade_date="2026-07-14")
+
+    first = review.loc[review["asset_id"].eq("CN:SZ:002463")].iloc[0]
+    assert first["stock_name"] == "候选原名"
+    assert first["stock_name_source"] == "strategy_candidate"
+    assert review["rank"].tolist() == [1, 2, 3, 5]
+    assert "CN:SZ:001399" not in set(review["asset_id"])
+    assert "CN:SZ:000001" not in set(review["asset_id"])
+    assert review["review_tier"].eq("top5_focus").all()
+    assert review.loc[review["review_tier"].eq("top5_focus"), "confirmation_state"].eq("pending_confirmation").all()
+    st_row = review.loc[review["asset_id"].eq("CN:SZ:000078")].iloc[0]
+    assert st_row["buy_signal_status"] == "tradable"
+    assert "st_high_risk" in st_row["eligibility_warning_codes"]
+
+
+@pytest.mark.parametrize(
+    ("layer", "action", "fill_status", "eligibility_status", "expected"),
+    [
+        ("pending_intraday", "pending", "not_follow_allowed", "eligible", "pending_confirmation"),
+        ("follow_pool_core", "follow_allowed", "filled", "eligible", "confirmed_follow"),
+        ("watch_pool", "watch_only", "not_follow_allowed", "eligible", "watch_only"),
+        ("retreat_hard", "retreat", "not_follow_allowed", "eligible", "retreat"),
+        ("pending_intraday", "pending", "not_follow_allowed", "risk_watch", "risk_watch"),
+    ],
+)
+def test_lhb_confirmation_state_mapping(layer, action, fill_status, eligibility_status, expected):
+    assert strategy_eod_publish._lhb_confirmation_state(
+        phase12a_rule_layer=layer,
+        phase12a_rule_action=action,
+        fill_status=fill_status,
+        eligibility_status=eligibility_status,
+    ) == expected
+
+
+def test_lhb_review_excludes_upstream_risk_watch_from_official_rows(monkeypatch):
+    result = _lhb_result_for_review_test()
+    candidate = result["candidates"][3]
+    candidate.pop("auction_enhanced_score")
+    candidate.update(
+        {
+            "auction_enhanced_score": 20.0,
+            "selection_score": 618.3,
+            "phase12a_rule_layer": "risk_watch",
+            "eligibility_status": "risk_watch",
+            "top5_eligible": False,
+            "backtest_entry_eligible": False,
+            "eligibility_reason_codes": ["near_limit_down_followthrough_risk"],
+            "eligibility_reason_texts": ["接近跌停，禁止进入跟随和回测交易"],
+            "eligibility_warning_codes": ["institution_activity_unknown"],
+            "eligibility_contract_version": "lhb_eligibility_v2",
+            "price_limit_regime": "main_board",
+            "near_limit_down_threshold": -9.5,
+            "data_quality_status": "complete",
+            "pct_chg": 2.0,
+        }
+    )
+    monkeypatch.setattr(
+        strategy_eod_publish,
+        "_lhb_base_score_lookup_for_trade_date",
+        lambda trade_date: {
+            "CN:SZ:001399": {
+                "score_total": 69.3698,
+                "stock_name": "惠科股份",
+                "pct_chg": 2.0,
+            }
+        },
+    )
+
+    review = _review_rows_from_result(result, trade_date="2026-07-14")
+
+    assert "CN:SZ:001399" not in set(review["asset_id"])
+    assert review["eligibility_status"].eq("eligible").all()
+    assert review["backtest_entry_eligible"].astype(bool).all()
+
+
+def test_lhb_review_rejects_contradictory_upstream_eligibility(monkeypatch):
+    result = _lhb_result_for_review_test()
+    result["candidates"][0].update(
+        {
+            "eligibility_status": "eligible",
+            "top5_eligible": False,
+            "backtest_entry_eligible": True,
+            "eligibility_reason_codes": [],
+            "eligibility_warning_codes": [],
+            "eligibility_contract_version": "lhb_eligibility_v2",
+        }
+    )
+    monkeypatch.setattr(strategy_eod_publish, "_lhb_base_score_lookup_for_trade_date", lambda trade_date: {})
+
+    with pytest.raises(ValueError, match="LHB eligibility parity violation"):
+        _review_rows_from_result(result, trade_date="2026-07-14")
+
+
+def test_load_lhb_base_score_source_prefers_master_name_then_lhb_name(monkeypatch):
+    queries = []
+
+    class DummyConnection:
+        def __enter__(self):
+            return object()
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+    def fake_fetch_all(conn, sql, params):
+        queries.append(sql)
+        return []
+
+    monkeypatch.setattr(strategy_eod_publish, "connect", lambda service: DummyConnection())
+    monkeypatch.setattr(strategy_eod_publish, "fetch_all", fake_fetch_all)
+
+    strategy_eod_publish._load_lhb_base_score_source_frames("2026-07-14")
+
+    lhb_sql = queries[0]
+    assert "COALESCE(NULLIF(a.name, ''), NULLIF(t.name, '')) AS stock_name" in lhb_sql
+    assert "AS stock_name_source" in lhb_sql
+    assert "market.lhb_top_list_daily" in lhb_sql
+    assert "pct_chg" in lhb_sql
+
+
 def test_mid_trend_review_uses_latest_signal_score_for_continued_holdings():
     result = {
         "strategy_id": "mid_trend",

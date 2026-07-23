@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-11
 
-**Status:** Running since 2026-07-11 15:16 Asia/Shanghai
+**Status:** Completed and verified on 2026-07-13 13:21 Asia/Shanghai
 
 ## Goal
 
@@ -131,3 +131,9 @@ Stop or interrupt the run if any of these occur:
 - first checkpoint: 50 raw jobs attempted, 50 raw successes, 50 local qfq successes, 0 failures, 35,040 rows
 - observed throughput: approximately 5.4 seconds per raw job
 - first-checkpoint ETA: approximately 42 hours 53 minutes, projecting completion on 2026-07-13 before the 17:00 daily minute task
+- final raw jobs: 62,508/62,508 success; pending/running/failed/skipped all zero
+- final qfq jobs: 62,508/62,508 success; pending/running/failed/skipped all zero
+- all twelve job months: raw and qfq 5,209/5,209 success
+- database coverage: 243 trading days, 3,944 assets, 09:35–15:00 session boundaries
+- final market rows: raw 43,173,816; qfq 43,174,748
+- 2026-07-13 quota: 4,012 consumed, zero active reservation

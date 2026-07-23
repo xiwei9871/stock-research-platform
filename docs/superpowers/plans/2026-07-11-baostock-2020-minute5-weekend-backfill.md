@@ -4,7 +4,7 @@
 
 **Goal:** Start and supervise a quota-bounded, resumable completion run for all remaining 2020 raw 5-minute BaoStock jobs while deriving qfq locally.
 
-**Status:** Running under launchd label `com.stockresearch.baostock-2020-minute5-backfill-20260711`; first 50-job checkpoint passed with zero failures.
+**Status:** Completed and verified on 2026-07-13. Raw and qfq each reached 62,508/62,508 successful jobs with no remaining non-success status.
 
 **Architecture:** Use the existing dedicated 2020 runner without changing production code. Perform authoritative preflight checks, reserve at most the observed 28,667 pending raw requests in the quota ledger, launch one detached serial process with a timestamped log, and verify early progress before handing the long run to ongoing monitoring.
 

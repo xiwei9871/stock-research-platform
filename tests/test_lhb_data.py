@@ -1,9 +1,11 @@
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from stock_research import cli
 import stock_research.lhb_data as lhb_data
+import stock_research.lhb_eligibility as lhb_eligibility
 
 
 def test_normalize_top_list_rows():
@@ -1656,6 +1658,10 @@ def test_build_lhb_full_market_pool_backtest_v1_scores_daily_lhb_topn(tmp_path):
             {
                 "trade_date": "2026-01-02",
                 "ts_code": "000001.SZ",
+                "stock_name": "平安银行",
+                "pct_chg": 2.0,
+                "stored_is_st": False,
+                "stored_status_quality": "trusted",
                 "lhb_net_buy_amount": 1000.0,
                 "lhb_net_buy_ratio": 0.10,
                 "institution_net_buy": 100.0,
@@ -1668,6 +1674,10 @@ def test_build_lhb_full_market_pool_backtest_v1_scores_daily_lhb_topn(tmp_path):
             {
                 "trade_date": "2026-01-02",
                 "ts_code": "000002.SZ",
+                "stock_name": "万科A",
+                "pct_chg": 1.0,
+                "stored_is_st": False,
+                "stored_status_quality": "trusted",
                 "lhb_net_buy_amount": 200.0,
                 "lhb_net_buy_ratio": 0.03,
                 "institution_net_buy": 0.0,
@@ -1680,6 +1690,10 @@ def test_build_lhb_full_market_pool_backtest_v1_scores_daily_lhb_topn(tmp_path):
             {
                 "trade_date": "2026-01-02",
                 "ts_code": "000003.SZ",
+                "stock_name": "国华网安",
+                "pct_chg": -1.0,
+                "stored_is_st": False,
+                "stored_status_quality": "trusted",
                 "lhb_net_buy_amount": -500.0,
                 "lhb_net_buy_ratio": -0.08,
                 "institution_net_buy": -50.0,
@@ -1733,6 +1747,220 @@ def test_build_lhb_full_market_pool_backtest_v1_scores_daily_lhb_topn(tmp_path):
     assert Path(result["paths"]["selected_trades"]).exists()
     assert Path(result["paths"]["daily_curve"]).exists()
     assert Path(result["paths"]["markdown_report"]).exists()
+
+
+def test_build_lhb_full_market_pool_backtest_v1_applies_shared_eligibility_before_ranking(tmp_path, monkeypatch):
+    base = {
+        "trade_date": "2026-07-14",
+        "lhb_net_buy_amount": 1000.0,
+        "lhb_net_buy_ratio": 0.10,
+        "institution_net_buy": 100.0,
+        "top_seat_concentration": 0.20,
+        "repeat_on_list_count_3d": 1,
+        "repeat_on_list_count_5d": 1,
+        "lhb_after_limit_up": False,
+        "lhb_after_break_limit": False,
+        "lhb_after_reversal": False,
+        "stored_is_st": False,
+        "stored_status_quality": "trusted",
+        "high_to_close_drawdown": 0.02,
+    }
+    lhb_features = pd.DataFrame(
+        [
+            {
+                **base,
+                "ts_code": "000001.SZ",
+                "stock_name": "平安银行",
+                "lhb_reason": "日涨幅偏离值达到7%的前5只证券",
+                "pct_chg": 2.0,
+                "lhb_one_day_pump_risk": 0.20,
+            },
+            {
+                **base,
+                "ts_code": "000004.SZ",
+                "stock_name": "退市测试",
+                "lhb_reason": "退市整理期",
+                "pct_chg": -2.0,
+                "lhb_one_day_pump_risk": 0.20,
+            },
+            {
+                **base,
+                "ts_code": "001399.SZ",
+                "stock_name": "惠科股份",
+                "lhb_reason": "日跌幅偏离值达到7%的前5只证券",
+                "pct_chg": -9.991,
+                "lhb_one_day_pump_risk": 0.30,
+            },
+            {
+                **base,
+                "ts_code": "000080.SZ",
+                "stock_name": "高弹性测试",
+                "lhb_reason": "日涨幅偏离值达到7%的前5只证券",
+                "pct_chg": 3.0,
+                "lhb_one_day_pump_risk": 0.80,
+            },
+            {
+                **base,
+                "ts_code": "000090.SZ",
+                "stock_name": "极端拉升测试",
+                "lhb_reason": "日涨幅偏离值达到7%的前5只证券",
+                "pct_chg": 4.0,
+                "lhb_one_day_pump_risk": 0.90,
+            },
+        ]
+    )
+    daily_bars = pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-07-14",
+                "ts_code": ts_code,
+                "close": 10.0,
+                "low": 9.8,
+            }
+            for ts_code in lhb_features["ts_code"]
+        ]
+    )
+
+    result = lhb_data.build_lhb_full_market_pool_backtest_v1(
+        lhb_features=lhb_features,
+        daily_bars=daily_bars,
+        start_date="2026-07-14",
+        end_date="2026-07-14",
+        top_n_values=[10],
+        output_dir=tmp_path,
+        pool_mode="raw_lhb_positive",
+    )
+
+    selected = result["selected_trades"]
+    eligible_candidates = result["eligible_candidates"]
+    rejected = result["rejected_events"]
+    assert "000004.SZ" in set(selected["ts_code"])
+    assert "001399.SZ" in set(selected["ts_code"])
+    assert "000080.SZ" in set(selected["ts_code"])
+    assert "000090.SZ" in set(selected["ts_code"])
+    assert set(selected["eligibility_status"]) == {"eligible", "risk_watch", "hard_reject"}
+    assert set(result["selected_rejected_events"]["eligibility_status"]) == {
+        "risk_watch",
+        "hard_reject",
+    }
+    assert set(eligible_candidates["ts_code"]) == {"000001.SZ", "000080.SZ"}
+    assert set(rejected["eligibility_status"]) == {"hard_reject", "risk_watch"}
+    assert rejected["eligibility_reason_codes"].str.contains("delisting_period").any()
+    assert rejected["eligibility_reason_codes"].str.contains("near_limit_down_followthrough_risk").any()
+    assert selected["eligibility_contract_version"].eq("lhb_eligibility_v2").all()
+    warning = selected[selected["ts_code"].eq("000080.SZ")].iloc[0]
+    assert "high_elasticity_pump_risk" in warning["eligibility_warning_codes"]
+    assert Path(result["paths"]["rejected_events"]).exists()
+    assert Path(result["paths"]["eligible_candidates"]).exists()
+
+    monkeypatch.setattr(lhb_eligibility, "PUMP_WARNING_THRESHOLD", 0.85)
+    no_pump = lhb_data.build_lhb_full_market_pool_backtest_v1(
+        lhb_features=lhb_features,
+        daily_bars=daily_bars,
+        start_date="2026-07-14",
+        end_date="2026-07-14",
+        top_n_values=[10],
+        output_dir=tmp_path / "no_pump",
+        pool_mode="positive_no_pump",
+    )
+    assert "000080.SZ" in set(no_pump["eligible_candidates"]["ts_code"])
+
+
+def test_build_lhb_full_market_pool_backtest_v1_filters_after_original_topn_without_refill(tmp_path):
+    rows = []
+    for index, (ts_code, net_ratio) in enumerate(
+        [
+            ("000001.SZ", 0.60),
+            ("000002.SZ", 0.50),
+            ("000003.SZ", 0.40),
+            ("000004.SZ", 0.30),
+            ("000005.SZ", 0.20),
+            ("000006.SZ", 0.10),
+        ],
+        start=1,
+    ):
+        rows.append(
+            {
+                "trade_date": "2026-07-14",
+                "ts_code": ts_code,
+                "stock_name": f"测试{index}",
+                "lhb_reason": "日涨幅偏离值达到7%的前5只证券",
+                "lhb_net_buy_amount": 10_000.0 - index,
+                "lhb_net_buy_ratio": net_ratio,
+                "institution_net_buy": 100.0,
+                "top_seat_concentration": 0.20,
+                "repeat_on_list_count_3d": 1,
+                "repeat_on_list_count_5d": 1,
+                "lhb_after_limit_up": False,
+                "lhb_after_break_limit": False,
+                "lhb_after_reversal": False,
+                "lhb_one_day_pump_risk": 0.20,
+                "stored_is_st": False,
+                "stored_status_quality": "trusted",
+                "pct_chg": -9.99 if index == 2 else 2.0,
+                "high_to_close_drawdown": 0.02,
+            }
+        )
+    lhb_features = pd.DataFrame(rows)
+    daily_bars = pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-07-14",
+                "ts_code": row["ts_code"],
+                "close": 10.0,
+                "low": 9.8,
+            }
+            for row in rows
+        ]
+    )
+
+    result = lhb_data.build_lhb_full_market_pool_backtest_v1(
+        lhb_features=lhb_features,
+        daily_bars=daily_bars,
+        start_date="2026-07-14",
+        end_date="2026-07-14",
+        top_n_values=[5],
+        output_dir=tmp_path,
+    )
+
+    selected = result["selected_trades"]
+    selected_rejected = result["selected_rejected_events"]
+    assert selected["selection_rank"].tolist() == [1, 2, 3, 4, 5]
+    assert selected.loc[selected["selection_rank"].eq(2), "backtest_entry_eligible"].tolist() == [False]
+    assert "000006.SZ" not in set(selected["ts_code"])
+    assert selected_rejected["selection_rank"].tolist() == [2]
+    assert selected_rejected["ts_code"].tolist() == ["000002.SZ"]
+    assert Path(result["paths"]["selected_rejected_events"]).exists()
+
+
+def test_full_market_pool_fails_when_entire_date_has_incomplete_price_limit_data(tmp_path):
+    lhb_features = pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-07-14",
+                "ts_code": "000001.SZ",
+                "lhb_net_buy_amount": 1_000.0,
+                "lhb_net_buy_ratio": 0.10,
+                "institution_net_buy": 1.0,
+                "top_seat_concentration": 0.10,
+                "repeat_on_list_count_3d": 1,
+                "lhb_after_limit_up": False,
+                "lhb_after_break_limit": False,
+                "lhb_after_reversal": False,
+                "lhb_one_day_pump_risk": 0.20,
+            }
+        ]
+    )
+
+    with pytest.raises(ValueError, match="all candidates have incomplete price-limit data"):
+        lhb_data.build_lhb_full_market_pool_backtest_v1(
+            lhb_features=lhb_features,
+            daily_bars=pd.DataFrame(),
+            start_date="2026-07-14",
+            end_date="2026-07-14",
+            top_n_values=[5],
+            output_dir=tmp_path,
+        )
 
 
 def test_build_lhb_intraday_filtered_topn_comparison_v1_compares_actions(tmp_path):
@@ -6017,6 +6245,57 @@ def test_build_lhb_phase18c_auction_enhanced_cash_account_backtest_v1_selects_re
         & selected["trade_date"].eq("2025-01-02")
     ].iloc[0]
     assert enhanced_first_day["ts_code"] == "B"
+
+
+def test_phase18c_filters_final_top5_for_account_without_rank6_refill():
+    lifecycle = pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-07-14",
+                "ts_code": f"00000{rank}.SZ",
+                "phase12a_rule_layer": "follow_pool_core",
+                "fill_status": "filled",
+                "entry_trade_date": "2026-07-15",
+                "exit_trade_date": "2026-07-16",
+                "realized_return": 0.01 * rank,
+                "top_n": 10,
+                "eligibility_status": "risk_watch" if rank == 2 else "eligible",
+                "backtest_entry_eligible": rank != 2,
+                "buy_signal_status": "research_only" if rank == 2 else "tradable",
+                "eligibility_contract_version": "lhb_eligibility_v2",
+            }
+            for rank in range(1, 7)
+        ]
+    )
+    scores = pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-07-14",
+                "ts_code": f"00000{rank}.SZ",
+                "auction_enhanced_score": 100.0 - rank,
+            }
+            for rank in range(1, 7)
+        ]
+    )
+
+    result = lhb_data.build_lhb_phase18c_auction_enhanced_cash_account_backtest_v1(
+        lifecycle_trades=lifecycle,
+        scored_candidates=scores,
+        output_dir="unused",
+        top_ns=[5],
+        write_outputs=False,
+    )
+
+    selected = result["selected_trades"]
+    rejected = result["selected_rejected_trades"]
+    baseline = selected[selected["strategy"].eq("baseline_original_order")]
+    assert baseline["phase18c_selection_rank"].tolist() == [1, 3, 4, 5]
+    assert 6 not in set(baseline["phase18c_selection_rank"])
+    rejected_baseline = rejected[rejected["strategy"].eq("baseline_original_order")]
+    assert rejected_baseline["phase18c_selection_rank"].tolist() == [2]
+    assert not result["account_trades"]["backtest_entry_eligible"].eq(False).any()
+    summary = result["summary"]
+    assert summary["cash_slot_count"].eq(1).all()
 
 
 def test_build_lhb_phase18f_tradable_joint_exit_replay_v1_uses_t1_5min_exit():

@@ -290,9 +290,16 @@ function strategyEvidenceMetrics(strategy: StrategyCatalogItem) {
     asOfDate: strategy.latest_metrics?.as_of_date ?? null,
     signalStatus: strategy.latest_metrics?.signal_status ?? 'no_position_rows',
     signalCount: strategy.latest_metrics?.signal_count ?? null,
+    strategyVersion: strategy.latest_metrics?.strategy_version ?? null,
     status,
     evidence
   };
+}
+
+function strategyVersionLabel(version: string | null) {
+  if (version === 'lhb_v1_stable_safe_top5') return 'LHB V1 Stable Safe Top5';
+  if (version === 'lhb_v1_safe_top5') return 'LHB V1 Safe Top5';
+  return version;
 }
 
 function activeStrategies(strategies: StrategyCatalogItem[]) {
@@ -1682,6 +1689,9 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
               <article className="strategy-command-card" key={strategy.strategy_id}>
                 <div className="strategy-command-card-header">
                   <strong>{strategy.strategy_name}</strong>
+                  {strategyVersionLabel(metrics.strategyVersion) ? (
+                    <span className="status-chip neutral">{strategyVersionLabel(metrics.strategyVersion)}</span>
+                  ) : null}
                   <span className="status-chip neutral">{statusLabel(metrics.status)}</span>
                 </div>
                 <div className="strategy-metric-grid">

@@ -114,31 +114,59 @@ def check_daily_bars(trade_date: str, *, fetcher=_default_fetcher) -> RepairChec
 
 def check_minute5_bars(trade_date: str, *, fetcher=_default_fetcher) -> RepairCheckResult:
     sql = """
-        SELECT expected_count,
-               actual_count,
-               jsonb_array_length(missing_symbols) AS missing_count,
-               jsonb_array_length(abnormal_symbols) AS abnormal_count
+        SELECT
+               max(expected_count) FILTER (WHERE dataset_name = 'minute5_bar') AS raw_expected_count,
+               max(actual_count) FILTER (WHERE dataset_name = 'minute5_bar') AS raw_actual_count,
+               max(jsonb_array_length(missing_symbols)) FILTER (WHERE dataset_name = 'minute5_bar') AS raw_missing_count,
+               max(jsonb_array_length(abnormal_symbols)) FILTER (WHERE dataset_name = 'minute5_bar') AS raw_abnormal_count,
+               max(expected_count) FILTER (WHERE dataset_name = 'minute5_qfq_bar') AS qfq_expected_count,
+               max(actual_count) FILTER (WHERE dataset_name = 'minute5_qfq_bar') AS qfq_actual_count,
+               max(jsonb_array_length(missing_symbols)) FILTER (WHERE dataset_name = 'minute5_qfq_bar') AS qfq_missing_count,
+               max(jsonb_array_length(abnormal_symbols)) FILTER (WHERE dataset_name = 'minute5_qfq_bar') AS qfq_abnormal_count
         FROM ops.daily_pipeline_quality
         WHERE trade_date = %s
-          AND dataset_name = 'minute5_bar'
-        ORDER BY updated_at DESC
-        LIMIT 1
+          AND dataset_name IN ('minute5_bar', 'minute5_qfq_bar')
     """
     row = _fetch_one(fetcher, sql, [trade_date])
-    actual = int(row.get("actual_count") or 0)
-    expected = int(row.get("expected_count") or 0)
-    missing = int(row.get("missing_count") or 0)
-    abnormal = int(row.get("abnormal_count") or 0)
-    gap_ratio = (missing + abnormal) / expected if expected else 1.0
+    raw_actual = int(row.get("raw_actual_count") or 0)
+    raw_expected = int(row.get("raw_expected_count") or 0)
+    raw_missing = int(row.get("raw_missing_count") or 0)
+    raw_abnormal = int(row.get("raw_abnormal_count") or 0)
+    qfq_actual = int(row.get("qfq_actual_count") or 0)
+    qfq_expected = int(row.get("qfq_expected_count") or 0)
+    qfq_missing = int(row.get("qfq_missing_count") or 0)
+    qfq_abnormal = int(row.get("qfq_abnormal_count") or 0)
+    raw_gap_ratio = (
+        (raw_missing + raw_abnormal) / raw_expected if raw_expected else 1.0
+    )
+    qfq_gap_ratio = (
+        (qfq_missing + qfq_abnormal) / qfq_expected if qfq_expected else 1.0
+    )
     metrics = {
-        "actual_count": actual,
-        "expected_count": expected,
-        "missing_count": missing,
-        "abnormal_count": abnormal,
-        "gap_ratio": round(gap_ratio, 6),
+        "raw_actual_count": raw_actual,
+        "raw_expected_count": raw_expected,
+        "raw_missing_count": raw_missing,
+        "raw_abnormal_count": raw_abnormal,
+        "raw_gap_ratio": round(raw_gap_ratio, 6),
+        "qfq_actual_count": qfq_actual,
+        "qfq_expected_count": qfq_expected,
+        "qfq_missing_count": qfq_missing,
+        "qfq_abnormal_count": qfq_abnormal,
+        "qfq_gap_ratio": round(qfq_gap_ratio, 6),
     }
-    if expected > 0 and actual > 0 and gap_ratio <= 0.01:
-        status = RepairStatus.DEGRADED if missing or abnormal else RepairStatus.SUCCESS
+    if (
+        raw_expected > 0
+        and raw_actual > 0
+        and raw_gap_ratio <= 0.01
+        and qfq_expected > 0
+        and qfq_actual > 0
+        and qfq_gap_ratio <= 0.01
+    ):
+        status = (
+            RepairStatus.DEGRADED
+            if raw_missing or raw_abnormal or qfq_missing or qfq_abnormal
+            else RepairStatus.SUCCESS
+        )
         return RepairCheckResult("minute5_bars", status, "ready", metrics)
     return RepairCheckResult("minute5_bars", RepairStatus.FAILED, "minute5 quality failed", metrics, blocker=True)
 

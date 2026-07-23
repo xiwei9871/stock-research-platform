@@ -11,6 +11,8 @@ from uuid import uuid4
 
 import pandas as pd
 
+from stock_research.lhb_eligibility import LHB_ELIGIBILITY_CONTRACT_VERSION, PUMP_REJECT_THRESHOLD
+
 
 LEGACY_LHB_BENCHMARK_SUMMARY_PATH = Path(
     "/Users/xiwei/stock_research/outputs/research/web_lhb_phase18c_runs/"
@@ -740,6 +742,29 @@ def _extend_lhb_shortline_account_curve_to_end_date(
     return extended.reindex(columns=account_curve.columns)
 
 
+def _extend_lhb_shortline_stable_account_to_end_date(
+    *,
+    summary: dict[str, Any],
+    account_trades: pd.DataFrame,
+    account_curve: pd.DataFrame,
+    daily_bars: pd.DataFrame,
+    end_date: str,
+) -> tuple[dict[str, Any], pd.DataFrame]:
+    extended_curve = _extend_lhb_shortline_account_curve_to_end_date(
+        account_curve=account_curve,
+        daily_bars=daily_bars,
+        end_date=end_date,
+    )
+    next_summary = dict(summary)
+    next_summary.update(
+        _summarize_lhb_shortline_market_regime_account(
+            account_trades=account_trades,
+            account_curve=extended_curve,
+        )
+    )
+    return next_summary, extended_curve
+
+
 def _canonical_ts_code(value: Any) -> str:
     code = str(value).upper().strip()
     parts = code.split(":")
@@ -814,7 +839,7 @@ def build_lhb_shortline_v1_candidates(
     reversal = reversal.fillna(False).astype(bool).astype(float)
     amount_confirm = _optional_num(frame, "amount_vs_20d", 1.0).clip(0, 3)
     pump_risk = _optional_num(frame, "lhb_one_day_pump_risk").clip(0, 1)
-    drawdown = _optional_num(frame, "high_to_close_drawdown").clip(-1, 0).abs()
+    drawdown = _optional_num(frame, "high_to_close_drawdown").clip(0, 1)
 
     frame["score_total"] = (
         50.0
@@ -830,7 +855,10 @@ def build_lhb_shortline_v1_candidates(
     on_lhb = frame.get("on_lhb", False)
     if not isinstance(on_lhb, pd.Series):
         on_lhb = pd.Series(on_lhb, index=frame.index)
-    eligible = on_lhb.fillna(False).astype(bool) & pump_risk.lt(0.75)
+    if "backtest_entry_eligible" in frame.columns:
+        eligible = frame["backtest_entry_eligible"].fillna(False).astype(bool)
+    else:
+        eligible = on_lhb.fillna(False).astype(bool) & pump_risk.lt(PUMP_REJECT_THRESHOLD)
     frame = frame[eligible].copy()
     frame["candidate_reason"] = "lhb_capital_plus_structure"
     frame = frame.sort_values(
@@ -1209,7 +1237,7 @@ def _minute_asset_ids_for_lhb_shortline_v1(lhb_features: pd.DataFrame, top_value
         frame["lhb_net_buy_amount"].fillna(0.0).gt(0)
         & frame["lhb_net_buy_ratio"].fillna(0.0).gt(0)
         & frame["institution_net_buy"].fillna(0.0).ge(0)
-        & frame["lhb_one_day_pump_risk"].fillna(0.0).lt(0.90)
+        & frame["lhb_one_day_pump_risk"].fillna(0.0).lt(PUMP_REJECT_THRESHOLD)
     )
     frame = frame[mask].copy()
     if frame.empty:
@@ -1249,26 +1277,62 @@ def load_lhb_shortline_v1_frames_from_db(
         lhb_rows = fetch_all(
             conn,
             """
+            WITH same_day_top AS (
+                SELECT
+                    trade_date,
+                    ts_code,
+                    max(NULLIF(name, '')) AS stock_name,
+                    max(pct_change) AS pct_chg
+                FROM market.lhb_top_list_daily
+                WHERE trade_date BETWEEN %s::date AND %s::date
+                GROUP BY trade_date, ts_code
+            )
             SELECT
-                trade_date::text AS trade_date,
-                ts_code,
-                on_lhb,
-                lhb_reason,
-                lhb_net_buy_amount,
-                lhb_net_buy_ratio,
-                institution_net_buy,
-                top_seat_concentration,
-                repeat_on_list_count_3d,
-                repeat_on_list_count_5d,
-                lhb_after_limit_up,
-                lhb_after_break_limit,
-                lhb_after_reversal,
-                lhb_one_day_pump_risk
-            FROM factor.lhb_event_features_daily
-            WHERE trade_date BETWEEN %s::date AND %s::date
-            ORDER BY trade_date, ts_code
+                f.trade_date::text AS trade_date,
+                f.ts_code,
+                t.stock_name,
+                CASE WHEN t.stock_name IS NULL THEN 'unavailable' ELSE 'lhb_same_day_name' END
+                    AS stock_name_source,
+                t.pct_chg,
+                a.name AS current_name,
+                a.list_date::text AS list_date,
+                s.is_st AS stored_is_st,
+                CASE
+                    WHEN s.source LIKE '%%status_quality=same_day_lhb_name' THEN 'trusted'
+                    WHEN s.source LIKE '%%status_quality=daily_bar' THEN 'trusted'
+                    ELSE 'unverified'
+                END AS stored_status_quality,
+                tech.amount_vs_20d,
+                tech.high_to_close_drawdown,
+                f.on_lhb,
+                f.lhb_reason,
+                f.lhb_net_buy_amount,
+                f.lhb_net_buy_ratio,
+                f.institution_net_buy,
+                f.top_seat_concentration,
+                f.repeat_on_list_count_3d,
+                f.repeat_on_list_count_5d,
+                f.lhb_after_limit_up,
+                f.lhb_after_break_limit,
+                f.lhb_after_reversal,
+                f.lhb_one_day_pump_risk
+            FROM factor.lhb_event_features_daily f
+            LEFT JOIN same_day_top t
+              ON t.trade_date = f.trade_date
+             AND t.ts_code = f.ts_code
+            LEFT JOIN core.asset_master a
+              ON a.ts_code = f.ts_code
+            LEFT JOIN core.asset_status_daily s
+              ON s.trade_date = f.trade_date
+             AND s.asset_id = a.asset_id
+            LEFT JOIN factor.stock_technical_features_daily tech
+              ON tech.trade_date = f.trade_date
+             AND tech.asset_id = a.asset_id
+             AND tech.adjust_type = %s
+            WHERE f.trade_date BETWEEN %s::date AND %s::date
+            ORDER BY f.trade_date, f.ts_code
             """,
-            [config.start_date, config.end_date],
+            [config.start_date, config.end_date, config.adjust_type, config.start_date, config.end_date],
         )
         technical_rows = fetch_all(
             conn,
@@ -1290,12 +1354,17 @@ def load_lhb_shortline_v1_frames_from_db(
             """
             SELECT
                 b.trade_date::text AS trade_date,
-                b.asset_id AS ts_code,
+                COALESCE(a.ts_code, b.asset_id) AS ts_code,
                 b.open,
                 b.low,
                 b.close,
-                b.preclose
+                b.preclose,
+                b.pct_chg,
+                b.is_st AS stored_is_st,
+                CASE WHEN b.is_st THEN 'trusted' ELSE 'unverified' END AS stored_status_quality
             FROM market_daily_bar b
+            LEFT JOIN core.asset_master a
+              ON a.asset_id = b.asset_id
             WHERE b.trade_date BETWEEN %s::date AND (%s::date + INTERVAL '7 days')
               AND b.adjust_type = %s
               AND COALESCE(b.trade_status, '') <> '停牌'
@@ -1408,6 +1477,28 @@ def _records(frame: pd.DataFrame) -> list[dict[str, Any]]:
 
 def _lhb_shortline_v1_top_values(top_n: int) -> list[int]:
     return [max(int(top_n), 10)]
+
+
+def _lhb_safe_top5_summary_metadata(phase18c_summary: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "strategy_version": "lhb_v1_stable_safe_top5",
+        "selection_policy": "phase18c_top5_then_eligibility_no_refill",
+        "market_regime_policy": "disabled_for_stable_strategy",
+        "cash_slot_count": int(phase18c_summary.get("cash_slot_count") or 0),
+    }
+
+
+def _select_lhb_stable_account(
+    *,
+    phase18c_summary: dict[str, Any],
+    phase18c_account_trades: pd.DataFrame,
+    phase18c_account_curve: pd.DataFrame,
+) -> dict[str, Any]:
+    return {
+        "summary": phase18c_summary.copy(),
+        "account_trades": phase18c_account_trades.copy(),
+        "account_curve": phase18c_account_curve.copy(),
+    }
 
 
 def _filter_lhb_shortline_v1_lifecycle_minute_window(
@@ -1604,6 +1695,196 @@ def _lhb_shortline_daily_auction_score_fallback(
     return fallback.reindex(columns=columns)
 
 
+LHB_ELIGIBILITY_DECISION_COLUMNS = [
+    "eligibility_status",
+    "top5_eligible",
+    "backtest_entry_eligible",
+    "buy_signal_status",
+    "eligibility_reason_codes",
+    "eligibility_reason_texts",
+    "eligibility_warning_codes",
+    "price_limit_regime",
+    "near_limit_down_threshold",
+    "data_quality_status",
+    "eligibility_contract_version",
+]
+
+
+def _assert_lhb_contract_versions(frame: pd.DataFrame, *, stage: str) -> None:
+    required = {"backtest_entry_eligible", "eligibility_contract_version"}
+    missing = sorted(required.difference(frame.columns))
+    if missing:
+        raise ValueError(
+            f"LHB eligibility parity violation at {stage}: missing columns {', '.join(missing)}"
+        )
+    versions = frame["eligibility_contract_version"].fillna("").astype(str)
+    invalid = ~versions.eq(LHB_ELIGIBILITY_CONTRACT_VERSION)
+    if invalid.any():
+        raise ValueError(
+            f"LHB eligibility parity violation at {stage}: invalid contract version rows={int(invalid.sum())}"
+        )
+
+
+def _filter_lhb_entry_eligible_contract_rows(frame: pd.DataFrame, *, stage: str) -> pd.DataFrame:
+    if frame.empty:
+        return frame.copy()
+    _assert_lhb_contract_versions(frame, stage=stage)
+    eligible = frame["backtest_entry_eligible"].fillna(False).astype(bool)
+    return frame[eligible].copy().reset_index(drop=True)
+
+
+def _assert_lhb_entry_eligibility_contract(frame: pd.DataFrame, *, stage: str) -> None:
+    if frame.empty:
+        return
+    _assert_lhb_contract_versions(frame, stage=stage)
+    invalid = ~frame["backtest_entry_eligible"].fillna(False).astype(bool)
+    if invalid.any():
+        raise ValueError(
+            f"LHB eligibility parity violation at {stage}: ineligible entry rows={int(invalid.sum())}"
+        )
+
+
+def _attach_lhb_contract_decisions(
+    frame: pd.DataFrame,
+    *,
+    decisions: pd.DataFrame,
+    stage: str,
+) -> pd.DataFrame:
+    if frame.empty:
+        result = frame.copy()
+        for column in LHB_ELIGIBILITY_DECISION_COLUMNS:
+            if column not in result.columns:
+                result[column] = pd.NA
+        return result
+    decision_columns = [column for column in LHB_ELIGIBILITY_DECISION_COLUMNS if column in decisions.columns]
+    required = {"trade_date", "ts_code", "backtest_entry_eligible", "eligibility_contract_version"}
+    if not required.issubset(decisions.columns):
+        raise ValueError(f"LHB eligibility parity violation at {stage}: upstream decision fields missing")
+    source = decisions[["trade_date", "ts_code", *decision_columns]].copy()
+    source["trade_date"] = pd.to_datetime(source["trade_date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    source["ts_code"] = source["ts_code"].map(_canonical_ts_code)
+    source = source.drop_duplicates(["trade_date", "ts_code"], keep="last")
+
+    result = frame.copy()
+    result["trade_date"] = pd.to_datetime(result["trade_date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    result["ts_code"] = result["ts_code"].map(_canonical_ts_code)
+    comparison = result[["trade_date", "ts_code"]].merge(
+        source,
+        on=["trade_date", "ts_code"],
+        how="left",
+        validate="many_to_one",
+    )
+    if comparison["eligibility_contract_version"].isna().any():
+        raise ValueError(f"LHB eligibility parity violation at {stage}: decision key missing")
+    for column in decision_columns:
+        if column not in result.columns:
+            continue
+        existing = result[column]
+        upstream = comparison[column]
+        both = existing.notna() & upstream.notna()
+        mismatch = both & existing.astype(str).ne(upstream.astype(str))
+        if mismatch.any():
+            raise ValueError(
+                f"LHB eligibility parity violation at {stage}: contradictory {column} rows={int(mismatch.sum())}"
+            )
+    result = result.drop(columns=decision_columns, errors="ignore")
+    return result.merge(
+        source,
+        on=["trade_date", "ts_code"],
+        how="left",
+        validate="many_to_one",
+    )
+
+
+def _build_lhb_eligibility_parity_audit(
+    *,
+    decisions: pd.DataFrame,
+    stages: dict[str, pd.DataFrame],
+) -> pd.DataFrame:
+    base = decisions[["trade_date", "ts_code", "eligibility_status", "eligibility_contract_version"]].copy()
+    base["trade_date"] = pd.to_datetime(base["trade_date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    base["ts_code"] = base["ts_code"].map(_canonical_ts_code)
+    base = base.drop_duplicates(["trade_date", "ts_code"], keep="last").rename(
+        columns={
+            "eligibility_status": "source_eligibility_status",
+            "eligibility_contract_version": "source_contract_version",
+        }
+    )
+    parity = pd.Series(True, index=base.index)
+    for stage, frame in stages.items():
+        status_column = f"{stage}_eligibility_status"
+        version_column = f"{stage}_contract_version"
+        if frame.empty or not {"trade_date", "ts_code", "eligibility_status", "eligibility_contract_version"}.issubset(frame.columns):
+            base[status_column] = pd.NA
+            base[version_column] = pd.NA
+            continue
+        observed = frame[["trade_date", "ts_code", "eligibility_status", "eligibility_contract_version"]].copy()
+        observed["trade_date"] = pd.to_datetime(observed["trade_date"], errors="coerce").dt.strftime("%Y-%m-%d")
+        observed["ts_code"] = observed["ts_code"].map(_canonical_ts_code)
+        observed = observed.drop_duplicates(["trade_date", "ts_code"], keep="last").rename(
+            columns={"eligibility_status": status_column, "eligibility_contract_version": version_column}
+        )
+        base = base.merge(observed, on=["trade_date", "ts_code"], how="left", validate="one_to_one")
+        observed = base[status_column].notna() | base[version_column].notna()
+        stage_match = ~observed | (
+            base[status_column].eq(base["source_eligibility_status"])
+            & base[version_column].eq(base["source_contract_version"])
+        )
+        parity = stage_match & parity.reset_index(drop=True)
+    base["eligibility_contract_version"] = base["source_contract_version"]
+    base["parity_status"] = parity.map({True: "match", False: "mismatch"})
+    return base
+
+
+def _build_lhb_review_candidates(
+    *,
+    scored_candidates: pd.DataFrame,
+    risk_watch_candidates: pd.DataFrame,
+    top_n: int,
+) -> pd.DataFrame:
+    del risk_watch_candidates
+    scored = scored_candidates.copy()
+    if "top_n" in scored.columns:
+        requested = pd.to_numeric(scored["top_n"], errors="coerce").eq(int(top_n))
+        if requested.any():
+            scored = scored[requested].copy()
+    if not scored.empty and {"trade_date", "ts_code"}.issubset(scored.columns):
+        scored = scored.sort_values(
+            ["trade_date", "auction_enhanced_score", "ts_code"],
+            ascending=[True, False, True],
+            kind="stable",
+            na_position="last",
+        ).drop_duplicates(["trade_date", "ts_code"], keep="first")
+    if scored.empty:
+        return scored.reset_index(drop=True)
+    if "selection_rank" not in scored.columns:
+        rank_source = next((column for column in ("source_rank", "rank") if column in scored.columns), None)
+        if rank_source is not None:
+            scored["selection_rank"] = pd.to_numeric(scored[rank_source], errors="coerce")
+        elif "trade_date" in scored.columns:
+            scored["selection_rank"] = scored.groupby("trade_date", dropna=False).cumcount() + 1
+        else:
+            scored["selection_rank"] = range(1, len(scored) + 1)
+    rank_column = "phase18c_selection_rank" if "phase18c_selection_rank" in scored.columns else "selection_rank"
+    final_rank = pd.to_numeric(scored[rank_column], errors="coerce")
+    if "backtest_entry_eligible" in scored.columns:
+        eligible = scored["backtest_entry_eligible"].fillna(False).astype(bool)
+    else:
+        eligible = scored.get("eligibility_status", pd.Series("eligible", index=scored.index)).eq("eligible")
+    if "buy_signal_status" in scored.columns:
+        eligible &= scored["buy_signal_status"].eq("tradable")
+    review = scored[eligible & final_rank.le(int(top_n))].copy()
+    if rank_column == "phase18c_selection_rank":
+        review["pool_selection_rank"] = pd.to_numeric(review["selection_rank"], errors="coerce")
+        review["selection_rank"] = pd.to_numeric(
+            review["phase18c_selection_rank"], errors="coerce"
+        )
+    review = review.sort_values(["trade_date", rank_column, "ts_code"], kind="stable")
+    if "ts_code" in review.columns:
+        review["asset_id"] = review["ts_code"]
+    return review.reset_index(drop=True)
+
+
 def run_lhb_shortline_v1_lifecycle_from_frames(
     *,
     config: LHBShortlineV1Config,
@@ -1629,7 +1910,9 @@ def run_lhb_shortline_v1_lifecycle_from_frames(
         pool_mode="raw_lhb_positive",
         output_dir=output_dir,
     )
-    selected = pool["selected_trades"]
+    selected = pool["selected_trades"].copy()
+    _assert_lhb_contract_versions(selected, stage="full_market_selected")
+    contract_decisions = selected.copy()
     lifecycle_minute_bars = _filter_lhb_shortline_v1_lifecycle_minute_window(
         selected=selected,
         minute_bars=frames.minute_bars,
@@ -1647,9 +1930,19 @@ def run_lhb_shortline_v1_lifecycle_from_frames(
         output_dir=output_dir,
         pre_context_days=2,
     )
+    phase12a["decision"] = _attach_lhb_contract_decisions(
+        phase12a["decision"],
+        decisions=contract_decisions,
+        stage="phase12a_decision",
+    )
     rule = build_lhb_phase12a_rule_decision_v1(
         phase12a_decision=phase12a["decision"],
         output_dir=output_dir,
+    )
+    rule["rule_decision"] = _attach_lhb_contract_decisions(
+        rule["rule_decision"],
+        decisions=contract_decisions,
+        stage="phase12a_rule",
     )
     real_entry = build_lhb_phase12a_real_entry_backtest_v1(
         rule_decision=rule["rule_decision"],
@@ -1659,6 +1952,11 @@ def run_lhb_shortline_v1_lifecycle_from_frames(
         entry_start_time="10:30:00",
         slippage_bps=0.0,
     )
+    real_entry["trades"] = _attach_lhb_contract_decisions(
+        real_entry["trades"],
+        decisions=contract_decisions,
+        stage="real_entry",
+    )
     lifecycle = build_lhb_phase14c_lifecycle_portfolio_v1(
         entry_trades=real_entry["trades"],
         minute_bars=lifecycle_minute_bars,
@@ -1667,6 +1965,22 @@ def run_lhb_shortline_v1_lifecycle_from_frames(
         threshold_profile="sensitive_entry_buffer",
     )
     lifecycle_trades = lifecycle["lifecycle_trades"].copy()
+    lifecycle_trades = _attach_lhb_contract_decisions(
+        lifecycle_trades,
+        decisions=contract_decisions,
+        stage="lifecycle",
+    )
+    lifecycle["lifecycle_trades"] = lifecycle_trades
+    review_scored = _attach_lhb_shortline_v1_auction_score(
+        lifecycle_trades,
+        frames.auction_open,
+        daily_bars=frames.daily_bars,
+    )
+    review_scored = _attach_lhb_contract_decisions(
+        review_scored,
+        decisions=contract_decisions,
+        stage="review_scored_candidates",
+    )
     lifecycle_trades = _filter_rows_to_lhb_shortline_asof_cutoff(
         lifecycle_trades,
         end_date=config.end_date,
@@ -1685,6 +1999,11 @@ def run_lhb_shortline_v1_lifecycle_from_frames(
         frames.auction_open,
         daily_bars=frames.daily_bars,
     )
+    scored = _attach_lhb_contract_decisions(
+        scored,
+        decisions=contract_decisions,
+        stage="phase18c_scored_candidates",
+    )
     phase18c = build_lhb_phase18c_auction_enhanced_cash_account_backtest_v1(
         lifecycle_trades=lifecycle_trades,
         scored_candidates=scored,
@@ -1700,6 +2019,18 @@ def run_lhb_shortline_v1_lifecycle_from_frames(
     account_curve = phase18c["account_curve"]
     summary_frame = phase18c["summary"]
     selected_trades = phase18c["selected_trades"]
+    account_trades = _attach_lhb_contract_decisions(
+        account_trades,
+        decisions=contract_decisions,
+        stage="phase18c_account_trades",
+    )
+    selected_trades = _attach_lhb_contract_decisions(
+        selected_trades,
+        decisions=contract_decisions,
+        stage="phase18c_selected_trades",
+    )
+    phase18c["account_trades"] = account_trades
+    phase18c["selected_trades"] = selected_trades
     account_trades = _filter_rows_to_lhb_shortline_asof_cutoff(
         account_trades,
         end_date=config.end_date,
@@ -1745,39 +2076,21 @@ def run_lhb_shortline_v1_lifecycle_from_frames(
         risk_profile = _normalize_lhb_shortline_risk_profile(config.risk_profile)
         profile_def = LHB_SHORTLINE_RISK_PROFILES[risk_profile]
         baseline_summary = summary_frame.iloc[0].to_dict()
-        market_regime = build_lhb_shortline_market_regime_control(frames.daily_bars, risk_profile=risk_profile)
-        if market_regime.empty:
-            summary = baseline_summary.copy()
-        else:
-            market_account = run_lhb_shortline_market_regime_account(
-                lifecycle_trades=account_trades,
-                market_regime=market_regime,
-                max_positions=config.account_max_positions,
-                base_position_pct=config.position_weight,
-                daily_bars=frames.daily_bars,
-                minute_bars=frames.minute_bars,
-                end_date=config.end_date,
-            )
-            account_trades = market_account["account_trades"].copy()
-            account_curve = market_account["account_curve"].copy()
-            if not account_trades.empty:
-                account_trades["strategy"] = strategy
-                account_trades["top_n"] = config.top_n
-            if not account_curve.empty:
-                account_curve["strategy"] = strategy
-                account_curve["top_n"] = config.top_n
-            account_curve = _extend_lhb_shortline_account_curve_to_end_date(
-                account_curve=account_curve,
-                daily_bars=frames.daily_bars,
-                end_date=config.end_date,
-            )
-            summary = {
-                **baseline_summary,
-                **_summarize_lhb_shortline_market_regime_account(
-                    account_trades=account_trades,
-                    account_curve=account_curve,
-                ),
-            }
+        stable_account = _select_lhb_stable_account(
+            phase18c_summary=baseline_summary,
+            phase18c_account_trades=account_trades,
+            phase18c_account_curve=account_curve,
+        )
+        summary = stable_account["summary"]
+        account_trades = stable_account["account_trades"]
+        account_curve = stable_account["account_curve"]
+        summary, account_curve = _extend_lhb_shortline_stable_account_to_end_date(
+            summary=summary,
+            account_trades=account_trades,
+            account_curve=account_curve,
+            daily_bars=frames.daily_bars,
+            end_date=config.end_date,
+        )
         existing_sharpe = pd.to_numeric(
             pd.Series([summary.get("sharpe_ratio")]), errors="coerce"
         ).iloc[0]
@@ -1786,7 +2099,8 @@ def run_lhb_shortline_v1_lifecycle_from_frames(
         summary.update(
             {
                 "engine_version": config.engine_version,
-                "fresh_engine_note": "LHB Shortline DB lifecycle recompute with selectable risk profile",
+                **_lhb_safe_top5_summary_metadata(baseline_summary),
+                "fresh_engine_note": "LHB stable Phase18C safe Top5 account without market overlay",
                 "phase18c_strategy": strategy,
                 "phase18c_top_n": config.top_n,
                 "position_pct": config.position_weight,
@@ -1796,8 +2110,8 @@ def run_lhb_shortline_v1_lifecycle_from_frames(
                 "frequency": config.rebalance_frequency,
                 "risk_profile": risk_profile,
                 "risk_profile_label": profile_def["label"],
-                "market_regime_profile": profile_def["market_regime_profile"],
-                "market_regime_note": profile_def["note"],
+                "market_regime_profile": "disabled_for_stable_strategy",
+                "market_regime_note": "稳定版不使用市场环境仓位控制；相关逻辑仅保留为独立研究实验。",
                 "baseline_phase18c_final_equity": baseline_summary.get("final_equity"),
                 "baseline_phase18c_total_return": baseline_summary.get("total_return"),
                 "baseline_phase18c_max_drawdown": baseline_summary.get("max_drawdown"),
@@ -1825,7 +2139,25 @@ def run_lhb_shortline_v1_lifecycle_from_frames(
         market_regime_path = output_dir / "lhb_shortline_v1_1_market_regime.csv"
         market_regime.to_csv(market_regime_path, index=False)
         paths["pipeline_market_regime"] = str(market_regime_path)
-    return result, selected_trades.reset_index(drop=True), paths
+    parity_audit = _build_lhb_eligibility_parity_audit(
+        decisions=contract_decisions,
+        stages={
+            "phase12a": phase12a["decision"],
+            "rule": rule["rule_decision"],
+            "real_entry": real_entry["trades"],
+            "lifecycle": lifecycle["lifecycle_trades"],
+            "phase18c_account": phase18c["account_trades"],
+        },
+    )
+    parity_path = output_dir / "lhb_eligibility_parity_audit_v2.csv"
+    parity_audit.to_csv(parity_path, index=False)
+    paths["pipeline_eligibility_parity_audit"] = str(parity_path)
+    review_candidates = _build_lhb_review_candidates(
+        scored_candidates=selected_trades,
+        risk_watch_candidates=pool["rejected_events"],
+        top_n=config.top_n,
+    )
+    return result, review_candidates.reset_index(drop=True), paths
 
 
 def run_lhb_shortline_v1_backtest_for_dashboard(payload: dict[str, Any]) -> dict[str, Any]:

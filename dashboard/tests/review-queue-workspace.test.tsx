@@ -138,7 +138,7 @@ describe('ReviewQueueWorkspace', () => {
     expect(apiMocks.fetchReviewQueue).toHaveBeenCalledWith({ limit: 10, lookbackDays: 90 });
     expect(screen.getByRole('button', { name: 'Mid Trend Combo 1' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByText('复盘范围')).toBeInTheDocument();
-    expect(screen.getByText('启用策略 Top10')).toBeInTheDocument();
+    expect(screen.getByText('按策略正式复盘范围')).toBeInTheDocument();
     expect(screen.getByText('平台市场日期')).toBeInTheDocument();
     expect(screen.getByText('复盘队列与平台市场日期一致。')).toBeInTheDocument();
     expect(screen.getByText('Mid Trend Combo：最新 2026-06-08，1 只')).toBeInTheDocument();

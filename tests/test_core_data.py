@@ -1,3 +1,5 @@
+import pytest
+
 from stock_research import core_data
 
 
@@ -44,7 +46,7 @@ def test_sync_core_asset_master_does_not_overwrite_existing_region(monkeypatch):
     assert "region = COALESCE(NULLIF(a.region, ''), EXCLUDED.region)" in sql
 
 
-def test_sync_chinese_stock_names_from_akshare_updates_public_and_core(monkeypatch):
+def test_sync_chinese_stock_names_from_akshare_upserts_public_and_core(monkeypatch):
     conn = FakeConnection()
 
     class FakeAk:
@@ -54,8 +56,8 @@ def test_sync_chinese_stock_names_from_akshare_updates_public_and_core(monkeypat
 
             return pd.DataFrame(
                 [
-                    {"code": "002484", "name": "江海股份"},
-                    {"code": "600183", "name": "生益科技"},
+                    {"code": "001399", "name": "惠科股份"},
+                    {"code": "688001", "name": "华兴源创"},
                 ]
             )
 
@@ -68,12 +70,32 @@ def test_sync_chinese_stock_names_from_akshare_updates_public_and_core(monkeypat
     assert len(conn.executed_many) == 2
     public_sql, public_rows = conn.executed_many[0]
     core_sql, core_rows = conn.executed_many[1]
-    assert "UPDATE asset_master" in public_sql
-    assert "name = data.name" in public_sql
-    assert "UPDATE core.asset_master" in core_sql
-    assert "ts_code = data.ts_code" in core_sql
-    assert public_rows[0] == ("002484", "江海股份", "002484.SZ")
-    assert core_rows[1] == ("600183", "生益科技", "600183.SH")
+    assert "INSERT INTO asset_master" in public_sql
+    assert "ON CONFLICT (asset_id) DO UPDATE" in public_sql
+    assert "INSERT INTO core.asset_master" in core_sql
+    assert "ON CONFLICT (asset_id) DO UPDATE" in core_sql
+    assert "is_star" in core_sql
+    assert public_rows[0] == (
+        "CN:SZ:001399",
+        core_data.SETTINGS.default_market,
+        "001399",
+        "SZ",
+        "惠科股份",
+        core_data.SETTINGS.default_currency,
+    )
+    assert core_rows[1] == (
+        "CN:SH:688001",
+        "688001.SH",
+        "688001",
+        "688001",
+        "华兴源创",
+        "SH",
+        "STAR",
+        True,
+        False,
+        True,
+        False,
+    )
 
 
 def test_build_asset_status_daily_uses_point_in_time_daily_bars(monkeypatch):
@@ -90,6 +112,10 @@ def test_build_asset_status_daily_uses_point_in_time_daily_bars(monkeypatch):
     assert "INSERT INTO core.asset_status_daily" in sql
     assert "FROM market_daily_bar b" in sql
     assert "LEFT JOIN core.asset_master a" in sql
+    assert "market.lhb_top_list_daily" in sql
+    assert "same_day_lhb_name" in sql
+    assert "resolved_is_st" in sql
+    assert "status_quality" in sql
     assert "b.adjust_type = %s" in sql
     assert "b.trade_date >= %s" in sql
     assert "b.trade_date <= %s" in sql
@@ -97,6 +123,8 @@ def test_build_asset_status_daily_uses_point_in_time_daily_bars(monkeypatch):
     assert "b.trade_status <> '1'" in sql
     assert "b.pct_chg >= " in sql
     assert "b.pct_chg <= -" in sql
+    assert "WHEN resolved_is_st THEN 4.8" in sql
+    assert "WHEN is_beijing THEN 29.8" in sql
     assert "ON CONFLICT (trade_date, asset_id) DO UPDATE" in sql
     assert params == ["hfq", "2026-05-06", "2026-05-08"]
 
@@ -111,6 +139,74 @@ def test_build_asset_status_daily_allows_open_date_range(monkeypatch):
     assert "b.trade_date >=" not in sql
     assert "b.trade_date <=" not in sql
     assert params == ["qfq"]
+
+
+def test_asset_status_quality_rejects_zero_st_when_same_day_lhb_has_st(monkeypatch):
+    monkeypatch.setattr(
+        core_data,
+        "fetch_all",
+        lambda conn, sql, params: [
+            {
+                "trade_date": "2026-07-14",
+                "lhb_st_count": 2,
+                "asset_status_st_count": 0,
+            }
+        ],
+    )
+
+    with pytest.raises(RuntimeError, match="asset status ST quality violation"):
+        core_data.assert_asset_status_daily_quality(
+            object(),
+            start_date="2026-07-14",
+            end_date="2026-07-14",
+        )
+
+
+def test_asset_status_quality_accepts_nonzero_resolved_st(monkeypatch):
+    monkeypatch.setattr(core_data, "fetch_all", lambda conn, sql, params: [])
+
+    result = core_data.assert_asset_status_daily_quality(
+        object(),
+        start_date="2026-07-14",
+        end_date="2026-07-14",
+    )
+
+    assert result["violation_count"] == 0
+
+
+def test_asset_status_service_runs_quality_guard_after_build(monkeypatch):
+    calls = []
+
+    class ConnectionContext:
+        def __enter__(self):
+            return "conn"
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+    monkeypatch.setattr(core_data, "connect", lambda service: ConnectionContext())
+    monkeypatch.setattr(
+        core_data,
+        "build_asset_status_daily",
+        lambda conn, start_date, end_date, adjust_type: calls.append(("build", conn, start_date, end_date, adjust_type)),
+    )
+    monkeypatch.setattr(
+        core_data,
+        "assert_asset_status_daily_quality",
+        lambda conn, start_date, end_date: calls.append(("quality", conn, start_date, end_date)),
+    )
+
+    core_data.build_asset_status_daily_for_service(
+        start_date="2026-07-14",
+        end_date="2026-07-14",
+        adjust_type="hfq",
+        service="stock_research",
+    )
+
+    assert calls == [
+        ("build", "conn", "2026-07-14", "2026-07-14", "hfq"),
+        ("quality", "conn", "2026-07-14", "2026-07-14"),
+    ]
 
 
 def test_build_industry_daily_bars_uses_historical_membership_windows(monkeypatch):

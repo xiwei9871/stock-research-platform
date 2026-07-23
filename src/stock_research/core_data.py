@@ -5,6 +5,7 @@ import requests
 from stock_research.config import SETTINGS
 from stock_research.db import connect, execute
 from stock_research.db import execute_many
+from stock_research.db import fetch_all
 from stock_research.eastmoney_http import curl_eastmoney_json
 
 try:
@@ -101,33 +102,74 @@ def sync_chinese_stock_names_from_akshare(conn) -> int:
     if not rows:
         return 0
     public_sql = """
-    UPDATE asset_master AS a
-    SET
-        name = data.name,
+    INSERT INTO asset_master (
+        asset_id, market, symbol, exchange, name, currency, status, source, updated_at
+    )
+    VALUES (%s, %s, %s, %s, %s, %s, 'listed', 'akshare:stock_info_a_code_name', now())
+    ON CONFLICT (asset_id) DO UPDATE SET
+        market = EXCLUDED.market,
+        symbol = EXCLUDED.symbol,
+        exchange = EXCLUDED.exchange,
+        name = EXCLUDED.name,
+        currency = EXCLUDED.currency,
         updated_at = now()
-    FROM (VALUES (%s, %s, %s)) AS data(symbol, name, ts_code)
-    WHERE a.symbol = data.symbol
-      AND (a.name IS NULL OR a.name = '' OR a.name = a.symbol OR a.name <> data.name)
     """
     core_sql = """
-    UPDATE core.asset_master AS a
-    SET
-        name = data.name,
-        ts_code = data.ts_code,
+    INSERT INTO core.asset_master (
+        asset_id,
+        ts_code,
+        akshare_code,
+        symbol,
+        name,
+        exchange,
+        board,
+        is_active,
+        is_beijing,
+        is_star,
+        is_chinext,
+        source,
+        updated_at
+    )
+    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'akshare:stock_info_a_code_name', now())
+    ON CONFLICT (asset_id) DO UPDATE SET
+        ts_code = EXCLUDED.ts_code,
+        akshare_code = EXCLUDED.akshare_code,
+        symbol = EXCLUDED.symbol,
+        name = EXCLUDED.name,
+        exchange = EXCLUDED.exchange,
+        board = EXCLUDED.board,
+        is_active = EXCLUDED.is_active,
+        is_beijing = EXCLUDED.is_beijing,
+        is_star = EXCLUDED.is_star,
+        is_chinext = EXCLUDED.is_chinext,
         updated_at = now()
-    FROM (VALUES (%s, %s, %s)) AS data(symbol, name, ts_code)
-    WHERE a.symbol = data.symbol
-      AND (
-          a.name IS NULL OR a.name = '' OR a.name = a.symbol OR a.name <> data.name
-          OR a.ts_code IS NULL OR a.ts_code = ''
-      )
     """
-    execute_many(conn, public_sql, rows)
-    execute_many(conn, core_sql, rows)
+    public_rows = [
+        (asset_id, SETTINGS.default_market, symbol, exchange, name, SETTINGS.default_currency)
+        for asset_id, symbol, name, exchange, _ts_code in rows
+    ]
+    core_rows = [
+        (
+            asset_id,
+            ts_code,
+            symbol,
+            symbol,
+            name,
+            exchange,
+            _asset_board(symbol, exchange),
+            True,
+            exchange == "BJ",
+            exchange == "SH" and symbol.startswith("688"),
+            exchange == "SZ" and symbol.startswith(("300", "301", "302")),
+        )
+        for asset_id, symbol, name, exchange, ts_code in rows
+    ]
+    execute_many(conn, public_sql, public_rows)
+    execute_many(conn, core_sql, core_rows)
     return len(rows)
 
 
-def _normalize_akshare_code_name_rows(frame) -> list[tuple[str, str, str]]:
+def _normalize_akshare_code_name_rows(frame) -> list[tuple[str, str, str, str, str]]:
     if frame is None or frame.empty:
         return []
     code_column = "code" if "code" in frame.columns else "代码"
@@ -148,8 +190,20 @@ def _normalize_akshare_code_name_rows(frame) -> list[tuple[str, str, str]]:
             exchange = "BJ"
         else:
             continue
-        rows.append((symbol, name, f"{symbol}.{exchange}"))
+        rows.append((f"CN:{exchange}:{symbol}", symbol, name, exchange, f"{symbol}.{exchange}"))
     return rows
+
+
+def _asset_board(symbol: str, exchange: str) -> str:
+    if exchange == "BJ":
+        return "BSE"
+    if exchange == "SH" and symbol.startswith("688"):
+        return "STAR"
+    if exchange == "SZ" and symbol.startswith(("300", "301", "302")):
+        return "CHINEXT"
+    if exchange == "SH":
+        return "SSE_MAIN"
+    return "SZSE_MAIN"
 
 
 def sync_concept_memberships_from_akshare(
@@ -457,6 +511,7 @@ def build_asset_status_daily_for_service(
 ) -> None:
     with connect(service) as conn:
         build_asset_status_daily(conn, start_date, end_date, adjust_type)
+        assert_asset_status_daily_quality(conn, start_date=start_date, end_date=end_date)
 
 
 def build_asset_status_daily(
@@ -477,12 +532,46 @@ def build_asset_status_daily(
     where_sql = " AND ".join(filters)
     limit_threshold_sql = """
         CASE
-            WHEN b.is_st THEN 4.8
-            WHEN a.is_star OR a.is_chinext OR a.is_beijing THEN 19.8
+            WHEN resolved_is_st THEN 4.8
+            WHEN is_beijing THEN 29.8
+            WHEN is_star OR is_chinext THEN 19.8
             ELSE 9.8
         END
     """
     sql = f"""
+    WITH same_day_lhb AS (
+        SELECT
+            trade_date,
+            ts_code,
+            max(NULLIF(name, '')) AS same_day_lhb_name
+        FROM market.lhb_top_list_daily
+        GROUP BY trade_date, ts_code
+    ),
+    resolved AS (
+        SELECT
+            b.*,
+            a.is_star,
+            a.is_chinext,
+            a.is_beijing,
+            l.same_day_lhb_name,
+            COALESCE(
+                l.same_day_lhb_name ~* '^(\\*?ST|S\\*ST)',
+                b.is_st,
+                false
+            ) AS resolved_is_st,
+            CASE
+                WHEN l.same_day_lhb_name IS NOT NULL THEN 'same_day_lhb_name'
+                WHEN b.is_st THEN 'daily_bar'
+                ELSE 'daily_bar_unverified_false'
+            END AS status_quality
+        FROM market_daily_bar b
+        LEFT JOIN core.asset_master a
+          ON a.asset_id = b.asset_id
+        LEFT JOIN same_day_lhb l
+          ON l.trade_date = b.trade_date
+         AND l.ts_code = a.ts_code
+        WHERE {where_sql}
+    )
     INSERT INTO core.asset_status_daily (
         trade_date,
         asset_id,
@@ -499,7 +588,7 @@ def build_asset_status_daily(
         b.trade_date,
         b.asset_id,
         b.trade_status = '1' AS is_trade,
-        b.is_st,
+        b.resolved_is_st,
         b.trade_status <> '1' AS is_suspended,
         b.pct_chg >= {limit_threshold_sql} AS is_limit_up,
         b.pct_chg <= -{limit_threshold_sql} AS is_limit_down,
@@ -511,11 +600,8 @@ def build_asset_status_daily(
             WHEN b.preclose IS NULL THEN NULL
             ELSE b.preclose * (1 - ({limit_threshold_sql} / 100.0))
         END AS limit_down_price,
-        b.source
-    FROM market_daily_bar b
-    LEFT JOIN core.asset_master a
-      ON a.asset_id = b.asset_id
-    WHERE {where_sql}
+        b.source || ':status_quality=' || b.status_quality
+    FROM resolved b
     ON CONFLICT (trade_date, asset_id) DO UPDATE SET
         is_trade = EXCLUDED.is_trade,
         is_st = EXCLUDED.is_st,
@@ -528,6 +614,59 @@ def build_asset_status_daily(
         updated_at = now()
     """
     execute(conn, sql, params)
+
+
+def assert_asset_status_daily_quality(
+    conn,
+    *,
+    start_date: str | None = None,
+    end_date: str | None = None,
+) -> dict[str, object]:
+    filters = ["NULLIF(l.name, '') ~* '^(\\*?ST|S\\*ST)'"]
+    params: list[object] = []
+    if start_date:
+        filters.append("l.trade_date >= %s")
+        params.append(start_date)
+    if end_date:
+        filters.append("l.trade_date <= %s")
+        params.append(end_date)
+    rows = fetch_all(
+        conn,
+        f"""
+        WITH lhb_st AS (
+            SELECT
+                l.trade_date,
+                count(DISTINCT l.ts_code)::int AS lhb_st_count
+            FROM market.lhb_top_list_daily l
+            WHERE {' AND '.join(filters)}
+            GROUP BY l.trade_date
+        ),
+        status_st AS (
+            SELECT
+                s.trade_date,
+                count(DISTINCT s.asset_id)::int AS asset_status_st_count
+            FROM core.asset_status_daily s
+            WHERE s.is_st
+            GROUP BY s.trade_date
+        )
+        SELECT
+            l.trade_date::text AS trade_date,
+            l.lhb_st_count,
+            COALESCE(s.asset_status_st_count, 0)::int AS asset_status_st_count
+        FROM lhb_st l
+        LEFT JOIN status_st s ON s.trade_date = l.trade_date
+        WHERE COALESCE(s.asset_status_st_count, 0) = 0
+        ORDER BY l.trade_date
+        """,
+        params,
+    )
+    if rows:
+        sample = ", ".join(
+            f"{row.get('trade_date')}:lhb_st={row.get('lhb_st_count')}:status_st={row.get('asset_status_st_count')}"
+            for row in rows[:5]
+        )
+        raise RuntimeError(f"asset status ST quality violation: {sample}")
+    return {"violation_count": 0, "start_date": start_date, "end_date": end_date}
 
 
 def build_industry_daily_bars_for_service(

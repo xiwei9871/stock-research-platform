@@ -15,6 +15,7 @@ from stock_research.dashboard.reports import DEFAULT_REPORTS_DIR
 from stock_research.data_run_manifest import build_manifest_entry, upsert_data_run_manifest
 from stock_research.db import connect, fetch_all
 from stock_research.lhb_data import run_lhb_event_features_build
+from stock_research.lhb_review_policy import apply_lhb_top5_gate, is_valid_stock_name
 from stock_research.news_features import NEWS_FEATURE_COLUMNS, build_news_feature_daily
 from stock_research.review_evidence_snapshots import run_eod_review_evidence_snapshots
 from stock_research.strategy_contracts import OFFICIAL_MAX_POSITION_WEIGHT, OFFICIAL_TRANSACTION_COST_BPS
@@ -763,8 +764,11 @@ def _review_rows_from_result(
     columns = [
         "trade_date",
         "asset_id",
+        "stock_name",
+        "stock_name_source",
         "rank",
         "score_total",
+        "raw_score",
         "score_source",
         "score_explanation",
         "score_components",
@@ -775,6 +779,24 @@ def _review_rows_from_result(
         "source_name",
         "source_rank",
         "review_tier",
+        "confirmation_state",
+        "phase12a_rule_layer",
+        "phase12a_rule_action",
+        "fill_status",
+        "eligibility_status",
+        "top5_eligible",
+        "backtest_entry_eligible",
+        "buy_signal_status",
+        "eligibility_reason_codes",
+        "eligibility_reason_texts",
+        "eligibility_warning_codes",
+        "eligibility_contract_version",
+        "risk_gate_code",
+        "risk_gate_reason",
+        "price_limit_regime",
+        "near_limit_down_threshold",
+        "data_quality_status",
+        "pct_chg",
     ]
     current_holdings = _current_holdings_from_trades(result, trade_date=trade_date)
     if strategy_id != "lhb_shortline" and not current_holdings.empty:
@@ -865,22 +887,58 @@ def _review_rows_from_result(
             score = lookup_score
             resolved_score_col = lookup_source or resolved_score_col
         score_components: dict[str, Any] = {}
-        if strategy_id == "lhb_shortline" and _should_use_lhb_base_score(row=row, score_source=resolved_score_col):
-            base_score_row = _lookup_lhb_base_score(
+        base_score_row = (
+            _lookup_lhb_base_score(
                 lhb_base_score_lookup,
                 asset_id=str(row.get(asset_col) or ""),
             )
+            if strategy_id == "lhb_shortline"
+            else None
+        )
+        if strategy_id == "lhb_shortline" and score is None:
             base_score = _score_value(base_score_row.get("score_total"), "score_total") if base_score_row else None
             if base_score is not None:
                 score = base_score
                 resolved_score_col = "score_total"
                 score_components = _dict_or_empty(base_score_row.get("score_components"))
+        if strategy_id == "lhb_shortline" and str(row.get("eligibility_status") or "") == "risk_watch":
+            base_score = _score_value(base_score_row.get("score_total"), "score_total") if base_score_row else None
+            if base_score is not None:
+                score = base_score
+                resolved_score_col = "score_total"
+                score_components = _dict_or_empty(base_score_row.get("score_components"))
+        if strategy_id == "lhb_shortline" and _should_use_lhb_base_score(row=row, score_source=resolved_score_col):
+            base_score = _score_value(base_score_row.get("score_total"), "score_total") if base_score_row else None
+            if base_score is not None:
+                score = base_score
+                resolved_score_col = "score_total"
+                score_components = _dict_or_empty(base_score_row.get("score_components"))
+        candidate_name = next(
+            (
+                row.get(key)
+                for key in ("stock_name", "name", "security_name")
+                if is_valid_stock_name(row.get(key), asset_id=normalized_asset_id or raw_asset_id)
+            ),
+            "",
+        )
+        lookup_name = (base_score_row or {}).get("stock_name")
+        resolved_name = candidate_name
+        resolved_name_source = "strategy_candidate" if candidate_name else ""
+        if not is_valid_stock_name(resolved_name, asset_id=normalized_asset_id or raw_asset_id):
+            resolved_name = lookup_name
+            resolved_name_source = str((base_score_row or {}).get("stock_name_source") or "")
+        if not is_valid_stock_name(resolved_name, asset_id=normalized_asset_id or raw_asset_id):
+            resolved_name = normalized_asset_id or raw_asset_id
+            resolved_name_source = "code_fallback"
         rows.append(
             {
                 "trade_date": trade_date,
                 "asset_id": raw_asset_id,
+                "stock_name": str(resolved_name or ""),
+                "stock_name_source": resolved_name_source,
                 "rank": rank or index + 1,
                 "score_total": score,
+                "raw_score": score,
                 "score_source": resolved_score_col or "",
                 "score_explanation": "真实策略输出分；无策略分字段时留空，不使用排名占位分",
                 "score_components": score_components,
@@ -891,19 +949,71 @@ def _review_rows_from_result(
                 "source_name": source_name,
                 "source_rank": rank or index + 1,
                 "review_tier": "top5_focus" if (rank or index + 1) <= 5 else "watch",
+                "confirmation_state": _lhb_confirmation_state(
+                    phase12a_rule_layer=row.get("phase12a_rule_layer"),
+                    phase12a_rule_action=row.get("phase12a_rule_action"),
+                    fill_status=row.get("fill_status"),
+                    eligibility_status=row.get("eligibility_status"),
+                ) if strategy_id == "lhb_shortline" else "",
+                "phase12a_rule_layer": row.get("phase12a_rule_layer"),
+                "phase12a_rule_action": row.get("phase12a_rule_action"),
+                "fill_status": row.get("fill_status"),
+                "eligibility_status": row.get("eligibility_status"),
+                "top5_eligible": row.get("top5_eligible"),
+                "backtest_entry_eligible": row.get("backtest_entry_eligible"),
+                "buy_signal_status": row.get("buy_signal_status"),
+                "eligibility_reason_codes": row.get("eligibility_reason_codes"),
+                "eligibility_reason_texts": row.get("eligibility_reason_texts"),
+                "eligibility_warning_codes": row.get("eligibility_warning_codes"),
+                "eligibility_contract_version": row.get("eligibility_contract_version"),
+                "risk_gate_code": "",
+                "risk_gate_reason": "",
+                "price_limit_regime": row.get("price_limit_regime"),
+                "near_limit_down_threshold": row.get("near_limit_down_threshold"),
+                "data_quality_status": row.get("data_quality_status"),
+                "pct_chg": row.get("pct_chg") if pd.notna(row.get("pct_chg")) else (base_score_row or {}).get("pct_chg"),
             }
         )
     review = pd.DataFrame(rows, columns=columns)
     if review.empty:
         return review
     if strategy_id == "lhb_shortline" and "score_total" in review.columns:
-        review["_sort_score"] = pd.to_numeric(review["score_total"], errors="coerce")
-        review = review.sort_values(["_sort_score", "asset_id"], ascending=[False, True], kind="stable").drop(columns=["_sort_score"])
-        review["rank"] = range(1, len(review) + 1)
-        review["source_rank"] = review["rank"]
-        review["review_tier"] = review["rank"].map(lambda rank: "top5_focus" if int(rank) <= 5 else "watch")
+        review = apply_lhb_top5_gate(review)
+        original_rank = pd.to_numeric(review["rank"], errors="coerce")
+        eligible = review["eligibility_status"].eq("eligible")
+        entry_eligible = review["backtest_entry_eligible"].fillna(False).astype(bool)
+        tradable = review["buy_signal_status"].eq("tradable")
+        review = review[eligible & entry_eligible & tradable & original_rank.le(5)].copy()
+        review["review_tier"] = "top5_focus"
+        review = review.sort_values(["rank", "asset_id"], kind="stable")
         return review.reset_index(drop=True).reindex(columns=columns)
     return review.sort_values(["rank", "asset_id"], kind="stable").reset_index(drop=True)
+
+
+def _lhb_confirmation_state(
+    *,
+    phase12a_rule_layer: object,
+    phase12a_rule_action: object,
+    fill_status: object,
+    eligibility_status: object,
+) -> str:
+    eligibility = str(eligibility_status or "").strip().lower()
+    layer = str(phase12a_rule_layer or "").strip().lower()
+    action = str(phase12a_rule_action or "").strip().lower()
+    fill = str(fill_status or "").strip().lower()
+    if eligibility == "risk_watch":
+        return "risk_watch"
+    if eligibility == "hard_reject":
+        return "retreat"
+    if layer == "pending_intraday" or action == "pending":
+        return "pending_confirmation"
+    if layer.startswith("follow_pool") or action == "follow_allowed" or fill == "filled":
+        return "confirmed_follow"
+    if layer in {"watch_pool", "chase_control"} or action in {"watch_only", "chase_control"}:
+        return "watch_only"
+    if layer == "retreat_hard" or action in {"retreat", "reject_follow"}:
+        return "retreat"
+    return "pending_confirmation" if eligibility == "eligible" else "watch_only"
 
 
 def _mid_trend_latest_equity_is_flat_cash(result: dict[str, Any], *, trade_date: str) -> bool:
@@ -997,15 +1107,30 @@ def _lhb_base_score_lookup_for_trade_date(trade_date: str) -> dict[str, dict[str
         return {}
     if scores.empty:
         return {}
+    metadata_lookup: dict[str, dict[str, Any]] = {}
+    for row in lhb.to_dict("records"):
+        raw_asset_id = str(row.get("asset_id") or "")
+        metadata = {
+            "stock_name": row.get("stock_name"),
+            "stock_name_source": row.get("stock_name_source"),
+            "pct_chg": row.get("pct_chg"),
+        }
+        for key in {raw_asset_id, _asset_id_from_review_code(raw_asset_id)}:
+            if key:
+                metadata_lookup[key] = metadata
     lookup: dict[str, dict[str, Any]] = {}
     for row in scores.to_dict("records"):
         score = _score_value(row.get("score_total"), "score_total")
         if score is None:
             continue
         raw_asset_id = str(row.get("asset_id") or "")
+        metadata = metadata_lookup.get(raw_asset_id) or metadata_lookup.get(_asset_id_from_review_code(raw_asset_id)) or {}
         payload = {
             "score_total": score,
             "score_components": _dict_or_empty(row.get("score_components")),
+            "stock_name": metadata.get("stock_name"),
+            "stock_name_source": metadata.get("stock_name_source"),
+            "pct_chg": metadata.get("pct_chg"),
         }
         for key in {raw_asset_id, _asset_id_from_review_code(raw_asset_id)}:
             if key:
@@ -1024,9 +1149,28 @@ def _load_lhb_base_score_source_frames(trade_date: str) -> tuple[pd.DataFrame, p
             l.institution_net_buy,
             l.repeat_on_list_count_3d,
             l.lhb_after_reversal,
-            l.lhb_one_day_pump_risk
+            l.lhb_one_day_pump_risk,
+            COALESCE(NULLIF(a.name, ''), NULLIF(t.name, '')) AS stock_name,
+            CASE
+                WHEN NULLIF(a.name, '') IS NOT NULL THEN 'core_asset_master'
+                WHEN NULLIF(t.name, '') IS NOT NULL THEN 'lhb_top_list_daily'
+                ELSE ''
+            END AS stock_name_source,
+            COALESCE(d.pct_chg, t.pct_change) AS pct_chg
         FROM factor.lhb_event_features_daily l
         LEFT JOIN core.asset_master a ON a.ts_code = l.ts_code
+        LEFT JOIN LATERAL (
+            SELECT
+                max(NULLIF(source.name, '')) AS name,
+                max(source.pct_change) AS pct_change
+            FROM market.lhb_top_list_daily source
+            WHERE source.trade_date = l.trade_date
+              AND source.ts_code = l.ts_code
+        ) t ON true
+        LEFT JOIN market_daily_bar d
+          ON d.asset_id = a.asset_id
+         AND d.trade_date = l.trade_date
+         AND d.adjust_type = 'hfq'
         WHERE l.trade_date = %s
     """
     technical_sql = """
@@ -1066,7 +1210,8 @@ def _lhb_same_day_candidate_frame(result: dict[str, Any], *, trade_date: str) ->
         return pd.DataFrame()
     if "auction_enhanced_score" in frame.columns:
         scored = pd.to_numeric(frame["auction_enhanced_score"], errors="coerce")
-        frame = frame[scored.notna()].copy()
+        risk_watch = frame.get("eligibility_status", pd.Series("", index=frame.index)).fillna("").astype(str).eq("risk_watch")
+        frame = frame[scored.notna() | risk_watch].copy()
     return frame
 
 
