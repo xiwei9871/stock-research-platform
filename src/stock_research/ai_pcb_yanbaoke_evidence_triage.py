@@ -398,6 +398,33 @@ def collapse_content_identities(
     return collapsed
 
 
+def annotate_common_origin_groups(frame: pd.DataFrame) -> pd.DataFrame:
+    output = frame.copy()
+    output["suspected_common_origin_group"] = ""
+    keys: list[str] = []
+    for row in output.fillna("").to_dict("records"):
+        title = str(row.get("report_title") or "").casefold()
+        title = re.sub(r"\d+", "", title)
+        title = title.replace("深度报告", "")
+        title = re.sub(r"[^a-z\u4e00-\u9fff]+", "", title)
+        key = "|".join(
+            (
+                str(row.get("stock_name") or "").strip(),
+                str(row.get("broker") or "").strip(),
+                title,
+            )
+        )
+        keys.append(key if len(title) >= 8 else "")
+    counts = pd.Series(keys, dtype=object).value_counts().to_dict()
+    for index, key in enumerate(keys):
+        if key and counts.get(key, 0) > 1:
+            group_hash = hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
+            output.at[index, "suspected_common_origin_group"] = (
+                f"common_origin:{group_hash}"
+            )
+    return output
+
+
 def classify_utility(*, title: str, body_text: str) -> UtilityResult:
     text = f"{title}\n{body_text}"
     doi_leads = tuple(
@@ -417,14 +444,14 @@ def classify_utility(*, title: str, body_text: str) -> UtilityResult:
             {
                 match.strip().rstrip(".,;。；")
                 for match in re.findall(
-                    r"(?:IPC|IEEE|OIF|PCIe?)[-\s][A-Z0-9][A-Z0-9.\-/]*",
+                    r"(?:IPC(?:-TM)?-[A-Z0-9.\-/]+|IEEE\s+[A-Z0-9][A-Z0-9.\-/]*|OIF-[A-Z0-9.\-/]+|PCI-SIG\s+[A-Z0-9][A-Z0-9.\-/]*)",
                     text,
                     flags=re.IGNORECASE,
                 )
             }
         )
     )
-    source_types = tuple(
+    formal_source_types = tuple(
         name
         for name, leads in (
             ("doi", doi_leads),
@@ -432,7 +459,7 @@ def classify_utility(*, title: str, body_text: str) -> UtilityResult:
         )
         if leads
     )
-    leads = doi_leads + standard_leads
+    formal_leads = doi_leads + standard_leads
     investment = any(
         term in text
         for term in (
@@ -453,14 +480,20 @@ def classify_utility(*, title: str, body_text: str) -> UtilityResult:
             "公司产能",
             "公司收入",
             "产品收入",
+            "年度报告",
         )
     )
-    if investment and not leads:
-        primary = "investment_opinion_non_evidence"
-    elif leads:
+    company_leads = ("company_announcement_or_filing_reference",) if company_specific else ()
+    source_types = formal_source_types + (
+        ("company_filing_reference",) if company_specific else ()
+    )
+    leads = formal_leads + company_leads
+    if formal_leads:
         primary = "primary_source_lead"
     elif company_specific:
         primary = "company_evidence_lead"
+    elif investment:
+        primary = "investment_opinion_non_evidence"
     else:
         primary = "contextual_industry"
     validate_primary_classification(primary)
@@ -672,6 +705,19 @@ def _build_audit_payload(
     }
     duplicate_records = selected_source_records - len(selected)
     records = _serializable_selected(selected).fillna("").to_dict("records")
+    common_origin_groups = {
+        str(group): sorted(
+            selected.loc[
+                selected["suspected_common_origin_group"].eq(group),
+                "content_identity",
+            ].astype(str)
+        )
+        for group in sorted(
+            value
+            for value in selected["suspected_common_origin_group"].astype(str).unique()
+            if value
+        )
+    }
     return {
         "artifact_type": "ai_pcb_yanbaoke_evidence_triage_audit",
         "artifact_version": "1.0.0",
@@ -683,6 +729,8 @@ def _build_audit_payload(
         "duplicate_source_records": int(duplicate_records),
         "formal_queue_missing_download_count": int(formal_queue_missing_download_count),
         "replacement_download_count": int(replacement_download_count),
+        "suspected_common_origin_groups": common_origin_groups,
+        "suspected_common_origin_group_count": len(common_origin_groups),
         "primary_classification_distribution": _distribution(
             selected, "primary_classification"
         ),
@@ -787,7 +835,9 @@ def run_triage(
         manifest=manifest,
         input_dir=input_dir,
     )
-    selected = pd.DataFrame(collapse_content_identities(rows))
+    selected = annotate_common_origin_groups(
+        pd.DataFrame(collapse_content_identities(rows))
+    )
     _validate_selected_frame(selected)
     serializable = _serializable_selected(selected)
     audit = _build_audit_payload(

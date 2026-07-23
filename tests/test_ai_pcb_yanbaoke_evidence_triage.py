@@ -11,6 +11,7 @@ import pandas as pd
 import pytest
 
 from stock_research.ai_pcb_yanbaoke_evidence_triage import (
+    annotate_common_origin_groups,
     classify_relevance,
     classify_utility,
     collapse_content_identities,
@@ -145,6 +146,40 @@ def test_same_content_hash_collapses_to_one_document_identity():
     assert identities[0]["duplicate_record_count"] == 1
 
 
+def test_near_identical_same_broker_titles_are_flagged_as_suspected_common_origin():
+    frame = pd.DataFrame(
+        [
+            {
+                "content_identity": "sha256:a",
+                "stock_name": "联瑞新材",
+                "broker": "西南证券",
+                "report_title": "深度报告 2026 06 15 填料艺术家 积淀深厚 充分受益于AI浪潮",
+            },
+            {
+                "content_identity": "sha256:b",
+                "stock_name": "联瑞新材",
+                "broker": "西南证券",
+                "report_title": "深度报告 20260614 填料艺术家 积淀深厚 充分受益于AI浪潮",
+            },
+            {
+                "content_identity": "sha256:c",
+                "stock_name": "联瑞新材",
+                "broker": "西南证券",
+                "report_title": "持续聚焦高端粉体 可转债项目助力成长",
+            },
+        ]
+    )
+
+    result = annotate_common_origin_groups(frame)
+
+    assert result.loc[0, "suspected_common_origin_group"]
+    assert (
+        result.loc[0, "suspected_common_origin_group"]
+        == result.loc[1, "suspected_common_origin_group"]
+    )
+    assert result.loc[2, "suspected_common_origin_group"] == ""
+
+
 def test_traceable_standard_or_paper_reference_becomes_source_lead():
     result = classify_utility(
         title="高速材料研究",
@@ -165,6 +200,26 @@ def test_investment_recommendation_is_not_technical_evidence():
 
     assert result.primary_classification == "investment_opinion_non_evidence"
     assert "not_direct_evidence" in result.prohibited_use
+
+
+def test_company_announcement_reference_is_a_company_evidence_lead_even_with_rating():
+    result = classify_utility(
+        title="公司公告点评：维持买入评级",
+        body_text="事件来源为公司公告和2025年年度报告。",
+    )
+
+    assert result.primary_classification == "company_evidence_lead"
+    assert "company_filing_reference" in result.traceable_source_types
+
+
+def test_pcie_version_mention_is_not_misclassified_as_formal_standard_source():
+    result = classify_utility(
+        title="高速PCB公司深度",
+        body_text="产品支持 PCIe 4.0 和 PCIe 5.0，给予买入评级。",
+    )
+
+    assert result.primary_classification == "investment_opinion_non_evidence"
+    assert result.traceable_source_leads == ()
 
 
 def test_a04_requires_measurement_method_terms():
