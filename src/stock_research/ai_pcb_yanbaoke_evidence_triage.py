@@ -426,37 +426,41 @@ def _build_triage_rows(
     manifest: pd.DataFrame,
     input_dir: Path,
 ) -> tuple[list[dict[str, object]], list[Path]]:
-    manifest_by_uuid = {
+    queue_by_uuid = {
         str(row.get("uuid") or ""): row
-        for row in manifest.fillna("").to_dict("records")
-        if str(row.get("status") or "") == "downloaded"
+        for row in queue.fillna("").to_dict("records")
     }
     rows: list[dict[str, object]] = []
     inspected_pdfs: list[Path] = []
-    for queue_row in queue.fillna("").to_dict("records"):
-        uuid = str(queue_row.get("uuid") or "")
-        manifest_row = manifest_by_uuid.get(uuid)
-        if manifest_row is None:
-            raise ValueError(f"queue UUID has no successful download lineage: {uuid}")
+    downloaded_rows = manifest.loc[
+        manifest["status"].astype(str).eq("downloaded")
+    ].fillna("").to_dict("records")
+    for manifest_row in downloaded_rows:
+        uuid = str(manifest_row.get("uuid") or "")
+        queue_row = queue_by_uuid.get(uuid)
+        source_row = dict(manifest_row)
+        if queue_row is not None:
+            source_row.update(queue_row)
         pdf_path = _resolve_pdf_path(manifest_row.get("pdf_path"), input_dir=input_dir)
         inspected_pdfs.append(pdf_path)
         body_text, body_status = extract_pdf_text(pdf_path)
-        relevance = classify_relevance(queue_row, body_text=body_text)
+        relevance = classify_relevance(source_row, body_text=body_text)
         if not relevance.selected:
             continue
-        title = str(queue_row.get("report_title") or queue_row.get("title") or "")
+        title = str(source_row.get("report_title") or source_row.get("title") or "")
         utility = classify_utility(title=title, body_text=body_text)
         er_mappings = map_er_dispositions(title, body_text=body_text)
         content_hash = sha256_path(pdf_path)
         row: dict[str, object] = {
             "uuid": uuid,
             "report_title": title,
-            "stock_name": str(queue_row.get("stock_name") or ""),
-            "ts_code": str(queue_row.get("ts_code") or ""),
-            "broker": str(queue_row.get("broker") or queue_row.get("org_name") or ""),
-            "publisher": str(queue_row.get("org_name") or queue_row.get("broker") or ""),
-            "publish_date": str(queue_row.get("publish_date") or ""),
-            "publication_date_status": _publication_date_status(queue_row.get("publish_date")),
+            "queue_kind": str(source_row.get("queue_kind") or "formal"),
+            "stock_name": str(source_row.get("stock_name") or ""),
+            "ts_code": str(source_row.get("ts_code") or ""),
+            "broker": str(source_row.get("broker") or source_row.get("org_name") or ""),
+            "publisher": str(source_row.get("org_name") or source_row.get("broker") or ""),
+            "publish_date": str(source_row.get("publish_date") or ""),
+            "publication_date_status": _publication_date_status(source_row.get("publish_date")),
             "local_pdf_path": str(pdf_path),
             "content_sha256": content_hash,
             "body_review_status": body_status,
@@ -558,6 +562,8 @@ def _build_audit_payload(
     queue: pd.DataFrame,
     selected_source_records: int,
     selected: pd.DataFrame,
+    formal_queue_missing_download_count: int,
+    replacement_download_count: int,
 ) -> dict[str, object]:
     er_distributions = {
         er_id: _distribution(selected, er_id)
@@ -574,6 +580,8 @@ def _build_audit_payload(
         "selected_source_records": int(selected_source_records),
         "selected_content_identities": int(len(selected)),
         "duplicate_source_records": int(duplicate_records),
+        "formal_queue_missing_download_count": int(formal_queue_missing_download_count),
+        "replacement_download_count": int(replacement_download_count),
         "primary_classification_distribution": _distribution(
             selected, "primary_classification"
         ),
@@ -640,7 +648,10 @@ def run_triage(
     queue_path = input_dir / "yanbaoke_download_queue_474.csv"
     mappings_path = input_dir / "theme_company_mappings.csv"
     manifest_path = input_dir / "download" / "yanbaoke_direct_uuid_downloads.csv"
-    input_paths = (queue_path, mappings_path, manifest_path)
+    replacement_path = input_dir / "yanbaoke_replacement_queue.csv"
+    input_paths = (queue_path, mappings_path, manifest_path) + (
+        (replacement_path,) if replacement_path.exists() else ()
+    )
     before_hashes = {str(path): sha256_path(path) for path in input_paths}
     queue = pd.read_csv(queue_path, dtype=object).fillna("")
     pd.read_csv(mappings_path, dtype=object).fillna("")
@@ -649,6 +660,27 @@ def run_triage(
         raise ValueError(
             f"expected {expected_queue_rows} queue rows, found {len(queue)}"
         )
+    downloaded = manifest.loc[manifest["status"].astype(str).eq("downloaded")].copy()
+    queue_uuids = set(queue["uuid"].astype(str))
+    downloaded_uuids = set(downloaded["uuid"].astype(str))
+    missing_formal_uuids = queue_uuids - downloaded_uuids
+    replacement_uuids = downloaded_uuids - queue_uuids
+    if len(missing_formal_uuids) != len(replacement_uuids):
+        raise ValueError(
+            "formal/replacement download substitution is not one-for-one: "
+            f"missing={len(missing_formal_uuids)} replacement={len(replacement_uuids)}"
+        )
+    if replacement_uuids:
+        if not replacement_path.exists():
+            raise ValueError("replacement downloads exist without replacement queue lineage")
+        replacement_queue = pd.read_csv(replacement_path, dtype=object).fillna("")
+        allowed_replacements = set(replacement_queue["uuid"].astype(str))
+        unknown_replacements = replacement_uuids - allowed_replacements
+        if unknown_replacements:
+            raise ValueError(
+                "download manifest contains replacements absent from replacement queue: "
+                + ",".join(sorted(unknown_replacements))
+            )
     rows, inspected_pdfs = _build_triage_rows(
         queue=queue,
         manifest=manifest,
@@ -662,6 +694,8 @@ def run_triage(
         queue=queue,
         selected_source_records=len(rows),
         selected=selected,
+        formal_queue_missing_download_count=len(missing_formal_uuids),
+        replacement_download_count=len(replacement_uuids),
     )
     csv_path = output_dir / "ai_pcb_evidence_triage_v1.csv"
     audit_path = output_dir / "ai_pcb_evidence_triage_audit_v1.json"

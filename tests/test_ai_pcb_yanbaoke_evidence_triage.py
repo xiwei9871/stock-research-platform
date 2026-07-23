@@ -220,3 +220,71 @@ def test_script_help_uses_current_repository_source_without_pythonpath():
 
     assert completed.returncode == 0, completed.stderr
     assert "offline, read-only AI PCB triage" in completed.stdout
+
+
+def test_run_triage_accepts_audited_one_for_one_replacement(tmp_path):
+    download_dir = tmp_path / "download"
+    pdf_dir = download_dir / "pdfs"
+    pdf_dir.mkdir(parents=True)
+    formal_pdf = pdf_dir / "formal.pdf"
+    replacement_pdf = pdf_dir / "replacement.pdf"
+    formal_pdf.write_bytes(b"formal bytes")
+    replacement_pdf.write_bytes(b"replacement bytes")
+
+    pd.DataFrame(
+        [
+            {
+                "uuid": "formal-ok",
+                "report_title": "AI服务器行业更新",
+                "stock_name": "样本甲",
+                "content": "算力增长",
+            },
+            {
+                "uuid": "formal-missing",
+                "report_title": "工业机器人研究",
+                "stock_name": "样本乙",
+                "content": "机器人本体",
+            },
+        ]
+    ).to_csv(tmp_path / "yanbaoke_download_queue_474.csv", index=False)
+    pd.DataFrame(
+        [{"ts_code": "000001.SZ", "stock_name": "样本甲", "theme_name": "AI算力"}]
+    ).to_csv(tmp_path / "theme_company_mappings.csv", index=False)
+    pd.DataFrame(
+        [
+            {
+                "uuid": "formal-ok",
+                "status": "downloaded",
+                "queue_kind": "formal",
+                "pdf_path": str(formal_pdf),
+            },
+            {
+                "uuid": "replacement-one",
+                "status": "downloaded",
+                "queue_kind": "replacement",
+                "report_title": "高速PCB与HVLP铜箔研究",
+                "stock_name": "兴森科技",
+                "content": "Rz与20 GHz插损测试",
+                "pdf_path": str(replacement_pdf),
+            },
+        ]
+    ).to_csv(download_dir / "yanbaoke_direct_uuid_downloads.csv", index=False)
+    pd.DataFrame(
+        [
+            {
+                "uuid": "replacement-one",
+                "queue_kind": "replacement",
+                "report_title": "高速PCB与HVLP铜箔研究",
+            }
+        ]
+    ).to_csv(tmp_path / "yanbaoke_replacement_queue.csv", index=False)
+
+    result = run_triage(input_dir=tmp_path, output_dir=tmp_path, expected_queue_rows=2)
+
+    assert result.queue_rows_considered == 2
+    assert result.selected_source_records == 1
+    audit = json.loads(
+        (tmp_path / "ai_pcb_evidence_triage_audit_v1.json").read_text(encoding="utf-8")
+    )
+    assert audit["formal_queue_missing_download_count"] == 1
+    assert audit["replacement_download_count"] == 1
