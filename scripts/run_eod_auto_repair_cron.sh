@@ -12,8 +12,9 @@ FLOCK_FILE="$ROOT/.locks/eod_auto_repair.flock"
 ACTION_TIMEOUT_SECONDS="${EOD_AUTO_REPAIR_ACTION_TIMEOUT_SECONDS:-43200}"
 DASHBOARD_CACHE_CLEAR_URL="${DASHBOARD_CACHE_CLEAR_URL:-http://127.0.0.1:8765/api/dashboard/cache/clear}"
 DASHBOARD_AUTH_LOGIN_URL="${DASHBOARD_AUTH_LOGIN_URL:-http://127.0.0.1:8765/api/auth/login}"
-DASHBOARD_AUTH_USERNAME="${DASHBOARD_AUTH_USERNAME:-}"
+DASHBOARD_AUTH_USERNAME="${DASHBOARD_AUTH_USERNAME:-eod_repair}"
 DASHBOARD_AUTH_PASSWORD="${DASHBOARD_AUTH_PASSWORD:-}"
+DASHBOARD_AUTH_KEYCHAIN_SERVICE="${DASHBOARD_AUTH_KEYCHAIN_SERVICE:-stock-research-dashboard-eod-repair}"
 DASHBOARD_WRITE_TOKEN="${DASHBOARD_WRITE_TOKEN:-${STOCK_RESEARCH_DASHBOARD_WRITE_TOKEN:-}}"
 CACHE_STATUS="pending"
 
@@ -21,6 +22,15 @@ source "$ROOT/scripts/stock_cron_guard.sh"
 clear_stock_proxy_env
 
 mkdir -p "$LOG_DIR" "$OUTPUT_DIR" "$(dirname "$LOCK_FILE")"
+
+if [[ -z "$DASHBOARD_AUTH_PASSWORD" ]] && command -v security >/dev/null 2>&1; then
+  DASHBOARD_AUTH_PASSWORD="$(
+    security find-generic-password \
+      -s "$DASHBOARD_AUTH_KEYCHAIN_SERVICE" \
+      -a "$DASHBOARD_AUTH_USERNAME" \
+      -w 2>/dev/null || true
+  )"
+fi
 
 acquire_python_lock() {
   while true; do

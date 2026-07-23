@@ -143,6 +143,32 @@ def test_eod_auto_repair_cron_cache_clear_can_use_dashboard_auth(tmp_path):
     assert "-X POST http://127.0.0.1:8765/api/dashboard/cache/clear" in curl_log
 
 
+def test_eod_auto_repair_cron_loads_dashboard_password_from_keychain(tmp_path):
+    root, env = _make_cron_harness(
+        tmp_path,
+        extra_env={
+            "DASHBOARD_AUTH_USERNAME": "eod_repair",
+            "DASHBOARD_AUTH_KEYCHAIN_SERVICE": "stock-research-dashboard-eod-repair",
+        },
+    )
+    _write_executable(
+        tmp_path / "bin" / "security",
+        "#!/usr/bin/env bash\n"
+        'echo "security|$*" >> "$STOCK_RESEARCH_ROOT/security.log"\n'
+        'printf "%s\\n" "keychain-secret"\n',
+    )
+
+    result = _run_cron(env, "2026-07-02")
+
+    assert result.returncode == 0
+    assert "find-generic-password -s stock-research-dashboard-eod-repair -a eod_repair -w" in (
+        root / "security.log"
+    ).read_text()
+    curl_log = (root / "curl.log").read_text()
+    assert "/api/auth/login" in curl_log
+    assert '{"username":"eod_repair","password":"keychain-secret"}' in curl_log
+
+
 def test_eod_auto_repair_cron_logs_flock_lock_mode_when_already_locked(tmp_path):
     root, env = _make_cron_harness(
         tmp_path,
