@@ -1,0 +1,94 @@
+{
+  "schema_version": "1.0.0",
+  "artifact_type": "consolidated_assessment_execution_authorization",
+  "authorization_id": "consolidated_assessment_execution_authorization:ai_pcb:wave_1b:v1",
+  "authorization_status": "frozen",
+  "authorized_at": "2026-07-23T02:48:38Z",
+  "authorization_actor": "human_reviewer",
+  "project_id": "research_project:ai_compute_pcb_industry_bottleneck",
+  "input_bindings": {
+    "recovery_pilot_review_decision_id": "wave_1b_recovery_pilot_review_decision:ai_pcb:v1",
+    "recovery_pilot_review_decision_hash": "51f0d1415b8240f8b3bca96ca5187026af05094426d50c9376d72b82fd4014fd",
+    "recovery_pilot_checkpoint_id": "wave_1b_recovery_checkpoint:eb5ac1cd5e37481dcd2df2dc",
+    "recovery_pilot_checkpoint_hash": "96949222f5697c1074e4ac60ee230fd814e9f8cc95cecbb112c0e14982290f54",
+    "wave_1b_checkpoint_id": "targeted_acquisition_checkpoint:a4690962e23c07e238dd2f4d",
+    "wave_1b_checkpoint_hash": "a4690962e23c07e238dd2f4dfeb5d081fd1c93a0b95a89a2509e23ae4f9ceec2",
+    "wave_1_assessment_id": "targeted_evidence_assessment:ai_pcb:wave_1:v1",
+    "wave_1_assessment_hash": "8e80bc8994f6f1fd20ae7c46fe5d3669be13a08b86162f7c5d7f2729788367cd",
+    "wave_1_checkpoint_id": "targeted_acquisition_checkpoint:b53ab0a0143b89f9914842f5",
+    "wave_1_checkpoint_hash": "b53ab0a0143b89f9914842f5848ed606b86de3dc1a4a7f5f08a05c6afcf81013"
+  },
+  "execution_authorized": true,
+  "one_time_authorization": true,
+  "authorization_consumed": false,
+  "execution_mode": "offline_read_only_consolidated_evidence_assessment",
+  "authorization_scope": "exact_er_and_evidence_list_only",
+  "authorized_er_ids": [
+    "PCB-ER-A04",
+    "PCB-ER-B01",
+    "PCB-ER-B02",
+    "PCB-ER-A02"
+  ],
+  "eligible_source_batches": [
+    "targeted_evidence_acquisition_wave_1",
+    "targeted_evidence_acquisition_wave_1b",
+    "wave_1b_recovery_pilot_acquisition"
+  ],
+  "eligible_recovery_evidence": [
+    {
+      "recovery_target_id": "recovery_target:ai_pcb:wave_1b:a02:ieee_802_3ck_index_to_fulltext:v1",
+      "authorized_er_id": "PCB-ER-A02",
+      "artifact_id": "evidence_artifact:5cf8a72e4f4c6a9043a474c5",
+      "raw_content_hash": "701d2fbd43167f5f40a02e51c6ad58bef346dcc49c5fb502d5a268dc195cdad4",
+      "canonical_normalized_document_id": "normalized_document:019803185d3da18b4d1f2486"
+    }
+  ],
+  "strict_exclusions": [
+    "USC content acquired for B02 because its document identity does not match the frozen target",
+    "the five failed or manually unavailable recovery targets",
+    "blocked, failed, HTTP 404, HTTP 403, timeout, and security-policy-blocked records",
+    "preflight discovery and recovery planning records",
+    "landing pages, overview pages, index pages, and source-discovery-only records",
+    "capability-hardening benchmark artifacts",
+    "duplicate normalized representations beyond the canonical representation for a raw document"
+  ],
+  "normalization_duplicate_rule": {
+    "identity_rule": "same raw hash plus same document identity plus equivalent normalized content equals one evidence document and one provisional evidence chain",
+    "canonical_representations": {
+      "50983b38c26460255f89668f3fe76eb9759b879c3ea6cce31483f468e61c97e2": "normalized_document:22497cde16ab00ae7b720c87",
+      "701d2fbd43167f5f40a02e51c6ad58bef346dcc49c5fb502d5a268dc195cdad4": "normalized_document:019803185d3da18b4d1f2486"
+    },
+    "resume_duplicates": [
+      "normalized_document:c3ff111a56925e8c6836494f",
+      "normalized_document:500ae7dcaae88360df0e9c72"
+    ],
+    "duplicates_increase_evidence_chain_count": false,
+    "duplicates_increase_locator_independence": false
+  },
+  "required_outputs": [
+    "ai_pcb_targeted_evidence_assessment_wave_1b_consolidated_v1.json",
+    "ai_pcb_targeted_evidence_assessment_wave_1b_consolidated_v1.md"
+  ],
+  "required_final_classification": [
+    "machine_public_acquisition_resolved",
+    "manual_source_resolution_candidate",
+    "expert_technical_review_candidate",
+    "bounded_by_public_evidence",
+    "stop_investment_recommended"
+  ],
+  "post_execution_requirements": {
+    "authorization_consumption_recorded_in_assessment": true,
+    "pause_after_assessment": true,
+    "automatic_manual_task_authorization": false,
+    "automatic_cognition_update": false
+  },
+  "network_access": false,
+  "new_acquisition_authorized": false,
+  "recovery_acquisition_authorized": false,
+  "cognition_update_authorized": false,
+  "wave_2_authorized": false,
+  "company_mapping_authorized": false,
+  "stage_a2_authorized": false,
+  "stage_b_authorized": false,
+  "content_hash": "5eb4b45d600a7618f59243af5560bac4c0d320bde86cebdee49e1378361dd4d2"
+}
