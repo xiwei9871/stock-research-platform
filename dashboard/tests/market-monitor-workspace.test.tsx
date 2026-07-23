@@ -3,9 +3,14 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MarketMonitorWorkspace } from '../src/components/MarketMonitorWorkspace';
 import type { MarketMonitorPayload } from '../src/api/types';
+import type { ComponentProps } from 'react';
 
 const apiMocks = vi.hoisted(() => ({
-  fetchMarketMonitorEod: vi.fn()
+  fetchMarketMonitorEod: vi.fn(),
+  fetchMarketOverview: vi.fn(),
+  fetchSectorHeatmap: vi.fn(),
+  fetchSectorFundFlow: vi.fn(),
+  fetchSectorDetail: vi.fn()
 }));
 
 const echartsMocks = vi.hoisted(() => {
@@ -31,6 +36,30 @@ const echartsMocks = vi.hoisted(() => {
 
 vi.mock('../src/api/client', () => apiMocks);
 vi.mock('echarts', () => echartsMocks);
+
+const resizeObserverMocks = vi.hoisted(() => {
+  const instances: Array<{
+    observe: ReturnType<typeof vi.fn>;
+    disconnect: ReturnType<typeof vi.fn>;
+    callback: ResizeObserverCallback;
+  }> = [];
+
+  class MockResizeObserver {
+    observe = vi.fn();
+    disconnect = vi.fn();
+    callback: ResizeObserverCallback;
+
+    constructor(callback: ResizeObserverCallback) {
+      this.callback = callback;
+      instances.push(this);
+    }
+  }
+
+  return {
+    instances,
+    MockResizeObserver
+  };
+});
 
 function makeMarketMonitorPayload(overrides: Partial<MarketMonitorPayload> = {}): MarketMonitorPayload {
   return {
@@ -133,11 +162,134 @@ function makeMarketMonitorPayload(overrides: Partial<MarketMonitorPayload> = {})
   };
 }
 
-function renderWorkspace(extraProps?: Record<string, unknown>) {
-  render(<MarketMonitorWorkspace {...(extraProps as never)} />);
+function makeOverviewResponse(overrides: Record<string, unknown> = {}) {
+  return {
+    trade_date: '2026-06-12',
+    updated_at: '2026-06-12 15:10',
+    source: 'api',
+    data_status: 'completed',
+    warnings: [],
+    indices: [
+      {
+        code: '000001',
+        name: 'API上证指数',
+        close: 3201.88,
+        change_pct: 0.0123
+      }
+    ],
+    total_amount: 1666000000000,
+    up_count: 3988,
+    down_count: 1102,
+    limit_up_count: 118,
+    limit_down_count: 7,
+    ...overrides
+  };
 }
 
-function overrideChartSize(width: number, height: number) {
+function makeHeatmapItems(sectorType: 'industry' | 'concept') {
+  if (sectorType === 'concept') {
+    return [
+      {
+        sector_id: 'concept-api-compute',
+        sector_name: 'API算力',
+        sector_type: 'concept',
+        change_pct: 0.0412,
+        amount: 188800000000,
+        up_count: 103,
+        down_count: 19,
+        main_net_inflow: 25600000000,
+        stock_count: 132
+      }
+    ];
+  }
+
+  return [
+    {
+      sector_id: 'industry-api-chip',
+      sector_name: 'API半导体',
+      sector_type: 'industry',
+      change_pct: 0.0315,
+      amount: 146600000000,
+      up_count: 96,
+      down_count: 12,
+      main_net_inflow: 22100000000,
+      stock_count: 118
+    }
+  ];
+}
+
+function makeHeatmapResponse(sectorType: 'industry' | 'concept', overrides: Record<string, unknown> = {}) {
+  return {
+    trade_date: '2026-06-12',
+    updated_at: '2026-06-12 15:10',
+    source: 'api',
+    data_status: 'completed',
+    warnings: [],
+    items: makeHeatmapItems(sectorType),
+    ...overrides
+  };
+}
+
+function makeFundFlowResponse(sectorType: 'industry' | 'concept', overrides: Record<string, unknown> = {}) {
+  const [item] = makeHeatmapItems(sectorType);
+  return {
+    trade_date: '2026-06-12',
+    updated_at: '2026-06-12 15:10',
+    source: 'api',
+    data_status: 'completed',
+    warnings: [],
+    inflow: [
+      {
+        rank: 1,
+        sector_id: item.sector_id,
+        sector_name: item.sector_name,
+        sector_type: item.sector_type,
+        change_pct: item.change_pct,
+        amount: item.amount,
+        main_net_inflow: item.main_net_inflow,
+        main_net_inflow_ratio: 0.153,
+        leading_stock_name: sectorType === 'concept' ? '真实算力龙头' : '真实半导体龙头'
+      }
+    ],
+    outflow: [],
+    ...overrides
+  };
+}
+
+function makeSectorDetailResponse(overrides: Record<string, unknown> = {}) {
+  return {
+    trade_date: '2026-06-12',
+    updated_at: '2026-06-12 15:20',
+    source: 'api',
+    data_status: 'completed',
+    warnings: [],
+    sector_id: 'industry-api-chip',
+    sector_name: 'API半导体',
+    sector_type: 'industry',
+    change_pct: 0.0315,
+    amount: 146600000000,
+    up_count: 96,
+    down_count: 12,
+    main_net_inflow: 22100000000,
+    main_net_inflow_ratio: 0.153,
+    leading_stocks: [
+      {
+        asset_id: 'CN:SH:688981',
+        name: '真实龙头',
+        change_pct: 0.0521
+      }
+    ],
+    ...overrides
+  };
+}
+
+function renderWorkspace(extraProps?: Partial<ComponentProps<typeof MarketMonitorWorkspace>>) {
+  render(<MarketMonitorWorkspace {...extraProps} />);
+}
+
+function overrideChartSize(initialWidth: number, initialHeight: number) {
+  let width = initialWidth;
+  let height = initialHeight;
   const widthDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth');
   const heightDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientHeight');
 
@@ -155,17 +307,23 @@ function overrideChartSize(width: number, height: number) {
     }
   });
 
-  return () => {
-    if (widthDescriptor) {
-      Object.defineProperty(HTMLElement.prototype, 'clientWidth', widthDescriptor);
-    } else {
-      delete (HTMLElement.prototype as { clientWidth?: number }).clientWidth;
-    }
+  return {
+    setSize(nextWidth: number, nextHeight: number) {
+      width = nextWidth;
+      height = nextHeight;
+    },
+    restore() {
+      if (widthDescriptor) {
+        Object.defineProperty(HTMLElement.prototype, 'clientWidth', widthDescriptor);
+      } else {
+        delete (HTMLElement.prototype as { clientWidth?: number }).clientWidth;
+      }
 
-    if (heightDescriptor) {
-      Object.defineProperty(HTMLElement.prototype, 'clientHeight', heightDescriptor);
-    } else {
-      delete (HTMLElement.prototype as { clientHeight?: number }).clientHeight;
+      if (heightDescriptor) {
+        Object.defineProperty(HTMLElement.prototype, 'clientHeight', heightDescriptor);
+      } else {
+        delete (HTMLElement.prototype as { clientHeight?: number }).clientHeight;
+      }
     }
   };
 }
@@ -173,94 +331,129 @@ function overrideChartSize(width: number, height: number) {
 describe('MarketMonitorWorkspace', () => {
   beforeEach(() => {
     apiMocks.fetchMarketMonitorEod.mockResolvedValue(makeMarketMonitorPayload());
+    apiMocks.fetchMarketOverview.mockResolvedValue(makeOverviewResponse());
+    apiMocks.fetchSectorHeatmap.mockImplementation((tradeDate: string, sectorType: 'industry' | 'concept') =>
+      Promise.resolve(makeHeatmapResponse(sectorType, { trade_date: tradeDate }))
+    );
+    apiMocks.fetchSectorFundFlow.mockImplementation((tradeDate: string, sectorType: 'industry' | 'concept') =>
+      Promise.resolve(makeFundFlowResponse(sectorType, { trade_date: tradeDate }))
+    );
+    apiMocks.fetchSectorDetail.mockResolvedValue(makeSectorDetailResponse());
     echartsMocks.handlers.clear();
+    resizeObserverMocks.instances.length = 0;
+    vi.stubGlobal('ResizeObserver', resizeObserverMocks.MockResizeObserver);
   });
 
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    vi.unstubAllGlobals();
   });
 
-  it('renders the mock-first market monitor stage with overview, heatmap, ranking, and compact emotion', async () => {
+  it('orchestrates overview, heatmap, ranking, and emotion APIs without letting mock data overwrite real results', async () => {
     renderWorkspace();
 
-    expect(screen.getByRole('heading', { name: '市场总览' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '板块热力图' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '板块资金排行' })).toBeInTheDocument();
-    expect(screen.getByText('点击热力图或资金榜查看板块详情')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(apiMocks.fetchMarketOverview).toHaveBeenCalledWith('2026-06-12');
+      expect(apiMocks.fetchSectorHeatmap).toHaveBeenCalledWith('2026-06-12', 'industry');
+      expect(apiMocks.fetchSectorFundFlow).toHaveBeenCalledWith('2026-06-12', 'industry');
+      expect(apiMocks.fetchMarketMonitorEod).toHaveBeenCalledWith({ topN: 5 });
+    });
 
-    await waitFor(() => expect(apiMocks.fetchMarketMonitorEod).toHaveBeenCalled());
+    expect(screen.getByRole('heading', { name: '市场总览' })).toBeInTheDocument();
+    expect(screen.getByText('API上证指数')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '板块热力图' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '从热力图摘要查看 API半导体' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '板块资金排行' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '查看板块详情 API半导体' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '查看板块详情 半导体' })).not.toBeInTheDocument();
+    expect(screen.getByText('点击热力图或资金榜查看板块详情')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '市场情绪摘要' })).toBeInTheDocument();
   });
 
-  it('updates the detail panel when a ranking row is selected', () => {
+  it('updates the detail panel and starts real detail orchestration when a ranking row is selected', async () => {
     const onOpenAsset = vi.fn();
     renderWorkspace({ onOpenAsset });
 
-    fireEvent.click(screen.getByRole('button', { name: '查看板块详情 半导体' }));
+    await waitFor(() => expect(apiMocks.fetchSectorFundFlow).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button', { name: '查看板块详情 API半导体' }));
+
+    await waitFor(() => {
+      expect(apiMocks.fetchSectorDetail).toHaveBeenCalledWith('2026-06-12', 'industry-api-chip');
+    });
 
     const detailPanel = screen.getByRole('heading', { name: '板块详情' }).closest('section');
     expect(detailPanel).not.toBeNull();
 
     const scoped = within(detailPanel as HTMLElement);
-    expect(scoped.getByRole('heading', { level: 3, name: '半导体' })).toBeInTheDocument();
+    expect(scoped.getByRole('heading', { level: 3, name: 'API半导体' })).toBeInTheDocument();
     expect(scoped.getByText('行业板块')).toBeInTheDocument();
+    expect(await scoped.findByRole('button', { name: '打开领涨股 真实龙头' })).toBeInTheDocument();
 
-    fireEvent.click(scoped.getByRole('button', { name: '打开领涨股 北方华创' }));
+    fireEvent.click(scoped.getByRole('button', { name: '打开领涨股 真实龙头' }));
 
     expect(onOpenAsset).toHaveBeenCalledWith(
-      'CN:SZ:002371',
+      'CN:SH:688981',
       expect.objectContaining({
         sourceWorkspace: 'market',
         monitorTab: 'industry',
-        query: '北方华创',
+        query: '真实龙头',
         tradeDate: '2026-06-12'
       })
     );
   });
 
-  it('switches between 行业 and 概念 and updates the primary content', () => {
+  it('switches between 行业 and 概念 and reloads heatmap plus fund-flow without refetching overview', async () => {
     renderWorkspace();
 
+    await waitFor(() => {
+      expect(apiMocks.fetchMarketOverview).toHaveBeenCalledTimes(1);
+      expect(apiMocks.fetchSectorHeatmap).toHaveBeenCalledWith('2026-06-12', 'industry');
+      expect(apiMocks.fetchSectorFundFlow).toHaveBeenCalledWith('2026-06-12', 'industry');
+    });
+
     expect(screen.getByRole('button', { name: '行业' })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('button', { name: '查看板块详情 半导体' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '查看板块详情 AI算力' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '查看板块详情 API半导体' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '查看板块详情 API算力' })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '概念' }));
 
+    await waitFor(() => {
+      expect(apiMocks.fetchMarketOverview).toHaveBeenCalledTimes(1);
+      expect(apiMocks.fetchSectorHeatmap).toHaveBeenLastCalledWith('2026-06-12', 'concept');
+      expect(apiMocks.fetchSectorFundFlow).toHaveBeenLastCalledWith('2026-06-12', 'concept');
+    });
+
     expect(screen.getByRole('button', { name: '概念' })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('button', { name: '查看板块详情 AI算力' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '查看板块详情 半导体' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '查看板块详情 API算力' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '查看板块详情 API半导体' })).not.toBeInTheDocument();
   });
 
-  it('keeps the compact emotion panel visible even when the main mock data is empty', async () => {
-    renderWorkspace({
-      mockDataOverride: {
-        marketOverview: {
-          tradeDate: '2026-06-12',
-          updatedAt: '2026-06-12 15:10',
-          dataStatus: 'missing',
-          totalAmount: null,
-          upCount: null,
-          downCount: null,
-          limitUpCount: null,
-          limitDownCount: null,
-          indices: []
-        },
-        industryHeatmap: [],
-        conceptHeatmap: [],
-        sectorFundFlow: {
-          industry: { inflow: [], outflow: [] },
-          concept: { inflow: [], outflow: [] }
-        },
-        sectorDetails: {}
-      }
-    });
+  it('keeps the compact emotion panel visible without showing mock market data when main requests are empty or failing', async () => {
+    apiMocks.fetchMarketOverview.mockRejectedValueOnce(new Error('overview failed'));
+    apiMocks.fetchSectorHeatmap.mockResolvedValueOnce(
+      makeHeatmapResponse('industry', {
+        data_status: 'missing',
+        items: []
+      })
+    );
+    apiMocks.fetchSectorFundFlow.mockRejectedValueOnce(new Error('fund flow failed'));
+
+    renderWorkspace();
 
     expect(screen.getByText('暂无板块热力图数据')).toBeInTheDocument();
     expect(screen.getByText('暂无板块资金排行数据')).toBeInTheDocument();
 
-    await waitFor(() => expect(apiMocks.fetchMarketMonitorEod).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(apiMocks.fetchMarketOverview).toHaveBeenCalledWith('2026-06-12');
+      expect(apiMocks.fetchSectorHeatmap).toHaveBeenCalledWith('2026-06-12', 'industry');
+      expect(apiMocks.fetchSectorFundFlow).toHaveBeenCalledWith('2026-06-12', 'industry');
+      expect(apiMocks.fetchMarketMonitorEod).toHaveBeenCalledWith({ topN: 5 });
+    });
+    expect(screen.getByText('暂无市场总览数据')).toBeInTheDocument();
+    expect(screen.queryByText('3168.44')).not.toBeInTheDocument();
+    expect(screen.queryByText('15260.00亿')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '从热力图摘要查看 半导体' })).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '市场情绪摘要' })).toBeInTheDocument();
     expect(screen.getByText('综合强度')).toBeInTheDocument();
   });
@@ -273,7 +466,7 @@ describe('MarketMonitorWorkspace', () => {
   });
 
   it('initializes an echarts treemap when the heatmap container can be measured', async () => {
-    const restoreChartSize = overrideChartSize(960, 360);
+    const chartSize = overrideChartSize(960, 360);
 
     try {
       renderWorkspace();
@@ -287,13 +480,31 @@ describe('MarketMonitorWorkspace', () => {
       expect(treemapSeries?.data).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
-            sectorId: 'industry-semiconductor',
-            sectorName: '半导体'
+            sectorId: 'industry-api-chip',
+            sectorName: 'API半导体'
           })
         ])
       );
     } finally {
-      restoreChartSize();
+      chartSize.restore();
+    }
+  });
+
+  it('recovers echarts initialization after the chart container becomes measurable later', async () => {
+    const chartSize = overrideChartSize(0, 0);
+
+    try {
+      renderWorkspace();
+
+      expect(echartsMocks.init).not.toHaveBeenCalled();
+      await waitFor(() => expect(resizeObserverMocks.instances).toHaveLength(1));
+
+      chartSize.setSize(960, 360);
+      resizeObserverMocks.instances[0]?.callback([], {} as ResizeObserver);
+
+      await waitFor(() => expect(echartsMocks.init).toHaveBeenCalledTimes(1));
+    } finally {
+      chartSize.restore();
     }
   });
 });

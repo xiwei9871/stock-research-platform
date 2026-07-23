@@ -6,8 +6,9 @@ from typing import Any
 
 from stock_research.config import SETTINGS
 from stock_research.dashboard.schemas import SectorFundFlowItem, SectorFundFlowPayload, SectorType
+from stock_research.db import connect, fetch_all
 
-FUND_FLOW_SOURCE = "third_party_fund_flow_signal"
+FUND_FLOW_SOURCE = "derived:industry_amount_price_breadth_proxy"
 FUND_FLOW_MISSING_WARNING = (
     "fund flow source is unavailable; returning empty directional signal payload"
 )
@@ -63,8 +64,108 @@ def load_sector_fund_flow_rows(
     period: str = "1d",
     service: str = SETTINGS.research_service,
 ) -> list[dict[str, Any]]:
-    del trade_date, sector_type, period, service
-    return []
+    del period
+    if sector_type != "industry":
+        return []
+    sql = """
+        WITH member_stats AS (
+            SELECT
+                m.industry_system,
+                m.industry_code,
+                count(DISTINCT b.asset_id) FILTER (WHERE b.asset_id IS NOT NULL) AS stock_count,
+                count(DISTINCT b.asset_id) FILTER (WHERE b.pct_chg > 0) AS up_count,
+                count(DISTINCT b.asset_id) FILTER (WHERE b.pct_chg < 0) AS down_count
+            FROM core.industry_membership m
+            LEFT JOIN market_daily_bar b
+              ON b.asset_id = m.asset_id
+             AND b.trade_date = %s
+             AND b.adjust_type = 'qfq'
+            WHERE m.industry_system = 'csrc'
+              AND m.level = 1
+              AND m.start_date <= %s
+              AND (m.end_date IS NULL OR %s < m.end_date)
+            GROUP BY m.industry_system, m.industry_code
+        ),
+        leading_stocks AS (
+            SELECT DISTINCT ON (m.industry_system, m.industry_code)
+                m.industry_system,
+                m.industry_code,
+                COALESCE(a.name, b.asset_id) AS leading_stock_name
+            FROM core.industry_membership m
+            JOIN market_daily_bar b
+              ON b.asset_id = m.asset_id
+             AND b.trade_date = %s
+             AND b.adjust_type = 'qfq'
+            LEFT JOIN core.asset_master a
+              ON a.asset_id = b.asset_id
+            WHERE m.industry_system = 'csrc'
+              AND m.level = 1
+              AND m.start_date <= %s
+              AND (m.end_date IS NULL OR %s < m.end_date)
+            ORDER BY
+                m.industry_system,
+                m.industry_code,
+                b.pct_chg DESC NULLS LAST,
+                b.amount DESC NULLS LAST,
+                b.asset_id
+        )
+        SELECT
+            bars.trade_date,
+            bars.industry_system,
+            bars.industry_code,
+            bars.industry_name,
+            bars.close,
+            bars.preclose,
+            bars.amount * 1000 AS amount,
+            (bars.close / NULLIF(bars.preclose, 0) - 1.0) AS change_pct,
+            (
+                COALESCE(bars.amount, 0) * 1000
+                * COALESCE((bars.close / NULLIF(bars.preclose, 0) - 1.0), 0)
+                * COALESCE(
+                    (stats.up_count - stats.down_count)::numeric / NULLIF(stats.stock_count, 0),
+                    0
+                )
+            ) AS main_net_inflow,
+            CASE
+                WHEN COALESCE(bars.amount, 0) = 0 THEN NULL
+                ELSE (
+                    COALESCE((bars.close / NULLIF(bars.preclose, 0) - 1.0), 0)
+                    * COALESCE(
+                        (stats.up_count - stats.down_count)::numeric / NULLIF(stats.stock_count, 0),
+                        0
+                    )
+                )
+            END AS main_net_inflow_ratio,
+            leaders.leading_stock_name,
+            'derived:industry_amount_price_breadth_proxy' AS source,
+            bars.updated_at
+        FROM market.industry_daily_bar bars
+        LEFT JOIN member_stats stats
+          ON stats.industry_system = bars.industry_system
+         AND stats.industry_code = bars.industry_code
+        LEFT JOIN leading_stocks leaders
+          ON leaders.industry_system = bars.industry_system
+         AND leaders.industry_code = bars.industry_code
+        WHERE bars.trade_date = %s
+          AND bars.industry_system = 'csrc'
+        ORDER BY abs(
+            COALESCE(bars.amount, 0)
+            * COALESCE((bars.close / NULLIF(bars.preclose, 0) - 1.0), 0)
+            * COALESCE((stats.up_count - stats.down_count)::numeric / NULLIF(stats.stock_count, 0), 0)
+        ) DESC,
+        bars.industry_code
+    """
+    params = [
+        trade_date,
+        trade_date,
+        trade_date,
+        trade_date,
+        trade_date,
+        trade_date,
+        trade_date,
+    ]
+    with connect(service) as conn:
+        return [dict(row) for row in fetch_all(conn, sql, params)]
 
 
 def _normalize_fund_flow_item(row: dict[str, Any], *, sector_type: SectorType) -> SectorFundFlowItem:

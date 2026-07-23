@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { HomeCockpit } from '../src/components/HomeCockpit';
@@ -185,5 +185,47 @@ describe('HomeCockpit strategy score audit summary', () => {
     expect(scoreAuditCell).not.toBeNull();
     await waitFor(() => expect(within(scoreAuditCell as HTMLDivElement).getByText('不可用')).toBeVisible());
     expect(within(scoreAuditCell as HTMLDivElement).getByText('加载失败')).toBeVisible();
+  });
+
+  it('shows an admin-facing anomaly handling panel for known LHB score anomalies', async () => {
+    const onNavigate = vi.fn();
+    apiMocks.fetchStrategyScoreAudit.mockResolvedValue({
+      trade_date: '2026-06-22',
+      status: 'success',
+      overall_status: 'warning',
+      summary_path: '/tmp/strategy_score_audit_summary.json',
+      detail_path: '/tmp/strategy_score_audit_detail.csv',
+      total_rows: 15,
+      selected_rows: 15,
+      anomaly_row_count: 5,
+      anomaly_counts_by_type: { mapped_score_without_raw_score: 5 },
+      strategies: [
+        { strategy_id: 'lhb_shortline', anomaly_count: 5, row_count: 5, selected_count: 5 },
+        { strategy_id: 'mid_trend', anomaly_count: 0, row_count: 5, selected_count: 5 },
+        { strategy_id: 'tech_bottleneck', anomaly_count: 0, row_count: 5, selected_count: 5 }
+      ],
+      sample_rows: [
+        { asset_id: '000960.SZ', anomaly_flags: ['mapped_score_without_raw_score'], strategy_id: 'lhb_shortline' },
+        { asset_id: '002691.SZ', anomaly_flags: ['mapped_score_without_raw_score'], strategy_id: 'lhb_shortline' }
+      ]
+    });
+
+    render(<HomeCockpit onNavigate={onNavigate} />);
+
+    const panel = await screen.findByRole('region', { name: '策略打分审计处理建议' });
+    expect(within(panel).getByText('已知观察项')).toBeInTheDocument();
+    expect(within(panel).getAllByText('LHB Shortline Combo').length).toBeGreaterThan(0);
+    expect(within(panel).getByText('5 条异常')).toBeInTheDocument();
+    expect(within(panel).getAllByText('映射分存在但原始分缺失').length).toBeGreaterThan(0);
+    expect(within(panel).getByText('000960.SZ')).toBeInTheDocument();
+    expect(within(panel).getByText('002691.SZ')).toBeInTheDocument();
+
+    fireEvent.click(within(panel).getByRole('button', { name: '查看复盘队列' }));
+    fireEvent.click(within(panel).getByRole('button', { name: '打开策略实验室' }));
+    fireEvent.click(within(panel).getByRole('button', { name: '查看生成报告' }));
+
+    expect(onNavigate).toHaveBeenNthCalledWith(1, 'reviewQueue');
+    expect(onNavigate).toHaveBeenNthCalledWith(2, 'strategyLab');
+    expect(onNavigate).toHaveBeenNthCalledWith(3, 'generatedReports');
   });
 });

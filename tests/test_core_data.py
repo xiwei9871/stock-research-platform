@@ -116,6 +116,9 @@ def test_build_industry_daily_bars_uses_historical_membership_windows(monkeypatc
     assert "INSERT INTO market.industry_daily_bar" in sql
     assert "FROM market_daily_bar b" in sql
     assert "JOIN core.industry_membership m" in sql
+    assert "GROUP BY" in sql
+    assert "m.asset_id" in sql
+    assert "m.level = 1" in sql
     assert "m.start_date <= b.trade_date" in sql
     assert "(m.end_date IS NULL OR b.trade_date < m.end_date)" in sql
     assert "m.industry_system = %s" in sql

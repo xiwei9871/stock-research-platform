@@ -505,6 +505,27 @@ def test_compute_market_emotion_row_builds_latest_selected_day(monkeypatch):
     market_monitor._compute_market_emotion_row_cached.cache_clear()
 
 
+def test_compute_market_emotion_row_does_not_fallback_to_stale_day(monkeypatch):
+    market_monitor._compute_market_emotion_row_cached.cache_clear()
+    monkeypatch.setattr(
+        market_monitor,
+        "load_market_emotion_source_frames",
+        lambda start_date, end_date, service="research": ("bars", "status"),
+    )
+    monkeypatch.setattr(
+        market_monitor,
+        "build_market_emotion_state_from_frames",
+        lambda bars, status: pd.DataFrame(
+            [
+                {"trade_date": "2026-06-22", "emotion_score": 72.6},
+            ]
+        ),
+    )
+
+    assert market_monitor.compute_market_emotion_row("2026-06-25") is None
+    market_monitor._compute_market_emotion_row_cached.cache_clear()
+
+
 def test_compute_market_emotion_row_caches_selected_day(monkeypatch):
     calls = 0
     market_monitor._compute_market_emotion_row_cached.cache_clear()
@@ -550,6 +571,25 @@ def test_load_market_emotion_row_reraises_undefined_column_and_generic_errors(
 
     with pytest.raises(_SqlStateError):
         market_monitor.load_market_emotion_row("2026-06-12")
+
+
+def test_load_market_emotion_row_converts_tushare_amount_to_yuan(monkeypatch):
+    def fake_fetch_all(conn, sql, params):
+        return [
+            {
+                "trade_date": "2026-06-12",
+                "total_amount": Decimal("1280000000.0"),
+                "amount_ratio_5_20": Decimal("1.18"),
+            }
+        ]
+
+    monkeypatch.setattr(market_monitor, "connect", lambda service: _fake_connection())
+    monkeypatch.setattr(market_monitor, "fetch_all", fake_fetch_all)
+
+    row = market_monitor.load_market_emotion_row("2026-06-12")
+
+    assert row is not None
+    assert row["total_amount"] == Decimal("1280000000000.0")
 
 
 def test_load_emotion_stock_lists_maps_query_rows_and_limits_each_list(monkeypatch):
@@ -639,6 +679,7 @@ def test_load_emotion_stock_lists_maps_query_rows_and_limits_each_list(monkeypat
     assert len(result["limit_up"]) == 1
     assert captured["params"] == ["2026-06-12"]
     assert "FROM market_daily_bar b" in captured["sql"]
+    assert "b.amount * 1000 AS amount" in captured["sql"]
     assert "JOIN core.asset_status_daily s" in captured["sql"]
     assert "JOIN core.asset_master a" in captured["sql"]
     assert "ORDER BY b.amount DESC NULLS LAST" in captured["sql"]

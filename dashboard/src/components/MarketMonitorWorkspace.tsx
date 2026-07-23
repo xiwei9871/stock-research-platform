@@ -1,5 +1,11 @@
 import { type FormEvent, useEffect, useMemo, useState } from 'react';
-import { fetchMarketMonitorEod } from '../api/client';
+import {
+  fetchMarketMonitorEod,
+  fetchMarketOverview,
+  fetchSectorDetail,
+  fetchSectorFundFlow,
+  fetchSectorHeatmap
+} from '../api/client';
 import type { MarketMonitorPayload } from '../api/types';
 import type { StockEntryContext } from './StockWorkspace';
 import { MarketEmotionMiniPanel } from './market-monitor/MarketEmotionMiniPanel';
@@ -8,8 +14,13 @@ import { SectorDetailPanel } from './market-monitor/SectorDetailPanel';
 import { SectorFundRankingPanel } from './market-monitor/SectorFundRankingPanel';
 import { SectorHeatmapPanel } from './market-monitor/SectorHeatmapPanel';
 import {
-  buildMarketMonitorMockData,
-  mockMarketOverview,
+  DEFAULT_MARKET_MONITOR_TRADE_DATE,
+  createEmptyMarketOverview,
+  createEmptySectorFundFlow,
+  mapApiMarketOverview,
+  mapApiSectorDetail,
+  mapApiSectorFundFlow,
+  mapApiSectorHeatmapItems,
   type MarketMonitorMockData,
   type MarketOverview,
   type SectorDetail,
@@ -18,51 +29,20 @@ import {
   type SectorType
 } from './market-monitor/mockData';
 
-type MarketMonitorMockDataOverride = {
-  marketOverview?: Partial<MarketOverview>;
-  industryHeatmap?: SectorHeatmapItem[];
-  conceptHeatmap?: SectorHeatmapItem[];
-  sectorFundFlow?: Partial<Record<SectorType, Partial<SectorFundFlowSet>>>;
-  sectorDetails?: Record<string, SectorDetail>;
-};
-
 type MarketMonitorWorkspaceProps = {
   initialTradeDate?: string;
-  initialMonitorTab?: string;
+  initialMonitorTab?: SectorType;
   initialAssetId?: string;
   onOpenAsset?: (assetId: string, context: StockEntryContext) => void;
-  mockDataOverride?: MarketMonitorMockDataOverride;
 };
 
-const DEFAULT_TRADE_DATE = mockMarketOverview.tradeDate;
-
-function mergeMockData(baseData: MarketMonitorMockData, override?: MarketMonitorMockDataOverride): MarketMonitorMockData {
-  return {
-    marketOverview: {
-      ...baseData.marketOverview,
-      ...(override?.marketOverview ?? {})
-    },
-    industryHeatmap: override?.industryHeatmap ?? baseData.industryHeatmap,
-    conceptHeatmap: override?.conceptHeatmap ?? baseData.conceptHeatmap,
-    sectorFundFlow: {
-      industry: {
-        inflow: override?.sectorFundFlow?.industry?.inflow ?? baseData.sectorFundFlow.industry.inflow,
-        outflow: override?.sectorFundFlow?.industry?.outflow ?? baseData.sectorFundFlow.industry.outflow
-      },
-      concept: {
-        inflow: override?.sectorFundFlow?.concept?.inflow ?? baseData.sectorFundFlow.concept.inflow,
-        outflow: override?.sectorFundFlow?.concept?.outflow ?? baseData.sectorFundFlow.concept.outflow
-      }
-    },
-    sectorDetails: override?.sectorDetails ?? baseData.sectorDetails
-  };
-}
+const DEFAULT_TRADE_DATE = DEFAULT_MARKET_MONITOR_TRADE_DATE;
 
 function createFallbackDetail(item: SectorHeatmapItem, tradeDate: string): SectorDetail {
   return {
     ...item,
     updatedAt: `${tradeDate} 15:10`,
-    summary: '该板块详情仍处于 mock-first 阶段，后续会补齐成分股与更细的资金解释。',
+    summary: '该板块详情暂未返回完整成分股数据，后续会补齐更细的资金解释。',
     leadingStocks: []
   };
 }
@@ -83,8 +63,7 @@ export function MarketMonitorWorkspace({
   initialTradeDate,
   initialMonitorTab,
   initialAssetId,
-  onOpenAsset,
-  mockDataOverride
+  onOpenAsset
 }: MarketMonitorWorkspaceProps = {}) {
   const initialDate = initialTradeDate ?? DEFAULT_TRADE_DATE;
   const [tradeDate, setTradeDate] = useState(initialTradeDate ?? '');
@@ -93,6 +72,10 @@ export function MarketMonitorWorkspace({
   const [latestAvailableTradeDate, setLatestAvailableTradeDate] = useState(initialDate);
   const [sectorType, setSectorType] = useState<SectorType>(initialMonitorTab === 'concept' ? 'concept' : 'industry');
   const [selectedSectorId, setSelectedSectorId] = useState<string | null>(null);
+  const [overviewData, setOverviewData] = useState<MarketOverview | null>(null);
+  const [heatmapData, setHeatmapData] = useState<SectorHeatmapItem[] | null>(null);
+  const [rankingData, setRankingData] = useState<SectorFundFlowSet | null>(null);
+  const [detailData, setDetailData] = useState<SectorDetail | null>(null);
   const [emotionPayload, setEmotionPayload] = useState<MarketMonitorPayload | null>(null);
   const [emotionLoading, setEmotionLoading] = useState(false);
   const [emotionError, setEmotionError] = useState<string | null>(null);
@@ -103,6 +86,88 @@ export function MarketMonitorWorkspace({
   useEffect(() => {
     setSelectedSectorId(null);
   }, [activeTradeDate, sectorType]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setOverviewData(null);
+
+    void fetchMarketOverview(activeTradeDate)
+      .then((overview) => {
+        if (cancelled) return;
+        setOverviewData(mapApiMarketOverview(overview));
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setOverviewData(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTradeDate]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setHeatmapData(null);
+    setRankingData(null);
+
+    void Promise.allSettled([
+      fetchSectorHeatmap(activeTradeDate, sectorType),
+      fetchSectorFundFlow(activeTradeDate, sectorType)
+    ]).then(([heatmapResult, rankingResult]) => {
+      if (cancelled) return;
+
+      if (heatmapResult.status === 'fulfilled') {
+        setHeatmapData(mapApiSectorHeatmapItems(heatmapResult.value.items));
+      } else {
+        setHeatmapData(null);
+      }
+
+      if (rankingResult.status === 'fulfilled') {
+        setRankingData(
+          mapApiSectorFundFlow({
+            inflow: rankingResult.value.inflow,
+            outflow: rankingResult.value.outflow
+          })
+        );
+      } else {
+        setRankingData(null);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTradeDate, sectorType]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!selectedSectorId) {
+      setDetailData(null);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setDetailData(null);
+
+    void fetchSectorDetail(activeTradeDate, selectedSectorId)
+      .then((detail) => {
+        if (cancelled) return;
+        setDetailData(mapApiSectorDetail(detail));
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setDetailData(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTradeDate, selectedSectorId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -137,15 +202,34 @@ export function MarketMonitorWorkspace({
   }, [emotionRequestVersion, tradeDate]);
 
   const workspaceData = useMemo(
-    () => mergeMockData(buildMarketMonitorMockData(activeTradeDate), mockDataOverride),
-    [activeTradeDate, mockDataOverride]
+    () => ({
+      marketOverview: createEmptyMarketOverview(activeTradeDate),
+      industryHeatmap: [],
+      conceptHeatmap: [],
+      sectorFundFlow: {
+        industry: createEmptySectorFundFlow(),
+        concept: createEmptySectorFundFlow()
+      },
+      sectorDetails: {}
+    }),
+    [activeTradeDate]
   );
-
-  const activeHeatmap = sectorType === 'industry' ? workspaceData.industryHeatmap : workspaceData.conceptHeatmap;
-  const activeRanking = workspaceData.sectorFundFlow[sectorType];
+  const fallbackHeatmap = sectorType === 'industry' ? workspaceData.industryHeatmap : workspaceData.conceptHeatmap;
+  const fallbackRanking = workspaceData.sectorFundFlow[sectorType] ?? createEmptySectorFundFlow();
+  const activeOverview = overviewData ?? workspaceData.marketOverview;
+  const activeHeatmap = heatmapData ?? fallbackHeatmap;
+  const activeRanking = rankingData ?? fallbackRanking;
+  const detailFallbackData = useMemo(
+    () => ({
+      ...workspaceData,
+      industryHeatmap: sectorType === 'industry' ? activeHeatmap : workspaceData.industryHeatmap,
+      conceptHeatmap: sectorType === 'concept' ? activeHeatmap : workspaceData.conceptHeatmap
+    }),
+    [activeHeatmap, sectorType, workspaceData]
+  );
   const selectedDetail = useMemo(
-    () => resolveSelectedDetail(selectedSectorId, sectorType, activeTradeDate, workspaceData),
-    [activeTradeDate, selectedSectorId, sectorType, workspaceData]
+    () => detailData ?? resolveSelectedDetail(selectedSectorId, sectorType, activeTradeDate, detailFallbackData),
+    [activeTradeDate, detailData, detailFallbackData, selectedSectorId, sectorType]
   );
 
   const handleTradeDateSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -170,7 +254,7 @@ export function MarketMonitorWorkspace({
       <header className="workspace-header workspace-header-row">
         <div>
           <h1>Market Monitor</h1>
-          <p className="muted">mock-first 的板块与资金复盘工作区，主舞台聚焦板块强弱、资金方向和可操作细节。</p>
+          <p className="muted">盘后板块与资金复盘工作区，主舞台聚焦板块强弱、资金方向和可操作细节。</p>
         </div>
         <button type="button" aria-label="Load Latest EOD" onClick={handleLoadLatest}>
           最新收盘日
@@ -212,7 +296,7 @@ export function MarketMonitorWorkspace({
         </button>
       </div>
 
-      <MarketOverviewCards overview={workspaceData.marketOverview} />
+      <MarketOverviewCards overview={activeOverview} />
 
       <section className="market-monitor-main-grid">
         <SectorHeatmapPanel

@@ -296,6 +296,7 @@ def run_eod_review_evidence_snapshots(
         trade_date=trade_date,
         score_version=score_version,
         limit=limit,
+        use_strategy_snapshots=False,
     )
     warnings.extend(str(warning) for warning in queue_payload.get("warnings") or [])
     queue_payload = _queue_payload_with_run_context(

@@ -1249,6 +1249,56 @@ export type ResearchReportResponse = {
   warnings: string[];
 };
 
+export type ResearchReportDocument = {
+  report_id: string;
+  report_title: string;
+  has_pdf: boolean;
+  pdf_url: string;
+  source_url: string;
+  file_name: string;
+  public_access: boolean;
+  copyright_note: string;
+  warnings: string[];
+};
+
+export type DailyReviewLiteItem = {
+  label: string;
+  value: string;
+};
+
+export type DailyReviewLiteSection = {
+  key: string;
+  title: string;
+  status: string;
+  items: DailyReviewLiteItem[];
+};
+
+export type DailyReviewLiteRun = {
+  run_id: string;
+  source: string;
+  report_type: string;
+  status?: string;
+  updated_at?: string;
+};
+
+export type DailyReviewLiteArtifact = {
+  key: string;
+  label: string;
+  url?: string;
+  path?: string;
+  format?: string;
+};
+
+export type DailyReviewLitePayload = {
+  trade_date: string;
+  status: string;
+  run: DailyReviewLiteRun;
+  fallback: boolean;
+  sections: DailyReviewLiteSection[];
+  artifacts: DailyReviewLiteArtifact[];
+  warnings: string[];
+};
+
 export type AssetResearchReportSummary = {
   report_count_30d: number;
   report_count_90d: number;

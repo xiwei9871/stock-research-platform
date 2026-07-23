@@ -19,8 +19,11 @@ def test_dashboard_deployment_templates_define_api_and_spa_routes() -> None:
     assert "try_files $uri $uri/ /index.html" in nginx_conf
     assert "proxy_read_timeout 180s" in nginx_conf
 
-    assert "WorkingDirectory=/opt/stock_research" in service
-    assert "Environment=PYTHONPATH=src" in service
+    assert "WorkingDirectory=/home/jqz/code/stock-research-platform-main" in service
+    assert "Environment=PYTHONPATH=/home/jqz/code/stock-research-platform-main/src" in service
+    assert "Environment=STOCK_RESEARCH_OUTPUT_ROOT=/home/jqz/code/stock-research-platform-main/outputs" in service
+    assert "Environment=STOCK_RESEARCH_REPORTS_ROOT=/home/jqz/code/stock-research-platform-main/reports" in service
+    assert "EnvironmentFile=/home/jqz/code/stock-research-platform-main/.env" in service
     assert "stock_research.dashboard.app:app" in service
     assert "--host 127.0.0.1 --port 8765" in service
 
@@ -33,12 +36,18 @@ def test_dashboard_release_check_script_covers_live_endpoints() -> None:
     assert "FETCH_RETRIES" in script
     assert "FETCH_RETRY_SLEEP_SECONDS" in script
     assert "/api/platform/summary" in script
+    assert "/api/platform/readiness" in script
+    assert "/api/review-queue" in script
+    assert "/api/daily-review-lite" in script
     assert "/api/backtests/strategies" in script
     assert "/api/backtests/jobs" in script
     assert "/api/assets/000001.SZ/profile" in script
     assert "Backtest Lab" in script
     assert "Market Monitor" in script
     assert "Stock Workspace" in script
+    assert '\\"max_positions\\":null' in script
+    assert '\\"max_position_weight\\":0.2' in script
+    assert '\\"max_positions\\":2' not in script
     assert "TOPN" in script
 
 
@@ -57,9 +66,11 @@ def test_fast_dashboard_sync_script_uses_mounted_source_restart_path() -> None:
     assert "pnpm build" in script
     assert "dashboard/dist/" in script
     assert "STRATEGY_OUTPUT_ROOT" in script
+    assert "REPORTS_ROOT" in script
     assert "LATEST_STRATEGY_DAILY_EOD" in script
     assert "find_latest_strategy_daily_eod" in script
     assert "outputs/research" in script
+    assert "reports/" in script
     assert "strategy_daily_eod" in script
     assert "strategy_daily_eod/2026-06-16" not in script
     assert "web_tech_bottleneck_v1_runs" in script
@@ -89,6 +100,24 @@ def test_daily_dashboard_sync_wrapper_guards_and_verifies_release() -> None:
     assert "export REMOTE_USER REMOTE_HOST REMOTE_DIR SSH_OPTS REBUILD STRATEGY_OUTPUT_ROOT" in script
     assert "timestamp()" in script
     assert "date '+%Y-%m-%dT%H:%M:%S%z'" in script
+
+
+def test_publish_prod_wrapper_runs_systemd_sync_and_release_check() -> None:
+    script_path = REPO_ROOT / "deploy/publish_prod.sh"
+    script = read_repo_file("deploy/publish_prod.sh")
+    mode = script_path.stat().st_mode
+
+    assert mode & stat.S_IXUSR
+    assert "set -euo pipefail" in script
+    assert 'Usage: ./deploy/publish_prod.sh YYYY-MM-DD' in script
+    assert 'trade_date="${1:-}"' in script
+    assert '[[ ! "$trade_date" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]' in script
+    assert 'LATEST_STRATEGY_DAILY_EOD="strategy_daily_eod/${trade_date}"' in script
+    assert 'START_DATE="${START_DATE:-2026-01-01}"' in script
+    assert '"${repo_root}/deploy/sync_dashboard_systemd.sh"' in script
+    assert '"${repo_root}/deploy/check_dashboard_release.sh"' in script
+    assert 'DASHBOARD_AUTH is required' in script
+    assert 'BASE_URL="${BASE_URL:-https://stock.manqiaotechnology.com}"' in script
 
 
 def test_launchd_daily_dashboard_sync_runs_after_close() -> None:

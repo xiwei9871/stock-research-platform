@@ -34,6 +34,11 @@ type HomeCockpitProps = {
 };
 
 const ACTIVE_STRATEGY_IDS = ['lhb_shortline', 'mid_trend', 'tech_bottleneck'];
+const STRATEGY_LABELS: Record<string, string> = {
+  lhb_shortline: 'LHB Shortline Combo',
+  mid_trend: 'Mid Trend Combo',
+  tech_bottleneck: 'Tech Bottleneck Combo'
+};
 
 function formatCount(value: number | null | undefined) {
   return typeof value === 'number' ? value.toLocaleString() : '-';
@@ -163,6 +168,35 @@ function strategyScoreAuditSummaryText(audit: StrategyScoreAuditSummary | null, 
   if (!audit) return '读取中';
   if (audit.overall_status === 'missing') return '暂无审计产物';
   return `${audit.anomaly_row_count} 条异常`;
+}
+
+function strategyScoreAuditAnomalyLabel(anomalyType: string) {
+  const labels: Record<string, string> = {
+    mapped_score_without_raw_score: '映射分存在但原始分缺失',
+    missing_candidate_source: '候选来源缺失',
+    missing_raw_candidate_score: '原始候选分缺失',
+    published_score_mismatch: '发布分与规则映射不一致',
+    published_display_score_mismatch: '发布分与展示分不一致',
+    stale_source: '来源数据过期'
+  };
+  return labels[anomalyType] ?? anomalyType;
+}
+
+function isKnownLhbMappingObservation(audit: StrategyScoreAuditSummary | null) {
+  if (!audit || audit.overall_status !== 'warning') return false;
+  const anomalyTypes = Object.keys(audit.anomaly_counts_by_type ?? {});
+  if (anomalyTypes.length !== 1 || anomalyTypes[0] !== 'mapped_score_without_raw_score') return false;
+  return (audit.strategies ?? []).every((strategy) =>
+    strategy.strategy_id === 'lhb_shortline' ? strategy.anomaly_count > 0 : strategy.anomaly_count === 0
+  );
+}
+
+function auditAffectedStrategies(audit: StrategyScoreAuditSummary | null) {
+  return (audit?.strategies ?? []).filter((strategy) => strategy.anomaly_count > 0);
+}
+
+function auditSampleRows(audit: StrategyScoreAuditSummary | null) {
+  return (audit?.sample_rows ?? []).slice(0, 5);
 }
 
 function errorMessage(err: unknown) {
@@ -504,6 +538,69 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
           <small>{strategyScoreAuditSummaryText(scoreAudit, scoreAuditError)}</small>
         </div>
       </section>
+
+      {scoreAudit?.overall_status === 'warning' ? (
+        <section className="workspace-panel audit-action-panel" aria-label="策略打分审计处理建议">
+          <div className="section-heading">
+            <div>
+              <h2>策略打分审计处理建议</h2>
+              <p className="muted">
+                {isKnownLhbMappingObservation(scoreAudit)
+                  ? '当前异常集中在 LHB 的已知观察项，可继续使用系统，同时跟踪原始分审计链补齐。'
+                  : '审计发现异常，请先确认影响范围，再决定是按已知观察项处理还是按系统问题排查。'}
+              </p>
+            </div>
+            <span className={`status-chip ${isKnownLhbMappingObservation(scoreAudit) ? 'neutral' : 'warning'}`}>
+              {isKnownLhbMappingObservation(scoreAudit) ? '已知观察项' : '需人工处理'}
+            </span>
+          </div>
+
+          <div className="audit-action-grid">
+            <div className="audit-action-card">
+              <span>异常总数</span>
+              <strong>{scoreAudit.anomaly_row_count} 条</strong>
+            </div>
+            {(auditAffectedStrategies(scoreAudit).length ? auditAffectedStrategies(scoreAudit) : scoreAudit.strategies).map((strategy) => (
+              <div className="audit-action-card" key={strategy.strategy_id}>
+                <span>{STRATEGY_LABELS[strategy.strategy_id] ?? strategy.strategy_id}</span>
+                <strong>{strategy.anomaly_count} 条异常</strong>
+              </div>
+            ))}
+          </div>
+
+          <div className="tag-stack">
+            {Object.entries(scoreAudit.anomaly_counts_by_type ?? {}).map(([anomalyType, count]) => (
+              <span className="status-chip warning" key={anomalyType}>
+                {`${strategyScoreAuditAnomalyLabel(anomalyType)} ${count} 条`}
+              </span>
+            ))}
+          </div>
+
+          {auditSampleRows(scoreAudit).length > 0 ? (
+            <div className="audit-sample-list" aria-label="审计异常样本">
+              {auditSampleRows(scoreAudit).map((row) => (
+                <div className="audit-sample-row" key={`${row.strategy_id ?? ''}:${row.asset_id}`}>
+                  <strong>{row.asset_id}</strong>
+                  <span>{STRATEGY_LABELS[row.strategy_id ?? ''] ?? row.strategy_id ?? '未知策略'}</span>
+                  <span>{(row.anomaly_flags ?? []).map((flag) => strategyScoreAuditAnomalyLabel(flag)).join(' / ') || '异常待确认'}</span>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          <div className="compact-toolbar">
+            <button type="button" onClick={() => onNavigate('reviewQueue')}>
+              查看复盘队列
+            </button>
+            <button type="button" onClick={() => onNavigate('strategyLab')}>
+              打开策略实验室
+            </button>
+            <button type="button" onClick={() => onNavigate('generatedReports')}>
+              查看生成报告
+            </button>
+          </div>
+        </section>
+      ) : null}
 
       <section className="workspace-panel health-check-panel" aria-label="平台健康检查">
         <details>

@@ -67,6 +67,7 @@ def test_build_platform_readiness_returns_ready_when_all_sources_available(monke
     assert {check["key"]: check["status"] for check in payload["checks"]} == {
         "platform_summary": "ready",
         "review_queue": "ready",
+        "market_monitor": "ready",
         "news": "ready",
         "research_reports": "ready",
         "generated_reports": "ready",
@@ -386,6 +387,51 @@ def test_research_reports_probe_uses_bounded_select_one(monkeypatch):
     ]
 
 
+def test_market_monitor_check_uses_bounded_source_counts(monkeypatch):
+    calls = []
+    conn = object()
+
+    monkeypatch.setattr(readiness, "connect", lambda service: _FakeConnectionContext(conn))
+
+    def fake_fetch_all(active_conn, sql, params=None):
+        calls.append({"conn": active_conn, "sql": sql, "params": params})
+        return [{"industry_rows": 31, "index_rows": 5, "market_daily_rows": 5191}]
+
+    monkeypatch.setattr(readiness, "fetch_all", fake_fetch_all)
+
+    check = readiness._market_monitor_check("2026-06-26", service="svc")
+
+    assert check == {
+        "key": "market_monitor",
+        "label": "Market Monitor",
+        "status": "ready",
+        "detail": "Market Monitor sources ready for 2026-06-26",
+    }
+    assert calls == [
+        {
+            "conn": conn,
+            "sql": readiness.MARKET_MONITOR_SOURCE_COUNT_SQL,
+            "params": ["2026-06-26", "2026-06-26", "2026-06-26"],
+        }
+    ]
+
+
+def test_market_monitor_check_requires_all_required_indices(monkeypatch):
+    monkeypatch.setattr(readiness, "connect", lambda service: _FakeConnectionContext(object()))
+    monkeypatch.setattr(
+        readiness,
+        "fetch_all",
+        lambda conn, sql, params=None: [
+            {"industry_rows": 31, "index_rows": 3, "market_daily_rows": 5191}
+        ],
+    )
+
+    check = readiness._market_monitor_check("2026-06-26", service="svc")
+
+    assert check["status"] == "partial"
+    assert check["detail"] == "Market Monitor missing index_daily_bar>=5"
+
+
 def test_generated_reports_probe_checks_only_direct_children(tmp_path):
     nested = tmp_path / "nested"
     nested.mkdir()
@@ -433,6 +479,15 @@ def test_build_platform_readiness_v2_ok_from_manifest(monkeypatch):
             "tier": "tier1",
             "status": "success",
             "row_count": 85,
+            "warnings": [],
+            "error_message": "",
+        },
+        {
+            "module": "market_monitor",
+            "source": "dashboard",
+            "tier": "tier1",
+            "status": "success",
+            "row_count": 31,
             "warnings": [],
             "error_message": "",
         },
@@ -575,11 +630,12 @@ def test_build_platform_readiness_v2_ok_from_manifest(monkeypatch):
     assert payload["missing_data"] == []
     health_groups = {group["key"]: group for group in payload["health_groups"]}
     assert list(health_groups) == ["base_data", "strategy_execution", "review_chain", "content_chain"]
-    assert health_groups["base_data"]["ready_count"] == 4
+    assert health_groups["base_data"]["ready_count"] == 5
     assert [item["label"] for item in health_groups["base_data"]["items"]] == [
         "日线",
         "因子",
         "评分",
+        "Market Monitor",
         "龙虎榜",
     ]
     assert health_groups["strategy_execution"]["ready_count"] == 3

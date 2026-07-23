@@ -198,7 +198,75 @@ def test_review_rows_use_lhb_auction_enhanced_score_when_positions_have_no_score
     assert review.iloc[0]["score_source"] == "auction_enhanced_score"
 
 
-def test_review_rows_use_same_day_lhb_candidates_when_positions_are_stale() -> None:
+def test_review_rows_prefer_lhb_base_score_lookup_over_auction_placeholder(monkeypatch) -> None:
+    monkeypatch.setattr(
+        strategy_eod_publish,
+        "_lhb_base_score_lookup_for_trade_date",
+        lambda trade_date: {
+            "CN:SH:600667": {
+                "score_total": 66.378613,
+                "score_components": {"lhb_net_buy_ratio": 0.13938337902073},
+            }
+        },
+    )
+
+    review = strategy_eod_publish._review_rows_from_result(
+        {
+            "strategy_id": "lhb_shortline",
+            "strategy_name": "LHB Shortline Combo",
+            "positions": [
+                {"trade_date": "2026-06-24", "ts_code": "002080.SZ"},
+            ],
+            "candidates": [
+                {
+                    "trade_date": "2026-06-25",
+                    "ts_code": "600667.SH",
+                    "phase12a_rule_layer": "pending_intraday",
+                    "auction_enhanced_score": 20.0,
+                }
+            ],
+        },
+        trade_date="2026-06-25",
+    )
+
+    assert review.iloc[0]["score_total"] == 66.378613
+    assert review.iloc[0]["score_source"] == "score_total"
+    assert review.iloc[0]["score_components"] == {"lhb_net_buy_ratio": 0.13938337902073}
+
+
+def test_lhb_base_score_lookup_keeps_pump_risk_filtered_rows(monkeypatch) -> None:
+    monkeypatch.setattr(
+        strategy_eod_publish,
+        "_load_lhb_base_score_source_frames",
+        lambda trade_date: (
+            strategy_eod_publish.pd.DataFrame(
+                [
+                    {
+                        "trade_date": trade_date,
+                        "asset_id": "CN:SZ:301418",
+                        "on_lhb": True,
+                        "lhb_net_buy_ratio": 0.17663801963951,
+                        "lhb_net_buy_amount": 96585148.41,
+                        "institution_net_buy": 33550682.24,
+                        "repeat_on_list_count_3d": 1,
+                        "lhb_after_reversal": False,
+                        "lhb_one_day_pump_risk": 0.8,
+                    }
+                ]
+            ),
+            strategy_eod_publish.pd.DataFrame(),
+        ),
+    )
+
+    lookup = strategy_eod_publish._lhb_base_score_lookup_for_trade_date("2026-06-25")
+
+    assert lookup["CN:SZ:301418"]["score_total"] > 0
+    assert lookup["CN:SZ:301418"]["score_components"]["lhb_one_day_pump_risk"] == 0.8
+
+
+def test_review_rows_use_same_day_lhb_candidates_when_positions_are_stale(monkeypatch) -> None:
+    monkeypatch.setattr(strategy_eod_publish, "_lhb_base_score_lookup_for_trade_date", lambda trade_date: {})
+
     review = strategy_eod_publish._review_rows_from_result(
         {
             "strategy_id": "lhb_shortline",
@@ -282,6 +350,77 @@ def test_review_rows_use_mid_trend_signal_score_when_positions_have_no_score() -
 
     assert review.iloc[0]["score_total"] == 91.2
     assert review.iloc[0]["score_source"] == "mid_trend_funnel_score"
+
+
+def test_review_rows_do_not_publish_mid_trend_stale_positions_when_latest_equity_is_flat_cash() -> None:
+    review = strategy_eod_publish._review_rows_from_result(
+        {
+            "strategy_id": "mid_trend",
+            "strategy_name": "Mid Trend Combo",
+            "positions": [
+                {"rebalance_date": "2026-06-22", "asset_id": "CN:SZ:002171", "weight": 0.2},
+                {"rebalance_date": "2026-06-22", "asset_id": "CN:SZ:002057", "weight": 0.2},
+            ],
+            "equity_curve": [
+                {"date": "2026-06-24", "holdings_count": 2, "invested_weight": 0.4},
+                {"date": "2026-06-25", "holdings_count": 0, "invested_weight": 0.0},
+            ],
+            "signals": [
+                {
+                    "trade_date": "2026-06-22",
+                    "asset_id": "CN:SZ:002171",
+                    "mid_trend_funnel_score": 76.8,
+                },
+                {
+                    "trade_date": "2026-06-22",
+                    "asset_id": "CN:SZ:002057",
+                    "mid_trend_funnel_score": 75.9,
+                },
+            ],
+        },
+        trade_date="2026-06-25",
+    )
+
+    assert review.empty
+
+
+def test_review_rows_publish_mid_trend_current_holdings_after_risk_exits() -> None:
+    review = strategy_eod_publish._review_rows_from_result(
+        {
+            "strategy_id": "mid_trend",
+            "strategy_name": "Mid Trend Combo",
+            "positions": [
+                {"rebalance_date": "2026-06-22", "asset_id": "CN:SZ:002171", "weight": 0.2},
+                {"rebalance_date": "2026-06-22", "asset_id": "CN:SZ:002057", "weight": 0.2},
+                {"rebalance_date": "2026-06-22", "asset_id": "CN:SH:601211", "weight": 0.2},
+                {"rebalance_date": "2026-06-22", "asset_id": "CN:SZ:002955", "weight": 0.2},
+                {"rebalance_date": "2026-06-22", "asset_id": "CN:SH:603257", "weight": 0.2},
+            ],
+            "trades": [
+                {"trade_date": "2026-06-22", "asset_id": "CN:SZ:002171", "target_weight": 0.2},
+                {"trade_date": "2026-06-22", "asset_id": "CN:SZ:002057", "target_weight": 0.2},
+                {"trade_date": "2026-06-22", "asset_id": "CN:SH:601211", "target_weight": 0.2},
+                {"trade_date": "2026-06-22", "asset_id": "CN:SZ:002955", "target_weight": 0.2},
+                {"trade_date": "2026-06-22", "asset_id": "CN:SH:603257", "target_weight": 0.2},
+                {"trade_date": "2026-06-23", "asset_id": "CN:SZ:002171", "target_weight": 0.0},
+                {"trade_date": "2026-06-23", "asset_id": "CN:SZ:002057", "target_weight": 0.0},
+            ],
+            "equity_curve": [
+                {"date": "2026-06-22", "holdings_count": 5, "invested_weight": 1.0},
+                {"date": "2026-06-23", "holdings_count": 3, "invested_weight": 0.6},
+            ],
+            "signals": [
+                {"trade_date": "2026-06-23", "asset_id": "CN:SH:601211", "mid_trend_funnel_score": 81.0},
+                {"trade_date": "2026-06-23", "asset_id": "CN:SZ:002955", "mid_trend_funnel_score": 79.0},
+                {"trade_date": "2026-06-23", "asset_id": "CN:SH:603257", "mid_trend_funnel_score": 77.0},
+            ],
+        },
+        trade_date="2026-06-23",
+    )
+
+    assert review["asset_id"].tolist() == ["CN:SH:601211", "CN:SZ:002955", "CN:SH:603257"]
+    assert review["rank"].tolist() == [1, 2, 3]
+    assert review["score_total"].tolist() == [81.0, 79.0, 77.0]
 
 
 def test_prepare_tech_bottleneck_source_converts_legacy_seed_to_fresh_daily_source(monkeypatch, tmp_path):
@@ -494,7 +633,7 @@ def test_publish_strategy_eod_writes_score_audit_artifacts_and_summary_paths(mon
     assert publish_summary_path.exists()
     assert summary["score_audit"]["detail_path"] == str(detail_path)
     assert summary["score_audit"]["summary_path"] == str(audit_summary_path)
-    assert summary["score_audit"]["anomaly_row_count"] == 1
+    assert summary["score_audit"]["anomaly_row_count"] == 0
     assert summary["score_audit"]["strategy_counts"] == {
         "lhb_shortline": 1,
         "mid_trend": 1,

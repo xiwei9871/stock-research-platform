@@ -303,5 +303,9 @@ def test_build_default_step_runners_wire_daily_jobs(monkeypatch):
     assert outputs[2] == {"bar_count": 1234}
     assert calls[1][1]["source_service"] == "stock_hfq"
     assert calls[1][1]["start_date"] == "2026-05-12"
+    assert calls[7][1]["start_date"] == "2026-05-12"
+    assert calls[7][1]["end_date"] == "2026-05-12"
+    assert calls[7][1]["industry_system"] == "csrc"
+    assert calls[7][1]["adjust_type"] == "qfq"
     assert calls[9][1]["lookback_bars"] == 130
     assert calls[10][1]["approved_only"] is True

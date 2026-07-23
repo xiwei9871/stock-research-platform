@@ -8,6 +8,7 @@ from functools import lru_cache
 from typing import Any
 
 from stock_research.config import SETTINGS
+from stock_research.dashboard.amount_units import storage_amount_to_yuan
 from stock_research.data_run_manifest import load_recent_data_run_manifest
 from stock_research.dashboard.display_date_gate import select_display_date
 from stock_research.dashboard.platform import load_platform_summary
@@ -18,6 +19,8 @@ from stock_research.market_emotion_state_v1 import (
     build_market_emotion_state_from_frames,
     load_market_emotion_source_frames,
 )
+
+load_latest_data_run_manifest = load_recent_data_run_manifest
 
 
 _MISSING_TABLE_SQLSTATES = {"3F000", "42P01"}
@@ -65,9 +68,12 @@ def load_market_emotion_row(
             rows = fetch_all(conn, sql, [trade_date])
     except Exception as exc:
         if _is_missing_optional_source(exc):
-            return compute_market_emotion_row(trade_date, service=service)
+            return _market_emotion_amounts_to_yuan(
+                compute_market_emotion_row(trade_date, service=service)
+            )
         raise
-    return dict(rows[0]) if rows else compute_market_emotion_row(trade_date, service=service)
+    row = dict(rows[0]) if rows else compute_market_emotion_row(trade_date, service=service)
+    return _market_emotion_amounts_to_yuan(row)
 
 
 def compute_market_emotion_row(
@@ -78,6 +84,15 @@ def compute_market_emotion_row(
 ) -> dict[str, Any] | None:
     row = _compute_market_emotion_row_cached(str(trade_date), service, int(lookback_days))
     return dict(row) if row else None
+
+
+def _market_emotion_amounts_to_yuan(row: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not row:
+        return row
+    result = dict(row)
+    if "total_amount" in result:
+        result["total_amount"] = storage_amount_to_yuan(result.get("total_amount"))
+    return result
 
 
 @lru_cache(maxsize=64)
@@ -100,8 +115,6 @@ def _compute_market_emotion_row_cached(
     if daily.empty:
         return None
     selected = daily[daily["trade_date"].astype(str).eq(end_date.isoformat())]
-    if selected.empty:
-        selected = daily[daily["trade_date"].astype(str).le(end_date.isoformat())].tail(1)
     if selected.empty:
         return None
     row = dict(selected.iloc[0].to_dict())
@@ -207,7 +220,7 @@ def load_emotion_stock_lists(trade_date: str, *, limit: int = 30) -> dict[str, l
             b.asset_id,
             COALESCE(a.symbol, b.asset_id) AS symbol,
             COALESCE(a.name, b.asset_id) AS name,
-            b.amount,
+            b.amount * 1000 AS amount,
             b.pct_chg,
             COALESCE(a.board, '') AS board,
             s.is_limit_up,
@@ -399,13 +412,18 @@ def _default_display_trade_date(summary: dict[str, Any]) -> str:
     latest_market_date = str(summary.get("latest_market_date") or "")
     try:
         gate = select_display_date(
-            list(load_recent_data_run_manifest()),
+            list(load_latest_data_run_manifest()),
             latest_market_date=latest_market_date,
         )
     except Exception:
         gate = {}
+    display_trade_date = str(gate.get("display_trade_date") or "")
+    if not latest_market_date:
+        display_trade_date = ""
+    if latest_market_date and display_trade_date and display_trade_date > latest_market_date:
+        display_trade_date = latest_market_date
     return str(
-        gate.get("display_trade_date")
+        display_trade_date
         or latest_market_date
         or summary.get("latest_score_date")
         or ""

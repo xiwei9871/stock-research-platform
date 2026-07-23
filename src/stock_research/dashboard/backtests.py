@@ -273,7 +273,8 @@ def _metrics_from_eod_summary(summary: dict[str, Any]) -> dict[str, Any]:
 
 def _performance_as_of_date(summary: dict[str, Any], *, fallback: str) -> str:
     return str(
-        summary.get("actual_end_date")
+        summary.get("performance_effective_date")
+        or summary.get("actual_end_date")
         or summary.get("equity_latest_date")
         or summary.get("end_date")
         or fallback

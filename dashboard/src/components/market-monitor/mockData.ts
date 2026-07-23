@@ -1,3 +1,10 @@
+import type {
+  MarketOverview as ApiMarketOverview,
+  SectorDetail as ApiSectorDetail,
+  SectorFundFlowItem as ApiSectorFundFlowItem,
+  SectorHeatmapItem as ApiSectorHeatmapItem
+} from '../../api/types';
+
 export type SectorType = 'industry' | 'concept';
 
 export type MarketDataStatus = 'completed' | 'partial' | 'missing' | 'stale';
@@ -66,8 +73,30 @@ export type MarketMonitorMockData = {
   sectorDetails: Record<string, SectorDetail>;
 };
 
+export const DEFAULT_MARKET_MONITOR_TRADE_DATE = '2026-06-12';
+
+function fallbackUpdatedAt(tradeDate: string, updatedAt?: string | null) {
+  return updatedAt?.trim() || `${tradeDate} 15:10`;
+}
+
+function coerceNumber(value: number | null | undefined) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+
+function normalizeMarketDataStatus(status: string | null | undefined): MarketDataStatus {
+  if (status === 'completed' || status === 'partial' || status === 'missing' || status === 'stale') {
+    return status;
+  }
+  return 'missing';
+}
+
+function inferSymbol(assetId: string) {
+  const symbol = assetId.split(':').at(-1)?.trim();
+  return symbol || assetId;
+}
+
 export const mockMarketOverview: MarketOverview = {
-  tradeDate: '2026-06-12',
+  tradeDate: DEFAULT_MARKET_MONITOR_TRADE_DATE,
   updatedAt: '2026-06-12 15:10',
   dataStatus: 'completed',
   totalAmount: 1526000000000,
@@ -83,6 +112,127 @@ export const mockMarketOverview: MarketOverview = {
     { id: 'beijing50', name: '北证50', close: 1088.67, pctChange: -0.0038 }
   ]
 };
+
+export function createEmptyMarketOverview(tradeDate = DEFAULT_MARKET_MONITOR_TRADE_DATE): MarketOverview {
+  return {
+    tradeDate,
+    updatedAt: fallbackUpdatedAt(tradeDate),
+    dataStatus: 'missing',
+    totalAmount: null,
+    upCount: null,
+    downCount: null,
+    limitUpCount: null,
+    limitDownCount: null,
+    indices: []
+  };
+}
+
+export function createEmptySectorFundFlow(): SectorFundFlowSet {
+  return {
+    inflow: [],
+    outflow: []
+  };
+}
+
+export function hasMarketOverviewContent(overview: MarketOverview | null | undefined) {
+  if (!overview) return false;
+  return (
+    overview.indices.length > 0 ||
+    overview.totalAmount != null ||
+    overview.upCount != null ||
+    overview.downCount != null ||
+    overview.limitUpCount != null ||
+    overview.limitDownCount != null
+  );
+}
+
+export function hasSectorHeatmapContent(items: SectorHeatmapItem[] | null | undefined) {
+  return Boolean(items && items.length > 0);
+}
+
+export function hasSectorFundFlowContent(ranking: SectorFundFlowSet | null | undefined) {
+  if (!ranking) return false;
+  return ranking.inflow.length > 0 || ranking.outflow.length > 0;
+}
+
+export function mapApiMarketOverview(overview: ApiMarketOverview): MarketOverview {
+  const tradeDate = overview.trade_date?.trim() || DEFAULT_MARKET_MONITOR_TRADE_DATE;
+  return {
+    tradeDate,
+    updatedAt: fallbackUpdatedAt(tradeDate, overview.updated_at),
+    dataStatus: normalizeMarketDataStatus(overview.data_status),
+    totalAmount: overview.total_amount ?? null,
+    upCount: overview.up_count ?? null,
+    downCount: overview.down_count ?? null,
+    limitUpCount: overview.limit_up_count ?? null,
+    limitDownCount: overview.limit_down_count ?? null,
+    indices: (overview.indices ?? []).map((item) => ({
+      id: item.code || item.name,
+      name: item.name,
+      close: item.close ?? null,
+      pctChange: item.change_pct ?? null
+    }))
+  };
+}
+
+function mapApiSectorSnapshot(item: ApiSectorHeatmapItem | ApiSectorFundFlowItem | ApiSectorDetail): SectorHeatmapItem {
+  const upCount = 'up_count' in item ? item.up_count : null;
+  const downCount = 'down_count' in item ? item.down_count : null;
+  const mainNetInflow =
+    'main_net_inflow' in item && typeof item.main_net_inflow !== 'undefined' ? item.main_net_inflow : null;
+  const netInflowRatio =
+    'main_net_inflow_ratio' in item && typeof item.main_net_inflow_ratio !== 'undefined'
+      ? item.main_net_inflow_ratio
+      : null;
+  const leadingStockName =
+    'leading_stock_name' in item && typeof item.leading_stock_name !== 'undefined' ? item.leading_stock_name : null;
+
+  return {
+    sectorId: item.sector_id,
+    sectorName: item.sector_name,
+    sectorType: item.sector_type,
+    pctChange: coerceNumber(item.change_pct),
+    amount: coerceNumber(item.amount),
+    upCount: coerceNumber(upCount),
+    downCount: coerceNumber(downCount),
+    mainNetInflow: coerceNumber(mainNetInflow),
+    netInflowRatio: coerceNumber(netInflowRatio),
+    leadingStockName: leadingStockName ?? null
+  };
+}
+
+export function mapApiSectorHeatmapItems(items: ApiSectorHeatmapItem[]): SectorHeatmapItem[] {
+  return items.map((item) => mapApiSectorSnapshot(item));
+}
+
+export function mapApiSectorFundFlow(items: {
+  inflow: ApiSectorFundFlowItem[];
+  outflow: ApiSectorFundFlowItem[];
+}): SectorFundFlowSet {
+  return {
+    inflow: items.inflow.map((item) => mapApiSectorSnapshot(item)),
+    outflow: items.outflow.map((item) => mapApiSectorSnapshot(item))
+  };
+}
+
+export function mapApiSectorDetail(detail: ApiSectorDetail): SectorDetail {
+  const tradeDate = detail.trade_date?.trim() || DEFAULT_MARKET_MONITOR_TRADE_DATE;
+  return {
+    ...mapApiSectorSnapshot(detail),
+    updatedAt: fallbackUpdatedAt(tradeDate, detail.updated_at),
+    summary:
+      detail.warnings.find((warning) => warning.trim().length > 0) ??
+      '真实 detail API 暂未提供更细摘要，当前先展示核心行情与领涨股。',
+    leadingStocks: (detail.leading_stocks ?? []).map((stock) => ({
+      assetId: stock.asset_id,
+      name: stock.name,
+      symbol: inferSymbol(stock.asset_id),
+      pctChange: coerceNumber(stock.change_pct),
+      turnover: 0,
+      reason: '真实 detail API 暂未提供成交额与原因字段。'
+    }))
+  };
+}
 
 export const mockIndustryHeatmap: SectorHeatmapItem[] = [
   {

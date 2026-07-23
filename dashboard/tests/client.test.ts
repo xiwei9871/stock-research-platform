@@ -7,6 +7,7 @@ import {
   fetchAssetNews,
   fetchAssetOutcomes,
   fetchAssetResearchReports,
+  fetchDailyReviewLite,
   fetchExperimentProposals,
   fetchExperimentReplay,
   fetchGlobalSearch,
@@ -21,6 +22,7 @@ import {
   fetchPublicSnapshot,
   fetchPublicNews,
   fetchPublicNewsStatus,
+  fetchResearchReportDocument,
   fetchResearchReportSummary,
   fetchResearchReports,
   fetchSectorDetail,
@@ -223,6 +225,27 @@ describe('dashboard API client', () => {
 
     expect(fetchMock).toHaveBeenCalledWith('/api/market-monitor/eod?trade_date=2026-06-10&top_n=3');
     expect(result.freshness.is_realtime).toBe(false);
+  });
+
+  it('fetches daily review lite with the selected trade date', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        trade_date: '2026-06-18',
+        status: 'partial',
+        run: { run_id: '', source: 'fallback', report_type: 'daily_review_lite' },
+        fallback: true,
+        sections: [],
+        artifacts: [],
+        warnings: ['no registered daily review run selected']
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchDailyReviewLite({ tradeDate: '2026-06-18' });
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/daily-review-lite?trade_date=2026-06-18');
+    expect(result.trade_date).toBe('2026-06-18');
   });
 
   it('fetches market overview for a trade date', async () => {
@@ -509,6 +532,29 @@ describe('dashboard API client', () => {
         '&source_name=cfi_ybyl&start_date=2026-06-01&end_date=2026-06-05&has_target_price=true&limit=25&offset=5'
     );
     expect(result.items[0].stock_name).toBe('贵州茅台');
+  });
+
+  it('fetches the research report document payload', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        report_id: 'r1',
+        report_title: '贵州茅台深度报告',
+        has_pdf: true,
+        pdf_url: '/api/research-reports/r1/pdf',
+        source_url: 'https://example.com/r1',
+        file_name: 'r1.pdf',
+        public_access: false,
+        copyright_note: 'internal pdf',
+        warnings: []
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchResearchReportDocument('r1');
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/research-reports/r1/document');
+    expect(result.pdf_url).toBe('/api/research-reports/r1/pdf');
   });
 
   it('fetches asset research reports', async () => {

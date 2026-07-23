@@ -3,6 +3,7 @@ import json
 import time
 from typing import Any
 
+import pandas as pd
 import baostock as bs
 
 from stock_research.assets import asset_id_from_baostock_code
@@ -18,6 +19,11 @@ INDEX_TARGETS = {
     "CSI_500": "sh.000905",
     "CSI_1000": "sh.000852",
     "CHINEXT": "sz.399006",
+}
+
+AKSHARE_INDEX_TARGETS = {
+    "STAR_50": "sh000688",
+    "BSE_50": "bj899050",
 }
 
 INDEX_CONSTITUENT_TARGETS = {
@@ -218,6 +224,63 @@ def normalize_index_row(index_id: str, row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def normalize_akshare_index_daily_rows(
+    index_id: str,
+    frame: pd.DataFrame,
+    *,
+    start_date: str,
+    end_date: str,
+) -> list[dict[str, Any]]:
+    if frame.empty:
+        return []
+    normalized = frame.copy()
+    normalized["trade_date"] = pd.to_datetime(normalized["date"], errors="coerce").dt.date.astype(str)
+    normalized = normalized.sort_values("trade_date").reset_index(drop=True)
+    normalized["preclose"] = pd.to_numeric(normalized["close"], errors="coerce").shift(1)
+    selected = normalized[
+        normalized["trade_date"].between(str(start_date), str(end_date), inclusive="both")
+    ]
+    rows: list[dict[str, Any]] = []
+    for raw_row in selected.to_dict("records"):
+        rows.append(
+            {
+                "index_id": index_id,
+                "trade_date": str(raw_row["trade_date"]),
+                "open": parse_float(raw_row.get("open")),
+                "high": parse_float(raw_row.get("high")),
+                "low": parse_float(raw_row.get("low")),
+                "close": parse_float(raw_row.get("close")),
+                "preclose": parse_float(raw_row.get("preclose")),
+                "volume": parse_float(raw_row.get("volume")),
+                "amount": parse_float(raw_row.get("amount")),
+                "source": "akshare",
+            }
+        )
+    return rows
+
+
+def query_akshare_index_daily_rows(
+    *,
+    start_date: str,
+    end_date: str,
+    targets: dict[str, str] | None = None,
+) -> list[dict[str, Any]]:
+    import akshare as ak
+
+    rows: list[dict[str, Any]] = []
+    for index_id, symbol in (targets or AKSHARE_INDEX_TARGETS).items():
+        frame = ak.stock_zh_index_daily_em(symbol=symbol)
+        rows.extend(
+            normalize_akshare_index_daily_rows(
+                index_id,
+                frame,
+                start_date=start_date,
+                end_date=end_date,
+            )
+        )
+    return rows
+
+
 def upsert_index_daily_bars(conn, rows: list[dict[str, Any]]) -> int:
     if not rows:
         return 0
@@ -403,6 +466,7 @@ def sync_index_daily_bars(
                     f"{rs.error_code} {rs.error_msg}"
                 )
             rows.extend(normalize_index_row(index_id, row) for row in _rows_from_result(rs))
+        rows.extend(query_akshare_index_daily_rows(start_date=start_date, end_date=end_date))
         with connect(service) as conn:
             return upsert_index_daily_bars(conn, rows)
     finally:

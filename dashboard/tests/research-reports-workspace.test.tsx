@@ -6,7 +6,8 @@ import type { ResearchReportItem } from '../src/api/types';
 
 const apiMocks = vi.hoisted(() => ({
   fetchResearchReportSummary: vi.fn(),
-  fetchResearchReports: vi.fn()
+  fetchResearchReports: vi.fn(),
+  fetchResearchReportDocument: vi.fn()
 }));
 
 vi.mock('../src/api/client', () => apiMocks);
@@ -46,7 +47,7 @@ function makeReport(overrides: Partial<ResearchReportItem> = {}): ResearchReport
 beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
   vi.setSystemTime(new Date('2026-06-12T10:00:00Z'));
-  vi.clearAllMocks();
+  vi.resetAllMocks();
   apiMocks.fetchResearchReportSummary.mockResolvedValue({
     total_reports: 57418,
     covered_stocks: 3367,
@@ -62,6 +63,17 @@ beforeEach(() => {
     total: 1,
     limit: 50,
     offset: 0,
+    warnings: []
+  });
+  apiMocks.fetchResearchReportDocument.mockResolvedValue({
+    report_id: 'r1',
+    report_title: '贵州茅台深度报告',
+    has_pdf: true,
+    pdf_url: '/api/research-reports/r1/pdf',
+    source_url: 'https://example.com/r1',
+    file_name: 'r1.pdf',
+    public_access: false,
+    copyright_note: 'internal pdf',
     warnings: []
   });
 });
@@ -170,14 +182,84 @@ describe('ResearchReportsWorkspace', () => {
     });
   });
 
-  it('opens report details from a selected row', async () => {
+  it('opens full-screen report details from a selected row', async () => {
     render(<ResearchReportsWorkspace />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Open report 贵州茅台深度报告' }));
 
+    expect(screen.getByLabelText('Research report full-screen reader')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '贵州茅台深度报告' })).toBeInTheDocument();
-    expect(screen.getByText('company view')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open Source' })).toHaveAttribute('href', 'https://example.com/r1');
+    expect(screen.getByText('贵州茅台 600519.SH')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '来源链接' })).toHaveAttribute('href', 'https://example.com/r1');
+  });
+
+  it('renders a full-screen PDF reader for the selected research report', async () => {
+    render(<ResearchReportsWorkspace />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Open report 贵州茅台深度报告' }));
+
+    await waitFor(() => {
+      expect(apiMocks.fetchResearchReportDocument).toHaveBeenCalledWith('r1');
+    });
+    expect(await screen.findByTitle('贵州茅台深度报告 PDF')).toHaveAttribute(
+      'src',
+      '/api/research-reports/r1/pdf'
+    );
+    expect(screen.getByRole('link', { name: '打开PDF' })).toHaveAttribute('href', '/api/research-reports/r1/pdf');
+    expect(screen.getByLabelText('Research report full-screen reader')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '返回研报列表' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Research report results')).not.toBeInTheDocument();
+  });
+
+  it('toggles the PDF reader between normal and fill-screen layouts', async () => {
+    render(<ResearchReportsWorkspace />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Open report 贵州茅台深度报告' }));
+    const reader = await screen.findByLabelText('Research report full-screen reader');
+
+    expect(reader).not.toHaveClass('is-fill-screen');
+    fireEvent.click(screen.getByRole('button', { name: '铺满屏幕' }));
+
+    expect(reader).toHaveClass('is-fill-screen');
+    expect(screen.getByRole('button', { name: '退出铺满' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '退出铺满' }));
+
+    expect(reader).not.toHaveClass('is-fill-screen');
+    expect(screen.getByRole('button', { name: '铺满屏幕' })).toBeInTheDocument();
+  });
+
+  it('returns from the full-screen reader to the report list', async () => {
+    render(<ResearchReportsWorkspace />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Open report 贵州茅台深度报告' }));
+    expect(await screen.findByLabelText('Research report full-screen reader')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '返回研报列表' }));
+
+    expect(screen.getByLabelText('Research report results')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Research report full-screen reader')).not.toBeInTheDocument();
+  });
+
+  it('shows a clear fallback when the selected research report has no local PDF', async () => {
+    apiMocks.fetchResearchReportDocument.mockResolvedValue({
+      report_id: 'r1',
+      report_title: '贵州茅台深度报告',
+      has_pdf: false,
+      pdf_url: '',
+      source_url: 'https://example.com/r1',
+      file_name: '',
+      public_access: true,
+      copyright_note: 'metadata only',
+      warnings: ['local pdf is unavailable or outside allowed report directories']
+    });
+
+    render(<ResearchReportsWorkspace />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Open report 贵州茅台深度报告' }));
+
+    expect(await screen.findByText('暂无本地PDF')).toBeInTheDocument();
+    expect(screen.getByText('可打开来源链接查看原文，或等待研报同步任务补齐PDF文件。')).toBeInTheDocument();
   });
 
   it('opens stock detail from a report row with report context', async () => {
@@ -206,7 +288,7 @@ describe('ResearchReportsWorkspace', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Open report 贵州茅台深度报告' }));
     fireEvent.click(
-      within(screen.getByLabelText('Research report detail')).getByRole('button', {
+      within(screen.getByLabelText('Research report full-screen reader')).getByRole('button', {
         name: 'Open Stock Detail for 贵州茅台'
       })
     );
@@ -250,9 +332,9 @@ describe('ResearchReportsWorkspace', () => {
     const buttons = await screen.findAllByRole('button', { name: 'Open report 同名报告' });
     fireEvent.click(buttons[1]);
 
-    const detail = screen.getByLabelText('Research report detail');
-    expect(within(detail).getByText(/平安银行/)).toBeInTheDocument();
-    expect(within(detail).getByText('B')).toBeInTheDocument();
+    const reader = screen.getByLabelText('Research report full-screen reader');
+    expect(within(reader).getByText(/平安银行/)).toBeInTheDocument();
+    expect(within(reader).getByRole('heading', { name: '同名报告' })).toBeInTheDocument();
     expect(
       consoleErrorSpy.mock.calls.some((call) => call.join(' ').includes('Encountered two children with the same key'))
     ).toBe(false);
@@ -373,7 +455,7 @@ describe('ResearchReportsWorkspace', () => {
     expect(await screen.findByRole('heading', { name: '贵州茅台深度跟踪' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Open report 贵州茅台旧报告' }));
     expect(screen.getByRole('heading', { name: '贵州茅台旧报告' })).toBeInTheDocument();
-    expect(screen.getByText('旧报告视角')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '返回研报列表' }));
 
     fireEvent.click(screen.getByRole('button', { name: 'Search Reports' }));
 

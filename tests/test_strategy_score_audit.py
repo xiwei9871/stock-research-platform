@@ -52,6 +52,39 @@ def test_lhb_audit_flags_mapped_score_without_raw_score() -> None:
     assert row["eligibility_layer"] == "pending_intraday"
 
 
+def test_lhb_audit_treats_published_score_total_as_raw_candidate_score() -> None:
+    review_rows = [
+        {
+            "trade_date": "2026-06-25",
+            "asset_id": "600667.SH",
+            "rank": 1,
+            "score_total": 66.378613,
+            "score_source": "score_total",
+            "score_components": {"lhb_net_buy_ratio": 0.13938337902073},
+            "strategy_id": "lhb_shortline",
+            "strategy_name": "LHB Shortline Combo",
+            "strategy_run_id": "strategy-eod-2026-06-25-local",
+            "source_type": "strategy_manifest",
+            "source_name": "strategy_lhb_shortline",
+            "source_rank": 1,
+            "review_tier": "top5_focus",
+        }
+    ]
+
+    detail = build_strategy_score_audit(
+        trade_date="2026-06-25",
+        review_rows=review_rows,
+        strategy_results={"lhb_shortline": {}},
+        display_rows=review_rows,
+    )
+
+    row = detail.iloc[0].to_dict()
+    assert row["raw_candidate_score"] == 66.378613
+    assert row["raw_candidate_score_source"] == "score_total"
+    assert row["published_score"] == 66.378613
+    assert row["anomaly_flags"] == []
+
+
 def test_tech_audit_tracks_raw_and_scaled_published_scores() -> None:
     review_rows = [
         {

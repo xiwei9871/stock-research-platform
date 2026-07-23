@@ -64,8 +64,13 @@ const apiMocks = vi.hoisted(() => ({
   fetchFactorLibrary: vi.fn(),
   fetchFactorScorePreview: vi.fn(),
   fetchMarketMonitorEod: vi.fn(),
+  fetchMarketOverview: vi.fn(),
+  fetchSectorHeatmap: vi.fn(),
+  fetchSectorFundFlow: vi.fn(),
+  fetchSectorDetail: vi.fn(),
   fetchResearchReportSummary: vi.fn(),
   fetchResearchReports: vi.fn(),
+  fetchResearchReportDocument: vi.fn(),
   fetchAssetResearchReports: vi.fn(),
   fetchEvidenceDigest: vi.fn(),
   fetchReviewQueue: vi.fn(),
@@ -272,6 +277,105 @@ const marketEmotionFixture = {
   },
   weight_performance: { status: 'pending_source' }
 };
+
+function makeMarketOverviewResponse(overrides: Record<string, unknown> = {}) {
+  return {
+    trade_date: '2026-06-10',
+    updated_at: '2026-06-10 15:10',
+    source: 'api',
+    data_status: 'completed',
+    warnings: [],
+    indices: [
+      {
+        code: '000001',
+        name: '上证指数',
+        close: 3168.44,
+        change_pct: 0.0087
+      }
+    ],
+    total_amount: 1526000000000,
+    up_count: 3612,
+    down_count: 1491,
+    limit_up_count: 90,
+    limit_down_count: 10,
+    ...overrides
+  };
+}
+
+function makeSectorHeatmapResponse(sectorType: 'industry' | 'concept', tradeDate = '2026-06-10') {
+  return {
+    trade_date: tradeDate,
+    updated_at: `${tradeDate} 15:10`,
+    source: 'api',
+    data_status: 'completed',
+    warnings: [],
+    items: [
+      {
+        sector_id: sectorType === 'concept' ? 'concept-ai-compute' : 'industry-semiconductor',
+        sector_name: sectorType === 'concept' ? 'AI算力' : '半导体',
+        sector_type: sectorType,
+        change_pct: sectorType === 'concept' ? 0.0432 : 0.0321,
+        amount: sectorType === 'concept' ? 198400000000 : 145800000000,
+        up_count: sectorType === 'concept' ? 128 : 112,
+        down_count: sectorType === 'concept' ? 22 : 18,
+        main_net_inflow: sectorType === 'concept' ? 32200000000 : 24800000000,
+        stock_count: sectorType === 'concept' ? 150 : 130
+      }
+    ]
+  };
+}
+
+function makeSectorFundFlowResponse(sectorType: 'industry' | 'concept', tradeDate = '2026-06-10') {
+  const item = makeSectorHeatmapResponse(sectorType, tradeDate).items[0];
+  return {
+    trade_date: tradeDate,
+    updated_at: `${tradeDate} 15:10`,
+    source: 'api',
+    data_status: 'completed',
+    warnings: [],
+    inflow: [
+      {
+        rank: 1,
+        sector_id: item.sector_id,
+        sector_name: item.sector_name,
+        sector_type: item.sector_type,
+        change_pct: item.change_pct,
+        amount: item.amount,
+        main_net_inflow: item.main_net_inflow,
+        main_net_inflow_ratio: 0.153,
+        leading_stock_name: sectorType === 'concept' ? '中际旭创' : '北方华创'
+      }
+    ],
+    outflow: []
+  };
+}
+
+function makeSectorDetailResponse(overrides: Record<string, unknown> = {}) {
+  return {
+    trade_date: '2026-06-10',
+    updated_at: '2026-06-10 15:10',
+    source: 'api',
+    data_status: 'completed',
+    warnings: [],
+    sector_id: 'industry-semiconductor',
+    sector_name: '半导体',
+    sector_type: 'industry',
+    change_pct: 0.0321,
+    amount: 145800000000,
+    up_count: 112,
+    down_count: 18,
+    main_net_inflow: 24800000000,
+    main_net_inflow_ratio: 0.1701,
+    leading_stocks: [
+      {
+        asset_id: 'CN:SZ:002371',
+        name: '北方华创',
+        change_pct: 0.0642
+      }
+    ],
+    ...overrides
+  };
+}
 
 const emotionStockListsFixture = {
   auction_status: 'pending_source',
@@ -975,6 +1079,16 @@ describe('dashboard app shell', () => {
     apiMocks.fetchFactorLibrary.mockResolvedValue([]);
     apiMocks.fetchFactorScorePreview.mockResolvedValue({ trade_date: '2026-06-08', selected_factors: [], items: [] });
     apiMocks.fetchMarketMonitorEod.mockResolvedValue(makeMarketMonitorPayload());
+    apiMocks.fetchMarketOverview.mockImplementation((tradeDate: string) =>
+      Promise.resolve(makeMarketOverviewResponse({ trade_date: tradeDate, updated_at: `${tradeDate} 15:10` }))
+    );
+    apiMocks.fetchSectorHeatmap.mockImplementation((tradeDate: string, sectorType: 'industry' | 'concept') =>
+      Promise.resolve(makeSectorHeatmapResponse(sectorType, tradeDate))
+    );
+    apiMocks.fetchSectorFundFlow.mockImplementation((tradeDate: string, sectorType: 'industry' | 'concept') =>
+      Promise.resolve(makeSectorFundFlowResponse(sectorType, tradeDate))
+    );
+    apiMocks.fetchSectorDetail.mockResolvedValue(makeSectorDetailResponse());
     apiMocks.fetchResearchReportSummary.mockResolvedValue({
       total_reports: 1,
       covered_stocks: 1,
@@ -991,6 +1105,17 @@ describe('dashboard app shell', () => {
       limit: 50,
       offset: 0,
       warnings: []
+    });
+    apiMocks.fetchResearchReportDocument.mockResolvedValue({
+      report_id: 'report-1',
+      report_title: 'Research Report',
+      has_pdf: false,
+      pdf_url: '',
+      source_url: 'https://example.com/report',
+      file_name: '',
+      public_access: true,
+      copyright_note: 'metadata only',
+      warnings: ['local pdf is unavailable or outside allowed report directories']
     });
     apiMocks.fetchAssetResearchReports.mockResolvedValue({
       asset_id: 'CN:SZ:000001',
@@ -1333,6 +1458,11 @@ describe('dashboard app shell', () => {
     vi.doMock('../src/components/DataExplorerWorkspace', () => ({ DataExplorerWorkspace: () => <div>data workspace</div> }));
     vi.doMock('../src/components/FactorLabWorkspace', () => ({ FactorLabWorkspace: () => <div>factor workspace</div> }));
     vi.doMock('../src/components/HomeCockpit', () => ({ HomeCockpit: () => <div>home workspace</div> }));
+    vi.doMock('../src/components/DailyReviewLiteWorkspace', () => ({
+      DailyReviewLiteWorkspace: ({ initialTradeDate }: { initialTradeDate?: string }) => (
+        <div data-testid="mock-daily-review-workspace">daily review:{initialTradeDate ?? 'none'}</div>
+      )
+    }));
     vi.doMock('../src/components/MarketMonitorWorkspace', () => ({
       MarketMonitorWorkspace: ({
         initialTradeDate,
@@ -1356,7 +1486,7 @@ describe('dashboard app shell', () => {
                   sourceWorkspace: 'market',
                   assetId: 'CN:SH:600519',
                   tradeDate: '2026-06-12',
-                  monitorTab: 'limit_up',
+                  monitorTab: 'industry',
                   query: '贵州茅台'
                 })
               }
@@ -1650,6 +1780,21 @@ describe('dashboard app shell', () => {
     });
   });
 
+  it('shows daily review as an independent workspace after review queue', async () => {
+    await renderMockedAppShellForHandoff();
+
+    const reviewQueue = screen.getByRole('button', { name: 'Open Review Queue workspace' });
+    const dailyReview = screen.getByRole('button', { name: 'Open Daily Review workspace' });
+    const marketMonitor = screen.getByRole('button', { name: 'Open Market Monitor workspace' });
+
+    expect(reviewQueue.compareDocumentPosition(dailyReview) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(dailyReview.compareDocumentPosition(marketMonitor) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    fireEvent.click(dailyReview);
+
+    expect(await screen.findByTestId('mock-daily-review-workspace')).toHaveTextContent('daily review:2026-06-08');
+  });
+
   it('uses news row context when news opens a stock asset', async () => {
     const { stockRenders } = await renderMockedAppShellForHandoff();
 
@@ -1702,11 +1847,11 @@ describe('dashboard app shell', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open Stock Workspace workspace' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Mock stock open market' }));
     expect(await screen.findByTestId('mock-market-workspace')).toHaveTextContent(
-      'market workspace:2026-06-12:broken_limit_up:CN:SH:600519'
+      'market workspace:2026-06-12:industry:CN:SH:600519'
     );
     expect(marketRenders.at(-1)).toMatchObject({
       initialTradeDate: '2026-06-12',
-      initialMonitorTab: 'broken_limit_up',
+      initialMonitorTab: 'industry',
       initialAssetId: 'CN:SH:600519'
     });
   });
@@ -1753,11 +1898,11 @@ describe('dashboard app shell', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Mock stock return current market' }));
     expect(await screen.findByTestId('mock-market-workspace')).toHaveTextContent(
-      'market workspace:2026-06-12:limit_up:CN:SH:600519'
+      'market workspace:2026-06-12:industry:CN:SH:600519'
     );
     expect(marketRenders.at(-1)).toMatchObject({
       initialTradeDate: '2026-06-12',
-      initialMonitorTab: 'limit_up',
+      initialMonitorTab: 'industry',
       initialAssetId: 'CN:SH:600519'
     });
   });
@@ -1777,7 +1922,7 @@ describe('dashboard app shell', () => {
         sourceWorkspace: 'market',
         query: '贵州茅台',
         tradeDate: '2026-06-12',
-        monitorTab: 'limit_up'
+        monitorTab: 'industry'
       },
       mountId: 1
     });

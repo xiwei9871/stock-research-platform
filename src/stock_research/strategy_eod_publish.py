@@ -697,6 +697,7 @@ def _review_rows_from_result(
         "score_total",
         "score_source",
         "score_explanation",
+        "score_components",
         "strategy_id",
         "strategy_name",
         "strategy_run_id",
@@ -705,6 +706,11 @@ def _review_rows_from_result(
         "source_rank",
         "review_tier",
     ]
+    current_holdings = _current_holdings_from_trades(result, trade_date=trade_date)
+    if strategy_id != "lhb_shortline" and not current_holdings.empty:
+        positions = current_holdings
+    if strategy_id == "mid_trend" and current_holdings.empty and _mid_trend_latest_equity_is_flat_cash(result, trade_date=trade_date):
+        return pd.DataFrame(columns=columns)
     if positions.empty:
         if strategy_id != "lhb_shortline":
             return pd.DataFrame(columns=columns)
@@ -745,6 +751,7 @@ def _review_rows_from_result(
         ],
     )
     score_lookup = _strategy_score_lookup_from_result(result)
+    lhb_base_score_lookup = _lhb_base_score_lookup_for_trade_date(trade_date) if strategy_id == "lhb_shortline" else {}
     excluded_assets = set(excluded_lhb_assets or set())
     if strategy_id == "lhb_shortline":
         excluded_assets.update(_lhb_delisting_assets_from_result(result))
@@ -765,6 +772,17 @@ def _review_rows_from_result(
             )
             score = lookup_score
             resolved_score_col = lookup_source or score_col
+        score_components: dict[str, Any] = {}
+        if strategy_id == "lhb_shortline" and _should_use_lhb_base_score(row=row, score_source=resolved_score_col):
+            base_score_row = _lookup_lhb_base_score(
+                lhb_base_score_lookup,
+                asset_id=str(row.get(asset_col) or ""),
+            )
+            base_score = _score_value(base_score_row.get("score_total"), "score_total") if base_score_row else None
+            if base_score is not None:
+                score = base_score
+                resolved_score_col = "score_total"
+                score_components = _dict_or_empty(base_score_row.get("score_components"))
         rows.append(
             {
                 "trade_date": trade_date,
@@ -773,6 +791,7 @@ def _review_rows_from_result(
                 "score_total": score,
                 "score_source": resolved_score_col or "",
                 "score_explanation": "真实策略输出分；无策略分字段时留空，不使用排名占位分",
+                "score_components": score_components,
                 "strategy_id": strategy_id,
                 "strategy_name": strategy_name,
                 "strategy_run_id": f"strategy-eod-{trade_date}-local",
@@ -793,6 +812,153 @@ def _review_rows_from_result(
         review["review_tier"] = review["rank"].map(lambda rank: "top5_focus" if int(rank) <= 5 else "watch")
         return review.reset_index(drop=True).reindex(columns=columns)
     return review.sort_values(["rank", "asset_id"], kind="stable").reset_index(drop=True)
+
+
+def _mid_trend_latest_equity_is_flat_cash(result: dict[str, Any], *, trade_date: str) -> bool:
+    equity = _records_frame(result.get("equity_curve"))
+    if equity.empty:
+        return False
+    date_col = _first_existing_column(equity, ["trade_date", "date"])
+    if not date_col:
+        return False
+    frame = equity.copy()
+    frame[date_col] = pd.to_datetime(frame[date_col], errors="coerce").dt.strftime("%Y-%m-%d")
+    eligible = frame[frame[date_col].le(trade_date)].copy()
+    if eligible.empty:
+        return False
+    latest = eligible.sort_values(date_col, kind="stable").iloc[-1]
+    holdings_count = _score_value(latest.get("holdings_count"), None)
+    invested_weight = _score_value(latest.get("invested_weight"), None)
+    return (holdings_count is not None and holdings_count <= 0) or (
+        invested_weight is not None and invested_weight <= 0
+    )
+
+
+def _current_holdings_from_trades(result: dict[str, Any], *, trade_date: str) -> pd.DataFrame:
+    trades = _records_frame(result.get("trades"))
+    if trades.empty:
+        return pd.DataFrame()
+    date_col = _first_existing_column(trades, ["trade_date", "date"])
+    asset_col = _first_existing_column(trades, ["asset_id", "symbol", "ts_code", "stock_code"])
+    weight_col = _first_existing_column(trades, ["target_weight", "weight"])
+    if not date_col or not asset_col or not weight_col:
+        return pd.DataFrame()
+    frame = trades.copy()
+    frame[date_col] = pd.to_datetime(frame[date_col], errors="coerce").dt.strftime("%Y-%m-%d")
+    frame = frame[frame[date_col].le(trade_date)].copy()
+    if frame.empty:
+        return pd.DataFrame()
+    frame["_target_weight"] = pd.to_numeric(frame[weight_col], errors="coerce").fillna(0.0)
+    latest = frame.sort_values([date_col, asset_col], kind="stable").groupby(asset_col, as_index=False).tail(1)
+    latest = latest[latest["_target_weight"].gt(0)].copy()
+    if latest.empty:
+        return pd.DataFrame()
+    position_order = _position_asset_order(result)
+    latest["_position_order"] = latest[asset_col].map(position_order).fillna(len(position_order))
+    latest = latest.sort_values(["_position_order", asset_col], kind="stable")
+    latest["trade_date"] = trade_date
+    latest["weight"] = latest["_target_weight"]
+    latest["rank"] = range(1, len(latest) + 1)
+    return latest.rename(columns={asset_col: "asset_id"}).reset_index(drop=True)
+
+
+def _position_asset_order(result: dict[str, Any]) -> dict[str, int]:
+    positions = _records_frame(result.get("positions"))
+    asset_col = _first_existing_column(positions, ["asset_id", "symbol", "ts_code", "stock_code"])
+    if positions.empty or not asset_col:
+        return {}
+    order: dict[str, int] = {}
+    for index, asset_id in enumerate(positions[asset_col].astype(str).tolist()):
+        order.setdefault(asset_id, index)
+    return order
+
+
+def _should_use_lhb_base_score(*, row: pd.Series, score_source: str | None) -> bool:
+    if score_source != "auction_enhanced_score":
+        return False
+    return str(row.get("phase12a_rule_layer") or "").strip() == "pending_intraday"
+
+
+def _lookup_lhb_base_score(
+    lookup: dict[str, dict[str, Any]],
+    *,
+    asset_id: str,
+) -> dict[str, Any] | None:
+    keys = [asset_id]
+    normalized_asset_id = _asset_id_from_review_code(asset_id)
+    if normalized_asset_id:
+        keys.append(normalized_asset_id)
+    for key in keys:
+        row = lookup.get(key)
+        if row is not None:
+            return row
+    return None
+
+
+def _lhb_base_score_lookup_for_trade_date(trade_date: str) -> dict[str, dict[str, Any]]:
+    try:
+        from stock_research.dashboard.strategy_backtest_adapters import build_lhb_shortline_scores_from_frames
+
+        lhb, technical = _load_lhb_base_score_source_frames(trade_date)
+        scores = build_lhb_shortline_scores_from_frames(lhb, technical)
+    except Exception:
+        return {}
+    if scores.empty:
+        return {}
+    lookup: dict[str, dict[str, Any]] = {}
+    for row in scores.to_dict("records"):
+        score = _score_value(row.get("score_total"), "score_total")
+        if score is None:
+            continue
+        raw_asset_id = str(row.get("asset_id") or "")
+        payload = {
+            "score_total": score,
+            "score_components": _dict_or_empty(row.get("score_components")),
+        }
+        for key in {raw_asset_id, _asset_id_from_review_code(raw_asset_id)}:
+            if key:
+                lookup[key] = payload
+    return lookup
+
+
+def _load_lhb_base_score_source_frames(trade_date: str) -> tuple[pd.DataFrame, pd.DataFrame]:
+    lhb_sql = """
+        SELECT
+            l.trade_date,
+            COALESCE(a.asset_id, l.ts_code) AS asset_id,
+            l.on_lhb,
+            l.lhb_net_buy_ratio,
+            l.lhb_net_buy_amount,
+            l.institution_net_buy,
+            l.repeat_on_list_count_3d,
+            l.lhb_after_reversal,
+            l.lhb_one_day_pump_risk
+        FROM factor.lhb_event_features_daily l
+        LEFT JOIN core.asset_master a ON a.ts_code = l.ts_code
+        WHERE l.trade_date = %s
+    """
+    technical_sql = """
+        SELECT trade_date, asset_id, amount_vs_20d, high_to_close_drawdown
+        FROM factor.stock_technical_features_daily
+        WHERE adjust_type = 'hfq'
+          AND trade_date = %s
+    """
+    with connect(SETTINGS.research_service) as conn:
+        lhb_rows = fetch_all(conn, lhb_sql, [trade_date])
+        technical_rows = fetch_all(conn, technical_sql, [trade_date])
+    return pd.DataFrame(lhb_rows), pd.DataFrame(technical_rows)
+
+
+def _dict_or_empty(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return dict(value)
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return {}
+        return dict(parsed) if isinstance(parsed, dict) else {}
+    return {}
 
 
 def _lhb_same_day_candidate_frame(result: dict[str, Any], *, trade_date: str) -> pd.DataFrame:

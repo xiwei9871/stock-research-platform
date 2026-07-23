@@ -1,3 +1,5 @@
+import pandas as pd
+
 from stock_research.loaders import baostock_ingestion
 
 
@@ -264,6 +266,67 @@ def test_normalize_index_row_maps_market_bar():
     assert normalized["volume"] == 1000.0
 
 
+def test_index_targets_cover_market_monitor_required_indices():
+    available_targets = {
+        *baostock_ingestion.INDEX_TARGETS,
+        *baostock_ingestion.AKSHARE_INDEX_TARGETS,
+    }
+    assert {
+        "SSE_COMPOSITE",
+        "SZSE_COMPONENT",
+        "CHINEXT",
+        "STAR_50",
+        "BSE_50",
+    }.issubset(available_targets)
+
+
+def test_normalize_akshare_index_daily_rows_filters_dates_and_computes_preclose():
+    frame = pd.DataFrame(
+        [
+            {
+                "date": "2026-06-25",
+                "open": 100.0,
+                "close": 101.0,
+                "high": 102.0,
+                "low": 99.0,
+                "volume": 1000,
+                "amount": 2000.0,
+            },
+            {
+                "date": "2026-06-26",
+                "open": 101.0,
+                "close": 103.0,
+                "high": 104.0,
+                "low": 100.0,
+                "volume": 1200,
+                "amount": 2400.0,
+            },
+        ]
+    )
+
+    rows = baostock_ingestion.normalize_akshare_index_daily_rows(
+        "STAR_50",
+        frame,
+        start_date="2026-06-26",
+        end_date="2026-06-26",
+    )
+
+    assert rows == [
+        {
+            "index_id": "STAR_50",
+            "trade_date": "2026-06-26",
+            "open": 101.0,
+            "high": 104.0,
+            "low": 100.0,
+            "close": 103.0,
+            "preclose": 101.0,
+            "volume": 1200.0,
+            "amount": 2400.0,
+            "source": "akshare",
+        }
+    ]
+
+
 def test_upsert_index_daily_bars(monkeypatch):
     conn = FakeConnection()
     monkeypatch.setattr(baostock_ingestion, "execute_many", fake_execute_many)
@@ -291,6 +354,91 @@ def test_upsert_index_daily_bars(monkeypatch):
     assert "INSERT INTO market.index_daily_bar" in sql
     assert "ON CONFLICT" in sql
     assert rows[0][0] == "SSE_COMPOSITE"
+
+
+def test_sync_index_daily_bars_merges_baostock_and_akshare_supplemental_rows(monkeypatch):
+    conn = FakeConnection()
+    upserted = []
+
+    class FakeResult:
+        error_code = "0"
+        error_msg = ""
+        fields = ["date", "code", "open", "high", "low", "close", "preclose", "volume", "amount", "pctChg"]
+
+        def __init__(self, rows):
+            self._rows = rows
+            self._index = 0
+
+        def next(self):
+            if self._index >= len(self._rows):
+                return False
+            self._row = self._rows[self._index]
+            self._index += 1
+            return True
+
+        def get_row_data(self):
+            return [self._row[field] for field in self.fields]
+
+    monkeypatch.setattr(
+        baostock_ingestion,
+        "INDEX_TARGETS",
+        {"SSE_COMPOSITE": "sh.000001"},
+    )
+    monkeypatch.setattr(
+        baostock_ingestion.bs,
+        "login",
+        lambda: type("Login", (), {"error_code": "0", "error_msg": ""})(),
+    )
+    monkeypatch.setattr(baostock_ingestion.bs, "logout", lambda: None)
+    monkeypatch.setattr(
+        baostock_ingestion.bs,
+        "query_history_k_data_plus",
+        lambda *args, **kwargs: FakeResult(
+            [
+                {
+                    "date": "2026-06-26",
+                    "code": "sh.000001",
+                    "open": "1",
+                    "high": "2",
+                    "low": "0.5",
+                    "close": "1.5",
+                    "preclose": "1.4",
+                    "volume": "100",
+                    "amount": "200",
+                    "pctChg": "0.1",
+                }
+            ]
+        ),
+    )
+    monkeypatch.setattr(
+        baostock_ingestion,
+        "query_akshare_index_daily_rows",
+        lambda start_date, end_date: [
+            {
+                "index_id": "STAR_50",
+                "trade_date": "2026-06-26",
+                "open": 10.0,
+                "high": 11.0,
+                "low": 9.0,
+                "close": 10.5,
+                "preclose": 10.2,
+                "volume": 1000.0,
+                "amount": 2000.0,
+                "source": "akshare",
+            }
+        ],
+    )
+    monkeypatch.setattr(baostock_ingestion, "connect", lambda service: _ConnectionContext(conn))
+    monkeypatch.setattr(
+        baostock_ingestion,
+        "upsert_index_daily_bars",
+        lambda opened, rows: upserted.append((opened, rows)) or len(rows),
+    )
+
+    count = baostock_ingestion.sync_index_daily_bars("2026-06-26", "2026-06-26")
+
+    assert count == 2
+    assert [row["index_id"] for row in upserted[0][1]] == ["SSE_COMPOSITE", "STAR_50"]
 
 
 def test_normalize_index_constituent_row_maps_asset():

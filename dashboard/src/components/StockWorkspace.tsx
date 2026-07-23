@@ -20,6 +20,7 @@ import type {
 } from '../api/types';
 import { AssetChart } from '../charts/AssetChart';
 import { OperatorDecisionPanel } from './OperatorDecisionPanel';
+import type { SectorType } from './market-monitor/mockData';
 
 const DEFAULT_ASSET_ID = '000001.SZ';
 const DEFAULT_TRADE_DATE = '2026-06-18';
@@ -665,8 +666,7 @@ export function StockWorkspace({
   const reviewRank = currentEntryContext.topnRank ?? profile?.score?.rank ?? null;
   const marketMonitorSection = visibleEvidenceDigest?.sections?.market_monitor;
   const marketMonitorStatus = marketMonitorSection?.status ?? 'missing';
-  const marketMonitorTab =
-    visibleEvidenceDigest?.source_refs.monitor_tab ?? currentEntryContext.monitorTab ?? '';
+  const marketMonitorTab = visibleEvidenceDigest?.source_refs.monitor_tab ?? currentEntryContext.monitorTab ?? '';
   const marketFacts = visibleEvidenceDigest?.facts.filter((fact) => fact.kind === 'market') ?? [];
   const marketRiskFlags =
     visibleEvidenceDigest?.risk_flags.filter((flag) => flag.key.startsWith('market_')) ?? [];

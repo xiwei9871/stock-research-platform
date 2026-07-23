@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 from typing import Any
+from urllib.parse import unquote, urlparse
 
 from stock_research.config import SETTINGS
 from stock_research.db import connect, fetch_all
@@ -10,6 +12,11 @@ from stock_research.db import connect, fetch_all
 
 MAX_LIMIT = 200
 DEFAULT_LIMIT = 50
+RESEARCH_REPORT_ALLOWED_PDF_ROOTS = (
+    Path("/Users/xiwei/stock_research/data/manual"),
+    Path("/Users/xiwei/stock_research/reports"),
+    Path(getattr(SETTINGS, "output_root", "/Users/xiwei/stock_research/outputs")),
+)
 
 
 def load_research_report_summary(service: str = SETTINGS.research_service) -> dict[str, Any]:
@@ -206,6 +213,73 @@ def load_asset_research_reports(
     }
 
 
+def load_research_report_document(
+    report_id: str,
+    *,
+    service: str = SETTINGS.research_service,
+) -> dict[str, Any]:
+    clean_report_id = _clean(report_id)
+    if not clean_report_id:
+        return _empty_report_document("", warnings=["missing report id"])
+
+    with connect(service) as conn:
+        rows = fetch_all(
+            conn,
+            """
+            SELECT
+                report_id, report_title, source_url, public_access, copyright_note,
+                COALESCE(metadata, '{}'::jsonb) AS metadata
+            FROM research.stock_report_source
+            WHERE report_id = %s
+            LIMIT 1
+            """,
+            [clean_report_id],
+        )
+    if not rows:
+        return _empty_report_document(clean_report_id, warnings=["research report not found"])
+
+    row = rows[0]
+    metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+    local_pdf_path = _resolve_report_pdf_path(row)
+    source_url = _display_source_url(row, metadata)
+    warnings = [] if local_pdf_path else ["local pdf is unavailable or outside allowed report directories"]
+    return {
+        "report_id": clean_report_id,
+        "report_title": str(row.get("report_title") or ""),
+        "has_pdf": local_pdf_path is not None,
+        "pdf_url": f"/api/research-reports/{clean_report_id}/pdf" if local_pdf_path else "",
+        "source_url": source_url,
+        "file_name": local_pdf_path.name if local_pdf_path else "",
+        "public_access": bool(row.get("public_access")),
+        "copyright_note": str(row.get("copyright_note") or ""),
+        "warnings": warnings,
+    }
+
+
+def load_research_report_pdf_path(
+    report_id: str,
+    *,
+    service: str = SETTINGS.research_service,
+) -> Path | None:
+    clean_report_id = _clean(report_id)
+    if not clean_report_id:
+        return None
+    with connect(service) as conn:
+        rows = fetch_all(
+            conn,
+            """
+            SELECT source_url, COALESCE(metadata, '{}'::jsonb) AS metadata
+            FROM research.stock_report_source
+            WHERE report_id = %s
+            LIMIT 1
+            """,
+            [clean_report_id],
+        )
+    if not rows:
+        return None
+    return _resolve_report_pdf_path(rows[0])
+
+
 def _build_filters(**filters: Any) -> tuple[list[str], list[Any]]:
     clauses: list[str] = []
     params: list[Any] = []
@@ -314,3 +388,88 @@ def _number_or_none(value: object) -> float | None:
         return float(str(value))
     except ValueError:
         return None
+
+
+def _empty_report_document(report_id: str, *, warnings: list[str]) -> dict[str, Any]:
+    return {
+        "report_id": report_id,
+        "report_title": "",
+        "has_pdf": False,
+        "pdf_url": "",
+        "source_url": "",
+        "file_name": "",
+        "public_access": False,
+        "copyright_note": "",
+        "warnings": warnings,
+    }
+
+
+def _resolve_report_pdf_path(row: dict[str, Any]) -> Path | None:
+    metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+    candidates = _pdf_path_candidates(row, metadata)
+    for candidate in candidates:
+        resolved = _safe_existing_pdf_path(candidate)
+        if resolved:
+            return resolved
+    return None
+
+
+def _pdf_path_candidates(row: dict[str, Any], metadata: dict[str, Any]) -> list[str]:
+    candidates: list[str] = []
+    yanbaoke = metadata.get("yanbaoke") if isinstance(metadata.get("yanbaoke"), dict) else {}
+    for value in (
+        yanbaoke.get("local_pdf_path"),
+        metadata.get("local_pdf_path"),
+        metadata.get("pdf_path"),
+        row.get("source_url"),
+    ):
+        text = _clean(value)
+        if text:
+            candidates.append(text)
+    return candidates
+
+
+def _display_source_url(row: dict[str, Any], metadata: dict[str, Any]) -> str:
+    yanbaoke = metadata.get("yanbaoke") if isinstance(metadata.get("yanbaoke"), dict) else {}
+    detail_url = _clean(yanbaoke.get("detail_url"))
+    if detail_url:
+        return detail_url
+    source_url = _clean(row.get("source_url"))
+    if source_url.startswith("file://"):
+        return ""
+    return source_url
+
+
+def _safe_existing_pdf_path(value: str) -> Path | None:
+    path_text = value
+    parsed = urlparse(value)
+    if parsed.scheme == "file":
+        path_text = unquote(parsed.path)
+    elif parsed.scheme:
+        return None
+    candidate = Path(path_text).expanduser()
+    try:
+        resolved = candidate.resolve(strict=True)
+    except (OSError, RuntimeError):
+        return None
+    if resolved.suffix.lower() != ".pdf":
+        return None
+    if not resolved.is_file():
+        return None
+    allowed_roots = []
+    for root in RESEARCH_REPORT_ALLOWED_PDF_ROOTS:
+        try:
+            allowed_roots.append(Path(root).expanduser().resolve(strict=False))
+        except (OSError, RuntimeError):
+            continue
+    if not any(_is_relative_to(resolved, root) for root in allowed_roots):
+        return None
+    return resolved
+
+
+def _is_relative_to(path: Path, root: Path) -> bool:
+    try:
+        path.relative_to(root)
+    except ValueError:
+        return False
+    return True

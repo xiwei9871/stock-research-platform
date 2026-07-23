@@ -45,6 +45,27 @@ def load_platform_summary(
             WHERE trade_date = (SELECT max(trade_date) FROM factor.factor_daily)
             """,
         )[0]
+        market_monitor = fetch_all(
+            conn,
+            """
+            WITH industry_dates AS (
+                SELECT trade_date
+                FROM market.industry_daily_bar
+                WHERE industry_system = 'csrc'
+                GROUP BY trade_date
+                HAVING count(*) > 0
+            ),
+            index_dates AS (
+                SELECT trade_date
+                FROM market.index_daily_bar
+                GROUP BY trade_date
+                HAVING count(*) > 0
+            )
+            SELECT max(industry_dates.trade_date) AS latest_market_monitor_date
+            FROM industry_dates
+            JOIN index_dates USING (trade_date)
+            """,
+        )[0]
         versions = fetch_all(
             conn,
             """
@@ -70,8 +91,12 @@ def load_platform_summary(
             )
     else:
         topn_rows = []
+    latest_market_date = str(market.get("latest_market_date") or "")
     return {
-        "latest_market_date": str(market.get("latest_market_date") or ""),
+        "latest_market_date": latest_market_date,
+        "latest_market_monitor_date": str(
+            market_monitor.get("latest_market_monitor_date") or ""
+        ),
         "latest_score_date": latest_score_date,
         "latest_factor_date": str(factors.get("latest_factor_date") or ""),
         "market_asset_count": int(market.get("market_asset_count") or 0),

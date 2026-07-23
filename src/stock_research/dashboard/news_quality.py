@@ -52,6 +52,61 @@ TRADING_TOKENS = {
     "price_signal": ("涨价", "降价", "大涨", "大跌", "供给", "减产", "库存", "期货"),
 }
 
+A_SHARE_RELEVANCE_TOKENS = (
+    "A股",
+    "沪深",
+    "上证",
+    "深证",
+    "创业板",
+    "科创板",
+    "北交所",
+    "龙虎榜",
+    "涨停",
+    "跌停",
+    "连板",
+    "证监会",
+    "交易所",
+    "国家发改委",
+    "发改委",
+    "央行",
+    "人民银行",
+    "财政部",
+    "商务部",
+    "工信部",
+    "中国",
+    "国内",
+)
+
+DOMESTIC_SECTOR_TOKENS = (
+    "半导体",
+    "新能源",
+    "机器人",
+    "算力",
+    "芯片",
+    "有色",
+    "军工",
+    "医药",
+    "地产",
+    "消费",
+    "产业链",
+    "光伏",
+    "锂电",
+    "稀土",
+)
+
+OVERSEAS_ONLY_TOKENS = (
+    "美股",
+    "纳斯达克",
+    "道指",
+    "标普",
+    "英特尔",
+    "苹果",
+    "SpaceX",
+    "特斯拉",
+    "英伟达",
+    "美联储",
+)
+
 CATEGORY_SCORE = {
     "live": 18,
     "focus": 18,
@@ -194,6 +249,9 @@ def score_public_news_item(
     if any(token in text for token in LOW_SIGNAL_TOKENS):
         return NewsQualityDecision(item, False, 0, [], "low_signal")
 
+    if not _is_a_share_relevant(text):
+        return NewsQualityDecision(item, False, 0, [], "not_a_share_relevant")
+
     published_at = _parse_timestamp(item.published_at) or _parse_timestamp(item.collected_at)
     if published_at and _as_utc(now) - published_at > timedelta(hours=NEWS_FRESHNESS_HOURS):
         return NewsQualityDecision(item, False, 0, [], "stale")
@@ -231,6 +289,16 @@ def score_public_news_item(
     if score < threshold:
         return NewsQualityDecision(item, False, score, unique_reasons, "below_threshold")
     return NewsQualityDecision(item, True, score, unique_reasons, "")
+
+
+def _is_a_share_relevant(text: str) -> bool:
+    if any(token in text for token in A_SHARE_RELEVANCE_TOKENS):
+        return True
+    if any(token in text for token in DOMESTIC_SECTOR_TOKENS) and not any(
+        token in text for token in OVERSEAS_ONLY_TOKENS
+    ):
+        return True
+    return False
 
 
 def _with_quality_metadata(

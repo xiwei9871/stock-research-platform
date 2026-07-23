@@ -254,6 +254,7 @@ def build_industry_daily_bars(
 ) -> None:
     filters = [
         "m.industry_system = %s",
+        "m.level = 1",
         "b.adjust_type = %s",
         "m.start_date <= b.trade_date",
         "(m.end_date IS NULL OR b.trade_date < m.end_date)",
@@ -268,6 +269,25 @@ def build_industry_daily_bars(
 
     where_sql = " AND ".join(filters)
     sql = f"""
+    WITH membership AS (
+        SELECT
+            m.industry_system,
+            m.industry_code,
+            max(m.industry_name) AS industry_name,
+            m.asset_id,
+            b.adjust_type,
+            b.trade_date
+        FROM market_daily_bar b
+        JOIN core.industry_membership m
+          ON m.asset_id = b.asset_id
+        WHERE {where_sql}
+        GROUP BY
+            m.industry_system,
+            m.industry_code,
+            m.asset_id,
+            b.adjust_type,
+            b.trade_date
+    )
     INSERT INTO market.industry_daily_bar (
         industry_system,
         industry_code,
@@ -296,9 +316,10 @@ def build_industry_daily_bars(
         sum(b.amount) AS amount,
         'derived:market_daily_bar' AS source
     FROM market_daily_bar b
-    JOIN core.industry_membership m
+    JOIN membership m
       ON m.asset_id = b.asset_id
-    WHERE {where_sql}
+     AND m.adjust_type = b.adjust_type
+     AND m.trade_date = b.trade_date
     GROUP BY
         m.industry_system,
         m.industry_code,

@@ -82,6 +82,14 @@ type SectorHeatmapPanelProps = {
   onSelectSector: (sectorId: string) => void;
 };
 
+function extractSectorId(params: unknown) {
+  if (!params || typeof params !== 'object' || !('data' in params)) return null;
+  const data = (params as { data?: unknown }).data;
+  if (!data || typeof data !== 'object' || !('sectorId' in data)) return null;
+  const sectorId = (data as { sectorId?: unknown }).sectorId;
+  return typeof sectorId === 'string' ? sectorId : null;
+}
+
 export function SectorHeatmapPanel({ items, selectedSectorId, onSelectSector }: SectorHeatmapPanelProps) {
   const chartRef = useRef<HTMLDivElement | null>(null);
   const chartInstanceRef = useRef<echarts.EChartsType | null>(null);
@@ -97,34 +105,59 @@ export function SectorHeatmapPanel({ items, selectedSectorId, onSelectSector }: 
     const node = chartRef.current;
     if (!node) return undefined;
 
+    let resizeObserver: ResizeObserver | null = null;
+    let frameId: number | null = null;
+
     if (items.length === 0) {
       chartInstanceRef.current?.dispose();
       chartInstanceRef.current = null;
       return undefined;
     }
 
-    if (node.clientWidth === 0 || node.clientHeight === 0) {
-      return undefined;
+    const renderChart = () => {
+      if (node.clientWidth === 0 || node.clientHeight === 0) {
+        return;
+      }
+
+      const chart = chartInstanceRef.current ?? echarts.init(node);
+      chartInstanceRef.current = chart;
+      chart.setOption(buildTreemapOption(items, selectedSectorId));
+      chart.off('click');
+      chart.on('click', (params: unknown) => {
+        const sectorId = extractSectorId(params);
+        if (sectorId) {
+          onSelectSector(sectorId);
+        }
+      });
+      chart.resize();
+    };
+
+    renderChart();
+
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => {
+        renderChart();
+      });
+      resizeObserver.observe(node);
+    } else {
+      frameId = window.requestAnimationFrame(() => {
+        renderChart();
+      });
     }
 
-    const chart = chartInstanceRef.current ?? echarts.init(node);
-    chartInstanceRef.current = chart;
-    chart.setOption(buildTreemapOption(items, selectedSectorId));
-
-    chart.off('click');
-    chart.on('click', (params: { data?: { sectorId?: string } }) => {
-      const sectorId = params.data?.sectorId;
-      if (sectorId) {
-        onSelectSector(sectorId);
-      }
-    });
-
-    const handleResize = () => chart.resize();
+    const handleResize = () => {
+      renderChart();
+      chartInstanceRef.current?.resize();
+    };
     window.addEventListener('resize', handleResize);
 
     return () => {
+      if (frameId != null) {
+        window.cancelAnimationFrame(frameId);
+      }
+      resizeObserver?.disconnect();
       window.removeEventListener('resize', handleResize);
-      chart.off('click');
+      chartInstanceRef.current?.off('click');
     };
   }, [items, onSelectSector, selectedSectorId]);
 

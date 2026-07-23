@@ -209,6 +209,60 @@ def test_lhb_eod_metrics_use_actual_end_date_when_requested_date_has_no_equity(m
     assert "收益估值截止 2026-06-17" in enriched["latest_evidence"]
 
 
+def test_lhb_eod_metrics_prefer_performance_effective_date_over_flat_extended_curve(
+    monkeypatch,
+    tmp_path,
+):
+    artifact = tmp_path / "strategy_lhb_shortline_review.csv"
+    artifact.write_text(
+        "\n".join(
+            [
+                "trade_date,asset_id,rank,strategy_id,strategy_name,stock_name",
+                "2026-06-25,600667.SH,1,lhb_shortline,LHB Shortline Combo,太极实业",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        backtests,
+        "load_latest_data_run_manifest",
+        lambda: [
+            {
+                "module": "strategy_lhb_shortline",
+                "status": "success",
+                "trade_date": "2026-06-25",
+                "latest_trade_date": "2026-06-25",
+                "row_count": 5,
+                "artifact_path": str(artifact),
+                "metadata": {
+                    "summary": {
+                        "actual_end_date": "2026-06-25",
+                        "performance_effective_date": "2026-06-18",
+                        "total_return": 1.5517460873599078,
+                        "max_drawdown": -0.08423350324977863,
+                    }
+                },
+            }
+        ],
+        raising=False,
+    )
+    monkeypatch.setattr(backtests, "load_strategy_contracts", lambda profile="balanced": {})
+
+    enriched = backtests._with_latest_eod_strategy_metrics(
+        {
+            "strategy_id": "lhb_shortline",
+            "strategy_name": "LHB Shortline Combo",
+            "default_parameters": {"rebalance_frequency": "daily"},
+            "latest_metrics": {},
+        }
+    )
+
+    assert enriched["latest_metrics"]["as_of_date"] == "2026-06-18"
+    assert enriched["latest_metrics"]["signal_as_of_date"] == "2026-06-25"
+    assert "候选日期 2026-06-25" in enriched["latest_evidence"]
+    assert "收益估值截止 2026-06-18" in enriched["latest_evidence"]
+
+
 def test_eod_metrics_use_equity_curve_for_latest_day_return_when_summary_is_stale(monkeypatch, tmp_path):
     review = tmp_path / "strategy_lhb_shortline_review.csv"
     review.write_text(

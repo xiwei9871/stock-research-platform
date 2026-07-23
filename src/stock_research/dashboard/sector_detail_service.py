@@ -119,7 +119,7 @@ def load_sector_leading_stocks(
             b.asset_id,
             COALESCE(a.name, b.asset_id) AS name,
             b.pct_chg,
-            b.amount,
+            b.amount * 1000 AS amount,
             b.source,
             b.updated_at
         FROM core.industry_membership m

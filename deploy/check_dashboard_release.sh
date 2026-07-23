@@ -64,11 +64,25 @@ require_body_not_old_dashboard "$bundle_body"
 echo "Checking /api/platform/summary endpoint"
 fetch "${API_BASE%/}/platform/summary" >/dev/null
 
+echo "Checking /api/platform/readiness endpoint"
+readiness_body="$(fetch "${API_BASE%/}/platform/readiness")"
+require_body_contains "$readiness_body" "\"latest_trade_date\"" "platform readiness"
+
 echo "Checking /api/backtests/strategies endpoint"
 strategies_body="$(fetch "${API_BASE%/}/backtests/strategies")"
 require_body_contains "$strategies_body" "lhb_shortline" "strategy catalog"
 require_body_contains "$strategies_body" "mid_trend" "strategy catalog"
 require_body_contains "$strategies_body" "tech_bottleneck" "strategy catalog"
+
+echo "Checking /api/review-queue endpoint"
+review_queue_body="$(fetch "${API_BASE%/}/review-queue?trade_date=${TRADE_DATE}&limit=20")"
+require_body_contains "$review_queue_body" "\"trade_date\"" "review queue"
+require_body_contains "$review_queue_body" "\"groups\"" "review queue"
+
+echo "Checking /api/daily-review-lite endpoint"
+daily_review_body="$(fetch "${API_BASE%/}/daily-review-lite?trade_date=${TRADE_DATE}")"
+require_body_contains "$daily_review_body" "\"trade_date\"" "daily review lite"
+require_body_contains "$daily_review_body" "\"sections\"" "daily review lite"
 
 echo "Checking /api/strategy-score-audit endpoint"
 strategy_score_audit_body="$(fetch "${API_BASE%/}/strategy-score-audit?trade_date=${TRADE_DATE}")"
@@ -83,7 +97,7 @@ echo "Checking /api/backtests/jobs endpoint wiring"
 job_body="$(fetch \
   -H "Content-Type: application/json" \
   -X POST \
-  --data "{\"strategy_id\":\"lhb_shortline\",\"start_date\":\"${START_DATE}\",\"end_date\":\"${END_DATE}\",\"top_n\":5,\"transaction_cost_bps\":10,\"max_positions\":2}" \
+  --data "{\"strategy_id\":\"lhb_shortline\",\"start_date\":\"${START_DATE}\",\"end_date\":\"${END_DATE}\",\"top_n\":5,\"transaction_cost_bps\":10,\"max_positions\":null,\"max_position_weight\":0.2}" \
   "${API_BASE%/}/backtests/jobs")"
 require_body_contains "$job_body" "job_id" "backtest job submission"
 require_body_contains "$job_body" "status" "backtest job submission"

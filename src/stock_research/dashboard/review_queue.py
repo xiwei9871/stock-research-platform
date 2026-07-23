@@ -46,6 +46,7 @@ def build_review_queue(
     limit: int = 20,
     lookback_days: int = 90,
     review_mode: str = "strategy_topn",
+    use_strategy_snapshots: bool = True,
 ) -> dict[str, Any]:
     bounded_limit = _bounded_int(limit, default=20, minimum=1, maximum=50)
     bounded_lookback_days = _bounded_int(lookback_days, default=90, minimum=1, maximum=365)
@@ -55,7 +56,15 @@ def build_review_queue(
     explicit_trade_date = bool(trade_date)
     selected_trade_date = str(trade_date) if explicit_trade_date else _default_display_trade_date(summary)
     if normalized_review_mode == "strategy_topn":
-        strategy_rows = load_active_strategy_topn_rows(trade_date=selected_trade_date, limit=min(bounded_limit, 10))
+        strategy_rows = _attach_asset_names(_load_manifest_strategy_rows(trade_date=selected_trade_date, limit=50))
+        if not strategy_rows:
+            strategy_rows = (
+                _load_strategy_snapshot_rows(trade_date=selected_trade_date, limit=50)
+                if use_strategy_snapshots
+                else []
+            )
+        if not strategy_rows:
+            strategy_rows = load_active_strategy_topn_rows(trade_date=selected_trade_date, limit=min(bounded_limit, 10))
         if strategy_rows:
             return _strategy_review_queue(
                 rows=strategy_rows,
@@ -161,6 +170,40 @@ def load_active_strategy_topn_rows(*, trade_date: str, limit: int) -> list[dict[
     return _attach_asset_names(
         _select_latest_strategy_sources(artifact_rows=artifact_rows, db_rows=db_rows)
     )
+
+
+def _load_strategy_snapshot_rows(*, trade_date: str, limit: int) -> list[dict[str, Any]]:
+    if not trade_date:
+        return []
+    try:
+        from stock_research.review_evidence_snapshots import list_review_item_snapshots
+
+        snapshots = list_review_item_snapshots(trade_date=trade_date, limit=limit)
+    except Exception:
+        return []
+
+    rows: list[dict[str, Any]] = []
+    for snapshot in snapshots:
+        payload = snapshot.get("review_item_payload")
+        if not isinstance(payload, dict):
+            continue
+        if str(payload.get("score_version") or "") != "strategy_topn":
+            continue
+        row = dict(payload)
+        row.setdefault("trade_date", str(snapshot.get("trade_date") or trade_date)[:10])
+        row.setdefault("latest_trade_date", str(snapshot.get("latest_trade_date") or row.get("trade_date") or trade_date)[:10])
+        row.setdefault("asset_id", str(snapshot.get("stock_code") or snapshot.get("asset_id") or row.get("asset_id") or ""))
+        row.setdefault("canonical_asset_id", str(snapshot.get("asset_id") or row.get("canonical_asset_id") or row.get("asset_id") or ""))
+        row.setdefault("stock_name", str(snapshot.get("stock_name") or row.get("stock_name") or row.get("display_name") or ""))
+        row.setdefault("display_name", str(row.get("stock_name") or row.get("display_name") or ""))
+        row.setdefault("source_type", str(snapshot.get("source_type") or row.get("source_type") or "strategy_manifest"))
+        row.setdefault("source_name", str(snapshot.get("source_name") or row.get("source_name") or ""))
+        row.setdefault("source_rank", snapshot.get("source_rank") if snapshot.get("source_rank") is not None else row.get("source_rank"))
+        row.setdefault("topn_rank", snapshot.get("topn_rank") if snapshot.get("topn_rank") is not None else row.get("topn_rank") or row.get("rank"))
+        row.setdefault("rank", row.get("topn_rank") or row.get("source_rank"))
+        row.setdefault("score_total", snapshot.get("score") if snapshot.get("score") is not None else row.get("score_total") or row.get("score"))
+        rows.append(row)
+    return _select_latest_strategy_sources(artifact_rows=rows, db_rows=[])
 
 
 def _load_manifest_strategy_rows(*, trade_date: str, limit: int) -> list[dict[str, Any]]:
@@ -706,7 +749,11 @@ def _strategy_review_queue(
                     f"{strategy_label} 复盘数据最新日期 {strategy_latest_date}，早于平台日期 {selected_trade_date}；"
                     "该策略未完成当日真实执行产物。"
                 )
-    strategy_order = list(_active_strategy_names())
+    active_strategy_names = _active_strategy_names()
+    for strategy_id, strategy_label in active_strategy_names.items():
+        by_strategy.setdefault(strategy_id, [])
+        labels.setdefault(strategy_id, strategy_label)
+    strategy_order = list(active_strategy_names)
     ordered_strategy_ids = [strategy_id for strategy_id in strategy_order if strategy_id in by_strategy]
     ordered_strategy_ids.extend(strategy_id for strategy_id in by_strategy if strategy_id not in ordered_strategy_ids)
     groups = [

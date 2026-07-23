@@ -113,19 +113,26 @@ export function ReviewQueueWorkspace({
   const [error, setError] = useState<string | null>(null);
   const [selectedBucket, setSelectedBucket] = useState<string>('strong');
   const [selectedQueueId, setSelectedQueueId] = useState<string | null>(null);
+  const [replayTradeDate, setReplayTradeDate] = useState('');
   const requestIdRef = useRef(0);
 
-  const loadQueue = useCallback(async () => {
+  const loadQueue = useCallback(async (tradeDate?: string) => {
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
     setLoading(true);
     setError(null);
 
     try {
-      const nextQueue = await fetchReviewQueue({ limit: 10, lookbackDays: 90 });
+      const requestedTradeDate = tradeDate?.trim();
+      const nextQueue = await fetchReviewQueue({
+        ...(requestedTradeDate ? { tradeDate: requestedTradeDate } : {}),
+        limit: 10,
+        lookbackDays: 90
+      });
       if (requestIdRef.current !== requestId) return;
       const selection = findInitialSelection(nextQueue);
       setQueue(nextQueue);
+      setReplayTradeDate(nextQueue.trade_date);
       setSelectedBucket(selection.selectedBucket);
       setSelectedQueueId(selection.selectedQueueId);
       fetchPlatformSummary()
@@ -172,6 +179,10 @@ export function ReviewQueueWorkspace({
     setSelectedQueueId(group.items[0]?.queue_id ?? null);
   };
 
+  const replayQueue = () => {
+    void loadQueue(replayTradeDate);
+  };
+
   const openAction = (action: EvidenceDigestAction) => {
     const baseContext = actionContext(action, selectedItem?.asset_id, selectedItem?.display_name, selectedItem?.trade_date);
     const context: StockEntryContext = selectedItem
@@ -211,7 +222,7 @@ export function ReviewQueueWorkspace({
       {error ? (
         <section className="workspace-band" aria-label="策略复盘队列错误">
           <p className="error-text">{error}</p>
-          <button type="button" onClick={loadQueue}>
+          <button type="button" onClick={() => void loadQueue()}>
             重新加载复盘队列
           </button>
         </section>
@@ -244,6 +255,24 @@ export function ReviewQueueWorkspace({
                   <span className="muted">复盘范围</span>
                   <strong>{queue.review_mode === 'strategy_topn' ? '启用策略 Top10' : queue.score_version}</strong>
                 </div>
+              </div>
+
+              <div className="compact-toolbar" aria-label="复盘日期回放">
+                <label>
+                  <span className="muted">选择复盘日期</span>
+                  <input
+                    aria-label="选择复盘日期"
+                    type="date"
+                    value={replayTradeDate}
+                    onChange={(event) => setReplayTradeDate(event.target.value)}
+                  />
+                </label>
+                <button type="button" onClick={replayQueue}>
+                  回放该日复盘队列
+                </button>
+                <button type="button" onClick={() => void loadQueue()}>
+                  回到最新复盘队列
+                </button>
               </div>
 
               <div className="workspace-panel" aria-label="复盘队列新鲜度">

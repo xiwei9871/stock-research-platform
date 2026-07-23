@@ -3,6 +3,7 @@ from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 
 from stock_research.dashboard.asset_profile import build_asset_profile
 from stock_research.dashboard.backtests import (
@@ -14,6 +15,7 @@ from stock_research.dashboard.backtests import (
 from stock_research.dashboard.backtest_jobs import BacktestJobStore
 from stock_research.dashboard.bars import load_bars, load_daily_bars, load_minute_bars, normalize_resolution
 from stock_research.dashboard.decisions import load_asset_decision_history, update_operator_decision_event
+from stock_research.dashboard.daily_review_lite import build_daily_review_lite
 from stock_research.dashboard.evidence_digest import build_evidence_digest
 from stock_research.dashboard.experiment_proposals import load_experiment_proposals_summary
 from stock_research.dashboard.experiment_replay import load_experiment_replay_summary
@@ -49,6 +51,8 @@ from stock_research.dashboard.reports import load_report_links
 from stock_research.dashboard.research_reports import (
     list_research_reports,
     load_asset_research_reports,
+    load_research_report_document,
+    load_research_report_pdf_path,
     load_research_report_summary,
 )
 from stock_research.dashboard.review_queue import build_review_queue
@@ -308,6 +312,13 @@ def create_app() -> FastAPI:
             ),
         )
 
+    @app.get("/api/daily-review-lite")
+    def daily_review_lite_route(trade_date: str | None = None):
+        return app.state.eod_response_cache.get_or_set(
+            ("daily_review_lite", trade_date or ""),
+            lambda: build_daily_review_lite(trade_date=trade_date),
+        )
+
     @app.get("/api/review-queue/snapshots")
     def review_queue_snapshots(
         run_id: str | None = None,
@@ -436,6 +447,25 @@ def create_app() -> FastAPI:
             has_target_price=has_target_price,
             limit=limit,
             offset=offset,
+        )
+
+    @app.get("/api/research-reports/{report_id}/document")
+    def research_report_document(report_id: str):
+        payload = load_research_report_document(report_id)
+        if payload.get("warnings") == ["research report not found"]:
+            raise HTTPException(status_code=404, detail="research report not found")
+        return payload
+
+    @app.get("/api/research-reports/{report_id}/pdf")
+    def research_report_pdf(report_id: str):
+        pdf_path = load_research_report_pdf_path(report_id)
+        if not pdf_path:
+            raise HTTPException(status_code=404, detail="research report pdf not found")
+        return FileResponse(
+            path=pdf_path,
+            media_type="application/pdf",
+            filename=pdf_path.name,
+            content_disposition_type="inline",
         )
 
     @app.get("/api/assets/{asset_id}/research-reports")

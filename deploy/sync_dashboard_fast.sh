@@ -7,6 +7,7 @@ REMOTE_DIR="${REMOTE_DIR:-/home/${REMOTE_USER}/code/stock-research-platform-main
 SSH_OPTS="${SSH_OPTS:--o PreferredAuthentications=password -o PubkeyAuthentication=no}"
 REBUILD="${REBUILD:-0}"
 STRATEGY_OUTPUT_ROOT="${STRATEGY_OUTPUT_ROOT:-/Users/xiwei/stock_research/outputs/research}"
+REPORTS_ROOT="${REPORTS_ROOT:-/Users/xiwei/stock_research/reports}"
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 find_latest_strategy_daily_eod() {
@@ -66,6 +67,16 @@ for output_dir in "${strategy_output_dirs[@]}"; do
     echo "Skipping missing strategy output directory: ${STRATEGY_OUTPUT_ROOT}/${output_dir}"
   fi
 done
+
+echo "Syncing report artifacts"
+if [[ -d "${REPORTS_ROOT}" ]]; then
+  ssh ${SSH_OPTS} "${REMOTE_USER}@${REMOTE_HOST}" "mkdir -p '${REMOTE_DIR}/reports'"
+  rsync -az -e "ssh ${SSH_OPTS}" \
+    "${REPORTS_ROOT}/" \
+    "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}/reports/"
+else
+  echo "Skipping missing reports directory: ${REPORTS_ROOT}"
+fi
 
 if [[ "$REBUILD" == "1" ]]; then
   echo "Rebuilding images because REBUILD=1"

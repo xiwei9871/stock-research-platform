@@ -11,6 +11,11 @@ function formatAmountYi(value: number | null | undefined) {
   return `${(value / 100000000).toFixed(2)}亿`;
 }
 
+function movementClassName(value: number | null | undefined) {
+  if (typeof value !== 'number' || Number.isNaN(value)) return 'market-monitor-negative';
+  return value >= 0 ? 'market-monitor-positive' : 'market-monitor-negative';
+}
+
 function statusLabel(status: MarketOverview['dataStatus']) {
   if (status === 'completed') return '已完成';
   if (status === 'partial') return '部分完成';
@@ -45,7 +50,7 @@ export function MarketOverviewCards({ overview }: { overview: MarketOverview }) 
               <article className="metric-card compact" key={index.id}>
                 <span>{index.name}</span>
                 <strong>{index.close?.toFixed(2) ?? '--'}</strong>
-                <small className={index.pctChange >= 0 ? 'market-monitor-positive' : 'market-monitor-negative'}>
+                <small className={movementClassName(index.pctChange)}>
                   {formatSignedPercent(index.pctChange)}
                 </small>
               </article>

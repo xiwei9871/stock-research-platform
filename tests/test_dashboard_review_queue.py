@@ -1,7 +1,14 @@
 from fastapi.testclient import TestClient
+import pytest
 
 from stock_research.dashboard import app as dashboard_app
 from stock_research.dashboard import review_queue
+
+
+@pytest.fixture(autouse=True)
+def isolate_review_queue_external_sources(monkeypatch):
+    monkeypatch.setattr(review_queue, "load_recent_data_run_manifest", lambda *args, **kwargs: [])
+    monkeypatch.setattr(review_queue, "_load_strategy_snapshot_rows", lambda *, trade_date, limit: [])
 
 
 def _score(asset_id, rank, score_total=80.0):
@@ -31,6 +38,10 @@ def _strategy_position(asset_id, rank, strategy_id="mid_trend", strategy_name="M
         "source_rank": rank,
         "review_tier": "top5_focus" if rank <= 5 else "top10_watch",
     }
+
+
+def _group_by_bucket(payload, bucket):
+    return next(group for group in payload["groups"] if group["bucket"] == bucket)
 
 
 def _digest(asset_id, *, bucket="strong", score=80, facts=None, risks=None, warnings=None):
@@ -97,14 +108,19 @@ def test_build_review_queue_defaults_to_active_strategy_top10_groups(monkeypatch
     assert payload["review_mode"] == "strategy_topn"
     assert payload["score_version"] == "strategy_topn"
     assert payload["trade_date"] == "2026-06-12"
-    assert [group["bucket"] for group in payload["groups"]] == ["strategy:mid_trend", "strategy:tech_bottleneck"]
-    assert payload["groups"][0]["label"] == "Mid Trend Combo"
-    assert [item["asset_id"] for item in payload["groups"][0]["items"]] == ["CN:SZ:000001", "CN:SZ:000002"]
-    assert payload["groups"][0]["items"][0]["review_tier"] == "top5_focus"
-    assert payload["groups"][0]["items"][1]["review_tier"] == "top10_watch"
-    assert payload["groups"][0]["items"][0]["source_type"] == "strategy_topn"
-    assert payload["groups"][0]["items"][0]["strategy_id"] == "mid_trend"
-    assert payload["groups"][0]["items"][0]["strategy_run_id"] == "mid_trend:run"
+    assert [group["bucket"] for group in payload["groups"]] == [
+        "strategy:lhb_shortline",
+        "strategy:mid_trend",
+        "strategy:tech_bottleneck",
+    ]
+    mid_group = _group_by_bucket(payload, "strategy:mid_trend")
+    assert mid_group["label"] == "Mid Trend Combo"
+    assert [item["asset_id"] for item in mid_group["items"]] == ["CN:SZ:000001", "CN:SZ:000002"]
+    assert mid_group["items"][0]["review_tier"] == "top5_focus"
+    assert mid_group["items"][1]["review_tier"] == "top10_watch"
+    assert mid_group["items"][0]["source_type"] == "strategy_topn"
+    assert mid_group["items"][0]["strategy_id"] == "mid_trend"
+    assert mid_group["items"][0]["strategy_run_id"] == "mid_trend:run"
 
 
 def test_build_review_queue_defaults_to_display_gate_date(monkeypatch):
@@ -142,7 +158,7 @@ def test_build_review_queue_defaults_to_display_gate_date(monkeypatch):
 
     assert captured == {"trade_date": "2026-06-17", "limit": 10}
     assert payload["trade_date"] == "2026-06-17"
-    assert payload["groups"][0]["items"][0]["asset_id"] == "CN:SZ:000001"
+    assert _group_by_bucket(payload, "strategy:mid_trend")["items"][0]["asset_id"] == "CN:SZ:000001"
 
 
 def test_build_review_queue_strategy_mode_uses_lightweight_digest(monkeypatch):
@@ -161,10 +177,166 @@ def test_build_review_queue_strategy_mode_uses_lightweight_digest(monkeypatch):
 
     payload = review_queue.build_review_queue(trade_date=None, limit=10)
 
-    item = payload["groups"][0]["items"][0]
+    item = _group_by_bucket(payload, "strategy:mid_trend")["items"][0]
     assert item["digest"]["title"] == "Mid Trend Combo Top5 重点复盘"
     assert item["source_kinds"] == ["strategy"]
     assert item["next_action_count"] == 1
+
+
+def test_build_review_queue_prefers_current_snapshots_over_stale_strategy_fallback(monkeypatch):
+    stale_rows = [
+        {
+            **_strategy_position("CN:SZ:000001", 1, strategy_id="lhb_shortline", strategy_name="LHB Shortline Combo"),
+            "trade_date": "2026-06-22",
+            "latest_trade_date": "2026-06-22",
+        }
+    ]
+    snapshot_rows = [
+        {
+            **_strategy_position("CN:SZ:300650", 1, strategy_id="lhb_shortline", strategy_name="LHB Shortline Combo"),
+            "trade_date": "2026-06-25",
+            "latest_trade_date": "2026-06-25",
+            "source_type": "strategy_manifest",
+            "source_name": "strategy_lhb_shortline",
+        }
+    ]
+    monkeypatch.setattr(
+        review_queue,
+        "load_platform_summary",
+        lambda **kwargs: {"latest_market_date": "2026-06-25", "topn_preview": []},
+    )
+    monkeypatch.setattr(
+        review_queue,
+        "_load_manifest_strategy_rows",
+        lambda *, trade_date, limit: [],
+        raising=False,
+    )
+    monkeypatch.setattr(
+        review_queue,
+        "_load_strategy_snapshot_rows",
+        lambda *, trade_date, limit: snapshot_rows,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        review_queue,
+        "load_active_strategy_topn_rows",
+        lambda *, trade_date, limit: stale_rows,
+        raising=False,
+    )
+
+    payload = review_queue.build_review_queue(trade_date="2026-06-25", limit=10)
+
+    assert payload["trade_date"] == "2026-06-25"
+    assert payload["warnings"] == []
+    assert payload["groups"][0]["items"][0]["asset_id"] == "CN:SZ:300650"
+    assert payload["groups"][0]["items"][0]["source_type"] == "strategy_manifest"
+
+
+def test_build_review_queue_prefers_current_manifest_over_stale_snapshots(monkeypatch):
+    manifest_rows = [
+        _strategy_position("CN:SH:600667", 1, strategy_id="lhb_shortline", strategy_name="LHB Shortline Combo"),
+        _strategy_position("CN:SZ:300408", 1, strategy_id="tech_bottleneck", strategy_name="Tech Bottleneck Combo"),
+    ]
+    snapshot_rows = [
+        _strategy_position("CN:SZ:002955", 1, strategy_id="mid_trend", strategy_name="Mid Trend Combo"),
+    ]
+    monkeypatch.setattr(
+        review_queue,
+        "load_platform_summary",
+        lambda **kwargs: {"latest_market_date": "2026-06-25", "topn_preview": []},
+    )
+    monkeypatch.setattr(
+        review_queue,
+        "_load_manifest_strategy_rows",
+        lambda *, trade_date, limit: manifest_rows,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        review_queue,
+        "_load_strategy_snapshot_rows",
+        lambda *, trade_date, limit: snapshot_rows,
+        raising=False,
+    )
+    monkeypatch.setattr(review_queue, "_attach_asset_names", lambda rows: rows)
+
+    payload = review_queue.build_review_queue(trade_date="2026-06-25", limit=10)
+
+    assert [group["bucket"] for group in payload["groups"]] == [
+        "strategy:lhb_shortline",
+        "strategy:mid_trend",
+        "strategy:tech_bottleneck",
+    ]
+    assert {item["strategy_id"] for group in payload["groups"] for item in group["items"]} == {
+        "lhb_shortline",
+        "tech_bottleneck",
+    }
+    assert payload["groups"][1]["items"] == []
+
+
+def test_build_review_queue_keeps_empty_active_strategy_groups(monkeypatch):
+    manifest_rows = [
+        _strategy_position("CN:SH:600667", 1, strategy_id="lhb_shortline", strategy_name="LHB Shortline Combo"),
+        _strategy_position("CN:SZ:300408", 1, strategy_id="tech_bottleneck", strategy_name="Tech Bottleneck Combo"),
+    ]
+    monkeypatch.setattr(
+        review_queue,
+        "load_platform_summary",
+        lambda **kwargs: {"latest_market_date": "2026-06-25", "topn_preview": []},
+    )
+    monkeypatch.setattr(
+        review_queue,
+        "_load_manifest_strategy_rows",
+        lambda *, trade_date, limit: manifest_rows,
+        raising=False,
+    )
+    monkeypatch.setattr(review_queue, "_attach_asset_names", lambda rows: rows)
+    monkeypatch.setattr(
+        review_queue,
+        "_active_strategy_names",
+        lambda: {
+            "lhb_shortline": "LHB Shortline Combo",
+            "mid_trend": "Mid Trend Combo",
+            "tech_bottleneck": "Tech Bottleneck Combo",
+        },
+    )
+
+    payload = review_queue.build_review_queue(trade_date="2026-06-25", limit=10)
+
+    assert [(group["bucket"], group["count"]) for group in payload["groups"]] == [
+        ("strategy:lhb_shortline", 1),
+        ("strategy:mid_trend", 0),
+        ("strategy:tech_bottleneck", 1),
+    ]
+    mid_group = payload["groups"][1]
+    assert mid_group["label"] == "Mid Trend Combo"
+    assert mid_group["items"] == []
+
+
+def test_strategy_review_queue_uses_requested_trade_date_when_all_strategy_groups_are_empty(monkeypatch):
+    monkeypatch.setattr(
+        review_queue,
+        "_active_strategy_names",
+        lambda: {
+            "lhb_shortline": "LHB Shortline Combo",
+            "mid_trend": "Mid Trend Combo",
+            "tech_bottleneck": "Tech Bottleneck Combo",
+        },
+    )
+
+    payload = review_queue._strategy_review_queue(
+        rows=[],
+        selected_trade_date="2026-06-25",
+        score_version="strategy_topn",
+        lookback_days=90,
+    )
+
+    assert payload["trade_date"] == "2026-06-25"
+    assert [(group["bucket"], group["count"], group["items"]) for group in payload["groups"]] == [
+        ("strategy:lhb_shortline", 0, []),
+        ("strategy:mid_trend", 0, []),
+        ("strategy:tech_bottleneck", 0, []),
+    ]
+    assert payload["warnings"] == []
 
 
 def test_build_review_queue_strategy_mode_keeps_lhb_and_meaningful_review_metrics(monkeypatch):

@@ -78,7 +78,7 @@ def load_sector_heatmap_rows(
             bars.industry_name,
             bars.close,
             bars.preclose,
-            bars.amount,
+            bars.amount * 1000 AS amount,
             bars.source,
             bars.updated_at,
             stats.stock_count,

@@ -30,6 +30,8 @@ def test_load_platform_summary_combines_coverage_and_topn(monkeypatch):
             return [{"latest_score_date": "2026-06-08", "score_asset_count": 5207}]
         if "count(DISTINCT factor_name)" in sql:
             return [{"factor_count": 43, "latest_factor_date": "2026-06-08"}]
+        if "latest_market_monitor_date" in sql:
+            return [{"latest_market_monitor_date": "2026-06-07"}]
         if "SELECT DISTINCT score_version" in sql:
             return [{"score_version": "manual_v1"}]
         if "FROM factor.stock_score_daily" in sql:
@@ -52,6 +54,7 @@ def test_load_platform_summary_combines_coverage_and_topn(monkeypatch):
 
     assert result["latest_market_date"] == "2026-06-08"
     assert result["latest_score_date"] == "2026-06-08"
+    assert result["latest_market_monitor_date"] == "2026-06-07"
     assert result["market_asset_count"] == 5207
     assert result["factor_count"] == 43
     assert result["score_versions"] == ["manual_v1"]

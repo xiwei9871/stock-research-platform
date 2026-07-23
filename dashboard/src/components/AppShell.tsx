@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { FactorLabWorkspace } from './FactorLabWorkspace';
+import { DailyReviewLiteWorkspace } from './DailyReviewLiteWorkspace';
 import { GeneratedReportsWorkspace } from './GeneratedReportsWorkspace';
 import { GlobalSearchBox } from './GlobalSearchBox';
 import { HomeCockpit } from './HomeCockpit';
@@ -10,12 +11,14 @@ import { ReviewQueueWorkspace } from './ReviewQueueWorkspace';
 import { StockWorkspace, type StockEntryContext } from './StockWorkspace';
 import { StrategyLabWorkspace } from './StrategyLabWorkspace';
 import { WatchlistWorkspace } from './WatchlistWorkspace';
+import type { SectorType } from './market-monitor/mockData';
 import { fetchPlatformReadiness, fetchPlatformSummary } from '../api/client';
 import type { GlobalSearchResult } from '../api/types';
 
 type WorkspaceMode =
   | 'home'
   | 'reviewQueue'
+  | 'dailyReview'
   | 'market'
   | 'news'
   | 'researchReports'
@@ -25,8 +28,6 @@ type WorkspaceMode =
   | 'strategyLab'
   | 'generatedReports';
 
-type MarketMonitorTab = 'auction' | 'limit_up' | 'broken_limit_up' | 'limit_down';
-
 type WorkspaceHandoff = {
   query: string;
   tradeDate?: string;
@@ -35,7 +36,7 @@ type WorkspaceHandoff = {
   eventKey?: string;
   reportId?: string;
   path?: string;
-  monitorTab?: MarketMonitorTab;
+  monitorTab?: SectorType;
   version: number;
 };
 
@@ -50,13 +51,19 @@ type StockHandoff = {
   eventKey?: string;
   reportId?: string;
   tradeDate?: string;
-  monitorTab?: MarketMonitorTab;
+  monitorTab?: string;
   version: number;
 };
+
+function normalizeMarketMonitorTab(monitorTab?: string | null): SectorType | undefined {
+  if (!monitorTab) return undefined;
+  return monitorTab === 'concept' ? 'concept' : 'industry';
+}
 
 const NAV_ITEMS: Array<{ mode: WorkspaceMode; label: string; ariaLabel: string }> = [
   { mode: 'home', label: '首页', ariaLabel: 'Open Home workspace' },
   { mode: 'reviewQueue', label: '复盘队列', ariaLabel: 'Open Review Queue workspace' },
+  { mode: 'dailyReview', label: '每日复盘', ariaLabel: 'Open Daily Review workspace' },
   { mode: 'market', label: '市场监控', ariaLabel: 'Open Market Monitor workspace' },
   { mode: 'news', label: '新闻', ariaLabel: 'Open News workspace' },
   { mode: 'researchReports', label: '研报', ariaLabel: 'Open Research Reports workspace' },
@@ -143,18 +150,17 @@ export function AppShell() {
       query: context.query ?? context.assetId ?? selectedAssetId,
       assetId: context.assetId ?? selectedAssetId,
       tradeDate: context.tradeDate,
-      monitorTab: context.monitorTab as MarketMonitorTab | undefined,
+      monitorTab: normalizeMarketMonitorTab(context.monitorTab),
       version: current.version + 1
     }));
     setWorkspaceMode('market');
   }
 
-  function openStockWorkspaceFromReviewQueue(assetId: string, context?: StockEntryContext) {
-    openStockWorkspace(assetId, {
-      ...context,
-      monitorTab: context?.monitorTab as MarketMonitorTab | undefined
-    });
-  }
+function openStockWorkspaceFromReviewQueue(assetId: string, context?: StockEntryContext) {
+  openStockWorkspace(assetId, {
+    ...context
+  });
+}
 
   function openGlobalSearchResult(result: GlobalSearchResult) {
     const { target } = result;
@@ -235,6 +241,7 @@ export function AppShell() {
               onOpenMarketMonitor={openMarketMonitorWorkspaceFromStock}
             />
           ) : null}
+          {workspaceMode === 'dailyReview' ? <DailyReviewLiteWorkspace initialTradeDate={displayTradeDate} /> : null}
           {workspaceMode === 'market' ? (
             <MarketMonitorWorkspace
               key={`market:${marketHandoff.version}`}
@@ -246,7 +253,7 @@ export function AppShell() {
                   sourceWorkspace: 'market',
                   query: context.query,
                   tradeDate: context.tradeDate,
-                  monitorTab: context.monitorTab as MarketMonitorTab | undefined
+                  monitorTab: normalizeMarketMonitorTab(context.monitorTab)
                 })
               }
             />

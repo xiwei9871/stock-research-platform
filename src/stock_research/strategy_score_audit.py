@@ -315,6 +315,10 @@ def _raw_score_for_strategy(
             value = _optional_float(source_row.get(column))
             if value is not None:
                 return value, column
+        if _text(review_row.get("score_source")) == "score_total":
+            value = _optional_float(review_row.get("score_total"))
+            if value is not None:
+                return value, "score_total"
         return None, ""
     if strategy_id == "mid_trend":
         value = _optional_float(source_row.get("mid_trend_funnel_score"))
@@ -367,7 +371,8 @@ def _anomaly_flags(
         flags.append("missing_published_score_source")
     if audit_row["display_score"] is not None and not audit_row["display_score_source"]:
         flags.append("missing_display_score_source")
-    if lineage_row is None:
+    self_contained_lhb_score = _is_self_contained_lhb_score_total(strategy_id=strategy_id, audit_row=audit_row)
+    if lineage_row is None and not self_contained_lhb_score:
         flags.append("missing_candidate_source")
     mapped_without_raw = (
         strategy_id == "lhb_shortline"
@@ -393,12 +398,21 @@ def _anomaly_flags(
         and abs(float(audit_row["published_score"]) - float(audit_row["display_score"])) > 1e-6
     ):
         flags.append("published_display_score_mismatch")
-    if lineage_row is None and not audit_row["selection_reason"] and not audit_row["eligibility_layer"]:
+    if lineage_row is None and not self_contained_lhb_score and not audit_row["selection_reason"] and not audit_row["eligibility_layer"]:
         flags.append("unknown_selection_reason")
     lineage_trade_date = _lineage_trade_date(lineage_row)
     if lineage_trade_date and lineage_trade_date < audit_row["trade_date"]:
         flags.append("stale_source")
     return flags
+
+
+def _is_self_contained_lhb_score_total(*, strategy_id: str, audit_row: dict[str, Any]) -> bool:
+    return (
+        strategy_id == "lhb_shortline"
+        and audit_row["raw_candidate_score"] is not None
+        and audit_row["raw_candidate_score_source"] == "score_total"
+        and audit_row["published_score_source"] == "score_total"
+    )
 
 
 def _sorted_non_empty(values: pd.Series) -> list[str]:

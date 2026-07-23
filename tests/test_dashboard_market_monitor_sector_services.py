@@ -211,7 +211,7 @@ def test_build_sector_fund_flow_payload_is_stable_when_source_is_missing(monkeyp
     )
 
     assert payload["trade_date"] == "2026-06-26"
-    assert payload["source"] == "third_party_fund_flow_signal"
+    assert payload["source"] == "derived:industry_amount_price_breadth_proxy"
     assert payload["data_status"] == "missing"
     assert payload["warnings"] == [
         "fund flow source is unavailable; returning empty directional signal payload"
@@ -296,6 +296,65 @@ def test_build_sector_fund_flow_payload_normalizes_and_ranks_rows(monkeypatch):
     assert [item["sector_id"] for item in payload["outflow"]] == ["BK0477", "BK0488"]
     assert [item["rank"] for item in payload["outflow"]] == [1, 2]
     assert payload["outflow"][0]["change_pct"] == pytest.approx(-0.03)
+
+
+def test_load_sector_fund_flow_rows_queries_derived_industry_proxy(monkeypatch):
+    calls: list[dict[str, object]] = []
+
+    class _Connection:
+        def __enter__(self):
+            return object()
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    def fake_connect(service):
+        calls.append({"service": service})
+        return _Connection()
+
+    def fake_fetch_all(conn, sql, params):
+        calls.append({"sql": sql, "params": params})
+        return [
+            {
+                "industry_code": "BK0428",
+                "industry_name": "半导体",
+                "close": 105.0,
+                "preclose": 100.0,
+                "amount": 88000000000.0,
+                "main_net_inflow": 2710000000.0,
+                "main_net_inflow_ratio": 0.0308,
+                "leading_stock_name": "寒武纪",
+                "source": "derived:industry_amount_price_breadth_proxy",
+                "updated_at": "2026-06-26T15:41:00+08:00",
+            }
+        ]
+
+    monkeypatch.setattr(sector_fund_flow_service, "connect", fake_connect)
+    monkeypatch.setattr(sector_fund_flow_service, "fetch_all", fake_fetch_all)
+
+    rows = sector_fund_flow_service.load_sector_fund_flow_rows(
+        "2026-06-26",
+        "industry",
+        period="1d",
+        service="stock_research",
+    )
+
+    assert rows[0]["industry_code"] == "BK0428"
+    assert calls[0] == {"service": "stock_research"}
+    assert calls[1]["params"] == [
+        "2026-06-26",
+        "2026-06-26",
+        "2026-06-26",
+        "2026-06-26",
+        "2026-06-26",
+        "2026-06-26",
+        "2026-06-26",
+    ]
+    assert "derived:industry_amount_price_breadth_proxy" in str(calls[1]["sql"])
+    assert "market.industry_daily_bar" in str(calls[1]["sql"])
+    assert "market_daily_bar" in str(calls[1]["sql"])
+    assert "bars.amount * 1000 AS amount" in str(calls[1]["sql"])
+    assert "COALESCE(bars.amount, 0) * 1000" in str(calls[1]["sql"])
 
 
 def test_build_sector_detail_payload_returns_partial_when_fund_flow_fields_are_missing(monkeypatch):

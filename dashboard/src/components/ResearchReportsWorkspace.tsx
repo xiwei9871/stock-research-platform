@@ -1,6 +1,11 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
-import { fetchResearchReportSummary, fetchResearchReports } from '../api/client';
-import type { ResearchReportItem, ResearchReportResponse, ResearchReportSummary } from '../api/types';
+import { fetchResearchReportDocument, fetchResearchReportSummary, fetchResearchReports } from '../api/client';
+import type {
+  ResearchReportDocument,
+  ResearchReportItem,
+  ResearchReportResponse,
+  ResearchReportSummary
+} from '../api/types';
 import type { StockEntryContext } from './StockWorkspace';
 
 const DEFAULT_START_DATE = '2026-03-01';
@@ -100,6 +105,9 @@ export function ResearchReportsWorkspace({
   const [summary, setSummary] = useState<ResearchReportSummary | null>(null);
   const [reportsPayload, setReportsPayload] = useState<ResearchReportResponse | null>(null);
   const [selectedReport, setSelectedReport] = useState<ResearchReportItem | null>(null);
+  const [readerReport, setReaderReport] = useState<ResearchReportItem | null>(null);
+  const [isReaderFillScreen, setIsReaderFillScreen] = useState(false);
+  const [selectedDocument, setSelectedDocument] = useState<ResearchReportDocument | null>(null);
   const [q, setQ] = useState(initialQuery);
   const [broker, setBroker] = useState('');
   const [rating, setRating] = useState('');
@@ -111,8 +119,11 @@ export function ResearchReportsWorkspace({
   const [isReportsLoading, setIsReportsLoading] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [reportsError, setReportsError] = useState<string | null>(null);
+  const [documentError, setDocumentError] = useState<string | null>(null);
+  const [isDocumentLoading, setIsDocumentLoading] = useState(false);
   const mountedRef = useRef(false);
   const reportsRequestIdRef = useRef(0);
+  const documentRequestIdRef = useRef(0);
   const consumedDeepLinkRef = useRef('');
   const filtersRef = useRef<ReportFilters>({
     q: initialQuery,
@@ -184,6 +195,7 @@ export function ResearchReportsWorkspace({
     return () => {
       mountedRef.current = false;
       reportsRequestIdRef.current += 1;
+      documentRequestIdRef.current += 1;
     };
   }, []);
 
@@ -244,6 +256,127 @@ export function ResearchReportsWorkspace({
       return reports[0] ?? null;
     });
   }, [reports, initialEventKey, initialReportId]);
+
+  useEffect(() => {
+    const reportId = readerReport?.report_id;
+    const requestId = documentRequestIdRef.current + 1;
+    documentRequestIdRef.current = requestId;
+
+    if (!reportId) {
+      setSelectedDocument(null);
+      setDocumentError(null);
+      setIsDocumentLoading(false);
+      return;
+    }
+
+    setSelectedDocument(null);
+    setDocumentError(null);
+    setIsDocumentLoading(true);
+
+    fetchResearchReportDocument(reportId)
+      .then((document) => {
+        if (mountedRef.current && requestId === documentRequestIdRef.current) {
+          setSelectedDocument(document);
+        }
+      })
+      .catch((err: unknown) => {
+        if (mountedRef.current && requestId === documentRequestIdRef.current) {
+          setDocumentError(err instanceof Error ? err.message : String(err));
+        }
+      })
+      .finally(() => {
+        if (mountedRef.current && requestId === documentRequestIdRef.current) {
+          setIsDocumentLoading(false);
+        }
+      });
+  }, [readerReport]);
+
+  if (readerReport) {
+    const readerAssetId = getReportAssetId(readerReport);
+    return (
+      <section
+        className={`research-report-fullscreen${isReaderFillScreen ? ' is-fill-screen' : ''}`}
+        aria-label="Research report full-screen reader"
+      >
+        <header className="research-report-reader-toolbar">
+          <button
+            type="button"
+            className="link-chip"
+            onClick={() => {
+              setIsReaderFillScreen(false);
+              setReaderReport(null);
+            }}
+          >
+            返回研报列表
+          </button>
+          <div className="research-report-reader-title">
+            <span>
+              {formatText(readerReport.stock_name)} {formatText(readerReport.ts_code)}
+            </span>
+            <h1>{readerReport.report_title}</h1>
+            <small>
+              {formatText(readerReport.broker)} / {formatText(readerReport.publish_date)}
+            </small>
+          </div>
+          <div className="research-report-reader-actions">
+            <button
+              type="button"
+              className="link-chip"
+              aria-pressed={isReaderFillScreen}
+              onClick={() => setIsReaderFillScreen((current) => !current)}
+            >
+              {isReaderFillScreen ? '退出铺满' : '铺满屏幕'}
+            </button>
+            {readerAssetId ? (
+              <button
+                type="button"
+                className="link-chip"
+                aria-label={`Open Stock Detail for ${readerReport.stock_name || readerReport.ts_code}`}
+                onClick={() => {
+                  onOpenAsset?.(readerAssetId, { ...buildReportStockContext(readerReport), tradeDate: initialTradeDate });
+                }}
+              >
+                个股工作台
+              </button>
+            ) : null}
+            {selectedDocument?.has_pdf && selectedDocument.pdf_url ? (
+              <a href={selectedDocument.pdf_url} target="_blank" rel="noreferrer">
+                打开PDF
+              </a>
+            ) : null}
+            {(selectedDocument?.source_url || readerReport.source_url) ? (
+              <a href={selectedDocument?.source_url || readerReport.source_url} target="_blank" rel="noreferrer">
+                来源链接
+              </a>
+            ) : null}
+          </div>
+        </header>
+
+        <main className="research-report-reader-main">
+          {isDocumentLoading ? <p className="muted">正在加载研报文档...</p> : null}
+          {documentError ? <p className="error-text">{documentError}</p> : null}
+          {!isDocumentLoading && selectedDocument?.has_pdf && selectedDocument.pdf_url ? (
+            <iframe
+              className="research-report-fullscreen-frame"
+              src={selectedDocument.pdf_url}
+              title={`${readerReport.report_title} PDF`}
+            />
+          ) : null}
+          {!isDocumentLoading && selectedDocument && !selectedDocument.has_pdf ? (
+            <div className="research-report-fullscreen-empty">
+              <strong>暂无本地PDF</strong>
+              <p>可打开来源链接查看原文，或等待研报同步任务补齐PDF文件。</p>
+              {selectedDocument.warnings.map((warning) => (
+                <span className="muted" key={warning}>
+                  {warning}
+                </span>
+              ))}
+            </div>
+          ) : null}
+        </main>
+      </section>
+    );
+  }
 
   return (
     <section className="workspace-stack" aria-label="Research Reports workspace">
@@ -359,7 +492,10 @@ export function ResearchReportsWorkspace({
                         <button
                           type="button"
                           aria-label={`Open report ${item.report_title}`}
-                          onClick={() => setSelectedReport(item)}
+                          onClick={() => {
+                            setSelectedReport(item);
+                            setReaderReport(item);
+                          }}
                         >
                           {item.report_title}
                         </button>

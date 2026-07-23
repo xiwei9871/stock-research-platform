@@ -513,6 +513,83 @@ def test_lhb_shortline_v1_auction_score_uses_signal_close_call_and_entry_open_ca
     assert scored.iloc[0]["auction_enhanced_score"] == 110.0
 
 
+def test_lhb_shortline_v1_auction_score_falls_back_to_daily_open_when_auction_missing():
+    lifecycle = pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-06-25",
+                "ts_code": "600667.SH",
+                "phase12a_rule_layer": "follow_pool_core",
+                "entry_trade_date": "2026-06-26",
+            }
+        ]
+    )
+    daily = pd.DataFrame(
+        [
+            {"trade_date": "2026-06-25", "ts_code": "600667.SH", "open": 9.8, "close": 10.0},
+            {"trade_date": "2026-06-26", "ts_code": "600667.SH", "open": 10.5, "close": 10.8},
+        ]
+    )
+
+    scored = lhb_shortline_v1._attach_lhb_shortline_v1_auction_score(
+        lifecycle,
+        pd.DataFrame(),
+        daily_bars=daily,
+    )
+
+    assert scored.iloc[0]["signal_close_close"] == pytest.approx(10.0)
+    assert scored.iloc[0]["entry_open_open"] == pytest.approx(10.5)
+    assert scored.iloc[0]["entry_open_vs_signal_close"] == pytest.approx(0.05)
+    assert scored.iloc[0]["auction_enhanced_score"] == 125.0
+
+
+def test_lhb_shortline_v1_minute_rows_prefer_qfq_and_fallback_to_raw():
+    rows = [
+        {
+            "trade_date": "2026-06-18",
+            "ts_code": "CN:SH:600667",
+            "trade_time": "2026-06-18 09:35:00",
+            "open": 10.0,
+            "high": 10.2,
+            "low": 9.9,
+            "close": 10.1,
+            "volume": 100,
+            "amount": 1_000,
+            "adjust_type": "raw",
+        },
+        {
+            "trade_date": "2026-06-18",
+            "ts_code": "CN:SH:600667",
+            "trade_time": "2026-06-18 09:35:00",
+            "open": 11.0,
+            "high": 11.2,
+            "low": 10.9,
+            "close": 11.1,
+            "volume": 100,
+            "amount": 1_100,
+            "adjust_type": "qfq",
+        },
+        {
+            "trade_date": "2026-06-25",
+            "ts_code": "CN:SH:600667",
+            "trade_time": "2026-06-25 09:35:00",
+            "open": 12.0,
+            "high": 12.2,
+            "low": 11.9,
+            "close": 12.1,
+            "volume": 100,
+            "amount": 1_200,
+            "adjust_type": "raw",
+        },
+    ]
+
+    minute = lhb_shortline_v1._prefer_lhb_shortline_minute_rows(rows)
+
+    assert minute["ts_code"].tolist() == ["600667.SH", "600667.SH"]
+    assert minute["trade_date"].tolist() == ["2026-06-18", "2026-06-25"]
+    assert minute["open"].tolist() == [11.0, 12.0]
+
+
 def test_lhb_shortline_v1_uses_fixed_top10_candidate_pool_for_phase18c():
     assert lhb_shortline_v1._lhb_shortline_v1_top_values(5) == [10]
     assert lhb_shortline_v1._lhb_shortline_v1_top_values(20) == [20]
@@ -1300,9 +1377,7 @@ def test_load_lhb_shortline_v1_frames_from_db_queries_base_tables(monkeypatch):
     assert "market_daily_bar" in sql
     assert "market.stock_auction_bar" in sql
     assert "market.stock_minute_bar" in sql
-    assert "m.adjust_type = 'qfq'" in sql
-    assert "m.adjust_type = 'raw'" not in sql
-    assert "adjust_type in ('qfq', 'raw')" not in sql
+    assert "m.adjust_type in ('qfq', 'raw')" in sql
     assert "factor.stock_intraday_features_daily" in sql
     assert "morning_return" in sql
     assert "first_60m_return" not in sql

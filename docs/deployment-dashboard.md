@@ -153,6 +153,19 @@ launchctl load ~/Library/LaunchAgents/com.stockresearch.dashboard-daily-sync.pli
 
 The default schedule is every day at 18:30 local time.
 
+## Manual Prod Publish
+
+For the current systemd-based production path, use the thin manual wrapper when
+you already know the trade date you want to publish:
+
+```bash
+./deploy/publish_prod.sh 2026-06-27
+```
+
+The wrapper loads the same local env file as the daily sync helper, publishes
+`strategy_daily_eod/2026-06-27` through `deploy/sync_dashboard_systemd.sh`,
+and then runs `deploy/check_dashboard_release.sh` against the public site.
+
 ## Nginx Deploy
 
 Install `deploy/nginx/stock-dashboard.conf` into the server's nginx site configuration. Keep Basic Auth if the site is private.

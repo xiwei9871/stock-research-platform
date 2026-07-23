@@ -255,10 +255,11 @@ def test_load_evidence_digest_snapshot_returns_single_row(monkeypatch):
 
 
 def test_run_eod_review_evidence_snapshots_writes_summary_artifact(monkeypatch, tmp_path):
-    monkeypatch.setattr(
-        snapshots,
-        "build_review_queue",
-        lambda trade_date, score_version, limit: {
+    captured_queue_args = {}
+
+    def fake_build_review_queue(**kwargs):
+        captured_queue_args.update(kwargs)
+        return {
             "groups": [
                 {
                     "items": [
@@ -287,7 +288,12 @@ def test_run_eod_review_evidence_snapshots_writes_summary_artifact(monkeypatch, 
                 }
             ],
             "warnings": [],
-        },
+        }
+
+    monkeypatch.setattr(
+        snapshots,
+        "build_review_queue",
+        fake_build_review_queue,
     )
     monkeypatch.setattr(
         snapshots,
@@ -308,6 +314,7 @@ def test_run_eod_review_evidence_snapshots_writes_summary_artifact(monkeypatch, 
     )
 
     assert result["status"] == "success"
+    assert captured_queue_args["use_strategy_snapshots"] is False
     assert result["review_item_snapshot_count"] == 1
     assert result["evidence_digest_snapshot_count"] == 1
     assert result["asset_count"] == 1
@@ -324,7 +331,7 @@ def test_run_eod_review_evidence_snapshots_skips_empty_queue(monkeypatch):
     monkeypatch.setattr(
         snapshots,
         "build_review_queue",
-        lambda trade_date, score_version, limit: {"groups": [{"items": []}], "warnings": []},
+        lambda **kwargs: {"groups": [{"items": []}], "warnings": []},
     )
 
     result = snapshots.run_eod_review_evidence_snapshots(
@@ -342,7 +349,7 @@ def test_run_eod_review_evidence_snapshots_partial_when_persist_fails(monkeypatc
     monkeypatch.setattr(
         snapshots,
         "build_review_queue",
-        lambda trade_date, score_version, limit: {
+        lambda **kwargs: {
             "groups": [{"items": [{"asset_id": "000001.SZ", "digest_key": "digest-1"}]}],
             "warnings": [],
         },
@@ -369,7 +376,7 @@ def test_run_eod_review_evidence_snapshots_dry_run_does_not_persist(monkeypatch)
     monkeypatch.setattr(
         snapshots,
         "build_review_queue",
-        lambda trade_date, score_version, limit: {
+        lambda **kwargs: {
             "groups": [{"items": [{"asset_id": "000001.SZ", "digest_key": "digest-1"}]}],
             "warnings": ["news partial"],
         },

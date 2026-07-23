@@ -1,4 +1,5 @@
 from datetime import date
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 from stock_research.dashboard import app as dashboard_app
@@ -218,6 +219,67 @@ def test_report_row_returns_empty_metadata_for_non_dict_values():
         assert result["metadata"] == {}
 
 
+def test_load_research_report_document_resolves_safe_local_pdf(monkeypatch, tmp_path):
+    pdf_path = tmp_path / "report.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\n")
+
+    def fake_fetch_all(conn, sql, params=None):
+        assert "FROM research.stock_report_source" in sql
+        assert params == ["r1"]
+        return [
+            {
+                "report_id": "r1",
+                "report_title": "贵州茅台深度报告",
+                "source_url": "file://" + str(pdf_path),
+                "public_access": False,
+                "copyright_note": "internal pdf",
+                "metadata": {"yanbaoke": {"local_pdf_path": str(pdf_path), "detail_url": "https://pc.example/r1"}},
+            }
+        ]
+
+    monkeypatch.setattr(research_reports, "connect", lambda service: DummyConnection())
+    monkeypatch.setattr(research_reports, "fetch_all", fake_fetch_all)
+    monkeypatch.setattr(research_reports, "RESEARCH_REPORT_ALLOWED_PDF_ROOTS", (tmp_path,))
+
+    result = research_reports.load_research_report_document("r1", service="test")
+
+    assert result["report_id"] == "r1"
+    assert result["has_pdf"] is True
+    assert result["pdf_url"] == "/api/research-reports/r1/pdf"
+    assert result["file_name"] == "report.pdf"
+    assert result["source_url"] == "https://pc.example/r1"
+    assert result["warnings"] == []
+
+
+def test_load_research_report_document_blocks_pdf_outside_allowed_roots(monkeypatch, tmp_path):
+    outside = tmp_path / "outside.pdf"
+    outside.write_bytes(b"%PDF-1.4\n")
+    allowed_root = tmp_path / "allowed"
+    allowed_root.mkdir()
+
+    def fake_fetch_all(conn, sql, params=None):
+        return [
+            {
+                "report_id": "r2",
+                "report_title": "外部研报",
+                "source_url": "file://" + str(outside),
+                "public_access": False,
+                "copyright_note": "metadata only",
+                "metadata": {"yanbaoke": {"local_pdf_path": str(outside)}},
+            }
+        ]
+
+    monkeypatch.setattr(research_reports, "connect", lambda service: DummyConnection())
+    monkeypatch.setattr(research_reports, "fetch_all", fake_fetch_all)
+    monkeypatch.setattr(research_reports, "RESEARCH_REPORT_ALLOWED_PDF_ROOTS", (allowed_root,))
+
+    result = research_reports.load_research_report_document("r2", service="test")
+
+    assert result["has_pdf"] is False
+    assert result["pdf_url"] == ""
+    assert result["warnings"] == ["local pdf is unavailable or outside allowed report directories"]
+
+
 class DummyConnection:
     def __enter__(self):
         return self
@@ -297,3 +359,27 @@ def test_asset_research_reports_route(monkeypatch):
     assert response.status_code == 200
     assert captured["args"] == ["600519.SH", 5, 90]
     assert response.json()["summary"]["report_count_90d"] == 4
+
+
+def test_research_report_document_route(monkeypatch):
+    monkeypatch.setattr(
+        dashboard_app,
+        "load_research_report_document",
+        lambda report_id: {
+            "report_id": report_id,
+            "report_title": "贵州茅台深度报告",
+            "has_pdf": True,
+            "pdf_url": f"/api/research-reports/{report_id}/pdf",
+            "source_url": "https://example.com/r1",
+            "file_name": "r1.pdf",
+            "public_access": False,
+            "copyright_note": "internal pdf",
+            "warnings": [],
+        },
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/research-reports/r1/document")
+
+    assert response.status_code == 200
+    assert response.json()["pdf_url"] == "/api/research-reports/r1/pdf"

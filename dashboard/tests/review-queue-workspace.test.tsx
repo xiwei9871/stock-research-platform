@@ -220,6 +220,48 @@ describe('ReviewQueueWorkspace', () => {
     expect(screen.queryByText('Recent accepted news')).not.toBeInTheDocument();
   });
 
+  it('replays the review queue for a selected trade date', async () => {
+    const replayQueue = makeQueue({
+      trade_date: '2026-06-24',
+      groups: [
+        {
+          ...makeQueue().groups[0],
+          count: 2,
+          items: [
+            makeQueue().groups[0].items[0],
+            {
+              ...makeQueue().groups[0].items[0],
+              queue_id: '2026-06-24:strategy_topn:000002.SZ',
+              asset_id: '000002.SZ',
+              display_name: '万科A',
+              rank: 2,
+              topn_rank: 2
+            }
+          ]
+        },
+        { bucket: 'strategy:tech_bottleneck', label: 'Tech Bottleneck Combo', count: 0, items: [] }
+      ]
+    });
+    apiMocks.fetchReviewQueue.mockResolvedValueOnce(makeQueue()).mockResolvedValueOnce(replayQueue);
+
+    render(<ReviewQueueWorkspace />);
+
+    expect(await screen.findByText('Recent accepted news')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('选择复盘日期'), { target: { value: '2026-06-24' } });
+    fireEvent.click(screen.getByRole('button', { name: '回放该日复盘队列' }));
+
+    await waitFor(() =>
+      expect(apiMocks.fetchReviewQueue).toHaveBeenLastCalledWith({
+        tradeDate: '2026-06-24',
+        limit: 10,
+        lookbackDays: 90
+      })
+    );
+    expect((await screen.findAllByText('2026-06-24')).length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'Mid Trend Combo 2' })).toBeInTheDocument();
+    expect(screen.getByText('万科A')).toBeInTheDocument();
+  });
+
   it('dispatches source-backed next actions', async () => {
     const onOpenStock = vi.fn();
     const onOpenNews = vi.fn();

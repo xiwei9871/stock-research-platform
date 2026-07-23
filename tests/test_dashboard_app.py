@@ -18,11 +18,13 @@ def test_strategy_score_audit_route_returns_payload(monkeypatch):
             "trade_date": trade_date,
             "status": "success",
             "overall_status": "ok",
+            "generated_at": "2026-06-22T10:30:00Z",
             "total_rows": 3,
             "selected_rows": 3,
             "anomaly_row_count": 0,
             "anomaly_counts_by_type": {},
             "strategies": [],
+            "sample_rows": [{"asset_id": "CN:SZ:002080", "stock_name": "Sample A"}],
             "warnings": [],
         }
 
@@ -42,11 +44,13 @@ def test_strategy_score_audit_route_returns_payload(monkeypatch):
         "trade_date": "2026-06-22",
         "status": "success",
         "overall_status": "ok",
+        "generated_at": "2026-06-22T10:30:00Z",
         "total_rows": 3,
         "selected_rows": 3,
         "anomaly_row_count": 0,
         "anomaly_counts_by_type": {},
         "strategies": [],
+        "sample_rows": [{"asset_id": "CN:SZ:002080", "stock_name": "Sample A"}],
         "warnings": [],
     }
 
@@ -577,6 +581,50 @@ def test_market_monitor_sectors_detail_route_separates_cache_by_type(monkeypatch
     assert len(calls) == 2
     assert first.json() == third.json()
     assert first.json() != second.json()
+
+
+def test_daily_review_lite_route_returns_operator_review_payload(monkeypatch):
+    captured = {}
+
+    def fake_daily_review(trade_date=None):
+        captured["trade_date"] = trade_date
+        return {
+            "trade_date": trade_date,
+            "status": "partial",
+            "run": {"run_id": "", "source": "fallback", "report_type": "daily_review_lite"},
+            "fallback": True,
+            "sections": [
+                {"key": "data_readiness", "title": "Data Readiness", "status": "ready", "items": []},
+                {"key": "market_review", "title": "Market Review", "status": "ready", "items": []},
+                {"key": "strategy_summaries", "title": "Strategy Summaries", "status": "partial", "items": []},
+                {"key": "holding_review", "title": "Holding Review", "status": "empty", "items": []},
+                {"key": "operator_plan", "title": "Operator Plan", "status": "empty", "items": []},
+                {"key": "next_day_checklist", "title": "Next-day Checklist", "status": "empty", "items": []},
+                {"key": "artifacts", "title": "Artifacts", "status": "empty", "items": []},
+            ],
+            "artifacts": [],
+            "warnings": ["no registered daily review run selected"],
+        }
+
+    monkeypatch.setattr(dashboard_app, "build_daily_review_lite", fake_daily_review, raising=False)
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/daily-review-lite?trade_date=2026-06-18")
+
+    assert response.status_code == 200
+    assert captured["trade_date"] == "2026-06-18"
+    payload = response.json()
+    assert payload["trade_date"] == "2026-06-18"
+    assert payload["status"] == "partial"
+    assert [section["key"] for section in payload["sections"]] == [
+        "data_readiness",
+        "market_review",
+        "strategy_summaries",
+        "holding_review",
+        "operator_plan",
+        "next_day_checklist",
+        "artifacts",
+    ]
 
 
 def test_platform_display_date_route_returns_readiness_gate(monkeypatch):

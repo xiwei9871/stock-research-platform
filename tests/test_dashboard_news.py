@@ -1004,7 +1004,7 @@ def test_news_quality_gate_rejects_low_signal_and_does_not_fill_three_slots():
 
     assert [item.news_id for item in result.accepted_items] == ["good-1"]
     assert result.rejection_counts["low_signal"] >= 1
-    assert result.rejection_counts["below_threshold"] >= 1
+    assert result.rejection_counts["not_a_share_relevant"] >= 1
 
 
 def test_news_quality_gate_rejects_missing_title_and_url():
@@ -1149,9 +1149,9 @@ def test_news_quality_gate_clamps_custom_threshold_and_max_accepted():
     assert zero_slots.threshold == 0
     assert zero_slots.max_accepted == 0
     assert zero_slots.accepted_items == []
-    assert zero_slots.rejection_counts["overflow"] == 1
+    assert zero_slots.rejection_counts["not_a_share_relevant"] == 1
     assert high_threshold.threshold == 100
-    assert high_threshold.rejection_counts["below_threshold"] == 1
+    assert high_threshold.rejection_counts["not_a_share_relevant"] == 1
 
 
 def test_news_quality_gate_default_threshold_is_65():
@@ -1161,6 +1161,43 @@ def test_news_quality_gate_default_threshold_is_65():
 
     assert NEWS_QUALITY_THRESHOLD == 65
     assert result.threshold == 65
+
+
+def test_news_quality_gate_rejects_overseas_or_generic_futures_without_a_share_relevance():
+    from stock_research.dashboard.news_quality import evaluate_public_news_items
+
+    result = evaluate_public_news_items(
+        [
+            make_item(
+                news_id="us-stocks",
+                title="美股成交额前20：英特尔与苹果洽谈合作",
+                summary="纳斯达克、标普指数走强，科技股大涨",
+                category="international",
+                published_at="2026-06-13T05:00:00+00:00",
+                url="https://finance.sina.com.cn/us-stocks.shtml",
+            ),
+            make_item(
+                news_id="generic-futures",
+                title="期货公司管理层调整",
+                summary="行业机构发布人事变动公告",
+                category="market",
+                published_at="2026-06-13T05:01:00+00:00",
+                url="https://finance.sina.com.cn/generic-futures.shtml",
+            ),
+            make_item(
+                news_id="china-sector",
+                title="国家发改委出台半导体产业链支持政策",
+                summary="A股半导体、芯片、算力方向订单和涨价预期明确",
+                category="market",
+                published_at="2026-06-13T05:02:00+00:00",
+                url="https://finance.sina.com.cn/china-sector.shtml",
+            ),
+        ],
+        now=datetime(2026, 6, 13, 6, 0, tzinfo=UTC),
+    )
+
+    assert [item.news_id for item in result.accepted_items] == ["china-sector"]
+    assert result.rejection_counts["not_a_share_relevant"] == 2
 
 
 def test_public_news_ingestion_writes_db_and_cache(

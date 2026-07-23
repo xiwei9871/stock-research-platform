@@ -24,6 +24,7 @@ REPORT_SUFFIXES = {".html", ".md", ".json", ".csv"}
 CHECK_LABELS = {
     "platform_summary": "Platform Summary",
     "review_queue": "Review Queue",
+    "market_monitor": "Market Monitor",
     "news": "News",
     "news_features": "News Features",
     "news_enrichment": "News Enrichment",
@@ -36,6 +37,7 @@ UNAVAILABLE_WARNINGS = {
     "platform_summary": "Platform summary unavailable",
     "topn_preview": "TopN preview unavailable",
     "review_queue": "Review Queue unavailable",
+    "market_monitor": "Market Monitor unavailable",
     "news": "News unavailable",
     "news_features": "News Features unavailable",
     "news_enrichment": "News Enrichment unavailable",
@@ -43,6 +45,27 @@ UNAVAILABLE_WARNINGS = {
     "generated_reports": "Generated Reports unavailable",
     "review_evidence_snapshots": "Review/Evidence Snapshots unavailable",
 }
+
+MARKET_MONITOR_SOURCE_COUNT_SQL = """
+        SELECT
+            (
+                SELECT count(*)::int
+                FROM market.industry_daily_bar
+                WHERE trade_date = %s
+                  AND industry_system = 'csrc'
+            ) AS industry_rows,
+            (
+                SELECT count(*)::int
+                FROM market.index_daily_bar
+                WHERE trade_date = %s
+            ) AS index_rows,
+            (
+                SELECT count(*)::int
+                FROM market_daily_bar
+                WHERE trade_date = %s
+                  AND adjust_type = 'qfq'
+            ) AS market_daily_rows
+        """
 
 
 def aggregate_readiness_status(checks: list[dict[str, Any]]) -> str:
@@ -95,6 +118,10 @@ def build_platform_readiness(score_version: str = "manual_v1") -> dict[str, Any]
 
     if latest_market_date:
         checks.append(_review_queue_check(topn_preview, warnings))
+        market_monitor_check = _market_monitor_check(latest_market_date)
+        checks.append(market_monitor_check)
+        if market_monitor_check["status"] != "ready":
+            warnings.append(UNAVAILABLE_WARNINGS["market_monitor"])
         checks.append(_news_check(warnings))
         checks.append(_research_reports_check(warnings))
         checks.append(_generated_reports_check(latest_market_date, warnings))
@@ -102,6 +129,7 @@ def build_platform_readiness(score_version: str = "manual_v1") -> dict[str, Any]
         checks.extend(
             [
                 _check("review_queue", "unknown", "Latest market date unavailable"),
+                _check("market_monitor", "unknown", "Latest market date unavailable"),
                 _check("news", "unknown", "Latest market date unavailable"),
                 _check("research_reports", "unknown", "Latest market date unavailable"),
                 _check("generated_reports", "unknown", "Latest market date unavailable"),
@@ -314,6 +342,16 @@ def _build_manifest_health_groups(
             modules=("score_topn",),
             fallback_ready=bool(topn_preview),
             fallback_detail="TopN 评分可用" if topn_preview else "TopN 评分不可用",
+        ),
+        _manifest_health_item(
+            by_module,
+            key="market_monitor",
+            label="Market Monitor",
+            modules=("market_monitor",),
+            fallback_ready=_market_monitor_ready(latest_market_date),
+            fallback_detail=f"Market Monitor sources ready for {latest_market_date}",
+            fallback_status="partial",
+            fallback_latest_trade_date=latest_market_date,
         ),
         _manifest_health_item(
             by_module,
@@ -753,6 +791,49 @@ def _generated_reports_check(latest_market_date: str, warnings: list[str]) -> di
         warnings.append(UNAVAILABLE_WARNINGS["generated_reports"])
         return _check("generated_reports", "partial", UNAVAILABLE_WARNINGS["generated_reports"])
     return _check("generated_reports", "ready", "Generated Reports available")
+
+
+def _market_monitor_check(
+    latest_market_date: str,
+    service: str = SETTINGS.research_service,
+) -> dict[str, Any]:
+    if not latest_market_date:
+        return _check("market_monitor", "unknown", "Latest market date unavailable")
+    try:
+        with connect(service) as conn:
+            rows = fetch_all(
+                conn,
+                MARKET_MONITOR_SOURCE_COUNT_SQL,
+                [latest_market_date, latest_market_date, latest_market_date],
+            )
+    except Exception:
+        return _check("market_monitor", "partial", UNAVAILABLE_WARNINGS["market_monitor"])
+    row = dict(rows[0]) if rows else {}
+    industry_rows = int(row.get("industry_rows") or 0)
+    index_rows = int(row.get("index_rows") or 0)
+    market_daily_rows = int(row.get("market_daily_rows") or 0)
+    if industry_rows > 0 and index_rows >= 5 and market_daily_rows > 0:
+        return _check(
+            "market_monitor",
+            "ready",
+            f"Market Monitor sources ready for {latest_market_date}",
+        )
+    missing = []
+    if industry_rows <= 0:
+        missing.append("industry_daily_bar")
+    if index_rows < 5:
+        missing.append("index_daily_bar>=5")
+    if market_daily_rows <= 0:
+        missing.append("market_daily_bar")
+    return _check(
+        "market_monitor",
+        "partial",
+        "Market Monitor missing " + ", ".join(missing),
+    )
+
+
+def _market_monitor_ready(latest_market_date: str) -> bool:
+    return _market_monitor_check(latest_market_date)["status"] == "ready"
 
 
 def _has_public_news(service: str = SETTINGS.research_service) -> bool:

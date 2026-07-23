@@ -656,12 +656,18 @@ def _summarize_lhb_shortline_market_regime_account(
         if latest_equity is not None and previous_equity not in (None, 0.0)
         else None
     )
+    performance_effective_date = str(latest.get("trade_date") or "")
+    if not closed.empty and "exit_trade_date" in closed.columns:
+        exit_dates = pd.to_datetime(closed["exit_trade_date"], errors="coerce").dropna()
+        if not exit_dates.empty:
+            performance_effective_date = str(exit_dates.max().date())
     return {
         "initial_equity": 1.0,
         "final_equity": final_equity,
         "total_return": final_equity - 1.0,
         "max_drawdown": max_drawdown,
         "actual_end_date": str(latest.get("trade_date") or ""),
+        "performance_effective_date": performance_effective_date,
         "latest_day_return": latest_day_return,
         "latest_day_drawdown": _finite_or_none(latest.get("drawdown")),
         "open_position_count": int(_finite_or_none(latest.get("open_position_count")) or 0),
@@ -755,6 +761,27 @@ def _normalize_key_columns(frame: pd.DataFrame) -> pd.DataFrame:
     ).dt.strftime("%Y-%m-%d")
     normalized["ts_code"] = normalized["ts_code"].map(_canonical_ts_code)
     return normalized
+
+
+def _prefer_lhb_shortline_minute_rows(rows: list[dict[str, Any]]) -> pd.DataFrame:
+    frame = _frame_from_rows(rows)
+    columns = ["trade_date", "ts_code", "trade_time", "open", "high", "low", "close", "volume", "amount"]
+    if frame.empty:
+        return pd.DataFrame(columns=columns)
+    for column in columns:
+        if column not in frame.columns:
+            frame[column] = pd.NA
+    frame["trade_date"] = pd.to_datetime(frame["trade_date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    frame["ts_code"] = frame["ts_code"].map(_canonical_ts_code)
+    frame["trade_time"] = pd.to_datetime(frame["trade_time"], errors="coerce")
+    adjust = frame.get("adjust_type", pd.Series("", index=frame.index)).astype(str).str.lower()
+    frame["_adjust_priority"] = adjust.map({"qfq": 0, "raw": 1}).fillna(9)
+    frame = frame.sort_values(
+        ["ts_code", "trade_date", "trade_time", "_adjust_priority"],
+        kind="stable",
+    )
+    frame = frame.drop_duplicates(["ts_code", "trade_date", "trade_time"], keep="first")
+    return frame.drop(columns=["_adjust_priority"], errors="ignore").reindex(columns=columns)
 
 
 def build_lhb_shortline_v1_candidates(
@@ -1333,17 +1360,19 @@ def load_lhb_shortline_v1_frames_from_db(
                 m.low,
                 m.close,
                 m.volume,
-                m.amount
+                m.amount,
+                m.adjust_type
             FROM market.stock_minute_bar m
             WHERE m.trade_date BETWEEN (%s::date - INTERVAL '7 days') AND (%s::date + INTERVAL '7 days')
-              AND m.adjust_type = 'qfq'
+              AND m.adjust_type IN ('qfq', 'raw')
               AND m.freq = '5min'
               AND m.source = 'baostock'
               AND m.asset_id = ANY(%s)
-            ORDER BY m.asset_id, m.trade_time
+            ORDER BY m.asset_id, m.trade_time, m.adjust_type
             """,
             [config.start_date, config.end_date, minute_asset_ids],
         ) if minute_asset_ids else []
+        minute_frame = _prefer_lhb_shortline_minute_rows(minute_rows)
 
     frames = LHBShortlineV1Frames(
         lhb_features=_frame_from_rows(lhb_rows),
@@ -1351,7 +1380,7 @@ def load_lhb_shortline_v1_frames_from_db(
         auction_open=_frame_from_rows(auction_rows),
         intraday_confirmation=_frame_from_rows(intraday_rows),
         daily_bars=_frame_from_rows(daily_rows),
-        minute_bars=_frame_from_rows(minute_rows),
+        minute_bars=minute_frame,
         coverage={
             "source": "db_base_tables",
             "service": db_service,
@@ -1361,6 +1390,7 @@ def load_lhb_shortline_v1_frames_from_db(
             "intraday_feature_rows": len(intraday_rows),
             "daily_bar_rows": len(daily_rows),
             "minute_bar_rows": len(minute_rows),
+            "minute_bar_effective_rows": len(minute_frame),
             "minute_asset_count": len(minute_asset_ids),
         },
     )
@@ -1426,6 +1456,8 @@ def _filter_lhb_shortline_v1_lifecycle_minute_window(
 def _attach_lhb_shortline_v1_auction_score(
     lifecycle_trades: pd.DataFrame,
     auction_open: pd.DataFrame,
+    *,
+    daily_bars: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     trades = lifecycle_trades.copy().reset_index(names="original_order")
     if trades.empty:
@@ -1471,6 +1503,29 @@ def _attach_lhb_shortline_v1_auction_score(
     )[["entry_trade_date", "ts_code", "entry_open_open", "entry_open_close", "entry_open_amount"]]
     trades = trades.merge(signal, on=["trade_date", "ts_code"], how="left")
     trades = trades.merge(entry, on=["entry_trade_date", "ts_code"], how="left")
+    daily_fallback = _lhb_shortline_daily_auction_score_fallback(trades, daily_bars)
+    if not daily_fallback.empty:
+        trades = trades.merge(
+            daily_fallback,
+            on=["trade_date", "entry_trade_date", "ts_code"],
+            how="left",
+            suffixes=("", "_daily_fallback"),
+        )
+        for column in [
+            "signal_close_open",
+            "signal_close_close",
+            "signal_close_amount",
+            "entry_open_open",
+            "entry_open_close",
+            "entry_open_amount",
+        ]:
+            fallback_column = f"{column}_daily_fallback"
+            if fallback_column in trades.columns:
+                trades[column] = trades[column].combine_first(trades[fallback_column])
+        trades = trades.drop(
+            columns=[column for column in trades.columns if column.endswith("_daily_fallback")],
+            errors="ignore",
+        )
     trades["signal_close_auction_return"] = (
         trades["signal_close_close"] / trades["signal_close_open"] - 1.0
     )
@@ -1502,6 +1557,49 @@ def _attach_lhb_shortline_v1_auction_score(
         - signal_return.lt(-0.005).astype(float) * 10.0
     )
     return trades
+
+
+def _lhb_shortline_daily_auction_score_fallback(
+    trades: pd.DataFrame,
+    daily_bars: pd.DataFrame | None,
+) -> pd.DataFrame:
+    columns = [
+        "trade_date",
+        "entry_trade_date",
+        "ts_code",
+        "signal_close_open",
+        "signal_close_close",
+        "signal_close_amount",
+        "entry_open_open",
+        "entry_open_close",
+        "entry_open_amount",
+    ]
+    if trades.empty or daily_bars is None or daily_bars.empty:
+        return pd.DataFrame(columns=columns)
+    daily = _normalize_key_columns(daily_bars)
+    for column in ["open", "close", "amount"]:
+        if column not in daily.columns:
+            daily[column] = pd.NA
+        daily[column] = pd.to_numeric(daily[column], errors="coerce")
+    signal = daily.rename(
+        columns={
+            "close": "signal_close_close",
+            "amount": "signal_close_amount",
+        }
+    )[["trade_date", "ts_code", "signal_close_close", "signal_close_amount"]]
+    signal["signal_close_open"] = signal["signal_close_close"]
+    entry = daily.rename(
+        columns={
+            "trade_date": "entry_trade_date",
+            "open": "entry_open_open",
+            "amount": "entry_open_amount",
+        }
+    )[["entry_trade_date", "ts_code", "entry_open_open", "entry_open_amount"]]
+    entry["entry_open_close"] = entry["entry_open_open"]
+    keys = trades[["trade_date", "entry_trade_date", "ts_code"]].drop_duplicates().copy()
+    fallback = keys.merge(signal, on=["trade_date", "ts_code"], how="left")
+    fallback = fallback.merge(entry, on=["entry_trade_date", "ts_code"], how="left")
+    return fallback.reindex(columns=columns)
 
 
 def run_lhb_shortline_v1_lifecycle_from_frames(
@@ -1580,7 +1678,11 @@ def run_lhb_shortline_v1_lifecycle_from_frames(
     lifecycle_trades.loc[lifecycle_trades["gross_realized_return"].notna(), "realized_return"] = (
         lifecycle_trades["gross_realized_return"] - config.round_trip_cost_return
     )
-    scored = _attach_lhb_shortline_v1_auction_score(lifecycle_trades, frames.auction_open)
+    scored = _attach_lhb_shortline_v1_auction_score(
+        lifecycle_trades,
+        frames.auction_open,
+        daily_bars=frames.daily_bars,
+    )
     phase18c = build_lhb_phase18c_auction_enhanced_cash_account_backtest_v1(
         lifecycle_trades=lifecycle_trades,
         scored_candidates=scored,
