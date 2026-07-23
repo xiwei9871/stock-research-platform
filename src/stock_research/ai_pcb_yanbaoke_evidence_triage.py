@@ -263,9 +263,48 @@ def classify_relevance(
     ]
     haystack = " ".join(parts + [body_text]).casefold()
     matches = {
-        domain: tuple(signal for signal in signals if signal.casefold() in haystack)
+        domain: tuple(signal for signal in signals if _contains_signal(haystack, signal))
         for domain, signals in DOMAIN_SIGNALS.items()
     }
+    pcb_context = any(
+        _contains_signal(haystack, signal)
+        for signal in (
+            "pcb",
+            "印制电路板",
+            "高速pcb",
+            "高多层板",
+            "hdi",
+            "msap",
+            "覆铜板",
+            "ccl",
+            "铜箔",
+            "hvlp",
+            "vlp",
+            "rtf",
+        )
+    )
+    copper_context = any(
+        _contains_signal(haystack, signal)
+        for signal in ("铜箔", "copper foil", "hvlp", "vlp", "rtf")
+    )
+    copper_specific = {"铜箔", "hvlp", "vlp", "rtf", "surface profile"}
+    if matches["copper_foil"] and not (
+        copper_context or copper_specific.intersection(matches["copper_foil"])
+    ):
+        matches["copper_foil"] = ()
+    manufacturing_specific = {
+        "背钻",
+        "压合",
+        "层间对位",
+        "直接成像",
+        "pcb主轴",
+        "pcb设备",
+    }
+    if matches["manufacturing_and_test"] and not (
+        pcb_context
+        or manufacturing_specific.intersection(matches["manufacturing_and_test"])
+    ):
+        matches["manufacturing_and_test"] = ()
     domains = tuple(sorted(domain for domain, signals in matches.items() if signals))
     signals = tuple(sorted({signal for domain in domains for signal in matches[domain]}))
     return RelevanceResult(
@@ -273,6 +312,18 @@ def classify_relevance(
         relevance_domains=domains,
         matched_signals=signals,
     )
+
+
+def _contains_signal(text: str, signal: str) -> bool:
+    normalized = signal.casefold()
+    if re.fullmatch(r"[a-z0-9][a-z0-9 ._+\-/]*", normalized):
+        return bool(
+            re.search(
+                rf"(?<![a-z0-9]){re.escape(normalized)}(?![a-z0-9])",
+                text,
+            )
+        )
+    return normalized in text
 
 
 def collapse_content_identities(

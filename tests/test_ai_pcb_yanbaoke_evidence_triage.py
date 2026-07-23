@@ -58,6 +58,30 @@ def test_specific_pcb_material_terms_select_a_report():
     assert "laminate_materials" in result.relevance_domains
 
 
+def test_short_ascii_signals_do_not_match_inside_unrelated_english_words():
+    row = {
+        "report_title": "Overseas growth update",
+        "stock_name": "样本公司",
+        "content": "driving structural growth with resilient margins",
+    }
+
+    result = classify_relevance(row, body_text="platform diversification and rating update")
+
+    assert result.selected is False
+
+
+def test_generic_yield_without_pcb_context_is_not_selected():
+    row = {
+        "report_title": "先进封装良率管理研究",
+        "stock_name": "半导体公司",
+        "content": "晶圆制造良率持续改善",
+    }
+
+    result = classify_relevance(row, body_text="封装测试产线的良率提升")
+
+    assert result.selected is False
+
+
 def test_same_content_hash_collapses_to_one_document_identity():
     rows = [
         {"uuid": "u1", "content_sha256": "abc", "report_title": "Report A"},
