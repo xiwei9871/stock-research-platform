@@ -82,6 +82,31 @@ def test_generic_yield_without_pcb_context_is_not_selected():
     assert result.selected is False
 
 
+def test_single_incidental_pcb_mention_in_unrelated_company_body_is_not_selected():
+    row = {
+        "report_title": "光模块公司深度报告",
+        "stock_name": "仕佳光子",
+        "content": "高速光模块需求增长",
+    }
+
+    result = classify_relevance(row, body_text="供应链也会使用 PCB。")
+
+    assert result.selected is False
+
+
+def test_pcb_focus_company_with_body_anchor_remains_selected():
+    row = {
+        "report_title": "年度经营回顾",
+        "stock_name": "深南电路",
+        "content": "",
+    }
+
+    result = classify_relevance(row, body_text="公司从事高多层 PCB 与封装基板业务。")
+
+    assert result.selected is True
+    assert "pcb_design" in result.relevance_domains
+
+
 def test_same_content_hash_collapses_to_one_document_identity():
     rows = [
         {"uuid": "u1", "content_sha256": "abc", "report_title": "Report A"},

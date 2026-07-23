@@ -192,6 +192,38 @@ ER_SIGNAL_RULES: dict[str, dict[str, tuple[str, ...]]] = {
     },
 }
 
+PCB_FOCUS_COMPANIES = frozenset(
+    {
+        "沪电股份",
+        "深南电路",
+        "兴森科技",
+        "铜冠铜箔",
+        "联瑞新材",
+        "芯碁微装",
+        "昊志机电",
+    }
+)
+
+STRONG_METADATA_SIGNALS = (
+    "pcb",
+    "印制电路板",
+    "高速pcb",
+    "高多层板",
+    "hdi",
+    "msap",
+    "类载板",
+    "封装基板",
+    "覆铜板",
+    "ccl",
+    "铜箔",
+    "hvlp",
+    "vlp",
+    "rtf",
+    "直接成像",
+    "pcb主轴",
+    "pcb设备",
+)
+
 
 @dataclass(frozen=True)
 class RelevanceResult:
@@ -261,7 +293,8 @@ def classify_relevance(
             "content",
         )
     ]
-    haystack = " ".join(parts + [body_text]).casefold()
+    metadata_haystack = " ".join(parts).casefold()
+    haystack = f"{metadata_haystack} {body_text}".casefold()
     matches = {
         domain: tuple(signal for signal in signals if _contains_signal(haystack, signal))
         for domain, signals in DOMAIN_SIGNALS.items()
@@ -307,8 +340,22 @@ def classify_relevance(
         matches["manufacturing_and_test"] = ()
     domains = tuple(sorted(domain for domain, signals in matches.items() if signals))
     signals = tuple(sorted({signal for domain in domains for signal in matches[domain]}))
+    stock_name = str(row.get("stock_name") or "").strip()
+    metadata_has_strong_signal = any(
+        _contains_signal(metadata_haystack, signal)
+        for signal in STRONG_METADATA_SIGNALS
+    )
+    focus_company_match = stock_name in PCB_FOCUS_COMPANIES and pcb_context
+    body_has_dense_pcb_evidence = (
+        pcb_context and len(signals) >= 4 and len(domains) >= 2
+    )
     return RelevanceResult(
-        selected=bool(domains),
+        selected=bool(domains)
+        and (
+            metadata_has_strong_signal
+            or focus_company_match
+            or body_has_dense_pcb_evidence
+        ),
         relevance_domains=domains,
         matched_signals=signals,
     )
