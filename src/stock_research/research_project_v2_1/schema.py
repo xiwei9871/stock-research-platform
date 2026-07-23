@@ -28,6 +28,7 @@ SCHEMA_FILES = {
     "industry_cognition_baseline_v2_5": "industry_cognition_baseline_v2_5.schema.json",
     "evidence_gap_review_v2_6": "evidence_gap_review_v2_6.schema.json",
     "targeted_evidence_assessment_v2_7": "targeted_evidence_assessment_v2_7.schema.json",
+    "targeted_evidence_assessment_consolidated_v2_8": "targeted_evidence_assessment_consolidated_v2_8.schema.json",
 }
 
 

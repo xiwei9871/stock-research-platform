@@ -1,0 +1,32 @@
+{
+  "allowlist_id": "scope_allowlist:ai_pcb_targeted_evidence_assessment_wave_1b_consolidated_v1",
+  "baseline_commit": "a8c4459",
+  "phase": "stage_a_targeted_evidence_assessment_wave_1b_consolidated_v1",
+  "schema_version": "1.0.0",
+  "paths": [
+    "artifacts/research_projects/v2_1/analysis/ai_pcb_targeted_evidence_assessment_wave_1b_consolidated_v1.json",
+    "artifacts/research_projects/v2_1/governance/targeted_evidence_assessment_wave_1b_consolidated_exact_allowlist.json",
+    "artifacts/research_projects/v2_1/reports/ai_pcb_targeted_evidence_assessment_wave_1b_consolidated_v1.md",
+    "artifacts/research_projects/v2_1/schema/targeted_evidence_assessment_consolidated_v2_8.schema.json",
+    "scripts/build_ai_pcb_targeted_evidence_assessment_wave_1b_consolidated.py",
+    "src/stock_research/research_project_v2_1/consolidated_assessment.py",
+    "src/stock_research/research_project_v2_1/schema.py",
+    "tests/test_research_project_v2_1_consolidated_assessment.py",
+    "tests/test_research_project_v2_1_schema.py",
+    "tests/test_research_project_v2_1_wave_1b_recovery.py"
+  ],
+  "forbidden_prefixes": [
+    "artifacts/research_projects/v2_1/acquisition/",
+    "artifacts/research_projects/v2_1/admission/",
+    "artifacts/research_projects/v2_1/company_capture/",
+    "artifacts/research_projects/v2_1/portfolio/",
+    "artifacts/research_projects/v2_1/signal/",
+    "artifacts/research_projects/v2_1/stock_evaluation/",
+    "artifacts/research_projects/v2_1/strategy/",
+    "artifacts/research_projects/v2_1/watchlist/",
+    "artifacts/technology_industry_catalog/",
+    "artifacts/theme_decomposition/",
+    "dashboard/",
+    "src/stock_research/dashboard/"
+  ]
+}

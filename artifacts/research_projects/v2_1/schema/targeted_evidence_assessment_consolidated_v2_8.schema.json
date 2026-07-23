@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "targeted_evidence_assessment_consolidated_v2_8.schema.json",
+  "$defs": {
+    "non_empty_string": {"type": "string", "minLength": 1},
+    "string_array": {"type": "array", "items": {"type": "string"}},
+    "evidence_chain": {
+      "type": "object",
+      "required": ["chain_id", "source_owner", "artifact_ids", "independence_group"],
+      "properties": {
+        "chain_id": {"type": "string", "pattern": "^evidence_chain:"},
+        "source_owner": {"$ref": "#/$defs/non_empty_string"},
+        "artifact_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "pattern": "^evidence_artifact:"}},
+        "independence_group": {"$ref": "#/$defs/non_empty_string"}
+      },
+      "additionalProperties": false
+    },
+    "unresolved_target": {
+      "type": "object",
+      "required": ["target_id", "er_id", "classification", "priority", "why_unresolved", "required_human_action", "stop_condition", "future_action_authorized"],
+      "properties": {
+        "target_id": {"$ref": "#/$defs/non_empty_string"},
+        "er_id": {"enum": ["PCB-ER-A04", "PCB-ER-B01", "PCB-ER-B02", "PCB-ER-A02"]},
+        "classification": {"enum": ["machine_public_acquisition_resolved", "manual_source_resolution_candidate", "expert_technical_review_candidate", "bounded_by_public_evidence", "stop_investment_recommended"]},
+        "priority": {"enum": ["P0", "P1", "P2"]},
+        "why_unresolved": {"$ref": "#/$defs/non_empty_string"},
+        "required_human_action": {"$ref": "#/$defs/non_empty_string"},
+        "stop_condition": {"$ref": "#/$defs/non_empty_string"},
+        "future_action_authorized": {"const": false}
+      },
+      "additionalProperties": false
+    }
+  },
+  "type": "object",
+  "required": [
+    "schema_version", "artifact_type", "assessment_id", "project_id",
+    "assessment_wave", "execution_mode", "renderer_version", "input_bindings",
+    "authorization_consumed", "authorized_er_ids", "eligible_recovery_artifact_ids",
+    "canonical_representation_register", "evidence_chain_register", "atomic_claims",
+    "er_assessments", "evidence_increment_summary", "unresolved_evidence_targets",
+    "consolidated_answer", "excluded_records", "known_non_blocking_engineering_issues",
+    "governance", "provenance", "content_hash"
+  ],
+  "properties": {
+    "schema_version": {"const": "2.8.0"},
+    "artifact_type": {"const": "targeted_evidence_assessment_consolidated"},
+    "assessment_id": {"const": "targeted_evidence_assessment:ai_pcb:wave_1b_consolidated:v1"},
+    "project_id": {"$ref": "#/$defs/non_empty_string"},
+    "assessment_wave": {"const": "targeted_evidence_assessment_wave_1b_consolidated_v1"},
+    "execution_mode": {"const": "offline_read_only_consolidated_evidence_assessment"},
+    "renderer_version": {"const": "targeted_evidence_assessment_consolidated_markdown_v1"},
+    "input_bindings": {},
+    "authorization_consumed": {"const": true},
+    "authorized_er_ids": {
+      "type": "array",
+      "prefixItems": [
+        {"const": "PCB-ER-A04"},
+        {"const": "PCB-ER-B01"},
+        {"const": "PCB-ER-B02"},
+        {"const": "PCB-ER-A02"}
+      ],
+      "items": false,
+      "minItems": 4,
+      "maxItems": 4
+    },
+    "eligible_recovery_artifact_ids": {
+      "type": "array",
+      "prefixItems": [{"const": "evidence_artifact:5cf8a72e4f4c6a9043a474c5"}],
+      "items": false,
+      "minItems": 1,
+      "maxItems": 1
+    },
+    "canonical_representation_register": {"type": "array", "minItems": 2, "maxItems": 2},
+    "evidence_chain_register": {"type": "array", "items": {"$ref": "#/$defs/evidence_chain"}},
+    "atomic_claims": {"type": "array", "minItems": 1, "items": {}},
+    "er_assessments": {"type": "array", "minItems": 4, "maxItems": 4, "items": {}},
+    "evidence_increment_summary": {},
+    "unresolved_evidence_targets": {"type": "array", "minItems": 3, "maxItems": 5, "items": {"$ref": "#/$defs/unresolved_target"}},
+    "consolidated_answer": {},
+    "excluded_records": {"type": "array", "items": {}},
+    "known_non_blocking_engineering_issues": {"type": "array", "items": {}},
+    "governance": {
+      "type": "object",
+      "required": ["network_access", "new_acquisition", "recovery_acquisition", "cognition_update", "gap_review_update", "gate_update", "automatic_manual_task_authorization", "company_mapping_authorized", "stage_a2_authorized", "stage_b_authorized", "wave_2_authorized"],
+      "properties": {
+        "network_access": {"const": false},
+        "new_acquisition": {"const": false},
+        "recovery_acquisition": {"const": false},
+        "cognition_update": {"const": false},
+        "gap_review_update": {"const": false},
+        "gate_update": {"const": false},
+        "automatic_manual_task_authorization": {"const": false},
+        "company_mapping_authorized": {"const": false},
+        "stage_a2_authorized": {"const": false},
+        "stage_b_authorized": {"const": false},
+        "wave_2_authorized": {"const": false}
+      },
+      "additionalProperties": false
+    },
+    "provenance": {"$ref": "definitions_v2_1.schema.json#/$defs/provenance"},
+    "content_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  },
+  "additionalProperties": false
+}

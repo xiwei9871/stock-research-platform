@@ -19,6 +19,9 @@ from stock_research.research_project_v2_1.wave_1b_recovery import (
 )
 
 
+WAVE_1B_RECOVERY_END_COMMIT = "c1d70228b0571cd270964338c7b677686c4389f3"
+
+
 def _gate() -> dict:
     targets = []
     for index, er_id in enumerate(("PCB-ER-A04", "PCB-ER-A04", "PCB-ER-B01", "PCB-ER-B01", "PCB-ER-B02", "PCB-ER-A02", "PCB-ER-A02"), 1):
@@ -158,14 +161,10 @@ def test_recovery_pilot_exact_allowlist_contains_all_changes() -> None:
     )
     changed = set(
         subprocess.check_output(
-            ["git", "diff", "--name-only", f"{allowlist['baseline_commit']}..HEAD"],
+            ["git", "diff", "--name-only", f"{allowlist['baseline_commit']}..{WAVE_1B_RECOVERY_END_COMMIT}"],
             cwd=root,
             text=True,
         ).splitlines()
     )
-    for line in subprocess.check_output(
-        ["git", "status", "--porcelain=v1", "-uall"], cwd=root, text=True
-    ).splitlines():
-        changed.add(line[3:].split(" -> ", 1)[-1])
     assert changed <= set(allowlist["paths"])
     assert not any(path.startswith(tuple(allowlist["forbidden_prefixes"])) for path in changed)
