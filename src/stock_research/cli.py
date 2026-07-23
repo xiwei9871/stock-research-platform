@@ -1502,6 +1502,18 @@ def build_parser() -> argparse.ArgumentParser:
     tech_bottleneck_observation_outcome.add_argument("--benchmark-asset-id")
     tech_bottleneck_observation_outcome.add_argument("--horizons", default="120,250,500")
 
+    tech_bottleneck_strict_performance = subparsers.add_parser(
+        "tech-bottleneck-strict-dimension-performance",
+        help="Analyze returns and drawdowns for assets with matched bottleneck dimensions.",
+    )
+    tech_bottleneck_strict_performance.add_argument("--quality-review-csv", required=True)
+    tech_bottleneck_strict_performance.add_argument("--output-dir", required=True)
+    tech_bottleneck_strict_performance.add_argument("--start-date", required=True)
+    tech_bottleneck_strict_performance.add_argument("--end-date", required=True)
+    tech_bottleneck_strict_performance.add_argument("--adjust-type", default="qfq")
+    tech_bottleneck_strict_performance.add_argument("--service", default="stock_research")
+    tech_bottleneck_strict_performance.add_argument("--horizons", default="20,60,120,250")
+
     tech_bottleneck_product = subparsers.add_parser(
         "tech-bottleneck-official-disclosure-product-backfill",
         help="Backfill official disclosure product revenue evidence for tech bottleneck candidates.",
@@ -4975,6 +4987,21 @@ def main_for_args(argv: list[str] | None = None) -> None:
             output_dir=Path(args.output_dir),
             source_manifest_path=Path(args.source_manifest) if args.source_manifest else None,
             benchmark_asset_id=args.benchmark_asset_id,
+            horizons=[int(item.strip()) for item in str(args.horizons).split(",") if item.strip()],
+        )
+        print(json.dumps({key: str(value) for key, value in paths.items()}, ensure_ascii=False, indent=2))
+    elif args.command == "tech-bottleneck-strict-dimension-performance":
+        from stock_research.tech_bottleneck_strict_dimension_performance import (
+            run_strict_dimension_performance_from_files,
+        )
+
+        paths = run_strict_dimension_performance_from_files(
+            quality_review_csv=Path(args.quality_review_csv),
+            output_dir=Path(args.output_dir),
+            start_date=args.start_date,
+            end_date=args.end_date,
+            adjust_type=args.adjust_type,
+            service=args.service,
             horizons=[int(item.strip()) for item in str(args.horizons).split(",") if item.strip()],
         )
         print(json.dumps({key: str(value) for key, value in paths.items()}, ensure_ascii=False, indent=2))
