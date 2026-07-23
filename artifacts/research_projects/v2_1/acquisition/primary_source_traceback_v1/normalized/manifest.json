@@ -1,0 +1,14 @@
+[
+  {
+    "normalization_status": "normalized",
+    "normalized_document_hash": "11d12cab072ef7d73aff150fae6865df76e3353de549f7f7f8ac1ad9b1da9ebd",
+    "normalized_document_id": "normalized_document:ddb90d268b7abd4114702aae",
+    "source_candidate_id": "traceback_source_candidate:novoray_spherical_silica_product"
+  },
+  {
+    "normalization_status": "normalized",
+    "normalized_document_hash": "b58aa71e0a034adefa40e5385b644e4841d1eb2108e3b00bffeeac2ada3417d2",
+    "normalized_document_id": "normalized_document:129d59b80c64f823eeeddb0f",
+    "source_candidate_id": "traceback_source_candidate:novoray_ccl_application"
+  }
+]

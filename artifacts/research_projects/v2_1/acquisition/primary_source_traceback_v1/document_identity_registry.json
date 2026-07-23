@@ -1,0 +1,932 @@
+{
+  "artifact_role": "primary_source_traceback",
+  "common_origin_groups": {
+    "group_id": "common_origin:38c17ff3d93a0941",
+    "independent_chain_count_must_not_increase_without_distinct_original_data_or_method": true,
+    "member_target_ids": [
+      "traceback_target:ai_pcb:broker_report:novoray_deep_20260615:v1",
+      "traceback_target:ai_pcb:broker_report:novoray_deep_20260614:v1"
+    ],
+    "provisional_evidence_chain_count": 1
+  },
+  "direct_er_evidence_admission": false,
+  "document_identities": [
+    {
+      "candidate_authors": [],
+      "candidate_document_number": null,
+      "candidate_doi": null,
+      "candidate_organization": "江苏联瑞新材料股份有限公司",
+      "candidate_source_class": "official_product_datasheet",
+      "candidate_standard_number": null,
+      "candidate_title": "联瑞新材 NOVOPOWDER DQ 球形硅微粉产品参数",
+      "candidate_url": "https://www.novoray.com/index.php/product/content/id/18/proid/7.html",
+      "citation_specificity": "generic_company_material",
+      "common_origin_group": "common_origin:38c17ff3d93a0941",
+      "eligible_for_future_assessment_candidate": true,
+      "formal_acquisition_authorized": true,
+      "identity_confidence": "high",
+      "identity_evidence": [
+        "official_domain_and_page_content"
+      ],
+      "identity_status": "confirmed",
+      "originating_claim_ids": [
+        "broker_claim:0a01c0739848200426ce3f43",
+        "broker_claim:0a36cf84ebbd8a064c167bb9",
+        "broker_claim:11662b09b724c18efb57f1a8",
+        "broker_claim:21195a3589295594ab15c46d",
+        "broker_claim:2e8be75265dd661122769388",
+        "broker_claim:3af3fa1f9b4ec9e4185a9521",
+        "broker_claim:42be2beb62cdafb1371df134",
+        "broker_claim:42dd186e1b5bf479cb9cffdc",
+        "broker_claim:47bef8f5c58a097ac1f45d03",
+        "broker_claim:4dec9d4e4266ce6fab52375b",
+        "broker_claim:5ef06006c99d7b17146f2481",
+        "broker_claim:66b770d3d85039c61b9696da",
+        "broker_claim:68c1f07759ee6611436409e9",
+        "broker_claim:6dc91cc84b35e5622312542c",
+        "broker_claim:996959ad7b1fe1f6af657b00",
+        "broker_claim:a2a56c5cfdda4b2d0d0d325a",
+        "broker_claim:ae08d40b2b630e97a5aa29c5",
+        "broker_claim:bdde8429f37cff8b1c60eeba",
+        "broker_claim:cf1bbf5387bb9061bf92d736",
+        "broker_claim:d5f21d5059c75d7a6b191f30",
+        "broker_claim:e3e77b0b72735eed43cac4e5",
+        "broker_claim:e41d8430e55810b87def8ae3"
+      ],
+      "originating_report_ids": [
+        "broker_report:3b697a2a00bf2ac055ba5a3b",
+        "broker_report:43370b67292abbed56df6855"
+      ],
+      "required_content_class": "official_product_datasheet",
+      "source_candidate_id": "traceback_source_candidate:novoray_spherical_silica_product"
+    },
+    {
+      "candidate_authors": [],
+      "candidate_document_number": null,
+      "candidate_doi": null,
+      "candidate_organization": "江苏联瑞新材料股份有限公司",
+      "candidate_source_class": "company_webpage",
+      "candidate_standard_number": null,
+      "candidate_title": "联瑞新材电子与电器行业覆铜板应用说明",
+      "candidate_url": "https://www.novoray.com/index.php/application/page/id/34.html",
+      "citation_specificity": "generic_company_material",
+      "common_origin_group": "common_origin:38c17ff3d93a0941",
+      "eligible_for_future_assessment_candidate": false,
+      "formal_acquisition_authorized": true,
+      "identity_confidence": "high",
+      "identity_evidence": [
+        "official_domain_and_page_content"
+      ],
+      "identity_status": "confirmed",
+      "originating_claim_ids": [
+        "broker_claim:0a01c0739848200426ce3f43",
+        "broker_claim:0a36cf84ebbd8a064c167bb9",
+        "broker_claim:11662b09b724c18efb57f1a8",
+        "broker_claim:21195a3589295594ab15c46d",
+        "broker_claim:2e8be75265dd661122769388",
+        "broker_claim:3af3fa1f9b4ec9e4185a9521",
+        "broker_claim:42be2beb62cdafb1371df134",
+        "broker_claim:42dd186e1b5bf479cb9cffdc",
+        "broker_claim:47bef8f5c58a097ac1f45d03",
+        "broker_claim:4dec9d4e4266ce6fab52375b",
+        "broker_claim:5ef06006c99d7b17146f2481",
+        "broker_claim:66b770d3d85039c61b9696da",
+        "broker_claim:68c1f07759ee6611436409e9",
+        "broker_claim:6dc91cc84b35e5622312542c",
+        "broker_claim:996959ad7b1fe1f6af657b00",
+        "broker_claim:a2a56c5cfdda4b2d0d0d325a",
+        "broker_claim:ae08d40b2b630e97a5aa29c5",
+        "broker_claim:bdde8429f37cff8b1c60eeba",
+        "broker_claim:cf1bbf5387bb9061bf92d736",
+        "broker_claim:d5f21d5059c75d7a6b191f30",
+        "broker_claim:e3e77b0b72735eed43cac4e5",
+        "broker_claim:e41d8430e55810b87def8ae3"
+      ],
+      "originating_report_ids": [
+        "broker_report:3b697a2a00bf2ac055ba5a3b",
+        "broker_report:43370b67292abbed56df6855"
+      ],
+      "required_content_class": "company_webpage",
+      "source_candidate_id": "traceback_source_candidate:novoray_ccl_application"
+    },
+    {
+      "candidate_authors": [
+        "杨维生"
+      ],
+      "candidate_document_number": null,
+      "candidate_doi": null,
+      "candidate_organization": null,
+      "candidate_source_class": "formal_document",
+      "candidate_standard_number": null,
+      "candidate_title": "AI 产品用印制电路板对覆铜板性能要求解析",
+      "candidate_url": null,
+      "citation_specificity": "exact_document",
+      "common_origin_group": null,
+      "formal_acquisition_authorized": false,
+      "identity_confidence": "medium",
+      "identity_evidence": [
+        "broker_citation:64d2d8bc265e707fdce15025"
+      ],
+      "identity_status": "provisional",
+      "originating_candidate_ids": [
+        "traceback_source_candidate:26c47430cf30ba4797464378"
+      ],
+      "originating_claim_ids": [
+        "broker_claim:0d3d46aa2ae7b2fa6a346750",
+        "broker_claim:a0f75c5bacd30a37fa6b4784",
+        "broker_claim:e2c4dae92168df70111774e8"
+      ],
+      "originating_report_ids": [
+        "broker_report:0e65e812de2abb18761fdaa5"
+      ],
+      "provisional_source_chain_count": 1,
+      "source_candidate_id": "traceback_source_candidate:26c47430cf30ba4797464378"
+    },
+    {
+      "candidate_authors": [
+        "龚永林"
+      ],
+      "candidate_document_number": null,
+      "candidate_doi": null,
+      "candidate_organization": null,
+      "candidate_source_class": "formal_document",
+      "candidate_standard_number": null,
+      "candidate_title": "HDI 板、UHDI 板和类载板、载板",
+      "candidate_url": null,
+      "citation_specificity": "exact_document",
+      "common_origin_group": null,
+      "formal_acquisition_authorized": false,
+      "identity_confidence": "medium",
+      "identity_evidence": [
+        "broker_citation:48a33b71f49e9d5bb09a3f5a"
+      ],
+      "identity_status": "provisional",
+      "originating_candidate_ids": [
+        "traceback_source_candidate:03dcb102c59b988b1cd3864c"
+      ],
+      "originating_claim_ids": [
+        "broker_claim:50ceb137c5e70416a52f692e",
+        "broker_claim:6155205c8ea9988cf4347e99",
+        "broker_claim:cec2f85db4f326f8cf2cfdca",
+        "broker_claim:d6efd90384a2fb3a5d87d980"
+      ],
+      "originating_report_ids": [
+        "broker_report:0e65e812de2abb18761fdaa5"
+      ],
+      "provisional_source_chain_count": 1,
+      "source_candidate_id": "traceback_source_candidate:03dcb102c59b988b1cd3864c"
+    },
+    {
+      "candidate_authors": [
+        "祝大同"
+      ],
+      "candidate_document_number": null,
+      "candidate_doi": null,
+      "candidate_organization": null,
+      "candidate_source_class": "formal_document",
+      "candidate_standard_number": null,
+      "candidate_title": "印制电路板用高端电子铜箔及其技术新发展（上）",
+      "candidate_url": null,
+      "citation_specificity": "exact_document",
+      "common_origin_group": null,
+      "formal_acquisition_authorized": false,
+      "identity_confidence": "medium",
+      "identity_evidence": [
+        "broker_citation:ceea1b156c8f4b3c6458c0a8"
+      ],
+      "identity_status": "provisional",
+      "originating_candidate_ids": [
+        "traceback_source_candidate:205c905f98b64ba7c2183edd",
+        "traceback_source_candidate:ad61d428721dc898cbf651ee"
+      ],
+      "originating_claim_ids": [
+        "broker_claim:06d92f1caa761c0463347ac4",
+        "broker_claim:111dae567697112db7403b7f",
+        "broker_claim:13218d65c96edccb63ebc5bc",
+        "broker_claim:62a599cb9a67bbbf5f068009",
+        "broker_claim:69ae636adef2d88c7d3d2790",
+        "broker_claim:77d94e4d43e3c6b60bbac13a",
+        "broker_claim:917f800bc494cb6bfdfd4095"
+      ],
+      "originating_report_ids": [
+        "broker_report:0e65e812de2abb18761fdaa5"
+      ],
+      "provisional_source_chain_count": 1,
+      "source_candidate_id": "traceback_source_candidate:ad61d428721dc898cbf651ee"
+    },
+    {
+      "candidate_authors": [
+        "祝大同"
+      ],
+      "candidate_document_number": null,
+      "candidate_doi": null,
+      "candidate_organization": null,
+      "candidate_source_class": "formal_document",
+      "candidate_standard_number": null,
+      "candidate_title": "印制电路板用高端电子铜箔及其技术新发展（下）",
+      "candidate_url": null,
+      "citation_specificity": "exact_document",
+      "common_origin_group": null,
+      "formal_acquisition_authorized": false,
+      "identity_confidence": "medium",
+      "identity_evidence": [
+        "broker_citation:6885295f28e5ce6443345fb6"
+      ],
+      "identity_status": "provisional",
+      "originating_candidate_ids": [
+        "traceback_source_candidate:61ae0fae6c1598ad14bb10e5"
+      ],
+      "originating_claim_ids": [],
+      "originating_report_ids": [
+        "broker_report:0e65e812de2abb18761fdaa5"
+      ],
+      "provisional_source_chain_count": 1,
+      "source_candidate_id": "traceback_source_candidate:61ae0fae6c1598ad14bb10e5"
+    },
+    {
+      "candidate_authors": [],
+      "candidate_document_number": null,
+      "candidate_doi": null,
+      "candidate_organization": "QY Research",
+      "candidate_source_class": "formal_document",
+      "candidate_standard_number": null,
+      "candidate_title": "热界面材料概况及性能影响因素",
+      "candidate_url": null,
+      "citation_specificity": "exact_document",
+      "common_origin_group": "common_origin:38c17ff3d93a0941",
+      "formal_acquisition_authorized": false,
+      "identity_confidence": "medium",
+      "identity_evidence": [
+        "broker_citation:ab6d9028db572b036320f4f9"
+      ],
+      "identity_status": "provisional",
+      "originating_candidate_ids": [
+        "traceback_source_candidate:83ef63ce7191560a9920038f",
+        "traceback_source_candidate:8bda2bb298afddd7026d4e6c"
+      ],
+      "originating_claim_ids": [],
+      "originating_report_ids": [
+        "broker_report:3b697a2a00bf2ac055ba5a3b",
+        "broker_report:43370b67292abbed56df6855"
+      ],
+      "provisional_source_chain_count": 1,
+      "source_candidate_id": "traceback_source_candidate:8bda2bb298afddd7026d4e6c"
+    },
+    {
+      "candidate_authors": [
+        "张杰"
+      ],
+      "candidate_document_number": null,
+      "candidate_doi": null,
+      "candidate_organization": null,
+      "candidate_source_class": "formal_document",
+      "candidate_standard_number": null,
+      "candidate_title": "第三代超低轮廓电解铜箔 V-HS3 性能研究",
+      "candidate_url": null,
+      "citation_specificity": "exact_document",
+      "common_origin_group": null,
+      "formal_acquisition_authorized": false,
+      "identity_confidence": "medium",
+      "identity_evidence": [
+        "broker_citation:e36221625202faf1d2435643"
+      ],
+      "identity_status": "provisional",
+      "originating_candidate_ids": [
+        "traceback_source_candidate:6a1e12b41b87fc3c484c2926",
+        "traceback_source_candidate:db22941b9cc1d85de6379b7f"
+      ],
+      "originating_claim_ids": [
+        "broker_claim:f4a62e1d165690f5a67c1864"
+      ],
+      "originating_report_ids": [
+        "broker_report:0e65e812de2abb18761fdaa5"
+      ],
+      "provisional_source_chain_count": 1,
+      "source_candidate_id": "traceback_source_candidate:6a1e12b41b87fc3c484c2926"
+    },
+    {
+      "candidate_authors": [
+        "姜洪权"
+      ],
+      "candidate_document_number": null,
+      "candidate_doi": null,
+      "candidate_organization": null,
+      "candidate_source_class": "formal_document",
+      "candidate_standard_number": null,
+      "candidate_title": "融合设备状态和产品要求的电解铜箔制造工艺参数优化",
+      "candidate_url": null,
+      "citation_specificity": "exact_document",
+      "common_origin_group": null,
+      "formal_acquisition_authorized": false,
+      "identity_confidence": "medium",
+      "identity_evidence": [
+        "broker_citation:ff42865122ccc610a087353d"
+      ],
+      "identity_status": "provisional",
+      "originating_candidate_ids": [
+        "traceback_source_candidate:cf7d2ced1b71123cb855b81f"
+      ],
+      "originating_claim_ids": [
+        "broker_claim:71c059620eadb975895b4697",
+        "broker_claim:c01ae158a5614605ec2ed35e",
+        "broker_claim:e51a938f2f90117612ee44c9",
+        "broker_claim:fd5bb98ea384fc20881b96a4"
+      ],
+      "originating_report_ids": [
+        "broker_report:0e65e812de2abb18761fdaa5"
+      ],
+      "provisional_source_chain_count": 1,
+      "source_candidate_id": "traceback_source_candidate:cf7d2ced1b71123cb855b81f"
+    },
+    {
+      "candidate_authors": [],
+      "candidate_document_number": null,
+      "candidate_doi": null,
+      "candidate_organization": "CNKI",
+      "candidate_source_class": "company_material",
+      "candidate_standard_number": null,
+      "candidate_title": "CNKI",
+      "candidate_url": null,
+      "citation_specificity": "partial_identity",
+      "common_origin_group": "common_origin:38c17ff3d93a0941",
+      "formal_acquisition_authorized": false,
+      "identity_confidence": "low",
+      "identity_evidence": [
+        "broker_citation:9abfc0517a6e049c73163b53"
+      ],
+      "identity_status": "provisional",
+      "originating_candidate_ids": [
+        "traceback_source_candidate:a495c8b2a1ff0f5c9ba57640",
+        "traceback_source_candidate:b511db6465cdd57135fa3788"
+      ],
+      "originating_claim_ids": [
+        "broker_claim:0a36cf84ebbd8a064c167bb9",
+        "broker_claim:14ed68920863eb29896778e8",
+        "broker_claim:47bef8f5c58a097ac1f45d03",
+        "broker_claim:a2a56c5cfdda4b2d0d0d325a",
+        "broker_claim:d64ee964e8b1b429f9348764",
+        "broker_claim:e3e77b0b72735eed43cac4e5"
+      ],
+      "originating_report_ids": [
+        "broker_report:3b697a2a00bf2ac055ba5a3b",
+        "broker_report:43370b67292abbed56df6855"
+      ],
+      "provisional_source_chain_count": 1,
+      "source_candidate_id": "traceback_source_candidate:a495c8b2a1ff0f5c9ba57640"
+    },
+    {
+      "candidate_authors": [],
+      "candidate_document_number": null,
+      "candidate_doi": null,
+      "candidate_organization": "Prismark",
+      "candidate_source_class": "company_material",
+      "candidate_standard_number": null,
+      "candidate_title": "Prismark",
+      "candidate_url": null,
+      "citation_specificity": "partial_identity",
+      "common_origin_group": "common_origin:38c17ff3d93a0941",
+      "formal_acquisition_authorized": false,
+      "identity_confidence": "low",
+      "identity_evidence": [
+        "broker_citation:53d811eb06ff710e070f276c"
+      ],
+      "identity_status": "provisional",
+      "originating_candidate_ids": [
+        "traceback_source_candidate:0b46bdfc7b50a40f4b579f30",
+        "traceback_source_candidate:b7d4003ad9aaf00c8c1f1a32"
+      ],
+      "originating_claim_ids": [
+        "broker_claim:2ad8306d2d1fb10037ed3bb6",
+        "broker_claim:3d3805b0551c295d0bf03670",
+        "broker_claim:8c12ea65b4d41f215bf19e63",
+        "broker_claim:9ed522ad12e522bade5b54b5"
+      ],
+      "originating_report_ids": [
+        "broker_report:3b697a2a00bf2ac055ba5a3b",
+        "broker_report:43370b67292abbed56df6855"
+      ],
+      "provisional_source_chain_count": 1,
+      "source_candidate_id": "traceback_source_candidate:b7d4003ad9aaf00c8c1f1a32"
+    },
+    {
+      "candidate_authors": [],
+      "candidate_document_number": null,
+      "candidate_doi": null,
+      "candidate_organization": "公司年报",
+      "candidate_source_class": "company_material",
+      "candidate_standard_number": null,
+      "candidate_title": "公司年报",
+      "candidate_url": null,
+      "citation_specificity": "partial_identity",
+      "common_origin_group": null,
+      "formal_acquisition_authorized": false,
+      "identity_confidence": "low",
+      "identity_evidence": [
+        "broker_citation:8b53175c0665f96c6e935222"
+      ],
+      "identity_status": "provisional",
+      "originating_candidate_ids": [
+        "traceback_source_candidate:3dcba2ae1cc8059e449d4cfd",
+        "traceback_source_candidate:e2bab3858a7e467135739651"
+      ],
+      "originating_claim_ids": [],
+      "originating_report_ids": [
+        "broker_report:0e65e812de2abb18761fdaa5"
+      ],
+      "provisional_source_chain_count": 1,
+      "source_candidate_id": "traceback_source_candidate:3dcba2ae1cc8059e449d4cfd"
+    },
+    {
+      "candidate_authors": [],
+      "candidate_document_number": null,
+      "candidate_doi": null,
+      "candidate_organization": "公司年报",
+      "candidate_source_class": "company_material",
+      "candidate_standard_number": null,
+      "candidate_title": "公司年报",
+      "candidate_url": null,
+      "citation_specificity": "partial_identity",
+      "common_origin_group": "common_origin:38c17ff3d93a0941",
+      "formal_acquisition_authorized": false,
+      "identity_confidence": "low",
+      "identity_evidence": [
+        "broker_citation:6e9054298bafef28fee7773a"
+      ],
+      "identity_status": "provisional",
+      "originating_candidate_ids": [
+        "traceback_source_candidate:37ed723dbdfcda2f8cba3ec1",
+        "traceback_source_candidate:58acc0ae33404224c14ab68d",
+        "traceback_source_candidate:d98533804324b8684066ad01",
+        "traceback_source_candidate:dbbe075567772cadc7558192"
+      ],
+      "originating_claim_ids": [],
+      "originating_report_ids": [
+        "broker_report:3b697a2a00bf2ac055ba5a3b",
+        "broker_report:43370b67292abbed56df6855"
+      ],
+      "provisional_source_chain_count": 1,
+      "source_candidate_id": "traceback_source_candidate:dbbe075567772cadc7558192"
+    },
+    {
+      "candidate_authors": [],
+      "candidate_document_number": null,
+      "candidate_doi": null,
+      "candidate_organization": "公司招股书",
+      "candidate_source_class": "company_material",
+      "candidate_standard_number": null,
+      "candidate_title": "公司招股书",
+      "candidate_url": null,
+      "citation_specificity": "partial_identity",
+      "common_origin_group": "common_origin:38c17ff3d93a0941",
+      "formal_acquisition_authorized": false,
+      "identity_confidence": "low",
+      "identity_evidence": [
+        "broker_citation:ff0acc5150eb4f677512f1a2"
+      ],
+      "identity_status": "provisional",
+      "originating_candidate_ids": [
+        "traceback_source_candidate:0236ee5367a40ca9fe691fe3",
+        "traceback_source_candidate:05dbc95300e5362debb0e7ed",
+        "traceback_source_candidate:2995fc57273194e3afbff548",
+        "traceback_source_candidate:2c4d6d06796df04376cdf992",
+        "traceback_source_candidate:418f6a07df16430cc21a5543",
+        "traceback_source_candidate:497dbf3da8b9a877dd56ad9a",
+        "traceback_source_candidate:58ce9adfc4b766f59e17ec08",
+        "traceback_source_candidate:5c22de5ed12b64c49f9d2111",
+        "traceback_source_candidate:6b4e3692033ebc1ccb90f17c",
+        "traceback_source_candidate:7d08f1e02d2b915d18552262",
+        "traceback_source_candidate:7d446747fd70400719be3784",
+        "traceback_source_candidate:83518dea5d8b45e8611c0b5b",
+        "traceback_source_candidate:870f3414c36126f9d5bb091e",
+        "traceback_source_candidate:908c522a7515cb28bb7c3ca8",
+        "traceback_source_candidate:a1a6f8a44744434a24bfb12f",
+        "traceback_source_candidate:a4c266448e55df73e52a5048",
+        "traceback_source_candidate:ae36302834cd27e3d18676fb",
+        "traceback_source_candidate:cb1551ceb1cc99cc45a8b69e",
+        "traceback_source_candidate:cb910acf51bd072958b92c42",
+        "traceback_source_candidate:d33caa0f2cc62ecd8482dc05",
+        "traceback_source_candidate:d64d3dace14418ed7bc99acb",
+        "traceback_source_candidate:da53f487d622230b9ff21935",
+        "traceback_source_candidate:dc9e65a55a537130db339ce6",
+        "traceback_source_candidate:e592e3d8abbdf433f7378f1e",
+        "traceback_source_candidate:ee5841d738b2089f087ca510",
+        "traceback_source_candidate:f291ecfb3d2f2cddbff1d31a",
+        "traceback_source_candidate:f3203ecc88ecc027a9d43a6c",
+        "traceback_source_candidate:f57ee79bd6dc6dc61dc91cd6"
+      ],
+      "originating_claim_ids": [
+        "broker_claim:0a01c0739848200426ce3f43",
+        "broker_claim:11662b09b724c18efb57f1a8",
+        "broker_claim:4dec9d4e4266ce6fab52375b",
+        "broker_claim:5ef06006c99d7b17146f2481",
+        "broker_claim:66b770d3d85039c61b9696da",
+        "broker_claim:68c1f07759ee6611436409e9",
+        "broker_claim:6dc91cc84b35e5622312542c",
+        "broker_claim:cf1bbf5387bb9061bf92d736"
+      ],
+      "originating_report_ids": [
+        "broker_report:3b697a2a00bf2ac055ba5a3b",
+        "broker_report:43370b67292abbed56df6855"
+      ],
+      "provisional_source_chain_count": 1,
+      "source_candidate_id": "traceback_source_candidate:e592e3d8abbdf433f7378f1e"
+    },
+    {
+      "candidate_authors": [],
+      "candidate_document_number": null,
+      "candidate_doi": null,
+      "candidate_organization": "华经产业研究院",
+      "candidate_source_class": "company_material",
+      "candidate_standard_number": null,
+      "candidate_title": "华经产业研究院 / 高工产业研究院",
+      "candidate_url": null,
+      "citation_specificity": "partial_identity",
+      "common_origin_group": "common_origin:38c17ff3d93a0941",
+      "formal_acquisition_authorized": false,
+      "identity_confidence": "low",
+      "identity_evidence": [
+        "broker_citation:0190f6c93210b54b0748167b"
+      ],
+      "identity_status": "provisional",
+      "originating_candidate_ids": [
+        "traceback_source_candidate:aa7eb9fac275ea9774173d47",
+        "traceback_source_candidate:d9d057dfd67ffe629387cbac"
+      ],
+      "originating_claim_ids": [],
+      "originating_report_ids": [
+        "broker_report:3b697a2a00bf2ac055ba5a3b",
+        "broker_report:43370b67292abbed56df6855"
+      ],
+      "provisional_source_chain_count": 1,
+      "source_candidate_id": "traceback_source_candidate:aa7eb9fac275ea9774173d47"
+    },
+    {
+      "candidate_authors": [],
+      "candidate_document_number": null,
+      "candidate_doi": null,
+      "candidate_organization": "高工产业研究院",
+      "candidate_source_class": "company_material",
+      "candidate_standard_number": null,
+      "candidate_title": "高工产业研究院",
+      "candidate_url": null,
+      "citation_specificity": "partial_identity",
+      "common_origin_group": "common_origin:38c17ff3d93a0941",
+      "formal_acquisition_authorized": false,
+      "identity_confidence": "low",
+      "identity_evidence": [
+        "broker_citation:f4f90df2bed05ffaa9a3dfce"
+      ],
+      "identity_status": "provisional",
+      "originating_candidate_ids": [
+        "traceback_source_candidate:2be414a6ba9c993813c4e128",
+        "traceback_source_candidate:f3cba7f1de6c6d36be79b181"
+      ],
+      "originating_claim_ids": [],
+      "originating_report_ids": [
+        "broker_report:3b697a2a00bf2ac055ba5a3b",
+        "broker_report:43370b67292abbed56df6855"
+      ],
+      "provisional_source_chain_count": 1,
+      "source_candidate_id": "traceback_source_candidate:f3cba7f1de6c6d36be79b181"
+    },
+    {
+      "candidate_authors": [],
+      "candidate_document_number": null,
+      "candidate_doi": null,
+      "candidate_organization": "公司公告",
+      "candidate_source_class": "company_material",
+      "candidate_standard_number": null,
+      "candidate_title": "公司公告",
+      "candidate_url": null,
+      "citation_specificity": "generic_company_material",
+      "common_origin_group": null,
+      "formal_acquisition_authorized": false,
+      "identity_confidence": "low",
+      "identity_evidence": [
+        "broker_citation:1d8715ee99a1aafe9dbce613"
+      ],
+      "identity_status": "unresolved",
+      "originating_candidate_ids": [
+        "traceback_source_candidate:1b642b612dcd7176ab911330",
+        "traceback_source_candidate:1bb10e4d827b8498766b5dbb",
+        "traceback_source_candidate:3d5d3ee0476df4bf8208ac86",
+        "traceback_source_candidate:54013963fbd7968d6aa870e5",
+        "traceback_source_candidate:56db994a12883a1da193e9e9",
+        "traceback_source_candidate:574bfe0661aae4972eb9488b",
+        "traceback_source_candidate:5f460adb2dbbc337b87f39ec",
+        "traceback_source_candidate:619c1163738211bae123c1af",
+        "traceback_source_candidate:6ebcd9b7385ded6857585e7a",
+        "traceback_source_candidate:aa18c9f9e236694ccad4fa3e",
+        "traceback_source_candidate:af233380219c8842dc59e5b0",
+        "traceback_source_candidate:b339dbcf4b24f5870ce8f1e3",
+        "traceback_source_candidate:bc70b2674d9cff24ba656b88",
+        "traceback_source_candidate:cc9ca359037505f2fd0392e6",
+        "traceback_source_candidate:cd27d01b18c6b01173b77fa6",
+        "traceback_source_candidate:fd1d9f38188ebc7e2478c2b8"
+      ],
+      "originating_claim_ids": [
+        "broker_claim:03976a6f8610172ed8683197",
+        "broker_claim:26c4234e792762165187672b",
+        "broker_claim:4a14572576eeeb18f9fbc83f",
+        "broker_claim:803b5846b4142953d21fd94c",
+        "broker_claim:9672a2b5e8992923db77d530",
+        "broker_claim:b7a5df73a1901792483955c5",
+        "broker_claim:c521a5c1ee28b7604d9c7d08"
+      ],
+      "originating_report_ids": [
+        "broker_report:0e65e812de2abb18761fdaa5",
+        "broker_report:6d866e6380d40849f8c72c76"
+      ],
+      "provisional_source_chain_count": 1,
+      "source_candidate_id": "traceback_source_candidate:56db994a12883a1da193e9e9"
+    },
+    {
+      "candidate_authors": [],
+      "candidate_document_number": null,
+      "candidate_doi": null,
+      "candidate_organization": "公司公告",
+      "candidate_source_class": "company_material",
+      "candidate_standard_number": null,
+      "candidate_title": "公司公告",
+      "candidate_url": null,
+      "citation_specificity": "generic_company_material",
+      "common_origin_group": "common_origin:38c17ff3d93a0941",
+      "formal_acquisition_authorized": false,
+      "identity_confidence": "low",
+      "identity_evidence": [
+        "broker_citation:aecd1153858b3b175b400920"
+      ],
+      "identity_status": "unresolved",
+      "originating_candidate_ids": [
+        "traceback_source_candidate:099405dc5402d8968f8a9f40",
+        "traceback_source_candidate:218ef243a409c340247b1e92",
+        "traceback_source_candidate:243db6be3dece3595de06c9f",
+        "traceback_source_candidate:27218a0f88b575226381b599",
+        "traceback_source_candidate:2efa83ab79603762bc8b517f",
+        "traceback_source_candidate:4824041409c23211390b8e01",
+        "traceback_source_candidate:6743ce47c57f8aa2376910a4",
+        "traceback_source_candidate:98c249747206a4169c96b4c6",
+        "traceback_source_candidate:a1f37d5d0f59b38b1bbdea34",
+        "traceback_source_candidate:aa6619f1b9a735502f9ccd4f",
+        "traceback_source_candidate:ab5792de5f6021d3f2e747c9",
+        "traceback_source_candidate:b274536584568c176d193b1d",
+        "traceback_source_candidate:bb87278e23f985575e480374",
+        "traceback_source_candidate:d52878e06fe7f812b371d9de",
+        "traceback_source_candidate:d66ad9315a5ee0a972a8ac36",
+        "traceback_source_candidate:f713809e59765e4b4996cc55"
+      ],
+      "originating_claim_ids": [],
+      "originating_report_ids": [
+        "broker_report:3b697a2a00bf2ac055ba5a3b",
+        "broker_report:43370b67292abbed56df6855"
+      ],
+      "provisional_source_chain_count": 1,
+      "source_candidate_id": "traceback_source_candidate:aa6619f1b9a735502f9ccd4f"
+    },
+    {
+      "candidate_authors": [],
+      "candidate_document_number": null,
+      "candidate_doi": null,
+      "candidate_organization": "公司官网",
+      "candidate_source_class": "company_material",
+      "candidate_standard_number": null,
+      "candidate_title": "公司官网",
+      "candidate_url": null,
+      "citation_specificity": "generic_company_material",
+      "common_origin_group": null,
+      "formal_acquisition_authorized": false,
+      "identity_confidence": "low",
+      "identity_evidence": [
+        "broker_citation:e0370d2fd8d5398db1f624ca"
+      ],
+      "identity_status": "unresolved",
+      "originating_candidate_ids": [
+        "traceback_source_candidate:144b5d3dfef47d65f44f911d",
+        "traceback_source_candidate:445f18eb72c32f6703a4c2cf"
+      ],
+      "originating_claim_ids": [
+        "broker_claim:3564f848c375ec5589b3e3ec",
+        "broker_claim:891c101e0020a1d07fb20552",
+        "broker_claim:c6882bca1d456d9680758fbc",
+        "broker_claim:e1a86f52c1f54f923e798c42"
+      ],
+      "originating_report_ids": [
+        "broker_report:0e65e812de2abb18761fdaa5",
+        "broker_report:6d866e6380d40849f8c72c76"
+      ],
+      "provisional_source_chain_count": 1,
+      "source_candidate_id": "traceback_source_candidate:445f18eb72c32f6703a4c2cf"
+    },
+    {
+      "candidate_authors": [],
+      "candidate_document_number": null,
+      "candidate_doi": null,
+      "candidate_organization": "公司官网",
+      "candidate_source_class": "company_material",
+      "candidate_standard_number": null,
+      "candidate_title": "公司官网",
+      "candidate_url": null,
+      "citation_specificity": "generic_company_material",
+      "common_origin_group": "common_origin:38c17ff3d93a0941",
+      "formal_acquisition_authorized": false,
+      "identity_confidence": "low",
+      "identity_evidence": [
+        "broker_citation:9f85156aa51a92bc43fccbf1"
+      ],
+      "identity_status": "unresolved",
+      "originating_candidate_ids": [
+        "traceback_source_candidate:0bd9168881ecb1d2898aed77",
+        "traceback_source_candidate:54ad7f5f1c636714341f96ac",
+        "traceback_source_candidate:5825d96dd602a7a8624ba916",
+        "traceback_source_candidate:855fce0ed68bdaf26e17a396"
+      ],
+      "originating_claim_ids": [],
+      "originating_report_ids": [
+        "broker_report:3b697a2a00bf2ac055ba5a3b",
+        "broker_report:43370b67292abbed56df6855"
+      ],
+      "provisional_source_chain_count": 1,
+      "source_candidate_id": "traceback_source_candidate:54ad7f5f1c636714341f96ac"
+    },
+    {
+      "candidate_authors": [],
+      "candidate_document_number": null,
+      "candidate_doi": null,
+      "candidate_organization": "Prismark",
+      "candidate_source_class": "secondary_source",
+      "candidate_standard_number": null,
+      "candidate_title": "Prismark",
+      "candidate_url": null,
+      "citation_specificity": "secondary_source",
+      "common_origin_group": null,
+      "formal_acquisition_authorized": false,
+      "identity_confidence": "low",
+      "identity_evidence": [
+        "broker_citation:6dd0176b6651360ce5cc9354"
+      ],
+      "identity_status": "unresolved",
+      "originating_candidate_ids": [
+        "traceback_source_candidate:2d3264708b047b4bf843919e",
+        "traceback_source_candidate:2d8cf9d583908a54c9fa6215",
+        "traceback_source_candidate:57f76fda15eb4952f70927be",
+        "traceback_source_candidate:a57993141916f2f869873044",
+        "traceback_source_candidate:c3249e9bb8c48bea611ff8de",
+        "traceback_source_candidate:d340e4584d3166d0c7ff330a"
+      ],
+      "originating_claim_ids": [],
+      "originating_report_ids": [
+        "broker_report:6d866e6380d40849f8c72c76"
+      ],
+      "provisional_source_chain_count": 1,
+      "source_candidate_id": "traceback_source_candidate:2d3264708b047b4bf843919e"
+    },
+    {
+      "candidate_authors": [],
+      "candidate_document_number": null,
+      "candidate_doi": null,
+      "candidate_organization": "QY Research",
+      "candidate_source_class": "secondary_source",
+      "candidate_standard_number": null,
+      "candidate_title": "QY Research / 华经产业研究院",
+      "candidate_url": null,
+      "citation_specificity": "secondary_source",
+      "common_origin_group": "common_origin:38c17ff3d93a0941",
+      "formal_acquisition_authorized": false,
+      "identity_confidence": "low",
+      "identity_evidence": [
+        "broker_citation:5eab230ee3deb07cd0b6e64f"
+      ],
+      "identity_status": "unresolved",
+      "originating_candidate_ids": [
+        "traceback_source_candidate:6315505815667c5b75e85c85",
+        "traceback_source_candidate:d241c7be82d1d336a9c40df2"
+      ],
+      "originating_claim_ids": [],
+      "originating_report_ids": [
+        "broker_report:3b697a2a00bf2ac055ba5a3b",
+        "broker_report:43370b67292abbed56df6855"
+      ],
+      "provisional_source_chain_count": 1,
+      "source_candidate_id": "traceback_source_candidate:d241c7be82d1d336a9c40df2"
+    },
+    {
+      "candidate_authors": [],
+      "candidate_document_number": null,
+      "candidate_doi": null,
+      "candidate_organization": "Wind",
+      "candidate_source_class": "secondary_source",
+      "candidate_standard_number": null,
+      "candidate_title": "Wind",
+      "candidate_url": null,
+      "citation_specificity": "secondary_source",
+      "common_origin_group": "common_origin:38c17ff3d93a0941",
+      "formal_acquisition_authorized": false,
+      "identity_confidence": "low",
+      "identity_evidence": [
+        "broker_citation:8eb5d51cbd227607dd5556c8"
+      ],
+      "identity_status": "unresolved",
+      "originating_candidate_ids": [
+        "traceback_source_candidate:3bd171b7dce668f4dce3a0f1",
+        "traceback_source_candidate:5b10dd418a34db39549c33a1",
+        "traceback_source_candidate:6fb863e379255d976d051d8c",
+        "traceback_source_candidate:812b62abe7cb4f9ed4f3aa6b",
+        "traceback_source_candidate:962b50b84299073601e62c9f",
+        "traceback_source_candidate:9ccaf94fe2fd6bb72a8afc53",
+        "traceback_source_candidate:9daa0237fb8912622d997c3e",
+        "traceback_source_candidate:ab58391146bc06f71ce198f6",
+        "traceback_source_candidate:b0ac98c5cdc1debf9b032b39",
+        "traceback_source_candidate:dc180fa6b07d739e76167823",
+        "traceback_source_candidate:dc2cffa242703a4de899022f",
+        "traceback_source_candidate:dd18837d5c8c09d0d2c9bad8",
+        "traceback_source_candidate:f20363aca5b511ee3c32803f",
+        "traceback_source_candidate:f8e314108b12819489a20d9e"
+      ],
+      "originating_claim_ids": [],
+      "originating_report_ids": [
+        "broker_report:3b697a2a00bf2ac055ba5a3b",
+        "broker_report:43370b67292abbed56df6855"
+      ],
+      "provisional_source_chain_count": 1,
+      "source_candidate_id": "traceback_source_candidate:962b50b84299073601e62c9f"
+    },
+    {
+      "candidate_authors": [],
+      "candidate_document_number": null,
+      "candidate_doi": null,
+      "candidate_organization": "wind",
+      "candidate_source_class": "secondary_source",
+      "candidate_standard_number": null,
+      "candidate_title": "wind",
+      "candidate_url": null,
+      "citation_specificity": "secondary_source",
+      "common_origin_group": null,
+      "formal_acquisition_authorized": false,
+      "identity_confidence": "low",
+      "identity_evidence": [
+        "broker_citation:7efe7479db8f1385fac56758"
+      ],
+      "identity_status": "unresolved",
+      "originating_candidate_ids": [
+        "traceback_source_candidate:0e1a77051a3854a1f7393c1b",
+        "traceback_source_candidate:0f103df0224a5ce9d383c43d",
+        "traceback_source_candidate:1307f0428ff2c5427dfe04c1",
+        "traceback_source_candidate:391416da722559fda12a9ccf",
+        "traceback_source_candidate:39697e8811cd6ea9d7a12c2b",
+        "traceback_source_candidate:4041092ad1227f9b017ab373",
+        "traceback_source_candidate:45ee30ab56b070bb6c39f87a",
+        "traceback_source_candidate:4f81120872343a5202066510",
+        "traceback_source_candidate:51c2c07e4c932711b7342964",
+        "traceback_source_candidate:54d39857edc77cf6a32b2690",
+        "traceback_source_candidate:831d29a6773adbb3f7b68661",
+        "traceback_source_candidate:8ed5ff728bed9c6fed81a8bc",
+        "traceback_source_candidate:9f35c31ef6866d77f7cfa13c",
+        "traceback_source_candidate:a9d5fd3c657b609354af5c1e",
+        "traceback_source_candidate:bd00239f7ff32f6aeda5a375",
+        "traceback_source_candidate:d0ab7cc27bfb61a22ead9579",
+        "traceback_source_candidate:d646a4d99454c398ccdf1f70",
+        "traceback_source_candidate:e999b5dd2ddceaebd3ca06e1"
+      ],
+      "originating_claim_ids": [
+        "broker_claim:9e58e277eb0cc9f3f7acdf4a",
+        "broker_claim:a0cf17ee40c445cd0861ab94",
+        "broker_claim:bcf73cf0ffdec8882b2b8cba",
+        "broker_claim:d0cc79c13631b065cbc9e387"
+      ],
+      "originating_report_ids": [
+        "broker_report:0e65e812de2abb18761fdaa5",
+        "broker_report:6d866e6380d40849f8c72c76"
+      ],
+      "provisional_source_chain_count": 1,
+      "source_candidate_id": "traceback_source_candidate:d0ab7cc27bfb61a22ead9579"
+    },
+    {
+      "candidate_authors": [],
+      "candidate_document_number": null,
+      "candidate_doi": null,
+      "candidate_organization": "wind",
+      "candidate_source_class": "secondary_source",
+      "candidate_standard_number": null,
+      "candidate_title": "wind / 中商产业研究院",
+      "candidate_url": null,
+      "citation_specificity": "secondary_source",
+      "common_origin_group": null,
+      "formal_acquisition_authorized": false,
+      "identity_confidence": "low",
+      "identity_evidence": [
+        "broker_citation:201a74b789945fd30144fa29"
+      ],
+      "identity_status": "unresolved",
+      "originating_candidate_ids": [
+        "traceback_source_candidate:6cc7bad8e91a0a78ccc822e3"
+      ],
+      "originating_claim_ids": [],
+      "originating_report_ids": [
+        "broker_report:6d866e6380d40849f8c72c76"
+      ],
+      "provisional_source_chain_count": 1,
+      "source_candidate_id": "traceback_source_candidate:6cc7bad8e91a0a78ccc822e3"
+    }
+  ],
+  "unique_source_identity_count": 25
+}

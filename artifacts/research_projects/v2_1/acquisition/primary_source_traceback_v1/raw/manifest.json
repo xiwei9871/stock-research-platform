@@ -1,0 +1,14 @@
+[
+  {
+    "raw_artifact_path": "evidence/raw/ab/ab2ccbf1587f9d9a31a0482fce64e53e84af129e1c0b283488e9eca6ae6ad2a7.html",
+    "source_artifact_hash": "ab2ccbf1587f9d9a31a0482fce64e53e84af129e1c0b283488e9eca6ae6ad2a7",
+    "source_artifact_id": "evidence_artifact:408fa4886206c8463510a812",
+    "source_candidate_id": "traceback_source_candidate:novoray_spherical_silica_product"
+  },
+  {
+    "raw_artifact_path": "evidence/raw/2e/2e1a9ce40d69e17e600418ad7254402dbdd372d4a29ef27dd415ba905c53fd7b.html",
+    "source_artifact_hash": "2e1a9ce40d69e17e600418ad7254402dbdd372d4a29ef27dd415ba905c53fd7b",
+    "source_artifact_id": "evidence_artifact:0647c35f461a2fcec0002749",
+    "source_candidate_id": "traceback_source_candidate:novoray_ccl_application"
+  }
+]
