@@ -1916,11 +1916,9 @@ def run_retry_failed_stage(
     config: PipelineConfig,
     fetcher: Callable[..., list[dict[str, Any]]] = fetch_akshare_minute5_rows,
     upserter: Callable[[str, list[dict[str, Any]]], int] = upsert_minute5_bars,
+    qfq_deriver: Callable[[str, date], dict[str, int]] = derive_qfq_minute5_from_daily_factor,
 ) -> dict[str, Any]:
     missing_symbols = load_latest_minute5_missing_symbols(config.service, trade_date)
-    if not missing_symbols:
-        return {"stage": "retry_failed", "status": "skipped", "rows": 0, "failed_symbols": []}
-
     rows_by_symbol: dict[str, list[dict[str, Any]]] = {}
     failures: dict[str, str] = {}
     attempts: dict[str, int] = {}
@@ -1952,7 +1950,7 @@ def run_retry_failed_stage(
                 rows_by_symbol[ts_code] = rows
 
     rows = [row for symbol_rows in rows_by_symbol.values() for row in symbol_rows]
-    rows_upserted = upserter(config.service, rows)
+    rows_upserted = upserter(config.service, rows) if rows else 0
     for ts_code in missing_symbols:
         if ts_code not in failures and ts_code in rows_by_symbol:
             for source in minute5_success_sources(ts_code):
@@ -1960,14 +1958,39 @@ def run_retry_failed_stage(
                     config.service, trade_date, "minute5", "minute5_bar", ts_code, source
                 )
     expected_ts_codes = load_minute5_expected_ts_codes(config.service, trade_date)
-    quality = inspect_minute5_quality_from_db(config.service, expected_ts_codes, trade_date)
+    qfq_result = qfq_deriver(config.service, trade_date)
+    quality = inspect_minute5_quality_from_db(
+        config.service,
+        expected_ts_codes,
+        trade_date,
+        adjust_type="raw",
+    )
+    qfq_quality = inspect_minute5_quality_from_db(
+        config.service,
+        expected_ts_codes,
+        trade_date,
+        adjust_type="qfq",
+    )
     upsert_quality(service=config.service, trade_date=trade_date, dataset_name="minute5_bar", **quality)
+    upsert_quality(
+        service=config.service,
+        trade_date=trade_date,
+        dataset_name="minute5_qfq_bar",
+        **qfq_quality,
+    )
     coverage = quality["actual_count"] / quality["expected_count"] if quality["expected_count"] else 1.0
+    qfq_coverage = (
+        qfq_quality["actual_count"] / qfq_quality["expected_count"]
+        if qfq_quality["expected_count"]
+        else 1.0
+    )
     status = (
         "success"
-        if not quality["missing_symbols"] and not quality["abnormal_symbols"]
+        if quality["status"] == "pass" and qfq_quality["status"] == "pass"
         else "partial_success"
-        if rows_upserted and coverage >= config.minute5_min_coverage_ratio
+        if rows_upserted
+        and coverage >= config.minute5_min_coverage_ratio
+        and qfq_coverage >= config.minute5_min_coverage_ratio
         else "failed"
     )
     now = datetime.now(ZoneInfo(config.timezone))
@@ -1983,15 +2006,21 @@ def run_retry_failed_stage(
         attempt_count=max(attempts.values(), default=0),
         rows_inserted=rows_upserted,
         rows_failed=len(failures),
-        missing_symbols_count=len(quality["missing_symbols"]),
+        missing_symbols_count=max(
+            len(quality["missing_symbols"]),
+            len(qfq_quality["missing_symbols"]),
+        ),
         error_summary="; ".join(f"{code}:{err}" for code, err in list(failures.items())[:5]) or None,
     )
     return {
         "stage": "retry_failed",
         "status": status,
         "rows": rows_upserted,
+        "qfq_rows": qfq_result["inserted_rows"],
         "failed_symbols": sorted(failures),
         "attempts": max(attempts.values(), default=0),
+        "quality": quality,
+        "qfq_quality": qfq_quality,
     }
 
 
@@ -2449,6 +2478,9 @@ def finalize_pipeline_status(trade_date: date, *, config: PipelineConfig) -> dic
     else:
         minute5_status = minute5_job_status
     market_monitor_status = _stage_status_from_jobs(rows, "market_monitor")
+    market_monitor_sources = check_market_monitor_sources(trade_date.isoformat(), config.service)
+    if market_monitor_sources.get("status") == "success":
+        market_monitor_status = "success"
     deps_status = _stage_status_from_jobs(rows, "deps")
     quality_success_stages = set()
     if daily_status == "success" and quality_by_dataset.get("daily_bar"):
@@ -2459,6 +2491,8 @@ def finalize_pipeline_status(trade_date: date, *, config: PipelineConfig) -> dic
         and quality_by_dataset.get("minute5_qfq_bar")
     ):
         quality_success_stages.add("minute5")
+    if market_monitor_status == "success" and market_monitor_sources.get("status") == "success":
+        quality_success_stages.add("market_monitor")
     unsuperseded_rows = [row for row in rows if row["stage"] not in quality_success_stages]
     failed_jobs = [
         {
@@ -2631,7 +2665,20 @@ def run_pipeline_stage(
     if stage == "daily":
         return run_daily_stage(trade_date, config=config, progress=progress)
     if stage == "minute5":
-        return run_minute5_stage(trade_date, config=config, progress=progress)
+        result = run_minute5_stage(trade_date, config=config, progress=progress)
+        if result["status"] == "success":
+            return result
+        rescue = run_retry_failed_stage(trade_date, config=config)
+        result.update(
+            status="success" if rescue["status"] == "success" else result["status"],
+            rescue_status=rescue["status"],
+            rescue_rows=rescue["rows"],
+            rescue_qfq_rows=rescue["qfq_rows"],
+            quality=rescue["quality"],
+            qfq_quality=rescue["qfq_quality"],
+            failed_symbols=rescue["failed_symbols"],
+        )
+        return result
     if stage == "deps":
         return run_deps_stage(trade_date, config=config)
     if stage == "market_monitor":

@@ -994,13 +994,13 @@ def test_retry_failed_stage_runs_baostock_exchange_rescue_inline(monkeypatch):
     monkeypatch.setattr(
         dcp,
         "inspect_minute5_quality_from_db",
-        lambda _service, expected_ts_codes, _trade_date: {
+        lambda _service, expected_ts_codes, _trade_date, *, adjust_type="raw": {
             "status": "pass",
             "expected_count": len(expected_ts_codes),
             "actual_count": len(expected_ts_codes),
             "missing_symbols": [],
             "abnormal_symbols": [],
-            "check_summary": "minute5 covered",
+            "check_summary": f"minute5 {adjust_type} covered",
         },
     )
     monkeypatch.setattr(dcp, "upsert_quality", lambda **_kwargs: None)
@@ -1022,11 +1022,140 @@ def test_retry_failed_stage_runs_baostock_exchange_rescue_inline(monkeypatch):
             max_workers_baostock_minute5=2,
         ),
         upserter=lambda _service, rows: len(rows),
+        qfq_deriver=lambda _service, _trade_date: {"raw_rows": 2, "inserted_rows": 2},
     )
 
     assert result["status"] == "success"
     assert result["rows"] == 2
     assert calls == ["600000.SH", "000001.SZ"]
+
+
+def test_retry_failed_stage_refreshes_qfq_when_raw_has_no_missing_symbols(monkeypatch):
+    _no_db(monkeypatch)
+    monkeypatch.setattr(
+        dcp,
+        "load_latest_minute5_missing_symbols",
+        lambda _service, _trade_date: [],
+    )
+    monkeypatch.setattr(
+        dcp,
+        "load_minute5_expected_ts_codes",
+        lambda _service, _trade_date: ["600000.SH"],
+    )
+    quality_calls = []
+
+    def fake_inspect(_service, expected_ts_codes, _trade_date, *, adjust_type="raw"):
+        return {
+            "status": "pass",
+            "expected_count": len(expected_ts_codes),
+            "actual_count": len(expected_ts_codes),
+            "missing_symbols": [],
+            "abnormal_symbols": [],
+            "check_summary": f"minute5 {adjust_type} covered",
+        }
+
+    monkeypatch.setattr(dcp, "inspect_minute5_quality_from_db", fake_inspect)
+    monkeypatch.setattr(
+        dcp,
+        "upsert_quality",
+        lambda **kwargs: quality_calls.append(kwargs["dataset_name"]),
+    )
+    monkeypatch.setattr(dcp, "upsert_job", lambda **_kwargs: None)
+    qfq_calls = []
+
+    result = dcp.run_retry_failed_stage(
+        date(2026, 6, 5),
+        config=dcp.PipelineConfig(service="test"),
+        qfq_deriver=lambda service, trade_date: qfq_calls.append((service, trade_date))
+        or {"raw_rows": 48, "inserted_rows": 48},
+    )
+
+    assert result["status"] == "success"
+    assert result["qfq_rows"] == 48
+    assert qfq_calls == [("test", date(2026, 6, 5))]
+    assert quality_calls == ["minute5_bar", "minute5_qfq_bar"]
+
+
+def test_retry_failed_stage_fails_when_qfq_remains_incomplete(monkeypatch):
+    _no_db(monkeypatch)
+    monkeypatch.setattr(
+        dcp,
+        "load_latest_minute5_missing_symbols",
+        lambda _service, _trade_date: [],
+    )
+    monkeypatch.setattr(
+        dcp,
+        "load_minute5_expected_ts_codes",
+        lambda _service, _trade_date: ["600000.SH"],
+    )
+
+    def fake_inspect(_service, expected_ts_codes, _trade_date, *, adjust_type="raw"):
+        missing = [] if adjust_type == "raw" else list(expected_ts_codes)
+        return {
+            "status": "pass" if not missing else "warning",
+            "expected_count": len(expected_ts_codes),
+            "actual_count": len(expected_ts_codes) - len(missing),
+            "missing_symbols": missing,
+            "abnormal_symbols": [],
+            "check_summary": f"minute5 {adjust_type} quality",
+        }
+
+    monkeypatch.setattr(dcp, "inspect_minute5_quality_from_db", fake_inspect)
+    monkeypatch.setattr(dcp, "upsert_quality", lambda **_kwargs: None)
+    monkeypatch.setattr(dcp, "upsert_job", lambda **_kwargs: None)
+
+    result = dcp.run_retry_failed_stage(
+        date(2026, 6, 5),
+        config=dcp.PipelineConfig(service="test"),
+        qfq_deriver=lambda _service, _trade_date: {"raw_rows": 48, "inserted_rows": 0},
+    )
+
+    assert result["status"] == "failed"
+    assert result["quality"]["status"] == "pass"
+    assert result["qfq_quality"]["status"] == "warning"
+
+
+def test_run_pipeline_minute5_self_heals_recoverable_quality_gap(monkeypatch):
+    monkeypatch.setattr(dcp, "apply_daily_close_pipeline_schema", lambda _service: None)
+    calls = []
+    monkeypatch.setattr(
+        dcp,
+        "run_minute5_stage",
+        lambda _trade_date, *, config, progress=None: calls.append("minute5")
+        or {
+            "stage": "minute5",
+            "status": "failed",
+            "rows": 206051,
+            "quality": {"status": "warning"},
+            "qfq_quality": {"status": "warning"},
+        },
+    )
+    monkeypatch.setattr(
+        dcp,
+        "run_retry_failed_stage",
+        lambda _trade_date, *, config: calls.append("retry_failed")
+        or {
+            "stage": "retry_failed",
+            "status": "success",
+            "rows": 904 * 48,
+            "qfq_rows": 5197 * 48,
+            "failed_symbols": [],
+            "quality": {"status": "pass"},
+            "qfq_quality": {"status": "pass"},
+        },
+    )
+
+    result = dcp.run_pipeline_stage(
+        "minute5",
+        date(2026, 7, 21),
+        dcp.PipelineConfig(service="test"),
+    )
+
+    assert result["status"] == "success"
+    assert result["rescue_status"] == "success"
+    assert result["quality"]["status"] == "pass"
+    assert result["qfq_quality"]["status"] == "pass"
+    assert calls == ["minute5", "retry_failed"]
 
 
 def test_minute5_stage_runs_exchange_split_sources(monkeypatch):
@@ -2143,6 +2272,51 @@ def test_finalize_pipeline_status_blocks_ready_when_market_monitor_failed(monkey
     assert result["latest_ready_trade_date"] == date(2026, 6, 25)
     assert result["using_fallback_trade_date"] is True
     assert result["failed_jobs"][0]["stage"] == "market_monitor"
+
+
+def test_finalize_pipeline_status_ignores_superseded_market_monitor_failure_when_sources_pass(monkeypatch):
+    _no_db(monkeypatch)
+    jobs = [
+        {"stage": "daily", "job_name": "daily_bar", "source": "mixed", "status": "success"},
+        {"stage": "minute5", "job_name": "minute5_bar", "source": "fallback", "status": "success"},
+        {
+            "stage": "market_monitor",
+            "job_name": "market_monitor_eod",
+            "source": "internal",
+            "status": "failed",
+            "error_summary": "stale upstream fetch failure",
+        },
+        {"stage": "deps", "job_name": "daily_factor_pipeline", "source": "internal", "status": "success"},
+    ]
+
+    def fake_fetch_all(_conn, sql, _params=None):
+        if "FROM ops.daily_pipeline_quality" in sql:
+            return []
+        return jobs
+
+    monkeypatch.setattr(dcp, "fetch_all", fake_fetch_all)
+    monkeypatch.setattr(
+        dcp,
+        "check_market_monitor_sources",
+        lambda _trade_date, _service: {
+            "emotion_rows": 1,
+            "index_rows": 5,
+            "industry_rows": 85,
+            "fund_flow_rows": 85,
+            "status": "success",
+        },
+    )
+    monkeypatch.setattr(dcp, "latest_ready_trade_date", lambda _service: date(2026, 7, 14))
+
+    result = dcp.finalize_pipeline_status(
+        date(2026, 7, 15),
+        config=dcp.PipelineConfig(service="test"),
+    )
+
+    assert result["pipeline_status"] == "READY"
+    assert result["market_monitor_status"] == "success"
+    assert result["latest_ready_trade_date"] == date(2026, 7, 15)
+    assert all(job["stage"] != "market_monitor" for job in result["failed_jobs"])
 
 
 def test_upsert_market_emotion_state_daily_persists_computed_row(monkeypatch):
