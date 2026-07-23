@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from pathlib import Path
+import subprocess
+import sys
 
 import pandas as pd
 import pytest
@@ -195,3 +198,25 @@ def test_run_triage_writes_reconciled_outputs_without_mutating_inputs(tmp_path):
     assert audit["validation"]["counts_reconciled"] is True
     assert audit["evidence_assessment_updated"] is False
     assert audit["network_access_used"] is False
+
+
+def test_script_help_uses_current_repository_source_without_pythonpath():
+    repo_root = Path(__file__).resolve().parents[1]
+    environment = dict(os.environ)
+    environment.pop("PYTHONPATH", None)
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(repo_root / "scripts" / "run_ai_pcb_yanbaoke_evidence_triage.py"),
+            "--help",
+        ],
+        cwd=repo_root,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert "offline, read-only AI PCB triage" in completed.stdout

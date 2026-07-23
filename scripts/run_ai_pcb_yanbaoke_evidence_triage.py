@@ -4,6 +4,12 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import sys
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+CURRENT_SRC = REPO_ROOT / "src"
+if str(CURRENT_SRC) not in sys.path:
+    sys.path.insert(0, str(CURRENT_SRC))
 
 from stock_research.ai_pcb_yanbaoke_evidence_triage import run_triage
 
