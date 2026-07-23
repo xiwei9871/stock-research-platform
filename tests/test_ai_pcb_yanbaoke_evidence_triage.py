@@ -107,6 +107,30 @@ def test_pcb_focus_company_with_body_anchor_remains_selected():
     assert "pcb_design" in result.relevance_domains
 
 
+def test_incidental_queue_content_does_not_make_report_focus_relevant():
+    row = {
+        "report_title": "光模块公司深度报告",
+        "stock_name": "光模块公司",
+        "content": "供应链中使用 PCB",
+    }
+
+    result = classify_relevance(row, body_text="高速光模块需求增长。")
+
+    assert result.selected is False
+
+
+def test_pcba_in_title_is_a_strong_manufacturing_signal():
+    row = {
+        "report_title": "PCBA设备细分环节研究",
+        "stock_name": "设备公司",
+        "content": "",
+    }
+
+    result = classify_relevance(row, body_text="电子装联设备用于 PCBA 生产。")
+
+    assert result.selected is True
+
+
 def test_same_content_hash_collapses_to_one_document_identity():
     rows = [
         {"uuid": "u1", "content_sha256": "abc", "report_title": "Report A"},

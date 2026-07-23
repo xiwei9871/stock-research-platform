@@ -36,6 +36,7 @@ DOMAIN_SIGNALS: dict[str, tuple[str, ...]] = {
         "高多层板",
         "高速pcb",
         "pcb",
+        "pcba",
         "hdi",
         "msap",
         "类载板",
@@ -206,6 +207,7 @@ PCB_FOCUS_COMPANIES = frozenset(
 
 STRONG_METADATA_SIGNALS = (
     "pcb",
+    "pcba",
     "印制电路板",
     "高速pcb",
     "高多层板",
@@ -282,7 +284,7 @@ def classify_relevance(
     *,
     body_text: str,
 ) -> RelevanceResult:
-    parts = [
+    metadata_parts = [
         str(row.get(key) or "")
         for key in (
             "report_title",
@@ -290,11 +292,11 @@ def classify_relevance(
             "stock_name",
             "themes",
             "node_name",
-            "content",
         )
     ]
-    metadata_haystack = " ".join(parts).casefold()
-    haystack = f"{metadata_haystack} {body_text}".casefold()
+    metadata_haystack = " ".join(metadata_parts).casefold()
+    queue_content = str(row.get("content") or "")
+    haystack = f"{metadata_haystack} {queue_content} {body_text}".casefold()
     matches = {
         domain: tuple(signal for signal in signals if _contains_signal(haystack, signal))
         for domain, signals in DOMAIN_SIGNALS.items()
@@ -303,6 +305,7 @@ def classify_relevance(
         _contains_signal(haystack, signal)
         for signal in (
             "pcb",
+            "pcba",
             "印制电路板",
             "高速pcb",
             "高多层板",
