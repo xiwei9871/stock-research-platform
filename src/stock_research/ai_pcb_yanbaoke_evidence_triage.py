@@ -2,7 +2,15 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+import hashlib
+import json
+import os
+from pathlib import Path
 import re
+import tempfile
+
+import pandas as pd
+from pypdf import PdfReader
 
 
 PRIMARY_CLASSIFICATIONS = frozenset(
@@ -201,6 +209,15 @@ class UtilityResult:
     prohibited_use: str
 
 
+@dataclass(frozen=True)
+class TriageRunResult:
+    queue_rows_considered: int
+    selected_source_records: int
+    selected_content_identities: int
+    duplicate_source_records: int
+    output_paths: tuple[Path, ...]
+
+
 def validate_primary_classification(value: str) -> None:
     if value not in PRIMARY_CLASSIFICATIONS:
         raise ValueError(f"unsupported primary classification: {value}")
@@ -209,6 +226,23 @@ def validate_primary_classification(value: str) -> None:
 def validate_er_disposition(value: str) -> None:
     if value not in ER_DISPOSITIONS:
         raise ValueError(f"unsupported ER disposition: {value}")
+
+
+def sha256_path(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def extract_pdf_text(path: Path) -> tuple[str, str]:
+    try:
+        reader = PdfReader(path)
+        text = "\n".join(page.extract_text() or "" for page in reader.pages).strip()
+    except Exception as exc:  # noqa: BLE001 - unreadable files remain auditable.
+        return "", f"unreadable:{type(exc).__name__}"
+    return text, "readable" if text else "empty_text"
 
 
 def classify_relevance(
@@ -358,3 +392,296 @@ def map_er_dispositions(title: str, *, body_text: str) -> dict[str, str]:
         validate_er_disposition(disposition)
         mappings[er_id] = disposition
     return mappings
+
+
+def _resolve_pdf_path(value: object, *, input_dir: Path) -> Path:
+    raw = str(value or "").strip()
+    if not raw:
+        raise ValueError("downloaded manifest row has no pdf_path")
+    candidate = Path(raw).expanduser()
+    if candidate.is_absolute() and candidate.exists():
+        return candidate
+    direct = Path.cwd() / candidate
+    if direct.exists():
+        return direct.resolve()
+    relative_to_input = input_dir / candidate
+    if relative_to_input.exists():
+        return relative_to_input.resolve()
+    raise FileNotFoundError(f"manifest PDF does not exist: {raw}")
+
+
+def _publication_date_status(value: object) -> str:
+    return "provided_in_queue" if str(value or "").strip() else "unknown"
+
+
+def _stringify_sequence(value: object) -> str:
+    if isinstance(value, (tuple, list, set)):
+        return "|".join(str(item) for item in value)
+    return str(value or "")
+
+
+def _build_triage_rows(
+    *,
+    queue: pd.DataFrame,
+    manifest: pd.DataFrame,
+    input_dir: Path,
+) -> tuple[list[dict[str, object]], list[Path]]:
+    manifest_by_uuid = {
+        str(row.get("uuid") or ""): row
+        for row in manifest.fillna("").to_dict("records")
+        if str(row.get("status") or "") == "downloaded"
+    }
+    rows: list[dict[str, object]] = []
+    inspected_pdfs: list[Path] = []
+    for queue_row in queue.fillna("").to_dict("records"):
+        uuid = str(queue_row.get("uuid") or "")
+        manifest_row = manifest_by_uuid.get(uuid)
+        if manifest_row is None:
+            raise ValueError(f"queue UUID has no successful download lineage: {uuid}")
+        pdf_path = _resolve_pdf_path(manifest_row.get("pdf_path"), input_dir=input_dir)
+        inspected_pdfs.append(pdf_path)
+        body_text, body_status = extract_pdf_text(pdf_path)
+        relevance = classify_relevance(queue_row, body_text=body_text)
+        if not relevance.selected:
+            continue
+        title = str(queue_row.get("report_title") or queue_row.get("title") or "")
+        utility = classify_utility(title=title, body_text=body_text)
+        er_mappings = map_er_dispositions(title, body_text=body_text)
+        content_hash = sha256_path(pdf_path)
+        row: dict[str, object] = {
+            "uuid": uuid,
+            "report_title": title,
+            "stock_name": str(queue_row.get("stock_name") or ""),
+            "ts_code": str(queue_row.get("ts_code") or ""),
+            "broker": str(queue_row.get("broker") or queue_row.get("org_name") or ""),
+            "publisher": str(queue_row.get("org_name") or queue_row.get("broker") or ""),
+            "publish_date": str(queue_row.get("publish_date") or ""),
+            "publication_date_status": _publication_date_status(queue_row.get("publish_date")),
+            "local_pdf_path": str(pdf_path),
+            "content_sha256": content_hash,
+            "body_review_status": body_status,
+            "body_char_count": len(body_text),
+            "relevance_domains": relevance.relevance_domains,
+            "matched_signals": relevance.matched_signals,
+            "primary_classification": utility.primary_classification,
+            "classification_reason": utility.classification_reason,
+            "traceable_source_types": utility.traceable_source_types,
+            "traceable_source_leads": utility.traceable_source_leads,
+            "prohibited_use": utility.prohibited_use,
+            "PCB-ER-A02": er_mappings["PCB-ER-A02"],
+            "PCB-ER-A04": er_mappings["PCB-ER-A04"],
+            "PCB-ER-B01": er_mappings["PCB-ER-B01"],
+            "PCB-ER-B02": er_mappings["PCB-ER-B02"],
+            "manual_review_priority": (
+                "P0"
+                if utility.primary_classification == "primary_source_lead"
+                else "P1"
+                if "source_discovery_only" in er_mappings.values()
+                else "P2"
+            ),
+            "limitations": (
+                "sell_side_secondary_source;trace_original_source_before_evidence_use"
+            ),
+        }
+        rows.append(row)
+    return rows, inspected_pdfs
+
+
+def _validate_selected_frame(frame: pd.DataFrame) -> None:
+    if frame.empty:
+        raise ValueError("triage selected no report identities")
+    if not frame["content_identity"].is_unique:
+        raise ValueError("content identities are not unique")
+    for value in frame["primary_classification"].astype(str):
+        validate_primary_classification(value)
+    for column in ("PCB-ER-A02", "PCB-ER-A04", "PCB-ER-B01", "PCB-ER-B02"):
+        for value in frame[column].astype(str):
+            validate_er_disposition(value)
+
+
+def _serializable_selected(frame: pd.DataFrame) -> pd.DataFrame:
+    output = frame.copy()
+    for column in (
+        "source_record_uuids",
+        "relevance_domains",
+        "matched_signals",
+        "traceable_source_types",
+        "traceable_source_leads",
+    ):
+        output[column] = output[column].map(_stringify_sequence)
+    return output.sort_values(
+        ["manual_review_priority", "primary_classification", "report_title", "content_identity"]
+    ).reset_index(drop=True)
+
+
+def _atomic_write_text(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        dir=path.parent,
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+        delete=False,
+    ) as handle:
+        handle.write(text)
+        temp_path = Path(handle.name)
+    os.replace(temp_path, path)
+
+
+def _atomic_write_csv(path: Path, frame: pd.DataFrame) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        newline="",
+        dir=path.parent,
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+        delete=False,
+    ) as handle:
+        frame.to_csv(handle, index=False)
+        temp_path = Path(handle.name)
+    os.replace(temp_path, path)
+
+
+def _distribution(frame: pd.DataFrame, column: str) -> dict[str, int]:
+    return {
+        str(key): int(value)
+        for key, value in frame[column].value_counts().sort_index().to_dict().items()
+    }
+
+
+def _build_audit_payload(
+    *,
+    before_hashes: Mapping[str, str],
+    queue: pd.DataFrame,
+    selected_source_records: int,
+    selected: pd.DataFrame,
+) -> dict[str, object]:
+    er_distributions = {
+        er_id: _distribution(selected, er_id)
+        for er_id in ("PCB-ER-A02", "PCB-ER-A04", "PCB-ER-B01", "PCB-ER-B02")
+    }
+    duplicate_records = selected_source_records - len(selected)
+    records = _serializable_selected(selected).fillna("").to_dict("records")
+    return {
+        "artifact_type": "ai_pcb_yanbaoke_evidence_triage_audit",
+        "artifact_version": "1.0.0",
+        "execution_mode": "offline_read_only_triage",
+        "input_hashes": dict(sorted(before_hashes.items())),
+        "queue_rows_considered": int(len(queue)),
+        "selected_source_records": int(selected_source_records),
+        "selected_content_identities": int(len(selected)),
+        "duplicate_source_records": int(duplicate_records),
+        "primary_classification_distribution": _distribution(
+            selected, "primary_classification"
+        ),
+        "er_disposition_distribution": er_distributions,
+        "selected_records": records,
+        "validation": {
+            "counts_reconciled": selected_source_records == len(selected) + duplicate_records,
+            "content_identities_unique": bool(selected["content_identity"].is_unique),
+            "direct_evidence_state_count": 0,
+            "er_sufficiency_state_count": 0,
+        },
+        "evidence_assessment_updated": False,
+        "cognition_updated": False,
+        "database_written": False,
+        "network_access_used": False,
+    }
+
+
+def render_summary(audit: Mapping[str, object]) -> str:
+    classifications = json.dumps(
+        audit["primary_classification_distribution"],
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+    er_dispositions = audit["er_disposition_distribution"]
+    lines = [
+        "# AI PCB Yanbaoke Evidence Triage v1",
+        "",
+        f"- Queue rows considered: {audit['queue_rows_considered']}",
+        f"- Selected source records: {audit['selected_source_records']}",
+        f"- Selected content identities: {audit['selected_content_identities']}",
+        f"- Duplicate source records collapsed: {audit['duplicate_source_records']}",
+        f"- Primary classifications: {classifications}",
+        "- Evidence Assessment updated: no",
+        "- Cognition package updated: no",
+        "",
+        "## Technical ER lead dispositions",
+        "",
+    ]
+    for er_id in ("PCB-ER-A02", "PCB-ER-A04", "PCB-ER-B01", "PCB-ER-B02"):
+        lines.append(
+            f"- {er_id}: {json.dumps(er_dispositions[er_id], ensure_ascii=False, sort_keys=True)}"
+        )
+    lines.extend(
+        [
+            "",
+            "## Evidence boundary",
+            "",
+            "All mappings are source-discovery or contextual leads. No selected broker report is treated as direct technical evidence, an independent evidence chain, or proof that an Evidence Requirement is sufficient.",
+            "",
+            "Company, capacity, benefit, valuation, and recommendation statements require separate primary-source verification and are not technical evidence in this audit.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def run_triage(
+    *,
+    input_dir: Path,
+    output_dir: Path,
+    expected_queue_rows: int = 474,
+) -> TriageRunResult:
+    queue_path = input_dir / "yanbaoke_download_queue_474.csv"
+    mappings_path = input_dir / "theme_company_mappings.csv"
+    manifest_path = input_dir / "download" / "yanbaoke_direct_uuid_downloads.csv"
+    input_paths = (queue_path, mappings_path, manifest_path)
+    before_hashes = {str(path): sha256_path(path) for path in input_paths}
+    queue = pd.read_csv(queue_path, dtype=object).fillna("")
+    pd.read_csv(mappings_path, dtype=object).fillna("")
+    manifest = pd.read_csv(manifest_path, dtype=object).fillna("")
+    if len(queue) != expected_queue_rows:
+        raise ValueError(
+            f"expected {expected_queue_rows} queue rows, found {len(queue)}"
+        )
+    rows, inspected_pdfs = _build_triage_rows(
+        queue=queue,
+        manifest=manifest,
+        input_dir=input_dir,
+    )
+    selected = pd.DataFrame(collapse_content_identities(rows))
+    _validate_selected_frame(selected)
+    serializable = _serializable_selected(selected)
+    audit = _build_audit_payload(
+        before_hashes=before_hashes,
+        queue=queue,
+        selected_source_records=len(rows),
+        selected=selected,
+    )
+    csv_path = output_dir / "ai_pcb_evidence_triage_v1.csv"
+    audit_path = output_dir / "ai_pcb_evidence_triage_audit_v1.json"
+    summary_path = output_dir / "ai_pcb_evidence_triage_summary_v1.md"
+    _atomic_write_csv(csv_path, serializable)
+    _atomic_write_text(
+        audit_path,
+        json.dumps(audit, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+    )
+    _atomic_write_text(summary_path, render_summary(audit))
+    after_hashes = {str(path): sha256_path(path) for path in input_paths}
+    if after_hashes != before_hashes:
+        raise RuntimeError("upstream input drift detected")
+    for pdf_path in inspected_pdfs:
+        if not pdf_path.exists():
+            raise RuntimeError(f"inspected PDF disappeared during audit: {pdf_path}")
+    return TriageRunResult(
+        queue_rows_considered=len(queue),
+        selected_source_records=len(rows),
+        selected_content_identities=len(selected),
+        duplicate_source_records=len(rows) - len(selected),
+        output_paths=(csv_path, audit_path, summary_path),
+    )

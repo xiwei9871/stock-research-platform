@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+import hashlib
+import json
+from pathlib import Path
+
+import pandas as pd
 import pytest
 
 from stock_research.ai_pcb_yanbaoke_evidence_triage import (
@@ -7,6 +12,7 @@ from stock_research.ai_pcb_yanbaoke_evidence_triage import (
     classify_utility,
     collapse_content_identities,
     map_er_dispositions,
+    run_triage,
     validate_er_disposition,
     validate_primary_classification,
 )
@@ -108,3 +114,84 @@ def test_er_mappings_are_denominator_aware_and_never_direct_evidence():
         "contextual_candidate",
         "not_relevant",
     }
+
+
+def _file_sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def test_run_triage_writes_reconciled_outputs_without_mutating_inputs(tmp_path):
+    download_dir = tmp_path / "download"
+    pdf_dir = download_dir / "pdfs"
+    pdf_dir.mkdir(parents=True)
+    relevant_a = pdf_dir / "relevant-a.pdf"
+    relevant_b = pdf_dir / "relevant-b.pdf"
+    generic = pdf_dir / "generic.pdf"
+    relevant_a.write_bytes(b"same report bytes")
+    relevant_b.write_bytes(b"same report bytes")
+    generic.write_bytes(b"generic report bytes")
+
+    queue = pd.DataFrame(
+        [
+            {
+                "uuid": "u1",
+                "report_title": "HVLP铜箔研究",
+                "stock_name": "样本公司",
+                "content": "Rz与20 GHz插损测试",
+                "publish_date": "2026-01-01",
+                "broker": "券商甲",
+            },
+            {
+                "uuid": "u2",
+                "report_title": "HVLP铜箔研究镜像",
+                "stock_name": "样本公司",
+                "content": "Rz与20 GHz插损测试",
+                "publish_date": "2026-01-01",
+                "broker": "券商甲",
+            },
+            {
+                "uuid": "u3",
+                "report_title": "AI服务器行业更新",
+                "stock_name": "另一公司",
+                "content": "算力需求增长",
+                "publish_date": "2026-01-02",
+                "broker": "券商乙",
+            },
+        ]
+    )
+    mappings = pd.DataFrame(
+        [
+            {"ts_code": "000001.SZ", "stock_name": "样本公司", "theme_name": "AI算力基础设施"},
+            {"ts_code": "000002.SZ", "stock_name": "另一公司", "theme_name": "AI算力基础设施"},
+        ]
+    )
+    manifest = pd.DataFrame(
+        [
+            {"uuid": "u1", "status": "downloaded", "pdf_path": str(relevant_a)},
+            {"uuid": "u2", "status": "downloaded", "pdf_path": str(relevant_b)},
+            {"uuid": "u3", "status": "downloaded", "pdf_path": str(generic)},
+        ]
+    )
+    queue_path = tmp_path / "yanbaoke_download_queue_474.csv"
+    mappings_path = tmp_path / "theme_company_mappings.csv"
+    manifest_path = download_dir / "yanbaoke_direct_uuid_downloads.csv"
+    queue.to_csv(queue_path, index=False)
+    mappings.to_csv(mappings_path, index=False)
+    manifest.to_csv(manifest_path, index=False)
+    inputs = (queue_path, mappings_path, manifest_path, relevant_a, relevant_b, generic)
+    before = {str(path): _file_sha256(path) for path in inputs}
+
+    result = run_triage(input_dir=tmp_path, output_dir=tmp_path, expected_queue_rows=3)
+
+    assert result.queue_rows_considered == 3
+    assert result.selected_source_records == 2
+    assert result.selected_content_identities == 1
+    assert result.duplicate_source_records == 1
+    assert {str(path): _file_sha256(path) for path in inputs} == before
+    assert (tmp_path / "ai_pcb_evidence_triage_v1.csv").exists()
+    audit = json.loads(
+        (tmp_path / "ai_pcb_evidence_triage_audit_v1.json").read_text(encoding="utf-8")
+    )
+    assert audit["validation"]["counts_reconciled"] is True
+    assert audit["evidence_assessment_updated"] is False
+    assert audit["network_access_used"] is False
