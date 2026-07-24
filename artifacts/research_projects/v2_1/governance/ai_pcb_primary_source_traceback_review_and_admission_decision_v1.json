@@ -1,0 +1,113 @@
+{
+  "schema_version": "1.0.0",
+  "artifact_type": "ai_pcb_primary_source_traceback_review_and_admission_decision",
+  "decision_id": "primary_source_traceback_review_and_admission_decision:ai_pcb:v1",
+  "decision_status": "frozen",
+  "decided_at": "2026-07-24T02:17:35Z",
+  "decision_actor": "human_reviewer",
+  "project_id": "research_project:ai_compute_pcb_industry_bottleneck",
+  "input_bindings": {
+    "traceback_artifact_id": "primary_source_traceback:ai_pcb:bc09509467a93e1234900567",
+    "traceback_artifact_hash": "e98a79b38dda17e9e88845016baa3a0f49cf008fd9ffa777375ace3cd5693844",
+    "traceback_checkpoint_id": "primary_source_traceback_checkpoint:18931f3769c7774c18e3c9ae",
+    "traceback_checkpoint_hash": "2d8b975656c69c1c659c57eecef27e4711927332e701375d871a4330cd8c425b",
+    "traceback_execution_authorization_id": "primary_source_traceback_execution_authorization:ai_pcb:broker_reports:v1",
+    "traceback_execution_authorization_hash": "6723770b1a037fa918c6fe69ea55499fd4dd65110f8d3e81d4ee9156795d1bc3",
+    "traceback_gate_id": "primary_source_traceback_gate_decision:ai_pcb:broker_reports:v1",
+    "traceback_gate_hash": "6082249e201e97421ea0d7107217b044d376abfb32da93e0b68d779854e6e6d5"
+  },
+  "traceback_review_status": "accepted_with_one_supplier_specific_assessment_candidate",
+  "traceback_accepted": true,
+  "future_assessment_candidate_count": 1,
+  "direct_er_status_change": false,
+  "additional_traceback_authorized": false,
+  "additional_broker_report_triage_authorized": false,
+  "human_assistance_required": false,
+  "admitted_sources": [
+    {
+      "admission_id": "traceback_admission:ai_pcb:b01:novoray_spherical_silica:v1",
+      "source_identity": "novoray_novopowder_dq_spherical_silica_official_product_page",
+      "source_candidate_id": "traceback_source_candidate:novoray_spherical_silica_product",
+      "source_artifact_id": "evidence_artifact:408fa4886206c8463510a812",
+      "raw_content_hash": "ab2ccbf1587f9d9a31a0482fce64e53e84af129e1c0b283488e9eca6ae6ad2a7",
+      "raw_artifact_path": "evidence/raw/ab/ab2ccbf1587f9d9a31a0482fce64e53e84af129e1c0b283488e9eca6ae6ad2a7.html",
+      "normalized_document_id": "normalized_document:ddb90d268b7abd4114702aae",
+      "normalized_document_hash": "11d12cab072ef7d73aff150fae6865df76e3353de549f7f7f8ac1ad9b1da9ebd",
+      "locator": {
+        "section_index": 111,
+        "section_id": "section:evidence_artifact:408fa4886206c8463510a812:0111",
+        "section_hash": "e8ad5cef300fa3cfaf6301b594a0199efd559c2d04353cb8a0b4197f15192a8e",
+        "heading": "球形硅微粉",
+        "locator": "html:div:0046",
+        "locator_note": "Official supplier product table explicitly labels both values as typical and states the 1 MHz frequency."
+      },
+      "authorized_er_id": "PCB-ER-B01",
+      "evidence_role": "supplier_specific_parameter_statement",
+      "admitted_to_consolidated_assessment": true,
+      "admitted_claim_scope": [
+        "For Novoray NOVOPOWDER DQ spherical silica, the supplier page states a typical dielectric constant (Dk) of 3.88 at 1 MHz.",
+        "For Novoray NOVOPOWDER DQ spherical silica, the supplier page states a typical dielectric loss (Df) of 0.0002 at 1 MHz."
+      ],
+      "prohibited_inferences": [
+        "complete Dk or Df test-method understanding",
+        "cross-supplier comparability",
+        "high-frequency performance extrapolation",
+        "whole-board or whole-channel transmission performance",
+        "general technical causality between lower Dk or Df and system performance",
+        "industry material capability or bottleneck",
+        "company competitive advantage, earnings exposure, valuation, or investment conclusion"
+      ],
+      "originating_broker_claim_ids": [
+        "broker_claim:21195a3589295594ab15c46d",
+        "broker_claim:42dd186e1b5bf479cb9cffdc",
+        "broker_claim:2e8be75265dd661122769388",
+        "broker_claim:d5f21d5059c75d7a6b191f30"
+      ],
+      "source_identity_count": 1,
+      "evidence_chain_count": 1,
+      "duplicate_broker_claims_increase_evidence_chain_count": false,
+      "claim_sufficient": false,
+      "er_sufficient": false,
+      "cognition_update_eligible": false,
+      "publication_date_status": "unknown"
+    }
+  ],
+  "strict_exclusions": [
+    {
+      "object": "traceback_source_candidate:novoray_ccl_application",
+      "reason": "official application context without the admitted parameter statement or a complete technical test method"
+    },
+    {
+      "object": "five broker-report PDF bodies",
+      "reason": "source-discovery-only; broker claims and opinions are not primary technical evidence"
+    },
+    {
+      "object": "A02 and B02 source candidates without acquired full text",
+      "reason": "document identity candidates do not provide assessable technical正文"
+    },
+    {
+      "object": "unresolved, unattributed, and secondary-only claims",
+      "reason": "no identity-confirmed acquired primary source"
+    },
+    {
+      "object": "analyst inference and investment opinion",
+      "reason": "non-evidence research or investment interpretation"
+    },
+    {
+      "object": "scope-broadened broker explanations",
+      "reason": "the official supplier page supports only the two supplier-specific typical parameter statements"
+    }
+  ],
+  "admission_effect": {
+    "assessment_candidate_added": true,
+    "assessment_started": false,
+    "claim_status_changed": false,
+    "er_status_changed": false,
+    "cognition_updated": false
+  },
+  "cognition_update_authorized": false,
+  "company_mapping_authorized": false,
+  "stage_a2_authorized": false,
+  "stage_b_authorized": false,
+  "content_hash": "27026a1b9b1e0790e4996f8d40ceb01b40741d1f6cb1477f8aa82eac115d5752"
+}

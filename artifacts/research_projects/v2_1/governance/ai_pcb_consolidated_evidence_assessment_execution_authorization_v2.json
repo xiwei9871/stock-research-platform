@@ -1,0 +1,102 @@
+{
+  "schema_version": "1.0.0",
+  "artifact_type": "consolidated_assessment_execution_authorization",
+  "authorization_id": "consolidated_assessment_execution_authorization:ai_pcb:wave_1b:v2",
+  "authorization_status": "frozen",
+  "authorized_at": "2026-07-24T02:17:35Z",
+  "authorization_actor": "human_reviewer",
+  "project_id": "research_project:ai_compute_pcb_industry_bottleneck",
+  "input_bindings": {
+    "traceback_review_decision_id": "primary_source_traceback_review_and_admission_decision:ai_pcb:v1",
+    "traceback_review_decision_hash": "27026a1b9b1e0790e4996f8d40ceb01b40741d1f6cb1477f8aa82eac115d5752",
+    "traceback_artifact_id": "primary_source_traceback:ai_pcb:bc09509467a93e1234900567",
+    "traceback_artifact_hash": "e98a79b38dda17e9e88845016baa3a0f49cf008fd9ffa777375ace3cd5693844",
+    "traceback_checkpoint_id": "primary_source_traceback_checkpoint:18931f3769c7774c18e3c9ae",
+    "traceback_checkpoint_hash": "2d8b975656c69c1c659c57eecef27e4711927332e701375d871a4330cd8c425b",
+    "wave_1_checkpoint_id": "targeted_acquisition_checkpoint:b53ab0a0143b89f9914842f5",
+    "wave_1_checkpoint_hash": "b53ab0a0143b89f9914842f5848ed606b86de3dc1a4a7f5f08a05c6afcf81013",
+    "wave_1_assessment_id": "targeted_evidence_assessment:ai_pcb:wave_1:v1",
+    "wave_1_assessment_hash": "8e80bc8994f6f1fd20ae7c46fe5d3669be13a08b86162f7c5d7f2729788367cd",
+    "wave_1b_checkpoint_id": "targeted_acquisition_checkpoint:a4690962e23c07e238dd2f4d",
+    "wave_1b_checkpoint_hash": "a4690962e23c07e238dd2f4dfeb5d081fd1c93a0b95a89a2509e23ae4f9ceec2",
+    "recovery_pilot_checkpoint_id": "wave_1b_recovery_checkpoint:eb5ac1cd5e37481dcd2df2dc",
+    "recovery_pilot_checkpoint_hash": "96949222f5697c1074e4ac60ee230fd814e9f8cc95cecbb112c0e14982290f54",
+    "recovery_pilot_review_decision_id": "wave_1b_recovery_pilot_review_decision:ai_pcb:v1",
+    "recovery_pilot_review_decision_hash": "51f0d1415b8240f8b3bca96ca5187026af05094426d50c9376d72b82fd4014fd",
+    "prior_consolidated_assessment_authorization_id": "consolidated_assessment_execution_authorization:ai_pcb:wave_1b:v1",
+    "prior_consolidated_assessment_authorization_hash": "5eb4b45d600a7618f59243af5560bac4c0d320bde86cebdee49e1378361dd4d2",
+    "prior_authorization_consumed": false
+  },
+  "execution_authorized": true,
+  "one_time_authorization": true,
+  "execution_mode": "offline_read_only_consolidated_assessment",
+  "network_access": false,
+  "new_acquisition": false,
+  "fallback_acquisition": false,
+  "authorization_scope": "exact_evidence_bundle_only",
+  "consolidated_assessment_authorized": true,
+  "authorization_consumed": false,
+  "authorized_er_ids": [
+    "PCB-ER-A02",
+    "PCB-ER-A04",
+    "PCB-ER-B01",
+    "PCB-ER-B02"
+  ],
+  "eligible_source_batches": [
+    "targeted_evidence_acquisition_wave_1",
+    "targeted_evidence_acquisition_wave_1b",
+    "wave_1b_recovery_pilot_acquisition",
+    "primary_source_traceback_v1_admitted_sources_only"
+  ],
+  "admitted_traceback_evidence": [
+    {
+      "admission_id": "traceback_admission:ai_pcb:b01:novoray_spherical_silica:v1",
+      "authorized_er_id": "PCB-ER-B01",
+      "evidence_role": "supplier_specific_parameter_statement",
+      "source_identity": "novoray_novopowder_dq_spherical_silica_official_product_page",
+      "source_candidate_id": "traceback_source_candidate:novoray_spherical_silica_product",
+      "source_artifact_id": "evidence_artifact:408fa4886206c8463510a812",
+      "raw_content_hash": "ab2ccbf1587f9d9a31a0482fce64e53e84af129e1c0b283488e9eca6ae6ad2a7",
+      "normalized_document_id": "normalized_document:ddb90d268b7abd4114702aae",
+      "normalized_document_hash": "11d12cab072ef7d73aff150fae6865df76e3353de549f7f8ac1ad9b1da9ebd",
+      "section_index": 111,
+      "section_id": "section:evidence_artifact:408fa4886206c8463510a812:0111",
+      "section_hash": "e8ad5cef300fa3cfaf6301b594a0199efd559c2d04353cb8a0b4197f15192a8e",
+      "admitted_claim_scope": [
+        "supplier-specific typical Dk = 3.88 at 1 MHz",
+        "supplier-specific typical Df = 0.0002 at 1 MHz"
+      ],
+      "source_identity_count": 1,
+      "evidence_chain_count": 1,
+      "claim_sufficient": false,
+      "er_sufficient": false
+    }
+  ],
+  "eligible_recovery_evidence": [
+    {
+      "recovery_target_id": "recovery_target:ai_pcb:wave_1b:a02:ieee_802_3ck_index_to_fulltext:v1",
+      "authorized_er_id": "PCB-ER-A02",
+      "artifact_id": "evidence_artifact:5cf8a72e4f4c6a9043a474c5",
+      "raw_content_hash": "701d2fbd43167f5f40a02e51c6ad58bef346dcc49c5fb502d5a268dc195cdad4",
+      "canonical_normalized_document_id": "normalized_document:019803185d3da18b4d1f2486"
+    }
+  ],
+  "strict_exclusions": [
+    "all broker-report PDF bodies and broker opinions",
+    "Novoray CCL application context page",
+    "A02 and B02 traceback source candidates without acquired full text",
+    "unresolved, unattributed, secondary-only, analyst-inference, and investment-opinion traceback records",
+    "scope-broadened broker explanations beyond the two admitted supplier-specific values",
+    "identity-mismatched USC recovery content",
+    "failed, blocked, timeout, landing, overview, index, preflight, and recovery-planning records",
+    "duplicate normalized representations beyond each canonical raw-document identity"
+  ],
+  "assessment_started": false,
+  "cognition_update_authorized": false,
+  "additional_recovery_authorized": false,
+  "additional_traceback_authorized": false,
+  "company_mapping_authorized": false,
+  "stage_a2_authorized": false,
+  "stage_b_authorized": false,
+  "content_hash": "95042e9ebe958f4c3bab10f78b9a39a03c9ded00c9216eb3c920cbcc051c58e8"
+}

@@ -1,0 +1,14 @@
+{
+  "allowlist_id": "exact_allowlist:ai_pcb_traceback_review_and_consolidated_assessment_authorization_v2",
+  "baseline_commit": "8c6df485976065fbb25de98fcb3a7f00a16a76de",
+  "allowed_paths": [
+    "artifacts/research_projects/v2_1/governance/ai_pcb_primary_source_traceback_review_and_admission_decision_v1.json",
+    "artifacts/research_projects/v2_1/governance/ai_pcb_consolidated_evidence_assessment_execution_authorization_v2.json",
+    "artifacts/research_projects/v2_1/governance/ai_pcb_traceback_review_and_consolidated_assessment_authorization_v2_exact_allowlist.json",
+    "tests/test_research_project_v2_1_traceback_admission_governance.py"
+  ],
+  "historical_artifact_modification_allowed": false,
+  "network_access_allowed": false,
+  "assessment_execution_allowed_in_this_commit": false,
+  "scope": "traceback_review_admission_and_consolidated_assessment_authorization_v2_only"
+}
