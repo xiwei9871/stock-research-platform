@@ -33,7 +33,7 @@ rtk scripts/install_founder_os_model_recovery.sh --dry-run
 - 只管理启用的 `agentTurn` cron；
 - 排除 command 任务、`orchestration-dashboard-sync` 和监督器自身；
 - 只关闭受管任务的逐条 failure alert；
-- 新增一个每 20 分钟运行的 command supervisor；
+- 新增一个绑定 `agent_jarvis`、每 20 分钟运行的 command supervisor；
 - 将 `founder-os-cron-health-guard` 转为 deterministic audit command；
 - 不出现 `--model` 或 `--fallbacks` 修改命令。
 
@@ -68,7 +68,7 @@ rtk openclaw cron get 7bb1fe09-5543-4f79-8dfc-cd0fe308638d
 
 预期：
 
-- 恰好一个 `founder-os-model-recovery-supervisor`，payload 为 command，每 20 分钟运行；
+- 恰好一个 `founder-os-model-recovery-supervisor`，绑定 `agent_jarvis`，payload 为 `founder-os-model-recovery spawn`，每 20 分钟运行；
 - `founder-os-cron-health-guard` 的 payload 为 command；
 - 原 agentTurn 任务仍保持豆包主模型和 OpenAI fallback；
 - 原 agentTurn 任务不再单独发送 failure alert；
@@ -79,7 +79,7 @@ rtk openclaw cron get 7bb1fe09-5543-4f79-8dfc-cd0fe308638d
 每轮监督器：
 
 1. 读取北京时间当天的模型失败任务；
-2. 等待 20 分钟 probe cooldown；
+2. 等待全局 20 分钟 probe cooldown；同一故障期不会轮换不同任务重复探测；
 3. 先补跑最早失败的一项；
 4. 若仍是模型不可用，停止本轮，避免批量失败；
 5. 若 probe 成功，顺序补跑其余当天任务；
@@ -147,3 +147,18 @@ rtk scripts/install_founder_os_model_recovery.sh --rollback \
 - 补跑命令返回非零：继续读取 run history，并按最终 run 状态分类。
 - 飞书发送失败：重新打开对应通知标志，下一轮只重试通知，不重复补跑成功任务。
 - 锁已占用：第二实例正常退出，并在本地日志写入一行 locked 记录。
+
+## OpenClaw command lane
+
+监督器 cron 使用 `spawn` 快速启动模式，而不是直接执行 `run`。原因是 `run` 会同步调用 `openclaw cron run --wait`；若它本身仍占用 OpenClaw cron command lane，会形成自等待。`spawn` 在 cron lane 内只启动独立进程并立即返回，独立进程随后执行实际探测和补跑。
+
+## 2026-07-25 上线证据
+
+- 原始 cron 备份：`/Users/xiwei/.openclaw/state/founder-os-model-recovery/cron-backup-20260725T221001+0800.json`
+- SQLite 修复前备份：`/Users/xiwei/.openclaw/state/founder-os-model-recovery/openclaw-before-supervisor-repair-20260725T2220.sqlite`
+- supervisor ID：`655fb64c-4d70-4e63-a00e-ea219d5d9294`
+- supervisor：`agent_jarvis`、每 20 分钟、command payload、delivery none、failure alert false
+- health guard：deterministic audit command、delivery none、failure alert false
+- 模型配置对比：受管任务 `model` / `fallbacks` 与原始备份零差异
+- 首个有效快速启动 cron：状态 `ok`，command lane 耗时 19ms
+- 当日恢复状态：已识别失败任务并发送一次聚合故障通知；恢复探测期间 `founder-os-jarvis-opportunity-triage` 已补跑成功，其余任务继续按全局冷却等待

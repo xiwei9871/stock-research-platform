@@ -15,7 +15,7 @@ from stock_research.founder_os_model_recovery_cli import CommandResult
 
 HEALTH_GUARD_ID = "7bb1fe09-5543-4f79-8dfc-cd0fe308638d"
 SUPERVISOR_NAME = "founder-os-model-recovery-supervisor"
-SUPERVISOR_COMMAND = "/Users/xiwei/.openclaw/bin/founder-os-model-recovery run"
+SUPERVISOR_COMMAND = "/Users/xiwei/.openclaw/bin/founder-os-model-recovery spawn"
 AUDIT_COMMAND = "/Users/xiwei/.openclaw/bin/founder-os-model-recovery audit"
 DEFAULT_STATE_DIR = Path("/Users/xiwei/.openclaw/state/founder-os-model-recovery")
 Runner = Callable[[list[str], int], CommandResult]
@@ -50,6 +50,8 @@ def build_apply_commands(jobs: list[dict[str, Any]]) -> list[list[str]]:
             "Retry same-day Founder OS tasks after Doubao or OpenAI recovers",
             "--every",
             "20m",
+            "--agent",
+            "agent_jarvis",
             "--command",
             SUPERVISOR_COMMAND,
             "--command-cwd",

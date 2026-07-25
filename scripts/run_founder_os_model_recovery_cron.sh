@@ -11,10 +11,15 @@ if [[ $# -gt 0 ]]; then
   shift
 fi
 
-[[ "$COMMAND" == "run" || "$COMMAND" == "audit" ]] || {
-  echo "usage: $0 [run|audit]" >&2
+[[ "$COMMAND" == "run" || "$COMMAND" == "audit" || "$COMMAND" == "spawn" ]] || {
+  echo "usage: $0 [run|audit|spawn]" >&2
   exit 2
 }
+
+if [[ "$COMMAND" == "spawn" ]]; then
+  nohup "$0" run "$@" </dev/null >/dev/null 2>&1 &
+  exit 0
+fi
 
 mkdir -p "$STATE_ROOT" "$(dirname "$LOG_FILE")"
 if ! mkdir "$LOCK_DIR" 2>/dev/null; then

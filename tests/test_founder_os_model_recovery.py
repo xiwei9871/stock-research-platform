@@ -80,6 +80,18 @@ def test_recovery_state_deduplicates_and_enforces_probe_cooldown() -> None:
     assert state.can_probe("job-1", "run-1", now + timedelta(minutes=20)) is True
 
 
+def test_probe_cooldown_is_shared_across_pending_tasks() -> None:
+    now = datetime(2026, 7, 25, 1, 0, tzinfo=timezone.utc)
+    state = RecoveryState.for_time(now)
+    state.record_failure("job-1", "run-1", "morning", "model_unavailable", now)
+    state.record_failure("job-2", "run-2", "signals", "model_unavailable", now)
+
+    state.record_probe("job-1", "run-1", now)
+
+    assert state.can_probe("job-2", "run-2", now + timedelta(minutes=19)) is False
+    assert state.can_probe("job-2", "run-2", now + timedelta(minutes=20)) is True
+
+
 def test_recovery_state_marks_recovered_item_terminal() -> None:
     now = datetime(2026, 7, 25, 1, 0, tzinfo=timezone.utc)
     state = RecoveryState.for_time(now)

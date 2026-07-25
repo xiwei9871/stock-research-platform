@@ -11,7 +11,7 @@ def test_recovery_cron_script_uses_lock_and_repo_python() -> None:
     assert "python_lockfile" in text
     assert "founder-os-model-recovery.log" in text
     assert '-m stock_research.founder_os_model_recovery_cli "$COMMAND"' in text
-    assert '[[ "$COMMAND" == "run" || "$COMMAND" == "audit" ]]' in text
+    assert '[[ "$COMMAND" == "run" || "$COMMAND" == "audit" || "$COMMAND" == "spawn" ]]' in text
 
 
 def test_recovery_cron_script_defaults_to_run() -> None:
@@ -25,6 +25,13 @@ def test_recovery_cron_script_forwards_additional_cli_arguments() -> None:
 
     assert 'shift' in text
     assert '"$COMMAND" "$@"' in text
+
+
+def test_recovery_cron_script_can_spawn_outside_openclaw_cron_lane() -> None:
+    text = RUN_SCRIPT.read_text(encoding="utf-8")
+
+    assert '"spawn"' in text
+    assert 'nohup "$0" run' in text
 
 
 def test_installer_supports_dry_run_apply_and_rollback() -> None:

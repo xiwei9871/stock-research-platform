@@ -104,6 +104,12 @@ def test_apply_plan_disables_only_managed_agent_alerts_and_preserves_models() ->
     assert disabled_alert_ids == ["agent-1", HEALTH_GUARD_ID]
     assert all("--model" not in command and "--fallbacks" not in command for command in commands)
     assert sum(SUPERVISOR_NAME in command for command in commands) == 1
+    supervisor_command = next(command for command in commands if SUPERVISOR_NAME in command)
+    assert supervisor_command[supervisor_command.index("--agent") : supervisor_command.index("--agent") + 2] == [
+        "--agent",
+        "agent_jarvis",
+    ]
+    assert "/Users/xiwei/.openclaw/bin/founder-os-model-recovery spawn" in supervisor_command
     health_commands = [command for command in commands if HEALTH_GUARD_ID in command and "--command" in command]
     assert len(health_commands) == 1
 

@@ -108,10 +108,15 @@ class RecoveryState:
         item = self.items[self.item_key(job_id, run_id)]
         if item["status"] != "pending":
             return False
-        attempts = item["probe_attempts"]
+        attempts = [
+            attempt
+            for candidate in self.items.values()
+            for attempt in candidate.get("probe_attempts", [])
+        ]
         if not attempts:
             return True
-        return now - datetime.fromisoformat(attempts[-1]) >= PROBE_COOLDOWN
+        last_probe_at = max(datetime.fromisoformat(attempt) for attempt in attempts)
+        return now - last_probe_at >= PROBE_COOLDOWN
 
     def mark_recovered(
         self,
