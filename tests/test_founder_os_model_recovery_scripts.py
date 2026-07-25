@@ -20,6 +20,13 @@ def test_recovery_cron_script_defaults_to_run() -> None:
     assert 'COMMAND="${1:-run}"' in text
 
 
+def test_recovery_cron_script_forwards_additional_cli_arguments() -> None:
+    text = RUN_SCRIPT.read_text(encoding="utf-8")
+
+    assert 'shift' in text
+    assert '"$COMMAND" "$@"' in text
+
+
 def test_installer_supports_dry_run_apply_and_rollback() -> None:
     text = INSTALL_SCRIPT.read_text(encoding="utf-8")
 

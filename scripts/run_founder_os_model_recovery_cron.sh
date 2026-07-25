@@ -7,6 +7,9 @@ STATE_ROOT="${FOUNDER_OS_MODEL_RECOVERY_STATE_ROOT:-/Users/xiwei/.openclaw/state
 LOCK_DIR="$STATE_ROOT/python_lockfile"
 LOG_FILE="${FOUNDER_OS_MODEL_RECOVERY_LOG:-/Users/xiwei/.openclaw/logs/founder-os-model-recovery.log}"
 COMMAND="${1:-run}"
+if [[ $# -gt 0 ]]; then
+  shift
+fi
 
 [[ "$COMMAND" == "run" || "$COMMAND" == "audit" ]] || {
   echo "usage: $0 [run|audit]" >&2
@@ -26,5 +29,5 @@ trap cleanup_lock EXIT INT TERM
 
 cd "$ROOT"
 PYTHONPATH="$ROOT/src" "$PYTHON" \
-  -m stock_research.founder_os_model_recovery_cli "$COMMAND" \
+  -m stock_research.founder_os_model_recovery_cli "$COMMAND" "$@" \
   >>"$LOG_FILE" 2>&1
