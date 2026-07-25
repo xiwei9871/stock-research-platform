@@ -220,6 +220,7 @@ def run_supervisor_cycle(
     state: RecoveryState,
     now: datetime,
     persist_state: Callable[[RecoveryState], None] = lambda state: None,
+    execute_replays: bool = True,
 ) -> CycleResult:
     jobs = {job["id"]: job for job in client.list_jobs() if is_managed_job(job)}
     non_model_failures: list[str] = []
@@ -268,7 +269,7 @@ def run_supervisor_cycle(
     ]
     recovered: list[str] = []
 
-    if eligible:
+    if eligible and execute_replays:
         probe = eligible[0]
         state.record_probe(probe["job_id"], probe["original_run_id"], now)
         persist_state(state)

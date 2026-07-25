@@ -314,3 +314,22 @@ def test_supervisor_sends_one_unresolved_summary_after_2350() -> None:
 
     assert first.notifications == ["outage", "unresolved"]
     assert second.notifications == []
+
+
+def test_supervisor_dry_run_discovers_but_does_not_replay() -> None:
+    client = FakeClient(
+        jobs=[agent_job("job-1", "morning")],
+        initial_runs={"job-1": model_failure("run-1")},
+        replay_results={"job-1": success("replay-1")},
+    )
+
+    result = run_supervisor_cycle(
+        client=client,
+        state=RecoveryState.for_time(NOW),
+        now=NOW,
+        execute_replays=False,
+    )
+
+    assert client.run_calls == []
+    assert result.pending == ["morning"]
+    assert result.notifications == ["outage"]

@@ -1,11 +1,22 @@
 from __future__ import annotations
 
+import argparse
 import json
 import subprocess
 from dataclasses import dataclass
+from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any, Callable
 
-from stock_research.founder_os_model_recovery import run_identity
+from stock_research.founder_os_model_recovery import (
+    CycleResult,
+    RecoveryState,
+    SHANGHAI,
+    load_state,
+    run_identity,
+    run_supervisor_cycle,
+    save_state,
+)
 
 
 FEISHU_ACCOUNT = "jarvis"
@@ -149,3 +160,112 @@ class OpenClawClient:
             f"截止检查: {at_time}\n"
             "跨日后不再自动补跑"
         )
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("command", choices=["run", "audit"])
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--now")
+    parser.add_argument(
+        "--state-dir",
+        type=Path,
+        default=Path("/Users/xiwei/.openclaw/state/founder-os-model-recovery"),
+    )
+    return parser
+
+
+def audit_state(*, state: RecoveryState, now: datetime) -> int:
+    if not state.last_cycle_at:
+        return 1
+    try:
+        last_cycle = datetime.fromisoformat(state.last_cycle_at)
+    except ValueError:
+        return 1
+    if now - last_cycle > timedelta(minutes=45):
+        return 1
+    for item in state.items.values():
+        if item.get("status") != "replay_unknown":
+            continue
+        marked_at = item.get("replay_unknown_at")
+        if not marked_at:
+            return 1
+        if now - datetime.fromisoformat(str(marked_at)) > timedelta(minutes=40):
+            return 1
+    return 0
+
+
+def deliver_notifications(
+    *,
+    client: OpenClawClient,
+    result: CycleResult,
+    state: RecoveryState,
+    now: datetime,
+    dry_run: bool,
+    persist_state: Callable[[RecoveryState], None],
+) -> None:
+    for notification in result.notifications:
+        if notification == "outage":
+            message = client.render_outage_message(
+                result.pending,
+                (now + timedelta(minutes=20)).astimezone(SHANGHAI).strftime("%H:%M"),
+            )
+            flag = "outage_alert_sent"
+        elif notification == "recovery":
+            message = client.render_recovery_message(
+                result.recovered,
+                result.non_model_failures,
+            )
+            flag = "recovery_alert_sent"
+        elif notification == "unresolved":
+            message = client.render_unresolved_message(
+                result.pending,
+                now.astimezone(SHANGHAI).strftime("%H:%M"),
+            )
+            flag = "unresolved_alert_sent"
+        else:
+            continue
+        try:
+            client.send_feishu(message, dry_run=dry_run)
+        except Exception:
+            setattr(state, flag, False)
+            persist_state(state)
+            raise
+        persist_state(state)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    now = datetime.fromisoformat(args.now) if args.now else datetime.now(tz=SHANGHAI)
+    state_path = args.state_dir / f"{now.astimezone(SHANGHAI).date().isoformat()}.json"
+    try:
+        state = load_state(state_path, now=now)
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+        return 1
+    if args.command == "audit":
+        return audit_state(state=state, now=now)
+
+    client = OpenClawClient()
+    persist = (lambda value: None) if args.dry_run else (lambda value: save_state(state_path, value))
+    result = run_supervisor_cycle(
+        client=client,
+        state=state,
+        now=now,
+        persist_state=persist,
+        execute_replays=not args.dry_run,
+    )
+    deliver_notifications(
+        client=client,
+        result=result,
+        state=state,
+        now=now,
+        dry_run=args.dry_run,
+        persist_state=persist,
+    )
+    if not args.dry_run:
+        save_state(state_path, state)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
