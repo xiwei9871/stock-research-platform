@@ -5,10 +5,13 @@ import os
 from datetime import datetime, timedelta, timezone
 
 from stock_research.founder_os_model_recovery import (
+    CycleResult,
     RecoveryState,
     classify_failure,
     is_same_shanghai_day,
+    is_managed_job,
     load_state,
+    run_supervisor_cycle,
     save_state,
 )
 
@@ -128,3 +131,186 @@ def test_load_state_returns_fresh_state_for_missing_file(tmp_path) -> None:
 
     assert state.shanghai_date == "2026-07-25"
     assert state.items == {}
+
+
+NOW = datetime(2026, 7, 25, 1, 0, tzinfo=timezone.utc)
+
+
+def agent_job(job_id: str, name: str, *, enabled: bool = True) -> dict:
+    return {
+        "id": job_id,
+        "name": name,
+        "enabled": enabled,
+        "payload": {"kind": "agentTurn"},
+    }
+
+
+def model_failure(
+    run_id: str,
+    run_at: str = "2026-07-25T08:00:00+08:00",
+) -> dict:
+    return {
+        "action": "finished",
+        "status": "error",
+        "sessionId": run_id,
+        "runAtIso": run_at,
+        "runAtMs": 1,
+        "ts": 1,
+        "error": (
+            "All models failed (2): doubao 429 weekly usage quota | "
+            "openai 503 auth_unavailable"
+        ),
+    }
+
+
+def non_model_failure(run_id: str) -> dict:
+    run = model_failure(run_id)
+    run["error"] = "permission denied writing report"
+    return run
+
+
+def success(run_id: str) -> dict:
+    return {
+        "action": "finished",
+        "status": "ok",
+        "sessionId": run_id,
+        "runAtIso": "2026-07-25T09:00:00+08:00",
+        "runAtMs": 2,
+        "ts": 2,
+    }
+
+
+class FakeClient:
+    def __init__(self, *, jobs, initial_runs, replay_results=None):
+        self.jobs = jobs
+        self.current_runs = dict(initial_runs)
+        self.replay_results = dict(replay_results or {})
+        self.run_calls: list[str] = []
+
+    def list_jobs(self):
+        return self.jobs
+
+    def latest_terminal_run(self, job_id):
+        return self.current_runs.get(job_id)
+
+    def run_job(self, job_id):
+        self.run_calls.append(job_id)
+        self.current_runs[job_id] = self.replay_results[job_id]
+
+
+def test_is_managed_job_excludes_commands_disabled_and_supervisor() -> None:
+    assert is_managed_job(agent_job("job-1", "morning")) is True
+    assert is_managed_job(agent_job("job-2", "disabled", enabled=False)) is False
+    assert (
+        is_managed_job(
+            {
+                "id": "job-3",
+                "name": "command",
+                "enabled": True,
+                "payload": {"kind": "command"},
+            }
+        )
+        is False
+    )
+    assert (
+        is_managed_job(agent_job("job-4", "founder-os-model-recovery-supervisor"))
+        is False
+    )
+
+
+def test_supervisor_runs_one_probe_then_replays_remaining_tasks() -> None:
+    client = FakeClient(
+        jobs=[agent_job("job-1", "morning"), agent_job("job-2", "signals")],
+        initial_runs={
+            "job-1": model_failure("run-1", "2026-07-25T08:00:00+08:00"),
+            "job-2": model_failure("run-2", "2026-07-25T08:05:00+08:00"),
+        },
+        replay_results={"job-1": success("replay-1"), "job-2": success("replay-2")},
+    )
+    state = RecoveryState.for_time(NOW)
+
+    result = run_supervisor_cycle(client=client, state=state, now=NOW)
+
+    assert isinstance(result, CycleResult)
+    assert client.run_calls == ["job-1", "job-2"]
+    assert result.recovered == ["morning", "signals"]
+    assert result.pending == []
+    assert result.notifications == ["outage", "recovery"]
+
+
+def test_supervisor_stops_after_probe_remains_unavailable() -> None:
+    client = FakeClient(
+        jobs=[agent_job("job-1", "morning"), agent_job("job-2", "signals")],
+        initial_runs={"job-1": model_failure("run-1"), "job-2": model_failure("run-2")},
+        replay_results={"job-1": model_failure("replay-1")},
+    )
+
+    result = run_supervisor_cycle(
+        client=client,
+        state=RecoveryState.for_time(NOW),
+        now=NOW,
+    )
+
+    assert client.run_calls == ["job-1"]
+    assert result.pending == ["morning", "signals"]
+    assert result.notifications == ["outage"]
+
+
+def test_supervisor_does_not_replay_non_model_or_previous_day_failures() -> None:
+    client = FakeClient(
+        jobs=[agent_job("job-1", "bad-file"), agent_job("job-2", "yesterday")],
+        initial_runs={
+            "job-1": non_model_failure("run-1"),
+            "job-2": model_failure("run-2", "2026-07-24T08:00:00+08:00"),
+        },
+    )
+
+    result = run_supervisor_cycle(
+        client=client,
+        state=RecoveryState.for_time(NOW),
+        now=NOW,
+    )
+
+    assert client.run_calls == []
+    assert result.non_model_failures == ["bad-file"]
+    assert result.pending == []
+
+
+def test_supervisor_second_cycle_does_not_replay_recovered_original_run() -> None:
+    client = FakeClient(
+        jobs=[agent_job("job-1", "morning")],
+        initial_runs={"job-1": model_failure("run-1")},
+        replay_results={"job-1": success("replay-1")},
+    )
+    state = RecoveryState.for_time(NOW)
+    run_supervisor_cycle(client=client, state=state, now=NOW)
+
+    second = run_supervisor_cycle(
+        client=client,
+        state=state,
+        now=NOW + timedelta(minutes=20),
+    )
+
+    assert client.run_calls == ["job-1"]
+    assert second.recovered == []
+    assert second.notifications == []
+
+
+def test_supervisor_sends_one_unresolved_summary_after_2350() -> None:
+    now = datetime.fromisoformat("2026-07-25T23:50:00+08:00")
+    client = FakeClient(
+        jobs=[agent_job("job-1", "morning")],
+        initial_runs={"job-1": model_failure("run-1")},
+        replay_results={"job-1": model_failure("replay-1")},
+    )
+    state = RecoveryState.for_time(now)
+
+    first = run_supervisor_cycle(client=client, state=state, now=now)
+    second = run_supervisor_cycle(
+        client=client,
+        state=state,
+        now=now + timedelta(minutes=5),
+    )
+
+    assert first.notifications == ["outage", "unresolved"]
+    assert second.notifications == []

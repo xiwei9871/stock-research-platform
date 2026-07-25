@@ -5,6 +5,8 @@ import subprocess
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from stock_research.founder_os_model_recovery import run_identity
+
 
 FEISHU_ACCOUNT = "jarvis"
 FEISHU_TARGET = "chat:oc_82dd978138a0cde5864868c5b5b8e754"
@@ -33,10 +35,6 @@ def _default_runner(argv: list[str], timeout: int) -> CommandResult:
         stdout=completed.stdout,
         stderr=completed.stderr,
     )
-
-
-def run_identity(job_id: str, run: dict[str, Any]) -> str:
-    return str(run.get("sessionId") or f"{job_id}:{run.get('runAtMs', 0)}")
 
 
 @dataclass
