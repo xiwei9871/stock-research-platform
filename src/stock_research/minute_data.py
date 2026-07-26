@@ -62,6 +62,11 @@ BAOSTOCK_RETRYABLE_ERROR_MESSAGES = {
 BAOSTOCK_RETRY_SLEEP_SECONDS = 1.0
 BAOSTOCK_LOGIN_MAX_ATTEMPTS = 5
 BAOSTOCK_LOGIN_RETRY_ERROR_CODES = {"10002007"}
+MINUTE_STAGING_ENABLED_VALUES = {"1", "true", "yes", "on"}
+
+
+def minute_staging_enabled() -> bool:
+    return os.getenv("BAOSTOCK_MINUTE_STAGING_ENABLED", "").strip().lower() in MINUTE_STAGING_ENABLED_VALUES
 
 
 def _load_socks_module():
@@ -394,10 +399,6 @@ def upsert_stock_minute_bars(
     if not rows:
         return 0
 
-    staging_rows = [
-        minute_staging_row(row, freq=freq, adjust_type=adjust_type, params=params)
-        for row in rows
-    ]
     market_rows = [minute_market_row(row, freq=freq, adjust_type=adjust_type) for row in rows]
 
     staging_sql = """
@@ -450,16 +451,21 @@ def upsert_stock_minute_bars(
         amount = EXCLUDED.amount,
         updated_at = now()
     """
-    staging_params = [
-        {
-            **row,
-            "request_params": canonical_json(row["request_params"]),
-            "payload": canonical_json(row["payload"]),
-        }
-        for row in staging_rows
-    ]
     with connect(research_service) as conn:
-        execute_many(conn, staging_sql, staging_params)
+        if minute_staging_enabled():
+            staging_rows = [
+                minute_staging_row(row, freq=freq, adjust_type=adjust_type, params=params)
+                for row in rows
+            ]
+            staging_params = [
+                {
+                    **row,
+                    "request_params": canonical_json(row["request_params"]),
+                    "payload": canonical_json(row["payload"]),
+                }
+                for row in staging_rows
+            ]
+            execute_many(conn, staging_sql, staging_params)
         execute_many(conn, market_sql, market_rows)
     return len(market_rows)
 

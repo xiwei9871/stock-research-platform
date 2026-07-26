@@ -187,12 +187,31 @@ def test_minute_staging_row_preserves_raw_payload_hash():
     assert len(row["payload_hash"]) == 64
 
 
-def test_upsert_stock_minute_bars_writes_staging_and_market(monkeypatch):
+def test_upsert_stock_minute_bars_skips_staging_by_default(monkeypatch):
     calls = []
 
     def fake_execute_many(conn, sql, rows):
         calls.append((conn, sql, list(rows)))
 
+    monkeypatch.delenv("BAOSTOCK_MINUTE_STAGING_ENABLED", raising=False)
+    monkeypatch.setattr(minute_data, "connect", lambda service: _Context("conn"))
+    monkeypatch.setattr(minute_data, "execute_many", fake_execute_many)
+
+    assert upsert_stock_minute_bars([raw_minute_row()], freq="5min", adjust_type="qfq") == 1
+
+    assert len(calls) == 1
+    assert "INSERT INTO market.stock_minute_bar" in calls[0][1]
+    assert "ON CONFLICT (trade_date, asset_id, trade_time, freq, adjust_type, source)" in calls[0][1]
+    assert calls[0][2][0]["adjust_type"] == "qfq"
+
+
+def test_upsert_stock_minute_bars_writes_staging_when_enabled(monkeypatch):
+    calls = []
+
+    def fake_execute_many(conn, sql, rows):
+        calls.append((conn, sql, list(rows)))
+
+    monkeypatch.setenv("BAOSTOCK_MINUTE_STAGING_ENABLED", "true")
     monkeypatch.setattr(minute_data, "connect", lambda service: _Context("conn"))
     monkeypatch.setattr(minute_data, "execute_many", fake_execute_many)
 
@@ -201,8 +220,6 @@ def test_upsert_stock_minute_bars_writes_staging_and_market(monkeypatch):
     assert len(calls) == 2
     assert "INSERT INTO staging.baostock_stock_minute_bar" in calls[0][1]
     assert "INSERT INTO market.stock_minute_bar" in calls[1][1]
-    assert "ON CONFLICT (trade_date, asset_id, trade_time, freq, adjust_type, source)" in calls[1][1]
-    assert calls[1][2][0]["adjust_type"] == "qfq"
 
 
 def test_query_baostock_minute_rows_uses_frequency_and_adjustflag(monkeypatch):
