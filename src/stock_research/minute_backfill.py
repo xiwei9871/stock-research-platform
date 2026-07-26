@@ -17,6 +17,7 @@ from stock_research.db import connect, execute, execute_many, fetch_all
 from stock_research.minute_data import (
     bs,
     login_or_raise,
+    minute_staging_enabled,
     query_baostock_minute_rows,
     request_params,
     upsert_stock_minute_bars,
@@ -1233,29 +1234,35 @@ def validate_minute_bars(
     GROUP BY adjust_type
     ORDER BY adjust_type
     """
+    staging_enabled = minute_staging_enabled()
     with connect(SETTINGS.research_service) as conn:
         rows = fetch_all(conn, sql, params)
-        staging_counts = fetch_all(conn, staging_sql, [parsed_start, parsed_end, freq, adjust_types])
+        staging_counts = (
+            fetch_all(conn, staging_sql, [parsed_start, parsed_end, freq, adjust_types])
+            if staging_enabled
+            else []
+        )
         market_counts = fetch_all(conn, market_count_sql, [parsed_start, parsed_end, freq, adjust_types])
     errors = validate_minute_bar_rows(rows, adjust_types=adjust_types)
     staging_by_adjust = {row["adjust_type"]: int(row["row_count"]) for row in staging_counts}
     market_by_adjust = {row["adjust_type"]: int(row["row_count"]) for row in market_counts}
-    for adjust_type in adjust_types:
-        if staging_by_adjust.get(adjust_type, 0) != market_by_adjust.get(adjust_type, 0):
-            errors.append(
-                {
-                    "error_type": "staging_market_count_mismatch",
-                    "asset_id": "",
-                    "trade_time": "",
-                    "trade_date": "",
-                    "freq": freq,
-                    "adjust_type": adjust_type,
-                    "details": {
-                        "market": market_by_adjust.get(adjust_type, 0),
-                        "staging": staging_by_adjust.get(adjust_type, 0),
-                    },
-                }
-            )
+    if staging_enabled:
+        for adjust_type in adjust_types:
+            if staging_by_adjust.get(adjust_type, 0) != market_by_adjust.get(adjust_type, 0):
+                errors.append(
+                    {
+                        "error_type": "staging_market_count_mismatch",
+                        "asset_id": "",
+                        "trade_time": "",
+                        "trade_date": "",
+                        "freq": freq,
+                        "adjust_type": adjust_type,
+                        "details": {
+                            "market": market_by_adjust.get(adjust_type, 0),
+                            "staging": staging_by_adjust.get(adjust_type, 0),
+                        },
+                    }
+                )
     summary = {
         "start_date": parsed_start,
         "end_date": parsed_end,

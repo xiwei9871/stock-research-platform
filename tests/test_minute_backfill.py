@@ -853,3 +853,38 @@ def test_validate_minute_bar_rows_finds_duplicate_ohlc_mismatch_and_date_errors(
     assert "negative_volume_or_amount" in error_types
     assert "trade_date_mismatch" in error_types
     assert "adjust_type_count_mismatch" in error_types
+
+
+def test_validate_minute_bars_skips_staging_count_when_archive_disabled(monkeypatch, tmp_path):
+    calls = []
+
+    @contextmanager
+    def connected(service):
+        yield FakeConnection()
+
+    def fetched(conn, sql, params=None):
+        calls.append(sql)
+        if "SELECT asset_id" in sql:
+            return []
+        if "FROM staging.baostock_stock_minute_bar" in sql:
+            return []
+        if "count(*) AS row_count" in sql and "FROM market.stock_minute_bar" in sql:
+            return [{"adjust_type": "raw", "row_count": 10}]
+        raise AssertionError(sql)
+
+    monkeypatch.delenv("BAOSTOCK_MINUTE_STAGING_ENABLED", raising=False)
+    monkeypatch.setattr(minute_backfill, "connect", connected)
+    monkeypatch.setattr(minute_backfill, "fetch_all", fetched)
+
+    result = minute_backfill.validate_minute_bars(
+        "2022-01-01",
+        "2022-01-01",
+        freq="5min",
+        adjust_types=["raw"],
+        output_dir=tmp_path,
+    )
+
+    assert result["summary"]["market_rows"] == 10
+    assert result["summary"]["staging_rows"] == 0
+    assert result["summary"]["error_count"] == 0
+    assert not any("FROM staging.baostock_stock_minute_bar" in sql for sql in calls)
