@@ -5,6 +5,7 @@ from pathlib import Path
 from urllib.parse import urlencode
 from typing import Any
 
+from stock_research.asset_identity import normalize_cn_equity_asset_id
 from stock_research.config import SETTINGS
 from stock_research.data_run_manifest import load_latest_data_run_manifest, load_recent_data_run_manifest
 from stock_research.dashboard.display_date_gate import select_display_date
@@ -1241,20 +1242,7 @@ def _dedupe_records_by_asset(records: list[dict[str, Any]]) -> list[dict[str, An
 
 
 def _asset_id_from_ts_code(value: Any) -> str:
-    text = str(value or "").strip()
-    if not text:
-        return ""
-    if text.startswith("CN:"):
-        return text
-    if "." not in text:
-        return text
-    symbol, exchange = text.split(".", 1)
-    exchange = exchange.upper()
-    if exchange in {"SH", "SSE", "SHH"}:
-        return f"CN:SH:{symbol.zfill(6)}"
-    if exchange in {"SZ", "SZSE", "SHE"}:
-        return f"CN:SZ:{symbol.zfill(6)}"
-    return text
+    return normalize_cn_equity_asset_id(value)
 
 
 def _attach_asset_names(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:

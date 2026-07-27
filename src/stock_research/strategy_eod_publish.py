@@ -8,6 +8,7 @@ from typing import Any, Callable
 
 import pandas as pd
 
+from stock_research.asset_identity import normalize_cn_equity_asset_id
 from stock_research.config import SETTINGS
 from stock_research.dashboard.backtests import run_fresh_backtest
 from stock_research.dashboard.platform import load_platform_summary
@@ -1401,17 +1402,7 @@ def _score_from_lookup(
 
 
 def _asset_id_from_review_code(value: Any) -> str:
-    text = str(value or "").upper().strip()
-    if not text:
-        return ""
-    parts = text.split(":")
-    if len(parts) == 3 and parts[0] == "CN":
-        return text
-    if "." in text:
-        symbol, exchange = text.split(".", 1)
-        if exchange in {"SH", "SZ", "BJ"}:
-            return f"CN:{exchange}:{symbol}"
-    return ""
+    return normalize_cn_equity_asset_id(value)
 
 
 def _write_review_queue(

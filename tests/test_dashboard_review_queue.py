@@ -1,6 +1,24 @@
 from stock_research.dashboard import review_queue
 
 
+def test_review_queue_asset_normalization_uses_shared_strict_identity():
+    assert review_queue._asset_id_from_ts_code("600000.SSE") == "CN:SH:600000"
+    assert review_queue._asset_id_from_ts_code("000001.SZSE") == "CN:SZ:000001"
+    assert review_queue._asset_id_from_ts_code("CN:SH:") == ""
+    assert review_queue._asset_id_from_ts_code("CN:XX:000001") == ""
+    assert review_queue._asset_id_from_ts_code("ABC.SH") == ""
+
+
+def test_review_queue_dedupes_equivalent_asset_encodings():
+    rows = [
+        {"asset_id": "CN:SH:600000"},
+        {"asset_id": "600000.SSE"},
+        {"asset_id": "600001.SH"},
+    ]
+
+    assert review_queue._dedupe_records_by_asset(rows) == [rows[0], rows[2]]
+
+
 def _patch_stale_strategy_fallback(monkeypatch):
     monkeypatch.setattr(
         review_queue,
