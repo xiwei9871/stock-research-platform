@@ -124,10 +124,9 @@ def build_mid_trend_v1_from_frames(
             },
         }
     )
-    config_payload = asdict(config)
-    if report_start_date:
-        config_payload["start_date"] = report_start_date
-        config_payload["simulation_start_date"] = config.start_date
+    config_payload = _effective_config_payload(
+        config, report_start_date=report_start_date
+    )
     return {
         "strategy_id": "mid_trend",
         "strategy_name": "Mid Trend Combo",
@@ -140,6 +139,17 @@ def build_mid_trend_v1_from_frames(
         "positions": _records(result["positions"]),
         "trades": _records(result["trades"]),
     }
+
+
+def _effective_config_payload(
+    config: MidTrendV1Config, *, report_start_date: str | None
+) -> dict[str, Any]:
+    payload = asdict(config)
+    payload["rebalance_frequency"] = "weekly"
+    if report_start_date:
+        payload["start_date"] = report_start_date
+        payload["simulation_start_date"] = config.start_date
+    return payload
 
 
 def run_mid_trend_v1_backtest_for_dashboard(payload: dict[str, Any]) -> dict[str, Any]:

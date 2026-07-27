@@ -1105,11 +1105,28 @@ def _payload_missing(payload: dict[str, Any], key: str) -> bool:
 
 
 def _with_contract_config(result: dict[str, Any], run_config: dict[str, Any]) -> dict[str, Any]:
+    from stock_research.strategy_publication_contracts import get_publication_contract
+
+    strategy_id = _official_result_strategy_id(result)
+    contract = get_publication_contract(strategy_id, profile="balanced")
+    engine_config = result.get("config")
+    if not isinstance(engine_config, Mapping):
+        raise ValueError("engine result config must be a mapping")
+    for field, expected in contract.normalized_run_config.items():
+        if field not in run_config:
+            raise ValueError(f"official run config missing: {field}")
+        if run_config[field] != expected:
+            raise ValueError(
+                f"official config mismatch in run config: {field} expected {expected}, got {run_config[field]}"
+            )
+        if field not in engine_config:
+            raise ValueError(f"engine config missing: {field}")
+        if engine_config[field] != run_config[field]:
+            raise ValueError(
+                f"engine config mismatch: {field} expected executed {run_config[field]}, got {engine_config[field]}"
+            )
     next_result = dict(result)
-    config = dict(next_result.get("config") or {})
-    for key, value in run_config.items():
-        config[key] = value
-    next_result["config"] = config
+    next_result["config"] = dict(engine_config)
     return next_result
 
 

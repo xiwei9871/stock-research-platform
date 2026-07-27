@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 
 from stock_research.dashboard import backtests
+from stock_research import mid_trend_v1, tech_bottleneck_eod, tech_bottleneck_v1
 from stock_research.strategy_publication_contracts import build_publication_identity, get_publication_contract
 
 
@@ -40,6 +41,42 @@ def _official_result(strategy_id: str) -> dict:
         "summary": summary,
         "payload": {"preserve": True},
     }
+
+
+def test_mid_trend_engine_effective_config_records_weekly_frequency():
+    config = mid_trend_v1.MidTrendV1Config(
+        start_date="2026-01-01",
+        end_date="2026-07-24",
+        top_n=5,
+        transaction_cost_bps=10.0,
+        max_position_weight=0.2,
+        benchmark_variant=get_publication_contract("mid_trend").variant,
+    )
+    payload = mid_trend_v1._effective_config_payload(config, report_start_date=None)
+    assert payload["rebalance_frequency"] == "weekly"
+
+
+def test_tech_engine_effective_config_records_universe_and_protection():
+    config = tech_bottleneck_v1.TechBottleneckV1Config(
+        start_date="2026-01-01",
+        end_date="2026-07-24",
+        top_n=5,
+        rebalance_frequency="biweekly",
+        transaction_cost_bps=10.0,
+        max_position_weight=0.2,
+    )
+    payload = tech_bottleneck_v1._effective_config_payload(config, report_start_date=None)
+    assert payload["universe"] == "strict_153_st_only_financial_state"
+    assert payload["protection_name"] == "rank_exit_top10_1d"
+
+
+def test_tech_eod_engine_result_config_records_full_official_contract():
+    payload = tech_bottleneck_eod._effective_strategy_config(
+        start_date="2026-01-01", end_date="2026-07-24"
+    )
+    contract = get_publication_contract("tech_bottleneck")
+    for field, expected in contract.normalized_run_config.items():
+        assert payload[field] == expected
 
 
 def test_attach_publication_identity_succeeds_for_mid_and_lhb_with_detached_copies():
@@ -158,7 +195,9 @@ def test_official_fresh_path_attaches_identity_after_contract_config(monkeypatch
         "top_n": 5,
         "rebalance_frequency": "weekly",
         "transaction_cost_bps": 10.0,
+        "max_position_weight": 0.2,
         "adjust_type": "hfq",
+        "benchmark_variant": get_publication_contract("mid_trend").variant,
         "contract_id": get_publication_contract("mid_trend").contract_id,
         "contract_profile": "balanced",
         "contract_variant": get_publication_contract("mid_trend").variant,
@@ -184,7 +223,7 @@ def test_official_fresh_records_the_complete_config_passed_to_engine(monkeypatch
     def engine(payload):
         received.update(payload)
         returned = copy.deepcopy(result)
-        returned["config"] = {}
+        returned["config"] = dict(run_config)
         return returned
 
     monkeypatch.setattr(
@@ -213,6 +252,77 @@ def test_official_fresh_records_the_complete_config_passed_to_engine(monkeypatch
     assert {key: attached["config"][key] for key in run_config} == run_config
 
 
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        (lambda config: None, "engine result config must be a mapping"),
+        (lambda config: config.pop("max_position_weight"), "engine config missing"),
+        (lambda config: config.__setitem__("top_n", 999), "engine config mismatch"),
+    ],
+)
+def test_official_fresh_rejects_missing_or_conflicting_engine_config(
+    monkeypatch, mutation, message
+):
+    strategy_id = "mid_trend"
+    contract = get_publication_contract(strategy_id)
+    run_config = dict(contract.normalized_run_config)
+    params = SimpleNamespace(start_date="2026-01-01", end_date="2026-01-02")
+
+    def engine(payload):
+        returned = _official_result(strategy_id)
+        config = dict(run_config)
+        if message == "engine result config must be a mapping":
+            returned["config"] = None
+        else:
+            mutation(config)
+            returned["config"] = config
+        return returned
+
+    monkeypatch.setattr(
+        backtests,
+        "_parse_backtest_request",
+        lambda payload: (strategy_id, params, dict(run_config), None),
+    )
+    monkeypatch.setattr(
+        backtests,
+        "_apply_strategy_contract_run_config",
+        lambda strategy_id, config, payload: config,
+    )
+    monkeypatch.setattr(backtests, "run_mid_trend_v1_backtest_for_dashboard", engine)
+
+    with pytest.raises(ValueError, match=message):
+        backtests.run_fresh_backtest({"strategy_id": strategy_id})
+
+
+def test_official_fresh_rejects_engine_config_that_disagrees_with_official_run_config(
+    monkeypatch,
+):
+    strategy_id = "tech_bottleneck"
+    contract = get_publication_contract(strategy_id)
+    run_config = dict(contract.normalized_run_config)
+    params = SimpleNamespace(start_date="2026-01-01", end_date="2026-01-02")
+
+    def engine(payload):
+        returned = _official_result(strategy_id)
+        returned["config"] = {**run_config, "top_n": 999}
+        return returned
+
+    monkeypatch.setattr(
+        backtests,
+        "_parse_backtest_request",
+        lambda payload: (strategy_id, params, dict(run_config), None),
+    )
+    monkeypatch.setattr(
+        backtests,
+        "_apply_strategy_contract_run_config",
+        lambda strategy_id, config, payload: config,
+    )
+    monkeypatch.setattr(backtests, "run_tech_bottleneck_v1_backtest_for_dashboard", engine)
+
+    with pytest.raises(ValueError, match="engine config mismatch"):
+        backtests.run_fresh_backtest({"strategy_id": strategy_id})
+
+
 def test_official_replay_path_attaches_identity_after_contract_config(monkeypatch):
     result = _official_result("lhb_shortline")
     params = SimpleNamespace(start_date="2026-01-01", end_date="2026-01-02")
@@ -221,7 +331,9 @@ def test_official_replay_path_attaches_identity_after_contract_config(monkeypatc
         "top_n": 5,
         "rebalance_frequency": "daily",
         "transaction_cost_bps": 10.0,
+        "max_position_weight": 0.2,
         "adjust_type": "hfq",
+        "risk_profile": "balanced",
         "contract_id": contract.contract_id,
         "contract_profile": "balanced",
         "contract_variant": contract.variant,

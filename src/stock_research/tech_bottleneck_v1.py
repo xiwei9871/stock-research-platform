@@ -126,10 +126,9 @@ def build_tech_bottleneck_v1_from_frames(
             },
         }
     )
-    config_payload = asdict(config)
-    if report_start_date:
-        config_payload["start_date"] = report_start_date
-        config_payload["simulation_start_date"] = config.start_date
+    config_payload = _effective_config_payload(
+        config, report_start_date=report_start_date
+    )
     return {
         "strategy_id": "tech_bottleneck",
         "strategy_name": "Tech Bottleneck Discovery",
@@ -228,10 +227,9 @@ def build_tech_bottleneck_v1_from_rank_snapshots(
             },
         }
     )
-    config_payload = asdict(config)
-    if report_start_date:
-        config_payload["start_date"] = report_start_date
-        config_payload["simulation_start_date"] = config.start_date
+    config_payload = _effective_config_payload(
+        config, report_start_date=report_start_date
+    )
     return {
         "strategy_id": "tech_bottleneck",
         "strategy_name": "Tech Bottleneck Discovery",
@@ -243,6 +241,18 @@ def build_tech_bottleneck_v1_from_rank_snapshots(
         "positions": _records(run["positions"]),
         "trades": _records(run["trades"]),
     }
+
+
+def _effective_config_payload(
+    config: TechBottleneckV1Config, *, report_start_date: str | None
+) -> dict[str, Any]:
+    payload = asdict(config)
+    payload["universe"] = "strict_153_st_only_financial_state"
+    payload["protection_name"] = TECH_BOTTLENECK_V1_PROTECTION_NAME
+    if report_start_date:
+        payload["start_date"] = report_start_date
+        payload["simulation_start_date"] = config.start_date
+    return payload
 
 
 def run_tech_bottleneck_v1_backtest_for_dashboard(payload: dict[str, Any]) -> dict[str, Any]:

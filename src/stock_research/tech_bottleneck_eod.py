@@ -104,16 +104,7 @@ def run_tech_bottleneck_eod_from_frames(
     summary = _json_ready(strategy["summary"])
     summary.setdefault("transaction_cost_bps", TECH_BOTTLENECK_EOD_TRANSACTION_COST_BPS)
     summary.setdefault("max_position_weight", TECH_BOTTLENECK_EOD_MAX_POSITION_WEIGHT)
-    config = {
-        "start_date": start_date,
-        "end_date": end_date,
-        "top_n": TECH_BOTTLENECK_EOD_TOP_N,
-        "rebalance_frequency": TECH_BOTTLENECK_EOD_REBALANCE_FREQUENCY,
-        "transaction_cost_bps": TECH_BOTTLENECK_EOD_TRANSACTION_COST_BPS,
-        "max_position_weight": TECH_BOTTLENECK_EOD_MAX_POSITION_WEIGHT,
-        "adjust_type": TECH_BOTTLENECK_EOD_ADJUST_TYPE,
-        "engine_version": TECH_BOTTLENECK_V1_ENGINE_VERSION,
-    }
+    config = _effective_strategy_config(start_date=start_date, end_date=end_date)
 
     candidate_metadata = {
         "candidate_snapshot_latest_date": latest_snapshot_date,
@@ -174,6 +165,21 @@ def run_tech_bottleneck_eod_from_frames(
         "review_rows": int(len(review)),
         **output_paths,
         "manifest_entries": [candidate_entry, strategy_entry],
+    }
+
+
+def _effective_strategy_config(*, start_date: str, end_date: str) -> dict[str, Any]:
+    return {
+        "start_date": start_date,
+        "end_date": end_date,
+        "top_n": TECH_BOTTLENECK_EOD_TOP_N,
+        "rebalance_frequency": TECH_BOTTLENECK_EOD_REBALANCE_FREQUENCY,
+        "transaction_cost_bps": TECH_BOTTLENECK_EOD_TRANSACTION_COST_BPS,
+        "max_position_weight": TECH_BOTTLENECK_EOD_MAX_POSITION_WEIGHT,
+        "adjust_type": TECH_BOTTLENECK_EOD_ADJUST_TYPE,
+        "engine_version": TECH_BOTTLENECK_V1_ENGINE_VERSION,
+        "universe": "strict_153_st_only_financial_state",
+        "protection_name": "rank_exit_top10_1d",
     }
 
 
