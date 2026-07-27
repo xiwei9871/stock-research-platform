@@ -134,7 +134,10 @@ if [[ "$*" == *"run-strategy-daily-eod"* ]]; then
   echo "strategy_daily_eod|status|partial"
   echo "strategy_daily_eod|lhb_shortline_status|blocked"
   echo "strategy_daily_eod|mid_trend_status|success"
+  echo "strategy_daily_eod|strategy_midtrend_artifacts_status|success"
   echo "strategy_daily_eod|tech_bottleneck_status|success"
+  echo "strategy_daily_eod|dependency_common_status|success"
+  echo "strategy_daily_eod|dependency_intraday_status|failed"
   echo "strategy_daily_eod|dependency_reason|intraday: baostock login failed: 10002007"
   exit 0
 fi
@@ -160,5 +163,8 @@ exit 0
     assert "策略日终部分完成" in result.stdout
     assert "LHB: blocked" in result.stdout
     assert "Mid Trend: success" in result.stdout
+    assert "Midtrend Artifacts: success" in result.stdout
     assert "Tech Bottleneck: success" in result.stdout
+    assert "Common Dependency: success" in result.stdout
+    assert "Intraday Dependency: failed" in result.stdout
     assert "依赖原因: intraday: baostock login failed: 10002007" in result.stdout

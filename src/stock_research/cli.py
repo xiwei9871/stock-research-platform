@@ -7810,6 +7810,19 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
                 f"strategy_daily_eod|{strategy_name}_status|"
                 f"{strategy_status.get(strategy_name)}"
             )
+        print(
+            "strategy_daily_eod|strategy_midtrend_artifacts_status|"
+            f"{strategy_status.get('midtrend_artifacts')}"
+        )
+        dependency_check = result.get("dependency_check") or {}
+        print(
+            "strategy_daily_eod|dependency_common_status|"
+            f"{(dependency_check.get('common') or {}).get('status')}"
+        )
+        print(
+            "strategy_daily_eod|dependency_intraday_status|"
+            f"{(dependency_check.get('intraday') or {}).get('status')}"
+        )
         print(f"strategy_daily_eod|dependency_reason|{result.get('dependency_reason') or ''}")
     elif args.command == "trend-lifecycle-v1":
         result = run_trend_lifecycle_v1_report(
