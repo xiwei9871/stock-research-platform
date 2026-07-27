@@ -139,8 +139,14 @@ if [[ -z "$EXPECTED_TRADE_DATE" ]]; then
               and .runtime_provenance.source_root == $source
               and .runtime_provenance.python_package_root == $package
             )
-            | .latest_market_date
-            | select(type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$"))
+            | .runtime_provenance.strategy_artifact_date as $artifact
+            | select($artifact | type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$"))
+            | if ((.display_trade_date // "") == "") then
+                $artifact
+              else
+                .display_trade_date
+                | select(type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$") and . == $artifact)
+              end
           ' \
       2>/dev/null || true
   )"
@@ -152,7 +158,7 @@ if [[ -z "$EXPECTED_TRADE_DATE" ]]; then
       STOCK_RESEARCH_RELEASE_ROOT="$ROOT" \
       STOCK_RESEARCH_RELEASE_ID="$release_id" \
       "$STOCK_RESEARCH_PYTHON" -c \
-      'from stock_research.dashboard.platform import load_platform_summary; summary = load_platform_summary(); print(summary.get("latest_market_date") or summary.get("latest_trade_date") or "")' \
+      'import re; from stock_research.dashboard.readiness import build_platform_readiness; payload = build_platform_readiness(); artifact = str(payload.get("runtime_provenance", {}).get("strategy_artifact_date") or ""); display = str(payload.get("display_trade_date") or ""); selected = display or artifact; print(selected if re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", artifact) and (not display or display == artifact) else "")' \
       2>/dev/null || true
   )"
 fi

@@ -18,6 +18,10 @@ if [[ ! "$EXPECTED_TRADE_DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
   echo "Invalid EXPECTED_TRADE_DATE: expected YYYY-MM-DD" >&2
   exit 2
 fi
+if [[ ! "$EXPECTED_STRATEGY_ARTIFACT_DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+  echo "Invalid EXPECTED_STRATEGY_ARTIFACT_DATE: expected YYYY-MM-DD" >&2
+  exit 2
+fi
 if [[ ! "$RELEASE_CHECK_TIMEOUT_SECONDS" =~ ^[0-9]+$ ]] || (( RELEASE_CHECK_TIMEOUT_SECONDS < 1 || RELEASE_CHECK_TIMEOUT_SECONDS > 120 )); then
   echo "Invalid RELEASE_CHECK_TIMEOUT_SECONDS: expected 1..120" >&2
   exit 2
@@ -59,17 +63,25 @@ fetch_json() {
 
 readiness_matches_release() {
   jq -e \
-    --arg expected "$EXPECTED_TRADE_DATE" \
     --arg release "$EXPECTED_RELEASE_ID" \
     --arg source "$EXPECTED_REMOTE_SOURCE_ROOT" \
     --arg frontend_build "$EXPECTED_FRONTEND_BUILD_ID" \
     --arg strategy_date "$EXPECTED_STRATEGY_ARTIFACT_DATE" \
     --arg package_root "$EXPECTED_REMOTE_PYTHON_PACKAGE_ROOT" \
     '
-      .latest_market_date == $expected
+      (.latest_market_date | type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$"))
+      and (.runtime_provenance.strategy_artifact_date | type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$"))
+      and (.latest_market_date >= $strategy_date)
+      and .runtime_provenance.strategy_artifact_date == $strategy_date
+      and (
+        ((.display_trade_date // "") == "")
+        or (
+          (.display_trade_date | type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$"))
+          and .display_trade_date == $strategy_date
+        )
+      )
       and .runtime_provenance.release_id == $release
       and .runtime_provenance.frontend_build_id == $frontend_build
-      and .runtime_provenance.strategy_artifact_date == $strategy_date
       and .runtime_provenance.source_root != ""
       and ($source == "" or .runtime_provenance.source_root == $source)
       and (
@@ -127,7 +139,7 @@ done
 echo "Dashboard release check failed after ${RELEASE_CHECK_TIMEOUT_SECONDS}s." >&2
 echo "Expected date ${EXPECTED_TRADE_DATE} and release ${EXPECTED_RELEASE_ID}." >&2
 if [[ -s "$tmp_dir/readiness.json" ]]; then
-  jq '{latest_market_date, runtime_provenance}' "$tmp_dir/readiness.json" >&2 || true
+  jq '{latest_market_date, display_trade_date, runtime_provenance}' "$tmp_dir/readiness.json" >&2 || true
 fi
 if [[ -s "$tmp_dir/frontend-release.json" ]]; then
   jq '{release_id}' "$tmp_dir/frontend-release.json" >&2 || true

@@ -123,9 +123,9 @@ def _release_fixture(tmp_path: Path, *, valid_manifest: bool = True) -> tuple[Pa
           echo "$FAKE_RELEASE_ROOT/src/stock_research/__init__.py"
           exit 0
         fi
-        if [[ "$*" == *"load_platform_summary"* ]]; then
+        if [[ "$*" == *"load_platform_summary"* || "$*" == *"build_platform_readiness"* ]]; then
           if [[ "${FAKE_PLATFORM_LOADER_FAIL:-0}" == "1" ]]; then exit 1; fi
-          echo "${FAKE_PLATFORM_LATEST_DATE:-2026-07-24}"
+          echo "${FAKE_STRATEGY_DATE:-2026-07-24}"
           exit 0
         fi
         exec /usr/bin/python3 "$@"
@@ -437,6 +437,33 @@ def test_release_sync_executes_with_dynamic_date_python_override_and_compose_pro
     assert "BatchMode=yes" in commands
 
 
+def test_release_sync_prefers_publishable_date_from_matching_local_readiness(tmp_path):
+    root, env, _log_file = _release_fixture(tmp_path)
+    fake_bin = Path(env["PATH"].split(":", 1)[0])
+    _write_executable(
+        fake_bin / "curl",
+        """
+        #!/bin/bash
+        release_id="$(git -C "$FAKE_RELEASE_ROOT" rev-parse HEAD)"
+        printf '{"latest_market_date":"2026-07-27","display_trade_date":"2026-07-24","runtime_provenance":{"release_id":"%s","source_root":"%s","python_package_root":"%s/src/stock_research","strategy_artifact_date":"2026-07-24"}}\n' \
+          "$release_id" "$FAKE_RELEASE_ROOT" "$FAKE_RELEASE_ROOT"
+        """,
+    )
+
+    result = subprocess.run(
+        [str(REPO_ROOT / "deploy/sync_dashboard_release.sh")],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "Resolved EXPECTED_TRADE_DATE=2026-07-24" in result.stdout
+    assert "Resolved EXPECTED_TRADE_DATE=2026-07-27" not in result.stdout
+
+
 def test_release_sync_skips_all_mutations_when_desired_state_is_already_live(tmp_path):
     _root, env, log_file = _release_fixture(tmp_path)
     env["EXPECTED_TRADE_DATE"] = "2026-07-24"
@@ -661,7 +688,7 @@ def test_release_sync_builds_and_syncs_one_identified_release():
     assert "deploy/check_dashboard_release.sh" in script
     assert "deploy/validate_strategy_release.py" in script
     assert "release.json" in script
-    assert "load_platform_summary" in script
+    assert "build_platform_readiness" in script
     assert "platform_daily_summary_v1" not in script
     assert "resolve-latest" not in script
 
@@ -687,7 +714,15 @@ def test_release_gate_checks_readiness_provenance_and_review_queue_contract():
         assert strategy_id in script
 
 
-def _release_gate_env(tmp_path: Path, *, frontend_release_id: str) -> dict[str, str]:
+def _release_gate_env(
+    tmp_path: Path,
+    *,
+    frontend_release_id: str,
+    latest_market_date: str = "2026-07-24",
+    display_trade_date: str | None = "2026-07-24",
+    strategy_artifact_date: str = "2026-07-24",
+    queue_trade_date: str = "2026-07-24",
+) -> dict[str, str]:
     fake_bin = tmp_path / "bin"
     _write_executable(
         fake_bin / "curl",
@@ -704,15 +739,40 @@ def _release_gate_env(tmp_path: Path, *, frontend_release_id: str) -> dict[str, 
           esac
         done
         if [[ "$url" == */api/platform/readiness ]]; then
-          printf '%s\n' '{"latest_market_date":"2026-07-24","runtime_provenance":{"release_id":"new-release","frontend_build_id":"new-release","strategy_artifact_date":"2026-07-24","source_root":"/app","python_package_root":"/app/src/stock_research"}}' > "$output"
+          printf '%s\n' "$FAKE_READINESS_JSON" > "$output"
         elif [[ "$url" == */release.json ]]; then
           printf '{"release_id":"%s","api_base_image":"python:3.12.11-slim-bookworm@sha256:519591d6871b7bc437060736b9f7456b8731f1499a57e22e6c285135ae657bf7","frontend_base_image":"nginx:1.27.5-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10"}\n' "$FAKE_FRONTEND_RELEASE_ID" > "$output"
         else
-          printf '%s\n' '{"requested_trade_date":"2026-07-24","trade_date":"2026-07-24","groups":[{"strategy_id":"lhb_shortline","count":5,"data_trade_date":"2026-07-24","freshness_status":"current"},{"strategy_id":"mid_trend","count":5,"data_trade_date":"2026-07-24","freshness_status":"current"},{"strategy_id":"tech_bottleneck","count":5,"data_trade_date":"2026-07-24","freshness_status":"current"}]}' > "$output"
+          printf '%s\n' "$FAKE_QUEUE_JSON" > "$output"
         fi
         printf '200'
         """,
     )
+    readiness = {
+        "latest_market_date": latest_market_date,
+        "runtime_provenance": {
+            "release_id": "new-release",
+            "frontend_build_id": "new-release",
+            "strategy_artifact_date": strategy_artifact_date,
+            "source_root": "/app",
+            "python_package_root": "/app/src/stock_research",
+        },
+    }
+    if display_trade_date is not None:
+        readiness["display_trade_date"] = display_trade_date
+    queue = {
+        "requested_trade_date": queue_trade_date,
+        "trade_date": queue_trade_date,
+        "groups": [
+            {
+                "strategy_id": strategy_id,
+                "count": 5,
+                "data_trade_date": queue_trade_date,
+                "freshness_status": "current",
+            }
+            for strategy_id in ("lhb_shortline", "mid_trend", "tech_bottleneck")
+        ],
+    }
     return {
         **os.environ,
         "PATH": f"{fake_bin}:{os.environ['PATH']}",
@@ -723,6 +783,8 @@ def _release_gate_env(tmp_path: Path, *, frontend_release_id: str) -> dict[str, 
         "RELEASE_CHECK_TIMEOUT_SECONDS": "1",
         "RELEASE_CHECK_RETRY_SECONDS": "1",
         "FAKE_FRONTEND_RELEASE_ID": frontend_release_id,
+        "FAKE_READINESS_JSON": json.dumps(readiness),
+        "FAKE_QUEUE_JSON": json.dumps(queue),
     }
 
 
@@ -755,6 +817,117 @@ def test_release_gate_accepts_matching_public_dist_api_and_queue(tmp_path):
 
     assert result.returncode == 0, result.stderr
     assert "Dashboard release check passed" in result.stdout
+
+
+def test_release_gate_accepts_market_date_after_expected_strategy_date(tmp_path):
+    env = _release_gate_env(
+        tmp_path,
+        frontend_release_id="new-release",
+        latest_market_date="2026-07-27",
+        display_trade_date="2026-07-24",
+        strategy_artifact_date="2026-07-24",
+    )
+    env["RELEASE_CHECK_TIMEOUT_SECONDS"] = "5"
+
+    result = subprocess.run(
+        [str(REPO_ROOT / "deploy/check_dashboard_release.sh")],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize(
+    ("latest_market_date", "display_trade_date", "strategy_artifact_date"),
+    [
+        ("2026-07-23", "2026-07-24", "2026-07-24"),
+        ("2026-07-27", "2026-07-24", "2026-06-01"),
+        ("2026-07-27", "2026-06-01", "2026-07-24"),
+        ("2026-7-27", "2026-07-24", "2026-07-24"),
+        ("not-a-date", "2026-07-24", "2026-07-24"),
+    ],
+)
+def test_release_gate_rejects_invalid_or_inconsistent_release_dates(
+    tmp_path, latest_market_date, display_trade_date, strategy_artifact_date
+):
+    env = _release_gate_env(
+        tmp_path,
+        frontend_release_id="new-release",
+        latest_market_date=latest_market_date,
+        display_trade_date=display_trade_date,
+        strategy_artifact_date=strategy_artifact_date,
+    )
+
+    result = subprocess.run(
+        [str(REPO_ROOT / "deploy/check_dashboard_release.sh")],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
+
+
+def test_release_gate_accepts_missing_display_date_when_artifact_date_is_exact(tmp_path):
+    env = _release_gate_env(
+        tmp_path,
+        frontend_release_id="new-release",
+        latest_market_date="2026-07-27",
+        display_trade_date=None,
+        strategy_artifact_date="2026-07-24",
+    )
+    env["RELEASE_CHECK_TIMEOUT_SECONDS"] = "5"
+
+    result = subprocess.run(
+        [str(REPO_ROOT / "deploy/check_dashboard_release.sh")],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_release_gate_rejects_malformed_expected_strategy_artifact_date(tmp_path):
+    env = _release_gate_env(tmp_path, frontend_release_id="new-release")
+    env["EXPECTED_STRATEGY_ARTIFACT_DATE"] = "2026-7-24"
+
+    result = subprocess.run(
+        [str(REPO_ROOT / "deploy/check_dashboard_release.sh")],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert "Invalid EXPECTED_STRATEGY_ARTIFACT_DATE" in result.stderr
+
+
+def test_release_gate_rejects_queue_date_rewrite(tmp_path):
+    env = _release_gate_env(
+        tmp_path,
+        frontend_release_id="new-release",
+        latest_market_date="2026-07-27",
+        display_trade_date="2026-07-24",
+        strategy_artifact_date="2026-07-24",
+        queue_trade_date="2026-07-27",
+    )
+
+    result = subprocess.run(
+        [str(REPO_ROOT / "deploy/check_dashboard_release.sh")],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
 
 
 def test_vite_build_emits_release_metadata():
