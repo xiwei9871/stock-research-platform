@@ -24,6 +24,9 @@ BUCKET_LABELS = {
     "thin": "Thin / Missing Sources",
 }
 CANONICAL_STRATEGY_OUTPUT_SUFFIX = ("outputs", "research", "strategy_daily_eod")
+LEGACY_STRATEGY_OUTPUT_ROOTS = (
+    Path("/Users/xiwei/stock_research/outputs/research/strategy_daily_eod"),
+)
 
 
 def _configured_output_root() -> Path:
@@ -342,11 +345,13 @@ def _resolve_manifest_artifact_path(
     if not raw_text:
         return None
     raw_path = Path(raw_text)
+    if ".." in raw_path.parts:
+        return None
     if raw_path.is_absolute():
         direct = _contained_existing_file(raw_path, root=strategy_output_root)
         if direct is not None:
             return direct
-        suffix = _path_suffix_after(raw_path, CANONICAL_STRATEGY_OUTPUT_SUFFIX)
+        suffix = _legacy_strategy_artifact_suffix(raw_path)
         if suffix is None:
             return None
         candidate = strategy_output_root.joinpath(*suffix)
@@ -359,6 +364,15 @@ def _resolve_manifest_artifact_path(
         else:
             candidate = strategy_output_root / trade_date / raw_path
     return _contained_existing_file(candidate, root=strategy_output_root)
+
+
+def _legacy_strategy_artifact_suffix(path: Path) -> tuple[str, ...] | None:
+    for legacy_root in LEGACY_STRATEGY_OUTPUT_ROOTS:
+        try:
+            return path.relative_to(legacy_root).parts
+        except ValueError:
+            continue
+    return None
 
 
 def _path_suffix_after(path: Path, marker: tuple[str, ...]) -> tuple[str, ...] | None:

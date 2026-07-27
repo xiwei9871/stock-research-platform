@@ -190,6 +190,36 @@ def test_review_queue_rejects_manifest_artifacts_escaping_explicit_root(
     assert all(group["freshness_status"] == "missing" for group in result["groups"])
 
 
+@pytest.mark.parametrize("unsafe_style", ["untrusted_absolute", "traversal_before_suffix"])
+def test_review_queue_does_not_relocate_untrusted_canonical_suffix_paths(
+    monkeypatch, tmp_path, unsafe_style
+):
+    strategy_root = tmp_path / "release" / "outputs" / "research" / "strategy_daily_eod"
+    date_root = strategy_root / "2026-07-24"
+    artifact_paths = {}
+    for module, (strategy_id, strategy_name) in STRATEGY_MODULES.items():
+        filename = f"{module}_review.csv"
+        _write_strategy_review(date_root / filename, strategy_id=strategy_id, strategy_name=strategy_name)
+        if unsafe_style == "untrusted_absolute":
+            artifact_paths[module] = Path(
+                f"/srv/untrusted-copy/outputs/research/strategy_daily_eod/2026-07-24/{filename}"
+            )
+        else:
+            artifact_paths[module] = Path(
+                f"../../external/outputs/research/strategy_daily_eod/2026-07-24/{filename}"
+            )
+    _patch_release_queue_dependencies(monkeypatch, _successful_modules(artifact_paths))
+
+    result = review_queue.build_review_queue(
+        trade_date="2026-07-24",
+        strategy_output_root=strategy_root,
+        use_strategy_snapshots=False,
+    )
+
+    assert all(group["count"] == 0 for group in result["groups"])
+    assert all(group["freshness_status"] == "missing" for group in result["groups"])
+
+
 def test_review_queue_asset_normalization_uses_shared_strict_identity():
     assert review_queue._asset_id_from_ts_code("600000.SSE") == "CN:SH:600000"
     assert review_queue._asset_id_from_ts_code("000001.SZSE") == "CN:SZ:000001"
