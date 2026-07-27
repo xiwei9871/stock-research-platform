@@ -272,14 +272,32 @@ def test_release_frontend_build_enables_ci_only_for_the_build_process(tmp_path):
 
     assert result.returncode == 0, result.stderr
     commands = log_file.read_text(encoding="utf-8")
+    command_lines = commands.splitlines()
     script = _read("deploy/sync_dashboard_release.sh")
     build_command = 'rtk pnpm --dir "$ROOT/dashboard" build'
     build_index = script.index(build_command)
     assert "CI=true" in script[build_index - 200 : build_index]
-    assert "rtk:CI=caller-value:pnpm --dir" in commands
-    assert "install --frozen-lockfile" in commands
-    assert "rtk:CI=true:pnpm --dir" in commands
-    assert "ssh:CI=caller-value:" in commands
+    install_line = next(
+        line
+        for line in command_lines
+        if line.startswith("rtk:CI=") and " install --frozen-lockfile" in line
+    )
+    build_line = next(
+        line
+        for line in command_lines
+        if line.startswith("rtk:CI=") and line.endswith(" build")
+    )
+    ssh_lines = [line for line in command_lines if line.startswith("ssh:CI=")]
+    rsync_lines = [line for line in command_lines if line.startswith("rsync:CI=")]
+
+    assert install_line.startswith("rtk:CI=caller-value:")
+    assert build_line.startswith("rtk:CI=true:")
+    assert ssh_lines and all(
+        line.startswith("ssh:CI=caller-value:") for line in ssh_lines
+    )
+    assert rsync_lines and all(
+        line.startswith("rsync:CI=caller-value:") for line in rsync_lines
+    )
 
 
 def test_release_sync_defaults_to_batch_mode_and_validates_ssh_options():
