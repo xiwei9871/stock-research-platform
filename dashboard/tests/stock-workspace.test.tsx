@@ -902,6 +902,90 @@ describe('StockWorkspace', () => {
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
+  it.each([
+    ['an empty start date', 'stock workspace start date', '', '请输入有效的图表开始和结束日期。'],
+    ['an empty end date', 'stock workspace end date', '', '请输入有效的图表开始和结束日期。'],
+    ['a reversed range', 'stock workspace start date', '2026-07-25', '图表开始日期不能晚于结束日期。']
+  ])('does not apply or fetch %s', async (_caseName, inputLabel, inputValue, expectedError) => {
+    render(<StockWorkspace initialAssetId="000001.SZ" defaultTradeDate="2026-07-24" />);
+
+    await waitFor(() =>
+      expect(apiMocks.fetchDailyBars).toHaveBeenCalledWith('000001.SZ', undefined, '2026-07-24', {
+        resolution: '1D',
+        adjustType: 'qfq'
+      })
+    );
+    const initialProfileRequestCount = apiMocks.fetchAssetProfile.mock.calls.length;
+    const initialChartRequestCount = apiMocks.fetchDailyBars.mock.calls.length;
+
+    fireEvent.change(screen.getByLabelText(inputLabel), { target: { value: inputValue } });
+    fireEvent.click(screen.getByRole('button', { name: '加载回放' }));
+
+    expect(await screen.findByText(expectedError)).toBeInTheDocument();
+    expect(apiMocks.fetchAssetProfile).toHaveBeenCalledTimes(initialProfileRequestCount);
+    expect(apiMocks.fetchDailyBars).toHaveBeenCalledTimes(initialChartRequestCount);
+    expect(screen.getByText(/图表 2026-01-25 至 2026-07-24/)).toBeInTheDocument();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('stock workspace start date')).toBeRequired();
+    expect(screen.getByLabelText('stock workspace end date')).toBeRequired();
+  });
+
+  it('does not request a new range for the previously loaded asset during an asset and range submit', async () => {
+    const secondProfile = deferred<AssetProfile>();
+    apiMocks.fetchAssetProfile.mockResolvedValueOnce(makeProfile()).mockReturnValueOnce(secondProfile.promise);
+
+    render(<StockWorkspace initialAssetId="000001.SZ" defaultTradeDate="2026-07-24" />);
+
+    await waitFor(() =>
+      expect(apiMocks.fetchDailyBars).toHaveBeenCalledWith('000001.SZ', undefined, '2026-07-24', {
+        resolution: '1D',
+        adjustType: 'qfq'
+      })
+    );
+    apiMocks.fetchDailyBars.mockClear();
+
+    fireEvent.change(screen.getByLabelText('stock workspace asset'), { target: { value: '600000' } });
+    fireEvent.change(screen.getByLabelText('stock workspace end date'), { target: { value: '2026-05-18' } });
+    fireEvent.click(screen.getByRole('button', { name: '加载回放' }));
+
+    await waitFor(() =>
+      expect(apiMocks.fetchAssetProfile).toHaveBeenLastCalledWith(
+        '600000.SH',
+        '2026-07-24',
+        '2026-01-25',
+        '2026-05-18',
+        'manual_v1',
+        'qfq'
+      )
+    );
+    expect(apiMocks.fetchDailyBars).not.toHaveBeenCalled();
+
+    await act(async () => {
+      secondProfile.resolve(
+        makeProfile({
+          asset_id: '600000.SH',
+          canonical_asset_id: '600000.SH',
+          asset: {
+            asset_id: '600000.SH',
+            symbol: '600000',
+            name: '浦发银行',
+            exchange: 'SH',
+            board: null,
+            is_active: true
+          }
+        })
+      );
+      await secondProfile.promise;
+    });
+
+    await waitFor(() =>
+      expect(apiMocks.fetchDailyBars).toHaveBeenCalledWith('600000.SH', undefined, '2026-05-18', {
+        resolution: '1D',
+        adjustType: 'qfq'
+      })
+    );
+  });
+
   it('renders a decision-first layout with price state and collapsed secondary evidence', async () => {
     apiMocks.fetchAssetProfile.mockResolvedValueOnce(
       makeProfile({

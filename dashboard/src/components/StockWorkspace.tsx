@@ -64,6 +64,14 @@ function offsetDate(dateValue: string, dayOffset: number) {
   return date.toISOString().slice(0, 10);
 }
 
+function isValidDateValue(dateValue: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+    return false;
+  }
+  const date = new Date(`${dateValue}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === dateValue;
+}
+
 type FactorDisplayRow = {
   group: string;
   name: string;
@@ -487,6 +495,7 @@ export function StockWorkspace({
   const [endDate, setEndDate] = useState(initialChartEndDate);
   const [startDateInput, setStartDateInput] = useState(initialChartStartDate);
   const [endDateInput, setEndDateInput] = useState(initialChartEndDate);
+  const [chartRangeError, setChartRangeError] = useState<string | null>(null);
   const [profile, setProfile] = useState<StockWorkspaceAssetProfile | null>(null);
   const [chartResolution, setChartResolution] = useState<ChartResolution>('1D');
   const [chartBars, setChartBars] = useState<BarPoint[]>([]);
@@ -662,6 +671,7 @@ export function StockWorkspace({
     setEndDate(initialChartEndDate);
     setStartDateInput(initialChartStartDate);
     setEndDateInput(initialChartEndDate);
+    setChartRangeError(null);
     void loadProfile(initialAssetId, initialReviewDate, initialChartStartDate, initialChartEndDate);
     return () => {
       mountedRef.current = false;
@@ -859,6 +869,17 @@ export function StockWorkspace({
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!isValidDateValue(startDateInput) || !isValidDateValue(endDateInput)) {
+      setChartRangeError('请输入有效的图表开始和结束日期。');
+      return;
+    }
+    if (startDateInput > endDateInput) {
+      setChartRangeError('图表开始日期不能晚于结束日期。');
+      return;
+    }
+    setChartRangeError(null);
+    setProfile(null);
+    setChartBars([]);
     setStartDate(startDateInput);
     setEndDate(endDateInput);
     void loadProfile(assetId, tradeDate, startDateInput, endDateInput);
@@ -964,7 +985,7 @@ export function StockWorkspace({
   const chartWindowLabel = isIntradayChartActive
     ? `${startDate} to ${endDate}`
     : `历史 ${chartBars.length} bars / 固定显示 ${visibleChartBarCount} bars / 截至 ${endDate}`;
-  const historicalChartReplay = endDate < initialChartEndDate;
+  const historicalChartReplay = isValidDateValue(endDate) && endDate < initialChartEndDate;
   const thesisGapSummary = summarizeTechBottleneckGap(currentEntryContext);
   const thesisNextStepSummary = summarizeTechBottleneckNextStep(currentEntryContext.nextAction);
   const thesisGapDetail = normalizeCompactSentence(currentEntryContext.evidenceGapNote ?? '');
@@ -1008,7 +1029,7 @@ export function StockWorkspace({
             {assetId} · 复盘日 {tradeDate} · 图表 {startDate} 至 {endDate}
           </small>
         </summary>
-        <form className="compact-toolbar" onSubmit={handleSubmit}>
+        <form className="compact-toolbar" onSubmit={handleSubmit} noValidate>
           <label>
             股票代码
             <input
@@ -1031,6 +1052,7 @@ export function StockWorkspace({
             <input
               aria-label="stock workspace start date"
               type="date"
+              required
               value={startDateInput}
               onChange={(event) => setStartDateInput(event.target.value)}
             />
@@ -1040,12 +1062,14 @@ export function StockWorkspace({
             <input
               aria-label="stock workspace end date"
               type="date"
+              required
               value={endDateInput}
               onChange={(event) => setEndDateInput(event.target.value)}
             />
           </label>
           <button type="submit">加载回放</button>
           {isLoading ? <span className="muted">正在加载...</span> : null}
+          {chartRangeError ? <span className="error-text">{chartRangeError}</span> : null}
         </form>
       </details>
 
