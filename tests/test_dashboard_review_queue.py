@@ -1,6 +1,98 @@
 from stock_research.dashboard import review_queue
 
 
+def test_strategy_review_queue_preserves_requested_date_and_reports_group_data_date(monkeypatch):
+    monkeypatch.setattr(
+        review_queue,
+        "_active_strategy_names",
+        lambda: {
+            "lhb_shortline": "LHB Shortline Combo",
+            "mid_trend": "Mid Trend Combo",
+            "tech_bottleneck": "Tech Bottleneck Combo",
+        },
+    )
+
+    result = review_queue._strategy_review_queue(
+        rows=[
+            {
+                "trade_date": "2026-06-01",
+                "asset_id": "CN:SZ:000001",
+                "strategy_id": "mid_trend",
+                "strategy_name": "Mid Trend Combo",
+                "rank": 1,
+                "score_total": 88.0,
+            }
+        ],
+        selected_trade_date="2026-07-24",
+        platform_market_date="2026-07-24",
+        score_version="strategy_topn",
+        lookback_days=90,
+    )
+
+    assert result["requested_trade_date"] == "2026-07-24"
+    assert result["trade_date"] == "2026-07-24"
+    mid_trend = next(group for group in result["groups"] if group["strategy_id"] == "mid_trend")
+    assert mid_trend["strategy_id"] == "mid_trend"
+    assert mid_trend["requested_trade_date"] == "2026-07-24"
+    assert mid_trend["data_trade_date"] == "2026-06-01"
+    assert mid_trend["freshness_status"] == "stale"
+
+
+def test_strategy_review_queue_marks_empty_official_groups_missing(monkeypatch):
+    monkeypatch.setattr(
+        review_queue,
+        "_active_strategy_names",
+        lambda: {
+            "lhb_shortline": "LHB Shortline Combo",
+            "mid_trend": "Mid Trend Combo",
+            "tech_bottleneck": "Tech Bottleneck Combo",
+        },
+    )
+
+    result = review_queue._strategy_review_queue(
+        rows=[],
+        selected_trade_date="2026-07-24",
+        platform_market_date="2026-07-24",
+        score_version="strategy_topn",
+        lookback_days=90,
+    )
+
+    assert result["requested_trade_date"] == "2026-07-24"
+    assert result["trade_date"] == "2026-07-24"
+    assert all(group["freshness_status"] == "missing" for group in result["groups"])
+    assert all(group["data_trade_date"] == "" for group in result["groups"])
+
+
+def test_strategy_review_queue_uses_underlying_latest_trade_date_for_freshness(monkeypatch):
+    monkeypatch.setattr(
+        review_queue,
+        "_active_strategy_names",
+        lambda: {"mid_trend": "Mid Trend Combo"},
+    )
+
+    result = review_queue._strategy_review_queue(
+        rows=[
+            {
+                "trade_date": "2026-07-24",
+                "latest_trade_date": "2026-06-01",
+                "asset_id": "CN:SZ:000001",
+                "strategy_id": "mid_trend",
+                "strategy_name": "Mid Trend Combo",
+                "rank": 1,
+                "score_total": 88.0,
+            }
+        ],
+        selected_trade_date="2026-07-24",
+        platform_market_date="2026-07-24",
+        score_version="strategy_topn",
+        lookback_days=90,
+    )
+
+    group = result["groups"][0]
+    assert group["data_trade_date"] == "2026-06-01"
+    assert group["freshness_status"] == "stale"
+
+
 def test_review_queue_defaults_to_latest_market_date_when_display_gate_lags(monkeypatch):
     monkeypatch.setattr(review_queue, "load_recent_data_run_manifest", lambda: [{"trade_date": "2026-06-30"}])
     monkeypatch.setattr(

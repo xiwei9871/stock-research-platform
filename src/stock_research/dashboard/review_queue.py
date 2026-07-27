@@ -69,6 +69,7 @@ def build_review_queue(
             return _strategy_review_queue(
                 rows=strategy_rows,
                 selected_trade_date=selected_trade_date,
+                platform_market_date=str(summary.get("latest_market_date") or selected_trade_date),
                 score_version="strategy_topn",
                 lookback_days=bounded_lookback_days,
             )
@@ -763,6 +764,7 @@ def _strategy_review_queue(
     *,
     rows: list[dict[str, Any]],
     selected_trade_date: str,
+    platform_market_date: str,
     score_version: str,
     lookback_days: int,
 ) -> dict[str, Any]:
@@ -775,7 +777,8 @@ def _strategy_review_queue(
         if not asset_id:
             continue
         item_trade_date = str(row.get("trade_date") or selected_trade_date)
-        digest = _strategy_lightweight_digest(row, asset_id, item_trade_date)
+        item_data_trade_date = str(row.get("latest_trade_date") or item_trade_date)
+        digest = _strategy_lightweight_digest(row, asset_id, item_data_trade_date)
         item = _queue_item(
             row=row,
             digest=digest,
@@ -785,7 +788,7 @@ def _strategy_review_queue(
             generated_at=_generated_at(item_trade_date),
             manifest_modules=[],
             manifest_run_id=str(row.get("strategy_run_id") or ""),
-            manifest_latest_trade_date=item_trade_date,
+            manifest_latest_trade_date=str(row.get("latest_trade_date") or item_trade_date),
         )
         by_strategy.setdefault(strategy_id, []).append(item)
         labels[strategy_id] = str(row.get("strategy_name") or strategy_id)
@@ -814,23 +817,46 @@ def _strategy_review_queue(
     strategy_order = list(active_strategy_names)
     ordered_strategy_ids = [strategy_id for strategy_id in strategy_order if strategy_id in by_strategy]
     ordered_strategy_ids.extend(strategy_id for strategy_id in by_strategy if strategy_id not in ordered_strategy_ids)
-    groups = [
-        {
-            "bucket": f"strategy:{strategy_id}",
-            "label": labels.get(strategy_id, strategy_id),
-            "count": len(sorted_items := sorted(by_strategy[strategy_id], key=_sort_key)),
-            "items": sorted_items,
-        }
-        for strategy_id in ordered_strategy_ids
-    ]
+    groups = []
+    for strategy_id in ordered_strategy_ids:
+        sorted_items = sorted(by_strategy[strategy_id], key=_sort_key)
+        data_trade_date = max(
+            (str(item.get("latest_trade_date") or item.get("trade_date") or "")[:10] for item in sorted_items),
+            default="",
+        )
+        groups.append(
+            {
+                "bucket": f"strategy:{strategy_id}",
+                "strategy_id": strategy_id,
+                "label": labels.get(strategy_id, strategy_id),
+                "requested_trade_date": selected_trade_date,
+                "data_trade_date": data_trade_date,
+                "freshness_status": _group_freshness(data_trade_date, selected_trade_date),
+                "count": len(sorted_items),
+                "items": sorted_items,
+            }
+        )
     return {
-        "trade_date": latest_item_date or selected_trade_date,
+        "requested_trade_date": selected_trade_date,
+        "trade_date": selected_trade_date,
+        "platform_market_date": platform_market_date or selected_trade_date,
+        "data_status": (
+            "ready"
+            if groups and all(group["freshness_status"] == "current" for group in groups)
+            else "partial"
+        ),
         "score_version": score_version,
         "review_mode": "strategy_topn",
-        "generated_at": _generated_at(latest_item_date or selected_trade_date),
+        "generated_at": _generated_at(selected_trade_date),
         "groups": groups,
         "warnings": warnings,
     }
+
+
+def _group_freshness(data_trade_date: str, requested_trade_date: str) -> str:
+    if not data_trade_date:
+        return "missing"
+    return "current" if data_trade_date == requested_trade_date else "stale"
 
 
 def _strategy_lightweight_digest(row: dict[str, Any], asset_id: str, trade_date: str) -> dict[str, Any]:
