@@ -1,3 +1,4 @@
+import importlib.util
 from pathlib import Path
 
 import pandas as pd
@@ -85,16 +86,70 @@ def test_run_strategy_daily_eod_writes_summary_and_status(tmp_path: Path, monkey
         tech_runner=runner,
     )
 
-    summary_path = tmp_path / "2026-06-24" / "strategy_daily_eod_legacy" / "strategy_eod_publish_summary.json"
+    summary_path = tmp_path / "2026-06-24" / "strategy_eod_publish_summary.json"
     assert result["status"] == "success"
     assert summary_path.exists()
-    assert official_manifest.read_text(encoding="utf-8") == "official dashboard manifest\n"
-    assert official_lhb.read_text(encoding="utf-8") == "official lhb\n"
+    assert official_manifest.exists()
+    assert official_lhb.read_text(encoding="utf-8") != "official lhb\n"
     assert official_mid.read_text(encoding="utf-8") == "official mid\n"
     assert official_tech.read_text(encoding="utf-8") == "official tech\n"
-    assert (tmp_path / "2026-06-24" / "strategy_daily_eod_legacy" / "strategy_daily_eod_review_manifest.csv").exists()
-    assert result["output_dir"].endswith("strategy_daily_eod_legacy")
+    assert (tmp_path / "2026-06-24" / "strategy_daily_eod_review_manifest.csv").exists()
+    assert result["output_dir"].endswith("2026-06-24")
+    assert result["manifest_modules"] == [
+        "strategy_lhb_shortline",
+        "strategy_mid_trend",
+        "strategy_tech_bottleneck",
+        "review_queue_strategy_manifest",
+    ]
     assert captured["payload"]["status"] == "success"
+
+
+def test_official_strategy_runner_writes_task7_canonical_release(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(eod, "apply_strategy_daily_eod_status_schema", lambda **_kwargs: None)
+    monkeypatch.setattr(eod, "upsert_strategy_daily_eod_status", lambda *_args, **_kwargs: None)
+
+    def runner_for(strategy_id, filename):
+        def runner(*, trade_date, output_dir, service):
+            rows = [
+                {
+                    "trade_date": trade_date,
+                    "strategy_id": strategy_id,
+                    "rank": rank,
+                    "asset_id": f"{strategy_id}-{rank}",
+                    "review_tier": "top5_focus",
+                }
+                for rank in range(1, 6)
+            ]
+            path = Path(output_dir) / filename
+            pd.DataFrame(rows).to_csv(path, index=False)
+            return {"status": "success", "review_rows": 5, "paths": {"review": str(path)}}
+
+        return runner
+
+    result = eod.run_strategy_daily_eod(
+        trade_date="2026-07-02",
+        output_root=tmp_path,
+        dependency_checker=lambda **_kwargs: {"status": "success"},
+        lhb_runner=runner_for("lhb_shortline", "strategy_lhb_shortline_review.csv"),
+        mid_runner=runner_for("mid_trend", "strategy_mid_trend_review.csv"),
+        tech_runner=runner_for("tech_bottleneck", "strategy_tech_bottleneck_review.csv"),
+        midtrend_artifact_builder=lambda **_kwargs: {
+            "status": "success",
+            "review_rows": 0,
+            "paths": {},
+        },
+    )
+
+    assert result["publishable"] is True
+    validator_path = Path(__file__).resolve().parents[1] / "deploy" / "validate_strategy_release.py"
+    spec = importlib.util.spec_from_file_location("validate_strategy_release", validator_path)
+    assert spec and spec.loader
+    validator = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(validator)
+    validator.validate_strategy_release(
+        output_dir=tmp_path / "2026-07-02",
+        trade_date="2026-07-02",
+    )
 
 
 def test_run_strategy_daily_eod_writes_midtrend_v1_v2_and_review_artifacts(tmp_path: Path, monkeypatch):

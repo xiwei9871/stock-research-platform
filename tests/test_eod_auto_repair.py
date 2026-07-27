@@ -96,8 +96,11 @@ def test_validate_strategy_runner_publication_rejects_failed_fourth_runner(tmp_p
     summary_path = tmp_path / "strategy_eod_publish_summary.json"
     summary_path.write_text(
         json.dumps(
-            {
-                "status": "partial",
+                {
+                    "trade_date": "2026-07-02",
+                    "run_id": "strategy-eod-2026-07-02-local",
+                    "status": "partial",
+                "run_id": "strategy-eod-2026-07-02-local",
                 "strategy_status": {
                     "lhb_shortline": "success",
                     "midtrend_artifacts": "failed",
@@ -137,7 +140,7 @@ def test_finalize_repaired_release_invokes_shared_finalizer(monkeypatch, tmp_pat
     assert callable(captured["sync_external"])
 
 
-def test_finalize_repaired_release_preserves_readiness_exit_code(monkeypatch, tmp_path):
+def test_finalize_repaired_release_preserves_official_runner_cli_exit_code(monkeypatch, tmp_path):
     output_dir = tmp_path / "repair"
     output_dir.mkdir()
     (output_dir / "run_summary.json").write_text(
@@ -160,6 +163,51 @@ def test_finalize_repaired_release_preserves_readiness_exit_code(monkeypatch, tm
     assert persisted["repair_phases"]["strategy_publication"] == "failed"
     assert persisted["repair_phases"]["cache_invalidation"] == "skipped"
     assert persisted["repair_phases"]["external_sync"] == "skipped"
+
+
+def test_finalize_repaired_release_preserves_readiness_exit_code(tmp_path):
+    output_dir = tmp_path / "repair"
+    output_dir.mkdir()
+    runner_summary = (
+        tmp_path
+        / "outputs"
+        / "research"
+        / "strategy_daily_eod"
+        / "2026-07-02"
+        / "strategy_eod_publish_summary.json"
+    )
+    runner_summary.parent.mkdir(parents=True)
+
+    def official_publication(*, trade_date, output_root):
+        payload = {
+            "trade_date": trade_date,
+            "run_id": "strategy-eod-2026-07-02-local",
+            "status": "success",
+            "summary_path": str(runner_summary),
+            "strategy_status": {
+                name: "success" for name in eod_auto_repair.REQUIRED_STRATEGY_RUNNERS
+            },
+        }
+        runner_summary.write_text(json.dumps(payload), encoding="utf-8")
+        return payload
+
+    result = eod_auto_repair.finalize_repaired_release(
+        trade_date="2026-07-02",
+        output_dir=output_dir,
+        release_root=tmp_path,
+        official_publication=official_publication,
+        contract_check=lambda: {"status": "success"},
+        readiness_check=lambda: {
+            "status": "failed",
+            "exit_code": 7,
+            "error_code": "platform_readiness_command_failed",
+        },
+        clear_cache=lambda: pytest.fail("cache must not run"),
+        sync_external=lambda: pytest.fail("sync must not run"),
+    )
+
+    assert result["exit_code"] == 7
+    assert result["errors"]["strategy_publication"] == "platform_readiness_command_failed"
 
 
 def test_finalize_repaired_release_marks_downstream_skipped_when_repair_failed(tmp_path):
@@ -194,11 +242,13 @@ def test_finalize_repaired_release_stops_when_fourth_runner_is_not_success(
     output_dir = tmp_path / "repair"
     output_dir.mkdir()
     strategy_output = tmp_path / "outputs" / "research" / "strategy_daily_eod" / "2026-07-02"
-    runner_dir = strategy_output / "strategy_daily_eod_legacy"
+    runner_dir = strategy_output
     runner_dir.mkdir(parents=True)
     (runner_dir / "strategy_eod_publish_summary.json").write_text(
         json.dumps(
             {
+                "trade_date": "2026-07-02",
+                "run_id": "strategy-eod-2026-07-02-local",
                 "status": "partial",
                 "strategy_status": {
                     "lhb_shortline": "success",
@@ -234,6 +284,143 @@ def test_finalize_repaired_release_stops_when_fourth_runner_is_not_success(
     assert result["exit_code"] == 2
     assert len(calls) == 1
     assert result["errors"]["strategy_publication"] == "strategy_runner_status_invalid"
+
+
+def test_finalize_repaired_release_refreshes_old_failed_runner_before_cache_and_sync(
+    tmp_path,
+):
+    output_dir = tmp_path / "repair"
+    output_dir.mkdir()
+    runner_summary = (
+        tmp_path
+        / "outputs"
+        / "research"
+        / "strategy_daily_eod"
+        / "2026-07-02"
+        / "strategy_eod_publish_summary.json"
+    )
+    runner_summary.parent.mkdir(parents=True)
+    runner_summary.write_text(
+        json.dumps(
+            {
+                "trade_date": "2026-07-01",
+                "run_id": "old-failed",
+                "status": "failed",
+                "strategy_status": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+    events = []
+
+    def official_publication(*, trade_date, output_root):
+        events.append("official")
+        payload = {
+            "trade_date": trade_date,
+            "run_id": "strategy-eod-2026-07-02-local",
+            "status": "success",
+            "summary_path": str(runner_summary),
+            "strategy_status": {
+                "lhb_shortline": "success",
+                "midtrend_artifacts": "success",
+                "mid_trend": "success",
+                "tech_bottleneck": "success",
+            },
+        }
+        runner_summary.write_text(json.dumps(payload), encoding="utf-8")
+        return payload
+
+    result = eod_auto_repair.finalize_repaired_release(
+        trade_date="2026-07-02",
+        output_dir=output_dir,
+        release_root=tmp_path,
+        official_publication=official_publication,
+        contract_check=lambda: events.append("contract") or {"status": "success"},
+        readiness_check=lambda: events.append("readiness") or {"status": "success"},
+        clear_cache=lambda: events.append("cache") or True,
+        sync_external=lambda: events.append("sync") or True,
+    )
+
+    assert result["status"] == "success"
+    assert events == ["official", "contract", "readiness", "cache", "sync"]
+
+
+def test_finalize_repaired_release_rejects_runner_that_did_not_refresh_summary(tmp_path):
+    output_dir = tmp_path / "repair"
+    output_dir.mkdir()
+    runner_summary = (
+        tmp_path
+        / "outputs"
+        / "research"
+        / "strategy_daily_eod"
+        / "2026-07-02"
+        / "strategy_eod_publish_summary.json"
+    )
+    runner_summary.parent.mkdir(parents=True)
+    stale = {
+        "trade_date": "2026-07-02",
+        "run_id": "stale-run",
+        "status": "success",
+        "summary_path": str(runner_summary),
+        "strategy_status": {name: "success" for name in eod_auto_repair.REQUIRED_STRATEGY_RUNNERS},
+    }
+    runner_summary.write_text(json.dumps(stale), encoding="utf-8")
+    events = []
+
+    result = eod_auto_repair.finalize_repaired_release(
+        trade_date="2026-07-02",
+        output_dir=output_dir,
+        release_root=tmp_path,
+        official_publication=lambda **_kwargs: events.append("official") or dict(stale),
+        contract_check=lambda: pytest.fail("contract must not run"),
+        readiness_check=lambda: pytest.fail("readiness must not run"),
+        clear_cache=lambda: pytest.fail("cache must not run"),
+        sync_external=lambda: pytest.fail("sync must not run"),
+    )
+
+    assert result["status"] == "failed"
+    assert result["errors"]["strategy_publication"] == "strategy_runner_summary_not_refreshed"
+    assert events == ["official"]
+
+
+def test_finalize_repaired_release_rejects_refreshed_runner_with_wrong_date(tmp_path):
+    output_dir = tmp_path / "repair"
+    output_dir.mkdir()
+    runner_summary = (
+        tmp_path
+        / "outputs"
+        / "research"
+        / "strategy_daily_eod"
+        / "2026-07-02"
+        / "strategy_eod_publish_summary.json"
+    )
+    runner_summary.parent.mkdir(parents=True)
+    runner_summary.write_text('{"status":"failed"}', encoding="utf-8")
+
+    def wrong_date_runner(**_kwargs):
+        payload = {
+            "trade_date": "2026-07-01",
+            "run_id": "strategy-eod-2026-07-01-local",
+            "status": "success",
+            "summary_path": str(runner_summary),
+            "strategy_status": {name: "success" for name in eod_auto_repair.REQUIRED_STRATEGY_RUNNERS},
+        }
+        runner_summary.write_text(json.dumps(payload), encoding="utf-8")
+        return payload
+
+    result = eod_auto_repair.finalize_repaired_release(
+        trade_date="2026-07-02",
+        output_dir=output_dir,
+        release_root=tmp_path,
+        official_publication=wrong_date_runner,
+        contract_check=lambda: pytest.fail("contract must not run"),
+        readiness_check=lambda: pytest.fail("readiness must not run"),
+        clear_cache=lambda: pytest.fail("cache must not run"),
+        sync_external=lambda: pytest.fail("sync must not run"),
+    )
+
+    assert result["status"] == "failed"
+    assert result["errors"]["strategy_publication"] == "strategy_runner_trade_date_mismatch"
 
 
 @pytest.mark.parametrize("publish_status", ["partial", "failed", "blocked", "skipped"])

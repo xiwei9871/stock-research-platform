@@ -48,7 +48,7 @@ def run_strategy_daily_eod(
 ) -> dict[str, Any]:
     apply_strategy_daily_eod_status_schema(service=service)
     dependency_checker = dependency_checker or check_strategy_daily_eod_dependencies
-    output_dir = Path(output_root) / trade_date / "strategy_daily_eod_legacy"
+    output_dir = Path(output_root) / trade_date
     output_dir.mkdir(parents=True, exist_ok=True)
 
     dependency_check = _normalize_dependency_check(
@@ -106,6 +106,13 @@ def run_strategy_daily_eod(
         else "failed"
     )
     dependency_reason = _dependency_failure_reason(dependency_check)
+    strategy_counts = _write_review_manifest(output_dir)
+    expected_counts = {
+        "lhb_shortline": 5,
+        "mid_trend": 5,
+        "tech_bottleneck": 5,
+    }
+    contract_valid = aggregate_status == "success" and strategy_counts == expected_counts
     summary = {
         "trade_date": trade_date,
         "run_id": f"strategy-eod-{trade_date}-local",
@@ -118,12 +125,22 @@ def run_strategy_daily_eod(
         "midtrend_artifact_warnings": results["midtrend_artifacts"].get("warnings", []),
         "review_rows": review_rows,
         "status": aggregate_status,
+        "publishable": contract_valid,
+        "manifest_modules": [
+            "strategy_lhb_shortline",
+            "strategy_mid_trend",
+            "strategy_tech_bottleneck",
+            "review_queue_strategy_manifest",
+        ],
+        "score_audit": {
+            "status": "success" if contract_valid else "failed",
+            "strategy_counts": strategy_counts,
+        },
         "error_summary": _join_errors(list(strategy_errors.values())),
     }
     summary_path = output_dir / "strategy_eod_publish_summary.json"
     summary["summary_path"] = str(summary_path)
     summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
-    _write_review_manifest(output_dir)
 
     upsert_strategy_daily_eod_status(
         build_status_payload(
@@ -652,18 +669,32 @@ def _normalize_mid_trend_review(
     return normalized
 
 
-def _write_review_manifest(output_dir: Path) -> None:
+def _write_review_manifest(output_dir: Path) -> dict[str, int]:
     frames: list[pd.DataFrame] = []
-    for filename in (
-        "strategy_lhb_shortline_review.csv",
-        "strategy_mid_trend_review.csv",
-        "strategy_tech_bottleneck_review.csv",
-    ):
+    strategy_files = {
+        "lhb_shortline": "strategy_lhb_shortline_review.csv",
+        "mid_trend": "strategy_mid_trend_review.csv",
+        "tech_bottleneck": "strategy_tech_bottleneck_review.csv",
+    }
+    counts: dict[str, int] = {}
+    for strategy_id, filename in strategy_files.items():
         path = output_dir / filename
         if path.exists() and path.stat().st_size > 0:
-            frames.append(pd.read_csv(path, low_memory=False))
-    manifest_path = output_dir / "strategy_daily_eod_review_manifest.csv"
+            frame = pd.read_csv(path, low_memory=False)
+            frame["strategy_id"] = strategy_id
+            frame["artifact_path"] = filename
+            frames.append(frame)
+            counts[strategy_id] = int(len(frame))
+        else:
+            counts[strategy_id] = 0
+    legacy_manifest_path = output_dir / "strategy_daily_eod_review_manifest.csv"
+    manifest_path = output_dir / "review_queue_strategy_manifest.csv"
     if not frames:
-        pd.DataFrame().to_csv(manifest_path, index=False)
-        return
-    pd.concat(frames, ignore_index=True, sort=False).to_csv(manifest_path, index=False)
+        empty = pd.DataFrame()
+        empty.to_csv(legacy_manifest_path, index=False)
+        empty.to_csv(manifest_path, index=False)
+        return counts
+    manifest = pd.concat(frames, ignore_index=True, sort=False)
+    manifest.to_csv(legacy_manifest_path, index=False)
+    manifest.to_csv(manifest_path, index=False)
+    return counts

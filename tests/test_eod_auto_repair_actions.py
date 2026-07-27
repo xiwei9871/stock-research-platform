@@ -209,6 +209,7 @@ def test_repair_strategy_publish_wraps_publisher_result():
         "2026-06-29",
         output_root="outputs",
         publisher=lambda **kwargs: {
+            "status": "success",
             "review_rows": 14,
             "output_dir": "outputs/research/strategy_daily_eod/2026-06-29",
         },
@@ -217,6 +218,22 @@ def test_repair_strategy_publish_wraps_publisher_result():
     assert result.status == RepairStatus.SUCCESS
     assert result.metrics["review_rows"] == 14
     assert result.artifact_paths == ["outputs/research/strategy_daily_eod/2026-06-29"]
+
+
+def test_repair_strategy_publish_propagates_partial_business_failure():
+    result = repair_strategy_publish(
+        "2026-06-29",
+        output_root="outputs",
+        publisher=lambda **kwargs: {
+            "status": "partial",
+            "strategy_status": {"midtrend_artifacts": "failed"},
+            "review_rows": 10,
+        },
+    )
+
+    assert result.status == RepairStatus.FAILED
+    assert result.metrics["publication_status"] == "partial"
+    assert result.metrics["strategy_status"]["midtrend_artifacts"] == "failed"
 
 
 def test_repair_market_monitor_wraps_runner_result():

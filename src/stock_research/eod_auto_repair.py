@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import http.cookiejar
+import hashlib
 import json
 import os
 import signal
@@ -299,14 +300,47 @@ def persist_repair_publication_summary(
     temporary.replace(path)
 
 
-def validate_strategy_runner_publication(summary_path: str | Path) -> dict[str, Any]:
-    try:
-        payload = json.loads(Path(summary_path).read_text(encoding="utf-8"))
-    except (FileNotFoundError, json.JSONDecodeError):
+def validate_strategy_runner_publication(
+    summary: str | Path | dict[str, Any],
+    *,
+    expected_trade_date: str | None = None,
+) -> dict[str, Any]:
+    if isinstance(summary, dict):
+        payload = dict(summary)
+    else:
+        try:
+            payload = json.loads(Path(summary).read_text(encoding="utf-8"))
+        except (FileNotFoundError, json.JSONDecodeError):
+            return {
+                "status": "failed",
+                "exit_code": 2,
+                "error_code": "strategy_runner_summary_invalid",
+            }
+    if not isinstance(payload, dict):
         return {
             "status": "failed",
             "exit_code": 2,
             "error_code": "strategy_runner_summary_invalid",
+        }
+    if expected_trade_date and str(payload.get("trade_date") or "") != expected_trade_date:
+        return {
+            "status": "failed",
+            "exit_code": 2,
+            "error_code": "strategy_runner_trade_date_mismatch",
+        }
+    if not str(payload.get("run_id") or "").strip():
+        return {
+            "status": "failed",
+            "exit_code": 2,
+            "error_code": "strategy_runner_run_id_missing",
+        }
+    if expected_trade_date and str(payload.get("run_id") or "") != (
+        f"strategy-eod-{expected_trade_date}-local"
+    ):
+        return {
+            "status": "failed",
+            "exit_code": 2,
+            "error_code": "strategy_runner_run_id_mismatch",
         }
     statuses = dict(payload.get("strategy_status") or {})
     if str(payload.get("status") or "") != "success":
@@ -324,6 +358,49 @@ def validate_strategy_runner_publication(summary_path: str | Path) -> dict[str, 
             "error_code": "strategy_runner_status_invalid",
         }
     return {"status": "success"}
+
+
+def _file_fingerprint(path: Path) -> tuple[int, int, str] | None:
+    try:
+        content = path.read_bytes()
+        stat = path.stat()
+    except FileNotFoundError:
+        return None
+    return (stat.st_mtime_ns, stat.st_size, hashlib.sha256(content).hexdigest())
+
+
+def _run_official_strategy_publication(
+    *,
+    trade_date: str,
+    output_root: Path,
+) -> dict[str, Any]:
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "stock_research.cli",
+            "run-strategy-daily-eod",
+            "--trade-date",
+            trade_date,
+            "--output-root",
+            str(output_root),
+        ],
+        check=False,
+    )
+    if completed.returncode != 0:
+        return {
+            "status": "failed",
+            "exit_code": completed.returncode,
+            "error_code": "official_strategy_publication_failed",
+        }
+    summary_path = (
+        output_root
+        / trade_date
+        / "strategy_eod_publish_summary.json"
+    )
+    payload = _load_repair_summary(summary_path)
+    payload.setdefault("summary_path", str(summary_path))
+    return payload
 
 
 def _clear_dashboard_cache() -> dict[str, Any]:
@@ -368,11 +445,19 @@ def finalize_repaired_release(
     output_dir: str | Path,
     release_root: str | Path,
     repair_exit_code: int = 0,
+    official_publication: Callable[..., dict[str, Any]] | None = None,
+    contract_check: Callable[[], Any] | None = None,
+    readiness_check: Callable[[], Any] | None = None,
+    clear_cache: Callable[[], Any] | None = None,
+    sync_external: Callable[[], Any] | None = None,
 ) -> dict[str, Any]:
     root = Path(release_root).resolve()
     repair_output = Path(output_dir)
     strategy_output = root / "outputs" / "research" / "strategy_daily_eod" / trade_date
-    runner_summary = strategy_output / "strategy_daily_eod_legacy" / "strategy_eod_publish_summary.json"
+    runner_summary = (
+        strategy_output
+        / "strategy_eod_publish_summary.json"
+    )
     readiness_json = repair_output / "platform_ready.json"
 
     if repair_exit_code != 0:
@@ -387,7 +472,29 @@ def finalize_repaired_release(
             summary_path=repair_output / "run_summary.json",
         )
 
-    def publish() -> dict[str, Any]:
+    official_publication = official_publication or _run_official_strategy_publication
+    def default_contract_check() -> dict[str, Any]:
+        contract = subprocess.run(
+            [
+                sys.executable,
+                str(root / "deploy" / "validate_strategy_release.py"),
+                "--output-dir",
+                str(strategy_output),
+                "--trade-date",
+                trade_date,
+            ],
+            cwd=root,
+            check=False,
+        )
+        if contract.returncode != 0:
+            return {
+                "status": "failed",
+                "exit_code": contract.returncode,
+                "error_code": "strategy_release_contract_invalid",
+            }
+        return {"status": "success"}
+
+    def default_readiness_check() -> dict[str, Any]:
         readiness = subprocess.run(
             [
                 sys.executable,
@@ -411,31 +518,14 @@ def finalize_repaired_release(
             }
         readiness_payload = _load_repair_summary(readiness_json)
         if str(readiness_payload.get("status") or "") != "ready":
-            return {"status": "failed", "exit_code": 1, "error_code": "platform_readiness_not_ready"}
-        runner_gate = validate_strategy_runner_publication(runner_summary)
-        if not _phase_succeeded(runner_gate):
-            return runner_gate
-        contract = subprocess.run(
-            [
-                sys.executable,
-                str(root / "deploy" / "validate_strategy_release.py"),
-                "--output-dir",
-                str(strategy_output),
-                "--trade-date",
-                trade_date,
-            ],
-            cwd=root,
-            check=False,
-        )
-        if contract.returncode != 0:
             return {
                 "status": "failed",
-                "exit_code": contract.returncode,
-                "error_code": "strategy_release_contract_invalid",
+                "exit_code": 1,
+                "error_code": "platform_readiness_not_ready",
             }
         return {"status": "success"}
 
-    def sync_external() -> dict[str, Any]:
+    def default_sync_external() -> dict[str, Any]:
         sync_script = root / "deploy" / "sync_dashboard_release.sh"
         if not sync_script.is_file():
             return {"status": "failed", "exit_code": 1, "error_code": "canonical_sync_script_missing"}
@@ -456,9 +546,69 @@ def finalize_repaired_release(
             }
         return {"status": "success"}
 
+    contract_check = contract_check or default_contract_check
+    readiness_check = readiness_check or default_readiness_check
+    clear_cache = clear_cache or _clear_dashboard_cache
+    sync_external = sync_external or default_sync_external
+
+    def publish() -> dict[str, Any]:
+        previous_fingerprint = _file_fingerprint(runner_summary)
+        official_result = official_publication(
+            trade_date=trade_date,
+            output_root=root / "outputs" / "research" / "strategy_daily_eod",
+        )
+        if not _phase_succeeded(official_result):
+            if official_result.get("error_code"):
+                return official_result
+            return validate_strategy_runner_publication(
+                official_result,
+                expected_trade_date=trade_date,
+            )
+        current_fingerprint = _file_fingerprint(runner_summary)
+        if current_fingerprint is None or current_fingerprint == previous_fingerprint:
+            return {
+                "status": "failed",
+                "exit_code": 2,
+                "error_code": "strategy_runner_summary_not_refreshed",
+            }
+        persisted_runner = _load_repair_summary(runner_summary)
+        try:
+            returned_summary_path = Path(str(official_result.get("summary_path") or "")).resolve()
+        except (OSError, RuntimeError):
+            returned_summary_path = Path()
+        if returned_summary_path != runner_summary.resolve():
+            return {
+                "status": "failed",
+                "exit_code": 2,
+                "error_code": "strategy_runner_summary_path_mismatch",
+            }
+        for candidate in (official_result, persisted_runner):
+            runner_gate = validate_strategy_runner_publication(
+                candidate,
+                expected_trade_date=trade_date,
+            )
+            if not _phase_succeeded(runner_gate):
+                return runner_gate
+        if any(
+            official_result.get(key) != persisted_runner.get(key)
+            for key in ("trade_date", "run_id", "status", "strategy_status")
+        ):
+            return {
+                "status": "failed",
+                "exit_code": 2,
+                "error_code": "strategy_runner_result_mismatch",
+            }
+        contract_result = contract_check()
+        if not _phase_succeeded(contract_result):
+            return contract_result
+        readiness_result = readiness_check()
+        if not _phase_succeeded(readiness_result):
+            return readiness_result
+        return {"status": "success"}
+
     return finalize_repair_publication(
         publish=publish,
-        clear_cache=_clear_dashboard_cache,
+        clear_cache=clear_cache,
         sync_external=sync_external,
         summary_path=repair_output / "run_summary.json",
     )
@@ -1193,8 +1343,8 @@ def build_default_action_registry(*, output_root: str | Path = "outputs") -> dic
     from stock_research.strategy_eod_publish import (
         DEFAULT_REPORTS_DIR,
         _write_report_content_manifest_entries,
-        publish_strategy_eod,
     )
+    from stock_research.strategy_daily_eod import run_strategy_daily_eod
     from stock_research.technical_feature_store import build_and_store_stock_technical_features_daily
     from stock_research.factor_backfill import backfill_factor_daily_range
     from stock_research.watchlist.workflow import (
@@ -1212,10 +1362,16 @@ def build_default_action_registry(*, output_root: str | Path = "outputs") -> dic
         )
 
     def strategy_action(trade_date: str, output_dir: str | Path) -> RepairActionResult:
+        def publisher(*, trade_date: str, output_root: str | Path) -> dict[str, Any]:
+            return run_strategy_daily_eod(
+                trade_date=trade_date,
+                output_root=Path(output_root) / "research" / "strategy_daily_eod",
+            )
+
         return repair_strategy_publish(
             trade_date,
             output_root=output_root,
-            publisher=publish_strategy_eod,
+            publisher=publisher,
         )
 
     def market_monitor_action(trade_date: str, output_dir: str | Path) -> RepairActionResult:
