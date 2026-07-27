@@ -116,7 +116,8 @@ def validate_official_strategy_result(
                 f"publication policy mismatch in config: {field} expected {expected}, got {config[field]}"
             )
 
-    validation = validate_strategy_summary_against_contract(dict(summary), parameter_contract)
+    effective_summary = _effective_summary_from_authenticated_config(summary, config)
+    validation = validate_strategy_summary_against_contract(effective_summary, parameter_contract)
     if validation.status != "success":
         raise ValueError(f"official strategy contract mismatch: {validation.reason}")
 
@@ -242,6 +243,34 @@ def _validate_contract_identity_declarations(
             raise ValueError(
                 f"official contract mismatch in {location}: {field} expected {expected}, got {actual}"
             )
+
+
+def _effective_summary_from_authenticated_config(
+    summary: Mapping[str, Any], config: Mapping[str, Any]
+) -> dict[str, Any]:
+    effective = dict(summary)
+    aliases = {
+        "engine_version": ("engine_version", "engine"),
+        "variant": ("variant", "variant_name"),
+        "top_n": ("top_n",),
+        "transaction_cost_bps": ("transaction_cost_bps",),
+        "adjust_type": ("adjust_type",),
+        "frequency": ("frequency", "rebalance_frequency"),
+        "protection_name": ("protection_name",),
+        "risk_profile": ("risk_profile",),
+        "benchmark_variant": ("benchmark_variant",),
+        "universe": ("universe",),
+        "phase18c_strategy": ("phase18c_strategy",),
+    }
+    for summary_field, config_fields in aliases.items():
+        if effective.get(summary_field) not in (None, ""):
+            continue
+        for config_field in config_fields:
+            value = config.get(config_field)
+            if value not in (None, ""):
+                effective[summary_field] = value
+                break
+    return effective
 
 
 def list_backtest_strategies() -> list[dict[str, Any]]:

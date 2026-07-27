@@ -159,6 +159,24 @@ def test_validate_official_strategy_result_rejects_missing_engine_evidence():
         backtests.validate_official_strategy_result(result, profile="balanced")
 
 
+def test_mid_summary_frequency_alias_comes_from_authenticated_engine_config():
+    result = _official_result("mid_trend")
+    del result["summary"]["frequency"]
+
+    attached = backtests.attach_publication_identity(result, profile="balanced")
+
+    assert attached["publication_identity"]["strategy_id"] == "mid_trend"
+    assert "frequency" not in result["summary"]
+
+
+def test_mid_summary_explicit_frequency_conflict_is_not_overridden():
+    result = _official_result("mid_trend")
+    result["summary"]["frequency"] = "daily"
+
+    with pytest.raises(ValueError, match="frequency expected weekly"):
+        backtests.attach_publication_identity(result, profile="balanced")
+
+
 def test_validate_official_strategy_result_rejects_empty_official_config_evidence():
     contract = get_publication_contract("mid_trend")
     result = {
