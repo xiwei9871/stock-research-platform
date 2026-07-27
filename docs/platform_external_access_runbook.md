@@ -114,7 +114,7 @@ REMOTE_CONTAINER_RELEASE_ROOT=/app
 
 `latest_market_date` and the publishable strategy date are deliberately separate. Market ingestion may already report a newer session while the official strategy publisher is still at the last completed cutoff; for example, market `2026-07-27` with publishable strategy artifacts for `2026-07-24` is valid. The release gate requires the market date to be on or after the expected strategy date, while readiness display/artifact provenance and all Review Queue requested/top/data dates must remain exactly on that expected strategy date.
 
-The low-level `deploy/check_dashboard_release.sh` gate accepts `EXPECTED_STRATEGY_ARTIFACT_DATE`, defaulting it to `EXPECTED_TRADE_DATE`. The canonical sync entry point intentionally passes the same resolved publishable date for both values so deployment cannot mix artifacts and Queue data from different sessions.
+The low-level `deploy/check_dashboard_release.sh` gate retains `EXPECTED_STRATEGY_ARTIFACT_DATE` for compatibility and defaults it to `EXPECTED_TRADE_DATE`, but rejects any different value before network access. The canonical sync entry point passes the same resolved publishable date for both names so deployment cannot mix artifacts and Queue data from different sessions.
 
 All release dates are validated as real ISO calendar dates, not only by string shape, before lexical ordering or remote access. A lightweight readiness probe with no publishable manifest reports an empty `strategy_artifact_date`; it must never promote `latest_market_date` into strategy provenance.
 

@@ -983,6 +983,24 @@ def test_release_gate_rejects_impossible_calendar_dates_before_network(
     assert not Path(env["FAKE_CURL_LOG"]).exists()
 
 
+def test_release_gate_rejects_mismatched_queue_and_artifact_dates_before_network(tmp_path):
+    env = _release_gate_env(tmp_path, frontend_release_id="new-release")
+    env["EXPECTED_TRADE_DATE"] = "2026-07-24"
+    env["EXPECTED_STRATEGY_ARTIFACT_DATE"] = "2026-07-23"
+
+    result = subprocess.run(
+        [str(REPO_ROOT / "deploy/check_dashboard_release.sh")],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert "must equal EXPECTED_TRADE_DATE" in result.stderr
+    assert not Path(env["FAKE_CURL_LOG"]).exists()
+
+
 def test_release_gate_rejects_queue_date_rewrite(tmp_path):
     env = _release_gate_env(
         tmp_path,

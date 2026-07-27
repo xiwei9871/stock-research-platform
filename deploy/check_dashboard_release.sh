@@ -45,6 +45,10 @@ if ! valid_iso_date "$EXPECTED_STRATEGY_ARTIFACT_DATE"; then
   echo "Invalid EXPECTED_STRATEGY_ARTIFACT_DATE: expected a real YYYY-MM-DD calendar date" >&2
   exit 2
 fi
+if [[ "$EXPECTED_STRATEGY_ARTIFACT_DATE" != "$EXPECTED_TRADE_DATE" ]]; then
+  echo "EXPECTED_STRATEGY_ARTIFACT_DATE must equal EXPECTED_TRADE_DATE" >&2
+  exit 2
+fi
 if [[ ! "$RELEASE_CHECK_TIMEOUT_SECONDS" =~ ^[0-9]+$ ]] || (( RELEASE_CHECK_TIMEOUT_SECONDS < 1 || RELEASE_CHECK_TIMEOUT_SECONDS > 120 )); then
   echo "Invalid RELEASE_CHECK_TIMEOUT_SECONDS: expected 1..120" >&2
   exit 2
