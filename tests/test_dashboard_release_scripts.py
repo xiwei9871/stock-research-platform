@@ -48,6 +48,8 @@ def _release_fixture(tmp_path: Path, *, valid_manifest: bool = True) -> tuple[Pa
         "dashboard-frontend.Dockerfile",
         "dashboard-nginx.conf",
         "dashboard-api-requirements.lock",
+        "dashboard-api-requirements.in",
+        "check_dashboard_remote_host.sh",
     ):
         source = REPO_ROOT / "deploy" / name
         if source.exists():
@@ -93,6 +95,9 @@ def _release_fixture(tmp_path: Path, *, valid_manifest: bool = True) -> tuple[Pa
     (output_dir / "strategy_eod_publish_summary.json").write_text(
         json.dumps(summary), encoding="utf-8"
     )
+    platform_summary = root / "outputs" / "research" / "platform_daily_summary_v1" / "latest.json"
+    platform_summary.parent.mkdir(parents=True)
+    platform_summary.write_text('{"latest_market_date":"2026-07-24"}', encoding="utf-8")
 
     fake_bin = tmp_path / "bin"
     log_file = tmp_path / "commands.log"
@@ -115,7 +120,7 @@ def _release_fixture(tmp_path: Path, *, valid_manifest: bool = True) -> tuple[Pa
         echo "rtk:$*" >> "$FAKE_COMMAND_LOG"
         if [[ "$*" == *" build" ]]; then
           mkdir -p "$FAKE_RELEASE_ROOT/dashboard/dist"
-          printf '{"release_id":"%s","api_base_image":"python:3.12.11-slim-bookworm","frontend_base_image":"nginx:1.27.5-alpine"}\n' "$VITE_RELEASE_ID" > "$FAKE_RELEASE_ROOT/dashboard/dist/release.json"
+          printf '{"release_id":"%s","api_base_image":"python:3.12.11-slim-bookworm@sha256:519591d6871b7bc437060736b9f7456b8731f1499a57e22e6c285135ae657bf7","frontend_base_image":"nginx:1.27.5-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10"}\n' "$VITE_RELEASE_ID" > "$FAKE_RELEASE_ROOT/dashboard/dist/release.json"
         fi
         """,
     )
@@ -186,7 +191,9 @@ def test_release_sync_versions_compose_images_and_injects_provenance():
 
     assert "dashboard-release.compose.yml" in script
     assert "compose_file" not in script
-    assert "docker compose -f deploy/dashboard-release.compose.yml" in script
+    assert "-f deploy/dashboard-release.compose.yml" in script
+    assert "--project-name" in script
+    assert "STOCK_RESEARCH_COMPOSE_PROJECT" in script
     assert "docker compose" in script and "build api dashboard" in script
     assert "--force-recreate api dashboard" in script
     assert "STOCK_RESEARCH_RELEASE_ROOT" in compose
@@ -213,24 +220,62 @@ def test_release_builds_use_lockfiles_and_pinned_base_images():
     api_dockerfile = _read("deploy/dashboard-api.Dockerfile")
     frontend_dockerfile = _read("deploy/dashboard-frontend.Dockerfile")
     requirements = _read("deploy/dashboard-api-requirements.lock")
+    requirements_input = _read("deploy/dashboard-api-requirements.in")
 
     assert 'pnpm --dir "$ROOT/dashboard" install --frozen-lockfile' in script
-    assert "python:3.12.11-slim-bookworm" in api_dockerfile
+    assert "python:3.12.11-slim-bookworm@sha256:519591d6871b7bc437060736b9f7456b8731f1499a57e22e6c285135ae657bf7" in api_dockerfile
     assert "dashboard-api-requirements.lock" in api_dockerfile
+    assert "--require-hashes" in api_dockerfile
     assert "--no-deps ." in api_dockerfile
-    assert "nginx:1.27.5-alpine" in frontend_dockerfile
+    assert "nginx:1.27.5-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10" in frontend_dockerfile
+    assert requirements.count("--hash=sha256:") > 30
+    assert "akshare==1.18.60" in requirements_input
+    assert "jsonpath==" in requirements
+    assert "pydantic-core==" in requirements
     for package in ("fastapi==", "uvicorn==", "pandas==", "psycopg[binary]=="):
         assert package in requirements
 
 
 def test_release_sync_defaults_to_batch_mode_and_validates_ssh_options():
     script = _read("deploy/sync_dashboard_release.sh")
+    preflight = _read("deploy/check_dashboard_remote_host.sh")
 
     assert "BatchMode=yes" in script
     assert "STOCK_RESEARCH_SSH_CONFIG" in script
     assert "Unsupported SSH option token" in script
-    assert "docker compose version" in script
-    assert script.index("docker compose version") < script.index('rsync -az --delete')
+    assert "docker compose version" in preflight
+    assert "check_dashboard_remote_host.sh" in script
+    assert script.index("check_dashboard_remote_host.sh") < script.index('rsync -az --delete')
+
+
+def test_remote_host_preflight_rejects_ports_owned_by_another_project(tmp_path):
+    fake_bin = tmp_path / "bin"
+    _write_executable(
+        fake_bin / "docker",
+        """
+        #!/bin/bash
+        if [[ "$1 $2" == "compose version" ]]; then exit 0; fi
+        if [[ "$1 $2" == "compose ls" ]]; then echo '[]'; exit 0; fi
+        if [[ "$1" == "ps" ]]; then echo 'abc123|legacy_dashboard|legacy-api'; exit 0; fi
+        exit 1
+        """,
+    )
+    result = subprocess.run(
+        [
+            str(REPO_ROOT / "deploy/check_dashboard_remote_host.sh"),
+            "stock_research_dashboard",
+            "8765",
+            "5174",
+        ],
+        env={**os.environ, "PATH": f"{fake_bin}:{os.environ['PATH']}"},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert "legacy_dashboard" in result.stderr
+    assert "migration required" in result.stderr
 
 
 def test_release_sync_fails_before_side_effects_for_worktree_root(tmp_path):
@@ -266,7 +311,7 @@ def test_release_sync_executes_with_dynamic_date_python_override_and_compose_pro
     assert "Resolved EXPECTED_TRADE_DATE=2026-07-24" in result.stdout
     assert "Resolved EXPECTED_TRADE_DATE=2026-05-18" not in result.stdout
     assert json.loads((root / "dashboard" / "dist" / "release.json").read_text())["release_id"]
-    commands = log_file.read_text(encoding="utf-8")
+    commands = log_file.read_text(encoding="utf-8") if log_file.exists() else ""
     assert "python:" in commands
     assert "docker compose" in commands
     assert "build api dashboard" in commands
@@ -291,6 +336,36 @@ def test_release_sync_invalid_strategy_contract_fails_before_remote_or_restart(t
     )
 
     assert result.returncode != 0
+    commands = log_file.read_text(encoding="utf-8")
+    assert "ssh:" not in commands
+    assert "rsync:" not in commands
+
+
+def test_release_sync_platform_date_without_exact_strategy_artifact_fails_before_remote(tmp_path):
+    root, env, log_file = _release_fixture(tmp_path)
+    source = root / "outputs" / "research" / "strategy_daily_eod" / "2026-07-24"
+    stale = source.parent / "2026-06-01"
+    source.rename(stale)
+    subprocess.run(["git", "-C", str(root), "add", "-A"], check=True)
+    subprocess.run(
+        [
+            "git", "-C", str(root), "-c", "user.name=Test", "-c",
+            "user.email=test@example.invalid", "commit", "-qm", "stale-artifact",
+        ],
+        check=True,
+    )
+
+    result = subprocess.run(
+        [str(REPO_ROOT / "deploy/sync_dashboard_release.sh")],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert "2026-07-24" in result.stderr
     commands = log_file.read_text(encoding="utf-8")
     assert "ssh:" not in commands
     assert "rsync:" not in commands
@@ -333,6 +408,30 @@ def test_release_sync_accepts_explicit_legacy_simple_ssh_options(tmp_path):
     commands = log_file.read_text(encoding="utf-8")
     assert "PreferredAuthentications=password" in commands
     assert "PubkeyAuthentication=no" in commands
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [("REMOTE_USER", "-oProxy"), ("REMOTE_HOST", "-malicious.example")],
+)
+def test_release_sync_rejects_option_like_remote_targets(tmp_path, key, value):
+    _root, env, log_file = _release_fixture(tmp_path)
+    env[key] = value
+
+    result = subprocess.run(
+        [str(REPO_ROOT / "deploy/sync_dashboard_release.sh")],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert "unsupported characters" in result.stderr
+    commands = log_file.read_text(encoding="utf-8") if log_file.exists() else ""
+    assert "ssh:" not in commands
+    assert "rsync:" not in commands
 
 
 def test_release_sync_builds_and_syncs_one_identified_release():
@@ -393,7 +492,7 @@ def _release_gate_env(tmp_path: Path, *, frontend_release_id: str) -> dict[str, 
         if [[ "$url" == */api/platform/readiness ]]; then
           printf '%s\n' '{"latest_market_date":"2026-07-24","runtime_provenance":{"release_id":"new-release","frontend_build_id":"new-release","strategy_artifact_date":"2026-07-24","source_root":"/app","python_package_root":"/app/src/stock_research"}}' > "$output"
         elif [[ "$url" == */release.json ]]; then
-          printf '{"release_id":"%s","api_base_image":"python:3.12.11-slim-bookworm","frontend_base_image":"nginx:1.27.5-alpine"}\n' "$FAKE_FRONTEND_RELEASE_ID" > "$output"
+          printf '{"release_id":"%s","api_base_image":"python:3.12.11-slim-bookworm@sha256:519591d6871b7bc437060736b9f7456b8731f1499a57e22e6c285135ae657bf7","frontend_base_image":"nginx:1.27.5-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10"}\n' "$FAKE_FRONTEND_RELEASE_ID" > "$output"
         else
           printf '%s\n' '{"requested_trade_date":"2026-07-24","trade_date":"2026-07-24","groups":[{"strategy_id":"lhb_shortline","count":5,"data_trade_date":"2026-07-24","freshness_status":"current"},{"strategy_id":"mid_trend","count":5,"data_trade_date":"2026-07-24","freshness_status":"current"},{"strategy_id":"tech_bottleneck","count":5,"data_trade_date":"2026-07-24","freshness_status":"current"}]}' > "$output"
         fi
@@ -550,6 +649,10 @@ def test_release_docs_define_single_entrypoint_environment_and_rollback():
         "LOCAL_READINESS_URL",
         "STOCK_RESEARCH_SSH_CONFIG",
         "DASHBOARD_REMOTE_ENV_FILE",
+        "STOCK_RESEARCH_COMPOSE_PROJECT",
+        "migration",
+        "sha256:519591d6871b7bc437060736b9f7456b8731f1499a57e22e6c285135ae657bf7",
+        "sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10",
         "DASHBOARD_AUTH",
         "回滚",
     ):

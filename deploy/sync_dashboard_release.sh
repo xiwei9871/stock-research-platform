@@ -16,6 +16,10 @@ strategy_output_root_override="${STRATEGY_OUTPUT_ROOT:-}"
 local_readiness_url_override="${LOCAL_READINESS_URL:-}"
 remote_env_file_override="${DASHBOARD_REMOTE_ENV_FILE:-}"
 remote_pgservice_file_override="${DASHBOARD_PGSERVICE_FILE:-}"
+compose_project_override="${STOCK_RESEARCH_COMPOSE_PROJECT:-}"
+platform_summary_file_override="${PLATFORM_SUMMARY_FILE:-}"
+api_bind_port_override="${DASHBOARD_API_BIND_PORT:-}"
+frontend_bind_port_override="${DASHBOARD_FRONTEND_BIND_PORT:-}"
 
 env_file="${DASHBOARD_SYNC_ENV:-/Users/xiwei/.stock_research_dashboard_sync.env}"
 if [[ -f "$env_file" ]]; then
@@ -37,6 +41,10 @@ STRATEGY_OUTPUT_ROOT="${strategy_output_root_override:-${STRATEGY_OUTPUT_ROOT:-$
 LOCAL_READINESS_URL="${local_readiness_url_override:-${LOCAL_READINESS_URL:-http://127.0.0.1:8765/api/platform/readiness}}"
 DASHBOARD_REMOTE_ENV_FILE="${remote_env_file_override:-${DASHBOARD_REMOTE_ENV_FILE:-.env.dashboard}}"
 DASHBOARD_PGSERVICE_FILE="${remote_pgservice_file_override:-${DASHBOARD_PGSERVICE_FILE:-.pg_service.conf}}"
+STOCK_RESEARCH_COMPOSE_PROJECT="${compose_project_override:-${STOCK_RESEARCH_COMPOSE_PROJECT:-stock_research_dashboard}}"
+PLATFORM_SUMMARY_FILE="${platform_summary_file_override:-${PLATFORM_SUMMARY_FILE:-$ROOT/outputs/research/platform_daily_summary_v1/latest.json}}"
+DASHBOARD_API_BIND_PORT="${api_bind_port_override:-${DASHBOARD_API_BIND_PORT:-8765}}"
+DASHBOARD_FRONTEND_BIND_PORT="${frontend_bind_port_override:-${DASHBOARD_FRONTEND_BIND_PORT:-5174}}"
 
 case "$ROOT" in
   */.worktrees/*|*/.worktrees)
@@ -57,10 +65,23 @@ case "$ROOT" in
     ;;
 esac
 
-if [[ ! "$REMOTE_USER" =~ ^[A-Za-z0-9._-]+$ ]] || [[ ! "$REMOTE_HOST" =~ ^[A-Za-z0-9.:-]+$ ]]; then
+if [[ ! "$REMOTE_USER" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] \
+  || [[ ! "$REMOTE_HOST" =~ ^[A-Za-z0-9]([A-Za-z0-9.:-]*[A-Za-z0-9])?$ ]] \
+  || [[ "$REMOTE_HOST" == *".."* ]] \
+  || [[ "$REMOTE_HOST" == *":::"* ]]; then
   echo "REMOTE_USER or REMOTE_HOST contains unsupported characters" >&2
   exit 2
 fi
+if [[ ! "$STOCK_RESEARCH_COMPOSE_PROJECT" =~ ^[a-z0-9][a-z0-9_-]*$ ]]; then
+  echo "Invalid STOCK_RESEARCH_COMPOSE_PROJECT: $STOCK_RESEARCH_COMPOSE_PROJECT" >&2
+  exit 2
+fi
+for port in "$DASHBOARD_API_BIND_PORT" "$DASHBOARD_FRONTEND_BIND_PORT"; do
+  if [[ ! "$port" =~ ^[0-9]+$ ]] || (( port < 1 || port > 65535 )); then
+    echo "Invalid dashboard bind port: $port" >&2
+    exit 2
+  fi
+done
 if [[ ! "$REMOTE_DIR" =~ ^/[A-Za-z0-9._/-]+$ ]] || [[ ! "$REMOTE_CONTAINER_RELEASE_ROOT" =~ ^/[A-Za-z0-9._/-]+$ ]]; then
   echo "REMOTE_DIR or REMOTE_CONTAINER_RELEASE_ROOT must be a safe absolute path" >&2
   exit 2
@@ -125,15 +146,17 @@ if [[ -z "$EXPECTED_TRADE_DATE" ]]; then
   )"
 fi
 if [[ -z "$EXPECTED_TRADE_DATE" ]]; then
-  EXPECTED_TRADE_DATE="$(
-    "$STOCK_RESEARCH_PYTHON" "$ROOT/deploy/validate_strategy_release.py" \
-      --output-root "${STRATEGY_OUTPUT_ROOT%/}/strategy_daily_eod" \
-      --resolve-latest \
-      2>/dev/null || true
-  )"
+  if [[ -f "$PLATFORM_SUMMARY_FILE" ]]; then
+    summary_path="$(cd "$(dirname "$PLATFORM_SUMMARY_FILE")" && pwd -P)/$(basename "$PLATFORM_SUMMARY_FILE")"
+    case "$summary_path" in
+      "$ROOT"/*)
+        EXPECTED_TRADE_DATE="$(jq -er '.latest_market_date | select(type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$"))' "$summary_path" 2>/dev/null || true)"
+        ;;
+    esac
+  fi
 fi
 if [[ ! "$EXPECTED_TRADE_DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
-  echo "Unable to resolve a valid EXPECTED_TRADE_DATE from override, current readiness, or contract-valid local artifacts" >&2
+  echo "Unable to resolve a valid EXPECTED_TRADE_DATE from override, current readiness, or the selected release platform summary" >&2
   exit 2
 fi
 echo "Resolved EXPECTED_TRADE_DATE=${EXPECTED_TRADE_DATE}"
@@ -199,6 +222,9 @@ remote="${REMOTE_USER}@${REMOTE_HOST}"
 printf -v remote_dir_q '%q' "$REMOTE_DIR"
 printf -v container_root_q '%q' "$REMOTE_CONTAINER_RELEASE_ROOT"
 printf -v release_id_q '%q' "$release_id"
+printf -v compose_project_q '%q' "$STOCK_RESEARCH_COMPOSE_PROJECT"
+printf -v api_bind_port_q '%q' "$DASHBOARD_API_BIND_PORT"
+printf -v frontend_bind_port_q '%q' "$DASHBOARD_FRONTEND_BIND_PORT"
 case "$DASHBOARD_REMOTE_ENV_FILE" in
   /*) remote_env_file="$DASHBOARD_REMOTE_ENV_FILE" ;;
   *) remote_env_file="$REMOTE_DIR/$DASHBOARD_REMOTE_ENV_FILE" ;;
@@ -214,44 +240,47 @@ echo "Building canonical frontend for release ${release_id}"
 rtk pnpm --dir "$ROOT/dashboard" install --frozen-lockfile
 STOCK_RESEARCH_RELEASE_ID="$release_id" \
 VITE_RELEASE_ID="$release_id" \
-VITE_API_BASE_IMAGE="python:3.12.11-slim-bookworm" \
-VITE_FRONTEND_BASE_IMAGE="nginx:1.27.5-alpine" \
+VITE_API_BASE_IMAGE="python:3.12.11-slim-bookworm@sha256:519591d6871b7bc437060736b9f7456b8731f1499a57e22e6c285135ae657bf7" \
+VITE_FRONTEND_BASE_IMAGE="nginx:1.27.5-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10" \
   rtk pnpm --dir "$ROOT/dashboard" build
 if ! jq -e --arg release "$release_id" '
   .release_id == $release
-  and .api_base_image == "python:3.12.11-slim-bookworm"
-  and .frontend_base_image == "nginx:1.27.5-alpine"
+  and .api_base_image == "python:3.12.11-slim-bookworm@sha256:519591d6871b7bc437060736b9f7456b8731f1499a57e22e6c285135ae657bf7"
+  and .frontend_base_image == "nginx:1.27.5-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10"
 ' "$ROOT/dashboard/dist/release.json" >/dev/null; then
   echo "Frontend release metadata does not match release ${release_id}" >&2
   exit 2
 fi
 
 echo "Preparing remote release directories"
-ssh "${ssh_opts[@]}" "$remote" "docker compose version >/dev/null"
-ssh "${ssh_opts[@]}" "$remote" \
+ssh "${ssh_opts[@]}" -- "$remote" \
+  "bash -s -- ${compose_project_q} ${api_bind_port_q} ${frontend_bind_port_q}" < "$ROOT/deploy/check_dashboard_remote_host.sh"
+ssh "${ssh_opts[@]}" -- "$remote" \
   "mkdir -p ${remote_dir_q}/src ${remote_dir_q}/dashboard/dist ${remote_dir_q}/deploy ${remote_dir_q}/outputs/research/strategy_daily_eod/${EXPECTED_TRADE_DATE}"
 
 echo "Syncing backend source"
-rsync -az --delete -e "$rsync_rsh" "$ROOT/src/" "$remote:$REMOTE_DIR/src/"
-rsync -az -e "$rsync_rsh" "$ROOT/pyproject.toml" "$remote:$REMOTE_DIR/"
-rsync -az -e "$rsync_rsh" \
+rsync -az --delete -e "$rsync_rsh" -- "$ROOT/src/" "$remote:$REMOTE_DIR/src/"
+rsync -az -e "$rsync_rsh" -- "$ROOT/pyproject.toml" "$remote:$REMOTE_DIR/"
+rsync -az -e "$rsync_rsh" -- \
   "$ROOT/deploy/dashboard-api.Dockerfile" \
+  "$ROOT/deploy/dashboard-api-requirements.in" \
   "$ROOT/deploy/dashboard-api-requirements.lock" \
   "$ROOT/deploy/dashboard-frontend.Dockerfile" \
   "$ROOT/deploy/dashboard-nginx.conf" \
+  "$ROOT/deploy/check_dashboard_remote_host.sh" \
   "$ROOT/deploy/dashboard-release.compose.yml" \
   "$remote:$REMOTE_DIR/deploy/"
 
 echo "Syncing canonical frontend build"
-rsync -az --delete -e "$rsync_rsh" "$ROOT/dashboard/dist/" "$remote:$REMOTE_DIR/dashboard/dist/"
+rsync -az --delete -e "$rsync_rsh" -- "$ROOT/dashboard/dist/" "$remote:$REMOTE_DIR/dashboard/dist/"
 
 echo "Syncing strategy artifacts for ${EXPECTED_TRADE_DATE}"
-rsync -az --delete -e "$rsync_rsh" "$strategy_output/" \
+rsync -az --delete -e "$rsync_rsh" -- "$strategy_output/" \
   "$remote:$REMOTE_DIR/outputs/research/strategy_daily_eod/${EXPECTED_TRADE_DATE}/"
 
 echo "Restarting Docker Compose API and dashboard services"
-ssh "${ssh_opts[@]}" "$remote" \
-  "cd ${remote_dir_q} && test -f ${remote_env_file_q} && test -f ${pgservice_file_q} && STOCK_RESEARCH_RELEASE_ROOT=${container_root_q} STOCK_RESEARCH_RELEASE_ID=${release_id_q} STOCK_RESEARCH_FRONTEND_BUILD_ID=${release_id_q} DASHBOARD_REMOTE_ENV_FILE=${remote_env_file_q} DASHBOARD_PGSERVICE_FILE=${pgservice_file_q} docker compose -f deploy/dashboard-release.compose.yml build api dashboard && STOCK_RESEARCH_RELEASE_ROOT=${container_root_q} STOCK_RESEARCH_RELEASE_ID=${release_id_q} STOCK_RESEARCH_FRONTEND_BUILD_ID=${release_id_q} DASHBOARD_REMOTE_ENV_FILE=${remote_env_file_q} DASHBOARD_PGSERVICE_FILE=${pgservice_file_q} docker compose -f deploy/dashboard-release.compose.yml up -d --force-recreate api dashboard"
+ssh "${ssh_opts[@]}" -- "$remote" \
+  "cd ${remote_dir_q} && test -f ${remote_env_file_q} && test -f ${pgservice_file_q} && STOCK_RESEARCH_RELEASE_ROOT=${container_root_q} STOCK_RESEARCH_RELEASE_ID=${release_id_q} STOCK_RESEARCH_FRONTEND_BUILD_ID=${release_id_q} DASHBOARD_REMOTE_ENV_FILE=${remote_env_file_q} DASHBOARD_PGSERVICE_FILE=${pgservice_file_q} DASHBOARD_API_BIND_PORT=${api_bind_port_q} DASHBOARD_FRONTEND_BIND_PORT=${frontend_bind_port_q} docker compose --project-name ${compose_project_q} -f deploy/dashboard-release.compose.yml build api dashboard && STOCK_RESEARCH_RELEASE_ROOT=${container_root_q} STOCK_RESEARCH_RELEASE_ID=${release_id_q} STOCK_RESEARCH_FRONTEND_BUILD_ID=${release_id_q} DASHBOARD_REMOTE_ENV_FILE=${remote_env_file_q} DASHBOARD_PGSERVICE_FILE=${pgservice_file_q} DASHBOARD_API_BIND_PORT=${api_bind_port_q} DASHBOARD_FRONTEND_BIND_PORT=${frontend_bind_port_q} docker compose --project-name ${compose_project_q} -f deploy/dashboard-release.compose.yml up -d --force-recreate api dashboard"
 
 echo "Running bounded external release gate"
 BASE_URL="$BASE_URL" \

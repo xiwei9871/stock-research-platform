@@ -4,7 +4,6 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-import re
 from collections import Counter
 from pathlib import Path
 
@@ -140,34 +139,12 @@ def validate_strategy_release(*, output_dir: str | Path, trade_date: str) -> Non
             raise ValueError(f"{filename} does not match manifest strategy/rank/asset keys")
 
 
-def resolve_latest_strategy_release(*, output_root: str | Path) -> str:
-    root = Path(output_root)
-    if not root.is_dir():
-        raise ValueError(f"strategy output root is missing: {root}")
-    for candidate in sorted(root.iterdir(), key=lambda path: path.name, reverse=True):
-        if not candidate.is_dir() or not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", candidate.name):
-            continue
-        try:
-            validate_strategy_release(output_dir=candidate, trade_date=candidate.name)
-        except (TypeError, ValueError):
-            continue
-        return candidate.name
-    raise ValueError(f"no contract-valid strategy release found under: {root}")
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description="Validate one official strategy dashboard release")
     parser.add_argument("--output-dir")
     parser.add_argument("--trade-date")
-    parser.add_argument("--output-root")
-    parser.add_argument("--resolve-latest", action="store_true")
     args = parser.parse_args()
     try:
-        if args.resolve_latest:
-            if not args.output_root:
-                raise ValueError("--output-root is required with --resolve-latest")
-            print(resolve_latest_strategy_release(output_root=args.output_root))
-            return 0
         if not args.output_dir or not args.trade_date:
             raise ValueError("--output-dir and --trade-date are required")
         validate_strategy_release(output_dir=args.output_dir, trade_date=args.trade_date)

@@ -86,7 +86,7 @@ Expected:
 
 ## Canonical Release Entry Point
 
-`deploy/sync_dashboard_release.sh` 是外部仪表盘发布的唯一入口 (the only supported external dashboard release entry point). Do not publish directly from validation branches or `.worktrees` directories. The script fails closed unless the selected release root is clean (including untracked files), its own `.venv` imports `stock_research` from that root, and the exact dated strategy artifact directory exists.
+`deploy/sync_dashboard_release.sh` 是外部仪表盘发布的唯一入口 (the only supported external dashboard release entry point). Do not publish directly from validation branches or `.worktrees` directories. The script fails closed unless the selected release root is clean (including untracked files), the selected Python imports `stock_research` from that root, and the exact dated strategy artifact directory exists.
 
 Required operational inputs are normally stored in the server-only file selected by `DASHBOARD_SYNC_ENV` (default `/Users/xiwei/.stock_research_dashboard_sync.env`):
 
@@ -95,6 +95,7 @@ STOCK_RESEARCH_RELEASE_ROOT=/Users/xiwei/stock_research_release_YYYYMMDD
 # Optional manual override; omit for LaunchAgent dynamic resolution.
 # EXPECTED_TRADE_DATE=YYYY-MM-DD
 LOCAL_READINESS_URL=http://127.0.0.1:8765/api/platform/readiness
+PLATFORM_SUMMARY_FILE=/absolute/release/outputs/research/platform_daily_summary_v1/latest.json
 STOCK_RESEARCH_PYTHON=/absolute/path/to/python
 REMOTE_USER=deployment-user
 REMOTE_HOST=deployment-host
@@ -104,18 +105,25 @@ STOCK_RESEARCH_SSH_CONFIG=/Users/xiwei/.ssh/stock-research-dashboard.conf
 STRATEGY_OUTPUT_ROOT=/absolute/local/outputs/research
 DASHBOARD_REMOTE_ENV_FILE=.env.dashboard
 DASHBOARD_PGSERVICE_FILE=.pg_service.conf
+STOCK_RESEARCH_COMPOSE_PROJECT=stock_research_dashboard
+DASHBOARD_API_BIND_PORT=8765
+DASHBOARD_FRONTEND_BIND_PORT=5174
 BASE_URL=https://stock.manqiaotechnology.com
 DASHBOARD_AUTH=user:password
 REMOTE_CONTAINER_RELEASE_ROOT=/app
 ```
 
-`EXPECTED_TRADE_DATE` is an optional explicit override. When it is absent (the normal LaunchAgent path), the script accepts `latest_market_date` from `LOCAL_READINESS_URL` only when that process proves it is running the selected Git release and exact source/package roots. Otherwise it selects the newest local strategy artifact directory that passes the full publish contract, and fails closed when none exists. `STOCK_RESEARCH_PYTHON` can select the Python used for import and artifact validation. Without it, the script prefers `$STOCK_RESEARCH_RELEASE_ROOT/.venv/bin/python` and falls back to `/Users/xiwei/stock_research/.venv/bin/python`, while still requiring `stock_research.__file__` to belong to the selected release.
+`EXPECTED_TRADE_DATE` is an optional explicit override. When it is absent (the normal LaunchAgent path), the script accepts `latest_market_date` from `LOCAL_READINESS_URL` only when that process proves it is running the selected Git release and exact source/package roots. Otherwise it reads `latest_market_date` from the selected release's canonical `PLATFORM_SUMMARY_FILE`. It then validates that exact date's publish summary, manifest, and three review CSVs. It never infers the market date from whichever strategy artifact directory happens to be newest. `STOCK_RESEARCH_PYTHON` can select the Python used for import and artifact validation. Without it, the script prefers `$STOCK_RESEARCH_RELEASE_ROOT/.venv/bin/python` and falls back to `/Users/xiwei/stock_research/.venv/bin/python`, while still requiring `stock_research.__file__` to belong to the selected release.
 
 `REMOTE_USER`, `REMOTE_HOST`, and `REMOTE_DIR` retain the existing defaults (`jqz`, `192.168.3.185`, and `/home/$REMOTE_USER/code/stock-research-platform-main`) but should be set explicitly outside that host. SSH defaults to `BatchMode=yes`; use a dedicated host entry through `STOCK_RESEARCH_SSH_CONFIG`. Legacy `SSH_OPTS` remains an explicit compatibility override, accepts only simple option tokens, and should not be used to restore password-only automation. The script verifies SSH and `docker compose` before the first `rsync`. `DASHBOARD_AUTH` is passed only to the release check and must not be committed or embedded in the frontend.
 
-The release sync uses only the complete version-controlled `deploy/dashboard-release.compose.yml`; it never merges an unknown remote Compose file. The canonical stack builds both images, binds the API to host `127.0.0.1:8765`, binds the frontend to host `127.0.0.1:5174`, and connects them on the dedicated `stock-research-dashboard-release` network. The frontend Nginx container proxies `/api/` to `api:8765`. Server-only application variables come from `DASHBOARD_REMOTE_ENV_FILE`; PostgreSQL service configuration comes from `DASHBOARD_PGSERVICE_FILE`. Both files must already exist on the remote and are never synchronized from the repository.
+The release sync uses only the complete version-controlled `deploy/dashboard-release.compose.yml`; it never merges an unknown remote Compose file. Every Compose command uses the explicit `STOCK_RESEARCH_COMPOSE_PROJECT` name (default `stock_research_dashboard`). The canonical stack builds both images, binds the API to host `127.0.0.1:8765`, binds the frontend to host `127.0.0.1:5174`, and connects them on the dedicated `stock-research-dashboard-release` network. The frontend Nginx container proxies `/api/` to `api:8765`. Server-only application variables come from `DASHBOARD_REMOTE_ENV_FILE`; PostgreSQL service configuration comes from `DASHBOARD_PGSERVICE_FILE`. Both files must already exist on the remote and are never synchronized from the repository.
 
-Frontend dependencies are installed from `dashboard/pnpm-lock.yaml` with `--frozen-lockfile`. API direct runtime dependencies are pinned in `deploy/dashboard-api-requirements.lock`, the local package is installed with `--no-deps`, and the base images use explicit patch tags. `dashboard/dist/release.json` records the release ID and both base-image tags; the release gate checks the public metadata plus the container source/package roots.
+Before synchronization, the remote preflight lists Compose projects/containers and checks the selected host ports. If either port belongs to another project or a non-Compose container, deployment fails with a migration message and does not stop anything. One-time migration is operator-owned: inspect the reported container/project, intentionally run its own `docker compose --project-name <legacy-project> down` from the legacy deployment, verify the ports are free, then rerun the canonical release. If the legacy service must remain, select approved `DASHBOARD_API_BIND_PORT` / `DASHBOARD_FRONTEND_BIND_PORT` overrides and update the outer reverse proxy before release.
+
+Frontend dependencies are installed from `dashboard/pnpm-lock.yaml` with `--frozen-lockfile`. `deploy/dashboard-api-requirements.lock` is generated from `deploy/dashboard-api-requirements.in` with pip-tools and contains the complete transitive graph plus hashes; the image installs it with `--require-hashes`, then installs the local package with `--no-deps`. Base images are fixed to the official manifest-list references `python:3.12.11-slim-bookworm@sha256:519591d6871b7bc437060736b9f7456b8731f1499a57e22e6c285135ae657bf7` and `nginx:1.27.5-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10`. `dashboard/dist/release.json` records those exact references; the release gate checks the public metadata plus the container source/package roots.
+
+Regenerate the API lock only through `pip-compile --generate-hashes --allow-unsafe --output-file deploy/dashboard-api-requirements.lock deploy/dashboard-api-requirements.in`, review the complete diff, and verify it with `pip install --dry-run --require-hashes -r deploy/dashboard-api-requirements.lock` before release.
 
 Run the release only after the official strategy publisher has completed successfully:
 
@@ -125,7 +133,7 @@ EXPECTED_TRADE_DATE=YYYY-MM-DD \
 deploy/sync_dashboard_release.sh
 ```
 
-Before any remote mutation, the script validates the publish summary, manifest, and all three official review CSVs for the selected date. A date returned by `LOCAL_READINESS_URL` is accepted only when that process reports the current Git release ID and the exact selected source/package roots. Otherwise the script scans the local strategy output root and selects the newest contract-valid artifact date; it never trusts an older running service merely because it returned a date. The command then builds one `release_id`, syncs backend source, the canonical `dashboard/dist`, and only `outputs/research/strategy_daily_eod/$EXPECTED_TRADE_DATE`, rebuilds and recreates the API and dashboard services, then waits at most 120 seconds for the readiness and Review Queue contracts.
+Before any remote mutation, the script validates the publish summary, manifest, and all three official review CSVs for the selected platform date. A date returned by `LOCAL_READINESS_URL` is accepted only when that process reports the current Git release ID and the exact selected source/package roots; otherwise the selected release's canonical platform summary is authoritative. The command then builds one `release_id`, syncs backend source, the canonical `dashboard/dist`, and only `outputs/research/strategy_daily_eod/$EXPECTED_TRADE_DATE`, rebuilds and recreates the API and dashboard services, then waits at most 120 seconds for the readiness and Review Queue contracts.
 
 ### 回滚
 
