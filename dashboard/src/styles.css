@@ -2557,6 +2557,8 @@ body {
   grid-template-columns: repeat(2, max-content);
   gap: 3px 10px;
   max-width: min(260px, calc(100% - 24px));
+  max-height: calc(460px - 24px);
+  overflow: hidden;
   border: 1px solid #c8d3e3;
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.96);

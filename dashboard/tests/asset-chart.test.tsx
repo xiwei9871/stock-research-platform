@@ -298,4 +298,57 @@ describe('AssetChart', () => {
     expect(screen.getByRole('tooltip', { name: 'K线数据' })).toHaveTextContent('量 10.00万');
     expect(screen.getByRole('tooltip', { name: 'K线数据' })).toHaveTextContent('额 105.00万');
   });
+
+  it('flips the tooltip left so the rightmost bar keeps every field visible', async () => {
+    render(
+      <AssetChart
+        bars={[
+          { time: '2026-06-01', open: 10, high: 11, low: 9.8, close: 10.5, volume: 100000, amount: 1050000 }
+        ]}
+      />
+    );
+
+    const chartElement = document.querySelector('.asset-chart') as HTMLDivElement;
+    Object.defineProperty(chartElement, 'clientWidth', { configurable: true, value: 720 });
+    Object.defineProperty(chartElement, 'clientHeight', { configurable: true, value: 460 });
+    const originalRect = HTMLElement.prototype.getBoundingClientRect;
+    HTMLElement.prototype.getBoundingClientRect = function () {
+      if (this.classList.contains('asset-chart-tooltip')) {
+        return { width: 180, height: 110 } as DOMRect;
+      }
+      return originalRect.call(this);
+    };
+
+    try {
+      const handler = chartMocks.chart.subscribeCrosshairMove.mock.calls.at(-1)?.[0] as
+        | ((param: {
+            time?: string;
+            point?: { x: number; y: number };
+            seriesData: Map<object, object>;
+          }) => void)
+        | undefined;
+
+      act(() => {
+        handler?.({
+          time: '2026-06-01',
+          point: { x: 700, y: 120 },
+          seriesData: new Map<object, object>([
+            [chartMocks.candleSeries, { open: 10, high: 11, low: 9.8, close: 10.5 }],
+            [chartMocks.volumeSeries, { value: 100000 }]
+          ])
+        });
+      });
+
+      const tooltip = screen.getByRole('tooltip', { name: 'K线数据' });
+      await waitFor(() => expect(tooltip).toHaveStyle({ left: '506px' }));
+      expect(tooltip).toHaveTextContent('开 10');
+      expect(tooltip).toHaveTextContent('高 11');
+      expect(tooltip).toHaveTextContent('低 9.8');
+      expect(tooltip).toHaveTextContent('收 10.5');
+      expect(tooltip).toHaveTextContent('量 10.00万');
+      expect(tooltip).toHaveTextContent('额 105.00万');
+    } finally {
+      HTMLElement.prototype.getBoundingClientRect = originalRect;
+    }
+  });
 });
