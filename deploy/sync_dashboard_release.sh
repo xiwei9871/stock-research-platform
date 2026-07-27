@@ -294,6 +294,7 @@ STOCK_RESEARCH_RELEASE_ID="$release_id" \
 VITE_RELEASE_ID="$release_id" \
 VITE_API_BASE_IMAGE="$EXPECTED_API_BASE_IMAGE" \
 VITE_FRONTEND_BASE_IMAGE="$EXPECTED_FRONTEND_BASE_IMAGE" \
+CI=true \
   rtk pnpm --dir "$ROOT/dashboard" build
 if ! jq -e \
   --arg release "$release_id" \

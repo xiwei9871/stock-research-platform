@@ -135,7 +135,7 @@ def _release_fixture(tmp_path: Path, *, valid_manifest: bool = True) -> tuple[Pa
         fake_bin / "rtk",
         """
         #!/bin/bash
-        echo "rtk:$*" >> "$FAKE_COMMAND_LOG"
+        echo "rtk:CI=${CI-unset}:$*" >> "$FAKE_COMMAND_LOG"
         if [[ "$*" == *" build" ]]; then
           mkdir -p "$FAKE_RELEASE_ROOT/dashboard/dist"
           printf '{"release_id":"%s","api_base_image":"python:3.12.11-slim-bookworm@sha256:519591d6871b7bc437060736b9f7456b8731f1499a57e22e6c285135ae657bf7","frontend_base_image":"nginx:1.27.5-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10"}\n' "$VITE_RELEASE_ID" > "$FAKE_RELEASE_ROOT/dashboard/dist/release.json"
@@ -152,7 +152,7 @@ def _release_fixture(tmp_path: Path, *, valid_manifest: bool = True) -> tuple[Pa
     for command in ("ssh", "rsync"):
         _write_executable(
             fake_bin / command,
-            f"#!/bin/bash\necho \"{command}:$*\" >> \"$FAKE_COMMAND_LOG\"\n",
+            f"#!/bin/bash\necho \"{command}:CI=${{CI-unset}}:$*\" >> \"$FAKE_COMMAND_LOG\"\n",
         )
 
     subprocess.run(["git", "init", "-q", str(root)], check=True)
@@ -255,6 +255,31 @@ def test_release_builds_use_lockfiles_and_pinned_base_images():
     assert "pydantic-core==" in requirements
     for package in ("fastapi==", "uvicorn==", "pandas==", "psycopg[binary]=="):
         assert package in requirements
+
+
+def test_release_frontend_build_enables_ci_only_for_the_build_process(tmp_path):
+    _root, env, log_file = _release_fixture(tmp_path)
+    env["CI"] = "caller-value"
+
+    result = subprocess.run(
+        [str(REPO_ROOT / "deploy/sync_dashboard_release.sh")],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    commands = log_file.read_text(encoding="utf-8")
+    script = _read("deploy/sync_dashboard_release.sh")
+    build_command = 'rtk pnpm --dir "$ROOT/dashboard" build'
+    build_index = script.index(build_command)
+    assert "CI=true" in script[build_index - 200 : build_index]
+    assert "rtk:CI=caller-value:pnpm --dir" in commands
+    assert "install --frozen-lockfile" in commands
+    assert "rtk:CI=true:pnpm --dir" in commands
+    assert "ssh:CI=caller-value:" in commands
 
 
 def test_release_sync_defaults_to_batch_mode_and_validates_ssh_options():
