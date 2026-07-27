@@ -5241,6 +5241,27 @@ table.data-table td {
   padding: 3px;
 }
 
+.market-monitor-sector-tooltip {
+  position: absolute;
+  z-index: 4;
+  display: grid;
+  gap: 3px;
+  max-width: min(260px, calc(100% - 24px));
+  border: 1px solid #c8d3e3;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.14);
+  padding: 8px 10px;
+  color: #1f2937;
+  font-size: 12px;
+  line-height: 1.35;
+  pointer-events: none;
+}
+
+.market-monitor-sector-tooltip strong {
+  color: #111827;
+}
+
 .market-monitor-heatmap-fallback-tile {
   display: grid;
   align-content: center;

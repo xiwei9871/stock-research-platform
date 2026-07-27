@@ -25,8 +25,10 @@ export function resolveChartTooltipPosition({
   margin = 12,
   verticalOffset = 82
 }: ChartTooltipPositionInput) {
-  const rightCandidate = pointerX + gap;
-  const leftCandidate = pointerX - gap - tooltipWidth;
+  const safePointerX = Number.isFinite(pointerX) ? pointerX : margin - gap;
+  const safePointerY = Number.isFinite(pointerY) ? pointerY : margin + verticalOffset;
+  const rightCandidate = safePointerX + gap;
+  const leftCandidate = safePointerX - gap - tooltipWidth;
   const preferredLeft = rightCandidate + tooltipWidth <= containerWidth - margin
     ? rightCandidate
     : leftCandidate;
@@ -35,6 +37,6 @@ export function resolveChartTooltipPosition({
 
   return {
     left: clamp(preferredLeft, margin, maxLeft),
-    top: clamp(pointerY - verticalOffset, margin, maxTop)
+    top: clamp(safePointerY - verticalOffset, margin, maxTop)
   };
 }
