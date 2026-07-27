@@ -120,7 +120,7 @@ class RepairRunSummary:
     repair_phase_errors: dict[str, str] = field(default_factory=dict)
     finalization_status: str = "pending"
     repair_run_id: str = ""
-    publication_receipt: dict[str, Any] = field(default_factory=dict)
+    publication_receipt: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {

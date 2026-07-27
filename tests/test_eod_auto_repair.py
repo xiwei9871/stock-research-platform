@@ -589,6 +589,151 @@ def test_finalizer_rejects_tampered_receipt_file(tmp_path, publication_mode):
     assert result["errors"]["strategy_publication"] == "publication_receipt_file_changed"
 
 
+@pytest.mark.parametrize(
+    ("publication_mode", "expected_calls", "expected_status"),
+    [("publish_if_missing", 1, "success"), ("require_existing", 0, "failed")],
+)
+def test_empty_receipt_is_missing_with_entrypoint_specific_behavior(
+    tmp_path, publication_mode, expected_calls, expected_status
+):
+    repair_output = tmp_path / "repair"
+    repair_output.mkdir()
+    (repair_output / "run_summary.json").write_text(
+        json.dumps({"repair_run_id": "repair-current", "publication_receipt": {}}),
+        encoding="utf-8",
+    )
+    summary_path = (
+        tmp_path
+        / "outputs"
+        / "research"
+        / "strategy_daily_eod"
+        / "2026-07-02"
+        / "strategy_eod_publish_summary.json"
+    )
+    summary_path.parent.mkdir(parents=True)
+    calls = []
+
+    def official_publication(*, trade_date, output_root):
+        calls.append("official")
+        payload = {
+            "trade_date": trade_date,
+            "run_id": "strategy-eod-2026-07-02-local",
+            "status": "success",
+            "summary_path": str(summary_path),
+            "strategy_status": {
+                name: "success" for name in eod_auto_repair.REQUIRED_STRATEGY_RUNNERS
+            },
+        }
+        summary_path.write_text(json.dumps(payload), encoding="utf-8")
+        return payload
+
+    result = eod_auto_repair.finalize_repaired_release(
+        trade_date="2026-07-02",
+        output_dir=repair_output,
+        release_root=tmp_path,
+        publication_mode=publication_mode,
+        official_publication=official_publication,
+        contract_check=lambda: {"status": "success"},
+        readiness_check=lambda: {"status": "success"},
+        clear_cache=lambda: True,
+        sync_external=lambda: True,
+    )
+
+    assert result["status"] == expected_status
+    assert len(calls) == expected_calls
+
+
+def test_finalizer_rejects_valid_receipt_from_alternate_directory(tmp_path):
+    repair_output = tmp_path / "repair"
+    repair_output.mkdir()
+    alternate = tmp_path / "alternate" / "strategy_eod_publish_summary.json"
+    alternate.parent.mkdir()
+    alternate.write_text(
+        json.dumps(
+            {
+                "trade_date": "2026-07-02",
+                "run_id": "strategy-eod-2026-07-02-local",
+                "status": "success",
+                "strategy_status": {
+                    name: "success" for name in eod_auto_repair.REQUIRED_STRATEGY_RUNNERS
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    repair_run_id = "repair-current"
+    receipt = eod_auto_repair.build_publication_receipt(
+        summary_path=alternate,
+        expected_trade_date="2026-07-02",
+        repair_run_id=repair_run_id,
+    )
+    (repair_output / "run_summary.json").write_text(
+        json.dumps({"repair_run_id": repair_run_id, "publication_receipt": receipt}),
+        encoding="utf-8",
+    )
+
+    result = eod_auto_repair.finalize_repaired_release(
+        trade_date="2026-07-02",
+        output_dir=repair_output,
+        release_root=tmp_path,
+        clear_cache=lambda: pytest.fail("cache must not run"),
+        sync_external=lambda: pytest.fail("sync must not run"),
+    )
+
+    assert result["errors"]["strategy_publication"] == "publication_receipt_path_mismatch"
+
+
+def test_finalizer_rejects_canonical_summary_symlink_escape(tmp_path):
+    repair_output = tmp_path / "repair"
+    repair_output.mkdir()
+    outside = tmp_path / "outside" / "summary.json"
+    outside.parent.mkdir()
+    outside.write_text(
+        json.dumps(
+            {
+                "trade_date": "2026-07-02",
+                "run_id": "strategy-eod-2026-07-02-local",
+                "status": "success",
+                "strategy_status": {
+                    name: "success" for name in eod_auto_repair.REQUIRED_STRATEGY_RUNNERS
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    canonical = (
+        tmp_path
+        / "release"
+        / "outputs"
+        / "research"
+        / "strategy_daily_eod"
+        / "2026-07-02"
+        / "strategy_eod_publish_summary.json"
+    )
+    canonical.parent.mkdir(parents=True)
+    canonical.symlink_to(outside)
+    repair_run_id = "repair-current"
+    receipt = eod_auto_repair.build_publication_receipt(
+        summary_path=canonical,
+        expected_trade_date="2026-07-02",
+        repair_run_id=repair_run_id,
+    )
+    (repair_output / "run_summary.json").write_text(
+        json.dumps({"repair_run_id": repair_run_id, "publication_receipt": receipt}),
+        encoding="utf-8",
+    )
+
+    result = eod_auto_repair.finalize_repaired_release(
+        trade_date="2026-07-02",
+        output_dir=repair_output,
+        release_root=tmp_path / "release",
+        clear_cache=lambda: pytest.fail("cache must not run"),
+        sync_external=lambda: pytest.fail("sync must not run"),
+    )
+
+    assert result["errors"]["strategy_publication"] == "publication_receipt_path_escape"
+
+
 @pytest.mark.parametrize("publish_status", ["partial", "failed", "blocked", "skipped"])
 def test_finalize_repair_publication_stops_before_cache_when_publish_is_not_success(publish_status):
     events = []

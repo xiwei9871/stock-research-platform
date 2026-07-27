@@ -473,16 +473,16 @@ def finalize_repaired_release(
     repair_summary_path = repair_output / "run_summary.json"
     repair_summary = _load_repair_summary(repair_summary_path)
     repair_run_id = str(repair_summary.get("repair_run_id") or f"eod-repair-{trade_date}-{uuid.uuid4().hex}")
+    strategy_output = root / "outputs" / "research" / "strategy_daily_eod" / trade_date
+    runner_summary = strategy_output / "strategy_eod_publish_summary.json"
     existing_receipt = repair_summary.get("publication_receipt")
+    receipt_missing = existing_receipt is None or existing_receipt == {}
     receipt_gate = validate_publication_receipt(
         existing_receipt,
         expected_trade_date=trade_date,
         repair_run_id=repair_run_id,
-    )
-    strategy_output = root / "outputs" / "research" / "strategy_daily_eod" / trade_date
-    runner_summary = (
-        strategy_output
-        / "strategy_eod_publish_summary.json"
+        expected_summary_path=runner_summary,
+        release_root=root,
     )
     readiness_json = repair_output / "platform_ready.json"
 
@@ -587,7 +587,7 @@ def finalize_repaired_release(
                 return readiness_result
             return {"status": "success"}
         receipt_error = str(receipt_gate.get("error_code") or "publication_receipt_invalid")
-        if existing_receipt is not None or publication_mode == "require_existing":
+        if not receipt_missing or publication_mode == "require_existing":
             return {"status": "failed", "exit_code": 2, "error_code": receipt_error}
         previous_fingerprint = file_fingerprint(runner_summary)
         official_result = official_publication(
@@ -644,6 +644,8 @@ def finalize_repaired_release(
             receipt,
             expected_trade_date=trade_date,
             repair_run_id=repair_run_id,
+            expected_summary_path=runner_summary,
+            release_root=root,
         )
         if not _phase_succeeded(refreshed_receipt_gate):
             return refreshed_receipt_gate
@@ -1288,7 +1290,7 @@ def _run_eod_auto_repair_loop(
             for action in actions
             if action.metrics.get("publication_receipt")
         ),
-        {},
+        None,
     )
     return RepairRunSummary(
         trade_date=trade_date,
@@ -1421,7 +1423,7 @@ def run_eod_auto_repair(
             for action in actions
             if action.metrics.get("publication_receipt")
         ),
-        {},
+        None,
     )
     summary = RepairRunSummary(
         trade_date=trade_date,
