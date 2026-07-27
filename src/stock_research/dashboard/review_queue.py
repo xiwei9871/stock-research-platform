@@ -348,9 +348,12 @@ def _resolve_manifest_artifact_path(
     if ".." in raw_path.parts:
         return None
     if raw_path.is_absolute():
-        direct = _contained_existing_file(raw_path, root=strategy_output_root)
-        if direct is not None:
-            return direct
+        try:
+            raw_path.relative_to(strategy_output_root)
+        except ValueError:
+            pass
+        else:
+            return _contained_existing_file(raw_path, root=strategy_output_root)
         suffix = _legacy_strategy_artifact_suffix(raw_path)
         if suffix is None:
             return None

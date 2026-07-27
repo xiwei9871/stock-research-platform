@@ -220,6 +220,53 @@ def test_review_queue_does_not_relocate_untrusted_canonical_suffix_paths(
     assert all(group["freshness_status"] == "missing" for group in result["groups"])
 
 
+def test_manifest_artifact_resolver_rejects_external_symlink_pointing_into_root(tmp_path):
+    strategy_root = tmp_path / "release" / "outputs" / "research" / "strategy_daily_eod"
+    artifact = strategy_root / "2026-07-24" / "strategy_lhb_shortline_review.csv"
+    _write_strategy_review(artifact, strategy_id="lhb_shortline", strategy_name="LHB Shortline Combo")
+    external_link = tmp_path / "external.csv"
+    external_link.symlink_to(artifact)
+
+    resolved = review_queue._resolve_manifest_artifact_path(
+        external_link,
+        strategy_output_root=strategy_root.resolve(),
+        trade_date="2026-07-24",
+    )
+
+    assert resolved is None
+
+
+def test_manifest_artifact_resolver_rejects_root_symlink_pointing_outside(tmp_path):
+    strategy_root = tmp_path / "release" / "outputs" / "research" / "strategy_daily_eod"
+    outside = tmp_path / "outside.csv"
+    _write_strategy_review(outside, strategy_id="lhb_shortline", strategy_name="LHB Shortline Combo")
+    root_link = strategy_root / "2026-07-24" / "strategy_lhb_shortline_review.csv"
+    root_link.parent.mkdir(parents=True)
+    root_link.symlink_to(outside)
+
+    resolved = review_queue._resolve_manifest_artifact_path(
+        root_link,
+        strategy_output_root=strategy_root.resolve(),
+        trade_date="2026-07-24",
+    )
+
+    assert resolved is None
+
+
+def test_manifest_artifact_resolver_accepts_regular_file_inside_root(tmp_path):
+    strategy_root = tmp_path / "release" / "outputs" / "research" / "strategy_daily_eod"
+    artifact = strategy_root / "2026-07-24" / "strategy_lhb_shortline_review.csv"
+    _write_strategy_review(artifact, strategy_id="lhb_shortline", strategy_name="LHB Shortline Combo")
+
+    resolved = review_queue._resolve_manifest_artifact_path(
+        artifact,
+        strategy_output_root=strategy_root.resolve(),
+        trade_date="2026-07-24",
+    )
+
+    assert resolved == artifact.resolve()
+
+
 def test_review_queue_asset_normalization_uses_shared_strict_identity():
     assert review_queue._asset_id_from_ts_code("600000.SSE") == "CN:SH:600000"
     assert review_queue._asset_id_from_ts_code("000001.SZSE") == "CN:SZ:000001"
