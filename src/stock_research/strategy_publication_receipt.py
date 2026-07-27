@@ -41,13 +41,13 @@ def _required_mapping(value: Any, *, field: str) -> dict[str, Any]:
 
 def file_fingerprint(path: str | Path) -> dict[str, Any] | None:
     try:
-        snapshot = _read_summary_snapshot(Path(path))
+        snapshot = read_summary_snapshot(Path(path))
     except (FileNotFoundError, OSError, ValueError, json.JSONDecodeError):
         return None
     return dict(snapshot["fingerprint"])
 
 
-def _read_summary_snapshot(path: Path) -> dict[str, Any]:
+def read_summary_snapshot(path: Path) -> dict[str, Any]:
     flags = os.O_RDONLY
     if hasattr(os, "O_NOFOLLOW"):
         flags |= os.O_NOFOLLOW
@@ -85,6 +85,9 @@ def _read_summary_snapshot(path: Path) -> dict[str, Any]:
     }
 
 
+_read_summary_snapshot = read_summary_snapshot
+
+
 def build_publication_receipt(
     *,
     summary_path: str | Path,
@@ -93,7 +96,7 @@ def build_publication_receipt(
 ) -> dict[str, Any]:
     path = Path(summary_path).absolute()
     try:
-        snapshot = _read_summary_snapshot(path)
+        snapshot = read_summary_snapshot(path)
     except (ValueError, json.JSONDecodeError) as exc:
         raise PublicationReceiptSummaryInvalid(
             "strategy publication summary is invalid"
@@ -151,7 +154,7 @@ def validate_publication_receipt(
     if not RECEIPT_CONTRACT_FIELDS.issubset(receipt):
         return {"status": "failed", "error_code": "publication_receipt_missing_contract"}
     try:
-        snapshot = _read_summary_snapshot(summary_path)
+        snapshot = read_summary_snapshot(summary_path)
     except (FileNotFoundError, OSError, ValueError, json.JSONDecodeError):
         return {"status": "failed", "error_code": "publication_receipt_summary_invalid"}
     if snapshot["fingerprint"] != receipt.get("fingerprint"):

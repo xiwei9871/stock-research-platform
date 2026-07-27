@@ -234,6 +234,35 @@ def load_recent_data_run_manifest(
         return list(fetch_all(conn, sql, {"lookback_days": int(lookback_days)}))
 
 
+def load_strategy_publication_manifest(
+    *,
+    trade_date: str,
+    run_id: str,
+    service: str = SETTINGS.research_service,
+) -> list[dict[str, Any]]:
+    sql = """
+    SELECT *
+    FROM ops.data_run_manifest
+    WHERE trade_date = %(trade_date)s
+      AND run_id = %(run_id)s
+      AND module IN (
+          'strategy_lhb_shortline',
+          'strategy_mid_trend',
+          'strategy_tech_bottleneck',
+          'review_queue_strategy_manifest'
+      )
+    ORDER BY module, COALESCE(ended_at, created_at), manifest_id
+    """
+    with connect(service) as conn:
+        return list(
+            fetch_all(
+                conn,
+                sql,
+                {"trade_date": trade_date, "run_id": run_id},
+            )
+        )
+
+
 def summarize_manifest_modules(modules: list[dict[str, Any]]) -> dict[str, Any]:
     warnings: list[str] = []
     errors: list[str] = []

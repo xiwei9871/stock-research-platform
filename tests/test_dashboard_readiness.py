@@ -6,6 +6,10 @@ import pytest
 from stock_research.dashboard import app as dashboard_app
 from stock_research.dashboard import readiness
 from stock_research.dashboard.display_date_gate import select_display_date
+from stock_research.strategy_publication_contracts import (
+    build_publication_identity,
+    get_publication_contract,
+)
 
 
 class _FakeConnectionContext:
@@ -28,6 +32,12 @@ def _disable_real_manifest_probe(monkeypatch):
         lambda: None,
         raising=False,
     )
+    monkeypatch.setattr(
+        readiness,
+        "load_strategy_publication_manifest",
+        lambda **_kwargs: [],
+        raising=False,
+    )
 
 
 def _write_publishable_strategy_summary(release_root, trade_date="2026-07-24"):
@@ -40,6 +50,7 @@ def _write_publishable_strategy_summary(release_root, trade_date="2026-07-24"):
         json.dumps(
             {
                 "trade_date": trade_date,
+                "run_id": f"strategy-eod-{trade_date}-local",
                 "status": "success",
                 "publishable": True,
                 "review_rows": 15,
@@ -57,6 +68,12 @@ def _write_publishable_strategy_summary(release_root, trade_date="2026-07-24"):
                         "tech_bottleneck": 5,
                     },
                 },
+                "manifest_modules": [
+                    "strategy_lhb_shortline",
+                    "strategy_mid_trend",
+                    "strategy_tech_bottleneck",
+                    "review_queue_strategy_manifest",
+                ],
             }
         ),
         encoding="utf-8",
@@ -74,6 +91,42 @@ def _write_publishable_strategy_summary(release_root, trade_date="2026-07-24"):
         "summary_path": str(summary_path),
         "error_summary": None,
     }
+
+
+def _write_official_manifest_artifacts(release_root, trade_date="2026-07-24"):
+    run_id = f"strategy-eod-{trade_date}-local"
+    output_dir = (
+        release_root / "outputs" / "research" / "strategy_daily_eod" / trade_date
+    )
+    module_files = {
+        "strategy_lhb_shortline": "strategy_lhb_shortline_review.csv",
+        "strategy_mid_trend": "strategy_mid_trend_review.csv",
+        "strategy_tech_bottleneck": "strategy_tech_bottleneck_review.csv",
+        "review_queue_strategy_manifest": "review_queue_strategy_manifest.csv",
+    }
+    rows = []
+    for module, filename in module_files.items():
+        path = output_dir / filename
+        path.write_text("row\n", encoding="utf-8")
+        strategy_id = module.removeprefix("strategy_")
+        metadata = {}
+        if module != "review_queue_strategy_manifest":
+            metadata["publication_identity"] = build_publication_identity(
+                get_publication_contract(strategy_id)
+            )
+        rows.append(
+            {
+                "run_id": run_id,
+                "trade_date": trade_date,
+                "latest_trade_date": trade_date,
+                "module": module,
+                "status": "success",
+                "row_count": 15 if module == "review_queue_strategy_manifest" else 5,
+                "artifact_path": str(path),
+                "metadata": metadata,
+            }
+        )
+    return rows
 
 
 def _patch_market_monitor_ready(monkeypatch):
@@ -181,10 +234,22 @@ def test_readiness_uses_latest_trusted_official_publication_not_display_date(
 ):
     release_root = tmp_path / "release"
     status = _write_publishable_strategy_summary(release_root, "2026-07-24")
+    manifests = _write_official_manifest_artifacts(release_root, "2026-07-24")
+    local_prefix = "/Users/xiwei/old-release/outputs/research/strategy_daily_eod/2026-07-24"
+    status["output_dir"] = local_prefix
+    status["summary_path"] = f"{local_prefix}/strategy_eod_publish_summary.json"
+    for entry in manifests:
+        entry["artifact_path"] = f"{local_prefix}/{entry['artifact_path'].split('/')[-1]}"
     monkeypatch.setattr(
         readiness,
         "load_latest_successful_strategy_daily_eod_status",
         lambda: status,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        readiness,
+        "load_strategy_publication_manifest",
+        lambda **_kwargs: manifests,
         raising=False,
     )
     monkeypatch.setattr(
@@ -220,6 +285,7 @@ def test_readiness_rejects_official_publication_through_symlink_outside_release(
     release_root = tmp_path / "release"
     outside_root = tmp_path / "outside"
     status = _write_publishable_strategy_summary(outside_root, "2026-07-24")
+    manifests = _write_official_manifest_artifacts(outside_root, "2026-07-24")
     expected_parent = release_root / "outputs" / "research" / "strategy_daily_eod"
     expected_parent.mkdir(parents=True)
     (expected_parent / "2026-07-24").symlink_to(
@@ -230,10 +296,20 @@ def test_readiness_rejects_official_publication_through_symlink_outside_release(
     status["summary_path"] = str(
         expected_parent / "2026-07-24" / "strategy_eod_publish_summary.json"
     )
+    for entry in manifests:
+        entry["artifact_path"] = str(
+            expected_parent / "2026-07-24" / entry["artifact_path"].split("/")[-1]
+        )
     monkeypatch.setattr(
         readiness,
         "load_latest_successful_strategy_daily_eod_status",
         lambda: status,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        readiness,
+        "load_strategy_publication_manifest",
+        lambda **_kwargs: manifests,
         raising=False,
     )
     monkeypatch.setattr(
@@ -264,9 +340,41 @@ def test_readiness_rejects_summary_symlink_outside_release(tmp_path, monkeypatch
         / "2026-07-24"
     )
     output_dir.mkdir(parents=True)
+    manifests = _write_official_manifest_artifacts(release_root, "2026-07-24")
     summary_path = output_dir / "strategy_eod_publish_summary.json"
     summary_path.symlink_to(outside_status["summary_path"])
     status = dict(outside_status, output_dir=str(output_dir), summary_path=str(summary_path))
+    monkeypatch.setattr(
+        readiness,
+        "load_latest_successful_strategy_daily_eod_status",
+        lambda: status,
+    )
+    monkeypatch.setattr(
+        readiness,
+        "load_strategy_publication_manifest",
+        lambda **_kwargs: manifests,
+    )
+    monkeypatch.setattr(
+        readiness,
+        "load_platform_summary",
+        lambda score_version, top_n: {
+            "latest_market_date": "2026-07-27",
+            "topn_preview": [{"asset_id": "A"}],
+        },
+    )
+
+    payload = readiness.build_platform_readiness(
+        runtime_provenance_data={"source_root": str(release_root)}
+    )
+
+    assert payload["runtime_provenance"]["strategy_artifact_date"] == ""
+
+
+def test_readiness_rejects_publishable_summary_without_bound_official_manifests(
+    tmp_path, monkeypatch
+):
+    release_root = tmp_path / "release"
+    status = _write_publishable_strategy_summary(release_root, "2026-07-24")
     monkeypatch.setattr(
         readiness,
         "load_latest_successful_strategy_daily_eod_status",
@@ -286,6 +394,103 @@ def test_readiness_rejects_summary_symlink_outside_release(tmp_path, monkeypatch
     )
 
     assert payload["runtime_provenance"]["strategy_artifact_date"] == ""
+
+
+@pytest.mark.parametrize("corruption", ["identity", "traversal"])
+def test_readiness_rejects_corrupt_official_manifest_binding(
+    tmp_path, monkeypatch, corruption
+):
+    release_root = tmp_path / "release"
+    status = _write_publishable_strategy_summary(release_root, "2026-07-24")
+    manifests = _write_official_manifest_artifacts(release_root, "2026-07-24")
+    if corruption == "identity":
+        manifests[0]["metadata"]["publication_identity"]["variant"] = "legacy"
+    else:
+        manifests[0]["artifact_path"] = (
+            "/old/outputs/research/strategy_daily_eod/2026-07-24/../2026-07-24/"
+            "strategy_lhb_shortline_review.csv"
+        )
+    monkeypatch.setattr(
+        readiness,
+        "load_latest_successful_strategy_daily_eod_status",
+        lambda: status,
+    )
+    monkeypatch.setattr(
+        readiness,
+        "load_strategy_publication_manifest",
+        lambda **_kwargs: manifests,
+    )
+    monkeypatch.setattr(
+        readiness,
+        "load_platform_summary",
+        lambda score_version, top_n: {
+            "latest_market_date": "2026-07-27",
+            "topn_preview": [{"asset_id": "A"}],
+        },
+    )
+
+    payload = readiness.build_platform_readiness(
+        runtime_provenance_data={"source_root": str(release_root)}
+    )
+
+    assert payload["runtime_provenance"]["strategy_artifact_date"] == ""
+
+
+def test_readiness_summary_snapshot_is_bound_to_resolved_canonical_target(
+    tmp_path, monkeypatch
+):
+    release_root = tmp_path / "release"
+    status = _write_publishable_strategy_summary(release_root, "2026-07-24")
+    manifests = _write_official_manifest_artifacts(release_root, "2026-07-24")
+    canonical = (
+        release_root
+        / "outputs"
+        / "research"
+        / "strategy_daily_eod"
+        / "2026-07-24"
+    )
+    version_root = canonical.parent / ".versions"
+    version_root.mkdir()
+    version_one = version_root / "version-one"
+    canonical.rename(version_one)
+    canonical.symlink_to(version_one, target_is_directory=True)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    real_snapshot = readiness.read_summary_snapshot
+    captured = {}
+
+    def swap_after_resolve(path):
+        captured["path"] = path
+        canonical.unlink()
+        canonical.symlink_to(outside, target_is_directory=True)
+        return real_snapshot(path)
+
+    monkeypatch.setattr(readiness, "read_summary_snapshot", swap_after_resolve)
+    monkeypatch.setattr(
+        readiness,
+        "load_latest_successful_strategy_daily_eod_status",
+        lambda: status,
+    )
+    monkeypatch.setattr(
+        readiness,
+        "load_strategy_publication_manifest",
+        lambda **_kwargs: manifests,
+    )
+    monkeypatch.setattr(
+        readiness,
+        "load_platform_summary",
+        lambda score_version, top_n: {
+            "latest_market_date": "2026-07-27",
+            "topn_preview": [{"asset_id": "A"}],
+        },
+    )
+
+    payload = readiness.build_platform_readiness(
+        runtime_provenance_data={"source_root": str(release_root)}
+    )
+
+    assert captured["path"].parent == version_one.resolve()
+    assert payload["runtime_provenance"]["strategy_artifact_date"] == "2026-07-24"
 
 
 def test_build_platform_readiness_converts_optional_failures_and_empty_sources_to_partial(

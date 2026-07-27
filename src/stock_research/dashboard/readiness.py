@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Mapping
@@ -9,6 +10,7 @@ from zoneinfo import ZoneInfo
 from stock_research.config import SETTINGS
 from stock_research.data_run_manifest import (
     load_recent_data_run_manifest,
+    load_strategy_publication_manifest,
     summarize_manifest_modules,
 )
 
@@ -21,9 +23,24 @@ from stock_research.runtime_provenance import runtime_provenance
 from stock_research.strategy_daily_eod_store import (
     load_latest_successful_strategy_daily_eod_status,
 )
+from stock_research.strategy_publication_contracts import (
+    build_publication_identity,
+    get_publication_contract,
+    validate_publication_identity,
+)
+from stock_research.strategy_publication_receipt import read_summary_snapshot
 
 
 REPORT_SUFFIXES = {".html", ".md", ".json", ".csv"}
+OFFICIAL_PUBLICATION_MODULES = {
+    "strategy_lhb_shortline": ("lhb_shortline", "strategy_lhb_shortline_review.csv"),
+    "strategy_mid_trend": ("mid_trend", "strategy_mid_trend_review.csv"),
+    "strategy_tech_bottleneck": (
+        "tech_bottleneck",
+        "strategy_tech_bottleneck_review.csv",
+    ),
+    "review_queue_strategy_manifest": (None, "review_queue_strategy_manifest.csv"),
+}
 
 
 CHECK_LABELS = {
@@ -220,39 +237,144 @@ def _trusted_strategy_artifact_date(provenance: Mapping[str, str]) -> str:
     if not _real_iso_date(trade_date):
         return ""
     source_root = Path(source_root_value).resolve()
-    expected_output = (
+    canonical_output = (
         source_root / "outputs" / "research" / "strategy_daily_eod" / trade_date
     )
-    output_dir = Path(str(status.get("output_dir") or ""))
-    summary_path = Path(str(status.get("summary_path") or ""))
-    if not str(status.get("output_dir") or "") or not str(status.get("summary_path") or ""):
+    output_suffix = ("outputs", "research", "strategy_daily_eod", trade_date)
+    summary_suffix = (*output_suffix, "strategy_eod_publish_summary.json")
+    if not _path_has_exact_suffix(status.get("output_dir"), output_suffix):
+        return ""
+    if not _path_has_exact_suffix(status.get("summary_path"), summary_suffix):
         return ""
     try:
-        resolved_expected = expected_output.resolve()
-        resolved_expected.relative_to(source_root)
-        resolved_output = output_dir.resolve()
-        resolved_summary = summary_path.resolve()
+        resolved_output = canonical_output.resolve(strict=True)
         resolved_output.relative_to(source_root)
+        mapped_summary = resolved_output / "strategy_eod_publish_summary.json"
+        if mapped_summary.is_symlink():
+            return ""
+        resolved_summary = mapped_summary.resolve(strict=True)
         resolved_summary.relative_to(source_root)
-    except (OSError, ValueError):
+    except (FileNotFoundError, OSError, ValueError):
         return ""
-    expected_summary = (expected_output / "strategy_eod_publish_summary.json").resolve()
-    if (
-        resolved_output != resolved_expected
-        or resolved_summary != expected_summary
-        or resolved_summary.parent != resolved_output
-    ):
+    if resolved_summary.parent != resolved_output:
         return ""
-    if not output_dir.is_dir() or not summary_path.is_file():
+    if not resolved_output.is_dir() or not resolved_summary.is_file():
         return ""
 
     try:
-        summary = json.loads(summary_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+        snapshot = read_summary_snapshot(resolved_summary)
+    except (FileNotFoundError, OSError, ValueError, json.JSONDecodeError):
         return ""
+    summary = snapshot.get("payload")
     if not _publishable_summary_contract(summary, trade_date=trade_date):
         return ""
+    run_id = str(summary.get("run_id") or "")
+    if not re.fullmatch(
+        rf"strategy-eod-{re.escape(trade_date)}-[A-Za-z0-9._-]+",
+        run_id,
+    ):
+        return ""
+    if not set(OFFICIAL_PUBLICATION_MODULES).issubset(
+        summary.get("manifest_modules") or []
+    ):
+        return ""
+    try:
+        manifests = load_strategy_publication_manifest(
+            trade_date=trade_date,
+            run_id=run_id,
+        )
+    except Exception:  # noqa: BLE001
+        return ""
+    if not _official_manifest_contract(
+        manifests,
+        trade_date=trade_date,
+        run_id=run_id,
+        source_root=source_root,
+        resolved_output=resolved_output,
+    ):
+        return ""
     return trade_date
+
+
+def _path_has_exact_suffix(value: Any, suffix: tuple[str, ...]) -> bool:
+    raw = str(value or "").strip()
+    if not raw:
+        return False
+    parts = Path(raw).parts
+    return (
+        ".." not in parts
+        and len(parts) >= len(suffix)
+        and tuple(parts[-len(suffix):]) == suffix
+    )
+
+
+def _official_manifest_contract(
+    manifests: Any,
+    *,
+    trade_date: str,
+    run_id: str,
+    source_root: Path,
+    resolved_output: Path,
+) -> bool:
+    if (
+        not isinstance(manifests, list)
+        or len(manifests) != len(OFFICIAL_PUBLICATION_MODULES)
+    ):
+        return False
+    by_module: dict[str, Mapping[str, Any]] = {}
+    for entry in manifests:
+        if not isinstance(entry, Mapping):
+            return False
+        module = str(entry.get("module") or "")
+        if module not in OFFICIAL_PUBLICATION_MODULES or module in by_module:
+            return False
+        by_module[module] = entry
+    if set(by_module) != set(OFFICIAL_PUBLICATION_MODULES):
+        return False
+
+    for module, (strategy_id, filename) in OFFICIAL_PUBLICATION_MODULES.items():
+        entry = by_module[module]
+        if (
+            str(entry.get("run_id") or "") != run_id
+            or str(entry.get("trade_date") or "") != trade_date
+            or str(entry.get("latest_trade_date") or "") != trade_date
+            or entry.get("status") != "success"
+        ):
+            return False
+        suffix = (
+            "outputs",
+            "research",
+            "strategy_daily_eod",
+            trade_date,
+            filename,
+        )
+        if not _path_has_exact_suffix(entry.get("artifact_path"), suffix):
+            return False
+        artifact = resolved_output / filename
+        try:
+            resolved_artifact = artifact.resolve(strict=True)
+            resolved_artifact.relative_to(source_root)
+            resolved_artifact.relative_to(resolved_output)
+        except (FileNotFoundError, OSError, ValueError):
+            return False
+        if not resolved_artifact.is_file():
+            return False
+        if strategy_id is None:
+            if type(entry.get("row_count")) is not int or entry.get("row_count") != 15:
+                return False
+            continue
+        metadata = entry.get("metadata")
+        actual = (
+            metadata.get("publication_identity")
+            if isinstance(metadata, Mapping)
+            else None
+        )
+        if not isinstance(actual, Mapping):
+            return False
+        expected = build_publication_identity(get_publication_contract(strategy_id))
+        if validate_publication_identity(actual, expected):
+            return False
+    return True
 
 
 def _successful_status_contract(status: Mapping[str, Any]) -> bool:
