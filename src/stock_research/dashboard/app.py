@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 from datetime import date, datetime
 from inspect import signature
 import os
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, HTTPException, Request
@@ -385,6 +386,16 @@ def _dashboard_auth_required() -> bool:
 
 def create_app() -> FastAPI:
     validated_runtime_provenance = runtime_provenance()
+    release_root = Path(validated_runtime_provenance["source_root"]).resolve()
+    strategy_output_root = (
+        release_root / "outputs" / "research" / "strategy_daily_eod"
+    ).resolve()
+    try:
+        strategy_output_root.relative_to(release_root)
+    except ValueError as exc:
+        raise RuntimeError(
+            f"strategy output root escapes release root: {strategy_output_root}"
+        ) from exc
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -399,6 +410,7 @@ def create_app() -> FastAPI:
     app = FastAPI(title="Stock Research Dashboard API", lifespan=lifespan)
     install_request_id_middleware(app)
     app.state.runtime_provenance = validated_runtime_provenance
+    app.state.strategy_output_root = strategy_output_root
     app.state.eod_response_cache = DashboardResponseCache(ttl_seconds=dashboard_eod_cache_ttl_seconds())
     app.state.backtest_jobs = BacktestJobStore(run_fresh_backtest)
     app.state.public_news_scheduler = PublicNewsScheduler(
@@ -1095,6 +1107,7 @@ def create_app() -> FastAPI:
                 score_version=score_version,
                 limit=limit,
                 lookback_days=lookback_days,
+                strategy_output_root=app.state.strategy_output_root,
             ),
         )
 

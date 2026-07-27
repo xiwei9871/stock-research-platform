@@ -23,7 +23,17 @@ BUCKET_LABELS = {
     "risk_heavy": "Risk Flags",
     "thin": "Thin / Missing Sources",
 }
-RESEARCH_OUTPUT_ROOT = Path("/Users/xiwei/stock_research/outputs/research")
+CANONICAL_STRATEGY_OUTPUT_SUFFIX = ("outputs", "research", "strategy_daily_eod")
+
+
+def _configured_output_root() -> Path:
+    output_root = Path(SETTINGS.output_root)
+    if not output_root.is_absolute():
+        output_root = Path(SETTINGS.repo_root) / output_root
+    return output_root.resolve()
+
+
+RESEARCH_OUTPUT_ROOT = _configured_output_root() / "research"
 
 
 def load_strategy_contracts(*, profile: str = "balanced") -> dict[str, Any]:
@@ -48,6 +58,7 @@ def build_review_queue(
     lookback_days: int = 90,
     review_mode: str = "strategy_topn",
     use_strategy_snapshots: bool = True,
+    strategy_output_root: str | Path | None = None,
 ) -> dict[str, Any]:
     bounded_limit = _bounded_int(limit, default=20, minimum=1, maximum=50)
     bounded_lookback_days = _bounded_int(lookback_days, default=90, minimum=1, maximum=365)
@@ -59,11 +70,15 @@ def build_review_queue(
     if normalized_review_mode == "strategy_topn":
         strategy_rows = _attach_asset_names(
             _exact_trade_date_rows(
-                _load_manifest_strategy_rows(trade_date=selected_trade_date, limit=50),
+                _load_manifest_strategy_rows(
+                    trade_date=selected_trade_date,
+                    limit=50,
+                    strategy_output_root=strategy_output_root,
+                ),
                 selected_trade_date,
             )
         )
-        if not strategy_rows:
+        if not strategy_rows and strategy_output_root is None:
             strategy_rows = _exact_trade_date_rows(
                 (
                     _load_strategy_snapshot_rows(trade_date=selected_trade_date, limit=50)
@@ -72,7 +87,7 @@ def build_review_queue(
                 ),
                 selected_trade_date,
             )
-        if not strategy_rows:
+        if not strategy_rows and strategy_output_root is None:
             strategy_rows = _exact_trade_date_rows(
                 load_active_strategy_topn_rows(trade_date=selected_trade_date, limit=min(bounded_limit, 10)),
                 selected_trade_date,
@@ -190,9 +205,18 @@ def _exact_trade_date_rows(rows: list[dict[str, Any]], trade_date: str) -> list[
     ]
 
 
-def load_active_strategy_topn_rows(*, trade_date: str, limit: int) -> list[dict[str, Any]]:
+def load_active_strategy_topn_rows(
+    *,
+    trade_date: str,
+    limit: int,
+    strategy_output_root: str | Path | None = None,
+) -> list[dict[str, Any]]:
     manifest_rows = _exact_trade_date_rows(
-        _load_manifest_strategy_rows(trade_date=trade_date, limit=limit),
+        _load_manifest_strategy_rows(
+            trade_date=trade_date,
+            limit=limit,
+            strategy_output_root=strategy_output_root,
+        ),
         trade_date,
     )
     if manifest_rows:
@@ -251,9 +275,30 @@ def _load_strategy_snapshot_rows(*, trade_date: str, limit: int) -> list[dict[st
     )
 
 
-def _load_manifest_strategy_rows(*, trade_date: str, limit: int) -> list[dict[str, Any]]:
+def _load_manifest_strategy_rows(
+    *,
+    trade_date: str,
+    limit: int,
+    strategy_output_root: str | Path | None = None,
+) -> list[dict[str, Any]]:
     if not trade_date:
         return []
+    resolved_output_root = _strategy_output_root(strategy_output_root)
+    canonical_manifest = _contained_existing_file(
+        resolved_output_root / trade_date / "review_queue_strategy_manifest.csv",
+        root=resolved_output_root,
+    )
+    if canonical_manifest is not None:
+        canonical_rows = _read_manifest_strategy_artifact(
+            canonical_manifest,
+            trade_date=trade_date,
+            limit=max(limit * 3, limit),
+            manifest={"module": "strategy_review_queue", "run_id": ""},
+        )
+        return _select_latest_strategy_sources(
+            artifact_rows=_exact_trade_date_rows(canonical_rows, trade_date),
+            db_rows=[],
+        )
     try:
         modules = list(load_latest_data_run_manifest(trade_date=trade_date))
     except Exception:
@@ -267,12 +312,74 @@ def _load_manifest_strategy_rows(*, trade_date: str, limit: int) -> list[dict[st
             continue
         if not _manifest_strategy_contract_valid(module):
             continue
-        artifact_path = Path(str(module.get("artifact_path") or ""))
+        artifact_path = _resolve_manifest_artifact_path(
+            module.get("artifact_path"),
+            strategy_output_root=resolved_output_root,
+            trade_date=trade_date,
+        )
+        if artifact_path is None:
+            continue
         rows.extend(_read_manifest_strategy_artifact(artifact_path, trade_date=trade_date, limit=limit, manifest=module))
     return _select_latest_strategy_sources(
         artifact_rows=_exact_trade_date_rows(rows, trade_date),
         db_rows=[],
     )
+
+
+def _strategy_output_root(value: str | Path | None) -> Path:
+    if value is not None:
+        return Path(value).resolve()
+    return (_configured_output_root() / "research" / "strategy_daily_eod").resolve()
+
+
+def _resolve_manifest_artifact_path(
+    value: Any,
+    *,
+    strategy_output_root: Path,
+    trade_date: str,
+) -> Path | None:
+    raw_text = str(value or "").strip()
+    if not raw_text:
+        return None
+    raw_path = Path(raw_text)
+    if raw_path.is_absolute():
+        direct = _contained_existing_file(raw_path, root=strategy_output_root)
+        if direct is not None:
+            return direct
+        suffix = _path_suffix_after(raw_path, CANONICAL_STRATEGY_OUTPUT_SUFFIX)
+        if suffix is None:
+            return None
+        candidate = strategy_output_root.joinpath(*suffix)
+    else:
+        suffix = _path_suffix_after(raw_path, CANONICAL_STRATEGY_OUTPUT_SUFFIX)
+        if suffix is not None:
+            candidate = strategy_output_root.joinpath(*suffix)
+        elif raw_path.parts and raw_path.parts[0] == trade_date:
+            candidate = strategy_output_root / raw_path
+        else:
+            candidate = strategy_output_root / trade_date / raw_path
+    return _contained_existing_file(candidate, root=strategy_output_root)
+
+
+def _path_suffix_after(path: Path, marker: tuple[str, ...]) -> tuple[str, ...] | None:
+    parts = path.parts
+    width = len(marker)
+    for index in range(len(parts) - width + 1):
+        if tuple(parts[index : index + width]) == marker:
+            return tuple(parts[index + width :])
+    return None
+
+
+def _contained_existing_file(path: Path, *, root: Path) -> Path | None:
+    resolved_root = root.resolve()
+    resolved_path = path.resolve()
+    try:
+        resolved_path.relative_to(resolved_root)
+    except ValueError:
+        return None
+    if not resolved_path.is_file():
+        return None
+    return resolved_path
 
 
 def _manifest_strategy_snapshot_valid(module: dict[str, Any]) -> bool:

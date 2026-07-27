@@ -35,7 +35,66 @@ def test_create_app_validates_runtime_provenance_once(monkeypatch):
     app = dashboard_app.create_app()
 
     assert app.state.runtime_provenance is provenance
+    assert app.state.strategy_output_root == Path(
+        "/srv/stock-research/outputs/research/strategy_daily_eod"
+    )
     assert calls == [True]
+
+
+def test_create_app_binds_review_queue_to_runtime_release_root_from_wrong_cwd(monkeypatch, tmp_path):
+    release_root = tmp_path / "release"
+    release_root.mkdir()
+    unrelated_cwd = tmp_path / "unrelated"
+    unrelated_cwd.mkdir()
+    monkeypatch.chdir(unrelated_cwd)
+    monkeypatch.setattr(
+        dashboard_app,
+        "runtime_provenance",
+        lambda: {
+            "release_id": "release-1",
+            "source_root": str(release_root),
+            "python_package_root": str(release_root / "src" / "stock_research"),
+            "frontend_build_id": "release-1",
+        },
+    )
+    captured = {}
+
+    def fake_build_review_queue(**kwargs):
+        captured.update(kwargs)
+        return {"groups": []}
+
+    monkeypatch.setattr(dashboard_app, "build_review_queue", fake_build_review_queue)
+
+    app = dashboard_app.create_app()
+    response = TestClient(app).get("/api/review-queue?trade_date=2026-07-24")
+
+    assert response.status_code == 200
+    assert app.state.strategy_output_root == (
+        release_root / "outputs" / "research" / "strategy_daily_eod"
+    ).resolve()
+    assert captured["strategy_output_root"] == app.state.strategy_output_root
+
+
+def test_create_app_rejects_strategy_output_root_symlink_escape(monkeypatch, tmp_path):
+    release_root = tmp_path / "release"
+    research_root = release_root / "outputs" / "research"
+    research_root.mkdir(parents=True)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (research_root / "strategy_daily_eod").symlink_to(outside, target_is_directory=True)
+    monkeypatch.setattr(
+        dashboard_app,
+        "runtime_provenance",
+        lambda: {
+            "release_id": "release-1",
+            "source_root": str(release_root),
+            "python_package_root": str(release_root / "src" / "stock_research"),
+            "frontend_build_id": "release-1",
+        },
+    )
+
+    with pytest.raises(RuntimeError, match="strategy output root escapes release root"):
+        dashboard_app.create_app()
 
 
 def test_overview_route_returns_payload(monkeypatch):

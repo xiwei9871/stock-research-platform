@@ -1,4 +1,193 @@
+import csv
+from pathlib import Path
+
+import pytest
+
 from stock_research.dashboard import review_queue
+
+
+STRATEGY_MODULES = {
+    "strategy_lhb_shortline": ("lhb_shortline", "LHB Shortline Combo"),
+    "strategy_mid_trend": ("mid_trend", "Mid Trend Combo"),
+    "strategy_tech_bottleneck": ("tech_bottleneck", "Tech Bottleneck Combo"),
+}
+
+
+def _write_strategy_review(path: Path, *, strategy_id: str, strategy_name: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=[
+                "trade_date",
+                "asset_id",
+                "rank",
+                "score_total",
+                "strategy_id",
+                "strategy_name",
+                "source_type",
+                "source_name",
+                "source_rank",
+                "review_tier",
+            ],
+        )
+        writer.writeheader()
+        offset = {"lhb_shortline": 0, "mid_trend": 10, "tech_bottleneck": 20}[strategy_id]
+        for rank in range(1, 6):
+            writer.writerow(
+                {
+                    "trade_date": "2026-07-24",
+                    "asset_id": f"CN:SH:{600000 + offset + rank:06d}",
+                    "rank": rank,
+                    "score_total": 90 - rank,
+                    "strategy_id": strategy_id,
+                    "strategy_name": strategy_name,
+                    "source_type": "strategy_manifest",
+                    "source_name": f"strategy_{strategy_id}",
+                    "source_rank": rank,
+                    "review_tier": "top5_focus",
+                }
+            )
+
+
+def _patch_release_queue_dependencies(monkeypatch, modules):
+    monkeypatch.setattr(
+        review_queue,
+        "load_platform_summary",
+        lambda **kwargs: {"latest_market_date": "2026-07-24", "latest_score_date": "2026-07-24"},
+    )
+    monkeypatch.setattr(review_queue, "load_latest_data_run_manifest", lambda **kwargs: modules)
+    monkeypatch.setattr(review_queue, "_attach_asset_names", lambda rows: rows)
+    monkeypatch.setattr(
+        review_queue,
+        "_active_strategy_names",
+        lambda: {strategy_id: strategy_name for strategy_id, strategy_name in STRATEGY_MODULES.values()},
+    )
+
+
+def _successful_modules(artifact_paths):
+    modules = []
+    for module, (strategy_id, _) in STRATEGY_MODULES.items():
+        modules.append(
+            {
+                "module": module,
+                "status": "success",
+                "trade_date": "2026-07-24",
+                "latest_trade_date": "2026-07-24",
+                "run_id": "release-run",
+                "artifact_path": str(artifact_paths[module]),
+                "metadata": (
+                    {"candidate_snapshot_latest_date": "2026-07-24"}
+                    if strategy_id == "tech_bottleneck"
+                    else {}
+                ),
+            }
+        )
+    return modules
+
+
+def _assert_release_queue_is_5_by_3(result):
+    assert result["trade_date"] == "2026-07-24"
+    assert result["requested_trade_date"] == "2026-07-24"
+    assert {group["strategy_id"] for group in result["groups"]} == {
+        "lhb_shortline",
+        "mid_trend",
+        "tech_bottleneck",
+    }
+    assert all(group["count"] == 5 for group in result["groups"])
+    assert all(group["data_trade_date"] == "2026-07-24" for group in result["groups"])
+    assert all(group["freshness_status"] == "current" for group in result["groups"])
+
+
+@pytest.mark.parametrize("path_style", ["old_absolute", "repo_relative", "date_relative"])
+def test_review_queue_relocates_manifest_artifacts_to_explicit_release_root(
+    monkeypatch, tmp_path, path_style
+):
+    release_root = tmp_path / "clean-release"
+    strategy_root = release_root / "outputs" / "research" / "strategy_daily_eod"
+    date_root = strategy_root / "2026-07-24"
+    artifact_paths = {}
+    for module, (strategy_id, strategy_name) in STRATEGY_MODULES.items():
+        filename = f"{module}_review.csv"
+        _write_strategy_review(date_root / filename, strategy_id=strategy_id, strategy_name=strategy_name)
+        if path_style == "old_absolute":
+            artifact_paths[module] = Path(
+                f"/Users/xiwei/stock_research/outputs/research/strategy_daily_eod/2026-07-24/{filename}"
+            )
+        elif path_style == "repo_relative":
+            artifact_paths[module] = Path(
+                f"outputs/research/strategy_daily_eod/2026-07-24/{filename}"
+            )
+        else:
+            artifact_paths[module] = Path(filename)
+
+    _patch_release_queue_dependencies(monkeypatch, _successful_modules(artifact_paths))
+    unrelated_cwd = tmp_path / "unrelated"
+    unrelated_cwd.mkdir()
+    monkeypatch.chdir(unrelated_cwd)
+
+    result = review_queue.build_review_queue(
+        trade_date="2026-07-24",
+        strategy_output_root=strategy_root,
+    )
+
+    _assert_release_queue_is_5_by_3(result)
+
+
+def test_review_queue_prefers_canonical_date_manifest_over_database_paths(monkeypatch, tmp_path):
+    strategy_root = tmp_path / "release" / "outputs" / "research" / "strategy_daily_eod"
+    date_root = strategy_root / "2026-07-24"
+    combined = date_root / "review_queue_strategy_manifest.csv"
+    for module, (strategy_id, strategy_name) in STRATEGY_MODULES.items():
+        per_strategy = date_root / f"{module}_review.csv"
+        _write_strategy_review(per_strategy, strategy_id=strategy_id, strategy_name=strategy_name)
+    rows = []
+    for path in sorted(date_root.glob("strategy_*_review.csv")):
+        with path.open(encoding="utf-8", newline="") as handle:
+            rows.extend(csv.DictReader(handle))
+    with combined.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows)
+
+    outside_paths = {module: tmp_path / "outside" / f"{module}.csv" for module in STRATEGY_MODULES}
+    _patch_release_queue_dependencies(monkeypatch, _successful_modules(outside_paths))
+    monkeypatch.chdir(tmp_path)
+
+    result = review_queue.build_review_queue(
+        trade_date="2026-07-24",
+        strategy_output_root=strategy_root,
+    )
+
+    _assert_release_queue_is_5_by_3(result)
+
+
+@pytest.mark.parametrize("escape_kind", ["traversal", "symlink"])
+def test_review_queue_rejects_manifest_artifacts_escaping_explicit_root(
+    monkeypatch, tmp_path, escape_kind
+):
+    strategy_root = tmp_path / "release" / "outputs" / "research" / "strategy_daily_eod"
+    date_root = strategy_root / "2026-07-24"
+    outside = tmp_path / "outside.csv"
+    _write_strategy_review(outside, strategy_id="lhb_shortline", strategy_name="LHB Shortline Combo")
+    date_root.mkdir(parents=True)
+    if escape_kind == "traversal":
+        unsafe_path = "../../../../outside.csv"
+    else:
+        unsafe_link = date_root / "strategy_lhb_shortline_review.csv"
+        unsafe_link.symlink_to(outside)
+        unsafe_path = unsafe_link.name
+    artifact_paths = {module: unsafe_path for module in STRATEGY_MODULES}
+    _patch_release_queue_dependencies(monkeypatch, _successful_modules(artifact_paths))
+
+    result = review_queue.build_review_queue(
+        trade_date="2026-07-24",
+        strategy_output_root=strategy_root,
+        use_strategy_snapshots=False,
+    )
+
+    assert all(group["count"] == 0 for group in result["groups"])
+    assert all(group["freshness_status"] == "missing" for group in result["groups"])
 
 
 def test_review_queue_asset_normalization_uses_shared_strict_identity():
