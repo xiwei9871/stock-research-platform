@@ -1429,15 +1429,17 @@ def _strategy_review_counts(
     review_rows: list[dict[str, Any]],
 ) -> tuple[dict[str, int], dict[str, int]]:
     frame = pd.DataFrame(review_rows)
-    if frame.empty or not {"strategy_id", "asset_id"}.issubset(frame.columns):
+    if frame.empty or "strategy_id" not in frame.columns:
         return {}, {}
     frame = frame.copy()
     frame["strategy_id"] = frame["strategy_id"].fillna("").astype(str).str.strip()
-    frame["asset_id"] = frame["asset_id"].fillna("").astype(str).str.strip()
-    frame = frame[frame["strategy_id"].ne("") & frame["asset_id"].ne("")]
+    frame["_canonical_asset_id"] = [
+        _canonical_review_asset_id(row) for row in frame.to_dict("records")
+    ]
+    frame = frame[frame["strategy_id"].ne("") & frame["_canonical_asset_id"].ne("")]
     if frame.empty:
         return {}, {}
-    unique_counts = frame.groupby("strategy_id")["asset_id"].nunique().astype(int).to_dict()
+    unique_counts = frame.groupby("strategy_id")["_canonical_asset_id"].nunique().astype(int).to_dict()
     row_counts = frame.groupby("strategy_id").size().astype(int).to_dict()
     return unique_counts, row_counts
 
@@ -1450,17 +1452,23 @@ def _strategy_review_rows_valid(
     if len(review_rows) != sum(EXPECTED_STRATEGY_REVIEW_COUNTS.values()):
         return False
     frame = pd.DataFrame(review_rows)
-    required_columns = {"trade_date", "strategy_id", "asset_id", "rank", "review_tier"}
+    required_columns = {"trade_date", "strategy_id", "rank", "review_tier"}
     if not required_columns.issubset(frame.columns):
         return False
     strategy_ids = frame["strategy_id"].fillna("").astype(str).str.strip()
-    asset_ids = frame["asset_id"].fillna("").astype(str).str.strip()
+    canonical_asset_ids = pd.Series(
+        [_canonical_review_asset_id(row) for row in frame.to_dict("records")],
+        index=frame.index,
+    )
     trade_dates = frame["trade_date"].fillna("").astype(str).str.strip().str[:10]
     review_tiers = frame["review_tier"].fillna("").astype(str).str.strip()
+    rank_values = frame["rank"]
+    if rank_values.map(lambda value: isinstance(value, bool) or type(value).__name__ == "bool_").any():
+        return False
     ranks = pd.to_numeric(frame["rank"], errors="coerce")
     if not bool(
         strategy_ids.isin(EXPECTED_STRATEGY_REVIEW_COUNTS).all()
-        and asset_ids.ne("").all()
+        and canonical_asset_ids.ne("").all()
         and trade_dates.eq(expected_trade_date).all()
         and review_tiers.eq("top5_focus").all()
         and ranks.notna().all()
@@ -1473,6 +1481,25 @@ def _strategy_review_rows_valid(
         if len(strategy_ranks) != 5 or set(strategy_ranks.astype(int)) != expected_ranks:
             return False
     return True
+
+
+def _canonical_review_asset_id(row: dict[str, Any]) -> str:
+    for field in ("asset_id", "ts_code"):
+        value = row.get(field)
+        if value is None:
+            continue
+        try:
+            if bool(pd.isna(value)):
+                continue
+        except (TypeError, ValueError):
+            return ""
+        text = str(value).strip()
+        if not text:
+            continue
+        if text.lower() in {"nan", "none", "null", "na", "n/a"}:
+            return ""
+        return _asset_id_from_review_code(text)
+    return ""
 
 
 def _replace_official_strategy_entries_with_failures(

@@ -649,3 +649,61 @@ def test_publish_strategy_eod_replaces_duplicate_asset_strategy_success_with_fai
     lhb_entries = [entry for entry in collected if entry.get("module") == "strategy_lhb_shortline"]
     assert not any(entry.get("status") == "success" for entry in lhb_entries)
     assert any(entry.get("status") == "failed" for entry in lhb_entries)
+
+
+@pytest.mark.parametrize(
+    "lhb_assets",
+    [
+        ["CN:SH:000001", "000001.SH", "CN:SH:000002", "CN:SH:000003", "CN:SH:000004"],
+        ["CN:SH:000001", "CN:SH:000002", "CN:SH:000003", "CN:SH:000004", "nan"],
+    ],
+)
+def test_publish_strategy_eod_rejects_noncanonical_or_equivalent_duplicate_assets(monkeypatch, tmp_path, lhb_assets):
+    strategy_assets = {
+        "lhb_shortline": lhb_assets,
+        "mid_trend": [f"CN:SH:{index:06d}" for index in range(101, 106)],
+        "tech_bottleneck": [f"CN:SH:{index:06d}" for index in range(201, 206)],
+    }
+    _install_publish_contract_fakes(monkeypatch, tmp_path, strategy_assets=strategy_assets)
+    collected = []
+
+    with pytest.raises(RuntimeError, match="strategy review contract requires exactly 5 rows per strategy"):
+        strategy_eod_publish.publish_strategy_eod(
+            trade_date="2026-07-24",
+            output_root=tmp_path,
+            runner=lambda payload: {"strategy_id": payload["strategy_id"]},
+            manifest_upsert=collected.append,
+        )
+
+    lhb_entries = [entry for entry in collected if entry.get("module") == "strategy_lhb_shortline"]
+    assert not any(entry.get("status") == "success" for entry in lhb_entries)
+    assert any(entry.get("status") == "failed" for entry in lhb_entries)
+
+
+def test_publish_strategy_eod_rejects_boolean_rank(monkeypatch, tmp_path):
+    strategy_assets = {
+        "lhb_shortline": [f"CN:SH:{index:06d}" for index in range(1, 6)],
+        "mid_trend": [f"CN:SH:{index:06d}" for index in range(101, 106)],
+        "tech_bottleneck": [f"CN:SH:{index:06d}" for index in range(201, 206)],
+    }
+
+    def mutate(strategy_id, frame):
+        if strategy_id == "lhb_shortline":
+            frame = frame.astype({"rank": object})
+            frame.loc[0, "rank"] = True
+        return frame
+
+    _install_publish_contract_fakes(
+        monkeypatch,
+        tmp_path,
+        strategy_assets=strategy_assets,
+        review_mutator=mutate,
+    )
+
+    with pytest.raises(RuntimeError, match="strategy review contract requires exactly 5 rows per strategy"):
+        strategy_eod_publish.publish_strategy_eod(
+            trade_date="2026-07-24",
+            output_root=tmp_path,
+            runner=lambda payload: {"strategy_id": payload["strategy_id"]},
+            manifest_upsert=lambda entry: None,
+        )
