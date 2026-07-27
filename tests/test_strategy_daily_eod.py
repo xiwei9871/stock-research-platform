@@ -1081,7 +1081,12 @@ def test_status_payload_and_schema():
     assert store.STRATEGY_DAILY_EOD_STATUS_SQL.index(
         "IF constraint_definition IS NULL"
     ) < store.STRATEGY_DAILY_EOD_STATUS_SQL.index("DROP CONSTRAINT IF EXISTS")
-    assert "ADD COLUMN IF NOT EXISTS midtrend_artifacts_status text" in store.STRATEGY_DAILY_EOD_STATUS_SQL
+    assert "ADD COLUMN midtrend_artifacts_status text" in store.STRATEGY_DAILY_EOD_STATUS_SQL
+    assert "ADD COLUMN IF NOT EXISTS" not in store.STRATEGY_DAILY_EOD_STATUS_SQL
+    assert "FROM pg_attribute" in store.STRATEGY_DAILY_EOD_STATUS_SQL
+    assert "attnotnull" in store.STRATEGY_DAILY_EOD_STATUS_SQL
+    assert "IF NOT column_exists" in store.STRATEGY_DAILY_EOD_STATUS_SQL
+    assert "ELSIF NOT column_not_null" in store.STRATEGY_DAILY_EOD_STATUS_SQL
     assert "SET midtrend_artifacts_status = 'skipped'" in store.STRATEGY_DAILY_EOD_STATUS_SQL
     assert "COALESCE(midtrend_artifacts_status, mid_trend_status" not in store.STRATEGY_DAILY_EOD_STATUS_SQL
 

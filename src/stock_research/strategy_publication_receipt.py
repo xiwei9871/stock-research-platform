@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +25,18 @@ RECEIPT_CONTRACT_FIELDS = {
     "strategy_counts",
     "score_audit_status",
 }
+
+
+class PublicationReceiptSummaryInvalid(RuntimeError):
+    error_code = "publication_receipt_summary_invalid"
+
+
+def _required_mapping(value: Any, *, field: str) -> dict[str, Any]:
+    if not isinstance(value, Mapping):
+        raise PublicationReceiptSummaryInvalid(
+            f"publication summary field {field} must be an object"
+        )
+    return dict(value)
 
 
 def file_fingerprint(path: str | Path) -> dict[str, Any] | None:
@@ -79,10 +92,21 @@ def build_publication_receipt(
     repair_run_id: str,
 ) -> dict[str, Any]:
     path = Path(summary_path).absolute()
-    snapshot = _read_summary_snapshot(path)
+    try:
+        snapshot = _read_summary_snapshot(path)
+    except (ValueError, json.JSONDecodeError) as exc:
+        raise PublicationReceiptSummaryInvalid(
+            "strategy publication summary is invalid"
+        ) from exc
     payload = snapshot["payload"]
     fingerprint = snapshot["fingerprint"]
-    score_audit = dict(payload.get("score_audit") or {})
+    strategy_status = _required_mapping(
+        payload.get("strategy_status"), field="strategy_status"
+    )
+    score_audit = _required_mapping(payload.get("score_audit"), field="score_audit")
+    strategy_counts = _required_mapping(
+        score_audit.get("strategy_counts"), field="score_audit.strategy_counts"
+    )
     return {
         "expected_trade_date": expected_trade_date,
         "repair_run_id": repair_run_id,
@@ -90,10 +114,10 @@ def build_publication_receipt(
         "summary_path": str(path),
         "fingerprint": fingerprint,
         "overall_status": str(payload.get("status") or ""),
-        "strategy_status": dict(payload.get("strategy_status") or {}),
+        "strategy_status": strategy_status,
         "publishable": payload.get("publishable"),
         "review_rows": payload.get("review_rows"),
-        "strategy_counts": dict(score_audit.get("strategy_counts") or {}),
+        "strategy_counts": strategy_counts,
         "score_audit_status": str(score_audit.get("status") or ""),
     }
 
@@ -133,9 +157,16 @@ def validate_publication_receipt(
     if snapshot["fingerprint"] != receipt.get("fingerprint"):
         return {"status": "failed", "error_code": "publication_receipt_file_changed"}
     payload = snapshot["payload"]
-    strategy_status = dict(payload.get("strategy_status") or {})
-    score_audit = dict(payload.get("score_audit") or {})
-    strategy_counts = dict(score_audit.get("strategy_counts") or {})
+    try:
+        strategy_status = _required_mapping(
+            payload.get("strategy_status"), field="strategy_status"
+        )
+        score_audit = _required_mapping(payload.get("score_audit"), field="score_audit")
+        strategy_counts = _required_mapping(
+            score_audit.get("strategy_counts"), field="score_audit.strategy_counts"
+        )
+    except PublicationReceiptSummaryInvalid:
+        return {"status": "failed", "error_code": "publication_receipt_summary_invalid"}
     expected_run_id = f"strategy-eod-{expected_trade_date}-local"
     if (
         payload.get("trade_date") != expected_trade_date

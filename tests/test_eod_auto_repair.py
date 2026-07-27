@@ -614,16 +614,7 @@ def test_finalizer_rejects_tampered_receipt_file(tmp_path, publication_mode):
     strategy_output.mkdir(parents=True)
     summary_path = strategy_output / "strategy_eod_publish_summary.json"
     summary_path.write_text(
-        json.dumps(
-            {
-                "trade_date": "2026-07-02",
-                "run_id": "strategy-eod-2026-07-02-local",
-                "status": "success",
-                "strategy_status": {
-                    name: "success" for name in eod_auto_repair.REQUIRED_STRATEGY_RUNNERS
-                },
-            }
-        ),
+        json.dumps(_successful_strategy_summary()),
         encoding="utf-8",
     )
     repair_run_id = "repair-current"
@@ -695,6 +686,87 @@ def test_nonempty_legacy_receipt_fails_closed_as_missing_contract(tmp_path):
 
     assert result["status"] == "failed"
     assert result["errors"]["strategy_publication"] == "publication_receipt_missing_contract"
+
+
+@pytest.mark.parametrize(
+    ("field", "malformed"),
+    [("strategy_status", "bad"), ("score_audit", ["bad"]), ("strategy_counts", None)],
+)
+def test_finalizer_fails_safely_for_malformed_publication_summary(
+    tmp_path, field, malformed
+):
+    repair_output = tmp_path / "repair"
+    repair_output.mkdir()
+    summary_path = (
+        tmp_path
+        / "outputs"
+        / "research"
+        / "strategy_daily_eod"
+        / "2026-07-02"
+        / "strategy_eod_publish_summary.json"
+    )
+    summary_path.parent.mkdir(parents=True)
+    events = []
+
+    def official_publication(*, trade_date, output_root):
+        events.append("official")
+        payload = _successful_strategy_summary(trade_date, summary_path=summary_path)
+        if field == "strategy_counts":
+            payload["score_audit"]["strategy_counts"] = malformed
+        else:
+            payload[field] = malformed
+        summary_path.write_text(json.dumps(payload), encoding="utf-8")
+        return payload
+
+    result = eod_auto_repair.finalize_repaired_release(
+        trade_date="2026-07-02",
+        output_dir=repair_output,
+        release_root=tmp_path,
+        official_publication=official_publication,
+        contract_check=lambda: events.append("contract") or {"status": "success"},
+        readiness_check=lambda: events.append("readiness") or {"status": "success"},
+        clear_cache=lambda: events.append("cache") or True,
+        sync_external=lambda: events.append("sync") or True,
+    )
+
+    assert result["status"] == "failed"
+    assert events == ["official"]
+    assert result["errors"]["strategy_publication"] in {
+        "strategy_runner_summary_invalid",
+        "publication_receipt_summary_invalid",
+    }
+
+
+@pytest.mark.parametrize(
+    ("field", "malformed"),
+    [("strategy_status", "bad"), ("score_audit", ["bad"]), ("strategy_counts", None)],
+)
+def test_repair_action_fails_safely_for_malformed_publication_summary(
+    tmp_path, field, malformed
+):
+    payload = _successful_strategy_summary()
+    if field == "strategy_counts":
+        payload["score_audit"]["strategy_counts"] = malformed
+    else:
+        payload[field] = malformed
+    (tmp_path / "strategy_eod_publish_summary.json").write_text(
+        json.dumps(payload), encoding="utf-8"
+    )
+    action = RepairActionResult(
+        "repair_strategy_publish",
+        RepairStatus.SUCCESS,
+        artifact_paths=[str(tmp_path)],
+    )
+
+    result = eod_auto_repair._action_with_publication_receipt(
+        action,
+        trade_date="2026-07-02",
+        repair_run_id="repair-current",
+    )
+
+    assert result.status == RepairStatus.FAILED
+    assert result.exit_code == 2
+    assert "publication_receipt" not in result.metrics
 
 
 @pytest.mark.parametrize(
@@ -788,16 +860,7 @@ def test_finalizer_rejects_valid_receipt_from_alternate_directory(tmp_path):
     alternate = tmp_path / "alternate" / "strategy_eod_publish_summary.json"
     alternate.parent.mkdir()
     alternate.write_text(
-        json.dumps(
-            {
-                "trade_date": "2026-07-02",
-                "run_id": "strategy-eod-2026-07-02-local",
-                "status": "success",
-                "strategy_status": {
-                    name: "success" for name in eod_auto_repair.REQUIRED_STRATEGY_RUNNERS
-                },
-            }
-        ),
+        json.dumps(_successful_strategy_summary()),
         encoding="utf-8",
     )
     repair_run_id = "repair-current"

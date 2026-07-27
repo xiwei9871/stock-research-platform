@@ -2011,7 +2011,9 @@ def _main(argv: list[str] | None = None) -> int:
 
     provenance = runtime_provenance()
     release_root = Path(provenance["source_root"])
-    base_output_root = Path(args.output_root) if args.output_root else release_root / "outputs"
+    base_output_root = Path(args.output_root) if args.output_root else Path("outputs")
+    if not base_output_root.is_absolute():
+        base_output_root = release_root / base_output_root
     print(
         "DEPRECATED: use `stock-research run-strategy-daily-eod`; forwarding to official runner",
         file=sys.stderr,

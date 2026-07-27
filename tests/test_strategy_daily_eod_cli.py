@@ -38,6 +38,67 @@ def test_cli_defaults_strategy_output_to_runtime_release_root(monkeypatch):
     assert captured["release_root"] == "/tmp/clean-release"
 
 
+@pytest.mark.parametrize("cwd_suffix", ["outside", "release/subdir"])
+def test_cli_anchors_relative_strategy_output_to_runtime_release_root(
+    tmp_path, cwd_suffix, monkeypatch
+):
+    release = tmp_path / "release"
+    cwd = tmp_path / cwd_suffix
+    cwd.mkdir(parents=True)
+    captured = {}
+    monkeypatch.chdir(cwd)
+    monkeypatch.setattr(cli, "runtime_provenance", lambda: {"source_root": str(release)})
+    monkeypatch.setattr(
+        cli,
+        "run_strategy_daily_eod",
+        lambda **kwargs: captured.update(kwargs) or {
+            "status": "success",
+            "trade_date": "2026-06-24",
+            "dependency_check": {},
+            "strategy_status": {},
+        },
+    )
+
+    assert cli.main(
+        [
+            "run-strategy-daily-eod",
+            "--trade-date",
+            "2026-06-24",
+            "--output-root",
+            "outputs/custom-strategy",
+        ]
+    ) == 0
+    assert captured["output_root"] == str(release / "outputs/custom-strategy")
+    assert captured["release_root"] == str(release)
+
+
+@pytest.mark.parametrize("cwd_suffix", ["outside", "release/subdir"])
+def test_legacy_cli_anchors_relative_base_output_to_runtime_release_root(
+    tmp_path, cwd_suffix, monkeypatch
+):
+    release = tmp_path / "release"
+    cwd = tmp_path / cwd_suffix
+    cwd.mkdir(parents=True)
+    captured = []
+    monkeypatch.chdir(cwd)
+    monkeypatch.setattr(
+        "stock_research.runtime_provenance.runtime_provenance",
+        lambda: {"source_root": str(release)},
+    )
+    monkeypatch.setattr(
+        "stock_research.strategy_daily_eod.run_strategy_daily_eod",
+        lambda **kwargs: captured.append(kwargs) or {"status": "success"},
+    )
+
+    assert strategy_eod_publish._main(
+        ["--trade-date", "2026-06-24", "--output-root", "outputs-alt"]
+    ) == 0
+    assert captured[0]["output_root"] == (
+        release / "outputs-alt" / "research" / "strategy_daily_eod"
+    )
+    assert captured[0]["release_root"] == release
+
+
 def test_legacy_strategy_publish_cli_forwards_once_to_official_runner(
     tmp_path, monkeypatch, capsys
 ):

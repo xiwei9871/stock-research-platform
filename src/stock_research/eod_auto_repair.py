@@ -28,6 +28,7 @@ from stock_research.eod_auto_repair_models import (
     RepairStatus,
 )
 from stock_research.strategy_publication_receipt import (
+    PublicationReceiptSummaryInvalid,
     REQUIRED_STRATEGY_RUNNERS,
     build_publication_receipt,
     file_fingerprint,
@@ -378,7 +379,14 @@ def validate_strategy_runner_publication(
             "exit_code": 2,
             "error_code": "strategy_runner_run_id_mismatch",
         }
-    statuses = dict(payload.get("strategy_status") or {})
+    raw_statuses = payload.get("strategy_status")
+    if not isinstance(raw_statuses, dict):
+        return {
+            "status": "failed",
+            "exit_code": 2,
+            "error_code": "strategy_runner_summary_invalid",
+        }
+    statuses = dict(raw_statuses)
     if str(payload.get("status") or "") != "success":
         return {
             "status": "failed",
@@ -624,7 +632,13 @@ def finalize_repaired_release(
                     expected_trade_date=trade_date,
                     repair_run_id=repair_run_id,
                 )
-            except (FileNotFoundError, OSError, ValueError, json.JSONDecodeError):
+            except (
+                FileNotFoundError,
+                OSError,
+                ValueError,
+                json.JSONDecodeError,
+                PublicationReceiptSummaryInvalid,
+            ):
                 return {
                     "status": "failed",
                     "exit_code": 2,
@@ -694,11 +708,18 @@ def finalize_repaired_release(
                 "exit_code": 2,
                 "error_code": "strategy_runner_result_mismatch",
             }
-        receipt = build_publication_receipt(
-            summary_path=runner_summary,
-            expected_trade_date=trade_date,
-            repair_run_id=repair_run_id,
-        )
+        try:
+            receipt = build_publication_receipt(
+                summary_path=runner_summary,
+                expected_trade_date=trade_date,
+                repair_run_id=repair_run_id,
+            )
+        except PublicationReceiptSummaryInvalid:
+            return {
+                "status": "failed",
+                "exit_code": 2,
+                "error_code": "publication_receipt_summary_invalid",
+            }
         refreshed_receipt_gate = validate_publication_receipt(
             receipt,
             expected_trade_date=trade_date,
@@ -1017,7 +1038,12 @@ def _action_with_publication_receipt(
             expected_trade_date=trade_date,
             repair_run_id=repair_run_id,
         )
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
+    except (
+        FileNotFoundError,
+        json.JSONDecodeError,
+        OSError,
+        PublicationReceiptSummaryInvalid,
+    ):
         return replace(
             action,
             status=RepairStatus.FAILED,

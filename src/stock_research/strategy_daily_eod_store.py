@@ -24,13 +24,28 @@ CREATE TABLE IF NOT EXISTS ops.strategy_daily_eod_status (
     updated_at timestamptz NOT NULL DEFAULT now()
 );
 
-ALTER TABLE ops.strategy_daily_eod_status
-    ADD COLUMN IF NOT EXISTS midtrend_artifacts_status text;
-UPDATE ops.strategy_daily_eod_status
-SET midtrend_artifacts_status = 'skipped'
-WHERE midtrend_artifacts_status IS NULL;
-ALTER TABLE ops.strategy_daily_eod_status
-    ALTER COLUMN midtrend_artifacts_status SET NOT NULL;
+DO $strategy_daily_eod_midtrend_artifacts_migration$
+DECLARE
+    column_exists boolean := false;
+    column_not_null boolean := false;
+BEGIN
+    SELECT true, attnotnull
+    INTO column_exists, column_not_null
+    FROM pg_attribute
+    WHERE attrelid = 'ops.strategy_daily_eod_status'::regclass
+      AND attname = 'midtrend_artifacts_status'
+      AND NOT attisdropped;
+
+    IF NOT column_exists THEN
+        EXECUTE 'ALTER TABLE ops.strategy_daily_eod_status ADD COLUMN midtrend_artifacts_status text';
+        EXECUTE $sql$UPDATE ops.strategy_daily_eod_status SET midtrend_artifacts_status = 'skipped' WHERE midtrend_artifacts_status IS NULL$sql$;
+        EXECUTE 'ALTER TABLE ops.strategy_daily_eod_status ALTER COLUMN midtrend_artifacts_status SET NOT NULL';
+    ELSIF NOT column_not_null THEN
+        EXECUTE $sql$UPDATE ops.strategy_daily_eod_status SET midtrend_artifacts_status = 'skipped' WHERE midtrend_artifacts_status IS NULL$sql$;
+        EXECUTE 'ALTER TABLE ops.strategy_daily_eod_status ALTER COLUMN midtrend_artifacts_status SET NOT NULL';
+    END IF;
+END
+$strategy_daily_eod_midtrend_artifacts_migration$;
 
 DO $strategy_daily_eod_status_migration$
 DECLARE

@@ -7800,8 +7800,13 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
     elif args.command == "run-strategy-daily-eod":
         provenance = runtime_provenance()
         release_root = provenance["source_root"]
-        output_root = args.output_root or str(
-            Path(release_root) / "outputs" / "research" / "strategy_daily_eod"
+        output_path = (
+            Path(args.output_root)
+            if args.output_root
+            else Path("outputs") / "research" / "strategy_daily_eod"
+        )
+        output_root = str(
+            output_path if output_path.is_absolute() else Path(release_root) / output_path
         )
         result = run_strategy_daily_eod(
             trade_date=args.trade_date,
