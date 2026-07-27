@@ -30,7 +30,11 @@ def _base_decision_payload() -> dict:
 
 
 def test_operator_decision_create_requires_evidence_linkage(monkeypatch):
-    monkeypatch.setattr(dashboard_app, "build_platform_readiness", lambda score_version="manual_v1": _ready_payload())
+    monkeypatch.setattr(
+        dashboard_app,
+        "build_platform_readiness",
+        lambda score_version="manual_v1", runtime_provenance_data=None: _ready_payload(),
+    )
     monkeypatch.setattr(dashboard_app, "create_operator_decision", lambda payload: {"event_id": "should-not-write"})
     payload = _base_decision_payload()
     payload.pop("evidence_artifact_id")
@@ -43,7 +47,11 @@ def test_operator_decision_create_requires_evidence_linkage(monkeypatch):
 
 
 def test_operator_decision_create_forbids_auto_trade(monkeypatch):
-    monkeypatch.setattr(dashboard_app, "build_platform_readiness", lambda score_version="manual_v1": _ready_payload())
+    monkeypatch.setattr(
+        dashboard_app,
+        "build_platform_readiness",
+        lambda score_version="manual_v1", runtime_provenance_data=None: _ready_payload(),
+    )
     monkeypatch.setattr(dashboard_app, "create_operator_decision", lambda payload: {"event_id": "should-not-write"})
     payload = {**_base_decision_payload(), "auto_trade_enabled": True}
     client = TestClient(dashboard_app.create_app())
@@ -56,7 +64,11 @@ def test_operator_decision_create_forbids_auto_trade(monkeypatch):
 
 def test_operator_decision_create_forces_manual_review_and_no_auto_trade(monkeypatch):
     captured = {}
-    monkeypatch.setattr(dashboard_app, "build_platform_readiness", lambda score_version="manual_v1": _ready_payload())
+    monkeypatch.setattr(
+        dashboard_app,
+        "build_platform_readiness",
+        lambda score_version="manual_v1", runtime_provenance_data=None: _ready_payload(),
+    )
 
     def fake_create(payload):
         captured.update(payload)

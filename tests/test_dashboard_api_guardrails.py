@@ -100,7 +100,11 @@ def test_write_endpoint_accepts_dashboard_write_token(monkeypatch):
 
 
 def test_operator_decision_create_blocks_when_platform_not_publication_ready(monkeypatch):
-    monkeypatch.setattr(dashboard_app, "build_platform_readiness", lambda score_version="manual_v1": _degraded_payload())
+    monkeypatch.setattr(
+        dashboard_app,
+        "build_platform_readiness",
+        lambda score_version="manual_v1", runtime_provenance_data=None: _degraded_payload(),
+    )
 
     def fail_if_called(payload):
         raise AssertionError("create_operator_decision should not be called")
@@ -124,7 +128,11 @@ def test_operator_decision_create_blocks_when_platform_not_publication_ready(mon
 
 
 def test_operator_decision_create_allows_ready_platform(monkeypatch):
-    monkeypatch.setattr(dashboard_app, "build_platform_readiness", lambda score_version="manual_v1": _ready_payload())
+    monkeypatch.setattr(
+        dashboard_app,
+        "build_platform_readiness",
+        lambda score_version="manual_v1", runtime_provenance_data=None: _ready_payload(),
+    )
     monkeypatch.setattr(
         dashboard_app,
         "create_operator_decision",
@@ -151,7 +159,11 @@ def test_operator_decision_create_allows_ready_platform(monkeypatch):
 
 
 def test_operator_decision_create_rejects_invalid_asset_before_write(monkeypatch):
-    monkeypatch.setattr(dashboard_app, "build_platform_readiness", lambda score_version="manual_v1": _ready_payload())
+    monkeypatch.setattr(
+        dashboard_app,
+        "build_platform_readiness",
+        lambda score_version="manual_v1", runtime_provenance_data=None: _ready_payload(),
+    )
 
     def fail_if_called(payload):
         raise AssertionError("create_operator_decision should not be called")
@@ -169,7 +181,11 @@ def test_operator_decision_create_rejects_invalid_asset_before_write(monkeypatch
 
 
 def test_operator_decision_create_rejects_follow_up_before_decision_date(monkeypatch):
-    monkeypatch.setattr(dashboard_app, "build_platform_readiness", lambda score_version="manual_v1": _ready_payload())
+    monkeypatch.setattr(
+        dashboard_app,
+        "build_platform_readiness",
+        lambda score_version="manual_v1", runtime_provenance_data=None: _ready_payload(),
+    )
     monkeypatch.setattr(dashboard_app, "create_operator_decision", lambda payload: {"event_id": "should-not-write"})
     client = TestClient(dashboard_app.create_app())
 
