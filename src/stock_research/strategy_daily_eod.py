@@ -14,7 +14,10 @@ import pandas as pd
 
 from stock_research.atomic_json import atomic_write_json
 from stock_research.config import SETTINGS
-from stock_research.data_run_manifest import upsert_data_run_manifest
+from stock_research.data_run_manifest import (
+    upsert_data_run_manifest,
+    upsert_data_run_manifest_with_connection,
+)
 from stock_research.db import connect, fetch_all
 from stock_research.factor_store import load_top_scores
 from stock_research.mid_trend_shadow_top10 import build_mid_trend_shadow_top10_from_frame
@@ -22,6 +25,7 @@ from stock_research.strategy_daily_eod_store import (
     apply_strategy_daily_eod_status_schema,
     build_status_payload,
     upsert_strategy_daily_eod_status,
+    upsert_strategy_daily_eod_status_with_connection,
 )
 from stock_research.strategy_eod_publish import publish_strategy_eod
 from stock_research.tech_bottleneck_evidence_workflow import (
@@ -32,6 +36,7 @@ from stock_research.tech_bottleneck_evidence_workflow import (
 DependencyChecker = Callable[..., dict[str, Any]]
 StrategyRunner = Callable[..., dict[str, Any]]
 Publisher = Callable[..., dict[str, Any]]
+PublicationTransaction = Callable[..., None]
 
 
 DEFAULT_OUTPUT_ROOT = Path("outputs/research/strategy_daily_eod")
@@ -51,22 +56,25 @@ def run_strategy_daily_eod(
     dependency_checker: DependencyChecker | None = None,
     publisher: Publisher = publish_strategy_eod,
     release_root: str | Path | None = None,
+    publication_transaction: PublicationTransaction | None = None,
     lhb_runner: StrategyRunner | None = None,
     mid_runner: StrategyRunner | None = None,
     tech_runner: StrategyRunner | None = None,
     midtrend_artifact_builder: StrategyRunner | None = None,
     service: str = SETTINGS.research_service,
 ) -> dict[str, Any]:
+    if any(
+        runner is not None
+        for runner in (lhb_runner, mid_runner, tech_runner, midtrend_artifact_builder)
+    ):
+        raise ValueError("legacy strategy runner injection is unsupported")
     apply_strategy_daily_eod_status_schema(service=service)
     dependency_checker = dependency_checker or check_strategy_daily_eod_dependencies
-    root = Path(output_root)
-    allowed_release_root = (
-        Path(release_root).resolve()
-        if release_root is not None
-        else _release_root_for_output(root)
-        if root.is_absolute()
-        else root.resolve()
-    )
+    root = Path(output_root).resolve()
+    allowed_release_root = Path(release_root).resolve() if release_root is not None else root
+    if not _path_is_within(root, allowed_release_root):
+        raise ValueError("strategy output root must be contained within release root")
+    publication_transaction = publication_transaction or commit_strategy_publication
     canonical_output_dir = root / trade_date
     versions_dir = root / ".versions" / trade_date
     versions_dir.mkdir(parents=True, exist_ok=True)
@@ -108,7 +116,7 @@ def run_strategy_daily_eod(
                     entry,
                     staging=generated,
                     canonical=output_dir,
-                    allowed_roots=(allowed_release_root, publisher_root),
+                    allowed_roots=(allowed_release_root,),
                 )
                 for entry in manifest_entries
             ]
@@ -116,7 +124,7 @@ def run_strategy_daily_eod(
                 generated / "review_queue_strategy_manifest.csv",
                 staging=generated,
                 canonical=output_dir,
-                allowed_roots=(allowed_release_root, publisher_root),
+                allowed_roots=(allowed_release_root,),
             )
             os.replace(generated, output_dir)
             if not _manifest_entries_reference_root(manifest_entries, publisher_root):
@@ -210,13 +218,26 @@ def run_strategy_daily_eod(
     summary_path = persistent_output_dir / "strategy_eod_publish_summary.json"
     summary["summary_path"] = str(summary_path)
 
+    status_payload = build_status_payload(
+        trade_date=trade_date,
+        status=summary["status"],
+        dependency_check_status=_dependency_check_status(dependency_check),
+        lhb_shortline_status=strategy_status["lhb_shortline"],
+        mid_trend_status=strategy_status["mid_trend"],
+        tech_bottleneck_status=strategy_status["tech_bottleneck"],
+        review_rows=review_rows,
+        output_dir=str(summary["output_dir"]),
+        summary_path=str(summary["summary_path"]),
+        error_summary=summary["error_summary"],
+    )
+
     if contract_valid:
         canonical_entries = [
             _relocate_manifest_entry(
                 entry,
                 staging=output_dir,
                 canonical=canonical_output_dir,
-                allowed_roots=(allowed_release_root, publisher_root),
+                allowed_roots=(allowed_release_root,),
             )
             for entry in manifest_entries
         ]
@@ -224,15 +245,42 @@ def run_strategy_daily_eod(
             output_dir / "review_queue_strategy_manifest.csv",
             staging=output_dir,
             canonical=canonical_output_dir,
-            allowed_roots=(allowed_release_root, publisher_root),
+            allowed_roots=(allowed_release_root,),
         )
         staging_summary_path.write_text(
             json.dumps(summary, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
-        _atomic_publish_directory(output_dir, canonical_output_dir)
-        for entry in canonical_entries:
-            upsert_data_run_manifest(entry, service=service)
+        handle: AtomicPublishHandle | None = None
+        try:
+            handle = begin_atomic_publish(output_dir, canonical_output_dir)
+            publication_transaction(
+                manifest_entries=canonical_entries,
+                status_payload=status_payload,
+                service=service,
+            )
+            handle.commit()
+        except Exception as exc:  # noqa: BLE001
+            if handle is not None:
+                try:
+                    handle.rollback()
+                except Exception as rollback_exc:  # noqa: BLE001
+                    exc = RuntimeError(f"{exc}; filesystem rollback failed: {rollback_exc}")
+            summary = _failed_commit_summary(
+                summary,
+                error=exc,
+                failure_output_dir=failure_output_dir,
+            )
+            _persist_failure_summary(
+                summary_path=Path(summary["summary_path"]),
+                summary=summary,
+                output_root=root,
+                trade_date=trade_date,
+            )
+            shutil.rmtree(output_dir, ignore_errors=True)
+            shutil.rmtree(publisher_root, ignore_errors=True)
+            _best_effort_failed_status(summary, dependency_check=dependency_check, service=service)
+            return summary
     else:
         _persist_failure_summary(
             summary_path=summary_path,
@@ -242,47 +290,144 @@ def run_strategy_daily_eod(
         )
         shutil.rmtree(output_dir, ignore_errors=True)
         shutil.rmtree(publisher_root, ignore_errors=True)
-
-    upsert_strategy_daily_eod_status(
-        build_status_payload(
-            trade_date=trade_date,
-            status=summary["status"],
-            dependency_check_status=_dependency_check_status(dependency_check),
-            lhb_shortline_status=strategy_status["lhb_shortline"],
-            mid_trend_status=strategy_status["mid_trend"],
-            tech_bottleneck_status=strategy_status["tech_bottleneck"],
-            review_rows=review_rows,
-            output_dir=str(summary["output_dir"]),
-            summary_path=str(summary["summary_path"]),
-            error_summary=summary["error_summary"],
-        ),
-        service=service,
-    )
+        upsert_strategy_daily_eod_status(status_payload, service=service)
     return summary
 
 
-def _atomic_publish_directory(staging: Path, canonical: Path) -> None:
+def commit_strategy_publication(
+    *,
+    manifest_entries: list[dict[str, Any]],
+    status_payload: dict[str, Any],
+    service: str,
+) -> None:
+    with connect(service) as conn:
+        for entry in manifest_entries:
+            upsert_data_run_manifest_with_connection(entry, conn=conn)
+        upsert_strategy_daily_eod_status_with_connection(status_payload, conn=conn)
+
+
+def _failed_commit_summary(
+    summary: dict[str, Any],
+    *,
+    error: Exception,
+    failure_output_dir: Path,
+) -> dict[str, Any]:
+    failed = dict(summary)
+    message = f"{type(error).__name__}: {error}"
+    failed.update(
+        {
+            "status": "failed",
+            "publishable": False,
+            "output_dir": str(failure_output_dir),
+            "summary_path": str(failure_output_dir / "strategy_eod_publish_summary.json"),
+            "error_summary": _join_errors([summary.get("error_summary"), message]),
+        }
+    )
+    failed["strategy_status"] = {
+        name: "failed" for name in STRATEGY_DEPENDENCIES
+    }
+    failed["strategy_errors"] = {
+        name: message for name in STRATEGY_DEPENDENCIES
+    }
+    return failed
+
+
+def _best_effort_failed_status(
+    summary: dict[str, Any],
+    *,
+    dependency_check: dict[str, dict[str, Any]],
+    service: str,
+) -> None:
+    statuses = dict(summary.get("strategy_status") or {})
+    payload = build_status_payload(
+        trade_date=str(summary["trade_date"]),
+        status="failed",
+        dependency_check_status=_dependency_check_status(dependency_check),
+        lhb_shortline_status=str(statuses.get("lhb_shortline") or "failed"),
+        mid_trend_status=str(statuses.get("mid_trend") or "failed"),
+        tech_bottleneck_status=str(statuses.get("tech_bottleneck") or "failed"),
+        review_rows=int(summary.get("review_rows") or 0),
+        output_dir=str(summary.get("output_dir") or ""),
+        summary_path=str(summary.get("summary_path") or ""),
+        error_summary=str(summary.get("error_summary") or ""),
+    )
+    try:
+        upsert_strategy_daily_eod_status(payload, service=service)
+    except Exception:  # noqa: BLE001
+        return
+
+
+class AtomicPublishHandle:
+    def __init__(self, *, staging: Path, canonical: Path, mode: str, old_link: str | None = None):
+        self.staging = staging
+        self.canonical = canonical
+        self.mode = mode
+        self.old_link = old_link
+        self.finished = False
+
+    def commit(self) -> None:
+        if self.finished:
+            return
+        self.finished = True
+        try:
+            if self.mode == "exchange":
+                history = self.staging.parent / f"history-{uuid.uuid4().hex}"
+                os.replace(self.staging, history)
+                _prune_version_history(history.parent, current_target=None)
+            elif self.mode == "symlink":
+                _prune_version_history(self.staging.parent, current_target=self.staging)
+            _fsync_directory(self.canonical.parent)
+        except OSError:
+            # The canonical switch and DB transaction are already committed.
+            # Retaining an extra old version is safer than reporting a false rollback.
+            return
+
+    def rollback(self) -> None:
+        if self.finished:
+            return
+        if self.mode == "first":
+            os.replace(self.canonical, self.staging)
+        elif self.mode == "exchange":
+            _atomic_exchange_directories(self.staging, self.canonical)
+        elif self.mode == "symlink":
+            if self.old_link is None:
+                raise RuntimeError("missing previous canonical symlink target")
+            temporary = self.canonical.with_name(f".{self.canonical.name}.rollback-{uuid.uuid4().hex}")
+            temporary.symlink_to(self.old_link, target_is_directory=True)
+            os.replace(temporary, self.canonical)
+        self.finished = True
+        _fsync_directory(self.canonical.parent)
+
+
+def begin_atomic_publish(staging: Path, canonical: Path) -> AtomicPublishHandle:
     canonical.parent.mkdir(parents=True, exist_ok=True)
     if canonical.is_symlink():
+        old_link = os.readlink(canonical)
         _atomic_symlink_publish(staging, canonical)
-        _prune_version_history(staging.parent, current_target=staging)
-        return
+        return AtomicPublishHandle(
+            staging=staging,
+            canonical=canonical,
+            mode="symlink",
+            old_link=old_link,
+        )
     if not canonical.exists():
         os.replace(staging, canonical)
         _fsync_directory(canonical.parent)
-        return
+        return AtomicPublishHandle(staging=staging, canonical=canonical, mode="first")
     try:
         _atomic_exchange_directories(staging, canonical)
     except OSError as exc:
         if exc.errno not in {errno.ENOSYS, errno.EINVAL, getattr(errno, "ENOTSUP", errno.EINVAL)}:
             raise
         _atomic_symlink_publish(staging, canonical)
-        _prune_version_history(staging.parent, current_target=staging)
-        return
-    history = staging.parent / f"history-{uuid.uuid4().hex}"
-    os.replace(staging, history)
-    _prune_version_history(history.parent, current_target=None)
+        return AtomicPublishHandle(staging=staging, canonical=canonical, mode="symlink")
     _fsync_directory(canonical.parent)
+    return AtomicPublishHandle(staging=staging, canonical=canonical, mode="exchange")
+
+
+def _atomic_publish_directory(staging: Path, canonical: Path) -> None:
+    handle = begin_atomic_publish(staging, canonical)
+    handle.commit()
 
 
 def _persist_failure_summary(
@@ -563,13 +708,6 @@ def _path_is_within(path: Path, root: Path) -> bool:
     except ValueError:
         return False
     return True
-
-
-def _release_root_for_output(output_root: Path) -> Path:
-    parts = output_root.parts
-    if len(parts) >= 3 and parts[-3:] == ("outputs", "research", "strategy_daily_eod"):
-        return output_root.parents[2]
-    return output_root
 
 
 def _manifest_entries_reference_root(entries: list[dict[str, Any]], root: Path) -> bool:

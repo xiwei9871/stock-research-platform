@@ -9,6 +9,19 @@ import pytest
 
 from stock_research import strategy_daily_eod as eod
 from stock_research import strategy_daily_eod_store as store
+from stock_research import strategy_eod_publish as mature_publish
+
+REAL_COMMIT_STRATEGY_PUBLICATION = eod.commit_strategy_publication
+
+
+@pytest.fixture(autouse=True)
+def _compat_publication_transaction(monkeypatch):
+    def commit(*, manifest_entries, status_payload, service):
+        for entry in manifest_entries:
+            eod.upsert_data_run_manifest(entry, service=service)
+        eod.upsert_strategy_daily_eod_status(status_payload, service=service)
+
+    monkeypatch.setattr(eod, "commit_strategy_publication", commit)
 
 
 def _write_complete_mature_release(
@@ -114,7 +127,8 @@ def test_official_runner_uses_mature_publisher_once_and_publishes_5x3(
     )
 
     assert len(calls) == 1
-    assert summary["status"] == "success"
+    assert not summary["error_summary"], summary["error_summary"]
+    assert summary["status"] == "success", summary
     assert summary["publishable"] is True
     assert summary["review_rows"] == 15
     assert summary["strategy_status"] == {
@@ -134,6 +148,145 @@ def test_official_runner_uses_mature_publisher_once_and_publishes_5x3(
         for key, value in (entry.get("metadata") or {}).items():
             if key.endswith("_path") and value:
                 assert str(value).startswith(str(tmp_path / "2026-07-24"))
+
+
+def test_official_runner_integrates_real_mature_publisher_manifest_shape(
+    tmp_path: Path, monkeypatch
+):
+    release_root = tmp_path / "release"
+    output_root = release_root / "outputs" / "research" / "strategy_daily_eod"
+    report_path = release_root / "outputs" / "reports" / "daily.html"
+    report_path.parent.mkdir(parents=True)
+    report_path.write_text("report", encoding="utf-8")
+    persisted = []
+    monkeypatch.setattr(eod, "apply_strategy_daily_eod_status_schema", lambda **_kwargs: None)
+    monkeypatch.setattr(eod, "upsert_strategy_daily_eod_status", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(eod, "upsert_data_run_manifest", lambda entry, **_kwargs: persisted.append(entry))
+    monkeypatch.setattr(mature_publish, "_ensure_strategy_dependencies", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        mature_publish,
+        "_build_base_manifest_entries",
+        lambda **_kwargs: [{"module": "daily_bars", "status": "success", "metadata": {}}],
+    )
+
+    def write_strategy(*, run_id, trade_date, strategy_id, output_dir, started_at, **_kwargs):
+        module = mature_publish.STRATEGY_EOD_MODULES[strategy_id]
+        offset = 1 if strategy_id == "lhb_shortline" else 101
+        rows = pd.DataFrame(
+            [
+                {
+                    "trade_date": trade_date,
+                    "strategy_id": strategy_id,
+                    "asset_id": f"CN:SH:{offset + rank - 1:06d}",
+                    "rank": rank,
+                    "review_tier": "top5_focus",
+                }
+                for rank in range(1, 6)
+            ]
+        )
+        review_path = output_dir / f"{module}_review.csv"
+        rows.to_csv(review_path, index=False)
+        metadata = {"review_path": str(review_path)}
+        for kind in ("equity", "positions", "trades"):
+            path = output_dir / f"{module}_{kind}.csv"
+            path.write_text("value\n1\n", encoding="utf-8")
+            metadata[f"{kind}_path"] = str(path)
+        entry = mature_publish.build_manifest_entry(
+            run_id=run_id,
+            run_date=trade_date,
+            trade_date=trade_date,
+            module=module,
+            source="strategy_daily_eod",
+            tier="tier1",
+            status="success",
+            started_at=started_at,
+            latest_trade_date=trade_date,
+            artifact_path=review_path,
+            metadata=metadata,
+        )
+        return entry, rows
+
+    monkeypatch.setattr(mature_publish, "_write_strategy_artifacts", write_strategy)
+    monkeypatch.setattr(
+        mature_publish,
+        "_prepare_tech_bottleneck_base_candidate_source",
+        lambda **kwargs: Path(kwargs["output_dir"]) / "tech-base.csv",
+    )
+
+    def write_tech(*, end_date, output_dir, manifest_upsert, **_kwargs):
+        rows = pd.DataFrame(
+            [
+                {
+                    "trade_date": end_date,
+                    "strategy_id": "tech_bottleneck",
+                    "asset_id": f"CN:SH:{200 + rank:06d}",
+                    "rank": rank,
+                    "review_tier": "top5_focus",
+                }
+                for rank in range(1, 6)
+            ]
+        )
+        review_path = Path(output_dir) / "strategy_tech_bottleneck_review.csv"
+        rows.to_csv(review_path, index=False)
+        manifest_upsert(
+            mature_publish.build_manifest_entry(
+                run_id=f"strategy-eod-{end_date}-local",
+                run_date=end_date,
+                trade_date=end_date,
+                module="strategy_tech_bottleneck",
+                source="strategy_daily_eod",
+                tier="tier1",
+                status="success",
+                latest_trade_date=end_date,
+                artifact_path=review_path,
+                metadata={"review_path": str(review_path)},
+            )
+        )
+        return {"review_path": str(review_path)}
+
+    monkeypatch.setattr(mature_publish, "run_tech_bottleneck_eod", write_tech)
+    monkeypatch.setattr(
+        mature_publish,
+        "_write_strategy_score_audit_artifacts",
+        lambda **_kwargs: {"status": "success"},
+    )
+    monkeypatch.setattr(mature_publish, "_write_eod_news_artifacts", lambda **_kwargs: [])
+    monkeypatch.setattr(
+        mature_publish,
+        "_load_research_report_manifest_stats",
+        lambda _trade_date: {"row_count": 1, "asset_count": 1, "latest_trade_date": "2026-07-24"},
+    )
+    monkeypatch.setattr(mature_publish, "_generated_report_files", lambda _trade_date: [str(report_path)])
+    monkeypatch.setattr(mature_publish, "DEFAULT_REPORTS_DIR", report_path.parent)
+    monkeypatch.setattr(
+        mature_publish,
+        "_write_review_evidence_snapshot_entry",
+        lambda **_kwargs: {"module": "review_evidence_snapshots", "status": "partial"},
+    )
+
+    def publisher(**kwargs):
+        return mature_publish.publish_strategy_eod(
+            trade_date=kwargs["trade_date"],
+            output_root=kwargs["output_root"],
+            runner=lambda payload: {"strategy_id": payload["strategy_id"]},
+            manifest_upsert=kwargs["manifest_upsert"],
+        )
+
+    summary = eod.run_strategy_daily_eod(
+        trade_date="2026-07-24",
+        output_root=output_root,
+        release_root=release_root,
+        dependency_checker=lambda **_kwargs: {"status": "success"},
+        publisher=publisher,
+        service="test",
+    )
+
+    assert not summary["error_summary"], summary["error_summary"]
+    assert summary["status"] == "success", summary
+    assert summary["review_rows"] == 15
+    generated = next(entry for entry in persisted if entry["module"] == "generated_reports")
+    assert generated["artifact_path"] == str(report_path)
+    assert generated["metadata"]["reports_dir"] == str(report_path.parent)
 
 
 def test_official_runner_requires_real_midtrend_artifacts(tmp_path: Path, monkeypatch):
@@ -239,6 +392,7 @@ def test_official_runner_preserves_controlled_release_sibling_manifest_paths(
     summary = eod.run_strategy_daily_eod(
         trade_date="2026-07-24",
         output_root=output_root,
+        release_root=release_root,
         dependency_checker=lambda **_kwargs: {"status": "success"},
         publisher=publisher,
         service="test",
@@ -285,6 +439,7 @@ def test_official_runner_allows_missing_descriptive_reports_dir(
     summary = eod.run_strategy_daily_eod(
         trade_date="2026-07-24",
         output_root=output_root,
+        release_root=release_root,
         dependency_checker=lambda **_kwargs: {"status": "success"},
         publisher=publisher,
         service="test",
@@ -323,6 +478,7 @@ def test_official_runner_requires_concrete_report_files_to_exist(
     summary = eod.run_strategy_daily_eod(
         trade_date="2026-07-24",
         output_root=output_root,
+        release_root=release_root,
         dependency_checker=lambda **_kwargs: {"status": "success"},
         publisher=publisher,
         service="test",
@@ -363,6 +519,7 @@ def test_official_runner_rejects_key_manifest_artifact_in_release_sibling(
     summary = eod.run_strategy_daily_eod(
         trade_date="2026-07-24",
         output_root=output_root,
+        release_root=release_root,
         dependency_checker=lambda **_kwargs: {"status": "success"},
         publisher=publisher,
         service="test",
@@ -450,6 +607,179 @@ def test_official_runner_rejects_stale_key_manifest_date(tmp_path: Path, monkeyp
     assert "strategy_tech_bottleneck on 2026-07-24" in summary["error_summary"]
 
 
+@pytest.mark.parametrize("failure", ["nth_manifest", "status"])
+def test_official_runner_rolls_back_canonical_when_publication_transaction_fails(
+    tmp_path: Path, monkeypatch, failure: str
+):
+    monkeypatch.setattr(eod, "apply_strategy_daily_eod_status_schema", lambda **_kwargs: None)
+    monkeypatch.setattr(eod, "upsert_strategy_daily_eod_status", lambda *_args, **_kwargs: None)
+    canonical = tmp_path / "2026-07-24"
+    canonical.mkdir()
+    (canonical / "marker").write_text("old", encoding="utf-8")
+    transaction_calls = []
+
+    def failing_transaction(*, manifest_entries, status_payload, service):
+        transaction_calls.append((manifest_entries, status_payload, service))
+        raise RuntimeError(f"{failure} write failed")
+
+    summary = eod.run_strategy_daily_eod(
+        trade_date="2026-07-24",
+        output_root=tmp_path,
+        dependency_checker=lambda **_kwargs: {"status": "success"},
+        publisher=lambda **kwargs: _write_complete_mature_release(**kwargs),
+        publication_transaction=failing_transaction,
+        service="test",
+    )
+
+    assert len(transaction_calls) == 1
+    assert summary["status"] == "failed"
+    assert (canonical / "marker").read_text(encoding="utf-8") == "old"
+    assert Path(summary["summary_path"]).exists()
+    assert str(summary["summary_path"]).startswith(str(tmp_path / ".failures"))
+
+
+def test_official_runner_rejects_legacy_runner_injection(tmp_path: Path):
+    with pytest.raises(ValueError, match="legacy strategy runner injection is unsupported"):
+        eod.run_strategy_daily_eod(
+            trade_date="2026-07-24",
+            output_root=tmp_path,
+            lhb_runner=lambda **_kwargs: {},
+        )
+
+
+def test_official_runner_rejects_output_root_outside_explicit_release(tmp_path: Path):
+    release_root = tmp_path / "release"
+    outside = tmp_path / "outside" / "strategy_daily_eod"
+    with pytest.raises(ValueError, match="contained within release root"):
+        eod.run_strategy_daily_eod(
+            trade_date="2026-07-24",
+            output_root=outside,
+            release_root=release_root,
+        )
+
+
+def test_official_runner_rejects_output_root_symlink_escape(tmp_path: Path):
+    release_root = tmp_path / "release"
+    release_root.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    linked_output = release_root / "strategy_daily_eod"
+    linked_output.symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="contained within release root"):
+        eod.run_strategy_daily_eod(
+            trade_date="2026-07-24",
+            output_root=linked_output,
+            release_root=release_root,
+        )
+
+
+@pytest.mark.parametrize("error_number", [errno.ENOSYS, errno.EXDEV])
+def test_official_runner_preserves_canonical_when_atomic_begin_fails(
+    tmp_path: Path, monkeypatch, error_number: int
+):
+    monkeypatch.setattr(eod, "apply_strategy_daily_eod_status_schema", lambda **_kwargs: None)
+    monkeypatch.setattr(eod, "upsert_strategy_daily_eod_status", lambda *_args, **_kwargs: None)
+    canonical = tmp_path / "2026-07-24"
+    canonical.mkdir()
+    (canonical / "marker").write_text("old", encoding="utf-8")
+    monkeypatch.setattr(
+        eod,
+        "_atomic_exchange_directories",
+        lambda *_args: (_ for _ in ()).throw(OSError(error_number, "atomic failed")),
+    )
+
+    summary = eod.run_strategy_daily_eod(
+        trade_date="2026-07-24",
+        output_root=tmp_path,
+        dependency_checker=lambda **_kwargs: {"status": "success"},
+        publisher=lambda **kwargs: _write_complete_mature_release(**kwargs),
+        publication_transaction=lambda **_kwargs: pytest.fail("DB must not start"),
+        service="test",
+    )
+
+    assert summary["status"] == "failed"
+    assert (canonical / "marker").read_text(encoding="utf-8") == "old"
+    assert Path(summary["summary_path"]).exists()
+
+
+def test_publication_transaction_uses_one_connection_and_rolls_back_on_status_failure(
+    monkeypatch,
+):
+    connection = object()
+    observed = {"entered": 0, "exit_error": None, "manifest_connections": []}
+
+    class TransactionContext:
+        def __enter__(self):
+            observed["entered"] += 1
+            return connection
+
+        def __exit__(self, error_type, _error, _traceback):
+            observed["exit_error"] = error_type
+            return False
+
+    monkeypatch.setattr(eod, "connect", lambda _service: TransactionContext())
+    monkeypatch.setattr(
+        eod,
+        "upsert_data_run_manifest_with_connection",
+        lambda _entry, *, conn: observed["manifest_connections"].append(conn),
+    )
+    monkeypatch.setattr(
+        eod,
+        "upsert_strategy_daily_eod_status_with_connection",
+        lambda _payload, *, conn: (_ for _ in ()).throw(RuntimeError("status failed")),
+    )
+
+    with pytest.raises(RuntimeError, match="status failed"):
+        REAL_COMMIT_STRATEGY_PUBLICATION(
+            manifest_entries=[{"module": "one"}, {"module": "two"}],
+            status_payload={"status": "success"},
+            service="test",
+        )
+
+    assert observed["entered"] == 1
+    assert observed["manifest_connections"] == [connection, connection]
+    assert observed["exit_error"] is RuntimeError
+
+
+def test_publication_transaction_rolls_back_on_nth_manifest_failure(monkeypatch):
+    connection = object()
+    observed = {"exit_error": None, "manifest_calls": 0, "status_calls": 0}
+
+    class TransactionContext:
+        def __enter__(self):
+            return connection
+
+        def __exit__(self, error_type, _error, _traceback):
+            observed["exit_error"] = error_type
+            return False
+
+    def write_manifest(_entry, *, conn):
+        assert conn is connection
+        observed["manifest_calls"] += 1
+        if observed["manifest_calls"] == 2:
+            raise RuntimeError("second manifest failed")
+
+    monkeypatch.setattr(eod, "connect", lambda _service: TransactionContext())
+    monkeypatch.setattr(eod, "upsert_data_run_manifest_with_connection", write_manifest)
+    monkeypatch.setattr(
+        eod,
+        "upsert_strategy_daily_eod_status_with_connection",
+        lambda *_args, **_kwargs: observed.update(status_calls=observed["status_calls"] + 1),
+    )
+
+    with pytest.raises(RuntimeError, match="second manifest failed"):
+        REAL_COMMIT_STRATEGY_PUBLICATION(
+            manifest_entries=[{"module": "one"}, {"module": "two"}, {"module": "three"}],
+            status_payload={"status": "success"},
+            service="test",
+        )
+
+    assert observed["manifest_calls"] == 2
+    assert observed["status_calls"] == 0
+    assert observed["exit_error"] is RuntimeError
+
+
 def test_official_runner_does_not_replace_canonical_for_invalid_counts(
     tmp_path: Path, monkeypatch
 ):
@@ -523,6 +853,25 @@ def test_atomic_publish_switches_existing_symlink_to_new_version(tmp_path: Path)
     assert canonical.is_symlink()
     assert (canonical / "marker").read_text(encoding="utf-8") == "new"
     assert canonical.resolve() == new_version.resolve()
+
+
+def test_atomic_publish_handle_rolls_back_existing_symlink(tmp_path: Path):
+    versions = tmp_path / ".versions" / "2026-07-02"
+    old_version = versions / "old"
+    new_version = versions / "new"
+    old_version.mkdir(parents=True)
+    new_version.mkdir()
+    (old_version / "marker").write_text("old", encoding="utf-8")
+    (new_version / "marker").write_text("new", encoding="utf-8")
+    canonical = tmp_path / "2026-07-02"
+    canonical.symlink_to(os.path.relpath(old_version, canonical.parent), target_is_directory=True)
+
+    handle = eod.begin_atomic_publish(new_version, canonical)
+    assert (canonical / "marker").read_text(encoding="utf-8") == "new"
+    handle.rollback()
+
+    assert canonical.is_symlink()
+    assert (canonical / "marker").read_text(encoding="utf-8") == "old"
 
 
 def test_atomic_publish_fails_closed_when_exchange_is_unavailable_for_real_directory(
@@ -679,9 +1028,6 @@ def test_run_strategy_daily_eod_writes_summary_and_status(tmp_path: Path, monkey
             **kwargs,
             counts={"lhb_shortline": 1, "mid_trend": 1, "tech_bottleneck": 1},
         ),
-        lhb_runner=runner,
-        mid_runner=runner,
-        tech_runner=runner,
     )
 
     summary_path = tmp_path / "2026-06-24" / "strategy_eod_publish_summary.json"
@@ -734,14 +1080,14 @@ def test_official_strategy_runner_writes_task7_canonical_release(tmp_path: Path,
     canonical_dir = tmp_path / "2026-07-02"
     canonical_dir.mkdir()
     (canonical_dir / "old_release.marker").write_text("old", encoding="utf-8")
-    original_switch = eod._atomic_publish_directory
+    original_switch = eod.begin_atomic_publish
     switch_observations = []
 
     def observed_switch(staging, canonical):
         switch_observations.append((canonical / "old_release.marker").read_text(encoding="utf-8"))
-        original_switch(staging, canonical)
+        return original_switch(staging, canonical)
 
-    monkeypatch.setattr(eod, "_atomic_publish_directory", observed_switch)
+    monkeypatch.setattr(eod, "begin_atomic_publish", observed_switch)
 
     def runner_for(strategy_id, filename):
         def runner(*, trade_date, output_dir, service):
@@ -766,14 +1112,6 @@ def test_official_strategy_runner_writes_task7_canonical_release(tmp_path: Path,
         output_root=tmp_path,
         dependency_checker=lambda **_kwargs: {"status": "success"},
         publisher=lambda **kwargs: _write_complete_mature_release(**kwargs),
-        lhb_runner=runner_for("lhb_shortline", "strategy_lhb_shortline_review.csv"),
-        mid_runner=runner_for("mid_trend", "strategy_mid_trend_review.csv"),
-        tech_runner=runner_for("tech_bottleneck", "strategy_tech_bottleneck_review.csv"),
-        midtrend_artifact_builder=lambda **_kwargs: {
-            "status": "success",
-            "review_rows": 0,
-            "paths": {},
-        },
     )
 
     assert result["publishable"] is True
@@ -827,10 +1165,6 @@ def test_run_strategy_daily_eod_writes_midtrend_v1_v2_and_review_artifacts(tmp_p
         output_root=tmp_path,
         dependency_checker=lambda **_kwargs: {"status": "success"},
         publisher=lambda **kwargs: _write_complete_mature_release(**kwargs),
-        lhb_runner=runner,
-        mid_runner=runner,
-        tech_runner=runner,
-        midtrend_artifact_builder=artifact_builder,
     )
 
     assert result["status"] == "success"
@@ -919,10 +1253,6 @@ def test_run_strategy_daily_eod_common_failure_blocks_all_runners(tmp_path: Path
             "common": {"status": "failed", "reason": "daily_status=failed"},
             "intraday": {"status": "success"},
         },
-        lhb_runner=runner("lhb"),
-        mid_runner=runner("mid"),
-        midtrend_artifact_builder=runner("midtrend_artifacts"),
-        tech_runner=runner("tech"),
     )
 
     assert calls == []
@@ -946,10 +1276,6 @@ def test_run_strategy_daily_eod_records_independent_runner_failure_reason(tmp_pa
         output_root=tmp_path,
         dependency_checker=lambda **_kwargs: {"status": "success"},
         publisher=lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("model unavailable")),
-        lhb_runner=success,
-        mid_runner=failed,
-        midtrend_artifact_builder=success,
-        tech_runner=success,
     )
 
     assert result["status"] == "failed"

@@ -86,6 +86,15 @@ def upsert_strategy_daily_eod_status(
     *,
     service: str = SETTINGS.research_service,
 ) -> None:
+    with connect(service) as conn:
+        upsert_strategy_daily_eod_status_with_connection(payload, conn=conn)
+
+
+def upsert_strategy_daily_eod_status_with_connection(
+    payload: dict[str, Any],
+    *,
+    conn: Any,
+) -> None:
     sql = """
     INSERT INTO ops.strategy_daily_eod_status (
         trade_date,
@@ -124,8 +133,7 @@ def upsert_strategy_daily_eod_status(
         error_summary = EXCLUDED.error_summary,
         updated_at = now()
     """
-    with connect(service) as conn:
-        execute(conn, sql, payload)
+    execute(conn, sql, payload)
 
 
 def load_strategy_daily_eod_status(

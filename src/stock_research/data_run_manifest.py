@@ -117,6 +117,15 @@ def upsert_data_run_manifest(
     entry: dict[str, Any],
     service: str = SETTINGS.research_service,
 ) -> str:
+    with connect(service) as conn:
+        return upsert_data_run_manifest_with_connection(entry, conn=conn)
+
+
+def upsert_data_run_manifest_with_connection(
+    entry: dict[str, Any],
+    *,
+    conn: Any,
+) -> str:
     params = _db_params(entry)
     sql = """
     INSERT INTO ops.data_run_manifest (
@@ -153,9 +162,8 @@ def upsert_data_run_manifest(
         metadata = EXCLUDED.metadata,
         updated_at = now()
     """
-    with connect(service) as conn:
-        with conn.cursor() as cur:
-            cur.execute(sql, params)
+    with conn.cursor() as cur:
+        cur.execute(sql, params)
     return str(entry["manifest_id"])
 
 

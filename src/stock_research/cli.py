@@ -7800,6 +7800,7 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
         result = run_strategy_daily_eod(
             trade_date=args.trade_date,
             output_root=args.output_root,
+            release_root=os.getenv("STOCK_RESEARCH_RELEASE_ROOT") or None,
             dependency_checker=check_strategy_daily_eod_dependencies,
         )
         for key in ("status", "trade_date", "output_dir", "review_rows", "summary_path"):
