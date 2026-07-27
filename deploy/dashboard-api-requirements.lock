@@ -1,0 +1,11 @@
+# Direct runtime dependency lock for the canonical dashboard API image.
+# Transitive packages are resolved by pip from the configured package index.
+akshare==1.18.60
+baostock==0.9.2
+fastapi==0.136.3
+pandas==3.0.2
+psycopg[binary]==3.3.4
+pypdf==6.12.2
+PySocks==1.7.1
+requests==2.33.1
+uvicorn==0.48.0

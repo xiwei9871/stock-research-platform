@@ -1,5 +1,5 @@
-import os
 import json
+import os
 import stat
 import subprocess
 import textwrap
@@ -47,6 +47,7 @@ def _release_fixture(tmp_path: Path, *, valid_manifest: bool = True) -> tuple[Pa
         "dashboard-api.Dockerfile",
         "dashboard-frontend.Dockerfile",
         "dashboard-nginx.conf",
+        "dashboard-api-requirements.lock",
     ):
         source = REPO_ROOT / "deploy" / name
         if source.exists():
@@ -57,18 +58,20 @@ def _release_fixture(tmp_path: Path, *, valid_manifest: bool = True) -> tuple[Pa
     output_dir.mkdir(parents=True)
     strategy_ids = ("lhb_shortline", "mid_trend", "tech_bottleneck")
     count = 5 if valid_manifest else 4
-    manifest_rows = ["trade_date,strategy_id,rank,review_tier"]
+    manifest_rows = ["trade_date,strategy_id,rank,asset_id,review_tier,artifact_path"]
     for strategy_id in strategy_ids:
-        rows = ["trade_date,strategy_id,rank,review_tier"]
-        for rank in range(1, count + 1):
-            row = f"2026-07-24,{strategy_id},{rank},top5_focus"
-            manifest_rows.append(row)
-            rows.append(row)
+        rows = ["trade_date,strategy_id,rank,asset_id,review_tier"]
         filename = {
             "lhb_shortline": "strategy_lhb_shortline_review.csv",
             "mid_trend": "strategy_mid_trend_review.csv",
             "tech_bottleneck": "strategy_tech_bottleneck_review.csv",
         }[strategy_id]
+        for rank in range(1, count + 1):
+            asset_id = f"{strategy_id}-{rank}"
+            rows.append(f"2026-07-24,{strategy_id},{rank},{asset_id},top5_focus")
+            manifest_rows.append(
+                f"2026-07-24,{strategy_id},{rank},{asset_id},top5_focus,{filename}"
+            )
         (output_dir / filename).write_text("\n".join(rows) + "\n", encoding="utf-8")
     (output_dir / "review_queue_strategy_manifest.csv").write_text(
         "\n".join(manifest_rows) + "\n", encoding="utf-8"
@@ -110,9 +113,9 @@ def _release_fixture(tmp_path: Path, *, valid_manifest: bool = True) -> tuple[Pa
         """
         #!/bin/bash
         echo "rtk:$*" >> "$FAKE_COMMAND_LOG"
-        if [[ "$1" == "pnpm" ]]; then
+        if [[ "$*" == *" build" ]]; then
           mkdir -p "$FAKE_RELEASE_ROOT/dashboard/dist"
-          printf '{"release_id":"%s"}\n' "$VITE_RELEASE_ID" > "$FAKE_RELEASE_ROOT/dashboard/dist/release.json"
+          printf '{"release_id":"%s","api_base_image":"python:3.12.11-slim-bookworm","frontend_base_image":"nginx:1.27.5-alpine"}\n' "$VITE_RELEASE_ID" > "$FAKE_RELEASE_ROOT/dashboard/dist/release.json"
         fi
         """,
     )
@@ -120,7 +123,7 @@ def _release_fixture(tmp_path: Path, *, valid_manifest: bool = True) -> tuple[Pa
         fake_bin / "curl",
         """
         #!/bin/bash
-        echo '{"latest_market_date":"2026-07-24"}'
+        echo '{"latest_market_date":"2026-05-18","runtime_provenance":{"release_id":"old-release","source_root":"/old/release","python_package_root":"/old/release/src/stock_research"}}'
         """,
     )
     for command in ("ssh", "rsync"):
@@ -182,16 +185,52 @@ def test_release_sync_versions_compose_images_and_injects_provenance():
     nginx_config = _read("deploy/dashboard-nginx.conf")
 
     assert "dashboard-release.compose.yml" in script
+    assert "compose_file" not in script
+    assert "docker compose -f deploy/dashboard-release.compose.yml" in script
     assert "docker compose" in script and "build api dashboard" in script
     assert "--force-recreate api dashboard" in script
     assert "STOCK_RESEARCH_RELEASE_ROOT" in compose
     assert "STOCK_RESEARCH_RELEASE_ID" in compose
     assert "STOCK_RESEARCH_FRONTEND_BUILD_ID" in compose
+    assert '127.0.0.1:${DASHBOARD_API_BIND_PORT:-8765}:8765' in compose
+    assert '127.0.0.1:${DASHBOARD_FRONTEND_BIND_PORT:-5174}:80' in compose
+    assert "networks:" in compose
+    assert compose.count("context: ..") == 2
+    assert "../outputs/research:/app/outputs/research:ro" in compose
     assert "COPY src ./src" in api_dockerfile
     assert "COPY dashboard/dist ./dashboard/dist" in api_dockerfile
     assert "COPY dashboard/dist /usr/share/nginx/html" in frontend_dockerfile
     assert "COPY deploy/dashboard-nginx.conf" in frontend_dockerfile
     assert "try_files $uri $uri/ /index.html" in nginx_config
+    assert "location /api/" in nginx_config
+    assert "proxy_pass http://api:8765" in nginx_config
+    for header in ("Host", "X-Real-IP", "X-Forwarded-For", "X-Forwarded-Proto"):
+        assert f"proxy_set_header {header}" in nginx_config
+
+
+def test_release_builds_use_lockfiles_and_pinned_base_images():
+    script = _read("deploy/sync_dashboard_release.sh")
+    api_dockerfile = _read("deploy/dashboard-api.Dockerfile")
+    frontend_dockerfile = _read("deploy/dashboard-frontend.Dockerfile")
+    requirements = _read("deploy/dashboard-api-requirements.lock")
+
+    assert 'pnpm --dir "$ROOT/dashboard" install --frozen-lockfile' in script
+    assert "python:3.12.11-slim-bookworm" in api_dockerfile
+    assert "dashboard-api-requirements.lock" in api_dockerfile
+    assert "--no-deps ." in api_dockerfile
+    assert "nginx:1.27.5-alpine" in frontend_dockerfile
+    for package in ("fastapi==", "uvicorn==", "pandas==", "psycopg[binary]=="):
+        assert package in requirements
+
+
+def test_release_sync_defaults_to_batch_mode_and_validates_ssh_options():
+    script = _read("deploy/sync_dashboard_release.sh")
+
+    assert "BatchMode=yes" in script
+    assert "STOCK_RESEARCH_SSH_CONFIG" in script
+    assert "Unsupported SSH option token" in script
+    assert "docker compose version" in script
+    assert script.index("docker compose version") < script.index('rsync -az --delete')
 
 
 def test_release_sync_fails_before_side_effects_for_worktree_root(tmp_path):
@@ -225,6 +264,7 @@ def test_release_sync_executes_with_dynamic_date_python_override_and_compose_pro
 
     assert result.returncode == 0, result.stderr
     assert "Resolved EXPECTED_TRADE_DATE=2026-07-24" in result.stdout
+    assert "Resolved EXPECTED_TRADE_DATE=2026-05-18" not in result.stdout
     assert json.loads((root / "dashboard" / "dist" / "release.json").read_text())["release_id"]
     commands = log_file.read_text(encoding="utf-8")
     assert "python:" in commands
@@ -235,6 +275,7 @@ def test_release_sync_executes_with_dynamic_date_python_override_and_compose_pro
     assert "2026-07-24" in commands
     assert "jqz@192.168.3.185" in commands
     assert "/home/jqz/code/stock-research-platform-main" in commands
+    assert "BatchMode=yes" in commands
 
 
 def test_release_sync_invalid_strategy_contract_fails_before_remote_or_restart(tmp_path):
@@ -253,6 +294,45 @@ def test_release_sync_invalid_strategy_contract_fails_before_remote_or_restart(t
     commands = log_file.read_text(encoding="utf-8")
     assert "ssh:" not in commands
     assert "rsync:" not in commands
+
+
+def test_release_sync_rejects_dangerous_ssh_options_before_remote_access(tmp_path):
+    _root, env, log_file = _release_fixture(tmp_path)
+    env["SSH_OPTS"] = "-o ProxyCommand=touch/tmp/owned"
+
+    result = subprocess.run(
+        [str(REPO_ROOT / "deploy/sync_dashboard_release.sh")],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert "Unsupported SSH option token" in result.stderr
+    commands = log_file.read_text(encoding="utf-8")
+    assert "ssh:" not in commands
+    assert "rsync:" not in commands
+
+
+def test_release_sync_accepts_explicit_legacy_simple_ssh_options(tmp_path):
+    _root, env, log_file = _release_fixture(tmp_path)
+    env["SSH_OPTS"] = "-o PreferredAuthentications=password -o PubkeyAuthentication=no"
+
+    result = subprocess.run(
+        [str(REPO_ROOT / "deploy/sync_dashboard_release.sh")],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    commands = log_file.read_text(encoding="utf-8")
+    assert "PreferredAuthentications=password" in commands
+    assert "PubkeyAuthentication=no" in commands
 
 
 def test_release_sync_builds_and_syncs_one_identified_release():
@@ -313,7 +393,7 @@ def _release_gate_env(tmp_path: Path, *, frontend_release_id: str) -> dict[str, 
         if [[ "$url" == */api/platform/readiness ]]; then
           printf '%s\n' '{"latest_market_date":"2026-07-24","runtime_provenance":{"release_id":"new-release","frontend_build_id":"new-release","strategy_artifact_date":"2026-07-24","source_root":"/app","python_package_root":"/app/src/stock_research"}}' > "$output"
         elif [[ "$url" == */release.json ]]; then
-          printf '{"release_id":"%s"}\n' "$FAKE_FRONTEND_RELEASE_ID" > "$output"
+          printf '{"release_id":"%s","api_base_image":"python:3.12.11-slim-bookworm","frontend_base_image":"nginx:1.27.5-alpine"}\n' "$FAKE_FRONTEND_RELEASE_ID" > "$output"
         else
           printf '%s\n' '{"requested_trade_date":"2026-07-24","trade_date":"2026-07-24","groups":[{"strategy_id":"lhb_shortline","count":5,"data_trade_date":"2026-07-24","freshness_status":"current"},{"strategy_id":"mid_trend","count":5,"data_trade_date":"2026-07-24","freshness_status":"current"},{"strategy_id":"tech_bottleneck","count":5,"data_trade_date":"2026-07-24","freshness_status":"current"}]}' > "$output"
         fi
@@ -370,6 +450,8 @@ def test_vite_build_emits_release_metadata():
     assert "VITE_RELEASE_ID" in config
     assert "release.json" in config
     assert "release_id" in config
+    assert "api_base_image" in config
+    assert "frontend_base_image" in config
 
 
 def test_strategy_release_validator_accepts_current_official_contract():
@@ -395,6 +477,43 @@ def test_strategy_release_validator_accepts_current_official_contract():
 
     assert result.returncode == 0, result.stderr
     assert "strategy release contract valid" in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "expected_error"),
+    [
+        ("lhb_shortline-2", "lhb_shortline-1", "duplicate asset"),
+        ("lhb_shortline-2", "", "empty asset"),
+        ("lhb_shortline-2", "lhb_shortline-99", "does not match manifest"),
+        ("strategy_lhb_shortline_review.csv", "../escape.csv", "escapes release directory"),
+    ],
+)
+def test_strategy_release_validator_rejects_duplicate_assets_and_path_traversal(
+    tmp_path, old, new, expected_error
+):
+    root, _env, _log = _release_fixture(tmp_path)
+    output_dir = root / "outputs" / "research" / "strategy_daily_eod" / "2026-07-24"
+    manifest = output_dir / "review_queue_strategy_manifest.csv"
+    content = manifest.read_text(encoding="utf-8")
+    content = content.replace(old, new, 1)
+    manifest.write_text(content, encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            "/Users/xiwei/stock_research/.venv/bin/python",
+            str(REPO_ROOT / "deploy/validate_strategy_release.py"),
+            "--output-dir",
+            str(output_dir),
+            "--trade-date",
+            "2026-07-24",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert expected_error in result.stderr
 
 
 def test_launchd_template_uses_canonical_repo_not_worktree():
@@ -429,6 +548,8 @@ def test_release_docs_define_single_entrypoint_environment_and_rollback():
         "STRATEGY_OUTPUT_ROOT",
         "STOCK_RESEARCH_PYTHON",
         "LOCAL_READINESS_URL",
+        "STOCK_RESEARCH_SSH_CONFIG",
+        "DASHBOARD_REMOTE_ENV_FILE",
         "DASHBOARD_AUTH",
         "回滚",
     ):

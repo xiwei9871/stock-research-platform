@@ -5,6 +5,8 @@ const runtimeEnv =
   (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env ?? {};
 const apiProxyTarget = runtimeEnv.VITE_API_PROXY_TARGET ?? 'http://127.0.0.1:8765';
 const releaseId = runtimeEnv.VITE_RELEASE_ID?.trim() ?? '';
+const apiBaseImage = runtimeEnv.VITE_API_BASE_IMAGE?.trim() ?? 'python:3.12.11-slim-bookworm';
+const frontendBaseImage = runtimeEnv.VITE_FRONTEND_BASE_IMAGE?.trim() ?? 'nginx:1.27.5-alpine';
 
 export default defineConfig({
   plugins: [
@@ -15,7 +17,11 @@ export default defineConfig({
         this.emitFile({
           type: 'asset',
           fileName: 'release.json',
-          source: `${JSON.stringify({ release_id: releaseId })}\n`
+          source: `${JSON.stringify({
+            release_id: releaseId,
+            api_base_image: apiBaseImage,
+            frontend_base_image: frontendBaseImage
+          })}\n`
         });
       }
     }

@@ -8,11 +8,14 @@ remote_user_override="${REMOTE_USER:-}"
 remote_host_override="${REMOTE_HOST:-}"
 remote_dir_override="${REMOTE_DIR:-}"
 ssh_opts_override="${SSH_OPTS:-}"
+ssh_config_override="${STOCK_RESEARCH_SSH_CONFIG:-}"
 base_url_override="${BASE_URL:-}"
 dashboard_auth_override="${DASHBOARD_AUTH:-}"
 container_root_override="${REMOTE_CONTAINER_RELEASE_ROOT:-}"
 strategy_output_root_override="${STRATEGY_OUTPUT_ROOT:-}"
 local_readiness_url_override="${LOCAL_READINESS_URL:-}"
+remote_env_file_override="${DASHBOARD_REMOTE_ENV_FILE:-}"
+remote_pgservice_file_override="${DASHBOARD_PGSERVICE_FILE:-}"
 
 env_file="${DASHBOARD_SYNC_ENV:-/Users/xiwei/.stock_research_dashboard_sync.env}"
 if [[ -f "$env_file" ]]; then
@@ -25,12 +28,15 @@ EXPECTED_TRADE_DATE="${trade_date_override:-${EXPECTED_TRADE_DATE:-}}"
 REMOTE_USER="${remote_user_override:-${REMOTE_USER:-jqz}}"
 REMOTE_HOST="${remote_host_override:-${REMOTE_HOST:-192.168.3.185}}"
 REMOTE_DIR="${remote_dir_override:-${REMOTE_DIR:-/home/${REMOTE_USER}/code/stock-research-platform-main}}"
-SSH_OPTS="${ssh_opts_override:-${SSH_OPTS:--o PreferredAuthentications=password -o PubkeyAuthentication=no}}"
+SSH_OPTS="${ssh_opts_override:-${SSH_OPTS:-}}"
+STOCK_RESEARCH_SSH_CONFIG="${ssh_config_override:-${STOCK_RESEARCH_SSH_CONFIG:-}}"
 BASE_URL="${base_url_override:-${BASE_URL:-https://stock.manqiaotechnology.com}}"
 DASHBOARD_AUTH="${dashboard_auth_override:-${DASHBOARD_AUTH:-}}"
 REMOTE_CONTAINER_RELEASE_ROOT="${container_root_override:-${REMOTE_CONTAINER_RELEASE_ROOT:-/app}}"
 STRATEGY_OUTPUT_ROOT="${strategy_output_root_override:-${STRATEGY_OUTPUT_ROOT:-$ROOT/outputs/research}}"
 LOCAL_READINESS_URL="${local_readiness_url_override:-${LOCAL_READINESS_URL:-http://127.0.0.1:8765/api/platform/readiness}}"
+DASHBOARD_REMOTE_ENV_FILE="${remote_env_file_override:-${DASHBOARD_REMOTE_ENV_FILE:-.env.dashboard}}"
+DASHBOARD_PGSERVICE_FILE="${remote_pgservice_file_override:-${DASHBOARD_PGSERVICE_FILE:-.pg_service.conf}}"
 
 case "$ROOT" in
   */.worktrees/*|*/.worktrees)
@@ -59,6 +65,14 @@ if [[ ! "$REMOTE_DIR" =~ ^/[A-Za-z0-9._/-]+$ ]] || [[ ! "$REMOTE_CONTAINER_RELEA
   echo "REMOTE_DIR or REMOTE_CONTAINER_RELEASE_ROOT must be a safe absolute path" >&2
   exit 2
 fi
+if [[ "$REMOTE_CONTAINER_RELEASE_ROOT" != "/app" ]]; then
+  echo "REMOTE_CONTAINER_RELEASE_ROOT must be /app for the canonical release compose" >&2
+  exit 2
+fi
+if [[ ! "$DASHBOARD_REMOTE_ENV_FILE" =~ ^[A-Za-z0-9._/-]+$ ]] || [[ ! "$DASHBOARD_PGSERVICE_FILE" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+  echo "DASHBOARD_REMOTE_ENV_FILE or DASHBOARD_PGSERVICE_FILE contains unsupported characters" >&2
+  exit 2
+fi
 if [[ -n "$python_override" ]]; then
   STOCK_RESEARCH_PYTHON="$python_override"
 elif [[ -n "${STOCK_RESEARCH_PYTHON:-}" ]]; then
@@ -82,6 +96,7 @@ if [[ -n "$dirty" ]]; then
 fi
 
 package_file="$(env -u PYTHONPATH STOCK_RESEARCH_RELEASE_ROOT="$ROOT" "$STOCK_RESEARCH_PYTHON" -c 'import stock_research; print(stock_research.__file__)')"
+EXPECTED_PACKAGE_ROOT="$(cd "$ROOT/src/stock_research" && pwd -P)"
 case "$package_file" in
   "$ROOT"/src/stock_research/*) ;;
   *)
@@ -93,19 +108,32 @@ esac
 if [[ -z "$EXPECTED_TRADE_DATE" ]]; then
   EXPECTED_TRADE_DATE="$(
     curl -fsS --connect-timeout 3 --max-time 10 "$LOCAL_READINESS_URL" 2>/dev/null \
-      | jq -er '.latest_market_date | select(type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$"))' \
+      | jq -er \
+          --arg release "$release_id" \
+          --arg source "$ROOT" \
+          --arg package "$EXPECTED_PACKAGE_ROOT" \
+          '
+            select(
+              .runtime_provenance.release_id == $release
+              and .runtime_provenance.source_root == $source
+              and .runtime_provenance.python_package_root == $package
+            )
+            | .latest_market_date
+            | select(type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$"))
+          ' \
       2>/dev/null || true
   )"
 fi
 if [[ -z "$EXPECTED_TRADE_DATE" ]]; then
   EXPECTED_TRADE_DATE="$(
-    env -u PYTHONPATH STOCK_RESEARCH_RELEASE_ROOT="$ROOT" "$STOCK_RESEARCH_PYTHON" -c \
-      'from stock_research.dashboard.platform import load_platform_summary; print(load_platform_summary().get("latest_market_date") or "")' \
+    "$STOCK_RESEARCH_PYTHON" "$ROOT/deploy/validate_strategy_release.py" \
+      --output-root "${STRATEGY_OUTPUT_ROOT%/}/strategy_daily_eod" \
+      --resolve-latest \
       2>/dev/null || true
   )"
 fi
 if [[ ! "$EXPECTED_TRADE_DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
-  echo "Unable to resolve a valid EXPECTED_TRADE_DATE from override or local readiness" >&2
+  echo "Unable to resolve a valid EXPECTED_TRADE_DATE from override, current readiness, or contract-valid local artifacts" >&2
   exit 2
 fi
 echo "Resolved EXPECTED_TRADE_DATE=${EXPECTED_TRADE_DATE}"
@@ -120,45 +148,110 @@ fi
   --trade-date "$EXPECTED_TRADE_DATE"
 
 ssh_opts=()
-if [[ -n "$SSH_OPTS" ]]; then
-  read -r -a ssh_opts <<<"$SSH_OPTS"
+if [[ -n "$STOCK_RESEARCH_SSH_CONFIG" ]]; then
+  if [[ ! -f "$STOCK_RESEARCH_SSH_CONFIG" ]]; then
+    echo "STOCK_RESEARCH_SSH_CONFIG does not exist: $STOCK_RESEARCH_SSH_CONFIG" >&2
+    exit 2
+  fi
+  ssh_opts=(-F "$STOCK_RESEARCH_SSH_CONFIG")
 fi
+if [[ -n "$SSH_OPTS" ]]; then
+  parsed_ssh_opts=()
+  read -r -a parsed_ssh_opts <<<"$SSH_OPTS"
+  index=0
+  while (( index < ${#parsed_ssh_opts[@]} )); do
+    token="${parsed_ssh_opts[$index]}"
+    case "$token" in
+      -4|-6)
+        index=$((index + 1))
+        ;;
+      -p)
+        index=$((index + 1))
+        value="${parsed_ssh_opts[$index]:-}"
+        [[ "$value" =~ ^[0-9]+$ ]] || { echo "Unsupported SSH option token: $token $value" >&2; exit 2; }
+        index=$((index + 1))
+        ;;
+      -i)
+        index=$((index + 1))
+        value="${parsed_ssh_opts[$index]:-}"
+        [[ "$value" =~ ^/[A-Za-z0-9._/-]+$ ]] || { echo "Unsupported SSH option token: $token $value" >&2; exit 2; }
+        index=$((index + 1))
+        ;;
+      -o)
+        index=$((index + 1))
+        value="${parsed_ssh_opts[$index]:-}"
+        [[ "$value" =~ ^(BatchMode|ConnectTimeout|IdentitiesOnly|PreferredAuthentications|PubkeyAuthentication|ServerAliveInterval|ServerAliveCountMax|StrictHostKeyChecking|UserKnownHostsFile)=[A-Za-z0-9_.,:/@+-]+$ ]] || { echo "Unsupported SSH option token: $token $value" >&2; exit 2; }
+        index=$((index + 1))
+        ;;
+      *)
+        echo "Unsupported SSH option token: $token" >&2
+        exit 2
+        ;;
+    esac
+  done
+  ssh_opts+=("${parsed_ssh_opts[@]}")
+else
+  ssh_opts+=(-o BatchMode=yes)
+fi
+printf -v rsync_rsh ' %q' "${ssh_opts[@]}"
+rsync_rsh="ssh${rsync_rsh}"
 remote="${REMOTE_USER}@${REMOTE_HOST}"
 printf -v remote_dir_q '%q' "$REMOTE_DIR"
 printf -v container_root_q '%q' "$REMOTE_CONTAINER_RELEASE_ROOT"
 printf -v release_id_q '%q' "$release_id"
+case "$DASHBOARD_REMOTE_ENV_FILE" in
+  /*) remote_env_file="$DASHBOARD_REMOTE_ENV_FILE" ;;
+  *) remote_env_file="$REMOTE_DIR/$DASHBOARD_REMOTE_ENV_FILE" ;;
+esac
+case "$DASHBOARD_PGSERVICE_FILE" in
+  /*) pgservice_file="$DASHBOARD_PGSERVICE_FILE" ;;
+  *) pgservice_file="$REMOTE_DIR/$DASHBOARD_PGSERVICE_FILE" ;;
+esac
+printf -v remote_env_file_q '%q' "$remote_env_file"
+printf -v pgservice_file_q '%q' "$pgservice_file"
 
 echo "Building canonical frontend for release ${release_id}"
-STOCK_RESEARCH_RELEASE_ID="$release_id" VITE_RELEASE_ID="$release_id" rtk pnpm --dir "$ROOT/dashboard" build
-if ! jq -e --arg release "$release_id" '.release_id == $release' "$ROOT/dashboard/dist/release.json" >/dev/null; then
+rtk pnpm --dir "$ROOT/dashboard" install --frozen-lockfile
+STOCK_RESEARCH_RELEASE_ID="$release_id" \
+VITE_RELEASE_ID="$release_id" \
+VITE_API_BASE_IMAGE="python:3.12.11-slim-bookworm" \
+VITE_FRONTEND_BASE_IMAGE="nginx:1.27.5-alpine" \
+  rtk pnpm --dir "$ROOT/dashboard" build
+if ! jq -e --arg release "$release_id" '
+  .release_id == $release
+  and .api_base_image == "python:3.12.11-slim-bookworm"
+  and .frontend_base_image == "nginx:1.27.5-alpine"
+' "$ROOT/dashboard/dist/release.json" >/dev/null; then
   echo "Frontend release metadata does not match release ${release_id}" >&2
   exit 2
 fi
 
 echo "Preparing remote release directories"
+ssh "${ssh_opts[@]}" "$remote" "docker compose version >/dev/null"
 ssh "${ssh_opts[@]}" "$remote" \
   "mkdir -p ${remote_dir_q}/src ${remote_dir_q}/dashboard/dist ${remote_dir_q}/deploy ${remote_dir_q}/outputs/research/strategy_daily_eod/${EXPECTED_TRADE_DATE}"
 
 echo "Syncing backend source"
-rsync -az --delete -e "ssh ${SSH_OPTS}" "$ROOT/src/" "$remote:$REMOTE_DIR/src/"
-rsync -az -e "ssh ${SSH_OPTS}" "$ROOT/pyproject.toml" "$remote:$REMOTE_DIR/"
-rsync -az -e "ssh ${SSH_OPTS}" \
+rsync -az --delete -e "$rsync_rsh" "$ROOT/src/" "$remote:$REMOTE_DIR/src/"
+rsync -az -e "$rsync_rsh" "$ROOT/pyproject.toml" "$remote:$REMOTE_DIR/"
+rsync -az -e "$rsync_rsh" \
   "$ROOT/deploy/dashboard-api.Dockerfile" \
+  "$ROOT/deploy/dashboard-api-requirements.lock" \
   "$ROOT/deploy/dashboard-frontend.Dockerfile" \
   "$ROOT/deploy/dashboard-nginx.conf" \
   "$ROOT/deploy/dashboard-release.compose.yml" \
   "$remote:$REMOTE_DIR/deploy/"
 
 echo "Syncing canonical frontend build"
-rsync -az --delete -e "ssh ${SSH_OPTS}" "$ROOT/dashboard/dist/" "$remote:$REMOTE_DIR/dashboard/dist/"
+rsync -az --delete -e "$rsync_rsh" "$ROOT/dashboard/dist/" "$remote:$REMOTE_DIR/dashboard/dist/"
 
 echo "Syncing strategy artifacts for ${EXPECTED_TRADE_DATE}"
-rsync -az --delete -e "ssh ${SSH_OPTS}" "$strategy_output/" \
+rsync -az --delete -e "$rsync_rsh" "$strategy_output/" \
   "$remote:$REMOTE_DIR/outputs/research/strategy_daily_eod/${EXPECTED_TRADE_DATE}/"
 
 echo "Restarting Docker Compose API and dashboard services"
 ssh "${ssh_opts[@]}" "$remote" \
-  "cd ${remote_dir_q} && compose_file='' && for candidate in compose.yaml compose.yml docker-compose.yaml docker-compose.yml; do if [ -f \"\$candidate\" ]; then compose_file=\"\$candidate\"; break; fi; done && test -n \"\$compose_file\" && STOCK_RESEARCH_RELEASE_ROOT=${container_root_q} STOCK_RESEARCH_RELEASE_ID=${release_id_q} STOCK_RESEARCH_FRONTEND_BUILD_ID=${release_id_q} docker compose -f \"\$compose_file\" -f deploy/dashboard-release.compose.yml build api dashboard && STOCK_RESEARCH_RELEASE_ROOT=${container_root_q} STOCK_RESEARCH_RELEASE_ID=${release_id_q} STOCK_RESEARCH_FRONTEND_BUILD_ID=${release_id_q} docker compose -f \"\$compose_file\" -f deploy/dashboard-release.compose.yml up -d --force-recreate api dashboard"
+  "cd ${remote_dir_q} && test -f ${remote_env_file_q} && test -f ${pgservice_file_q} && STOCK_RESEARCH_RELEASE_ROOT=${container_root_q} STOCK_RESEARCH_RELEASE_ID=${release_id_q} STOCK_RESEARCH_FRONTEND_BUILD_ID=${release_id_q} DASHBOARD_REMOTE_ENV_FILE=${remote_env_file_q} DASHBOARD_PGSERVICE_FILE=${pgservice_file_q} docker compose -f deploy/dashboard-release.compose.yml build api dashboard && STOCK_RESEARCH_RELEASE_ROOT=${container_root_q} STOCK_RESEARCH_RELEASE_ID=${release_id_q} STOCK_RESEARCH_FRONTEND_BUILD_ID=${release_id_q} DASHBOARD_REMOTE_ENV_FILE=${remote_env_file_q} DASHBOARD_PGSERVICE_FILE=${pgservice_file_q} docker compose -f deploy/dashboard-release.compose.yml up -d --force-recreate api dashboard"
 
 echo "Running bounded external release gate"
 BASE_URL="$BASE_URL" \

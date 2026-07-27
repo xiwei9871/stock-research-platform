@@ -1,20 +1,43 @@
 services:
   api:
+    image: stock-research-dashboard-api:${STOCK_RESEARCH_RELEASE_ID:?required}
     build:
-      context: .
+      context: ..
       dockerfile: deploy/dashboard-api.Dockerfile
+    restart: unless-stopped
     working_dir: /app
     command: ["python", "-m", "uvicorn", "stock_research.dashboard.app:app", "--host", "0.0.0.0", "--port", "8765", "--http", "h11"]
+    env_file:
+      - ${DASHBOARD_REMOTE_ENV_FILE:-.env.dashboard}
     environment:
       PYTHONPATH: /app/src
-      STOCK_RESEARCH_RELEASE_ROOT: ${STOCK_RESEARCH_RELEASE_ROOT:?required}
+      PGSERVICEFILE: /app/.pg_service.conf
+      STOCK_RESEARCH_RELEASE_ROOT: /app
       STOCK_RESEARCH_RELEASE_ID: ${STOCK_RESEARCH_RELEASE_ID:?required}
       STOCK_RESEARCH_FRONTEND_BUILD_ID: ${STOCK_RESEARCH_FRONTEND_BUILD_ID:?required}
       STOCK_RESEARCH_FRONTEND_METADATA_FILE: /app/dashboard/dist/release.json
+    ports:
+      - "127.0.0.1:${DASHBOARD_API_BIND_PORT:-8765}:8765"
     volumes:
-      - ./outputs/research:/app/outputs/research:ro
+      - ../outputs/research:/app/outputs/research:ro
+      - ${DASHBOARD_PGSERVICE_FILE:-./.pg_service.conf}:/app/.pg_service.conf:ro
+    networks:
+      - dashboard_release
+
   dashboard:
+    image: stock-research-dashboard-frontend:${STOCK_RESEARCH_RELEASE_ID:?required}
     build:
-      context: .
+      context: ..
       dockerfile: deploy/dashboard-frontend.Dockerfile
+    restart: unless-stopped
     command: ["nginx", "-g", "daemon off;"]
+    depends_on:
+      - api
+    ports:
+      - "127.0.0.1:${DASHBOARD_FRONTEND_BIND_PORT:-5174}:80"
+    networks:
+      - dashboard_release
+
+networks:
+  dashboard_release:
+    name: stock-research-dashboard-release

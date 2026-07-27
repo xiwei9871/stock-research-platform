@@ -69,7 +69,11 @@ readiness_matches_release() {
 }
 
 frontend_matches_release() {
-  jq -e --arg release "$EXPECTED_RELEASE_ID" '.release_id == $release' "$1" >/dev/null
+  jq -e --arg release "$EXPECTED_RELEASE_ID" '
+    .release_id == $release
+    and .api_base_image == "python:3.12.11-slim-bookworm"
+    and .frontend_base_image == "nginx:1.27.5-alpine"
+  ' "$1" >/dev/null
 }
 
 queue_matches_release() {
