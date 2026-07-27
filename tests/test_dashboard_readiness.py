@@ -795,6 +795,33 @@ def test_readiness_includes_display_date_gate(monkeypatch):
     assert payload["runtime_provenance"]["strategy_artifact_date"] == "2026-06-17"
 
 
+def test_runtime_provenance_does_not_report_unpublishable_manifest_date_when_summary_missing(
+    monkeypatch,
+):
+    monkeypatch.setattr(readiness, "load_platform_summary", lambda score_version, top_n: {})
+    monkeypatch.setattr(
+        readiness,
+        "_load_manifest_modules",
+        lambda: [
+            {
+                "run_id": "failed-run",
+                "trade_date": "2026-06-18",
+                "module": "daily_bars",
+                "tier": "tier1",
+                "status": "failed",
+                "warnings": [],
+                "error_message": "daily bars failed",
+            }
+        ],
+    )
+
+    payload = readiness.build_platform_readiness(runtime_provenance_data={})
+
+    assert payload["display_trade_date"] == ""
+    assert payload["latest_trade_date"] == "2026-06-18"
+    assert payload["runtime_provenance"]["strategy_artifact_date"] == ""
+
+
 def test_manifest_readiness_reports_display_trade_date_run_when_recent_manifest_contains_history(monkeypatch):
     modules = [
         {"run_id": "r1", "trade_date": "2026-06-17", "module": "daily_bars", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
@@ -959,6 +986,7 @@ def test_display_gate_failure_blocks_manifest_readiness(monkeypatch):
     assert payload["display_gate"]["candidate_status"] == "incomplete"
     assert payload["status"] == "BLOCKED"
     assert "display_trade_date" in payload["missing_data"]
+    assert payload["runtime_provenance"]["strategy_artifact_date"] == "2026-06-12"
     assert any(
         warning.startswith("Display trade date unavailable: incomplete")
         for warning in payload["warnings"]

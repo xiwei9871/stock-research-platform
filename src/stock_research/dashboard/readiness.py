@@ -104,7 +104,11 @@ def build_platform_readiness(
             topn_preview=topn_preview,
             warnings=warnings,
         )
-        return _with_runtime_provenance(payload, provenance)
+        return _with_runtime_provenance(
+            payload,
+            provenance,
+            strategy_artifact_date=str(payload.get("display_trade_date") or latest_market_date),
+        )
 
     checks: list[dict[str, Any]] = []
     if not platform_summary:
@@ -180,20 +184,18 @@ def build_platform_readiness(
             "dashboard_url": "http://127.0.0.1:5174",
         },
         provenance,
+        strategy_artifact_date=latest_market_date,
     )
 
 
 def _with_runtime_provenance(
     payload: dict[str, Any],
     provenance: Mapping[str, str],
+    *,
+    strategy_artifact_date: str,
 ) -> dict[str, Any]:
     runtime_payload = dict(provenance)
-    runtime_payload["strategy_artifact_date"] = str(
-        payload.get("display_trade_date")
-        or payload.get("latest_trade_date")
-        or payload.get("latest_market_date")
-        or ""
-    )
+    runtime_payload["strategy_artifact_date"] = strategy_artifact_date
     payload["runtime_provenance"] = runtime_payload
     return payload
 
