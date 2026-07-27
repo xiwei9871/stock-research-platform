@@ -272,12 +272,13 @@ def publish_strategy_eod(
     review_path, review_rows = _write_review_queue(review_frames, output_dir)
     strategy_counts, strategy_row_counts = _strategy_review_counts(review_rows)
     if (
-        strategy_counts != EXPECTED_STRATEGY_REVIEW_COUNTS
+        not _strategy_review_rows_valid(review_rows)
+        or strategy_counts != EXPECTED_STRATEGY_REVIEW_COUNTS
         or strategy_row_counts != EXPECTED_STRATEGY_REVIEW_COUNTS
     ):
         error = (
             "strategy review contract requires exactly 5 rows per strategy: "
-            f"unique_assets={strategy_counts}, rows={strategy_row_counts}"
+            f"unique_assets={strategy_counts}, rows={strategy_row_counts}, total_rows={len(review_rows)}"
         )
         entries.append(
             _failure_entry(
@@ -1433,6 +1434,20 @@ def _strategy_review_counts(
     unique_counts = frame.groupby("strategy_id")["asset_id"].nunique().astype(int).to_dict()
     row_counts = frame.groupby("strategy_id").size().astype(int).to_dict()
     return unique_counts, row_counts
+
+
+def _strategy_review_rows_valid(review_rows: list[dict[str, Any]]) -> bool:
+    if len(review_rows) != sum(EXPECTED_STRATEGY_REVIEW_COUNTS.values()):
+        return False
+    frame = pd.DataFrame(review_rows)
+    if not {"strategy_id", "asset_id"}.issubset(frame.columns):
+        return False
+    strategy_ids = frame["strategy_id"].fillna("").astype(str).str.strip()
+    asset_ids = frame["asset_id"].fillna("").astype(str).str.strip()
+    return bool(
+        strategy_ids.isin(EXPECTED_STRATEGY_REVIEW_COUNTS).all()
+        and asset_ids.ne("").all()
+    )
 
 
 def _write_eod_news_artifacts(

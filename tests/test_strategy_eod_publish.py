@@ -406,7 +406,7 @@ def test_publish_strategy_eod_upserts_failure_manifest_when_base_not_publishable
     assert upserts[-1]["status"] == "failed"
 
 
-def _install_publish_contract_fakes(monkeypatch, tmp_path, *, strategy_assets):
+def _install_publish_contract_fakes(monkeypatch, tmp_path, *, strategy_assets, extra_rows=()):
     monkeypatch.setattr(strategy_eod_publish, "_ensure_strategy_dependencies", lambda *args, **kwargs: None)
     monkeypatch.setattr(
         strategy_eod_publish,
@@ -433,13 +433,19 @@ def _install_publish_contract_fakes(monkeypatch, tmp_path, *, strategy_assets):
 
     def fake_tech_publish(*, end_date, output_dir, manifest_upsert, **kwargs):
         review_path = output_dir / "strategy_tech_bottleneck_review.csv"
-        strategy_eod_publish.pd.DataFrame(
+        tech_review = strategy_eod_publish.pd.DataFrame(
             {
                 "trade_date": [end_date] * len(strategy_assets["tech_bottleneck"]),
                 "strategy_id": ["tech_bottleneck"] * len(strategy_assets["tech_bottleneck"]),
                 "asset_id": strategy_assets["tech_bottleneck"],
             }
-        ).to_csv(review_path, index=False)
+        )
+        if extra_rows:
+            tech_review = strategy_eod_publish.pd.concat(
+                [tech_review, strategy_eod_publish.pd.DataFrame(extra_rows)],
+                ignore_index=True,
+            )
+        tech_review.to_csv(review_path, index=False)
         manifest_upsert({"module": "strategy_tech_bottleneck", "status": "success"})
         return {"review_path": str(review_path)}
 
@@ -515,3 +521,38 @@ def test_publish_strategy_eod_rejects_invalid_unique_asset_count(monkeypatch, tm
         entry.get("module") == "review_queue_strategy_manifest" and entry.get("status") == "success"
         for entry in collected
     )
+
+
+@pytest.mark.parametrize(
+    "extra_row",
+    [
+        {"trade_date": "2026-07-24", "strategy_id": "", "asset_id": ""},
+        {"trade_date": "2026-07-24", "strategy_id": "unknown_strategy", "asset_id": "CN:SH:999999"},
+    ],
+)
+def test_publish_strategy_eod_rejects_extra_malformed_or_unknown_review_row(monkeypatch, tmp_path, extra_row):
+    strategy_assets = {
+        "lhb_shortline": [f"CN:SH:{index:06d}" for index in range(1, 6)],
+        "mid_trend": [f"CN:SH:{index:06d}" for index in range(101, 106)],
+        "tech_bottleneck": [f"CN:SH:{index:06d}" for index in range(201, 206)],
+    }
+    _install_publish_contract_fakes(
+        monkeypatch,
+        tmp_path,
+        strategy_assets=strategy_assets,
+        extra_rows=[extra_row],
+    )
+    collected = []
+
+    with pytest.raises(RuntimeError, match="strategy review contract requires exactly 5 rows per strategy"):
+        strategy_eod_publish.publish_strategy_eod(
+            trade_date="2026-07-24",
+            output_root=tmp_path,
+            runner=lambda payload: {"strategy_id": payload["strategy_id"]},
+            manifest_upsert=collected.append,
+        )
+
+    aggregate_entries = [
+        entry for entry in collected if entry.get("module") == "review_queue_strategy_manifest"
+    ]
+    assert [entry.get("status") for entry in aggregate_entries] == ["failed"]
