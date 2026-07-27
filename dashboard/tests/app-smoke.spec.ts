@@ -4,6 +4,29 @@ import { expectNoHorizontalOverflow } from './e2e/assertions/runtime';
 import { expect, test } from './e2e/fixtures/test';
 
 async function mockDashboardApi(page: Page) {
+  const conceptStItem = {
+    sector_id: 'concept-st',
+    sector_name: 'ST板块',
+    sector_type: 'concept',
+    change_pct: 0.0989,
+    amount: 2923611417.92,
+    up_count: 5,
+    down_count: 12,
+    stock_count: 20,
+    main_net_inflow: null
+  };
+  const conceptDownItem = {
+    sector_id: 'concept-down',
+    sector_name: '概念回调',
+    sector_type: 'concept',
+    change_pct: -0.02,
+    amount: 1500000000,
+    up_count: 2,
+    down_count: 18,
+    stock_count: 20,
+    main_net_inflow: -100000000
+  };
+
   await page.route('/api/auth/me', async (route) => {
     await route.fulfill({
       json: {
@@ -66,9 +89,9 @@ async function mockDashboardApi(page: Page) {
   await page.route('/api/platform/summary**', async (route) => {
     await route.fulfill({
       json: {
-        latest_market_date: '2026-06-08',
-        latest_score_date: '2026-06-08',
-        latest_factor_date: '2026-06-08',
+        latest_market_date: '2026-06-18',
+        latest_score_date: '2026-06-18',
+        latest_factor_date: '2026-06-18',
         market_asset_count: 5207,
         score_asset_count: 5207,
         factor_count: 43,
@@ -83,6 +106,19 @@ async function mockDashboardApi(page: Page) {
             score_components: {}
           }
         ]
+      }
+    });
+  });
+
+  await page.route('/api/platform/readiness**', async (route) => {
+    await route.fulfill({
+      json: {
+        status: 'OK',
+        latest_market_date: '2026-06-18',
+        latest_trade_date: '2026-06-18',
+        display_trade_date: '2026-06-18',
+        policy: { status: 'ready', ready_for_dashboard: true, ready_for_publication: true, blocking_reasons: [], warnings: [] },
+        warnings: []
       }
     });
   });
@@ -124,6 +160,70 @@ async function mockDashboardApi(page: Page) {
         },
         generated_reports: [],
         warnings: []
+      }
+    });
+  });
+
+  await page.route('/api/market-monitor/overview**', async (route) => {
+    await route.fulfill({
+      json: {
+        trade_date: '2026-07-24',
+        updated_at: '2026-07-24 15:10',
+        source: 'fixture',
+        data_status: 'completed',
+        warnings: [],
+        indices: [],
+        total_amount: 10000000000,
+        up_count: 532,
+        down_count: 4629,
+        limit_up_count: 42,
+        limit_down_count: 28
+      }
+    });
+  });
+
+  await page.route('/api/market-monitor/sectors/heatmap**', async (route) => {
+    const type = new URL(route.request().url()).searchParams.get('type');
+    const items = type === 'concept'
+      ? [conceptStItem, conceptDownItem]
+      : [{ ...conceptStItem, sector_type: 'industry', sector_name: '运输设备制造业' }];
+    await route.fulfill({
+      json: {
+        trade_date: '2026-07-24',
+        updated_at: '2026-07-24 15:10',
+        source: 'fixture',
+        data_status: 'completed',
+        warnings: [],
+        items
+      }
+    });
+  });
+
+  await page.route('/api/market-monitor/sectors/fund-flow**', async (route) => {
+    await route.fulfill({
+      json: {
+        trade_date: '2026-07-24',
+        updated_at: '2026-07-24 15:10',
+        source: 'fixture',
+        data_status: 'completed',
+        warnings: [],
+        inflow: [],
+        outflow: []
+      }
+    });
+  });
+
+  await page.route(/\/api\/market-monitor\/sectors\/concept-st\?/, async (route) => {
+    await route.fulfill({
+      json: {
+        trade_date: '2026-07-24',
+        updated_at: '2026-07-24 15:10',
+        source: 'fixture',
+        data_status: 'completed',
+        warnings: ['ST板块 fixture'],
+        ...conceptStItem,
+        main_net_inflow_ratio: null,
+        leading_stocks: []
       }
     });
   });
@@ -233,6 +333,14 @@ async function mockDashboardApi(page: Page) {
       json: {
         asset_id: 'CN:SH:600519',
         items: [],
+        summary: {
+          news_count_1d: 0,
+          news_count_3d: 0,
+          news_count_7d: 0,
+          latest_published_at: undefined,
+          source_count: 0,
+          category_counts: []
+        },
         warnings: []
       }
     });
@@ -312,11 +420,26 @@ async function mockDashboardApi(page: Page) {
   });
 
   await page.route('/api/assets/*/bars**', async (route) => {
+    const resolution = new URL(route.request().url()).searchParams.get('resolution') ?? '1D';
+    const items = Array.from({ length: 120 }, (_, index) => {
+      const day = new Date(Date.UTC(2026, 0, 1 + index));
+      const date = day.toISOString().slice(0, 10);
+      const time = ['1D', '1W', '1M'].includes(resolution) ? date : `${date}T09:30:00+08:00`;
+      return {
+        time,
+        open: 10 + index * 0.01,
+        high: 10.2 + index * 0.01,
+        low: 9.8 + index * 0.01,
+        close: 10.1 + index * 0.01,
+        volume: 100000 + index * 100,
+        amount: 1000000 + index * 1000
+      };
+    });
     await route.fulfill({
       json: {
         asset_id: '000001.SZ',
-        resolution: '1D',
-        items: [{ time: '2026-05-28', open: 10, high: 11, low: 9, close: 10.5, volume: 100, amount: 1000 }]
+        resolution,
+        items
       }
     });
   });
@@ -846,4 +969,69 @@ test('dashboard shell stacks without horizontal overflow on mobile viewport', as
   await expect(page.getByRole('navigation', { name: 'Workspace navigation' })).toBeVisible();
   await expect(page.getByRole('combobox', { name: 'Global search' })).toBeVisible();
   await expectNoHorizontalOverflow(page);
+});
+
+test('concept heatmap exposes complete hover information and click detail', async ({ page }) => {
+  await mockDashboardApi(page);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Open Market Monitor workspace' }).click();
+  const sectorToolbar = page.getByRole('toolbar', { name: '板块类型切换' });
+  await sectorToolbar.getByRole('button', { name: '概念', exact: true }).click();
+
+  const tile = page.getByRole('button', { name: '兼容热力块 上涨 ST板块' });
+  await expect(tile).toBeVisible();
+  await tile.hover();
+
+  const tooltip = page.getByRole('tooltip', { name: '板块数据' });
+  await expect(tooltip).toContainText('ST板块');
+  await expect(tooltip).toContainText('涨跌幅 +9.89%');
+  await expect(tooltip).toContainText('成交额 29.24亿');
+  await expect(tooltip).toContainText('上涨/下跌 5/12');
+  await expect(tooltip).toContainText('成分股 20');
+  await expect(tooltip).toContainText('主力净流入 --');
+
+  await tile.click();
+  await expect(page.getByRole('heading', { level: 3, name: 'ST板块' })).toBeVisible();
+});
+
+async function hoverRightmostChartBar(page: Page) {
+  const chart = page.locator('.asset-chart');
+  await chart.scrollIntoViewIfNeeded();
+  const chartBox = await chart.boundingBox();
+  expect(chartBox).not.toBeNull();
+  const tooltip = page.getByRole('tooltip', { name: 'K线数据' });
+  for (const offset of [36, 48, 60, 72, 84, 96, 108, 120]) {
+    await page.mouse.move(chartBox!.x + chartBox!.width - offset, chartBox!.y + 200);
+    if (await tooltip.waitFor({ state: 'visible', timeout: 400 }).then(() => true).catch(() => false)) {
+      return chartBox!;
+    }
+  }
+  throw new Error('rightmost chart bar did not emit a tooltip');
+}
+
+test('rightmost stock bars keep the full tooltip inside the chart', async ({ page }) => {
+  await mockDashboardApi(page);
+  await page.goto('/');
+  await page.getByLabel('Global search').fill('600519');
+  await page.getByRole('option', { name: /贵州茅台/ }).click();
+  await expect(page.getByRole('heading', { name: /贵州茅台/ })).toBeVisible();
+  await expect(page.locator('.stock-price-behavior')).toBeVisible();
+  await expect(page.getByRole('group', { name: '时间窗口' })).toContainText('120 bars');
+
+  for (const period of ['日K', '周K', '月K', '分时']) {
+    if (period !== '日K') {
+      await page.getByRole('button', { name: period, exact: true }).click();
+    }
+    await expect(page.getByRole('button', { name: period, exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('group', { name: '时间窗口' })).toContainText('120 bars');
+    const chartBox = await hoverRightmostChartBar(page);
+    const tooltip = page.getByRole('tooltip', { name: 'K线数据' });
+    const tooltipBox = await tooltip.boundingBox();
+    expect(tooltipBox).not.toBeNull();
+    expect(tooltipBox!.x).toBeGreaterThanOrEqual(chartBox.x);
+    expect(tooltipBox!.x + tooltipBox!.width).toBeLessThanOrEqual(chartBox.x + chartBox.width);
+    for (const label of ['开', '高', '低', '收', '量', '额']) {
+      await expect(tooltip).toContainText(label);
+    }
+  }
 });
