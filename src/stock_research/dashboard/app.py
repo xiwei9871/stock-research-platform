@@ -386,10 +386,9 @@ def _dashboard_auth_required() -> bool:
 
 def create_app() -> FastAPI:
     validated_runtime_provenance = runtime_provenance()
-    release_root = Path(validated_runtime_provenance["source_root"]).resolve()
-    strategy_output_root = (
-        release_root / "outputs" / "research" / "strategy_daily_eod"
-    ).resolve()
+    release_root = Path(validated_runtime_provenance["source_root"]).resolve(strict=True)
+    strategy_output_candidate = release_root / "outputs" / "research" / "strategy_daily_eod"
+    strategy_output_root = strategy_output_candidate.resolve()
     try:
         strategy_output_root.relative_to(release_root)
     except ValueError as exc:
@@ -410,6 +409,7 @@ def create_app() -> FastAPI:
     app = FastAPI(title="Stock Research Dashboard API", lifespan=lifespan)
     install_request_id_middleware(app)
     app.state.runtime_provenance = validated_runtime_provenance
+    app.state.release_root = release_root
     app.state.strategy_output_root = strategy_output_root
     app.state.eod_response_cache = DashboardResponseCache(ttl_seconds=dashboard_eod_cache_ttl_seconds())
     app.state.backtest_jobs = BacktestJobStore(run_fresh_backtest)
@@ -1108,6 +1108,7 @@ def create_app() -> FastAPI:
                 limit=limit,
                 lookback_days=lookback_days,
                 strategy_output_root=app.state.strategy_output_root,
+                trusted_release_root=app.state.release_root,
             ),
         )
 

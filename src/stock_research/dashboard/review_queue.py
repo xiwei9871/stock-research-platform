@@ -62,6 +62,7 @@ def build_review_queue(
     review_mode: str = "strategy_topn",
     use_strategy_snapshots: bool = True,
     strategy_output_root: str | Path | None = None,
+    trusted_release_root: str | Path | None = None,
 ) -> dict[str, Any]:
     bounded_limit = _bounded_int(limit, default=20, minimum=1, maximum=50)
     bounded_lookback_days = _bounded_int(lookback_days, default=90, minimum=1, maximum=365)
@@ -77,6 +78,7 @@ def build_review_queue(
                     trade_date=selected_trade_date,
                     limit=50,
                     strategy_output_root=strategy_output_root,
+                    trusted_release_root=trusted_release_root,
                 ),
                 selected_trade_date,
             )
@@ -283,13 +285,21 @@ def _load_manifest_strategy_rows(
     trade_date: str,
     limit: int,
     strategy_output_root: str | Path | None = None,
+    trusted_release_root: str | Path | None = None,
 ) -> list[dict[str, Any]]:
     if not trade_date:
         return []
-    resolved_output_root = _strategy_output_root(strategy_output_root)
+    resolved_output_root = _strategy_output_root(
+        strategy_output_root,
+        trusted_release_root=trusted_release_root,
+    )
+    if resolved_output_root is None:
+        return []
+    resolved_release_root = Path(trusted_release_root) if trusted_release_root is not None else None
     canonical_manifest = _contained_existing_file(
         resolved_output_root / trade_date / "review_queue_strategy_manifest.csv",
         root=resolved_output_root,
+        trusted_release_root=resolved_release_root,
     )
     if canonical_manifest is not None:
         canonical_rows = _read_manifest_strategy_artifact(
@@ -318,6 +328,7 @@ def _load_manifest_strategy_rows(
         artifact_path = _resolve_manifest_artifact_path(
             module.get("artifact_path"),
             strategy_output_root=resolved_output_root,
+            trusted_release_root=resolved_release_root,
             trade_date=trade_date,
         )
         if artifact_path is None:
@@ -329,9 +340,28 @@ def _load_manifest_strategy_rows(
     )
 
 
-def _strategy_output_root(value: str | Path | None) -> Path:
+def _strategy_output_root(
+    value: str | Path | None,
+    *,
+    trusted_release_root: str | Path | None = None,
+) -> Path | None:
     if value is not None:
-        return Path(value).resolve()
+        expected_root = Path(value)
+        if trusted_release_root is None:
+            return expected_root.resolve()
+        expected_release_root = Path(trusted_release_root)
+        try:
+            current_release_root = expected_release_root.resolve(strict=True)
+            current_root = expected_root.resolve(strict=True)
+        except OSError:
+            return None
+        if current_release_root != expected_release_root or current_root != expected_root:
+            return None
+        try:
+            current_root.relative_to(current_release_root)
+        except ValueError:
+            return None
+        return current_root
     return (_configured_output_root() / "research" / "strategy_daily_eod").resolve()
 
 
@@ -339,6 +369,7 @@ def _resolve_manifest_artifact_path(
     value: Any,
     *,
     strategy_output_root: Path,
+    trusted_release_root: Path | None = None,
     trade_date: str,
 ) -> Path | None:
     raw_text = str(value or "").strip()
@@ -353,20 +384,33 @@ def _resolve_manifest_artifact_path(
         except ValueError:
             pass
         else:
-            return _contained_existing_file(raw_path, root=strategy_output_root)
+            return _contained_existing_file(
+                raw_path,
+                root=strategy_output_root,
+                trusted_release_root=trusted_release_root,
+            )
         suffix = _legacy_strategy_artifact_suffix(raw_path)
         if suffix is None:
             return None
         candidate = strategy_output_root.joinpath(*suffix)
     else:
-        suffix = _path_suffix_after(raw_path, CANONICAL_STRATEGY_OUTPUT_SUFFIX)
-        if suffix is not None:
+        marker_positions = _path_marker_positions(raw_path, CANONICAL_STRATEGY_OUTPUT_SUFFIX)
+        if marker_positions:
+            if marker_positions != [0]:
+                return None
+            suffix = tuple(raw_path.parts[len(CANONICAL_STRATEGY_OUTPUT_SUFFIX) :])
+            if not suffix:
+                return None
             candidate = strategy_output_root.joinpath(*suffix)
         elif raw_path.parts and raw_path.parts[0] == trade_date:
             candidate = strategy_output_root / raw_path
         else:
             candidate = strategy_output_root / trade_date / raw_path
-    return _contained_existing_file(candidate, root=strategy_output_root)
+    return _contained_existing_file(
+        candidate,
+        root=strategy_output_root,
+        trusted_release_root=trusted_release_root,
+    )
 
 
 def _legacy_strategy_artifact_suffix(path: Path) -> tuple[str, ...] | None:
@@ -378,22 +422,33 @@ def _legacy_strategy_artifact_suffix(path: Path) -> tuple[str, ...] | None:
     return None
 
 
-def _path_suffix_after(path: Path, marker: tuple[str, ...]) -> tuple[str, ...] | None:
+def _path_marker_positions(path: Path, marker: tuple[str, ...]) -> list[int]:
     parts = path.parts
     width = len(marker)
-    for index in range(len(parts) - width + 1):
-        if tuple(parts[index : index + width]) == marker:
-            return tuple(parts[index + width :])
-    return None
+    return [
+        index
+        for index in range(len(parts) - width + 1)
+        if tuple(parts[index : index + width]) == marker
+    ]
 
 
-def _contained_existing_file(path: Path, *, root: Path) -> Path | None:
+def _contained_existing_file(
+    path: Path,
+    *,
+    root: Path,
+    trusted_release_root: Path | None = None,
+) -> Path | None:
     resolved_root = root.resolve()
     resolved_path = path.resolve()
     try:
         resolved_path.relative_to(resolved_root)
     except ValueError:
         return None
+    if trusted_release_root is not None:
+        try:
+            resolved_path.relative_to(trusted_release_root)
+        except ValueError:
+            return None
     if not resolved_path.is_file():
         return None
     return resolved_path

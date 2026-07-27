@@ -1,3 +1,4 @@
+import csv
 from datetime import date
 from pathlib import Path
 
@@ -7,6 +8,7 @@ import pytest
 
 from stock_research import cli
 from stock_research.dashboard import app as dashboard_app
+from stock_research.dashboard import review_queue
 from stock_research.dashboard import shadow_outcomes
 
 
@@ -17,12 +19,14 @@ def test_create_app_rejects_mismatched_runtime_release_root(monkeypatch, tmp_pat
         dashboard_app.create_app()
 
 
-def test_create_app_validates_runtime_provenance_once(monkeypatch):
+def test_create_app_validates_runtime_provenance_once(monkeypatch, tmp_path):
     calls = []
+    release_root = tmp_path / "release"
+    release_root.mkdir()
     provenance = {
         "release_id": "release-1",
-        "source_root": "/srv/stock-research",
-        "python_package_root": "/srv/stock-research/src/stock_research",
+        "source_root": str(release_root),
+        "python_package_root": str(release_root / "src" / "stock_research"),
         "frontend_build_id": "release-1",
     }
 
@@ -35,15 +39,13 @@ def test_create_app_validates_runtime_provenance_once(monkeypatch):
     app = dashboard_app.create_app()
 
     assert app.state.runtime_provenance is provenance
-    assert app.state.strategy_output_root == Path(
-        "/srv/stock-research/outputs/research/strategy_daily_eod"
-    )
+    assert app.state.strategy_output_root == release_root / "outputs/research/strategy_daily_eod"
     assert calls == [True]
 
 
 def test_create_app_binds_review_queue_to_runtime_release_root_from_wrong_cwd(monkeypatch, tmp_path):
     release_root = tmp_path / "release"
-    release_root.mkdir()
+    (release_root / "outputs" / "research" / "strategy_daily_eod").mkdir(parents=True)
     unrelated_cwd = tmp_path / "unrelated"
     unrelated_cwd.mkdir()
     monkeypatch.chdir(unrelated_cwd)
@@ -72,7 +74,9 @@ def test_create_app_binds_review_queue_to_runtime_release_root_from_wrong_cwd(mo
     assert app.state.strategy_output_root == (
         release_root / "outputs" / "research" / "strategy_daily_eod"
     ).resolve()
+    assert app.state.release_root == release_root.resolve()
     assert captured["strategy_output_root"] == app.state.strategy_output_root
+    assert captured["trusted_release_root"] == app.state.release_root
 
 
 def test_create_app_rejects_strategy_output_root_symlink_escape(monkeypatch, tmp_path):
@@ -95,6 +99,81 @@ def test_create_app_rejects_strategy_output_root_symlink_escape(monkeypatch, tmp
 
     with pytest.raises(RuntimeError, match="strategy output root escapes release root"):
         dashboard_app.create_app()
+
+
+def test_review_queue_fails_closed_when_strategy_root_is_replaced_after_startup(monkeypatch, tmp_path):
+    release_root = tmp_path / "release"
+    strategy_root = release_root / "outputs" / "research" / "strategy_daily_eod"
+    strategy_root.mkdir(parents=True)
+    monkeypatch.setattr(
+        dashboard_app,
+        "runtime_provenance",
+        lambda: {
+            "release_id": "release-1",
+            "source_root": str(release_root),
+            "python_package_root": str(release_root / "src" / "stock_research"),
+            "frontend_build_id": "release-1",
+        },
+    )
+    monkeypatch.setattr(
+        review_queue,
+        "load_platform_summary",
+        lambda **kwargs: {"latest_market_date": "2026-07-24", "latest_score_date": "2026-07-24"},
+    )
+    monkeypatch.setattr(review_queue, "load_latest_data_run_manifest", lambda **kwargs: [])
+    monkeypatch.setattr(review_queue, "_attach_asset_names", lambda rows: rows)
+    monkeypatch.setattr(review_queue, "_active_strategy_names", lambda: {
+        "lhb_shortline": "LHB Shortline Combo",
+        "mid_trend": "Mid Trend Combo",
+        "tech_bottleneck": "Tech Bottleneck Combo",
+    })
+    monkeypatch.setattr(dashboard_app, "build_review_queue", review_queue.build_review_queue)
+
+    app = dashboard_app.create_app()
+    original_canonical_root = app.state.strategy_output_root
+    moved_root = release_root / "original-strategy-output"
+    strategy_root.rename(moved_root)
+    outside_root = tmp_path / "outside-strategy-output"
+    outside_manifest = outside_root / "2026-07-24" / "review_queue_strategy_manifest.csv"
+    outside_manifest.parent.mkdir(parents=True)
+    with outside_manifest.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=["trade_date", "asset_id", "rank", "score_total", "strategy_id", "strategy_name"],
+        )
+        writer.writeheader()
+        for strategy_index, (strategy_id, strategy_name) in enumerate(
+            [
+                ("lhb_shortline", "LHB Shortline Combo"),
+                ("mid_trend", "Mid Trend Combo"),
+                ("tech_bottleneck", "Tech Bottleneck Combo"),
+            ]
+        ):
+            for rank in range(1, 6):
+                writer.writerow(
+                    {
+                        "trade_date": "2026-07-24",
+                        "asset_id": f"CN:SH:{600000 + strategy_index * 10 + rank:06d}",
+                        "rank": rank,
+                        "score_total": 90 - rank,
+                        "strategy_id": strategy_id,
+                        "strategy_name": strategy_name,
+                    }
+                )
+    strategy_root.symlink_to(outside_root, target_is_directory=True)
+
+    untrusted_result = review_queue.build_review_queue(
+        trade_date="2026-07-24",
+        strategy_output_root=app.state.strategy_output_root,
+    )
+    assert all(group["count"] == 5 for group in untrusted_result["groups"])
+
+    response = TestClient(app).get("/api/review-queue?trade_date=2026-07-24")
+
+    assert response.status_code == 200
+    assert app.state.strategy_output_root == original_canonical_root
+    assert all(group["count"] == 0 for group in response.json()["groups"])
+    assert all(group["freshness_status"] == "missing" for group in response.json()["groups"])
 
 
 def test_overview_route_returns_payload(monkeypatch):

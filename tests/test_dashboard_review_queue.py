@@ -267,6 +267,36 @@ def test_manifest_artifact_resolver_accepts_regular_file_inside_root(tmp_path):
     assert resolved == artifact.resolve()
 
 
+@pytest.mark.parametrize("path_style", ["embedded_prefix", "repeated_prefix", "empty_suffix"])
+def test_manifest_artifact_resolver_requires_single_leading_repo_prefix(tmp_path, path_style):
+    strategy_root = tmp_path / "release" / "outputs" / "research" / "strategy_daily_eod"
+    if path_style == "embedded_prefix":
+        raw_path = Path(
+            "untrusted/outputs/research/strategy_daily_eod/2026-07-24/strategy_lhb_shortline_review.csv"
+        )
+        mapped = strategy_root / "2026-07-24" / "strategy_lhb_shortline_review.csv"
+    elif path_style == "repeated_prefix":
+        raw_path = Path(
+            "outputs/research/strategy_daily_eod/outputs/research/strategy_daily_eod/"
+            "2026-07-24/strategy_lhb_shortline_review.csv"
+        )
+        mapped = strategy_root / "outputs/research/strategy_daily_eod/2026-07-24/strategy_lhb_shortline_review.csv"
+    else:
+        raw_path = Path("outputs/research/strategy_daily_eod")
+        mapped = None
+    if mapped is not None:
+        _write_strategy_review(mapped, strategy_id="lhb_shortline", strategy_name="LHB Shortline Combo")
+
+    resolved = review_queue._resolve_manifest_artifact_path(
+        raw_path,
+        strategy_output_root=strategy_root.resolve(),
+        trusted_release_root=(tmp_path / "release").resolve(),
+        trade_date="2026-07-24",
+    )
+
+    assert resolved is None
+
+
 def test_review_queue_asset_normalization_uses_shared_strict_identity():
     assert review_queue._asset_id_from_ts_code("600000.SSE") == "CN:SH:600000"
     assert review_queue._asset_id_from_ts_code("000001.SZSE") == "CN:SZ:000001"

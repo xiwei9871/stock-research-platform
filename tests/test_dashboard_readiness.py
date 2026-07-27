@@ -1181,8 +1181,10 @@ def test_build_platform_readiness_v2_missing_topn_blocks_even_with_manifest(monk
     assert "Review Queue unavailable" in payload["warnings"]
 
 
-def test_platform_readiness_route_returns_payload(monkeypatch):
+def test_platform_readiness_route_returns_payload(monkeypatch, tmp_path):
     captured = {}
+    release_root = tmp_path / "release"
+    release_root.mkdir()
 
     monkeypatch.setattr(
         dashboard_app,
@@ -1203,8 +1205,8 @@ def test_platform_readiness_route_returns_payload(monkeypatch):
     )
     provenance = {
         "release_id": "release-1",
-        "source_root": "/srv/stock-research",
-        "python_package_root": "/srv/stock-research/src/stock_research",
+        "source_root": str(release_root),
+        "python_package_root": str(release_root / "src" / "stock_research"),
         "frontend_build_id": "release-1",
     }
     monkeypatch.setattr(dashboard_app, "runtime_provenance", lambda: captured.setdefault("value", provenance))
