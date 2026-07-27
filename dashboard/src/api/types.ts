@@ -2306,15 +2306,24 @@ export type ReviewQueueItem = {
   digest: EvidenceDigestResponse;
 };
 
+export type ReviewQueueFreshnessStatus = 'current' | 'stale' | 'missing';
+
 export type ReviewQueueGroup = {
   bucket: string;
+  strategy_id?: string;
   label: string;
+  requested_trade_date?: string;
+  data_trade_date?: string;
+  freshness_status?: ReviewQueueFreshnessStatus;
   count: number;
   items: ReviewQueueItem[];
 };
 
 export type ReviewQueueResponse = {
+  requested_trade_date?: string;
   trade_date: string;
+  platform_market_date?: string;
+  data_status?: 'ready' | 'partial' | 'missing' | string;
   score_version: string;
   review_mode?: 'strategy_topn' | 'score_topn' | string;
   generated_at: string;

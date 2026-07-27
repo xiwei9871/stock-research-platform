@@ -68,19 +68,31 @@ function sourceKindLabel(sourceKind: string) {
   return labels[sourceKind] ?? sourceKind;
 }
 
-function collectGroupFreshness(groups: ReviewQueueGroup[]) {
+function collectGroupFreshness(groups: ReviewQueueGroup[], requestedTradeDate: string) {
   return groups.map((group) => {
     const latestDates = group.items
       .map((item) => item.latest_trade_date ?? item.trade_date)
       .filter((date): date is string => Boolean(date));
-    const latestDate = latestDates.length > 0 ? latestDates.sort().at(-1) ?? null : null;
+    const itemDerivedDate = latestDates.length > 0 ? latestDates.sort().at(-1) ?? null : null;
+    const hasFreshnessMetadata = group.data_trade_date !== undefined || group.freshness_status !== undefined;
+    const dataTradeDate = hasFreshnessMetadata ? group.data_trade_date || null : itemDerivedDate;
+    const freshnessStatus =
+      group.freshness_status ??
+      (dataTradeDate ? (dataTradeDate === requestedTradeDate ? 'current' : 'stale') : 'missing');
     return {
       bucket: group.bucket,
       label: group.label,
       count: group.items.length,
-      latestDate
+      dataTradeDate,
+      freshnessStatus
     };
   });
+}
+
+function freshnessLabel(status: 'current' | 'stale' | 'missing') {
+  if (status === 'stale') return '数据过期';
+  if (status === 'missing') return '数据缺失';
+  return '数据已同步';
 }
 
 function actionContext(
@@ -132,7 +144,7 @@ export function ReviewQueueWorkspace({
       if (requestIdRef.current !== requestId) return;
       const selection = findInitialSelection(nextQueue);
       setQueue(nextQueue);
-      setReplayTradeDate(nextQueue.trade_date);
+      setReplayTradeDate(nextQueue.requested_trade_date ?? nextQueue.trade_date);
       setSelectedBucket(selection.selectedBucket);
       setSelectedQueueId(selection.selectedQueueId);
       fetchPlatformSummary()
@@ -169,10 +181,11 @@ export function ReviewQueueWorkspace({
     selectedGroup?.items.find((item) => item.queue_id === selectedQueueId) ?? selectedGroup?.items[0] ?? null;
   const selectedDigest = selectedItem?.digest ?? null;
   const sourceKinds = queue ? collectSourceKinds(queue) : [];
-  const groupFreshness = queue ? collectGroupFreshness(queue.groups) : [];
-  const latestMarketDate = platformSummary?.latest_market_date ?? null;
+  const requestedQueueDate = queue?.requested_trade_date ?? queue?.trade_date ?? null;
+  const groupFreshness = queue && requestedQueueDate ? collectGroupFreshness(queue.groups, requestedQueueDate) : [];
+  const latestMarketDate = queue?.platform_market_date ?? platformSummary?.latest_market_date ?? null;
   const freshnessLag =
-    queue && latestMarketDate ? dateDiffDays(queue.trade_date, latestMarketDate) : null;
+    requestedQueueDate && latestMarketDate ? dateDiffDays(requestedQueueDate, latestMarketDate) : null;
 
   const selectGroup = (group: ReviewQueueGroup) => {
     setSelectedBucket(group.bucket);
@@ -295,8 +308,15 @@ export function ReviewQueueWorkspace({
                 </p>
                 <div className="tag-stack" aria-label="分策略新鲜度">
                   {groupFreshness.map((group) => (
-                    <span className="status-chip neutral" key={group.bucket}>
-                      {`${group.label}：最新 ${group.latestDate ?? '暂无'}，${group.count} 只`}
+                    <span
+                      aria-label={`${group.label} 新鲜度`}
+                      className={`status-chip ${group.freshnessStatus === 'current' ? 'success' : 'warning'}`}
+                      key={group.bucket}
+                    >
+                      <span>{group.label}：</span>
+                      <span>{`数据日期 ${group.dataTradeDate ?? '暂无'}`}</span>
+                      <span>{freshnessLabel(group.freshnessStatus)}</span>
+                      <span>{`${group.count} 只`}</span>
                     </span>
                   ))}
                 </div>

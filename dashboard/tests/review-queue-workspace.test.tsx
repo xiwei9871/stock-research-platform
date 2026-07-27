@@ -14,6 +14,9 @@ vi.mock('../src/api/client', () => apiMocks);
 function makeQueue(overrides: Partial<ReviewQueueResponse> = {}): ReviewQueueResponse {
   return {
     trade_date: '2026-06-08',
+    requested_trade_date: '2026-06-08',
+    platform_market_date: '2026-06-08',
+    data_status: 'ready',
     score_version: 'strategy_topn',
     review_mode: 'strategy_topn',
     generated_at: '2026-06-08T16:00:00Z',
@@ -23,6 +26,10 @@ function makeQueue(overrides: Partial<ReviewQueueResponse> = {}): ReviewQueueRes
         bucket: 'strategy:mid_trend',
         label: 'Mid Trend Combo',
         count: 1,
+        strategy_id: 'mid_trend',
+        requested_trade_date: '2026-06-08',
+        data_trade_date: '2026-06-08',
+        freshness_status: 'current',
         items: [
           {
             queue_id: '2026-06-08:strategy_topn:000001.SZ',
@@ -103,7 +110,16 @@ function makeQueue(overrides: Partial<ReviewQueueResponse> = {}): ReviewQueueRes
           }
         ]
       },
-      { bucket: 'strategy:tech_bottleneck', label: 'Tech Bottleneck Combo', count: 0, items: [] }
+      {
+        bucket: 'strategy:tech_bottleneck',
+        label: 'Tech Bottleneck Combo',
+        count: 0,
+        strategy_id: 'tech_bottleneck',
+        requested_trade_date: '2026-06-08',
+        data_trade_date: '',
+        freshness_status: 'missing',
+        items: []
+      }
     ],
     ...overrides
   };
@@ -141,7 +157,14 @@ describe('ReviewQueueWorkspace', () => {
     expect(screen.getByText('按策略正式复盘范围')).toBeInTheDocument();
     expect(screen.getByText('平台市场日期')).toBeInTheDocument();
     expect(screen.getByText('复盘队列与平台市场日期一致。')).toBeInTheDocument();
-    expect(screen.getByText('Mid Trend Combo：最新 2026-06-08，1 只')).toBeInTheDocument();
+    const currentFreshness = screen.getByLabelText('Mid Trend Combo 新鲜度');
+    expect(within(currentFreshness).getByText('数据日期 2026-06-08')).toBeInTheDocument();
+    expect(within(currentFreshness).getByText('数据已同步')).toBeInTheDocument();
+    expect(currentFreshness).toHaveClass('success');
+    expect(currentFreshness).not.toHaveClass('warning');
+    const missingFreshness = screen.getByLabelText('Tech Bottleneck Combo 新鲜度');
+    expect(within(missingFreshness).getByText('数据日期 暂无')).toBeInTheDocument();
+    expect(within(missingFreshness).getByText('数据缺失')).toBeInTheDocument();
     const sourceFilters = within(screen.getByLabelText('策略复盘分组')).getByLabelText('证据来源');
     expect(within(sourceFilters).getByText('策略')).toBeInTheDocument();
     expect(within(sourceFilters).getByText('研报')).toBeInTheDocument();
@@ -165,7 +188,7 @@ describe('ReviewQueueWorkspace', () => {
     expect(within(sourceChips).getByText('研报')).toBeInTheDocument();
   });
 
-  it('shows platform and per-strategy freshness when review queue is stale', async () => {
+  it('uses the requested queue date for platform freshness and group metadata for strategy freshness', async () => {
     apiMocks.fetchPlatformSummary.mockResolvedValueOnce({
       latest_market_date: '2026-06-15',
       latest_factor_date: '2026-06-15',
@@ -179,12 +202,23 @@ describe('ReviewQueueWorkspace', () => {
     apiMocks.fetchReviewQueue.mockResolvedValueOnce(
       makeQueue({
         trade_date: '2026-06-05',
+        requested_trade_date: '2026-06-05',
+        platform_market_date: '2026-06-15',
         groups: [
-          makeQueue().groups[0],
+          {
+            ...makeQueue().groups[0],
+            requested_trade_date: '2026-06-05',
+            data_trade_date: '2026-06-08',
+            freshness_status: 'current'
+          },
           {
             bucket: 'strategy:tech_bottleneck',
             label: 'Tech Bottleneck Combo',
             count: 1,
+            strategy_id: 'tech_bottleneck',
+            requested_trade_date: '2026-06-05',
+            data_trade_date: '2026-06-01',
+            freshness_status: 'stale',
             items: [
               {
                 ...makeQueue().groups[0].items[0],
@@ -206,8 +240,12 @@ describe('ReviewQueueWorkspace', () => {
     render(<ReviewQueueWorkspace />);
 
     expect(await screen.findByText('复盘队列落后平台市场日期 10 个自然日，请检查复盘生成任务。')).toBeInTheDocument();
-    expect(screen.getByText('Mid Trend Combo：最新 2026-06-08，1 只')).toBeInTheDocument();
-    expect(screen.getByText('Tech Bottleneck Combo：最新 2026-06-01，1 只')).toBeInTheDocument();
+    const currentFreshness = screen.getByLabelText('Mid Trend Combo 新鲜度');
+    expect(within(currentFreshness).getByText('数据日期 2026-06-08')).toBeInTheDocument();
+    expect(within(currentFreshness).getByText('数据已同步')).toBeInTheDocument();
+    const staleFreshness = screen.getByLabelText('Tech Bottleneck Combo 新鲜度');
+    expect(within(staleFreshness).getByText('数据日期 2026-06-01')).toBeInTheDocument();
+    expect(within(staleFreshness).getByText('数据过期')).toBeInTheDocument();
   });
 
   it('switches groups and shows an empty group state', async () => {
@@ -220,18 +258,50 @@ describe('ReviewQueueWorkspace', () => {
     expect(screen.queryByText('Recent accepted news')).not.toBeInTheDocument();
   });
 
+  it('keeps supplied missing metadata authoritative over legacy item dates', async () => {
+    apiMocks.fetchReviewQueue.mockResolvedValueOnce(
+      makeQueue({
+        groups: [
+          makeQueue().groups[0],
+          {
+            ...makeQueue().groups[1],
+            data_trade_date: '',
+            freshness_status: 'missing',
+            items: [
+              {
+                ...makeQueue().groups[0].items[0],
+                queue_id: 'legacy-stale-item',
+                latest_trade_date: '2026-06-01'
+              }
+            ]
+          }
+        ]
+      })
+    );
+
+    render(<ReviewQueueWorkspace />);
+
+    const missingFreshness = await screen.findByLabelText('Tech Bottleneck Combo 新鲜度');
+    expect(within(missingFreshness).getByText('数据日期 暂无')).toBeInTheDocument();
+    expect(within(missingFreshness).getByText('数据缺失')).toBeInTheDocument();
+  });
+
   it('replays the review queue for a selected trade date', async () => {
     const replayQueue = makeQueue({
-      trade_date: '2026-06-24',
+      trade_date: '2026-07-24',
+      requested_trade_date: '2026-07-24',
       groups: [
         {
           ...makeQueue().groups[0],
+          requested_trade_date: '2026-07-24',
+          data_trade_date: '2026-06-01',
+          freshness_status: 'stale',
           count: 2,
           items: [
             makeQueue().groups[0].items[0],
             {
               ...makeQueue().groups[0].items[0],
-              queue_id: '2026-06-24:strategy_topn:000002.SZ',
+              queue_id: '2026-07-24:strategy_topn:000002.SZ',
               asset_id: '000002.SZ',
               display_name: '万科A',
               rank: 2,
@@ -239,7 +309,10 @@ describe('ReviewQueueWorkspace', () => {
             }
           ]
         },
-        { bucket: 'strategy:tech_bottleneck', label: 'Tech Bottleneck Combo', count: 0, items: [] }
+        {
+          ...makeQueue().groups[1],
+          requested_trade_date: '2026-07-24'
+        }
       ]
     });
     apiMocks.fetchReviewQueue.mockResolvedValueOnce(makeQueue()).mockResolvedValueOnce(replayQueue);
@@ -247,17 +320,20 @@ describe('ReviewQueueWorkspace', () => {
     render(<ReviewQueueWorkspace />);
 
     expect(await screen.findByText('Recent accepted news')).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('选择复盘日期'), { target: { value: '2026-06-24' } });
+    fireEvent.change(screen.getByLabelText('选择复盘日期'), { target: { value: '2026-07-24' } });
     fireEvent.click(screen.getByRole('button', { name: '回放该日复盘队列' }));
 
     await waitFor(() =>
       expect(apiMocks.fetchReviewQueue).toHaveBeenLastCalledWith({
-        tradeDate: '2026-06-24',
+        tradeDate: '2026-07-24',
         limit: 10,
         lookbackDays: 90
       })
     );
-    expect((await screen.findAllByText('2026-06-24')).length).toBeGreaterThan(0);
+    expect(screen.getByLabelText('选择复盘日期')).toHaveValue('2026-07-24');
+    const staleFreshness = screen.getByLabelText('Mid Trend Combo 新鲜度');
+    expect(within(staleFreshness).getByText('数据日期 2026-06-01')).toBeInTheDocument();
+    expect(within(staleFreshness).getByText('数据过期')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Mid Trend Combo 2' })).toBeInTheDocument();
     expect(screen.getByText('万科A')).toBeInTheDocument();
   });
