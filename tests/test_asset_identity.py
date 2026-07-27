@@ -15,8 +15,10 @@ from stock_research.asset_identity import normalize_cn_equity_asset_id
         ("430001.BSE", "CN:BJ:430001"),
         ("830001.BJ", "CN:BJ:830001"),
         ("688001", "CN:SH:688001"),
+        ("900901", "CN:SH:900901"),
         ("300001", "CN:SZ:300001"),
         ("430001", "CN:BJ:430001"),
+        ("920001", "CN:BJ:920001"),
     ],
 )
 def test_normalize_cn_equity_asset_id_supported_formats(value, expected):
@@ -32,6 +34,7 @@ def test_normalize_cn_equity_asset_id_supported_formats(value, expected):
         "12345.SH",
         "1234567.SH",
         "100001",
+        "910001",
         "nan",
         "none",
         None,

@@ -40,7 +40,9 @@ def normalize_cn_equity_asset_id(value: Any) -> str:
 
     if not _BARE_SYMBOL.fullmatch(text):
         return ""
-    if text.startswith(("6", "9")):
+    if text.startswith("92"):
+        exchange = "BJ"
+    elif text.startswith(("6", "90")):
         exchange = "SH"
     elif text.startswith(("0", "2", "3")):
         exchange = "SZ"
