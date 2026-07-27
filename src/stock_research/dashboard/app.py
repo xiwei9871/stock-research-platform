@@ -9,6 +9,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
 from stock_research.config import SETTINGS
+from stock_research.runtime_provenance import runtime_provenance
 from stock_research.dashboard.api_guardrails import (
     PublicationGuardBlocked,
     assert_publication_ready,
@@ -383,6 +384,8 @@ def _dashboard_auth_required() -> bool:
 
 
 def create_app() -> FastAPI:
+    validated_runtime_provenance = runtime_provenance()
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         scheduler = app.state.public_news_scheduler
@@ -395,6 +398,7 @@ def create_app() -> FastAPI:
 
     app = FastAPI(title="Stock Research Dashboard API", lifespan=lifespan)
     install_request_id_middleware(app)
+    app.state.runtime_provenance = validated_runtime_provenance
     app.state.eod_response_cache = DashboardResponseCache(ttl_seconds=dashboard_eod_cache_ttl_seconds())
     app.state.backtest_jobs = BacktestJobStore(run_fresh_backtest)
     app.state.public_news_scheduler = PublicNewsScheduler(
@@ -402,6 +406,12 @@ def create_app() -> FastAPI:
         interval_seconds=NEWS_SCHEDULER_INTERVAL_SECONDS,
         enabled=scheduler_enabled_from_env(),
     )
+
+    def build_readiness(score_version: str = "manual_v1"):
+        return build_platform_readiness(
+            score_version=score_version,
+            runtime_provenance_data=app.state.runtime_provenance,
+        )
 
     @app.middleware("http")
     async def dashboard_auth_required_middleware(request: Request, call_next):
@@ -509,13 +519,13 @@ def create_app() -> FastAPI:
     def platform_readiness(score_version: str = "manual_v1"):
         return app.state.eod_response_cache.get_or_set(
             ("platform_readiness", score_version),
-            lambda: build_platform_readiness(score_version=score_version),
+            lambda: build_readiness(score_version=score_version),
         )
 
     @app.get("/api/platform/display-date")
     def platform_display_date(score_version: str = "manual_v1"):
         def build_payload():
-            readiness = build_platform_readiness(score_version=score_version)
+            readiness = build_readiness(score_version=score_version)
             display_gate = readiness.get("display_gate") if isinstance(readiness.get("display_gate"), dict) else {}
             if "display_trade_date" in readiness:
                 display_trade_date = str(readiness.get("display_trade_date") or "")
@@ -1394,7 +1404,7 @@ def create_app() -> FastAPI:
     def operator_decisions(request: Request, payload: dict):
         try:
             _require_guard(request, "operator_decision_write")
-            assert_publication_ready(lambda: build_platform_readiness(score_version="manual_v1"))
+            assert_publication_ready(lambda: build_readiness(score_version="manual_v1"))
             validate_operator_decision_payload(payload)
             payload = validate_structured_operator_decision_payload(payload)
             return create_operator_decision(payload)

@@ -89,6 +89,38 @@ def test_build_platform_readiness_returns_ready_when_all_sources_available(monke
     assert payload["warnings"] == []
 
 
+def test_build_platform_readiness_includes_runtime_provenance_with_market_date(monkeypatch):
+    monkeypatch.setattr(
+        readiness,
+        "load_platform_summary",
+        lambda score_version, top_n: {
+            "latest_market_date": "2026-06-12",
+            "topn_preview": [{"asset_id": "CN:SH:600519"}],
+        },
+    )
+    monkeypatch.setattr(readiness, "_has_public_news", lambda: True)
+    monkeypatch.setattr(readiness, "_has_research_reports", lambda: True)
+    monkeypatch.setattr(readiness, "_has_generated_reports", lambda latest_market_date: True)
+    _patch_market_monitor_ready(monkeypatch)
+
+    payload = readiness.build_platform_readiness(
+        runtime_provenance_data={
+            "release_id": "release-1",
+            "source_root": "/srv/stock-research",
+            "python_package_root": "/srv/stock-research/src/stock_research",
+            "frontend_build_id": "release-1",
+        }
+    )
+
+    assert payload["runtime_provenance"] == {
+        "release_id": "release-1",
+        "source_root": "/srv/stock-research",
+        "python_package_root": "/srv/stock-research/src/stock_research",
+        "frontend_build_id": "release-1",
+        "strategy_artifact_date": "2026-06-12",
+    }
+
+
 def test_build_platform_readiness_converts_optional_failures_and_empty_sources_to_partial(
     monkeypatch,
 ):
@@ -760,6 +792,7 @@ def test_readiness_includes_display_date_gate(monkeypatch):
     assert payload["display_trade_date"] == "2026-06-17"
     assert payload["candidate_trade_date"] == "2026-06-18"
     assert payload["display_gate"]["candidate_status"] == "before_cutoff"
+    assert payload["runtime_provenance"]["strategy_artifact_date"] == "2026-06-17"
 
 
 def test_manifest_readiness_reports_display_trade_date_run_when_recent_manifest_contains_history(monkeypatch):
@@ -1121,10 +1154,12 @@ def test_build_platform_readiness_v2_missing_topn_blocks_even_with_manifest(monk
 
 
 def test_platform_readiness_route_returns_payload(monkeypatch):
+    captured = {}
+
     monkeypatch.setattr(
         dashboard_app,
         "build_platform_readiness",
-        lambda score_version="manual_v1": {
+        lambda score_version="manual_v1", runtime_provenance_data=None: {
             "mode": "eod_local",
             "status": "ready",
             "as_of": "2026-06-15T10:00:00+08:00",
@@ -1132,11 +1167,28 @@ def test_platform_readiness_route_returns_payload(monkeypatch):
             "checks": [],
             "warnings": [],
             "score_version": score_version,
+            "runtime_provenance": {
+                **dict(runtime_provenance_data or {}),
+                "strategy_artifact_date": "2026-06-12",
+            },
         },
     )
+    provenance = {
+        "release_id": "release-1",
+        "source_root": "/srv/stock-research",
+        "python_package_root": "/srv/stock-research/src/stock_research",
+        "frontend_build_id": "release-1",
+    }
+    monkeypatch.setattr(dashboard_app, "runtime_provenance", lambda: captured.setdefault("value", provenance))
     client = TestClient(dashboard_app.create_app())
 
     response = client.get("/api/platform/readiness?score_version=manual_v2")
 
     assert response.status_code == 200
     assert response.json()["score_version"] == "manual_v2"
+    assert response.json()["runtime_provenance"] == {
+        **provenance,
+        "strategy_artifact_date": "2026-06-12",
+    }
+    assert client.app.state.runtime_provenance is provenance
+    assert captured == {"value": provenance}

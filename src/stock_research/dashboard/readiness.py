@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 from zoneinfo import ZoneInfo
 
 from stock_research.config import SETTINGS
@@ -16,6 +16,7 @@ from stock_research.dashboard.display_date_gate import select_display_date
 from stock_research.dashboard.platform import load_platform_summary
 from stock_research.dashboard.reports import DEFAULT_REPORTS_DIR
 from stock_research.db import connect, fetch_all
+from stock_research.runtime_provenance import runtime_provenance
 
 
 REPORT_SUFFIXES = {".html", ".md", ".json", ".csv"}
@@ -77,8 +78,14 @@ def aggregate_readiness_status(checks: list[dict[str, Any]]) -> str:
     return "OK"
 
 
-def build_platform_readiness(score_version: str = "manual_v1") -> dict[str, Any]:
+def build_platform_readiness(
+    score_version: str = "manual_v1",
+    runtime_provenance_data: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
     warnings: list[str] = []
+    provenance = dict(
+        runtime_provenance() if runtime_provenance_data is None else runtime_provenance_data
+    )
 
     try:
         platform_summary = load_platform_summary(score_version=score_version, top_n=5)
@@ -91,12 +98,13 @@ def build_platform_readiness(score_version: str = "manual_v1") -> dict[str, Any]
 
     manifest_modules = _load_manifest_modules()
     if manifest_modules:
-        return _build_manifest_readiness(
+        payload = _build_manifest_readiness(
             manifest_modules=manifest_modules,
             latest_market_date=latest_market_date,
             topn_preview=topn_preview,
             warnings=warnings,
         )
+        return _with_runtime_provenance(payload, provenance)
 
     checks: list[dict[str, Any]] = []
     if not platform_summary:
@@ -137,39 +145,57 @@ def build_platform_readiness(score_version: str = "manual_v1") -> dict[str, Any]
         )
 
     status = aggregate_readiness_status(checks)
-    return {
-        "mode": "eod_local",
-        "status": status,
-        "policy": _policy_from_manifest_status(
-            status=status,
-            missing_data=_missing_from_checks(checks),
-            partial_data=_partial_from_checks(checks),
-            warnings=warnings,
-        ),
-        "as_of": datetime.now(ZoneInfo("Asia/Shanghai")).isoformat(timespec="seconds"),
-        "run_id": "",
-        "latest_trade_date": latest_market_date,
-        "latest_market_date": latest_market_date,
-        "source": "lightweight_probe",
-        "summary_path": "",
-        "tiers": _tiers_from_status(status),
-        "modules": [],
-        "checks": checks,
-        "health_groups": _build_health_groups_from_checks(
-            checks=checks,
-            latest_market_date=latest_market_date,
-        ),
-        "warnings": _dedupe(warnings),
-        "errors": [],
-        "missing_data": _missing_from_checks(checks),
-        "partial_data": _partial_from_checks(checks),
-        "next_actions": _next_actions(
-            status,
-            _missing_from_checks(checks),
-            _partial_from_checks(checks),
-        ),
-        "dashboard_url": "http://127.0.0.1:5174",
-    }
+    return _with_runtime_provenance(
+        {
+            "mode": "eod_local",
+            "status": status,
+            "policy": _policy_from_manifest_status(
+                status=status,
+                missing_data=_missing_from_checks(checks),
+                partial_data=_partial_from_checks(checks),
+                warnings=warnings,
+            ),
+            "as_of": datetime.now(ZoneInfo("Asia/Shanghai")).isoformat(timespec="seconds"),
+            "run_id": "",
+            "latest_trade_date": latest_market_date,
+            "latest_market_date": latest_market_date,
+            "source": "lightweight_probe",
+            "summary_path": "",
+            "tiers": _tiers_from_status(status),
+            "modules": [],
+            "checks": checks,
+            "health_groups": _build_health_groups_from_checks(
+                checks=checks,
+                latest_market_date=latest_market_date,
+            ),
+            "warnings": _dedupe(warnings),
+            "errors": [],
+            "missing_data": _missing_from_checks(checks),
+            "partial_data": _partial_from_checks(checks),
+            "next_actions": _next_actions(
+                status,
+                _missing_from_checks(checks),
+                _partial_from_checks(checks),
+            ),
+            "dashboard_url": "http://127.0.0.1:5174",
+        },
+        provenance,
+    )
+
+
+def _with_runtime_provenance(
+    payload: dict[str, Any],
+    provenance: Mapping[str, str],
+) -> dict[str, Any]:
+    runtime_payload = dict(provenance)
+    runtime_payload["strategy_artifact_date"] = str(
+        payload.get("display_trade_date")
+        or payload.get("latest_trade_date")
+        or payload.get("latest_market_date")
+        or ""
+    )
+    payload["runtime_provenance"] = runtime_payload
+    return payload
 
 
 def _load_manifest_modules() -> list[dict[str, Any]]:

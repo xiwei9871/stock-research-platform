@@ -3,10 +3,39 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 from psycopg import errors as psycopg_errors
+import pytest
 
 from stock_research import cli
 from stock_research.dashboard import app as dashboard_app
 from stock_research.dashboard import shadow_outcomes
+
+
+def test_create_app_rejects_mismatched_runtime_release_root(monkeypatch, tmp_path):
+    monkeypatch.setenv("STOCK_RESEARCH_RELEASE_ROOT", str(tmp_path))
+
+    with pytest.raises(RuntimeError, match="python package root does not match release root"):
+        dashboard_app.create_app()
+
+
+def test_create_app_validates_runtime_provenance_once(monkeypatch):
+    calls = []
+    provenance = {
+        "release_id": "release-1",
+        "source_root": "/srv/stock-research",
+        "python_package_root": "/srv/stock-research/src/stock_research",
+        "frontend_build_id": "release-1",
+    }
+
+    def fake_runtime_provenance():
+        calls.append(True)
+        return provenance
+
+    monkeypatch.setattr(dashboard_app, "runtime_provenance", fake_runtime_provenance)
+
+    app = dashboard_app.create_app()
+
+    assert app.state.runtime_provenance is provenance
+    assert calls == [True]
 
 
 def test_overview_route_returns_payload(monkeypatch):
