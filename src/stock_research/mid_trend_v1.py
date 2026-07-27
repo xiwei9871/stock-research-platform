@@ -87,6 +87,7 @@ def build_mid_trend_v1_from_frames(
         max_weekly_replacements=config.max_weekly_replacements,
         peak_drawdown_exit=config.peak_drawdown_exit,
         transaction_cost_bps=config.transaction_cost_bps,
+        max_position_weight=config.max_position_weight,
     )
     if report_start_date and report_start_date > config.start_date:
         result = _slice_lifecycle_result(

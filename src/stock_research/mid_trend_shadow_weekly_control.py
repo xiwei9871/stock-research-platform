@@ -162,6 +162,7 @@ def _simulate_variant(
     max_weekly_replacements: int,
     peak_drawdown_exit: float,
     transaction_cost_bps: float,
+    max_position_weight: float | None = None,
     protection_score_gap: float = 10.0,
     protection_mainline_gap: float = 0.10,
     protection_trend_r2_min: float = 80.0,
@@ -292,7 +293,12 @@ def _simulate_variant(
             )
             if forced_invested_weight is not None:
                 invested_weight = forced_invested_weight
-            target = _weights_for_variant(variant_name, target_assets, invested_weight=invested_weight)
+            target = _weights_for_variant(
+                variant_name,
+                target_assets,
+                invested_weight=invested_weight,
+                max_position_weight=max_position_weight,
+            )
             if _is_adaptive_variant(variant_name) and current_weights:
                 adaptive_replacements_used += len(set(current_weights) - set(target))
             turnover += _rebalance_turnover(current_weights, target)
@@ -994,21 +1000,38 @@ def _regime_for_day(day: pd.DataFrame) -> str:
     return values.iloc[0] if not values.empty else "unknown"
 
 
-def _equal_weights(assets: list[str], *, invested_weight: float) -> dict[str, float]:
+def _equal_weights(
+    assets: list[str],
+    *,
+    invested_weight: float,
+    max_position_weight: float | None = None,
+) -> dict[str, float]:
     if not assets:
         return {}
     weight = float(invested_weight) / len(assets)
+    if max_position_weight is not None:
+        weight = min(weight, float(max_position_weight))
     return {asset: weight for asset in assets}
 
 
-def _weights_for_variant(variant_name: str, assets: list[str], *, invested_weight: float) -> dict[str, float]:
+def _weights_for_variant(
+    variant_name: str,
+    assets: list[str],
+    *,
+    invested_weight: float,
+    max_position_weight: float | None = None,
+) -> dict[str, float]:
     if not assets:
         return {}
     if variant_name in {"top5_weekly_max2_rank_weight_mild_v1", "top5_adaptive_daily_check_rank_weight_mild_v1"}:
         return _rank_weights(assets, [0.24, 0.22, 0.20, 0.18, 0.16], invested_weight=invested_weight)
     if variant_name == "top5_weekly_max2_rank_weight_aggressive_v1":
         return _rank_weights(assets, [0.30, 0.25, 0.20, 0.15, 0.10], invested_weight=invested_weight)
-    return _equal_weights(assets, invested_weight=invested_weight)
+    return _equal_weights(
+        assets,
+        invested_weight=invested_weight,
+        max_position_weight=max_position_weight,
+    )
 
 
 def _rank_weights(assets: list[str], base_weights: list[float], *, invested_weight: float) -> dict[str, float]:

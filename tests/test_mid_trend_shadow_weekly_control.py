@@ -71,6 +71,18 @@ def _prices() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def test_equal_weights_keep_cash_when_candidates_are_below_top5():
+    for count, expected_total in ((1, 0.2), (2, 0.4), (5, 1.0)):
+        weights = _weights_for_variant(
+            "top5_weekly_max2_selective_trend_holding_protection_v1",
+            [f"A{index}" for index in range(count)],
+            invested_weight=1.0,
+            max_position_weight=0.2,
+        )
+        assert set(weights.values()) == {0.2}
+        assert sum(weights.values()) == expected_total
+
+
 def test_weekly_control_review_builds_variants_and_outputs(tmp_path: Path):
     result = build_mid_trend_shadow_weekly_control_review_from_frames(
         funnel_detail=_funnel_detail(),

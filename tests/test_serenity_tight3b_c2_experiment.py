@@ -4,6 +4,7 @@ import pandas as pd
 
 from stock_research import cli
 from stock_research.serenity_tight3b_c2_experiment import (
+    _target_equal_weights,
     build_serenity_tight3b_c2_experiment_from_frames,
 )
 
@@ -73,6 +74,42 @@ def _market_exposure() -> pd.DataFrame:
             for d in pd.date_range("2025-01-01", periods=6, freq="D")
         ]
     )
+
+
+def test_serenity_equal_weights_keep_cash_below_top5():
+    for count, expected_total in ((1, 0.2), (2, 0.4), (5, 1.0)):
+        weights = _target_equal_weights(
+            [f"A{index}" for index in range(count)],
+            exposure=1.0,
+            max_position_weight=0.2,
+        )
+        assert set(weights.values()) == {0.2}
+        assert sum(weights.values()) == expected_total
+
+
+def test_serenity_simulation_preserves_cash_for_two_candidates():
+    result = build_serenity_tight3b_c2_experiment_from_frames(
+        candidates=_candidates().iloc[:2].copy(),
+        prices=_prices().loc[lambda frame: frame["asset_id"].isin(["A", "B"])],
+        market_exposure=pd.DataFrame(
+            [
+                {"trade_date": d.strftime("%Y-%m-%d"), "target_exposure": 1.0}
+                for d in pd.date_range("2025-01-01", periods=6, freq="D")
+            ]
+        ),
+        start_date="2025-01-01",
+        end_date="2025-01-06",
+        top_n_values=[5],
+        rebalance_frequencies=["weekly"],
+        transaction_cost_bps=0.0,
+        max_position_weight=0.2,
+    )
+
+    first_positions = result["best_positions"].loc[
+        lambda frame: frame["trade_date"].eq(frame["trade_date"].min())
+    ]
+    assert first_positions["weight"].tolist() == [0.2, 0.2]
+    assert result["best_equity"]["actual_exposure"].max() == 0.4
 
 
 def test_serenity_tight3b_c2_experiment_scans_topn_and_protection_params(tmp_path: Path):

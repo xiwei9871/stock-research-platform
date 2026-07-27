@@ -108,6 +108,7 @@ def build_serenity_tight3b_c2_experiment_from_frames(
     rebalance_frequencies: list[str] | None = None,
     protection_configs: list[dict[str, Any]] | None = None,
     transaction_cost_bps: float = 20.0,
+    max_position_weight: float | None = None,
     adjust_type: str = "hfq",
 ) -> dict[str, Any]:
     top_ns = _clean_top_n_values(top_n_values)
@@ -143,6 +144,7 @@ def build_serenity_tight3b_c2_experiment_from_frames(
                     top_n=top_n,
                     protection=protection,
                     transaction_cost_bps=transaction_cost_bps,
+                    max_position_weight=max_position_weight,
                 )
                 all_summary.append(run["summary"])
                 all_equity.append(run["equity"])
@@ -210,6 +212,7 @@ def build_serenity_tight3b_c2_experiment_from_rank_frames(
     rebalance_frequencies: list[str] | None = None,
     protection_configs: list[dict[str, Any]] | None = None,
     transaction_cost_bps: float = 20.0,
+    max_position_weight: float | None = None,
     adjust_type: str = "hfq",
 ) -> dict[str, Any]:
     top_ns = _clean_top_n_values(top_n_values)
@@ -239,6 +242,7 @@ def build_serenity_tight3b_c2_experiment_from_rank_frames(
                     top_n=top_n,
                     protection=protection,
                     transaction_cost_bps=transaction_cost_bps,
+                    max_position_weight=max_position_weight,
                 )
                 all_summary.append(run["summary"])
                 all_equity.append(run["equity"])
@@ -305,6 +309,7 @@ def _simulate_one_config(
     top_n: int,
     protection: ProtectionConfig,
     transaction_cost_bps: float,
+    max_position_weight: float | None = None,
 ) -> dict[str, pd.DataFrame]:
     trading_dates = _trading_dates(prices, start_date, end_date)
     if len(trading_dates) < 2:
@@ -350,8 +355,11 @@ def _simulate_one_config(
             selected = _selected_for_day(day_ranks, top_n)
             exposure = float(exposure_by_date.get(trade_date, 1.0))
             selected_assets = selected["asset_id"].astype(str).tolist() if not selected.empty else []
-            weight = exposure / len(selected_assets) if selected_assets else 0.0
-            target = {asset_id: weight for asset_id in selected_assets}
+            target = _target_equal_weights(
+                selected_assets,
+                exposure=exposure,
+                max_position_weight=max_position_weight,
+            )
             for asset_id in selected_assets:
                 entry_high[asset_id] = max(
                     float(closes.at[trade_date, asset_id]) if asset_id in closes.columns else 0.0,
@@ -721,6 +729,20 @@ def _protection_fields(protection: ProtectionConfig) -> dict[str, Any]:
         "ma_window": protection.ma_window,
         "confirm_days": protection.confirm_days,
     }
+
+
+def _target_equal_weights(
+    assets: list[str],
+    *,
+    exposure: float,
+    max_position_weight: float | None = None,
+) -> dict[str, float]:
+    if not assets:
+        return {}
+    weight = float(exposure) / len(assets)
+    if max_position_weight is not None:
+        weight = min(weight, float(max_position_weight))
+    return {asset_id: weight for asset_id in assets}
 
 
 def _trade_row(

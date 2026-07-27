@@ -90,6 +90,7 @@ def build_tech_bottleneck_v1_from_frames(
         rebalance_frequencies=[config.rebalance_frequency],
         protection_configs=[{"name": TECH_BOTTLENECK_V1_PROTECTION_NAME, "rank_exit": 10, "confirm_days": 1}],
         transaction_cost_bps=config.transaction_cost_bps,
+        max_position_weight=config.max_position_weight,
         adjust_type=config.adjust_type,
     )
     run = {
@@ -115,6 +116,7 @@ def build_tech_bottleneck_v1_from_frames(
             "simulation_start_date": config.start_date,
             "requested_start_date": report_start_date or config.start_date,
             "transaction_cost_bps": config.transaction_cost_bps,
+            "max_position_weight": config.max_position_weight,
             "adjust_type": config.adjust_type,
             "position_rows": int(len(run["positions"])),
             "trade_rows": int(len(run["trades"])),
@@ -189,6 +191,7 @@ def build_tech_bottleneck_v1_from_rank_snapshots(
         rebalance_frequencies=[config.rebalance_frequency],
         protection_configs=[{"name": TECH_BOTTLENECK_V1_PROTECTION_NAME, "rank_exit": 10, "confirm_days": 1}],
         transaction_cost_bps=config.transaction_cost_bps,
+        max_position_weight=config.max_position_weight,
         adjust_type=config.adjust_type,
     )
     run = {
@@ -214,6 +217,7 @@ def build_tech_bottleneck_v1_from_rank_snapshots(
             "simulation_start_date": config.start_date,
             "requested_start_date": report_start_date or config.start_date,
             "transaction_cost_bps": config.transaction_cost_bps,
+            "max_position_weight": config.max_position_weight,
             "adjust_type": config.adjust_type,
             "position_rows": int(len(run["positions"])),
             "trade_rows": int(len(run["trades"])),
