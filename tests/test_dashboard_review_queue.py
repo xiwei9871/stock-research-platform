@@ -1,6 +1,74 @@
 from stock_research.dashboard import review_queue
 
 
+def _patch_stale_strategy_fallback(monkeypatch):
+    monkeypatch.setattr(
+        review_queue,
+        "load_platform_summary",
+        lambda **kwargs: {
+            "latest_market_date": "2026-07-24",
+            "latest_score_date": "2026-07-24",
+            "topn_preview": [],
+        },
+    )
+    monkeypatch.setattr(review_queue, "_load_manifest_strategy_rows", lambda **kwargs: [])
+    monkeypatch.setattr(review_queue, "_load_strategy_snapshot_rows", lambda **kwargs: [])
+    monkeypatch.setattr(
+        review_queue,
+        "load_active_strategy_topn_rows",
+        lambda **kwargs: [
+            {
+                "trade_date": "2026-06-01",
+                "asset_id": "CN:SZ:000001",
+                "strategy_id": "mid_trend",
+                "strategy_name": "Mid Trend Combo",
+                "rank": 1,
+                "score_total": 88.0,
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        review_queue,
+        "_active_strategy_names",
+        lambda: {
+            "lhb_shortline": "LHB Shortline Combo",
+            "mid_trend": "Mid Trend Combo",
+            "tech_bottleneck": "Tech Bottleneck Combo",
+        },
+    )
+    monkeypatch.setattr(
+        review_queue,
+        "load_top_scores_for_dashboard",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("must not fall through to score Top-N")),
+    )
+
+
+def _assert_strategy_queue_failed_closed(result):
+    assert result["requested_trade_date"] == "2026-07-24"
+    assert result["trade_date"] == "2026-07-24"
+    assert result["review_mode"] == "strategy_topn"
+    assert all(group["count"] == 0 for group in result["groups"])
+    assert all(group["freshness_status"] == "missing" for group in result["groups"])
+    assert all(group["items"] == [] for group in result["groups"])
+    assert "exact-date official strategy manifest unavailable for 2026-07-24" in result["warnings"]
+
+
+def test_default_strategy_review_queue_rejects_stale_fallback_rows(monkeypatch):
+    _patch_stale_strategy_fallback(monkeypatch)
+
+    result = review_queue.build_review_queue()
+
+    _assert_strategy_queue_failed_closed(result)
+
+
+def test_explicit_strategy_review_queue_rejects_stale_fallback_rows(monkeypatch):
+    _patch_stale_strategy_fallback(monkeypatch)
+
+    result = review_queue.build_review_queue(trade_date="2026-07-24")
+
+    _assert_strategy_queue_failed_closed(result)
+
+
 def test_strategy_review_queue_preserves_requested_date_and_reports_group_data_date(monkeypatch):
     monkeypatch.setattr(
         review_queue,

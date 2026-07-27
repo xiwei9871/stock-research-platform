@@ -56,15 +56,26 @@ def build_review_queue(
     explicit_trade_date = bool(trade_date)
     selected_trade_date = str(trade_date) if explicit_trade_date else _default_display_trade_date(summary)
     if normalized_review_mode == "strategy_topn":
-        strategy_rows = _attach_asset_names(_load_manifest_strategy_rows(trade_date=selected_trade_date, limit=50))
+        strategy_rows = _attach_asset_names(
+            _exact_trade_date_rows(
+                _load_manifest_strategy_rows(trade_date=selected_trade_date, limit=50),
+                selected_trade_date,
+            )
+        )
         if not strategy_rows:
-            strategy_rows = (
-                _load_strategy_snapshot_rows(trade_date=selected_trade_date, limit=50)
-                if use_strategy_snapshots
-                else []
+            strategy_rows = _exact_trade_date_rows(
+                (
+                    _load_strategy_snapshot_rows(trade_date=selected_trade_date, limit=50)
+                    if use_strategy_snapshots
+                    else []
+                ),
+                selected_trade_date,
             )
         if not strategy_rows:
-            strategy_rows = load_active_strategy_topn_rows(trade_date=selected_trade_date, limit=min(bounded_limit, 10))
+            strategy_rows = _exact_trade_date_rows(
+                load_active_strategy_topn_rows(trade_date=selected_trade_date, limit=min(bounded_limit, 10)),
+                selected_trade_date,
+            )
         if strategy_rows:
             return _strategy_review_queue(
                 rows=strategy_rows,
@@ -73,6 +84,17 @@ def build_review_queue(
                 score_version="strategy_topn",
                 lookback_days=bounded_lookback_days,
             )
+        queue = _strategy_review_queue(
+            rows=[],
+            selected_trade_date=selected_trade_date,
+            platform_market_date=str(summary.get("latest_market_date") or selected_trade_date),
+            score_version="strategy_topn",
+            lookback_days=bounded_lookback_days,
+        )
+        queue["warnings"].append(
+            f"exact-date official strategy manifest unavailable for {selected_trade_date}"
+        )
+        return queue
 
     score_rows = (
         load_top_scores_for_dashboard(selected_trade_date, score_version, bounded_limit)
@@ -159,13 +181,26 @@ def _should_load_scores_for_default_date(summary: dict[str, Any], selected_trade
     return selected_trade_date != latest_score_date
 
 
+def _exact_trade_date_rows(rows: list[dict[str, Any]], trade_date: str) -> list[dict[str, Any]]:
+    return [row for row in rows if str(row.get("trade_date") or "")[:10] == trade_date]
+
+
 def load_active_strategy_topn_rows(*, trade_date: str, limit: int) -> list[dict[str, Any]]:
-    manifest_rows = _load_manifest_strategy_rows(trade_date=trade_date, limit=limit)
+    manifest_rows = _exact_trade_date_rows(
+        _load_manifest_strategy_rows(trade_date=trade_date, limit=limit),
+        trade_date,
+    )
     if manifest_rows:
         return _attach_asset_names(manifest_rows)
     suppress_tech_fallback = _has_untrusted_tech_manifest(trade_date=trade_date)
-    artifact_rows = _load_strategy_artifact_topn_rows(trade_date=trade_date, limit=limit)
-    db_rows = _load_db_strategy_position_rows(trade_date=trade_date, limit=limit)
+    artifact_rows = _exact_trade_date_rows(
+        _load_strategy_artifact_topn_rows(trade_date=trade_date, limit=limit),
+        trade_date,
+    )
+    db_rows = _exact_trade_date_rows(
+        _load_db_strategy_position_rows(trade_date=trade_date, limit=limit),
+        trade_date,
+    )
     if suppress_tech_fallback:
         artifact_rows = _without_tech_bottleneck_rows(artifact_rows)
         db_rows = _without_tech_bottleneck_rows(db_rows)
@@ -205,7 +240,10 @@ def _load_strategy_snapshot_rows(*, trade_date: str, limit: int) -> list[dict[st
         row.setdefault("rank", row.get("topn_rank") or row.get("source_rank"))
         row.setdefault("score_total", snapshot.get("score") if snapshot.get("score") is not None else row.get("score_total") or row.get("score"))
         rows.append(row)
-    return _select_latest_strategy_sources(artifact_rows=rows, db_rows=[])
+    return _select_latest_strategy_sources(
+        artifact_rows=_exact_trade_date_rows(rows, trade_date),
+        db_rows=[],
+    )
 
 
 def _load_manifest_strategy_rows(*, trade_date: str, limit: int) -> list[dict[str, Any]]:
@@ -226,7 +264,10 @@ def _load_manifest_strategy_rows(*, trade_date: str, limit: int) -> list[dict[st
             continue
         artifact_path = Path(str(module.get("artifact_path") or ""))
         rows.extend(_read_manifest_strategy_artifact(artifact_path, trade_date=trade_date, limit=limit, manifest=module))
-    return _select_latest_strategy_sources(artifact_rows=rows, db_rows=[])
+    return _select_latest_strategy_sources(
+        artifact_rows=_exact_trade_date_rows(rows, trade_date),
+        db_rows=[],
+    )
 
 
 def _manifest_strategy_snapshot_valid(module: dict[str, Any]) -> bool:
@@ -556,7 +597,7 @@ def _load_strategy_artifact_topn_rows(*, trade_date: str, limit: int) -> list[di
     rows.extend(_load_lhb_shortline_artifact_rows(trade_date=trade_date, limit=limit))
     rows.extend(_load_mid_trend_artifact_rows(trade_date=trade_date, limit=limit))
     rows.extend(_load_tech_bottleneck_artifact_rows(trade_date=trade_date, limit=limit))
-    return rows
+    return _exact_trade_date_rows(rows, trade_date)
 
 
 def _load_lhb_shortline_artifact_rows(*, trade_date: str, limit: int) -> list[dict[str, Any]]:
