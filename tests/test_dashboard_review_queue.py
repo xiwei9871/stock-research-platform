@@ -69,6 +69,29 @@ def test_explicit_strategy_review_queue_rejects_stale_fallback_rows(monkeypatch)
     _assert_strategy_queue_failed_closed(result)
 
 
+def test_strategy_review_queue_rejects_row_with_stale_underlying_data_date(monkeypatch):
+    _patch_stale_strategy_fallback(monkeypatch)
+    monkeypatch.setattr(
+        review_queue,
+        "load_active_strategy_topn_rows",
+        lambda **kwargs: [
+            {
+                "trade_date": "2026-07-24",
+                "latest_trade_date": "2026-06-01",
+                "asset_id": "CN:SZ:000001",
+                "strategy_id": "mid_trend",
+                "strategy_name": "Mid Trend Combo",
+                "rank": 1,
+                "score_total": 88.0,
+            }
+        ],
+    )
+
+    result = review_queue.build_review_queue(trade_date="2026-07-24")
+
+    _assert_strategy_queue_failed_closed(result)
+
+
 def test_strategy_review_queue_preserves_requested_date_and_reports_group_data_date(monkeypatch):
     monkeypatch.setattr(
         review_queue,

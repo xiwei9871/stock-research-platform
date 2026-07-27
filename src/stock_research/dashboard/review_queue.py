@@ -182,7 +182,11 @@ def _should_load_scores_for_default_date(summary: dict[str, Any], selected_trade
 
 
 def _exact_trade_date_rows(rows: list[dict[str, Any]], trade_date: str) -> list[dict[str, Any]]:
-    return [row for row in rows if str(row.get("trade_date") or "")[:10] == trade_date]
+    return [
+        row
+        for row in rows
+        if str(row.get("latest_trade_date") or row.get("trade_date") or "")[:10] == trade_date
+    ]
 
 
 def load_active_strategy_topn_rows(*, trade_date: str, limit: int) -> list[dict[str, Any]]:
