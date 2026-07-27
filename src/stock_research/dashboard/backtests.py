@@ -98,13 +98,11 @@ def validate_official_strategy_result(
     if not isinstance(summary, dict):
         raise ValueError("official strategy result summary must be a mapping")
     config = result.get("config")
-    if config is not None and not isinstance(config, dict):
+    if not isinstance(config, Mapping):
         raise ValueError("official strategy result config must be a mapping")
-    config = config or {}
 
     _validate_declared_official_config(summary, publication_contract, location="summary")
-    _validate_declared_official_config(config, publication_contract, location="config")
-    _require_official_config_evidence(summary, config, publication_contract)
+    _require_official_config_evidence(config, publication_contract)
     _validate_contract_identity_declarations(result, summary, config, publication_contract)
 
     for field, expected in publication_contract.publication_policy.items():
@@ -118,12 +116,7 @@ def validate_official_strategy_result(
                 f"publication policy mismatch in config: {field} expected {expected}, got {config[field]}"
             )
 
-    effective_summary = _effective_official_summary(
-        result,
-        summary,
-        config,
-    )
-    validation = validate_strategy_summary_against_contract(effective_summary, parameter_contract)
+    validation = validate_strategy_summary_against_contract(dict(summary), parameter_contract)
     if validation.status != "success":
         raise ValueError(f"official strategy contract mismatch: {validation.reason}")
 
@@ -207,19 +200,18 @@ def _validate_declared_official_config(
 
 
 def _require_official_config_evidence(
-    summary: Mapping[str, Any],
     config: Mapping[str, Any],
     contract: Any,
 ) -> None:
     missing: list[str] = []
-    for field in contract.normalized_run_config:
-        keys = (field, "frequency") if field == "rebalance_frequency" else (field,)
-        if not any(
-            container.get(key) not in (None, "")
-            for container in (summary, config)
-            for key in keys
-        ):
+    for field, expected in contract.normalized_run_config.items():
+        if field not in config or config.get(field) in (None, ""):
             missing.append(field)
+            continue
+        if config[field] != expected:
+            raise ValueError(
+                f"official config mismatch in config: {field} expected {expected}, got {config[field]}"
+            )
     if missing:
         raise ValueError(f"official config evidence missing: {', '.join(missing)}")
 
@@ -250,41 +242,6 @@ def _validate_contract_identity_declarations(
             raise ValueError(
                 f"official contract mismatch in {location}: {field} expected {expected}, got {actual}"
             )
-
-
-def _effective_official_summary(
-    result: Mapping[str, Any],
-    summary: Mapping[str, Any],
-    config: Mapping[str, Any],
-) -> dict[str, Any]:
-    effective = dict(summary)
-    fields = {
-        "engine_version": (
-            config.get("engine_version"),
-            config.get("engine"),
-            result.get("source_kind"),
-        ),
-        "variant": (config.get("variant"), config.get("variant_name")),
-        "top_n": (config.get("top_n"),),
-        "transaction_cost_bps": (config.get("transaction_cost_bps"),),
-        "adjust_type": (config.get("adjust_type"),),
-        "frequency": (
-            config.get("frequency"),
-            config.get("rebalance_frequency"),
-        ),
-        "risk_profile": (config.get("risk_profile"),),
-        "benchmark_variant": (config.get("benchmark_variant"),),
-        "universe": (config.get("universe"),),
-        "protection_name": (config.get("protection_name"),),
-        "phase18c_strategy": (config.get("phase18c_strategy"),),
-    }
-    for field, candidates in fields.items():
-        if effective.get(field) not in (None, ""):
-            continue
-        value = next((candidate for candidate in candidates if candidate not in (None, "")), None)
-        if value is not None:
-            effective[field] = value
-    return effective
 
 
 def list_backtest_strategies() -> list[dict[str, Any]]:
@@ -1026,14 +983,30 @@ def _apply_strategy_contract_run_config(
     run_config: dict[str, Any],
     payload: dict[str, Any],
 ) -> dict[str, Any]:
+    from stock_research.strategy_publication_contracts import get_publication_contract
+
+    merged = dict(run_config)
+    try:
+        publication_contract = get_publication_contract(strategy_id, profile="balanced")
+    except KeyError:
+        publication_contract = None
+    if publication_contract is not None:
+        static_config = {
+            **dict(publication_contract.normalized_run_config),
+            "contract_id": publication_contract.contract_id,
+            "contract_profile": publication_contract.profile,
+            "contract_variant": publication_contract.variant,
+        }
+        for key, value in static_config.items():
+            if key.startswith("contract_") or _payload_missing(payload, key):
+                merged[key] = value
     try:
         contract = load_strategy_contracts(profile="balanced").get(strategy_id)
     except Exception:
         contract = None
     if contract is None:
-        return run_config
+        return merged
     contract_config = strategy_contract_run_config(contract)
-    merged = dict(run_config)
     for key, value in contract_config.items():
         if key.startswith("contract_") or _payload_missing(payload, key):
             merged[key] = value
@@ -1132,26 +1105,11 @@ def _payload_missing(payload: dict[str, Any], key: str) -> bool:
 
 
 def _with_contract_config(result: dict[str, Any], run_config: dict[str, Any]) -> dict[str, Any]:
-    if not any(str(key).startswith("contract_") for key in run_config):
-        return result
     next_result = dict(result)
     config = dict(next_result.get("config") or {})
     for key, value in run_config.items():
-        if str(key).startswith("contract_"):
-            config[key] = value
+        config[key] = value
     next_result["config"] = config
-    summary = dict(next_result.get("summary") or {})
-    summary_fields = {
-        "top_n": run_config.get("top_n"),
-        "frequency": run_config.get("rebalance_frequency"),
-        "protection_name": run_config.get("protection_name"),
-        "transaction_cost_bps": run_config.get("transaction_cost_bps"),
-        "adjust_type": run_config.get("adjust_type"),
-    }
-    for key, value in summary_fields.items():
-        if value is not None and (key not in summary or summary.get(key) in (None, "")):
-            summary[key] = value
-    next_result["summary"] = summary
     return next_result
 
 

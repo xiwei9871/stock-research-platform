@@ -1,4 +1,5 @@
 import errno
+import copy
 import importlib.util
 import json
 import os
@@ -187,6 +188,44 @@ def test_official_runner_rejects_tampered_identity_before_transaction(tmp_path, 
 
     assert result["status"] == "failed"
     assert "publication identity mismatch" in result["error_summary"]
+    assert transactions == []
+
+
+@pytest.mark.parametrize("tamper_one", [False, True])
+def test_official_runner_rejects_duplicate_success_identity_entries_before_transaction(
+    tmp_path, monkeypatch, tamper_one
+):
+    transactions = []
+    monkeypatch.setattr(eod, "apply_strategy_daily_eod_status_schema", lambda **_kwargs: None)
+    monkeypatch.setattr(eod, "upsert_strategy_daily_eod_status", lambda *_args, **_kwargs: None)
+
+    def duplicate_publisher(*, manifest_upsert, **kwargs):
+        captured = []
+        summary = _write_complete_mature_release(
+            manifest_upsert=captured.append,
+            **kwargs,
+        )
+        original = next(
+            entry for entry in captured if entry["module"] == "strategy_mid_trend"
+        )
+        duplicate = copy.deepcopy(original)
+        if tamper_one:
+            duplicate["metadata"]["publication_identity"]["variant"] = "legacy"
+        for entry in [*captured, duplicate]:
+            manifest_upsert(entry)
+        return summary
+
+    result = eod.run_strategy_daily_eod(
+        trade_date="2026-07-24",
+        output_root=tmp_path,
+        dependency_checker=lambda **_kwargs: {"status": "success"},
+        publisher=duplicate_publisher,
+        publication_transaction=lambda **kwargs: transactions.append(kwargs),
+        service="test",
+    )
+
+    assert result["status"] == "failed"
+    assert "exactly one success entry" in result["error_summary"]
     assert transactions == []
 
 

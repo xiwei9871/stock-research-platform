@@ -113,6 +113,31 @@ def test_attach_tech_identity_validates_manifest_execution_config():
         strategy_eod_publish._attach_tech_publication_identity([entry])
 
 
+def test_attach_tech_identity_rejects_tampered_predeclared_identity():
+    contract = get_publication_contract("tech_bottleneck")
+    identity = build_publication_identity(contract)
+    entry = {
+        "module": "strategy_tech_bottleneck",
+        "metadata": {
+            "publication_identity": {**identity, "variant": "legacy"},
+            "summary": {
+                "engine_version": contract.engine_version,
+                "top_n": 5,
+                "transaction_cost_bps": 10.0,
+                "max_position_weight": 0.2,
+                "adjust_type": "hfq",
+                "frequency": "biweekly",
+                "universe": "strict_153_st_only_financial_state",
+                "protection_name": "rank_exit_top10_1d",
+            },
+            "config": dict(contract.normalized_run_config),
+        },
+    }
+
+    with pytest.raises(ValueError, match="publication identity mismatch"):
+        strategy_eod_publish._attach_tech_publication_identity([entry])
+
+
 def test_lhb_review_publishes_original_top5_after_gate_without_refill(monkeypatch):
     lookup = {
         "CN:SZ:002463": {"score_total": 77.0, "stock_name": "沪电股份", "pct_chg": 2.0},

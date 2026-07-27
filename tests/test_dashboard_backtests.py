@@ -134,6 +134,15 @@ def test_validate_official_strategy_result_rejects_empty_official_config_evidenc
         backtests.validate_official_strategy_result(result, profile="balanced")
 
 
+@pytest.mark.parametrize("strategy_id", ["lhb_shortline", "mid_trend", "tech_bottleneck"])
+def test_summary_labels_cannot_replace_complete_engine_config(strategy_id):
+    result = _official_result(strategy_id)
+    result["config"] = {}
+
+    with pytest.raises(ValueError, match="official config evidence missing"):
+        backtests.attach_publication_identity(result, profile="balanced")
+
+
 def test_validate_official_strategy_result_rejects_partial_normalized_config_evidence():
     result = _official_result("mid_trend")
     del result["config"]["max_position_weight"]
@@ -162,6 +171,46 @@ def test_official_fresh_path_attaches_identity_after_contract_config(monkeypatch
 
     assert attached["publication_identity"]["strategy_id"] == "mid_trend"
     assert attached["summary"]["publication_identity"] == attached["publication_identity"]
+
+
+@pytest.mark.parametrize("strategy_id", ["lhb_shortline", "mid_trend", "tech_bottleneck"])
+def test_official_fresh_records_the_complete_config_passed_to_engine(monkeypatch, strategy_id):
+    result = _official_result(strategy_id)
+    contract = get_publication_contract(strategy_id)
+    run_config = dict(contract.normalized_run_config)
+    params = SimpleNamespace(start_date="2026-01-01", end_date="2026-01-02")
+    received = {}
+
+    def engine(payload):
+        received.update(payload)
+        returned = copy.deepcopy(result)
+        returned["config"] = {}
+        return returned
+
+    monkeypatch.setattr(
+        backtests,
+        "_parse_backtest_request",
+        lambda payload: (strategy_id, params, dict(run_config), None),
+    )
+    monkeypatch.setattr(
+        backtests,
+        "_apply_strategy_contract_run_config",
+        lambda strategy_id, config, payload: config,
+    )
+    monkeypatch.setattr(
+        backtests,
+        {
+            "lhb_shortline": "run_lhb_shortline_v1_backtest_for_dashboard",
+            "mid_trend": "run_mid_trend_v1_backtest_for_dashboard",
+            "tech_bottleneck": "run_tech_bottleneck_v1_backtest_for_dashboard",
+        }[strategy_id],
+        engine,
+    )
+
+    attached = backtests.run_fresh_backtest({"strategy_id": strategy_id})
+
+    assert {key: received[key] for key in run_config} == run_config
+    assert {key: attached["config"][key] for key in run_config} == run_config
 
 
 def test_official_replay_path_attaches_identity_after_contract_config(monkeypatch):
@@ -374,4 +423,3 @@ def test_eod_summary_projects_lhb_metrics_from_generic_publication_policy():
     assert metrics["strategy_version"] == policy["strategy_version"]
     assert metrics["selection_policy"] == policy["selection_policy"]
     assert metrics["market_regime_policy"] == policy["market_regime_policy"]
-

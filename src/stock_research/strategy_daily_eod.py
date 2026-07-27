@@ -341,18 +341,22 @@ def _validate_official_publication_identities(entries: list[dict[str, Any]]) -> 
         "strategy_mid_trend": "mid_trend",
         "strategy_tech_bottleneck": "tech_bottleneck",
     }
-    by_module = {
-        str(entry.get("module") or ""): entry
-        for entry in entries
-        if str(entry.get("module") or "") in modules
-        and str(entry.get("status") or "") == "success"
-    }
     for module, strategy_id in modules.items():
-        entry = by_module.get(module)
-        if entry is None:
+        success_entries = [
+            entry
+            for entry in entries
+            if str(entry.get("module") or "") == module
+            and str(entry.get("status") or "") == "success"
+        ]
+        if not success_entries:
             raise RuntimeError(
                 f"missing required success manifest: {module}; publication identity unavailable"
             )
+        if len(success_entries) != 1:
+            raise RuntimeError(
+                f"publication contract requires exactly one success entry: {module}; got {len(success_entries)}"
+            )
+        entry = success_entries[0]
         metadata = entry.get("metadata")
         actual = metadata.get("publication_identity") if isinstance(metadata, dict) else None
         if not isinstance(actual, Mapping):

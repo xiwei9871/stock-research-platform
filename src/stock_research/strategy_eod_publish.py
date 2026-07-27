@@ -825,6 +825,18 @@ def _attach_tech_publication_identity(entries: list[dict[str, Any]]) -> None:
     metadata = strategy_entry.get("metadata")
     if not isinstance(metadata, dict):
         raise ValueError("strategy_tech_bottleneck metadata missing")
+    expected_identity = build_publication_identity(
+        get_publication_contract("tech_bottleneck")
+    )
+    declared_identity = metadata.get("publication_identity")
+    if declared_identity is not None:
+        if not isinstance(declared_identity, Mapping):
+            raise ValueError("publication identity mismatch for tech_bottleneck: expected mapping")
+        mismatches = validate_publication_identity(declared_identity, expected_identity)
+        if mismatches:
+            raise ValueError(
+                f"publication identity mismatch for tech_bottleneck: {mismatches}"
+            )
     attached = attach_publication_identity(
         {
             "strategy_id": "tech_bottleneck",
@@ -833,7 +845,7 @@ def _attach_tech_publication_identity(entries: list[dict[str, Any]]) -> None:
         },
         profile="balanced",
     )
-    identity = attached["publication_identity"]
+    identity = expected_identity if declared_identity is not None else attached["publication_identity"]
     metadata["publication_identity"] = identity
     metadata["summary"] = attached["summary"]
 
