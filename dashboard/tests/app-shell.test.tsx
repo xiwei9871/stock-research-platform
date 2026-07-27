@@ -1480,12 +1480,20 @@ describe('dashboard app shell', () => {
       expect(apiMocks.fetchAssetProfile).toHaveBeenCalledWith(
         '000001.SZ',
         '2026-06-10',
-        '2025-12-12',
-        '2026-06-10',
+        '2025-12-14',
+        '2026-06-12',
         'manual_v1',
         'qfq'
       )
     );
+    await waitFor(() =>
+      expect(apiMocks.fetchDailyBars).toHaveBeenCalledWith('000001.SZ', undefined, '2026-06-12', {
+        resolution: '1D',
+        adjustType: 'qfq'
+      })
+    );
+    expect(screen.getByLabelText('stock workspace trade date')).toHaveValue('2026-06-10');
+    expect(screen.getByLabelText('stock workspace end date')).toHaveValue('2026-06-12');
     await waitFor(() =>
       expect(apiMocks.fetchEvidenceDigest).toHaveBeenCalledWith('000001.SZ', {
         tradeDate: '2026-06-10',

@@ -478,12 +478,15 @@ export function StockWorkspace({
   onOpenMarketMonitor,
   onOpenAsset
 }: StockWorkspaceProps) {
-  const initialTradeDate = entryContext?.tradeDate ?? defaultTradeDate ?? DEFAULT_TRADE_DATE;
-  const initialStartDate = offsetDate(initialTradeDate, -180);
+  const initialReviewDate = entryContext?.tradeDate ?? defaultTradeDate ?? DEFAULT_TRADE_DATE;
+  const initialChartEndDate = defaultTradeDate ?? DEFAULT_TRADE_DATE;
+  const initialChartStartDate = offsetDate(initialChartEndDate, -180);
   const [assetId, setAssetId] = useState(initialAssetId);
-  const [tradeDate, setTradeDate] = useState(initialTradeDate);
-  const [startDate, setStartDate] = useState(initialStartDate);
-  const [endDate, setEndDate] = useState(initialTradeDate);
+  const [tradeDate, setTradeDate] = useState(initialReviewDate);
+  const [startDate, setStartDate] = useState(initialChartStartDate);
+  const [endDate, setEndDate] = useState(initialChartEndDate);
+  const [startDateInput, setStartDateInput] = useState(initialChartStartDate);
+  const [endDateInput, setEndDateInput] = useState(initialChartEndDate);
   const [profile, setProfile] = useState<StockWorkspaceAssetProfile | null>(null);
   const [chartResolution, setChartResolution] = useState<ChartResolution>('1D');
   const [chartBars, setChartBars] = useState<BarPoint[]>([]);
@@ -654,10 +657,12 @@ export function StockWorkspace({
   useEffect(() => {
     mountedRef.current = true;
     setAssetId(normalizeAssetId(initialAssetId));
-    setTradeDate(initialTradeDate);
-    setStartDate(initialStartDate);
-    setEndDate(initialTradeDate);
-    void loadProfile(initialAssetId, initialTradeDate, initialStartDate, initialTradeDate);
+    setTradeDate(initialReviewDate);
+    setStartDate(initialChartStartDate);
+    setEndDate(initialChartEndDate);
+    setStartDateInput(initialChartStartDate);
+    setEndDateInput(initialChartEndDate);
+    void loadProfile(initialAssetId, initialReviewDate, initialChartStartDate, initialChartEndDate);
     return () => {
       mountedRef.current = false;
       profileRequestIdRef.current += 1;
@@ -667,7 +672,7 @@ export function StockWorkspace({
       marketContextHeatmapRequestIdRef.current += 1;
       searchRequestIdRef.current += 1;
     };
-  }, [initialAssetId, initialStartDate, initialTradeDate]);
+  }, [initialAssetId, initialChartEndDate, initialChartStartDate, initialReviewDate]);
 
   useEffect(() => {
     if (!profile?.canonical_asset_id) {
@@ -854,7 +859,9 @@ export function StockWorkspace({
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    void loadProfile();
+    setStartDate(startDateInput);
+    setEndDate(endDateInput);
+    void loadProfile(assetId, tradeDate, startDateInput, endDateInput);
   };
 
   const handleSelectPeerFromMarketContext = (nextAssetId: string) => {
@@ -957,6 +964,7 @@ export function StockWorkspace({
   const chartWindowLabel = isIntradayChartActive
     ? `${startDate} to ${endDate}`
     : `历史 ${chartBars.length} bars / 固定显示 ${visibleChartBarCount} bars / 截至 ${endDate}`;
+  const historicalChartReplay = endDate < initialChartEndDate;
   const thesisGapSummary = summarizeTechBottleneckGap(currentEntryContext);
   const thesisNextStepSummary = summarizeTechBottleneckNextStep(currentEntryContext.nextAction);
   const thesisGapDetail = normalizeCompactSentence(currentEntryContext.evidenceGapNote ?? '');
@@ -1023,8 +1031,8 @@ export function StockWorkspace({
             <input
               aria-label="stock workspace start date"
               type="date"
-              value={startDate}
-              onChange={(event) => setStartDate(event.target.value)}
+              value={startDateInput}
+              onChange={(event) => setStartDateInput(event.target.value)}
             />
           </label>
           <label>
@@ -1032,8 +1040,8 @@ export function StockWorkspace({
             <input
               aria-label="stock workspace end date"
               type="date"
-              value={endDate}
-              onChange={(event) => setEndDate(event.target.value)}
+              value={endDateInput}
+              onChange={(event) => setEndDateInput(event.target.value)}
             />
           </label>
           <button type="submit">加载回放</button>
@@ -1238,10 +1246,17 @@ export function StockWorkspace({
             </div>
             <div className="section-heading">
               <h3>价格走势</h3>
-              <span className="muted">
-                {isIntradayChartActive ? `${chartBars.length} bars / ` : ''}
-                {chartWindowLabel}
-              </span>
+              <div className="tag-stack">
+                <span className="muted">
+                  {isIntradayChartActive ? `${chartBars.length} bars / ` : ''}
+                  {chartWindowLabel}
+                </span>
+                {historicalChartReplay ? (
+                  <span className="status-chip neutral" role="status">
+                    历史回放中 · 截至 {endDate}
+                  </span>
+                ) : null}
+              </div>
             </div>
             <div className="segmented-control stock-chart-resolution" role="group" aria-label="K line period">
               {DAILY_CHART_RESOLUTIONS.map((resolution) => (

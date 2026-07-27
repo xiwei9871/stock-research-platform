@@ -799,6 +799,109 @@ describe('StockWorkspace', () => {
     expect(await screen.findByTestId('asset-chart')).toHaveTextContent('intraday');
   });
 
+  it('keeps a review queue evidence date independent from the latest chart cutoff', async () => {
+    render(
+      <StockWorkspace
+        initialAssetId="000001.SZ"
+        defaultTradeDate="2026-07-24"
+        entryContext={{ sourceWorkspace: 'reviewQueue', tradeDate: '2026-05-18' }}
+      />
+    );
+
+    await waitFor(() =>
+      expect(apiMocks.fetchAssetProfile).toHaveBeenCalledWith(
+        '000001.SZ',
+        '2026-05-18',
+        '2026-01-25',
+        '2026-07-24',
+        'manual_v1',
+        'qfq'
+      )
+    );
+    await waitFor(() =>
+      expect(apiMocks.fetchDailyBars).toHaveBeenCalledWith('000001.SZ', undefined, '2026-07-24', {
+        resolution: '1D',
+        adjustType: 'qfq'
+      })
+    );
+    expect(screen.getByLabelText('stock workspace trade date')).toHaveValue('2026-05-18');
+    expect(screen.getByLabelText('stock workspace end date')).toHaveValue('2026-07-24');
+  });
+
+  it('applies a historical chart cutoff only after loading the replay', async () => {
+    render(
+      <StockWorkspace
+        initialAssetId="000001.SZ"
+        defaultTradeDate="2026-07-24"
+        entryContext={{ sourceWorkspace: 'reviewQueue', tradeDate: '2026-05-18' }}
+      />
+    );
+
+    await waitFor(() =>
+      expect(apiMocks.fetchDailyBars).toHaveBeenCalledWith('000001.SZ', undefined, '2026-07-24', {
+        resolution: '1D',
+        adjustType: 'qfq'
+      })
+    );
+    const initialChartRequestCount = apiMocks.fetchDailyBars.mock.calls.length;
+
+    fireEvent.change(screen.getByLabelText('stock workspace end date'), { target: { value: '2026-05-18' } });
+
+    expect(apiMocks.fetchDailyBars).toHaveBeenCalledTimes(initialChartRequestCount);
+    expect(screen.getByText(/图表 2026-01-25 至 2026-07-24/)).toBeInTheDocument();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '加载回放' }));
+
+    await waitFor(() =>
+      expect(apiMocks.fetchAssetProfile).toHaveBeenLastCalledWith(
+        '000001.SZ',
+        '2026-05-18',
+        '2026-01-25',
+        '2026-05-18',
+        'manual_v1',
+        'qfq'
+      )
+    );
+    await waitFor(() =>
+      expect(apiMocks.fetchDailyBars).toHaveBeenLastCalledWith('000001.SZ', undefined, '2026-05-18', {
+        resolution: '1D',
+        adjustType: 'qfq'
+      })
+    );
+    expect(screen.getByRole('status')).toHaveTextContent('历史回放中 · 截至 2026-05-18');
+  });
+
+  it('removes historical replay status after reapplying the latest chart cutoff', async () => {
+    render(
+      <StockWorkspace
+        initialAssetId="000001.SZ"
+        defaultTradeDate="2026-07-24"
+        entryContext={{ sourceWorkspace: 'reviewQueue', tradeDate: '2026-05-18' }}
+      />
+    );
+
+    await waitFor(() => expect(apiMocks.fetchAssetProfile).toHaveBeenCalled());
+    fireEvent.change(screen.getByLabelText('stock workspace end date'), { target: { value: '2026-05-18' } });
+    fireEvent.click(screen.getByRole('button', { name: '加载回放' }));
+    expect(await screen.findByRole('status')).toHaveTextContent('历史回放中 · 截至 2026-05-18');
+
+    fireEvent.change(screen.getByLabelText('stock workspace end date'), { target: { value: '2026-07-24' } });
+    fireEvent.click(screen.getByRole('button', { name: '加载回放' }));
+
+    await waitFor(() =>
+      expect(apiMocks.fetchAssetProfile).toHaveBeenLastCalledWith(
+        '000001.SZ',
+        '2026-05-18',
+        '2026-01-25',
+        '2026-07-24',
+        'manual_v1',
+        'qfq'
+      )
+    );
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
   it('renders a decision-first layout with price state and collapsed secondary evidence', async () => {
     apiMocks.fetchAssetProfile.mockResolvedValueOnce(
       makeProfile({
@@ -1193,8 +1296,8 @@ describe('StockWorkspace', () => {
       expect(apiMocks.fetchAssetProfile).toHaveBeenCalledWith(
         '000001.SZ',
         '2026-06-12',
-        '2025-12-14',
-        '2026-06-12',
+        '2025-12-20',
+        '2026-06-18',
         'manual_v1',
         'qfq'
       )
