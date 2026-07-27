@@ -95,6 +95,15 @@ function freshnessLabel(status: 'current' | 'stale' | 'missing') {
   return '数据已同步';
 }
 
+function groupFreshnessAccessibleLabel(
+  label: string,
+  dataTradeDate: string | null,
+  status: 'current' | 'stale' | 'missing',
+  count: number
+) {
+  return `${label}：数据日期 ${dataTradeDate ?? '暂无'}，${freshnessLabel(status)}，${count} 只`;
+}
+
 function actionContext(
   action: EvidenceDigestAction,
   fallbackAssetId?: string,
@@ -295,21 +304,30 @@ export function ReviewQueueWorkspace({
                     <span className="status-chip neutral">等待平台日期</span>
                   ) : freshnessLag > 0 ? (
                     <span className="status-chip warning">落后 {freshnessLag} 天</span>
+                  ) : freshnessLag < 0 ? (
+                    <span className="status-chip warning">晚于 {Math.abs(freshnessLag)} 天</span>
                   ) : (
                     <span className="status-chip success">已同步</span>
                   )}
                 </div>
-                <p className={freshnessLag != null && freshnessLag > 0 ? 'error-text' : 'muted'}>
+                <p className={freshnessLag != null && freshnessLag !== 0 ? 'error-text' : 'muted'}>
                   {freshnessLag == null
                     ? '正在读取平台最新市场日期，用于判断复盘队列是否过旧。'
                     : freshnessLag > 0
                       ? `复盘队列落后平台市场日期 ${freshnessLag} 个自然日，请检查复盘生成任务。`
-                      : '复盘队列与平台市场日期一致。'}
+                      : freshnessLag < 0
+                        ? `复盘日期晚于平台市场日期 ${Math.abs(freshnessLag)} 个自然日，请确认日期或等待市场数据。`
+                        : '复盘队列与平台市场日期一致。'}
                 </p>
                 <div className="tag-stack" aria-label="分策略新鲜度">
                   {groupFreshness.map((group) => (
                     <span
-                      aria-label={`${group.label} 新鲜度`}
+                      aria-label={groupFreshnessAccessibleLabel(
+                        group.label,
+                        group.dataTradeDate,
+                        group.freshnessStatus,
+                        group.count
+                      )}
                       className={`status-chip ${group.freshnessStatus === 'current' ? 'success' : 'warning'}`}
                       key={group.bucket}
                     >

@@ -125,6 +125,10 @@ function makeQueue(overrides: Partial<ReviewQueueResponse> = {}): ReviewQueueRes
   };
 }
 
+function groupFreshnessName(label: string, dataDate: string, status: string, count: number) {
+  return `${label}：数据日期 ${dataDate}，${status}，${count} 只`;
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   apiMocks.fetchReviewQueue.mockResolvedValue(makeQueue());
@@ -157,12 +161,16 @@ describe('ReviewQueueWorkspace', () => {
     expect(screen.getByText('按策略正式复盘范围')).toBeInTheDocument();
     expect(screen.getByText('平台市场日期')).toBeInTheDocument();
     expect(screen.getByText('复盘队列与平台市场日期一致。')).toBeInTheDocument();
-    const currentFreshness = screen.getByLabelText('Mid Trend Combo 新鲜度');
+    const currentFreshness = screen.getByLabelText(
+      groupFreshnessName('Mid Trend Combo', '2026-06-08', '数据已同步', 1)
+    );
     expect(within(currentFreshness).getByText('数据日期 2026-06-08')).toBeInTheDocument();
     expect(within(currentFreshness).getByText('数据已同步')).toBeInTheDocument();
     expect(currentFreshness).toHaveClass('success');
     expect(currentFreshness).not.toHaveClass('warning');
-    const missingFreshness = screen.getByLabelText('Tech Bottleneck Combo 新鲜度');
+    const missingFreshness = screen.getByLabelText(
+      groupFreshnessName('Tech Bottleneck Combo', '暂无', '数据缺失', 0)
+    );
     expect(within(missingFreshness).getByText('数据日期 暂无')).toBeInTheDocument();
     expect(within(missingFreshness).getByText('数据缺失')).toBeInTheDocument();
     const sourceFilters = within(screen.getByLabelText('策略复盘分组')).getByLabelText('证据来源');
@@ -240,12 +248,34 @@ describe('ReviewQueueWorkspace', () => {
     render(<ReviewQueueWorkspace />);
 
     expect(await screen.findByText('复盘队列落后平台市场日期 10 个自然日，请检查复盘生成任务。')).toBeInTheDocument();
-    const currentFreshness = screen.getByLabelText('Mid Trend Combo 新鲜度');
+    const currentFreshness = screen.getByLabelText(
+      groupFreshnessName('Mid Trend Combo', '2026-06-08', '数据已同步', 1)
+    );
     expect(within(currentFreshness).getByText('数据日期 2026-06-08')).toBeInTheDocument();
     expect(within(currentFreshness).getByText('数据已同步')).toBeInTheDocument();
-    const staleFreshness = screen.getByLabelText('Tech Bottleneck Combo 新鲜度');
+    const staleFreshness = screen.getByLabelText(
+      groupFreshnessName('Tech Bottleneck Combo', '2026-06-01', '数据过期', 1)
+    );
     expect(within(staleFreshness).getByText('数据日期 2026-06-01')).toBeInTheDocument();
     expect(within(staleFreshness).getByText('数据过期')).toBeInTheDocument();
+  });
+
+  it('warns when the requested review date is later than the platform market date', async () => {
+    apiMocks.fetchReviewQueue.mockResolvedValueOnce(
+      makeQueue({
+        trade_date: '2026-07-25',
+        requested_trade_date: '2026-07-25',
+        platform_market_date: '2026-07-24'
+      })
+    );
+
+    render(<ReviewQueueWorkspace />);
+
+    expect(
+      await screen.findByText('复盘日期晚于平台市场日期 1 个自然日，请确认日期或等待市场数据。')
+    ).toBeInTheDocument();
+    expect(screen.queryByText('复盘队列与平台市场日期一致。')).not.toBeInTheDocument();
+    expect(screen.queryByText('已同步')).not.toBeInTheDocument();
   });
 
   it('switches groups and shows an empty group state', async () => {
@@ -281,7 +311,9 @@ describe('ReviewQueueWorkspace', () => {
 
     render(<ReviewQueueWorkspace />);
 
-    const missingFreshness = await screen.findByLabelText('Tech Bottleneck Combo 新鲜度');
+    const missingFreshness = await screen.findByLabelText(
+      groupFreshnessName('Tech Bottleneck Combo', '暂无', '数据缺失', 1)
+    );
     expect(within(missingFreshness).getByText('数据日期 暂无')).toBeInTheDocument();
     expect(within(missingFreshness).getByText('数据缺失')).toBeInTheDocument();
   });
@@ -331,7 +363,9 @@ describe('ReviewQueueWorkspace', () => {
       })
     );
     expect(screen.getByLabelText('选择复盘日期')).toHaveValue('2026-07-24');
-    const staleFreshness = screen.getByLabelText('Mid Trend Combo 新鲜度');
+    const staleFreshness = screen.getByLabelText(
+      groupFreshnessName('Mid Trend Combo', '2026-06-01', '数据过期', 2)
+    );
     expect(within(staleFreshness).getByText('数据日期 2026-06-01')).toBeInTheDocument();
     expect(within(staleFreshness).getByText('数据过期')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Mid Trend Combo 2' })).toBeInTheDocument();
