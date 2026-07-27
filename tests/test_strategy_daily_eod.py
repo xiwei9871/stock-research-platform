@@ -1,5 +1,6 @@
 import errno
 import importlib.util
+import json
 import os
 from pathlib import Path
 
@@ -7,6 +8,251 @@ import pandas as pd
 
 from stock_research import strategy_daily_eod as eod
 from stock_research import strategy_daily_eod_store as store
+
+
+def _write_complete_mature_release(
+    *,
+    output_root: Path,
+    trade_date: str,
+    manifest_upsert,
+    counts: dict[str, int] | None = None,
+) -> dict:
+    counts = counts or {
+        "lhb_shortline": 5,
+        "mid_trend": 5,
+        "tech_bottleneck": 5,
+    }
+    release = output_root / "research" / "strategy_daily_eod" / trade_date
+    release.mkdir(parents=True)
+    manifest_frames = []
+    modules = {
+        "lhb_shortline": "strategy_lhb_shortline",
+        "mid_trend": "strategy_mid_trend",
+        "tech_bottleneck": "strategy_tech_bottleneck",
+    }
+    for strategy_id, module in modules.items():
+        rows = [
+            {
+                "trade_date": trade_date,
+                "strategy_id": strategy_id,
+                "asset_id": f"{strategy_id}-{rank}",
+                "rank": rank,
+                "review_tier": "top5_focus",
+                "artifact_path": str(release / f"{module}_review.csv"),
+            }
+            for rank in range(1, counts[strategy_id] + 1)
+        ]
+        frame = pd.DataFrame(rows)
+        review_path = release / f"{module}_review.csv"
+        frame.to_csv(review_path, index=False)
+        metadata = {"review_path": str(review_path)}
+        if strategy_id == "mid_trend":
+            for kind in ("equity", "positions", "trades"):
+                path = release / f"{module}_{kind}.csv"
+                path.write_text("value\n1\n", encoding="utf-8")
+                metadata[f"{kind}_path"] = str(path)
+        manifest_upsert(
+            {
+                "module": module,
+                "status": "success",
+                "artifact_path": str(review_path),
+                "metadata": metadata,
+            }
+        )
+        manifest_frames.append(frame)
+    manifest = pd.concat(manifest_frames, ignore_index=True)
+    manifest_path = release / "review_queue_strategy_manifest.csv"
+    manifest.to_csv(manifest_path, index=False)
+    manifest_upsert(
+        {
+            "module": "review_queue_strategy_manifest",
+            "status": "success",
+            "artifact_path": str(manifest_path),
+            "metadata": {"review_path": str(manifest_path)},
+        }
+    )
+    summary = {
+        "run_id": f"strategy-eod-{trade_date}-local",
+        "trade_date": trade_date,
+        "output_dir": str(release),
+        "manifest_modules": [*modules.values(), "review_queue_strategy_manifest"],
+        "strategy_counts": counts,
+        "review_rows": sum(counts.values()),
+        "publishable": counts == {key: 5 for key in modules},
+        "score_audit": {"status": "success", "strategy_counts": counts},
+    }
+    (release / "strategy_eod_publish_summary.json").write_text(
+        json.dumps(summary), encoding="utf-8"
+    )
+    return summary
+
+
+def test_official_runner_uses_mature_publisher_once_and_publishes_5x3(
+    tmp_path: Path, monkeypatch
+):
+    calls = []
+    persisted = []
+    monkeypatch.setattr(eod, "apply_strategy_daily_eod_status_schema", lambda **_kwargs: None)
+    monkeypatch.setattr(eod, "upsert_strategy_daily_eod_status", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(eod, "upsert_data_run_manifest", lambda entry, **_kwargs: persisted.append(entry))
+
+    def publisher(**kwargs):
+        calls.append(kwargs)
+        return _write_complete_mature_release(**kwargs)
+
+    summary = eod.run_strategy_daily_eod(
+        trade_date="2026-07-24",
+        output_root=tmp_path,
+        dependency_checker=lambda **_kwargs: {"status": "success"},
+        publisher=publisher,
+        service="test",
+    )
+
+    assert len(calls) == 1
+    assert summary["status"] == "success"
+    assert summary["publishable"] is True
+    assert summary["review_rows"] == 15
+    assert summary["strategy_status"] == {
+        "lhb_shortline": "success",
+        "mid_trend": "success",
+        "midtrend_artifacts": "success",
+        "tech_bottleneck": "success",
+    }
+    assert persisted
+    assert all(".versions" not in str(entry) for entry in persisted)
+    assert all(
+        str(entry.get("artifact_path") or "").startswith(str(tmp_path / "2026-07-24"))
+        for entry in persisted
+        if entry.get("artifact_path")
+    )
+    for entry in persisted:
+        for key, value in (entry.get("metadata") or {}).items():
+            if key.endswith("_path") and value:
+                assert str(value).startswith(str(tmp_path / "2026-07-24"))
+
+
+def test_official_runner_requires_real_midtrend_artifacts(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(eod, "apply_strategy_daily_eod_status_schema", lambda **_kwargs: None)
+    monkeypatch.setattr(eod, "upsert_strategy_daily_eod_status", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(eod, "upsert_data_run_manifest", lambda *_args, **_kwargs: None)
+    canonical = tmp_path / "2026-07-24"
+    canonical.mkdir()
+    (canonical / "marker").write_text("old", encoding="utf-8")
+
+    def publisher(**kwargs):
+        summary = _write_complete_mature_release(**kwargs)
+        release = (
+            Path(kwargs["output_root"])
+            / "research"
+            / "strategy_daily_eod"
+            / kwargs["trade_date"]
+        )
+        (release / "strategy_mid_trend_positions.csv").unlink()
+        return summary
+
+    summary = eod.run_strategy_daily_eod(
+        trade_date="2026-07-24",
+        output_root=tmp_path,
+        dependency_checker=lambda **_kwargs: {"status": "success"},
+        publisher=publisher,
+        service="test",
+    )
+
+    assert summary["publishable"] is False
+    assert summary["strategy_status"]["midtrend_artifacts"] == "failed"
+    assert (canonical / "marker").read_text(encoding="utf-8") == "old"
+
+
+def test_official_runner_rejects_manifest_paths_outside_staged_release(
+    tmp_path: Path, monkeypatch
+):
+    monkeypatch.setattr(eod, "apply_strategy_daily_eod_status_schema", lambda **_kwargs: None)
+    monkeypatch.setattr(eod, "upsert_strategy_daily_eod_status", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(eod, "upsert_data_run_manifest", lambda *_args, **_kwargs: None)
+    canonical = tmp_path / "2026-07-24"
+    canonical.mkdir()
+    (canonical / "marker").write_text("old", encoding="utf-8")
+
+    def publisher(**kwargs):
+        collected = []
+        summary = _write_complete_mature_release(
+            output_root=kwargs["output_root"],
+            trade_date=kwargs["trade_date"],
+            manifest_upsert=collected.append,
+        )
+        collected[0]["artifact_path"] = str(tmp_path / "escape.csv")
+        for entry in collected:
+            kwargs["manifest_upsert"](entry)
+        return summary
+
+    summary = eod.run_strategy_daily_eod(
+        trade_date="2026-07-24",
+        output_root=tmp_path,
+        dependency_checker=lambda **_kwargs: {"status": "success"},
+        publisher=publisher,
+        service="test",
+    )
+
+    assert summary["status"] == "failed"
+    assert "escapes staged release" in summary["error_summary"]
+    assert (canonical / "marker").read_text(encoding="utf-8") == "old"
+
+
+def test_official_runner_does_not_replace_canonical_for_invalid_counts(
+    tmp_path: Path, monkeypatch
+):
+    persisted = []
+    monkeypatch.setattr(eod, "apply_strategy_daily_eod_status_schema", lambda **_kwargs: None)
+    monkeypatch.setattr(eod, "upsert_strategy_daily_eod_status", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(eod, "upsert_data_run_manifest", lambda entry, **_kwargs: persisted.append(entry))
+    canonical = tmp_path / "2026-07-24"
+    canonical.mkdir()
+    (canonical / "marker").write_text("old", encoding="utf-8")
+
+    summary = eod.run_strategy_daily_eod(
+        trade_date="2026-07-24",
+        output_root=tmp_path,
+        dependency_checker=lambda **_kwargs: {"status": "success"},
+        publisher=lambda **kwargs: _write_complete_mature_release(
+            **kwargs,
+            counts={"lhb_shortline": 5, "mid_trend": 5, "tech_bottleneck": 0},
+        ),
+        service="test",
+    )
+
+    assert summary["status"] == "partial"
+    assert summary["publishable"] is False
+    assert (canonical / "marker").read_text(encoding="utf-8") == "old"
+    assert str(summary["summary_path"]).startswith(str(tmp_path / ".failures"))
+    assert not persisted
+
+
+def test_official_runner_does_not_commit_success_manifest_when_publisher_raises(
+    tmp_path: Path, monkeypatch
+):
+    persisted = []
+    monkeypatch.setattr(eod, "apply_strategy_daily_eod_status_schema", lambda **_kwargs: None)
+    monkeypatch.setattr(eod, "upsert_strategy_daily_eod_status", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(eod, "upsert_data_run_manifest", lambda entry, **_kwargs: persisted.append(entry))
+
+    def publisher(**kwargs):
+        kwargs["manifest_upsert"](
+            {"module": "strategy_lhb_shortline", "status": "success"}
+        )
+        raise RuntimeError("engine exploded")
+
+    summary = eod.run_strategy_daily_eod(
+        trade_date="2026-07-24",
+        output_root=tmp_path,
+        dependency_checker=lambda **_kwargs: {"status": "success"},
+        publisher=publisher,
+        service="test",
+    )
+
+    assert summary["status"] == "failed"
+    assert summary["publishable"] is False
+    assert "engine exploded" in summary["error_summary"]
+    assert not persisted
 
 
 def test_atomic_publish_switches_existing_symlink_to_new_version(tmp_path: Path):
@@ -177,6 +423,10 @@ def test_run_strategy_daily_eod_writes_summary_and_status(tmp_path: Path, monkey
         trade_date="2026-06-24",
         output_root=tmp_path,
         dependency_checker=lambda **_kwargs: {"status": "success"},
+        publisher=lambda **kwargs: _write_complete_mature_release(
+            **kwargs,
+            counts={"lhb_shortline": 1, "mid_trend": 1, "tech_bottleneck": 1},
+        ),
         lhb_runner=runner,
         mid_runner=runner,
         tech_runner=runner,
@@ -228,6 +478,7 @@ def test_failed_strategy_publication_retains_only_ten_audit_summaries(
 def test_official_strategy_runner_writes_task7_canonical_release(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(eod, "apply_strategy_daily_eod_status_schema", lambda **_kwargs: None)
     monkeypatch.setattr(eod, "upsert_strategy_daily_eod_status", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(eod, "upsert_data_run_manifest", lambda *_args, **_kwargs: None)
     canonical_dir = tmp_path / "2026-07-02"
     canonical_dir.mkdir()
     (canonical_dir / "old_release.marker").write_text("old", encoding="utf-8")
@@ -262,6 +513,7 @@ def test_official_strategy_runner_writes_task7_canonical_release(tmp_path: Path,
         trade_date="2026-07-02",
         output_root=tmp_path,
         dependency_checker=lambda **_kwargs: {"status": "success"},
+        publisher=lambda **kwargs: _write_complete_mature_release(**kwargs),
         lhb_runner=runner_for("lhb_shortline", "strategy_lhb_shortline_review.csv"),
         mid_runner=runner_for("mid_trend", "strategy_mid_trend_review.csv"),
         tech_runner=runner_for("tech_bottleneck", "strategy_tech_bottleneck_review.csv"),
@@ -294,6 +546,7 @@ def test_run_strategy_daily_eod_writes_midtrend_v1_v2_and_review_artifacts(tmp_p
     captured = {}
     monkeypatch.setattr(eod, "apply_strategy_daily_eod_status_schema", lambda **_kwargs: None)
     monkeypatch.setattr(eod, "upsert_strategy_daily_eod_status", lambda payload, **_kwargs: captured.update(payload=payload))
+    monkeypatch.setattr(eod, "upsert_data_run_manifest", lambda *_args, **_kwargs: None)
 
     def runner(*, trade_date, output_dir, service):
         path = Path(output_dir) / "strategy_mid_trend_review.csv"
@@ -321,17 +574,23 @@ def test_run_strategy_daily_eod_writes_midtrend_v1_v2_and_review_artifacts(tmp_p
         trade_date="2026-06-24",
         output_root=tmp_path,
         dependency_checker=lambda **_kwargs: {"status": "success"},
+        publisher=lambda **kwargs: _write_complete_mature_release(**kwargs),
         lhb_runner=runner,
         mid_runner=runner,
         tech_runner=runner,
         midtrend_artifact_builder=artifact_builder,
     )
 
-    assert result["status"] == "partial"
+    assert result["status"] == "success"
     assert result["strategy_status"]["midtrend_artifacts"] == "success"
-    assert result["midtrend_artifacts"] == {}
+    assert set(result["midtrend_artifacts"]) == {
+        "review_path",
+        "equity_path",
+        "positions_path",
+        "trades_path",
+    }
     assert Path(result["summary_path"]).exists()
-    assert captured["payload"]["status"] == "partial"
+    assert captured["payload"]["status"] == "success"
 
 
 def test_run_strategy_daily_eod_flat_failed_dependency_blocks_all_strategies(tmp_path: Path, monkeypatch):
@@ -357,12 +616,9 @@ def test_run_strategy_daily_eod_intraday_failure_only_blocks_lhb(tmp_path: Path,
     monkeypatch.setattr(eod, "apply_strategy_daily_eod_status_schema", lambda **_kwargs: None)
     monkeypatch.setattr(eod, "upsert_strategy_daily_eod_status", lambda payload, **_kwargs: captured.update(payload=payload))
 
-    def runner(name, rows):
-        def run(*, trade_date, output_dir, service):
-            calls.append(name)
-            return {"status": "success", "review_rows": rows, "paths": {}}
-
-        return run
+    def publisher(**_kwargs):
+        calls.append("publisher")
+        raise AssertionError("dependency failure must block atomic publisher")
 
     result = eod.run_strategy_daily_eod(
         trade_date="2026-06-24",
@@ -374,24 +630,21 @@ def test_run_strategy_daily_eod_intraday_failure_only_blocks_lhb(tmp_path: Path,
                 "reason": "baostock login failed: 10002007",
             },
         },
-        lhb_runner=runner("lhb", 99),
-        mid_runner=runner("mid", 2),
-        midtrend_artifact_builder=runner("midtrend_artifacts", 0),
-        tech_runner=runner("tech", 3),
+        publisher=publisher,
     )
 
-    assert calls == ["mid", "midtrend_artifacts", "tech"]
-    assert result["status"] == "partial"
-    assert result["review_rows"] == 5
+    assert calls == []
+    assert result["status"] == "failed"
+    assert result["review_rows"] == 0
     assert result["strategy_status"] == {
         "lhb_shortline": "blocked",
-        "mid_trend": "success",
-        "midtrend_artifacts": "success",
-        "tech_bottleneck": "success",
+        "mid_trend": "skipped",
+        "midtrend_artifacts": "skipped",
+        "tech_bottleneck": "skipped",
     }
     assert result["strategy_errors"]["lhb_shortline"] == "intraday: baostock login failed: 10002007"
     assert result["dependency_check"]["intraday"]["reason"] == "baostock login failed: 10002007"
-    assert captured["payload"]["status"] == "partial"
+    assert captured["payload"]["status"] == "failed"
     assert captured["payload"]["dependency_check_status"] == "failed"
 
 
@@ -440,15 +693,16 @@ def test_run_strategy_daily_eod_records_independent_runner_failure_reason(tmp_pa
         trade_date="2026-06-24",
         output_root=tmp_path,
         dependency_checker=lambda **_kwargs: {"status": "success"},
+        publisher=lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("model unavailable")),
         lhb_runner=success,
         mid_runner=failed,
         midtrend_artifact_builder=success,
         tech_runner=success,
     )
 
-    assert result["status"] == "partial"
+    assert result["status"] == "failed"
     assert result["strategy_status"]["mid_trend"] == "failed"
-    assert result["strategy_errors"]["mid_trend"] == "model unavailable"
+    assert "model unavailable" in result["strategy_errors"]["mid_trend"]
 
 
 def test_check_strategy_daily_eod_dependencies_returns_common_and_intraday(monkeypatch):

@@ -14,6 +14,7 @@ import pandas as pd
 
 from stock_research.atomic_json import atomic_write_json
 from stock_research.config import SETTINGS
+from stock_research.data_run_manifest import upsert_data_run_manifest
 from stock_research.db import connect, fetch_all
 from stock_research.factor_store import load_top_scores
 from stock_research.mid_trend_shadow_top10 import build_mid_trend_shadow_top10_from_frame
@@ -22,6 +23,7 @@ from stock_research.strategy_daily_eod_store import (
     build_status_payload,
     upsert_strategy_daily_eod_status,
 )
+from stock_research.strategy_eod_publish import publish_strategy_eod
 from stock_research.tech_bottleneck_evidence_workflow import (
     build_tech_bottleneck_evidence_workflow,
 )
@@ -29,6 +31,7 @@ from stock_research.tech_bottleneck_evidence_workflow import (
 
 DependencyChecker = Callable[..., dict[str, Any]]
 StrategyRunner = Callable[..., dict[str, Any]]
+Publisher = Callable[..., dict[str, Any]]
 
 
 DEFAULT_OUTPUT_ROOT = Path("outputs/research/strategy_daily_eod")
@@ -46,6 +49,7 @@ def run_strategy_daily_eod(
     trade_date: str,
     output_root: str | Path = DEFAULT_OUTPUT_ROOT,
     dependency_checker: DependencyChecker | None = None,
+    publisher: Publisher = publish_strategy_eod,
     lhb_runner: StrategyRunner | None = None,
     mid_runner: StrategyRunner | None = None,
     tech_runner: StrategyRunner | None = None,
@@ -54,121 +58,148 @@ def run_strategy_daily_eod(
 ) -> dict[str, Any]:
     apply_strategy_daily_eod_status_schema(service=service)
     dependency_checker = dependency_checker or check_strategy_daily_eod_dependencies
-    canonical_output_dir = Path(output_root) / trade_date
-    versions_dir = Path(output_root) / ".versions" / trade_date
+    root = Path(output_root)
+    canonical_output_dir = root / trade_date
+    versions_dir = root / ".versions" / trade_date
     versions_dir.mkdir(parents=True, exist_ok=True)
-    output_dir = versions_dir / f"strategy-eod-{trade_date}-{uuid.uuid4().hex}"
-    output_dir.mkdir(parents=True)
+    staging_name = f"strategy-eod-{trade_date}-{uuid.uuid4().hex}"
+    publisher_root = versions_dir / f".{staging_name}-publisher-root"
+    output_dir = versions_dir / staging_name
 
     dependency_check = _normalize_dependency_check(
         dependency_checker(trade_date=trade_date, service=service)
     )
 
-    lhb_runner = lhb_runner or build_lhb_shortline_strategy_eod
-    mid_runner = mid_runner or build_mid_trend_strategy_eod
-    tech_runner = tech_runner or build_tech_bottleneck_strategy_eod
-    midtrend_artifact_builder = midtrend_artifact_builder or build_midtrend_daily_review_artifacts_eod
-
-    runners = {
-        "lhb_shortline": lhb_runner,
-        "mid_trend": mid_runner,
-        "midtrend_artifacts": midtrend_artifact_builder,
-        "tech_bottleneck": tech_runner,
-    }
-    results: dict[str, dict[str, Any]] = {}
-    for strategy_name, runner in runners.items():
-        blocked_reason = strategy_blocked_reason(strategy_name, dependency_check)
-        if blocked_reason:
-            results[strategy_name] = {
-                "status": "blocked",
-                "review_rows": 0,
-                "paths": {},
-                "error_summary": blocked_reason,
-            }
-        else:
-            results[strategy_name] = _run_strategy(
-                runner,
-                trade_date=trade_date,
-                output_dir=output_dir,
-                service=service,
-            )
-
-    strategy_status = {
-        name: str(result.get("status") or "failed") for name, result in results.items()
-    }
-    strategy_errors = {
-        name: str(result.get("error_summary") or result.get("reason"))
-        for name, result in results.items()
-        if result.get("error_summary") or result.get("reason")
-    }
-    review_rows = sum(
-        int(result.get("review_rows", 0))
-        for result in results.values()
-        if result.get("status") == "success"
-    )
-    success_count = sum(status == "success" for status in strategy_status.values())
-    aggregate_status = (
-        "success"
-        if success_count == len(strategy_status)
-        else "partial"
-        if success_count
-        else "failed"
-    )
     dependency_reason = _dependency_failure_reason(dependency_check)
-    strategy_counts = _write_review_manifest(output_dir)
     expected_counts = {
         "lhb_shortline": 5,
         "mid_trend": 5,
         "tech_bottleneck": 5,
     }
-    contract_valid = aggregate_status == "success" and strategy_counts == expected_counts
-    final_status = aggregate_status if aggregate_status != "success" or contract_valid else "partial"
-    if contract_valid:
-        for result in results.values():
-            result["paths"] = _relocate_result_paths(
-                dict(result.get("paths") or {}),
-                staging=output_dir,
-                canonical=canonical_output_dir,
+    manifest_entries: list[dict[str, Any]] = []
+    publisher_summary: dict[str, Any] = {}
+    publication_error: str | None = None
+
+    dependency_blocked = _dependency_check_status(dependency_check) != "success"
+    if dependency_blocked:
+        strategy_status, strategy_errors = _blocked_publication_status(dependency_check)
+        strategy_counts = {name: 0 for name in expected_counts}
+    else:
+        try:
+            publisher_summary = publisher(
+                trade_date=trade_date,
+                output_root=publisher_root,
+                manifest_upsert=manifest_entries.append,
             )
-    failure_output_dir = Path(output_root) / ".failures" / trade_date / output_dir.name
+            generated = publisher_root / "research" / "strategy_daily_eod" / trade_date
+            if not generated.is_dir():
+                raise RuntimeError(f"mature publisher did not create staged release: {generated}")
+            manifest_entries = [
+                _relocate_manifest_entry(entry, staging=generated, canonical=output_dir)
+                for entry in manifest_entries
+            ]
+            _relocate_review_manifest_paths(
+                generated / "review_queue_strategy_manifest.csv",
+                staging=generated,
+                canonical=output_dir,
+            )
+            os.replace(generated, output_dir)
+            shutil.rmtree(publisher_root, ignore_errors=True)
+            strategy_counts = {
+                name: int((publisher_summary.get("strategy_counts") or {}).get(name, 0))
+                for name in expected_counts
+            }
+            strategy_status = {
+                name: "success" if strategy_counts[name] == expected else "failed"
+                for name, expected in expected_counts.items()
+            }
+            strategy_status["midtrend_artifacts"] = (
+                "success"
+                if _midtrend_artifacts_valid(manifest_entries, staging=output_dir)
+                else "failed"
+            )
+            strategy_errors = {
+                name: f"expected 5 review rows, got {strategy_counts[name]}"
+                for name in expected_counts
+                if strategy_status[name] != "success"
+            }
+            if strategy_status["midtrend_artifacts"] != "success":
+                strategy_errors["midtrend_artifacts"] = "midtrend artifact contract invalid"
+        except Exception as exc:  # noqa: BLE001
+            publication_error = f"{type(exc).__name__}: {exc}"
+            strategy_counts = {name: 0 for name in expected_counts}
+            strategy_status = {
+                "lhb_shortline": "failed",
+                "mid_trend": "failed",
+                "midtrend_artifacts": "failed",
+                "tech_bottleneck": "failed",
+            }
+            strategy_errors = {name: publication_error for name in strategy_status}
+
+    review_rows = sum(strategy_counts.values())
+    contract_valid = (
+        not dependency_blocked
+        and publication_error is None
+        and strategy_counts == expected_counts
+        and strategy_status.get("midtrend_artifacts") == "success"
+        and publisher_summary.get("publishable") is True
+        and int(publisher_summary.get("review_rows") or 0) == 15
+        and (publisher_summary.get("score_audit") or {}).get("status") == "success"
+        and _staged_release_valid(output_dir, trade_date=trade_date)
+    )
+    success_count = sum(status == "success" for status in strategy_status.values())
+    final_status = "success" if contract_valid else "partial" if success_count else "failed"
+    failure_output_dir = root / ".failures" / trade_date / staging_name
     persistent_output_dir = canonical_output_dir if contract_valid else failure_output_dir
+    manifest_modules = list(publisher_summary.get("manifest_modules") or [
+        "strategy_lhb_shortline",
+        "strategy_mid_trend",
+        "strategy_tech_bottleneck",
+        "review_queue_strategy_manifest",
+    ])
     summary = {
         "trade_date": trade_date,
-        "run_id": f"strategy-eod-{trade_date}-local" if contract_valid else output_dir.name,
+        "run_id": str(publisher_summary.get("run_id") or staging_name),
         "output_dir": str(persistent_output_dir),
         "dependency_check": dependency_check,
         "dependency_reason": dependency_reason,
         "strategy_status": strategy_status,
         "strategy_errors": strategy_errors,
-        "midtrend_artifacts": (
-            results["midtrend_artifacts"].get("paths", {}) if contract_valid else {}
-        ),
-        "midtrend_artifact_warnings": results["midtrend_artifacts"].get("warnings", []),
+        "midtrend_artifacts": _canonical_midtrend_artifacts(
+            manifest_entries, staging=output_dir, canonical=canonical_output_dir
+        ) if contract_valid else {},
+        "midtrend_artifact_warnings": [],
         "review_rows": review_rows,
         "status": final_status,
         "publishable": contract_valid,
-        "manifest_modules": [
-            "strategy_lhb_shortline",
-            "strategy_mid_trend",
-            "strategy_tech_bottleneck",
-            "review_queue_strategy_manifest",
-        ],
+        "manifest_modules": manifest_modules,
         "score_audit": {
             "status": "success" if contract_valid else "failed",
             "strategy_counts": strategy_counts,
         },
-        "error_summary": _join_errors(list(strategy_errors.values())),
+        "error_summary": _join_errors([publication_error, *strategy_errors.values()]),
     }
     staging_summary_path = output_dir / "strategy_eod_publish_summary.json"
     summary_path = persistent_output_dir / "strategy_eod_publish_summary.json"
     summary["summary_path"] = str(summary_path)
 
     if contract_valid:
+        canonical_entries = [
+            _relocate_manifest_entry(entry, staging=output_dir, canonical=canonical_output_dir)
+            for entry in manifest_entries
+        ]
+        _relocate_review_manifest_paths(
+            output_dir / "review_queue_strategy_manifest.csv",
+            staging=output_dir,
+            canonical=canonical_output_dir,
+        )
         staging_summary_path.write_text(
             json.dumps(summary, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
         _atomic_publish_directory(output_dir, canonical_output_dir)
+        for entry in canonical_entries:
+            upsert_data_run_manifest(entry, service=service)
     else:
         _persist_failure_summary(
             summary_path=summary_path,
@@ -177,6 +208,7 @@ def run_strategy_daily_eod(
             trade_date=trade_date,
         )
         shutil.rmtree(output_dir, ignore_errors=True)
+        shutil.rmtree(publisher_root, ignore_errors=True)
 
     upsert_strategy_daily_eod_status(
         build_status_payload(
@@ -257,6 +289,189 @@ def _relocate_result_paths(
         else:
             relocated[key] = str(canonical / relative)
     return relocated
+
+
+def _blocked_publication_status(
+    dependency_check: dict[str, dict[str, Any]],
+) -> tuple[dict[str, str], dict[str, str]]:
+    statuses: dict[str, str] = {}
+    errors: dict[str, str] = {}
+    for strategy_name in STRATEGY_DEPENDENCIES:
+        reason = strategy_blocked_reason(strategy_name, dependency_check)
+        if reason:
+            statuses[strategy_name] = "blocked"
+            errors[strategy_name] = reason
+        else:
+            statuses[strategy_name] = "skipped"
+            errors[strategy_name] = "publication skipped because another required dependency failed"
+    return statuses, errors
+
+
+def _staged_release_valid(staging: Path, *, trade_date: str) -> bool:
+    expected_files = {
+        "lhb_shortline": "strategy_lhb_shortline_review.csv",
+        "mid_trend": "strategy_mid_trend_review.csv",
+        "tech_bottleneck": "strategy_tech_bottleneck_review.csv",
+    }
+    try:
+        manifest = pd.read_csv(staging / "review_queue_strategy_manifest.csv", low_memory=False)
+        if len(manifest) != 15:
+            return False
+        for strategy_id, filename in expected_files.items():
+            frame = pd.read_csv(staging / filename, low_memory=False)
+            selected = manifest.loc[manifest["strategy_id"].astype(str).eq(strategy_id)]
+            if not _review_frame_valid(frame, strategy_id=strategy_id, trade_date=trade_date):
+                return False
+            if not _review_frame_valid(selected, strategy_id=strategy_id, trade_date=trade_date):
+                return False
+            file_keys = set(zip(frame["rank"].astype(int), frame["asset_id"].astype(str)))
+            manifest_keys = set(zip(selected["rank"].astype(int), selected["asset_id"].astype(str)))
+            if file_keys != manifest_keys:
+                return False
+    except (FileNotFoundError, KeyError, TypeError, ValueError, pd.errors.EmptyDataError):
+        return False
+    return True
+
+
+def _review_frame_valid(frame: pd.DataFrame, *, strategy_id: str, trade_date: str) -> bool:
+    required = {"trade_date", "strategy_id", "asset_id", "rank", "review_tier"}
+    if len(frame) != 5 or not required.issubset(frame.columns):
+        return False
+    return (
+        set(frame["trade_date"].astype(str)) == {trade_date}
+        and set(frame["strategy_id"].astype(str)) == {strategy_id}
+        and sorted(frame["rank"].astype(int).tolist()) == [1, 2, 3, 4, 5]
+        and frame["review_tier"].astype(str).eq("top5_focus").all()
+        and frame["asset_id"].astype(str).str.strip().ne("").all()
+        and frame["asset_id"].astype(str).nunique() == 5
+    )
+
+
+def _midtrend_artifacts_valid(
+    entries: list[dict[str, Any]],
+    *,
+    staging: Path,
+) -> bool:
+    entry = next(
+        (
+            item
+            for item in entries
+            if item.get("module") == "strategy_mid_trend" and item.get("status") == "success"
+        ),
+        None,
+    )
+    if entry is None:
+        return False
+    metadata = dict(entry.get("metadata") or {})
+    paths = [
+        metadata.get("review_path"),
+        metadata.get("equity_path"),
+        metadata.get("positions_path"),
+        metadata.get("trades_path"),
+    ]
+    if not all(paths):
+        return False
+    try:
+        return all(_contained_existing_path(value, root=staging).is_file() for value in paths)
+    except RuntimeError:
+        return False
+
+
+def _canonical_midtrend_artifacts(
+    entries: list[dict[str, Any]],
+    *,
+    staging: Path,
+    canonical: Path,
+) -> dict[str, str]:
+    entry = next(
+        (item for item in entries if item.get("module") == "strategy_mid_trend"),
+        {},
+    )
+    metadata = dict(entry.get("metadata") or {})
+    return {
+        key: str(canonical / _contained_existing_path(value, root=staging).relative_to(staging.resolve()))
+        for key, value in metadata.items()
+        if key in {"review_path", "equity_path", "positions_path", "trades_path"} and value
+    }
+
+
+def _contained_existing_path(value: Any, *, root: Path) -> Path:
+    candidate = Path(str(value))
+    resolved = candidate.resolve() if candidate.is_absolute() else (root / candidate).resolve()
+    try:
+        resolved.relative_to(root.resolve())
+    except ValueError as exc:
+        raise RuntimeError(f"manifest path escapes staged release: {value}") from exc
+    return resolved
+
+
+def _relocate_manifest_entry(
+    entry: dict[str, Any],
+    *,
+    staging: Path,
+    canonical: Path,
+) -> dict[str, Any]:
+    relocated = dict(entry)
+    if relocated.get("artifact_path"):
+        relocated["artifact_path"] = _relocate_path_value(
+            relocated["artifact_path"], staging=staging, canonical=canonical
+        )
+    relocated["metadata"] = _relocate_metadata_paths(
+        dict(relocated.get("metadata") or {}), staging=staging, canonical=canonical
+    )
+    return relocated
+
+
+def _relocate_metadata_paths(
+    value: Any,
+    *,
+    staging: Path,
+    canonical: Path,
+    path_context: bool = False,
+) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: _relocate_metadata_paths(
+                item,
+                staging=staging,
+                canonical=canonical,
+                path_context=key.endswith("_path") or key in {"artifact_path", "summary_path"},
+            )
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [
+            _relocate_metadata_paths(
+                item, staging=staging, canonical=canonical, path_context=path_context
+            )
+            for item in value
+        ]
+    if path_context and value:
+        return _relocate_path_value(value, staging=staging, canonical=canonical)
+    return value
+
+
+def _relocate_path_value(value: Any, *, staging: Path, canonical: Path) -> str:
+    resolved = _contained_existing_path(value, root=staging)
+    return str(canonical / resolved.relative_to(staging.resolve()))
+
+
+def _relocate_review_manifest_paths(
+    manifest_path: Path,
+    *,
+    staging: Path,
+    canonical: Path,
+) -> None:
+    frame = pd.read_csv(manifest_path, low_memory=False)
+    if "artifact_path" not in frame.columns:
+        return
+    frame["artifact_path"] = [
+        _relocate_path_value(value, staging=staging, canonical=canonical)
+        if str(value or "").strip() and str(value).lower() != "nan"
+        else ""
+        for value in frame["artifact_path"].tolist()
+    ]
+    frame.to_csv(manifest_path, index=False)
 
 
 def _atomic_symlink_publish(staging: Path, canonical: Path) -> None:
