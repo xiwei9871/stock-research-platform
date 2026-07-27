@@ -7804,6 +7804,13 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
         )
         for key in ("status", "trade_date", "output_dir", "review_rows", "summary_path"):
             print(f"strategy_daily_eod|{key}|{result.get(key)}")
+        strategy_status = result.get("strategy_status") or {}
+        for strategy_name in ("lhb_shortline", "mid_trend", "tech_bottleneck"):
+            print(
+                f"strategy_daily_eod|{strategy_name}_status|"
+                f"{strategy_status.get(strategy_name)}"
+            )
+        print(f"strategy_daily_eod|dependency_reason|{result.get('dependency_reason') or ''}")
     elif args.command == "trend-lifecycle-v1":
         result = run_trend_lifecycle_v1_report(
             start_date=args.start_date,

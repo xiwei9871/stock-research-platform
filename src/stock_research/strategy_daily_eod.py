@@ -27,6 +27,13 @@ StrategyRunner = Callable[..., dict[str, Any]]
 
 DEFAULT_OUTPUT_ROOT = Path("outputs/research/strategy_daily_eod")
 
+STRATEGY_DEPENDENCIES = {
+    "lhb_shortline": ("common", "intraday"),
+    "mid_trend": ("common",),
+    "midtrend_artifacts": ("common",),
+    "tech_bottleneck": ("common",),
+}
+
 
 def run_strategy_daily_eod(
     *,
@@ -44,64 +51,74 @@ def run_strategy_daily_eod(
     output_dir = Path(output_root) / trade_date / "strategy_daily_eod_legacy"
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    dependency_check = dependency_checker(trade_date=trade_date, service=service)
-    if dependency_check.get("status") != "success":
-        result = _finalize_failure(
-            trade_date=trade_date,
-            output_dir=output_dir,
-            dependency_check=dependency_check,
-            lhb_status="skipped",
-            mid_status="skipped",
-            tech_status="skipped",
-            error_summary=str(dependency_check.get("reason") or "dependency check failed"),
-            service=service,
-        )
-        return result
+    dependency_check = _normalize_dependency_check(
+        dependency_checker(trade_date=trade_date, service=service)
+    )
 
     lhb_runner = lhb_runner or build_lhb_shortline_strategy_eod
     mid_runner = mid_runner or build_mid_trend_strategy_eod
     tech_runner = tech_runner or build_tech_bottleneck_strategy_eod
     midtrend_artifact_builder = midtrend_artifact_builder or build_midtrend_daily_review_artifacts_eod
 
-    lhb_result = _run_strategy(lhb_runner, trade_date=trade_date, output_dir=output_dir, service=service)
-    mid_result = _run_strategy(mid_runner, trade_date=trade_date, output_dir=output_dir, service=service)
-    midtrend_artifact_result = _run_strategy(
-        midtrend_artifact_builder,
-        trade_date=trade_date,
-        output_dir=output_dir,
-        service=service,
-    )
-    tech_result = _run_strategy(tech_runner, trade_date=trade_date, output_dir=output_dir, service=service)
+    runners = {
+        "lhb_shortline": lhb_runner,
+        "mid_trend": mid_runner,
+        "midtrend_artifacts": midtrend_artifact_builder,
+        "tech_bottleneck": tech_runner,
+    }
+    results: dict[str, dict[str, Any]] = {}
+    for strategy_name, runner in runners.items():
+        blocked_reason = strategy_blocked_reason(strategy_name, dependency_check)
+        if blocked_reason:
+            results[strategy_name] = {
+                "status": "blocked",
+                "review_rows": 0,
+                "paths": {},
+                "error_summary": blocked_reason,
+            }
+        else:
+            results[strategy_name] = _run_strategy(
+                runner,
+                trade_date=trade_date,
+                output_dir=output_dir,
+                service=service,
+            )
 
     strategy_status = {
-        "lhb_shortline": str(lhb_result.get("status") or "failed"),
-        "mid_trend": str(mid_result.get("status") or "failed"),
-        "midtrend_artifacts": str(midtrend_artifact_result.get("status") or "failed"),
-        "tech_bottleneck": str(tech_result.get("status") or "failed"),
+        name: str(result.get("status") or "failed") for name, result in results.items()
     }
-    review_rows = int(
-        lhb_result.get("review_rows", 0)
-        + mid_result.get("review_rows", 0)
-        + tech_result.get("review_rows", 0)
+    strategy_errors = {
+        name: str(result.get("error_summary") or result.get("reason"))
+        for name, result in results.items()
+        if result.get("error_summary") or result.get("reason")
+    }
+    review_rows = sum(
+        int(result.get("review_rows", 0))
+        for result in results.values()
+        if result.get("status") == "success"
     )
+    success_count = sum(status == "success" for status in strategy_status.values())
+    aggregate_status = (
+        "success"
+        if success_count == len(strategy_status)
+        else "partial"
+        if success_count
+        else "failed"
+    )
+    dependency_reason = _dependency_failure_reason(dependency_check)
     summary = {
         "trade_date": trade_date,
         "run_id": f"strategy-eod-{trade_date}-local",
         "output_dir": str(output_dir),
         "dependency_check": dependency_check,
+        "dependency_reason": dependency_reason,
         "strategy_status": strategy_status,
-        "midtrend_artifacts": midtrend_artifact_result.get("paths", {}),
-        "midtrend_artifact_warnings": midtrend_artifact_result.get("warnings", []),
+        "strategy_errors": strategy_errors,
+        "midtrend_artifacts": results["midtrend_artifacts"].get("paths", {}),
+        "midtrend_artifact_warnings": results["midtrend_artifacts"].get("warnings", []),
         "review_rows": review_rows,
-        "status": "success" if all(status == "success" for status in strategy_status.values()) else "failed",
-        "error_summary": _join_errors(
-            [
-                lhb_result.get("error_summary"),
-                mid_result.get("error_summary"),
-                midtrend_artifact_result.get("error_summary"),
-                tech_result.get("error_summary"),
-            ]
-        ),
+        "status": aggregate_status,
+        "error_summary": _join_errors(list(strategy_errors.values())),
     }
     summary_path = output_dir / "strategy_eod_publish_summary.json"
     summary["summary_path"] = str(summary_path)
@@ -112,7 +129,7 @@ def run_strategy_daily_eod(
         build_status_payload(
             trade_date=trade_date,
             status=summary["status"],
-            dependency_check_status=str(dependency_check.get("status") or "failed"),
+            dependency_check_status=_dependency_check_status(dependency_check),
             lhb_shortline_status=strategy_status["lhb_shortline"],
             mid_trend_status=strategy_status["mid_trend"],
             tech_bottleneck_status=strategy_status["tech_bottleneck"],
@@ -134,7 +151,7 @@ def check_strategy_daily_eod_dependencies(
     rows = _fetch_one(
         service,
         """
-        SELECT daily_status, minute5_status, deps_status
+        SELECT daily_status, minute5_status, deps_status, failed_jobs
         FROM ops.daily_pipeline_status
         WHERE trade_date = %s
         ORDER BY updated_at DESC
@@ -143,15 +160,100 @@ def check_strategy_daily_eod_dependencies(
         [trade_date],
     )
     if not rows:
-        return {"status": "failed", "reason": "missing daily_pipeline_status"}
+        failure = {"status": "failed", "reason": "missing daily_pipeline_status"}
+        return {"common": failure, "intraday": failure}
     row = rows[0]
+    common_failures = []
     if str(row.get("daily_status") or "") not in {"success", "partial_success"}:
-        return {"status": "failed", "reason": f"daily_status={row.get('daily_status')}"}
-    if str(row.get("minute5_status") or "") not in {"success", "partial_success"}:
-        return {"status": "failed", "reason": f"minute5_status={row.get('minute5_status')}"}
+        failure = f"daily_status={row.get('daily_status')}"
+        detail = _failed_job_reason(row.get("failed_jobs"), stage="daily")
+        common_failures.append(f"{failure}: {detail}" if detail else failure)
     if str(row.get("deps_status") or "") != "success":
-        return {"status": "failed", "reason": f"deps_status={row.get('deps_status')}"}
-    return {"status": "success"}
+        failure = f"deps_status={row.get('deps_status')}"
+        detail = _failed_job_reason(row.get("failed_jobs"), stage="deps")
+        common_failures.append(f"{failure}: {detail}" if detail else failure)
+    common = (
+        {"status": "failed", "reason": "; ".join(common_failures)}
+        if common_failures
+        else {"status": "success"}
+    )
+    if str(row.get("minute5_status") or "") in {"success", "partial_success"}:
+        intraday = {"status": "success"}
+    else:
+        reason = _failed_job_reason(row.get("failed_jobs"), stage="minute5")
+        intraday = {
+            "status": "failed",
+            "reason": reason or f"minute5_status={row.get('minute5_status')}",
+        }
+    return {"common": common, "intraday": intraday}
+
+
+def _normalize_dependency_check(check: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    if "common" in check or "intraday" in check:
+        return {
+            "common": dict(
+                check.get("common")
+                or {"status": "failed", "reason": "missing common dependency status"}
+            ),
+            "intraday": dict(
+                check.get("intraday")
+                or {"status": "failed", "reason": "missing intraday dependency status"}
+            ),
+        }
+    status = str(check.get("status") or "failed")
+    normalized = {"status": status}
+    if check.get("reason"):
+        normalized["reason"] = str(check["reason"])
+    return {"common": dict(normalized), "intraday": dict(normalized)}
+
+
+def strategy_blocked_reason(
+    strategy_name: str,
+    dependency_check: dict[str, dict[str, Any]],
+) -> str | None:
+    failures = []
+    for dependency_name in STRATEGY_DEPENDENCIES[strategy_name]:
+        dependency = dependency_check[dependency_name]
+        if dependency.get("status") != "success":
+            reason = str(dependency.get("reason") or "dependency check failed")
+            failures.append(f"{dependency_name}: {reason}")
+    return "; ".join(failures) if failures else None
+
+
+def _dependency_check_status(dependency_check: dict[str, dict[str, Any]]) -> str:
+    return (
+        "success"
+        if all(item.get("status") == "success" for item in dependency_check.values())
+        else "failed"
+    )
+
+
+def _dependency_failure_reason(dependency_check: dict[str, dict[str, Any]]) -> str | None:
+    failures = []
+    for name, item in dependency_check.items():
+        if item.get("status") != "success":
+            failures.append(f"{name}: {item.get('reason') or 'dependency check failed'}")
+    return "; ".join(failures) if failures else None
+
+
+def _failed_job_reason(value: Any, *, stage: str) -> str | None:
+    jobs = value
+    if isinstance(jobs, str):
+        try:
+            jobs = json.loads(jobs)
+        except json.JSONDecodeError:
+            return None
+    if not isinstance(jobs, list):
+        return None
+    for job in jobs:
+        if not isinstance(job, dict) or str(job.get("stage") or "") != stage:
+            continue
+        provider = str(job.get("source") or job.get("provider") or "").strip()
+        error = str(job.get("error_summary") or job.get("error") or "").strip()
+        reason = " ".join(part for part in (provider, error) if part)
+        if reason:
+            return reason
+    return None
 
 
 def _run_strategy(
@@ -358,52 +460,6 @@ def build_tech_bottleneck_strategy_eod(
             "positions": result["paths"].get("adjusted_candidates", ""),
         },
     }
-
-
-def _finalize_failure(
-    *,
-    trade_date: str,
-    output_dir: Path,
-    dependency_check: dict[str, Any],
-    lhb_status: str,
-    mid_status: str,
-    tech_status: str,
-    error_summary: str,
-    service: str,
-) -> dict[str, Any]:
-    summary = {
-        "trade_date": trade_date,
-        "run_id": f"strategy-eod-{trade_date}-local",
-        "output_dir": str(output_dir),
-        "dependency_check": dependency_check,
-        "strategy_status": {
-            "lhb_shortline": lhb_status,
-            "mid_trend": mid_status,
-            "tech_bottleneck": tech_status,
-        },
-        "review_rows": 0,
-        "status": "failed",
-        "error_summary": error_summary,
-    }
-    summary_path = output_dir / "strategy_eod_publish_summary.json"
-    summary["summary_path"] = str(summary_path)
-    summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
-    upsert_strategy_daily_eod_status(
-        build_status_payload(
-            trade_date=trade_date,
-            status="failed",
-            dependency_check_status=str(dependency_check.get("status") or "failed"),
-            lhb_shortline_status=lhb_status,
-            mid_trend_status=mid_status,
-            tech_bottleneck_status=tech_status,
-            review_rows=0,
-            output_dir=str(output_dir),
-            summary_path=str(summary_path),
-            error_summary=error_summary,
-        ),
-        service=service,
-    )
-    return summary
 
 
 def _join_errors(values: list[Any]) -> str | None:

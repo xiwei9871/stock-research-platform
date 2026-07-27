@@ -11,7 +11,7 @@ CREATE SCHEMA IF NOT EXISTS ops;
 
 CREATE TABLE IF NOT EXISTS ops.strategy_daily_eod_status (
     trade_date date PRIMARY KEY,
-    status text NOT NULL CHECK (status IN ('success', 'failed', 'running', 'skipped')),
+    status text NOT NULL CHECK (status IN ('success', 'partial', 'failed', 'running', 'skipped')),
     dependency_check_status text NOT NULL,
     lhb_shortline_status text NOT NULL,
     mid_trend_status text NOT NULL,
@@ -22,6 +22,12 @@ CREATE TABLE IF NOT EXISTS ops.strategy_daily_eod_status (
     error_summary text,
     updated_at timestamptz NOT NULL DEFAULT now()
 );
+
+ALTER TABLE ops.strategy_daily_eod_status
+    DROP CONSTRAINT IF EXISTS strategy_daily_eod_status_status_check;
+ALTER TABLE ops.strategy_daily_eod_status
+    ADD CONSTRAINT strategy_daily_eod_status_status_check
+    CHECK (status IN ('success', 'partial', 'failed', 'running', 'skipped'));
 """
 
 

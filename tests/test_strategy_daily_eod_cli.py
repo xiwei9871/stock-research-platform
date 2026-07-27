@@ -17,6 +17,12 @@ def test_cli_run_strategy_daily_eod_prints_summary(monkeypatch, capsys):
             "output_dir": "/tmp/out",
             "review_rows": 15,
             "summary_path": "/tmp/out/strategy_eod_publish_summary.json",
+            "dependency_reason": None,
+            "strategy_status": {
+                "lhb_shortline": "success",
+                "mid_trend": "success",
+                "tech_bottleneck": "success",
+            },
         },
     )
 
@@ -25,3 +31,4 @@ def test_cli_run_strategy_daily_eod_prints_summary(monkeypatch, capsys):
 
     assert rc in {0, None}
     assert "strategy_daily_eod|status|success" in out
+    assert "strategy_daily_eod|lhb_shortline_status|success" in out

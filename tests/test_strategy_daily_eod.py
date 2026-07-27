@@ -23,6 +23,7 @@ def test_status_payload_and_schema():
     assert payload["trade_date"] == "2026-06-24"
     assert payload["mid_trend_status"] == "skipped"
     assert "ops.strategy_daily_eod_status" in store.STRATEGY_DAILY_EOD_STATUS_SQL
+    assert "'partial'" in store.STRATEGY_DAILY_EOD_STATUS_SQL
 
 
 def test_run_strategy_daily_eod_writes_summary_and_status(tmp_path: Path, monkeypatch):
@@ -133,7 +134,7 @@ def test_run_strategy_daily_eod_writes_midtrend_v1_v2_and_review_artifacts(tmp_p
     assert captured["payload"]["status"] == "success"
 
 
-def test_run_strategy_daily_eod_skips_when_deps_fail(tmp_path: Path, monkeypatch):
+def test_run_strategy_daily_eod_flat_failed_dependency_blocks_all_strategies(tmp_path: Path, monkeypatch):
     captured = {}
     monkeypatch.setattr(eod, "apply_strategy_daily_eod_status_schema", lambda **_kwargs: None)
     monkeypatch.setattr(eod, "upsert_strategy_daily_eod_status", lambda payload, **_kwargs: captured.update(payload=payload))
@@ -145,5 +146,163 @@ def test_run_strategy_daily_eod_skips_when_deps_fail(tmp_path: Path, monkeypatch
     )
 
     assert result["status"] == "failed"
-    assert result["strategy_status"]["lhb_shortline"] == "skipped"
+    assert set(result["strategy_status"].values()) == {"blocked"}
+    assert all("deps missing" in reason for reason in result["strategy_errors"].values())
     assert captured["payload"]["dependency_check_status"] == "failed"
+
+
+def test_run_strategy_daily_eod_intraday_failure_only_blocks_lhb(tmp_path: Path, monkeypatch):
+    captured = {}
+    calls = []
+    monkeypatch.setattr(eod, "apply_strategy_daily_eod_status_schema", lambda **_kwargs: None)
+    monkeypatch.setattr(eod, "upsert_strategy_daily_eod_status", lambda payload, **_kwargs: captured.update(payload=payload))
+
+    def runner(name, rows):
+        def run(*, trade_date, output_dir, service):
+            calls.append(name)
+            return {"status": "success", "review_rows": rows, "paths": {}}
+
+        return run
+
+    result = eod.run_strategy_daily_eod(
+        trade_date="2026-06-24",
+        output_root=tmp_path,
+        dependency_checker=lambda **_kwargs: {
+            "common": {"status": "success"},
+            "intraday": {
+                "status": "failed",
+                "reason": "baostock login failed: 10002007",
+            },
+        },
+        lhb_runner=runner("lhb", 99),
+        mid_runner=runner("mid", 2),
+        midtrend_artifact_builder=runner("midtrend_artifacts", 0),
+        tech_runner=runner("tech", 3),
+    )
+
+    assert calls == ["mid", "midtrend_artifacts", "tech"]
+    assert result["status"] == "partial"
+    assert result["review_rows"] == 5
+    assert result["strategy_status"] == {
+        "lhb_shortline": "blocked",
+        "mid_trend": "success",
+        "midtrend_artifacts": "success",
+        "tech_bottleneck": "success",
+    }
+    assert result["strategy_errors"]["lhb_shortline"] == "intraday: baostock login failed: 10002007"
+    assert result["dependency_check"]["intraday"]["reason"] == "baostock login failed: 10002007"
+    assert captured["payload"]["status"] == "partial"
+    assert captured["payload"]["dependency_check_status"] == "failed"
+
+
+def test_run_strategy_daily_eod_common_failure_blocks_all_runners(tmp_path: Path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(eod, "apply_strategy_daily_eod_status_schema", lambda **_kwargs: None)
+    monkeypatch.setattr(eod, "upsert_strategy_daily_eod_status", lambda *_args, **_kwargs: None)
+
+    def runner(name):
+        def run(**_kwargs):
+            calls.append(name)
+            return {"status": "success", "review_rows": 1, "paths": {}}
+
+        return run
+
+    result = eod.run_strategy_daily_eod(
+        trade_date="2026-06-24",
+        output_root=tmp_path,
+        dependency_checker=lambda **_kwargs: {
+            "common": {"status": "failed", "reason": "daily_status=failed"},
+            "intraday": {"status": "success"},
+        },
+        lhb_runner=runner("lhb"),
+        mid_runner=runner("mid"),
+        midtrend_artifact_builder=runner("midtrend_artifacts"),
+        tech_runner=runner("tech"),
+    )
+
+    assert calls == []
+    assert result["status"] == "failed"
+    assert set(result["strategy_status"].values()) == {"blocked"}
+    assert result["strategy_errors"]["tech_bottleneck"] == "common: daily_status=failed"
+
+
+def test_run_strategy_daily_eod_records_independent_runner_failure_reason(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(eod, "apply_strategy_daily_eod_status_schema", lambda **_kwargs: None)
+    monkeypatch.setattr(eod, "upsert_strategy_daily_eod_status", lambda *_args, **_kwargs: None)
+
+    def success(**_kwargs):
+        return {"status": "success", "review_rows": 1, "paths": {}}
+
+    def failed(**_kwargs):
+        return {"status": "failed", "review_rows": 0, "paths": {}, "reason": "model unavailable"}
+
+    result = eod.run_strategy_daily_eod(
+        trade_date="2026-06-24",
+        output_root=tmp_path,
+        dependency_checker=lambda **_kwargs: {"status": "success"},
+        lhb_runner=success,
+        mid_runner=failed,
+        midtrend_artifact_builder=success,
+        tech_runner=success,
+    )
+
+    assert result["status"] == "partial"
+    assert result["strategy_status"]["mid_trend"] == "failed"
+    assert result["strategy_errors"]["mid_trend"] == "model unavailable"
+
+
+def test_check_strategy_daily_eod_dependencies_returns_common_and_intraday(monkeypatch):
+    monkeypatch.setattr(
+        eod,
+        "_fetch_one",
+        lambda *_args, **_kwargs: [
+            {
+                "daily_status": "success",
+                "minute5_status": "failed",
+                "deps_status": "success",
+                "failed_jobs": [
+                    {
+                        "stage": "minute5",
+                        "source": "baostock",
+                        "error_summary": "login failed: 10002007",
+                    }
+                ],
+            }
+        ],
+    )
+
+    result = eod.check_strategy_daily_eod_dependencies(trade_date="2026-06-24")
+
+    assert result["common"] == {"status": "success"}
+    assert result["intraday"] == {
+        "status": "failed",
+        "reason": "baostock login failed: 10002007",
+    }
+
+
+def test_check_strategy_daily_eod_dependencies_includes_common_provider_error(monkeypatch):
+    monkeypatch.setattr(
+        eod,
+        "_fetch_one",
+        lambda *_args, **_kwargs: [
+            {
+                "daily_status": "failed",
+                "minute5_status": "success",
+                "deps_status": "success",
+                "failed_jobs": [
+                    {
+                        "stage": "daily",
+                        "source": "tushare",
+                        "error_summary": "token rejected",
+                    }
+                ],
+            }
+        ],
+    )
+
+    result = eod.check_strategy_daily_eod_dependencies(trade_date="2026-06-24")
+
+    assert result["common"] == {
+        "status": "failed",
+        "reason": "daily_status=failed: tushare token rejected",
+    }

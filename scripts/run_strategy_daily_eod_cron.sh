@@ -27,14 +27,26 @@ print_summary() {
   echo "交易日: $TRADE_DATE"
   local status
   local review_rows
+  local lhb_status
+  local mid_status
+  local tech_status
+  local dependency_reason
   status="$(grep -E '^strategy_daily_eod\|status\|' "$DETAIL_LOG" | tail -n 1 | awk -F'|' '{print $3}' || true)"
   review_rows="$(grep -E '^strategy_daily_eod\|review_rows\|' "$DETAIL_LOG" | tail -n 1 | awk -F'|' '{print $3}' || true)"
+  lhb_status="$(grep -E '^strategy_daily_eod\|lhb_shortline_status\|' "$DETAIL_LOG" | tail -n 1 | awk -F'|' '{print $3}' || true)"
+  mid_status="$(grep -E '^strategy_daily_eod\|mid_trend_status\|' "$DETAIL_LOG" | tail -n 1 | awk -F'|' '{print $3}' || true)"
+  tech_status="$(grep -E '^strategy_daily_eod\|tech_bottleneck_status\|' "$DETAIL_LOG" | tail -n 1 | awk -F'|' '{print $3}' || true)"
+  dependency_reason="$(grep -E '^strategy_daily_eod\|dependency_reason\|' "$DETAIL_LOG" | tail -n 1 | cut -d'|' -f3- || true)"
   if [[ -n "$status" ]]; then
     echo "状态: $status"
   fi
   if [[ -n "$review_rows" ]]; then
     echo "复盘条目: $review_rows"
   fi
+  [[ -n "$lhb_status" ]] && echo "LHB: $lhb_status"
+  [[ -n "$mid_status" ]] && echo "Mid Trend: $mid_status"
+  [[ -n "$tech_status" ]] && echo "Tech Bottleneck: $tech_status"
+  [[ -n "$dependency_reason" ]] && echo "依赖原因: $dependency_reason"
   if [[ "$rc" -ne 0 ]]; then
     echo "退出码: $rc"
   fi
@@ -53,9 +65,13 @@ if [[ "$rc" -ne 0 ]]; then
   exit "$rc"
 fi
 
-if grep -q '^strategy_daily_eod|status|failed$' "$DETAIL_LOG"; then
+if grep -Eq '^strategy_daily_eod\|status\|(failed|partial)$' "$DETAIL_LOG"; then
   echo "strategy_daily_eod|business_failed|trade_date|${TRADE_DATE}" >>"$DETAIL_LOG"
-  print_summary "策略日终失败" 1
+  if grep -q '^strategy_daily_eod|status|partial$' "$DETAIL_LOG"; then
+    print_summary "策略日终部分完成" 1
+  else
+    print_summary "策略日终失败" 1
+  fi
   exit 1
 fi
 

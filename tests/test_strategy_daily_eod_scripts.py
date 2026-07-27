@@ -120,3 +120,45 @@ exit 0
     assert "详细日志:" in result.stdout
     assert "strategy_daily_eod|status|failed" not in result.stdout
     assert "strategy_daily_eod|business_failed" not in result.stderr
+
+
+def test_run_strategy_daily_eod_cron_preserves_partial_summary_and_exits_nonzero(tmp_path: Path) -> None:
+    fake_root = tmp_path / "root"
+    fake_root.mkdir()
+    _prepare_fake_guard(fake_root)
+    fake_python = tmp_path / "python.sh"
+
+    fake_python.write_text(
+        """#!/usr/bin/env bash
+if [[ "$*" == *"run-strategy-daily-eod"* ]]; then
+  echo "strategy_daily_eod|status|partial"
+  echo "strategy_daily_eod|lhb_shortline_status|blocked"
+  echo "strategy_daily_eod|mid_trend_status|success"
+  echo "strategy_daily_eod|tech_bottleneck_status|success"
+  echo "strategy_daily_eod|dependency_reason|intraday: baostock login failed: 10002007"
+  exit 0
+fi
+exit 0
+""",
+        encoding="utf-8",
+    )
+    fake_python.chmod(0o755)
+    env = os.environ.copy()
+    env.update(
+        {
+            "STRATEGY_DAILY_EOD_ROOT": str(fake_root),
+            "STRATEGY_DAILY_EOD_PYTHON": str(fake_python),
+            "STRATEGY_DAILY_EOD_TRADE_DATE": "2026-06-24",
+        }
+    )
+
+    result = subprocess.run(
+        ["scripts/run_strategy_daily_eod_cron.sh"], env=env, capture_output=True, text=True
+    )
+
+    assert result.returncode == 1
+    assert "策略日终部分完成" in result.stdout
+    assert "LHB: blocked" in result.stdout
+    assert "Mid Trend: success" in result.stdout
+    assert "Tech Bottleneck: success" in result.stdout
+    assert "依赖原因: intraday: baostock login failed: 10002007" in result.stdout
