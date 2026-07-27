@@ -24,6 +24,12 @@ def test_status_payload_and_schema():
     assert payload["mid_trend_status"] == "skipped"
     assert "ops.strategy_daily_eod_status" in store.STRATEGY_DAILY_EOD_STATUS_SQL
     assert "'partial'" in store.STRATEGY_DAILY_EOD_STATUS_SQL
+    assert "'blocked'" in store.STRATEGY_DAILY_EOD_STATUS_SQL
+    assert "pg_get_constraintdef" in store.STRATEGY_DAILY_EOD_STATUS_SQL
+    assert "IF constraint_definition IS NULL" in store.STRATEGY_DAILY_EOD_STATUS_SQL
+    assert store.STRATEGY_DAILY_EOD_STATUS_SQL.index(
+        "IF constraint_definition IS NULL"
+    ) < store.STRATEGY_DAILY_EOD_STATUS_SQL.index("DROP CONSTRAINT IF EXISTS")
 
 
 def test_run_strategy_daily_eod_writes_summary_and_status(tmp_path: Path, monkeypatch):

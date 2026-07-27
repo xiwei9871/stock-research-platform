@@ -7824,6 +7824,7 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
             f"{(dependency_check.get('intraday') or {}).get('status')}"
         )
         print(f"strategy_daily_eod|dependency_reason|{result.get('dependency_reason') or ''}")
+        return 0 if result.get("status") == "success" else 1
     elif args.command == "trend-lifecycle-v1":
         result = run_trend_lifecycle_v1_report(
             start_date=args.start_date,

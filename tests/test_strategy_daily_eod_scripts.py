@@ -139,7 +139,7 @@ if [[ "$*" == *"run-strategy-daily-eod"* ]]; then
   echo "strategy_daily_eod|dependency_common_status|success"
   echo "strategy_daily_eod|dependency_intraday_status|failed"
   echo "strategy_daily_eod|dependency_reason|intraday: baostock login failed: 10002007"
-  exit 0
+  exit 1
 fi
 exit 0
 """,

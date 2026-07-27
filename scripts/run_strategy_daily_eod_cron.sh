@@ -70,7 +70,11 @@ rc=$?
 set -e
 
 if [[ "$rc" -ne 0 ]]; then
-  print_summary "策略日终失败" "$rc"
+  if grep -q '^strategy_daily_eod|status|partial$' "$DETAIL_LOG"; then
+    print_summary "策略日终部分完成" "$rc"
+  else
+    print_summary "策略日终失败" "$rc"
+  fi
   exit "$rc"
 fi
 

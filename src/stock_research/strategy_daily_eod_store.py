@@ -11,7 +11,7 @@ CREATE SCHEMA IF NOT EXISTS ops;
 
 CREATE TABLE IF NOT EXISTS ops.strategy_daily_eod_status (
     trade_date date PRIMARY KEY,
-    status text NOT NULL CHECK (status IN ('success', 'partial', 'failed', 'running', 'skipped')),
+    status text NOT NULL CHECK (status IN ('success', 'partial', 'failed', 'blocked', 'running', 'skipped')),
     dependency_check_status text NOT NULL,
     lhb_shortline_status text NOT NULL,
     mid_trend_status text NOT NULL,
@@ -23,11 +23,27 @@ CREATE TABLE IF NOT EXISTS ops.strategy_daily_eod_status (
     updated_at timestamptz NOT NULL DEFAULT now()
 );
 
-ALTER TABLE ops.strategy_daily_eod_status
-    DROP CONSTRAINT IF EXISTS strategy_daily_eod_status_status_check;
-ALTER TABLE ops.strategy_daily_eod_status
-    ADD CONSTRAINT strategy_daily_eod_status_status_check
-    CHECK (status IN ('success', 'partial', 'failed', 'running', 'skipped'));
+DO $strategy_daily_eod_status_migration$
+DECLARE
+    constraint_definition text;
+BEGIN
+    SELECT pg_get_constraintdef(oid)
+    INTO constraint_definition
+    FROM pg_constraint
+    WHERE conrelid = 'ops.strategy_daily_eod_status'::regclass
+      AND conname = 'strategy_daily_eod_status_status_check';
+
+    IF constraint_definition IS NULL
+       OR position('partial' IN constraint_definition) = 0
+       OR position('blocked' IN constraint_definition) = 0 THEN
+        ALTER TABLE ops.strategy_daily_eod_status
+            DROP CONSTRAINT IF EXISTS strategy_daily_eod_status_status_check;
+        ALTER TABLE ops.strategy_daily_eod_status
+            ADD CONSTRAINT strategy_daily_eod_status_status_check
+            CHECK (status IN ('success', 'partial', 'failed', 'blocked', 'running', 'skipped'));
+    END IF;
+END
+$strategy_daily_eod_status_migration$;
 """
 
 
