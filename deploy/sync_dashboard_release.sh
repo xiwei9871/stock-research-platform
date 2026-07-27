@@ -108,6 +108,20 @@ if [[ ! -x "$STOCK_RESEARCH_PYTHON" ]]; then
   exit 2
 fi
 
+valid_iso_date() {
+  "$STOCK_RESEARCH_PYTHON" -c '
+from datetime import date
+import sys
+
+value = sys.argv[1]
+try:
+    parsed = date.fromisoformat(value)
+except ValueError:
+    raise SystemExit(1)
+raise SystemExit(0 if parsed.isoformat() == value else 1)
+' "$1" >/dev/null 2>&1
+}
+
 release_id="$(git -C "$ROOT" rev-parse HEAD)"
 dirty="$(git -C "$ROOT" status --porcelain --untracked-files=all)"
 if [[ -n "$dirty" ]]; then
@@ -162,7 +176,12 @@ if [[ -z "$EXPECTED_TRADE_DATE" ]]; then
       2>/dev/null || true
   )"
 fi
-if [[ ! "$EXPECTED_TRADE_DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+if [[ ! "$EXPECTED_TRADE_DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] \
+  || ! valid_iso_date "$EXPECTED_TRADE_DATE"; then
+  if [[ -n "$trade_date_override" ]]; then
+    echo "Invalid EXPECTED_TRADE_DATE: expected a real YYYY-MM-DD calendar date" >&2
+    exit 2
+  fi
   echo "Unable to resolve a valid EXPECTED_TRADE_DATE from override, current readiness, or the current release platform loader" >&2
   exit 2
 fi

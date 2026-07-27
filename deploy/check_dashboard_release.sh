@@ -13,13 +13,36 @@ EXPECTED_API_BASE_IMAGE="${EXPECTED_API_BASE_IMAGE:-python:3.12.11-slim-bookworm
 EXPECTED_FRONTEND_BASE_IMAGE="${EXPECTED_FRONTEND_BASE_IMAGE:-nginx:1.27.5-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10}"
 RELEASE_CHECK_TIMEOUT_SECONDS="${RELEASE_CHECK_TIMEOUT_SECONDS:-120}"
 RELEASE_CHECK_RETRY_SECONDS="${RELEASE_CHECK_RETRY_SECONDS:-3}"
+DATE_VALIDATION_PYTHON="${STOCK_RESEARCH_PYTHON:-python3}"
+
+valid_iso_date() {
+  "$DATE_VALIDATION_PYTHON" -c '
+from datetime import date
+import sys
+
+value = sys.argv[1]
+try:
+    parsed = date.fromisoformat(value)
+except ValueError:
+    raise SystemExit(1)
+raise SystemExit(0 if parsed.isoformat() == value else 1)
+' "$1" >/dev/null 2>&1
+}
 
 if [[ ! "$EXPECTED_TRADE_DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
   echo "Invalid EXPECTED_TRADE_DATE: expected YYYY-MM-DD" >&2
   exit 2
 fi
+if ! valid_iso_date "$EXPECTED_TRADE_DATE"; then
+  echo "Invalid EXPECTED_TRADE_DATE: expected a real YYYY-MM-DD calendar date" >&2
+  exit 2
+fi
 if [[ ! "$EXPECTED_STRATEGY_ARTIFACT_DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
   echo "Invalid EXPECTED_STRATEGY_ARTIFACT_DATE: expected YYYY-MM-DD" >&2
+  exit 2
+fi
+if ! valid_iso_date "$EXPECTED_STRATEGY_ARTIFACT_DATE"; then
+  echo "Invalid EXPECTED_STRATEGY_ARTIFACT_DATE: expected a real YYYY-MM-DD calendar date" >&2
   exit 2
 fi
 if [[ ! "$RELEASE_CHECK_TIMEOUT_SECONDS" =~ ^[0-9]+$ ]] || (( RELEASE_CHECK_TIMEOUT_SECONDS < 1 || RELEASE_CHECK_TIMEOUT_SECONDS > 120 )); then
@@ -61,7 +84,35 @@ fetch_json() {
   [[ "$status" == "200" ]] && jq -e . "$output" >/dev/null 2>&1
 }
 
+readiness_dates_are_calendar_valid() {
+  "$DATE_VALIDATION_PYTHON" -c '
+from datetime import date
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    payload = json.load(handle)
+values = [
+    payload.get("latest_market_date"),
+    (payload.get("runtime_provenance") or {}).get("strategy_artifact_date"),
+]
+display = payload.get("display_trade_date")
+if display not in (None, ""):
+    values.append(display)
+for value in values:
+    if not isinstance(value, str):
+        raise SystemExit(1)
+    try:
+        parsed = date.fromisoformat(value)
+    except ValueError:
+        raise SystemExit(1)
+    if parsed.isoformat() != value:
+        raise SystemExit(1)
+' "$1" >/dev/null 2>&1
+}
+
 readiness_matches_release() {
+  readiness_dates_are_calendar_valid "$1" || return 1
   jq -e \
     --arg release "$EXPECTED_RELEASE_ID" \
     --arg source "$EXPECTED_REMOTE_SOURCE_ROOT" \

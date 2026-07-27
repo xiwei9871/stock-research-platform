@@ -89,7 +89,7 @@ def test_build_platform_readiness_returns_ready_when_all_sources_available(monke
     assert payload["warnings"] == []
 
 
-def test_build_platform_readiness_includes_runtime_provenance_with_market_date(monkeypatch):
+def test_lightweight_readiness_does_not_claim_market_date_as_strategy_artifact(monkeypatch):
     monkeypatch.setattr(
         readiness,
         "load_platform_summary",
@@ -112,12 +112,13 @@ def test_build_platform_readiness_includes_runtime_provenance_with_market_date(m
         }
     )
 
+    assert payload.get("display_trade_date", "") == ""
     assert payload["runtime_provenance"] == {
         "release_id": "release-1",
         "source_root": "/srv/stock-research",
         "python_package_root": "/srv/stock-research/src/stock_research",
         "frontend_build_id": "release-1",
-        "strategy_artifact_date": "2026-06-12",
+        "strategy_artifact_date": "",
     }
 
 
@@ -986,7 +987,7 @@ def test_display_gate_failure_blocks_manifest_readiness(monkeypatch):
     assert payload["display_gate"]["candidate_status"] == "incomplete"
     assert payload["status"] == "BLOCKED"
     assert "display_trade_date" in payload["missing_data"]
-    assert payload["runtime_provenance"]["strategy_artifact_date"] == "2026-06-12"
+    assert payload["runtime_provenance"]["strategy_artifact_date"] == ""
     assert any(
         warning.startswith("Display trade date unavailable: incomplete")
         for warning in payload["warnings"]

@@ -125,7 +125,7 @@ def _release_fixture(tmp_path: Path, *, valid_manifest: bool = True) -> tuple[Pa
         fi
         if [[ "$*" == *"load_platform_summary"* || "$*" == *"build_platform_readiness"* ]]; then
           if [[ "${FAKE_PLATFORM_LOADER_FAIL:-0}" == "1" ]]; then exit 1; fi
-          echo "${FAKE_STRATEGY_DATE:-2026-07-24}"
+          echo "${FAKE_STRATEGY_DATE-2026-07-24}"
           exit 0
         fi
         exec /usr/bin/python3 "$@"
@@ -566,6 +566,46 @@ def test_release_sync_loader_failure_does_not_scan_stale_strategy_artifacts(tmp_
     assert "rsync:" not in commands
 
 
+def test_release_sync_rejects_impossible_explicit_calendar_date_before_remote(tmp_path):
+    _root, env, log_file = _release_fixture(tmp_path)
+    env["EXPECTED_TRADE_DATE"] = "2026-02-30"
+
+    result = subprocess.run(
+        [str(REPO_ROOT / "deploy/sync_dashboard_release.sh")],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert "Invalid EXPECTED_TRADE_DATE" in result.stderr
+    commands = log_file.read_text(encoding="utf-8")
+    assert "ssh:" not in commands
+    assert "rsync:" not in commands
+
+
+def test_release_sync_fails_closed_when_current_readiness_has_no_publishable_date(tmp_path):
+    _root, env, log_file = _release_fixture(tmp_path)
+    env["FAKE_STRATEGY_DATE"] = ""
+
+    result = subprocess.run(
+        [str(REPO_ROOT / "deploy/sync_dashboard_release.sh")],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert "Unable to resolve a valid EXPECTED_TRADE_DATE" in result.stderr
+    commands = log_file.read_text(encoding="utf-8")
+    assert "ssh:" not in commands
+    assert "rsync:" not in commands
+
+
 def test_release_sync_same_project_unpublished_worker_fails_before_rsync_and_up(tmp_path):
     _root, env, log_file = _release_fixture(tmp_path)
     fake_bin = Path(env["PATH"].split(":", 1)[0])
@@ -728,6 +768,7 @@ def _release_gate_env(
         fake_bin / "curl",
         """
         #!/bin/bash
+        [[ -n "${FAKE_CURL_LOG:-}" ]] && printf 'curl\n' >> "$FAKE_CURL_LOG"
         output=''
         url=''
         while (( $# )); do
@@ -785,6 +826,7 @@ def _release_gate_env(
         "FAKE_FRONTEND_RELEASE_ID": frontend_release_id,
         "FAKE_READINESS_JSON": json.dumps(readiness),
         "FAKE_QUEUE_JSON": json.dumps(queue),
+        "FAKE_CURL_LOG": str(tmp_path / "curl.log"),
     }
 
 
@@ -846,6 +888,8 @@ def test_release_gate_accepts_market_date_after_expected_strategy_date(tmp_path)
         ("2026-07-23", "2026-07-24", "2026-07-24"),
         ("2026-07-27", "2026-07-24", "2026-06-01"),
         ("2026-07-27", "2026-06-01", "2026-07-24"),
+        ("2026-98-98", "2026-07-24", "2026-07-24"),
+        ("2026-07-99", "2026-07-24", "2026-07-24"),
         ("2026-7-27", "2026-07-24", "2026-07-24"),
         ("not-a-date", "2026-07-24", "2026-07-24"),
     ],
@@ -907,6 +951,36 @@ def test_release_gate_rejects_malformed_expected_strategy_artifact_date(tmp_path
 
     assert result.returncode == 2
     assert "Invalid EXPECTED_STRATEGY_ARTIFACT_DATE" in result.stderr
+
+
+@pytest.mark.parametrize(
+    ("key", "value", "expected_error"),
+    [
+        ("EXPECTED_TRADE_DATE", "2026-02-30", "Invalid EXPECTED_TRADE_DATE"),
+        (
+            "EXPECTED_STRATEGY_ARTIFACT_DATE",
+            "2026-02-30",
+            "Invalid EXPECTED_STRATEGY_ARTIFACT_DATE",
+        ),
+    ],
+)
+def test_release_gate_rejects_impossible_calendar_dates_before_network(
+    tmp_path, key, value, expected_error
+):
+    env = _release_gate_env(tmp_path, frontend_release_id="new-release")
+    env[key] = value
+
+    result = subprocess.run(
+        [str(REPO_ROOT / "deploy/check_dashboard_release.sh")],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert expected_error in result.stderr
+    assert not Path(env["FAKE_CURL_LOG"]).exists()
 
 
 def test_release_gate_rejects_queue_date_rewrite(tmp_path):
