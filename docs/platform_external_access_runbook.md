@@ -84,6 +84,41 @@ Expected:
 - `/api/platform/readiness` returns JSON.
 - `X-Request-ID` is present in API responses.
 
+## Canonical Release Entry Point
+
+`deploy/sync_dashboard_release.sh` 是外部仪表盘发布的唯一入口 (the only supported external dashboard release entry point). Do not publish directly from validation branches or `.worktrees` directories. The script fails closed unless the selected release root is clean (including untracked files), its own `.venv` imports `stock_research` from that root, and the exact dated strategy artifact directory exists.
+
+Required operational inputs are normally stored in the server-only file selected by `DASHBOARD_SYNC_ENV` (default `/Users/xiwei/.stock_research_dashboard_sync.env`):
+
+```dotenv
+STOCK_RESEARCH_RELEASE_ROOT=/Users/xiwei/stock_research_release_YYYYMMDD
+EXPECTED_TRADE_DATE=YYYY-MM-DD
+REMOTE_USER=deployment-user
+REMOTE_HOST=deployment-host
+REMOTE_DIR=/absolute/remote/release/path
+SSH_OPTS=-o BatchMode=yes
+STRATEGY_OUTPUT_ROOT=/absolute/local/outputs/research
+BASE_URL=https://stock.manqiaotechnology.com
+DASHBOARD_AUTH=user:password
+REMOTE_CONTAINER_RELEASE_ROOT=/app
+```
+
+`EXPECTED_TRADE_DATE` is deliberately required; never infer a publish date from an older artifact. `DASHBOARD_AUTH` is passed only to the release check and must not be committed or embedded in the frontend. The remote Compose definition must forward `STOCK_RESEARCH_RELEASE_ROOT`, `STOCK_RESEARCH_RELEASE_ID`, and `STOCK_RESEARCH_FRONTEND_BUILD_ID` into the API container.
+
+Run the release only after the official strategy publisher has completed successfully:
+
+```bash
+STOCK_RESEARCH_RELEASE_ROOT=/Users/xiwei/stock_research_release_YYYYMMDD \
+EXPECTED_TRADE_DATE=YYYY-MM-DD \
+deploy/sync_dashboard_release.sh
+```
+
+The command builds one `release_id`, syncs backend source, the canonical `dashboard/dist`, and only `outputs/research/strategy_daily_eod/$EXPECTED_TRADE_DATE`, recreates the API and dashboard services, then waits at most 120 seconds for the readiness and Review Queue contracts.
+
+### 回滚
+
+Keep the previous clean release root and commit available. To roll back, set `STOCK_RESEARCH_RELEASE_ROOT` to that root, set `EXPECTED_TRADE_DATE` to the artifact date that belongs to it, and run the same `deploy/sync_dashboard_release.sh` entry point. The same provenance and Review Queue gates apply; do not bypass `deploy/check_dashboard_release.sh` or manually copy only frontend/backend files.
+
 ## Logs
 
 - Nginx access log: `/var/log/nginx/stock_research_dashboard.access.log`

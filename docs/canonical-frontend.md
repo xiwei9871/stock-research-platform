@@ -14,6 +14,8 @@ This AppShell frontend is the only supported UI for both local intranet debuggin
 
 Local intranet and external site deployments must serve the same canonical frontend bundle. Daily work should first validate `http://127.0.0.1:5174/`, then publish that same built artifact to `https://stock.manqiaotechnology.com/`.
 
+The only supported publication entry point is `deploy/sync_dashboard_release.sh`. It builds the SPA with the selected Git `release_id`, gives the API and frontend the same runtime identity, and accepts only a clean canonical release root. A frontend bundle copied separately from its backend is not a canonical release.
+
 ## Explicitly Not Canonical
 
 Do not reintroduce separate public snapshot pages, public dashboard entrypoints, or ops snapshot frontends such as:
