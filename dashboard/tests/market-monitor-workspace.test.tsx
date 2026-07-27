@@ -932,6 +932,47 @@ describe('MarketMonitorWorkspace', () => {
     }
   });
 
+  it('preserves missing sector metrics instead of presenting them as real zeros', async () => {
+    const chartSize = overrideChartSize(960, 360);
+    apiMocks.fetchSectorHeatmap.mockResolvedValueOnce(
+      makeHeatmapResponse('industry', {
+        items: [
+          {
+            ...makeHeatmapItems('industry')[0],
+            up_count: null,
+            down_count: null,
+            stock_count: null,
+            main_net_inflow: null
+          },
+          makeHeatmapItems('industry')[1]
+        ]
+      })
+    );
+
+    try {
+      renderWorkspace();
+      await waitFor(() => expect(echartsMocks.init).toHaveBeenCalledTimes(2));
+
+      const option = echartsMocks.charts[0]?.setOption.mock.calls.at(-1)?.[0];
+      const series = Array.isArray(option?.series) ? option.series[0] : null;
+      const item = Array.isArray(series?.data) ? series.data[0] : null;
+      const formatter = option?.tooltip?.formatter as ((params: { data?: typeof item }) => string) | undefined;
+
+      expect(item).toEqual(expect.objectContaining({
+        upCount: null,
+        downCount: null,
+        stockCount: null,
+        mainNetInflow: null
+      }));
+      expect(formatter?.({ data: item })).toContain('上涨/下跌 --/--');
+      expect(formatter?.({ data: item })).toContain('成分股 --');
+      expect(formatter?.({ data: item })).toContain('主力净流入 --');
+      expect(formatter?.({ data: { ...item, mainNetInflow: 0 } })).toContain('主力净流入 0.00亿');
+    } finally {
+      chartSize.restore();
+    }
+  });
+
   it('recovers echarts initialization after the chart container becomes measurable later', async () => {
     const chartSize = overrideChartSize(0, 0);
 

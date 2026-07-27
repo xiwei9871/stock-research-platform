@@ -11,6 +11,25 @@ function formatAmountYi(value: number) {
   return `${(value / 100000000).toFixed(2)}亿`;
 }
 
+function formatOptionalAmountYi(value: number | null) {
+  return value === null ? '--' : formatAmountYi(value);
+}
+
+function formatOptionalCount(value: number | null | undefined) {
+  return value == null ? '--' : String(value);
+}
+
+export function formatSectorTooltipLines(item: SectorHeatmapItem) {
+  return [
+    item.sectorName,
+    `涨跌幅 ${formatSignedPercent(item.pctChange)}`,
+    `成交额 ${formatAmountYi(item.amount)}`,
+    `上涨/下跌 ${formatOptionalCount(item.upCount)}/${formatOptionalCount(item.downCount)}`,
+    `成分股 ${formatOptionalCount(item.stockCount)}`,
+    `主力净流入 ${formatOptionalAmountYi(item.mainNetInflow)}`
+  ];
+}
+
 type HeatmapDirection = 'up' | 'down';
 
 function treemapColor(value: number, direction: HeatmapDirection) {
@@ -34,13 +53,7 @@ function buildTreemapOption(items: SectorHeatmapItem[], selectedSectorId: string
       formatter: (params: { data?: SectorHeatmapItem }) => {
         const item = params.data;
         if (!item) return '';
-        return [
-          item.sectorName,
-          `涨跌幅 ${formatSignedPercent(item.pctChange)}`,
-          `成交额 ${formatAmountYi(item.amount)}`,
-          `上涨/下跌 ${item.upCount}/${item.downCount}`,
-          `主力净流入 ${formatAmountYi(item.mainNetInflow)}`
-        ].join('<br/>');
+        return formatSectorTooltipLines(item).join('<br/>');
       }
     },
     series: [

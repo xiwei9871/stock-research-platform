@@ -6,7 +6,8 @@ function formatSignedPercent(value: number) {
   return `${sign}${(value * 100).toFixed(2)}%`;
 }
 
-function formatSignedAmountYi(value: number) {
+function formatSignedAmountYi(value: number | null) {
+  if (value === null) return '--';
   const sign = value > 0 ? '+' : '';
   return `${sign}${(value / 100000000).toFixed(2)}亿`;
 }
@@ -15,7 +16,8 @@ function formatAmountYi(value: number) {
   return `${(value / 100000000).toFixed(2)}亿`;
 }
 
-function formatRatio(value: number) {
+function formatRatio(value: number | null) {
+  if (value === null) return '--';
   const sign = value > 0 ? '+' : '';
   return `${sign}${(value * 100).toFixed(1)}%`;
 }
@@ -68,7 +70,7 @@ export function SectorDetailPanel({
             <article className="metric-card compact">
               <span>上涨 / 下跌</span>
               <strong>
-                {detail.upCount} / {detail.downCount}
+                {detail.upCount ?? '--'} / {detail.downCount ?? '--'}
               </strong>
             </article>
             <article className="metric-card compact">
