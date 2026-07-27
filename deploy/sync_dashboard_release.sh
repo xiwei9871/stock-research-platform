@@ -155,12 +155,14 @@ if [[ -z "$EXPECTED_TRADE_DATE" ]]; then
             )
             | .runtime_provenance.strategy_artifact_date as $artifact
             | select($artifact | type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$"))
-            | if ((.display_trade_date // "") == "") then
-                $artifact
-              else
-                .display_trade_date
-                | select(type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$") and . == $artifact)
-              end
+            | select(
+                ((.display_trade_date // "") == "")
+                or (
+                  (.display_trade_date | type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$"))
+                  and .display_trade_date >= $artifact
+                )
+              )
+            | $artifact
           ' \
       2>/dev/null || true
   )"
@@ -172,7 +174,7 @@ if [[ -z "$EXPECTED_TRADE_DATE" ]]; then
       STOCK_RESEARCH_RELEASE_ROOT="$ROOT" \
       STOCK_RESEARCH_RELEASE_ID="$release_id" \
       "$STOCK_RESEARCH_PYTHON" -c \
-      'import re; from stock_research.dashboard.readiness import build_platform_readiness; payload = build_platform_readiness(); artifact = str(payload.get("runtime_provenance", {}).get("strategy_artifact_date") or ""); display = str(payload.get("display_trade_date") or ""); selected = display or artifact; print(selected if re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", artifact) and (not display or display == artifact) else "")' \
+      'from datetime import date; from stock_research.dashboard.readiness import build_platform_readiness; payload = build_platform_readiness(); artifact = str(payload.get("runtime_provenance", {}).get("strategy_artifact_date") or ""); display = str(payload.get("display_trade_date") or ""); valid = lambda value: date.fromisoformat(value).isoformat() == value; print(artifact if valid(artifact) and (not display or (valid(display) and display >= artifact)) else "")' \
       2>/dev/null || true
   )"
 fi

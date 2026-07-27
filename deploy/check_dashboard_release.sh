@@ -132,7 +132,7 @@ readiness_matches_release() {
         ((.display_trade_date // "") == "")
         or (
           (.display_trade_date | type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$"))
-          and .display_trade_date == $strategy_date
+          and .display_trade_date >= $strategy_date
         )
       )
       and .runtime_provenance.release_id == $release

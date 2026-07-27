@@ -1,3 +1,5 @@
+import json
+
 from fastapi.testclient import TestClient
 import pytest
 
@@ -20,6 +22,58 @@ class _FakeConnectionContext:
 @pytest.fixture(autouse=True)
 def _disable_real_manifest_probe(monkeypatch):
     monkeypatch.setattr(readiness, "load_latest_data_run_manifest", lambda trade_date=None: [])
+    monkeypatch.setattr(
+        readiness,
+        "load_latest_successful_strategy_daily_eod_status",
+        lambda: None,
+        raising=False,
+    )
+
+
+def _write_publishable_strategy_summary(release_root, trade_date="2026-07-24"):
+    output_dir = (
+        release_root / "outputs" / "research" / "strategy_daily_eod" / trade_date
+    )
+    output_dir.mkdir(parents=True)
+    summary_path = output_dir / "strategy_eod_publish_summary.json"
+    summary_path.write_text(
+        json.dumps(
+            {
+                "trade_date": trade_date,
+                "status": "success",
+                "publishable": True,
+                "review_rows": 15,
+                "strategy_status": {
+                    "lhb_shortline": "success",
+                    "mid_trend": "success",
+                    "midtrend_artifacts": "success",
+                    "tech_bottleneck": "success",
+                },
+                "score_audit": {
+                    "status": "success",
+                    "strategy_counts": {
+                        "lhb_shortline": 5,
+                        "mid_trend": 5,
+                        "tech_bottleneck": 5,
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    return {
+        "trade_date": trade_date,
+        "status": "success",
+        "dependency_check_status": "success",
+        "lhb_shortline_status": "success",
+        "mid_trend_status": "success",
+        "midtrend_artifacts_status": "success",
+        "tech_bottleneck_status": "success",
+        "review_rows": 15,
+        "output_dir": str(output_dir),
+        "summary_path": str(summary_path),
+        "error_summary": None,
+    }
 
 
 def _patch_market_monitor_ready(monkeypatch):
@@ -120,6 +174,118 @@ def test_lightweight_readiness_does_not_claim_market_date_as_strategy_artifact(m
         "frontend_build_id": "release-1",
         "strategy_artifact_date": "",
     }
+
+
+def test_readiness_uses_latest_trusted_official_publication_not_display_date(
+    tmp_path, monkeypatch
+):
+    release_root = tmp_path / "release"
+    status = _write_publishable_strategy_summary(release_root, "2026-07-24")
+    monkeypatch.setattr(
+        readiness,
+        "load_latest_successful_strategy_daily_eod_status",
+        lambda: status,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        readiness,
+        "load_platform_summary",
+        lambda score_version, top_n: {
+            "latest_market_date": "2026-07-27",
+            "topn_preview": [{"asset_id": "A"}],
+        },
+    )
+    monkeypatch.setattr(readiness, "_load_manifest_modules", lambda: [{"module": "daily_bars"}])
+    monkeypatch.setattr(
+        readiness,
+        "_build_manifest_readiness",
+        lambda **_kwargs: {
+            "latest_market_date": "2026-07-27",
+            "display_trade_date": "2026-07-27",
+        },
+    )
+
+    payload = readiness.build_platform_readiness(
+        runtime_provenance_data={"source_root": str(release_root)}
+    )
+
+    assert payload["latest_market_date"] == "2026-07-27"
+    assert payload["display_trade_date"] == "2026-07-27"
+    assert payload["runtime_provenance"]["strategy_artifact_date"] == "2026-07-24"
+
+
+def test_readiness_rejects_official_publication_through_symlink_outside_release(
+    tmp_path, monkeypatch
+):
+    release_root = tmp_path / "release"
+    outside_root = tmp_path / "outside"
+    status = _write_publishable_strategy_summary(outside_root, "2026-07-24")
+    expected_parent = release_root / "outputs" / "research" / "strategy_daily_eod"
+    expected_parent.mkdir(parents=True)
+    (expected_parent / "2026-07-24").symlink_to(
+        outside_root / "outputs" / "research" / "strategy_daily_eod" / "2026-07-24",
+        target_is_directory=True,
+    )
+    status["output_dir"] = str(expected_parent / "2026-07-24")
+    status["summary_path"] = str(
+        expected_parent / "2026-07-24" / "strategy_eod_publish_summary.json"
+    )
+    monkeypatch.setattr(
+        readiness,
+        "load_latest_successful_strategy_daily_eod_status",
+        lambda: status,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        readiness,
+        "load_platform_summary",
+        lambda score_version, top_n: {
+            "latest_market_date": "2026-07-27",
+            "topn_preview": [{"asset_id": "A"}],
+        },
+    )
+
+    payload = readiness.build_platform_readiness(
+        runtime_provenance_data={"source_root": str(release_root)}
+    )
+
+    assert payload["runtime_provenance"]["strategy_artifact_date"] == ""
+
+
+def test_readiness_rejects_summary_symlink_outside_release(tmp_path, monkeypatch):
+    release_root = tmp_path / "release"
+    outside_root = tmp_path / "outside"
+    outside_status = _write_publishable_strategy_summary(outside_root, "2026-07-24")
+    output_dir = (
+        release_root
+        / "outputs"
+        / "research"
+        / "strategy_daily_eod"
+        / "2026-07-24"
+    )
+    output_dir.mkdir(parents=True)
+    summary_path = output_dir / "strategy_eod_publish_summary.json"
+    summary_path.symlink_to(outside_status["summary_path"])
+    status = dict(outside_status, output_dir=str(output_dir), summary_path=str(summary_path))
+    monkeypatch.setattr(
+        readiness,
+        "load_latest_successful_strategy_daily_eod_status",
+        lambda: status,
+    )
+    monkeypatch.setattr(
+        readiness,
+        "load_platform_summary",
+        lambda score_version, top_n: {
+            "latest_market_date": "2026-07-27",
+            "topn_preview": [{"asset_id": "A"}],
+        },
+    )
+
+    payload = readiness.build_platform_readiness(
+        runtime_provenance_data={"source_root": str(release_root)}
+    )
+
+    assert payload["runtime_provenance"]["strategy_artifact_date"] == ""
 
 
 def test_build_platform_readiness_converts_optional_failures_and_empty_sources_to_partial(
@@ -793,7 +959,7 @@ def test_readiness_includes_display_date_gate(monkeypatch):
     assert payload["display_trade_date"] == "2026-06-17"
     assert payload["candidate_trade_date"] == "2026-06-18"
     assert payload["display_gate"]["candidate_status"] == "before_cutoff"
-    assert payload["runtime_provenance"]["strategy_artifact_date"] == "2026-06-17"
+    assert payload["runtime_provenance"]["strategy_artifact_date"] == ""
 
 
 def test_runtime_provenance_does_not_report_unpublishable_manifest_date_when_summary_missing(

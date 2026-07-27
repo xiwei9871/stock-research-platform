@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime
+import json
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Mapping
 from zoneinfo import ZoneInfo
@@ -17,6 +18,9 @@ from stock_research.dashboard.platform import load_platform_summary
 from stock_research.dashboard.reports import DEFAULT_REPORTS_DIR
 from stock_research.db import connect, fetch_all
 from stock_research.runtime_provenance import runtime_provenance
+from stock_research.strategy_daily_eod_store import (
+    load_latest_successful_strategy_daily_eod_status,
+)
 
 
 REPORT_SUFFIXES = {".html", ".md", ".json", ".csv"}
@@ -86,6 +90,7 @@ def build_platform_readiness(
     provenance = dict(
         runtime_provenance() if runtime_provenance_data is None else runtime_provenance_data
     )
+    strategy_artifact_date = _trusted_strategy_artifact_date(provenance)
 
     try:
         platform_summary = load_platform_summary(score_version=score_version, top_n=5)
@@ -107,7 +112,7 @@ def build_platform_readiness(
         return _with_runtime_provenance(
             payload,
             provenance,
-            strategy_artifact_date=str(payload.get("display_trade_date") or ""),
+            strategy_artifact_date=strategy_artifact_date,
         )
 
     checks: list[dict[str, Any]] = []
@@ -184,7 +189,7 @@ def build_platform_readiness(
             "dashboard_url": "http://127.0.0.1:5174",
         },
         provenance,
-        strategy_artifact_date="",
+        strategy_artifact_date=strategy_artifact_date,
     )
 
 
@@ -198,6 +203,106 @@ def _with_runtime_provenance(
     runtime_payload["strategy_artifact_date"] = strategy_artifact_date
     payload["runtime_provenance"] = runtime_payload
     return payload
+
+
+def _trusted_strategy_artifact_date(provenance: Mapping[str, str]) -> str:
+    source_root_value = str(provenance.get("source_root") or "").strip()
+    if not source_root_value:
+        return ""
+    try:
+        status = load_latest_successful_strategy_daily_eod_status()
+    except Exception:  # noqa: BLE001
+        return ""
+    if not isinstance(status, Mapping) or not _successful_status_contract(status):
+        return ""
+
+    trade_date = str(status.get("trade_date") or "")
+    if not _real_iso_date(trade_date):
+        return ""
+    source_root = Path(source_root_value).resolve()
+    expected_output = (
+        source_root / "outputs" / "research" / "strategy_daily_eod" / trade_date
+    )
+    output_dir = Path(str(status.get("output_dir") or ""))
+    summary_path = Path(str(status.get("summary_path") or ""))
+    if not str(status.get("output_dir") or "") or not str(status.get("summary_path") or ""):
+        return ""
+    try:
+        resolved_expected = expected_output.resolve()
+        resolved_expected.relative_to(source_root)
+        resolved_output = output_dir.resolve()
+        resolved_summary = summary_path.resolve()
+        resolved_output.relative_to(source_root)
+        resolved_summary.relative_to(source_root)
+    except (OSError, ValueError):
+        return ""
+    expected_summary = (expected_output / "strategy_eod_publish_summary.json").resolve()
+    if (
+        resolved_output != resolved_expected
+        or resolved_summary != expected_summary
+        or resolved_summary.parent != resolved_output
+    ):
+        return ""
+    if not output_dir.is_dir() or not summary_path.is_file():
+        return ""
+
+    try:
+        summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return ""
+    if not _publishable_summary_contract(summary, trade_date=trade_date):
+        return ""
+    return trade_date
+
+
+def _successful_status_contract(status: Mapping[str, Any]) -> bool:
+    return (
+        status.get("status") == "success"
+        and status.get("dependency_check_status") == "success"
+        and status.get("lhb_shortline_status") == "success"
+        and status.get("mid_trend_status") == "success"
+        and status.get("midtrend_artifacts_status") == "success"
+        and status.get("tech_bottleneck_status") == "success"
+        and type(status.get("review_rows")) is int
+        and status.get("review_rows") == 15
+    )
+
+
+def _publishable_summary_contract(summary: Any, *, trade_date: str) -> bool:
+    if not isinstance(summary, Mapping):
+        return False
+    strategy_status = summary.get("strategy_status")
+    score_audit = summary.get("score_audit")
+    if not isinstance(strategy_status, Mapping) or not isinstance(score_audit, Mapping):
+        return False
+    counts = score_audit.get("strategy_counts")
+    return (
+        summary.get("trade_date") == trade_date
+        and summary.get("status") == "success"
+        and summary.get("publishable") is True
+        and type(summary.get("review_rows")) is int
+        and summary.get("review_rows") == 15
+        and all(
+            strategy_status.get(strategy_id) == "success"
+            for strategy_id in (
+                "lhb_shortline",
+                "mid_trend",
+                "midtrend_artifacts",
+                "tech_bottleneck",
+            )
+        )
+        and score_audit.get("status") == "success"
+        and isinstance(counts, Mapping)
+        and dict(counts)
+        == {"lhb_shortline": 5, "mid_trend": 5, "tech_bottleneck": 5}
+    )
+
+
+def _real_iso_date(value: str) -> bool:
+    try:
+        return date.fromisoformat(value).isoformat() == value
+    except ValueError:
+        return False
 
 
 def _load_manifest_modules() -> list[dict[str, Any]]:

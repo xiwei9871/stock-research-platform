@@ -1284,6 +1284,54 @@ def test_status_upsert_and_reader_include_midtrend_artifacts(monkeypatch):
     assert "midtrend_artifacts_status" in captured["select_sql"]
 
 
+def test_latest_successful_status_loader_requires_complete_official_publication(monkeypatch):
+    captured = {}
+    payload = {
+        "trade_date": "2026-07-24",
+        "status": "success",
+        "dependency_check_status": "success",
+        "lhb_shortline_status": "success",
+        "mid_trend_status": "success",
+        "midtrend_artifacts_status": "success",
+        "tech_bottleneck_status": "success",
+        "review_rows": 15,
+        "output_dir": "/release/outputs/research/strategy_daily_eod/2026-07-24",
+        "summary_path": "/release/outputs/research/strategy_daily_eod/2026-07-24/strategy_eod_publish_summary.json",
+        "error_summary": None,
+    }
+
+    class Context:
+        def __enter__(self):
+            return object()
+
+        def __exit__(self, *_args):
+            return False
+
+    monkeypatch.setattr(store, "connect", lambda _service: Context())
+    monkeypatch.setattr(
+        store,
+        "fetch_all",
+        lambda _conn, sql, params: captured.update(sql=sql, params=params) or [payload],
+    )
+
+    loaded = store.load_latest_successful_strategy_daily_eod_status(service="test")
+
+    assert loaded == payload
+    assert captured["params"] == []
+    for condition in (
+        "status = 'success'",
+        "dependency_check_status = 'success'",
+        "lhb_shortline_status = 'success'",
+        "mid_trend_status = 'success'",
+        "midtrend_artifacts_status = 'success'",
+        "tech_bottleneck_status = 'success'",
+        "review_rows = 15",
+        "ORDER BY trade_date DESC",
+        "LIMIT 1",
+    ):
+        assert condition in captured["sql"]
+
+
 def test_run_strategy_daily_eod_writes_summary_and_status(tmp_path: Path, monkeypatch):
     captured = {}
     monkeypatch.setattr(eod, "apply_strategy_daily_eod_status_schema", lambda **_kwargs: None)

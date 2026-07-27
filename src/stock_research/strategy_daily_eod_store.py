@@ -189,3 +189,36 @@ def load_strategy_daily_eod_status(
     with connect(service) as conn:
         rows = fetch_all(conn, sql, [trade_date])
     return rows[0] if rows else None
+
+
+def load_latest_successful_strategy_daily_eod_status(
+    *,
+    service: str = SETTINGS.research_service,
+) -> dict[str, Any] | None:
+    sql = """
+    SELECT
+        trade_date::text AS trade_date,
+        status,
+        dependency_check_status,
+        lhb_shortline_status,
+        mid_trend_status,
+        midtrend_artifacts_status,
+        tech_bottleneck_status,
+        review_rows,
+        output_dir,
+        summary_path,
+        error_summary
+    FROM ops.strategy_daily_eod_status
+    WHERE status = 'success'
+      AND dependency_check_status = 'success'
+      AND lhb_shortline_status = 'success'
+      AND mid_trend_status = 'success'
+      AND midtrend_artifacts_status = 'success'
+      AND tech_bottleneck_status = 'success'
+      AND review_rows = 15
+    ORDER BY trade_date DESC
+    LIMIT 1
+    """
+    with connect(service) as conn:
+        rows = fetch_all(conn, sql, [])
+    return rows[0] if rows else None

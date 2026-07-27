@@ -438,14 +438,14 @@ def test_release_sync_executes_with_dynamic_date_python_override_and_compose_pro
 
 
 def test_release_sync_prefers_publishable_date_from_matching_local_readiness(tmp_path):
-    root, env, _log_file = _release_fixture(tmp_path)
+    root, env, log_file = _release_fixture(tmp_path)
     fake_bin = Path(env["PATH"].split(":", 1)[0])
     _write_executable(
         fake_bin / "curl",
         """
         #!/bin/bash
         release_id="$(git -C "$FAKE_RELEASE_ROOT" rev-parse HEAD)"
-        printf '{"latest_market_date":"2026-07-27","display_trade_date":"2026-07-24","runtime_provenance":{"release_id":"%s","source_root":"%s","python_package_root":"%s/src/stock_research","strategy_artifact_date":"2026-07-24"}}\n' \
+        printf '{"latest_market_date":"2026-07-27","display_trade_date":"2026-07-27","runtime_provenance":{"release_id":"%s","source_root":"%s","python_package_root":"%s/src/stock_research","strategy_artifact_date":"2026-07-24"}}\n' \
           "$release_id" "$FAKE_RELEASE_ROOT" "$FAKE_RELEASE_ROOT"
         """,
     )
@@ -462,6 +462,8 @@ def test_release_sync_prefers_publishable_date_from_matching_local_readiness(tmp
     assert result.returncode == 0, result.stderr
     assert "Resolved EXPECTED_TRADE_DATE=2026-07-24" in result.stdout
     assert "Resolved EXPECTED_TRADE_DATE=2026-07-27" not in result.stdout
+    commands = log_file.read_text(encoding="utf-8")
+    assert "build_platform_readiness" not in commands
 
 
 def test_release_sync_skips_all_mutations_when_desired_state_is_already_live(tmp_path):
@@ -866,7 +868,7 @@ def test_release_gate_accepts_market_date_after_expected_strategy_date(tmp_path)
         tmp_path,
         frontend_release_id="new-release",
         latest_market_date="2026-07-27",
-        display_trade_date="2026-07-24",
+        display_trade_date="2026-07-27",
         strategy_artifact_date="2026-07-24",
     )
     env["RELEASE_CHECK_TIMEOUT_SECONDS"] = "5"
@@ -935,6 +937,26 @@ def test_release_gate_accepts_missing_display_date_when_artifact_date_is_exact(t
     )
 
     assert result.returncode == 0, result.stderr
+
+
+def test_release_gate_rejects_display_date_before_expected_strategy_date(tmp_path):
+    env = _release_gate_env(
+        tmp_path,
+        frontend_release_id="new-release",
+        latest_market_date="2026-07-27",
+        display_trade_date="2026-07-23",
+        strategy_artifact_date="2026-07-24",
+    )
+
+    result = subprocess.run(
+        [str(REPO_ROOT / "deploy/check_dashboard_release.sh")],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
 
 
 def test_release_gate_rejects_malformed_expected_strategy_artifact_date(tmp_path):
