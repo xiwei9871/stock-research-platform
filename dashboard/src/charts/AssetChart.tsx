@@ -8,10 +8,11 @@ import {
   type Time
 } from 'lightweight-charts';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import type { BarPoint } from '../api/types';
 import { toAlignedPriceVolumeData } from './chartData';
+import { resolveChartTooltipPosition } from './chartTooltipPosition';
 
 type ChartTimeAxisMode = 'daily' | 'intraday';
 type ChartTimeAxisPeriod = '1D' | '1W' | '1M' | 'intraday';
@@ -259,10 +260,12 @@ function clamp(value: number, min: number, max: number) {
 
 export function AssetChart({ bars, markers, visibleBarCount, timeAxisMode = 'daily', timeAxisPeriod }: AssetChartProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const tooltipRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const windowDragRef = useRef<WindowDragState | null>(null);
   const windowDragCleanupRef = useRef<(() => void) | null>(null);
   const [hoverData, setHoverData] = useState<ChartHoverData | null>(null);
+  const [tooltipPosition, setTooltipPosition] = useState<{ left: number; top: number } | null>(null);
   const activeAxisPeriod = timeAxisPeriod ?? (timeAxisMode === 'intraday' ? 'intraday' : '1D');
   const chartTimeContext = useMemo(
     () => buildChartTimeContext(bars, activeAxisPeriod, visibleBarCount),
@@ -498,15 +501,36 @@ export function AssetChart({ bars, markers, visibleBarCount, timeAxisMode = 'dai
     }
   }, [priceVolumeData.chartPointCount, safeRangeStart, windowSize]);
 
+  useLayoutEffect(() => {
+    if (!hoverData || !containerRef.current || !tooltipRef.current) {
+      setTooltipPosition(null);
+      return;
+    }
+    const tooltipRect = tooltipRef.current.getBoundingClientRect();
+    setTooltipPosition(resolveChartTooltipPosition({
+      pointerX: hoverData.x,
+      pointerY: hoverData.y,
+      containerWidth: containerRef.current.clientWidth,
+      containerHeight: containerRef.current.clientHeight,
+      tooltipWidth: tooltipRect.width,
+      tooltipHeight: tooltipRect.height
+    }));
+  }, [hoverData]);
+
   return (
     <div className="asset-chart-shell">
       <div className="asset-chart" ref={containerRef} />
       {hoverData ? (
         <div
+          ref={tooltipRef}
           className="asset-chart-tooltip"
           role="tooltip"
           aria-label="K线数据"
-          style={{ left: hoverData.x + 14, top: Math.max(12, hoverData.y - 82) }}
+          style={{
+            left: tooltipPosition?.left ?? 12,
+            top: tooltipPosition?.top ?? 12,
+            visibility: tooltipPosition ? 'visible' : 'hidden'
+          }}
         >
           <strong>{hoverData.time}</strong>
           <span>开 {hoverData.open}</span>
