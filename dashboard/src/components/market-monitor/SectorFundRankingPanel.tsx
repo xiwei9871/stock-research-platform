@@ -7,12 +7,14 @@ function formatSignedPercent(value: number) {
   return `${sign}${(value * 100).toFixed(2)}%`;
 }
 
-function formatSignedAmountYi(value: number) {
+function formatSignedAmountYi(value: number | null) {
+  if (value === null) return '--';
   const sign = value > 0 ? '+' : '';
   return `${sign}${(value / 100000000).toFixed(2)}亿`;
 }
 
-function formatRatio(value: number) {
+function formatRatio(value: number | null) {
+  if (value === null) return '--';
   const sign = value > 0 ? '+' : '';
   return `${sign}${(value * 100).toFixed(1)}%`;
 }

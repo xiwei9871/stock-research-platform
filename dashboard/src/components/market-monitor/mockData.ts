@@ -34,10 +34,11 @@ export type SectorSnapshot = {
   sectorType: SectorType;
   pctChange: number;
   amount: number;
-  upCount: number;
-  downCount: number;
-  mainNetInflow: number;
-  netInflowRatio: number;
+  upCount: number | null;
+  downCount: number | null;
+  stockCount?: number | null;
+  mainNetInflow: number | null;
+  netInflowRatio: number | null;
   leadingStockName: string | null;
 };
 
@@ -81,6 +82,10 @@ function fallbackUpdatedAt(tradeDate: string, updatedAt?: string | null) {
 
 function coerceNumber(value: number | null | undefined) {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+
+function coerceNullableNumber(value: number | null | undefined) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
 function normalizeMarketDataStatus(status: string | null | undefined): MarketDataStatus {
@@ -178,6 +183,7 @@ export function mapApiMarketOverview(overview: ApiMarketOverview): MarketOvervie
 function mapApiSectorSnapshot(item: ApiSectorHeatmapItem | ApiSectorFundFlowItem | ApiSectorDetail): SectorHeatmapItem {
   const upCount = 'up_count' in item ? item.up_count : null;
   const downCount = 'down_count' in item ? item.down_count : null;
+  const stockCount = 'stock_count' in item ? item.stock_count : null;
   const mainNetInflow =
     'main_net_inflow' in item && typeof item.main_net_inflow !== 'undefined' ? item.main_net_inflow : null;
   const netInflowRatio =
@@ -193,10 +199,11 @@ function mapApiSectorSnapshot(item: ApiSectorHeatmapItem | ApiSectorFundFlowItem
     sectorType: item.sector_type,
     pctChange: coerceNumber(item.change_pct),
     amount: coerceNumber(item.amount),
-    upCount: coerceNumber(upCount),
-    downCount: coerceNumber(downCount),
-    mainNetInflow: coerceNumber(mainNetInflow),
-    netInflowRatio: coerceNumber(netInflowRatio),
+    upCount: coerceNullableNumber(upCount),
+    downCount: coerceNullableNumber(downCount),
+    stockCount: coerceNullableNumber(stockCount),
+    mainNetInflow: coerceNullableNumber(mainNetInflow),
+    netInflowRatio: coerceNullableNumber(netInflowRatio),
     leadingStockName: leadingStockName ?? null
   };
 }
