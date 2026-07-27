@@ -20,8 +20,10 @@ def _make_cron_harness(
     root = tmp_path / "stock_research"
     bin_dir = tmp_path / "bin"
     scripts_dir = root / "scripts"
+    deploy_dir = root / "deploy"
 
     scripts_dir.mkdir(parents=True)
+    deploy_dir.mkdir()
     bin_dir.mkdir()
     (scripts_dir / "stock_cron_guard.sh").write_text(
         "clear_stock_proxy_env() {\n"
@@ -40,6 +42,13 @@ def _make_cron_harness(
         'echo "curl|$*" >> "$STOCK_RESEARCH_ROOT/curl.log"\n'
         'exit "${STUB_CURL_RC:-0}"\n',
     )
+    _write_executable(
+        deploy_dir / "sync_dashboard_release.sh",
+        "#!/usr/bin/env bash\n"
+        'echo "sync|date=$EXPECTED_TRADE_DATE|root=$STOCK_RESEARCH_RELEASE_ROOT" >> "$STOCK_RESEARCH_ROOT/sync.log"\n'
+        'exit "${STUB_SYNC_RC:-0}"\n',
+    )
+    (deploy_dir / "validate_strategy_release.py").write_text("# test stub\n")
     if flock_body is not None:
         _write_executable(
             bin_dir / "flock",
@@ -52,6 +61,13 @@ def _make_cron_harness(
         python_stub,
         "#!/usr/bin/env bash\n"
         'echo "python|$*" >> "$STOCK_RESEARCH_ROOT/python.log"\n'
+        'if [[ "$*" == *"stock_research.platform_ready"* ]]; then\n'
+        '  for ((i=1; i<=$#; i++)); do\n'
+        '    if [[ "${!i}" == "--json-output" ]]; then j=$((i+1)); printf \'{"status":"%s"}\\n\' "${STUB_READY_STATUS:-ready}" > "${!j}"; fi\n'
+        '  done\n'
+        '  [[ "${STUB_READY_STATUS:-ready}" == "ready" ]] && exit 0 || exit 1\n'
+        'fi\n'
+        'if [[ "$*" == *"validate_strategy_release.py"* ]]; then exit "${STUB_CONTRACT_RC:-0}"; fi\n'
         f"{python_body or 'exit \"${STUB_PYTHON_RC:-0}\"'}\n",
     )
 
@@ -116,6 +132,12 @@ def test_eod_auto_repair_cron_uses_flock_when_available(tmp_path):
     assert "--action-timeout-seconds" in (root / "python.log").read_text()
     assert "-X POST http://127.0.0.1:8765/api/dashboard/cache/clear" in (root / "curl.log").read_text()
     assert "eod_auto_repair|dashboard_cache_clear|success" in log_text
+    assert (root / "sync.log").read_text().strip() == (
+        f"sync|date=2026-07-02|root={root}"
+    )
+    calls = (root / "python.log").read_text()
+    assert calls.index("stock_research.eod_auto_repair") < calls.index("stock_research.platform_ready")
+    assert calls.index("stock_research.platform_ready") < calls.index("validate_strategy_release.py")
     assert "EOD自动修复完成" in result.stdout
     assert "交易日: 2026-07-02" in result.stdout
     assert "详细日志:" in result.stdout
@@ -167,6 +189,47 @@ def test_eod_auto_repair_cron_loads_dashboard_password_from_keychain(tmp_path):
     curl_log = (root / "curl.log").read_text()
     assert "/api/auth/login" in curl_log
     assert '{"username":"eod_repair","password":"keychain-secret"}' in curl_log
+
+
+def test_eod_auto_repair_cron_does_not_clear_cache_or_sync_when_readiness_is_not_ready(tmp_path):
+    root, env = _make_cron_harness(
+        tmp_path,
+        extra_env={"STUB_READY_STATUS": "degraded_ready"},
+    )
+
+    result = _run_cron(env, "2026-07-02")
+
+    assert result.returncode != 0
+    curl_log = root / "curl.log"
+    assert not curl_log.exists() or "/api/dashboard/cache/clear" not in curl_log.read_text()
+    assert not (root / "sync.log").exists()
+
+
+def test_eod_auto_repair_cron_does_not_clear_cache_or_sync_when_contract_is_invalid(tmp_path):
+    root, env = _make_cron_harness(
+        tmp_path,
+        extra_env={"STUB_CONTRACT_RC": "2"},
+    )
+
+    result = _run_cron(env, "2026-07-02")
+
+    assert result.returncode == 2
+    curl_log = root / "curl.log"
+    assert not curl_log.exists() or "/api/dashboard/cache/clear" not in curl_log.read_text()
+    assert not (root / "sync.log").exists()
+
+
+def test_eod_auto_repair_cron_does_not_sync_when_cache_clear_fails(tmp_path):
+    root, env = _make_cron_harness(
+        tmp_path,
+        extra_env={"STUB_CURL_RC": "22"},
+    )
+
+    result = _run_cron(env, "2026-07-02")
+
+    assert result.returncode != 0
+    assert "/api/dashboard/cache/clear" in (root / "curl.log").read_text()
+    assert not (root / "sync.log").exists()
 
 
 def test_eod_auto_repair_cron_logs_flock_lock_mode_when_already_locked(tmp_path):
@@ -226,6 +289,9 @@ def test_eod_auto_repair_cron_ignores_stale_lock_file_and_preserves_exit_code(tm
     assert f"eod_auto_repair|report|{root}/outputs/research/eod_auto_repair/{trade_date}/run_report.md" in log_text
     proxy_log = root / "proxy.log"
     assert not proxy_log.exists() or proxy_log.read_text() == ""
+    curl_log = root / "curl.log"
+    assert not curl_log.exists() or "/api/dashboard/cache/clear" not in curl_log.read_text()
+    assert not (root / "sync.log").exists()
 
 
 def test_eod_auto_repair_cron_allows_only_one_contender_while_locked(tmp_path):

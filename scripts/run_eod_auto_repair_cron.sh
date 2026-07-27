@@ -17,6 +17,12 @@ DASHBOARD_AUTH_PASSWORD="${DASHBOARD_AUTH_PASSWORD:-}"
 DASHBOARD_AUTH_KEYCHAIN_SERVICE="${DASHBOARD_AUTH_KEYCHAIN_SERVICE:-stock-research-dashboard-eod-repair}"
 DASHBOARD_WRITE_TOKEN="${DASHBOARD_WRITE_TOKEN:-${STOCK_RESEARCH_DASHBOARD_WRITE_TOKEN:-}}"
 CACHE_STATUS="pending"
+READINESS_STATUS="pending"
+CONTRACT_STATUS="pending"
+SYNC_STATUS="pending"
+READINESS_JSON="$OUTPUT_DIR/platform_ready.json"
+STRATEGY_OUTPUT_DIR="$ROOT/outputs/research/strategy_daily_eod/$TRADE_DATE"
+SYNC_SCRIPT="$ROOT/deploy/sync_dashboard_release.sh"
 
 source "$ROOT/scripts/stock_cron_guard.sh"
 clear_stock_proxy_env
@@ -73,12 +79,12 @@ clear_dashboard_cache() {
   if [[ -z "${DASHBOARD_CACHE_CLEAR_URL:-}" ]]; then
     CACHE_STATUS="skipped(url_empty)"
     echo "eod_auto_repair|dashboard_cache_clear|skipped|url_empty" >>"$DETAIL_LOG"
-    return 0
+    return 1
   fi
   if ! command -v curl >/dev/null 2>&1; then
     CACHE_STATUS="skipped(curl_missing)"
     echo "eod_auto_repair|dashboard_cache_clear|skipped|curl_missing|url|$DASHBOARD_CACHE_CLEAR_URL" >>"$DETAIL_LOG"
-    return 0
+    return 1
   fi
   local cookie_jar
   local curl_args
@@ -103,8 +109,69 @@ clear_dashboard_cache() {
   else
     CACHE_STATUS="failed"
     echo "eod_auto_repair|dashboard_cache_clear|failed|url|$DASHBOARD_CACHE_CLEAR_URL" >>"$DETAIL_LOG"
+    rm -f "$cookie_jar"
+    return 1
   fi
   rm -f "$cookie_jar"
+  return 0
+}
+
+finalize_publication() {
+  echo "eod_auto_repair|publication_finalize|platform_readiness|start" >>"$DETAIL_LOG"
+  if ! "$PYTHON" -m stock_research.platform_ready \
+    --trade-date "$TRADE_DATE" \
+    --json-output "$READINESS_JSON" >>"$DETAIL_LOG" 2>&1; then
+    READINESS_STATUS="failed"
+    CACHE_STATUS="skipped(readiness_failed)"
+    SYNC_STATUS="skipped(readiness_failed)"
+    return 1
+  fi
+  if ! jq -e '.status == "ready"' "$READINESS_JSON" >/dev/null 2>&1; then
+    READINESS_STATUS="failed"
+    CACHE_STATUS="skipped(readiness_not_ready)"
+    SYNC_STATUS="skipped(readiness_not_ready)"
+    echo "eod_auto_repair|publication_finalize|platform_readiness|failed|status_not_ready" >>"$DETAIL_LOG"
+    return 1
+  fi
+  READINESS_STATUS="success"
+  echo "eod_auto_repair|publication_finalize|platform_readiness|success" >>"$DETAIL_LOG"
+
+  "$PYTHON" "$ROOT/deploy/validate_strategy_release.py" \
+    --output-dir "$STRATEGY_OUTPUT_DIR" \
+    --trade-date "$TRADE_DATE" >>"$DETAIL_LOG" 2>&1 || {
+    local rc=$?
+    CONTRACT_STATUS="failed"
+    CACHE_STATUS="skipped(contract_invalid)"
+    SYNC_STATUS="skipped(contract_invalid)"
+    return "$rc"
+  }
+  CONTRACT_STATUS="success"
+  echo "eod_auto_repair|publication_finalize|strategy_contract|success" >>"$DETAIL_LOG"
+
+  if ! clear_dashboard_cache; then
+    SYNC_STATUS="skipped(cache_failed)"
+    return 1
+  fi
+
+  if [[ ! -x "$SYNC_SCRIPT" ]]; then
+    SYNC_STATUS="failed"
+    echo "eod_auto_repair|external_sync|failed|canonical_script_missing" >>"$DETAIL_LOG"
+    return 1
+  fi
+  local sync_rc=0
+  if STOCK_RESEARCH_RELEASE_ROOT="$ROOT" \
+    STOCK_RESEARCH_PYTHON="$PYTHON" \
+    EXPECTED_TRADE_DATE="$TRADE_DATE" \
+      "$SYNC_SCRIPT" >>"$DETAIL_LOG" 2>&1; then
+    SYNC_STATUS="success"
+    echo "eod_auto_repair|external_sync|success" >>"$DETAIL_LOG"
+    return 0
+  else
+    sync_rc=$?
+    SYNC_STATUS="failed"
+    echo "eod_auto_repair|external_sync|failed|rc=$sync_rc" >>"$DETAIL_LOG"
+    return "$sync_rc"
+  fi
 }
 
 print_summary() {
@@ -114,6 +181,9 @@ print_summary() {
   echo "交易日: $TRADE_DATE"
   echo "锁模式: $LOCK_MODE"
   echo "Dashboard缓存: $CACHE_STATUS"
+  echo "平台就绪: $READINESS_STATUS"
+  echo "策略发布契约: $CONTRACT_STATUS"
+  echo "外部同步: $SYNC_STATUS"
   echo "摘要文件: $OUTPUT_DIR/run_summary.json"
   echo "报告文件: $OUTPUT_DIR/run_report.md"
   if [[ "$rc" -ne 0 ]]; then
@@ -136,7 +206,18 @@ run_repair() {
   rc=$?
   echo "eod_auto_repair|summary|$OUTPUT_DIR/run_summary.json" >>"$DETAIL_LOG"
   echo "eod_auto_repair|report|$OUTPUT_DIR/run_report.md" >>"$DETAIL_LOG"
-  clear_dashboard_cache
+  if [[ "$rc" -eq 0 ]]; then
+    set +e
+    finalize_publication
+    rc=$?
+    set -e
+  else
+    CACHE_STATUS="skipped(repair_failed)"
+    READINESS_STATUS="skipped(repair_failed)"
+    CONTRACT_STATUS="skipped(repair_failed)"
+    SYNC_STATUS="skipped(repair_failed)"
+    echo "eod_auto_repair|dashboard_cache_clear|skipped|repair_failed" >>"$DETAIL_LOG"
+  fi
   echo "=== eod auto repair end: $(date '+%Y-%m-%d %H:%M:%S %z') rc=$rc ===" >>"$DETAIL_LOG"
   set -e
   if [[ "$rc" -ne 0 ]]; then

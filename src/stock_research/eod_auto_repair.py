@@ -114,6 +114,101 @@ LOOP_DEPENDENT_REPAIRS: dict[str, list[str]] = {
 OPS_READY_STATUSES = {"READY", "ready", "success", "DEGRADED_READY", "degraded_ready"}
 
 
+def _phase_succeeded(result: Any) -> bool:
+    if result is True:
+        return True
+    if isinstance(result, dict):
+        status = result.get("status")
+        if isinstance(status, RepairStatus):
+            status = status.value
+        return str(status or "").lower() == RepairStatus.SUCCESS.value
+    return False
+
+
+def _sanitized_phase_error(exc: Exception) -> str:
+    return f"{type(exc).__name__}: phase callable failed"
+
+
+def finalize_repair_publication(
+    *,
+    publish: Callable[[], Any],
+    clear_cache: Callable[[], Any],
+    sync_external: Callable[[], Any],
+) -> dict[str, Any]:
+    """Finalize repaired strategy data without exposing stale mixed state."""
+
+    phases = {
+        "minute5": "pending",
+        "strategy_publication": "pending",
+        "cache_invalidation": "pending",
+        "external_sync": "pending",
+    }
+    errors: dict[str, str] = {}
+
+    try:
+        publish_result = publish()
+    except Exception as exc:  # noqa: BLE001 - phase failures are returned to the caller.
+        phases["strategy_publication"] = "failed"
+        phases["cache_invalidation"] = "skipped"
+        phases["external_sync"] = "skipped"
+        errors["strategy_publication"] = _sanitized_phase_error(exc)
+        return {"status": "failed", "repair_phases": phases, "errors": errors}
+    if not _phase_succeeded(publish_result):
+        phases["strategy_publication"] = "failed"
+        phases["cache_invalidation"] = "skipped"
+        phases["external_sync"] = "skipped"
+        errors["strategy_publication"] = "publication status was not success"
+        return {"status": "failed", "repair_phases": phases, "errors": errors}
+    phases["strategy_publication"] = "success"
+
+    try:
+        cache_result = clear_cache()
+    except Exception as exc:  # noqa: BLE001 - phase failures are returned to the caller.
+        phases["cache_invalidation"] = "failed"
+        phases["external_sync"] = "skipped"
+        errors["cache_invalidation"] = _sanitized_phase_error(exc)
+        return {"status": "failed", "repair_phases": phases, "errors": errors}
+    if not _phase_succeeded(cache_result):
+        phases["cache_invalidation"] = "failed"
+        phases["external_sync"] = "skipped"
+        errors["cache_invalidation"] = "cache invalidation did not succeed"
+        return {"status": "failed", "repair_phases": phases, "errors": errors}
+    phases["cache_invalidation"] = "success"
+
+    try:
+        sync_result = sync_external()
+    except Exception as exc:  # noqa: BLE001 - phase failures are returned to the caller.
+        phases["external_sync"] = "failed"
+        errors["external_sync"] = _sanitized_phase_error(exc)
+        return {"status": "failed", "repair_phases": phases, "errors": errors}
+    if not _phase_succeeded(sync_result):
+        phases["external_sync"] = "failed"
+        errors["external_sync"] = "external sync did not succeed"
+        return {"status": "failed", "repair_phases": phases, "errors": errors}
+    phases["external_sync"] = "success"
+    return {"status": "success", "repair_phases": phases, "errors": errors}
+
+
+def _repair_phases_from_checks(checks: list[RepairCheckResult]) -> dict[str, str]:
+    by_name = {check.name: check for check in checks}
+
+    def phase_status(check_name: str) -> str:
+        check = by_name.get(check_name)
+        if check is None:
+            return "pending"
+        return "success" if check.status == RepairStatus.SUCCESS else "failed"
+
+    minute5 = phase_status("minute5_bars")
+    publication = phase_status("strategy_publish")
+    downstream = "skipped" if publication == "failed" else "pending"
+    return {
+        "minute5": minute5,
+        "strategy_publication": publication,
+        "cache_invalidation": downstream,
+        "external_sync": downstream,
+    }
+
+
 def _safe_run_check(check) -> RepairCheckResult:
     try:
         return check.run()
@@ -437,8 +532,16 @@ def _write_summary_files(summary: RepairRunSummary, output_dir: str | Path) -> N
         f"- Initial blocker count: {sum(1 for value in summary.initial_classification.values() if value == 'blocker')}",
         f"- Final blocker count: {len(summary.remaining_blockers)}",
         "",
-        "## Stages",
+        "## Repair Phases",
     ]
+    if summary.repair_phases:
+        lines.extend(f"- {name}: {status}" for name, status in summary.repair_phases.items())
+    else:
+        lines.append("- none")
+    lines.extend([
+        "",
+        "## Stages",
+    ])
     if summary.stages:
         for stage in summary.stages:
             blockers = ", ".join(stage.remaining_blockers) if stage.remaining_blockers else "none"
@@ -680,6 +783,7 @@ def _run_eod_auto_repair_loop(
         warnings=warnings,
         infrastructure_issues=[],
         recommended_followups=_recommended_followups(current_checks),
+        repair_phases=_repair_phases_from_checks(current_checks),
     )
 
 
@@ -785,6 +889,7 @@ def run_eod_auto_repair(
         initial_classification=_classify_checks(checks_before),
         final_classification=_classify_checks(checks_after),
         recommended_followups=_recommended_followups(checks_after),
+        repair_phases=_repair_phases_from_checks(checks_after),
     )
     if write_reports:
         _write_summary_files(summary, out)

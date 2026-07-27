@@ -18,6 +18,75 @@ from stock_research.eod_auto_repair import build_default_action_registry, run_eo
 from stock_research.eod_auto_repair_models import RepairActionResult, RepairCheckResult, RepairRunSummary, RepairStatus
 
 
+def test_finalize_repair_publication_orders_publish_cache_and_sync():
+    events = []
+
+    result = eod_auto_repair.finalize_repair_publication(
+        publish=lambda: events.append("publish") or {"status": "success"},
+        clear_cache=lambda: events.append("cache") or True,
+        sync_external=lambda: events.append("sync") or True,
+    )
+
+    assert result["status"] == "success"
+    assert events == ["publish", "cache", "sync"]
+    assert result["repair_phases"] == {
+        "minute5": "pending",
+        "strategy_publication": "success",
+        "cache_invalidation": "success",
+        "external_sync": "success",
+    }
+
+
+@pytest.mark.parametrize("publish_status", ["partial", "failed", "blocked", "skipped"])
+def test_finalize_repair_publication_stops_before_cache_when_publish_is_not_success(publish_status):
+    events = []
+
+    result = eod_auto_repair.finalize_repair_publication(
+        publish=lambda: events.append("publish") or {"status": publish_status},
+        clear_cache=lambda: events.append("cache") or True,
+        sync_external=lambda: events.append("sync") or True,
+    )
+
+    assert result["status"] == "failed"
+    assert events == ["publish"]
+    assert result["repair_phases"]["strategy_publication"] == "failed"
+    assert result["repair_phases"]["cache_invalidation"] == "skipped"
+    assert result["repair_phases"]["external_sync"] == "skipped"
+
+
+def test_finalize_repair_publication_stops_before_sync_when_cache_fails():
+    events = []
+
+    result = eod_auto_repair.finalize_repair_publication(
+        publish=lambda: events.append("publish") or {"status": "success"},
+        clear_cache=lambda: events.append("cache") or False,
+        sync_external=lambda: events.append("sync") or True,
+    )
+
+    assert result["status"] == "failed"
+    assert events == ["publish", "cache"]
+    assert result["repair_phases"]["cache_invalidation"] == "failed"
+    assert result["repair_phases"]["external_sync"] == "skipped"
+
+
+def test_finalize_repair_publication_records_sanitized_exception_without_continuing():
+    events = []
+
+    def publish():
+        events.append("publish")
+        raise RuntimeError("publication unavailable")
+
+    result = eod_auto_repair.finalize_repair_publication(
+        publish=publish,
+        clear_cache=lambda: events.append("cache") or True,
+        sync_external=lambda: events.append("sync") or True,
+    )
+
+    assert result["status"] == "failed"
+    assert events == ["publish"]
+    assert result["errors"] == {"strategy_publication": "RuntimeError: phase callable failed"}
+
+
 def test_run_eod_auto_repair_runs_action_for_failed_check_then_rechecks():
     calls = []
     check_results = [
@@ -103,6 +172,37 @@ def test_run_eod_auto_repair_check_mode_does_not_run_actions():
 
     assert calls == []
     assert summary.final_status == RepairStatus.FAILED
+
+
+def test_run_summary_records_explicit_repair_phase_states():
+    def check_plan_builder(trade_date):
+        return [
+            SimpleNamespace(
+                name="minute5_bars",
+                run=lambda: RepairCheckResult("minute5_bars", RepairStatus.SUCCESS, "ready"),
+            ),
+            SimpleNamespace(
+                name="strategy_publish",
+                run=lambda: RepairCheckResult(
+                    "strategy_publish", RepairStatus.FAILED, "partial", blocker=True
+                ),
+            ),
+        ]
+
+    summary = run_eod_auto_repair(
+        trade_date="2026-07-02",
+        output_dir="/tmp/out",
+        mode="check",
+        check_plan_builder=check_plan_builder,
+        action_registry={},
+    )
+
+    assert summary.to_dict()["repair_phases"] == {
+        "minute5": "success",
+        "strategy_publication": "failed",
+        "cache_invalidation": "skipped",
+        "external_sync": "skipped",
+    }
 
 
 def test_run_eod_auto_repair_loop_dry_run_observes_and_classifies_without_actions(tmp_path):

@@ -9,7 +9,9 @@ import pytest
 
 def _prepare_fake_guard(fake_root: Path) -> None:
     scripts_dir = fake_root / "scripts"
+    deploy_dir = fake_root / "deploy"
     scripts_dir.mkdir(parents=True, exist_ok=True)
+    deploy_dir.mkdir(parents=True, exist_ok=True)
     (scripts_dir / "stock_cron_guard.sh").write_text(
         """#!/usr/bin/env bash
 set -euo pipefail
@@ -26,6 +28,14 @@ stock_cron_guard_or_exit() {
 """,
         encoding="utf-8",
     )
+    (deploy_dir / "validate_strategy_release.py").write_text("# test stub\n", encoding="utf-8")
+    sync_script = deploy_dir / "sync_dashboard_release.sh"
+    sync_script.write_text(
+        "#!/usr/bin/env bash\n"
+        'echo "sync|date=$EXPECTED_TRADE_DATE|root=$STOCK_RESEARCH_RELEASE_ROOT" >> "$PLATFORM_READY_ROOT/sync.log"\n',
+        encoding="utf-8",
+    )
+    sync_script.chmod(0o755)
 
 
 def test_platform_build_script_runs_required_platform_steps(tmp_path: Path) -> None:
@@ -206,6 +216,7 @@ exit 3
     assert "eod_auto_repair/2026-06-18" in call
     assert "--mode repair" in call
     assert "-m stock_research.platform_ready" not in call
+    assert not (fake_root / "sync.log").exists()
     assert "EOD自动修复失败" in result.stdout
     assert "交易日: 2026-06-18" in result.stdout
     assert "退出码: 3" in result.stdout
@@ -227,7 +238,14 @@ def test_platform_ready_check_script_emits_heartbeat_while_repair_runs(tmp_path:
 
     fake_python.write_text(
         f"""#!/usr/bin/env bash
-printf '%s\\n' "$*" > "{calls_file}"
+printf '%s\\n' "$*" >> "{calls_file}"
+if [[ "$*" == *"stock_research.platform_ready"* ]]; then
+  for ((i=1; i<=$#; i++)); do
+    if [[ "${{!i}}" == "--json-output" ]]; then j=$((i+1)); printf '{{"status":"ready"}}\\n' > "${{!j}}"; fi
+  done
+  exit 0
+fi
+if [[ "$*" == *"validate_strategy_release.py"* ]]; then exit 0; fi
 echo 'child-detail-line'
 sleep 2
 exit 0
@@ -244,6 +262,7 @@ exit 0
             "PLATFORM_READY_TRADE_DATE": "2026-06-18",
             "PLATFORM_READY_LOG_DIR": str(log_dir),
             "PLATFORM_READY_CHECK_HEARTBEAT_SECONDS": "1",
+            "PLATFORM_READY_CURL": "/usr/bin/true",
         }
     )
 
@@ -262,6 +281,12 @@ exit 0
     assert "last_progress=waiting" in result.stdout
     assert "stale-run-report.md" not in result.stdout
     assert "EOD自动修复完成" in result.stdout
+    assert (fake_root / "sync.log").read_text().strip() == (
+        f"sync|date=2026-06-18|root={fake_root}"
+    )
+    calls = calls_file.read_text(encoding="utf-8")
+    assert calls.index("stock_research.eod_auto_repair") < calls.index("stock_research.platform_ready")
+    assert calls.index("stock_research.platform_ready") < calls.index("validate_strategy_release.py")
     log_text = (log_dir / "platform_ready_check.host.log").read_text(encoding="utf-8")
     assert "child-detail-line" in log_text
 
@@ -296,6 +321,7 @@ def test_platform_ready_check_script_forwards_signal_and_cleans_up(
             "PLATFORM_READY_PYTHON": str(fake_python),
             "PLATFORM_READY_TRADE_DATE": "2026-06-18",
             "PLATFORM_READY_LOG_DIR": str(tmp_path / "logs"),
+            "PLATFORM_READY_CURL": "/usr/bin/true",
             "PLATFORM_READY_CHECK_HEARTBEAT_SECONDS": "1",
         }
     )
@@ -343,6 +369,14 @@ def test_platform_ready_check_script_defaults_to_latest_market_date(tmp_path: Pa
 
     fake_python.write_text(
         f"""#!/usr/bin/env bash
+if [[ "$*" == *"stock_research.platform_ready"* ]]; then
+  for ((i=1; i<=$#; i++)); do
+    if [[ "${{!i}}" == "--json-output" ]]; then j=$((i+1)); printf '{{"status":"ready"}}\\n' > "${{!j}}"; fi
+  done
+  printf '%s\\n' "$*" >> "{calls_file}"
+  exit 0
+fi
+if [[ "$*" == *"validate_strategy_release.py"* ]]; then printf '%s\\n' "$*" >> "{calls_file}"; exit 0; fi
 if [[ "$#" -ge 2 && "$1" == "-c" ]]; then
   printf 'date-resolver-via-c\\n' >> "{calls_file}"
   printf '2026-06-29\\n'
@@ -361,6 +395,7 @@ exit 0
             "PLATFORM_READY_ROOT": str(fake_root),
             "PLATFORM_READY_PYTHON": str(fake_python),
             "PLATFORM_READY_LOG_DIR": str(tmp_path / "logs"),
+            "PLATFORM_READY_CURL": "/usr/bin/true",
         }
     )
     env.pop("PLATFORM_READY_TRADE_DATE", None)
@@ -378,6 +413,7 @@ exit 0
     assert "-m stock_research.eod_auto_repair --trade-date 2026-06-29" in calls
     assert "eod_auto_repair/2026-06-29" in result.stdout
     assert "EOD自动修复完成" in result.stdout
+    assert (fake_root / "sync.log").exists()
 
 
 def test_trading_calendar_sync_script_clears_proxy_env(tmp_path: Path) -> None:

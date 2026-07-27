@@ -116,6 +116,7 @@ class RepairRunSummary:
     warnings: list[str] = field(default_factory=list)
     infrastructure_issues: list[str] = field(default_factory=list)
     recommended_followups: list[str] = field(default_factory=list)
+    repair_phases: dict[str, str] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -138,4 +139,5 @@ class RepairRunSummary:
             "warnings": self.warnings,
             "infrastructure_issues": self.infrastructure_issues,
             "recommended_followups": self.recommended_followups,
+            "repair_phases": self.repair_phases,
         }
