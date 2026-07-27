@@ -18,6 +18,30 @@ from stock_research.eod_auto_repair import build_default_action_registry, run_eo
 from stock_research.eod_auto_repair_models import RepairActionResult, RepairCheckResult, RepairRunSummary, RepairStatus
 
 
+def _successful_strategy_summary(trade_date="2026-07-02", *, summary_path=None):
+    payload = {
+        "trade_date": trade_date,
+        "run_id": f"strategy-eod-{trade_date}-local",
+        "status": "success",
+        "publishable": True,
+        "review_rows": 15,
+        "strategy_status": {
+            name: "success" for name in eod_auto_repair.REQUIRED_STRATEGY_RUNNERS
+        },
+        "score_audit": {
+            "status": "success",
+            "strategy_counts": {
+                "lhb_shortline": 5,
+                "mid_trend": 5,
+                "tech_bottleneck": 5,
+            },
+        },
+    }
+    if summary_path is not None:
+        payload["summary_path"] = str(summary_path)
+    return payload
+
+
 def test_finalize_repair_publication_orders_publish_cache_and_sync():
     events = []
 
@@ -246,15 +270,7 @@ def test_finalize_repaired_release_preserves_readiness_exit_code(tmp_path):
     runner_summary.parent.mkdir(parents=True)
 
     def official_publication(*, trade_date, output_root):
-        payload = {
-            "trade_date": trade_date,
-            "run_id": "strategy-eod-2026-07-02-local",
-            "status": "success",
-            "summary_path": str(runner_summary),
-            "strategy_status": {
-                name: "success" for name in eod_auto_repair.REQUIRED_STRATEGY_RUNNERS
-            },
-        }
+        payload = _successful_strategy_summary(trade_date, summary_path=runner_summary)
         runner_summary.write_text(json.dumps(payload), encoding="utf-8")
         return payload
 
@@ -382,18 +398,7 @@ def test_finalize_repaired_release_refreshes_old_failed_runner_before_cache_and_
 
     def official_publication(*, trade_date, output_root):
         events.append("official")
-        payload = {
-            "trade_date": trade_date,
-            "run_id": "strategy-eod-2026-07-02-local",
-            "status": "success",
-            "summary_path": str(runner_summary),
-            "strategy_status": {
-                "lhb_shortline": "success",
-                "midtrend_artifacts": "success",
-                "mid_trend": "success",
-                "tech_bottleneck": "success",
-            },
-        }
+        payload = _successful_strategy_summary(trade_date, summary_path=runner_summary)
         runner_summary.write_text(json.dumps(payload), encoding="utf-8")
         return payload
 
@@ -510,14 +515,7 @@ def test_repair_receipt_makes_finalizer_exactly_once(tmp_path):
 
     def strategy_action(trade_date, output_dir):
         official_calls.append("repair_official")
-        summary = {
-            "trade_date": trade_date,
-            "run_id": "strategy-eod-2026-07-02-local",
-            "status": "success",
-            "strategy_status": {
-                name: "success" for name in eod_auto_repair.REQUIRED_STRATEGY_RUNNERS
-            },
-        }
+        summary = _successful_strategy_summary(trade_date)
         (strategy_output / "strategy_eod_publish_summary.json").write_text(
             json.dumps(summary), encoding="utf-8"
         )
@@ -656,6 +654,49 @@ def test_finalizer_rejects_tampered_receipt_file(tmp_path, publication_mode):
     assert result["errors"]["strategy_publication"] == "publication_receipt_file_changed"
 
 
+def test_nonempty_legacy_receipt_fails_closed_as_missing_contract(tmp_path):
+    repair_output = tmp_path / "repair"
+    repair_output.mkdir()
+    summary_path = (
+        tmp_path
+        / "outputs"
+        / "research"
+        / "strategy_daily_eod"
+        / "2026-07-02"
+        / "strategy_eod_publish_summary.json"
+    )
+    summary_path.parent.mkdir(parents=True)
+    summary_path.write_text(
+        json.dumps(_successful_strategy_summary(summary_path=summary_path)),
+        encoding="utf-8",
+    )
+    receipt = eod_auto_repair.build_publication_receipt(
+        summary_path=summary_path,
+        expected_trade_date="2026-07-02",
+        repair_run_id="repair-current",
+    )
+    for key in ("publishable", "review_rows", "strategy_counts", "score_audit_status"):
+        receipt.pop(key)
+    (repair_output / "run_summary.json").write_text(
+        json.dumps({"repair_run_id": "repair-current", "publication_receipt": receipt}),
+        encoding="utf-8",
+    )
+
+    result = eod_auto_repair.finalize_repaired_release(
+        trade_date="2026-07-02",
+        output_dir=repair_output,
+        release_root=tmp_path,
+        official_publication=lambda **_kwargs: pytest.fail("invalid receipt must not republish"),
+        contract_check=lambda: pytest.fail("contract must not run"),
+        readiness_check=lambda: pytest.fail("readiness must not run"),
+        clear_cache=lambda: pytest.fail("cache must not run"),
+        sync_external=lambda: pytest.fail("sync must not run"),
+    )
+
+    assert result["status"] == "failed"
+    assert result["errors"]["strategy_publication"] == "publication_receipt_missing_contract"
+
+
 @pytest.mark.parametrize(
     ("publication_mode", "expected_calls", "expected_status"),
     [("publish_if_missing", 1, "success"), ("require_existing", 0, "failed")],
@@ -682,15 +723,7 @@ def test_empty_receipt_is_missing_with_entrypoint_specific_behavior(
 
     def official_publication(*, trade_date, output_root):
         calls.append("official")
-        payload = {
-            "trade_date": trade_date,
-            "run_id": "strategy-eod-2026-07-02-local",
-            "status": "success",
-            "summary_path": str(summary_path),
-            "strategy_status": {
-                name: "success" for name in eod_auto_repair.REQUIRED_STRATEGY_RUNNERS
-            },
-        }
+        payload = _successful_strategy_summary(trade_date, summary_path=summary_path)
         summary_path.write_text(json.dumps(payload), encoding="utf-8")
         return payload
 
@@ -728,16 +761,7 @@ def test_require_existing_signs_healthy_current_publication_without_rerun(tmp_pa
     )
     summary_path.parent.mkdir(parents=True)
     summary_path.write_text(
-        json.dumps(
-            {
-                "trade_date": "2026-07-02",
-                "run_id": "strategy-eod-2026-07-02-local",
-                "status": "success",
-                "strategy_status": {
-                    name: "success" for name in eod_auto_repair.REQUIRED_STRATEGY_RUNNERS
-                },
-            }
-        ),
+        json.dumps(_successful_strategy_summary()),
         encoding="utf-8",
     )
 

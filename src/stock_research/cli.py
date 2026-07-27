@@ -286,6 +286,7 @@ from stock_research.strategy_daily_eod import (
     check_strategy_daily_eod_dependencies,
     run_strategy_daily_eod,
 )
+from stock_research.runtime_provenance import runtime_provenance
 from stock_research.tech_bottleneck_evidence_workflow import (
     run_tech_bottleneck_evidence_workflow,
 )
@@ -4012,7 +4013,7 @@ def build_parser() -> argparse.ArgumentParser:
     strategy_daily_eod.add_argument("--trade-date", required=True)
     strategy_daily_eod.add_argument(
         "--output-root",
-        default="/Users/xiwei/stock_research/outputs/research/strategy_daily_eod",
+        default=None,
     )
 
     trend_lifecycle_v1 = subparsers.add_parser("trend-lifecycle-v1")
@@ -7797,10 +7798,15 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
         )
         print(f"midtrend_pit_fundamental_features|output_dir|{result['paths']['output_dir']}")
     elif args.command == "run-strategy-daily-eod":
+        provenance = runtime_provenance()
+        release_root = provenance["source_root"]
+        output_root = args.output_root or str(
+            Path(release_root) / "outputs" / "research" / "strategy_daily_eod"
+        )
         result = run_strategy_daily_eod(
             trade_date=args.trade_date,
-            output_root=args.output_root,
-            release_root=os.getenv("STOCK_RESEARCH_RELEASE_ROOT") or None,
+            output_root=output_root,
+            release_root=release_root,
             dependency_checker=check_strategy_daily_eod_dependencies,
         )
         for key in ("status", "trade_date", "output_dir", "review_rows", "summary_path"):

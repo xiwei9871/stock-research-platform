@@ -1,12 +1,69 @@
 import pytest
 
 from stock_research import cli
+from stock_research import strategy_eod_publish
 
 
 def test_cli_accepts_run_strategy_daily_eod_command():
     args = cli.build_parser().parse_args(["run-strategy-daily-eod", "--trade-date", "2026-06-24"])
     assert args.command == "run-strategy-daily-eod"
     assert args.trade_date == "2026-06-24"
+    assert args.output_root is None
+
+
+def test_cli_defaults_strategy_output_to_runtime_release_root(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(
+        cli,
+        "runtime_provenance",
+        lambda: {"source_root": "/tmp/clean-release"},
+    )
+    monkeypatch.setattr(
+        cli,
+        "run_strategy_daily_eod",
+        lambda **kwargs: captured.update(kwargs) or {
+            "status": "success",
+            "trade_date": "2026-06-24",
+            "output_dir": "/tmp/clean-release/outputs/research/strategy_daily_eod/2026-06-24",
+            "review_rows": 15,
+            "summary_path": "/tmp/summary.json",
+            "dependency_reason": None,
+            "dependency_check": {},
+            "strategy_status": {},
+        },
+    )
+
+    assert cli.main(["run-strategy-daily-eod", "--trade-date", "2026-06-24"]) == 0
+    assert captured["output_root"] == "/tmp/clean-release/outputs/research/strategy_daily_eod"
+    assert captured["release_root"] == "/tmp/clean-release"
+
+
+def test_legacy_strategy_publish_cli_forwards_once_to_official_runner(
+    tmp_path, monkeypatch, capsys
+):
+    captured = []
+    monkeypatch.setattr(
+        "stock_research.runtime_provenance.runtime_provenance",
+        lambda: {"source_root": str(tmp_path)},
+    )
+    monkeypatch.setattr(
+        "stock_research.strategy_daily_eod.run_strategy_daily_eod",
+        lambda **kwargs: captured.append(kwargs) or {"status": "success"},
+    )
+
+    rc = strategy_eod_publish._main(
+        ["--trade-date", "2026-06-24", "--output-root", str(tmp_path / "outputs")]
+    )
+
+    assert rc == 0
+    assert captured == [
+        {
+            "trade_date": "2026-06-24",
+            "output_root": tmp_path / "outputs" / "research" / "strategy_daily_eod",
+            "release_root": tmp_path,
+        }
+    ]
+    assert "deprecated" in capsys.readouterr().err.lower()
 
 
 def test_cli_run_strategy_daily_eod_prints_summary(monkeypatch, capsys):

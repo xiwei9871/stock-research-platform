@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS ops.strategy_daily_eod_status (
     dependency_check_status text NOT NULL,
     lhb_shortline_status text NOT NULL,
     mid_trend_status text NOT NULL,
+    midtrend_artifacts_status text NOT NULL,
     tech_bottleneck_status text NOT NULL,
     review_rows integer NOT NULL DEFAULT 0,
     output_dir text,
@@ -22,6 +23,14 @@ CREATE TABLE IF NOT EXISTS ops.strategy_daily_eod_status (
     error_summary text,
     updated_at timestamptz NOT NULL DEFAULT now()
 );
+
+ALTER TABLE ops.strategy_daily_eod_status
+    ADD COLUMN IF NOT EXISTS midtrend_artifacts_status text;
+UPDATE ops.strategy_daily_eod_status
+SET midtrend_artifacts_status = COALESCE(midtrend_artifacts_status, mid_trend_status, 'skipped')
+WHERE midtrend_artifacts_status IS NULL;
+ALTER TABLE ops.strategy_daily_eod_status
+    ALTER COLUMN midtrend_artifacts_status SET NOT NULL;
 
 DO $strategy_daily_eod_status_migration$
 DECLARE
@@ -61,6 +70,7 @@ def build_status_payload(
     dependency_check_status: str,
     lhb_shortline_status: str,
     mid_trend_status: str,
+    midtrend_artifacts_status: str,
     tech_bottleneck_status: str,
     review_rows: int,
     output_dir: str | None,
@@ -73,6 +83,7 @@ def build_status_payload(
         "dependency_check_status": dependency_check_status,
         "lhb_shortline_status": lhb_shortline_status,
         "mid_trend_status": mid_trend_status,
+        "midtrend_artifacts_status": midtrend_artifacts_status,
         "tech_bottleneck_status": tech_bottleneck_status,
         "review_rows": int(review_rows),
         "output_dir": output_dir,
@@ -102,6 +113,7 @@ def upsert_strategy_daily_eod_status_with_connection(
         dependency_check_status,
         lhb_shortline_status,
         mid_trend_status,
+        midtrend_artifacts_status,
         tech_bottleneck_status,
         review_rows,
         output_dir,
@@ -114,6 +126,7 @@ def upsert_strategy_daily_eod_status_with_connection(
         %(dependency_check_status)s,
         %(lhb_shortline_status)s,
         %(mid_trend_status)s,
+        %(midtrend_artifacts_status)s,
         %(tech_bottleneck_status)s,
         %(review_rows)s,
         %(output_dir)s,
@@ -126,6 +139,7 @@ def upsert_strategy_daily_eod_status_with_connection(
         dependency_check_status = EXCLUDED.dependency_check_status,
         lhb_shortline_status = EXCLUDED.lhb_shortline_status,
         mid_trend_status = EXCLUDED.mid_trend_status,
+        midtrend_artifacts_status = EXCLUDED.midtrend_artifacts_status,
         tech_bottleneck_status = EXCLUDED.tech_bottleneck_status,
         review_rows = EXCLUDED.review_rows,
         output_dir = EXCLUDED.output_dir,
@@ -148,6 +162,7 @@ def load_strategy_daily_eod_status(
         dependency_check_status,
         lhb_shortline_status,
         mid_trend_status,
+        midtrend_artifacts_status,
         tech_bottleneck_status,
         review_rows,
         output_dir,

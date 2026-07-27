@@ -356,13 +356,16 @@ def _check_strategy_daily_eod(service: str, trade_date: str) -> dict[str, Any]:
         str(row.get("status") or "") == "success"
         and str(row.get("lhb_shortline_status") or "") == "success"
         and str(row.get("mid_trend_status") or "") == "success"
+        and str(row.get("midtrend_artifacts_status") or "") == "success"
         and str(row.get("tech_bottleneck_status") or "") == "success"
         and summary_path.exists()
         and all(path.exists() and path.stat().st_size > 0 for path in review_paths)
     )
     detail = (
         f"status={row.get('status')} lhb={row.get('lhb_shortline_status')} "
-        f"mid={row.get('mid_trend_status')} tech={row.get('tech_bottleneck_status')} "
+        f"mid={row.get('mid_trend_status')} "
+        f"midtrend_artifacts={row.get('midtrend_artifacts_status')} "
+        f"tech={row.get('tech_bottleneck_status')} "
         f"summary_path={summary_path}"
     )
     return _pass("strategy_daily_eod", detail) if ok else _fail("strategy_daily_eod", detail)

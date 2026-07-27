@@ -13,6 +13,17 @@ REQUIRED_STRATEGY_RUNNERS = {
     "mid_trend",
     "tech_bottleneck",
 }
+EXPECTED_STRATEGY_COUNTS = {
+    "lhb_shortline": 5,
+    "mid_trend": 5,
+    "tech_bottleneck": 5,
+}
+RECEIPT_CONTRACT_FIELDS = {
+    "publishable",
+    "review_rows",
+    "strategy_counts",
+    "score_audit_status",
+}
 
 
 def file_fingerprint(path: str | Path) -> dict[str, Any] | None:
@@ -71,6 +82,7 @@ def build_publication_receipt(
     snapshot = _read_summary_snapshot(path)
     payload = snapshot["payload"]
     fingerprint = snapshot["fingerprint"]
+    score_audit = dict(payload.get("score_audit") or {})
     return {
         "expected_trade_date": expected_trade_date,
         "repair_run_id": repair_run_id,
@@ -79,6 +91,10 @@ def build_publication_receipt(
         "fingerprint": fingerprint,
         "overall_status": str(payload.get("status") or ""),
         "strategy_status": dict(payload.get("strategy_status") or {}),
+        "publishable": payload.get("publishable"),
+        "review_rows": payload.get("review_rows"),
+        "strategy_counts": dict(score_audit.get("strategy_counts") or {}),
+        "score_audit_status": str(score_audit.get("status") or ""),
     }
 
 
@@ -108,6 +124,8 @@ def validate_publication_receipt(
         return {"status": "failed", "error_code": "publication_receipt_path_escape"}
     if resolved_summary_path != canonical_path.resolve(strict=True):
         return {"status": "failed", "error_code": "publication_receipt_path_mismatch"}
+    if not RECEIPT_CONTRACT_FIELDS.issubset(receipt):
+        return {"status": "failed", "error_code": "publication_receipt_missing_contract"}
     try:
         snapshot = _read_summary_snapshot(summary_path)
     except (FileNotFoundError, OSError, ValueError, json.JSONDecodeError):
@@ -116,11 +134,17 @@ def validate_publication_receipt(
         return {"status": "failed", "error_code": "publication_receipt_file_changed"}
     payload = snapshot["payload"]
     strategy_status = dict(payload.get("strategy_status") or {})
+    score_audit = dict(payload.get("score_audit") or {})
+    strategy_counts = dict(score_audit.get("strategy_counts") or {})
     expected_run_id = f"strategy-eod-{expected_trade_date}-local"
     if (
         payload.get("trade_date") != expected_trade_date
         or payload.get("run_id") != expected_run_id
         or payload.get("status") != "success"
+        or payload.get("publishable") is not True
+        or payload.get("review_rows") != 15
+        or strategy_counts != EXPECTED_STRATEGY_COUNTS
+        or score_audit.get("status") != "success"
         or not REQUIRED_STRATEGY_RUNNERS.issubset(strategy_status)
         or any(strategy_status.get(name) != "success" for name in REQUIRED_STRATEGY_RUNNERS)
     ):
@@ -129,6 +153,10 @@ def validate_publication_receipt(
         receipt.get("publication_run_id") != payload.get("run_id")
         or receipt.get("overall_status") != payload.get("status")
         or receipt.get("strategy_status") != strategy_status
+        or receipt.get("publishable") is not True
+        or receipt.get("review_rows") != 15
+        or receipt.get("strategy_counts") != EXPECTED_STRATEGY_COUNTS
+        or receipt.get("score_audit_status") != "success"
     ):
         return {"status": "failed", "error_code": "publication_receipt_payload_mismatch"}
     return {"status": "success", "summary": payload}

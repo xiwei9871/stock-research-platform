@@ -20,11 +20,31 @@ def _prepare_strategy_daily_eod_ok(monkeypatch, tmp_path: Path) -> None:
             "status": "success",
             "lhb_shortline_status": "success",
             "mid_trend_status": "success",
+            "midtrend_artifacts_status": "success",
             "tech_bottleneck_status": "success",
             "output_dir": str(output_dir),
             "summary_path": str(output_dir / "strategy_eod_publish_summary.json"),
         },
     )
+
+
+def test_strategy_daily_eod_readiness_requires_midtrend_artifacts_status(
+    monkeypatch, tmp_path: Path
+) -> None:
+    _prepare_strategy_daily_eod_ok(monkeypatch, tmp_path)
+    original_loader = platform_ready.load_strategy_daily_eod_status
+
+    def failed_artifacts(*args, **kwargs):
+        row = dict(original_loader(*args, **kwargs))
+        row["midtrend_artifacts_status"] = "failed"
+        return row
+
+    monkeypatch.setattr(platform_ready, "load_strategy_daily_eod_status", failed_artifacts)
+
+    result = platform_ready._check_strategy_daily_eod("test", "2026-06-18")
+
+    assert result["status"] == "fail"
+    assert "midtrend_artifacts=failed" in result["detail"]
 
 
 def test_platform_ready_check_fails_when_frontend_inputs_are_missing(monkeypatch, tmp_path: Path):

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
@@ -2001,16 +2002,27 @@ def _today() -> str:
 
 
 def _main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Publish official strategy EOD artifacts and manifest rows.")
+    parser = argparse.ArgumentParser(description="Forward legacy strategy publication to the official runner.")
     parser.add_argument("--trade-date", default="")
-    parser.add_argument("--output-root", default=str(DEFAULT_OUTPUT_ROOT))
+    parser.add_argument("--output-root", default=None)
     args = parser.parse_args(argv)
-    summary = publish_strategy_eod(
-        trade_date=args.trade_date or None,
-        output_root=args.output_root,
+    from stock_research.runtime_provenance import runtime_provenance
+    from stock_research.strategy_daily_eod import run_strategy_daily_eod
+
+    provenance = runtime_provenance()
+    release_root = Path(provenance["source_root"])
+    base_output_root = Path(args.output_root) if args.output_root else release_root / "outputs"
+    print(
+        "DEPRECATED: use `stock-research run-strategy-daily-eod`; forwarding to official runner",
+        file=sys.stderr,
+    )
+    summary = run_strategy_daily_eod(
+        trade_date=args.trade_date or _today(),
+        output_root=base_output_root / "research" / "strategy_daily_eod",
+        release_root=release_root,
     )
     print(json.dumps(summary, ensure_ascii=False, indent=2))
-    return 0
+    return 0 if summary.get("status") == "success" else 1
 
 
 if __name__ == "__main__":

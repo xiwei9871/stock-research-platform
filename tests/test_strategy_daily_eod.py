@@ -1062,6 +1062,7 @@ def test_status_payload_and_schema():
         dependency_check_status="failed",
         lhb_shortline_status="skipped",
         mid_trend_status="skipped",
+        midtrend_artifacts_status="skipped",
         tech_bottleneck_status="skipped",
         review_rows=0,
         output_dir="/tmp/out",
@@ -1071,6 +1072,7 @@ def test_status_payload_and_schema():
 
     assert payload["trade_date"] == "2026-06-24"
     assert payload["mid_trend_status"] == "skipped"
+    assert payload["midtrend_artifacts_status"] == "skipped"
     assert "ops.strategy_daily_eod_status" in store.STRATEGY_DAILY_EOD_STATUS_SQL
     assert "'partial'" in store.STRATEGY_DAILY_EOD_STATUS_SQL
     assert "'blocked'" in store.STRATEGY_DAILY_EOD_STATUS_SQL
@@ -1079,6 +1081,45 @@ def test_status_payload_and_schema():
     assert store.STRATEGY_DAILY_EOD_STATUS_SQL.index(
         "IF constraint_definition IS NULL"
     ) < store.STRATEGY_DAILY_EOD_STATUS_SQL.index("DROP CONSTRAINT IF EXISTS")
+    assert "ADD COLUMN IF NOT EXISTS midtrend_artifacts_status text" in store.STRATEGY_DAILY_EOD_STATUS_SQL
+
+
+def test_status_upsert_and_reader_include_midtrend_artifacts(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(store, "execute", lambda conn, sql, payload: captured.update(sql=sql, payload=payload))
+    payload = {
+        "trade_date": "2026-07-24",
+        "status": "success",
+        "dependency_check_status": "success",
+        "lhb_shortline_status": "success",
+        "mid_trend_status": "success",
+        "midtrend_artifacts_status": "success",
+        "tech_bottleneck_status": "success",
+        "review_rows": 15,
+        "output_dir": "/tmp/out",
+        "summary_path": "/tmp/out/summary.json",
+        "error_summary": None,
+    }
+    store.upsert_strategy_daily_eod_status_with_connection(payload, conn=object())
+    assert "midtrend_artifacts_status" in captured["sql"]
+    assert captured["payload"]["midtrend_artifacts_status"] == "success"
+
+    class Context:
+        def __enter__(self):
+            return object()
+
+        def __exit__(self, *_args):
+            return False
+
+    monkeypatch.setattr(store, "connect", lambda _service: Context())
+    monkeypatch.setattr(
+        store,
+        "fetch_all",
+        lambda _conn, sql, _params: captured.update(select_sql=sql) or [payload],
+    )
+    loaded = store.load_strategy_daily_eod_status("2026-07-24", service="test")
+    assert loaded["midtrend_artifacts_status"] == "success"
+    assert "midtrend_artifacts_status" in captured["select_sql"]
 
 
 def test_run_strategy_daily_eod_writes_summary_and_status(tmp_path: Path, monkeypatch):
@@ -1282,6 +1323,7 @@ def test_run_strategy_daily_eod_writes_midtrend_v1_v2_and_review_artifacts(tmp_p
     }
     assert Path(result["summary_path"]).exists()
     assert captured["payload"]["status"] == "success"
+    assert captured["payload"]["midtrend_artifacts_status"] == "success"
 
 
 def test_run_strategy_daily_eod_flat_failed_dependency_blocks_all_strategies(tmp_path: Path, monkeypatch):
@@ -1337,6 +1379,7 @@ def test_run_strategy_daily_eod_intraday_failure_only_blocks_lhb(tmp_path: Path,
     assert result["dependency_check"]["intraday"]["reason"] == "baostock login failed: 10002007"
     assert captured["payload"]["status"] == "failed"
     assert captured["payload"]["dependency_check_status"] == "failed"
+    assert captured["payload"]["midtrend_artifacts_status"] == "skipped"
 
 
 def test_run_strategy_daily_eod_common_failure_blocks_all_runners(tmp_path: Path, monkeypatch):
