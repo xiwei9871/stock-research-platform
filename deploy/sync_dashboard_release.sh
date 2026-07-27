@@ -17,7 +17,6 @@ local_readiness_url_override="${LOCAL_READINESS_URL:-}"
 remote_env_file_override="${DASHBOARD_REMOTE_ENV_FILE:-}"
 remote_pgservice_file_override="${DASHBOARD_PGSERVICE_FILE:-}"
 compose_project_override="${STOCK_RESEARCH_COMPOSE_PROJECT:-}"
-platform_summary_file_override="${PLATFORM_SUMMARY_FILE:-}"
 api_bind_port_override="${DASHBOARD_API_BIND_PORT:-}"
 frontend_bind_port_override="${DASHBOARD_FRONTEND_BIND_PORT:-}"
 
@@ -42,7 +41,6 @@ LOCAL_READINESS_URL="${local_readiness_url_override:-${LOCAL_READINESS_URL:-http
 DASHBOARD_REMOTE_ENV_FILE="${remote_env_file_override:-${DASHBOARD_REMOTE_ENV_FILE:-.env.dashboard}}"
 DASHBOARD_PGSERVICE_FILE="${remote_pgservice_file_override:-${DASHBOARD_PGSERVICE_FILE:-.pg_service.conf}}"
 STOCK_RESEARCH_COMPOSE_PROJECT="${compose_project_override:-${STOCK_RESEARCH_COMPOSE_PROJECT:-stock_research_dashboard}}"
-PLATFORM_SUMMARY_FILE="${platform_summary_file_override:-${PLATFORM_SUMMARY_FILE:-$ROOT/outputs/research/platform_daily_summary_v1/latest.json}}"
 DASHBOARD_API_BIND_PORT="${api_bind_port_override:-${DASHBOARD_API_BIND_PORT:-8765}}"
 DASHBOARD_FRONTEND_BIND_PORT="${frontend_bind_port_override:-${DASHBOARD_FRONTEND_BIND_PORT:-5174}}"
 
@@ -146,17 +144,18 @@ if [[ -z "$EXPECTED_TRADE_DATE" ]]; then
   )"
 fi
 if [[ -z "$EXPECTED_TRADE_DATE" ]]; then
-  if [[ -f "$PLATFORM_SUMMARY_FILE" ]]; then
-    summary_path="$(cd "$(dirname "$PLATFORM_SUMMARY_FILE")" && pwd -P)/$(basename "$PLATFORM_SUMMARY_FILE")"
-    case "$summary_path" in
-      "$ROOT"/*)
-        EXPECTED_TRADE_DATE="$(jq -er '.latest_market_date | select(type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$"))' "$summary_path" 2>/dev/null || true)"
-        ;;
-    esac
-  fi
+  EXPECTED_TRADE_DATE="$(
+    env \
+      PYTHONPATH="$ROOT/src" \
+      STOCK_RESEARCH_RELEASE_ROOT="$ROOT" \
+      STOCK_RESEARCH_RELEASE_ID="$release_id" \
+      "$STOCK_RESEARCH_PYTHON" -c \
+      'from stock_research.dashboard.platform import load_platform_summary; summary = load_platform_summary(); print(summary.get("latest_market_date") or summary.get("latest_trade_date") or "")' \
+      2>/dev/null || true
+  )"
 fi
 if [[ ! "$EXPECTED_TRADE_DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
-  echo "Unable to resolve a valid EXPECTED_TRADE_DATE from override, current readiness, or the selected release platform summary" >&2
+  echo "Unable to resolve a valid EXPECTED_TRADE_DATE from override, current readiness, or the current release platform loader" >&2
   exit 2
 fi
 echo "Resolved EXPECTED_TRADE_DATE=${EXPECTED_TRADE_DATE}"
@@ -280,7 +279,7 @@ rsync -az --delete -e "$rsync_rsh" -- "$strategy_output/" \
 
 echo "Restarting Docker Compose API and dashboard services"
 ssh "${ssh_opts[@]}" -- "$remote" \
-  "cd ${remote_dir_q} && test -f ${remote_env_file_q} && test -f ${pgservice_file_q} && STOCK_RESEARCH_RELEASE_ROOT=${container_root_q} STOCK_RESEARCH_RELEASE_ID=${release_id_q} STOCK_RESEARCH_FRONTEND_BUILD_ID=${release_id_q} DASHBOARD_REMOTE_ENV_FILE=${remote_env_file_q} DASHBOARD_PGSERVICE_FILE=${pgservice_file_q} DASHBOARD_API_BIND_PORT=${api_bind_port_q} DASHBOARD_FRONTEND_BIND_PORT=${frontend_bind_port_q} docker compose --project-name ${compose_project_q} -f deploy/dashboard-release.compose.yml build api dashboard && STOCK_RESEARCH_RELEASE_ROOT=${container_root_q} STOCK_RESEARCH_RELEASE_ID=${release_id_q} STOCK_RESEARCH_FRONTEND_BUILD_ID=${release_id_q} DASHBOARD_REMOTE_ENV_FILE=${remote_env_file_q} DASHBOARD_PGSERVICE_FILE=${pgservice_file_q} DASHBOARD_API_BIND_PORT=${api_bind_port_q} DASHBOARD_FRONTEND_BIND_PORT=${frontend_bind_port_q} docker compose --project-name ${compose_project_q} -f deploy/dashboard-release.compose.yml up -d --force-recreate api dashboard"
+  "cd ${remote_dir_q} && test -f ${remote_env_file_q} && test -f ${pgservice_file_q} && STOCK_RESEARCH_RELEASE_ROOT=${container_root_q} STOCK_RESEARCH_RELEASE_ID=${release_id_q} STOCK_RESEARCH_FRONTEND_BUILD_ID=${release_id_q} DASHBOARD_REMOTE_ENV_FILE=${remote_env_file_q} DASHBOARD_PGSERVICE_FILE=${pgservice_file_q} DASHBOARD_API_BIND_PORT=${api_bind_port_q} DASHBOARD_FRONTEND_BIND_PORT=${frontend_bind_port_q} docker compose --project-name ${compose_project_q} -f deploy/dashboard-release.compose.yml build api dashboard && STOCK_RESEARCH_RELEASE_ROOT=${container_root_q} STOCK_RESEARCH_RELEASE_ID=${release_id_q} STOCK_RESEARCH_FRONTEND_BUILD_ID=${release_id_q} DASHBOARD_REMOTE_ENV_FILE=${remote_env_file_q} DASHBOARD_PGSERVICE_FILE=${pgservice_file_q} DASHBOARD_API_BIND_PORT=${api_bind_port_q} DASHBOARD_FRONTEND_BIND_PORT=${frontend_bind_port_q} docker compose --project-name ${compose_project_q} -f deploy/dashboard-release.compose.yml up -d --force-recreate --remove-orphans api dashboard"
 
 echo "Running bounded external release gate"
 BASE_URL="$BASE_URL" \

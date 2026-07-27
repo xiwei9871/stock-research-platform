@@ -95,10 +95,6 @@ def _release_fixture(tmp_path: Path, *, valid_manifest: bool = True) -> tuple[Pa
     (output_dir / "strategy_eod_publish_summary.json").write_text(
         json.dumps(summary), encoding="utf-8"
     )
-    platform_summary = root / "outputs" / "research" / "platform_daily_summary_v1" / "latest.json"
-    platform_summary.parent.mkdir(parents=True)
-    platform_summary.write_text('{"latest_market_date":"2026-07-24"}', encoding="utf-8")
-
     fake_bin = tmp_path / "bin"
     log_file = tmp_path / "commands.log"
     _write_executable(
@@ -108,6 +104,11 @@ def _release_fixture(tmp_path: Path, *, valid_manifest: bool = True) -> tuple[Pa
         echo "python:$*" >> "$FAKE_COMMAND_LOG"
         if [[ "$*" == *"import stock_research"* ]]; then
           echo "$FAKE_RELEASE_ROOT/src/stock_research/__init__.py"
+          exit 0
+        fi
+        if [[ "$*" == *"load_platform_summary"* ]]; then
+          if [[ "${FAKE_PLATFORM_LOADER_FAIL:-0}" == "1" ]]; then exit 1; fi
+          echo "${FAKE_PLATFORM_LATEST_DATE:-2026-07-24}"
           exit 0
         fi
         exec /usr/bin/python3 "$@"
@@ -195,7 +196,8 @@ def test_release_sync_versions_compose_images_and_injects_provenance():
     assert "--project-name" in script
     assert "STOCK_RESEARCH_COMPOSE_PROJECT" in script
     assert "docker compose" in script and "build api dashboard" in script
-    assert "--force-recreate api dashboard" in script
+    assert "--force-recreate" in script
+    assert "up -d --force-recreate --remove-orphans api dashboard" in script
     assert "STOCK_RESEARCH_RELEASE_ROOT" in compose
     assert "STOCK_RESEARCH_RELEASE_ID" in compose
     assert "STOCK_RESEARCH_FRONTEND_BUILD_ID" in compose
@@ -256,7 +258,7 @@ def test_remote_host_preflight_rejects_ports_owned_by_another_project(tmp_path):
         #!/bin/bash
         if [[ "$1 $2" == "compose version" ]]; then exit 0; fi
         if [[ "$1 $2" == "compose ls" ]]; then echo '[]'; exit 0; fi
-        if [[ "$1" == "ps" ]]; then echo 'abc123|legacy_dashboard|legacy-api'; exit 0; fi
+        if [[ "$1" == "ps" ]]; then echo 'abc123|legacy_dashboard|api|legacy-api'; exit 0; fi
         exit 1
         """,
     )
@@ -276,6 +278,90 @@ def test_remote_host_preflight_rejects_ports_owned_by_another_project(tmp_path):
     assert result.returncode == 2
     assert "legacy_dashboard" in result.stderr
     assert "migration required" in result.stderr
+
+
+def test_remote_host_preflight_rejects_same_project_orphan_service(tmp_path):
+    fake_bin = tmp_path / "bin"
+    _write_executable(
+        fake_bin / "docker",
+        """
+        #!/bin/bash
+        if [[ "$1 $2" == "compose version" ]]; then exit 0; fi
+        if [[ "$1 $2" == "compose ls" ]]; then echo '[]'; exit 0; fi
+        if [[ "$1" == "ps" ]]; then echo 'abc123|stock_research_dashboard|worker|orphan-worker'; exit 0; fi
+        exit 1
+        """,
+    )
+    _write_executable(fake_bin / "ss", "#!/bin/bash\nexit 1\n")
+
+    result = subprocess.run(
+        [str(REPO_ROOT / "deploy/check_dashboard_remote_host.sh"), "stock_research_dashboard", "8765", "5174"],
+        env={**os.environ, "PATH": f"{fake_bin}:{os.environ['PATH']}"},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert "expected service=api" in result.stderr
+
+
+def test_remote_host_preflight_rejects_non_docker_listener(tmp_path):
+    fake_bin = tmp_path / "bin"
+    _write_executable(
+        fake_bin / "docker",
+        """
+        #!/bin/bash
+        if [[ "$1 $2" == "compose version" ]]; then exit 0; fi
+        if [[ "$1 $2" == "compose ls" ]]; then echo '[]'; exit 0; fi
+        if [[ "$1" == "ps" ]]; then exit 0; fi
+        exit 1
+        """,
+    )
+    _write_executable(
+        fake_bin / "ss",
+        """
+        #!/bin/bash
+        echo 'LISTEN 0 128 127.0.0.1:8765 0.0.0.0:* users:(("python",pid=99,fd=3))'
+        """,
+    )
+
+    result = subprocess.run(
+        [str(REPO_ROOT / "deploy/check_dashboard_remote_host.sh"), "stock_research_dashboard", "8765", "5174"],
+        env={**os.environ, "PATH": f"{fake_bin}:{os.environ['PATH']}"},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert "non-Docker listener" in result.stderr
+
+
+def test_remote_host_preflight_allows_expected_project_services(tmp_path):
+    fake_bin = tmp_path / "bin"
+    _write_executable(
+        fake_bin / "docker",
+        """
+        #!/bin/bash
+        if [[ "$1 $2" == "compose version" ]]; then exit 0; fi
+        if [[ "$1 $2" == "compose ls" ]]; then echo '[]'; exit 0; fi
+        if [[ "$1" == "ps" && "$*" == *"publish=8765"* ]]; then echo 'api1|stock_research_dashboard|api|canonical-api'; exit 0; fi
+        if [[ "$1" == "ps" && "$*" == *"publish=5174"* ]]; then echo 'web1|stock_research_dashboard|dashboard|canonical-dashboard'; exit 0; fi
+        exit 0
+        """,
+    )
+    _write_executable(fake_bin / "ss", "#!/bin/bash\necho LISTEN\n")
+
+    result = subprocess.run(
+        [str(REPO_ROOT / "deploy/check_dashboard_remote_host.sh"), "stock_research_dashboard", "8765", "5174"],
+        env={**os.environ, "PATH": f"{fake_bin}:{os.environ['PATH']}"},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
 
 
 def test_release_sync_fails_before_side_effects_for_worktree_root(tmp_path):
@@ -371,6 +457,38 @@ def test_release_sync_platform_date_without_exact_strategy_artifact_fails_before
     assert "rsync:" not in commands
 
 
+def test_release_sync_loader_failure_does_not_scan_stale_strategy_artifacts(tmp_path):
+    root, env, log_file = _release_fixture(tmp_path)
+    source = root / "outputs" / "research" / "strategy_daily_eod" / "2026-07-24"
+    stale = source.parent / "2026-06-01"
+    source.rename(stale)
+    subprocess.run(["git", "-C", str(root), "add", "-A"], check=True)
+    subprocess.run(
+        [
+            "git", "-C", str(root), "-c", "user.name=Test", "-c",
+            "user.email=test@example.invalid", "commit", "-qm", "stale-only",
+        ],
+        check=True,
+    )
+    env["FAKE_PLATFORM_LOADER_FAIL"] = "1"
+
+    result = subprocess.run(
+        [str(REPO_ROOT / "deploy/sync_dashboard_release.sh")],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert "Unable to resolve" in result.stderr
+    assert "2026-06-01" not in result.stdout
+    commands = log_file.read_text(encoding="utf-8")
+    assert "ssh:" not in commands
+    assert "rsync:" not in commands
+
+
 def test_release_sync_rejects_dangerous_ssh_options_before_remote_access(tmp_path):
     _root, env, log_file = _release_fixture(tmp_path)
     env["SSH_OPTS"] = "-o ProxyCommand=touch/tmp/owned"
@@ -446,10 +564,13 @@ def test_release_sync_builds_and_syncs_one_identified_release():
     for variable in ("REMOTE_USER", "REMOTE_HOST", "REMOTE_DIR", "SSH_OPTS"):
         assert variable in script
     assert "STRATEGY_OUTPUT_ROOT" in script
-    assert "dashboard-release.compose.yml up -d --force-recreate api dashboard" in script
+    assert "dashboard-release.compose.yml up -d --force-recreate --remove-orphans api dashboard" in script
     assert "deploy/check_dashboard_release.sh" in script
     assert "deploy/validate_strategy_release.py" in script
     assert "release.json" in script
+    assert "load_platform_summary" in script
+    assert "platform_daily_summary_v1" not in script
+    assert "resolve-latest" not in script
 
 
 def test_release_gate_checks_readiness_provenance_and_review_queue_contract():
