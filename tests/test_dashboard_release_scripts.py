@@ -58,9 +58,18 @@ def _release_fixture(tmp_path: Path, *, valid_manifest: bool = True) -> tuple[Pa
         root / "deploy" / "check_dashboard_release.sh",
         """
         #!/bin/bash
+        printf '%s|%s|%s|%s|%s|%s|%s|%s|%s\n' \
+          "$EXPECTED_TRADE_DATE" "$EXPECTED_RELEASE_ID" "$EXPECTED_REMOTE_SOURCE_ROOT" \
+          "$EXPECTED_FRONTEND_BUILD_ID" "$EXPECTED_STRATEGY_ARTIFACT_DATE" \
+          "$EXPECTED_REMOTE_PYTHON_PACKAGE_ROOT" "$EXPECTED_API_BASE_IMAGE" \
+          "$EXPECTED_FRONTEND_BASE_IMAGE" "$BASE_URL" \
+          >> "$FAKE_RELEASE_GATE_LOG"
         [[ "${FAKE_RELEASE_ALREADY_LIVE:-0}" == "1" ]] && exit 0
-        [[ -n "${EXPECTED_REMOTE_SOURCE_ROOT:-}" ]] && exit 0
-        exit 1
+        count=0
+        [[ -f "$FAKE_RELEASE_GATE_COUNT" ]] && count="$(cat "$FAKE_RELEASE_GATE_COUNT")"
+        count=$((count + 1))
+        printf '%s\n' "$count" > "$FAKE_RELEASE_GATE_COUNT"
+        [[ "$count" -ge 2 ]]
         """,
     )
 
@@ -173,6 +182,8 @@ def _release_fixture(tmp_path: Path, *, valid_manifest: bool = True) -> tuple[Pa
         "LOCAL_READINESS_URL": "http://local.invalid/api/platform/readiness",
         "FAKE_RELEASE_ROOT": str(root),
         "FAKE_COMMAND_LOG": str(log_file),
+        "FAKE_RELEASE_GATE_LOG": str(tmp_path / "release-gates.log"),
+        "FAKE_RELEASE_GATE_COUNT": str(tmp_path / "release-gates.count"),
     }
     env.pop("EXPECTED_TRADE_DATE", None)
     return root, env, log_file
@@ -405,6 +416,12 @@ def test_release_sync_executes_with_dynamic_date_python_override_and_compose_pro
     )
 
     assert result.returncode == 0, result.stderr
+    gates = (tmp_path / "release-gates.log").read_text(encoding="utf-8").splitlines()
+    assert len(gates) == 2
+    assert gates[0] == gates[1]
+    assert "|/app|" in gates[0]
+    assert "|2026-07-24|/app/src/stock_research|python:3.12.11-slim-bookworm@sha256:" in gates[0]
+    assert "|nginx:1.27.5-alpine@sha256:" in gates[0]
     assert "Resolved EXPECTED_TRADE_DATE=2026-07-24" in result.stdout
     assert "Resolved EXPECTED_TRADE_DATE=2026-05-18" not in result.stdout
     assert json.loads((root / "dashboard" / "dist" / "release.json").read_text())["release_id"]

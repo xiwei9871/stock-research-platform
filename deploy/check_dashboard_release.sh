@@ -6,6 +6,11 @@ EXPECTED_TRADE_DATE="${EXPECTED_TRADE_DATE:?EXPECTED_TRADE_DATE is required (YYY
 EXPECTED_RELEASE_ID="${EXPECTED_RELEASE_ID:?EXPECTED_RELEASE_ID is required}"
 DASHBOARD_AUTH="${DASHBOARD_AUTH:-}"
 EXPECTED_REMOTE_SOURCE_ROOT="${EXPECTED_REMOTE_SOURCE_ROOT:-}"
+EXPECTED_FRONTEND_BUILD_ID="${EXPECTED_FRONTEND_BUILD_ID:-$EXPECTED_RELEASE_ID}"
+EXPECTED_STRATEGY_ARTIFACT_DATE="${EXPECTED_STRATEGY_ARTIFACT_DATE:-$EXPECTED_TRADE_DATE}"
+EXPECTED_REMOTE_PYTHON_PACKAGE_ROOT="${EXPECTED_REMOTE_PYTHON_PACKAGE_ROOT:-${EXPECTED_REMOTE_SOURCE_ROOT:+$EXPECTED_REMOTE_SOURCE_ROOT/src/stock_research}}"
+EXPECTED_API_BASE_IMAGE="${EXPECTED_API_BASE_IMAGE:-python:3.12.11-slim-bookworm@sha256:519591d6871b7bc437060736b9f7456b8731f1499a57e22e6c285135ae657bf7}"
+EXPECTED_FRONTEND_BASE_IMAGE="${EXPECTED_FRONTEND_BASE_IMAGE:-nginx:1.27.5-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10}"
 RELEASE_CHECK_TIMEOUT_SECONDS="${RELEASE_CHECK_TIMEOUT_SECONDS:-120}"
 RELEASE_CHECK_RETRY_SECONDS="${RELEASE_CHECK_RETRY_SECONDS:-3}"
 
@@ -57,22 +62,31 @@ readiness_matches_release() {
     --arg expected "$EXPECTED_TRADE_DATE" \
     --arg release "$EXPECTED_RELEASE_ID" \
     --arg source "$EXPECTED_REMOTE_SOURCE_ROOT" \
+    --arg frontend_build "$EXPECTED_FRONTEND_BUILD_ID" \
+    --arg strategy_date "$EXPECTED_STRATEGY_ARTIFACT_DATE" \
+    --arg package_root "$EXPECTED_REMOTE_PYTHON_PACKAGE_ROOT" \
     '
       .latest_market_date == $expected
       and .runtime_provenance.release_id == $release
-      and .runtime_provenance.frontend_build_id == $release
-      and .runtime_provenance.strategy_artifact_date == $expected
+      and .runtime_provenance.frontend_build_id == $frontend_build
+      and .runtime_provenance.strategy_artifact_date == $strategy_date
       and .runtime_provenance.source_root != ""
       and ($source == "" or .runtime_provenance.source_root == $source)
-      and .runtime_provenance.python_package_root == (.runtime_provenance.source_root + "/src/stock_research")
+      and (
+        ($package_root == "" and .runtime_provenance.python_package_root == (.runtime_provenance.source_root + "/src/stock_research"))
+        or .runtime_provenance.python_package_root == $package_root
+      )
     ' "$1" >/dev/null
 }
 
 frontend_matches_release() {
-  jq -e --arg release "$EXPECTED_RELEASE_ID" '
+  jq -e \
+    --arg release "$EXPECTED_RELEASE_ID" \
+    --arg api_base_image "$EXPECTED_API_BASE_IMAGE" \
+    --arg frontend_base_image "$EXPECTED_FRONTEND_BASE_IMAGE" '
     .release_id == $release
-    and .api_base_image == "python:3.12.11-slim-bookworm@sha256:519591d6871b7bc437060736b9f7456b8731f1499a57e22e6c285135ae657bf7"
-    and .frontend_base_image == "nginx:1.27.5-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10"
+    and .api_base_image == $api_base_image
+    and .frontend_base_image == $frontend_base_image
   ' "$1" >/dev/null
 }
 

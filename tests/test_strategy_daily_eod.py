@@ -189,8 +189,13 @@ def test_run_strategy_daily_eod_writes_summary_and_status(tmp_path: Path, monkey
     assert official_lhb.read_text(encoding="utf-8") == "official lhb\n"
     assert official_mid.read_text(encoding="utf-8") == "official mid\n"
     assert official_tech.read_text(encoding="utf-8") == "official tech\n"
-    assert result["output_dir"].startswith(str(tmp_path / ".versions" / "2026-06-24"))
-    assert not Path(result["output_dir"]).exists()
+    failure_summary = Path(result["summary_path"])
+    assert failure_summary.exists()
+    assert failure_summary.parent.parent.parent == tmp_path / ".failures"
+    assert Path(result["output_dir"]) == failure_summary.parent
+    assert captured["payload"]["output_dir"] == str(failure_summary.parent)
+    assert captured["payload"]["summary_path"] == str(failure_summary)
+    assert result["midtrend_artifacts"] == {}
     assert result["manifest_modules"] == [
         "strategy_lhb_shortline",
         "strategy_mid_trend",
@@ -198,6 +203,26 @@ def test_run_strategy_daily_eod_writes_summary_and_status(tmp_path: Path, monkey
         "review_queue_strategy_manifest",
     ]
     assert captured["payload"]["status"] == "partial"
+
+
+def test_failed_strategy_publication_retains_only_ten_audit_summaries(
+    tmp_path: Path,
+    monkeypatch,
+):
+    monkeypatch.setattr(eod, "apply_strategy_daily_eod_status_schema", lambda **_kwargs: None)
+    monkeypatch.setattr(eod, "upsert_strategy_daily_eod_status", lambda *_args, **_kwargs: None)
+
+    for _ in range(12):
+        result = eod.run_strategy_daily_eod(
+            trade_date="2026-06-24",
+            output_root=tmp_path,
+            dependency_checker=lambda **_kwargs: {"status": "failed", "reason": "missing"},
+        )
+        assert Path(result["summary_path"]).exists()
+
+    failure_root = tmp_path / ".failures" / "2026-06-24"
+    retained = [path for path in failure_root.iterdir() if path.is_dir()]
+    assert len(retained) == 10
 
 
 def test_official_strategy_runner_writes_task7_canonical_release(tmp_path: Path, monkeypatch):
@@ -304,7 +329,8 @@ def test_run_strategy_daily_eod_writes_midtrend_v1_v2_and_review_artifacts(tmp_p
 
     assert result["status"] == "partial"
     assert result["strategy_status"]["midtrend_artifacts"] == "success"
-    assert "midtrend_v2_top10_candidate.csv" in result["midtrend_artifacts"]
+    assert result["midtrend_artifacts"] == {}
+    assert Path(result["summary_path"]).exists()
     assert captured["payload"]["status"] == "partial"
 
 

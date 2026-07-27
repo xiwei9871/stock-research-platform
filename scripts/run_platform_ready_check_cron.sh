@@ -21,6 +21,14 @@ if [ -z "$TRADE_DATE" ]; then
   REPAIR_OUTPUT_DIR="${PLATFORM_READY_REPAIR_OUTPUT_DIR:-$OUTPUT_DIR/eod_auto_repair/$TRADE_DATE}"
 fi
 
+REPAIR_PUBLICATION_LOCK_FILE="${REPAIR_PUBLICATION_LOCK_FILE:-$ROOT/.locks/eod_repair_publication.flock}"
+if [[ "${REPAIR_PUBLICATION_LOCK_GUARD:-0}" != "1" ]]; then
+  exec python3 "$ROOT/scripts/repair_publication_lock.py" \
+    --lock-file "$REPAIR_PUBLICATION_LOCK_FILE" \
+    --guard-env REPAIR_PUBLICATION_LOCK_GUARD \
+    -- "$0" "$@"
+fi
+
 DASHBOARD_AUTH_USERNAME="${DASHBOARD_AUTH_USERNAME:-eod_repair}"
 DASHBOARD_AUTH_PASSWORD="${DASHBOARD_AUTH_PASSWORD:-}"
 DASHBOARD_AUTH_KEYCHAIN_SERVICE="${DASHBOARD_AUTH_KEYCHAIN_SERVICE:-stock-research-dashboard-eod-repair}"
@@ -28,7 +36,6 @@ DASHBOARD_AUTH_KEYCHAIN_SERVICE="${DASHBOARD_AUTH_KEYCHAIN_SERVICE:-stock-resear
 mkdir -p "$LOG_DIR" "$OUTPUT_DIR" "$REPAIR_OUTPUT_DIR" "$(dirname "$RUN_LOG")"
 
 source "$ROOT/scripts/stock_cron_guard.sh"
-source "$ROOT/scripts/repair_publication_lock.sh"
 clear_stock_proxy_env
 
 if [[ -z "$DASHBOARD_AUTH_PASSWORD" ]] && command -v security >/dev/null 2>&1; then
@@ -69,7 +76,6 @@ cleanup_heartbeat() {
 
 cleanup_all() {
   cleanup_heartbeat
-  release_repair_publication_lock
 }
 
 finalize_publication() {
@@ -89,13 +95,8 @@ forward_signal() {
   fi
 }
 
-trap forward_signal TERM INT
+trap forward_signal TERM INT HUP
 trap cleanup_all EXIT
-
-if ! acquire_repair_publication_lock "$ROOT"; then
-  echo "platform_ready_check|locked|trade_date=${TRADE_DATE}"
-  exit 75
-fi
 
 echo "platform_ready_check|started|stage=eod_auto_repair|trade_date=${TRADE_DATE}|detail_log=${RUN_LOG}"
 echo "=== eod auto repair start: $(date '+%Y-%m-%d %H:%M:%S %z') ===" >>"$RUN_LOG"

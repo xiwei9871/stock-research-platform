@@ -12,6 +12,7 @@ from typing import Any, Callable
 
 import pandas as pd
 
+from stock_research.atomic_json import atomic_write_json
 from stock_research.config import SETTINGS
 from stock_research.db import connect, fetch_all
 from stock_research.factor_store import load_top_scores
@@ -129,15 +130,19 @@ def run_strategy_daily_eod(
                 staging=output_dir,
                 canonical=canonical_output_dir,
             )
+    failure_output_dir = Path(output_root) / ".failures" / trade_date / output_dir.name
+    persistent_output_dir = canonical_output_dir if contract_valid else failure_output_dir
     summary = {
         "trade_date": trade_date,
-        "run_id": f"strategy-eod-{trade_date}-local",
-        "output_dir": str(canonical_output_dir if contract_valid else output_dir),
+        "run_id": f"strategy-eod-{trade_date}-local" if contract_valid else output_dir.name,
+        "output_dir": str(persistent_output_dir),
         "dependency_check": dependency_check,
         "dependency_reason": dependency_reason,
         "strategy_status": strategy_status,
         "strategy_errors": strategy_errors,
-        "midtrend_artifacts": results["midtrend_artifacts"].get("paths", {}),
+        "midtrend_artifacts": (
+            results["midtrend_artifacts"].get("paths", {}) if contract_valid else {}
+        ),
         "midtrend_artifact_warnings": results["midtrend_artifacts"].get("warnings", []),
         "review_rows": review_rows,
         "status": final_status,
@@ -154,16 +159,24 @@ def run_strategy_daily_eod(
         },
         "error_summary": _join_errors(list(strategy_errors.values())),
     }
-    summary_path = output_dir / "strategy_eod_publish_summary.json"
-    summary["summary_path"] = str(
-        canonical_output_dir / "strategy_eod_publish_summary.json"
-        if contract_valid
-        else summary_path
-    )
-    summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+    staging_summary_path = output_dir / "strategy_eod_publish_summary.json"
+    summary_path = persistent_output_dir / "strategy_eod_publish_summary.json"
+    summary["summary_path"] = str(summary_path)
 
     if contract_valid:
+        staging_summary_path.write_text(
+            json.dumps(summary, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
         _atomic_publish_directory(output_dir, canonical_output_dir)
+    else:
+        _persist_failure_summary(
+            summary_path=summary_path,
+            summary=summary,
+            output_root=Path(output_root),
+            trade_date=trade_date,
+        )
+        shutil.rmtree(output_dir, ignore_errors=True)
 
     upsert_strategy_daily_eod_status(
         build_status_payload(
@@ -180,8 +193,6 @@ def run_strategy_daily_eod(
         ),
         service=service,
     )
-    if not contract_valid:
-        shutil.rmtree(output_dir, ignore_errors=True)
     return summary
 
 
@@ -207,6 +218,27 @@ def _atomic_publish_directory(staging: Path, canonical: Path) -> None:
     os.replace(staging, history)
     _prune_version_history(history.parent, current_target=None)
     _fsync_directory(canonical.parent)
+
+
+def _persist_failure_summary(
+    *,
+    summary_path: Path,
+    summary: dict[str, Any],
+    output_root: Path,
+    trade_date: str,
+) -> None:
+    failure_date_root = output_root / ".failures" / trade_date
+    resolved_root = output_root.resolve()
+    try:
+        summary_path.parent.resolve().relative_to(resolved_root)
+    except ValueError as exc:
+        raise RuntimeError("failure summary path escapes strategy output root") from exc
+    atomic_write_json(summary_path, summary)
+    _prune_version_history(
+        failure_date_root,
+        current_target=summary_path.parent,
+        retain=10,
+    )
 
 
 def _relocate_result_paths(

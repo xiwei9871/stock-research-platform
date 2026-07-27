@@ -11,9 +11,17 @@ ACTION_TIMEOUT_SECONDS="${EOD_AUTO_REPAIR_ACTION_TIMEOUT_SECONDS:-43200}"
 DASHBOARD_AUTH_USERNAME="${DASHBOARD_AUTH_USERNAME:-eod_repair}"
 DASHBOARD_AUTH_PASSWORD="${DASHBOARD_AUTH_PASSWORD:-}"
 DASHBOARD_AUTH_KEYCHAIN_SERVICE="${DASHBOARD_AUTH_KEYCHAIN_SERVICE:-stock-research-dashboard-eod-repair}"
+REPAIR_PUBLICATION_LOCK_FILE="${REPAIR_PUBLICATION_LOCK_FILE:-$ROOT/.locks/eod_repair_publication.flock}"
+
+if [[ "${REPAIR_PUBLICATION_LOCK_GUARD:-0}" != "1" ]]; then
+  exec python3 "$ROOT/scripts/repair_publication_lock.py" \
+    --lock-file "$REPAIR_PUBLICATION_LOCK_FILE" \
+    --guard-env REPAIR_PUBLICATION_LOCK_GUARD \
+    -- "$0" "$@"
+fi
+LOCK_MODE="flock"
 
 source "$ROOT/scripts/stock_cron_guard.sh"
-source "$ROOT/scripts/repair_publication_lock.sh"
 clear_stock_proxy_env
 
 mkdir -p "$LOG_DIR" "$OUTPUT_DIR" "$ROOT/.locks"
@@ -27,15 +35,6 @@ if [[ -z "$DASHBOARD_AUTH_PASSWORD" ]] && command -v security >/dev/null 2>&1; t
   )"
 fi
 export DASHBOARD_AUTH_PASSWORD
-
-log_locked() {
-  echo "eod_auto_repair|locked|lock_mode|${REPAIR_PUBLICATION_LOCK_MODE:-unknown}" >>"$DETAIL_LOG"
-  echo "EOD自动修复跳过"
-  echo "交易日: $TRADE_DATE"
-  echo "原因: 已有任务运行"
-  echo "锁模式: ${REPAIR_PUBLICATION_LOCK_MODE:-unknown}"
-  echo "详细日志: $DETAIL_LOG"
-}
 
 finalize_publication() {
   local repair_rc="$1"
@@ -102,17 +101,7 @@ forward_signal() {
     kill -TERM "$PIPELINE_PID" 2>/dev/null || true
   fi
 }
-cleanup() {
-  release_repair_publication_lock
-}
-trap forward_signal TERM INT
-trap cleanup EXIT
-
-if ! acquire_repair_publication_lock "$ROOT"; then
-  log_locked
-  exit 75
-fi
-LOCK_MODE="$REPAIR_PUBLICATION_LOCK_MODE"
+trap forward_signal TERM INT HUP
 
 run_repair
 exit "$?"

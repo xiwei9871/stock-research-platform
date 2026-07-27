@@ -43,6 +43,8 @@ DASHBOARD_PGSERVICE_FILE="${remote_pgservice_file_override:-${DASHBOARD_PGSERVIC
 STOCK_RESEARCH_COMPOSE_PROJECT="${compose_project_override:-${STOCK_RESEARCH_COMPOSE_PROJECT:-stock_research_dashboard}}"
 DASHBOARD_API_BIND_PORT="${api_bind_port_override:-${DASHBOARD_API_BIND_PORT:-8765}}"
 DASHBOARD_FRONTEND_BIND_PORT="${frontend_bind_port_override:-${DASHBOARD_FRONTEND_BIND_PORT:-5174}}"
+EXPECTED_API_BASE_IMAGE="python:3.12.11-slim-bookworm@sha256:519591d6871b7bc437060736b9f7456b8731f1499a57e22e6c285135ae657bf7"
+EXPECTED_FRONTEND_BASE_IMAGE="nginx:1.27.5-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10"
 
 case "$ROOT" in
   */.worktrees/*|*/.worktrees)
@@ -169,13 +171,25 @@ fi
   --output-dir "$strategy_output" \
   --trade-date "$EXPECTED_TRADE_DATE"
 
-if BASE_URL="$BASE_URL" \
+check_release_state() {
+  BASE_URL="$BASE_URL" \
   DASHBOARD_AUTH="$DASHBOARD_AUTH" \
   EXPECTED_TRADE_DATE="$EXPECTED_TRADE_DATE" \
   EXPECTED_RELEASE_ID="$release_id" \
-  RELEASE_CHECK_TIMEOUT_SECONDS="${DASHBOARD_DESIRED_STATE_TIMEOUT_SECONDS:-12}" \
-  RELEASE_CHECK_RETRY_SECONDS="${DASHBOARD_DESIRED_STATE_RETRY_SECONDS:-2}" \
-    "$ROOT/deploy/check_dashboard_release.sh" >/dev/null 2>&1; then
+  EXPECTED_REMOTE_SOURCE_ROOT="$REMOTE_CONTAINER_RELEASE_ROOT" \
+  EXPECTED_FRONTEND_BUILD_ID="$release_id" \
+  EXPECTED_STRATEGY_ARTIFACT_DATE="$EXPECTED_TRADE_DATE" \
+  EXPECTED_REMOTE_PYTHON_PACKAGE_ROOT="$REMOTE_CONTAINER_RELEASE_ROOT/src/stock_research" \
+  EXPECTED_API_BASE_IMAGE="$EXPECTED_API_BASE_IMAGE" \
+  EXPECTED_FRONTEND_BASE_IMAGE="$EXPECTED_FRONTEND_BASE_IMAGE" \
+  RELEASE_CHECK_TIMEOUT_SECONDS="$1" \
+  RELEASE_CHECK_RETRY_SECONDS="$2" \
+    "$ROOT/deploy/check_dashboard_release.sh"
+}
+
+if check_release_state \
+  "${DASHBOARD_DESIRED_STATE_TIMEOUT_SECONDS:-12}" \
+  "${DASHBOARD_DESIRED_STATE_RETRY_SECONDS:-2}" >/dev/null 2>&1; then
   echo "Dashboard desired state already live for ${EXPECTED_TRADE_DATE} (${release_id}); deployment skipped."
   exit 0
 fi
@@ -251,13 +265,16 @@ echo "Building canonical frontend for release ${release_id}"
 rtk pnpm --dir "$ROOT/dashboard" install --frozen-lockfile
 STOCK_RESEARCH_RELEASE_ID="$release_id" \
 VITE_RELEASE_ID="$release_id" \
-VITE_API_BASE_IMAGE="python:3.12.11-slim-bookworm@sha256:519591d6871b7bc437060736b9f7456b8731f1499a57e22e6c285135ae657bf7" \
-VITE_FRONTEND_BASE_IMAGE="nginx:1.27.5-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10" \
+VITE_API_BASE_IMAGE="$EXPECTED_API_BASE_IMAGE" \
+VITE_FRONTEND_BASE_IMAGE="$EXPECTED_FRONTEND_BASE_IMAGE" \
   rtk pnpm --dir "$ROOT/dashboard" build
-if ! jq -e --arg release "$release_id" '
+if ! jq -e \
+  --arg release "$release_id" \
+  --arg api_base_image "$EXPECTED_API_BASE_IMAGE" \
+  --arg frontend_base_image "$EXPECTED_FRONTEND_BASE_IMAGE" '
   .release_id == $release
-  and .api_base_image == "python:3.12.11-slim-bookworm@sha256:519591d6871b7bc437060736b9f7456b8731f1499a57e22e6c285135ae657bf7"
-  and .frontend_base_image == "nginx:1.27.5-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10"
+  and .api_base_image == $api_base_image
+  and .frontend_base_image == $frontend_base_image
 ' "$ROOT/dashboard/dist/release.json" >/dev/null; then
   echo "Frontend release metadata does not match release ${release_id}" >&2
   exit 2
@@ -294,9 +311,6 @@ ssh "${ssh_opts[@]}" -- "$remote" \
   "cd ${remote_dir_q} && test -f ${remote_env_file_q} && test -f ${pgservice_file_q} && STOCK_RESEARCH_RELEASE_ROOT=${container_root_q} STOCK_RESEARCH_RELEASE_ID=${release_id_q} STOCK_RESEARCH_FRONTEND_BUILD_ID=${release_id_q} DASHBOARD_REMOTE_ENV_FILE=${remote_env_file_q} DASHBOARD_PGSERVICE_FILE=${pgservice_file_q} DASHBOARD_API_BIND_PORT=${api_bind_port_q} DASHBOARD_FRONTEND_BIND_PORT=${frontend_bind_port_q} docker compose --project-name ${compose_project_q} -f deploy/dashboard-release.compose.yml build api dashboard && STOCK_RESEARCH_RELEASE_ROOT=${container_root_q} STOCK_RESEARCH_RELEASE_ID=${release_id_q} STOCK_RESEARCH_FRONTEND_BUILD_ID=${release_id_q} DASHBOARD_REMOTE_ENV_FILE=${remote_env_file_q} DASHBOARD_PGSERVICE_FILE=${pgservice_file_q} DASHBOARD_API_BIND_PORT=${api_bind_port_q} DASHBOARD_FRONTEND_BIND_PORT=${frontend_bind_port_q} docker compose --project-name ${compose_project_q} -f deploy/dashboard-release.compose.yml up -d --force-recreate --remove-orphans api dashboard"
 
 echo "Running bounded external release gate"
-BASE_URL="$BASE_URL" \
-EXPECTED_TRADE_DATE="$EXPECTED_TRADE_DATE" \
-EXPECTED_RELEASE_ID="$release_id" \
-DASHBOARD_AUTH="$DASHBOARD_AUTH" \
-EXPECTED_REMOTE_SOURCE_ROOT="$REMOTE_CONTAINER_RELEASE_ROOT" \
-  "$ROOT/deploy/check_dashboard_release.sh"
+check_release_state \
+  "${RELEASE_CHECK_TIMEOUT_SECONDS:-120}" \
+  "${RELEASE_CHECK_RETRY_SECONDS:-3}"
