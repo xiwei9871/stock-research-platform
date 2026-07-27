@@ -275,7 +275,6 @@ def test_official_runner_integrates_real_mature_publisher_manifest_shape(
     summary = eod.run_strategy_daily_eod(
         trade_date="2026-07-24",
         output_root=output_root,
-        release_root=release_root,
         dependency_checker=lambda **_kwargs: {"status": "success"},
         publisher=publisher,
         service="test",
@@ -636,6 +635,112 @@ def test_official_runner_rolls_back_canonical_when_publication_transaction_fails
     assert (canonical / "marker").read_text(encoding="utf-8") == "old"
     assert Path(summary["summary_path"]).exists()
     assert str(summary["summary_path"]).startswith(str(tmp_path / ".failures"))
+
+
+def test_official_runner_preserves_recovery_scene_when_rollback_fails(
+    tmp_path: Path, monkeypatch
+):
+    monkeypatch.setattr(eod, "apply_strategy_daily_eod_status_schema", lambda **_kwargs: None)
+    monkeypatch.setattr(eod, "upsert_strategy_daily_eod_status", lambda *_args, **_kwargs: None)
+    canonical = tmp_path / "2026-07-24"
+    canonical.mkdir()
+    (canonical / "marker").write_text("old", encoding="utf-8")
+    real_begin = eod.begin_atomic_publish
+
+    def begin_with_failed_rollback(staging, target):
+        handle = real_begin(staging, target)
+        handle.rollback = lambda: (_ for _ in ()).throw(OSError("rollback unavailable"))
+        return handle
+
+    monkeypatch.setattr(eod, "begin_atomic_publish", begin_with_failed_rollback)
+
+    with pytest.raises(
+        RuntimeError,
+        match="strategy publication rollback failed; manual recovery required",
+    ):
+        eod.run_strategy_daily_eod(
+            trade_date="2026-07-24",
+            output_root=tmp_path,
+            dependency_checker=lambda **_kwargs: {"status": "success"},
+            publisher=lambda **kwargs: _write_complete_mature_release(**kwargs),
+            publication_transaction=lambda **_kwargs: (_ for _ in ()).throw(
+                RuntimeError("DB failed")
+            ),
+            service="test",
+        )
+
+    assert not (canonical / "marker").exists()
+    assert (canonical / "strategy_eod_publish_summary.json").exists()
+    backups = list((tmp_path / ".versions" / "2026-07-24").glob("strategy-eod-*"))
+    assert any((backup / "marker").exists() for backup in backups)
+    audits = list((tmp_path / ".failures" / "2026-07-24").glob("*/strategy_eod_publish_summary.json"))
+    assert audits
+    assert "rollback_failure" in audits[-1].read_text(encoding="utf-8")
+
+
+def test_official_runner_handles_pre_switch_relocation_failure(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(eod, "apply_strategy_daily_eod_status_schema", lambda **_kwargs: None)
+    monkeypatch.setattr(eod, "upsert_strategy_daily_eod_status", lambda *_args, **_kwargs: None)
+    canonical = tmp_path / "2026-07-24"
+    canonical.mkdir()
+    (canonical / "marker").write_text("old", encoding="utf-8")
+    real_relocate = eod._relocate_review_manifest_paths
+    calls = 0
+
+    def fail_second_relocation(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise OSError("relocation failed")
+        return real_relocate(*args, **kwargs)
+
+    monkeypatch.setattr(eod, "_relocate_review_manifest_paths", fail_second_relocation)
+
+    summary = eod.run_strategy_daily_eod(
+        trade_date="2026-07-24",
+        output_root=tmp_path,
+        dependency_checker=lambda **_kwargs: {"status": "success"},
+        publisher=lambda **kwargs: _write_complete_mature_release(**kwargs),
+        service="test",
+    )
+
+    assert summary["status"] == "failed"
+    assert (canonical / "marker").read_text(encoding="utf-8") == "old"
+    assert Path(summary["summary_path"]).exists()
+    assert not list((tmp_path / ".versions" / "2026-07-24").glob("strategy-eod-*"))
+
+
+def test_official_runner_handles_staging_summary_write_failure(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(eod, "apply_strategy_daily_eod_status_schema", lambda **_kwargs: None)
+    monkeypatch.setattr(eod, "upsert_strategy_daily_eod_status", lambda *_args, **_kwargs: None)
+    canonical = tmp_path / "2026-07-24"
+    canonical.mkdir()
+    (canonical / "marker").write_text("old", encoding="utf-8")
+    real_write_text = Path.write_text
+    summary_writes = 0
+
+    def fail_official_summary_write(path, *args, **kwargs):
+        nonlocal summary_writes
+        if path.name == "strategy_eod_publish_summary.json":
+            summary_writes += 1
+            if summary_writes == 2:
+                raise OSError("summary write failed")
+        return real_write_text(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "write_text", fail_official_summary_write)
+
+    summary = eod.run_strategy_daily_eod(
+        trade_date="2026-07-24",
+        output_root=tmp_path,
+        dependency_checker=lambda **_kwargs: {"status": "success"},
+        publisher=lambda **kwargs: _write_complete_mature_release(**kwargs),
+        service="test",
+    )
+
+    assert summary["status"] == "failed"
+    assert "summary write failed" in summary["error_summary"]
+    assert (canonical / "marker").read_text(encoding="utf-8") == "old"
+    assert Path(summary["summary_path"]).exists()
 
 
 def test_official_runner_rejects_legacy_runner_injection(tmp_path: Path):

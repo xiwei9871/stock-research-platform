@@ -71,7 +71,11 @@ def run_strategy_daily_eod(
     apply_strategy_daily_eod_status_schema(service=service)
     dependency_checker = dependency_checker or check_strategy_daily_eod_dependencies
     root = Path(output_root).resolve()
-    allowed_release_root = Path(release_root).resolve() if release_root is not None else root
+    allowed_release_root = (
+        Path(release_root).resolve()
+        if release_root is not None
+        else _default_release_boundary(root)
+    )
     if not _path_is_within(root, allowed_release_root):
         raise ValueError("strategy output root must be contained within release root")
     publication_transaction = publication_transaction or commit_strategy_publication
@@ -232,27 +236,27 @@ def run_strategy_daily_eod(
     )
 
     if contract_valid:
-        canonical_entries = [
-            _relocate_manifest_entry(
-                entry,
+        handle: AtomicPublishHandle | None = None
+        try:
+            canonical_entries = [
+                _relocate_manifest_entry(
+                    entry,
+                    staging=output_dir,
+                    canonical=canonical_output_dir,
+                    allowed_roots=(allowed_release_root,),
+                )
+                for entry in manifest_entries
+            ]
+            _relocate_review_manifest_paths(
+                output_dir / "review_queue_strategy_manifest.csv",
                 staging=output_dir,
                 canonical=canonical_output_dir,
                 allowed_roots=(allowed_release_root,),
             )
-            for entry in manifest_entries
-        ]
-        _relocate_review_manifest_paths(
-            output_dir / "review_queue_strategy_manifest.csv",
-            staging=output_dir,
-            canonical=canonical_output_dir,
-            allowed_roots=(allowed_release_root,),
-        )
-        staging_summary_path.write_text(
-            json.dumps(summary, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-        handle: AtomicPublishHandle | None = None
-        try:
+            staging_summary_path.write_text(
+                json.dumps(summary, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
             handle = begin_atomic_publish(output_dir, canonical_output_dir)
             publication_transaction(
                 manifest_entries=canonical_entries,
@@ -261,11 +265,13 @@ def run_strategy_daily_eod(
             )
             handle.commit()
         except Exception as exc:  # noqa: BLE001
+            rollback_failed = False
             if handle is not None:
                 try:
                     handle.rollback()
-                except Exception as rollback_exc:  # noqa: BLE001
-                    exc = RuntimeError(f"{exc}; filesystem rollback failed: {rollback_exc}")
+                except Exception:  # noqa: BLE001
+                    rollback_failed = True
+                    exc = RuntimeError(f"{exc}; rollback_failure: filesystem rollback did not complete")
             summary = _failed_commit_summary(
                 summary,
                 error=exc,
@@ -277,9 +283,13 @@ def run_strategy_daily_eod(
                 output_root=root,
                 trade_date=trade_date,
             )
+            _best_effort_failed_status(summary, dependency_check=dependency_check, service=service)
+            if rollback_failed:
+                raise RuntimeError(
+                    "strategy publication rollback failed; manual recovery required"
+                ) from exc
             shutil.rmtree(output_dir, ignore_errors=True)
             shutil.rmtree(publisher_root, ignore_errors=True)
-            _best_effort_failed_status(summary, dependency_check=dependency_check, service=service)
             return summary
     else:
         _persist_failure_summary(
@@ -708,6 +718,12 @@ def _path_is_within(path: Path, root: Path) -> bool:
     except ValueError:
         return False
     return True
+
+
+def _default_release_boundary(output_root: Path) -> Path:
+    if output_root.parts[-3:] == ("outputs", "research", "strategy_daily_eod"):
+        return output_root.parents[2]
+    return output_root
 
 
 def _manifest_entries_reference_root(entries: list[dict[str, Any]], root: Path) -> bool:
