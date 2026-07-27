@@ -258,6 +258,7 @@ def test_remote_host_preflight_rejects_ports_owned_by_another_project(tmp_path):
         #!/bin/bash
         if [[ "$1 $2" == "compose version" ]]; then exit 0; fi
         if [[ "$1 $2" == "compose ls" ]]; then echo '[]'; exit 0; fi
+        if [[ "$1" == "ps" && "$*" == *" -a "* ]]; then exit 0; fi
         if [[ "$1" == "ps" ]]; then echo 'abc123|legacy_dashboard|api|legacy-api'; exit 0; fi
         exit 1
         """,
@@ -288,7 +289,8 @@ def test_remote_host_preflight_rejects_same_project_orphan_service(tmp_path):
         #!/bin/bash
         if [[ "$1 $2" == "compose version" ]]; then exit 0; fi
         if [[ "$1 $2" == "compose ls" ]]; then echo '[]'; exit 0; fi
-        if [[ "$1" == "ps" ]]; then echo 'abc123|stock_research_dashboard|worker|orphan-worker'; exit 0; fi
+        if [[ "$1" == "ps" && "$*" == *" -a "* ]]; then echo 'abc123|worker|orphan-worker|Exited (0)'; exit 0; fi
+        if [[ "$1" == "ps" ]]; then exit 0; fi
         exit 1
         """,
     )
@@ -303,7 +305,8 @@ def test_remote_host_preflight_rejects_same_project_orphan_service(tmp_path):
     )
 
     assert result.returncode == 2
-    assert "expected service=api" in result.stderr
+    assert "orphan-worker" in result.stderr
+    assert "manual migration required" in result.stderr
 
 
 def test_remote_host_preflight_rejects_non_docker_listener(tmp_path):
@@ -487,6 +490,49 @@ def test_release_sync_loader_failure_does_not_scan_stale_strategy_artifacts(tmp_
     commands = log_file.read_text(encoding="utf-8")
     assert "ssh:" not in commands
     assert "rsync:" not in commands
+
+
+def test_release_sync_same_project_unpublished_worker_fails_before_rsync_and_up(tmp_path):
+    _root, env, log_file = _release_fixture(tmp_path)
+    fake_bin = Path(env["PATH"].split(":", 1)[0])
+    _write_executable(
+        fake_bin / "docker",
+        """
+        #!/bin/bash
+        if [[ "$1 $2" == "compose version" ]]; then exit 0; fi
+        if [[ "$1 $2" == "compose ls" ]]; then echo '[]'; exit 0; fi
+        if [[ "$1" == "ps" && "$*" == *" -a "* ]]; then echo 'worker1|worker|hidden-worker|Up 1 hour'; exit 0; fi
+        if [[ "$1" == "ps" ]]; then exit 0; fi
+        exit 1
+        """,
+    )
+    _write_executable(
+        fake_bin / "ssh",
+        """
+        #!/bin/bash
+        echo "ssh:$*" >> "$FAKE_COMMAND_LOG"
+        if [[ "$*" == *"bash -s --"* ]]; then
+          exec /bin/bash -s -- stock_research_dashboard 8765 5174
+        fi
+        exit 0
+        """,
+    )
+
+    result = subprocess.run(
+        [str(REPO_ROOT / "deploy/sync_dashboard_release.sh")],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert "hidden-worker" in result.stderr
+    commands = log_file.read_text(encoding="utf-8")
+    assert "rsync:" not in commands
+    assert " build api dashboard" not in commands
+    assert " up -d " not in commands
 
 
 def test_release_sync_rejects_dangerous_ssh_options_before_remote_access(tmp_path):

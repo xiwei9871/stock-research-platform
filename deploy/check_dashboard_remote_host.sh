@@ -13,6 +13,22 @@ fi
 docker compose version >/dev/null
 docker compose ls --format json >/dev/null
 
+while IFS='|' read -r container_id owner_service container_name container_status; do
+  [[ -n "$container_id" ]] || continue
+  case "$owner_service" in
+    api|dashboard) ;;
+    *)
+      echo "Compose project $project_name contains unsupported service=${owner_service:-unknown} container $container_name ($container_id, $container_status); manual migration required before canonical release." >&2
+      echo "Inspect and remove the orphan explicitly. The release script will not let --remove-orphans delete an unreviewed service." >&2
+      exit 2
+      ;;
+  esac
+done < <(
+  docker ps -a \
+    --filter "label=com.docker.compose.project=$project_name" \
+    --format '{{.ID}}|{{.Label "com.docker.compose.service"}}|{{.Names}}|{{.Status}}'
+)
+
 listener_exists() {
   local port="$1"
   if command -v ss >/dev/null 2>&1; then
