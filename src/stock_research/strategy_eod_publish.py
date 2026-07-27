@@ -38,6 +38,11 @@ STRATEGY_EOD_NAMES = {
     "mid_trend": "Mid Trend Combo",
     "tech_bottleneck": "Tech Bottleneck Combo",
 }
+EXPECTED_STRATEGY_REVIEW_COUNTS = {
+    "lhb_shortline": 5,
+    "mid_trend": 5,
+    "tech_bottleneck": 5,
+}
 BASE_CHECKS = {
     "daily_bars": {
         "source": "market_daily_bar",
@@ -265,6 +270,28 @@ def publish_strategy_eod(
     strategy_results["tech_bottleneck"] = _strategy_score_audit_result(tech_result, tech_review_path=tech_review_path)
 
     review_path, review_rows = _write_review_queue(review_frames, output_dir)
+    strategy_counts, strategy_row_counts = _strategy_review_counts(review_rows)
+    if (
+        strategy_counts != EXPECTED_STRATEGY_REVIEW_COUNTS
+        or strategy_row_counts != EXPECTED_STRATEGY_REVIEW_COUNTS
+    ):
+        error = (
+            "strategy review contract requires exactly 5 rows per strategy: "
+            f"unique_assets={strategy_counts}, rows={strategy_row_counts}"
+        )
+        entries.append(
+            _failure_entry(
+                run_id=run_id,
+                trade_date=selected_trade_date,
+                module="review_queue_strategy_manifest",
+                source="strategy_daily_eod",
+                started_at=started_at,
+                error=error,
+            )
+        )
+        for entry in entries:
+            manifest_upsert(entry)
+        raise RuntimeError(error)
     entries.append(
         build_manifest_entry(
             run_id=run_id,
@@ -343,7 +370,9 @@ def publish_strategy_eod(
         "trade_date": selected_trade_date,
         "output_dir": str(output_dir),
         "manifest_modules": [entry["module"] for entry in entries],
+        "strategy_counts": strategy_counts,
         "review_rows": len(review_rows),
+        "publishable": True,
         "score_audit": score_audit,
     }
     summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -1387,6 +1416,23 @@ def _write_review_queue(
     path = output_dir / "review_queue_strategy_manifest.csv"
     frame.to_csv(path, index=False)
     return path, frame.to_dict("records")
+
+
+def _strategy_review_counts(
+    review_rows: list[dict[str, Any]],
+) -> tuple[dict[str, int], dict[str, int]]:
+    frame = pd.DataFrame(review_rows)
+    if frame.empty or not {"strategy_id", "asset_id"}.issubset(frame.columns):
+        return {}, {}
+    frame = frame.copy()
+    frame["strategy_id"] = frame["strategy_id"].fillna("").astype(str).str.strip()
+    frame["asset_id"] = frame["asset_id"].fillna("").astype(str).str.strip()
+    frame = frame[frame["strategy_id"].ne("") & frame["asset_id"].ne("")]
+    if frame.empty:
+        return {}, {}
+    unique_counts = frame.groupby("strategy_id")["asset_id"].nunique().astype(int).to_dict()
+    row_counts = frame.groupby("strategy_id").size().astype(int).to_dict()
+    return unique_counts, row_counts
 
 
 def _write_eod_news_artifacts(
