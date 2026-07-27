@@ -37,6 +37,205 @@ def test_finalize_repair_publication_orders_publish_cache_and_sync():
     }
 
 
+def test_finalize_repair_publication_persists_final_phase_states_atomically(tmp_path):
+    summary_path = tmp_path / "run_summary.json"
+    summary_path.write_text(
+        json.dumps(
+            {
+                "trade_date": "2026-07-02",
+                "repair_phases": {
+                    "minute5": "success",
+                    "strategy_publication": "pending",
+                    "cache_invalidation": "pending",
+                    "external_sync": "pending",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = eod_auto_repair.finalize_repair_publication(
+        publish=lambda: {"status": "success"},
+        clear_cache=lambda: True,
+        sync_external=lambda: True,
+        summary_path=summary_path,
+    )
+
+    persisted = json.loads(summary_path.read_text(encoding="utf-8"))
+    assert result["status"] == "success"
+    assert persisted["finalization_status"] == "success"
+    assert persisted["repair_phases"] == {
+        "minute5": "success",
+        "strategy_publication": "success",
+        "cache_invalidation": "success",
+        "external_sync": "success",
+    }
+    assert persisted["repair_phase_errors"] == {}
+    assert not (tmp_path / "run_summary.json.tmp").exists()
+
+
+def test_finalize_repair_publication_persists_failed_phase_and_safe_error(tmp_path):
+    summary_path = tmp_path / "run_summary.json"
+    summary_path.write_text('{"repair_phases":{"minute5":"success"}}', encoding="utf-8")
+
+    result = eod_auto_repair.finalize_repair_publication(
+        publish=lambda: {"status": "success"},
+        clear_cache=lambda: (_ for _ in ()).throw(RuntimeError("token=super-secret")),
+        sync_external=lambda: True,
+        summary_path=summary_path,
+    )
+
+    persisted = json.loads(summary_path.read_text(encoding="utf-8"))
+    assert result["status"] == "failed"
+    assert persisted["repair_phases"]["cache_invalidation"] == "failed"
+    assert persisted["repair_phases"]["external_sync"] == "skipped"
+    assert "super-secret" not in json.dumps(persisted)
+
+
+def test_validate_strategy_runner_publication_rejects_failed_fourth_runner(tmp_path):
+    summary_path = tmp_path / "strategy_eod_publish_summary.json"
+    summary_path.write_text(
+        json.dumps(
+            {
+                "status": "partial",
+                "strategy_status": {
+                    "lhb_shortline": "success",
+                    "midtrend_artifacts": "failed",
+                    "mid_trend": "success",
+                    "tech_bottleneck": "success",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = eod_auto_repair.validate_strategy_runner_publication(summary_path)
+
+    assert result["status"] == "failed"
+    assert result["error_code"] == "strategy_runner_status_invalid"
+
+
+def test_finalize_repaired_release_invokes_shared_finalizer(monkeypatch, tmp_path):
+    captured = {}
+
+    def fake_finalize(**kwargs):
+        captured.update(kwargs)
+        return {"status": "failed", "exit_code": 7, "repair_phases": {}, "errors": {}}
+
+    monkeypatch.setattr(eod_auto_repair, "finalize_repair_publication", fake_finalize)
+
+    result = eod_auto_repair.finalize_repaired_release(
+        trade_date="2026-07-02",
+        output_dir=tmp_path,
+        release_root=tmp_path,
+    )
+
+    assert result["exit_code"] == 7
+    assert captured["summary_path"] == tmp_path / "run_summary.json"
+    assert callable(captured["publish"])
+    assert callable(captured["clear_cache"])
+    assert callable(captured["sync_external"])
+
+
+def test_finalize_repaired_release_preserves_readiness_exit_code(monkeypatch, tmp_path):
+    output_dir = tmp_path / "repair"
+    output_dir.mkdir()
+    (output_dir / "run_summary.json").write_text(
+        '{"repair_phases":{"minute5":"success"}}', encoding="utf-8"
+    )
+    monkeypatch.setattr(
+        eod_auto_repair.subprocess,
+        "run",
+        lambda *args, **kwargs: SimpleNamespace(returncode=7),
+    )
+
+    result = eod_auto_repair.finalize_repaired_release(
+        trade_date="2026-07-02",
+        output_dir=output_dir,
+        release_root=tmp_path,
+    )
+
+    persisted = json.loads((output_dir / "run_summary.json").read_text(encoding="utf-8"))
+    assert result["exit_code"] == 7
+    assert persisted["repair_phases"]["strategy_publication"] == "failed"
+    assert persisted["repair_phases"]["cache_invalidation"] == "skipped"
+    assert persisted["repair_phases"]["external_sync"] == "skipped"
+
+
+def test_finalize_repaired_release_marks_downstream_skipped_when_repair_failed(tmp_path):
+    output_dir = tmp_path / "repair"
+    output_dir.mkdir()
+    (output_dir / "run_summary.json").write_text(
+        '{"repair_phases":{"minute5":"failed"}}', encoding="utf-8"
+    )
+
+    result = eod_auto_repair.finalize_repaired_release(
+        trade_date="2026-07-02",
+        output_dir=output_dir,
+        release_root=tmp_path,
+        repair_exit_code=7,
+    )
+
+    persisted = json.loads((output_dir / "run_summary.json").read_text(encoding="utf-8"))
+    assert result["exit_code"] == 7
+    assert persisted["finalization_status"] == "failed"
+    assert persisted["repair_phases"] == {
+        "minute5": "failed",
+        "strategy_publication": "failed",
+        "cache_invalidation": "skipped",
+        "external_sync": "skipped",
+    }
+    assert persisted["repair_phase_errors"] == {"strategy_publication": "repair_failed"}
+
+
+def test_finalize_repaired_release_stops_when_fourth_runner_is_not_success(
+    monkeypatch, tmp_path
+):
+    output_dir = tmp_path / "repair"
+    output_dir.mkdir()
+    strategy_output = tmp_path / "outputs" / "research" / "strategy_daily_eod" / "2026-07-02"
+    runner_dir = strategy_output / "strategy_daily_eod_legacy"
+    runner_dir.mkdir(parents=True)
+    (runner_dir / "strategy_eod_publish_summary.json").write_text(
+        json.dumps(
+            {
+                "status": "partial",
+                "strategy_status": {
+                    "lhb_shortline": "success",
+                    "midtrend_artifacts": "blocked",
+                    "mid_trend": "success",
+                    "tech_bottleneck": "success",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append(command)
+        readiness_path = output_dir / "platform_ready.json"
+        readiness_path.write_text('{"status":"ready"}', encoding="utf-8")
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(eod_auto_repair.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        eod_auto_repair,
+        "_clear_dashboard_cache",
+        lambda: pytest.fail("cache must not be called"),
+    )
+
+    result = eod_auto_repair.finalize_repaired_release(
+        trade_date="2026-07-02",
+        output_dir=output_dir,
+        release_root=tmp_path,
+    )
+
+    assert result["exit_code"] == 2
+    assert len(calls) == 1
+    assert result["errors"]["strategy_publication"] == "strategy_runner_status_invalid"
+
+
 @pytest.mark.parametrize("publish_status", ["partial", "failed", "blocked", "skipped"])
 def test_finalize_repair_publication_stops_before_cache_when_publish_is_not_success(publish_status):
     events = []

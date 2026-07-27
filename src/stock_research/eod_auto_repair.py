@@ -1,10 +1,15 @@
 from __future__ import annotations
 
 import argparse
+import http.cookiejar
 import json
+import os
 import signal
+import subprocess
+import sys
 import threading
 import time
+import urllib.request
 from dataclasses import replace
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -112,6 +117,12 @@ LOOP_DEPENDENT_REPAIRS: dict[str, list[str]] = {
     "strategy_publish": ["ops_health", "dashboard_surface_freshness"],
 }
 OPS_READY_STATUSES = {"READY", "ready", "success", "DEGRADED_READY", "degraded_ready"}
+REQUIRED_STRATEGY_RUNNERS = {
+    "lhb_shortline",
+    "midtrend_artifacts",
+    "mid_trend",
+    "tech_bottleneck",
+}
 
 
 def _phase_succeeded(result: Any) -> bool:
@@ -125,6 +136,23 @@ def _phase_succeeded(result: Any) -> bool:
     return False
 
 
+def _phase_exit_code(result: Any, *, default: int = 1) -> int:
+    if isinstance(result, dict):
+        try:
+            code = int(result.get("exit_code") or default)
+        except (TypeError, ValueError):
+            return default
+        return code if code > 0 else default
+    return default
+
+
+def _phase_error_code(result: Any, *, default: str) -> str:
+    if not isinstance(result, dict):
+        return default
+    value = str(result.get("error_code") or default)
+    return value if value.replace("_", "").isalnum() else default
+
+
 def _sanitized_phase_error(exc: Exception) -> str:
     return f"{type(exc).__name__}: phase callable failed"
 
@@ -134,6 +162,7 @@ def finalize_repair_publication(
     publish: Callable[[], Any],
     clear_cache: Callable[[], Any],
     sync_external: Callable[[], Any],
+    summary_path: str | Path | None = None,
 ) -> dict[str, Any]:
     """Finalize repaired strategy data without exposing stale mixed state."""
 
@@ -143,7 +172,39 @@ def finalize_repair_publication(
         "cache_invalidation": "pending",
         "external_sync": "pending",
     }
+    if summary_path is not None:
+        existing = _load_repair_summary(Path(summary_path))
+        phases.update(
+            {
+                name: str(status)
+                for name, status in dict(existing.get("repair_phases") or {}).items()
+                if name in phases
+            }
+        )
+        phases.update(
+            {
+                "strategy_publication": "pending",
+                "cache_invalidation": "pending",
+                "external_sync": "pending",
+            }
+        )
     errors: dict[str, str] = {}
+
+    def finish(status: str, *, exit_code: int) -> dict[str, Any]:
+        result = {
+            "status": status,
+            "exit_code": exit_code,
+            "repair_phases": dict(phases),
+            "errors": dict(errors),
+        }
+        if summary_path is not None:
+            persist_repair_publication_summary(
+                summary_path=summary_path,
+                status=status,
+                repair_phases=phases,
+                errors=errors,
+            )
+        return result
 
     try:
         publish_result = publish()
@@ -152,14 +213,23 @@ def finalize_repair_publication(
         phases["cache_invalidation"] = "skipped"
         phases["external_sync"] = "skipped"
         errors["strategy_publication"] = _sanitized_phase_error(exc)
-        return {"status": "failed", "repair_phases": phases, "errors": errors}
+        return finish("failed", exit_code=1)
     if not _phase_succeeded(publish_result):
         phases["strategy_publication"] = "failed"
         phases["cache_invalidation"] = "skipped"
         phases["external_sync"] = "skipped"
-        errors["strategy_publication"] = "publication status was not success"
-        return {"status": "failed", "repair_phases": phases, "errors": errors}
+        errors["strategy_publication"] = _phase_error_code(
+            publish_result, default="strategy_publication_failed"
+        )
+        return finish("failed", exit_code=_phase_exit_code(publish_result, default=2))
     phases["strategy_publication"] = "success"
+    if summary_path is not None:
+        persist_repair_publication_summary(
+            summary_path=summary_path,
+            status="pending",
+            repair_phases=phases,
+            errors=errors,
+        )
 
     try:
         cache_result = clear_cache()
@@ -167,26 +237,231 @@ def finalize_repair_publication(
         phases["cache_invalidation"] = "failed"
         phases["external_sync"] = "skipped"
         errors["cache_invalidation"] = _sanitized_phase_error(exc)
-        return {"status": "failed", "repair_phases": phases, "errors": errors}
+        return finish("failed", exit_code=1)
     if not _phase_succeeded(cache_result):
         phases["cache_invalidation"] = "failed"
         phases["external_sync"] = "skipped"
-        errors["cache_invalidation"] = "cache invalidation did not succeed"
-        return {"status": "failed", "repair_phases": phases, "errors": errors}
+        errors["cache_invalidation"] = _phase_error_code(
+            cache_result, default="cache_invalidation_failed"
+        )
+        return finish("failed", exit_code=_phase_exit_code(cache_result))
     phases["cache_invalidation"] = "success"
+    if summary_path is not None:
+        persist_repair_publication_summary(
+            summary_path=summary_path,
+            status="pending",
+            repair_phases=phases,
+            errors=errors,
+        )
 
     try:
         sync_result = sync_external()
     except Exception as exc:  # noqa: BLE001 - phase failures are returned to the caller.
         phases["external_sync"] = "failed"
         errors["external_sync"] = _sanitized_phase_error(exc)
-        return {"status": "failed", "repair_phases": phases, "errors": errors}
+        return finish("failed", exit_code=1)
     if not _phase_succeeded(sync_result):
         phases["external_sync"] = "failed"
-        errors["external_sync"] = "external sync did not succeed"
-        return {"status": "failed", "repair_phases": phases, "errors": errors}
+        errors["external_sync"] = _phase_error_code(
+            sync_result, default="external_sync_failed"
+        )
+        return finish("failed", exit_code=_phase_exit_code(sync_result))
     phases["external_sync"] = "success"
-    return {"status": "success", "repair_phases": phases, "errors": errors}
+    return finish("success", exit_code=0)
+
+
+def _load_repair_summary(path: Path) -> dict[str, Any]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def persist_repair_publication_summary(
+    *,
+    summary_path: str | Path,
+    status: str,
+    repair_phases: dict[str, str],
+    errors: dict[str, str],
+) -> None:
+    path = Path(summary_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = _load_repair_summary(path)
+    payload["finalization_status"] = status
+    payload["repair_phases"] = dict(repair_phases)
+    payload["repair_phase_errors"] = dict(errors)
+    temporary = path.with_name(f"{path.name}.tmp")
+    temporary.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2, default=str) + "\n",
+        encoding="utf-8",
+    )
+    temporary.replace(path)
+
+
+def validate_strategy_runner_publication(summary_path: str | Path) -> dict[str, Any]:
+    try:
+        payload = json.loads(Path(summary_path).read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {
+            "status": "failed",
+            "exit_code": 2,
+            "error_code": "strategy_runner_summary_invalid",
+        }
+    statuses = dict(payload.get("strategy_status") or {})
+    if str(payload.get("status") or "") != "success":
+        return {
+            "status": "failed",
+            "exit_code": 2,
+            "error_code": "strategy_runner_status_invalid",
+        }
+    if not REQUIRED_STRATEGY_RUNNERS.issubset(statuses) or any(
+        str(statuses.get(name) or "") != "success" for name in REQUIRED_STRATEGY_RUNNERS
+    ):
+        return {
+            "status": "failed",
+            "exit_code": 2,
+            "error_code": "strategy_runner_status_invalid",
+        }
+    return {"status": "success"}
+
+
+def _clear_dashboard_cache() -> dict[str, Any]:
+    cache_url = os.getenv(
+        "DASHBOARD_CACHE_CLEAR_URL",
+        "http://127.0.0.1:8765/api/dashboard/cache/clear",
+    )
+    login_url = os.getenv("DASHBOARD_AUTH_LOGIN_URL", "http://127.0.0.1:8765/api/auth/login")
+    username = os.getenv("DASHBOARD_AUTH_USERNAME", "eod_repair")
+    password = os.getenv("DASHBOARD_AUTH_PASSWORD", "")
+    write_token = os.getenv("DASHBOARD_WRITE_TOKEN") or os.getenv(
+        "STOCK_RESEARCH_DASHBOARD_WRITE_TOKEN", ""
+    )
+    cookie_jar = http.cookiejar.CookieJar()
+    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cookie_jar))
+    try:
+        if username and password:
+            login_request = urllib.request.Request(
+                login_url,
+                data=json.dumps({"username": username, "password": password}).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with opener.open(login_request, timeout=5):
+                pass
+        headers = {"X-Dashboard-Write-Token": write_token} if write_token else {}
+        clear_request = urllib.request.Request(cache_url, headers=headers, method="POST")
+        with opener.open(clear_request, timeout=5):
+            pass
+    except Exception as exc:  # noqa: BLE001 - finalizer returns a safe phase error.
+        return {
+            "status": "failed",
+            "exit_code": 1,
+            "error_code": f"cache_{type(exc).__name__.lower()}",
+        }
+    return {"status": "success"}
+
+
+def finalize_repaired_release(
+    *,
+    trade_date: str,
+    output_dir: str | Path,
+    release_root: str | Path,
+    repair_exit_code: int = 0,
+) -> dict[str, Any]:
+    root = Path(release_root).resolve()
+    repair_output = Path(output_dir)
+    strategy_output = root / "outputs" / "research" / "strategy_daily_eod" / trade_date
+    runner_summary = strategy_output / "strategy_daily_eod_legacy" / "strategy_eod_publish_summary.json"
+    readiness_json = repair_output / "platform_ready.json"
+
+    if repair_exit_code != 0:
+        return finalize_repair_publication(
+            publish=lambda: {
+                "status": "failed",
+                "exit_code": repair_exit_code,
+                "error_code": "repair_failed",
+            },
+            clear_cache=lambda: {"status": "failed", "error_code": "not_called"},
+            sync_external=lambda: {"status": "failed", "error_code": "not_called"},
+            summary_path=repair_output / "run_summary.json",
+        )
+
+    def publish() -> dict[str, Any]:
+        readiness = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "stock_research.platform_ready",
+                "--trade-date",
+                trade_date,
+                "--reports-dir",
+                str(root / "reports"),
+                "--json-output",
+                str(readiness_json),
+            ],
+            cwd=root,
+            check=False,
+        )
+        if readiness.returncode != 0:
+            return {
+                "status": "failed",
+                "exit_code": readiness.returncode,
+                "error_code": "platform_readiness_command_failed",
+            }
+        readiness_payload = _load_repair_summary(readiness_json)
+        if str(readiness_payload.get("status") or "") != "ready":
+            return {"status": "failed", "exit_code": 1, "error_code": "platform_readiness_not_ready"}
+        runner_gate = validate_strategy_runner_publication(runner_summary)
+        if not _phase_succeeded(runner_gate):
+            return runner_gate
+        contract = subprocess.run(
+            [
+                sys.executable,
+                str(root / "deploy" / "validate_strategy_release.py"),
+                "--output-dir",
+                str(strategy_output),
+                "--trade-date",
+                trade_date,
+            ],
+            cwd=root,
+            check=False,
+        )
+        if contract.returncode != 0:
+            return {
+                "status": "failed",
+                "exit_code": contract.returncode,
+                "error_code": "strategy_release_contract_invalid",
+            }
+        return {"status": "success"}
+
+    def sync_external() -> dict[str, Any]:
+        sync_script = root / "deploy" / "sync_dashboard_release.sh"
+        if not sync_script.is_file():
+            return {"status": "failed", "exit_code": 1, "error_code": "canonical_sync_script_missing"}
+        env = os.environ.copy()
+        env.update(
+            {
+                "STOCK_RESEARCH_RELEASE_ROOT": str(root),
+                "STOCK_RESEARCH_PYTHON": sys.executable,
+                "EXPECTED_TRADE_DATE": trade_date,
+            }
+        )
+        completed = subprocess.run([str(sync_script)], cwd=root, env=env, check=False)
+        if completed.returncode != 0:
+            return {
+                "status": "failed",
+                "exit_code": completed.returncode,
+                "error_code": "external_sync_failed",
+            }
+        return {"status": "success"}
+
+    return finalize_repair_publication(
+        publish=publish,
+        clear_cache=_clear_dashboard_cache,
+        sync_external=sync_external,
+        summary_path=repair_output / "run_summary.json",
+    )
 
 
 def _repair_phases_from_checks(checks: list[RepairCheckResult]) -> dict[str, str]:
@@ -1150,8 +1425,26 @@ def _main(argv: list[str] | None = None) -> int:
     parser.add_argument("--report-md")
     parser.add_argument("--strict", action="store_true")
     parser.add_argument("--action-timeout-seconds", type=int, default=43200)
+    parser.add_argument("--finalize-publication", action="store_true")
+    parser.add_argument("--release-root")
+    parser.add_argument("--repair-exit-code", type=int, default=0)
     args = parser.parse_args(argv)
     output_dir = args.output_dir or str(Path(args.output_root) / "research" / "eod_auto_repair" / args.trade_date)
+    if args.finalize_publication:
+        result = finalize_repaired_release(
+            trade_date=args.trade_date,
+            output_dir=output_dir,
+            release_root=(
+                args.release_root
+                or os.getenv("STOCK_RESEARCH_RELEASE_ROOT")
+                or Path.cwd()
+            ),
+            repair_exit_code=args.repair_exit_code,
+        )
+        print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
+        return int(result.get("exit_code") or 0) if result.get("status") == "success" else int(
+            result.get("exit_code") or 1
+        )
     summary = run_eod_auto_repair(
         trade_date=args.trade_date,
         output_dir=output_dir,

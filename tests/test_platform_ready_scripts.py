@@ -179,7 +179,7 @@ for name in HTTP_PROXY HTTPS_PROXY ALL_PROXY http_proxy https_proxy all_proxy; d
     exit 9
   fi
 done
-printf '%s\\n' "$*" > "{calls_file}"
+printf '%s\\n' "$*" >> "{calls_file}"
 exit 3
 """,
         encoding="utf-8",
@@ -215,7 +215,8 @@ exit 3
     assert "--output-dir" in call
     assert "eod_auto_repair/2026-06-18" in call
     assert "--mode repair" in call
-    assert "-m stock_research.platform_ready" not in call
+    assert "--finalize-publication" in call
+    assert "--repair-exit-code 3" in call
     assert not (fake_root / "sync.log").exists()
     assert "EOD自动修复失败" in result.stdout
     assert "交易日: 2026-06-18" in result.stdout
@@ -281,12 +282,9 @@ exit 0
     assert "last_progress=waiting" in result.stdout
     assert "stale-run-report.md" not in result.stdout
     assert "EOD自动修复完成" in result.stdout
-    assert (fake_root / "sync.log").read_text().strip() == (
-        f"sync|date=2026-06-18|root={fake_root}"
-    )
     calls = calls_file.read_text(encoding="utf-8")
-    assert calls.index("stock_research.eod_auto_repair") < calls.index("stock_research.platform_ready")
-    assert calls.index("stock_research.platform_ready") < calls.index("validate_strategy_release.py")
+    assert "--finalize-publication" in calls
+    assert calls.index("--mode repair") < calls.index("--finalize-publication")
     log_text = (log_dir / "platform_ready_check.host.log").read_text(encoding="utf-8")
     assert "child-detail-line" in log_text
 
@@ -307,6 +305,7 @@ def test_platform_ready_check_script_forwards_signal_and_cleans_up(
     fake_python.write_text(
         "#!/usr/bin/env bash\n"
         "if [[ \"$*\" == *\"stock_research.stock_cron_guard\"* ]]; then exit 0; fi\n"
+        "if [[ \"$*\" == *\"--finalize-publication\"* ]]; then exit 143; fi\n"
         f"echo $$ > \"{child_pid}\"\n"
         f"trap 'echo TERM > \"{term_marker}\"; exit 143' TERM\n"
         f"trap 'echo INT > \"{term_marker}\"; exit 130' INT\n"
@@ -413,7 +412,43 @@ exit 0
     assert "-m stock_research.eod_auto_repair --trade-date 2026-06-29" in calls
     assert "eod_auto_repair/2026-06-29" in result.stdout
     assert "EOD自动修复完成" in result.stdout
-    assert (fake_root / "sync.log").exists()
+    assert "--finalize-publication" in calls
+
+
+def test_platform_ready_check_script_preserves_finalizer_exit_code(tmp_path: Path) -> None:
+    fake_root = tmp_path / "root"
+    fake_root.mkdir()
+    _prepare_fake_guard(fake_root)
+    fake_python = tmp_path / "python.sh"
+    calls_file = tmp_path / "calls.txt"
+    fake_python.write_text(
+        f"""#!/usr/bin/env bash
+printf '%s\\n' "$*" >> "{calls_file}"
+if [[ "$*" == *"--finalize-publication"* ]]; then exit 7; fi
+exit 0
+""",
+        encoding="utf-8",
+    )
+    fake_python.chmod(0o755)
+    env = os.environ.copy()
+    env.update(
+        {
+            "PLATFORM_READY_ROOT": str(fake_root),
+            "PLATFORM_READY_PYTHON": str(fake_python),
+            "PLATFORM_READY_TRADE_DATE": "2026-06-18",
+            "PLATFORM_READY_LOG_DIR": str(tmp_path / "logs"),
+        }
+    )
+
+    result = subprocess.run(
+        ["scripts/run_platform_ready_check_cron.sh"],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 7
+    assert "--finalize-publication" in calls_file.read_text(encoding="utf-8")
 
 
 def test_trading_calendar_sync_script_clears_proxy_env(tmp_path: Path) -> None:
