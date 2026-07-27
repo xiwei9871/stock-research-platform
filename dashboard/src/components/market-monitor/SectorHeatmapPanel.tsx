@@ -371,7 +371,11 @@ function DirectionalHeatmap({
       {items.length > 0 ? (
         <>
           <div className={`market-monitor-heatmap-chart market-monitor-heatmap-chart-${direction}`}>
-            <div className="market-monitor-heatmap-echarts-layer" ref={chartRef} aria-label={`${title}图表`} />
+            <div
+              className={`market-monitor-heatmap-echarts-layer ${chartReady ? 'ready' : 'pending'}`}
+              ref={chartRef}
+              aria-label={`${title}图表`}
+            />
             {!chartReady ? (
               <FallbackTreemap direction={direction} items={items} onSelectSector={onSelectSector} />
             ) : null}
