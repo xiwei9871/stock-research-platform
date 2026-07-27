@@ -257,7 +257,9 @@ def test_release_builds_use_lockfiles_and_pinned_base_images():
         assert package in requirements
 
 
-def test_release_frontend_build_enables_ci_only_for_the_build_process(tmp_path):
+def test_release_frontend_pnpm_commands_enable_ci_without_leaking_to_remote_commands(
+    tmp_path,
+):
     _root, env, log_file = _release_fixture(tmp_path)
     env["CI"] = "caller-value"
 
