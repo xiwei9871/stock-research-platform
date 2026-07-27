@@ -119,6 +119,8 @@ class RepairRunSummary:
     repair_phases: dict[str, str] = field(default_factory=dict)
     repair_phase_errors: dict[str, str] = field(default_factory=dict)
     finalization_status: str = "pending"
+    repair_run_id: str = ""
+    publication_receipt: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -144,4 +146,6 @@ class RepairRunSummary:
             "repair_phases": self.repair_phases,
             "repair_phase_errors": self.repair_phase_errors,
             "finalization_status": self.finalization_status,
+            "repair_run_id": self.repair_run_id,
+            "publication_receipt": self.publication_receipt,
         }

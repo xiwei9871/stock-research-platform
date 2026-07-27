@@ -423,6 +423,172 @@ def test_finalize_repaired_release_rejects_refreshed_runner_with_wrong_date(tmp_
     assert result["errors"]["strategy_publication"] == "strategy_runner_trade_date_mismatch"
 
 
+def test_repair_receipt_makes_finalizer_exactly_once(tmp_path):
+    strategy_output = tmp_path / "outputs" / "research" / "strategy_daily_eod" / "2026-07-02"
+    strategy_output.mkdir(parents=True)
+    official_calls = []
+    check_state = {"strategy_publish": RepairStatus.FAILED}
+
+    def check_plan_builder(trade_date):
+        return [
+            SimpleNamespace(
+                name="strategy_publish",
+                run=lambda: RepairCheckResult(
+                    "strategy_publish",
+                    check_state["strategy_publish"],
+                    blocker=check_state["strategy_publish"] != RepairStatus.SUCCESS,
+                ),
+            )
+        ]
+
+    def strategy_action(trade_date, output_dir):
+        official_calls.append("repair_official")
+        summary = {
+            "trade_date": trade_date,
+            "run_id": "strategy-eod-2026-07-02-local",
+            "status": "success",
+            "strategy_status": {
+                name: "success" for name in eod_auto_repair.REQUIRED_STRATEGY_RUNNERS
+            },
+        }
+        (strategy_output / "strategy_eod_publish_summary.json").write_text(
+            json.dumps(summary), encoding="utf-8"
+        )
+        check_state["strategy_publish"] = RepairStatus.SUCCESS
+        return RepairActionResult(
+            "repair_strategy_publish",
+            RepairStatus.SUCCESS,
+            artifact_paths=[str(strategy_output)],
+        )
+
+    repair_output = tmp_path / "repair"
+    summary = run_eod_auto_repair(
+        trade_date="2026-07-02",
+        output_dir=repair_output,
+        mode="repair",
+        check_plan_builder=check_plan_builder,
+        action_registry={"strategy_publish": strategy_action},
+        write_reports=True,
+    )
+    events = []
+    result = eod_auto_repair.finalize_repaired_release(
+        trade_date="2026-07-02",
+        output_dir=repair_output,
+        release_root=tmp_path,
+        publication_mode="require_existing",
+        official_publication=lambda **_kwargs: pytest.fail("official runner must not repeat"),
+        contract_check=lambda: events.append("contract") or {"status": "success"},
+        readiness_check=lambda: events.append("readiness") or {"status": "success"},
+        clear_cache=lambda: events.append("cache") or True,
+        sync_external=lambda: events.append("sync") or True,
+    )
+
+    assert summary.publication_receipt
+    assert result["status"] == "success"
+    assert official_calls == ["repair_official"]
+    assert events == ["contract", "readiness", "cache", "sync"]
+
+
+def test_loop_runs_shared_official_publication_only_once_for_three_checks(tmp_path):
+    strategy_output = tmp_path / "strategy"
+    strategy_output.mkdir()
+    calls = []
+
+    def check_plan_builder(trade_date):
+        return [
+            SimpleNamespace(
+                name=name,
+                run=lambda check_name=name: RepairCheckResult(
+                    check_name,
+                    RepairStatus.FAILED,
+                    blocker=True,
+                ),
+            )
+            for name in sorted(eod_auto_repair.STRATEGY_PUBLICATION_CHECKS)
+        ]
+
+    def strategy_action(trade_date, output_dir):
+        calls.append("official")
+        (strategy_output / "strategy_eod_publish_summary.json").write_text(
+            json.dumps(
+                {
+                    "trade_date": trade_date,
+                    "run_id": "strategy-eod-2026-07-02-local",
+                    "status": "success",
+                    "strategy_status": {
+                        name: "success"
+                        for name in eod_auto_repair.REQUIRED_STRATEGY_RUNNERS
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        return RepairActionResult(
+            "repair_strategy_publish",
+            RepairStatus.SUCCESS,
+            artifact_paths=[str(strategy_output)],
+        )
+
+    run_eod_auto_repair(
+        trade_date="2026-07-02",
+        output_dir=tmp_path / "repair",
+        mode="loop",
+        max_cycles=3,
+        check_plan_builder=check_plan_builder,
+        action_registry={name: strategy_action for name in eod_auto_repair.STRATEGY_PUBLICATION_CHECKS},
+    )
+
+    assert calls == ["official"]
+
+
+@pytest.mark.parametrize("publication_mode", ["require_existing", "publish_if_missing"])
+def test_finalizer_rejects_tampered_receipt_file(tmp_path, publication_mode):
+    repair_output = tmp_path / "repair"
+    repair_output.mkdir()
+    strategy_output = tmp_path / "outputs" / "research" / "strategy_daily_eod" / "2026-07-02"
+    strategy_output.mkdir(parents=True)
+    summary_path = strategy_output / "strategy_eod_publish_summary.json"
+    summary_path.write_text(
+        json.dumps(
+            {
+                "trade_date": "2026-07-02",
+                "run_id": "strategy-eod-2026-07-02-local",
+                "status": "success",
+                "strategy_status": {
+                    name: "success" for name in eod_auto_repair.REQUIRED_STRATEGY_RUNNERS
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    repair_run_id = "repair-current"
+    receipt = eod_auto_repair.build_publication_receipt(
+        summary_path=summary_path,
+        expected_trade_date="2026-07-02",
+        repair_run_id=repair_run_id,
+    )
+    (repair_output / "run_summary.json").write_text(
+        json.dumps({"repair_run_id": repair_run_id, "publication_receipt": receipt}),
+        encoding="utf-8",
+    )
+    summary_path.write_text(summary_path.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+
+    result = eod_auto_repair.finalize_repaired_release(
+        trade_date="2026-07-02",
+        output_dir=repair_output,
+        release_root=tmp_path,
+        publication_mode=publication_mode,
+        official_publication=lambda **_kwargs: pytest.fail("tampering must not republish"),
+        contract_check=lambda: pytest.fail("contract must not run"),
+        readiness_check=lambda: pytest.fail("readiness must not run"),
+        clear_cache=lambda: pytest.fail("cache must not run"),
+        sync_external=lambda: pytest.fail("sync must not run"),
+    )
+
+    assert result["status"] == "failed"
+    assert result["errors"]["strategy_publication"] == "publication_receipt_file_changed"
+
+
 @pytest.mark.parametrize("publish_status", ["partial", "failed", "blocked", "skipped"])
 def test_finalize_repair_publication_stops_before_cache_when_publish_is_not_success(publish_status):
     events = []
@@ -1036,9 +1202,9 @@ def test_run_eod_auto_repair_loop_stops_after_repeated_action_failures(tmp_path)
         action_registry={"strategy_publish": action_runner},
     )
 
-    assert calls == ["repair_strategy_publish", "repair_strategy_publish"]
+    assert calls == ["repair_strategy_publish"]
     assert summary.final_status == RepairStatus.FAILED
-    assert summary.loop_stop_reason == "failed_action_repeat_limit:strategy_publish"
+    assert summary.loop_stop_reason == "publication_action_already_attempted"
 
 
 def test_run_eod_auto_repair_loop_bounds_individual_action_runtime(tmp_path):
@@ -1074,9 +1240,9 @@ def test_run_eod_auto_repair_loop_bounds_individual_action_runtime(tmp_path):
         action_registry={"strategy_publish": slow_action},
     )
 
-    assert summary.loop_stop_reason == "failed_action_repeat_limit:strategy_publish"
-    assert len(summary.actions) == 2
-    assert [action.exit_code for action in summary.actions] == [124, 124]
+    assert summary.loop_stop_reason == "publication_action_already_attempted"
+    assert len(summary.actions) == 1
+    assert [action.exit_code for action in summary.actions] == [124]
     assert "TimeoutError" in summary.actions[0].message
 
 

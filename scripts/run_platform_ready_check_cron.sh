@@ -73,6 +73,7 @@ finalize_publication() {
     --trade-date "$TRADE_DATE" \
     --output-dir "$REPAIR_OUTPUT_DIR" \
     --release-root "$ROOT" \
+    --publication-mode publish_if_missing \
     --repair-exit-code "$repair_rc" >>"$RUN_LOG" 2>&1
 }
 

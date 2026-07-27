@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import http.cookiejar
-import hashlib
 import json
 import os
 import signal
@@ -11,6 +10,7 @@ import sys
 import threading
 import time
 import urllib.request
+import uuid
 from dataclasses import replace
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -24,6 +24,12 @@ from stock_research.eod_auto_repair_models import (
     RepairRunSummary,
     RepairStageResult,
     RepairStatus,
+)
+from stock_research.strategy_publication_receipt import (
+    REQUIRED_STRATEGY_RUNNERS,
+    build_publication_receipt,
+    file_fingerprint,
+    validate_publication_receipt,
 )
 
 
@@ -94,6 +100,11 @@ STAGE_CHECKS: list[tuple[str, tuple[str, ...]]] = [
     ("presentation", ("reports", "review_evidence_snapshots", "ops_health", "dashboard_surface_freshness")),
 ]
 PUBLISH_ONLY_STAGE_NAMES = {"strategy_eod", "presentation"}
+STRATEGY_PUBLICATION_CHECKS = {
+    "strategy_publish",
+    "review_queue",
+    "strategy_score_audit",
+}
 LOOP_REPAIR_ORDER = [
     "daily_bars",
     "minute5_bars",
@@ -118,12 +129,6 @@ LOOP_DEPENDENT_REPAIRS: dict[str, list[str]] = {
     "strategy_publish": ["ops_health", "dashboard_surface_freshness"],
 }
 OPS_READY_STATUSES = {"READY", "ready", "success", "DEGRADED_READY", "degraded_ready"}
-REQUIRED_STRATEGY_RUNNERS = {
-    "lhb_shortline",
-    "midtrend_artifacts",
-    "mid_trend",
-    "tech_bottleneck",
-}
 
 
 def _phase_succeeded(result: Any) -> bool:
@@ -300,6 +305,24 @@ def persist_repair_publication_summary(
     temporary.replace(path)
 
 
+def persist_publication_receipt(
+    *,
+    summary_path: str | Path,
+    repair_run_id: str,
+    receipt: dict[str, Any],
+) -> None:
+    path = Path(summary_path)
+    payload = _load_repair_summary(path)
+    payload["repair_run_id"] = repair_run_id
+    payload["publication_receipt"] = dict(receipt)
+    temporary = path.with_name(f"{path.name}.tmp")
+    temporary.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2, default=str) + "\n",
+        encoding="utf-8",
+    )
+    temporary.replace(path)
+
+
 def validate_strategy_runner_publication(
     summary: str | Path | dict[str, Any],
     *,
@@ -358,15 +381,6 @@ def validate_strategy_runner_publication(
             "error_code": "strategy_runner_status_invalid",
         }
     return {"status": "success"}
-
-
-def _file_fingerprint(path: Path) -> tuple[int, int, str] | None:
-    try:
-        content = path.read_bytes()
-        stat = path.stat()
-    except FileNotFoundError:
-        return None
-    return (stat.st_mtime_ns, stat.st_size, hashlib.sha256(content).hexdigest())
 
 
 def _run_official_strategy_publication(
@@ -450,9 +464,21 @@ def finalize_repaired_release(
     readiness_check: Callable[[], Any] | None = None,
     clear_cache: Callable[[], Any] | None = None,
     sync_external: Callable[[], Any] | None = None,
+    publication_mode: str = "publish_if_missing",
 ) -> dict[str, Any]:
+    if publication_mode not in {"require_existing", "publish_if_missing"}:
+        raise ValueError("publication_mode must be require_existing or publish_if_missing")
     root = Path(release_root).resolve()
     repair_output = Path(output_dir)
+    repair_summary_path = repair_output / "run_summary.json"
+    repair_summary = _load_repair_summary(repair_summary_path)
+    repair_run_id = str(repair_summary.get("repair_run_id") or f"eod-repair-{trade_date}-{uuid.uuid4().hex}")
+    existing_receipt = repair_summary.get("publication_receipt")
+    receipt_gate = validate_publication_receipt(
+        existing_receipt,
+        expected_trade_date=trade_date,
+        repair_run_id=repair_run_id,
+    )
     strategy_output = root / "outputs" / "research" / "strategy_daily_eod" / trade_date
     runner_summary = (
         strategy_output
@@ -469,7 +495,7 @@ def finalize_repaired_release(
             },
             clear_cache=lambda: {"status": "failed", "error_code": "not_called"},
             sync_external=lambda: {"status": "failed", "error_code": "not_called"},
-            summary_path=repair_output / "run_summary.json",
+            summary_path=repair_summary_path,
         )
 
     official_publication = official_publication or _run_official_strategy_publication
@@ -552,7 +578,18 @@ def finalize_repaired_release(
     sync_external = sync_external or default_sync_external
 
     def publish() -> dict[str, Any]:
-        previous_fingerprint = _file_fingerprint(runner_summary)
+        if _phase_succeeded(receipt_gate):
+            contract_result = contract_check()
+            if not _phase_succeeded(contract_result):
+                return contract_result
+            readiness_result = readiness_check()
+            if not _phase_succeeded(readiness_result):
+                return readiness_result
+            return {"status": "success"}
+        receipt_error = str(receipt_gate.get("error_code") or "publication_receipt_invalid")
+        if existing_receipt is not None or publication_mode == "require_existing":
+            return {"status": "failed", "exit_code": 2, "error_code": receipt_error}
+        previous_fingerprint = file_fingerprint(runner_summary)
         official_result = official_publication(
             trade_date=trade_date,
             output_root=root / "outputs" / "research" / "strategy_daily_eod",
@@ -564,7 +601,7 @@ def finalize_repaired_release(
                 official_result,
                 expected_trade_date=trade_date,
             )
-        current_fingerprint = _file_fingerprint(runner_summary)
+        current_fingerprint = file_fingerprint(runner_summary)
         if current_fingerprint is None or current_fingerprint == previous_fingerprint:
             return {
                 "status": "failed",
@@ -598,6 +635,23 @@ def finalize_repaired_release(
                 "exit_code": 2,
                 "error_code": "strategy_runner_result_mismatch",
             }
+        receipt = build_publication_receipt(
+            summary_path=runner_summary,
+            expected_trade_date=trade_date,
+            repair_run_id=repair_run_id,
+        )
+        refreshed_receipt_gate = validate_publication_receipt(
+            receipt,
+            expected_trade_date=trade_date,
+            repair_run_id=repair_run_id,
+        )
+        if not _phase_succeeded(refreshed_receipt_gate):
+            return refreshed_receipt_gate
+        persist_publication_receipt(
+            summary_path=repair_summary_path,
+            repair_run_id=repair_run_id,
+            receipt=receipt,
+        )
         contract_result = contract_check()
         if not _phase_succeeded(contract_result):
             return contract_result
@@ -610,7 +664,7 @@ def finalize_repaired_release(
         publish=publish,
         clear_cache=clear_cache,
         sync_external=sync_external,
-        summary_path=repair_output / "run_summary.json",
+        summary_path=repair_summary_path,
     )
 
 
@@ -836,6 +890,33 @@ def _action_with_validation(
     )
 
 
+def _action_with_publication_receipt(
+    action: RepairActionResult,
+    *,
+    trade_date: str,
+    repair_run_id: str,
+) -> RepairActionResult:
+    if action.status != RepairStatus.SUCCESS or not action.artifact_paths:
+        return action
+    summary_path = Path(action.artifact_paths[0]) / "strategy_eod_publish_summary.json"
+    try:
+        receipt = build_publication_receipt(
+            summary_path=summary_path,
+            expected_trade_date=trade_date,
+            repair_run_id=repair_run_id,
+        )
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return replace(
+            action,
+            status=RepairStatus.FAILED,
+            message="strategy publication receipt unavailable",
+            exit_code=2,
+        )
+    metrics = dict(action.metrics)
+    metrics["publication_receipt"] = receipt
+    return replace(action, metrics=metrics)
+
+
 def _stage_checks(checks: list[RepairCheckResult], names: tuple[str, ...]) -> list[RepairCheckResult]:
     by_name = _checks_by_name(checks)
     return [by_name[name] for name in names if name in by_name]
@@ -1050,6 +1131,7 @@ def _run_eod_auto_repair_loop(
     max_cycles: int,
     dry_run: bool,
     action_timeout_seconds: int | None,
+    repair_run_id: str,
 ) -> RepairRunSummary:
     checks_before = _safe_run_check_plan(check_plan_builder, trade_date)
     current_checks = checks_before
@@ -1067,6 +1149,7 @@ def _run_eod_auto_repair_loop(
     actions: list[RepairActionResult] = []
     cycles: list[RepairLoopCycleResult] = []
     failed_action_counts: dict[str, int] = {}
+    publication_action_ran = False
     stop_reason = ""
     warnings: list[str] = []
 
@@ -1095,6 +1178,9 @@ def _run_eod_auto_repair_loop(
                     continue
                 if check_name in ran_action_this_cycle:
                     continue
+                if check_name in STRATEGY_PUBLICATION_CHECKS and publication_action_ran:
+                    stop_reason = "publication_action_already_attempted"
+                    break
                 if failed_action_counts.get(check_name, 0) >= 2:
                     stop_reason = f"failed_action_repeat_limit:{check_name}"
                     break
@@ -1116,6 +1202,13 @@ def _run_eod_auto_repair_loop(
                         component=check_name,
                     ),
                 )
+                if check_name in STRATEGY_PUBLICATION_CHECKS:
+                    publication_action_ran = True
+                    action = _action_with_publication_receipt(
+                        action,
+                        trade_date=trade_date,
+                        repair_run_id=repair_run_id,
+                    )
                 ran_action_this_cycle.add(check_name)
                 if action.status != RepairStatus.SUCCESS:
                     failed_action_counts[check_name] = failed_action_counts.get(check_name, 0) + 1
@@ -1189,6 +1282,14 @@ def _run_eod_auto_repair_loop(
         if _has_blocker(current_checks):
             final_status = RepairStatus.FAILED
 
+    publication_receipt = next(
+        (
+            dict(action.metrics.get("publication_receipt") or {})
+            for action in actions
+            if action.metrics.get("publication_receipt")
+        ),
+        {},
+    )
     return RepairRunSummary(
         trade_date=trade_date,
         mode="loop",
@@ -1209,6 +1310,8 @@ def _run_eod_auto_repair_loop(
         infrastructure_issues=[],
         recommended_followups=_recommended_followups(current_checks),
         repair_phases=_repair_phases_from_checks(current_checks),
+        repair_run_id=repair_run_id,
+        publication_receipt=publication_receipt,
     )
 
 
@@ -1230,6 +1333,7 @@ def run_eod_auto_repair(
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
     registry = action_registry if action_registry is not None else build_default_action_registry(output_root="outputs")
+    repair_run_id = f"eod-repair-{trade_date}-{uuid.uuid4().hex}"
     if mode == "loop":
         _reset_progress_files(out)
         summary = _run_eod_auto_repair_loop(
@@ -1240,6 +1344,7 @@ def run_eod_auto_repair(
             max_cycles=max_cycles,
             dry_run=dry_run,
             action_timeout_seconds=action_timeout_seconds,
+            repair_run_id=repair_run_id,
         )
         if strict and summary.final_status != RepairStatus.SUCCESS:
             summary = replace(summary, final_status=RepairStatus.FAILED)
@@ -1264,6 +1369,7 @@ def run_eod_auto_repair(
     current_checks = checks_before
     stages: list[RepairStageResult] = []
     actions: list[RepairActionResult] = []
+    publication_action_ran = False
     if mode != "check":
         for stage_name, check_names in _stages_for_mode(mode):
             before = _stage_checks(current_checks, check_names)
@@ -1276,6 +1382,8 @@ def run_eod_auto_repair(
                 runner = registry.get(check.name)
                 if runner is None:
                     continue
+                if check.name in STRATEGY_PUBLICATION_CHECKS and publication_action_ran:
+                    continue
                 action = _safe_run_action(
                     check.name,
                     runner,
@@ -1283,6 +1391,13 @@ def run_eod_auto_repair(
                     out,
                     action_timeout_seconds=action_timeout_seconds,
                 )
+                if check.name in STRATEGY_PUBLICATION_CHECKS:
+                    publication_action_ran = True
+                    action = _action_with_publication_receipt(
+                        action,
+                        trade_date=trade_date,
+                        repair_run_id=repair_run_id,
+                    )
                 stage_actions.append(action)
                 actions.append(action)
             if stage_actions:
@@ -1300,6 +1415,14 @@ def run_eod_auto_repair(
             if _has_blocker(after):
                 break
     checks_after = current_checks if actions or stages else checks_before
+    publication_receipt = next(
+        (
+            dict(action.metrics.get("publication_receipt") or {})
+            for action in actions
+            if action.metrics.get("publication_receipt")
+        ),
+        {},
+    )
     summary = RepairRunSummary(
         trade_date=trade_date,
         mode=mode,
@@ -1315,6 +1438,8 @@ def run_eod_auto_repair(
         final_classification=_classify_checks(checks_after),
         recommended_followups=_recommended_followups(checks_after),
         repair_phases=_repair_phases_from_checks(checks_after),
+        repair_run_id=repair_run_id,
+        publication_receipt=publication_receipt,
     )
     if write_reports:
         _write_summary_files(summary, out)
@@ -1584,6 +1709,11 @@ def _main(argv: list[str] | None = None) -> int:
     parser.add_argument("--finalize-publication", action="store_true")
     parser.add_argument("--release-root")
     parser.add_argument("--repair-exit-code", type=int, default=0)
+    parser.add_argument(
+        "--publication-mode",
+        choices=["require_existing", "publish_if_missing"],
+        default="publish_if_missing",
+    )
     args = parser.parse_args(argv)
     output_dir = args.output_dir or str(Path(args.output_root) / "research" / "eod_auto_repair" / args.trade_date)
     if args.finalize_publication:
@@ -1596,6 +1726,7 @@ def _main(argv: list[str] | None = None) -> int:
                 or Path.cwd()
             ),
             repair_exit_code=args.repair_exit_code,
+            publication_mode=args.publication_mode,
         )
         print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
         return int(result.get("exit_code") or 0) if result.get("status") == "success" else int(
