@@ -28,6 +28,7 @@ DASHBOARD_AUTH_KEYCHAIN_SERVICE="${DASHBOARD_AUTH_KEYCHAIN_SERVICE:-stock-resear
 mkdir -p "$LOG_DIR" "$OUTPUT_DIR" "$REPAIR_OUTPUT_DIR" "$(dirname "$RUN_LOG")"
 
 source "$ROOT/scripts/stock_cron_guard.sh"
+source "$ROOT/scripts/repair_publication_lock.sh"
 clear_stock_proxy_env
 
 if [[ -z "$DASHBOARD_AUTH_PASSWORD" ]] && command -v security >/dev/null 2>&1; then
@@ -66,6 +67,11 @@ cleanup_heartbeat() {
   fi
 }
 
+cleanup_all() {
+  cleanup_heartbeat
+  release_repair_publication_lock
+}
+
 finalize_publication() {
   local repair_rc="$1"
   "$PYTHON" -m stock_research.eod_auto_repair \
@@ -84,7 +90,12 @@ forward_signal() {
 }
 
 trap forward_signal TERM INT
-trap cleanup_heartbeat EXIT
+trap cleanup_all EXIT
+
+if ! acquire_repair_publication_lock "$ROOT"; then
+  echo "platform_ready_check|locked|trade_date=${TRADE_DATE}"
+  exit 0
+fi
 
 echo "platform_ready_check|started|stage=eod_auto_repair|trade_date=${TRADE_DATE}|detail_log=${RUN_LOG}"
 echo "=== eod auto repair start: $(date '+%Y-%m-%d %H:%M:%S %z') ===" >>"$RUN_LOG"

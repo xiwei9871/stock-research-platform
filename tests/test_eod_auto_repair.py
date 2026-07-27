@@ -92,6 +92,69 @@ def test_finalize_repair_publication_persists_failed_phase_and_safe_error(tmp_pa
     assert "super-secret" not in json.dumps(persisted)
 
 
+def test_finalization_retry_skips_successful_cache_checkpoint(tmp_path):
+    summary_path = tmp_path / "run_summary.json"
+    summary_path.write_text("{}", encoding="utf-8")
+    events = []
+    first = eod_auto_repair.finalize_repair_publication(
+        publish=lambda: {"status": "success"},
+        clear_cache=lambda: events.append("cache") or True,
+        sync_external=lambda: events.append("sync-fail") or False,
+        summary_path=summary_path,
+        operation_id="operation-1",
+    )
+    second = eod_auto_repair.finalize_repair_publication(
+        publish=lambda: {"status": "success"},
+        clear_cache=lambda: events.append("cache-repeat") or True,
+        sync_external=lambda: events.append("sync-success") or True,
+        summary_path=summary_path,
+        operation_id="operation-1",
+    )
+
+    assert first["status"] == "failed"
+    assert second["status"] == "success"
+    assert events == ["cache", "sync-fail", "sync-success"]
+
+
+def test_finalization_retry_skips_completed_cache_and_sync_checkpoints(tmp_path):
+    summary_path = tmp_path / "run_summary.json"
+    summary_path.write_text("{}", encoding="utf-8")
+    eod_auto_repair.finalize_repair_publication(
+        publish=lambda: {"status": "success"},
+        clear_cache=lambda: True,
+        sync_external=lambda: True,
+        summary_path=summary_path,
+        operation_id="operation-1",
+    )
+
+    result = eod_auto_repair.finalize_repair_publication(
+        publish=lambda: {"status": "success"},
+        clear_cache=lambda: pytest.fail("cache must not repeat"),
+        sync_external=lambda: pytest.fail("sync must not repeat"),
+        summary_path=summary_path,
+        operation_id="operation-1",
+    )
+
+    assert result["status"] == "success"
+
+
+def test_sync_environment_excludes_cache_credentials(monkeypatch):
+    monkeypatch.setenv("PATH", "/usr/bin")
+    monkeypatch.setenv("REMOTE_HOST", "example")
+    monkeypatch.setenv("STOCK_RESEARCH_RELEASE_ID", "release")
+    monkeypatch.setenv("DASHBOARD_AUTH_PASSWORD", "password")
+    monkeypatch.setenv("DASHBOARD_WRITE_TOKEN", "token")
+    monkeypatch.setenv("STOCK_RESEARCH_DASHBOARD_WRITE_TOKEN", "token-2")
+
+    environment = eod_auto_repair._sync_environment_allowlist()
+
+    assert environment["REMOTE_HOST"] == "example"
+    assert environment["STOCK_RESEARCH_RELEASE_ID"] == "release"
+    assert "DASHBOARD_AUTH_PASSWORD" not in environment
+    assert "DASHBOARD_WRITE_TOKEN" not in environment
+    assert "STOCK_RESEARCH_DASHBOARD_WRITE_TOKEN" not in environment
+
+
 def test_validate_strategy_runner_publication_rejects_failed_fourth_runner(tmp_path):
     summary_path = tmp_path / "strategy_eod_publish_summary.json"
     summary_path.write_text(
@@ -282,7 +345,7 @@ def test_finalize_repaired_release_stops_when_fourth_runner_is_not_success(
     )
 
     assert result["exit_code"] == 2
-    assert len(calls) == 1
+    assert sum("run-strategy-daily-eod" in command for command in calls) == 1
     assert result["errors"]["strategy_publication"] == "strategy_runner_status_invalid"
 
 
@@ -643,6 +706,54 @@ def test_empty_receipt_is_missing_with_entrypoint_specific_behavior(
     assert len(calls) == expected_calls
 
 
+def test_require_existing_signs_healthy_current_publication_without_rerun(tmp_path):
+    repair_output = tmp_path / "repair"
+    repair_output.mkdir()
+    repair_run_id = "repair-current"
+    (repair_output / "run_summary.json").write_text(
+        json.dumps({"repair_run_id": repair_run_id, "publication_receipt": None}),
+        encoding="utf-8",
+    )
+    summary_path = (
+        tmp_path
+        / "outputs"
+        / "research"
+        / "strategy_daily_eod"
+        / "2026-07-02"
+        / "strategy_eod_publish_summary.json"
+    )
+    summary_path.parent.mkdir(parents=True)
+    summary_path.write_text(
+        json.dumps(
+            {
+                "trade_date": "2026-07-02",
+                "run_id": "strategy-eod-2026-07-02-local",
+                "status": "success",
+                "strategy_status": {
+                    name: "success" for name in eod_auto_repair.REQUIRED_STRATEGY_RUNNERS
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = eod_auto_repair.finalize_repaired_release(
+        trade_date="2026-07-02",
+        output_dir=repair_output,
+        release_root=tmp_path,
+        publication_mode="require_existing",
+        official_publication=lambda **_kwargs: pytest.fail("healthy no-op must not rerun"),
+        contract_check=lambda: {"status": "success"},
+        readiness_check=lambda: {"status": "success"},
+        clear_cache=lambda: True,
+        sync_external=lambda: True,
+    )
+
+    persisted = json.loads((repair_output / "run_summary.json").read_text(encoding="utf-8"))
+    assert result["status"] == "success"
+    assert persisted["publication_receipt"]["repair_run_id"] == repair_run_id
+
+
 def test_finalizer_rejects_valid_receipt_from_alternate_directory(tmp_path):
     repair_output = tmp_path / "repair"
     repair_output.mkdir()
@@ -713,11 +824,17 @@ def test_finalizer_rejects_canonical_summary_symlink_escape(tmp_path):
     canonical.parent.mkdir(parents=True)
     canonical.symlink_to(outside)
     repair_run_id = "repair-current"
-    receipt = eod_auto_repair.build_publication_receipt(
-        summary_path=canonical,
-        expected_trade_date="2026-07-02",
-        repair_run_id=repair_run_id,
-    )
+    receipt = {
+        "expected_trade_date": "2026-07-02",
+        "repair_run_id": repair_run_id,
+        "publication_run_id": "strategy-eod-2026-07-02-local",
+        "summary_path": str(canonical.absolute()),
+        "fingerprint": eod_auto_repair.file_fingerprint(outside),
+        "overall_status": "success",
+        "strategy_status": {
+            name: "success" for name in eod_auto_repair.REQUIRED_STRATEGY_RUNNERS
+        },
+    }
     (repair_output / "run_summary.json").write_text(
         json.dumps({"repair_run_id": repair_run_id, "publication_receipt": receipt}),
         encoding="utf-8",

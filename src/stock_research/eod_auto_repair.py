@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import http.cookiejar
+import hashlib
 import json
 import os
 import signal
@@ -17,6 +18,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from stock_research.eod_auto_repair_checks import build_check_plan
+from stock_research.atomic_json import atomic_write_json, file_lock, read_json
 from stock_research.eod_auto_repair_models import (
     RepairActionResult,
     RepairCheckResult,
@@ -169,6 +171,7 @@ def finalize_repair_publication(
     clear_cache: Callable[[], Any],
     sync_external: Callable[[], Any],
     summary_path: str | Path | None = None,
+    operation_id: str = "",
 ) -> dict[str, Any]:
     """Finalize repaired strategy data without exposing stale mixed state."""
 
@@ -180,21 +183,30 @@ def finalize_repair_publication(
     }
     if summary_path is not None:
         existing = _load_repair_summary(Path(summary_path))
-        phases.update(
-            {
-                name: str(status)
-                for name, status in dict(existing.get("repair_phases") or {}).items()
-                if name in phases
-            }
-        )
-        phases.update(
-            {
-                "strategy_publication": "pending",
-                "cache_invalidation": "pending",
-                "external_sync": "pending",
-            }
-        )
-    errors: dict[str, str] = {}
+        same_operation = bool(operation_id) and existing.get("finalization_operation_id") == operation_id
+        if same_operation:
+            phases.update(
+                {
+                    name: str(status)
+                    for name, status in dict(existing.get("repair_phases") or {}).items()
+                    if name in phases
+                }
+            )
+            errors: dict[str, str] = dict(existing.get("repair_phase_errors") or {})
+        else:
+            phases.update(
+                {
+                    "minute5": str(
+                        dict(existing.get("repair_phases") or {}).get("minute5") or "pending"
+                    ),
+                    "strategy_publication": "pending",
+                    "cache_invalidation": "pending",
+                    "external_sync": "pending",
+                }
+            )
+            errors = {}
+    else:
+        errors = {}
 
     def finish(status: str, *, exit_code: int) -> dict[str, Any]:
         result = {
@@ -209,6 +221,7 @@ def finalize_repair_publication(
                 status=status,
                 repair_phases=phases,
                 errors=errors,
+                operation_id=operation_id,
             )
         return result
 
@@ -229,21 +242,26 @@ def finalize_repair_publication(
         )
         return finish("failed", exit_code=_phase_exit_code(publish_result, default=2))
     phases["strategy_publication"] = "success"
+    errors.pop("strategy_publication", None)
     if summary_path is not None:
         persist_repair_publication_summary(
             summary_path=summary_path,
             status="pending",
             repair_phases=phases,
             errors=errors,
+            operation_id=operation_id,
         )
 
-    try:
-        cache_result = clear_cache()
-    except Exception as exc:  # noqa: BLE001 - phase failures are returned to the caller.
-        phases["cache_invalidation"] = "failed"
-        phases["external_sync"] = "skipped"
-        errors["cache_invalidation"] = _sanitized_phase_error(exc)
-        return finish("failed", exit_code=1)
+    if phases["cache_invalidation"] == "success":
+        cache_result = True
+    else:
+        try:
+            cache_result = clear_cache()
+        except Exception as exc:  # noqa: BLE001 - phase failures are returned to the caller.
+            phases["cache_invalidation"] = "failed"
+            phases["external_sync"] = "skipped"
+            errors["cache_invalidation"] = _sanitized_phase_error(exc)
+            return finish("failed", exit_code=1)
     if not _phase_succeeded(cache_result):
         phases["cache_invalidation"] = "failed"
         phases["external_sync"] = "skipped"
@@ -252,20 +270,25 @@ def finalize_repair_publication(
         )
         return finish("failed", exit_code=_phase_exit_code(cache_result))
     phases["cache_invalidation"] = "success"
+    errors.pop("cache_invalidation", None)
     if summary_path is not None:
         persist_repair_publication_summary(
             summary_path=summary_path,
             status="pending",
             repair_phases=phases,
             errors=errors,
+            operation_id=operation_id,
         )
 
-    try:
-        sync_result = sync_external()
-    except Exception as exc:  # noqa: BLE001 - phase failures are returned to the caller.
-        phases["external_sync"] = "failed"
-        errors["external_sync"] = _sanitized_phase_error(exc)
-        return finish("failed", exit_code=1)
+    if phases["external_sync"] == "success":
+        sync_result = True
+    else:
+        try:
+            sync_result = sync_external()
+        except Exception as exc:  # noqa: BLE001 - phase failures are returned to the caller.
+            phases["external_sync"] = "failed"
+            errors["external_sync"] = _sanitized_phase_error(exc)
+            return finish("failed", exit_code=1)
     if not _phase_succeeded(sync_result):
         phases["external_sync"] = "failed"
         errors["external_sync"] = _phase_error_code(
@@ -273,15 +296,12 @@ def finalize_repair_publication(
         )
         return finish("failed", exit_code=_phase_exit_code(sync_result))
     phases["external_sync"] = "success"
+    errors.pop("external_sync", None)
     return finish("success", exit_code=0)
 
 
 def _load_repair_summary(path: Path) -> dict[str, Any]:
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (FileNotFoundError, json.JSONDecodeError):
-        return {}
-    return payload if isinstance(payload, dict) else {}
+    return read_json(path)
 
 
 def persist_repair_publication_summary(
@@ -290,19 +310,16 @@ def persist_repair_publication_summary(
     status: str,
     repair_phases: dict[str, str],
     errors: dict[str, str],
+    operation_id: str = "",
 ) -> None:
     path = Path(summary_path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    payload = _load_repair_summary(path)
-    payload["finalization_status"] = status
-    payload["repair_phases"] = dict(repair_phases)
-    payload["repair_phase_errors"] = dict(errors)
-    temporary = path.with_name(f"{path.name}.tmp")
-    temporary.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2, default=str) + "\n",
-        encoding="utf-8",
-    )
-    temporary.replace(path)
+    with file_lock(path.with_suffix(f"{path.suffix}.lock")):
+        payload = _load_repair_summary(path)
+        payload["finalization_status"] = status
+        payload["repair_phases"] = dict(repair_phases)
+        payload["repair_phase_errors"] = dict(errors)
+        payload["finalization_operation_id"] = operation_id
+        atomic_write_json(path, payload)
 
 
 def persist_publication_receipt(
@@ -312,15 +329,11 @@ def persist_publication_receipt(
     receipt: dict[str, Any],
 ) -> None:
     path = Path(summary_path)
-    payload = _load_repair_summary(path)
-    payload["repair_run_id"] = repair_run_id
-    payload["publication_receipt"] = dict(receipt)
-    temporary = path.with_name(f"{path.name}.tmp")
-    temporary.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2, default=str) + "\n",
-        encoding="utf-8",
-    )
-    temporary.replace(path)
+    with file_lock(path.with_suffix(f"{path.suffix}.lock")):
+        payload = _load_repair_summary(path)
+        payload["repair_run_id"] = repair_run_id
+        payload["publication_receipt"] = dict(receipt)
+        atomic_write_json(path, payload)
 
 
 def validate_strategy_runner_publication(
@@ -475,6 +488,10 @@ def finalize_repaired_release(
     repair_run_id = str(repair_summary.get("repair_run_id") or f"eod-repair-{trade_date}-{uuid.uuid4().hex}")
     strategy_output = root / "outputs" / "research" / "strategy_daily_eod" / trade_date
     runner_summary = strategy_output / "strategy_eod_publish_summary.json"
+    release_id = os.getenv("STOCK_RESEARCH_RELEASE_ID") or _git_release_id(root)
+    operation_id = hashlib.sha256(
+        f"{trade_date}|{release_id}|strategy-eod-{trade_date}-local".encode("utf-8")
+    ).hexdigest()
     existing_receipt = repair_summary.get("publication_receipt")
     receipt_missing = existing_receipt is None or existing_receipt == {}
     receipt_gate = validate_publication_receipt(
@@ -496,6 +513,7 @@ def finalize_repaired_release(
             clear_cache=lambda: {"status": "failed", "error_code": "not_called"},
             sync_external=lambda: {"status": "failed", "error_code": "not_called"},
             summary_path=repair_summary_path,
+            operation_id=operation_id,
         )
 
     official_publication = official_publication or _run_official_strategy_publication
@@ -555,7 +573,7 @@ def finalize_repaired_release(
         sync_script = root / "deploy" / "sync_dashboard_release.sh"
         if not sync_script.is_file():
             return {"status": "failed", "exit_code": 1, "error_code": "canonical_sync_script_missing"}
-        env = os.environ.copy()
+        env = _sync_environment_allowlist()
         env.update(
             {
                 "STOCK_RESEARCH_RELEASE_ROOT": str(root),
@@ -587,8 +605,48 @@ def finalize_repaired_release(
                 return readiness_result
             return {"status": "success"}
         receipt_error = str(receipt_gate.get("error_code") or "publication_receipt_invalid")
-        if not receipt_missing or publication_mode == "require_existing":
+        if not receipt_missing:
             return {"status": "failed", "exit_code": 2, "error_code": receipt_error}
+        if publication_mode == "require_existing":
+            current_gate = validate_strategy_runner_publication(
+                runner_summary,
+                expected_trade_date=trade_date,
+            )
+            if not _phase_succeeded(current_gate):
+                return current_gate
+            contract_result = contract_check()
+            if not _phase_succeeded(contract_result):
+                return contract_result
+            try:
+                receipt = build_publication_receipt(
+                    summary_path=runner_summary,
+                    expected_trade_date=trade_date,
+                    repair_run_id=repair_run_id,
+                )
+            except (FileNotFoundError, OSError, ValueError, json.JSONDecodeError):
+                return {
+                    "status": "failed",
+                    "exit_code": 2,
+                    "error_code": "publication_receipt_summary_invalid",
+                }
+            current_receipt_gate = validate_publication_receipt(
+                receipt,
+                expected_trade_date=trade_date,
+                repair_run_id=repair_run_id,
+                expected_summary_path=runner_summary,
+                release_root=root,
+            )
+            if not _phase_succeeded(current_receipt_gate):
+                return current_receipt_gate
+            persist_publication_receipt(
+                summary_path=repair_summary_path,
+                repair_run_id=repair_run_id,
+                receipt=receipt,
+            )
+            readiness_result = readiness_check()
+            if not _phase_succeeded(readiness_result):
+                return readiness_result
+            return {"status": "success"}
         previous_fingerprint = file_fingerprint(runner_summary)
         official_result = official_publication(
             trade_date=trade_date,
@@ -667,7 +725,38 @@ def finalize_repaired_release(
         clear_cache=clear_cache,
         sync_external=sync_external,
         summary_path=repair_summary_path,
+        operation_id=operation_id,
     )
+
+
+def _git_release_id(root: Path) -> str:
+    completed = subprocess.run(
+        ["git", "-C", str(root), "rev-parse", "HEAD"],
+        check=False,
+        capture_output=True,
+        text=True,
+        env={"PATH": os.getenv("PATH", "")},
+    )
+    stdout = str(getattr(completed, "stdout", "") or "").strip()
+    return stdout if completed.returncode == 0 and stdout else "unknown-release"
+
+
+def _sync_environment_allowlist() -> dict[str, str]:
+    allowed_exact = {"PATH", "HOME", "USER", "LOGNAME", "TMPDIR", "SHELL"}
+    allowed_prefixes = (
+        "STOCK_RESEARCH_",
+        "REMOTE_",
+        "SSH_",
+        "DASHBOARD_REMOTE_",
+    )
+    denied_fragments = ("PASSWORD", "TOKEN", "SECRET", "AUTH")
+    environment = {
+        key: value
+        for key, value in os.environ.items()
+        if (key in allowed_exact or key.startswith(allowed_prefixes))
+        and not any(fragment in key.upper() for fragment in denied_fragments)
+    }
+    return environment
 
 
 def _repair_phases_from_checks(checks: list[RepairCheckResult]) -> dict[str, str]:

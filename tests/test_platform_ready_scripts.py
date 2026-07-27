@@ -28,6 +28,12 @@ stock_cron_guard_or_exit() {
 """,
         encoding="utf-8",
     )
+    (scripts_dir / "repair_publication_lock.sh").write_text(
+        (Path(__file__).resolve().parents[1] / "scripts" / "repair_publication_lock.sh").read_text(
+            encoding="utf-8"
+        ),
+        encoding="utf-8",
+    )
     (deploy_dir / "validate_strategy_release.py").write_text("# test stub\n", encoding="utf-8")
     sync_script = deploy_dir / "sync_dashboard_release.sh"
     sync_script.write_text(

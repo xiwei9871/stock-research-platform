@@ -7,17 +7,16 @@ TRADE_DATE="${1:-$(date +%F)}"
 LOG_DIR="$ROOT/logs/eod_auto_repair"
 OUTPUT_DIR="$ROOT/outputs/research/eod_auto_repair/$TRADE_DATE"
 DETAIL_LOG="$LOG_DIR/$TRADE_DATE.log"
-LOCK_FILE="$ROOT/.locks/eod_auto_repair.lock"
-FLOCK_FILE="$ROOT/.locks/eod_auto_repair.flock"
 ACTION_TIMEOUT_SECONDS="${EOD_AUTO_REPAIR_ACTION_TIMEOUT_SECONDS:-43200}"
 DASHBOARD_AUTH_USERNAME="${DASHBOARD_AUTH_USERNAME:-eod_repair}"
 DASHBOARD_AUTH_PASSWORD="${DASHBOARD_AUTH_PASSWORD:-}"
 DASHBOARD_AUTH_KEYCHAIN_SERVICE="${DASHBOARD_AUTH_KEYCHAIN_SERVICE:-stock-research-dashboard-eod-repair}"
 
 source "$ROOT/scripts/stock_cron_guard.sh"
+source "$ROOT/scripts/repair_publication_lock.sh"
 clear_stock_proxy_env
 
-mkdir -p "$LOG_DIR" "$OUTPUT_DIR" "$(dirname "$LOCK_FILE")"
+mkdir -p "$LOG_DIR" "$OUTPUT_DIR" "$ROOT/.locks"
 
 if [[ -z "$DASHBOARD_AUTH_PASSWORD" ]] && command -v security >/dev/null 2>&1; then
   DASHBOARD_AUTH_PASSWORD="$(
@@ -29,40 +28,12 @@ if [[ -z "$DASHBOARD_AUTH_PASSWORD" ]] && command -v security >/dev/null 2>&1; t
 fi
 export DASHBOARD_AUTH_PASSWORD
 
-acquire_python_lock() {
-  while true; do
-    if mkdir "$LOCK_FILE" 2>/dev/null; then
-      printf '%s\n' "$$" > "$LOCK_FILE/pid"
-      trap 'rm -rf "$LOCK_FILE"' EXIT INT TERM
-      return 0
-    fi
-
-    if [[ -d "$LOCK_FILE" ]]; then
-      return 1
-    fi
-
-    lock_pid="$(cat "$LOCK_FILE" 2>/dev/null || true)"
-    if ! [[ "$lock_pid" =~ ^[0-9]+$ ]]; then
-      return 1
-    fi
-    if kill -0 "$lock_pid" 2>/dev/null; then
-      return 1
-    fi
-
-    rm -f "$LOCK_FILE" 2>/dev/null || true
-  done
-}
-
 log_locked() {
-  lock_path="$LOCK_FILE"
-  if [[ "${LOCK_MODE:-}" == "flock" ]]; then
-    lock_path="$FLOCK_FILE"
-  fi
-  echo "eod_auto_repair|locked|lock_mode|${LOCK_MODE:-unknown}|path|$lock_path" >>"$DETAIL_LOG"
+  echo "eod_auto_repair|locked|lock_mode|${REPAIR_PUBLICATION_LOCK_MODE:-unknown}" >>"$DETAIL_LOG"
   echo "EOD自动修复跳过"
   echo "交易日: $TRADE_DATE"
   echo "原因: 已有任务运行"
-  echo "锁模式: ${LOCK_MODE:-unknown}"
+  echo "锁模式: ${REPAIR_PUBLICATION_LOCK_MODE:-unknown}"
   echo "详细日志: $DETAIL_LOG"
 }
 
@@ -101,13 +72,18 @@ run_repair() {
     --trade-date "$TRADE_DATE" \
     --output-dir "$OUTPUT_DIR" \
     --mode loop \
-    --action-timeout-seconds "$ACTION_TIMEOUT_SECONDS" >>"$DETAIL_LOG" 2>&1
+    --action-timeout-seconds "$ACTION_TIMEOUT_SECONDS" >>"$DETAIL_LOG" 2>&1 &
+  PIPELINE_PID=$!
+  wait "$PIPELINE_PID"
   rc=$?
+  PIPELINE_PID=""
   echo "eod_auto_repair|summary|$OUTPUT_DIR/run_summary.json" >>"$DETAIL_LOG"
   echo "eod_auto_repair|report|$OUTPUT_DIR/run_report.md" >>"$DETAIL_LOG"
-  repair_rc=$rc
-  finalize_publication "$repair_rc"
-  rc=$?
+  if [[ "$INTERRUPTED" -eq 0 ]]; then
+    repair_rc=$rc
+    finalize_publication "$repair_rc"
+    rc=$?
+  fi
   echo "=== eod auto repair end: $(date '+%Y-%m-%d %H:%M:%S %z') rc=$rc ===" >>"$DETAIL_LOG"
   set -e
   if [[ "$rc" -ne 0 ]]; then
@@ -118,22 +94,25 @@ run_repair() {
   return "$rc"
 }
 
-if [[ "${EOD_AUTO_REPAIR_DISABLE_FLOCK:-0}" != "1" ]] && command -v flock >/dev/null 2>&1; then
-  LOCK_MODE="flock"
-  exec 9>"$FLOCK_FILE"
-  if ! flock -n 9; then
-    log_locked
-    exit 0
+PIPELINE_PID=""
+INTERRUPTED=0
+forward_signal() {
+  INTERRUPTED=1
+  if [[ -n "$PIPELINE_PID" ]]; then
+    kill -TERM "$PIPELINE_PID" 2>/dev/null || true
   fi
-  run_repair
-  exit "$?"
-fi
+}
+cleanup() {
+  release_repair_publication_lock
+}
+trap forward_signal TERM INT
+trap cleanup EXIT
 
-LOCK_MODE="python_lockfile"
-if ! acquire_python_lock; then
+if ! acquire_repair_publication_lock "$ROOT"; then
   log_locked
   exit 0
 fi
+LOCK_MODE="$REPAIR_PUBLICATION_LOCK_MODE"
 
 run_repair
 exit "$?"

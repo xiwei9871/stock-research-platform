@@ -1,5 +1,7 @@
 import os
+import signal
 import subprocess
+import time
 from pathlib import Path
 
 
@@ -29,6 +31,10 @@ def _make_cron_harness(
         "clear_stock_proxy_env() {\n"
         "  unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY\n"
         "}\n"
+    )
+    (scripts_dir / "repair_publication_lock.sh").write_text(
+        (REPO_ROOT / "scripts" / "repair_publication_lock.sh").read_text(encoding="utf-8"),
+        encoding="utf-8",
     )
     _write_executable(
         bin_dir / "rtk",
@@ -106,12 +112,11 @@ def test_eod_auto_repair_cron_uses_module_entrypoint_and_portable_lock():
     script = Path("scripts/run_eod_auto_repair_cron.sh").read_text()
 
     assert "python -m stock_research.eod_auto_repair" in script
-    assert "command -v flock" in script
+    assert "repair_publication_lock.sh" in script
     assert "LOCK_MODE=" in script
-    assert "python_lockfile" in script
+    assert "REPAIR_PUBLICATION_LOCK_MODE" in script
     assert "stock_cron_guard.sh" in script
-    assert 'LOCK_FILE="$ROOT/.locks/eod_auto_repair.lock"' in script
-    assert 'mkdir "$LOCK_FILE"' in script
+    assert "acquire_repair_publication_lock" in script
     assert "eod_auto_repair|locked|lock_mode|" in script
     assert "--mode loop" in script
     assert "--action-timeout-seconds" in script
@@ -240,6 +245,41 @@ def test_eod_auto_repair_cron_preserves_finalizer_exit_code(tmp_path):
     assert "--finalize-publication" in (root / "python.log").read_text()
 
 
+def test_eod_auto_repair_cron_forwards_signal_and_skips_finalizer(tmp_path):
+    root, env = _make_cron_harness(
+        tmp_path,
+        python_body=(
+            'trap \'echo TERM > "$STOCK_RESEARCH_ROOT/child.terminated"; exit 143\' TERM\n'
+            'echo $$ > "$STOCK_RESEARCH_ROOT/child.pid"\n'
+            "while true; do sleep 1; done"
+        ),
+    )
+    process = subprocess.Popen(
+        [str(REPO_ROOT / "scripts/run_eod_auto_repair_cron.sh"), "2026-07-02"],
+        cwd=REPO_ROOT,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    for _ in range(50):
+        if (root / "child.pid").exists():
+            break
+        time.sleep(0.1)
+    assert (root / "child.pid").exists()
+
+    process.send_signal(signal.SIGTERM)
+    process.wait(timeout=5)
+
+    assert process.returncode != 0
+    for _ in range(50):
+        if (root / "child.terminated").exists():
+            break
+        time.sleep(0.1)
+    assert (root / "child.terminated").read_text().strip() == "TERM"
+    assert "--finalize-publication" not in (root / "python.log").read_text()
+
+
 def test_eod_auto_repair_cron_logs_flock_lock_mode_when_already_locked(tmp_path):
     root, env = _make_cron_harness(
         tmp_path,
@@ -272,7 +312,7 @@ def test_eod_auto_repair_cron_ignores_stale_lock_file_and_preserves_exit_code(tm
             "https_proxy": "http://proxy.invalid:8444",
         },
     )
-    lock_file = root / ".locks" / "eod_auto_repair.lock"
+    lock_file = root / ".locks" / "old_eod_auto_repair.lock"
     trade_date = "2026-07-02"
 
     lock_file.parent.mkdir(parents=True)
@@ -285,13 +325,12 @@ def test_eod_auto_repair_cron_ignores_stale_lock_file_and_preserves_exit_code(tm
     assert "交易日: 2026-07-02" in result.stdout
     assert "退出码: 7" in result.stdout
     assert "详细日志:" in result.stdout
-    assert not lock_file.exists()
     assert "-m stock_research.eod_auto_repair" in (root / "python.log").read_text()
     assert "--mode loop" in (root / "python.log").read_text()
     assert "--action-timeout-seconds" in (root / "python.log").read_text()
     log = root / "logs" / "eod_auto_repair" / f"{trade_date}.log"
     log_text = log.read_text()
-    assert "eod_auto_repair|lock_mode|python_lockfile" in log_text
+    assert "eod_auto_repair|lock_mode|mkdir" in log_text
     assert "eod_auto_repair|locked" not in log_text
     assert f"eod_auto_repair|summary|{root}/outputs/research/eod_auto_repair/{trade_date}/run_summary.json" in log_text
     assert f"eod_auto_repair|report|{root}/outputs/research/eod_auto_repair/{trade_date}/run_report.md" in log_text
@@ -329,7 +368,12 @@ def test_eod_auto_repair_cron_allows_only_one_contender_while_locked(tmp_path):
     assert all(proc.returncode == 0 for proc in procs), results
     starts_log = root / "starts.log"
     starts = starts_log.read_text().splitlines() if starts_log.exists() else []
-    assert len([line for line in starts if line.startswith("start|")]) == 1
+    active = 0
+    maximum_active = 0
+    for line in starts:
+        active += 1 if line.startswith("start|") else -1
+        maximum_active = max(maximum_active, active)
+    assert maximum_active == 1
     log_text = (root / "logs" / "eod_auto_repair" / "2026-07-02.log").read_text()
     assert "eod_auto_repair|locked" in log_text
 
@@ -344,7 +388,7 @@ def test_eod_auto_repair_cron_allows_only_one_contender_after_stale_lock(tmp_pat
             "exit 0"
         ),
     )
-    lock_file = root / ".locks" / "eod_auto_repair.lock"
+    lock_file = root / ".locks" / "old_eod_auto_repair.lock"
     lock_file.parent.mkdir(parents=True)
     lock_file.write_text("999999\n")
 
@@ -364,15 +408,19 @@ def test_eod_auto_repair_cron_allows_only_one_contender_after_stale_lock(tmp_pat
     assert all(proc.returncode == 0 for proc in procs), results
     starts_log = root / "starts.log"
     starts = starts_log.read_text().splitlines() if starts_log.exists() else []
-    assert len([line for line in starts if line.startswith("start|")]) == 1
-    assert not lock_file.exists()
+    active = 0
+    maximum_active = 0
+    for line in starts:
+        active += 1 if line.startswith("start|") else -1
+        maximum_active = max(maximum_active, active)
+    assert maximum_active == 1
     log_text = (root / "logs" / "eod_auto_repair" / "2026-07-02.log").read_text()
     assert "eod_auto_repair|locked" in log_text
 
 
 def test_eod_auto_repair_cron_treats_pidless_lock_directory_as_locked(tmp_path):
     root, env = _make_cron_harness(tmp_path)
-    lock_file = root / ".locks" / "eod_auto_repair.lock"
+    lock_file = root / ".locks" / "eod_repair_publication.lock"
     trade_date = "2026-07-02"
 
     lock_file.mkdir(parents=True)
@@ -383,12 +431,12 @@ def test_eod_auto_repair_cron_treats_pidless_lock_directory_as_locked(tmp_path):
     assert not (root / "python.log").exists()
     assert lock_file.is_dir()
     log_text = (root / "logs" / "eod_auto_repair" / f"{trade_date}.log").read_text()
-    assert "eod_auto_repair|locked|lock_mode|python_lockfile" in log_text
+    assert "eod_auto_repair|locked|lock_mode|unknown" in log_text
 
 
 def test_eod_auto_repair_cron_treats_empty_old_lock_file_as_locked(tmp_path):
     root, env = _make_cron_harness(tmp_path)
-    lock_file = root / ".locks" / "eod_auto_repair.lock"
+    lock_file = root / ".locks" / "eod_repair_publication.lock"
     trade_date = "2026-07-02"
 
     lock_file.parent.mkdir(parents=True)

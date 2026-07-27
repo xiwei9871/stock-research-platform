@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import ctypes
 import json
+import os
 import shutil
+import sys
+import uuid
 from pathlib import Path
 from typing import Any, Callable
 
@@ -48,8 +52,11 @@ def run_strategy_daily_eod(
 ) -> dict[str, Any]:
     apply_strategy_daily_eod_status_schema(service=service)
     dependency_checker = dependency_checker or check_strategy_daily_eod_dependencies
-    output_dir = Path(output_root) / trade_date
-    output_dir.mkdir(parents=True, exist_ok=True)
+    canonical_output_dir = Path(output_root) / trade_date
+    versions_dir = Path(output_root) / ".versions" / trade_date
+    versions_dir.mkdir(parents=True, exist_ok=True)
+    output_dir = versions_dir / f"strategy-eod-{trade_date}-{uuid.uuid4().hex}"
+    output_dir.mkdir(parents=True)
 
     dependency_check = _normalize_dependency_check(
         dependency_checker(trade_date=trade_date, service=service)
@@ -113,10 +120,18 @@ def run_strategy_daily_eod(
         "tech_bottleneck": 5,
     }
     contract_valid = aggregate_status == "success" and strategy_counts == expected_counts
+    final_status = aggregate_status if aggregate_status != "success" or contract_valid else "partial"
+    if contract_valid:
+        for result in results.values():
+            result["paths"] = _relocate_result_paths(
+                dict(result.get("paths") or {}),
+                staging=output_dir,
+                canonical=canonical_output_dir,
+            )
     summary = {
         "trade_date": trade_date,
         "run_id": f"strategy-eod-{trade_date}-local",
-        "output_dir": str(output_dir),
+        "output_dir": str(canonical_output_dir if contract_valid else output_dir),
         "dependency_check": dependency_check,
         "dependency_reason": dependency_reason,
         "strategy_status": strategy_status,
@@ -124,7 +139,7 @@ def run_strategy_daily_eod(
         "midtrend_artifacts": results["midtrend_artifacts"].get("paths", {}),
         "midtrend_artifact_warnings": results["midtrend_artifacts"].get("warnings", []),
         "review_rows": review_rows,
-        "status": aggregate_status,
+        "status": final_status,
         "publishable": contract_valid,
         "manifest_modules": [
             "strategy_lhb_shortline",
@@ -139,8 +154,15 @@ def run_strategy_daily_eod(
         "error_summary": _join_errors(list(strategy_errors.values())),
     }
     summary_path = output_dir / "strategy_eod_publish_summary.json"
-    summary["summary_path"] = str(summary_path)
+    summary["summary_path"] = str(
+        canonical_output_dir / "strategy_eod_publish_summary.json"
+        if contract_valid
+        else summary_path
+    )
     summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    if contract_valid:
+        _atomic_publish_directory(output_dir, canonical_output_dir)
 
     upsert_strategy_daily_eod_status(
         build_status_payload(
@@ -151,13 +173,77 @@ def run_strategy_daily_eod(
             mid_trend_status=strategy_status["mid_trend"],
             tech_bottleneck_status=strategy_status["tech_bottleneck"],
             review_rows=review_rows,
-            output_dir=str(output_dir),
-            summary_path=str(summary_path),
+            output_dir=str(summary["output_dir"]),
+            summary_path=str(summary["summary_path"]),
             error_summary=summary["error_summary"],
         ),
         service=service,
     )
     return summary
+
+
+def _atomic_publish_directory(staging: Path, canonical: Path) -> None:
+    canonical.parent.mkdir(parents=True, exist_ok=True)
+    if not canonical.exists():
+        os.replace(staging, canonical)
+        _fsync_directory(canonical.parent)
+        return
+    _atomic_exchange_directories(staging, canonical)
+    shutil.rmtree(staging)
+    _fsync_directory(canonical.parent)
+
+
+def _relocate_result_paths(
+    paths: dict[str, Any],
+    *,
+    staging: Path,
+    canonical: Path,
+) -> dict[str, Any]:
+    relocated: dict[str, Any] = {}
+    for key, value in paths.items():
+        candidate = Path(str(value))
+        try:
+            relative = candidate.relative_to(staging)
+        except ValueError:
+            relocated[key] = value
+        else:
+            relocated[key] = str(canonical / relative)
+    return relocated
+
+
+def _atomic_exchange_directories(left: Path, right: Path) -> None:
+    libc = ctypes.CDLL(None, use_errno=True)
+    left_b = os.fsencode(left)
+    right_b = os.fsencode(right)
+    if sys.platform == "darwin":
+        renamex_np = libc.renamex_np
+        renamex_np.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint]
+        renamex_np.restype = ctypes.c_int
+        result = renamex_np(left_b, right_b, 0x00000002)  # RENAME_SWAP
+    elif sys.platform.startswith("linux"):
+        renameat2 = libc.renameat2
+        renameat2.argtypes = [
+            ctypes.c_int,
+            ctypes.c_char_p,
+            ctypes.c_int,
+            ctypes.c_char_p,
+            ctypes.c_uint,
+        ]
+        renameat2.restype = ctypes.c_int
+        result = renameat2(-100, left_b, -100, right_b, 0x2)  # AT_FDCWD, RENAME_EXCHANGE
+    else:
+        raise RuntimeError("atomic directory exchange is unsupported on this platform")
+    if result != 0:
+        error = ctypes.get_errno()
+        raise OSError(error, os.strerror(error))
+
+
+def _fsync_directory(path: Path) -> None:
+    descriptor = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
 
 
 def check_strategy_daily_eod_dependencies(

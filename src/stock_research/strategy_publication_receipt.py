@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -15,16 +16,48 @@ REQUIRED_STRATEGY_RUNNERS = {
 
 
 def file_fingerprint(path: str | Path) -> dict[str, Any] | None:
-    candidate = Path(path)
     try:
-        content = candidate.read_bytes()
-        stat = candidate.stat()
-    except FileNotFoundError:
+        snapshot = _read_summary_snapshot(Path(path))
+    except (FileNotFoundError, OSError, ValueError, json.JSONDecodeError):
         return None
+    return dict(snapshot["fingerprint"])
+
+
+def _read_summary_snapshot(path: Path) -> dict[str, Any]:
+    flags = os.O_RDONLY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    descriptor = os.open(path, flags)
+    try:
+        before = os.fstat(descriptor)
+        chunks: list[bytes] = []
+        while True:
+            chunk = os.read(descriptor, 1024 * 1024)
+            if not chunk:
+                break
+            chunks.append(chunk)
+        after = os.fstat(descriptor)
+    finally:
+        os.close(descriptor)
+    identity_before = (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns)
+    identity_after = (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns)
+    if identity_before != identity_after:
+        raise ValueError("strategy publication summary changed during receipt snapshot")
+    content = b"".join(chunks)
+    if len(content) != after.st_size:
+        raise ValueError("strategy publication summary size changed during receipt snapshot")
+    payload = json.loads(content.decode("utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("strategy publication summary must be an object")
     return {
-        "mtime_ns": stat.st_mtime_ns,
-        "size": stat.st_size,
-        "sha256": hashlib.sha256(content).hexdigest(),
+        "payload": payload,
+        "fingerprint": {
+            "device": after.st_dev,
+            "inode": after.st_ino,
+            "mtime_ns": after.st_mtime_ns,
+            "size": after.st_size,
+            "sha256": hashlib.sha256(content).hexdigest(),
+        },
     }
 
 
@@ -35,10 +68,9 @@ def build_publication_receipt(
     repair_run_id: str,
 ) -> dict[str, Any]:
     path = Path(summary_path).absolute()
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    fingerprint = file_fingerprint(path)
-    if fingerprint is None:
-        raise FileNotFoundError(path)
+    snapshot = _read_summary_snapshot(path)
+    payload = snapshot["payload"]
+    fingerprint = snapshot["fingerprint"]
     return {
         "expected_trade_date": expected_trade_date,
         "repair_run_id": repair_run_id,
@@ -76,13 +108,13 @@ def validate_publication_receipt(
         return {"status": "failed", "error_code": "publication_receipt_path_escape"}
     if resolved_summary_path != canonical_path.resolve(strict=True):
         return {"status": "failed", "error_code": "publication_receipt_path_mismatch"}
-    fingerprint = file_fingerprint(summary_path)
-    if fingerprint is None or fingerprint != receipt.get("fingerprint"):
-        return {"status": "failed", "error_code": "publication_receipt_file_changed"}
     try:
-        payload = json.loads(summary_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
+        snapshot = _read_summary_snapshot(summary_path)
+    except (FileNotFoundError, OSError, ValueError, json.JSONDecodeError):
         return {"status": "failed", "error_code": "publication_receipt_summary_invalid"}
+    if snapshot["fingerprint"] != receipt.get("fingerprint"):
+        return {"status": "failed", "error_code": "publication_receipt_file_changed"}
+    payload = snapshot["payload"]
     strategy_status = dict(payload.get("strategy_status") or {})
     expected_run_id = f"strategy-eod-{expected_trade_date}-local"
     if (
