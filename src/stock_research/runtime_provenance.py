@@ -12,16 +12,22 @@ def build_runtime_provenance(
     package_file: str | Path,
 ) -> dict[str, str]:
     source_root = Path(release_root).resolve()
-    expected_package_root = (source_root / "src" / "stock_research").resolve()
+    expected_package_path = source_root / "src" / "stock_research"
+    expected_package_root = expected_package_path.resolve()
     python_package_root = Path(package_file).resolve().parent
 
     try:
-        python_package_root.relative_to(expected_package_root)
+        expected_package_root.relative_to(source_root)
     except ValueError as exc:
         raise RuntimeError(
             "python package root does not match release root: "
             f"expected {expected_package_root}, got {python_package_root}"
         ) from exc
+    if python_package_root != expected_package_root:
+        raise RuntimeError(
+            "python package root does not match release root: "
+            f"expected {expected_package_root}, got {python_package_root}"
+        )
 
     api_release_id = release_id.strip()
     frontend_release_id = frontend_build_id.strip()
