@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS ops.strategy_daily_eod_status (
 ALTER TABLE ops.strategy_daily_eod_status
     ADD COLUMN IF NOT EXISTS midtrend_artifacts_status text;
 UPDATE ops.strategy_daily_eod_status
-SET midtrend_artifacts_status = COALESCE(midtrend_artifacts_status, mid_trend_status, 'skipped')
+SET midtrend_artifacts_status = 'skipped'
 WHERE midtrend_artifacts_status IS NULL;
 ALTER TABLE ops.strategy_daily_eod_status
     ALTER COLUMN midtrend_artifacts_status SET NOT NULL;

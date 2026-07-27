@@ -28,7 +28,7 @@ def _prepare_strategy_daily_eod_ok(monkeypatch, tmp_path: Path) -> None:
     )
 
 
-def test_strategy_daily_eod_readiness_requires_midtrend_artifacts_status(
+def test_strategy_daily_eod_readiness_rejects_legacy_skipped_midtrend_artifacts(
     monkeypatch, tmp_path: Path
 ) -> None:
     _prepare_strategy_daily_eod_ok(monkeypatch, tmp_path)
@@ -36,7 +36,7 @@ def test_strategy_daily_eod_readiness_requires_midtrend_artifacts_status(
 
     def failed_artifacts(*args, **kwargs):
         row = dict(original_loader(*args, **kwargs))
-        row["midtrend_artifacts_status"] = "failed"
+        row["midtrend_artifacts_status"] = "skipped"
         return row
 
     monkeypatch.setattr(platform_ready, "load_strategy_daily_eod_status", failed_artifacts)
@@ -44,7 +44,18 @@ def test_strategy_daily_eod_readiness_requires_midtrend_artifacts_status(
     result = platform_ready._check_strategy_daily_eod("test", "2026-06-18")
 
     assert result["status"] == "fail"
-    assert "midtrend_artifacts=failed" in result["detail"]
+    assert "mid=success" in result["detail"]
+    assert "midtrend_artifacts=skipped" in result["detail"]
+
+
+def test_strategy_daily_eod_readiness_accepts_all_four_success(
+    monkeypatch, tmp_path: Path
+) -> None:
+    _prepare_strategy_daily_eod_ok(monkeypatch, tmp_path)
+
+    result = platform_ready._check_strategy_daily_eod("test", "2026-06-18")
+
+    assert result["status"] == "pass"
 
 
 def test_platform_ready_check_fails_when_frontend_inputs_are_missing(monkeypatch, tmp_path: Path):

@@ -1082,6 +1082,8 @@ def test_status_payload_and_schema():
         "IF constraint_definition IS NULL"
     ) < store.STRATEGY_DAILY_EOD_STATUS_SQL.index("DROP CONSTRAINT IF EXISTS")
     assert "ADD COLUMN IF NOT EXISTS midtrend_artifacts_status text" in store.STRATEGY_DAILY_EOD_STATUS_SQL
+    assert "SET midtrend_artifacts_status = 'skipped'" in store.STRATEGY_DAILY_EOD_STATUS_SQL
+    assert "COALESCE(midtrend_artifacts_status, mid_trend_status" not in store.STRATEGY_DAILY_EOD_STATUS_SQL
 
 
 def test_status_upsert_and_reader_include_midtrend_artifacts(monkeypatch):
