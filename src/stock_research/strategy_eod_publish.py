@@ -272,13 +272,19 @@ def publish_strategy_eod(
     review_path, review_rows = _write_review_queue(review_frames, output_dir)
     strategy_counts, strategy_row_counts = _strategy_review_counts(review_rows)
     if (
-        not _strategy_review_rows_valid(review_rows)
+        not _strategy_review_rows_valid(review_rows, expected_trade_date=selected_trade_date)
         or strategy_counts != EXPECTED_STRATEGY_REVIEW_COUNTS
         or strategy_row_counts != EXPECTED_STRATEGY_REVIEW_COUNTS
     ):
         error = (
             "strategy review contract requires exactly 5 rows per strategy: "
             f"unique_assets={strategy_counts}, rows={strategy_row_counts}, total_rows={len(review_rows)}"
+        )
+        _replace_official_strategy_entries_with_failures(
+            entries,
+            run_id=run_id,
+            trade_date=selected_trade_date,
+            started_at=started_at,
         )
         entries.append(
             _failure_entry(
@@ -1436,18 +1442,68 @@ def _strategy_review_counts(
     return unique_counts, row_counts
 
 
-def _strategy_review_rows_valid(review_rows: list[dict[str, Any]]) -> bool:
+def _strategy_review_rows_valid(
+    review_rows: list[dict[str, Any]],
+    *,
+    expected_trade_date: str,
+) -> bool:
     if len(review_rows) != sum(EXPECTED_STRATEGY_REVIEW_COUNTS.values()):
         return False
     frame = pd.DataFrame(review_rows)
-    if not {"strategy_id", "asset_id"}.issubset(frame.columns):
+    required_columns = {"trade_date", "strategy_id", "asset_id", "rank", "review_tier"}
+    if not required_columns.issubset(frame.columns):
         return False
     strategy_ids = frame["strategy_id"].fillna("").astype(str).str.strip()
     asset_ids = frame["asset_id"].fillna("").astype(str).str.strip()
-    return bool(
+    trade_dates = frame["trade_date"].fillna("").astype(str).str.strip().str[:10]
+    review_tiers = frame["review_tier"].fillna("").astype(str).str.strip()
+    ranks = pd.to_numeric(frame["rank"], errors="coerce")
+    if not bool(
         strategy_ids.isin(EXPECTED_STRATEGY_REVIEW_COUNTS).all()
         and asset_ids.ne("").all()
-    )
+        and trade_dates.eq(expected_trade_date).all()
+        and review_tiers.eq("top5_focus").all()
+        and ranks.notna().all()
+        and ranks.mod(1).eq(0).all()
+    ):
+        return False
+    expected_ranks = {1, 2, 3, 4, 5}
+    for strategy_id in EXPECTED_STRATEGY_REVIEW_COUNTS:
+        strategy_ranks = ranks[strategy_ids.eq(strategy_id)]
+        if len(strategy_ranks) != 5 or set(strategy_ranks.astype(int)) != expected_ranks:
+            return False
+    return True
+
+
+def _replace_official_strategy_entries_with_failures(
+    entries: list[dict[str, Any]],
+    *,
+    run_id: str,
+    trade_date: str,
+    started_at: datetime,
+) -> None:
+    official_modules = set(STRATEGY_EOD_MODULES.values())
+    present_modules = {
+        str(entry.get("module") or "")
+        for entry in entries
+        if str(entry.get("module") or "") in official_modules
+    }
+    entries[:] = [
+        entry for entry in entries if str(entry.get("module") or "") not in official_modules
+    ]
+    for module in STRATEGY_EOD_MODULES.values():
+        if module not in present_modules:
+            continue
+        entries.append(
+            _failure_entry(
+                run_id=run_id,
+                trade_date=trade_date,
+                module=module,
+                source="strategy_daily_eod",
+                started_at=started_at,
+                error="strategy review contract validation failed",
+            )
+        )
 
 
 def _write_eod_news_artifacts(
