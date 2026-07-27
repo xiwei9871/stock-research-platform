@@ -44,7 +44,14 @@ const echartsMocks = vi.hoisted(() => {
   return {
     charts,
     handlers,
-    init: vi.fn(() => makeChart())
+    init: vi.fn((node?: HTMLElement) => {
+      if (node) {
+        globalThis.requestAnimationFrame(() => {
+          node.appendChild(document.createElement('canvas'));
+        });
+      }
+      return makeChart();
+    })
   };
 });
 
@@ -820,6 +827,26 @@ describe('MarketMonitorWorkspace', () => {
     expect(screen.getByLabelText('兼容热力块 下跌 API回调')).toBeInTheDocument();
   });
 
+  it('shows the full sector tooltip from the compatibility heatmap on hover and focus', async () => {
+    renderWorkspace();
+
+    const tile = await screen.findByRole('button', { name: '兼容热力块 上涨 API半导体' });
+    fireEvent.pointerEnter(tile, { clientX: 120, clientY: 80 });
+    const hoverTooltip = screen.getByRole('tooltip', { name: '板块数据' });
+    expect(hoverTooltip).toHaveStyle({ left: '12px' });
+    expect(hoverTooltip).toHaveTextContent('API半导体');
+    expect(hoverTooltip).toHaveTextContent('上涨/下跌 96/12');
+    expect(hoverTooltip).toHaveTextContent('成分股 118');
+
+    fireEvent.pointerLeave(tile);
+    expect(screen.queryByRole('tooltip', { name: '板块数据' })).not.toBeInTheDocument();
+
+    fireEvent.focus(tile);
+    expect(screen.getByRole('tooltip', { name: '板块数据' })).toBeInTheDocument();
+    fireEvent.blur(tile);
+    expect(screen.queryByRole('tooltip', { name: '板块数据' })).not.toBeInTheDocument();
+  });
+
   it('initializes an echarts treemap when the heatmap container can be measured', async () => {
     const chartSize = overrideChartSize(960, 360);
 
@@ -845,6 +872,26 @@ describe('MarketMonitorWorkspace', () => {
           })
         ])
       );
+    } finally {
+      chartSize.restore();
+    }
+  });
+
+  it('hides the compatibility layer after echarts renders its canvas on the next frame', async () => {
+    const chartSize = overrideChartSize(960, 360);
+
+    try {
+      renderWorkspace();
+      await waitFor(() => expect(echartsMocks.init).toHaveBeenCalledTimes(2));
+      expect(screen.getByLabelText('上涨板块兼容热力图')).toBeInTheDocument();
+
+      animationFrameMocks.flushNextFrame();
+      animationFrameMocks.flushNextFrame();
+
+      await waitFor(() => {
+        expect(document.querySelector('.market-monitor-heatmap-chart-up canvas')).not.toBeNull();
+        expect(screen.queryByLabelText('上涨板块兼容热力图')).not.toBeInTheDocument();
+      });
     } finally {
       chartSize.restore();
     }

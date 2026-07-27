@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import * as echarts from 'echarts';
+import { resolveChartTooltipPosition } from '../../charts/chartTooltipPosition';
 import type { SectorHeatmapItem, SectorType } from './mockData';
 
 function formatSignedPercent(value: number) {
@@ -50,6 +51,10 @@ function treemapColor(value: number, direction: HeatmapDirection) {
 function buildTreemapOption(items: SectorHeatmapItem[], selectedSectorId: string | null, direction: HeatmapDirection) {
   return {
     tooltip: {
+      renderMode: 'html',
+      appendToBody: false,
+      className: 'market-monitor-sector-tooltip',
+      confine: true,
       formatter: (params: { data?: SectorHeatmapItem }) => {
         const item = params.data;
         if (!item) return '';
@@ -139,11 +144,49 @@ function FallbackTreemap({
   items: SectorHeatmapItem[];
   onSelectSector: (sectorId: string) => void;
 }) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const tooltipRef = useRef<HTMLDivElement | null>(null);
+  const [hoveredItem, setHoveredItem] = useState<SectorHeatmapItem | null>(null);
+  const [tooltipPointer, setTooltipPointer] = useState<{ x: number; y: number } | null>(null);
+  const [tooltipPosition, setTooltipPosition] = useState<{ left: number; top: number } | null>(null);
   const totalAmount = items.reduce((total, item) => total + Math.max(item.amount, 1), 0);
   const directionLabel = direction === 'up' ? '上涨' : '下跌';
 
+  const setPointerFromClient = (item: SectorHeatmapItem, clientX: number, clientY: number) => {
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setHoveredItem(item);
+    setTooltipPointer({ x: clientX - rect.left, y: clientY - rect.top });
+  };
+
+  useEffect(() => {
+    setHoveredItem(null);
+    setTooltipPointer(null);
+  }, [items]);
+
+  useLayoutEffect(() => {
+    if (!hoveredItem || !tooltipPointer || !containerRef.current || !tooltipRef.current) {
+      setTooltipPosition(null);
+      return;
+    }
+    const tooltipRect = tooltipRef.current.getBoundingClientRect();
+    setTooltipPosition(resolveChartTooltipPosition({
+      pointerX: tooltipPointer.x,
+      pointerY: tooltipPointer.y,
+      containerWidth: containerRef.current.clientWidth,
+      containerHeight: containerRef.current.clientHeight,
+      tooltipWidth: tooltipRect.width,
+      tooltipHeight: tooltipRect.height,
+      verticalOffset: 24
+    }));
+  }, [hoveredItem, tooltipPointer]);
+
   return (
-    <div className="market-monitor-heatmap-fallback" aria-label={`${directionLabel}板块兼容热力图`}>
+    <div
+      ref={containerRef}
+      className="market-monitor-heatmap-fallback"
+      aria-label={`${directionLabel}板块兼容热力图`}
+    >
       {items.map((item) => {
         const share = totalAmount > 0 ? Math.max(item.amount, 1) / totalAmount : 0;
         const basis = `${Math.min(72, Math.max(16, share * 100))}%`;
@@ -159,6 +202,20 @@ function FallbackTreemap({
               flexGrow: Math.max(1, share * 100)
             }}
             aria-label={`兼容热力块 ${directionLabel} ${item.sectorName}`}
+            onPointerEnter={(event) => setPointerFromClient(item, event.clientX, event.clientY)}
+            onPointerMove={(event) => setPointerFromClient(item, event.clientX, event.clientY)}
+            onPointerLeave={() => {
+              setHoveredItem(null);
+              setTooltipPointer(null);
+            }}
+            onFocus={(event) => {
+              const tileRect = event.currentTarget.getBoundingClientRect();
+              setPointerFromClient(item, tileRect.left + tileRect.width / 2, tileRect.top + tileRect.height / 2);
+            }}
+            onBlur={() => {
+              setHoveredItem(null);
+              setTooltipPointer(null);
+            }}
             onClick={() => onSelectSector(item.sectorId)}
           >
             <strong>{item.sectorName}</strong>
@@ -166,6 +223,22 @@ function FallbackTreemap({
           </button>
         );
       })}
+      {hoveredItem ? (
+        <div
+          ref={tooltipRef}
+          className="market-monitor-sector-tooltip"
+          role="tooltip"
+          aria-label="板块数据"
+          style={{
+            left: tooltipPosition?.left ?? 12,
+            top: tooltipPosition?.top ?? 12
+          }}
+        >
+          {formatSectorTooltipLines(hoveredItem).map((line, index) =>
+            index === 0 ? <strong key={`${index}-${line}`}>{line}</strong> : <span key={`${index}-${line}`}>{line}</span>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -200,7 +273,8 @@ function DirectionalHeatmap({
     if (!node) return undefined;
 
     let resizeObserver: ResizeObserver | null = null;
-    let frameId: number | null = null;
+    let retryFrameId: number | null = null;
+    let readinessFrameId: number | null = null;
     let retryCount = 0;
 
     if (items.length === 0) {
@@ -210,20 +284,27 @@ function DirectionalHeatmap({
       return undefined;
     }
 
-    const cancelFrame = () => {
-      if (frameId != null) {
-        window.cancelAnimationFrame(frameId);
-        frameId = null;
+    const cancelRetryFrame = () => {
+      if (retryFrameId != null) {
+        window.cancelAnimationFrame(retryFrameId);
+        retryFrameId = null;
+      }
+    };
+
+    const cancelReadinessFrame = () => {
+      if (readinessFrameId != null) {
+        window.cancelAnimationFrame(readinessFrameId);
+        readinessFrameId = null;
       }
     };
 
     const scheduleRenderRetry = () => {
-      if (frameId != null || retryCount >= CHART_SIZE_RETRY_LIMIT) {
+      if (retryFrameId != null || retryCount >= CHART_SIZE_RETRY_LIMIT) {
         return;
       }
 
-      frameId = window.requestAnimationFrame(() => {
-        frameId = null;
+      retryFrameId = window.requestAnimationFrame(() => {
+        retryFrameId = null;
         retryCount += 1;
         renderChart();
       });
@@ -236,7 +317,7 @@ function DirectionalHeatmap({
       }
 
       retryCount = 0;
-      cancelFrame();
+      cancelRetryFrame();
       const chart = chartInstanceRef.current ?? echarts.init(node);
       chartInstanceRef.current = chart;
       chart.setOption(buildTreemapOption(items, selectedSectorId, direction));
@@ -248,7 +329,11 @@ function DirectionalHeatmap({
         }
       });
       chart.resize();
-      setChartReady(node.children.length > 0);
+      cancelReadinessFrame();
+      readinessFrameId = window.requestAnimationFrame(() => {
+        readinessFrameId = null;
+        setChartReady(Boolean(node.querySelector('canvas, svg')));
+      });
     };
 
     renderChart();
@@ -269,7 +354,8 @@ function DirectionalHeatmap({
     window.addEventListener('resize', handleResize);
 
     return () => {
-      cancelFrame();
+      cancelRetryFrame();
+      cancelReadinessFrame();
       resizeObserver?.disconnect();
       window.removeEventListener('resize', handleResize);
       chartInstanceRef.current?.off('click');

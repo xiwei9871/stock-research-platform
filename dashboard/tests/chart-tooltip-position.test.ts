@@ -34,4 +34,15 @@ describe('resolveChartTooltipPosition', () => {
       tooltipHeight: 100
     })).toEqual({ left: 12, top: 12 });
   });
+
+  it('falls back to the safe margin for non-finite pointer coordinates', () => {
+    expect(resolveChartTooltipPosition({
+      pointerX: Number.NaN,
+      pointerY: Number.NaN,
+      containerWidth: 320,
+      containerHeight: 240,
+      tooltipWidth: 180,
+      tooltipHeight: 110
+    })).toEqual({ left: 12, top: 12 });
+  });
 });
