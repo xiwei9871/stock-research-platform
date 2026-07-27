@@ -5198,6 +5198,14 @@ table.data-table td {
   z-index: 2;
 }
 
+.market-monitor-heatmap-echarts-layer.pending {
+  pointer-events: none;
+}
+
+.market-monitor-heatmap-echarts-layer.ready {
+  pointer-events: auto;
+}
+
 .market-monitor-heatmap-fallback {
   z-index: 1;
   display: flex;

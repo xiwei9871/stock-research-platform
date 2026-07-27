@@ -823,6 +823,7 @@ describe('MarketMonitorWorkspace', () => {
     expect(screen.getByRole('heading', { name: '行业板块热力图' })).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole('heading', { name: '上涨板块热力图' })).toBeInTheDocument());
     expect(echartsMocks.init).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('上涨板块热力图图表')).toHaveClass('pending');
     expect(screen.getByLabelText('兼容热力块 上涨 API半导体')).toBeInTheDocument();
     expect(screen.getByLabelText('兼容热力块 下跌 API回调')).toBeInTheDocument();
   });
