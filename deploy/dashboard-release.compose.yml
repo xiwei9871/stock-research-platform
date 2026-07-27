@@ -1,0 +1,20 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: deploy/dashboard-api.Dockerfile
+    working_dir: /app
+    command: ["python", "-m", "uvicorn", "stock_research.dashboard.app:app", "--host", "0.0.0.0", "--port", "8765", "--http", "h11"]
+    environment:
+      PYTHONPATH: /app/src
+      STOCK_RESEARCH_RELEASE_ROOT: ${STOCK_RESEARCH_RELEASE_ROOT:?required}
+      STOCK_RESEARCH_RELEASE_ID: ${STOCK_RESEARCH_RELEASE_ID:?required}
+      STOCK_RESEARCH_FRONTEND_BUILD_ID: ${STOCK_RESEARCH_FRONTEND_BUILD_ID:?required}
+      STOCK_RESEARCH_FRONTEND_METADATA_FILE: /app/dashboard/dist/release.json
+    volumes:
+      - ./outputs/research:/app/outputs/research:ro
+  dashboard:
+    build:
+      context: .
+      dockerfile: deploy/dashboard-frontend.Dockerfile
+    command: ["nginx", "-g", "daemon off;"]

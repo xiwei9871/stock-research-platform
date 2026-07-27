@@ -117,3 +117,58 @@ def test_runtime_provenance_defaults_release_root_from_module_location(monkeypat
 
     expected_root = Path(__file__).resolve().parents[1]
     assert payload["source_root"] == str(expected_root)
+
+
+def test_runtime_provenance_reads_frontend_build_id_from_dist_metadata(monkeypatch, tmp_path):
+    package_file = tmp_path / "src" / "stock_research" / "__init__.py"
+    package_file.parent.mkdir(parents=True)
+    metadata_file = tmp_path / "dashboard" / "dist" / "release.json"
+    metadata_file.parent.mkdir(parents=True)
+    metadata_file.write_text('{"release_id":"release-1"}', encoding="utf-8")
+    monkeypatch.setenv("STOCK_RESEARCH_RELEASE_ROOT", str(tmp_path))
+    monkeypatch.setenv("STOCK_RESEARCH_RELEASE_ID", "release-1")
+    monkeypatch.setenv("STOCK_RESEARCH_FRONTEND_BUILD_ID", "release-1")
+
+    payload = runtime_provenance(package_file=package_file)
+
+    assert payload["frontend_build_id"] == "release-1"
+
+
+def test_runtime_provenance_rejects_old_dist_with_new_api_release(monkeypatch, tmp_path):
+    package_file = tmp_path / "src" / "stock_research" / "__init__.py"
+    package_file.parent.mkdir(parents=True)
+    metadata_file = tmp_path / "dashboard" / "dist" / "release.json"
+    metadata_file.parent.mkdir(parents=True)
+    metadata_file.write_text('{"release_id":"old-release"}', encoding="utf-8")
+    monkeypatch.setenv("STOCK_RESEARCH_RELEASE_ROOT", str(tmp_path))
+    monkeypatch.setenv("STOCK_RESEARCH_RELEASE_ID", "new-release")
+    monkeypatch.setenv("STOCK_RESEARCH_FRONTEND_BUILD_ID", "new-release")
+
+    with pytest.raises(RuntimeError, match="frontend release metadata does not match"):
+        runtime_provenance(package_file=package_file)
+
+
+def test_runtime_provenance_requires_metadata_for_declared_frontend_release(monkeypatch, tmp_path):
+    package_file = tmp_path / "src" / "stock_research" / "__init__.py"
+    package_file.parent.mkdir(parents=True)
+    monkeypatch.setenv("STOCK_RESEARCH_RELEASE_ROOT", str(tmp_path))
+    monkeypatch.setenv("STOCK_RESEARCH_RELEASE_ID", "release-1")
+    monkeypatch.setenv("STOCK_RESEARCH_FRONTEND_BUILD_ID", "release-1")
+
+    with pytest.raises(RuntimeError, match="frontend release metadata is missing"):
+        runtime_provenance(package_file=package_file)
+
+
+def test_runtime_provenance_allows_empty_development_metadata(monkeypatch, tmp_path):
+    package_file = tmp_path / "src" / "stock_research" / "__init__.py"
+    package_file.parent.mkdir(parents=True)
+    metadata_file = tmp_path / "dashboard" / "dist" / "release.json"
+    metadata_file.parent.mkdir(parents=True)
+    metadata_file.write_text('{"release_id":""}', encoding="utf-8")
+    monkeypatch.setenv("STOCK_RESEARCH_RELEASE_ROOT", str(tmp_path))
+    monkeypatch.setenv("STOCK_RESEARCH_RELEASE_ID", "")
+    monkeypatch.setenv("STOCK_RESEARCH_FRONTEND_BUILD_ID", "")
+
+    payload = runtime_provenance(package_file=package_file)
+
+    assert payload["frontend_build_id"] == ""

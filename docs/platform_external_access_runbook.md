@@ -92,7 +92,10 @@ Required operational inputs are normally stored in the server-only file selected
 
 ```dotenv
 STOCK_RESEARCH_RELEASE_ROOT=/Users/xiwei/stock_research_release_YYYYMMDD
-EXPECTED_TRADE_DATE=YYYY-MM-DD
+# Optional manual override; omit for LaunchAgent dynamic resolution.
+# EXPECTED_TRADE_DATE=YYYY-MM-DD
+LOCAL_READINESS_URL=http://127.0.0.1:8765/api/platform/readiness
+STOCK_RESEARCH_PYTHON=/absolute/path/to/python
 REMOTE_USER=deployment-user
 REMOTE_HOST=deployment-host
 REMOTE_DIR=/absolute/remote/release/path
@@ -103,7 +106,11 @@ DASHBOARD_AUTH=user:password
 REMOTE_CONTAINER_RELEASE_ROOT=/app
 ```
 
-`EXPECTED_TRADE_DATE` is deliberately required; never infer a publish date from an older artifact. `DASHBOARD_AUTH` is passed only to the release check and must not be committed or embedded in the frontend. The remote Compose definition must forward `STOCK_RESEARCH_RELEASE_ROOT`, `STOCK_RESEARCH_RELEASE_ID`, and `STOCK_RESEARCH_FRONTEND_BUILD_ID` into the API container.
+`EXPECTED_TRADE_DATE` is an optional explicit override. When it is absent (the normal LaunchAgent path), the script resolves `latest_market_date` from `LOCAL_READINESS_URL`, then falls back to the selected release's platform summary; it fails instead of selecting the newest artifact directory. `STOCK_RESEARCH_PYTHON` can select the Python used for import and artifact validation. Without it, the script prefers `$STOCK_RESEARCH_RELEASE_ROOT/.venv/bin/python` and falls back to `/Users/xiwei/stock_research/.venv/bin/python`, while still requiring `stock_research.__file__` to belong to the selected release.
+
+`REMOTE_USER`, `REMOTE_HOST`, and `REMOTE_DIR` retain the existing defaults (`jqz`, `192.168.3.185`, and `/home/$REMOTE_USER/code/stock-research-platform-main`) but should be set explicitly outside that host. `DASHBOARD_AUTH` is passed only to the release check and must not be committed or embedded in the frontend.
+
+The release sync installs the version-controlled `deploy/dashboard-release.compose.yml` override and its API/frontend Dockerfiles beside the remote's existing base Compose file. It builds both images before force-recreating them. The override injects the three runtime provenance values, packages the synchronized backend and `dashboard/dist/release.json` into the API image, and mounts strategy outputs read-only. The release gate checks the actual frontend metadata plus the container source/package roots; environment variables alone cannot attest a release.
 
 Run the release only after the official strategy publisher has completed successfully:
 
@@ -113,7 +120,7 @@ EXPECTED_TRADE_DATE=YYYY-MM-DD \
 deploy/sync_dashboard_release.sh
 ```
 
-The command builds one `release_id`, syncs backend source, the canonical `dashboard/dist`, and only `outputs/research/strategy_daily_eod/$EXPECTED_TRADE_DATE`, recreates the API and dashboard services, then waits at most 120 seconds for the readiness and Review Queue contracts.
+Before any remote command, the script validates the publish summary, manifest, and all three official review CSVs for the selected date. The command then builds one `release_id`, syncs backend source, the canonical `dashboard/dist`, and only `outputs/research/strategy_daily_eod/$EXPECTED_TRADE_DATE`, rebuilds and recreates the API and dashboard services, then waits at most 120 seconds for the readiness and Review Queue contracts.
 
 ### 回滚
 
