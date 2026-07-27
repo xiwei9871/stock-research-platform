@@ -158,6 +158,9 @@ def test_official_runner_integrates_real_mature_publisher_manifest_shape(
     report_path = release_root / "outputs" / "reports" / "daily.html"
     report_path.parent.mkdir(parents=True)
     report_path.write_text("report", encoding="utf-8")
+    provenance_path = tmp_path / "external-inputs" / "mid_trend_research_overlay.csv"
+    provenance_path.parent.mkdir(parents=True)
+    provenance_path.write_text("input", encoding="utf-8")
     persisted = []
     monkeypatch.setattr(eod, "apply_strategy_daily_eod_status_schema", lambda **_kwargs: None)
     monkeypatch.setattr(eod, "upsert_strategy_daily_eod_status", lambda *_args, **_kwargs: None)
@@ -187,6 +190,10 @@ def test_official_runner_integrates_real_mature_publisher_manifest_shape(
         review_path = output_dir / f"{module}_review.csv"
         rows.to_csv(review_path, index=False)
         metadata = {"review_path": str(review_path)}
+        if strategy_id == "mid_trend":
+            metadata["summary"] = {
+                "data_coverage": {"research_overlay_path": str(provenance_path)}
+            }
         for kind in ("equity", "positions", "trades"):
             path = output_dir / f"{module}_{kind}.csv"
             path.write_text("value\n1\n", encoding="utf-8")
@@ -286,6 +293,40 @@ def test_official_runner_integrates_real_mature_publisher_manifest_shape(
     generated = next(entry for entry in persisted if entry["module"] == "generated_reports")
     assert generated["artifact_path"] == str(report_path)
     assert generated["metadata"]["reports_dir"] == str(report_path.parent)
+    mid = next(entry for entry in persisted if entry["module"] == "strategy_mid_trend")
+    assert mid["metadata"]["summary"]["data_coverage"]["research_overlay_path"] == str(
+        provenance_path
+    )
+
+
+def test_official_runner_rejects_external_metadata_review_path(tmp_path: Path, monkeypatch):
+    external_review = tmp_path.parent / f"{tmp_path.name}-external-review.csv"
+    external_review.write_text("review", encoding="utf-8")
+    monkeypatch.setattr(eod, "apply_strategy_daily_eod_status_schema", lambda **_kwargs: None)
+    monkeypatch.setattr(eod, "upsert_strategy_daily_eod_status", lambda *_args, **_kwargs: None)
+
+    def publisher(**kwargs):
+        collected = []
+        summary = _write_complete_mature_release(
+            output_root=kwargs["output_root"],
+            trade_date=kwargs["trade_date"],
+            manifest_upsert=collected.append,
+        )
+        collected[0]["metadata"]["review_path"] = str(external_review)
+        for entry in collected:
+            kwargs["manifest_upsert"](entry)
+        return summary
+
+    summary = eod.run_strategy_daily_eod(
+        trade_date="2026-07-24",
+        output_root=tmp_path,
+        dependency_checker=lambda **_kwargs: {"status": "success"},
+        publisher=publisher,
+        service="test",
+    )
+
+    assert summary["status"] == "failed"
+    assert "escapes controlled publication roots" in summary["error_summary"]
 
 
 def test_official_runner_requires_real_midtrend_artifacts(tmp_path: Path, monkeypatch):

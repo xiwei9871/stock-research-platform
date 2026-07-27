@@ -48,6 +48,18 @@ STRATEGY_DEPENDENCIES = {
     "tech_bottleneck": ("common",),
 }
 
+ARTIFACT_METADATA_FILE_KEYS = {
+    "artifact_path",
+    "summary_path",
+    "review_path",
+    "equity_path",
+    "positions_path",
+    "trades_path",
+    "detail_path",
+}
+ARTIFACT_METADATA_FILE_LIST_KEYS = {"report_files", "report_paths"}
+ARTIFACT_METADATA_OPTIONAL_DIR_KEYS = {"reports_dir"}
+
 
 def run_strategy_daily_eod(
     *,
@@ -636,12 +648,10 @@ def _relocate_metadata_paths(
                 allowed_roots=allowed_roots,
                 path_kind=(
                     "directory"
-                    if key.endswith("_dir")
+                    if key in ARTIFACT_METADATA_OPTIONAL_DIR_KEYS
                     else "file"
-                    if key.endswith("_path")
-                    or key.endswith("_paths")
-                    or key.endswith("_files")
-                    or key in {"artifact_path", "summary_path"}
+                    if key in ARTIFACT_METADATA_FILE_KEYS
+                    or key in ARTIFACT_METADATA_FILE_LIST_KEYS
                     else None
                 ),
             )
