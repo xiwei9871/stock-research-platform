@@ -144,7 +144,7 @@ def run_strategy_daily_eod(
             required_manifest_errors = _required_success_manifest_errors(
                 manifest_entries,
                 trade_date=trade_date,
-                allowed_roots=(allowed_release_root, publisher_root, output_dir),
+                strategy_date_root=output_dir,
             )
             strategy_errors.update(required_manifest_errors)
             for module, strategy_name in {
@@ -468,7 +468,7 @@ def _relocate_metadata_paths(
     staging: Path,
     canonical: Path,
     allowed_roots: tuple[Path, ...] = (),
-    path_context: bool = False,
+    path_kind: str | None = None,
 ) -> Any:
     if isinstance(value, dict):
         return {
@@ -477,11 +477,15 @@ def _relocate_metadata_paths(
                 staging=staging,
                 canonical=canonical,
                 allowed_roots=allowed_roots,
-                path_context=(
-                    key.endswith("_path")
+                path_kind=(
+                    "directory"
+                    if key.endswith("_dir")
+                    else "file"
+                    if key.endswith("_path")
                     or key.endswith("_paths")
-                    or key.endswith("_dir")
+                    or key.endswith("_files")
                     or key in {"artifact_path", "summary_path"}
+                    else None
                 ),
             )
             for key, item in value.items()
@@ -493,16 +497,17 @@ def _relocate_metadata_paths(
                 staging=staging,
                 canonical=canonical,
                 allowed_roots=allowed_roots,
-                path_context=path_context,
+                path_kind=path_kind,
             )
             for item in value
         ]
-    if path_context and value:
+    if path_kind and value:
         return _relocate_path_value(
             value,
             staging=staging,
             canonical=canonical,
             allowed_roots=allowed_roots,
+            require_exists=path_kind == "file",
         )
     return value
 
@@ -513,10 +518,11 @@ def _relocate_path_value(
     staging: Path,
     canonical: Path,
     allowed_roots: tuple[Path, ...] = (),
+    require_exists: bool = True,
 ) -> str:
     candidate = Path(str(value))
     resolved = candidate.resolve() if candidate.is_absolute() else (staging / candidate).resolve()
-    if not resolved.exists():
+    if require_exists and not resolved.exists():
         raise RuntimeError(f"manifest path does not exist: {value}")
     try:
         relative = resolved.relative_to(staging.resolve())
@@ -575,7 +581,7 @@ def _required_success_manifest_errors(
     entries: list[dict[str, Any]],
     *,
     trade_date: str,
-    allowed_roots: tuple[Path, ...],
+    strategy_date_root: Path,
 ) -> dict[str, str]:
     required = {
         "strategy_lhb_shortline",
@@ -596,7 +602,7 @@ def _required_success_manifest_errors(
                 and artifact
             ):
                 path = Path(artifact).resolve()
-                if path.exists() and any(_path_is_within(path, root) for root in allowed_roots):
+                if path.exists() and _path_is_within(path, strategy_date_root):
                     valid = True
                     break
         if not valid:

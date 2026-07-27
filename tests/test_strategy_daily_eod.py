@@ -252,6 +252,127 @@ def test_official_runner_preserves_controlled_release_sibling_manifest_paths(
     assert "generated_reports" in summary["manifest_modules"]
 
 
+def test_official_runner_allows_missing_descriptive_reports_dir(
+    tmp_path: Path, monkeypatch
+):
+    release_root = tmp_path / "release"
+    output_root = release_root / "outputs" / "research" / "strategy_daily_eod"
+    report_path = release_root / "outputs" / "reports" / "daily.html"
+    report_path.parent.mkdir(parents=True)
+    report_path.write_text("report", encoding="utf-8")
+    missing_reports_dir = release_root / "outputs" / "reports-next"
+    monkeypatch.setattr(eod, "apply_strategy_daily_eod_status_schema", lambda **_kwargs: None)
+    monkeypatch.setattr(eod, "upsert_strategy_daily_eod_status", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(eod, "upsert_data_run_manifest", lambda *_args, **_kwargs: None)
+
+    def publisher(**kwargs):
+        summary = _write_complete_mature_release(**kwargs)
+        kwargs["manifest_upsert"](
+            {
+                "module": "generated_reports",
+                "status": "partial",
+                "trade_date": kwargs["trade_date"],
+                "latest_trade_date": kwargs["trade_date"],
+                "artifact_path": str(report_path),
+                "metadata": {
+                    "report_files": [str(report_path)],
+                    "reports_dir": str(missing_reports_dir),
+                },
+            }
+        )
+        return summary
+
+    summary = eod.run_strategy_daily_eod(
+        trade_date="2026-07-24",
+        output_root=output_root,
+        dependency_checker=lambda **_kwargs: {"status": "success"},
+        publisher=publisher,
+        service="test",
+    )
+
+    assert summary["status"] == "success"
+    assert not missing_reports_dir.exists()
+
+
+def test_official_runner_requires_concrete_report_files_to_exist(
+    tmp_path: Path, monkeypatch
+):
+    release_root = tmp_path / "release"
+    output_root = release_root / "outputs" / "research" / "strategy_daily_eod"
+    monkeypatch.setattr(eod, "apply_strategy_daily_eod_status_schema", lambda **_kwargs: None)
+    monkeypatch.setattr(eod, "upsert_strategy_daily_eod_status", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(eod, "upsert_data_run_manifest", lambda *_args, **_kwargs: None)
+
+    def publisher(**kwargs):
+        summary = _write_complete_mature_release(**kwargs)
+        kwargs["manifest_upsert"](
+            {
+                "module": "generated_reports",
+                "status": "partial",
+                "trade_date": kwargs["trade_date"],
+                "latest_trade_date": kwargs["trade_date"],
+                "metadata": {
+                    "report_files": [
+                        str(release_root / "outputs" / "reports" / "missing.html")
+                    ],
+                },
+            }
+        )
+        return summary
+
+    summary = eod.run_strategy_daily_eod(
+        trade_date="2026-07-24",
+        output_root=output_root,
+        dependency_checker=lambda **_kwargs: {"status": "success"},
+        publisher=publisher,
+        service="test",
+    )
+
+    assert summary["status"] == "failed"
+    assert "manifest path does not exist" in summary["error_summary"]
+
+
+def test_official_runner_rejects_key_manifest_artifact_in_release_sibling(
+    tmp_path: Path, monkeypatch
+):
+    release_root = tmp_path / "release"
+    output_root = release_root / "outputs" / "research" / "strategy_daily_eod"
+    wrong_path = release_root / "outputs" / "reports" / "wrong.csv"
+    wrong_path.parent.mkdir(parents=True)
+    wrong_path.write_text("wrong", encoding="utf-8")
+    canonical = output_root / "2026-07-24"
+    canonical.mkdir(parents=True)
+    (canonical / "marker").write_text("old", encoding="utf-8")
+    monkeypatch.setattr(eod, "apply_strategy_daily_eod_status_schema", lambda **_kwargs: None)
+    monkeypatch.setattr(eod, "upsert_strategy_daily_eod_status", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(eod, "upsert_data_run_manifest", lambda *_args, **_kwargs: None)
+
+    def publisher(**kwargs):
+        collected = []
+        summary = _write_complete_mature_release(
+            output_root=kwargs["output_root"],
+            trade_date=kwargs["trade_date"],
+            manifest_upsert=collected.append,
+        )
+        for entry in collected:
+            if entry["module"] == "strategy_lhb_shortline":
+                entry["artifact_path"] = str(wrong_path)
+            kwargs["manifest_upsert"](entry)
+        return summary
+
+    summary = eod.run_strategy_daily_eod(
+        trade_date="2026-07-24",
+        output_root=output_root,
+        dependency_checker=lambda **_kwargs: {"status": "success"},
+        publisher=publisher,
+        service="test",
+    )
+
+    assert summary["publishable"] is False
+    assert summary["strategy_status"]["lhb_shortline"] == "failed"
+    assert (canonical / "marker").read_text(encoding="utf-8") == "old"
+
+
 @pytest.mark.parametrize(
     ("missing_module", "failed_strategy"),
     [
