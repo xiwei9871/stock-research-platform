@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from stock_research import strategy_daily_eod as eod
 from stock_research import strategy_daily_eod_store as store
@@ -55,6 +56,8 @@ def _write_complete_mature_release(
             {
                 "module": module,
                 "status": "success",
+                "trade_date": trade_date,
+                "latest_trade_date": trade_date,
                 "artifact_path": str(review_path),
                 "metadata": metadata,
             }
@@ -67,6 +70,8 @@ def _write_complete_mature_release(
         {
             "module": "review_queue_strategy_manifest",
             "status": "success",
+            "trade_date": trade_date,
+            "latest_trade_date": trade_date,
             "artifact_path": str(manifest_path),
             "metadata": {"review_path": str(manifest_path)},
         }
@@ -180,7 +185,9 @@ def test_official_runner_rejects_manifest_paths_outside_staged_release(
             trade_date=kwargs["trade_date"],
             manifest_upsert=collected.append,
         )
-        collected[0]["artifact_path"] = str(tmp_path / "escape.csv")
+        escape_path = tmp_path.parent / f"{tmp_path.name}-escape.csv"
+        escape_path.write_text("escape", encoding="utf-8")
+        collected[0]["artifact_path"] = str(escape_path)
         for entry in collected:
             kwargs["manifest_upsert"](entry)
         return summary
@@ -194,8 +201,132 @@ def test_official_runner_rejects_manifest_paths_outside_staged_release(
     )
 
     assert summary["status"] == "failed"
-    assert "escapes staged release" in summary["error_summary"]
+    assert "escapes controlled publication roots" in summary["error_summary"]
     assert (canonical / "marker").read_text(encoding="utf-8") == "old"
+
+
+def test_official_runner_preserves_controlled_release_sibling_manifest_paths(
+    tmp_path: Path, monkeypatch
+):
+    release_root = tmp_path / "release"
+    output_root = release_root / "outputs" / "research" / "strategy_daily_eod"
+    report_path = release_root / "outputs" / "reports" / "daily.html"
+    report_path.parent.mkdir(parents=True)
+    report_path.write_text("report", encoding="utf-8")
+    persisted = []
+    monkeypatch.setattr(eod, "apply_strategy_daily_eod_status_schema", lambda **_kwargs: None)
+    monkeypatch.setattr(eod, "upsert_strategy_daily_eod_status", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(eod, "upsert_data_run_manifest", lambda entry, **_kwargs: persisted.append(entry))
+
+    def publisher(**kwargs):
+        summary = _write_complete_mature_release(**kwargs)
+        kwargs["manifest_upsert"](
+            {
+                "module": "generated_reports",
+                "status": "success",
+                "trade_date": kwargs["trade_date"],
+                "latest_trade_date": kwargs["trade_date"],
+                "artifact_path": str(report_path),
+                "metadata": {
+                    "report_paths": [str(report_path)],
+                    "reports_dir": str(report_path.parent),
+                },
+            }
+        )
+        summary["manifest_modules"].append("generated_reports")
+        return summary
+
+    summary = eod.run_strategy_daily_eod(
+        trade_date="2026-07-24",
+        output_root=output_root,
+        dependency_checker=lambda **_kwargs: {"status": "success"},
+        publisher=publisher,
+        service="test",
+    )
+
+    assert summary["status"] == "success"
+    reports = next(entry for entry in persisted if entry["module"] == "generated_reports")
+    assert reports["artifact_path"] == str(report_path)
+    assert reports["metadata"]["report_paths"] == [str(report_path)]
+    assert reports["metadata"]["reports_dir"] == str(report_path.parent)
+    assert "generated_reports" in summary["manifest_modules"]
+
+
+@pytest.mark.parametrize(
+    ("missing_module", "failed_strategy"),
+    [
+        ("strategy_lhb_shortline", "lhb_shortline"),
+        ("strategy_tech_bottleneck", "tech_bottleneck"),
+        ("review_queue_strategy_manifest", None),
+    ],
+)
+def test_official_runner_requires_all_key_success_manifest_entries(
+    tmp_path: Path, monkeypatch, missing_module: str, failed_strategy: str | None
+):
+    monkeypatch.setattr(eod, "apply_strategy_daily_eod_status_schema", lambda **_kwargs: None)
+    monkeypatch.setattr(eod, "upsert_strategy_daily_eod_status", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(eod, "upsert_data_run_manifest", lambda *_args, **_kwargs: None)
+    canonical = tmp_path / "2026-07-24"
+    canonical.mkdir()
+    (canonical / "marker").write_text("old", encoding="utf-8")
+
+    def publisher(**kwargs):
+        collected = []
+        summary = _write_complete_mature_release(
+            output_root=kwargs["output_root"],
+            trade_date=kwargs["trade_date"],
+            manifest_upsert=collected.append,
+        )
+        for entry in collected:
+            if entry["module"] != missing_module:
+                kwargs["manifest_upsert"](entry)
+        return summary
+
+    summary = eod.run_strategy_daily_eod(
+        trade_date="2026-07-24",
+        output_root=tmp_path,
+        dependency_checker=lambda **_kwargs: {"status": "success"},
+        publisher=publisher,
+        service="test",
+    )
+
+    assert summary["publishable"] is False
+    if failed_strategy:
+        assert summary["strategy_status"][failed_strategy] == "failed"
+    assert missing_module not in summary["manifest_modules"]
+    assert "missing required success manifest" in summary["error_summary"]
+    assert (canonical / "marker").read_text(encoding="utf-8") == "old"
+
+
+def test_official_runner_rejects_stale_key_manifest_date(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(eod, "apply_strategy_daily_eod_status_schema", lambda **_kwargs: None)
+    monkeypatch.setattr(eod, "upsert_strategy_daily_eod_status", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(eod, "upsert_data_run_manifest", lambda *_args, **_kwargs: None)
+
+    def publisher(**kwargs):
+        collected = []
+        summary = _write_complete_mature_release(
+            output_root=kwargs["output_root"],
+            trade_date=kwargs["trade_date"],
+            manifest_upsert=collected.append,
+        )
+        for entry in collected:
+            if entry["module"] == "strategy_tech_bottleneck":
+                entry["latest_trade_date"] = "2026-07-23"
+            kwargs["manifest_upsert"](entry)
+        return summary
+
+    summary = eod.run_strategy_daily_eod(
+        trade_date="2026-07-24",
+        output_root=tmp_path,
+        dependency_checker=lambda **_kwargs: {"status": "success"},
+        publisher=publisher,
+        service="test",
+    )
+
+    assert summary["publishable"] is False
+    assert summary["strategy_status"]["tech_bottleneck"] == "failed"
+    assert "strategy_tech_bottleneck on 2026-07-24" in summary["error_summary"]
 
 
 def test_official_runner_does_not_replace_canonical_for_invalid_counts(

@@ -50,6 +50,7 @@ def run_strategy_daily_eod(
     output_root: str | Path = DEFAULT_OUTPUT_ROOT,
     dependency_checker: DependencyChecker | None = None,
     publisher: Publisher = publish_strategy_eod,
+    release_root: str | Path | None = None,
     lhb_runner: StrategyRunner | None = None,
     mid_runner: StrategyRunner | None = None,
     tech_runner: StrategyRunner | None = None,
@@ -59,6 +60,13 @@ def run_strategy_daily_eod(
     apply_strategy_daily_eod_status_schema(service=service)
     dependency_checker = dependency_checker or check_strategy_daily_eod_dependencies
     root = Path(output_root)
+    allowed_release_root = (
+        Path(release_root).resolve()
+        if release_root is not None
+        else _release_root_for_output(root)
+        if root.is_absolute()
+        else root.resolve()
+    )
     canonical_output_dir = root / trade_date
     versions_dir = root / ".versions" / trade_date
     versions_dir.mkdir(parents=True, exist_ok=True)
@@ -79,6 +87,7 @@ def run_strategy_daily_eod(
     manifest_entries: list[dict[str, Any]] = []
     publisher_summary: dict[str, Any] = {}
     publication_error: str | None = None
+    required_manifest_errors: dict[str, str] = {}
 
     dependency_blocked = _dependency_check_status(dependency_check) != "success"
     if dependency_blocked:
@@ -95,16 +104,23 @@ def run_strategy_daily_eod(
             if not generated.is_dir():
                 raise RuntimeError(f"mature publisher did not create staged release: {generated}")
             manifest_entries = [
-                _relocate_manifest_entry(entry, staging=generated, canonical=output_dir)
+                _relocate_manifest_entry(
+                    entry,
+                    staging=generated,
+                    canonical=output_dir,
+                    allowed_roots=(allowed_release_root, publisher_root),
+                )
                 for entry in manifest_entries
             ]
             _relocate_review_manifest_paths(
                 generated / "review_queue_strategy_manifest.csv",
                 staging=generated,
                 canonical=output_dir,
+                allowed_roots=(allowed_release_root, publisher_root),
             )
             os.replace(generated, output_dir)
-            shutil.rmtree(publisher_root, ignore_errors=True)
+            if not _manifest_entries_reference_root(manifest_entries, publisher_root):
+                shutil.rmtree(publisher_root, ignore_errors=True)
             strategy_counts = {
                 name: int((publisher_summary.get("strategy_counts") or {}).get(name, 0))
                 for name in expected_counts
@@ -125,6 +141,19 @@ def run_strategy_daily_eod(
             }
             if strategy_status["midtrend_artifacts"] != "success":
                 strategy_errors["midtrend_artifacts"] = "midtrend artifact contract invalid"
+            required_manifest_errors = _required_success_manifest_errors(
+                manifest_entries,
+                trade_date=trade_date,
+                allowed_roots=(allowed_release_root, publisher_root, output_dir),
+            )
+            strategy_errors.update(required_manifest_errors)
+            for module, strategy_name in {
+                "strategy_lhb_shortline": "lhb_shortline",
+                "strategy_mid_trend": "mid_trend",
+                "strategy_tech_bottleneck": "tech_bottleneck",
+            }.items():
+                if module in required_manifest_errors:
+                    strategy_status[strategy_name] = "failed"
         except Exception as exc:  # noqa: BLE001
             publication_error = f"{type(exc).__name__}: {exc}"
             strategy_counts = {name: 0 for name in expected_counts}
@@ -145,18 +174,16 @@ def run_strategy_daily_eod(
         and publisher_summary.get("publishable") is True
         and int(publisher_summary.get("review_rows") or 0) == 15
         and (publisher_summary.get("score_audit") or {}).get("status") == "success"
+        and not required_manifest_errors
         and _staged_release_valid(output_dir, trade_date=trade_date)
     )
     success_count = sum(status == "success" for status in strategy_status.values())
     final_status = "success" if contract_valid else "partial" if success_count else "failed"
     failure_output_dir = root / ".failures" / trade_date / staging_name
     persistent_output_dir = canonical_output_dir if contract_valid else failure_output_dir
-    manifest_modules = list(publisher_summary.get("manifest_modules") or [
-        "strategy_lhb_shortline",
-        "strategy_mid_trend",
-        "strategy_tech_bottleneck",
-        "review_queue_strategy_manifest",
-    ])
+    manifest_modules = list(dict.fromkeys(
+        str(entry.get("module") or "") for entry in manifest_entries if entry.get("module")
+    ))
     summary = {
         "trade_date": trade_date,
         "run_id": str(publisher_summary.get("run_id") or staging_name),
@@ -185,13 +212,19 @@ def run_strategy_daily_eod(
 
     if contract_valid:
         canonical_entries = [
-            _relocate_manifest_entry(entry, staging=output_dir, canonical=canonical_output_dir)
+            _relocate_manifest_entry(
+                entry,
+                staging=output_dir,
+                canonical=canonical_output_dir,
+                allowed_roots=(allowed_release_root, publisher_root),
+            )
             for entry in manifest_entries
         ]
         _relocate_review_manifest_paths(
             output_dir / "review_queue_strategy_manifest.csv",
             staging=output_dir,
             canonical=canonical_output_dir,
+            allowed_roots=(allowed_release_root, publisher_root),
         )
         staging_summary_path.write_text(
             json.dumps(summary, ensure_ascii=False, indent=2),
@@ -410,14 +443,21 @@ def _relocate_manifest_entry(
     *,
     staging: Path,
     canonical: Path,
+    allowed_roots: tuple[Path, ...] = (),
 ) -> dict[str, Any]:
     relocated = dict(entry)
     if relocated.get("artifact_path"):
         relocated["artifact_path"] = _relocate_path_value(
-            relocated["artifact_path"], staging=staging, canonical=canonical
+            relocated["artifact_path"],
+            staging=staging,
+            canonical=canonical,
+            allowed_roots=allowed_roots,
         )
     relocated["metadata"] = _relocate_metadata_paths(
-        dict(relocated.get("metadata") or {}), staging=staging, canonical=canonical
+        dict(relocated.get("metadata") or {}),
+        staging=staging,
+        canonical=canonical,
+        allowed_roots=allowed_roots,
     )
     return relocated
 
@@ -427,6 +467,7 @@ def _relocate_metadata_paths(
     *,
     staging: Path,
     canonical: Path,
+    allowed_roots: tuple[Path, ...] = (),
     path_context: bool = False,
 ) -> Any:
     if isinstance(value, dict):
@@ -435,25 +476,55 @@ def _relocate_metadata_paths(
                 item,
                 staging=staging,
                 canonical=canonical,
-                path_context=key.endswith("_path") or key in {"artifact_path", "summary_path"},
+                allowed_roots=allowed_roots,
+                path_context=(
+                    key.endswith("_path")
+                    or key.endswith("_paths")
+                    or key.endswith("_dir")
+                    or key in {"artifact_path", "summary_path"}
+                ),
             )
             for key, item in value.items()
         }
     if isinstance(value, list):
         return [
             _relocate_metadata_paths(
-                item, staging=staging, canonical=canonical, path_context=path_context
+                item,
+                staging=staging,
+                canonical=canonical,
+                allowed_roots=allowed_roots,
+                path_context=path_context,
             )
             for item in value
         ]
     if path_context and value:
-        return _relocate_path_value(value, staging=staging, canonical=canonical)
+        return _relocate_path_value(
+            value,
+            staging=staging,
+            canonical=canonical,
+            allowed_roots=allowed_roots,
+        )
     return value
 
 
-def _relocate_path_value(value: Any, *, staging: Path, canonical: Path) -> str:
-    resolved = _contained_existing_path(value, root=staging)
-    return str(canonical / resolved.relative_to(staging.resolve()))
+def _relocate_path_value(
+    value: Any,
+    *,
+    staging: Path,
+    canonical: Path,
+    allowed_roots: tuple[Path, ...] = (),
+) -> str:
+    candidate = Path(str(value))
+    resolved = candidate.resolve() if candidate.is_absolute() else (staging / candidate).resolve()
+    if not resolved.exists():
+        raise RuntimeError(f"manifest path does not exist: {value}")
+    try:
+        relative = resolved.relative_to(staging.resolve())
+    except ValueError:
+        if not any(_path_is_within(resolved, root) for root in allowed_roots):
+            raise RuntimeError(f"manifest path escapes controlled publication roots: {value}")
+        return str(resolved)
+    return str(canonical / relative)
 
 
 def _relocate_review_manifest_paths(
@@ -461,17 +532,76 @@ def _relocate_review_manifest_paths(
     *,
     staging: Path,
     canonical: Path,
+    allowed_roots: tuple[Path, ...] = (),
 ) -> None:
     frame = pd.read_csv(manifest_path, low_memory=False)
     if "artifact_path" not in frame.columns:
         return
     frame["artifact_path"] = [
-        _relocate_path_value(value, staging=staging, canonical=canonical)
+        _relocate_path_value(
+            value,
+            staging=staging,
+            canonical=canonical,
+            allowed_roots=allowed_roots,
+        )
         if str(value or "").strip() and str(value).lower() != "nan"
         else ""
         for value in frame["artifact_path"].tolist()
     ]
     frame.to_csv(manifest_path, index=False)
+
+
+def _path_is_within(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+    except ValueError:
+        return False
+    return True
+
+
+def _release_root_for_output(output_root: Path) -> Path:
+    parts = output_root.parts
+    if len(parts) >= 3 and parts[-3:] == ("outputs", "research", "strategy_daily_eod"):
+        return output_root.parents[2]
+    return output_root
+
+
+def _manifest_entries_reference_root(entries: list[dict[str, Any]], root: Path) -> bool:
+    root_text = str(root.resolve())
+    return any(root_text in json.dumps(entry, ensure_ascii=False) for entry in entries)
+
+
+def _required_success_manifest_errors(
+    entries: list[dict[str, Any]],
+    *,
+    trade_date: str,
+    allowed_roots: tuple[Path, ...],
+) -> dict[str, str]:
+    required = {
+        "strategy_lhb_shortline",
+        "strategy_mid_trend",
+        "strategy_tech_bottleneck",
+        "review_queue_strategy_manifest",
+    }
+    errors: dict[str, str] = {}
+    for module in required:
+        candidates = [entry for entry in entries if entry.get("module") == module]
+        valid = False
+        for entry in candidates:
+            artifact = str(entry.get("artifact_path") or "").strip()
+            if (
+                entry.get("status") == "success"
+                and str(entry.get("trade_date") or "") == trade_date
+                and str(entry.get("latest_trade_date") or "") == trade_date
+                and artifact
+            ):
+                path = Path(artifact).resolve()
+                if path.exists() and any(_path_is_within(path, root) for root in allowed_roots):
+                    valid = True
+                    break
+        if not valid:
+            errors[module] = f"missing required success manifest for {module} on {trade_date}"
+    return errors
 
 
 def _atomic_symlink_publish(staging: Path, canonical: Path) -> None:
