@@ -1,9 +1,10 @@
 import math
 import time
+from copy import deepcopy
 from datetime import datetime, timezone
 from numbers import Integral, Real
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 import pandas as pd
 
@@ -57,6 +58,233 @@ def validate_strategy_summary_against_contract(summary: dict[str, Any], contract
     )
 
     return _validate_strategy_summary_against_contract(summary, contract)
+
+
+def validate_official_strategy_result(
+    result: dict[str, Any],
+    *,
+    profile: str,
+) -> dict[str, Any]:
+    from stock_research.strategy_publication_contracts import (
+        build_publication_identity,
+        get_publication_contract,
+        validate_publication_identity,
+    )
+
+    strategy_id = _official_result_strategy_id(result)
+    publication_contract = get_publication_contract(strategy_id, profile=profile)
+    from stock_research.strategy_contracts import StrategyContract
+
+    parameter_contract = StrategyContract(
+        contract_id=publication_contract.contract_id,
+        strategy_id=publication_contract.strategy_id,
+        profile=publication_contract.profile,
+        engine=publication_contract.engine_version,
+        variant=publication_contract.variant,
+        top_n=int(publication_contract.normalized_run_config["top_n"]),
+        transaction_cost_bps=float(
+            publication_contract.normalized_run_config["transaction_cost_bps"]
+        ),
+        adjust_type=str(publication_contract.normalized_run_config["adjust_type"]),
+        frequency=str(publication_contract.normalized_run_config["rebalance_frequency"]),
+        protection_name=(
+            str(publication_contract.normalized_run_config["protection_name"])
+            if publication_contract.normalized_run_config.get("protection_name")
+            else None
+        ),
+    )
+
+    summary = result.get("summary")
+    if not isinstance(summary, dict):
+        raise ValueError("official strategy result summary must be a mapping")
+    config = result.get("config")
+    if config is not None and not isinstance(config, dict):
+        raise ValueError("official strategy result config must be a mapping")
+    config = config or {}
+
+    _validate_declared_official_config(summary, publication_contract, location="summary")
+    _validate_declared_official_config(config, publication_contract, location="config")
+    _require_official_config_evidence(summary, config, publication_contract)
+    _validate_contract_identity_declarations(result, summary, config, publication_contract)
+
+    for field, expected in publication_contract.publication_policy.items():
+        actual = summary.get(field)
+        if actual != expected:
+            raise ValueError(
+                f"publication policy mismatch: {field} expected {expected}, got {actual}"
+            )
+        if field in config and config.get(field) not in (None, "") and config[field] != expected:
+            raise ValueError(
+                f"publication policy mismatch in config: {field} expected {expected}, got {config[field]}"
+            )
+
+    effective_summary = _effective_official_summary(
+        result,
+        summary,
+        config,
+    )
+    validation = validate_strategy_summary_against_contract(effective_summary, parameter_contract)
+    if validation.status != "success":
+        raise ValueError(f"official strategy contract mismatch: {validation.reason}")
+
+    expected_identity = build_publication_identity(publication_contract)
+    for container_name, container in (
+        ("result", result),
+        ("summary", summary),
+        ("config", config),
+    ):
+        if "publication_identity" not in container:
+            continue
+        actual_identity = container["publication_identity"]
+        if not isinstance(actual_identity, Mapping):
+            raise ValueError(
+                f"publication identity mismatch in {container_name}: expected mapping"
+            )
+        mismatches = validate_publication_identity(actual_identity, expected_identity)
+        if mismatches:
+            raise ValueError(
+                f"publication identity mismatch in {container_name}: {mismatches}"
+            )
+    return result
+
+
+def attach_publication_identity(
+    result: dict[str, Any],
+    *,
+    profile: str,
+) -> dict[str, Any]:
+    from stock_research.strategy_publication_contracts import (
+        build_publication_identity,
+        get_publication_contract,
+    )
+
+    validate_official_strategy_result(result, profile=profile)
+    strategy_id = _official_result_strategy_id(result)
+    identity = build_publication_identity(
+        get_publication_contract(strategy_id, profile=profile)
+    )
+    next_result = dict(result)
+    next_result["publication_identity"] = deepcopy(identity)
+    summary = dict(result.get("summary") or {})
+    summary["publication_identity"] = deepcopy(identity)
+    next_result["summary"] = summary
+    return next_result
+
+
+def _official_result_strategy_id(result: Mapping[str, Any]) -> str:
+    declarations: list[tuple[str, Any]] = [("result", result.get("strategy_id"))]
+    for location in ("summary", "config"):
+        container = result.get(location)
+        if isinstance(container, Mapping) and "strategy_id" in container:
+            declarations.append((location, container.get("strategy_id")))
+    values = [(location, str(value)) for location, value in declarations if value not in (None, "")]
+    if not values:
+        raise ValueError("official strategy result missing strategy_id")
+    strategy_id = values[0][1]
+    for location, value in values[1:]:
+        if value != strategy_id:
+            raise ValueError(
+                f"official strategy_id mismatch in {location}: expected {strategy_id}, got {value}"
+            )
+    return strategy_id
+
+
+def _validate_declared_official_config(
+    actual: Mapping[str, Any],
+    contract: Any,
+    *,
+    location: str,
+) -> None:
+    for field, expected in contract.normalized_run_config.items():
+        keys = (field, "frequency") if field == "rebalance_frequency" else (field,)
+        for key in keys:
+            if key not in actual or actual.get(key) in (None, ""):
+                continue
+            if actual[key] != expected:
+                raise ValueError(
+                    f"official config mismatch in {location}: {key} expected {expected}, got {actual[key]}"
+                )
+
+
+def _require_official_config_evidence(
+    summary: Mapping[str, Any],
+    config: Mapping[str, Any],
+    contract: Any,
+) -> None:
+    missing: list[str] = []
+    for field in contract.normalized_run_config:
+        keys = (field, "frequency") if field == "rebalance_frequency" else (field,)
+        if not any(
+            container.get(key) not in (None, "")
+            for container in (summary, config)
+            for key in keys
+        ):
+            missing.append(field)
+    if missing:
+        raise ValueError(f"official config evidence missing: {', '.join(missing)}")
+
+
+def _validate_contract_identity_declarations(
+    result: Mapping[str, Any],
+    summary: Mapping[str, Any],
+    config: Mapping[str, Any],
+    contract: Any,
+) -> None:
+    checks = (
+        ("result", result, "contract_id", contract.contract_id),
+        ("summary", summary, "contract_id", contract.contract_id),
+        ("config", config, "contract_id", contract.contract_id),
+        ("config", config, "contract_profile", contract.profile),
+        ("config", config, "contract_variant", contract.variant),
+        ("summary", summary, "engine_version", contract.engine_version),
+        ("config", config, "engine_version", contract.engine_version),
+        ("summary", summary, "variant", contract.variant),
+        ("summary", summary, "variant_name", contract.variant),
+        ("config", config, "variant", contract.variant),
+    )
+    for location, container, field, expected in checks:
+        if field not in container or container.get(field) in (None, ""):
+            continue
+        actual = container[field]
+        if actual != expected:
+            raise ValueError(
+                f"official contract mismatch in {location}: {field} expected {expected}, got {actual}"
+            )
+
+
+def _effective_official_summary(
+    result: Mapping[str, Any],
+    summary: Mapping[str, Any],
+    config: Mapping[str, Any],
+) -> dict[str, Any]:
+    effective = dict(summary)
+    fields = {
+        "engine_version": (
+            config.get("engine_version"),
+            config.get("engine"),
+            result.get("source_kind"),
+        ),
+        "variant": (config.get("variant"), config.get("variant_name")),
+        "top_n": (config.get("top_n"),),
+        "transaction_cost_bps": (config.get("transaction_cost_bps"),),
+        "adjust_type": (config.get("adjust_type"),),
+        "frequency": (
+            config.get("frequency"),
+            config.get("rebalance_frequency"),
+        ),
+        "risk_profile": (config.get("risk_profile"),),
+        "benchmark_variant": (config.get("benchmark_variant"),),
+        "universe": (config.get("universe"),),
+        "protection_name": (config.get("protection_name"),),
+        "phase18c_strategy": (config.get("phase18c_strategy"),),
+    }
+    for field, candidates in fields.items():
+        if effective.get(field) not in (None, ""):
+            continue
+        value = next((candidate for candidate in candidates if candidate not in (None, "")), None)
+        if value is not None:
+            effective[field] = value
+    return effective
 
 
 def list_backtest_strategies() -> list[dict[str, Any]]:
@@ -273,9 +501,25 @@ def _eod_summary(module: dict[str, Any]) -> dict[str, Any]:
 
 def _metrics_from_eod_summary(summary: dict[str, Any]) -> dict[str, Any]:
     metrics: dict[str, Any] = {}
+    publication_identity = summary.get("publication_identity")
+    publication_policy: Mapping[str, Any] = {}
+    if isinstance(publication_identity, Mapping):
+        for key in (
+            "contract_id",
+            "identity_schema_version",
+            "config_fingerprint",
+            "publication_policy",
+        ):
+            if key in publication_identity:
+                metrics[key] = deepcopy(publication_identity[key])
+        if isinstance(publication_identity.get("publication_policy"), Mapping):
+            publication_policy = publication_identity["publication_policy"]
+    if summary.get("artifact_version") is not None:
+        metrics["artifact_version"] = deepcopy(summary["artifact_version"])
     for key in ("strategy_version", "selection_policy", "market_regime_policy"):
-        if summary.get(key):
-            metrics[key] = str(summary[key])
+        value = summary.get(key) or publication_policy.get(key)
+        if value:
+            metrics[key] = str(value)
     if summary.get("cash_slot_count") is not None:
         metrics["cash_slot_count"] = int(summary["cash_slot_count"])
     total_return = summary.get("total_return")
@@ -653,6 +897,11 @@ def run_replay_backtest(payload: dict[str, Any]) -> dict[str, Any]:
     if not callable(replay_runner):
         raise ValueError(f"strategy does not support replay: {strategy_id}")
     result = to_json_safe(replay_runner(params, run_config))
+    if strategy_id in BACKTEST_LAB_STRATEGY_IDS:
+        result = attach_publication_identity(
+            _with_contract_config(result, run_config),
+            profile="balanced",
+        )
     return _with_execution_metadata(
         result,
         mode="replay",
@@ -676,7 +925,10 @@ def run_fresh_backtest(payload: dict[str, Any]) -> dict[str, Any]:
             }
         )
         return _with_execution_metadata(
-            _with_contract_config(to_json_safe(result), run_config),
+            attach_publication_identity(
+                _with_contract_config(to_json_safe(result), run_config),
+                profile="balanced",
+            ),
             mode="fresh",
             source=str(result.get("source_kind") or "lhb_shortline_v1"),
             started_at=started_at,
@@ -691,7 +943,10 @@ def run_fresh_backtest(payload: dict[str, Any]) -> dict[str, Any]:
             }
         )
         return _with_execution_metadata(
-            _with_contract_config(to_json_safe(result), run_config),
+            attach_publication_identity(
+                _with_contract_config(to_json_safe(result), run_config),
+                profile="balanced",
+            ),
             mode="fresh",
             source=str(result.get("source_kind") or "mid_trend_v1"),
             started_at=started_at,
@@ -712,7 +967,10 @@ def run_fresh_backtest(payload: dict[str, Any]) -> dict[str, Any]:
             result = _run_tech_bottleneck_eod_backtest_for_lab(tech_payload)
             source = "tech_bottleneck_eod"
         return _with_execution_metadata(
-            _with_contract_config(to_json_safe(result), run_config),
+            attach_publication_identity(
+                _with_contract_config(to_json_safe(result), run_config),
+                profile="balanced",
+            ),
             mode="fresh",
             source=source,
             started_at=started_at,

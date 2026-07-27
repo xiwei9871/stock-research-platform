@@ -10,6 +10,10 @@ import pytest
 from stock_research import strategy_daily_eod as eod
 from stock_research import strategy_daily_eod_store as store
 from stock_research import strategy_eod_publish as mature_publish
+from stock_research.strategy_publication_contracts import (
+    build_publication_identity,
+    get_publication_contract,
+)
 
 REAL_COMMIT_STRATEGY_PUBLICATION = eod.commit_strategy_publication
 
@@ -59,7 +63,12 @@ def _write_complete_mature_release(
         frame = pd.DataFrame(rows)
         review_path = release / f"{module}_review.csv"
         frame.to_csv(review_path, index=False)
-        metadata = {"review_path": str(review_path)}
+        metadata = {
+            "review_path": str(review_path),
+            "publication_identity": build_publication_identity(
+                get_publication_contract(strategy_id)
+            ),
+        }
         if strategy_id == "mid_trend":
             for kind in ("equity", "positions", "trades"):
                 path = release / f"{module}_{kind}.csv"
@@ -150,6 +159,37 @@ def test_official_runner_uses_mature_publisher_once_and_publishes_5x3(
                 assert str(value).startswith(str(tmp_path / "2026-07-24"))
 
 
+def test_official_runner_rejects_tampered_identity_before_transaction(tmp_path, monkeypatch):
+    transactions = []
+    monkeypatch.setattr(eod, "apply_strategy_daily_eod_status_schema", lambda **_kwargs: None)
+    monkeypatch.setattr(eod, "upsert_strategy_daily_eod_status", lambda *_args, **_kwargs: None)
+
+    def tampered_publisher(*, manifest_upsert, **kwargs):
+        captured = []
+        summary = _write_complete_mature_release(
+            manifest_upsert=captured.append,
+            **kwargs,
+        )
+        target = next(entry for entry in captured if entry["module"] == "strategy_mid_trend")
+        target["metadata"]["publication_identity"]["variant"] = "legacy"
+        for entry in captured:
+            manifest_upsert(entry)
+        return summary
+
+    result = eod.run_strategy_daily_eod(
+        trade_date="2026-07-24",
+        output_root=tmp_path,
+        dependency_checker=lambda **_kwargs: {"status": "success"},
+        publisher=tampered_publisher,
+        publication_transaction=lambda **kwargs: transactions.append(kwargs),
+        service="test",
+    )
+
+    assert result["status"] == "failed"
+    assert "publication identity mismatch" in result["error_summary"]
+    assert transactions == []
+
+
 def test_official_runner_integrates_real_mature_publisher_manifest_shape(
     tmp_path: Path, monkeypatch
 ):
@@ -189,7 +229,12 @@ def test_official_runner_integrates_real_mature_publisher_manifest_shape(
         )
         review_path = output_dir / f"{module}_review.csv"
         rows.to_csv(review_path, index=False)
-        metadata = {"review_path": str(review_path)}
+        metadata = {
+            "review_path": str(review_path),
+            "publication_identity": build_publication_identity(
+                get_publication_contract(strategy_id)
+            ),
+        }
         if strategy_id == "mid_trend":
             metadata["summary"] = {
                 "data_coverage": {"research_overlay_path": str(provenance_path)}
@@ -221,6 +266,7 @@ def test_official_runner_integrates_real_mature_publisher_manifest_shape(
     )
 
     def write_tech(*, end_date, output_dir, manifest_upsert, **_kwargs):
+        contract = get_publication_contract("tech_bottleneck")
         rows = pd.DataFrame(
             [
                 {
@@ -246,7 +292,23 @@ def test_official_runner_integrates_real_mature_publisher_manifest_shape(
                 status="success",
                 latest_trade_date=end_date,
                 artifact_path=review_path,
-                metadata={"review_path": str(review_path)},
+                    metadata={
+                        "review_path": str(review_path),
+                        "publication_identity": build_publication_identity(
+                            contract
+                        ),
+                        "config": dict(contract.normalized_run_config),
+                        "summary": {
+                            "engine_version": contract.engine_version,
+                            "top_n": 5,
+                            "transaction_cost_bps": 10.0,
+                            "max_position_weight": 0.2,
+                            "adjust_type": "hfq",
+                            "frequency": "biweekly",
+                            "universe": "strict_153_st_only_financial_state",
+                            "protection_name": "rank_exit_top10_1d",
+                        },
+                    },
             )
         )
         return {"review_path": str(review_path)}
@@ -290,6 +352,19 @@ def test_official_runner_integrates_real_mature_publisher_manifest_shape(
     assert not summary["error_summary"], summary["error_summary"]
     assert summary["status"] == "success", summary
     assert summary["review_rows"] == 15
+    strategy_entries = {
+        entry["module"]: entry
+        for entry in persisted
+        if entry.get("module", "").startswith("strategy_")
+    }
+    for module, strategy_id in {
+        "strategy_lhb_shortline": "lhb_shortline",
+        "strategy_mid_trend": "mid_trend",
+        "strategy_tech_bottleneck": "tech_bottleneck",
+    }.items():
+        assert strategy_entries[module]["metadata"]["publication_identity"] == (
+            build_publication_identity(get_publication_contract(strategy_id))
+        )
     generated = next(entry for entry in persisted if entry["module"] == "generated_reports")
     assert generated["artifact_path"] == str(report_path)
     assert generated["metadata"]["reports_dir"] == str(report_path.parent)

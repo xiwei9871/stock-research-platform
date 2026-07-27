@@ -8,7 +8,7 @@ import shutil
 import sys
 import uuid
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Mapping
 
 import pandas as pd
 
@@ -28,6 +28,11 @@ from stock_research.strategy_daily_eod_store import (
     upsert_strategy_daily_eod_status_with_connection,
 )
 from stock_research.strategy_eod_publish import publish_strategy_eod
+from stock_research.strategy_publication_contracts import (
+    build_publication_identity,
+    get_publication_contract,
+    validate_publication_identity,
+)
 from stock_research.tech_bottleneck_evidence_workflow import (
     build_tech_bottleneck_evidence_workflow,
 )
@@ -127,6 +132,7 @@ def run_strategy_daily_eod(
             generated = publisher_root / "research" / "strategy_daily_eod" / trade_date
             if not generated.is_dir():
                 raise RuntimeError(f"mature publisher did not create staged release: {generated}")
+            _validate_official_publication_identities(manifest_entries)
             manifest_entries = [
                 _relocate_manifest_entry(
                     entry,
@@ -327,6 +333,34 @@ def commit_strategy_publication(
         for entry in manifest_entries:
             upsert_data_run_manifest_with_connection(entry, conn=conn)
         upsert_strategy_daily_eod_status_with_connection(status_payload, conn=conn)
+
+
+def _validate_official_publication_identities(entries: list[dict[str, Any]]) -> None:
+    modules = {
+        "strategy_lhb_shortline": "lhb_shortline",
+        "strategy_mid_trend": "mid_trend",
+        "strategy_tech_bottleneck": "tech_bottleneck",
+    }
+    by_module = {
+        str(entry.get("module") or ""): entry
+        for entry in entries
+        if str(entry.get("module") or "") in modules
+        and str(entry.get("status") or "") == "success"
+    }
+    for module, strategy_id in modules.items():
+        entry = by_module.get(module)
+        if entry is None:
+            raise RuntimeError(
+                f"missing required success manifest: {module}; publication identity unavailable"
+            )
+        metadata = entry.get("metadata")
+        actual = metadata.get("publication_identity") if isinstance(metadata, dict) else None
+        if not isinstance(actual, Mapping):
+            raise RuntimeError(f"publication identity missing: {module}")
+        expected = build_publication_identity(get_publication_contract(strategy_id))
+        mismatches = validate_publication_identity(actual, expected)
+        if mismatches:
+            raise RuntimeError(f"publication identity mismatch: {module}: {mismatches}")
 
 
 def _failed_commit_summary(

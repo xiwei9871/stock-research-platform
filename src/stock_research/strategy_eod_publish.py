@@ -5,13 +5,13 @@ import json
 import sys
 from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Mapping
 
 import pandas as pd
 
 from stock_research.asset_identity import normalize_cn_equity_asset_id
 from stock_research.config import SETTINGS
-from stock_research.dashboard.backtests import run_fresh_backtest
+from stock_research.dashboard.backtests import attach_publication_identity, run_fresh_backtest
 from stock_research.dashboard.platform import load_platform_summary
 from stock_research.dashboard.reports import DEFAULT_REPORTS_DIR
 from stock_research.data_run_manifest import build_manifest_entry, upsert_data_run_manifest
@@ -22,6 +22,11 @@ from stock_research.news_features import NEWS_FEATURE_COLUMNS, build_news_featur
 from stock_research.review_evidence_snapshots import run_eod_review_evidence_snapshots
 from stock_research.strategy_contracts import OFFICIAL_MAX_POSITION_WEIGHT, OFFICIAL_TRANSACTION_COST_BPS
 from stock_research.strategy_score_audit import build_strategy_score_audit, summarize_strategy_score_audit
+from stock_research.strategy_publication_contracts import (
+    build_publication_identity,
+    get_publication_contract,
+    validate_publication_identity,
+)
 from stock_research.tech_bottleneck_eod import run_tech_bottleneck_eod
 from stock_research.tech_bottleneck_v1 import TECH_BOTTLENECK_V1_CANDIDATES_PATH
 from stock_research.topn_news_enrichment import build_topn_news_enrichment
@@ -230,6 +235,7 @@ def publish_strategy_eod(
             base_candidates_path=tech_base_candidates_path,
             manifest_upsert=lambda entry: tech_entries.append(entry),
         )
+        _attach_tech_publication_identity(tech_entries)
     except Exception as exc:
         entries.extend(tech_entries)
         entries.append(
@@ -725,6 +731,7 @@ def _write_strategy_artifacts(
     output_dir: Path,
     started_at: datetime,
 ) -> tuple[dict[str, Any], pd.DataFrame]:
+    publication_identity = _validated_publication_identity(result, strategy_id=strategy_id)
     module = STRATEGY_EOD_MODULES[strategy_id]
     prefix = module
     equity_path = output_dir / f"{prefix}_equity.csv"
@@ -747,10 +754,12 @@ def _write_strategy_artifacts(
     review.to_csv(review_path, index=False)
 
     summary = dict(result.get("summary") or {})
+    summary["publication_identity"] = dict(publication_identity)
     summary.setdefault("engine_version", result.get("source_kind") or result.get("result_source") or "")
     summary.setdefault("requested_end_date", trade_date)
     summary.setdefault("actual_end_date", trade_date)
     metadata = {
+        "publication_identity": dict(publication_identity),
         "summary": summary,
         "config": dict(result.get("config") or {}),
         "equity_path": str(equity_path),
@@ -787,6 +796,46 @@ def _write_strategy_artifacts(
         metadata=metadata,
     )
     return entry, review
+
+
+def _validated_publication_identity(
+    result: dict[str, Any], *, strategy_id: str
+) -> dict[str, Any]:
+    actual = result.get("publication_identity")
+    if not isinstance(actual, Mapping):
+        raise ValueError(f"publication identity missing for {strategy_id}")
+    expected = build_publication_identity(get_publication_contract(strategy_id))
+    mismatches = validate_publication_identity(actual, expected)
+    if mismatches:
+        raise ValueError(f"publication identity mismatch for {strategy_id}: {mismatches}")
+    return expected
+
+
+def _attach_tech_publication_identity(entries: list[dict[str, Any]]) -> None:
+    strategy_entry = next(
+        (
+            entry
+            for entry in entries
+            if str(entry.get("module") or "") == "strategy_tech_bottleneck"
+        ),
+        None,
+    )
+    if strategy_entry is None:
+        raise ValueError("strategy_tech_bottleneck manifest entry missing")
+    metadata = strategy_entry.get("metadata")
+    if not isinstance(metadata, dict):
+        raise ValueError("strategy_tech_bottleneck metadata missing")
+    attached = attach_publication_identity(
+        {
+            "strategy_id": "tech_bottleneck",
+            "summary": dict(metadata.get("summary") or {}),
+            "config": dict(metadata.get("config") or {}),
+        },
+        profile="balanced",
+    )
+    identity = attached["publication_identity"]
+    metadata["publication_identity"] = identity
+    metadata["summary"] = attached["summary"]
 
 
 def _review_rows_from_result(

@@ -3,6 +3,10 @@ from datetime import datetime, timezone
 import stock_research.strategy_eod_publish as strategy_eod_publish
 from stock_research.strategy_eod_publish import _review_rows_from_result
 import pytest
+from stock_research.strategy_publication_contracts import (
+    build_publication_identity,
+    get_publication_contract,
+)
 
 
 def _lhb_result_for_review_test():
@@ -34,6 +38,79 @@ def _lhb_result_for_review_test():
         "positions": [],
         "candidates": candidates,
     }
+
+
+def _official_mid_result(identity: dict | None = None) -> dict:
+    contract = get_publication_contract("mid_trend")
+    return {
+        "strategy_id": "mid_trend",
+        "strategy_name": "Mid Trend Combo",
+        "publication_identity": identity,
+        "config": dict(contract.normalized_run_config),
+        "summary": {
+            "engine_version": contract.engine_version,
+            "benchmark_variant": contract.variant,
+            "top_n": 5,
+            "transaction_cost_bps": 10.0,
+            "adjust_type": "hfq",
+            "frequency": "weekly",
+        },
+        "equity_curve": [],
+        "positions": [],
+        "trades": [],
+    }
+
+
+def test_write_strategy_artifacts_persists_validated_identity_at_metadata_top_level(tmp_path):
+    identity = build_publication_identity(get_publication_contract("mid_trend"))
+    entry, _review = strategy_eod_publish._write_strategy_artifacts(
+        run_id="run-1",
+        trade_date="2026-07-24",
+        strategy_id="mid_trend",
+        result=_official_mid_result(identity),
+        output_dir=tmp_path,
+        started_at=datetime.now(timezone.utc),
+    )
+    assert entry["metadata"]["publication_identity"] == identity
+    assert entry["metadata"]["summary"]["publication_identity"] == identity
+
+
+@pytest.mark.parametrize("identity", [None, {"strategy_id": "mid_trend"}])
+def test_write_strategy_artifacts_rejects_missing_or_tampered_identity(tmp_path, identity):
+    with pytest.raises(ValueError, match="publication identity"):
+        strategy_eod_publish._write_strategy_artifacts(
+            run_id="run-1",
+            trade_date="2026-07-24",
+            strategy_id="mid_trend",
+            result=_official_mid_result(identity),
+            output_dir=tmp_path,
+            started_at=datetime.now(timezone.utc),
+        )
+
+
+def test_attach_tech_identity_validates_manifest_execution_config():
+    contract = get_publication_contract("tech_bottleneck")
+    entry = {
+        "module": "strategy_tech_bottleneck",
+        "metadata": {
+            "summary": {
+                "engine_version": contract.engine_version,
+                "top_n": 5,
+                "transaction_cost_bps": 10.0,
+                "adjust_type": "hfq",
+                "frequency": "biweekly",
+                "universe": "strict_153_st_only_financial_state",
+                "protection_name": "rank_exit_top10_1d",
+            },
+            "config": dict(contract.normalized_run_config),
+        },
+    }
+    strategy_eod_publish._attach_tech_publication_identity([entry])
+    assert entry["metadata"]["publication_identity"] == build_publication_identity(contract)
+
+    entry["metadata"]["config"]["protection_name"] = "legacy"
+    with pytest.raises(ValueError, match="protection_name"):
+        strategy_eod_publish._attach_tech_publication_identity([entry])
 
 
 def test_lhb_review_publishes_original_top5_after_gate_without_refill(monkeypatch):
@@ -432,7 +509,15 @@ def _install_publish_contract_fakes(
             }
         )
         frame = review_mutator(strategy_id, frame)
-        return {"module": strategy_eod_publish.STRATEGY_EOD_MODULES[strategy_id], "status": "success"}, frame
+        return {
+            "module": strategy_eod_publish.STRATEGY_EOD_MODULES[strategy_id],
+            "status": "success",
+            "metadata": {
+                "publication_identity": build_publication_identity(
+                    get_publication_contract(strategy_id)
+                )
+            },
+        }, frame
 
     monkeypatch.setattr(strategy_eod_publish, "_write_strategy_artifacts", fake_write_strategy_artifacts)
     monkeypatch.setattr(
@@ -442,6 +527,7 @@ def _install_publish_contract_fakes(
     )
 
     def fake_tech_publish(*, end_date, output_dir, manifest_upsert, **kwargs):
+        contract = get_publication_contract("tech_bottleneck")
         review_path = output_dir / "strategy_tech_bottleneck_review.csv"
         tech_review = strategy_eod_publish.pd.DataFrame(
             {
@@ -459,7 +545,25 @@ def _install_publish_contract_fakes(
                 ignore_index=True,
             )
         tech_review.to_csv(review_path, index=False)
-        manifest_upsert({"module": "strategy_tech_bottleneck", "status": "success"})
+        manifest_upsert(
+            {
+                "module": "strategy_tech_bottleneck",
+                "status": "success",
+                "metadata": {
+                    "config": dict(contract.normalized_run_config),
+                    "summary": {
+                        "engine_version": contract.engine_version,
+                        "top_n": 5,
+                        "transaction_cost_bps": 10.0,
+                        "max_position_weight": 0.2,
+                        "adjust_type": "hfq",
+                        "frequency": "biweekly",
+                        "universe": "strict_153_st_only_financial_state",
+                        "protection_name": "rank_exit_top10_1d",
+                    },
+                },
+            }
+        )
         return {"review_path": str(review_path)}
 
     monkeypatch.setattr(strategy_eod_publish, "run_tech_bottleneck_eod", fake_tech_publish)
