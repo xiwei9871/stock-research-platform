@@ -290,7 +290,7 @@ def test_release_frontend_build_enables_ci_only_for_the_build_process(tmp_path):
     ssh_lines = [line for line in command_lines if line.startswith("ssh:CI=")]
     rsync_lines = [line for line in command_lines if line.startswith("rsync:CI=")]
 
-    assert install_line.startswith("rtk:CI=caller-value:")
+    assert install_line.startswith("rtk:CI=true:")
     assert build_line.startswith("rtk:CI=true:")
     assert ssh_lines and all(
         line.startswith("ssh:CI=caller-value:") for line in ssh_lines

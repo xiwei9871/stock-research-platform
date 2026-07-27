@@ -289,7 +289,7 @@ printf -v remote_env_file_q '%q' "$remote_env_file"
 printf -v pgservice_file_q '%q' "$pgservice_file"
 
 echo "Building canonical frontend for release ${release_id}"
-rtk pnpm --dir "$ROOT/dashboard" install --frozen-lockfile
+CI=true rtk pnpm --dir "$ROOT/dashboard" install --frozen-lockfile
 STOCK_RESEARCH_RELEASE_ID="$release_id" \
 VITE_RELEASE_ID="$release_id" \
 VITE_API_BASE_IMAGE="$EXPECTED_API_BASE_IMAGE" \
