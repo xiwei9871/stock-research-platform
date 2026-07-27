@@ -54,7 +54,15 @@ def _release_fixture(tmp_path: Path, *, valid_manifest: bool = True) -> tuple[Pa
         source = REPO_ROOT / "deploy" / name
         if source.exists():
             (root / "deploy" / name).write_bytes(source.read_bytes())
-    _write_executable(root / "deploy" / "check_dashboard_release.sh", "#!/bin/bash\nexit 0\n")
+    _write_executable(
+        root / "deploy" / "check_dashboard_release.sh",
+        """
+        #!/bin/bash
+        [[ "${FAKE_RELEASE_ALREADY_LIVE:-0}" == "1" ]] && exit 0
+        [[ -n "${EXPECTED_REMOTE_SOURCE_ROOT:-}" ]] && exit 0
+        exit 1
+        """,
+    )
 
     output_dir = root / "outputs" / "research" / "strategy_daily_eod" / "2026-07-24"
     output_dir.mkdir(parents=True)
@@ -410,6 +418,28 @@ def test_release_sync_executes_with_dynamic_date_python_override_and_compose_pro
     assert "jqz@192.168.3.185" in commands
     assert "/home/jqz/code/stock-research-platform-main" in commands
     assert "BatchMode=yes" in commands
+
+
+def test_release_sync_skips_all_mutations_when_desired_state_is_already_live(tmp_path):
+    _root, env, log_file = _release_fixture(tmp_path)
+    env["EXPECTED_TRADE_DATE"] = "2026-07-24"
+    env["FAKE_RELEASE_ALREADY_LIVE"] = "1"
+
+    result = subprocess.run(
+        [str(REPO_ROOT / "deploy/sync_dashboard_release.sh")],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert "deployment skipped" in result.stdout
+    commands = log_file.read_text(encoding="utf-8") if log_file.exists() else ""
+    assert "rsync:" not in commands
+    assert "ssh:" not in commands
+    assert " build" not in commands
 
 
 def test_release_sync_invalid_strategy_contract_fails_before_remote_or_restart(tmp_path):

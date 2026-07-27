@@ -579,6 +579,7 @@ def finalize_repaired_release(
                 "STOCK_RESEARCH_RELEASE_ROOT": str(root),
                 "STOCK_RESEARCH_PYTHON": sys.executable,
                 "EXPECTED_TRADE_DATE": trade_date,
+                "STOCK_RESEARCH_OPERATION_ID": operation_id,
             }
         )
         completed = subprocess.run([str(sync_script)], cwd=root, env=env, check=False)
@@ -742,19 +743,39 @@ def _git_release_id(root: Path) -> str:
 
 
 def _sync_environment_allowlist() -> dict[str, str]:
-    allowed_exact = {"PATH", "HOME", "USER", "LOGNAME", "TMPDIR", "SHELL"}
-    allowed_prefixes = (
-        "STOCK_RESEARCH_",
-        "REMOTE_",
-        "SSH_",
-        "DASHBOARD_REMOTE_",
-    )
-    denied_fragments = ("PASSWORD", "TOKEN", "SECRET", "AUTH")
+    allowed_exact = {
+        "PATH",
+        "HOME",
+        "USER",
+        "LOGNAME",
+        "TMPDIR",
+        "SHELL",
+        "DASHBOARD_SYNC_ENV",
+        "BASE_URL",
+        "LOCAL_READINESS_URL",
+        "STRATEGY_OUTPUT_ROOT",
+        "DASHBOARD_AUTH",
+        "DASHBOARD_REMOTE_ENV_FILE",
+        "DASHBOARD_PGSERVICE_FILE",
+        "DASHBOARD_API_BIND_PORT",
+        "DASHBOARD_FRONTEND_BIND_PORT",
+        "REMOTE_USER",
+        "REMOTE_HOST",
+        "REMOTE_DIR",
+        "REMOTE_CONTAINER_RELEASE_ROOT",
+        "SSH_OPTS",
+        "EXPECTED_TRADE_DATE",
+        "STOCK_RESEARCH_RELEASE_ROOT",
+        "STOCK_RESEARCH_RELEASE_ID",
+        "STOCK_RESEARCH_PYTHON",
+        "STOCK_RESEARCH_SSH_CONFIG",
+        "STOCK_RESEARCH_COMPOSE_PROJECT",
+        "STOCK_RESEARCH_OPERATION_ID",
+    }
     environment = {
         key: value
         for key, value in os.environ.items()
-        if (key in allowed_exact or key.startswith(allowed_prefixes))
-        and not any(fragment in key.upper() for fragment in denied_fragments)
+        if key in allowed_exact
     }
     return environment
 

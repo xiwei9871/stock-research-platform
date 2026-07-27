@@ -1,10 +1,106 @@
+import errno
 import importlib.util
+import os
 from pathlib import Path
 
 import pandas as pd
 
 from stock_research import strategy_daily_eod as eod
 from stock_research import strategy_daily_eod_store as store
+
+
+def test_atomic_publish_switches_existing_symlink_to_new_version(tmp_path: Path):
+    versions = tmp_path / ".versions" / "2026-07-02"
+    old_version = versions / "old"
+    new_version = versions / "new"
+    old_version.mkdir(parents=True)
+    new_version.mkdir()
+    (old_version / "marker").write_text("old", encoding="utf-8")
+    (new_version / "marker").write_text("new", encoding="utf-8")
+    canonical = tmp_path / "2026-07-02"
+    canonical.symlink_to(os.path.relpath(old_version, canonical.parent), target_is_directory=True)
+
+    eod._atomic_publish_directory(new_version, canonical)
+
+    assert canonical.is_symlink()
+    assert (canonical / "marker").read_text(encoding="utf-8") == "new"
+    assert canonical.resolve() == new_version.resolve()
+
+
+def test_atomic_publish_fails_closed_when_exchange_is_unavailable_for_real_directory(
+    tmp_path: Path,
+    monkeypatch,
+):
+    versions = tmp_path / ".versions" / "2026-07-02"
+    staging = versions / "new"
+    staging.mkdir(parents=True)
+    (staging / "marker").write_text("new", encoding="utf-8")
+    canonical = tmp_path / "2026-07-02"
+    canonical.mkdir()
+    (canonical / "marker").write_text("old", encoding="utf-8")
+    monkeypatch.setattr(
+        eod,
+        "_atomic_exchange_directories",
+        lambda *_args: (_ for _ in ()).throw(OSError(errno.ENOSYS, "unsupported")),
+    )
+
+    try:
+        eod._atomic_publish_directory(staging, canonical)
+    except RuntimeError as exc:
+        assert "existing real directory preserved" in str(exc)
+    else:
+        raise AssertionError("real-directory migration must fail closed")
+
+    assert not canonical.is_symlink()
+    assert (canonical / "marker").read_text(encoding="utf-8") == "old"
+    assert (staging / "marker").read_text(encoding="utf-8") == "new"
+
+
+def test_atomic_publish_rejects_cross_device_exchange_without_fallback(
+    tmp_path: Path,
+    monkeypatch,
+):
+    versions = tmp_path / ".versions" / "2026-07-02"
+    staging = versions / "new"
+    staging.mkdir(parents=True)
+    canonical = tmp_path / "2026-07-02"
+    canonical.mkdir()
+    (canonical / "marker").write_text("old", encoding="utf-8")
+    monkeypatch.setattr(
+        eod,
+        "_atomic_exchange_directories",
+        lambda *_args: (_ for _ in ()).throw(OSError(errno.EXDEV, "cross-device")),
+    )
+
+    try:
+        eod._atomic_publish_directory(staging, canonical)
+    except OSError as exc:
+        assert exc.errno == errno.EXDEV
+    else:
+        raise AssertionError("cross-device exchange must be rejected")
+
+    assert not canonical.is_symlink()
+    assert (canonical / "marker").read_text(encoding="utf-8") == "old"
+
+
+def test_symlink_publication_retains_at_most_three_total_versions(tmp_path: Path):
+    versions = tmp_path / ".versions" / "2026-07-02"
+    versions.mkdir(parents=True)
+    canonical = tmp_path / "2026-07-02"
+    for index in range(5):
+        version = versions / f"version-{index}"
+        version.mkdir()
+        os.utime(version, ns=(index + 1, index + 1))
+    canonical.symlink_to(
+        os.path.relpath(versions / "version-3", canonical.parent),
+        target_is_directory=True,
+    )
+
+    eod._atomic_publish_directory(versions / "version-4", canonical)
+
+    retained = [path for path in versions.iterdir() if path.is_dir()]
+    assert len(retained) <= 3
+    assert canonical.resolve() == (versions / "version-4").resolve()
 
 
 def test_status_payload_and_schema():
@@ -94,6 +190,7 @@ def test_run_strategy_daily_eod_writes_summary_and_status(tmp_path: Path, monkey
     assert official_mid.read_text(encoding="utf-8") == "official mid\n"
     assert official_tech.read_text(encoding="utf-8") == "official tech\n"
     assert result["output_dir"].startswith(str(tmp_path / ".versions" / "2026-06-24"))
+    assert not Path(result["output_dir"]).exists()
     assert result["manifest_modules"] == [
         "strategy_lhb_shortline",
         "strategy_mid_trend",

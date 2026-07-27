@@ -94,7 +94,7 @@ trap cleanup_all EXIT
 
 if ! acquire_repair_publication_lock "$ROOT"; then
   echo "platform_ready_check|locked|trade_date=${TRADE_DATE}"
-  exit 0
+  exit 75
 fi
 
 echo "platform_ready_check|started|stage=eod_auto_repair|trade_date=${TRADE_DATE}|detail_log=${RUN_LOG}"

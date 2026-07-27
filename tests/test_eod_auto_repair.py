@@ -142,6 +142,8 @@ def test_sync_environment_excludes_cache_credentials(monkeypatch):
     monkeypatch.setenv("PATH", "/usr/bin")
     monkeypatch.setenv("REMOTE_HOST", "example")
     monkeypatch.setenv("STOCK_RESEARCH_RELEASE_ID", "release")
+    monkeypatch.setenv("DASHBOARD_AUTH", "public-basic-auth")
+    monkeypatch.setenv("DASHBOARD_API_BIND_PORT", "18765")
     monkeypatch.setenv("DASHBOARD_AUTH_PASSWORD", "password")
     monkeypatch.setenv("DASHBOARD_WRITE_TOKEN", "token")
     monkeypatch.setenv("STOCK_RESEARCH_DASHBOARD_WRITE_TOKEN", "token-2")
@@ -150,6 +152,8 @@ def test_sync_environment_excludes_cache_credentials(monkeypatch):
 
     assert environment["REMOTE_HOST"] == "example"
     assert environment["STOCK_RESEARCH_RELEASE_ID"] == "release"
+    assert environment["DASHBOARD_AUTH"] == "public-basic-auth"
+    assert environment["DASHBOARD_API_BIND_PORT"] == "18765"
     assert "DASHBOARD_AUTH_PASSWORD" not in environment
     assert "DASHBOARD_WRITE_TOKEN" not in environment
     assert "STOCK_RESEARCH_DASHBOARD_WRITE_TOKEN" not in environment

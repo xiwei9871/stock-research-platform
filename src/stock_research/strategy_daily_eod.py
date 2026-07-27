@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ctypes
+import errno
 import json
 import os
 import shutil
@@ -179,17 +180,32 @@ def run_strategy_daily_eod(
         ),
         service=service,
     )
+    if not contract_valid:
+        shutil.rmtree(output_dir, ignore_errors=True)
     return summary
 
 
 def _atomic_publish_directory(staging: Path, canonical: Path) -> None:
     canonical.parent.mkdir(parents=True, exist_ok=True)
+    if canonical.is_symlink():
+        _atomic_symlink_publish(staging, canonical)
+        _prune_version_history(staging.parent, current_target=staging)
+        return
     if not canonical.exists():
         os.replace(staging, canonical)
         _fsync_directory(canonical.parent)
         return
-    _atomic_exchange_directories(staging, canonical)
-    shutil.rmtree(staging)
+    try:
+        _atomic_exchange_directories(staging, canonical)
+    except OSError as exc:
+        if exc.errno not in {errno.ENOSYS, errno.EINVAL, getattr(errno, "ENOTSUP", errno.EINVAL)}:
+            raise
+        _atomic_symlink_publish(staging, canonical)
+        _prune_version_history(staging.parent, current_target=staging)
+        return
+    history = staging.parent / f"history-{uuid.uuid4().hex}"
+    os.replace(staging, history)
+    _prune_version_history(history.parent, current_target=None)
     _fsync_directory(canonical.parent)
 
 
@@ -209,6 +225,53 @@ def _relocate_result_paths(
         else:
             relocated[key] = str(canonical / relative)
     return relocated
+
+
+def _atomic_symlink_publish(staging: Path, canonical: Path) -> None:
+    if canonical.exists() and not canonical.is_symlink():
+        raise RuntimeError(
+            "atomic symlink fallback requires canonical path migration; existing real directory preserved"
+        )
+    try:
+        staging.resolve(strict=True).relative_to(staging.parent.parent.parent.resolve(strict=True))
+    except (FileNotFoundError, ValueError) as exc:
+        raise RuntimeError("staging directory escapes version root") from exc
+    temporary = canonical.with_name(f".{canonical.name}.link-{uuid.uuid4().hex}")
+    relative_target = os.path.relpath(staging, canonical.parent)
+    temporary.symlink_to(relative_target, target_is_directory=True)
+    try:
+        os.replace(temporary, canonical)
+        _fsync_directory(canonical.parent)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def _prune_version_history(
+    versions_root: Path,
+    *,
+    current_target: Path | None,
+    retain: int = 3,
+) -> None:
+    root = versions_root.resolve(strict=True)
+    current = current_target.resolve(strict=True) if current_target is not None else None
+    candidates = []
+    for candidate in versions_root.iterdir():
+        try:
+            resolved = candidate.resolve(strict=True)
+            resolved.relative_to(root)
+        except (FileNotFoundError, ValueError, OSError):
+            continue
+        if current is not None and resolved == current:
+            continue
+        if candidate.is_dir() and not candidate.is_symlink():
+            candidates.append(candidate)
+    candidates.sort(key=lambda path: path.stat().st_mtime_ns, reverse=True)
+    retained_history = max(retain - (1 if current is not None else 0), 0)
+    for stale in candidates[retained_history:]:
+        try:
+            shutil.rmtree(stale)
+        except OSError:
+            continue
 
 
 def _atomic_exchange_directories(left: Path, right: Path) -> None:

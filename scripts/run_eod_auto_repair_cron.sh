@@ -110,7 +110,7 @@ trap cleanup EXIT
 
 if ! acquire_repair_publication_lock "$ROOT"; then
   log_locked
-  exit 0
+  exit 75
 fi
 LOCK_MODE="$REPAIR_PUBLICATION_LOCK_MODE"
 

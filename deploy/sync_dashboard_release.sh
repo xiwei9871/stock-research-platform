@@ -169,6 +169,18 @@ fi
   --output-dir "$strategy_output" \
   --trade-date "$EXPECTED_TRADE_DATE"
 
+if BASE_URL="$BASE_URL" \
+  DASHBOARD_AUTH="$DASHBOARD_AUTH" \
+  EXPECTED_TRADE_DATE="$EXPECTED_TRADE_DATE" \
+  EXPECTED_RELEASE_ID="$release_id" \
+  RELEASE_CHECK_TIMEOUT_SECONDS="${DASHBOARD_DESIRED_STATE_TIMEOUT_SECONDS:-12}" \
+  RELEASE_CHECK_RETRY_SECONDS="${DASHBOARD_DESIRED_STATE_RETRY_SECONDS:-2}" \
+    "$ROOT/deploy/check_dashboard_release.sh" >/dev/null 2>&1; then
+  echo "Dashboard desired state already live for ${EXPECTED_TRADE_DATE} (${release_id}); deployment skipped."
+  exit 0
+fi
+echo "Dashboard desired-state gate not yet satisfied; continuing idempotent deployment."
+
 ssh_opts=()
 if [[ -n "$STOCK_RESEARCH_SSH_CONFIG" ]]; then
   if [[ ! -f "$STOCK_RESEARCH_SSH_CONFIG" ]]; then

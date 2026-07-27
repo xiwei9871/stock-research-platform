@@ -90,6 +90,7 @@ def _make_cron_harness(
             "STOCK_RESEARCH_ROOT": str(root),
             "STOCK_RESEARCH_PYTHON": str(python_stub),
             "EOD_AUTO_REPAIR_DISABLE_FLOCK": "0" if flock_body is not None else "1",
+            "REPAIR_PUBLICATION_DISABLE_FLOCK": "0" if flock_body is not None else "1",
         }
     )
     if extra_env:
@@ -288,7 +289,7 @@ def test_eod_auto_repair_cron_logs_flock_lock_mode_when_already_locked(tmp_path)
 
     result = _run_cron(env, "2026-07-02")
 
-    assert result.returncode == 0
+    assert result.returncode == 75
     log_text = (root / "logs" / "eod_auto_repair" / "2026-07-02.log").read_text()
     assert "eod_auto_repair|locked|lock_mode|flock" in log_text
     assert not (root / "python.log").exists()
@@ -365,7 +366,8 @@ def test_eod_auto_repair_cron_allows_only_one_contender_while_locked(tmp_path):
     ]
     results = [proc.communicate(timeout=10) for proc in procs]
 
-    assert all(proc.returncode == 0 for proc in procs), results
+    assert any(proc.returncode == 0 for proc in procs), results
+    assert all(proc.returncode in {0, 75} for proc in procs), results
     starts_log = root / "starts.log"
     starts = starts_log.read_text().splitlines() if starts_log.exists() else []
     active = 0
@@ -405,7 +407,8 @@ def test_eod_auto_repair_cron_allows_only_one_contender_after_stale_lock(tmp_pat
     ]
     results = [proc.communicate(timeout=10) for proc in procs]
 
-    assert all(proc.returncode == 0 for proc in procs), results
+    assert any(proc.returncode == 0 for proc in procs), results
+    assert all(proc.returncode in {0, 75} for proc in procs), results
     starts_log = root / "starts.log"
     starts = starts_log.read_text().splitlines() if starts_log.exists() else []
     active = 0
@@ -418,7 +421,7 @@ def test_eod_auto_repair_cron_allows_only_one_contender_after_stale_lock(tmp_pat
     assert "eod_auto_repair|locked" in log_text
 
 
-def test_eod_auto_repair_cron_treats_pidless_lock_directory_as_locked(tmp_path):
+def test_eod_auto_repair_cron_recovers_pidless_stale_lock_directory(tmp_path):
     root, env = _make_cron_harness(tmp_path)
     lock_file = root / ".locks" / "eod_repair_publication.lock"
     trade_date = "2026-07-02"
@@ -428,13 +431,11 @@ def test_eod_auto_repair_cron_treats_pidless_lock_directory_as_locked(tmp_path):
     result = _run_cron(env, trade_date)
 
     assert result.returncode == 0
-    assert not (root / "python.log").exists()
-    assert lock_file.is_dir()
-    log_text = (root / "logs" / "eod_auto_repair" / f"{trade_date}.log").read_text()
-    assert "eod_auto_repair|locked|lock_mode|unknown" in log_text
+    assert (root / "python.log").exists()
+    assert not lock_file.exists()
 
 
-def test_eod_auto_repair_cron_treats_empty_old_lock_file_as_locked(tmp_path):
+def test_eod_auto_repair_cron_recovers_empty_stale_lock_file(tmp_path):
     root, env = _make_cron_harness(tmp_path)
     lock_file = root / ".locks" / "eod_repair_publication.lock"
     trade_date = "2026-07-02"
@@ -445,7 +446,40 @@ def test_eod_auto_repair_cron_treats_empty_old_lock_file_as_locked(tmp_path):
     result = _run_cron(env, trade_date)
 
     assert result.returncode == 0
+    assert (root / "python.log").exists()
+    assert not lock_file.exists()
+
+
+def test_eod_auto_repair_cron_rejects_active_lock_owner(tmp_path):
+    root, env = _make_cron_harness(tmp_path)
+    lock_dir = root / ".locks" / "eod_repair_publication.lock"
+    lock_dir.mkdir(parents=True)
+    start = subprocess.run(
+        ["ps", "-o", "lstart=", "-p", str(os.getpid())],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    host = subprocess.run(["hostname"], capture_output=True, text=True, check=True).stdout.strip()
+    (lock_dir / "owner").write_text(f"{os.getpid()}|{host}|{start}\n", encoding="utf-8")
+
+    result = _run_cron(env)
+
+    assert result.returncode == 75
     assert not (root / "python.log").exists()
-    assert lock_file.is_file()
-    log_text = (root / "logs" / "eod_auto_repair" / f"{trade_date}.log").read_text()
-    assert "eod_auto_repair|locked" in log_text
+
+
+def test_eod_auto_repair_cron_recovers_pid_reuse_identity_mismatch(tmp_path):
+    root, env = _make_cron_harness(tmp_path)
+    lock_dir = root / ".locks" / "eod_repair_publication.lock"
+    lock_dir.mkdir(parents=True)
+    host = subprocess.run(["hostname"], capture_output=True, text=True, check=True).stdout.strip()
+    (lock_dir / "owner").write_text(
+        f"{os.getpid()}|{host}|Mon Jan  1 00:00:00 1990\n",
+        encoding="utf-8",
+    )
+
+    result = _run_cron(env)
+
+    assert result.returncode == 0
+    assert (root / "python.log").exists()
