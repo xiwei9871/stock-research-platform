@@ -316,6 +316,7 @@ ssh "${ssh_opts[@]}" -- "$remote" \
 echo "Syncing backend source"
 rsync -az --delete -e "$rsync_rsh" -- "$ROOT/src/" "$remote:$REMOTE_DIR/src/"
 rsync -az -e "$rsync_rsh" -- "$ROOT/pyproject.toml" "$remote:$REMOTE_DIR/"
+rsync -az -e "$rsync_rsh" -- "$ROOT/.dockerignore" "$remote:$REMOTE_DIR/"
 rsync -az -e "$rsync_rsh" -- \
   "$ROOT/deploy/dashboard-api.Dockerfile" \
   "$ROOT/deploy/dashboard-api-requirements.in" \

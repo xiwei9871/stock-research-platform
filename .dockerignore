@@ -1,0 +1,13 @@
+**
+!src/
+!src/**
+!pyproject.toml
+!deploy/
+!deploy/dashboard-api.Dockerfile
+!deploy/dashboard-api-requirements.in
+!deploy/dashboard-api-requirements.lock
+!deploy/dashboard-frontend.Dockerfile
+!deploy/dashboard-nginx.conf
+!dashboard/
+!dashboard/dist/
+!dashboard/dist/**

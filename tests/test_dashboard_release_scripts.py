@@ -236,6 +236,20 @@ def test_release_sync_versions_compose_images_and_injects_provenance():
         assert f"proxy_set_header {header}" in nginx_config
 
 
+def test_release_sync_provides_frontend_dist_in_docker_build_context():
+    script = _read("deploy/sync_dashboard_release.sh")
+
+    assert (REPO_ROOT / ".dockerignore").is_file()
+    dockerignore_rules = {
+        line.strip()
+        for line in _read(".dockerignore").splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    }
+    assert "!dashboard/dist/" in dockerignore_rules
+    assert "!dashboard/dist/**" in dockerignore_rules
+    assert '"$ROOT/.dockerignore"' in script
+
+
 def test_release_builds_use_lockfiles_and_pinned_base_images():
     script = _read("deploy/sync_dashboard_release.sh")
     api_dockerfile = _read("deploy/dashboard-api.Dockerfile")
