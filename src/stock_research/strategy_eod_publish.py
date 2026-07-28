@@ -753,15 +753,18 @@ def _write_strategy_artifacts(
     )
     review.to_csv(review_path, index=False)
 
+    config = dict(result.get("config") or {})
     summary = dict(result.get("summary") or {})
     summary["publication_identity"] = dict(publication_identity)
     summary.setdefault("engine_version", result.get("source_kind") or result.get("result_source") or "")
     summary.setdefault("requested_end_date", trade_date)
     summary.setdefault("actual_end_date", trade_date)
+    if config.get("rebalance_frequency"):
+        summary.setdefault("frequency", config["rebalance_frequency"])
     metadata = {
         "publication_identity": dict(publication_identity),
         "summary": summary,
-        "config": dict(result.get("config") or {}),
+        "config": config,
         "equity_path": str(equity_path),
         "positions_path": str(positions_path),
         "trades_path": str(trades_path),

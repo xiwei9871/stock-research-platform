@@ -75,6 +75,23 @@ def test_write_strategy_artifacts_persists_validated_identity_at_metadata_top_le
     assert entry["metadata"]["summary"]["publication_identity"] == identity
 
 
+def test_write_strategy_artifacts_derives_contract_frequency_from_run_config(tmp_path):
+    identity = build_publication_identity(get_publication_contract("mid_trend"))
+    result = _official_mid_result(identity)
+    result["summary"].pop("frequency")
+
+    entry, _review = strategy_eod_publish._write_strategy_artifacts(
+        run_id="run-1",
+        trade_date="2026-07-24",
+        strategy_id="mid_trend",
+        result=result,
+        output_dir=tmp_path,
+        started_at=datetime.now(timezone.utc),
+    )
+
+    assert entry["metadata"]["summary"]["frequency"] == "weekly"
+
+
 @pytest.mark.parametrize("identity", [None, {"strategy_id": "mid_trend"}])
 def test_write_strategy_artifacts_rejects_missing_or_tampered_identity(tmp_path, identity):
     with pytest.raises(ValueError, match="publication identity"):
