@@ -19,6 +19,14 @@
     <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
     <key>DASHBOARD_SYNC_ENV</key>
     <string>/Users/xiwei/.stock_research_dashboard_sync.env</string>
+    <key>STOCK_RESEARCH_RELEASE_ROOT</key>
+    <string>/Users/xiwei/stock_research_release_20260727</string>
+    <key>STRATEGY_OUTPUT_ROOT</key>
+    <string>/Users/xiwei/stock_research_release_20260727/outputs/research</string>
+    <key>DASHBOARD_REMOTE_ENV_FILE</key>
+    <string>.env</string>
+    <key>BASE_URL</key>
+    <string>https://stock.manqiaotechnology.com</string>
   </dict>
   <key>StartCalendarInterval</key>
   <dict>

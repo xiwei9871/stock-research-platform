@@ -1198,6 +1198,9 @@ def test_launchd_template_uses_selected_release_root_not_worktree():
     assert "/Users/xiwei/stock_research_release_20260727/deploy/sync_dashboard_release.sh" in plist
     assert ".worktrees" not in plist
     assert "/Users/xiwei/stock_research_release_20260727" in plist
+    assert "<key>DASHBOARD_REMOTE_ENV_FILE</key>" in plist
+    assert "<string>.env</string>" in plist
+    assert "<key>STRATEGY_OUTPUT_ROOT</key>" in plist
     assert "EXPECTED_TRADE_DATE" not in plist
     assert "<integer>22</integer>" in plist
     assert "<integer>15</integer>" in plist
