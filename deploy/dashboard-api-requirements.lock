@@ -8,6 +8,12 @@ akshare==1.18.60 \
     --hash=sha256:14e47cd2df694faf6efa6e7b1e4812061dbe76fd5f6ed04964b3119ee94a2c5f \
     --hash=sha256:959cb82dfcdd8c792e3304d4fe467d2fbff3ca31e469cf3ef0749bed01c1b158
     # via -r deploy/dashboard-api-requirements.in
+akracer==0.0.14 \
+    --hash=sha256:629eaccd0e1d18366804b797eb2692ed47bed0028f55b5a5af3cc277d521df04 \
+    --hash=sha256:e084c14bf6d9a02d5da375e3af1cba3d46f103aa1cf3a2010593b3e95bf1c29a
+    # via
+    #   -r deploy/dashboard-api-requirements.in
+    #   akshare
 annotated-doc==0.0.4 \
     --hash=sha256:571ac1dc6991c450b25a9c2d84a3705e2ae7a53467b5d111c24fa8baabbed320 \
     --hash=sha256:fbcda96e87e9c92ad167c2e53839e57503ecfda18804ea28102353485033faa4

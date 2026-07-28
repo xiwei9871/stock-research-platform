@@ -265,6 +265,8 @@ def test_release_builds_use_lockfiles_and_pinned_base_images():
     assert "nginx:1.27.5-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10" in frontend_dockerfile
     assert requirements.count("--hash=sha256:") > 30
     assert "akshare==1.18.60" in requirements_input
+    assert "akracer==0.0.14" in requirements_input
+    assert "akracer==0.0.14" in requirements
     assert "py-mini-racer==0.6.0" in requirements_input
     assert "py-mini-racer==0.6.0" in requirements
     assert "jsonpath==" in requirements
