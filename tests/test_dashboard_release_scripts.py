@@ -1192,12 +1192,12 @@ def test_strategy_release_validator_rejects_duplicate_assets_and_path_traversal(
     assert expected_error in result.stderr
 
 
-def test_launchd_template_uses_canonical_repo_not_worktree():
+def test_launchd_template_uses_selected_release_root_not_worktree():
     plist = _read("deploy/launchd/com.stockresearch.dashboard-daily-sync.plist")
 
-    assert "/Users/xiwei/stock_research/deploy/sync_dashboard_release.sh" in plist
+    assert "/Users/xiwei/stock_research_release_20260727/deploy/sync_dashboard_release.sh" in plist
     assert ".worktrees" not in plist
-    assert "/Users/xiwei/stock_research" in plist
+    assert "/Users/xiwei/stock_research_release_20260727" in plist
     assert "EXPECTED_TRADE_DATE" not in plist
     assert "<integer>22</integer>" in plist
     assert "<integer>15</integer>" in plist
