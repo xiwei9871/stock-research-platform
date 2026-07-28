@@ -271,12 +271,75 @@ def test_readiness_uses_latest_trusted_official_publication_not_display_date(
     )
 
     payload = readiness.build_platform_readiness(
-        runtime_provenance_data={"source_root": str(release_root)}
+        runtime_provenance_data={
+            "release_id": "release-1",
+            "source_root": str(release_root),
+            "frontend_build_id": "release-1",
+        }
     )
 
     assert payload["latest_market_date"] == "2026-07-27"
     assert payload["display_trade_date"] == "2026-07-27"
     assert payload["runtime_provenance"]["strategy_artifact_date"] == "2026-07-24"
+
+
+def test_readiness_blocks_publication_when_strategy_artifact_lags_market(
+    tmp_path, monkeypatch
+):
+    release_root = tmp_path / "release"
+    status = _write_publishable_strategy_summary(release_root, "2026-07-24")
+    manifests = _write_official_manifest_artifacts(release_root, "2026-07-24")
+    monkeypatch.setattr(
+        readiness,
+        "load_latest_successful_strategy_daily_eod_status",
+        lambda: status,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        readiness,
+        "load_strategy_publication_manifest",
+        lambda **_kwargs: manifests,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        readiness,
+        "load_platform_summary",
+        lambda score_version, top_n: {
+            "latest_market_date": "2026-07-27",
+            "topn_preview": [{"asset_id": "A"}],
+        },
+    )
+    monkeypatch.setattr(readiness, "_load_manifest_modules", lambda: [{"module": "daily_bars"}])
+    monkeypatch.setattr(
+        readiness,
+        "_build_manifest_readiness",
+        lambda **_kwargs: {
+            "status": "OK",
+            "policy": {
+                "status": "ready",
+                "ready_for_dashboard": True,
+                "ready_for_publication": True,
+                "blocking_reasons": [],
+                "warnings": [],
+            },
+            "latest_market_date": "2026-07-27",
+            "display_trade_date": "2026-07-27",
+            "warnings": [],
+        },
+    )
+
+    payload = readiness.build_platform_readiness(
+        runtime_provenance_data={
+            "release_id": "release-1",
+            "source_root": str(release_root),
+            "frontend_build_id": "release-1",
+        }
+    )
+
+    assert payload["policy"]["ready_for_dashboard"] is True
+    assert payload["policy"]["ready_for_publication"] is False
+    assert payload["policy"]["status"] == "blocked"
+    assert "strategy_artifact_date=2026-07-24" in payload["policy"]["blocking_reasons"][0]
 
 
 def test_readiness_rejects_official_publication_through_symlink_outside_release(

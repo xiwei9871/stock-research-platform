@@ -126,9 +126,13 @@ def build_platform_readiness(
             topn_preview=topn_preview,
             warnings=warnings,
         )
-        return _with_runtime_provenance(
-            payload,
-            provenance,
+        return _apply_strategy_artifact_freshness_gate(
+            _with_runtime_provenance(
+                payload,
+                provenance,
+                strategy_artifact_date=strategy_artifact_date,
+            ),
+            latest_market_date=latest_market_date,
             strategy_artifact_date=strategy_artifact_date,
         )
 
@@ -171,41 +175,45 @@ def build_platform_readiness(
         )
 
     status = aggregate_readiness_status(checks)
-    return _with_runtime_provenance(
-        {
-            "mode": "eod_local",
-            "status": status,
-            "policy": _policy_from_manifest_status(
-                status=status,
-                missing_data=_missing_from_checks(checks),
-                partial_data=_partial_from_checks(checks),
-                warnings=warnings,
-            ),
-            "as_of": datetime.now(ZoneInfo("Asia/Shanghai")).isoformat(timespec="seconds"),
-            "run_id": "",
-            "latest_trade_date": latest_market_date,
-            "latest_market_date": latest_market_date,
-            "source": "lightweight_probe",
-            "summary_path": "",
-            "tiers": _tiers_from_status(status),
-            "modules": [],
-            "checks": checks,
-            "health_groups": _build_health_groups_from_checks(
-                checks=checks,
-                latest_market_date=latest_market_date,
-            ),
-            "warnings": _dedupe(warnings),
-            "errors": [],
-            "missing_data": _missing_from_checks(checks),
-            "partial_data": _partial_from_checks(checks),
-            "next_actions": _next_actions(
-                status,
-                _missing_from_checks(checks),
-                _partial_from_checks(checks),
-            ),
-            "dashboard_url": "http://127.0.0.1:5174",
-        },
-        provenance,
+    return _apply_strategy_artifact_freshness_gate(
+        _with_runtime_provenance(
+            {
+                "mode": "eod_local",
+                "status": status,
+                "policy": _policy_from_manifest_status(
+                    status=status,
+                    missing_data=_missing_from_checks(checks),
+                    partial_data=_partial_from_checks(checks),
+                    warnings=warnings,
+                ),
+                "as_of": datetime.now(ZoneInfo("Asia/Shanghai")).isoformat(timespec="seconds"),
+                "run_id": "",
+                "latest_trade_date": latest_market_date,
+                "latest_market_date": latest_market_date,
+                "source": "lightweight_probe",
+                "summary_path": "",
+                "tiers": _tiers_from_status(status),
+                "modules": [],
+                "checks": checks,
+                "health_groups": _build_health_groups_from_checks(
+                    checks=checks,
+                    latest_market_date=latest_market_date,
+                ),
+                "warnings": _dedupe(warnings),
+                "errors": [],
+                "missing_data": _missing_from_checks(checks),
+                "partial_data": _partial_from_checks(checks),
+                "next_actions": _next_actions(
+                    status,
+                    _missing_from_checks(checks),
+                    _partial_from_checks(checks),
+                ),
+                "dashboard_url": "http://127.0.0.1:5174",
+            },
+            provenance,
+            strategy_artifact_date=strategy_artifact_date,
+        ),
+        latest_market_date=latest_market_date,
         strategy_artifact_date=strategy_artifact_date,
     )
 
@@ -219,6 +227,41 @@ def _with_runtime_provenance(
     runtime_payload = dict(provenance)
     runtime_payload["strategy_artifact_date"] = strategy_artifact_date
     payload["runtime_provenance"] = runtime_payload
+    return payload
+
+
+def _apply_strategy_artifact_freshness_gate(
+    payload: dict[str, Any],
+    *,
+    latest_market_date: str,
+    strategy_artifact_date: str,
+) -> dict[str, Any]:
+    runtime_payload = payload.get("runtime_provenance") or {}
+    if (
+        not str(runtime_payload.get("source_root") or "").strip()
+        or not str(runtime_payload.get("release_id") or "").strip()
+        or not str(runtime_payload.get("frontend_build_id") or "").strip()
+        or not latest_market_date
+        or latest_market_date == strategy_artifact_date
+    ):
+        return payload
+    reason = (
+        "official strategy artifact is not current: "
+        f"latest_market_date={latest_market_date}, "
+        f"strategy_artifact_date={strategy_artifact_date or 'missing'}"
+    )
+    policy = dict(payload.get("policy") or {})
+    policy.update(
+        {
+            "status": "blocked",
+            "ready_for_dashboard": True,
+            "ready_for_publication": False,
+            "blocking_reasons": _dedupe([*(policy.get("blocking_reasons") or []), reason]),
+            "warnings": _dedupe([*(policy.get("warnings") or []), reason]),
+        }
+    )
+    payload["policy"] = policy
+    payload["warnings"] = _dedupe([*(payload.get("warnings") or []), reason])
     return payload
 
 
