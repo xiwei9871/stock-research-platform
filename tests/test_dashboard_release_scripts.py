@@ -482,8 +482,9 @@ def test_release_sync_executes_with_dynamic_date_python_override_and_compose_pro
     assert "BatchMode=yes" in commands
 
 
-def test_release_sync_prefers_publishable_date_from_matching_local_readiness(tmp_path):
+def test_release_sync_rejects_stale_date_from_matching_local_readiness(tmp_path):
     root, env, log_file = _release_fixture(tmp_path)
+    env["FAKE_PLATFORM_LOADER_FAIL"] = "1"
     fake_bin = Path(env["PATH"].split(":", 1)[0])
     _write_executable(
         fake_bin / "curl",
@@ -504,11 +505,10 @@ def test_release_sync_prefers_publishable_date_from_matching_local_readiness(tmp
         check=False,
     )
 
-    assert result.returncode == 0, result.stderr
-    assert "Resolved EXPECTED_TRADE_DATE=2026-07-24" in result.stdout
-    assert "Resolved EXPECTED_TRADE_DATE=2026-07-27" not in result.stdout
-    commands = log_file.read_text(encoding="utf-8")
-    assert "build_platform_readiness" not in commands
+    assert result.returncode == 2
+    assert "Unable to resolve a valid EXPECTED_TRADE_DATE" in result.stderr
+    commands = log_file.read_text(encoding="utf-8") if log_file.exists() else ""
+    assert "rsync" not in commands
 
 
 def test_release_sync_skips_all_mutations_when_desired_state_is_already_live(tmp_path):
@@ -1168,6 +1168,9 @@ def test_launchd_template_uses_canonical_repo_not_worktree():
     assert ".worktrees" not in plist
     assert "/Users/xiwei/stock_research" in plist
     assert "EXPECTED_TRADE_DATE" not in plist
+    assert "<integer>22</integer>" in plist
+    assert "<integer>15</integer>" in plist
+    assert "<integer>18</integer>" not in plist
 
 
 def test_release_scripts_are_executable():

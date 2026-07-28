@@ -156,11 +156,10 @@ if [[ -z "$EXPECTED_TRADE_DATE" ]]; then
             | .runtime_provenance.strategy_artifact_date as $artifact
             | select($artifact | type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$"))
             | select(
-                ((.display_trade_date // "") == "")
-                or (
-                  (.display_trade_date | type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$"))
-                  and .display_trade_date >= $artifact
-                )
+                (.latest_market_date | type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$"))
+                and (.display_trade_date | type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$"))
+                and .latest_market_date == $artifact
+                and .display_trade_date == $artifact
               )
             | $artifact
           ' \
@@ -174,7 +173,7 @@ if [[ -z "$EXPECTED_TRADE_DATE" ]]; then
       STOCK_RESEARCH_RELEASE_ROOT="$ROOT" \
       STOCK_RESEARCH_RELEASE_ID="$release_id" \
       "$STOCK_RESEARCH_PYTHON" -c \
-      'from datetime import date; from stock_research.dashboard.readiness import build_platform_readiness; payload = build_platform_readiness(); artifact = str(payload.get("runtime_provenance", {}).get("strategy_artifact_date") or ""); display = str(payload.get("display_trade_date") or ""); valid = lambda value: date.fromisoformat(value).isoformat() == value; print(artifact if valid(artifact) and (not display or (valid(display) and display >= artifact)) else "")' \
+      'from datetime import date; from stock_research.dashboard.readiness import build_platform_readiness; payload = build_platform_readiness(); artifact = str(payload.get("runtime_provenance", {}).get("strategy_artifact_date") or ""); market = str(payload.get("latest_market_date") or ""); display = str(payload.get("display_trade_date") or ""); valid = lambda value: date.fromisoformat(value).isoformat() == value; print(artifact if all(valid(value) for value in (artifact, market, display)) and artifact == market == display else "")' \
       2>/dev/null || true
   )"
 fi

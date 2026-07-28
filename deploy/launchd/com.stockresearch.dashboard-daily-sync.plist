@@ -23,9 +23,9 @@
   <key>StartCalendarInterval</key>
   <dict>
     <key>Hour</key>
-    <integer>18</integer>
+    <integer>22</integer>
     <key>Minute</key>
-    <integer>30</integer>
+    <integer>15</integer>
   </dict>
   <key>StandardOutPath</key>
   <string>/Users/xiwei/stock_research/logs/dashboard_release_sync.launchd.out.log</string>
