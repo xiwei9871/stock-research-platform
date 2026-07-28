@@ -197,6 +197,16 @@ fi
   --output-dir "$strategy_output" \
   --trade-date "$EXPECTED_TRADE_DATE"
 
+manifest_snapshot="$(mktemp)"
+cleanup_manifest_snapshot() {
+  rm -f "$manifest_snapshot"
+}
+trap cleanup_manifest_snapshot EXIT
+PYTHONPATH="$ROOT/src" "$STOCK_RESEARCH_PYTHON" -m stock_research.strategy_manifest_transfer export \
+  --trade-date "$EXPECTED_TRADE_DATE" \
+  --source-root "$ROOT" \
+  --target-root "$REMOTE_CONTAINER_RELEASE_ROOT" > "$manifest_snapshot"
+
 check_release_state() {
   BASE_URL="$BASE_URL" \
   DASHBOARD_AUTH="$DASHBOARD_AUTH" \
@@ -276,6 +286,8 @@ printf -v release_id_q '%q' "$release_id"
 printf -v compose_project_q '%q' "$STOCK_RESEARCH_COMPOSE_PROJECT"
 printf -v api_bind_port_q '%q' "$DASHBOARD_API_BIND_PORT"
 printf -v frontend_bind_port_q '%q' "$DASHBOARD_FRONTEND_BIND_PORT"
+api_container="${STOCK_RESEARCH_COMPOSE_PROJECT}-api-1"
+printf -v api_container_q '%q' "$api_container"
 case "$DASHBOARD_REMOTE_ENV_FILE" in
   /*) remote_env_file="$DASHBOARD_REMOTE_ENV_FILE" ;;
   *) remote_env_file="$REMOTE_DIR/$DASHBOARD_REMOTE_ENV_FILE" ;;
@@ -337,6 +349,11 @@ rsync -az --delete -e "$rsync_rsh" -- "$strategy_output/" \
 echo "Restarting Docker Compose API and dashboard services"
 ssh "${ssh_opts[@]}" -- "$remote" \
   "cd ${remote_dir_q} && test -f ${remote_env_file_q} && test -f ${pgservice_file_q} && STOCK_RESEARCH_RELEASE_ROOT=${container_root_q} STOCK_RESEARCH_RELEASE_ID=${release_id_q} STOCK_RESEARCH_FRONTEND_BUILD_ID=${release_id_q} DASHBOARD_REMOTE_ENV_FILE=${remote_env_file_q} DASHBOARD_PGSERVICE_FILE=${pgservice_file_q} DASHBOARD_API_BIND_PORT=${api_bind_port_q} DASHBOARD_FRONTEND_BIND_PORT=${frontend_bind_port_q} docker compose --project-name ${compose_project_q} -f deploy/dashboard-release.compose.yml build api dashboard && STOCK_RESEARCH_RELEASE_ROOT=${container_root_q} STOCK_RESEARCH_RELEASE_ID=${release_id_q} STOCK_RESEARCH_FRONTEND_BUILD_ID=${release_id_q} DASHBOARD_REMOTE_ENV_FILE=${remote_env_file_q} DASHBOARD_PGSERVICE_FILE=${pgservice_file_q} DASHBOARD_API_BIND_PORT=${api_bind_port_q} DASHBOARD_FRONTEND_BIND_PORT=${frontend_bind_port_q} docker compose --project-name ${compose_project_q} -f deploy/dashboard-release.compose.yml up -d --force-recreate --remove-orphans api dashboard"
+
+echo "Synchronizing trusted strategy manifest into remote database"
+ssh "${ssh_opts[@]}" -- "$remote" \
+  "docker exec -i ${api_container_q} python -m stock_research.strategy_manifest_transfer import && docker restart ${api_container_q} >/dev/null" \
+  < "$manifest_snapshot"
 
 echo "Running bounded external release gate"
 check_release_state \

@@ -128,6 +128,10 @@ def _release_fixture(tmp_path: Path, *, valid_manifest: bool = True) -> tuple[Pa
           echo "${FAKE_STRATEGY_DATE-2026-07-24}"
           exit 0
         fi
+        if [[ "$*" == *"stock_research.strategy_manifest_transfer export"* ]]; then
+          echo '{"schema_version":"strategy_manifest_transfer_v1","trade_date":"2026-07-24","run_id":"strategy-eod-2026-07-24-local","rows":[]}'
+          exit 0
+        fi
         exec /usr/bin/python3 "$@"
         """,
     )
@@ -262,6 +266,7 @@ def test_release_builds_use_lockfiles_and_pinned_base_images():
     assert "dashboard-api-requirements.lock" in api_dockerfile
     assert "--require-hashes" in api_dockerfile
     assert "--no-deps ." in api_dockerfile
+    assert api_dockerfile.index("--requirement deploy/dashboard-api-requirements.lock") < api_dockerfile.index("COPY src ./src")
     assert "nginx:1.27.5-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10" in frontend_dockerfile
     assert requirements.count("--hash=sha256:") > 30
     assert "akshare==1.18.60" in requirements_input
@@ -273,6 +278,14 @@ def test_release_builds_use_lockfiles_and_pinned_base_images():
     assert "pydantic-core==" in requirements
     for package in ("fastapi==", "uvicorn==", "pandas==", "psycopg[binary]=="):
         assert package in requirements
+
+
+def test_release_sync_transfers_trusted_strategy_manifest_before_external_gate():
+    script = _read("deploy/sync_dashboard_release.sh")
+
+    assert "stock_research.strategy_manifest_transfer export" in script
+    assert "stock_research.strategy_manifest_transfer import" in script
+    assert script.index("strategy_manifest_transfer import") < script.index("Running bounded external release gate")
 
 
 def test_release_frontend_pnpm_commands_enable_ci_without_leaking_to_remote_commands(
