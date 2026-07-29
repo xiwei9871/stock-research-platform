@@ -126,6 +126,18 @@ def _require_columns(frame: pd.DataFrame, required: tuple[str, ...], name: str) 
         raise ValueError(f"{name} missing required columns: {', '.join(missing)}")
 
 
+def _decimal_outside_range(value: object, lower: str, upper: str) -> bool:
+    return isinstance(value, Decimal) and (
+        not value.is_finite() or value < Decimal(lower) or value > Decimal(upper)
+    )
+
+
+def _meets_decimal_aware_threshold(value: object, number: float, threshold: str) -> bool:
+    if isinstance(value, Decimal):
+        return value >= Decimal(threshold)
+    return number >= float(threshold)
+
+
 def _parse_date_series(frame: pd.DataFrame, field: str, name: str) -> pd.Series:
     try:
         parsed = pd.to_datetime(frame[field], errors="raise", format="mixed").dt.normalize()
@@ -157,6 +169,11 @@ def _strict_numeric_frame(
             ):
                 asset_id = str(frame.at[index, "asset_id"])
                 raise ValueError(f"{name} asset {asset_id} field {field} must be finite numeric")
+            if isinstance(value, Decimal) and not value.is_finite():
+                asset_id = str(frame.at[index, "asset_id"])
+                raise ValueError(
+                    f"{name} asset {asset_id} field {field} must be finite numeric"
+                )
             try:
                 number = float(value)
             except (OverflowError, ValueError):
@@ -768,8 +785,12 @@ def compute_oversold_score(frame: pd.DataFrame) -> pd.Series:
     _require_columns(frame, SCORE_COLUMNS, "frame")
     raw_valuation = frame["valuation_depression_percentile"]
     valuation = pd.to_numeric(raw_valuation, errors="coerce").astype(float)
-    invalid_valuation = raw_valuation.notna() & (
-        valuation.isna() | ~np.isfinite(valuation) | ~valuation.between(0.0, 1.0)
+    invalid_decimal = raw_valuation.map(
+        lambda value: _decimal_outside_range(value, "0", "1")
+    )
+    invalid_valuation = invalid_decimal | (
+        raw_valuation.notna()
+        & (valuation.isna() | ~np.isfinite(valuation) | ~valuation.between(0.0, 1.0))
     )
     if invalid_valuation.any():
         raise ValueError(
@@ -800,6 +821,8 @@ def _optional_number(row: Mapping[str, object] | pd.Series, field: str) -> tuple
         return math.nan, False
     if isinstance(value, (bool, np.bool_)) or not isinstance(value, STRICT_NUMERIC_TYPES):
         raise ValueError(f"{field} must be a finite int or float")
+    if isinstance(value, Decimal) and not value.is_finite():
+        raise ValueError(f"{field} must be a finite int or float")
     try:
         number = float(value)
     except (OverflowError, ValueError):
@@ -823,12 +846,24 @@ def compute_already_priced_features(
     rebound, rebound_coverage = _optional_number(price_row, "rebound_from_low_60d")
     relative_return, relative_return_coverage = _optional_number(price_row, "relative_return_60d")
     valuation, valuation_coverage = _optional_number(valuation_row, "valuation_percentile")
-    if valuation_coverage and not 0.0 <= valuation <= 1.0:
+    rebound_raw = price_row.get("rebound_from_low_60d", math.nan)
+    relative_return_raw = price_row.get("relative_return_60d", math.nan)
+    valuation_raw = valuation_row.get("valuation_percentile", math.nan)
+    if valuation_coverage and (
+        _decimal_outside_range(valuation_raw, "0", "1")
+        or not 0.0 <= valuation <= 1.0
+    ):
         raise ValueError("valuation_percentile must be between 0 and 1")
 
-    rebound_trigger = rebound_coverage and rebound >= 0.25
-    relative_return_trigger = relative_return_coverage and relative_return >= 0.10
-    valuation_trigger = valuation_coverage and valuation >= 0.50
+    rebound_trigger = rebound_coverage and _meets_decimal_aware_threshold(
+        rebound_raw, rebound, "0.25"
+    )
+    relative_return_trigger = relative_return_coverage and _meets_decimal_aware_threshold(
+        relative_return_raw, relative_return, "0.10"
+    )
+    valuation_trigger = valuation_coverage and _meets_decimal_aware_threshold(
+        valuation_raw, valuation, "0.50"
+    )
     evidence_revision_trigger = evidence_revision_state == "broadly_priced"
     penalty = min(
         20.0,

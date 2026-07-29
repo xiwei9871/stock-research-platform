@@ -126,6 +126,21 @@ def test_score_candidates_rejects_fraction_despite_real_number_protocol():
         )
 
 
+@pytest.mark.parametrize(
+    ("field", "invalid"),
+    [
+        ("expected_improvement_score", Decimal("100.000000000000000000000000000001")),
+        ("catalyst_verifiability_score", Decimal("100.000000000000000000000000000001")),
+        ("valuation_depression_percentile", Decimal("1.000000000000000000000000000001")),
+        ("oversold_score", Decimal("100.000000000000000000000000000001")),
+        ("priced_in_penalty", Decimal("20.000000000000000000000000000001")),
+    ],
+)
+def test_score_candidates_rejects_high_precision_decimal_just_above_range(field, invalid):
+    with pytest.raises(ValueError, match=field):
+        score_candidates(pd.DataFrame([scoring_rows(**{field: invalid})]), CONFIG)
+
+
 def test_operating_gap_requires_two_available_components():
     result = score_candidates(
         pd.DataFrame(

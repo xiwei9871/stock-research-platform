@@ -371,6 +371,23 @@ def test_oversold_score_rejects_non_numeric_non_finite_or_out_of_range_valuation
         compute_oversold_score(frame)
 
 
+def test_oversold_score_rejects_high_precision_decimal_just_above_one():
+    frame = pd.DataFrame(
+        {
+            "max_drawdown_12m": [-0.3],
+            "return_6m": [-0.2],
+            "relative_return_6m": [-0.1],
+            "valuation_depression_percentile": [
+                Decimal("1.000000000000000000000000000001")
+            ],
+            "distance_ma120": [-0.1],
+            "distance_ma250": [-0.1],
+        }
+    )
+    with pytest.raises(ValueError, match="valuation_depression_percentile"):
+        compute_oversold_score(frame)
+
+
 @pytest.mark.parametrize("missing", [None, np.nan, pd.NA])
 def test_oversold_score_allows_missing_valuation_to_propagate(missing):
     frame = pd.DataFrame(
@@ -484,6 +501,32 @@ def test_already_priced_optional_numbers_accept_finite_database_decimal():
     assert result["priced_in_rebound_trigger"]
     assert result["priced_in_relative_return_trigger"]
     assert result["priced_in_valuation_trigger"]
+
+
+def test_already_priced_decimal_thresholds_do_not_round_up():
+    result = compute_already_priced_features(
+        {
+            "rebound_from_low_60d": Decimal("0.249999999999999999999999999999"),
+            "relative_return_60d": Decimal("0.099999999999999999999999999999"),
+        },
+        {"valuation_percentile": Decimal("0.499999999999999999999999999999")},
+    )
+    assert not result["priced_in_rebound_trigger"]
+    assert not result["priced_in_relative_return_trigger"]
+    assert not result["priced_in_valuation_trigger"]
+    assert result["priced_in_penalty"] == 0.0
+
+
+def test_already_priced_rejects_high_precision_decimal_just_above_one():
+    with pytest.raises(ValueError, match="valuation_percentile"):
+        compute_already_priced_features(
+            {},
+            {
+                "valuation_percentile": Decimal(
+                    "1.000000000000000000000000000001"
+                )
+            },
+        )
 
 
 @pytest.mark.parametrize("invalid", [Decimal("NaN"), Decimal("Infinity")])

@@ -138,6 +138,14 @@ def _is_missing(value: object) -> bool:
     return isinstance(value, (float, np.floating)) and math.isnan(float(value))
 
 
+def _decimal_outside_range(value: object, lower: float, upper: float) -> bool:
+    return isinstance(value, Decimal) and (
+        not value.is_finite()
+        or value < Decimal(str(lower))
+        or value > Decimal(str(upper))
+    )
+
+
 def _assign_numeric(frame: pd.DataFrame, fields: tuple[str, ...], name: str) -> None:
     for field in fields:
         parsed: list[float] = []
@@ -148,6 +156,10 @@ def _assign_numeric(frame: pd.DataFrame, fields: tuple[str, ...], name: str) -> 
             if isinstance(value, (bool, np.bool_)) or not isinstance(
                 value, STRICT_NUMERIC_TYPES
             ):
+                raise ValueError(
+                    f"{name} asset {frame.at[index, 'asset_id']} field {field} must be finite numeric"
+                )
+            if isinstance(value, Decimal) and not value.is_finite():
                 raise ValueError(
                     f"{name} asset {frame.at[index, 'asset_id']} field {field} must be finite numeric"
                 )
@@ -166,9 +178,19 @@ def _assign_numeric(frame: pd.DataFrame, fields: tuple[str, ...], name: str) -> 
 
 
 def _validate_range(
-    frame: pd.DataFrame, field: str, lower: float, upper: float, name: str
+    frame: pd.DataFrame,
+    raw_frame: pd.DataFrame,
+    field: str,
+    lower: float,
+    upper: float,
+    name: str,
 ) -> None:
-    invalid = frame[field].notna() & ~frame[field].between(lower, upper, inclusive="both")
+    invalid_decimal = raw_frame[field].map(
+        lambda value: _decimal_outside_range(value, lower, upper)
+    )
+    invalid = invalid_decimal | (
+        frame[field].notna() & ~frame[field].between(lower, upper, inclusive="both")
+    )
     if invalid.any():
         asset_id = frame.loc[invalid, "asset_id"].sort_values(kind="stable").iloc[0]
         raise ValueError(
@@ -225,12 +247,20 @@ def score_candidates(rows: pd.DataFrame, config: ConsumerOversoldConfig) -> pd.D
         raise ValueError(
             f"rows asset {asset_id} field consumer_subindustry must be non-empty"
         )
+    raw_numeric = frame.loc[:, SCORE_NUMERIC_COLUMNS].copy()
     _assign_numeric(frame, SCORE_NUMERIC_COLUMNS, "rows")
-    _validate_range(frame, "expected_improvement_score", 0.0, 100.0, "rows")
-    _validate_range(frame, "catalyst_verifiability_score", 0.0, 100.0, "rows")
-    _validate_range(frame, "valuation_depression_percentile", 0.0, 1.0, "rows")
-    _validate_range(frame, "oversold_score", 0.0, 100.0, "rows")
-    _validate_range(frame, "priced_in_penalty", 0.0, config.max_priced_in_penalty, "rows")
+    _validate_range(frame, raw_numeric, "expected_improvement_score", 0.0, 100.0, "rows")
+    _validate_range(frame, raw_numeric, "catalyst_verifiability_score", 0.0, 100.0, "rows")
+    _validate_range(frame, raw_numeric, "valuation_depression_percentile", 0.0, 1.0, "rows")
+    _validate_range(frame, raw_numeric, "oversold_score", 0.0, 100.0, "rows")
+    _validate_range(
+        frame,
+        raw_numeric,
+        "priced_in_penalty",
+        0.0,
+        config.max_priced_in_penalty,
+        "rows",
+    )
 
     if frame.empty:
         for column in SCORE_ADDED_COLUMNS:
