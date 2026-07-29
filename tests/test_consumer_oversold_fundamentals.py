@@ -313,6 +313,30 @@ def test_retail_prefers_ev_even_with_stable_positive_earnings():
     assert result["valuation_method"] == "ev_ebitda"
 
 
+def test_tourism_falls_through_from_ev_without_reference_to_ps():
+    result = compute_valuation_features(
+        pd.DataFrame([current_row("A", consumer_subindustry="tourism_hospitality")]),
+        pd.DataFrame(
+            monthly_history(
+                "A", "ps_ttm", [1.0] * 24, subindustry="tourism_hospitality"
+            )
+        ),
+        pd.DataFrame([fundamental_row("A")]),
+    ).iloc[0]
+    assert result["valuation_method"] == "ps_normalized_margin"
+    assert result["reference_multiple"] == 1.0
+
+
+def test_general_consumer_falls_through_from_pe_without_reference_to_ev():
+    result = compute_valuation_features(
+        pd.DataFrame([current_row("A")]),
+        pd.DataFrame(monthly_history("A", "ev_ebitda", [8.0] * 24)),
+        pd.DataFrame([fundamental_row("A")]),
+    ).iloc[0]
+    assert result["valuation_method"] == "ev_ebitda"
+    assert result["reference_multiple"] == 8.0
+
+
 def test_auto_oem_prefers_ps_even_with_stable_positive_earnings():
     result = compute_valuation_features(
         pd.DataFrame([current_row("A", consumer_subindustry="auto_oem")]),

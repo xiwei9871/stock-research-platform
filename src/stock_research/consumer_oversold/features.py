@@ -188,7 +188,9 @@ def _winsorized_median(values: pd.Series) -> float:
     return float(valid.clip(lower=lower, upper=upper).median())
 
 
-def _select_valuation_method(row: object, stable_positive_earnings: bool) -> tuple[str, str]:
+def _select_valuation_method(
+    row: object, stable_positive_earnings: bool
+) -> list[tuple[str, str]]:
     pe_available = stable_positive_earnings and row.np_parent_ttm > 0.0 and row.pe_ttm > 0.0
     ev_available = row.ebitda_ttm > 0.0 and row.ev_ebitda > 0.0
     ps_available = row.revenue_ttm > 0.0 and row.ps_ttm > 0.0
@@ -203,11 +205,12 @@ def _select_valuation_method(row: object, stable_positive_earnings: bool) -> tup
         order = ("ps", "pe", "ev")
     else:
         order = ("pe", "ev", "ps")
-    for candidate in order:
-        available, method, multiple_field = methods[candidate]
-        if available:
-            return method, multiple_field
-    return "unavailable", ""
+    return [
+        (method, multiple_field)
+        for candidate in order
+        for available, method, multiple_field in [methods[candidate]]
+        if available
+    ]
 
 
 def compute_fundamental_features(
@@ -383,55 +386,62 @@ def compute_valuation_features(
                 f"asset {asset_id} latest_announcement_date must be on or before as_of_date"
             )
 
-        method, multiple_field = _select_valuation_method(
+        candidates = _select_valuation_method(
             current_row, bool(fundamental_row["stable_positive_earnings"])
         )
 
         eligible = history.loc[history["valuation_date"].le(current_row.as_of_date)]
-        if method == "unavailable":
-            current_multiple = math.nan
-            company_values = pd.Series(dtype=float)
-            reference_multiple = math.nan
-            valuation_percentile = math.nan
-        else:
-            current_multiple = float(getattr(current_row, multiple_field))
+        method = "unavailable"
+        multiple_field = ""
+        current_multiple = math.nan
+        company_values = pd.Series(dtype=float)
+        reference_multiple = math.nan
+        valuation_percentile = math.nan
+        industry_peer_assets = 0
+        for candidate_index, (candidate_method, candidate_field) in enumerate(candidates):
+            candidate_multiple = float(getattr(current_row, candidate_field))
             method_history = eligible.loc[
-                eligible[multiple_field].gt(0.0) & np.isfinite(eligible[multiple_field])
+                eligible[candidate_field].gt(0.0) & np.isfinite(eligible[candidate_field])
             ].copy()
             method_history["valuation_month"] = method_history["valuation_date"].dt.to_period("M")
             method_history = method_history.sort_values(
                 ["asset_id", "valuation_date"], kind="stable"
             ).drop_duplicates(["asset_id", "valuation_month"], keep="last")
-            company_values = method_history.loc[
-                method_history["asset_id"].eq(asset_id), multiple_field
+            candidate_company_values = method_history.loc[
+                method_history["asset_id"].eq(asset_id), candidate_field
             ].astype(float)
             peer_history = method_history.loc[
                 method_history["consumer_subindustry"].eq(current_row.consumer_subindustry)
                 & method_history["asset_id"].ne(asset_id)
             ]
-            industry_peer_assets = int(peer_history["asset_id"].nunique())
-            industry_median = _winsorized_median(peer_history[multiple_field])
-            if len(company_values) >= 24:
-                company_median = _winsorized_median(company_values)
-                reference_multiple = (
+            candidate_peer_assets = int(peer_history["asset_id"].nunique())
+            industry_median = _winsorized_median(peer_history[candidate_field])
+            if len(candidate_company_values) >= 24:
+                company_median = _winsorized_median(candidate_company_values)
+                candidate_reference = (
                     min(company_median, industry_median)
                     if math.isfinite(industry_median)
                     else company_median
                 )
-            elif industry_peer_assets >= 3:
-                reference_multiple = industry_median
+            elif candidate_peer_assets >= 3:
+                candidate_reference = industry_median
             else:
-                reference_multiple = math.nan
-            valuation_percentile = (
-                float(company_values.le(current_multiple).mean())
-                if len(company_values) >= 24
+                candidate_reference = math.nan
+            candidate_percentile = (
+                float(candidate_company_values.le(candidate_multiple).mean())
+                if len(candidate_company_values) >= 24
                 else math.nan
             )
-            if not math.isfinite(reference_multiple):
-                method = "unavailable"
-
-        if multiple_field == "":
-            industry_peer_assets = 0
+            if candidate_index == 0 or math.isfinite(candidate_reference):
+                current_multiple = candidate_multiple
+                company_values = candidate_company_values
+                reference_multiple = candidate_reference
+                valuation_percentile = candidate_percentile
+                industry_peer_assets = candidate_peer_assets
+            if math.isfinite(candidate_reference):
+                method = candidate_method
+                multiple_field = candidate_field
+                break
 
         result: dict[str, object] = {
             "asset_id": asset_id,
