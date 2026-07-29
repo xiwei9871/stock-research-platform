@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -157,6 +158,51 @@ def test_delisting_risk_excludes_stock_without_st_flag():
     assert row["exclude_reasons"] == "st_or_delisting_risk"
 
 
+@pytest.mark.parametrize("false_value", [False, np.bool_(False), 0, "false", " FALSE ", "0"])
+def test_status_false_values_do_not_trigger_market_gate(false_value):
+    statuses = _statuses().astype(
+        {"is_st": "object", "is_delisting_risk": "object", "is_suspended": "object"}
+    )
+    target = statuses["asset_id"].eq("a1")
+    statuses.loc[target, ["is_st", "is_delisting_risk", "is_suspended"]] = false_value
+
+    row = _build(statuses=statuses).set_index("stock_code").loc["601888"]
+
+    assert row["included"]
+    assert row["exclude_reasons"] == ""
+
+
+@pytest.mark.parametrize("true_value", [True, np.bool_(True), 1, "true", " TRUE ", "1"])
+def test_status_true_values_trigger_market_gate(true_value):
+    statuses = _statuses().astype({"is_suspended": "object"})
+    target = statuses["asset_id"].eq("a1")
+    statuses.loc[target, "is_suspended"] = true_value
+
+    row = _build(statuses=statuses).set_index("stock_code").loc["601888"]
+
+    assert not row["included"]
+    assert row["exclude_reasons"] == "suspended"
+
+
+@pytest.mark.parametrize("invalid_value", [pd.NA, np.nan, 2, "yes"])
+def test_invalid_status_value_raises_with_field_and_asset(invalid_value):
+    statuses = _statuses().astype({"is_st": "object"})
+    statuses.loc[statuses["asset_id"].eq("a1"), "is_st"] = invalid_value
+
+    with pytest.raises(ValueError, match=r"is_st.*a1"):
+        _build(statuses=statuses)
+
+
+def test_invalid_status_value_is_not_hidden_by_a_later_duplicate_row():
+    statuses = _statuses()
+    invalid = statuses.loc[statuses["asset_id"].eq("a1")].astype({"is_st": "object"})
+    invalid.loc[:, "is_st"] = "unknown"
+    statuses = pd.concat([invalid, statuses], ignore_index=True)
+
+    with pytest.raises(ValueError, match=r"is_st.*a1"):
+        _build(statuses=statuses)
+
+
 @pytest.mark.parametrize("list_date", ["", None, "not-a-date"])
 def test_unknown_or_invalid_list_date_is_conservatively_excluded(list_date):
     assets = _assets()
@@ -183,6 +229,24 @@ def test_override_include_and_exclude_take_precedence_when_active():
     assert by_code.loc["000887", "include_reasons"] == "manual_include"
     assert not by_code.loc["601888", "included"]
     assert by_code.loc["601888", "exclude_reasons"] == "manual_exclude"
+
+
+def test_numeric_stock_codes_from_csv_are_zero_padded_for_override_matching(tmp_path):
+    override_path = tmp_path / "overrides.csv"
+    override_path.write_text(
+        "stock_code,action,consumer_subindustry,reason,effective_from,effective_to\n"
+        "000887,include,direct_consumer_brand,csv_override,2026-01-01,2027-01-01\n",
+        encoding="utf-8",
+    )
+    overrides = pd.read_csv(override_path)
+    assets = _assets().astype({"stock_code": "object"})
+    assets.loc[assets["stock_code"].eq("000887"), "stock_code"] = 887
+
+    by_code = _build(assets=assets, asset_overrides=overrides).set_index("stock_code")
+
+    assert "000887" in by_code.index
+    assert by_code.loc["000887", "included"]
+    assert by_code.loc["000887", "include_reasons"] == "csv_override"
 
 
 def test_override_effective_interval_is_left_closed_and_right_open():
@@ -267,6 +331,72 @@ def test_invalid_override_actions_and_missing_include_subindustry_are_rejected()
 
     with pytest.raises(ValueError, match="consumer_subindustry"):
         _build(asset_overrides=_overrides([("601888", "include", "", "bad", "", "")]))
+
+
+@pytest.mark.parametrize("action", ["include", "exclude"])
+def test_override_reason_must_be_non_empty(action):
+    subindustry = "retail_duty_free" if action == "include" else ""
+
+    with pytest.raises(ValueError, match="reason"):
+        _build(asset_overrides=_overrides([("601888", action, subindustry, "  ", "", "")]))
+
+
+@pytest.mark.parametrize(
+    ("column", "value", "match"),
+    [
+        ("priority", np.nan, "priority"),
+        ("priority", "high", "priority"),
+        ("action", "incldue", "action"),
+        ("industry_name_pattern", "", "industry_name_pattern"),
+        ("industry_name_pattern", "[", "industry_name_pattern"),
+        ("reason", " ", "reason"),
+        ("industry_system", "", "industry_system"),
+    ],
+)
+def test_invalid_industry_rule_configuration_is_rejected(column, value, match):
+    rules = _industry_rules().astype({column: "object"})
+    rules.loc[rules.index[0], column] = value
+
+    with pytest.raises(ValueError, match=match):
+        _build(industry_rules=rules)
+
+
+def test_industry_include_rule_requires_subindustry():
+    rules = _industry_rules()
+    rules.loc[rules["action"].eq("include"), "consumer_subindustry"] = ""
+
+    with pytest.raises(ValueError, match="consumer_subindustry"):
+        _build(industry_rules=rules)
+
+
+@pytest.mark.parametrize(
+    ("effective_from", "effective_to", "match"),
+    [
+        ("2026-02-30", "", "effective_from"),
+        ("", "2026/12/31", "effective_to"),
+        ("2026-07-29", "2026-07-29", "effective_to"),
+        ("2026-07-30", "2026-07-29", "effective_to"),
+    ],
+)
+def test_invalid_override_date_configuration_is_rejected(effective_from, effective_to, match):
+    overrides = _overrides(
+        [("601888", "exclude", "", "date_check", effective_from, effective_to)]
+    )
+
+    with pytest.raises(ValueError, match=match):
+        _build(asset_overrides=overrides)
+
+
+def test_multiple_active_overrides_for_normalized_stock_code_are_rejected():
+    overrides = _overrides(
+        [
+            ("000887", "include", "direct_consumer_brand", "first", "2026-01-01", ""),
+            (887, "exclude", "", "second", "", "2027-01-01"),
+        ]
+    )
+
+    with pytest.raises(ValueError, match=r"multiple active overrides.*000887"):
+        _build(asset_overrides=overrides)
 
 
 def test_empty_assets_return_stable_columns():
