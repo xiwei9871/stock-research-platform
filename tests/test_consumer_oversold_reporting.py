@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import numpy as np
@@ -98,7 +99,7 @@ def _payload() -> dict[str, object]:
 
 def _artifact_contents(output_dir: Path) -> dict[str, bytes]:
     return {
-        key: (output_dir / filename).read_bytes()
+        key: (output_dir / "current" / filename).read_bytes()
         for key, filename in OUTPUT_FILENAMES.items()
     }
 
@@ -112,7 +113,10 @@ def test_writes_six_stable_artifacts_and_chinese_report(tmp_path):
         path = Path(result["paths"][key])
         assert path.is_absolute()
         assert path.name == filename
+        assert path.parent == tmp_path / "nested" / "current"
         assert path.exists()
+    assert (tmp_path / "nested" / "current").is_symlink()
+    assert os.readlink(tmp_path / "nested" / "current").startswith(".releases/")
 
     expected_csv = pd.read_csv(result["paths"]["expected"])
     expected_order = [column for column in REPORT_COLUMNS if column in _payload()["expected"].columns]
@@ -143,6 +147,7 @@ def test_writes_six_stable_artifacts_and_chinese_report(tmp_path):
         assert text in report
     assert "白色家电\\|厨电 细分" in report
     assert "公告\\|原文 链接" in report
+    assert "CSV 为审阅安全转义" in report
 
 
 def test_empty_frames_still_write_asset_id_headers_and_missing_markdown_values(tmp_path):
@@ -177,6 +182,7 @@ def test_rejects_missing_or_wrongly_typed_payload(mutation, error, message, tmp_
 def test_rejects_bucket_overlap_limit_duplicate_empty_and_risk_contracts(tmp_path):
     payload = _payload()
     payload["early"] = payload["expected"].copy(deep=True)
+    payload["early"]["repair_bucket"] = "early_validation"
     with pytest.raises(ValueError, match="mutually exclusive"):
         write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
 
@@ -216,6 +222,47 @@ def test_nonempty_selected_frame_requires_every_risk_gate(missing_gate, tmp_path
         write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
 
 
+@pytest.mark.parametrize(
+    ("frame_name", "bucket"),
+    [("expected", "expected_repair"), ("early", "early_validation")],
+)
+def test_nonempty_selected_frame_requires_its_exact_repair_bucket(frame_name, bucket, tmp_path):
+    payload = _payload()
+    payload[frame_name] = payload[frame_name].drop(columns=["repair_bucket"])
+    with pytest.raises(ValueError, match=f"{frame_name} missing required columns.*repair_bucket"):
+        write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+
+    payload = _payload()
+    payload[frame_name].loc[0, "repair_bucket"] = "wrong_bucket"
+    with pytest.raises(ValueError, match=f"{frame_name} field repair_bucket.*{bucket}"):
+        write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+
+
+@pytest.mark.parametrize("bad_count", [True, 1.5, -1, "1"])
+def test_funnel_counts_are_nonnegative_strict_integers(bad_count, tmp_path):
+    payload = _payload()
+    payload["coverage"]["funnel"]["raw_assets"] = bad_count
+    with pytest.raises((TypeError, ValueError), match="raw_assets.*integer|raw_assets.*non-negative"):
+        write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+
+
+def test_funnel_order_and_selected_counts_are_consistent(tmp_path):
+    payload = _payload()
+    payload["coverage"]["funnel"]["consumer_universe"] = 101
+    with pytest.raises(ValueError, match="funnel.*non-increasing"):
+        write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+
+    payload = _payload()
+    payload["coverage"]["funnel"]["selected_expected"] = 0
+    with pytest.raises(ValueError, match="selected_expected.*expected"):
+        write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+
+    payload = _payload()
+    payload["coverage"]["funnel"]["valuation_eligible"] = 1
+    with pytest.raises(ValueError, match="selected_expected.*selected_early"):
+        write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+
+
 @pytest.mark.parametrize("bad", [np.nan, np.inf, -np.inf])
 def test_rejects_non_json_safe_coverage_values(bad, tmp_path):
     payload = _payload()
@@ -244,22 +291,126 @@ def test_does_not_modify_input_frames(tmp_path):
         pd.testing.assert_frame_equal(payload[key], original)
 
 
-def test_existing_artifacts_are_replaced_and_unrelated_file_is_preserved(tmp_path):
-    tmp_path.mkdir(exist_ok=True)
-    for filename in OUTPUT_FILENAMES.values():
-        (tmp_path / filename).write_text("old", encoding="utf-8")
+def test_csv_text_formula_cells_are_escaped_without_changing_numeric_cells(tmp_path):
+    payload = _payload()
+    payload["expected"].loc[0, "stock_name"] = " =2+2"
+    payload["expected"].loc[0, "a_extra"] = "@cmd"
+
+    result = write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+
+    written = pd.read_csv(result["paths"]["expected"])
+    assert written.loc[0, "stock_name"] == "' =2+2"
+    assert written.loc[0, "a_extra"] == "'@cmd"
+    assert written.loc[0, "return_6m"] == pytest.approx(-0.31)
+    assert payload["expected"].loc[0, "stock_name"] == " =2+2"
+
+
+@pytest.mark.parametrize(
+    "bad_url",
+    [
+        "https://example.com/a b",
+        "https://example.com/<bad>",
+        "https://example.com/a\tb",
+        "https://example.com:bad/path",
+        "https://user@example.com/path",
+        "https://localhost/path",
+        "https://127.0.0.1/path",
+        "ftp://example.com/path",
+    ],
+)
+def test_report_rejects_urls_that_can_break_markdown_link_boundaries(bad_url, tmp_path):
+    payload = _payload()
+    payload["expected"].loc[0, "source_url"] = bad_url
+    result = write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+
+    report = Path(result["paths"]["report"]).read_text(encoding="utf-8")
+    assert bad_url not in report
+
+
+def test_report_escapes_markdown_link_label_metacharacters(tmp_path):
+    payload = _payload()
+    payload["expected"].loc[0, "source_title"] = "反\\斜[左]|右]\n下一行"
+    result = write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+
+    source_line = next(
+        line for line in Path(result["paths"]["report"]).read_text(encoding="utf-8").splitlines()
+        if line.startswith("- 来源：") and "example.com" in line
+    )
+    assert "反\\\\斜\\[左\\]\\|右\\] 下一行" in source_line
+
+
+def test_existing_release_switches_once_and_unrelated_file_is_preserved(tmp_path, monkeypatch):
+    first = write_consumer_oversold_artifacts(_payload(), output_dir=tmp_path)
+    old_target = os.readlink(tmp_path / "current")
+    old_contents = _artifact_contents(tmp_path)
     unrelated = tmp_path / "keep.txt"
     unrelated.write_text("untouched", encoding="utf-8")
+    payload = _payload()
+    payload["expected"].loc[0, "stock_name"] = "新甲公司"
+    real_replace = os.replace
+    observations = []
+
+    def observe_switch(source, destination):
+        if Path(destination) == tmp_path / "current":
+            observations.append((os.readlink(tmp_path / "current"), _artifact_contents(tmp_path)))
+            result = real_replace(source, destination)
+            observations.append((os.readlink(tmp_path / "current"), _artifact_contents(tmp_path)))
+            return result
+        return real_replace(source, destination)
+
+    monkeypatch.setattr("stock_research.consumer_oversold.reporting.os.replace", observe_switch)
+    second = write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+
+    assert len(observations) == 2
+    assert observations[0] == (old_target, old_contents)
+    assert observations[1][0] != old_target
+    assert observations[1][1] == _artifact_contents(tmp_path)
+    assert (tmp_path / old_target).is_dir()
+    assert Path(first["paths"]["expected"]).read_text(encoding="utf-8") != ""
+    assert "新甲公司" in Path(second["paths"]["expected"]).read_text(encoding="utf-8")
+    assert unrelated.read_text(encoding="utf-8") == "untouched"
+
+
+def test_publish_uses_exclusive_flock(tmp_path, monkeypatch):
+    import stock_research.consumer_oversold.reporting as reporting
+
+    calls = []
+    monkeypatch.setattr(reporting.fcntl, "flock", lambda fd, operation: calls.append(operation))
+    write_consumer_oversold_artifacts(_payload(), output_dir=tmp_path)
+    assert calls == [reporting.fcntl.LOCK_EX, reporting.fcntl.LOCK_UN]
+
+
+def test_stale_tool_entries_are_cleaned_without_touching_unrelated_files(tmp_path):
+    releases = tmp_path / ".releases"
+    releases.mkdir(parents=True)
+    stale_dir = releases / ".consumer-oversold-staging-stale"
+    stale_dir.mkdir()
+    stale_link = tmp_path / ".consumer-oversold-current-tmp-stale"
+    stale_link.symlink_to(".releases/missing")
+    unrelated = tmp_path / ".someone-else-staging"
+    unrelated.mkdir()
 
     write_consumer_oversold_artifacts(_payload(), output_dir=tmp_path)
 
-    assert unrelated.read_text(encoding="utf-8") == "untouched"
-    assert all(content != b"old" for content in _artifact_contents(tmp_path).values())
+    assert not stale_dir.exists()
+    assert not stale_link.exists() and not stale_link.is_symlink()
+    assert unrelated.is_dir()
 
 
-def test_write_failure_leaves_no_partial_new_artifact_set(tmp_path, monkeypatch):
+def test_first_publish_creates_complete_current_release(tmp_path):
+    assert not (tmp_path / "current").exists()
+    result = write_consumer_oversold_artifacts(_payload(), output_dir=tmp_path)
+    assert (tmp_path / "current").is_symlink()
+    assert set(path.name for path in (tmp_path / "current").iterdir()) == set(OUTPUT_FILENAMES.values())
+    assert all(Path(path).exists() for path in result["paths"].values())
+
+
+def test_write_failure_keeps_current_on_complete_old_release(tmp_path, monkeypatch):
     import stock_research.consumer_oversold.reporting as reporting
 
+    write_consumer_oversold_artifacts(_payload(), output_dir=tmp_path)
+    old_target = os.readlink(tmp_path / "current")
+    old_contents = _artifact_contents(tmp_path)
     real_write_csv = reporting._write_csv
     calls = 0
 
@@ -274,30 +425,35 @@ def test_write_failure_leaves_no_partial_new_artifact_set(tmp_path, monkeypatch)
     with pytest.raises(OSError, match="simulated"):
         write_consumer_oversold_artifacts(_payload(), output_dir=tmp_path)
 
-    assert not any((tmp_path / name).exists() for name in OUTPUT_FILENAMES.values())
+    assert os.readlink(tmp_path / "current") == old_target
+    assert _artifact_contents(tmp_path) == old_contents
 
 
-def test_third_replace_failure_restores_complete_old_set(tmp_path, monkeypatch):
+@pytest.mark.parametrize("failure_point", ["fsync", "symlink", "replace"])
+def test_prepublication_failure_keeps_current_on_complete_old_release(
+    failure_point, tmp_path, monkeypatch
+):
     import stock_research.consumer_oversold.reporting as reporting
 
-    for key, filename in OUTPUT_FILENAMES.items():
-        (tmp_path / filename).write_text(f"old-{key}", encoding="utf-8")
-    before = _artifact_contents(tmp_path)
-    real_replace = reporting.os.replace
-    promotions = 0
+    write_consumer_oversold_artifacts(_payload(), output_dir=tmp_path)
+    old_target = os.readlink(tmp_path / "current")
+    old_contents = _artifact_contents(tmp_path)
+    if failure_point == "fsync":
+        monkeypatch.setattr(reporting, "_dir_fsync", lambda path: (_ for _ in ()).throw(OSError("fsync failed")))
+    elif failure_point == "symlink":
+        monkeypatch.setattr(reporting.os, "symlink", lambda *args: (_ for _ in ()).throw(OSError("symlink failed")))
+    else:
+        real_replace = reporting.os.replace
 
-    def fail_third_promotion(source, destination):
-        nonlocal promotions
-        source_path = Path(source)
-        destination_path = Path(destination)
-        if source_path.parent.name == "new" and destination_path.parent == tmp_path:
-            promotions += 1
-            if promotions == 3:
-                raise OSError("simulated replace failure")
-        return real_replace(source, destination)
+        def fail_current_replace(source, destination):
+            if Path(destination) == tmp_path / "current":
+                raise OSError("replace failed")
+            return real_replace(source, destination)
 
-    monkeypatch.setattr(reporting.os, "replace", fail_third_promotion)
-    with pytest.raises(OSError, match="simulated"):
+        monkeypatch.setattr(reporting.os, "replace", fail_current_replace)
+
+    with pytest.raises(OSError, match="failed"):
         write_consumer_oversold_artifacts(_payload(), output_dir=tmp_path)
 
-    assert _artifact_contents(tmp_path) == before
+    assert os.readlink(tmp_path / "current") == old_target
+    assert _artifact_contents(tmp_path) == old_contents

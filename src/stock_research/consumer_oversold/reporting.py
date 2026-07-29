@@ -1,20 +1,21 @@
 from __future__ import annotations
 
 import copy
+import fcntl
 import json
 import math
 import os
 import shutil
-import tempfile
+import uuid
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
 
 import numpy as np
 import pandas as pd
 
 from .contracts import OUTPUT_FILENAMES, validate_trade_date
+from .evidence import _valid_source_url
 
 
 REPORT_COLUMNS = (
@@ -78,6 +79,9 @@ _SELECTED_GATES = {
     "hard_risk_triggered": False,
     "hard_risk_review_unknown": False,
 }
+_STAGING_PREFIX = ".consumer-oversold-staging-"
+_TEMP_LINK_PREFIX = ".consumer-oversold-current-tmp-"
+_RELEASE_PREFIX = "consumer-oversold-"
 
 
 def _missing_keys(mapping: dict[str, Any], required: tuple[str, ...]) -> list[str]:
@@ -93,12 +97,12 @@ def _ordered_frame(frame: pd.DataFrame) -> pd.DataFrame:
     return result.loc[:, [*preferred, *extras]]
 
 
-def _validate_selected(frame: pd.DataFrame, name: str) -> set[str]:
+def _validate_selected(frame: pd.DataFrame, name: str, required_bucket: str) -> set[str]:
     if len(frame) > 20:
         raise ValueError(f"{name} must contain at most 20 rows")
     if frame.empty:
         return set()
-    required_columns = ("asset_id", *_SELECTED_GATES)
+    required_columns = ("asset_id", "repair_bucket", *_SELECTED_GATES)
     missing_columns = [column for column in required_columns if column not in frame.columns]
     if missing_columns:
         raise ValueError(f"{name} missing required columns: {', '.join(missing_columns)}")
@@ -108,6 +112,11 @@ def _validate_selected(frame: pd.DataFrame, name: str) -> set[str]:
         raise ValueError(f"{name} asset_id must be non-empty")
     if normalized.duplicated().any():
         raise ValueError(f"{name} asset_id must be unique")
+    valid_bucket = frame["repair_bucket"].map(
+        lambda value: isinstance(value, str) and value.strip() == required_bucket
+    )
+    if not valid_bucket.all():
+        raise ValueError(f"{name} field repair_bucket must be {required_bucket}")
     for field, required in _SELECTED_GATES.items():
         valid = frame[field].map(
             lambda value: isinstance(value, (bool, np.bool_)) and bool(value) is required
@@ -143,7 +152,9 @@ def _json_safe(value: Any, path: str = "coverage") -> Any:
     raise TypeError(f"{path} contains a value that is not JSON-safe: {type(value).__name__}")
 
 
-def _normalize_coverage(coverage: dict[str, Any], trade_date: str) -> dict[str, Any]:
+def _normalize_coverage(
+    coverage: dict[str, Any], trade_date: str, expected_count: int, early_count: int
+) -> dict[str, Any]:
     missing = _missing_keys(coverage, _COVERAGE_KEYS)
     if missing:
         raise ValueError(f"coverage missing required keys: {', '.join(missing)}")
@@ -152,13 +163,35 @@ def _normalize_coverage(coverage: dict[str, Any], trade_date: str) -> dict[str, 
     missing_funnel = _missing_keys(coverage["funnel"], _FUNNEL_KEYS)
     if missing_funnel:
         raise ValueError(f"coverage funnel missing required keys: {', '.join(missing_funnel)}")
+    for key in _FUNNEL_KEYS:
+        value = coverage["funnel"][key]
+        if isinstance(value, (bool, np.bool_)) or not isinstance(value, (int, np.integer)):
+            raise TypeError(f"coverage funnel {key} must be an integer")
+        if int(value) < 0:
+            raise ValueError(f"coverage funnel {key} must be non-negative")
+    ordered = [int(coverage["funnel"][key]) for key in _FUNNEL_KEYS[:7]]
+    if any(left < right for left, right in zip(ordered, ordered[1:])):
+        raise ValueError("coverage funnel counts must be non-increasing")
+    selected_expected = int(coverage["funnel"]["selected_expected"])
+    selected_early = int(coverage["funnel"]["selected_early"])
+    if selected_expected != expected_count:
+        raise ValueError("coverage selected_expected must equal expected frame length")
+    if selected_early != early_count:
+        raise ValueError("coverage selected_early must equal early frame length")
+    if ordered[-1] < selected_expected + selected_early:
+        raise ValueError(
+            "coverage valuation_eligible must be at least selected_expected + selected_early"
+        )
     normalized = _json_safe(copy.deepcopy(coverage))
     normalized["trade_date"] = trade_date
     return normalized
 
 
 def _write_csv(frame: pd.DataFrame, path: Path) -> None:
-    frame.to_csv(path, index=False, encoding="utf-8")
+    safe = frame.copy(deep=True)
+    for column in safe.columns:
+        safe[column] = safe[column].map(_escape_csv_formula)
+    safe.to_csv(path, index=False, encoding="utf-8")
     _fsync_file(path)
 
 
@@ -166,18 +199,26 @@ def _write_text(text: str, path: Path) -> None:
     with path.open("w", encoding="utf-8", newline="\n") as handle:
         handle.write(text)
         handle.flush()
-        try:
-            os.fsync(handle.fileno())
-        except OSError:
-            pass
+        os.fsync(handle.fileno())
 
 
 def _fsync_file(path: Path) -> None:
+    with path.open("rb") as handle:
+        os.fsync(handle.fileno())
+
+
+def _dir_fsync(path: Path) -> None:
+    descriptor = os.open(path, os.O_RDONLY)
     try:
-        with path.open("rb") as handle:
-            os.fsync(handle.fileno())
-    except OSError:
-        pass
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _escape_csv_formula(value: Any) -> Any:
+    if isinstance(value, str) and value.lstrip().startswith(("=", "+", "-", "@")):
+        return "'" + value
+    return value
 
 
 def _display(value: Any, *, percent: bool = False) -> str:
@@ -200,18 +241,37 @@ def _escape_table(value: Any) -> str:
     return _display(value).replace("\\", "\\\\").replace("|", "\\|").replace("\r", " ").replace("\n", " ")
 
 
+def _escape_link_label(value: Any) -> str:
+    return (
+        _display(value)
+        .replace("\\", "\\\\")
+        .replace("[", "\\[")
+        .replace("]", "\\]")
+        .replace("|", "\\|")
+        .replace("\r", " ")
+        .replace("\n", " ")
+    )
+
+
 def _valid_url(value: Any) -> str | None:
     if not isinstance(value, str):
         return None
-    url = value.strip()
-    parsed = urlparse(url)
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc or any(char in url for char in "\r\n"):
+    url = value
+    if (
+        not url
+        or url != url.strip()
+        or any(char.isspace() or ord(char) < 32 or ord(char) == 127 for char in url)
+        or "<" in url
+        or ">" in url
+    ):
+        return None
+    if not _valid_source_url(url):
         return None
     return url
 
 
 def _source_link(row: pd.Series) -> str:
-    title = _escape_table(row.get("source_title"))
+    title = _escape_link_label(row.get("source_title"))
     url = _valid_url(row.get("source_url"))
     if url is None:
         return title
@@ -318,6 +378,8 @@ def _render_report(
         "",
         "> 方法声明：本报告仅提供研究候选，不是交易指令。",
         "",
+        "> CSV 为审阅安全转义：疑似公式的文本单元格已加单引号前缀。",
+        "",
         "## 数据覆盖",
         "",
         *_coverage_table(coverage),
@@ -341,36 +403,82 @@ def _render_report(
     return "\n".join(lines).rstrip() + "\n"
 
 
-def _publish_set(staged: Path, output_dir: Path) -> None:
-    output_dir.mkdir(parents=True, exist_ok=True)
-    backup = staged.parent / "backup"
-    backup.mkdir()
-    targets = {key: output_dir / filename for key, filename in OUTPUT_FILENAMES.items()}
-    backed_up: list[str] = []
-    promoted: list[str] = []
+def _remove_path(path: Path) -> None:
+    if path.is_symlink() or path.is_file():
+        path.unlink(missing_ok=True)
+    elif path.is_dir():
+        shutil.rmtree(path)
+
+
+def _cleanup_stale(output_dir: Path, releases_dir: Path) -> None:
+    for path in releases_dir.glob(f"{_STAGING_PREFIX}*"):
+        _remove_path(path)
+    for path in output_dir.glob(f"{_TEMP_LINK_PREFIX}*"):
+        _remove_path(path)
+
+
+def _restore_current(output_dir: Path, old_target: str | None) -> None:
+    current = output_dir / "current"
+    if old_target is None:
+        current.unlink(missing_ok=True)
+        return
+    recovery = output_dir / f"{_TEMP_LINK_PREFIX}recovery-{uuid.uuid4().hex}"
     try:
-        for key, target in targets.items():
-            if target.exists():
-                os.replace(target, backup / target.name)
-                backed_up.append(key)
-        for key, target in targets.items():
-            os.replace(staged / target.name, target)
-            promoted.append(key)
-    except BaseException:
-        rollback_errors: list[OSError] = []
-        for key in promoted:
-            try:
-                targets[key].unlink(missing_ok=True)
-            except OSError as error:
-                rollback_errors.append(error)
-        for key in backed_up:
-            try:
-                os.replace(backup / targets[key].name, targets[key])
-            except OSError as error:
-                rollback_errors.append(error)
-        if rollback_errors:
-            raise RuntimeError("artifact publication failed and rollback was incomplete") from rollback_errors[0]
-        raise
+        os.symlink(old_target, recovery)
+        os.replace(recovery, current)
+    finally:
+        recovery.unlink(missing_ok=True)
+
+
+def _publish_release(
+    output_dir: Path,
+    frames: dict[str, pd.DataFrame],
+    coverage: dict[str, Any],
+    report: str,
+) -> None:
+    releases_dir = output_dir / ".releases"
+    releases_dir.mkdir(exist_ok=True)
+    _cleanup_stale(output_dir, releases_dir)
+    identifier = uuid.uuid4().hex
+    staging = releases_dir / f"{_STAGING_PREFIX}{identifier}"
+    release = releases_dir / f"{_RELEASE_PREFIX}{identifier}"
+    temp_link = output_dir / f"{_TEMP_LINK_PREFIX}{identifier}"
+    current = output_dir / "current"
+    old_target: str | None = None
+    if current.is_symlink():
+        old_target = os.readlink(current)
+    elif current.exists():
+        raise ValueError("output_dir/current must be a symlink managed by this publisher")
+    switched = False
+    staging.mkdir()
+    try:
+        for key in _FRAME_KEYS:
+            _write_csv(frames[key], staging / OUTPUT_FILENAMES[key])
+        _write_text(
+            json.dumps(coverage, ensure_ascii=False, indent=2, sort_keys=True, allow_nan=False)
+            + "\n",
+            staging / OUTPUT_FILENAMES["coverage"],
+        )
+        _write_text(report, staging / OUTPUT_FILENAMES["report"])
+        _dir_fsync(staging)
+        os.replace(staging, release)
+        _dir_fsync(releases_dir)
+        relative_target = str(Path(".releases") / release.name)
+        os.symlink(relative_target, temp_link)
+        _dir_fsync(output_dir)
+        os.replace(temp_link, current)
+        switched = True
+        try:
+            _dir_fsync(output_dir)
+        except OSError:
+            _restore_current(output_dir, old_target)
+            switched = False
+            raise
+    finally:
+        _remove_path(staging)
+        temp_link.unlink(missing_ok=True)
+        if not switched:
+            _remove_path(release)
 
 
 def write_consumer_oversold_artifacts(
@@ -389,13 +497,15 @@ def write_consumer_oversold_artifacts(
         if not isinstance(frame, pd.DataFrame):
             raise TypeError(f"{key} must be a pandas DataFrame")
         frames[key] = _ordered_frame(frame)
-    expected_assets = _validate_selected(frames["expected"], "expected")
-    early_assets = _validate_selected(frames["early"], "early")
+    expected_assets = _validate_selected(frames["expected"], "expected", "expected_repair")
+    early_assets = _validate_selected(frames["early"], "early", "early_validation")
     if expected_assets & early_assets:
         raise ValueError("expected and early asset sets must be mutually exclusive")
     if not isinstance(payload["coverage"], dict):
         raise TypeError("coverage must be a dict")
-    coverage = _normalize_coverage(payload["coverage"], trade_date)
+    coverage = _normalize_coverage(
+        payload["coverage"], trade_date, len(frames["expected"]), len(frames["early"])
+    )
     report = _render_report(
         trade_date,
         frames["expected"],
@@ -405,23 +515,21 @@ def write_consumer_oversold_artifacts(
     )
 
     destination = Path(output_dir).expanduser().resolve()
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    staging_root = Path(tempfile.mkdtemp(prefix=f".{destination.name}.staging-", dir=destination.parent))
-    staged = staging_root / "new"
-    staged.mkdir()
+    destination.mkdir(parents=True, exist_ok=True)
+    lock_path = destination / ".publish.lock"
+    lock_handle = lock_path.open("a+b")
     try:
-        for key in _FRAME_KEYS:
-            _write_csv(frames[key], staged / OUTPUT_FILENAMES[key])
-        _write_text(
-            json.dumps(coverage, ensure_ascii=False, indent=2, sort_keys=True, allow_nan=False) + "\n",
-            staged / OUTPUT_FILENAMES["coverage"],
-        )
-        _write_text(report, staged / OUTPUT_FILENAMES["report"])
-        _publish_set(staged, destination)
+        fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
+        _publish_release(destination, frames, coverage, report)
     finally:
-        shutil.rmtree(staging_root, ignore_errors=True)
+        try:
+            fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
+        finally:
+            lock_handle.close()
 
-    paths = {key: str(destination / filename) for key, filename in OUTPUT_FILENAMES.items()}
+    paths = {
+        key: str(destination / "current" / filename) for key, filename in OUTPUT_FILENAMES.items()
+    }
     return {
         "paths": paths,
         "expected": frames["expected"],
