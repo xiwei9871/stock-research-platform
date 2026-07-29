@@ -318,6 +318,67 @@ def test_price_gate_uses_or_and_completed_repair_requires_positive_normals():
     assert bool(result.loc["nonpositive", "eligible"])
 
 
+def test_completed_repair_detects_positive_latest_metrics_above_mixed_sign_normals():
+    result = apply_candidate_gates(
+        pd.DataFrame(
+            [
+                gate_rows(
+                    asset_id="xinhee",
+                    normal_revenue_growth=-0.0252,
+                    normal_profit_growth=0.6813,
+                    normal_net_margin=0.0109,
+                    latest_revenue_growth=0.0939,
+                    latest_profit_growth=1.446,
+                    latest_net_margin=0.0198,
+                )
+            ]
+        ),
+        CONFIG,
+    ).iloc[0]
+
+    assert not bool(result["eligible"])
+    assert result["exclusion_reasons"] == "repair_already_completed"
+
+
+@pytest.mark.parametrize(
+    "latest",
+    [
+        {
+            "latest_revenue_growth": -0.01,
+            "latest_profit_growth": 0.20,
+            "latest_net_margin": 0.02,
+        },
+        {
+            "latest_revenue_growth": 0.10,
+            "latest_profit_growth": -0.10,
+            "latest_net_margin": 0.02,
+        },
+        {
+            "latest_revenue_growth": 0.10,
+            "latest_profit_growth": 0.20,
+            "latest_net_margin": -0.01,
+        },
+    ],
+)
+def test_negative_latest_metric_does_not_complete_repair_just_because_normal_is_lower(latest):
+    result = apply_candidate_gates(
+        pd.DataFrame(
+            [
+                gate_rows(
+                    normal_revenue_growth=-0.0252,
+                    normal_profit_growth=-0.50,
+                    normal_net_margin=-0.05,
+                    **latest,
+                )
+            ]
+        ),
+        CONFIG,
+    ).iloc[0]
+
+    assert bool(result["eligible"])
+    assert "repair_already_completed" not in result["exclusion_reasons"]
+
+
 @pytest.mark.parametrize(
     ("field", "value", "overrides", "eligible", "failure_code"),
     [

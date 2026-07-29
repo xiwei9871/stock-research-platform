@@ -23,5 +23,6 @@ stock_code,action,consumer_subindustry,reason,effective_from,effective_to
 601238,include,auto_oem,terminal_consumer_brand_audit,1900-01-01,
 601633,include,auto_oem,terminal_consumer_brand_audit,1900-01-01,
 601888,include,retail_duty_free,terminal_consumer_brand_audit,1900-01-01,
+603079,exclude,,b2b_ingredient_supplier_audit,1900-01-01,
 603129,include,auto_oem,terminal_consumer_brand_audit,1900-01-01,
 603766,include,auto_oem,terminal_consumer_brand_audit,1900-01-01,

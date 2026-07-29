@@ -355,7 +355,7 @@ def test_override_include_and_exclude_take_precedence_when_active():
     assert by_code.loc["601888", "exclude_reasons"] == "manual_exclude"
 
 
-def test_curated_override_file_contains_only_audited_terminal_consumer_brands():
+def test_curated_override_file_contains_only_audited_terminal_consumer_decisions():
     overrides = pd.read_csv(ASSET_OVERRIDES_PATH, dtype={"stock_code": "string"})
     expected_auto = {
         "000550", "000572", "000625", "000800", "000868", "000951", "000957",
@@ -364,12 +364,16 @@ def test_curated_override_file_contains_only_audited_terminal_consumer_brands():
         "000913", "600099", "603129", "603766",
     }
 
-    assert set(overrides["stock_code"]) == expected_auto | {"601888"}
+    assert set(overrides["stock_code"]) == expected_auto | {"601888", "603079"}
     assert "601777" not in set(overrides["stock_code"])
-    assert overrides["action"].eq("include").all()
-    assert overrides["reason"].eq("terminal_consumer_brand_audit").all()
-    assert set(overrides.loc[overrides["stock_code"].isin(expected_auto), "consumer_subindustry"]) == {"auto_oem"}
-    assert overrides.loc[overrides["stock_code"].eq("601888"), "consumer_subindustry"].item() == "retail_duty_free"
+    included = overrides.loc[overrides["action"].eq("include")]
+    excluded = overrides.loc[overrides["action"].eq("exclude")]
+    assert included["reason"].eq("terminal_consumer_brand_audit").all()
+    assert set(included.loc[included["stock_code"].isin(expected_auto), "consumer_subindustry"]) == {"auto_oem"}
+    assert included.loc[included["stock_code"].eq("601888"), "consumer_subindustry"].item() == "retail_duty_free"
+    assert excluded[["stock_code", "reason"]].to_dict(orient="records") == [
+        {"stock_code": "603079", "reason": "b2b_ingredient_supplier_audit"}
+    ]
 
 
 def test_curated_overrides_include_oems_and_duty_free_but_not_auto_parts():
@@ -382,6 +386,55 @@ def test_curated_overrides_include_oems_and_duty_free_but_not_auto_parts():
         assert by_code.loc[code, "include_reasons"] == "terminal_consumer_brand_audit"
     assert not by_code.loc["000887", "included"]
     assert by_code.loc["000887", "exclude_reasons"] == "not_terminal_consumer"
+
+
+def test_curated_override_excludes_shengda_b2b_ingredient_supplier():
+    overrides = pd.read_csv(ASSET_OVERRIDES_PATH, dtype={"stock_code": "string"})
+    assets = pd.concat(
+        [
+            _assets(),
+            pd.DataFrame(
+                [["a11", "603079", "圣达生物", "2019-08-23"]],
+                columns=_assets().columns,
+            ),
+        ],
+        ignore_index=True,
+    )
+    statuses = pd.concat(
+        [
+            _statuses(),
+            pd.DataFrame(
+                [["a11", False, False, False]],
+                columns=_statuses().columns,
+            ),
+        ],
+        ignore_index=True,
+    )
+    liquidity = pd.concat(
+        [
+            _liquidity(),
+            pd.DataFrame([["a11", 100_000_000.0]], columns=_liquidity().columns),
+        ],
+        ignore_index=True,
+    )
+    industries = pd.concat(
+        [
+            _industries(),
+            pd.DataFrame([["a11", "申万", "食品"]], columns=_industries().columns),
+        ],
+        ignore_index=True,
+    )
+
+    row = _build(
+        assets=assets,
+        statuses=statuses,
+        liquidity=liquidity,
+        industries=industries,
+        asset_overrides=overrides,
+    ).set_index("stock_code").loc["603079"]
+
+    assert not row["included"]
+    assert row["exclude_reasons"] == "b2b_ingredient_supplier_audit"
 
 
 def test_numeric_stock_codes_from_csv_are_zero_padded_for_override_matching(tmp_path):

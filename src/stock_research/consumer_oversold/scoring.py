@@ -246,6 +246,10 @@ def _at_least_ninety_percent(latest: float, normal: float) -> bool:
     return latest >= threshold or math.isclose(latest, threshold, rel_tol=1e-12, abs_tol=1e-15)
 
 
+def _at_least_normal(latest: float, normal: float) -> bool:
+    return latest >= normal or math.isclose(latest, normal, rel_tol=1e-12, abs_tol=1e-15)
+
+
 def score_candidates(rows: pd.DataFrame, config: ConsumerOversoldConfig) -> pd.DataFrame:
     """Compute approved consumer-repair component and composite scores."""
     rows = _supply_empty_schema(rows, SCORE_REQUIRED_COLUMNS)
@@ -454,7 +458,7 @@ def apply_candidate_gates(rows: pd.DataFrame, config: ConsumerOversoldConfig) ->
         )
         repair_complete = explicitly_completed
         if not any(math.isnan(value) for value in repair_values):
-            repair_complete = repair_complete or (
+            positive_normal_recovery = (
                 row.normal_revenue_growth > 0.0
                 and row.normal_profit_growth > 0.0
                 and row.normal_net_margin > 0.0
@@ -465,6 +469,21 @@ def apply_candidate_gates(rows: pd.DataFrame, config: ConsumerOversoldConfig) ->
                     row.latest_profit_growth, row.normal_profit_growth
                 )
                 and _at_least_ninety_percent(row.latest_net_margin, row.normal_net_margin)
+            )
+            positive_full_recovery = (
+                row.latest_revenue_growth > 0.0
+                and row.latest_profit_growth > 0.0
+                and row.latest_net_margin > 0.0
+                and _at_least_normal(
+                    row.latest_revenue_growth, row.normal_revenue_growth
+                )
+                and _at_least_normal(
+                    row.latest_profit_growth, row.normal_profit_growth
+                )
+                and _at_least_normal(row.latest_net_margin, row.normal_net_margin)
+            )
+            repair_complete = (
+                repair_complete or positive_normal_recovery or positive_full_recovery
             )
         if repair_complete:
             reasons.add("repair_already_completed")
