@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import fcntl
+import hashlib
 import json
 import math
 import os
@@ -237,20 +238,25 @@ def _display(value: Any, *, percent: bool = False) -> str:
     return text if text else "数据缺失"
 
 
+def _escape_markdown_text(value: Any) -> str:
+    text = _display(value).replace("\r", " ").replace("\n", " ")
+    text = text.replace("\\", "\\\\")
+    text = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    for character in "[]()!*_`#":
+        text = text.replace(character, f"\\{character}")
+    return text.replace("|", "\\|")
+
+
 def _escape_table(value: Any) -> str:
-    return _display(value).replace("\\", "\\\\").replace("|", "\\|").replace("\r", " ").replace("\n", " ")
+    return _escape_markdown_text(value)
 
 
 def _escape_link_label(value: Any) -> str:
-    return (
-        _display(value)
-        .replace("\\", "\\\\")
-        .replace("[", "\\[")
-        .replace("]", "\\]")
-        .replace("|", "\\|")
-        .replace("\r", " ")
-        .replace("\n", " ")
-    )
+    return _escape_markdown_text(value)
+
+
+def _percent_text(value: Any) -> str:
+    return _escape_markdown_text(_display(value, percent=True))
 
 
 def _valid_url(value: Any) -> str | None:
@@ -316,16 +322,16 @@ def _candidate_section(title: str, frame: pd.DataFrame) -> list[str]:
                 f"- 行业分类：{_escape_table(row.get('consumer_subindustry'))}",
                 (
                     "- 跌幅：6个月 "
-                    f"{_display(row.get('return_6m'), percent=True)}；12个月最大回撤 "
-                    f"{_display(row.get('max_drawdown_12m'), percent=True)}；相对收益 "
-                    f"{_display(row.get('relative_return_6m'), percent=True)}"
+                    f"{_percent_text(row.get('return_6m'))}；12个月最大回撤 "
+                    f"{_percent_text(row.get('max_drawdown_12m'))}；相对收益 "
+                    f"{_percent_text(row.get('relative_return_6m'))}"
                 ),
                 (
                     f"- 估值：{_escape_table(row.get('valuation_method'))}；分位 "
-                    f"{_display(row.get('valuation_percentile'), percent=True)}；三情景 "
-                    f"{_display(row.get('pessimistic_upside'), percent=True)} / "
-                    f"{_display(row.get('base_upside'), percent=True)} / "
-                    f"{_display(row.get('optimistic_upside'), percent=True)}"
+                    f"{_percent_text(row.get('valuation_percentile'))}；三情景 "
+                    f"{_percent_text(row.get('pessimistic_upside'))} / "
+                    f"{_percent_text(row.get('base_upside'))} / "
+                    f"{_percent_text(row.get('optimistic_upside'))}"
                 ),
                 f"- 修复逻辑：{_escape_table(row.get('repair_thesis'))}",
                 f"- 未修复指标：{_escape_table(row.get('unrepaired_metrics'))}",
@@ -407,6 +413,7 @@ def _remove_path(path: Path) -> None:
     if path.is_symlink() or path.is_file():
         path.unlink(missing_ok=True)
     elif path.is_dir():
+        path.chmod(0o755)
         shutil.rmtree(path)
 
 
@@ -430,6 +437,38 @@ def _restore_current(output_dir: Path, old_target: str | None) -> None:
         recovery.unlink(missing_ok=True)
 
 
+def _artifact_digest(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _write_and_verify_manifest(release: Path) -> Path:
+    manifest = release / ".manifest.sha256"
+    lines = [
+        f"{_artifact_digest(release / filename)}  {filename}"
+        for filename in sorted(OUTPUT_FILENAMES.values())
+    ]
+    _write_text("\n".join(lines) + "\n", manifest)
+    parsed: dict[str, str] = {}
+    for line in manifest.read_text(encoding="utf-8").splitlines():
+        digest, filename = line.split("  ", 1)
+        parsed[filename] = digest
+    expected_names = sorted(OUTPUT_FILENAMES.values())
+    if list(parsed) != expected_names or any(
+        parsed[filename] != _artifact_digest(release / filename) for filename in expected_names
+    ):
+        raise ValueError("release manifest verification failed")
+    return manifest
+
+
+def _seal_release(release: Path, manifest: Path) -> None:
+    for filename in (*OUTPUT_FILENAMES.values(), manifest.name):
+        artifact = release / filename
+        artifact.chmod(0o444)
+        _fsync_file(artifact)
+    release.chmod(0o555)
+    _dir_fsync(release)
+
+
 def _publish_release(
     output_dir: Path,
     frames: dict[str, pd.DataFrame],
@@ -450,6 +489,7 @@ def _publish_release(
     elif current.exists():
         raise ValueError("output_dir/current must be a symlink managed by this publisher")
     switched = False
+    preserve_release = False
     staging.mkdir()
     try:
         for key in _FRAME_KEYS:
@@ -460,7 +500,8 @@ def _publish_release(
             staging / OUTPUT_FILENAMES["coverage"],
         )
         _write_text(report, staging / OUTPUT_FILENAMES["report"])
-        _dir_fsync(staging)
+        manifest = _write_and_verify_manifest(staging)
+        _seal_release(staging, manifest)
         os.replace(staging, release)
         _dir_fsync(releases_dir)
         relative_target = str(Path(".releases") / release.name)
@@ -470,14 +511,22 @@ def _publish_release(
         switched = True
         try:
             _dir_fsync(output_dir)
-        except OSError:
-            _restore_current(output_dir, old_target)
+        except OSError as publication_error:
+            try:
+                _restore_current(output_dir, old_target)
+                _dir_fsync(output_dir)
+            except BaseException as rollback_error:
+                preserve_release = True
+                failure = RuntimeError(
+                    f"artifact publication failed and rollback incomplete: {rollback_error}"
+                )
+                raise failure from publication_error
             switched = False
             raise
     finally:
         _remove_path(staging)
         temp_link.unlink(missing_ok=True)
-        if not switched:
+        if not switched and not preserve_release:
             _remove_path(release)
 
 

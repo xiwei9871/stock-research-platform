@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
+import stat
 from pathlib import Path
 
 import numpy as np
@@ -401,8 +403,45 @@ def test_first_publish_creates_complete_current_release(tmp_path):
     assert not (tmp_path / "current").exists()
     result = write_consumer_oversold_artifacts(_payload(), output_dir=tmp_path)
     assert (tmp_path / "current").is_symlink()
-    assert set(path.name for path in (tmp_path / "current").iterdir()) == set(OUTPUT_FILENAMES.values())
+    assert set(path.name for path in (tmp_path / "current").iterdir()) == {
+        *OUTPUT_FILENAMES.values(),
+        ".manifest.sha256",
+    }
     assert all(Path(path).exists() for path in result["paths"].values())
+
+
+def test_release_is_hash_verified_and_sealed_read_only(tmp_path):
+    result = write_consumer_oversold_artifacts(_payload(), output_dir=tmp_path)
+    release = (tmp_path / "current").resolve()
+    manifest = release / ".manifest.sha256"
+
+    assert set(result["paths"]) == set(OUTPUT_FILENAMES)
+    assert manifest.is_file()
+    entries = {}
+    for line in manifest.read_text(encoding="utf-8").splitlines():
+        digest, filename = line.split("  ", 1)
+        entries[filename] = digest
+    assert list(entries) == sorted(OUTPUT_FILENAMES.values())
+    assert set(entries) == set(OUTPUT_FILENAMES.values())
+    for filename, digest in entries.items():
+        artifact = release / filename
+        assert hashlib.sha256(artifact.read_bytes()).hexdigest() == digest
+        assert stat.S_IMODE(artifact.stat().st_mode) == 0o444
+    assert stat.S_IMODE(manifest.stat().st_mode) == 0o444
+    assert stat.S_IMODE(release.stat().st_mode) == 0o555
+
+
+def test_old_sealed_release_bytes_remain_unchanged_after_next_publish(tmp_path):
+    write_consumer_oversold_artifacts(_payload(), output_dir=tmp_path)
+    old_release = (tmp_path / "current").resolve()
+    before = {path.name: path.read_bytes() for path in old_release.iterdir() if path.is_file()}
+
+    payload = _payload()
+    payload["expected"].loc[0, "stock_name"] = "新版本公司"
+    write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+
+    assert {path.name: path.read_bytes() for path in old_release.iterdir() if path.is_file()} == before
+    assert stat.S_IMODE(old_release.stat().st_mode) == 0o555
 
 
 def test_write_failure_keeps_current_on_complete_old_release(tmp_path, monkeypatch):
@@ -457,3 +496,106 @@ def test_prepublication_failure_keeps_current_on_complete_old_release(
 
     assert os.readlink(tmp_path / "current") == old_target
     assert _artifact_contents(tmp_path) == old_contents
+
+
+def test_post_switch_fsync_failure_durably_restores_old_current(tmp_path, monkeypatch):
+    import stock_research.consumer_oversold.reporting as reporting
+
+    write_consumer_oversold_artifacts(_payload(), output_dir=tmp_path)
+    old_target = os.readlink(tmp_path / "current")
+    old_contents = _artifact_contents(tmp_path)
+    real_dir_fsync = reporting._dir_fsync
+    output_fsyncs = 0
+
+    def fail_post_switch_once(path):
+        nonlocal output_fsyncs
+        if Path(path) == tmp_path:
+            output_fsyncs += 1
+            if output_fsyncs == 2:
+                raise OSError("post-switch fsync failed")
+        return real_dir_fsync(path)
+
+    monkeypatch.setattr(reporting, "_dir_fsync", fail_post_switch_once)
+    with pytest.raises(OSError, match="post-switch"):
+        write_consumer_oversold_artifacts(_payload(), output_dir=tmp_path)
+
+    assert output_fsyncs == 3
+    assert os.readlink(tmp_path / "current") == old_target
+    assert _artifact_contents(tmp_path) == old_contents
+
+
+@pytest.mark.parametrize("rollback_failure", ["replace", "fsync"])
+def test_incomplete_post_switch_rollback_is_explicit_and_preserves_new_release(
+    rollback_failure, tmp_path, monkeypatch
+):
+    import stock_research.consumer_oversold.reporting as reporting
+
+    write_consumer_oversold_artifacts(_payload(), output_dir=tmp_path)
+    old_target = os.readlink(tmp_path / "current")
+    real_dir_fsync = reporting._dir_fsync
+    real_replace = reporting.os.replace
+    output_fsyncs = 0
+    current_replaces = 0
+
+    def fail_output_fsync(path):
+        nonlocal output_fsyncs
+        if Path(path) == tmp_path:
+            output_fsyncs += 1
+            if output_fsyncs == 2 or (rollback_failure == "fsync" and output_fsyncs == 3):
+                raise OSError(f"rollback {rollback_failure} failed")
+        return real_dir_fsync(path)
+
+    def fail_restore_replace(source, destination):
+        nonlocal current_replaces
+        if Path(destination) == tmp_path / "current":
+            current_replaces += 1
+            if rollback_failure == "replace" and current_replaces == 2:
+                raise OSError("rollback replace failed")
+        return real_replace(source, destination)
+
+    monkeypatch.setattr(reporting, "_dir_fsync", fail_output_fsync)
+    monkeypatch.setattr(reporting.os, "replace", fail_restore_replace)
+    with pytest.raises(RuntimeError, match="rollback incomplete") as caught:
+        write_consumer_oversold_artifacts(_payload(), output_dir=tmp_path)
+
+    assert isinstance(caught.value.__cause__, OSError)
+    current_target = os.readlink(tmp_path / "current")
+    if rollback_failure == "replace":
+        assert current_target != old_target
+    else:
+        assert current_target == old_target
+    assert (tmp_path / current_target).is_dir()
+    releases = [path for path in (tmp_path / ".releases").iterdir() if not path.name.startswith(".")]
+    assert len(releases) == 2
+
+
+def test_all_external_markdown_text_is_rendered_inert(tmp_path):
+    payload = _payload()
+    attack = "\\escape [link](https://evil) ![img](x) *em* _u_ `code` # head > quote <script>&"
+    for frame_name in ("expected", "early"):
+        for column in (
+            "stock_name",
+            "consumer_subindustry",
+            "repair_thesis",
+            "leading_indicator",
+            "main_risks",
+            "invalidation_conditions",
+            "source_title",
+        ):
+            payload[frame_name].loc[0, column] = attack + "\r\nnext"
+        payload[frame_name]["return_6m"] = payload[frame_name]["return_6m"].astype(object)
+        payload[frame_name].loc[0, "return_6m"] = "[numeric-link](https://evil)"
+    payload["coverage"]["warnings"] = [attack + "\nnext"]
+
+    result = write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+    report = Path(result["paths"]["report"]).read_text(encoding="utf-8")
+
+    assert "[link](https://evil)" not in report
+    assert "[numeric-link](https://evil)" not in report
+    assert "![img](x)" not in report
+    assert "<script>" not in report
+    assert "&lt;script&gt;&amp;" in report
+    assert "\\[link\\]\\(https://evil\\)" in report
+    assert "\\!\\[img\\]\\(x\\)" in report
+    assert "\\# head &gt; quote" in report
+    assert "\nnext" not in report
