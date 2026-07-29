@@ -33,8 +33,17 @@ def _row(**changes: object) -> dict[str, object]:
         "source_publish_date": "2026-07-28",
         "forecast_revision_state": "stable",
         "audit_review_status": "clear",
+        "audit_review_source_title": "2025年度审计报告",
+        "audit_review_source_url": "https://example.com/audit/1",
+        "audit_review_source_publish_date": "2026-04-20",
         "pledge_debt_review_status": "clear",
+        "pledge_debt_review_source_title": "股份质押及债务事项核查公告",
+        "pledge_debt_review_source_url": "https://example.com/pledge/1",
+        "pledge_debt_review_source_publish_date": "2026-05-20",
         "permanent_impairment_status": "clear",
+        "permanent_impairment_source_title": "资产减值事项核查公告",
+        "permanent_impairment_source_url": "https://example.com/impairment/1",
+        "permanent_impairment_source_publish_date": "2026-04-21",
         "catalyst_verifiability_score": 80,
         "expected_improvement_score": 70.5,
         "operator_notes": "",
@@ -236,6 +245,81 @@ def test_any_triggered_risk_sets_manual_trigger_flag():
     assert result.loc[0, "permanent_impairment_status"] == "triggered"
     assert result.loc[0, "hard_risk_manual_trigger"]
     assert not result.loc[0, "hard_risk_review_unknown"]
+
+
+@pytest.mark.parametrize(
+    ("field", "error"),
+    [
+        ("audit_review_source_title", "missing_audit_review_source_title"),
+        ("audit_review_source_url", "missing_audit_review_source_url"),
+        (
+            "audit_review_source_publish_date",
+            "missing_audit_review_source_publish_date",
+        ),
+        ("pledge_debt_review_source_title", "missing_pledge_debt_review_source_title"),
+        ("pledge_debt_review_source_url", "missing_pledge_debt_review_source_url"),
+        (
+            "pledge_debt_review_source_publish_date",
+            "missing_pledge_debt_review_source_publish_date",
+        ),
+        (
+            "permanent_impairment_source_title",
+            "missing_permanent_impairment_source_title",
+        ),
+        (
+            "permanent_impairment_source_url",
+            "missing_permanent_impairment_source_url",
+        ),
+        (
+            "permanent_impairment_source_publish_date",
+            "missing_permanent_impairment_source_publish_date",
+        ),
+    ],
+)
+def test_each_hard_risk_status_requires_its_own_source_triplet(field, error):
+    result = _validate(_frame(_row(**{field: ""})))
+
+    assert not result.loc[0, "evidence_complete"]
+    assert error in result.loc[0, "evidence_errors"]
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "audit_review_source_publish_date",
+        "pledge_debt_review_source_publish_date",
+        "permanent_impairment_source_publish_date",
+    ],
+)
+def test_hard_risk_source_dates_cannot_be_future(field):
+    with pytest.raises(ValueError, match=field):
+        _validate(_frame(_row(**{field: "2026-07-30"})))
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "audit_review_source_url",
+        "pledge_debt_review_source_url",
+        "permanent_impairment_source_url",
+    ],
+)
+def test_hard_risk_source_urls_are_validated(field):
+    with pytest.raises(ValueError, match=field):
+        _validate(_frame(_row(**{field: "seller-note-without-url"})))
+
+
+def test_hard_risk_reviews_cannot_reuse_one_source_for_all_three_checks():
+    with pytest.raises(ValueError, match="hard risk source URLs must be distinct"):
+        _validate(
+            _frame(
+                _row(
+                    audit_review_source_url="https://example.com/seller/1",
+                    pledge_debt_review_source_url="https://example.com/seller/1",
+                    permanent_impairment_source_url="https://example.com/seller/1",
+                )
+            )
+        )
 
 
 @pytest.mark.parametrize("field", ["audit_review_status", "pledge_debt_review_status", "permanent_impairment_status"])

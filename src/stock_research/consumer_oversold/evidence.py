@@ -26,8 +26,17 @@ EVIDENCE_COLUMNS = [
     "source_publish_date",
     "forecast_revision_state",
     "audit_review_status",
+    "audit_review_source_title",
+    "audit_review_source_url",
+    "audit_review_source_publish_date",
     "pledge_debt_review_status",
+    "pledge_debt_review_source_title",
+    "pledge_debt_review_source_url",
+    "pledge_debt_review_source_publish_date",
     "permanent_impairment_status",
+    "permanent_impairment_source_title",
+    "permanent_impairment_source_url",
+    "permanent_impairment_source_publish_date",
     "catalyst_verifiability_score",
     "expected_improvement_score",
     "operator_notes",
@@ -47,6 +56,23 @@ _RISK_FIELDS = (
     "pledge_debt_review_status",
     "permanent_impairment_status",
 )
+_RISK_SOURCE_FIELDS = {
+    "audit_review_status": (
+        "audit_review_source_title",
+        "audit_review_source_url",
+        "audit_review_source_publish_date",
+    ),
+    "pledge_debt_review_status": (
+        "pledge_debt_review_source_title",
+        "pledge_debt_review_source_url",
+        "pledge_debt_review_source_publish_date",
+    ),
+    "permanent_impairment_status": (
+        "permanent_impairment_source_title",
+        "permanent_impairment_source_url",
+        "permanent_impairment_source_publish_date",
+    ),
+}
 _SCORE_FIELDS = ("catalyst_verifiability_score", "expected_improvement_score")
 _FORECAST_STATES = {
     "unknown",
@@ -167,9 +193,9 @@ def _valid_source_url(value: str) -> bool:
     return True
 
 
-def _validate_source_url(value: str, *, asset_id: str) -> None:
+def _validate_source_url(value: str, *, asset_id: str, field: str = "source_url") -> None:
     if not _valid_source_url(value):
-        raise ValueError(f"invalid source_url for asset {asset_id}: {value!r}")
+        raise ValueError(f"invalid {field} for asset {asset_id}: {value!r}")
 
 
 def validate_repair_evidence(frame: pd.DataFrame, *, trade_date: str) -> pd.DataFrame:
@@ -255,12 +281,43 @@ def validate_repair_evidence(frame: pd.DataFrame, *, trade_date: str) -> pd.Data
             )
 
         statuses: list[str] = []
+        risk_source_urls: list[str] = []
         for field in _RISK_FIELDS:
             normalized = _text(row[field]).lower() or "unknown"
             if normalized not in _RISK_STATUSES:
                 raise ValueError(f"invalid {field} for asset {asset_id}: {row[field]!r}")
             result.at[index, field] = normalized
             statuses.append(normalized)
+            title_field, url_field, date_field = _RISK_SOURCE_FIELDS[field]
+            source_title = _text(row[title_field])
+            source_url = _text(row[url_field])
+            source_date_text = _text(row[date_field])
+            result.at[index, title_field] = source_title
+            result.at[index, url_field] = source_url
+            result.at[index, date_field] = source_date_text
+            if not source_title:
+                errors.append(f"missing_{title_field}")
+            if not source_url:
+                errors.append(f"missing_{url_field}")
+            else:
+                _validate_source_url(source_url, asset_id=asset_id, field=url_field)
+                risk_source_urls.append(source_url)
+            if not source_date_text:
+                errors.append(f"missing_{date_field}")
+            else:
+                source_date = _strict_iso_date(
+                    source_date_text, field=date_field, asset_id=asset_id
+                )
+                if source_date > parsed_trade_date:
+                    raise ValueError(
+                        f"future {date_field} for asset {asset_id}: {source_date_text}"
+                    )
+                if evidence_date is not None and source_date > evidence_date:
+                    raise ValueError(
+                        f"asset {asset_id} {date_field} cannot follow evidence_as_of_date"
+                    )
+        if len(risk_source_urls) != len(set(risk_source_urls)):
+            raise ValueError(f"hard risk source URLs must be distinct for asset {asset_id}")
 
         forecast_state = _text(row["forecast_revision_state"]).lower() or "unknown"
         if forecast_state not in _FORECAST_STATES:

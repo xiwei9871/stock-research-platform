@@ -364,16 +364,27 @@ def test_curated_override_file_contains_only_audited_terminal_consumer_decisions
         "000913", "600099", "603129", "603766",
     }
 
-    assert set(overrides["stock_code"]) == expected_auto | {"601888", "603079"}
+    audited_consumer = {
+        "000501", "000596", "001330", "002187", "002910", "002991", "003016",
+        "300673", "301061", "301078", "600702", "600859", "601116", "601595",
+        "601888", "603214", "603801", "605089", "605338", "605499", "605567",
+    }
+    assert set(overrides["stock_code"]) == expected_auto | audited_consumer | {
+        "300973",
+        "301011",
+        "603079",
+    }
     assert "601777" not in set(overrides["stock_code"])
     included = overrides.loc[overrides["action"].eq("include")]
     excluded = overrides.loc[overrides["action"].eq("exclude")]
     assert included["reason"].eq("terminal_consumer_brand_audit").all()
     assert set(included.loc[included["stock_code"].isin(expected_auto), "consumer_subindustry"]) == {"auto_oem"}
     assert included.loc[included["stock_code"].eq("601888"), "consumer_subindustry"].item() == "retail_duty_free"
-    assert excluded[["stock_code", "reason"]].to_dict(orient="records") == [
-        {"stock_code": "603079", "reason": "b2b_ingredient_supplier_audit"}
-    ]
+    assert set(map(tuple, excluded[["stock_code", "reason"]].to_numpy())) == {
+        ("300973", "b2b_bakery_ingredient_supplier_audit"),
+        ("301011", "b2b_amusement_equipment_audit"),
+        ("603079", "b2b_ingredient_supplier_audit"),
+    }
 
 
 def test_curated_overrides_include_oems_and_duty_free_but_not_auto_parts():
@@ -435,6 +446,44 @@ def test_curated_override_excludes_shengda_b2b_ingredient_supplier():
 
     assert not row["included"]
     assert row["exclude_reasons"] == "b2b_ingredient_supplier_audit"
+
+
+def test_actual_candidate_business_model_audits_are_explicit():
+    overrides = pd.read_csv(ASSET_OVERRIDES_PATH, dtype={"stock_code": "string"})
+    by_code = overrides.set_index("stock_code")
+
+    assert by_code.loc["300973", ["action", "reason"]].tolist() == [
+        "exclude",
+        "b2b_bakery_ingredient_supplier_audit",
+    ]
+    assert by_code.loc["301011", ["action", "reason"]].tolist() == [
+        "exclude",
+        "b2b_amusement_equipment_audit",
+    ]
+    for code in {
+        "002187",
+        "301078",
+        "003016",
+        "605567",
+        "001330",
+        "002910",
+        "605499",
+        "603801",
+        "601595",
+        "605338",
+        "002991",
+        "605089",
+        "000501",
+        "301061",
+        "300673",
+        "000596",
+        "601116",
+        "600702",
+        "600859",
+        "603214",
+    }:
+        assert by_code.loc[code, "action"] == "include"
+        assert by_code.loc[code, "reason"] == "terminal_consumer_brand_audit"
 
 
 def test_numeric_stock_codes_from_csv_are_zero_padded_for_override_matching(tmp_path):
