@@ -262,7 +262,7 @@ def test_valuation_rejects_fundamentals_announced_after_as_of_date():
         )
 
 
-def test_valuation_short_company_history_falls_back_to_industry_and_future_is_ignored():
+def test_valuation_short_company_history_keeps_peer_reference_but_is_unavailable():
     history = monthly_history("A", "pe_ttm", [4.0] * 23)
     for peer in ("B", "C", "D"):
         history += monthly_history(peer, "pe_ttm", [8.0] * 24)
@@ -288,6 +288,7 @@ def test_valuation_short_company_history_falls_back_to_industry_and_future_is_ig
     assert result["industry_peer_assets"] == 3
     assert not result["valuation_percentile_coverage"]
     assert math.isnan(result["valuation_percentile"])
+    assert result["valuation_method"] == "unavailable"
 
 
 def test_valuation_short_history_requires_three_distinct_industry_peers():
@@ -384,6 +385,64 @@ def test_general_consumer_falls_through_from_pe_without_reference_to_ev():
     ).iloc[0]
     assert result["valuation_method"] == "ev_ebitda"
     assert result["reference_multiple"] == 8.0
+
+
+def test_general_consumer_falls_through_from_short_pe_history_to_complete_ps():
+    history = monthly_history("A", "ps_ttm", [1.0] * 24)
+    for row in history[:15]:
+        row["pe_ttm"] = 10.0
+    result = compute_valuation_features(
+        pd.DataFrame([current_row("A")]),
+        pd.DataFrame(history),
+        pd.DataFrame([fundamental_row("A")]),
+    ).iloc[0]
+    assert result["valuation_method"] == "ps_normalized_margin"
+    assert result["valid_history_observations"] == 24
+    assert result["valuation_percentile_coverage"]
+
+
+def test_general_consumer_keeps_pe_when_pe_and_ps_histories_are_complete():
+    history = monthly_history("A", "ps_ttm", [1.0] * 24)
+    for row in history:
+        row["pe_ttm"] = 10.0
+    result = compute_valuation_features(
+        pd.DataFrame([current_row("A")]),
+        pd.DataFrame(history),
+        pd.DataFrame([fundamental_row("A")]),
+    ).iloc[0]
+    assert result["valuation_method"] == "pe_normalized_profit"
+    assert result["valid_history_observations"] == 24
+
+
+def test_tourism_falls_through_from_short_ev_history_to_complete_ps():
+    history = monthly_history(
+        "A", "ps_ttm", [1.0] * 24, subindustry="tourism_hospitality"
+    )
+    for row in history[:23]:
+        row["ev_ebitda"] = 8.0
+    result = compute_valuation_features(
+        pd.DataFrame([current_row("A", consumer_subindustry="tourism_hospitality")]),
+        pd.DataFrame(history),
+        pd.DataFrame([fundamental_row("A")]),
+    ).iloc[0]
+    assert result["valuation_method"] == "ps_normalized_margin"
+    assert result["valid_history_observations"] == 24
+
+
+def test_valuation_is_unavailable_when_all_candidate_self_histories_are_short():
+    history = monthly_history("A", "ps_ttm", [1.0] * 23)
+    for row in history[:20]:
+        row["ev_ebitda"] = 8.0
+    for row in history[:15]:
+        row["pe_ttm"] = 10.0
+    result = compute_valuation_features(
+        pd.DataFrame([current_row("A")]),
+        pd.DataFrame(history),
+        pd.DataFrame([fundamental_row("A")]),
+    ).iloc[0]
+    assert result["valuation_method"] == "unavailable"
+    assert not result["valuation_percentile_coverage"]
+    assert math.isnan(result["valuation_percentile"])
 
 
 def test_auto_oem_prefers_ps_even_with_stable_positive_earnings():

@@ -459,13 +459,17 @@ def compute_valuation_features(
                 if len(candidate_company_values) >= 24
                 else math.nan
             )
-            if candidate_index == 0 or math.isfinite(candidate_reference):
+            candidate_complete = (
+                len(candidate_company_values) >= 24
+                and math.isfinite(candidate_reference)
+            )
+            if candidate_index == 0 or candidate_complete:
                 current_multiple = candidate_multiple
                 company_values = candidate_company_values
                 reference_multiple = candidate_reference
                 valuation_percentile = candidate_percentile
                 industry_peer_assets = candidate_peer_assets
-            if math.isfinite(candidate_reference):
+            if candidate_complete:
                 method = candidate_method
                 multiple_field = candidate_field
                 break
