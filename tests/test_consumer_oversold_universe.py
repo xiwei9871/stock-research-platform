@@ -145,6 +145,18 @@ def test_universe_applies_all_market_gates_and_keeps_every_asset():
     assert not by_code.loc[["600001", "600002", "600003", "600004", "600005"], "included"].any()
 
 
+def test_delisting_risk_excludes_stock_without_st_flag():
+    statuses = _statuses()
+    target = statuses["asset_id"].eq("a1")
+    statuses.loc[target, "is_st"] = False
+    statuses.loc[target, "is_delisting_risk"] = True
+
+    row = _build(statuses=statuses).set_index("stock_code").loc["601888"]
+
+    assert not row["included"]
+    assert row["exclude_reasons"] == "st_or_delisting_risk"
+
+
 @pytest.mark.parametrize("list_date", ["", None, "not-a-date"])
 def test_unknown_or_invalid_list_date_is_conservatively_excluded(list_date):
     assets = _assets()
