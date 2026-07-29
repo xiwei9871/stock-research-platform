@@ -181,12 +181,18 @@ def compute_price_features(
 def compute_oversold_score(frame: pd.DataFrame) -> pd.Series:
     """Return the approved cross-sectional oversold score without filling gaps."""
     _require_columns(frame, SCORE_COLUMNS, "frame")
-    valuation = pd.to_numeric(frame["valuation_depression_percentile"], errors="coerce")
-    invalid_valuation = valuation.notna() & ~valuation.between(0.0, 1.0)
+    raw_valuation = frame["valuation_depression_percentile"]
+    valuation = pd.to_numeric(raw_valuation, errors="coerce").astype(float)
+    invalid_valuation = raw_valuation.notna() & (
+        valuation.isna() | ~np.isfinite(valuation) | ~valuation.between(0.0, 1.0)
+    )
     if invalid_valuation.any():
-        raise ValueError("valuation_depression_percentile must be between 0 and 1")
+        raise ValueError(
+            "valuation_depression_percentile must be numeric, finite, and between 0 and 1"
+        )
 
     numeric = frame.loc[:, SCORE_COLUMNS].apply(pd.to_numeric, errors="coerce")
+    numeric["valuation_depression_percentile"] = valuation
     drawdown_percentile = numeric["max_drawdown_12m"].rank(pct=True, ascending=False)
     return_6m_percentile = numeric["return_6m"].rank(pct=True, ascending=False)
     relative_return_percentile = numeric["relative_return_6m"].rank(pct=True, ascending=False)

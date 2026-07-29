@@ -108,6 +108,30 @@ def test_industry_relative_returns_require_three_non_null_peers():
     assert not result.loc["x", "relative_return_coverage"]
 
 
+def test_industry_relative_returns_have_coverage_at_exactly_three_valid_peers():
+    bars = pd.concat(
+        [
+            _bars("a", [100.0] * 125 + [70.0]),
+            _bars("b", [100.0] * 125 + [90.0]),
+            _bars("c", [100.0] * 125 + [110.0]),
+        ],
+        ignore_index=True,
+    )
+    membership = pd.DataFrame(
+        [("a", "exactly_three"), ("b", "exactly_three"), ("c", "exactly_three")],
+        columns=["asset_id", "consumer_subindustry"],
+    )
+
+    result = compute_price_features(bars, membership, trade_date=TRADE_DATE).set_index("asset_id")
+
+    assert result.loc["a", "industry_peer_count"] == 3
+    assert result.loc["a", "relative_return_coverage"]
+    assert result.loc["a", "industry_return_6m"] == pytest.approx(-0.1)
+    assert result.loc["a", "relative_return_6m"] == pytest.approx(-0.2)
+    assert result.loc["a", "industry_return_60d"] == pytest.approx(-0.1)
+    assert result.loc["a", "relative_return_60d"] == pytest.approx(-0.2)
+
+
 def test_incomplete_history_is_retained_without_fabricating_long_windows():
     bars = pd.concat([_bars("short", list(range(1, 121))), _bars("tiny", [5.0] * 10)])
     membership = pd.DataFrame(
@@ -190,6 +214,39 @@ def test_oversold_score_propagates_missing_components_and_validates_valuation():
     frame.loc[0, "valuation_depression_percentile"] = 1.01
     with pytest.raises(ValueError, match="valuation_depression_percentile"):
         compute_oversold_score(frame)
+
+
+@pytest.mark.parametrize("invalid", ["bad", np.inf, -0.1, 1.1])
+def test_oversold_score_rejects_non_numeric_non_finite_or_out_of_range_valuation(invalid):
+    frame = pd.DataFrame(
+        {
+            "max_drawdown_12m": [-0.5],
+            "return_6m": [-0.4],
+            "relative_return_6m": [-0.3],
+            "valuation_depression_percentile": [invalid],
+            "distance_ma120": [-0.2],
+            "distance_ma250": [-0.3],
+        }
+    )
+
+    with pytest.raises(ValueError, match="valuation_depression_percentile"):
+        compute_oversold_score(frame)
+
+
+@pytest.mark.parametrize("missing", [None, np.nan, pd.NA])
+def test_oversold_score_allows_missing_valuation_to_propagate(missing):
+    frame = pd.DataFrame(
+        {
+            "max_drawdown_12m": [-0.5],
+            "return_6m": [-0.4],
+            "relative_return_6m": [-0.3],
+            "valuation_depression_percentile": [missing],
+            "distance_ma120": [-0.2],
+            "distance_ma250": [-0.3],
+        }
+    )
+
+    assert pd.isna(compute_oversold_score(frame).iloc[0])
 
 
 def test_already_priced_penalty_individual_triggers_total_cap_and_missing_coverage():
