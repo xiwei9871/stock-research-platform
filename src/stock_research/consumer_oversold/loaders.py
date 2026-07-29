@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import math
 from collections.abc import Iterable
+from decimal import Decimal
+from numbers import Real
 from typing import Any
 
 import pandas as pd
@@ -60,6 +63,27 @@ EARNINGS_COLUMNS = (
     "source",
     "source_endpoint",
 )
+
+
+def normalize_market_amount(amount: Any, source: Any) -> Any:
+    if isinstance(amount, bool):
+        raise ValueError("market amount must be a finite numeric value")
+    if isinstance(amount, Decimal):
+        if not amount.is_finite():
+            raise ValueError("market amount must be a finite numeric value")
+    elif isinstance(amount, Real):
+        if not math.isfinite(amount):
+            raise ValueError("market amount must be a finite numeric value")
+    else:
+        raise ValueError("market amount must be a finite numeric value")
+
+    if source is None:
+        normalized_source = ""
+    elif isinstance(source, str):
+        normalized_source = source.casefold()
+    else:
+        raise ValueError("market amount source must be a string or None")
+    return amount * 1000 if "tushare" in normalized_source else amount
 
 
 def _asset_ids(values: list[str]) -> list[str]:
@@ -137,8 +161,8 @@ def load_consumer_universe_frames(
       AND (a.delist_date IS NULL OR a.delist_date >= %s)
     ORDER BY a.asset_id
     """
-    # market_daily_bar.amount is stored in thousands of yuan; normalize the
-    # aggregate to yuan before applying the consumer-universe liquidity gate.
+    # Tushare-derived amounts are stored in thousands of yuan; other sources
+    # already use yuan. Normalize each bar before aggregating the liquidity gate.
     liquidity_sql = """
     WITH latest_dates AS (
         SELECT DISTINCT trade_date
@@ -148,7 +172,9 @@ def load_consumer_universe_frames(
         ORDER BY trade_date DESC
         LIMIT 20
     )
-    SELECT b.asset_id, AVG(b.amount) * 1000 AS avg_turnover_amount
+    SELECT b.asset_id,
+           AVG(CASE WHEN lower(COALESCE(b.source, '')) LIKE '%tushare%'
+                    THEN b.amount * 1000 ELSE b.amount END) AS avg_turnover_amount
     FROM market_daily_bar b
     JOIN latest_dates d ON d.trade_date = b.trade_date
     WHERE b.adjust_type = 'hfq'

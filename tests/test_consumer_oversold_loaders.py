@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from datetime import date, datetime
+from decimal import Decimal
 
 import pandas as pd
 import pytest
@@ -32,6 +33,36 @@ def _install_db(monkeypatch, responses):
     monkeypatch.setattr(loaders, "connect", fake_connect)
     monkeypatch.setattr(loaders, "fetch_all", fake_fetch_all)
     return calls, services
+
+
+@pytest.mark.parametrize(
+    ("amount", "source", "expected"),
+    [
+        (Decimal("691266.56"), "tushare", Decimal("691266560.00")),
+        (691_266.56, "derived:tushare_raw_latest_factor", 691_266_560.0),
+        (691_266.56, "TuShare", 691_266_560.0),
+        (691_266_560.0, "baostock", 691_266_560.0),
+        (691_266_560.0, "akshare", 691_266_560.0),
+        (691_266_560.0, "eastmoney", 691_266_560.0),
+        (691_266_560.0, None, 691_266_560.0),
+    ],
+)
+def test_normalize_market_amount_is_source_aware(amount, source, expected):
+    assert loaders.normalize_market_amount(amount, source) == expected
+
+
+@pytest.mark.parametrize(
+    "amount", [None, pd.NA, float("nan"), float("inf"), True, "691266.56"]
+)
+def test_normalize_market_amount_rejects_missing_or_invalid_amount(amount):
+    with pytest.raises(ValueError, match="amount"):
+        loaders.normalize_market_amount(amount, "tushare")
+
+
+@pytest.mark.parametrize("source", [123, True, [], {}])
+def test_normalize_market_amount_rejects_invalid_source(source):
+    with pytest.raises(ValueError, match="source"):
+        loaders.normalize_market_amount(691_266.56, source)
 
 
 def test_universe_loads_four_stable_frames_and_point_in_time_sql(monkeypatch):
@@ -70,7 +101,11 @@ def test_universe_loads_four_stable_frames_and_point_in_time_sql(monkeypatch):
     assert "a.delist_date IS NOT NULL AND a.delist_date <= %s" in calls[1][0]
     assert "LIMIT 20" in calls[2][0]
     assert "adjust_type = 'hfq'" in calls[2][0]
-    assert "AVG(b.amount) * 1000 AS avg_turnover_amount" in calls[2][0]
+    assert (
+        "AVG(CASE WHEN lower(COALESCE(b.source, '')) LIKE '%tushare%' "
+        "THEN b.amount * 1000 ELSE b.amount END) AS avg_turnover_amount"
+        in calls[2][0]
+    )
     assert "start_date <= %s" in calls[3][0]
     assert "%s < end_date" in calls[3][0]
     assert "PARTITION BY asset_id" in calls[3][0]
