@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from decimal import Decimal
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -468,3 +470,22 @@ def test_already_priced_optional_numbers_accept_int_and_float_values():
     assert result["priced_in_rebound_trigger"]
     assert result["priced_in_relative_return_trigger"]
     assert result["priced_in_valuation_trigger"]
+
+
+def test_already_priced_optional_numbers_accept_finite_database_decimal():
+    result = compute_already_priced_features(
+        {
+            "rebound_from_low_60d": Decimal("0.25"),
+            "relative_return_60d": Decimal("0.10"),
+        },
+        {"valuation_percentile": Decimal("0.50")},
+    )
+    assert result["priced_in_rebound_trigger"]
+    assert result["priced_in_relative_return_trigger"]
+    assert result["priced_in_valuation_trigger"]
+
+
+@pytest.mark.parametrize("invalid", [Decimal("NaN"), Decimal("Infinity")])
+def test_already_priced_optional_numbers_reject_non_finite_database_decimal(invalid):
+    with pytest.raises(ValueError, match="rebound_from_low_60d"):
+        compute_already_priced_features({"rebound_from_low_60d": invalid}, {})

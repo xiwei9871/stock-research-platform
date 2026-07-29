@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import math
+from decimal import Decimal
+from numbers import Real
 
 import numpy as np
 import pandas as pd
@@ -141,13 +143,16 @@ def _assign_numeric(frame: pd.DataFrame, fields: tuple[str, ...], name: str) -> 
             if _is_missing(value):
                 parsed.append(math.nan)
                 continue
-            if isinstance(value, (bool, np.bool_)) or not isinstance(
-                value, (int, float, np.integer, np.floating)
-            ):
+            if isinstance(value, (bool, np.bool_)) or not isinstance(value, (Real, Decimal)):
                 raise ValueError(
                     f"{name} asset {frame.at[index, 'asset_id']} field {field} must be finite numeric"
                 )
-            number = float(value)
+            try:
+                number = float(value)
+            except (OverflowError, ValueError):
+                raise ValueError(
+                    f"{name} asset {frame.at[index, 'asset_id']} field {field} must be finite numeric"
+                ) from None
             if not math.isfinite(number):
                 raise ValueError(
                     f"{name} asset {frame.at[index, 'asset_id']} field {field} must be finite numeric"

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping
+from decimal import Decimal
+from numbers import Real
 
 import numpy as np
 import pandas as pd
@@ -148,12 +150,16 @@ def _strict_numeric_frame(
             if missing:
                 values.append(math.nan)
                 continue
-            if isinstance(value, (bool, np.bool_)) or not isinstance(
-                value, (int, float, np.integer, np.floating)
-            ):
+            if isinstance(value, (bool, np.bool_)) or not isinstance(value, (Real, Decimal)):
                 asset_id = str(frame.at[index, "asset_id"])
                 raise ValueError(f"{name} asset {asset_id} field {field} must be finite numeric")
-            number = float(value)
+            try:
+                number = float(value)
+            except (OverflowError, ValueError):
+                asset_id = str(frame.at[index, "asset_id"])
+                raise ValueError(
+                    f"{name} asset {asset_id} field {field} must be finite numeric"
+                ) from None
             if not math.isfinite(number):
                 asset_id = str(frame.at[index, "asset_id"])
                 raise ValueError(f"{name} asset {asset_id} field {field} must be finite numeric")
@@ -788,12 +794,15 @@ def _optional_number(row: Mapping[str, object] | pd.Series, field: str) -> tuple
     value = row.get(field, math.nan)
     if value is None or value is pd.NA:
         return math.nan, False
-    if isinstance(value, (bool, np.bool_)) or not isinstance(
-        value, (int, float, np.integer, np.floating)
-    ):
+    if isinstance(value, (bool, np.bool_)) or not isinstance(value, (Real, Decimal)):
         raise ValueError(f"{field} must be a finite int or float")
-    number = float(value)
+    try:
+        number = float(value)
+    except (OverflowError, ValueError):
+        raise ValueError(f"{field} must be a finite int or float") from None
     if math.isnan(number):
+        if isinstance(value, Decimal):
+            raise ValueError(f"{field} must be a finite int or float")
         return math.nan, False
     if not math.isfinite(number):
         raise ValueError(f"{field} must be a finite int or float")

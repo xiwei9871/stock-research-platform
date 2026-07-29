@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from decimal import Decimal
 
 import numpy as np
 import pandas as pd
@@ -165,6 +166,31 @@ def test_fundamentals_reject_duplicate_same_period_and_announcement():
         compute_fundamental_features(pd.DataFrame([row, row]), trade_date="2025-04-30")
 
 
+def test_fundamentals_accept_finite_database_decimal_as_float():
+    result = compute_fundamental_features(
+        pd.DataFrame(
+            [
+                finance_row(
+                    "A",
+                    "2024-12-31",
+                    "2025-03-01",
+                    revenue_growth=Decimal("0.009411"),
+                )
+            ]
+        ),
+        trade_date="2025-04-30",
+    ).iloc[0]
+    assert result["latest_revenue_growth"] == pytest.approx(0.009411)
+    assert isinstance(result["latest_revenue_growth"], float)
+
+
+@pytest.mark.parametrize("invalid", [Decimal("NaN"), Decimal("Infinity")])
+def test_fundamentals_reject_non_finite_database_decimal(invalid):
+    row = finance_row("A", "2024-12-31", "2025-03-01", revenue_growth=invalid)
+    with pytest.raises(ValueError, match=r"A.*revenue_growth"):
+        compute_fundamental_features(pd.DataFrame([row]), trade_date="2025-04-30")
+
+
 def test_valuation_selects_pe_for_positive_profit_and_uses_exact_scenarios():
     history = monthly_history("A", "pe_ttm", [10.0] * 24)
     result = compute_valuation_features(
@@ -182,6 +208,20 @@ def test_valuation_selects_pe_for_positive_profit_and_uses_exact_scenarios():
     assert result["base_market_cap"] == pytest.approx(106.5 * 0.0825 * 8.5)
     assert result["optimistic_market_cap"] == pytest.approx(108.0 * 0.09 * 10.0)
     assert result["base_upside"] == pytest.approx(106.5 * 0.0825 * 8.5 / 100.0 - 1.0)
+
+
+def test_valuation_accepts_finite_database_decimal_current_and_history():
+    current = current_row("A", current_market_cap=Decimal("100.0"), pe_ttm=Decimal("10.0"))
+    history = monthly_history("A", "pe_ttm", [Decimal("10.0")] * 24)
+    result = compute_valuation_features(
+        pd.DataFrame([current]),
+        pd.DataFrame(history),
+        pd.DataFrame([fundamental_row("A")]),
+    ).iloc[0]
+    assert result["current_multiple"] == 10.0
+    assert result["reference_multiple"] == 10.0
+    assert isinstance(result["current_multiple"], float)
+    assert isinstance(result["reference_multiple"], float)
 
 
 def test_valuation_negative_pe_falls_through_to_ps_and_positive_ebitda_precedes_ps():

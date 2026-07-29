@@ -1,4 +1,5 @@
 import math
+from decimal import Decimal
 
 import numpy as np
 import pandas as pd
@@ -101,6 +102,20 @@ def test_score_candidates_uses_approved_weights_exactly():
     )
     assert row["composite_score"] == pytest.approx(expected_composite)
     assert bool(row["balance_sheet_coverage"])
+
+
+def test_score_candidates_accepts_finite_database_decimal_as_float():
+    result = score_candidates(
+        pd.DataFrame([scoring_rows(base_upside=Decimal("0.50"))]), CONFIG
+    ).iloc[0]
+    assert result["base_upside"] == 0.5
+    assert isinstance(result["base_upside"], float)
+
+
+@pytest.mark.parametrize("invalid", [Decimal("NaN"), Decimal("Infinity")])
+def test_score_candidates_rejects_non_finite_database_decimal(invalid):
+    with pytest.raises(ValueError, match=r"A.*base_upside"):
+        score_candidates(pd.DataFrame([scoring_rows(base_upside=invalid)]), CONFIG)
 
 
 def test_operating_gap_requires_two_available_components():
