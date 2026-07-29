@@ -51,6 +51,8 @@ def fundamental_row(asset_id: str, **overrides: object) -> dict[str, object]:
         "normal_revenue_growth": 0.10,
         "latest_net_margin": 0.05,
         "normal_net_margin": 0.10,
+        "positive_profit_periods": 8,
+        "stable_positive_earnings": True,
         "latest_equity_parent": 50.0,
         "latest_debt_ratio": 0.45,
         "latest_operating_cash_flow": 10.0,
@@ -136,6 +138,10 @@ def test_fundamentals_are_point_in_time_use_latest_announcement_and_eight_period
     assert b["prior_operating_cash_flow"] == 8.0
     assert b["second_prior_operating_cash_flow"] == 7.0
     assert b["revenue_growth_delta_to_prior"] == 1.0
+    assert b["positive_profit_periods"] == 8
+    assert b["stable_positive_earnings"]
+    assert a["positive_profit_periods"] == 1
+    assert not a["stable_positive_earnings"]
 
 
 @pytest.mark.parametrize("field,value", [("report_period", "bad"), ("announcement_date", "bad")])
@@ -171,6 +177,7 @@ def test_valuation_selects_pe_for_positive_profit_and_uses_exact_scenarios():
     assert result["reference_multiple"] == 10.0
     assert result["valid_history_observations"] == 24
     assert not result["valuation_self_history_insufficient"]
+    assert result["valuation_percentile_coverage"]
     assert result["pessimistic_market_cap"] == pytest.approx(40.0)
     assert result["base_market_cap"] == pytest.approx(106.5 * 0.0825 * 8.5)
     assert result["optimistic_market_cap"] == pytest.approx(108.0 * 0.09 * 10.0)
@@ -195,9 +202,21 @@ def test_valuation_negative_pe_falls_through_to_ps_and_positive_ebitda_precedes_
     assert ev["base_market_cap"] == pytest.approx(15.0 * 1.065 * 6.8 - 5.0)
 
 
+def test_valuation_rejects_fundamentals_announced_after_as_of_date():
+    with pytest.raises(ValueError, match=r"A.*latest_announcement_date.*as_of_date"):
+        compute_valuation_features(
+            pd.DataFrame([current_row("A", as_of_date="2025-03-01")]),
+            pd.DataFrame(monthly_history("A", "pe_ttm", [10.0] * 24)),
+            pd.DataFrame(
+                [fundamental_row("A", latest_announcement_date=pd.Timestamp("2025-03-02"))]
+            ),
+        )
+
+
 def test_valuation_short_company_history_falls_back_to_industry_and_future_is_ignored():
     history = monthly_history("A", "pe_ttm", [4.0] * 23)
-    history += monthly_history("B", "pe_ttm", [8.0] * 24)
+    for peer in ("B", "C", "D"):
+        history += monthly_history(peer, "pe_ttm", [8.0] * 24)
     history.append(
         {
             "asset_id": "A",
@@ -217,6 +236,23 @@ def test_valuation_short_company_history_falls_back_to_industry_and_future_is_ig
     assert result["valuation_self_history_insufficient"]
     assert result["valid_history_observations"] == 23
     assert result["reference_multiple"] == 8.0
+    assert result["industry_peer_assets"] == 3
+    assert not result["valuation_percentile_coverage"]
+    assert math.isnan(result["valuation_percentile"])
+
+
+def test_valuation_short_history_requires_three_distinct_industry_peers():
+    history = monthly_history("A", "pe_ttm", [4.0] * 23)
+    for peer in ("B", "C"):
+        history += monthly_history(peer, "pe_ttm", [8.0] * 24)
+    result = compute_valuation_features(
+        pd.DataFrame([current_row("A")]),
+        pd.DataFrame(history),
+        pd.DataFrame([fundamental_row("A")]),
+    ).iloc[0]
+    assert result["valuation_method"] == "unavailable"
+    assert result["industry_peer_assets"] == 2
+    assert math.isnan(result["reference_multiple"])
 
 
 def test_valuation_counts_distinct_months_not_duplicate_rows():
@@ -230,6 +266,62 @@ def test_valuation_counts_distinct_months_not_duplicate_rows():
     ).iloc[0]
     assert result["valid_history_observations"] == 23
     assert result["valuation_self_history_insufficient"]
+
+
+def test_valuation_rejects_duplicate_asset_and_normalized_date_before_monthly_sampling():
+    history = monthly_history("A", "pe_ttm", [10.0] * 24)
+    history.append({**history[0], "valuation_date": "2023-01-31 18:30:00"})
+    with pytest.raises(ValueError, match=r"A.*2023-01-31"):
+        compute_valuation_features(
+            pd.DataFrame([current_row("A")]),
+            pd.DataFrame(history),
+            pd.DataFrame([fundamental_row("A")]),
+        )
+
+
+def test_retail_unstable_earnings_use_ps_instead_of_mechanical_pe():
+    result = compute_valuation_features(
+        pd.DataFrame(
+            [
+                current_row(
+                    "A",
+                    consumer_subindustry="retail_duty_free",
+                    ebitda_ttm=-1.0,
+                )
+            ]
+        ),
+        pd.DataFrame(
+            monthly_history(
+                "A", "ps_ttm", [1.0] * 24, subindustry="retail_duty_free"
+            )
+        ),
+        pd.DataFrame([fundamental_row("A", stable_positive_earnings=False)]),
+    ).iloc[0]
+    assert result["valuation_method"] == "ps_normalized_margin"
+
+
+def test_retail_prefers_ev_even_with_stable_positive_earnings():
+    result = compute_valuation_features(
+        pd.DataFrame([current_row("A", consumer_subindustry="tourism_hospitality")]),
+        pd.DataFrame(
+            monthly_history(
+                "A", "ev_ebitda", [8.0] * 24, subindustry="tourism_hospitality"
+            )
+        ),
+        pd.DataFrame([fundamental_row("A")]),
+    ).iloc[0]
+    assert result["valuation_method"] == "ev_ebitda"
+
+
+def test_auto_oem_prefers_ps_even_with_stable_positive_earnings():
+    result = compute_valuation_features(
+        pd.DataFrame([current_row("A", consumer_subindustry="auto_oem")]),
+        pd.DataFrame(
+            monthly_history("A", "ps_ttm", [1.0] * 24, subindustry="auto_oem")
+        ),
+        pd.DataFrame([fundamental_row("A")]),
+    ).iloc[0]
+    assert result["valuation_method"] == "ps_normalized_margin"
 
 
 def test_valuation_unavailable_when_company_and_industry_reference_are_missing():
@@ -322,6 +414,27 @@ def test_hard_risk_missing_manual_is_unknown_not_clear():
     assert result["hard_risk_codes"] == "hard_risk_review_unknown"
     assert result["hard_risk_review_unknown"]
     assert not result["hard_risk_triggered"]
+
+
+def test_hard_risk_missing_automated_inputs_marks_review_unknown_but_keeps_triggers():
+    fundamentals = pd.DataFrame(
+        [fundamental_row("A", latest_equity_parent=np.nan, latest_debt_ratio=0.90)]
+    )
+    manual = pd.DataFrame(
+        [
+            {
+                "asset_id": "A",
+                "audit_review_status": "clear",
+                "pledge_debt_review_status": "clear",
+                "permanent_impairment_status": "clear",
+            }
+        ]
+    )
+    result = compute_hard_risk_features(fundamentals, manual).iloc[0]
+    assert result["automated_risk_review_unknown"]
+    assert result["hard_risk_review_unknown"]
+    assert result["hard_risk_triggered"]
+    assert result["hard_risk_codes"] == "debt_pressure|hard_risk_review_unknown"
 
 
 @pytest.mark.parametrize("missing_status", [None, np.nan, pd.NA, "", "   "])

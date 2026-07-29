@@ -97,6 +97,8 @@ VALUATION_FUNDAMENTAL_COLUMNS = (
     "normal_revenue_growth",
     "latest_net_margin",
     "normal_net_margin",
+    "positive_profit_periods",
+    "stable_positive_earnings",
 )
 HARD_RISK_FUNDAMENTAL_COLUMNS = (
     "asset_id",
@@ -186,6 +188,28 @@ def _winsorized_median(values: pd.Series) -> float:
     return float(valid.clip(lower=lower, upper=upper).median())
 
 
+def _select_valuation_method(row: object, stable_positive_earnings: bool) -> tuple[str, str]:
+    pe_available = stable_positive_earnings and row.np_parent_ttm > 0.0 and row.pe_ttm > 0.0
+    ev_available = row.ebitda_ttm > 0.0 and row.ev_ebitda > 0.0
+    ps_available = row.revenue_ttm > 0.0 and row.ps_ttm > 0.0
+    methods = {
+        "pe": (pe_available, "pe_normalized_profit", "pe_ttm"),
+        "ev": (ev_available, "ev_ebitda", "ev_ebitda"),
+        "ps": (ps_available, "ps_normalized_margin", "ps_ttm"),
+    }
+    if row.consumer_subindustry in {"retail_duty_free", "tourism_hospitality"}:
+        order = ("ev", "ps", "pe")
+    elif row.consumer_subindustry == "auto_oem":
+        order = ("ps", "pe", "ev")
+    else:
+        order = ("pe", "ev", "ps")
+    for candidate in order:
+        available, method, multiple_field = methods[candidate]
+        if available:
+            return method, multiple_field
+    return "unavailable", ""
+
+
 def compute_fundamental_features(
     finance_rows: pd.DataFrame,
     *,
@@ -240,6 +264,7 @@ def compute_fundamental_features(
     output_columns.extend(
         ["prior_operating_cash_flow", "second_prior_operating_cash_flow"]
     )
+    output_columns.extend(["positive_profit_periods", "stable_positive_earnings"])
     output_columns.extend(f"{field}_delta_to_prior" for field in FINANCE_NUMERIC_COLUMNS)
     if frame.empty:
         return pd.DataFrame(columns=output_columns)
@@ -264,6 +289,13 @@ def compute_fundamental_features(
         )
         row["second_prior_operating_cash_flow"] = (
             history.at[2, "operating_cash_flow"] if len(history) >= 3 else math.nan
+        )
+        positive_profit_periods = int(history["np_parent_ttm"].gt(0.0).sum())
+        row["positive_profit_periods"] = positive_profit_periods
+        row["stable_positive_earnings"] = bool(
+            pd.notna(latest["np_parent_ttm"])
+            and latest["np_parent_ttm"] > 0.0
+            and positive_profit_periods >= 4
         )
         for field in FINANCE_NUMERIC_COLUMNS:
             prior = history.at[1, field] if len(history) >= 2 else math.nan
@@ -298,6 +330,15 @@ def compute_valuation_features(
     history = valuation_history.loc[:, VALUATION_HISTORY_COLUMNS].copy()
     history["asset_id"] = history["asset_id"].astype(str)
     history["valuation_date"] = _parse_date_series(history, "valuation_date", "valuation_history")
+    duplicate_history = history.duplicated(["asset_id", "valuation_date"], keep=False)
+    if duplicate_history.any():
+        row = history.loc[duplicate_history, ["asset_id", "valuation_date"]].sort_values(
+            ["asset_id", "valuation_date"], kind="stable"
+        ).iloc[0]
+        raise ValueError(
+            "duplicate valuation_history for asset "
+            f"{row['asset_id']} on {row['valuation_date'].date().isoformat()}"
+        )
     history_numeric_fields = ("pe_ttm", "ps_ttm", "ev_ebitda")
     _assign_strict_numeric(history, history_numeric_fields, name="valuation_history")
 
@@ -307,8 +348,27 @@ def compute_valuation_features(
     fundamental["latest_announcement_date"] = _parse_date_series(
         fundamental, "latest_announcement_date", "fundamentals"
     )
-    fundamental_numeric_fields = VALUATION_FUNDAMENTAL_COLUMNS[2:]
+    fundamental_numeric_fields = VALUATION_FUNDAMENTAL_COLUMNS[2:7]
     _assign_strict_numeric(fundamental, fundamental_numeric_fields, name="fundamentals")
+    invalid_profit_periods = (
+        fundamental["positive_profit_periods"].isna()
+        | fundamental["positive_profit_periods"].lt(0.0)
+        | fundamental["positive_profit_periods"].gt(8.0)
+        | fundamental["positive_profit_periods"].mod(1.0).ne(0.0)
+    )
+    if invalid_profit_periods.any():
+        row = fundamental.loc[invalid_profit_periods].sort_values("asset_id", kind="stable").iloc[0]
+        raise ValueError(
+            f"fundamentals asset {row['asset_id']} field positive_profit_periods must be an integer from 0 to 8"
+        )
+    invalid_stable = ~fundamental["stable_positive_earnings"].map(
+        lambda value: isinstance(value, (bool, np.bool_))
+    )
+    if invalid_stable.any():
+        row = fundamental.loc[invalid_stable].sort_values("asset_id", kind="stable").iloc[0]
+        raise ValueError(
+            f"fundamentals asset {row['asset_id']} field stable_positive_earnings must be bool"
+        )
     fundamental_by_asset = fundamental.set_index("asset_id")
 
     rows: list[dict[str, object]] = []
@@ -318,15 +378,14 @@ def compute_valuation_features(
         if asset_id not in fundamental_by_asset.index:
             raise ValueError(f"fundamentals missing asset_id {asset_id}")
         fundamental_row = fundamental_by_asset.loc[asset_id]
+        if fundamental_row["latest_announcement_date"] > current_row.as_of_date:
+            raise ValueError(
+                f"asset {asset_id} latest_announcement_date must be on or before as_of_date"
+            )
 
-        if current_row.np_parent_ttm > 0.0 and current_row.pe_ttm > 0.0:
-            method, multiple_field = "pe_normalized_profit", "pe_ttm"
-        elif current_row.ebitda_ttm > 0.0 and current_row.ev_ebitda > 0.0:
-            method, multiple_field = "ev_ebitda", "ev_ebitda"
-        elif current_row.revenue_ttm > 0.0 and current_row.ps_ttm > 0.0:
-            method, multiple_field = "ps_normalized_margin", "ps_ttm"
-        else:
-            method, multiple_field = "unavailable", ""
+        method, multiple_field = _select_valuation_method(
+            current_row, bool(fundamental_row["stable_positive_earnings"])
+        )
 
         eligible = history.loc[history["valuation_date"].le(current_row.as_of_date)]
         if method == "unavailable":
@@ -346,23 +405,33 @@ def compute_valuation_features(
             company_values = method_history.loc[
                 method_history["asset_id"].eq(asset_id), multiple_field
             ].astype(float)
-            industry_values = method_history.loc[
-                method_history["consumer_subindustry"].eq(current_row.consumer_subindustry),
-                multiple_field,
+            peer_history = method_history.loc[
+                method_history["consumer_subindustry"].eq(current_row.consumer_subindustry)
+                & method_history["asset_id"].ne(asset_id)
             ]
-            industry_median = _winsorized_median(industry_values)
+            industry_peer_assets = int(peer_history["asset_id"].nunique())
+            industry_median = _winsorized_median(peer_history[multiple_field])
             if len(company_values) >= 24:
                 company_median = _winsorized_median(company_values)
-                reference_multiple = min(company_median, industry_median)
-            else:
+                reference_multiple = (
+                    min(company_median, industry_median)
+                    if math.isfinite(industry_median)
+                    else company_median
+                )
+            elif industry_peer_assets >= 3:
                 reference_multiple = industry_median
+            else:
+                reference_multiple = math.nan
             valuation_percentile = (
                 float(company_values.le(current_multiple).mean())
-                if not company_values.empty
+                if len(company_values) >= 24
                 else math.nan
             )
             if not math.isfinite(reference_multiple):
                 method = "unavailable"
+
+        if multiple_field == "":
+            industry_peer_assets = 0
 
         result: dict[str, object] = {
             "asset_id": asset_id,
@@ -373,9 +442,11 @@ def compute_valuation_features(
             "valuation_depression_percentile": (
                 1.0 - valuation_percentile if math.isfinite(valuation_percentile) else math.nan
             ),
+            "valuation_percentile_coverage": len(company_values) >= 24,
             "valuation_self_history_insufficient": len(company_values) < 24,
             "self_history_insufficient": len(company_values) < 24,
             "valid_history_observations": len(company_values),
+            "industry_peer_assets": industry_peer_assets,
         }
         for scenario, closure in scenario_closures.items():
             market_cap = math.nan
@@ -417,9 +488,11 @@ def compute_valuation_features(
                 "reference_multiple",
                 "valuation_percentile",
                 "valuation_depression_percentile",
+                "valuation_percentile_coverage",
                 "valuation_self_history_insufficient",
                 "self_history_insufficient",
                 "valid_history_observations",
+                "industry_peer_assets",
                 "pessimistic_market_cap",
                 "pessimistic_upside",
                 "base_market_cap",
@@ -484,6 +557,14 @@ def compute_hard_risk_features(
         )
         if all(pd.notna(value) for value in cash_flows) and cash_flows[0] < cash_flows[1] < cash_flows[2]:
             codes.add("ocf_two_period_deterioration")
+        automated_review_unknown = any(
+            pd.isna(value)
+            for value in (
+                row.latest_equity_parent,
+                row.latest_debt_ratio,
+                *cash_flows,
+            )
+        )
 
         statuses = reviews.get(row.asset_id, unknown_statuses)
         if statuses["audit_review_status"] == "triggered":
@@ -492,7 +573,7 @@ def compute_hard_risk_features(
             codes.add("pledge_debt_combination")
         if statuses["permanent_impairment_status"] == "triggered":
             codes.add("permanent_impairment_flag")
-        review_unknown = "unknown" in statuses.values()
+        review_unknown = automated_review_unknown or "unknown" in statuses.values()
         if review_unknown:
             codes.add("hard_risk_review_unknown")
         triggered = bool(codes - {"hard_risk_review_unknown"})
@@ -502,6 +583,7 @@ def compute_hard_risk_features(
                 "hard_risk_codes": "|".join(sorted(codes)),
                 "hard_risk_triggered": triggered,
                 "hard_risk_review_unknown": review_unknown,
+                "automated_risk_review_unknown": automated_review_unknown,
             }
         )
     if not rows:
@@ -511,6 +593,7 @@ def compute_hard_risk_features(
                 "hard_risk_codes",
                 "hard_risk_triggered",
                 "hard_risk_review_unknown",
+                "automated_risk_review_unknown",
             ]
         )
     return pd.DataFrame(rows).sort_values("asset_id", kind="stable").reset_index(drop=True)
