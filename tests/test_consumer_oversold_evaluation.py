@@ -476,10 +476,23 @@ def test_run_atomically_writes_safe_read_only_artifacts(tmp_path, monkeypatch):
 
     assert set(result["paths"]) == set(EVALUATION_FILENAMES)
     assert (tmp_path / "evaluation" / "current").is_symlink()
+    release = (tmp_path / "evaluation" / "current").resolve()
+    manifest = release / ".manifest.sha256"
+    assert stat.S_IMODE(release.stat().st_mode) == 0o555
+    assert stat.S_IMODE(manifest.stat().st_mode) == 0o444
+    manifest_entries = {
+        filename: digest
+        for digest, filename in (
+            line.split("  ", 1)
+            for line in manifest.read_text(encoding="utf-8").splitlines()
+        )
+    }
+    assert set(manifest_entries) == set(EVALUATION_FILENAMES.values())
     for path in result["paths"].values():
         artifact = Path(path)
         assert artifact.exists()
         assert stat.S_IMODE(artifact.stat().st_mode) == 0o444
+        assert manifest_entries[artifact.name] == hashlib.sha256(artifact.read_bytes()).hexdigest()
     assert "前瞻评估" in Path(result["paths"]["report"]).read_text(encoding="utf-8")
     detail = pd.read_csv(result["paths"]["detail"])
     assert detail.loc[0, "stock_name"] == "'=cmd"
@@ -543,3 +556,35 @@ def test_post_switch_fsync_failure_removes_first_current(tmp_path, monkeypatch):
     assert not (output_dir / "current").exists()
     assert not list((output_dir / ".releases").glob("consumer-oversold-evaluation-*"))
     assert not list(output_dir.glob(".consumer-oversold-evaluation-current-*"))
+
+
+def test_publish_locks_before_observing_current_for_failure_rollback(tmp_path, monkeypatch):
+    import stock_research.consumer_oversold.evaluation as evaluation
+
+    output_dir = tmp_path / "evaluation"
+    summary = pd.DataFrame([{"completed_count": 1}])
+    _publish(output_dir, pd.DataFrame([{"asset_id": "old"}]), summary, "old\n")
+    old_target = os.readlink(output_dir / "current")
+    _publish(output_dir, pd.DataFrame([{"asset_id": "winner"}]), summary, "winner\n")
+    winner_target = os.readlink(output_dir / "current")
+    replacement = output_dir / ".reset-current"
+    replacement.symlink_to(old_target)
+    os.replace(replacement, output_dir / "current")
+
+    lock_calls = []
+
+    def fake_flock(fd, operation):
+        lock_calls.append(operation)
+        if operation == evaluation.fcntl.LOCK_EX:
+            concurrent = output_dir / ".concurrent-current"
+            concurrent.symlink_to(winner_target)
+            os.replace(concurrent, output_dir / "current")
+
+    monkeypatch.setattr(evaluation.fcntl, "flock", fake_flock)
+    _fail_first_output_dir_fsync(monkeypatch, output_dir)
+
+    with pytest.raises(OSError, match="post-switch fsync failed"):
+        _publish(output_dir, pd.DataFrame([{"asset_id": "failed"}]), summary, "failed\n")
+
+    assert lock_calls == [evaluation.fcntl.LOCK_EX, evaluation.fcntl.LOCK_UN]
+    assert os.readlink(output_dir / "current") == winner_target

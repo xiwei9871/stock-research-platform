@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import json
 import math
@@ -24,6 +25,7 @@ EVALUATION_FILENAMES = {
     "summary": "consumer_oversold_forward_evaluation_summary.csv",
     "report": "consumer_oversold_forward_evaluation_report.md",
 }
+EVALUATION_MANIFEST_FILENAME = ".manifest.sha256"
 
 _SNAPSHOT_COLUMNS = (
     "trade_date",
@@ -394,6 +396,25 @@ def _write_text(path: Path, text: str) -> None:
         os.fsync(handle.fileno())
 
 
+def _write_and_verify_evaluation_manifest(release: Path) -> Path:
+    manifest = release / EVALUATION_MANIFEST_FILENAME
+    lines = [
+        f"{_digest(release / filename)}  {filename}"
+        for filename in sorted(EVALUATION_FILENAMES.values())
+    ]
+    _write_text(manifest, "\n".join(lines) + "\n")
+    parsed: dict[str, str] = {}
+    for line in manifest.read_text(encoding="utf-8").splitlines():
+        digest, filename = line.split("  ", 1)
+        parsed[filename] = digest
+    expected_names = sorted(EVALUATION_FILENAMES.values())
+    if list(parsed) != expected_names or any(
+        parsed[filename] != _digest(release / filename) for filename in expected_names
+    ):
+        raise ValueError("evaluation release manifest verification failed")
+    return manifest
+
+
 def _render_report(end_date: str, detail: pd.DataFrame, summary: pd.DataFrame) -> str:
     lines = [
         "# 消费超跌修复候选前瞻评估",
@@ -447,8 +468,9 @@ def _restore_current(output_dir: Path, old_target: str | None) -> None:
         recovery.unlink(missing_ok=True)
 
 
-def _publish(output_dir: Path, detail: pd.DataFrame, summary: pd.DataFrame, report: str) -> dict[str, str]:
-    output_dir.mkdir(parents=True, exist_ok=True)
+def _publish_release(
+    output_dir: Path, detail: pd.DataFrame, summary: pd.DataFrame, report: str
+) -> dict[str, str]:
     releases = output_dir / ".releases"
     releases.mkdir(exist_ok=True)
     identifier = uuid.uuid4().hex
@@ -468,7 +490,8 @@ def _publish(output_dir: Path, detail: pd.DataFrame, summary: pd.DataFrame, repo
         _write_csv(detail, staging / EVALUATION_FILENAMES["detail"])
         _write_csv(summary, staging / EVALUATION_FILENAMES["summary"])
         _write_text(staging / EVALUATION_FILENAMES["report"], report)
-        for filename in EVALUATION_FILENAMES.values():
+        manifest = _write_and_verify_evaluation_manifest(staging)
+        for filename in (*EVALUATION_FILENAMES.values(), manifest.name):
             artifact = staging / filename
             artifact.chmod(0o444)
             _fsync_file(artifact)
@@ -502,6 +525,21 @@ def _publish(output_dir: Path, detail: pd.DataFrame, summary: pd.DataFrame, repo
         key: str(output_dir / "current" / filename)
         for key, filename in EVALUATION_FILENAMES.items()
     }
+
+
+def _publish(
+    output_dir: Path, detail: pd.DataFrame, summary: pd.DataFrame, report: str
+) -> dict[str, str]:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    lock_handle = (output_dir / ".publish.lock").open("a+b")
+    try:
+        fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
+        return _publish_release(output_dir, detail, summary, report)
+    finally:
+        try:
+            fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
+        finally:
+            lock_handle.close()
 
 
 def _safe_path(value: str | Path, name: str) -> Path:
