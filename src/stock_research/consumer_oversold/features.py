@@ -104,6 +104,10 @@ VALUATION_FUNDAMENTAL_COLUMNS = (
     "positive_profit_periods",
     "stable_positive_earnings",
 )
+VALUATION_SELF_HISTORY_MONTHS = 24
+VALUATION_INDUSTRY_HISTORY_MONTHS = 18
+VALUATION_INDUSTRY_PEER_ASSETS = 3
+VALUATION_INDUSTRY_MAX_LAG_MONTHS = 1
 HARD_RISK_FUNDAMENTAL_COLUMNS = (
     "asset_id",
     "latest_equity_parent",
@@ -420,12 +424,9 @@ def compute_valuation_features(
         eligible = history.loc[history["valuation_date"].le(current_row.as_of_date)]
         method = "unavailable"
         multiple_field = ""
-        current_multiple = math.nan
-        company_values = pd.Series(dtype=float)
-        reference_multiple = math.nan
-        valuation_percentile = math.nan
-        industry_peer_assets = 0
-        for candidate_index, (candidate_method, candidate_field) in enumerate(candidates):
+        selected_state: dict[str, object] | None = None
+        diagnostic_state: dict[str, object] | None = None
+        for candidate_method, candidate_field in candidates:
             candidate_multiple = float(getattr(current_row, candidate_field))
             method_history = eligible.loc[
                 eligible[candidate_field].gt(0.0) & np.isfinite(eligible[candidate_field])
@@ -442,37 +443,79 @@ def compute_valuation_features(
                 & method_history["asset_id"].ne(asset_id)
             ]
             candidate_peer_assets = int(peer_history["asset_id"].nunique())
+            candidate_industry_months = int(peer_history["valuation_month"].nunique())
             industry_median = _winsorized_median(peer_history[candidate_field])
-            if len(candidate_company_values) >= 24:
+            if peer_history.empty:
+                peer_history_fresh = False
+            else:
+                latest_peer_month = peer_history["valuation_month"].max()
+                as_of_month = current_row.as_of_date.to_period("M")
+                peer_history_fresh = (
+                    0
+                    <= as_of_month.ordinal - latest_peer_month.ordinal
+                    <= VALUATION_INDUSTRY_MAX_LAG_MONTHS
+                )
+            candidate_source = "unavailable"
+            candidate_percentile = math.nan
+            if len(candidate_company_values) >= VALUATION_SELF_HISTORY_MONTHS:
                 company_median = _winsorized_median(candidate_company_values)
                 candidate_reference = (
                     min(company_median, industry_median)
                     if math.isfinite(industry_median)
                     else company_median
                 )
-            elif candidate_peer_assets >= 3:
+                candidate_percentile = float(
+                    candidate_company_values.le(candidate_multiple).mean()
+                )
+                candidate_source = "self_history"
+            elif (
+                candidate_peer_assets >= VALUATION_INDUSTRY_PEER_ASSETS
+                and candidate_industry_months >= VALUATION_INDUSTRY_HISTORY_MONTHS
+                and peer_history_fresh
+            ):
                 candidate_reference = industry_median
+                peer_values = peer_history[candidate_field].astype(float)
+                candidate_percentile = float(peer_values.le(candidate_multiple).mean())
+                candidate_source = "industry_history"
             else:
                 candidate_reference = math.nan
-            candidate_percentile = (
-                float(candidate_company_values.le(candidate_multiple).mean())
-                if len(candidate_company_values) >= 24
-                else math.nan
-            )
             candidate_complete = (
-                len(candidate_company_values) >= 24
-                and math.isfinite(candidate_reference)
+                math.isfinite(candidate_reference)
+                and math.isfinite(candidate_percentile)
             )
-            if candidate_index == 0 or candidate_complete:
-                current_multiple = candidate_multiple
-                company_values = candidate_company_values
-                reference_multiple = candidate_reference
-                valuation_percentile = candidate_percentile
-                industry_peer_assets = candidate_peer_assets
+            candidate_state: dict[str, object] = {
+                "current_multiple": candidate_multiple,
+                "company_values": candidate_company_values,
+                "reference_multiple": candidate_reference,
+                "valuation_percentile": candidate_percentile,
+                "valuation_percentile_source": candidate_source,
+                "industry_peer_assets": candidate_peer_assets,
+                "industry_history_months": candidate_industry_months,
+            }
+            if diagnostic_state is None:
+                diagnostic_state = candidate_state
             if candidate_complete:
+                selected_state = candidate_state
                 method = candidate_method
                 multiple_field = candidate_field
                 break
+
+        state = selected_state or diagnostic_state or {
+            "current_multiple": math.nan,
+            "company_values": pd.Series(dtype=float),
+            "reference_multiple": math.nan,
+            "valuation_percentile": math.nan,
+            "valuation_percentile_source": "unavailable",
+            "industry_peer_assets": 0,
+            "industry_history_months": 0,
+        }
+        current_multiple = float(state["current_multiple"])
+        company_values = state["company_values"]
+        reference_multiple = float(state["reference_multiple"])
+        valuation_percentile = float(state["valuation_percentile"])
+        valuation_percentile_source = str(state["valuation_percentile_source"])
+        industry_peer_assets = int(state["industry_peer_assets"])
+        industry_history_months = int(state["industry_history_months"])
 
         result: dict[str, object] = {
             "asset_id": asset_id,
@@ -483,11 +526,15 @@ def compute_valuation_features(
             "valuation_depression_percentile": (
                 1.0 - valuation_percentile if math.isfinite(valuation_percentile) else math.nan
             ),
-            "valuation_percentile_coverage": len(company_values) >= 24,
-            "valuation_self_history_insufficient": len(company_values) < 24,
-            "self_history_insufficient": len(company_values) < 24,
+            "valuation_percentile_source": valuation_percentile_source,
+            "valuation_percentile_coverage": valuation_percentile_source != "unavailable",
+            "valuation_self_history_insufficient": (
+                len(company_values) < VALUATION_SELF_HISTORY_MONTHS
+            ),
+            "self_history_insufficient": len(company_values) < VALUATION_SELF_HISTORY_MONTHS,
             "valid_history_observations": len(company_values),
             "industry_peer_assets": industry_peer_assets,
+            "industry_history_months": industry_history_months,
         }
         for scenario, closure in scenario_closures.items():
             market_cap = math.nan
@@ -529,11 +576,13 @@ def compute_valuation_features(
                 "reference_multiple",
                 "valuation_percentile",
                 "valuation_depression_percentile",
+                "valuation_percentile_source",
                 "valuation_percentile_coverage",
                 "valuation_self_history_insufficient",
                 "self_history_insufficient",
                 "valid_history_observations",
                 "industry_peer_assets",
+                "industry_history_months",
                 "pessimistic_market_cap",
                 "pessimistic_upside",
                 "base_market_cap",

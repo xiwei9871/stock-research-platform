@@ -211,6 +211,8 @@ def test_valuation_selects_pe_for_positive_profit_and_uses_exact_scenarios():
     assert result["valuation_method"] == "pe_normalized_profit"
     assert result["reference_multiple"] == 10.0
     assert result["valid_history_observations"] == 24
+    assert result["valuation_percentile_source"] == "self_history"
+    assert result["industry_history_months"] == 0
     assert not result["valuation_self_history_insufficient"]
     assert result["valuation_percentile_coverage"]
     assert result["pessimistic_market_cap"] == pytest.approx(40.0)
@@ -262,7 +264,7 @@ def test_valuation_rejects_fundamentals_announced_after_as_of_date():
         )
 
 
-def test_valuation_short_company_history_keeps_peer_reference_but_is_unavailable():
+def test_valuation_short_company_history_rejects_stale_peer_history():
     history = monthly_history("A", "pe_ttm", [4.0] * 23)
     for peer in ("B", "C", "D"):
         history += monthly_history(peer, "pe_ttm", [8.0] * 24)
@@ -284,10 +286,12 @@ def test_valuation_short_company_history_keeps_peer_reference_but_is_unavailable
 
     assert result["valuation_self_history_insufficient"]
     assert result["valid_history_observations"] == 23
-    assert result["reference_multiple"] == 8.0
+    assert math.isnan(result["reference_multiple"])
     assert result["industry_peer_assets"] == 3
+    assert result["industry_history_months"] == 24
     assert not result["valuation_percentile_coverage"]
     assert math.isnan(result["valuation_percentile"])
+    assert result["valuation_percentile_source"] == "unavailable"
     assert result["valuation_method"] == "unavailable"
 
 
@@ -399,6 +403,120 @@ def test_general_consumer_falls_through_from_short_pe_history_to_complete_ps():
     assert result["valuation_method"] == "ps_normalized_margin"
     assert result["valid_history_observations"] == 24
     assert result["valuation_percentile_coverage"]
+
+
+def test_valuation_falls_from_one_month_pe_to_twenty_month_industry_ps_atomically():
+    history = monthly_history("A", "ps_ttm", [1.0] * 20, start="2023-08-31")
+    history[0]["pe_ttm"] = 10.0
+    for peer, value in (("B", 2.0), ("C", 3.0), ("D", 4.0)):
+        peer_history = monthly_history(peer, "ps_ttm", [value] * 20, start="2023-08-31")
+        peer_history[0]["pe_ttm"] = 20.0
+        history += peer_history
+
+    result = compute_valuation_features(
+        pd.DataFrame([current_row("A")]),
+        pd.DataFrame(history),
+        pd.DataFrame([fundamental_row("A")]),
+    ).iloc[0]
+
+    assert result["valuation_method"] == "ps_normalized_margin"
+    assert result["current_multiple"] == 1.0
+    assert result["reference_multiple"] == 3.0
+    assert result["valid_history_observations"] == 20
+    assert result["industry_peer_assets"] == 3
+    assert result["industry_history_months"] == 20
+    assert result["valuation_percentile"] == 0.0
+    assert result["valuation_depression_percentile"] == 1.0
+    assert result["valuation_percentile_source"] == "industry_history"
+    assert result["valuation_percentile_coverage"]
+    assert math.isfinite(result["base_upside"])
+
+
+def test_valuation_industry_fallback_requires_eighteen_distinct_months():
+    history = monthly_history("A", "ps_ttm", [1.0] * 17, start="2023-12-31")
+    for peer in ("B", "C", "D"):
+        history += monthly_history(peer, "ps_ttm", [2.0] * 17, start="2023-12-31")
+
+    result = compute_valuation_features(
+        pd.DataFrame([current_row("A", pe_ttm=-1.0, ebitda_ttm=-1.0)]),
+        pd.DataFrame(history),
+        pd.DataFrame([fundamental_row("A")]),
+    ).iloc[0]
+
+    assert result["valuation_method"] == "unavailable"
+    assert result["valuation_percentile_source"] == "unavailable"
+    assert result["industry_history_months"] == 17
+    assert math.isnan(result["reference_multiple"])
+    assert math.isnan(result["valuation_percentile"])
+
+
+def test_valuation_industry_fallback_requires_three_distinct_peers():
+    history = monthly_history("A", "ps_ttm", [1.0] * 20, start="2023-09-30")
+    for peer in ("B", "C"):
+        history += monthly_history(peer, "ps_ttm", [2.0] * 20, start="2023-09-30")
+
+    result = compute_valuation_features(
+        pd.DataFrame([current_row("A", pe_ttm=-1.0, ebitda_ttm=-1.0)]),
+        pd.DataFrame(history),
+        pd.DataFrame([fundamental_row("A")]),
+    ).iloc[0]
+
+    assert result["valuation_method"] == "unavailable"
+    assert result["industry_peer_assets"] == 2
+    assert result["industry_history_months"] == 20
+    assert result["valuation_percentile_source"] == "unavailable"
+
+
+def test_valuation_industry_fallback_requires_peer_history_fresh_within_one_month():
+    history = monthly_history("A", "ps_ttm", [1.0] * 20, start="2023-07-31")
+    for peer in ("B", "C", "D"):
+        history += monthly_history(peer, "ps_ttm", [2.0] * 20, start="2023-07-31")
+
+    result = compute_valuation_features(
+        pd.DataFrame([current_row("A", pe_ttm=-1.0, ebitda_ttm=-1.0)]),
+        pd.DataFrame(history),
+        pd.DataFrame([fundamental_row("A")]),
+    ).iloc[0]
+
+    assert result["industry_history_months"] == 20
+    assert result["valuation_method"] == "unavailable"
+    assert result["valuation_percentile_source"] == "unavailable"
+    assert math.isnan(result["reference_multiple"])
+
+
+def test_valuation_industry_percentile_and_reference_exclude_target_asset():
+    history = monthly_history("A", "ps_ttm", [1000.0] * 20, start="2023-09-30")
+    for peer in ("B", "C", "D"):
+        history += monthly_history(peer, "ps_ttm", [2.0] * 20, start="2023-09-30")
+
+    result = compute_valuation_features(
+        pd.DataFrame([current_row("A", pe_ttm=-1.0, ebitda_ttm=-1.0, ps_ttm=3.0)]),
+        pd.DataFrame(history),
+        pd.DataFrame([fundamental_row("A")]),
+    ).iloc[0]
+
+    assert result["reference_multiple"] == 2.0
+    assert result["valuation_percentile"] == 1.0
+    assert result["valuation_percentile_source"] == "industry_history"
+
+
+def test_valuation_preferred_method_uses_fresh_industry_history_before_complete_ps():
+    history = monthly_history("A", "ps_ttm", [1.0] * 24, start="2023-05-31")
+    history[0]["pe_ttm"] = 10.0
+    for peer in ("B", "C", "D"):
+        peer_history = monthly_history(peer, "pe_ttm", [8.0] * 18, start="2023-11-30")
+        history += peer_history
+
+    result = compute_valuation_features(
+        pd.DataFrame([current_row("A")]),
+        pd.DataFrame(history),
+        pd.DataFrame([fundamental_row("A")]),
+    ).iloc[0]
+
+    assert result["valuation_method"] == "pe_normalized_profit"
+    assert result["valuation_percentile_source"] == "industry_history"
+    assert result["industry_history_months"] == 18
+    assert result["valid_history_observations"] == 1
 
 
 def test_general_consumer_keeps_pe_when_pe_and_ps_histories_are_complete():
