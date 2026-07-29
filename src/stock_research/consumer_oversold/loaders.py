@@ -173,7 +173,7 @@ def load_consumer_universe_frames(
         LIMIT 20
     )
     SELECT b.asset_id,
-           AVG(CASE WHEN lower(COALESCE(b.source, '')) LIKE '%tushare%'
+           AVG(CASE WHEN lower(COALESCE(b.source, '')) LIKE '%%tushare%%'
                     THEN b.amount * 1000 ELSE b.amount END) AS avg_turnover_amount
     FROM market_daily_bar b
     JOIN latest_dates d ON d.trade_date = b.trade_date

@@ -102,10 +102,11 @@ def test_universe_loads_four_stable_frames_and_point_in_time_sql(monkeypatch):
     assert "LIMIT 20" in calls[2][0]
     assert "adjust_type = 'hfq'" in calls[2][0]
     assert (
-        "AVG(CASE WHEN lower(COALESCE(b.source, '')) LIKE '%tushare%' "
+        "AVG(CASE WHEN lower(COALESCE(b.source, '')) LIKE '%%tushare%%' "
         "THEN b.amount * 1000 ELSE b.amount END) AS avg_turnover_amount"
         in calls[2][0]
     )
+    assert "LIKE '%tushare%'" not in calls[2][0]
     assert "start_date <= %s" in calls[3][0]
     assert "%s < end_date" in calls[3][0]
     assert "PARTITION BY asset_id" in calls[3][0]
