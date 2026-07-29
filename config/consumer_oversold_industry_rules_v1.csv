@@ -1,0 +1,12 @@
+priority,industry_system,industry_name_pattern,consumer_subindustry,action,reason
+10,*,汽车零部件|零部件|汽车电子|轮胎|车用材料,,exclude,not_terminal_consumer
+11,*,材料|设备|工业机械|代工|OEM,,exclude,not_terminal_consumer
+12,*,银行|证券|保险|房地产,,exclude,not_terminal_consumer
+100,*,白酒|啤酒|饮料|乳品|食品|调味品,food_beverage,include,terminal_consumer_industry
+110,*,家用电器|白色家电|厨卫电器|小家电,home_appliance,include,terminal_consumer_industry
+120,*,商超|百货|零售|免税|专业连锁,retail_duty_free,include,terminal_consumer_industry
+130,*,旅游|景区|酒店|餐饮|休闲服务,tourism_hospitality,include,terminal_consumer_industry
+140,*,纺织服装|服饰|鞋帽,textile_apparel,include,terminal_consumer_industry
+150,*,美容护理|化妆品|个人护理,beauty_care,include,terminal_consumer_industry
+160,*,家居|家具|文娱|文体用品,home_leisure,include,terminal_consumer_industry
+170,*,乘用车|商用车|汽车整车|整车,auto_oem,include,terminal_consumer_industry
