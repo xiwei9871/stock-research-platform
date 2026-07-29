@@ -42,11 +42,472 @@ PRICE_OUTPUT_COLUMNS = [
     "relative_return_coverage_60d",
 ]
 
+FINANCE_COLUMNS = (
+    "asset_id",
+    "report_period",
+    "announcement_date",
+    "revenue_ttm",
+    "revenue_growth",
+    "np_parent_ttm",
+    "profit_growth",
+    "gross_margin",
+    "net_margin",
+    "roe",
+    "ocf_to_np",
+    "debt_ratio",
+    "equity_parent",
+    "operating_cash_flow",
+)
+FINANCE_NUMERIC_COLUMNS = FINANCE_COLUMNS[3:]
+NORMAL_FUNDAMENTAL_COLUMNS = (
+    "revenue_growth",
+    "profit_growth",
+    "gross_margin",
+    "net_margin",
+    "roe",
+    "ocf_to_np",
+    "debt_ratio",
+    "equity_parent",
+)
+CURRENT_VALUATION_COLUMNS = (
+    "asset_id",
+    "as_of_date",
+    "consumer_subindustry",
+    "current_market_cap",
+    "net_debt",
+    "pe_ttm",
+    "ps_ttm",
+    "ev_ebitda",
+    "revenue_ttm",
+    "np_parent_ttm",
+    "ebitda_ttm",
+)
+VALUATION_HISTORY_COLUMNS = (
+    "asset_id",
+    "valuation_date",
+    "consumer_subindustry",
+    "pe_ttm",
+    "ps_ttm",
+    "ev_ebitda",
+)
+VALUATION_FUNDAMENTAL_COLUMNS = (
+    "asset_id",
+    "latest_announcement_date",
+    "latest_revenue_growth",
+    "normal_revenue_growth",
+    "latest_net_margin",
+    "normal_net_margin",
+)
+HARD_RISK_FUNDAMENTAL_COLUMNS = (
+    "asset_id",
+    "latest_equity_parent",
+    "latest_debt_ratio",
+    "latest_operating_cash_flow",
+    "prior_operating_cash_flow",
+    "second_prior_operating_cash_flow",
+)
+MANUAL_RISK_COLUMNS = (
+    "asset_id",
+    "audit_review_status",
+    "pledge_debt_review_status",
+    "permanent_impairment_status",
+)
+
 
 def _require_columns(frame: pd.DataFrame, required: tuple[str, ...], name: str) -> None:
     missing = [column for column in required if column not in frame.columns]
     if missing:
         raise ValueError(f"{name} missing required columns: {', '.join(missing)}")
+
+
+def _parse_date_series(frame: pd.DataFrame, field: str, name: str) -> pd.Series:
+    try:
+        parsed = pd.to_datetime(frame[field], errors="raise", format="mixed").dt.normalize()
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} {field} contains an invalid date") from exc
+    if parsed.isna().any():
+        raise ValueError(f"{name} {field} contains an invalid date")
+    return parsed
+
+
+def _strict_numeric_frame(
+    frame: pd.DataFrame,
+    fields: tuple[str, ...],
+    *,
+    name: str,
+) -> pd.DataFrame:
+    numeric = pd.DataFrame(index=frame.index)
+    for field in fields:
+        values: list[float] = []
+        for index, value in frame[field].items():
+            missing = value is None or value is pd.NA
+            if isinstance(value, (float, np.floating)) and math.isnan(float(value)):
+                missing = True
+            if missing:
+                values.append(math.nan)
+                continue
+            if isinstance(value, (bool, np.bool_)) or not isinstance(
+                value, (int, float, np.integer, np.floating)
+            ):
+                asset_id = str(frame.at[index, "asset_id"])
+                raise ValueError(f"{name} asset {asset_id} field {field} must be finite numeric")
+            number = float(value)
+            if not math.isfinite(number):
+                asset_id = str(frame.at[index, "asset_id"])
+                raise ValueError(f"{name} asset {asset_id} field {field} must be finite numeric")
+            values.append(number)
+        numeric[field] = values
+    return numeric
+
+
+def _assign_strict_numeric(
+    frame: pd.DataFrame,
+    fields: tuple[str, ...],
+    *,
+    name: str,
+) -> None:
+    numeric = _strict_numeric_frame(frame, fields, name=name)
+    for field in fields:
+        frame[field] = numeric[field]
+
+
+def _reject_duplicate_assets(frame: pd.DataFrame, name: str) -> None:
+    duplicate = frame["asset_id"].duplicated(keep=False)
+    if duplicate.any():
+        asset_id = frame.loc[duplicate, "asset_id"].astype(str).sort_values(kind="stable").iloc[0]
+        raise ValueError(f"{name} contains duplicate asset_id {asset_id}")
+
+
+def _winsorized_median(values: pd.Series) -> float:
+    valid = values.loc[values.gt(0.0) & np.isfinite(values)].astype(float)
+    if valid.empty:
+        return math.nan
+    lower, upper = valid.quantile([0.1, 0.9])
+    return float(valid.clip(lower=lower, upper=upper).median())
+
+
+def compute_fundamental_features(
+    finance_rows: pd.DataFrame,
+    *,
+    trade_date: str,
+) -> pd.DataFrame:
+    """Build point-in-time fundamental history summaries for each asset."""
+    _require_columns(finance_rows, FINANCE_COLUMNS, "finance_rows")
+    try:
+        cutoff = pd.Timestamp(trade_date).normalize()
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"invalid trade_date cutoff: {trade_date!r}") from exc
+    if pd.isna(cutoff):
+        raise ValueError(f"invalid trade_date cutoff: {trade_date!r}")
+
+    frame = finance_rows.loc[:, FINANCE_COLUMNS].copy()
+    frame["asset_id"] = frame["asset_id"].astype(str)
+    frame["report_period"] = _parse_date_series(frame, "report_period", "finance_rows")
+    frame["announcement_date"] = _parse_date_series(frame, "announcement_date", "finance_rows")
+    _assign_strict_numeric(frame, FINANCE_NUMERIC_COLUMNS, name="finance_rows")
+    frame = frame.loc[frame["announcement_date"].le(cutoff)].copy()
+
+    duplicate = frame.duplicated(
+        ["asset_id", "report_period", "announcement_date"], keep=False
+    )
+    if duplicate.any():
+        row = frame.loc[
+            duplicate, ["asset_id", "report_period", "announcement_date"]
+        ].sort_values(["asset_id", "report_period", "announcement_date"], kind="stable").iloc[0]
+        raise ValueError(
+            "duplicate finance announcement for asset "
+            f"{row['asset_id']} report_period {row['report_period'].date().isoformat()} "
+            f"announcement_date {row['announcement_date'].date().isoformat()}"
+        )
+
+    frame = frame.sort_values(
+        ["asset_id", "report_period", "announcement_date"], kind="stable"
+    ).drop_duplicates(["asset_id", "report_period"], keep="last")
+    frame = frame.sort_values(["asset_id", "report_period"], ascending=[True, False], kind="stable")
+    frame = frame.groupby("asset_id", sort=False, group_keys=False).head(8)
+
+    output_columns = [
+        "asset_id",
+        "latest_report_period",
+        "latest_announcement_date",
+        "history_periods",
+    ]
+    output_columns.extend(f"latest_{field}" for field in NORMAL_FUNDAMENTAL_COLUMNS)
+    output_columns.extend(f"normal_{field}" for field in NORMAL_FUNDAMENTAL_COLUMNS)
+    output_columns.extend(
+        ["latest_revenue_ttm", "latest_np_parent_ttm", "latest_operating_cash_flow"]
+    )
+    output_columns.extend(
+        ["prior_operating_cash_flow", "second_prior_operating_cash_flow"]
+    )
+    output_columns.extend(f"{field}_delta_to_prior" for field in FINANCE_NUMERIC_COLUMNS)
+    if frame.empty:
+        return pd.DataFrame(columns=output_columns)
+
+    rows: list[dict[str, object]] = []
+    for asset_id, history in frame.groupby("asset_id", sort=True):
+        history = history.sort_values("report_period", ascending=False, kind="stable").reset_index(drop=True)
+        latest = history.iloc[0]
+        row: dict[str, object] = {
+            "asset_id": asset_id,
+            "latest_report_period": latest["report_period"],
+            "latest_announcement_date": latest["announcement_date"],
+            "history_periods": len(history),
+        }
+        for field in NORMAL_FUNDAMENTAL_COLUMNS:
+            row[f"latest_{field}"] = latest[field]
+            row[f"normal_{field}"] = float(history[field].median(skipna=True))
+        for field in ("revenue_ttm", "np_parent_ttm", "operating_cash_flow"):
+            row[f"latest_{field}"] = latest[field]
+        row["prior_operating_cash_flow"] = (
+            history.at[1, "operating_cash_flow"] if len(history) >= 2 else math.nan
+        )
+        row["second_prior_operating_cash_flow"] = (
+            history.at[2, "operating_cash_flow"] if len(history) >= 3 else math.nan
+        )
+        for field in FINANCE_NUMERIC_COLUMNS:
+            prior = history.at[1, field] if len(history) >= 2 else math.nan
+            row[f"{field}_delta_to_prior"] = latest[field] - prior
+        rows.append(row)
+    return pd.DataFrame(rows).loc[:, output_columns].sort_values("asset_id", kind="stable").reset_index(drop=True)
+
+
+def compute_valuation_features(
+    current_valuation: pd.DataFrame,
+    valuation_history: pd.DataFrame,
+    fundamentals: pd.DataFrame,
+) -> pd.DataFrame:
+    """Estimate normalized valuation scenarios from point-in-time multiples."""
+    _require_columns(current_valuation, CURRENT_VALUATION_COLUMNS, "current_valuation")
+    _require_columns(valuation_history, VALUATION_HISTORY_COLUMNS, "valuation_history")
+    _require_columns(fundamentals, VALUATION_FUNDAMENTAL_COLUMNS, "fundamentals")
+
+    current = current_valuation.loc[:, CURRENT_VALUATION_COLUMNS].copy()
+    current["asset_id"] = current["asset_id"].astype(str)
+    _reject_duplicate_assets(current, "current_valuation")
+    current["as_of_date"] = _parse_date_series(current, "as_of_date", "current_valuation")
+    current_numeric_fields = CURRENT_VALUATION_COLUMNS[3:]
+    _assign_strict_numeric(current, current_numeric_fields, name="current_valuation")
+    invalid_market_cap = current["current_market_cap"].isna() | current["current_market_cap"].le(0.0)
+    if invalid_market_cap.any():
+        row = current.loc[invalid_market_cap].sort_values("asset_id", kind="stable").iloc[0]
+        raise ValueError(
+            f"current_valuation asset {row['asset_id']} field current_market_cap must be finite and > 0"
+        )
+
+    history = valuation_history.loc[:, VALUATION_HISTORY_COLUMNS].copy()
+    history["asset_id"] = history["asset_id"].astype(str)
+    history["valuation_date"] = _parse_date_series(history, "valuation_date", "valuation_history")
+    history_numeric_fields = ("pe_ttm", "ps_ttm", "ev_ebitda")
+    _assign_strict_numeric(history, history_numeric_fields, name="valuation_history")
+
+    fundamental = fundamentals.loc[:, VALUATION_FUNDAMENTAL_COLUMNS].copy()
+    fundamental["asset_id"] = fundamental["asset_id"].astype(str)
+    _reject_duplicate_assets(fundamental, "fundamentals")
+    fundamental["latest_announcement_date"] = _parse_date_series(
+        fundamental, "latest_announcement_date", "fundamentals"
+    )
+    fundamental_numeric_fields = VALUATION_FUNDAMENTAL_COLUMNS[2:]
+    _assign_strict_numeric(fundamental, fundamental_numeric_fields, name="fundamentals")
+    fundamental_by_asset = fundamental.set_index("asset_id")
+
+    rows: list[dict[str, object]] = []
+    scenario_closures = {"pessimistic": 0.0, "base": 0.65, "optimistic": 0.80}
+    for current_row in current.sort_values("asset_id", kind="stable").itertuples(index=False):
+        asset_id = current_row.asset_id
+        if asset_id not in fundamental_by_asset.index:
+            raise ValueError(f"fundamentals missing asset_id {asset_id}")
+        fundamental_row = fundamental_by_asset.loc[asset_id]
+
+        if current_row.np_parent_ttm > 0.0 and current_row.pe_ttm > 0.0:
+            method, multiple_field = "pe_normalized_profit", "pe_ttm"
+        elif current_row.ebitda_ttm > 0.0 and current_row.ev_ebitda > 0.0:
+            method, multiple_field = "ev_ebitda", "ev_ebitda"
+        elif current_row.revenue_ttm > 0.0 and current_row.ps_ttm > 0.0:
+            method, multiple_field = "ps_normalized_margin", "ps_ttm"
+        else:
+            method, multiple_field = "unavailable", ""
+
+        eligible = history.loc[history["valuation_date"].le(current_row.as_of_date)]
+        if method == "unavailable":
+            current_multiple = math.nan
+            company_values = pd.Series(dtype=float)
+            reference_multiple = math.nan
+            valuation_percentile = math.nan
+        else:
+            current_multiple = float(getattr(current_row, multiple_field))
+            method_history = eligible.loc[
+                eligible[multiple_field].gt(0.0) & np.isfinite(eligible[multiple_field])
+            ].copy()
+            method_history["valuation_month"] = method_history["valuation_date"].dt.to_period("M")
+            method_history = method_history.sort_values(
+                ["asset_id", "valuation_date"], kind="stable"
+            ).drop_duplicates(["asset_id", "valuation_month"], keep="last")
+            company_values = method_history.loc[
+                method_history["asset_id"].eq(asset_id), multiple_field
+            ].astype(float)
+            industry_values = method_history.loc[
+                method_history["consumer_subindustry"].eq(current_row.consumer_subindustry),
+                multiple_field,
+            ]
+            industry_median = _winsorized_median(industry_values)
+            if len(company_values) >= 24:
+                company_median = _winsorized_median(company_values)
+                reference_multiple = min(company_median, industry_median)
+            else:
+                reference_multiple = industry_median
+            valuation_percentile = (
+                float(company_values.le(current_multiple).mean())
+                if not company_values.empty
+                else math.nan
+            )
+            if not math.isfinite(reference_multiple):
+                method = "unavailable"
+
+        result: dict[str, object] = {
+            "asset_id": asset_id,
+            "valuation_method": method,
+            "current_multiple": current_multiple,
+            "reference_multiple": reference_multiple,
+            "valuation_percentile": valuation_percentile,
+            "valuation_depression_percentile": (
+                1.0 - valuation_percentile if math.isfinite(valuation_percentile) else math.nan
+            ),
+            "valuation_self_history_insufficient": len(company_values) < 24,
+            "self_history_insufficient": len(company_values) < 24,
+            "valid_history_observations": len(company_values),
+        }
+        for scenario, closure in scenario_closures.items():
+            market_cap = math.nan
+            if method != "unavailable":
+                current_growth = fundamental_row["latest_revenue_growth"]
+                normal_growth = fundamental_row["normal_revenue_growth"]
+                growth_gap = max(normal_growth - current_growth, 0.0)
+                scenario_revenue = current_row.revenue_ttm * (1.0 + closure * growth_gap)
+                if scenario == "pessimistic":
+                    multiple = min(current_multiple, reference_multiple * 0.8)
+                elif scenario == "base":
+                    multiple = reference_multiple * 0.85
+                else:
+                    multiple = reference_multiple
+                if method == "pe_normalized_profit":
+                    current_margin = fundamental_row["latest_net_margin"]
+                    normal_margin = fundamental_row["normal_net_margin"]
+                    scenario_margin = current_margin + closure * (normal_margin - current_margin)
+                    scenario_profit = max(scenario_revenue * scenario_margin, 0.0)
+                    market_cap = scenario_profit * multiple
+                elif method == "ps_normalized_margin":
+                    market_cap = scenario_revenue * multiple
+                else:
+                    scenario_ebitda = current_row.ebitda_ttm * (1.0 + closure * growth_gap)
+                    market_cap = scenario_ebitda * multiple - current_row.net_debt
+            result[f"{scenario}_market_cap"] = market_cap
+            result[f"{scenario}_upside"] = (
+                market_cap / current_row.current_market_cap - 1.0
+                if math.isfinite(market_cap)
+                else math.nan
+            )
+        rows.append(result)
+    if not rows:
+        return pd.DataFrame(
+            columns=[
+                "asset_id",
+                "valuation_method",
+                "current_multiple",
+                "reference_multiple",
+                "valuation_percentile",
+                "valuation_depression_percentile",
+                "valuation_self_history_insufficient",
+                "self_history_insufficient",
+                "valid_history_observations",
+                "pessimistic_market_cap",
+                "pessimistic_upside",
+                "base_market_cap",
+                "base_upside",
+                "optimistic_market_cap",
+                "optimistic_upside",
+            ]
+        )
+    return pd.DataFrame(rows).sort_values("asset_id", kind="stable").reset_index(drop=True)
+
+
+def compute_hard_risk_features(
+    fundamentals: pd.DataFrame,
+    manual_risk_reviews: pd.DataFrame | None = None,
+) -> pd.DataFrame:
+    """Combine automatic balance-sheet risks with non-defaulting manual reviews."""
+    _require_columns(fundamentals, HARD_RISK_FUNDAMENTAL_COLUMNS, "fundamentals")
+    frame = fundamentals.loc[:, HARD_RISK_FUNDAMENTAL_COLUMNS].copy()
+    frame["asset_id"] = frame["asset_id"].astype(str)
+    _reject_duplicate_assets(frame, "fundamentals")
+    numeric_fields = HARD_RISK_FUNDAMENTAL_COLUMNS[1:]
+    _assign_strict_numeric(frame, numeric_fields, name="fundamentals")
+
+    reviews: dict[str, dict[str, str]] = {}
+    if manual_risk_reviews is not None:
+        _require_columns(manual_risk_reviews, MANUAL_RISK_COLUMNS, "manual_risk_reviews")
+        manual = manual_risk_reviews.loc[:, MANUAL_RISK_COLUMNS].copy()
+        manual["asset_id"] = manual["asset_id"].astype(str)
+        _reject_duplicate_assets(manual, "manual_risk_reviews")
+        allowed = {"clear", "triggered", "unknown"}
+        for row in manual.itertuples(index=False):
+            statuses = {
+                field: getattr(row, field) for field in MANUAL_RISK_COLUMNS[1:]
+            }
+            for field, status in statuses.items():
+                if status not in allowed:
+                    raise ValueError(
+                        f"manual_risk_reviews asset {row.asset_id} field {field} "
+                        "must be clear, triggered, or unknown"
+                    )
+            reviews[row.asset_id] = statuses
+
+    rows: list[dict[str, object]] = []
+    unknown_statuses = {field: "unknown" for field in MANUAL_RISK_COLUMNS[1:]}
+    for row in frame.sort_values("asset_id", kind="stable").itertuples(index=False):
+        codes: set[str] = set()
+        if pd.notna(row.latest_equity_parent) and row.latest_equity_parent <= 0.0:
+            codes.add("negative_parent_equity")
+        debt_pressure = pd.notna(row.latest_debt_ratio) and row.latest_debt_ratio >= 0.85
+        if debt_pressure:
+            codes.add("debt_pressure")
+        cash_flows = (
+            row.latest_operating_cash_flow,
+            row.prior_operating_cash_flow,
+            row.second_prior_operating_cash_flow,
+        )
+        if all(pd.notna(value) for value in cash_flows) and cash_flows[0] < cash_flows[1] < cash_flows[2]:
+            codes.add("ocf_two_period_deterioration")
+
+        statuses = reviews.get(row.asset_id, unknown_statuses)
+        if statuses["audit_review_status"] == "triggered":
+            codes.add("audit_review_triggered")
+        if statuses["pledge_debt_review_status"] == "triggered" and debt_pressure:
+            codes.add("pledge_debt_combination")
+        if statuses["permanent_impairment_status"] == "triggered":
+            codes.add("permanent_impairment_flag")
+        review_unknown = "unknown" in statuses.values()
+        if review_unknown:
+            codes.add("hard_risk_review_unknown")
+        triggered = bool(codes - {"hard_risk_review_unknown"})
+        rows.append(
+            {
+                "asset_id": row.asset_id,
+                "hard_risk_codes": "|".join(sorted(codes)),
+                "hard_risk_triggered": triggered,
+                "hard_risk_review_unknown": review_unknown,
+            }
+        )
+    if not rows:
+        return pd.DataFrame(
+            columns=[
+                "asset_id",
+                "hard_risk_codes",
+                "hard_risk_triggered",
+                "hard_risk_review_unknown",
+            ]
+        )
+    return pd.DataFrame(rows).sort_values("asset_id", kind="stable").reset_index(drop=True)
 
 
 def _window_return(close: pd.Series, bars: int) -> float:
