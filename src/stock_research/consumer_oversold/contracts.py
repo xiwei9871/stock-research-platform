@@ -45,5 +45,7 @@ class ConsumerOversoldConfig:
 
     def __post_init__(self) -> None:
         validate_trade_date(self.trade_date)
+        if type(self.max_per_bucket) is not int:
+            raise ValueError("max_per_bucket must be an integer")
         if not 1 <= self.max_per_bucket <= 20:
             raise ValueError("max_per_bucket must be between 1 and 20")

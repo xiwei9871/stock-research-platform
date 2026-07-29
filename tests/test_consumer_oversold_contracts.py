@@ -1,5 +1,12 @@
+from dataclasses import FrozenInstanceError
+
 import pytest
 
+from stock_research.consumer_oversold import (
+    ConsumerOversoldConfig as PublicConsumerOversoldConfig,
+    EARLY_VALIDATION as PUBLIC_EARLY_VALIDATION,
+    EXPECTED_REPAIR as PUBLIC_EXPECTED_REPAIR,
+)
 from stock_research.consumer_oversold.contracts import (
     EARLY_VALIDATION,
     EXPECTED_REPAIR,
@@ -31,6 +38,12 @@ def test_repair_bucket_constants_are_stable():
     assert EXPECTED_REPAIR == "expected_repair"
     assert EARLY_VALIDATION == "early_validation"
     assert REPAIR_BUCKETS == (EXPECTED_REPAIR, EARLY_VALIDATION)
+
+
+def test_package_exports_public_contracts():
+    assert PublicConsumerOversoldConfig is ConsumerOversoldConfig
+    assert PUBLIC_EXPECTED_REPAIR == EXPECTED_REPAIR
+    assert PUBLIC_EARLY_VALIDATION == EARLY_VALIDATION
 
 
 def test_output_filenames_are_stable():
@@ -69,3 +82,19 @@ def test_max_per_bucket_rejects_values_outside_bounds(max_per_bucket):
             trade_date="2026-07-29",
             max_per_bucket=max_per_bucket,
         )
+
+
+@pytest.mark.parametrize("max_per_bucket", [True, False, 1.0, 1.5, "1"])
+def test_max_per_bucket_rejects_non_integer_values(max_per_bucket):
+    with pytest.raises(ValueError, match="max_per_bucket"):
+        ConsumerOversoldConfig(
+            trade_date="2026-07-29",
+            max_per_bucket=max_per_bucket,
+        )
+
+
+def test_config_is_frozen():
+    config = ConsumerOversoldConfig(trade_date="2026-07-29")
+
+    with pytest.raises(FrozenInstanceError):
+        config.max_per_bucket = 10
