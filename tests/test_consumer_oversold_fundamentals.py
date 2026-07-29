@@ -287,8 +287,8 @@ def test_valuation_short_company_history_rejects_stale_peer_history():
     assert result["valuation_self_history_insufficient"]
     assert result["valid_history_observations"] == 23
     assert math.isnan(result["reference_multiple"])
-    assert result["industry_peer_assets"] == 3
-    assert result["industry_history_months"] == 24
+    assert result["industry_peer_assets"] == 0
+    assert result["industry_history_months"] == 0
     assert not result["valuation_percentile_coverage"]
     assert math.isnan(result["valuation_percentile"])
     assert result["valuation_percentile_source"] == "unavailable"
@@ -298,7 +298,7 @@ def test_valuation_short_company_history_rejects_stale_peer_history():
 def test_valuation_short_history_requires_three_distinct_industry_peers():
     history = monthly_history("A", "pe_ttm", [4.0] * 23)
     for peer in ("B", "C"):
-        history += monthly_history(peer, "pe_ttm", [8.0] * 24)
+        history += monthly_history(peer, "pe_ttm", [8.0] * 24, start="2023-05-31")
     result = compute_valuation_features(
         pd.DataFrame([current_row("A")]),
         pd.DataFrame(history),
@@ -445,7 +445,8 @@ def test_valuation_industry_fallback_requires_eighteen_distinct_months():
 
     assert result["valuation_method"] == "unavailable"
     assert result["valuation_percentile_source"] == "unavailable"
-    assert result["industry_history_months"] == 17
+    assert result["industry_peer_assets"] == 0
+    assert result["industry_history_months"] == 0
     assert math.isnan(result["reference_multiple"])
     assert math.isnan(result["valuation_percentile"])
 
@@ -463,7 +464,7 @@ def test_valuation_industry_fallback_requires_three_distinct_peers():
 
     assert result["valuation_method"] == "unavailable"
     assert result["industry_peer_assets"] == 2
-    assert result["industry_history_months"] == 20
+    assert result["industry_history_months"] == 0
     assert result["valuation_percentile_source"] == "unavailable"
 
 
@@ -478,7 +479,8 @@ def test_valuation_industry_fallback_requires_peer_history_fresh_within_one_mont
         pd.DataFrame([fundamental_row("A")]),
     ).iloc[0]
 
-    assert result["industry_history_months"] == 20
+    assert result["industry_peer_assets"] == 0
+    assert result["industry_history_months"] == 0
     assert result["valuation_method"] == "unavailable"
     assert result["valuation_percentile_source"] == "unavailable"
     assert math.isnan(result["reference_multiple"])
@@ -498,6 +500,98 @@ def test_valuation_industry_percentile_and_reference_exclude_target_asset():
     assert result["reference_multiple"] == 2.0
     assert result["valuation_percentile"] == 1.0
     assert result["valuation_percentile_source"] == "industry_history"
+
+
+def test_valuation_industry_panel_rejects_one_long_peer_and_two_single_point_peers():
+    history = monthly_history("A", "ps_ttm", [1.0] * 10, start="2024-07-31")
+    history += monthly_history("B", "ps_ttm", [2.0] * 18, start="2023-11-30")
+    history += monthly_history("C", "ps_ttm", [3.0], start="2025-04-30")
+    history += monthly_history("D", "ps_ttm", [4.0], start="2025-04-30")
+
+    result = compute_valuation_features(
+        pd.DataFrame([current_row("A", pe_ttm=-1.0, ebitda_ttm=-1.0)]),
+        pd.DataFrame(history),
+        pd.DataFrame([fundamental_row("A")]),
+    ).iloc[0]
+
+    assert result["valuation_method"] == "unavailable"
+    assert result["industry_peer_assets"] == 1
+    assert result["industry_history_months"] == 0
+    assert result["valuation_percentile_source"] == "unavailable"
+
+
+def test_valuation_fresh_single_points_do_not_refresh_a_stale_long_peer():
+    history = monthly_history("A", "ps_ttm", [1.0] * 10, start="2024-07-31")
+    history += monthly_history("B", "ps_ttm", [2.0] * 18, start="2023-09-30")
+    history += monthly_history("C", "ps_ttm", [3.0], start="2025-04-30")
+    history += monthly_history("D", "ps_ttm", [4.0], start="2025-04-30")
+
+    result = compute_valuation_features(
+        pd.DataFrame([current_row("A", pe_ttm=-1.0, ebitda_ttm=-1.0)]),
+        pd.DataFrame(history),
+        pd.DataFrame([fundamental_row("A")]),
+    ).iloc[0]
+
+    assert result["valuation_method"] == "unavailable"
+    assert result["industry_peer_assets"] == 0
+    assert result["industry_history_months"] == 0
+
+
+def test_valuation_industry_panel_equal_weights_months_not_peer_record_density():
+    history = monthly_history("A", "ps_ttm", [1.0] * 10, start="2024-07-31")
+    history += monthly_history("B", "ps_ttm", [100.0] * 20, start="2023-08-31")
+    history += monthly_history("C", "ps_ttm", [1.0] * 18, start="2023-10-31")
+    history += monthly_history("D", "ps_ttm", [1.0] * 18, start="2023-10-31")
+    history += monthly_history("E", "ps_ttm", [100.0] * 18, start="2023-10-31")
+
+    result = compute_valuation_features(
+        pd.DataFrame(
+            [current_row("A", pe_ttm=-1.0, ebitda_ttm=-1.0, ps_ttm=50.0)]
+        ),
+        pd.DataFrame(history),
+        pd.DataFrame([fundamental_row("A")]),
+    ).iloc[0]
+
+    assert result["valuation_method"] == "ps_normalized_margin"
+    assert result["industry_peer_assets"] == 4
+    assert result["industry_history_months"] == 18
+    assert result["reference_multiple"] == 50.5
+    assert result["valuation_percentile"] == 0.5
+
+
+def test_valuation_industry_panel_counts_only_months_with_three_qualified_peers():
+    history = monthly_history("A", "ps_ttm", [1.0] * 10, start="2024-07-31")
+    history += monthly_history("B", "ps_ttm", [2.0] * 18, start="2023-11-30")
+    history += monthly_history("C", "ps_ttm", [3.0] * 18, start="2023-11-30")
+    history += monthly_history("D", "ps_ttm", [4.0] * 17, start="2022-01-31")
+    history += monthly_history("D", "ps_ttm", [4.0], start="2025-04-30")
+
+    result = compute_valuation_features(
+        pd.DataFrame([current_row("A", pe_ttm=-1.0, ebitda_ttm=-1.0)]),
+        pd.DataFrame(history),
+        pd.DataFrame([fundamental_row("A")]),
+    ).iloc[0]
+
+    assert result["industry_peer_assets"] == 3
+    assert result["industry_history_months"] == 1
+    assert result["valuation_method"] == "unavailable"
+
+
+def test_valuation_self_history_uses_company_reference_when_peer_panel_is_insufficient():
+    history = monthly_history("A", "pe_ttm", [10.0] * 24)
+    history += monthly_history("B", "pe_ttm", [2.0] * 18, start="2023-11-30")
+
+    result = compute_valuation_features(
+        pd.DataFrame([current_row("A")]),
+        pd.DataFrame(history),
+        pd.DataFrame([fundamental_row("A")]),
+    ).iloc[0]
+
+    assert result["valuation_method"] == "pe_normalized_profit"
+    assert result["valuation_percentile_source"] == "self_history"
+    assert result["industry_peer_assets"] == 1
+    assert result["industry_history_months"] == 0
+    assert result["reference_multiple"] == 10.0
 
 
 def test_valuation_preferred_method_uses_fresh_industry_history_before_complete_ps():

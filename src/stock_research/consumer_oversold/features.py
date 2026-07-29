@@ -219,6 +219,32 @@ def _winsorized_median(values: pd.Series) -> float:
     return float(valid.clip(lower=lower, upper=upper).median())
 
 
+def _qualified_industry_panel(
+    peer_history: pd.DataFrame,
+    *,
+    as_of_month: pd.Period,
+) -> tuple[pd.DataFrame, int]:
+    qualified_assets: list[str] = []
+    for peer_asset_id, peer_rows in peer_history.groupby("asset_id", sort=False):
+        latest_month = peer_rows["valuation_month"].max()
+        lag_months = as_of_month.ordinal - latest_month.ordinal
+        if (
+            peer_rows["valuation_month"].nunique() >= VALUATION_INDUSTRY_HISTORY_MONTHS
+            and 0 <= lag_months <= VALUATION_INDUSTRY_MAX_LAG_MONTHS
+        ):
+            qualified_assets.append(str(peer_asset_id))
+    qualified = peer_history.loc[peer_history["asset_id"].isin(qualified_assets)].copy()
+    if qualified.empty:
+        return qualified, 0
+    monthly_assets = qualified.groupby("valuation_month")["asset_id"].nunique()
+    qualified_months = monthly_assets.loc[
+        monthly_assets.ge(VALUATION_INDUSTRY_PEER_ASSETS)
+    ].index
+    return qualified.loc[qualified["valuation_month"].isin(qualified_months)].copy(), len(
+        qualified_assets
+    )
+
+
 def _select_valuation_method(
     row: object, stable_positive_earnings: bool
 ) -> list[tuple[str, str]]:
@@ -442,40 +468,39 @@ def compute_valuation_features(
                 method_history["consumer_subindustry"].eq(current_row.consumer_subindustry)
                 & method_history["asset_id"].ne(asset_id)
             ]
-            candidate_peer_assets = int(peer_history["asset_id"].nunique())
-            candidate_industry_months = int(peer_history["valuation_month"].nunique())
-            industry_median = _winsorized_median(peer_history[candidate_field])
-            if peer_history.empty:
-                peer_history_fresh = False
-            else:
-                latest_peer_month = peer_history["valuation_month"].max()
-                as_of_month = current_row.as_of_date.to_period("M")
-                peer_history_fresh = (
-                    0
-                    <= as_of_month.ordinal - latest_peer_month.ordinal
-                    <= VALUATION_INDUSTRY_MAX_LAG_MONTHS
-                )
+            panel, candidate_peer_assets = _qualified_industry_panel(
+                peer_history,
+                as_of_month=current_row.as_of_date.to_period("M"),
+            )
+            candidate_industry_months = int(panel["valuation_month"].nunique())
+            monthly_industry_medians = panel.groupby("valuation_month")[
+                candidate_field
+            ].median()
+            industry_median = _winsorized_median(monthly_industry_medians)
+            panel_complete = (
+                candidate_peer_assets >= VALUATION_INDUSTRY_PEER_ASSETS
+                and candidate_industry_months >= VALUATION_INDUSTRY_HISTORY_MONTHS
+                and math.isfinite(industry_median)
+            )
             candidate_source = "unavailable"
             candidate_percentile = math.nan
             if len(candidate_company_values) >= VALUATION_SELF_HISTORY_MONTHS:
                 company_median = _winsorized_median(candidate_company_values)
                 candidate_reference = (
                     min(company_median, industry_median)
-                    if math.isfinite(industry_median)
+                    if panel_complete
                     else company_median
                 )
                 candidate_percentile = float(
                     candidate_company_values.le(candidate_multiple).mean()
                 )
                 candidate_source = "self_history"
-            elif (
-                candidate_peer_assets >= VALUATION_INDUSTRY_PEER_ASSETS
-                and candidate_industry_months >= VALUATION_INDUSTRY_HISTORY_MONTHS
-                and peer_history_fresh
-            ):
+            elif panel_complete:
                 candidate_reference = industry_median
-                peer_values = peer_history[candidate_field].astype(float)
-                candidate_percentile = float(peer_values.le(candidate_multiple).mean())
+                monthly_percentiles = panel.groupby("valuation_month")[candidate_field].apply(
+                    lambda values: float(values.le(candidate_multiple).mean())
+                )
+                candidate_percentile = float(monthly_percentiles.mean())
                 candidate_source = "industry_history"
             else:
                 candidate_reference = math.nan
