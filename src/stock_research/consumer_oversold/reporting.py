@@ -16,6 +16,7 @@ import numpy as np
 import pandas as pd
 
 from .contracts import OUTPUT_FILENAMES, validate_trade_date
+from .evidence import OUTPUT_COLUMNS as EVIDENCE_OUTPUT_COLUMNS
 from .evidence import _valid_source_url
 
 
@@ -54,7 +55,7 @@ REPORT_COLUMNS = (
     "exclusion_reasons",
 )
 
-_FRAME_KEYS = ("expected", "early", "scores", "exclusions")
+_FRAME_KEYS = ("evidence", "expected", "early", "scores", "exclusions")
 _PAYLOAD_KEYS = ("trade_date", *_FRAME_KEYS, "coverage")
 _COVERAGE_KEYS = (
     "funnel",
@@ -94,6 +95,16 @@ def _ordered_frame(frame: pd.DataFrame) -> pd.DataFrame:
     if result.empty and "asset_id" not in result.columns:
         result = result.reindex(columns=["asset_id", *result.columns])
     preferred = [column for column in REPORT_COLUMNS if column in result.columns]
+    extras = sorted(column for column in result.columns if column not in preferred)
+    return result.loc[:, [*preferred, *extras]]
+
+
+def _ordered_evidence_frame(frame: pd.DataFrame) -> pd.DataFrame:
+    result = frame.copy(deep=True)
+    missing = [column for column in EVIDENCE_OUTPUT_COLUMNS if column not in result.columns]
+    if missing:
+        raise ValueError(f"evidence missing validated columns: {', '.join(missing)}")
+    preferred = [column for column in EVIDENCE_OUTPUT_COLUMNS if column in result.columns]
     extras = sorted(column for column in result.columns if column not in preferred)
     return result.loc[:, [*preferred, *extras]]
 
@@ -545,7 +556,7 @@ def write_consumer_oversold_artifacts(
         frame = payload[key]
         if not isinstance(frame, pd.DataFrame):
             raise TypeError(f"{key} must be a pandas DataFrame")
-        frames[key] = _ordered_frame(frame)
+        frames[key] = _ordered_evidence_frame(frame) if key == "evidence" else _ordered_frame(frame)
     expected_assets = _validate_selected(frames["expected"], "expected", "expected_repair")
     early_assets = _validate_selected(frames["early"], "early", "early_validation")
     if expected_assets & early_assets:
@@ -581,6 +592,7 @@ def write_consumer_oversold_artifacts(
     }
     return {
         "paths": paths,
+        "evidence": frames["evidence"],
         "expected": frames["expected"],
         "early": frames["early"],
         "scores": frames["scores"],

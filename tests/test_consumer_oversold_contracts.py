@@ -48,6 +48,7 @@ def test_package_exports_public_contracts():
 
 def test_output_filenames_are_stable():
     assert OUTPUT_FILENAMES == {
+        "evidence": "consumer_oversold_repair_evidence.csv",
         "expected": "consumer_oversold_expected_repair_top20.csv",
         "early": "consumer_oversold_early_validation_top20.csv",
         "scores": "consumer_oversold_full_scores.csv",

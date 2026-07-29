@@ -11,6 +11,7 @@ from stock_research import cli
 def _result(*, expected=None, early=None):
     return {
         "paths": {
+            "evidence": "/tmp/consumer/evidence.csv",
             "expected": "/tmp/consumer/expected.csv",
             "early": "/tmp/consumer/early.csv",
             "scores": "/tmp/consumer/scores.csv",
@@ -58,6 +59,7 @@ def test_consumer_oversold_weekly_dispatches_and_prints_machine_lines(monkeypatc
         "service": "research_custom",
     }
     assert capsys.readouterr().out.splitlines() == [
+        "consumer_oversold|evidence|/tmp/consumer/evidence.csv",
         "consumer_oversold|expected|/tmp/consumer/expected.csv",
         "consumer_oversold|early|/tmp/consumer/early.csv",
         "consumer_oversold|scores|/tmp/consumer/scores.csv",

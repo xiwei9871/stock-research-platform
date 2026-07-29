@@ -8,6 +8,7 @@ EARLY_VALIDATION = "early_validation"
 REPAIR_BUCKETS = (EXPECTED_REPAIR, EARLY_VALIDATION)
 
 OUTPUT_FILENAMES = {
+    "evidence": "consumer_oversold_repair_evidence.csv",
     "expected": "consumer_oversold_expected_repair_top20.csv",
     "early": "consumer_oversold_early_validation_top20.csv",
     "scores": "consumer_oversold_full_scores.csv",

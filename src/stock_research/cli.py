@@ -1510,6 +1510,7 @@ def _parse_p9_outcome_event_maps(events: pd.DataFrame) -> pd.DataFrame:
 
 
 _CONSUMER_OVERSOLD_PATH_KEYS = (
+    "evidence",
     "expected",
     "early",
     "scores",

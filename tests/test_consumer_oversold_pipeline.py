@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 from stock_research.consumer_oversold.contracts import ConsumerOversoldConfig, OUTPUT_FILENAMES
-from stock_research.consumer_oversold.evidence import EVIDENCE_COLUMNS
+from stock_research.consumer_oversold.evidence import EVIDENCE_COLUMNS, OUTPUT_COLUMNS
 from stock_research.consumer_oversold.pipeline import (
     build_consumer_oversold_weekly_from_frames,
     run_consumer_oversold_weekly,
@@ -298,7 +298,7 @@ def test_explicit_completed_repair_is_excluded():
     assert "repair_already_completed" in row["exclusion_reasons"]
 
 
-def test_output_dir_publishes_six_absolute_current_paths(tmp_path):
+def test_output_dir_publishes_validated_evidence_and_seven_absolute_current_paths(tmp_path):
     frames, evidence, config = _frames()
     result = build_consumer_oversold_weekly_from_frames(
         frames=frames, evidence=evidence, config=config, output_dir=tmp_path
@@ -306,6 +306,12 @@ def test_output_dir_publishes_six_absolute_current_paths(tmp_path):
 
     assert set(result["paths"]) == set(OUTPUT_FILENAMES)
     assert all(Path(path).is_absolute() and "/current/" in path for path in result["paths"].values())
+    assert result["evidence"].columns.tolist() == OUTPUT_COLUMNS
+    published_evidence = pd.read_csv(result["paths"]["evidence"])
+    assert published_evidence.columns.tolist() == OUTPUT_COLUMNS
+    assert published_evidence["asset_id"].tolist() == ["A", "B"]
+    assert published_evidence["evidence_complete"].tolist() == [True, True]
+    assert published_evidence["hard_risk_manual_trigger"].tolist() == [False, False]
     assert "消费超跌修复候选周报" in result["report"]
 
 

@@ -358,6 +358,7 @@ def build_consumer_oversold_weekly_from_frames(
         )
         payload = {
             "trade_date": config.trade_date,
+            "evidence": validated_evidence,
             "expected": empty_scores,
             "early": empty_scores,
             "scores": empty_scores,
@@ -368,7 +369,10 @@ def build_consumer_oversold_weekly_from_frames(
             return write_consumer_oversold_artifacts(payload, output_dir=output_dir)
         return {
             "paths": {},
-            **{key: payload[key] for key in ("expected", "early", "scores", "exclusions", "coverage")},
+            **{
+                key: payload[key]
+                for key in ("evidence", "expected", "early", "scores", "exclusions", "coverage")
+            },
             "report": _render_report(
                 config.trade_date,
                 empty_scores,
@@ -492,6 +496,7 @@ def build_consumer_oversold_weekly_from_frames(
     )
     payload = {
         "trade_date": config.trade_date,
+        "evidence": validated_evidence,
         "expected": ranked["expected"],
         "early": ranked["early"],
         "scores": gated,
@@ -502,6 +507,7 @@ def build_consumer_oversold_weekly_from_frames(
         return write_consumer_oversold_artifacts(payload, output_dir=output_dir)
     return {
         "paths": {},
+        "evidence": validated_evidence,
         "expected": ranked["expected"],
         "early": ranked["early"],
         "scores": gated,

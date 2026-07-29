@@ -11,6 +11,11 @@ import pandas as pd
 import pytest
 
 from stock_research.consumer_oversold.contracts import OUTPUT_FILENAMES
+from stock_research.consumer_oversold.evidence import (
+    EVIDENCE_COLUMNS,
+    OUTPUT_COLUMNS,
+    validate_repair_evidence,
+)
 from stock_research.consumer_oversold.reporting import (
     REPORT_COLUMNS,
     write_consumer_oversold_artifacts,
@@ -84,6 +89,36 @@ def _payload() -> dict[str, object]:
     )
     return {
         "trade_date": "2026-07-29",
+        "evidence": validate_repair_evidence(
+            pd.DataFrame(
+                [
+                    {
+                        "asset_id": "000001.SZ",
+                        "stock_code": "000001",
+                        "evidence_as_of_date": "2026-07-20",
+                        "repair_bucket": "expected_repair",
+                        "repair_thesis": "需求企稳",
+                        "leading_indicator": "月度销量",
+                        "unrepaired_metrics": "毛利率",
+                        "expected_validation_date": "2026-08-30",
+                        "main_risks": "价格战",
+                        "invalidation_conditions": "销量继续下滑",
+                        "source_title": "公司公告",
+                        "source_url": "https://example.com/filing",
+                        "source_publish_date": "2026-07-18",
+                        "forecast_revision_state": "improving",
+                        "audit_review_status": "clear",
+                        "pledge_debt_review_status": "clear",
+                        "permanent_impairment_status": "clear",
+                        "catalyst_verifiability_score": 68.0,
+                        "expected_improvement_score": 75.0,
+                        "operator_notes": "=external formula",
+                    }
+                ],
+                columns=EVIDENCE_COLUMNS,
+            ),
+            trade_date="2026-07-29",
+        ),
         "expected": expected,
         "early": early,
         "scores": scores,
@@ -106,10 +141,19 @@ def _artifact_contents(output_dir: Path) -> dict[str, bytes]:
     }
 
 
-def test_writes_six_stable_artifacts_and_chinese_report(tmp_path):
+def test_writes_seven_stable_artifacts_and_chinese_report(tmp_path):
     result = write_consumer_oversold_artifacts(_payload(), output_dir=tmp_path / "nested")
 
-    assert set(result) == {"paths", "expected", "early", "scores", "exclusions", "coverage", "report"}
+    assert set(result) == {
+        "paths",
+        "evidence",
+        "expected",
+        "early",
+        "scores",
+        "exclusions",
+        "coverage",
+        "report",
+    }
     assert set(result["paths"]) == set(OUTPUT_FILENAMES)
     for key, filename in OUTPUT_FILENAMES.items():
         path = Path(result["paths"][key])
@@ -127,6 +171,9 @@ def test_writes_six_stable_artifacts_and_chinese_report(tmp_path):
     )
     assert expected_csv.columns.tolist() == [*expected_order, *expected_extras]
     assert expected_csv.loc[0, "stock_name"] == "甲公司"
+    evidence_csv = pd.read_csv(result["paths"]["evidence"])
+    assert evidence_csv.columns.tolist() == OUTPUT_COLUMNS
+    assert evidence_csv.loc[0, "operator_notes"] == "'=external formula"
 
     coverage = json.loads(Path(result["paths"]["coverage"]).read_text(encoding="utf-8"))
     assert coverage["trade_date"] == "2026-07-29"
@@ -150,6 +197,46 @@ def test_writes_six_stable_artifacts_and_chinese_report(tmp_path):
     assert "白色家电\\|厨电 细分" in report
     assert "公告\\|原文 链接" in report
     assert "CSV 为审阅安全转义" in report
+
+
+def test_published_evidence_is_immutable_from_later_external_input_changes(tmp_path):
+    payload = _payload()
+    result = write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+    release = (tmp_path / "current").resolve()
+    evidence_path = release / OUTPUT_FILENAMES["evidence"]
+    manifest_path = release / ".manifest.sha256"
+    evidence_before = evidence_path.read_bytes()
+    manifest_before = manifest_path.read_bytes()
+
+    payload["evidence"].loc[0, "repair_thesis"] = "外部文件随后被修改"
+
+    assert evidence_path.read_bytes() == evidence_before
+    assert manifest_path.read_bytes() == manifest_before
+
+
+def test_release_evidence_tampering_fails_manifest_hash_check(tmp_path):
+    write_consumer_oversold_artifacts(_payload(), output_dir=tmp_path)
+    release = (tmp_path / "current").resolve()
+    evidence_path = release / OUTPUT_FILENAMES["evidence"]
+    manifest_path = release / ".manifest.sha256"
+    expected_digest = next(
+        line.split("  ", 1)[0]
+        for line in manifest_path.read_text(encoding="utf-8").splitlines()
+        if line.endswith(f"  {OUTPUT_FILENAMES['evidence']}")
+    )
+
+    evidence_path.chmod(0o644)
+    evidence_path.write_bytes(evidence_path.read_bytes() + b"tampered")
+
+    assert hashlib.sha256(evidence_path.read_bytes()).hexdigest() != expected_digest
+
+
+def test_rejects_evidence_without_validated_output_columns(tmp_path):
+    payload = _payload()
+    payload["evidence"] = payload["evidence"].drop(columns=["evidence_complete"])
+
+    with pytest.raises(ValueError, match="evidence missing validated columns: evidence_complete"):
+        write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
 
 
 def test_empty_frames_still_write_asset_id_headers_and_missing_markdown_values(tmp_path):
