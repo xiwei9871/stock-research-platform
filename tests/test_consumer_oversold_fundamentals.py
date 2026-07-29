@@ -324,6 +324,29 @@ def test_hard_risk_missing_manual_is_unknown_not_clear():
     assert not result["hard_risk_triggered"]
 
 
+@pytest.mark.parametrize("missing_status", [None, np.nan, pd.NA, "", "   "])
+def test_hard_risk_normalizes_partially_missing_manual_status_to_unknown(missing_status):
+    fundamentals = pd.DataFrame([fundamental_row("A", latest_debt_ratio=0.90)])
+    manual = pd.DataFrame(
+        [
+            {
+                "asset_id": "A",
+                "audit_review_status": missing_status,
+                "pledge_debt_review_status": "triggered",
+                "permanent_impairment_status": "clear",
+            }
+        ]
+    )
+
+    result = compute_hard_risk_features(fundamentals, manual).iloc[0]
+
+    assert result["hard_risk_review_unknown"]
+    assert result["hard_risk_triggered"]
+    assert result["hard_risk_codes"] == (
+        "debt_pressure|hard_risk_review_unknown|pledge_debt_combination"
+    )
+
+
 def test_hard_risk_rejects_unknown_status_value_and_duplicate_manual_asset():
     fundamentals = pd.DataFrame([fundamental_row("A")])
     manual = pd.DataFrame(

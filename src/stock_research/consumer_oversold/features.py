@@ -451,15 +451,21 @@ def compute_hard_risk_features(
         _reject_duplicate_assets(manual, "manual_risk_reviews")
         allowed = {"clear", "triggered", "unknown"}
         for row in manual.itertuples(index=False):
-            statuses = {
-                field: getattr(row, field) for field in MANUAL_RISK_COLUMNS[1:]
-            }
-            for field, status in statuses.items():
+            statuses: dict[str, str] = {}
+            for field in MANUAL_RISK_COLUMNS[1:]:
+                status = getattr(row, field)
+                missing_marker = pd.isna(status)
+                if (
+                    isinstance(missing_marker, (bool, np.bool_))
+                    and bool(missing_marker)
+                ) or (isinstance(status, str) and not status.strip()):
+                    status = "unknown"
                 if status not in allowed:
                     raise ValueError(
                         f"manual_risk_reviews asset {row.asset_id} field {field} "
                         "must be clear, triggered, or unknown"
                     )
+                statuses[field] = status
             reviews[row.asset_id] = statuses
 
     rows: list[dict[str, object]] = []
