@@ -180,8 +180,8 @@ def compute_price_features(
     result["industry_return_60d"] = grouped["return_60d"].transform("mean")
     result["relative_return_6m"] = result["return_6m"] - result["industry_return_6m"]
     result["relative_return_60d"] = result["return_60d"] - result["industry_return_60d"]
-    result["relative_return_coverage"] = peer_count_6m.ge(3)
-    result["relative_return_coverage_60d"] = peer_count_60d.ge(3)
+    result["relative_return_coverage"] = peer_count_6m.ge(3) & result["return_6m"].notna()
+    result["relative_return_coverage_60d"] = peer_count_60d.ge(3) & result["return_60d"].notna()
     result.loc[
         ~result["relative_return_coverage"],
         ["industry_return_6m", "relative_return_6m"],

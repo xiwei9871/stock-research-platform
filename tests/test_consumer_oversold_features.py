@@ -162,6 +162,58 @@ def test_six_month_and_sixty_day_peer_coverage_are_computed_independently():
     assert result.loc["a", "relative_return_60d"] == pytest.approx(-0.7 / 3.0)
 
 
+def test_six_month_coverage_requires_the_asset_own_return():
+    bars = pd.concat(
+        [
+            _bars("a", [100.0] * 125 + [70.0]),
+            _bars("b", [100.0] * 125 + [90.0]),
+            _bars("c", [100.0] * 125 + [110.0]),
+            _bars("short", [100.0] * 59 + [120.0]),
+        ],
+        ignore_index=True,
+    )
+    membership = pd.DataFrame(
+        [(asset_id, "own_6m") for asset_id in ("a", "b", "c", "short")],
+        columns=["asset_id", "consumer_subindustry"],
+    )
+
+    row = compute_price_features(bars, membership, trade_date=TRADE_DATE).set_index(
+        "asset_id"
+    ).loc["short"]
+
+    assert row["industry_peer_count"] == 3
+    assert pd.isna(row["return_6m"])
+    assert not row["relative_return_coverage"]
+    assert pd.isna(row["industry_return_6m"])
+    assert pd.isna(row["relative_return_6m"])
+
+
+def test_sixty_day_coverage_requires_the_asset_own_return():
+    bars = pd.concat(
+        [
+            _bars("a", [100.0] * 59 + [70.0]),
+            _bars("b", [100.0] * 59 + [90.0]),
+            _bars("c", [100.0] * 59 + [110.0]),
+            _bars("short", [100.0] * 10),
+        ],
+        ignore_index=True,
+    )
+    membership = pd.DataFrame(
+        [(asset_id, "own_60d") for asset_id in ("a", "b", "c", "short")],
+        columns=["asset_id", "consumer_subindustry"],
+    )
+
+    row = compute_price_features(bars, membership, trade_date=TRADE_DATE).set_index(
+        "asset_id"
+    ).loc["short"]
+
+    assert row["industry_peer_count_60d"] == 3
+    assert pd.isna(row["return_60d"])
+    assert not row["relative_return_coverage_60d"]
+    assert pd.isna(row["industry_return_60d"])
+    assert pd.isna(row["relative_return_60d"])
+
+
 def test_incomplete_history_is_retained_without_fabricating_long_windows():
     bars = pd.concat([_bars("short", list(range(1, 121))), _bars("tiny", [5.0] * 10)])
     membership = pd.DataFrame(
