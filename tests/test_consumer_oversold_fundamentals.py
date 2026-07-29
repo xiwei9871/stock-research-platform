@@ -279,6 +279,64 @@ def test_fundamental_derivations_keep_zero_denominators_and_future_comparators_m
         assert math.isnan(result.loc["B", field])
 
 
+@pytest.mark.parametrize(
+    ("prior_profit", "current_profit", "expected"),
+    [
+        (-10.0, -5.0, 0.5),
+        (-10.0, 10.0, 2.0),
+        (10.0, -5.0, -1.5),
+        (0.0, 5.0, math.nan),
+    ],
+)
+def test_derived_profit_growth_uses_absolute_prior_profit_base(
+    prior_profit, current_profit, expected
+):
+    rows = [
+        finance_row(
+            "A",
+            "2024-03-31",
+            "2024-04-20",
+            np_parent_ttm=prior_profit,
+            profit_growth=None,
+        ),
+        finance_row(
+            "A",
+            "2025-03-31",
+            "2025-04-20",
+            np_parent_ttm=current_profit,
+            profit_growth=None,
+        ),
+    ]
+
+    result = compute_fundamental_features(
+        pd.DataFrame(rows), trade_date="2025-04-30"
+    ).iloc[0]
+
+    if math.isnan(expected):
+        assert math.isnan(result["latest_profit_growth"])
+    else:
+        assert result["latest_profit_growth"] == pytest.approx(expected)
+
+
+def test_existing_profit_growth_indicator_is_not_overwritten_by_derivation():
+    rows = [
+        finance_row("A", "2024-03-31", "2024-04-20", np_parent_ttm=-10.0),
+        finance_row(
+            "A",
+            "2025-03-31",
+            "2025-04-20",
+            np_parent_ttm=-5.0,
+            profit_growth=0.99,
+        ),
+    ]
+
+    result = compute_fundamental_features(
+        pd.DataFrame(rows), trade_date="2025-04-30"
+    ).iloc[0]
+
+    assert result["latest_profit_growth"] == 0.99
+
+
 @pytest.mark.parametrize("invalid", [Decimal("NaN"), Decimal("Infinity")])
 def test_fundamentals_reject_non_finite_database_decimal(invalid):
     row = finance_row("A", "2024-12-31", "2025-03-01", revenue_growth=invalid)

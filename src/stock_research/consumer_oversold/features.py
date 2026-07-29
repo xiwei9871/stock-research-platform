@@ -247,8 +247,9 @@ def _derive_fundamental_period_fields(frame: pd.DataFrame) -> None:
             ):
                 if pd.isna(frame.at[index, field]):
                     prior_value = float(frame.at[prior_index, prior_field])
+                    denominator = abs(prior_value) if field == "profit_growth" else prior_value
                     frame.at[index, field] = _derived_ratio(
-                        current_value - prior_value, prior_value
+                        current_value - prior_value, denominator
                     )
 
 
