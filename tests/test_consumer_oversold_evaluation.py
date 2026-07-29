@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import stat
 from pathlib import Path
 
@@ -12,6 +13,8 @@ from stock_research.consumer_oversold.contracts import OUTPUT_FILENAMES
 from stock_research.consumer_oversold.evaluation import (
     EVALUATION_FILENAMES,
     _load_evaluation_bars,
+    _publish,
+    _verified_release,
     evaluate_consumer_oversold_snapshots,
     run_consumer_oversold_evaluation,
 )
@@ -371,6 +374,44 @@ def test_run_rejects_tampered_release_and_overlapping_paths(tmp_path, monkeypatc
             output_dir=tmp_path / "evaluation",
             service="test",
         )
+
+
+def test_verified_release_rejects_writable_release_directory(tmp_path):
+    release = _sealed_release(
+        tmp_path, "consumer-oversold-current", "2026-01-05", "A", "expected_repair"
+    )
+    release.chmod(0o755)
+
+    assert _verified_release(release) is False
+
+
+@pytest.mark.parametrize(
+    "filename",
+    [".manifest.sha256", *OUTPUT_FILENAMES.values()],
+)
+def test_verified_release_rejects_writable_manifest_or_artifact(tmp_path, filename):
+    release = _sealed_release(
+        tmp_path, "consumer-oversold-current", "2026-01-05", "A", "expected_repair"
+    )
+    (release / filename).chmod(0o644)
+
+    assert _verified_release(release) is False
+
+
+def test_verified_release_rejects_symlink_artifact_even_when_hash_matches(tmp_path):
+    release = _sealed_release(
+        tmp_path, "consumer-oversold-current", "2026-01-05", "A", "expected_repair"
+    )
+    artifact = release / OUTPUT_FILENAMES["evidence"]
+    external = tmp_path / "external-evidence.csv"
+    external.write_bytes(artifact.read_bytes())
+    external.chmod(0o444)
+    release.chmod(0o755)
+    artifact.unlink()
+    artifact.symlink_to(external)
+    release.chmod(0o555)
+
+    assert _verified_release(release) is False
     with pytest.raises(ValueError, match="must not overlap"):
         run_consumer_oversold_evaluation(
             snapshots_root=tmp_path / "snapshots",
@@ -442,3 +483,63 @@ def test_run_atomically_writes_safe_read_only_artifacts(tmp_path, monkeypatch):
     assert "前瞻评估" in Path(result["paths"]["report"]).read_text(encoding="utf-8")
     detail = pd.read_csv(result["paths"]["detail"])
     assert detail.loc[0, "stock_name"] == "'=cmd"
+
+
+def _fail_first_output_dir_fsync(monkeypatch, output_dir: Path):
+    import stock_research.consumer_oversold.evaluation as evaluation
+
+    real_fsync = evaluation._fsync_dir
+    failed = False
+
+    def fail_once(path):
+        nonlocal failed
+        if Path(path) == output_dir and not failed:
+            failed = True
+            raise OSError("post-switch fsync failed")
+        return real_fsync(path)
+
+    monkeypatch.setattr(evaluation, "_fsync_dir", fail_once)
+
+
+def test_post_switch_fsync_failure_restores_existing_current(tmp_path, monkeypatch):
+    output_dir = tmp_path / "evaluation"
+    detail = pd.DataFrame([{"asset_id": "old"}])
+    summary = pd.DataFrame([{"completed_count": 1}])
+    _publish(output_dir, detail, summary, "old report\n")
+    old_target = os.readlink(output_dir / "current")
+    _fail_first_output_dir_fsync(monkeypatch, output_dir)
+
+    with pytest.raises(OSError, match="post-switch fsync failed"):
+        _publish(
+            output_dir,
+            pd.DataFrame([{"asset_id": "new"}]),
+            summary,
+            "new report\n",
+        )
+
+    assert os.readlink(output_dir / "current") == old_target
+    releases = [
+        path
+        for path in (output_dir / ".releases").iterdir()
+        if path.name.startswith("consumer-oversold-evaluation-")
+    ]
+    assert len(releases) == 1
+    assert not list(output_dir.glob(".consumer-oversold-evaluation-current-*"))
+
+
+def test_post_switch_fsync_failure_removes_first_current(tmp_path, monkeypatch):
+    output_dir = tmp_path / "evaluation"
+    output_dir.mkdir()
+    _fail_first_output_dir_fsync(monkeypatch, output_dir)
+
+    with pytest.raises(OSError, match="post-switch fsync failed"):
+        _publish(
+            output_dir,
+            pd.DataFrame([{"asset_id": "new"}]),
+            pd.DataFrame([{"completed_count": 1}]),
+            "new report\n",
+        )
+
+    assert not (output_dir / "current").exists()
+    assert not list((output_dir / ".releases").glob("consumer-oversold-evaluation-*"))
+    assert not list(output_dir.glob(".consumer-oversold-evaluation-current-*"))

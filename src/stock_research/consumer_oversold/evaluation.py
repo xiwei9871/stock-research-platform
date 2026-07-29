@@ -5,6 +5,7 @@ import json
 import math
 import os
 import shutil
+import stat
 import uuid
 from pathlib import Path
 from typing import Any, Iterable
@@ -206,16 +207,21 @@ def _digest(path: Path) -> str:
 
 def _verified_release(release: Path) -> bool:
     manifest = release / ".manifest.sha256"
-    if not release.is_dir() or not manifest.is_file():
-        return False
     try:
+        release_mode = release.lstat().st_mode
+        if not stat.S_ISDIR(release_mode) or release_mode & 0o222:
+            return False
+        manifest_mode = manifest.lstat().st_mode
+        if not stat.S_ISREG(manifest_mode) or manifest_mode & 0o222:
+            return False
         entries = {}
         for line in manifest.read_text(encoding="utf-8").splitlines():
             digest, filename = line.split("  ", 1)
             entries[filename] = digest
         required = set(OUTPUT_FILENAMES.values())
         return required.issubset(entries) and all(
-            (release / filename).is_file()
+            stat.S_ISREG((release / filename).lstat().st_mode)
+            and not ((release / filename).lstat().st_mode & 0o222)
             and entries[filename] == _digest(release / filename)
             for filename in required
         )
@@ -428,6 +434,19 @@ def _remove(path: Path) -> None:
         shutil.rmtree(path)
 
 
+def _restore_current(output_dir: Path, old_target: str | None) -> None:
+    current = output_dir / "current"
+    if old_target is None:
+        current.unlink(missing_ok=True)
+        return
+    recovery = output_dir / f".consumer-oversold-evaluation-current-recovery-{uuid.uuid4().hex}"
+    try:
+        os.symlink(old_target, recovery)
+        os.replace(recovery, current)
+    finally:
+        recovery.unlink(missing_ok=True)
+
+
 def _publish(output_dir: Path, detail: pd.DataFrame, summary: pd.DataFrame, report: str) -> dict[str, str]:
     output_dir.mkdir(parents=True, exist_ok=True)
     releases = output_dir / ".releases"
@@ -437,8 +456,14 @@ def _publish(output_dir: Path, detail: pd.DataFrame, summary: pd.DataFrame, repo
     release = releases / f"consumer-oversold-evaluation-{identifier}"
     temp_link = output_dir / f".consumer-oversold-evaluation-current-{identifier}"
     current = output_dir / "current"
+    old_target: str | None = None
+    if current.is_symlink():
+        old_target = os.readlink(current)
+    elif current.exists():
+        raise ValueError("output_dir/current must be a symlink managed by this publisher")
     staging.mkdir()
     switched = False
+    preserve_release = False
     try:
         _write_csv(detail, staging / EVALUATION_FILENAMES["detail"])
         _write_csv(summary, staging / EVALUATION_FILENAMES["summary"])
@@ -454,11 +479,24 @@ def _publish(output_dir: Path, detail: pd.DataFrame, summary: pd.DataFrame, repo
         os.symlink(str(Path(".releases") / release.name), temp_link)
         os.replace(temp_link, current)
         switched = True
-        _fsync_dir(output_dir)
+        try:
+            _fsync_dir(output_dir)
+        except OSError as publication_error:
+            try:
+                _restore_current(output_dir, old_target)
+                _fsync_dir(output_dir)
+            except BaseException as rollback_error:
+                preserve_release = True
+                failure = RuntimeError(
+                    f"evaluation publication failed and rollback incomplete: {rollback_error}"
+                )
+                raise failure from publication_error
+            switched = False
+            raise
     finally:
         _remove(staging)
         temp_link.unlink(missing_ok=True)
-        if not switched:
+        if not switched and not preserve_release:
             _remove(release)
     return {
         key: str(output_dir / "current" / filename)
