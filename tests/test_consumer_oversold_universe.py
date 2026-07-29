@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -11,6 +12,9 @@ from stock_research.consumer_oversold.universe import build_consumer_universe_fr
 
 
 TRADE_DATE = "2026-07-29"
+INDUSTRY_RULES_PATH = (
+    Path(__file__).resolve().parents[1] / "config" / "consumer_oversold_industry_rules_v1.csv"
+)
 
 
 def _assets() -> pd.DataFrame:
@@ -144,6 +148,87 @@ def test_universe_applies_all_market_gates_and_keeps_every_asset():
     assert by_code.loc["600005", "exclude_reasons"] == "missing_industry"
     assert "not_terminal_consumer" not in by_code.loc["600005", "exclude_reasons"]
     assert not by_code.loc[["600001", "600002", "600003", "600004", "600005"], "included"].any()
+
+
+@pytest.mark.parametrize(
+    ("avg_turnover_amount", "included", "exclude_reasons"),
+    [
+        (691_266_560.0, True, ""),
+        (691_266.56, False, "low_liquidity"),
+    ],
+)
+def test_liquidity_gate_compares_turnover_in_yuan(
+    avg_turnover_amount, included, exclude_reasons
+):
+    liquidity = _liquidity()
+    liquidity.loc[liquidity["asset_id"].eq("a1"), "avg_turnover_amount"] = avg_turnover_amount
+
+    row = _build(liquidity=liquidity).set_index("stock_code").loc["601888"]
+
+    assert bool(row["included"]) is included
+    assert row["exclude_reasons"] == exclude_reasons
+
+
+@pytest.mark.parametrize(
+    ("industry_name", "expected_subindustry"),
+    [
+        ("酒、饮料和精制茶制造业", "food_beverage"),
+        ("食品制造业", "food_beverage"),
+        ("农副食品加工业", "food_beverage"),
+        ("零售业", "retail_duty_free"),
+        ("住宿业", "tourism_hospitality"),
+        ("餐饮业", "tourism_hospitality"),
+        ("文化艺术业", "tourism_hospitality"),
+        ("广播、电视、电影和录音制作业", "tourism_hospitality"),
+        ("纺织服装、服饰业", "textile_apparel"),
+        ("皮革、毛皮、羽毛及其制品和制鞋业", "textile_apparel"),
+        ("家具制造业", "home_leisure"),
+        ("文教、工美、体育和娱乐用品制造业", "home_leisure"),
+        ("新闻和出版业", "home_leisure"),
+    ],
+)
+def test_real_csrc_terminal_consumer_industries_are_included(
+    industry_name, expected_subindustry
+):
+    industries = _industries()
+    industries.loc[industries["asset_id"].eq("a1"), ["industry_system", "industry_name"]] = [
+        "csrc",
+        industry_name,
+    ]
+    rules = pd.read_csv(INDUSTRY_RULES_PATH)
+
+    row = _build(industries=industries, industry_rules=rules).set_index("stock_code").loc["601888"]
+
+    assert row["included"]
+    assert row["consumer_subindustry"] == expected_subindustry
+
+
+@pytest.mark.parametrize(
+    ("company_name", "industry_name"),
+    [
+        ("汽车整车样例", "汽车制造业"),
+        ("批发样例", "批发业"),
+        ("中国中免", "商务服务业"),
+        ("公共设施样例", "公共设施管理业"),
+        ("纺织B2B样例", "纺织业"),
+    ],
+)
+def test_broad_csrc_industries_default_to_not_terminal_consumer(
+    company_name, industry_name
+):
+    assets = _assets()
+    assets.loc[assets["asset_id"].eq("a1"), "name"] = company_name
+    industries = _industries()
+    industries.loc[industries["asset_id"].eq("a1"), ["industry_system", "industry_name"]] = [
+        "csrc",
+        industry_name,
+    ]
+    rules = pd.read_csv(INDUSTRY_RULES_PATH)
+
+    row = _build(assets=assets, industries=industries, industry_rules=rules).set_index("stock_code").loc["601888"]
+
+    assert not row["included"]
+    assert row["exclude_reasons"] == "not_terminal_consumer"
 
 
 def test_delisting_risk_excludes_stock_without_st_flag():

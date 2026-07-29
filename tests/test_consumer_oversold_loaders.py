@@ -40,7 +40,7 @@ def test_universe_loads_four_stable_frames_and_point_in_time_sql(monkeypatch):
         [
             [{"asset_id": "B", "stock_code": "000002", "name": "B", "list_date": date(2020, 1, 2)}],
             [{"asset_id": "B", "is_st": False, "is_delisting_risk": False, "is_suspended": True}],
-            [{"asset_id": "B", "avg_turnover_amount": 42}],
+            [{"asset_id": "B", "avg_turnover_amount": 691_266.56}],
             [
                 {"asset_id": "B", "industry_system": "citics", "industry_name": "消费"},
                 {"asset_id": "B", "industry_system": "sw", "industry_name": "食品"},
@@ -59,6 +59,7 @@ def test_universe_loads_four_stable_frames_and_point_in_time_sql(monkeypatch):
     assert result["industries"].columns.tolist() == ["asset_id", "industry_system", "industry_name"]
     assert result["assets"].iloc[0]["list_date"] == "2020-01-02"
     assert not bool(result["statuses"].iloc[0]["is_delisting_risk"])
+    assert result["liquidity"].iloc[0]["avg_turnover_amount"] == 691_266.56
     assert result["industries"].to_dict("records") == [
         {"asset_id": "B", "industry_system": "sw", "industry_name": "食品"}
     ]
@@ -69,6 +70,7 @@ def test_universe_loads_four_stable_frames_and_point_in_time_sql(monkeypatch):
     assert "a.delist_date IS NOT NULL AND a.delist_date <= %s" in calls[1][0]
     assert "LIMIT 20" in calls[2][0]
     assert "adjust_type = 'hfq'" in calls[2][0]
+    assert "AVG(b.amount) * 1000 AS avg_turnover_amount" in calls[2][0]
     assert "start_date <= %s" in calls[3][0]
     assert "%s < end_date" in calls[3][0]
     assert "PARTITION BY asset_id" in calls[3][0]

@@ -137,6 +137,8 @@ def load_consumer_universe_frames(
       AND (a.delist_date IS NULL OR a.delist_date >= %s)
     ORDER BY a.asset_id
     """
+    # market_daily_bar.amount is stored in thousands of yuan; normalize the
+    # aggregate to yuan before applying the consumer-universe liquidity gate.
     liquidity_sql = """
     WITH latest_dates AS (
         SELECT DISTINCT trade_date
@@ -146,7 +148,7 @@ def load_consumer_universe_frames(
         ORDER BY trade_date DESC
         LIMIT 20
     )
-    SELECT b.asset_id, AVG(b.amount) AS avg_turnover_amount
+    SELECT b.asset_id, AVG(b.amount) * 1000 AS avg_turnover_amount
     FROM market_daily_bar b
     JOIN latest_dates d ON d.trade_date = b.trade_date
     WHERE b.adjust_type = 'hfq'
