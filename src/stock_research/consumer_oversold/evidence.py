@@ -47,6 +47,7 @@ _RISK_FIELDS = (
     "pledge_debt_review_status",
     "permanent_impairment_status",
 )
+_SCORE_FIELDS = ("catalyst_verifiability_score", "expected_improvement_score")
 _FORECAST_STATES = {
     "unknown",
     "not_available",
@@ -110,17 +111,28 @@ def _validated_score(value: object, *, field: str, asset_id: str) -> float | Non
     return numeric
 
 
+def _normalize_score_dtypes(frame: pd.DataFrame) -> None:
+    for field in _SCORE_FIELDS:
+        frame[field] = pd.to_numeric(frame[field], errors="coerce").astype("Float64")
+
+
 def _valid_source_url(value: str) -> bool:
     try:
         parsed = urlparse(value)
         hostname = parsed.hostname
+        parsed.port
     except ValueError:
         return False
-    if parsed.scheme not in {"http", "https"} or not hostname:
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not hostname
+        or parsed.username is not None
+        or parsed.password is not None
+    ):
         return False
 
     try:
-        ipaddress.ip_address(hostname)
+        address = ipaddress.ip_address(hostname)
     except ValueError:
         try:
             ascii_hostname = hostname.encode("idna").decode("ascii")
@@ -141,6 +153,17 @@ def _valid_source_url(value: str) -> bool:
                 or not valid_characters
             ):
                 return False
+    else:
+        if (
+            not address.is_global
+            or address.is_loopback
+            or address.is_private
+            or address.is_link_local
+            or address.is_multicast
+            or address.is_reserved
+            or address.is_unspecified
+        ):
+            return False
     return True
 
 
@@ -158,6 +181,7 @@ def validate_repair_evidence(frame: pd.DataFrame, *, trade_date: str) -> pd.Data
 
     if frame.empty:
         result = frame.loc[:, EVIDENCE_COLUMNS].copy()
+        _normalize_score_dtypes(result)
         result["evidence_complete"] = pd.Series(dtype=bool)
         result["evidence_errors"] = pd.Series(dtype=object)
         result["hard_risk_manual_trigger"] = pd.Series(dtype=bool)
@@ -166,7 +190,7 @@ def validate_repair_evidence(frame: pd.DataFrame, *, trade_date: str) -> pd.Data
 
     result = frame.loc[:, EVIDENCE_COLUMNS].copy()
     for column in EVIDENCE_COLUMNS:
-        if column not in {"catalyst_verifiability_score", "expected_improvement_score"}:
+        if column not in _SCORE_FIELDS:
             result[column] = result[column].astype(object)
     result["asset_id"] = result["asset_id"].map(_text)
     if result["asset_id"].eq("").any():
@@ -219,7 +243,12 @@ def validate_repair_evidence(frame: pd.DataFrame, *, trade_date: str) -> pd.Data
             if parsed is not None and parsed > parsed_trade_date:
                 raise ValueError(f"future {field} for asset {asset_id}: {result.at[index, field]}")
         evidence_date = parsed_dates["evidence_as_of_date"]
+        source_date = parsed_dates["source_publish_date"]
         validation_date = parsed_dates["expected_validation_date"]
+        if evidence_date is not None and source_date is not None and source_date > evidence_date:
+            raise ValueError(
+                f"asset {asset_id} source_publish_date cannot follow evidence_as_of_date"
+            )
         if evidence_date is not None and validation_date is not None and validation_date < evidence_date:
             raise ValueError(
                 f"expected_validation_date cannot precede evidence_as_of_date for asset {asset_id}"
@@ -240,7 +269,7 @@ def validate_repair_evidence(frame: pd.DataFrame, *, trade_date: str) -> pd.Data
             )
         result.at[index, "forecast_revision_state"] = forecast_state
 
-        for field in ("catalyst_verifiability_score", "expected_improvement_score"):
+        for field in _SCORE_FIELDS:
             score = _validated_score(row[field], field=field, asset_id=asset_id)
             if score is None:
                 errors.append(f"missing_{field}")
@@ -254,6 +283,7 @@ def validate_repair_evidence(frame: pd.DataFrame, *, trade_date: str) -> pd.Data
         trigger_values.append("triggered" in statuses)
         unknown_values.append("unknown" in statuses)
 
+    _normalize_score_dtypes(result)
     result["evidence_complete"] = pd.Series(complete_values, index=result.index, dtype=bool)
     result["evidence_errors"] = error_values
     result["hard_risk_manual_trigger"] = pd.Series(trigger_values, index=result.index, dtype=bool)

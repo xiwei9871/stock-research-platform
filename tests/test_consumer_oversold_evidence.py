@@ -115,6 +115,31 @@ def test_expected_validation_date_cannot_precede_evidence_date():
         _validate(_frame(_row(expected_validation_date="2026-07-27")))
 
 
+def test_source_publish_date_cannot_follow_evidence_as_of_date():
+    with pytest.raises(
+        ValueError,
+        match=r"a1.*source_publish_date.*evidence_as_of_date|source_publish_date.*evidence_as_of_date.*a1",
+    ):
+        _validate(
+            _frame(
+                _row(
+                    evidence_as_of_date="2026-07-27",
+                    source_publish_date="2026-07-28",
+                )
+            )
+        )
+
+
+def test_source_publish_date_is_retained_when_evidence_as_of_date_is_missing():
+    result = _validate(
+        _frame(_row(evidence_as_of_date="", source_publish_date="2026-07-28"))
+    )
+
+    assert result.loc[0, "source_publish_date"] == "2026-07-28"
+    assert result.loc[0, "evidence_errors"] == "missing_evidence_as_of_date"
+    assert not result.loc[0, "evidence_complete"]
+
+
 @pytest.mark.parametrize("bucket", ["", " ", None, "late_validation"])
 def test_repair_bucket_must_be_non_empty_and_allowed(bucket):
     with pytest.raises(ValueError, match="repair_bucket"):
@@ -155,6 +180,20 @@ def test_missing_evidence_text_marks_incomplete_instead_of_raising(field, error)
         "https://./a",
         "https://-bad-.com/a",
         "https://localhost/a",
+        "https://user@example.com/a",
+        "https://user:password@example.com/a",
+        "https://example.com:not-a-port/a",
+        "https://example.com:70000/a",
+        "https://127.0.0.1/a",
+        "https://10.0.0.1/a",
+        "https://169.254.169.254/latest/meta-data",
+        "https://224.0.0.1/a",
+        "https://240.0.0.1/a",
+        "https://0.0.0.0/a",
+        "https://[::1]/a",
+        "https://[fc00::1]/a",
+        "https://[fe80::1]/a",
+        "https://[ff02::1]/a",
     ],
 )
 def test_non_empty_source_url_requires_http_or_https_and_a_host(url):
@@ -169,8 +208,8 @@ def test_non_empty_source_url_requires_http_or_https_and_a_host(url):
         "http://reports.example.com/a",
         "https://xn--fsqu00a.xn--0zwm56d/a",
         "https://例子.测试/a",
-        "https://192.0.2.1/a",
-        "https://[2001:db8::1]/a",
+        "https://8.8.8.8/a",
+        "https://[2606:4700:4700::1111]/a",
     ],
 )
 def test_source_url_accepts_valid_dns_idna_and_ip_hosts(url):
@@ -217,6 +256,40 @@ def test_missing_score_marks_evidence_incomplete(field, error):
 
     assert not result.loc[0, "evidence_complete"]
     assert result.loc[0, "evidence_errors"] == error
+
+
+@pytest.mark.parametrize("shape", ["mixed", "all_missing", "empty"])
+def test_score_columns_have_stable_nullable_float_dtype(shape):
+    if shape == "mixed":
+        frame = _frame(
+            _row(asset_id="a1", catalyst_verifiability_score=None),
+            _row(asset_id="a2", expected_improvement_score=None),
+        )
+    elif shape == "all_missing":
+        frame = _frame(
+            _row(
+                asset_id="a1",
+                catalyst_verifiability_score=None,
+                expected_improvement_score=None,
+            ),
+            _row(
+                asset_id="a2",
+                catalyst_verifiability_score=np.nan,
+                expected_improvement_score=pd.NA,
+            ),
+        )
+    else:
+        frame = pd.DataFrame(columns=EVIDENCE_COLUMNS)
+
+    result = _validate(frame)
+
+    assert str(result["catalyst_verifiability_score"].dtype) == "Float64"
+    assert str(result["expected_improvement_score"].dtype) == "Float64"
+    if not result.empty:
+        missing = result[
+            ["catalyst_verifiability_score", "expected_improvement_score"]
+        ].isna()
+        assert missing.any(axis=None)
 
 
 @pytest.mark.parametrize("value", [-1, 101, "80", True, np.bool_(False), np.inf, -np.inf])
