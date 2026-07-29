@@ -204,6 +204,18 @@ def test_rejects_bucket_overlap_limit_duplicate_empty_and_risk_contracts(tmp_pat
             write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
 
 
+@pytest.mark.parametrize(
+    "missing_gate",
+    ["evidence_complete", "hard_risk_triggered", "hard_risk_review_unknown"],
+)
+def test_nonempty_selected_frame_requires_every_risk_gate(missing_gate, tmp_path):
+    payload = _payload()
+    payload["expected"] = payload["expected"].drop(columns=[missing_gate])
+
+    with pytest.raises(ValueError, match=f"expected missing required columns.*{missing_gate}"):
+        write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+
+
 @pytest.mark.parametrize("bad", [np.nan, np.inf, -np.inf])
 def test_rejects_non_json_safe_coverage_values(bad, tmp_path):
     payload = _payload()

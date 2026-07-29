@@ -98,8 +98,10 @@ def _validate_selected(frame: pd.DataFrame, name: str) -> set[str]:
         raise ValueError(f"{name} must contain at most 20 rows")
     if frame.empty:
         return set()
-    if "asset_id" not in frame.columns:
-        raise ValueError(f"{name} missing required column: asset_id")
+    required_columns = ("asset_id", *_SELECTED_GATES)
+    missing_columns = [column for column in required_columns if column not in frame.columns]
+    if missing_columns:
+        raise ValueError(f"{name} missing required columns: {', '.join(missing_columns)}")
     missing = frame["asset_id"].isna()
     normalized = frame["asset_id"].astype(str).str.strip()
     if (missing | normalized.eq("")).any():
@@ -107,8 +109,6 @@ def _validate_selected(frame: pd.DataFrame, name: str) -> set[str]:
     if normalized.duplicated().any():
         raise ValueError(f"{name} asset_id must be unique")
     for field, required in _SELECTED_GATES.items():
-        if field not in frame.columns:
-            continue
         valid = frame[field].map(
             lambda value: isinstance(value, (bool, np.bool_)) and bool(value) is required
         )
