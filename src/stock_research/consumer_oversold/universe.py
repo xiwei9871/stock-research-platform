@@ -81,6 +81,16 @@ def _joined(reasons: list[str]) -> str:
     return "|".join(sorted({_text(reason) for reason in reasons if _text(reason)}))
 
 
+def _name_has_risk_flag(value: object) -> bool:
+    normalized = _normalized(value)
+    normalized = re.sub(r"^(?:XD|XR|DR)", "", normalized, count=1, flags=re.IGNORECASE)
+    return bool(
+        re.match(r"^S?\*?ST", normalized, flags=re.IGNORECASE)
+        or normalized.startswith("退市")
+        or normalized.endswith("退")
+    )
+
+
 def _parse_status_flag(value: object, *, field: str, asset_id: str) -> bool:
     if pd.isna(value):
         raise ValueError(f"invalid status {field} for asset {asset_id}: missing")
@@ -313,6 +323,8 @@ def build_consumer_universe_from_frames(
         )
         if is_st or is_delisting_risk:
             exclude_reasons.append("st_or_delisting_risk")
+        if _name_has_risk_flag(asset.name):
+            exclude_reasons.append("name_risk_flag")
         if is_suspended:
             exclude_reasons.append("suspended")
         if not _listed_long_enough(asset.list_date, trade_date=trade_date, minimum_days=config.min_listed_days):

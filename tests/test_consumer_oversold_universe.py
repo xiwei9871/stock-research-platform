@@ -15,6 +15,9 @@ TRADE_DATE = "2026-07-29"
 INDUSTRY_RULES_PATH = (
     Path(__file__).resolve().parents[1] / "config" / "consumer_oversold_industry_rules_v1.csv"
 )
+ASSET_OVERRIDES_PATH = (
+    Path(__file__).resolve().parents[1] / "config" / "consumer_oversold_asset_overrides_v1.csv"
+)
 
 
 def _assets() -> pd.DataFrame:
@@ -141,7 +144,7 @@ def test_universe_applies_all_market_gates_and_keeps_every_asset():
     by_code = result.set_index("stock_code")
 
     assert len(result) == len(_assets())
-    assert by_code.loc["600001", "exclude_reasons"] == "st_or_delisting_risk"
+    assert by_code.loc["600001", "exclude_reasons"] == "name_risk_flag|st_or_delisting_risk"
     assert by_code.loc["600002", "exclude_reasons"] == "listed_less_than_365_days"
     assert by_code.loc["600003", "exclude_reasons"] == "low_liquidity"
     assert by_code.loc["600004", "exclude_reasons"] == "suspended"
@@ -243,6 +246,42 @@ def test_delisting_risk_excludes_stock_without_st_flag():
     assert row["exclude_reasons"] == "st_or_delisting_risk"
 
 
+@pytest.mark.parametrize(
+    "name",
+    ["ST样例", " *ST 样例 ", "s*st样例", "SST样例", "退市样例", "样例退"],
+)
+def test_name_risk_flag_excludes_even_when_status_source_is_false(name):
+    assets = _assets()
+    assets.loc[assets["asset_id"].eq("a1"), "name"] = name
+
+    row = _build(assets=assets).set_index("stock_code").loc["601888"]
+
+    assert not row["included"]
+    assert row["exclude_reasons"] == "name_risk_flag"
+
+
+@pytest.mark.parametrize("name", ["XD中国中免", "XR 中国中免", "dr中国中免"])
+def test_normal_corporate_action_name_prefix_is_not_treated_as_risk(name):
+    assets = _assets()
+    assets.loc[assets["asset_id"].eq("a1"), "name"] = name
+
+    row = _build(assets=assets).set_index("stock_code").loc["601888"]
+
+    assert row["included"]
+    assert row["exclude_reasons"] == ""
+
+
+@pytest.mark.parametrize("name", ["XD*ST样例", "XR ST样例", "drs*st样例"])
+def test_corporate_action_prefix_does_not_hide_st_name(name):
+    assets = _assets()
+    assets.loc[assets["asset_id"].eq("a1"), "name"] = name
+
+    row = _build(assets=assets).set_index("stock_code").loc["601888"]
+
+    assert not row["included"]
+    assert row["exclude_reasons"] == "name_risk_flag"
+
+
 @pytest.mark.parametrize("false_value", [False, np.bool_(False), 0, "false", " FALSE ", "0"])
 def test_status_false_values_do_not_trigger_market_gate(false_value):
     statuses = _statuses().astype(
@@ -314,6 +353,35 @@ def test_override_include_and_exclude_take_precedence_when_active():
     assert by_code.loc["000887", "include_reasons"] == "manual_include"
     assert not by_code.loc["601888", "included"]
     assert by_code.loc["601888", "exclude_reasons"] == "manual_exclude"
+
+
+def test_curated_override_file_contains_only_audited_terminal_consumer_brands():
+    overrides = pd.read_csv(ASSET_OVERRIDES_PATH, dtype={"stock_code": "string"})
+    expected_auto = {
+        "000550", "000572", "000625", "000800", "000868", "000951", "000957",
+        "000980", "002594", "600006", "600066", "600104", "600166", "600303",
+        "600375", "600418", "600686", "600733", "601127", "601238", "601633",
+        "000913", "600099", "603129", "603766",
+    }
+
+    assert set(overrides["stock_code"]) == expected_auto | {"601888"}
+    assert "601777" not in set(overrides["stock_code"])
+    assert overrides["action"].eq("include").all()
+    assert overrides["reason"].eq("terminal_consumer_brand_audit").all()
+    assert set(overrides.loc[overrides["stock_code"].isin(expected_auto), "consumer_subindustry"]) == {"auto_oem"}
+    assert overrides.loc[overrides["stock_code"].eq("601888"), "consumer_subindustry"].item() == "retail_duty_free"
+
+
+def test_curated_overrides_include_oems_and_duty_free_but_not_auto_parts():
+    overrides = pd.read_csv(ASSET_OVERRIDES_PATH, dtype={"stock_code": "string"})
+
+    by_code = _build(asset_overrides=overrides).set_index("stock_code")
+
+    for code in ("601127", "600418", "601888"):
+        assert by_code.loc[code, "included"]
+        assert by_code.loc[code, "include_reasons"] == "terminal_consumer_brand_audit"
+    assert not by_code.loc["000887", "included"]
+    assert by_code.loc["000887", "exclude_reasons"] == "not_terminal_consumer"
 
 
 def test_numeric_stock_codes_from_csv_are_zero_padded_for_override_matching(tmp_path):
@@ -434,7 +502,10 @@ def test_reasons_are_stably_sorted_and_deduplicated():
     row = _build(statuses=statuses, liquidity=liquidity, config=config).set_index("stock_code").loc["600001"]
 
     assert row["include_reasons"] == "terminal_consumer_industry"
-    assert row["exclude_reasons"] == "listed_less_than_365_days|low_liquidity|st_or_delisting_risk|suspended"
+    assert row["exclude_reasons"] == (
+        "listed_less_than_365_days|low_liquidity|name_risk_flag|"
+        "st_or_delisting_risk|suspended"
+    )
 
 
 @pytest.mark.parametrize(
