@@ -178,6 +178,12 @@ def _gap(latest: float, normal: float, denominator_floor: float) -> float:
     return float(np.clip((normal - latest) / max(abs(normal), denominator_floor), 0.0, 1.0))
 
 
+def _revenue_growth_gap(latest: float, normal: float) -> float:
+    if math.isnan(latest) or math.isnan(normal):
+        return math.nan
+    return float(np.clip((normal - latest) / 0.30, 0.0, 1.0))
+
+
 def _cash_trend(latest: float, prior: float, second_prior: float) -> float:
     if any(math.isnan(value) for value in (latest, prior, second_prior)):
         return math.nan
@@ -218,7 +224,7 @@ def score_candidates(rows: pd.DataFrame, config: ConsumerOversoldConfig) -> pd.D
             [
                 _gap(latest_margin, normal_margin, 0.01),
                 _gap(latest_roe, normal_roe, 0.01),
-                _gap(latest_revenue, normal_revenue, 0.30),
+                _revenue_growth_gap(latest_revenue, normal_revenue),
             ],
             2,
         )

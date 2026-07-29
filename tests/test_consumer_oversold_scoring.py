@@ -127,6 +127,26 @@ def test_operating_gap_requires_two_available_components():
     assert math.isnan(result.loc["B", "composite_score"])
 
 
+def test_revenue_growth_gap_uses_fixed_thirty_percent_denominator():
+    result = score_candidates(
+        pd.DataFrame(
+            [
+                scoring_rows(
+                    latest_net_margin=0.0,
+                    normal_net_margin=0.10,
+                    latest_roe=np.nan,
+                    normal_roe=np.nan,
+                    latest_revenue_growth=0.30,
+                    normal_revenue_growth=0.60,
+                )
+            ]
+        ),
+        CONFIG,
+    )
+
+    assert result.loc[0, "operating_gap_score"] == 100.0
+
+
 def test_debt_peer_threshold_cash_trend_levels_and_balance_coverage():
     rows = pd.DataFrame(
         [
