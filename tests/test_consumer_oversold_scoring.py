@@ -233,6 +233,15 @@ def test_score_candidates_validates_columns_assets_and_empty_input():
     )
 
 
+@pytest.mark.parametrize("industry", [None, pd.NA, "", "   "])
+def test_score_candidates_rejects_empty_consumer_subindustry_with_asset(industry):
+    with pytest.raises(ValueError, match=r"asset A.*consumer_subindustry"):
+        score_candidates(
+            pd.DataFrame([scoring_rows(consumer_subindustry=industry)]),
+            CONFIG,
+        )
+
+
 @pytest.mark.parametrize(
     ("change", "code"),
     [
@@ -269,6 +278,34 @@ def test_price_gate_uses_or_and_completed_repair_requires_positive_normals():
     assert bool(result.loc["drawdown", "eligible"])
     assert result.loc["complete", "exclusion_reasons"] == "repair_already_completed"
     assert bool(result.loc["nonpositive", "eligible"])
+
+
+def test_explicit_repair_completed_flag_overrides_financial_calculation():
+    result = apply_candidate_gates(
+        pd.DataFrame(
+            [
+                gate_rows(
+                    repair_already_completed=True,
+                    latest_revenue_growth=0.01,
+                    latest_profit_growth=0.01,
+                    latest_net_margin=0.01,
+                )
+            ]
+        ),
+        CONFIG,
+    ).iloc[0]
+
+    assert not bool(result["eligible"])
+    assert result["exclusion_reasons"] == "repair_already_completed"
+
+
+@pytest.mark.parametrize("invalid", [None, pd.NA, np.nan, 2, "yes"])
+def test_explicit_repair_completed_flag_must_be_strict_boolean(invalid):
+    with pytest.raises(ValueError, match=r"asset A.*repair_already_completed"):
+        apply_candidate_gates(
+            pd.DataFrame([gate_rows(repair_already_completed=invalid)]),
+            CONFIG,
+        )
 
 
 def test_gate_boolean_parsing_reason_order_and_validation():
@@ -356,6 +393,86 @@ def test_rank_caps_each_bucket_at_twenty_and_validates_input():
     assert list(schema_less_empty["expected"].columns) == list(RANK_COLUMNS_FOR_TEST) + [
         "bucket_rank"
     ]
+
+
+@pytest.mark.parametrize("field", ["composite_score", "base_upside"])
+def test_rank_rejects_missing_core_value_for_eligible_asset(field):
+    row = {
+        "asset_id": "A",
+        "repair_bucket": "expected_repair",
+        "eligible": True,
+        "composite_score": 80.0,
+        "base_upside": 0.5,
+    }
+    row[field] = np.nan
+
+    with pytest.raises(ValueError, match=rf"asset A.*{field}"):
+        rank_candidate_buckets(pd.DataFrame([row]), CONFIG)
+
+
+def test_rank_allows_missing_core_values_for_ineligible_assets():
+    rows = pd.DataFrame(
+        [
+            {
+                "asset_id": "A",
+                "repair_bucket": "expected_repair",
+                "eligible": False,
+                "composite_score": np.nan,
+                "base_upside": np.nan,
+            }
+        ]
+    )
+
+    result = rank_candidate_buckets(rows, CONFIG)
+
+    assert result["expected"].empty
+    assert result["early"].empty
+
+
+@pytest.mark.parametrize(
+    ("function", "rows"),
+    [
+        (
+            score_candidates,
+            pd.DataFrame([scoring_rows(asset_id=" A "), scoring_rows(asset_id="A")]),
+        ),
+        (
+            apply_candidate_gates,
+            pd.DataFrame([gate_rows(asset_id=" A "), gate_rows(asset_id="A")]),
+        ),
+        (
+            rank_candidate_buckets,
+            pd.DataFrame(
+                [
+                    {"asset_id": " A ", "repair_bucket": "expected_repair", "eligible": True, "composite_score": 80.0, "base_upside": 0.5},
+                    {"asset_id": "A", "repair_bucket": "early_validation", "eligible": True, "composite_score": 70.0, "base_upside": 0.4},
+                ]
+            ),
+        ),
+    ],
+)
+def test_entry_points_strip_asset_id_before_duplicate_validation(function, rows):
+    with pytest.raises(ValueError, match="duplicate asset_id A"):
+        function(rows, CONFIG)
+
+
+@pytest.mark.parametrize(
+    ("function", "rows"),
+    [
+        (score_candidates, pd.DataFrame([scoring_rows(asset_id=" A ")])),
+        (apply_candidate_gates, pd.DataFrame([gate_rows(asset_id=" A ")])),
+        (
+            rank_candidate_buckets,
+            pd.DataFrame(
+                [{"asset_id": " A ", "repair_bucket": "expected_repair", "eligible": True, "composite_score": 80.0, "base_upside": 0.5}]
+            ),
+        ),
+    ],
+)
+def test_entry_points_output_stripped_asset_id(function, rows):
+    result = function(rows, CONFIG)
+    frame = result["expected"] if isinstance(result, dict) else result
+    assert frame.loc[0, "asset_id"] == "A"
 
 
 RANK_COLUMNS_FOR_TEST = [

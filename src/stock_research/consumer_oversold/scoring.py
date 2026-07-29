@@ -115,10 +115,12 @@ def _supply_empty_schema(frame: pd.DataFrame, required: tuple[str, ...]) -> pd.D
 
 def _prepare_assets(frame: pd.DataFrame, name: str) -> pd.DataFrame:
     result = frame.copy()
-    invalid = result["asset_id"].isna() | result["asset_id"].astype(str).str.strip().eq("")
+    missing = result["asset_id"].isna()
+    normalized = result["asset_id"].astype(str).str.strip()
+    invalid = missing | normalized.eq("")
     if invalid.any():
         raise ValueError(f"{name} asset_id must be non-empty")
-    result["asset_id"] = result["asset_id"].astype(str)
+    result["asset_id"] = normalized
     duplicate = result["asset_id"].duplicated(keep=False)
     if duplicate.any():
         asset_id = result.loc[duplicate, "asset_id"].sort_values(kind="stable").iloc[0]
@@ -206,6 +208,14 @@ def score_candidates(rows: pd.DataFrame, config: ConsumerOversoldConfig) -> pd.D
     rows = _supply_empty_schema(rows, SCORE_REQUIRED_COLUMNS)
     _require_columns(rows, SCORE_REQUIRED_COLUMNS, "rows")
     frame = _prepare_assets(rows, "rows")
+    invalid_industry = frame["consumer_subindustry"].isna() | frame[
+        "consumer_subindustry"
+    ].astype(str).str.strip().eq("")
+    if invalid_industry.any():
+        asset_id = frame.loc[invalid_industry, "asset_id"].sort_values(kind="stable").iloc[0]
+        raise ValueError(
+            f"rows asset {asset_id} field consumer_subindustry must be non-empty"
+        )
     _assign_numeric(frame, SCORE_NUMERIC_COLUMNS, "rows")
     _validate_range(frame, "expected_improvement_score", 0.0, 100.0, "rows")
     _validate_range(frame, "catalyst_verifiability_score", 0.0, 100.0, "rows")
@@ -321,10 +331,21 @@ def apply_candidate_gates(rows: pd.DataFrame, config: ConsumerOversoldConfig) ->
             _parse_boolean(value, field, asset_id)
             for value, asset_id in zip(frame[field], frame["asset_id"], strict=True)
         ]
+    explicit_completed = [False] * len(frame)
+    if "repair_already_completed" in frame.columns:
+        explicit_completed = [
+            _parse_boolean(value, "repair_already_completed", asset_id)
+            for value, asset_id in zip(
+                frame["repair_already_completed"], frame["asset_id"], strict=True
+            )
+        ]
+        frame["repair_already_completed"] = explicit_completed
 
     eligible_values: list[bool] = []
     reason_values: list[str] = []
-    for row in frame.itertuples(index=False):
+    for row, explicitly_completed in zip(
+        frame.itertuples(index=False), explicit_completed, strict=True
+    ):
         reasons: set[str] = set()
         if not row.included:
             reasons.add("universe_excluded")
@@ -361,9 +382,9 @@ def apply_candidate_gates(rows: pd.DataFrame, config: ConsumerOversoldConfig) ->
             row.latest_net_margin,
             row.normal_net_margin,
         )
-        repair_complete = False
+        repair_complete = explicitly_completed
         if not any(math.isnan(value) for value in repair_values):
-            repair_complete = (
+            repair_complete = repair_complete or (
                 row.normal_revenue_growth > 0.0
                 and row.normal_profit_growth > 0.0
                 and row.normal_net_margin > 0.0
@@ -401,6 +422,13 @@ def rank_candidate_buckets(
         _parse_boolean(value, "eligible", asset_id)
         for value, asset_id in zip(frame["eligible"], frame["asset_id"], strict=True)
     ]
+    for field in ("composite_score", "base_upside"):
+        invalid = frame["eligible"] & frame[field].isna()
+        if invalid.any():
+            asset_id = frame.loc[invalid, "asset_id"].sort_values(kind="stable").iloc[0]
+            raise ValueError(
+                f"scored_rows asset {asset_id} field {field} must be present for eligible assets"
+            )
     output: dict[str, pd.DataFrame] = {}
     for output_name, repair_bucket in (
         ("expected", EXPECTED_REPAIR),
