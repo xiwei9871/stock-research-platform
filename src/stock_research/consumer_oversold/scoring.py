@@ -146,6 +146,18 @@ def _decimal_outside_range(value: object, lower: float, upper: float) -> bool:
     )
 
 
+def _decimal_aware_le(value: object, number: float, threshold: float) -> bool:
+    if isinstance(value, Decimal):
+        return value <= Decimal(str(threshold))
+    return number <= threshold
+
+
+def _decimal_aware_ge(value: object, number: float, threshold: float) -> bool:
+    if isinstance(value, Decimal):
+        return value >= Decimal(str(threshold))
+    return number >= threshold
+
+
 def _assign_numeric(frame: pd.DataFrame, fields: tuple[str, ...], name: str) -> None:
     for field in fields:
         parsed: list[float] = []
@@ -364,6 +376,7 @@ def apply_candidate_gates(rows: pd.DataFrame, config: ConsumerOversoldConfig) ->
     rows = _supply_empty_schema(rows, GATE_REQUIRED_COLUMNS)
     _require_columns(rows, GATE_REQUIRED_COLUMNS, "rows")
     frame = _prepare_assets(rows, "rows")
+    raw_numeric = frame.loc[:, GATE_NUMERIC_COLUMNS].copy()
     _assign_numeric(frame, GATE_NUMERIC_COLUMNS, "rows")
     for field in GATE_BOOLEAN_COLUMNS:
         frame[field] = [
@@ -382,25 +395,43 @@ def apply_candidate_gates(rows: pd.DataFrame, config: ConsumerOversoldConfig) ->
 
     eligible_values: list[bool] = []
     reason_values: list[str] = []
-    for row, explicitly_completed in zip(
-        frame.itertuples(index=False), explicit_completed, strict=True
+    for row, raw_row, explicitly_completed in zip(
+        frame.itertuples(index=False),
+        raw_numeric.itertuples(index=False),
+        explicit_completed,
+        strict=True,
     ):
         reasons: set[str] = set()
         if not row.included:
             reasons.add("universe_excluded")
         price_passes = (
-            not math.isnan(row.return_6m) and row.return_6m <= config.min_6m_return
+            not math.isnan(row.return_6m)
+            and _decimal_aware_le(
+                raw_row.return_6m, row.return_6m, config.min_6m_return
+            )
         ) or (
             not math.isnan(row.max_drawdown_12m)
-            and row.max_drawdown_12m <= config.min_12m_drawdown
+            and _decimal_aware_le(
+                raw_row.max_drawdown_12m,
+                row.max_drawdown_12m,
+                config.min_12m_drawdown,
+            )
         )
         if not price_passes:
             reasons.add("price_threshold_not_met")
-        if math.isnan(row.relative_return_6m) or row.relative_return_6m > config.min_relative_return:
+        if math.isnan(row.relative_return_6m) or not _decimal_aware_le(
+            raw_row.relative_return_6m,
+            row.relative_return_6m,
+            config.min_relative_return,
+        ):
             reasons.add("relative_return_threshold_not_met")
-        if math.isnan(row.oversold_score) or row.oversold_score < config.min_oversold_score:
+        if math.isnan(row.oversold_score) or not _decimal_aware_ge(
+            raw_row.oversold_score, row.oversold_score, config.min_oversold_score
+        ):
             reasons.add("oversold_score_below_threshold")
-        if math.isnan(row.base_upside) or row.base_upside < config.min_base_upside:
+        if math.isnan(row.base_upside) or not _decimal_aware_ge(
+            raw_row.base_upside, row.base_upside, config.min_base_upside
+        ):
             reasons.add("base_upside_below_threshold")
         if not row.evidence_complete:
             reasons.add("evidence_incomplete")

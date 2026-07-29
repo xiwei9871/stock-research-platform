@@ -318,6 +318,97 @@ def test_price_gate_uses_or_and_completed_repair_requires_positive_normals():
     assert bool(result.loc["nonpositive", "eligible"])
 
 
+@pytest.mark.parametrize(
+    ("field", "value", "overrides", "eligible", "failure_code"),
+    [
+        ("return_6m", Decimal("-0.20"), {"max_drawdown_12m": -0.1}, True, ""),
+        (
+            "return_6m",
+            Decimal("-0.199999999999999999999999999999"),
+            {"max_drawdown_12m": -0.1},
+            False,
+            "price_threshold_not_met",
+        ),
+        (
+            "return_6m",
+            Decimal("-0.200000000000000000000000000001"),
+            {"max_drawdown_12m": -0.1},
+            True,
+            "",
+        ),
+        ("max_drawdown_12m", Decimal("-0.30"), {"return_6m": -0.1}, True, ""),
+        (
+            "max_drawdown_12m",
+            Decimal("-0.299999999999999999999999999999"),
+            {"return_6m": -0.1},
+            False,
+            "price_threshold_not_met",
+        ),
+        (
+            "max_drawdown_12m",
+            Decimal("-0.300000000000000000000000000001"),
+            {"return_6m": -0.1},
+            True,
+            "",
+        ),
+        ("relative_return_6m", Decimal("-0.10"), {}, True, ""),
+        (
+            "relative_return_6m",
+            Decimal("-0.099999999999999999999999999999"),
+            {},
+            False,
+            "relative_return_threshold_not_met",
+        ),
+        (
+            "relative_return_6m",
+            Decimal("-0.100000000000000000000000000001"),
+            {},
+            True,
+            "",
+        ),
+        ("oversold_score", Decimal("60"), {}, True, ""),
+        (
+            "oversold_score",
+            Decimal("59.999999999999999999999999999999"),
+            {},
+            False,
+            "oversold_score_below_threshold",
+        ),
+        (
+            "oversold_score",
+            Decimal("60.000000000000000000000000000001"),
+            {},
+            True,
+            "",
+        ),
+        ("base_upside", Decimal("0.25"), {}, True, ""),
+        (
+            "base_upside",
+            Decimal("0.249999999999999999999999999999"),
+            {},
+            False,
+            "base_upside_below_threshold",
+        ),
+        (
+            "base_upside",
+            Decimal("0.250000000000000000000000000001"),
+            {},
+            True,
+            "",
+        ),
+    ],
+)
+def test_candidate_gates_compare_decimal_thresholds_without_float_rounding(
+    field, value, overrides, eligible, failure_code
+):
+    row = gate_rows(**overrides)
+    row[field] = value
+    result = apply_candidate_gates(pd.DataFrame([row]), CONFIG).iloc[0]
+    assert bool(result["eligible"]) is eligible
+    if failure_code:
+        assert failure_code in result["exclusion_reasons"]
+
+
 def test_explicit_repair_completed_flag_overrides_financial_calculation():
     result = apply_candidate_gates(
         pd.DataFrame(
