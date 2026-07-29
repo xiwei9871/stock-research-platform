@@ -36,7 +36,6 @@ from stock_research.auction_data import (
     write_tushare_auction_full_backfill_report,
 )
 from stock_research.config import SETTINGS
-from stock_research.consumer_oversold.pipeline import run_consumer_oversold_weekly
 from stock_research.backtest import run_top20_backtest
 from stock_research.backfill_runs import (
     backfill_status_for_service,
@@ -1508,6 +1507,67 @@ def _parse_p9_outcome_event_maps(events: pd.DataFrame) -> pd.DataFrame:
         if column in parsed.columns:
             parsed[column] = parsed[column].map(_parse_json_cell)
     return parsed
+
+
+_CONSUMER_OVERSOLD_PATH_KEYS = (
+    "expected",
+    "early",
+    "scores",
+    "exclusions",
+    "coverage",
+    "report",
+)
+
+
+def _run_consumer_oversold_weekly(**kwargs):
+    from stock_research.consumer_oversold.pipeline import run_consumer_oversold_weekly
+
+    return run_consumer_oversold_weekly(**kwargs)
+
+
+def _validate_consumer_oversold_machine_path(value, name: str) -> str:
+    if not isinstance(value, str):
+        raise ValueError(f"{name} must be a string")
+    if any(character in value for character in ("|", "\r", "\n")):
+        raise ValueError(
+            f"{name} must not contain '|', carriage return, or line feed"
+        )
+    return value
+
+
+def _consumer_oversold_machine_lines(result) -> list[str]:
+    paths = result["paths"]
+    if not isinstance(paths, dict):
+        raise ValueError("consumer oversold result paths must be a dict")
+    required_keys = set(_CONSUMER_OVERSOLD_PATH_KEYS)
+    missing_keys = required_keys - set(paths)
+    if missing_keys:
+        raise KeyError(
+            "consumer oversold result paths missing required keys: "
+            + ", ".join(key for key in _CONSUMER_OVERSOLD_PATH_KEYS if key in missing_keys)
+        )
+    extra_keys = set(paths) - required_keys
+    if extra_keys:
+        raise ValueError(
+            "consumer oversold result paths contain unexpected keys: "
+            + ", ".join(sorted(str(key) for key in extra_keys))
+        )
+    validated_paths = {
+        key: _validate_consumer_oversold_machine_path(
+            paths[key], f"consumer oversold result path {key}"
+        )
+        for key in _CONSUMER_OVERSOLD_PATH_KEYS
+    }
+    expected_rows = len(result["expected"])
+    early_rows = len(result["early"])
+    return [
+        *(
+            f"consumer_oversold|{key}|{validated_paths[key]}"
+            for key in _CONSUMER_OVERSOLD_PATH_KEYS
+        ),
+        f"consumer_oversold|expected_rows|{expected_rows}",
+        f"consumer_oversold|early_rows|{early_rows}",
+    ]
 
 
 def _parse_json_cell(value):
@@ -7601,21 +7661,21 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
         for line in iter_daily_review_report_path_lines(result["report_paths"]):
             print(line)
     elif args.command == "consumer-oversold-weekly":
-        result = run_consumer_oversold_weekly(
+        evidence_path = _validate_consumer_oversold_machine_path(
+            args.evidence_path, "--evidence-path"
+        )
+        output_dir = _validate_consumer_oversold_machine_path(
+            args.output_dir, "--output-dir"
+        )
+        result = _run_consumer_oversold_weekly(
             trade_date=args.trade_date,
-            evidence_path=args.evidence_path,
-            output_dir=args.output_dir,
+            evidence_path=evidence_path,
+            output_dir=output_dir,
             service=args.service,
         )
-        paths = result["paths"]
-        print(f"consumer_oversold|expected|{paths['expected']}")
-        print(f"consumer_oversold|early|{paths['early']}")
-        print(f"consumer_oversold|scores|{paths['scores']}")
-        print(f"consumer_oversold|exclusions|{paths['exclusions']}")
-        print(f"consumer_oversold|coverage|{paths['coverage']}")
-        print(f"consumer_oversold|report|{paths['report']}")
-        print(f"consumer_oversold|expected_rows|{len(result['expected'])}")
-        print(f"consumer_oversold|early_rows|{len(result['early'])}")
+        lines = _consumer_oversold_machine_lines(result)
+        for line in lines:
+            print(line)
     elif args.command == "mid-trend-round2-optimize":
         from stock_research.mid_trend_round2_optimization import run_mid_trend_round2_optimization
 
