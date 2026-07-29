@@ -36,6 +36,7 @@ from stock_research.auction_data import (
     write_tushare_auction_full_backfill_report,
 )
 from stock_research.config import SETTINGS
+from stock_research.consumer_oversold.pipeline import run_consumer_oversold_weekly
 from stock_research.backtest import run_top20_backtest
 from stock_research.backfill_runs import (
     backfill_status_for_service,
@@ -3882,6 +3883,12 @@ def build_parser() -> argparse.ArgumentParser:
     daily_review_report.add_argument("--apply-report-run-schema", action="store_true")
     daily_review_report.add_argument("--record-run", action="store_true")
 
+    consumer_oversold_weekly = subparsers.add_parser("consumer-oversold-weekly")
+    consumer_oversold_weekly.add_argument("--trade-date", required=True)
+    consumer_oversold_weekly.add_argument("--evidence-path", required=True)
+    consumer_oversold_weekly.add_argument("--output-dir", required=True)
+    consumer_oversold_weekly.add_argument("--service", default=SETTINGS.research_service)
+
     mid_trend_round2 = subparsers.add_parser("mid-trend-round2-optimize")
     mid_trend_round2.add_argument("--start-date", required=True)
     mid_trend_round2.add_argument("--train-end-date", required=True)
@@ -7593,6 +7600,22 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
         )
         for line in iter_daily_review_report_path_lines(result["report_paths"]):
             print(line)
+    elif args.command == "consumer-oversold-weekly":
+        result = run_consumer_oversold_weekly(
+            trade_date=args.trade_date,
+            evidence_path=args.evidence_path,
+            output_dir=args.output_dir,
+            service=args.service,
+        )
+        paths = result["paths"]
+        print(f"consumer_oversold|expected|{paths['expected']}")
+        print(f"consumer_oversold|early|{paths['early']}")
+        print(f"consumer_oversold|scores|{paths['scores']}")
+        print(f"consumer_oversold|exclusions|{paths['exclusions']}")
+        print(f"consumer_oversold|coverage|{paths['coverage']}")
+        print(f"consumer_oversold|report|{paths['report']}")
+        print(f"consumer_oversold|expected_rows|{len(result['expected'])}")
+        print(f"consumer_oversold|early_rows|{len(result['early'])}")
     elif args.command == "mid-trend-round2-optimize":
         from stock_research.mid_trend_round2_optimization import run_mid_trend_round2_optimization
 
