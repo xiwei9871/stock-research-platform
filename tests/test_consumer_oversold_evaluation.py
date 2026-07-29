@@ -190,6 +190,119 @@ def test_horizon_uses_shared_market_trading_date_and_does_not_shift_for_suspensi
     assert pd.isna(row["forward_return"])
 
 
+def test_snapshot_calendar_uses_all_memberships_before_subindustry_filtering():
+    snapshots = pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-01-05",
+                "asset_id": "R",
+                "stock_code": "000001",
+                "stock_name": "Retail",
+                "consumer_subindustry": "retail",
+                "repair_bucket": "expected_repair",
+            },
+            {
+                "trade_date": "2026-01-05",
+                "asset_id": "F",
+                "stock_code": "000002",
+                "stock_name": "Food",
+                "consumer_subindustry": "food",
+                "repair_bucket": "early_validation",
+            },
+        ]
+    )
+    bars = pd.DataFrame(
+        [
+            ["2026-01-05", "R", "retail", "2026-01-05", 100.0],
+            ["2026-01-05", "R", "retail", "2026-01-06", 110.0],
+            ["2026-01-05", "R_PEER", "retail", "2026-01-05", 100.0],
+            ["2026-01-05", "R_PEER", "retail", "2026-01-06", 100.0],
+            ["2026-01-05", "F", "food", "2026-01-05", 100.0],
+            ["2026-01-05", "F", "food", "2026-01-07", 120.0],
+            ["2026-01-05", "F_PEER", "food", "2026-01-05", 100.0],
+            ["2026-01-05", "F_PEER", "food", "2026-01-07", 110.0],
+        ],
+        columns=[
+            "snapshot_trade_date",
+            "asset_id",
+            "consumer_subindustry",
+            "trade_date",
+            "close",
+        ],
+    )
+
+    detail = evaluate_consumer_oversold_snapshots(snapshots, bars, horizons=(1,))["detail"]
+
+    retail = detail.set_index("asset_id").loc["R"]
+    food = detail.set_index("asset_id").loc["F"]
+    assert retail["evaluation_status"] == "completed"
+    assert retail["horizon_trade_date"] == "2026-01-06"
+    assert food["evaluation_status"] == "pending"
+
+
+def test_two_buckets_in_same_week_share_one_snapshot_calendar():
+    snapshots = pd.DataFrame(
+        [
+            ["2026-01-05", "E", "000001", "Expected", "retail", "expected_repair"],
+            ["2026-01-05", "V", "000002", "Validation", "food", "early_validation"],
+        ],
+        columns=_snapshots().columns,
+    )
+    bars = pd.DataFrame(
+        [
+            ["2026-01-05", "E", "retail", "2026-01-05", 100.0],
+            ["2026-01-05", "E", "retail", "2026-01-07", 110.0],
+            ["2026-01-05", "V", "food", "2026-01-05", 100.0],
+            ["2026-01-05", "V", "food", "2026-01-06", 110.0],
+        ],
+        columns=[
+            "snapshot_trade_date",
+            "asset_id",
+            "consumer_subindustry",
+            "trade_date",
+            "close",
+        ],
+    )
+
+    detail = evaluate_consumer_oversold_snapshots(snapshots, bars, horizons=(1,))["detail"]
+
+    by_asset = detail.set_index("asset_id")
+    assert by_asset.loc["E", "evaluation_status"] == "pending"
+    assert by_asset.loc["V", "evaluation_status"] == "completed"
+    assert by_asset.loc["V", "horizon_trade_date"] == "2026-01-06"
+
+
+def test_different_snapshot_weeks_build_independent_calendars():
+    snapshots = pd.DataFrame(
+        [
+            ["2026-01-05", "A", "000001", "Alpha", "food", "expected_repair"],
+            ["2026-01-12", "B", "000002", "Beta", "food", "early_validation"],
+        ],
+        columns=_snapshots().columns,
+    )
+    bars = pd.DataFrame(
+        [
+            ["2026-01-05", "A", "food", "2026-01-05", 100.0],
+            ["2026-01-05", "A", "food", "2026-01-06", 110.0],
+            ["2026-01-12", "B", "food", "2026-01-12", 100.0],
+            ["2026-01-12", "B", "food", "2026-01-14", 120.0],
+        ],
+        columns=[
+            "snapshot_trade_date",
+            "asset_id",
+            "consumer_subindustry",
+            "trade_date",
+            "close",
+        ],
+    )
+
+    detail = evaluate_consumer_oversold_snapshots(snapshots, bars, horizons=(1,))["detail"]
+
+    by_asset = detail.set_index("asset_id")
+    assert by_asset.loc["A", "horizon_trade_date"] == "2026-01-06"
+    assert by_asset.loc["B", "horizon_trade_date"] == "2026-01-14"
+
+
 def test_run_prefers_current_sealed_release_and_deduplicates_trade_date(tmp_path, monkeypatch):
     week = tmp_path / "snapshots" / "2026-01-05"
     old = _sealed_release(week, "consumer-oversold-old", "2026-01-05", "OLD", "expected_repair")

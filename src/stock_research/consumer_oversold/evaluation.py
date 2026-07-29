@@ -116,6 +116,10 @@ def evaluate_consumer_oversold_snapshots(
     market = market.loc[market["trade_date"].notna()].copy()
 
     rows: list[dict[str, Any]] = []
+    snapshot_calendars = {
+        snapshot_date: sorted(group["trade_date"].dropna().unique())
+        for snapshot_date, group in market.groupby("snapshot_trade_date", sort=True)
+    }
     for snapshot in selected.sort_values(["trade_date", "repair_bucket", "asset_id"]).to_dict(
         orient="records"
     ):
@@ -128,7 +132,7 @@ def evaluate_consumer_oversold_snapshots(
         target_history = snapshot_bars.loc[
             snapshot_bars["asset_id"].eq(str(snapshot["asset_id"]))
         ]
-        market_dates = sorted(snapshot_bars["trade_date"].dropna().unique())
+        market_dates = snapshot_calendars.get(trade_date, [])
         try:
             entry_position = market_dates.index(pd.Timestamp(trade_date))
         except ValueError:
