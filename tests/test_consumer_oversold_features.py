@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from fractions import Fraction
 
 import numpy as np
 import pandas as pd
@@ -489,3 +490,8 @@ def test_already_priced_optional_numbers_accept_finite_database_decimal():
 def test_already_priced_optional_numbers_reject_non_finite_database_decimal(invalid):
     with pytest.raises(ValueError, match="rebound_from_low_60d"):
         compute_already_priced_features({"rebound_from_low_60d": invalid}, {})
+
+
+def test_already_priced_optional_numbers_reject_fraction():
+    with pytest.raises(ValueError, match="rebound_from_low_60d"):
+        compute_already_priced_features({"rebound_from_low_60d": Fraction(1, 3)}, {})

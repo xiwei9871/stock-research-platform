@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import math
 from decimal import Decimal
-from numbers import Real
 
 import numpy as np
 import pandas as pd
 
 from .contracts import EARLY_VALIDATION, EXPECTED_REPAIR, ConsumerOversoldConfig
+
+
+STRICT_NUMERIC_TYPES = (int, float, np.integer, np.floating, Decimal)
 
 
 SCORE_REQUIRED_COLUMNS = (
@@ -143,7 +145,9 @@ def _assign_numeric(frame: pd.DataFrame, fields: tuple[str, ...], name: str) -> 
             if _is_missing(value):
                 parsed.append(math.nan)
                 continue
-            if isinstance(value, (bool, np.bool_)) or not isinstance(value, (Real, Decimal)):
+            if isinstance(value, (bool, np.bool_)) or not isinstance(
+                value, STRICT_NUMERIC_TYPES
+            ):
                 raise ValueError(
                     f"{name} asset {frame.at[index, 'asset_id']} field {field} must be finite numeric"
                 )

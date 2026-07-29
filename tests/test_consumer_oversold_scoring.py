@@ -1,5 +1,6 @@
 import math
 from decimal import Decimal
+from fractions import Fraction
 
 import numpy as np
 import pandas as pd
@@ -116,6 +117,13 @@ def test_score_candidates_accepts_finite_database_decimal_as_float():
 def test_score_candidates_rejects_non_finite_database_decimal(invalid):
     with pytest.raises(ValueError, match=r"A.*base_upside"):
         score_candidates(pd.DataFrame([scoring_rows(base_upside=invalid)]), CONFIG)
+
+
+def test_score_candidates_rejects_fraction_despite_real_number_protocol():
+    with pytest.raises(ValueError, match=r"A.*base_upside"):
+        score_candidates(
+            pd.DataFrame([scoring_rows(base_upside=Fraction(1, 3))]), CONFIG
+        )
 
 
 def test_operating_gap_requires_two_available_components():

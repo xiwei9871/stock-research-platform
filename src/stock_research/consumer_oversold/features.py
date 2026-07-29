@@ -3,10 +3,12 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping
 from decimal import Decimal
-from numbers import Real
 
 import numpy as np
 import pandas as pd
+
+
+STRICT_NUMERIC_TYPES = (int, float, np.integer, np.floating, Decimal)
 
 
 BAR_COLUMNS = ("asset_id", "trade_date", "close")
@@ -150,7 +152,9 @@ def _strict_numeric_frame(
             if missing:
                 values.append(math.nan)
                 continue
-            if isinstance(value, (bool, np.bool_)) or not isinstance(value, (Real, Decimal)):
+            if isinstance(value, (bool, np.bool_)) or not isinstance(
+                value, STRICT_NUMERIC_TYPES
+            ):
                 asset_id = str(frame.at[index, "asset_id"])
                 raise ValueError(f"{name} asset {asset_id} field {field} must be finite numeric")
             try:
@@ -794,7 +798,7 @@ def _optional_number(row: Mapping[str, object] | pd.Series, field: str) -> tuple
     value = row.get(field, math.nan)
     if value is None or value is pd.NA:
         return math.nan, False
-    if isinstance(value, (bool, np.bool_)) or not isinstance(value, (Real, Decimal)):
+    if isinstance(value, (bool, np.bool_)) or not isinstance(value, STRICT_NUMERIC_TYPES):
         raise ValueError(f"{field} must be a finite int or float")
     try:
         number = float(value)

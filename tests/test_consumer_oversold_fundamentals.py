@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 from decimal import Decimal
+from fractions import Fraction
 
 import numpy as np
 import pandas as pd
@@ -187,6 +188,14 @@ def test_fundamentals_accept_finite_database_decimal_as_float():
 @pytest.mark.parametrize("invalid", [Decimal("NaN"), Decimal("Infinity")])
 def test_fundamentals_reject_non_finite_database_decimal(invalid):
     row = finance_row("A", "2024-12-31", "2025-03-01", revenue_growth=invalid)
+    with pytest.raises(ValueError, match=r"A.*revenue_growth"):
+        compute_fundamental_features(pd.DataFrame([row]), trade_date="2025-04-30")
+
+
+def test_fundamentals_reject_fraction_despite_real_number_protocol():
+    row = finance_row(
+        "A", "2024-12-31", "2025-03-01", revenue_growth=Fraction(1, 3)
+    )
     with pytest.raises(ValueError, match=r"A.*revenue_growth"):
         compute_fundamental_features(pd.DataFrame([row]), trade_date="2025-04-30")
 
