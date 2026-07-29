@@ -31,6 +31,7 @@ FINANCE_COLUMNS = (
     "debt_ratio",
     "equity_parent",
     "operating_cash_flow",
+    "total_share",
 )
 VALUATION_COLUMNS = (
     "asset_id",
@@ -214,9 +215,14 @@ def load_consumer_market_history(
     trade_date: str,
     *,
     service: str,
+    asset_ids: list[str] | None = None,
 ) -> pd.DataFrame:
     cutoff = validate_trade_date(trade_date)
-    sql = """
+    assets = _asset_ids(asset_ids) if asset_ids is not None else None
+    if assets == []:
+        return _frame([], MARKET_COLUMNS)
+    asset_clause = "\n      AND b.asset_id = ANY(%s)" if assets is not None else ""
+    sql = f"""
     WITH latest_dates AS (
         SELECT DISTINCT trade_date
         FROM market_daily_bar
@@ -229,10 +235,14 @@ def load_consumer_market_history(
     FROM market_daily_bar b
     JOIN latest_dates d ON d.trade_date = b.trade_date
     WHERE b.adjust_type = 'hfq'
+    {asset_clause}
     ORDER BY b.asset_id, b.trade_date
     """
+    params: list[Any] = [cutoff, 260]
+    if assets is not None:
+        params.append(assets)
     with connect(service) as conn:
-        rows = fetch_all(conn, sql, [cutoff, 260])
+        rows = fetch_all(conn, sql, params)
     result = _format_dates(_frame(rows, MARKET_COLUMNS), ("trade_date",))
     return _sort(result, ["asset_id", "trade_date"])
 
@@ -310,6 +320,34 @@ def _rows_by_asset(rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]
     return grouped
 
 
+def _latest_share_by_asset(rows: list[dict[str, Any]], cutoff: str) -> dict[str, dict[str, Any]]:
+    normalized: list[dict[str, Any]] = []
+    for raw in rows:
+        row = dict(raw)
+        event_date = _date_text(row.get("event_date"))
+        announcement_date = _date_text(row.get("announcement_date"))
+        if pd.isna(event_date) or event_date > cutoff:
+            continue
+        if not pd.isna(announcement_date) and announcement_date > cutoff:
+            continue
+        row["asset_id"] = str(row["asset_id"])
+        row["event_date"] = event_date
+        row["announcement_date"] = announcement_date
+        normalized.append(row)
+    normalized.sort(
+        key=lambda row: (
+            row["asset_id"],
+            row["event_date"],
+            "" if pd.isna(row["announcement_date"]) else row["announcement_date"],
+        ),
+        reverse=True,
+    )
+    latest: dict[str, dict[str, Any]] = {}
+    for row in normalized:
+        latest.setdefault(row["asset_id"], row)
+    return latest
+
+
 def load_consumer_finance_history(
     asset_ids: list[str],
     trade_date: str,
@@ -348,10 +386,19 @@ def load_consumer_finance_history(
         ORDER BY asset_id, report_period, announcement_date DESC, source DESC
         """,
     )
+    share_sql = """
+    SELECT asset_id, event_date, announcement_date, total_share
+    FROM finance.share_capital_event
+    WHERE asset_id = ANY(%s)
+      AND event_date <= %s
+      AND (announcement_date IS NULL OR announcement_date <= %s)
+    ORDER BY asset_id, event_date DESC, announcement_date DESC NULLS LAST
+    """
     with connect(service) as conn:
         raw_income, raw_indicator, raw_balance, raw_cash = [
             fetch_all(conn, sql, [assets, cutoff]) for sql in queries
         ]
+        raw_shares = fetch_all(conn, share_sql, [assets, cutoff, cutoff])
 
     income = _disclosed_rows(raw_income, cutoff)
     indicator = _disclosed_rows(raw_indicator, cutoff)
@@ -359,6 +406,7 @@ def load_consumer_finance_history(
     cash = _disclosed_rows(raw_cash, cutoff)
     income_by_asset = _rows_by_asset(income)
     cash_by_asset = _rows_by_asset(cash)
+    shares_by_asset = _latest_share_by_asset(raw_shares, cutoff)
     latest_sources = [
         _latest_by_period(source_rows)
         for source_rows in (income, indicator, balance, cash)
@@ -402,6 +450,18 @@ def load_consumer_finance_history(
                     asof=asof,
                     value_column="net_operate_cash_flow",
                 ),
+                "total_share": (shares_by_asset.get(asset_id) or {}).get("total_share"),
+            }
+        )
+    assets_with_periods = {row["asset_id"] for row in output}
+    for asset_id in sorted(set(shares_by_asset) - assets_with_periods):
+        share = shares_by_asset[asset_id]
+        output.append(
+            {
+                "asset_id": asset_id,
+                "report_period": None,
+                "announcement_date": share["announcement_date"],
+                "total_share": share.get("total_share"),
             }
         )
     return _sort(_frame(output, FINANCE_COLUMNS), ["asset_id", "report_period", "announcement_date"])

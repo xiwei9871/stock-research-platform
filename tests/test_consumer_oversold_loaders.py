@@ -110,11 +110,37 @@ def test_market_requests_260_hfq_dates_and_sorts(monkeypatch):
     assert params == ["2026-07-29", 260]
 
 
+def test_market_can_scope_assets_and_empty_scope_skips_database(monkeypatch):
+    calls, _ = _install_db(
+        monkeypatch,
+        [[{"asset_id": "A", "trade_date": date(2026, 7, 29), "close": 10}]],
+    )
+
+    result = loaders.load_consumer_market_history(
+        "2026-07-29", service="test", asset_ids=[" A "]
+    )
+
+    assert result["asset_id"].tolist() == ["A"]
+    sql, params = calls[0]
+    assert "b.asset_id = ANY(%s)" in sql
+    assert params == ["2026-07-29", 260, ["A"]]
+
+    def fail_connect(service):
+        raise AssertionError("empty asset scope must not query the database")
+
+    monkeypatch.setattr(loaders, "connect", fail_connect)
+    empty = loaders.load_consumer_market_history(
+        "2026-07-29", service="test", asset_ids=[]
+    )
+    assert empty.columns.tolist() == list(loaders.MARKET_COLUMNS)
+
+
 def test_asset_scoped_empty_lists_do_not_open_database(monkeypatch):
     def fail_connect(service):
         raise AssertionError("database must not be queried")
 
     monkeypatch.setattr(loaders, "connect", fail_connect)
+    assert loaders.load_consumer_market_history("2026-07-29", service="x", asset_ids=[]).columns.tolist() == list(loaders.MARKET_COLUMNS)
     assert loaders.load_consumer_finance_history([], "2026-07-29", service="x").columns.tolist() == list(loaders.FINANCE_COLUMNS)
     assert loaders.load_consumer_valuation_history([], "2026-07-29", service="x").columns.tolist() == list(loaders.VALUATION_COLUMNS)
     assert loaders.load_consumer_earnings_forecasts([], "2026-07-29", service="x").columns.tolist() == list(loaders.EARNINGS_COLUMNS)
@@ -139,7 +165,15 @@ def test_finance_queries_all_sources_with_cutoff_and_computes_pit_ttm(monkeypatc
         {"asset_id": "A", "report_period": "2023-12-31", "announcement_date": "2024-03-20", "net_operate_cash_flow": 8, "source": "s"},
         {"asset_id": "A", "report_period": "2024-03-31", "announcement_date": "2024-04-23", "net_operate_cash_flow": 2, "source": "s"},
     ]
-    calls, _ = _install_db(monkeypatch, [income, indicators, balances, cash])
+    shares = [
+        {
+            "asset_id": "A",
+            "event_date": "2025-03-31",
+            "announcement_date": "2025-03-31",
+            "total_share": 123.0,
+        }
+    ]
+    calls, _ = _install_db(monkeypatch, [income, indicators, balances, cash, shares])
 
     result = loaders.load_consumer_finance_history([" A "], "2025-04-01", service="test")
     march = result.loc[result["report_period"].eq("2024-03-31")].iloc[0]
@@ -152,10 +186,16 @@ def test_finance_queries_all_sources_with_cutoff_and_computes_pit_ttm(monkeypatc
     annual = result.loc[result["report_period"].eq("2024-12-31")].iloc[0]
     assert annual["revenue_ttm"] == 150
     assert annual["np_parent_ttm"] == 15
-    for sql, params in calls:
+    assert result["total_share"].eq(123.0).all()
+    for sql, params in calls[:4]:
         assert "announcement_date <= %s" in sql
         assert "asset_id = ANY(%s)" in sql
         assert params == [["A"], "2025-04-01"]
+    share_sql, share_params = calls[4]
+    assert "finance.share_capital_event" in share_sql
+    assert "event_date <= %s" in share_sql
+    assert "announcement_date IS NULL OR announcement_date <= %s" in share_sql
+    assert share_params == [["A"], "2025-04-01", "2025-04-01"]
 
 
 def test_finance_does_not_use_revision_announced_after_period_asof(monkeypatch):
@@ -165,7 +205,7 @@ def test_finance_does_not_use_revision_announced_after_period_asof(monkeypatch):
         {"asset_id": "A", "report_period": "2024-03-31", "announcement_date": "2024-04-20", "revenue": 30, "np_parent": 3, "source": "s"},
         {"asset_id": "A", "report_period": "2024-03-31", "announcement_date": "2024-06-01", "revenue": 300, "np_parent": 30, "source": "late"},
     ]
-    _install_db(monkeypatch, [income, [], [], []])
+    _install_db(monkeypatch, [income, [], [], [], []])
     result = loaders.load_consumer_finance_history(["A"], "2024-05-01", service="test")
     early = result.loc[result["announcement_date"].eq("2024-04-20")].iloc[0]
     assert early["revenue_ttm"] == 110
@@ -180,7 +220,7 @@ def test_finance_does_not_label_prior_period_ttm_as_a_later_report_period(monkey
         "asset_id": "A", "report_period": "2024-06-30", "announcement_date": "2024-08-20",
         "revenue_yoy": .1, "source": "s", "calc_version": "v1",
     }]
-    _install_db(monkeypatch, [income, indicators, [], []])
+    _install_db(monkeypatch, [income, indicators, [], [], []])
     result = loaders.load_consumer_finance_history(["A"], "2024-09-01", service="test")
     june = result.loc[result["report_period"].eq("2024-06-30")].iloc[0]
     assert pd.isna(june["revenue_ttm"])
@@ -196,7 +236,7 @@ def test_finance_ttm_scans_only_asset_local_rows(monkeypatch):
         {"asset_id": asset_id, "report_period": "2024-12-31", "announcement_date": "2025-03-21", "net_operate_cash_flow": value, "source": "s"}
         for asset_id, value in (("A", 10), ("B", 20))
     ]
-    _install_db(monkeypatch, [income, [], [], cash])
+    _install_db(monkeypatch, [income, [], [], cash, []])
     scanned_assets: list[set[str]] = []
     original = loaders._ttm_at_period
 
@@ -209,6 +249,21 @@ def test_finance_ttm_scans_only_asset_local_rows(monkeypatch):
 
     assert scanned_assets
     assert all(len(asset_set) <= 1 for asset_set in scanned_assets)
+
+
+def test_finance_retains_latest_share_capital_without_finance_periods(monkeypatch):
+    shares = [
+        {"asset_id": "A", "event_date": "2025-01-01", "announcement_date": None, "total_share": 90},
+        {"asset_id": "A", "event_date": "2025-06-01", "announcement_date": "2025-06-10", "total_share": 120},
+    ]
+    _install_db(monkeypatch, [[], [], [], [], shares])
+
+    result = loaders.load_consumer_finance_history(["A"], "2026-07-29", service="test")
+
+    assert result[["asset_id", "total_share"]].to_dict("records") == [
+        {"asset_id": "A", "total_share": 120}
+    ]
+    assert pd.isna(result.loc[0, "report_period"])
 
 
 def test_valuation_enforces_pit_deduplicates_versions_and_pivots(monkeypatch):

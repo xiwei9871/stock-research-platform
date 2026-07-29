@@ -309,7 +309,7 @@ def test_output_dir_publishes_six_absolute_current_paths(tmp_path):
     assert "消费超跌修复候选周报" in result["report"]
 
 
-def test_runner_loads_csvs_and_builds_current_market_cap_with_fallbacks(monkeypatch, tmp_path):
+def test_runner_uses_latest_close_times_shares_not_pe_or_ps(monkeypatch, tmp_path):
     from stock_research.consumer_oversold import pipeline
 
     frames, evidence, _ = _frames()
@@ -326,13 +326,19 @@ def test_runner_loads_csvs_and_builds_current_market_cap_with_fallbacks(monkeypa
         "load_consumer_universe_frames",
         lambda trade_date, service: {key: frames[key] for key in ("assets", "statuses", "liquidity", "industries")},
     )
-    monkeypatch.setattr(pipeline, "load_consumer_market_history", lambda trade_date, service: frames["bars"])
-    monkeypatch.setattr(pipeline, "load_consumer_finance_history", lambda ids, trade_date, service: frames["finance"])
+    market_calls = []
+    monkeypatch.setattr(
+        pipeline,
+        "load_consumer_market_history",
+        lambda trade_date, service, asset_ids=None: market_calls.append(asset_ids) or frames["bars"],
+    )
+    finance = frames["finance"].copy()
+    finance["total_share"] = finance["asset_id"].map({"A": 10, "B": 20, "C": np.nan, "D": 40})
+    monkeypatch.setattr(pipeline, "load_consumer_finance_history", lambda ids, trade_date, service: finance)
     raw_valuation = frames["valuation_history"].drop(columns="consumer_subindustry").copy()
     raw_valuation.loc[raw_valuation["asset_id"].eq("B"), "pe_ttm"] = np.nan
     raw_valuation.loc[raw_valuation["asset_id"].eq("C"), ["pe_ttm", "ps_ttm"]] = np.nan
     monkeypatch.setattr(pipeline, "load_consumer_valuation_history", lambda ids, trade_date, service: raw_valuation)
-    monkeypatch.setattr(pipeline, "load_consumer_earnings_forecasts", lambda ids, trade_date, service: pd.DataFrame())
 
     captured = {}
 
@@ -350,13 +356,49 @@ def test_runner_loads_csvs_and_builds_current_market_cap_with_fallbacks(monkeypa
     )
 
     assert result == {"ok": True}
+    assert market_calls == [["A", "B", "C", "D"]]
+    assert "earnings" not in captured["frames"]
     current = captured["frames"]["current_valuation"].set_index("asset_id")
-    assert current.loc["A", "current_market_cap"] == pytest.approx(20.0 * 8.0)
-    assert current.loc["B", "current_market_cap"] == pytest.approx(2.0 * 100.0)
+    assert current.loc["A", "current_market_cap"] == pytest.approx(55.0 * 10.0)
+    assert current.loc["B", "current_market_cap"] == pytest.approx(60.0 * 20.0)
     assert pd.isna(current.loc["C", "current_market_cap"])
     assert current["net_debt"].isna().all()
     assert current["ebitda_ttm"].isna().all()
     assert captured["evidence"]["stock_code"].dtype.name == "string"
+
+
+def test_empty_consumer_pool_allows_schema_less_downstream_frames():
+    frames, evidence, config = _frames()
+    frames["industry_rules"] = frames["industry_rules"].assign(action="exclude", consumer_subindustry="")
+    for key in ("bars", "finance", "current_valuation", "valuation_history"):
+        frames[key] = pd.DataFrame()
+
+    result = build_consumer_oversold_weekly_from_frames(
+        frames=frames, evidence=evidence.iloc[0:0], config=config
+    )
+
+    assert result["expected"].empty and result["early"].empty and result["scores"].empty
+    assert set(result["exclusions"]["asset_id"]) == {"A", "B", "C", "D", "AUTO"}
+    assert all(value == 0 for value in list(result["coverage"]["funnel"].values())[1:])
+
+
+@pytest.mark.parametrize(
+    ("frame_name", "missing_column"),
+    [
+        ("bars", "close"),
+        ("finance", "revenue_ttm"),
+        ("current_valuation", "current_market_cap"),
+        ("valuation_history", "valuation_date"),
+    ],
+)
+def test_nonempty_consumer_pool_validates_downstream_frame_schema(frame_name, missing_column):
+    frames, evidence, config = _frames()
+    frames[frame_name] = frames[frame_name].drop(columns=[missing_column])
+
+    with pytest.raises(ValueError, match=rf"{frame_name}.*{missing_column}"):
+        build_consumer_oversold_weekly_from_frames(
+            frames=frames, evidence=evidence, config=config
+        )
 
 
 def test_runner_rejects_missing_evidence_path(tmp_path):

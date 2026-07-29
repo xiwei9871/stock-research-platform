@@ -12,7 +12,9 @@ from stock_research.config import SETTINGS
 from .contracts import ConsumerOversoldConfig
 from .evidence import EVIDENCE_COLUMNS, validate_repair_evidence
 from .features import (
+    BAR_COLUMNS,
     CURRENT_VALUATION_COLUMNS,
+    FINANCE_COLUMNS as FEATURE_FINANCE_COLUMNS,
     VALUATION_HISTORY_COLUMNS,
     compute_already_priced_features,
     compute_fundamental_features,
@@ -22,7 +24,6 @@ from .features import (
     compute_valuation_features,
 )
 from .loaders import (
-    load_consumer_earnings_forecasts,
     load_consumer_finance_history,
     load_consumer_market_history,
     load_consumer_universe_frames,
@@ -71,6 +72,19 @@ def _copy_frames(frames: dict[str, pd.DataFrame]) -> dict[str, pd.DataFrame]:
             raise TypeError(f"frames[{key!r}] must be a pandas DataFrame")
         copied[key] = frame.copy(deep=True)
     return copied
+
+
+def _require_downstream_columns(frames: dict[str, pd.DataFrame]) -> None:
+    requirements = (
+        ("bars", BAR_COLUMNS),
+        ("finance", FEATURE_FINANCE_COLUMNS),
+        ("current_valuation", CURRENT_VALUATION_COLUMNS),
+        ("valuation_history", VALUATION_HISTORY_COLUMNS),
+    )
+    for frame_name, required in requirements:
+        missing = [column for column in required if column not in frames[frame_name].columns]
+        if missing:
+            raise ValueError(f"{frame_name} missing required columns: {', '.join(missing)}")
 
 
 def _normalize_asset_ids(frame: pd.DataFrame, name: str) -> pd.DataFrame:
@@ -303,9 +317,75 @@ def build_consumer_oversold_weekly_from_frames(
     included = universe.loc[universe["included"].astype(bool)].copy()
     membership = included.loc[:, ["asset_id", "consumer_subindustry"]].copy()
 
+    if included.empty:
+        validated_evidence = validate_repair_evidence(
+            evidence_input, trade_date=config.trade_date
+        )
+        universe_exclusions = universe.loc[~universe["included"].astype(bool)].rename(
+            columns={"name": "stock_name", "exclude_reasons": "exclusion_reasons"}
+        )
+        universe_exclusions["exclusion_stage"] = "universe"
+        exclusions = universe_exclusions.reindex(columns=EXCLUSION_ID_COLUMNS).reset_index(
+            drop=True
+        )
+        empty_scores = pd.DataFrame(
+            columns=[
+                "asset_id",
+                "price_history_complete",
+                "return_6m",
+                "max_drawdown_12m",
+                "relative_return_coverage",
+                "relative_return_6m",
+                "oversold_score",
+                "hard_risk_triggered",
+                "hard_risk_review_unknown",
+                "evidence_complete",
+                "base_upside",
+            ]
+        )
+        coverage = _coverage(
+            raw_assets=copied["assets"],
+            included=included,
+            scores=empty_scores,
+            evidence=validated_evidence,
+            bars=copied["bars"],
+            finance=copied["finance"],
+            valuation_history=copied["valuation_history"],
+            expected=empty_scores,
+            early=empty_scores,
+            config=config,
+            warnings=[],
+        )
+        payload = {
+            "trade_date": config.trade_date,
+            "expected": empty_scores,
+            "early": empty_scores,
+            "scores": empty_scores,
+            "exclusions": exclusions,
+            "coverage": coverage,
+        }
+        if output_dir is not None:
+            return write_consumer_oversold_artifacts(payload, output_dir=output_dir)
+        return {
+            "paths": {},
+            **{key: payload[key] for key in ("expected", "early", "scores", "exclusions", "coverage")},
+            "report": _render_report(
+                config.trade_date,
+                empty_scores,
+                empty_scores,
+                exclusions,
+                coverage,
+            ),
+        }
+
+    _require_downstream_columns(copied)
+
     included_ids = set(included["asset_id"])
     bars = copied["bars"].loc[copied["bars"]["asset_id"].astype(str).isin(included_ids)].copy()
     finance = copied["finance"].loc[copied["finance"]["asset_id"].astype(str).isin(included_ids)].copy()
+    finance = finance.loc[
+        finance["report_period"].notna() & finance["announcement_date"].notna()
+    ].copy()
     price = compute_price_features(bars, membership, trade_date=config.trade_date)
     fundamentals = compute_fundamental_features(finance, trade_date=config.trade_date)
 
@@ -449,6 +529,8 @@ def _current_valuation_from_histories(
     valuation_history: pd.DataFrame,
     fundamentals: pd.DataFrame,
     membership: pd.DataFrame,
+    latest_close: pd.Series,
+    total_share: pd.Series,
     trade_date: str,
 ) -> pd.DataFrame:
     history = valuation_history.copy(deep=True)
@@ -476,9 +558,9 @@ def _current_valuation_from_histories(
         ev = _positive(valuation.get("ev_ebitda", math.nan))
         revenue = _positive(fundamental.get("latest_revenue_ttm", math.nan))
         profit = _positive(fundamental.get("latest_np_parent_ttm", math.nan))
-        market_cap = pe * profit if math.isfinite(pe) and math.isfinite(profit) else math.nan
-        if not math.isfinite(market_cap) and math.isfinite(ps) and math.isfinite(revenue):
-            market_cap = ps * revenue
+        close = _positive(latest_close.get(asset_id, math.nan))
+        shares = _positive(total_share.get(asset_id, math.nan))
+        market_cap = close * shares if math.isfinite(close) and math.isfinite(shares) else math.nan
         rows.append(
             {
                 "asset_id": asset_id,
@@ -522,11 +604,32 @@ def run_consumer_oversold_weekly(
     )
     included = universe.loc[universe["included"].astype(bool), ["asset_id", "consumer_subindustry"]]
     asset_ids = included["asset_id"].astype(str).tolist()
-    bars = load_consumer_market_history(trade_date, service=service)
-    finance = load_consumer_finance_history(asset_ids, trade_date, service=service)
+    bars = load_consumer_market_history(trade_date, service=service, asset_ids=asset_ids)
+    finance_with_shares = load_consumer_finance_history(asset_ids, trade_date, service=service)
     valuation_raw = load_consumer_valuation_history(asset_ids, trade_date, service=service)
-    earnings = load_consumer_earnings_forecasts(asset_ids, trade_date, service=service)
+    if "total_share" in finance_with_shares.columns:
+        share_rows = finance_with_shares.loc[
+            finance_with_shares["total_share"].notna(), ["asset_id", "total_share"]
+        ]
+        total_share = share_rows.drop_duplicates("asset_id", keep="last").set_index(
+            "asset_id"
+        )["total_share"]
+    else:
+        total_share = pd.Series(dtype=float)
+    finance = finance_with_shares.loc[
+        finance_with_shares.get("report_period", pd.Series(index=finance_with_shares.index, dtype=object)).notna()
+        & finance_with_shares.get("announcement_date", pd.Series(index=finance_with_shares.index, dtype=object)).notna()
+    ].copy()
     fundamentals = compute_fundamental_features(finance, trade_date=trade_date)
+    if bars.empty:
+        latest_close = pd.Series(dtype=float)
+    else:
+        market = bars.copy(deep=True)
+        market["trade_date"] = pd.to_datetime(market["trade_date"], errors="coerce")
+        market = market.loc[market["trade_date"].le(pd.Timestamp(trade_date))]
+        latest_close = market.sort_values(["asset_id", "trade_date"], kind="stable").drop_duplicates(
+            "asset_id", keep="last"
+        ).set_index("asset_id")["close"]
     valuation_history = valuation_raw.copy(deep=True)
     for column in VALUATION_HISTORY_COLUMNS:
         if column not in valuation_history.columns:
@@ -537,7 +640,12 @@ def run_consumer_oversold_weekly(
         valuation_history["consumer_subindustry"] = valuation_history["asset_id"].map(membership_map)
     valuation_history = valuation_history.loc[:, VALUATION_HISTORY_COLUMNS]
     current_valuation = _current_valuation_from_histories(
-        valuation_history, fundamentals, included, trade_date
+        valuation_history,
+        fundamentals,
+        included,
+        latest_close,
+        total_share,
+        trade_date,
     )
     frames = {
         **universe_frames,
@@ -547,7 +655,6 @@ def run_consumer_oversold_weekly(
         "finance": finance,
         "current_valuation": current_valuation,
         "valuation_history": valuation_history,
-        "earnings": earnings,
     }
     return build_consumer_oversold_weekly_from_frames(
         frames=frames,
