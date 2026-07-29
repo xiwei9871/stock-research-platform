@@ -28,11 +28,13 @@ EXPECTED_COLUMNS = [
     "distance_ma250",
     "consumer_subindustry",
     "industry_peer_count",
+    "industry_peer_count_60d",
     "industry_return_6m",
     "relative_return_6m",
     "industry_return_60d",
     "relative_return_60d",
     "relative_return_coverage",
+    "relative_return_coverage_60d",
 ]
 
 
@@ -125,11 +127,39 @@ def test_industry_relative_returns_have_coverage_at_exactly_three_valid_peers():
     result = compute_price_features(bars, membership, trade_date=TRADE_DATE).set_index("asset_id")
 
     assert result.loc["a", "industry_peer_count"] == 3
+    assert result.loc["a", "industry_peer_count_60d"] == 3
     assert result.loc["a", "relative_return_coverage"]
+    assert result.loc["a", "relative_return_coverage_60d"]
     assert result.loc["a", "industry_return_6m"] == pytest.approx(-0.1)
     assert result.loc["a", "relative_return_6m"] == pytest.approx(-0.2)
     assert result.loc["a", "industry_return_60d"] == pytest.approx(-0.1)
     assert result.loc["a", "relative_return_60d"] == pytest.approx(-0.2)
+
+
+def test_six_month_and_sixty_day_peer_coverage_are_computed_independently():
+    bars = pd.concat(
+        [
+            _bars("a", [100.0] * 125 + [70.0]),
+            _bars("b", [100.0] * 125 + [90.0]),
+            _bars("c", [100.0] * 59 + [120.0]),
+        ],
+        ignore_index=True,
+    )
+    membership = pd.DataFrame(
+        [("a", "mixed_history"), ("b", "mixed_history"), ("c", "mixed_history")],
+        columns=["asset_id", "consumer_subindustry"],
+    )
+
+    result = compute_price_features(bars, membership, trade_date=TRADE_DATE).set_index("asset_id")
+
+    assert result.loc["a", "industry_peer_count"] == 2
+    assert not result.loc["a", "relative_return_coverage"]
+    assert pd.isna(result.loc["a", "industry_return_6m"])
+    assert pd.isna(result.loc["a", "relative_return_6m"])
+    assert result.loc["a", "industry_peer_count_60d"] == 3
+    assert result.loc["a", "relative_return_coverage_60d"]
+    assert result.loc["a", "industry_return_60d"] == pytest.approx(-0.2 / 3.0)
+    assert result.loc["a", "relative_return_60d"] == pytest.approx(-0.7 / 3.0)
 
 
 def test_incomplete_history_is_retained_without_fabricating_long_windows():
@@ -180,6 +210,42 @@ def test_price_features_reject_duplicate_dates_and_invalid_close_with_context():
         compute_price_features(invalid, membership, trade_date=TRADE_DATE)
 
 
+def test_membership_requires_unique_assets_and_nonempty_subindustry():
+    bars = _bars("a", [1.0])
+    duplicate = pd.DataFrame(
+        [("a", "retail"), ("a", "auto")],
+        columns=["asset_id", "consumer_subindustry"],
+    )
+    with pytest.raises(ValueError, match=r"a"):
+        compute_price_features(bars, duplicate, trade_date=TRADE_DATE)
+
+    for invalid in ("", "   ", None, pd.NA, np.nan):
+        membership = pd.DataFrame(
+            [("a", invalid)], columns=["asset_id", "consumer_subindustry"]
+        )
+        with pytest.raises(ValueError, match=r"a"):
+            compute_price_features(bars, membership, trade_date=TRADE_DATE)
+
+
+def test_trade_dates_are_normalized_before_duplicate_detection_and_output():
+    membership = pd.DataFrame(
+        [("a", "retail")], columns=["asset_id", "consumer_subindustry"]
+    )
+    intraday_duplicate = pd.DataFrame(
+        {
+            "asset_id": ["a", "a"],
+            "trade_date": ["2026-01-02 09:30:00", "2026-01-02 15:00:00"],
+            "close": [1.0, 2.0],
+        }
+    )
+    with pytest.raises(ValueError, match=r"a.*2026-01-02"):
+        compute_price_features(intraday_duplicate, membership, trade_date=TRADE_DATE)
+
+    single = intraday_duplicate.iloc[[0]]
+    row = compute_price_features(single, membership, trade_date=TRADE_DATE).iloc[0]
+    assert row["latest_trade_date"] == pd.Timestamp("2026-01-02")
+
+
 def test_oversold_score_percentile_direction_exact_weights_and_name():
     frame = pd.DataFrame(
         {
@@ -214,6 +280,23 @@ def test_oversold_score_propagates_missing_components_and_validates_valuation():
     frame.loc[0, "valuation_depression_percentile"] = 1.01
     with pytest.raises(ValueError, match="valuation_depression_percentile"):
         compute_oversold_score(frame)
+
+
+@pytest.mark.parametrize("missing_ma", ["distance_ma120", "distance_ma250"])
+def test_oversold_score_requires_both_ma_distances(missing_ma):
+    frame = pd.DataFrame(
+        {
+            "max_drawdown_12m": [-0.5, -0.2],
+            "return_6m": [-0.4, -0.1],
+            "relative_return_6m": [-0.3, -0.1],
+            "valuation_depression_percentile": [0.8, 0.2],
+            "distance_ma120": [-0.2, -0.1],
+            "distance_ma250": [-0.3, -0.2],
+        }
+    )
+    frame.loc[0, missing_ma] = np.nan
+
+    assert pd.isna(compute_oversold_score(frame).iloc[0])
 
 
 @pytest.mark.parametrize("invalid", ["bad", np.inf, -0.1, 1.1])
@@ -298,3 +381,38 @@ def test_already_priced_penalty_components_trigger_individually(
 
     assert result["priced_in_penalty"] == penalty
     assert result[trigger]
+
+
+@pytest.mark.parametrize(
+    ("row_name", "field", "invalid"),
+    [
+        ("price", "rebound_from_low_60d", True),
+        ("price", "rebound_from_low_60d", "0.25"),
+        ("price", "rebound_from_low_60d", np.inf),
+        ("price", "relative_return_60d", False),
+        ("price", "relative_return_60d", "0.10"),
+        ("price", "relative_return_60d", -np.inf),
+        ("valuation", "valuation_percentile", True),
+        ("valuation", "valuation_percentile", "0.50"),
+        ("valuation", "valuation_percentile", np.inf),
+    ],
+)
+def test_already_priced_optional_numbers_reject_bool_string_and_non_finite(
+    row_name, field, invalid
+):
+    price_row = {field: invalid} if row_name == "price" else {}
+    valuation_row = {field: invalid} if row_name == "valuation" else {}
+
+    with pytest.raises(ValueError, match=field):
+        compute_already_priced_features(price_row, valuation_row)
+
+
+def test_already_priced_optional_numbers_accept_int_and_float_values():
+    result = compute_already_priced_features(
+        {"rebound_from_low_60d": 1, "relative_return_60d": 0.10},
+        {"valuation_percentile": 1},
+    )
+
+    assert result["priced_in_rebound_trigger"]
+    assert result["priced_in_relative_return_trigger"]
+    assert result["priced_in_valuation_trigger"]
