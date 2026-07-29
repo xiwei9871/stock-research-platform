@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from datetime import date
-from numbers import Integral
+import math
+from numbers import Integral, Real
 import re
 import unicodedata
 
@@ -62,8 +63,18 @@ def _normalized(value: object) -> str:
 
 
 def _stock_code(value: object) -> str:
-    normalized = _text(value)
-    return normalized.zfill(6) if normalized.isdigit() and len(normalized) <= 6 else normalized
+    if pd.isna(value) or isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"invalid stock_code: {value!r}")
+    if isinstance(value, Real):
+        numeric = float(value)
+        if not math.isfinite(numeric) or numeric < 0 or not numeric.is_integer():
+            raise ValueError(f"invalid stock_code: {value!r}")
+        normalized = str(int(numeric))
+    else:
+        normalized = _text(value)
+    if not normalized or not normalized.isdigit() or len(normalized) > 6:
+        raise ValueError(f"invalid stock_code: {value!r}")
+    return normalized.zfill(6)
 
 
 def _joined(reasons: list[str]) -> str:
@@ -157,6 +168,9 @@ def _validate_inputs(
         asset_id = _text(status["asset_id"])
         for field in ("is_st", "is_delisting_risk", "is_suspended"):
             _parse_status_flag(status[field], field=field, asset_id=asset_id)
+
+    for stock_code in assets["stock_code"]:
+        _stock_code(stock_code)
 
     priorities = pd.to_numeric(industry_rules["priority"], errors="coerce")
     if priorities.isna().any():

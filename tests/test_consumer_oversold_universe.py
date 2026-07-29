@@ -249,6 +249,59 @@ def test_numeric_stock_codes_from_csv_are_zero_padded_for_override_matching(tmp_
     assert by_code.loc["000887", "include_reasons"] == "csv_override"
 
 
+def test_override_csv_with_numeric_and_empty_stock_code_is_rejected(tmp_path):
+    override_path = tmp_path / "mixed_overrides.csv"
+    override_path.write_text(
+        "stock_code,action,consumer_subindustry,reason,effective_from,effective_to\n"
+        "000887,include,direct_consumer_brand,valid_row,2026-01-01,2027-01-01\n"
+        ",exclude,,missing_code,2026-01-01,2027-01-01\n",
+        encoding="utf-8",
+    )
+    overrides = pd.read_csv(override_path)
+
+    assert overrides["stock_code"].dtype == np.dtype("float64")
+    assert overrides.loc[0, "stock_code"] == 887.0
+    with pytest.raises(ValueError, match="stock_code"):
+        _build(asset_overrides=overrides)
+
+
+def test_integral_float_stock_code_from_mixed_csv_normalizes_after_invalid_row_removed(tmp_path):
+    override_path = tmp_path / "mixed_overrides.csv"
+    override_path.write_text(
+        "stock_code,action,consumer_subindustry,reason,effective_from,effective_to\n"
+        "000887,include,direct_consumer_brand,float_code,2026-01-01,2027-01-01\n"
+        ",exclude,,missing_code,2026-01-01,2027-01-01\n",
+        encoding="utf-8",
+    )
+    overrides = pd.read_csv(override_path).dropna(subset=["stock_code"])
+    assets = _assets().astype({"stock_code": "object"})
+    assets.loc[assets["stock_code"].eq("000887"), "stock_code"] = 887.0
+
+    by_code = _build(assets=assets, asset_overrides=overrides).set_index("stock_code")
+
+    assert by_code.loc["000887", "included"]
+    assert by_code.loc["000887", "include_reasons"] == "float_code"
+
+
+@pytest.mark.parametrize("invalid_code", [887.5, np.inf, -887, "887.0", "ABC887"])
+def test_invalid_asset_stock_code_is_rejected_without_truncation(invalid_code):
+    assets = _assets().astype({"stock_code": "object"})
+    assets.loc[assets.index[0], "stock_code"] = invalid_code
+
+    with pytest.raises(ValueError, match="stock_code"):
+        _build(assets=assets)
+
+
+@pytest.mark.parametrize("invalid_code", ["", np.nan, 887.5, np.inf, -887, "887.0", "ABC887"])
+def test_invalid_override_stock_code_is_rejected_without_truncation(invalid_code):
+    overrides = _overrides(
+        [(invalid_code, "exclude", "", "invalid_code", "2026-01-01", "2027-01-01")]
+    )
+
+    with pytest.raises(ValueError, match="stock_code"):
+        _build(asset_overrides=overrides)
+
+
 def test_override_effective_interval_is_left_closed_and_right_open():
     base = ("000887", "include", "direct_consumer_brand", "manual_include")
 
