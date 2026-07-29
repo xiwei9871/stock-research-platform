@@ -93,27 +93,29 @@ def test_market_requests_260_hfq_dates_and_sorts(monkeypatch):
     calls, _ = _install_db(
         monkeypatch,
         [[
-            {"asset_id": "B", "trade_date": date(2026, 7, 29), "close": 2},
-            {"asset_id": "A", "trade_date": date(2026, 7, 28), "close": 1},
+            {"asset_id": "B", "trade_date": date(2026, 7, 29), "close": 2, "raw_close": 20},
+            {"asset_id": "A", "trade_date": date(2026, 7, 28), "close": 1, "raw_close": 10},
         ]],
     )
     result = loaders.load_consumer_market_history("2026-07-29", service="test")
     assert result.to_dict("records") == [
-        {"asset_id": "A", "trade_date": "2026-07-28", "close": 1},
-        {"asset_id": "B", "trade_date": "2026-07-29", "close": 2},
+        {"asset_id": "A", "trade_date": "2026-07-28", "close": 1, "raw_close": 10},
+        {"asset_id": "B", "trade_date": "2026-07-29", "close": 2, "raw_close": 20},
     ]
     sql, params = calls[0]
     assert "SELECT DISTINCT trade_date" in sql
     assert "trade_date <= %s" in sql
     assert "LIMIT %s" in sql
     assert "adjust_type = 'hfq'" in sql
+    assert "LEFT JOIN market_daily_bar raw" in sql
+    assert "raw.adjust_type = 'raw'" in sql
     assert params == ["2026-07-29", 260]
 
 
 def test_market_can_scope_assets_and_empty_scope_skips_database(monkeypatch):
     calls, _ = _install_db(
         monkeypatch,
-        [[{"asset_id": "A", "trade_date": date(2026, 7, 29), "close": 10}]],
+        [[{"asset_id": "A", "trade_date": date(2026, 7, 29), "close": 10, "raw_close": 5}]],
     )
 
     result = loaders.load_consumer_market_history(
@@ -264,6 +266,38 @@ def test_finance_retains_latest_share_capital_without_finance_periods(monkeypatc
         {"asset_id": "A", "total_share": 120}
     ]
     assert pd.isna(result.loc[0, "report_period"])
+
+
+def test_share_capital_same_dates_use_source_ascending_tie_break(monkeypatch):
+    rows = [
+        {
+            "asset_id": "A",
+            "event_date": "2025-06-01",
+            "announcement_date": "2025-06-10",
+            "total_share": 200,
+            "source": "z_source",
+        },
+        {
+            "asset_id": "A",
+            "event_date": "2025-06-01",
+            "announcement_date": "2025-06-10",
+            "total_share": 100,
+            "source": "a_source",
+        },
+    ]
+    selected = []
+    last_calls = None
+    for ordered in (rows, list(reversed(rows))):
+        calls, _ = _install_db(monkeypatch, [[], [], [], [], ordered])
+        result = loaders.load_consumer_finance_history(["A"], "2026-07-29", service="test")
+        selected.append(result.loc[0, "total_share"])
+        last_calls = calls
+
+    assert selected == [100, 100]
+    sql, _ = last_calls[4]
+    assert "SELECT DISTINCT ON (asset_id)" in sql
+    assert "announcement_date DESC NULLS LAST" in sql
+    assert "source ASC" in sql
 
 
 def test_valuation_enforces_pit_deduplicates_versions_and_pivots(monkeypatch):

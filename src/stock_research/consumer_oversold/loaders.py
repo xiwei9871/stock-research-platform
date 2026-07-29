@@ -15,7 +15,7 @@ ASSET_COLUMNS = ("asset_id", "stock_code", "name", "list_date")
 STATUS_COLUMNS = ("asset_id", "is_st", "is_delisting_risk", "is_suspended")
 LIQUIDITY_COLUMNS = ("asset_id", "avg_turnover_amount")
 INDUSTRY_COLUMNS = ("asset_id", "industry_system", "industry_name")
-MARKET_COLUMNS = ("asset_id", "trade_date", "close")
+MARKET_COLUMNS = ("asset_id", "trade_date", "close", "raw_close")
 FINANCE_COLUMNS = (
     "asset_id",
     "report_period",
@@ -231,9 +231,13 @@ def load_consumer_market_history(
         ORDER BY trade_date DESC
         LIMIT %s
     )
-    SELECT b.asset_id, b.trade_date, b.close
+    SELECT b.asset_id, b.trade_date, b.close, raw.close AS raw_close
     FROM market_daily_bar b
     JOIN latest_dates d ON d.trade_date = b.trade_date
+    LEFT JOIN market_daily_bar raw
+      ON raw.asset_id = b.asset_id
+     AND raw.trade_date = b.trade_date
+     AND raw.adjust_type = 'raw'
     WHERE b.adjust_type = 'hfq'
     {asset_clause}
     ORDER BY b.asset_id, b.trade_date
@@ -337,10 +341,13 @@ def _latest_share_by_asset(rows: list[dict[str, Any]], cutoff: str) -> dict[str,
     normalized.sort(
         key=lambda row: (
             row["asset_id"],
-            row["event_date"],
-            "" if pd.isna(row["announcement_date"]) else row["announcement_date"],
-        ),
-        reverse=True,
+            -pd.Timestamp(row["event_date"]).toordinal(),
+            pd.isna(row["announcement_date"]),
+            -pd.Timestamp(row["announcement_date"]).toordinal()
+            if not pd.isna(row["announcement_date"])
+            else 0,
+            str(row.get("source") or ""),
+        )
     )
     latest: dict[str, dict[str, Any]] = {}
     for row in normalized:
@@ -387,12 +394,13 @@ def load_consumer_finance_history(
         """,
     )
     share_sql = """
-    SELECT asset_id, event_date, announcement_date, total_share
+    SELECT DISTINCT ON (asset_id)
+           asset_id, event_date, announcement_date, total_share, source
     FROM finance.share_capital_event
     WHERE asset_id = ANY(%s)
       AND event_date <= %s
       AND (announcement_date IS NULL OR announcement_date <= %s)
-    ORDER BY asset_id, event_date DESC, announcement_date DESC NULLS LAST
+    ORDER BY asset_id, event_date DESC, announcement_date DESC NULLS LAST, source ASC
     """
     with connect(service) as conn:
         raw_income, raw_indicator, raw_balance, raw_cash = [

@@ -327,10 +327,13 @@ def test_runner_uses_latest_close_times_shares_not_pe_or_ps(monkeypatch, tmp_pat
         lambda trade_date, service: {key: frames[key] for key in ("assets", "statuses", "liquidity", "industries")},
     )
     market_calls = []
+    market = frames["bars"].copy()
+    market["raw_close"] = market["close"]
+    market.loc[market["asset_id"].eq("A") & market["trade_date"].eq(market.loc[market["asset_id"].eq("A"), "trade_date"].max()), ["close", "raw_close"]] = [200.0, 20.0]
     monkeypatch.setattr(
         pipeline,
         "load_consumer_market_history",
-        lambda trade_date, service, asset_ids=None: market_calls.append(asset_ids) or frames["bars"],
+        lambda trade_date, service, asset_ids=None: market_calls.append(asset_ids) or market,
     )
     finance = frames["finance"].copy()
     finance["total_share"] = finance["asset_id"].map({"A": 10, "B": 20, "C": np.nan, "D": 40})
@@ -359,7 +362,7 @@ def test_runner_uses_latest_close_times_shares_not_pe_or_ps(monkeypatch, tmp_pat
     assert market_calls == [["A", "B", "C", "D"]]
     assert "earnings" not in captured["frames"]
     current = captured["frames"]["current_valuation"].set_index("asset_id")
-    assert current.loc["A", "current_market_cap"] == pytest.approx(55.0 * 10.0)
+    assert current.loc["A", "current_market_cap"] == pytest.approx(20.0 * 10.0)
     assert current.loc["B", "current_market_cap"] == pytest.approx(60.0 * 20.0)
     assert pd.isna(current.loc["C", "current_market_cap"])
     assert current["net_debt"].isna().all()

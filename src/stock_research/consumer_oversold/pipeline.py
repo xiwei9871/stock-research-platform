@@ -529,7 +529,7 @@ def _current_valuation_from_histories(
     valuation_history: pd.DataFrame,
     fundamentals: pd.DataFrame,
     membership: pd.DataFrame,
-    latest_close: pd.Series,
+    latest_raw_close: pd.Series,
     total_share: pd.Series,
     trade_date: str,
 ) -> pd.DataFrame:
@@ -558,7 +558,7 @@ def _current_valuation_from_histories(
         ev = _positive(valuation.get("ev_ebitda", math.nan))
         revenue = _positive(fundamental.get("latest_revenue_ttm", math.nan))
         profit = _positive(fundamental.get("latest_np_parent_ttm", math.nan))
-        close = _positive(latest_close.get(asset_id, math.nan))
+        close = _positive(latest_raw_close.get(asset_id, math.nan))
         shares = _positive(total_share.get(asset_id, math.nan))
         market_cap = close * shares if math.isfinite(close) and math.isfinite(shares) else math.nan
         rows.append(
@@ -621,15 +621,15 @@ def run_consumer_oversold_weekly(
         & finance_with_shares.get("announcement_date", pd.Series(index=finance_with_shares.index, dtype=object)).notna()
     ].copy()
     fundamentals = compute_fundamental_features(finance, trade_date=trade_date)
-    if bars.empty:
-        latest_close = pd.Series(dtype=float)
+    if bars.empty or "raw_close" not in bars.columns:
+        latest_raw_close = pd.Series(dtype=float)
     else:
         market = bars.copy(deep=True)
         market["trade_date"] = pd.to_datetime(market["trade_date"], errors="coerce")
         market = market.loc[market["trade_date"].le(pd.Timestamp(trade_date))]
-        latest_close = market.sort_values(["asset_id", "trade_date"], kind="stable").drop_duplicates(
+        latest_raw_close = market.sort_values(["asset_id", "trade_date"], kind="stable").drop_duplicates(
             "asset_id", keep="last"
-        ).set_index("asset_id")["close"]
+        ).set_index("asset_id")["raw_close"]
     valuation_history = valuation_raw.copy(deep=True)
     for column in VALUATION_HISTORY_COLUMNS:
         if column not in valuation_history.columns:
@@ -643,7 +643,7 @@ def run_consumer_oversold_weekly(
         valuation_history,
         fundamentals,
         included,
-        latest_close,
+        latest_raw_close,
         total_share,
         trade_date,
     )
