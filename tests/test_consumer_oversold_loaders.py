@@ -42,8 +42,9 @@ def test_universe_loads_four_stable_frames_and_point_in_time_sql(monkeypatch):
             [{"asset_id": "B", "is_st": False, "is_delisting_risk": False, "is_suspended": True}],
             [{"asset_id": "B", "avg_turnover_amount": 42}],
             [
-                {"asset_id": "B", "industry_system": "sw", "industry_name": "食品"},
                 {"asset_id": "B", "industry_system": "citics", "industry_name": "消费"},
+                {"asset_id": "B", "industry_system": "sw", "industry_name": "食品"},
+                {"asset_id": "B", "industry_system": "csrc", "industry_name": "制造"},
             ],
         ],
     )
@@ -58,6 +59,9 @@ def test_universe_loads_four_stable_frames_and_point_in_time_sql(monkeypatch):
     assert result["industries"].columns.tolist() == ["asset_id", "industry_system", "industry_name"]
     assert result["assets"].iloc[0]["list_date"] == "2020-01-02"
     assert not bool(result["statuses"].iloc[0]["is_delisting_risk"])
+    assert result["industries"].to_dict("records") == [
+        {"asset_id": "B", "industry_system": "sw", "industry_name": "食品"}
+    ]
     assert "FROM core.asset_master" in calls[0][0]
     assert "core.asset_status_daily" in calls[1][0]
     assert "COALESCE" in calls[1][0] and "TRUE" in calls[1][0]
@@ -67,7 +71,10 @@ def test_universe_loads_four_stable_frames_and_point_in_time_sql(monkeypatch):
     assert "adjust_type = 'hfq'" in calls[2][0]
     assert "start_date <= %s" in calls[3][0]
     assert "%s < end_date" in calls[3][0]
-    assert "PARTITION BY asset_id, industry_system" in calls[3][0]
+    assert "PARTITION BY asset_id" in calls[3][0]
+    assert "PARTITION BY asset_id, industry_system" not in calls[3][0]
+    assert "CASE lower(industry_system) WHEN 'sw' THEN 0 WHEN 'citics' THEN 1 WHEN 'csrc' THEN 2 ELSE 9 END" in calls[3][0]
+    assert "level DESC, start_date DESC, industry_code" in calls[3][0]
     assert all("2026-07-29" in params for _, params in calls)
 
 
@@ -180,6 +187,30 @@ def test_finance_does_not_label_prior_period_ttm_as_a_later_report_period(monkey
     assert pd.isna(june["np_parent_ttm"])
 
 
+def test_finance_ttm_scans_only_asset_local_rows(monkeypatch):
+    income = [
+        {"asset_id": asset_id, "report_period": "2024-12-31", "announcement_date": "2025-03-20", "revenue": value, "np_parent": value / 10, "source": "s"}
+        for asset_id, value in (("A", 100), ("B", 200))
+    ]
+    cash = [
+        {"asset_id": asset_id, "report_period": "2024-12-31", "announcement_date": "2025-03-21", "net_operate_cash_flow": value, "source": "s"}
+        for asset_id, value in (("A", 10), ("B", 20))
+    ]
+    _install_db(monkeypatch, [income, [], [], cash])
+    scanned_assets: list[set[str]] = []
+    original = loaders._ttm_at_period
+
+    def probe(rows, **kwargs):
+        scanned_assets.append({str(row["asset_id"]) for row in rows})
+        return original(rows, **kwargs)
+
+    monkeypatch.setattr(loaders, "_ttm_at_period", probe)
+    loaders.load_consumer_finance_history(["A", "B"], "2025-04-01", service="test")
+
+    assert scanned_assets
+    assert all(len(asset_set) <= 1 for asset_set in scanned_assets)
+
+
 def test_valuation_enforces_pit_deduplicates_versions_and_pivots(monkeypatch):
     rows = [
         {"asset_id": "A", "trade_date": date(2026, 7, 28), "factor_name": "pe_ttm", "factor_value": 12, "computed_at": datetime(2026, 7, 29, 9), "calc_version": "v2", "industry_system": "sw", "industry_name": "食品"},
@@ -197,20 +228,25 @@ def test_valuation_enforces_pit_deduplicates_versions_and_pivots(monkeypatch):
     assert "trade_date <= %s" in sql
     assert "INTERVAL '5 years'" in sql
     assert "core.industry_membership" in sql
-    assert "computed_at::date <= %s" in sql
+    assert "f.computed_at < ((%s::date + interval '1 day') AT TIME ZONE 'Asia/Shanghai')" in sql
     assert params == [["A"], "2026-07-29", "2026-07-29", "2026-07-29"]
 
 
-def test_valuation_ignores_factor_revision_computed_after_cutoff(monkeypatch):
+def test_valuation_uses_absolute_asia_shanghai_day_end_for_version_visibility(monkeypatch):
     rows = [
         {
             "asset_id": "A", "trade_date": "2026-07-28", "factor_name": "pe_ttm",
-            "factor_value": 99, "computed_at": "2026-07-30T00:30:00+08:00",
-            "calc_version": "future", "industry_system": "sw", "industry_name": "食品",
+            "factor_value": 99, "computed_at": "2026-07-29T16:00:00Z",
+            "calc_version": "future_utc", "industry_system": "sw", "industry_name": "食品",
         },
         {
             "asset_id": "A", "trade_date": "2026-07-28", "factor_name": "pe_ttm",
-            "factor_value": 12, "computed_at": "2026-07-29T09:00:00+08:00",
+            "factor_value": 98, "computed_at": "2026-07-30T00:00:00+08:00",
+            "calc_version": "future_shanghai", "industry_system": "sw", "industry_name": "食品",
+        },
+        {
+            "asset_id": "A", "trade_date": "2026-07-28", "factor_name": "pe_ttm",
+            "factor_value": 12, "computed_at": "2026-07-29T15:59:59Z",
             "calc_version": "visible", "industry_system": "sw", "industry_name": "食品",
         },
     ]
@@ -219,14 +255,17 @@ def test_valuation_ignores_factor_revision_computed_after_cutoff(monkeypatch):
     assert result.iloc[0]["pe_ttm"] == 12
 
 
-def test_valuation_keeps_factor_rows_when_industry_and_version_metadata_are_missing(monkeypatch):
-    _install_db(monkeypatch, [[{
+@pytest.mark.parametrize("missing_column", ["computed_at", "calc_version"])
+def test_valuation_rejects_nonempty_database_rows_missing_version_metadata(monkeypatch, missing_column):
+    row = {
         "asset_id": "A", "trade_date": "2026-07-28", "factor_name": "pe_ttm", "factor_value": 12,
-    }]])
-    result = loaders.load_consumer_valuation_history(["A"], "2026-07-29", service="test")
-    assert len(result) == 1
-    assert result.iloc[0]["pe_ttm"] == 12
-    assert pd.isna(result.iloc[0]["industry_system"])
+        "computed_at": "2026-07-29T09:00:00+08:00", "calc_version": "v1",
+        "industry_system": None, "industry_name": None,
+    }
+    row.pop(missing_column)
+    _install_db(monkeypatch, [[row]])
+    with pytest.raises(ValueError, match=missing_column):
+        loaders.load_consumer_valuation_history(["A"], "2026-07-29", service="test")
 
 
 def test_earnings_unifies_forecast_and_express(monkeypatch):

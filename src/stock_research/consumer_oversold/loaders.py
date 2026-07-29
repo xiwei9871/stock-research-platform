@@ -156,8 +156,14 @@ def load_consumer_universe_frames(
     WITH ranked AS (
         SELECT asset_id, industry_system, industry_name,
                ROW_NUMBER() OVER (
-                   PARTITION BY asset_id, industry_system
-                   ORDER BY level DESC, start_date DESC, industry_code
+                   PARTITION BY asset_id
+                   ORDER BY CASE lower(industry_system)
+                                WHEN 'sw' THEN 0
+                                WHEN 'citics' THEN 1
+                                WHEN 'csrc' THEN 2
+                                ELSE 9
+                            END,
+                            level DESC, start_date DESC, industry_code
                ) AS row_number
         FROM core.industry_membership
         WHERE start_date <= %s
@@ -177,12 +183,28 @@ def load_consumer_universe_frames(
         industry_rows = fetch_all(conn, industries_sql, [cutoff, cutoff])
 
     assets = _format_dates(_frame(asset_rows, ASSET_COLUMNS), ("list_date",))
+    industries = _frame(industry_rows, INDUSTRY_COLUMNS)
+    if not industries.empty:
+        priorities = industries["industry_system"].map(
+            lambda value: {"sw": 0, "citics": 1, "csrc": 2}.get(
+                str(value).strip().lower(), 9
+            )
+        )
+        industries = (
+            industries.assign(_system_priority=priorities)
+            .sort_values(
+                ["asset_id", "_system_priority", "industry_system", "industry_name"],
+                kind="stable",
+            )
+            .drop_duplicates("asset_id", keep="first")
+            .drop(columns="_system_priority")
+        )
     return {
         "assets": _sort(assets, ["asset_id"]),
         "statuses": _sort(_frame(status_rows, STATUS_COLUMNS), ["asset_id"]),
         "liquidity": _sort(_frame(liquidity_rows, LIQUIDITY_COLUMNS), ["asset_id"]),
         "industries": _sort(
-            _frame(industry_rows, INDUSTRY_COLUMNS),
+            industries,
             ["asset_id", "industry_system", "industry_name"],
         ),
     }
@@ -251,7 +273,6 @@ def _latest_by_period(rows: list[dict[str, Any]]) -> dict[tuple[str, str], dict[
 def _ttm_at_period(
     rows: list[dict[str, Any]],
     *,
-    asset_id: str,
     report_period: str,
     asof: str,
     value_column: str,
@@ -259,8 +280,7 @@ def _ttm_at_period(
     available = [
         row
         for row in rows
-        if row["asset_id"] == asset_id
-        and row["report_period"] <= report_period
+        if row["report_period"] <= report_period
         and row["announcement_date"] <= asof
     ]
     if not any(
@@ -281,6 +301,13 @@ def _ttm_at_period(
         value_column=value_column,
         trade_date=asof,
     )
+
+
+def _rows_by_asset(rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        grouped.setdefault(row["asset_id"], []).append(row)
+    return grouped
 
 
 def load_consumer_finance_history(
@@ -330,6 +357,8 @@ def load_consumer_finance_history(
     indicator = _disclosed_rows(raw_indicator, cutoff)
     balance = _disclosed_rows(raw_balance, cutoff)
     cash = _disclosed_rows(raw_cash, cutoff)
+    income_by_asset = _rows_by_asset(income)
+    cash_by_asset = _rows_by_asset(cash)
     latest_sources = [
         _latest_by_period(source_rows)
         for source_rows in (income, indicator, balance, cash)
@@ -348,16 +377,14 @@ def load_consumer_finance_history(
                 "report_period": report_period,
                 "announcement_date": asof,
                 "revenue_ttm": _ttm_at_period(
-                    income,
-                    asset_id=asset_id,
+                    income_by_asset.get(asset_id, []),
                     report_period=report_period,
                     asof=asof,
                     value_column="revenue",
                 ),
                 "revenue_growth": (indicator_row or {}).get("revenue_yoy"),
                 "np_parent_ttm": _ttm_at_period(
-                    income,
-                    asset_id=asset_id,
+                    income_by_asset.get(asset_id, []),
                     report_period=report_period,
                     asof=asof,
                     value_column="np_parent",
@@ -370,8 +397,7 @@ def load_consumer_finance_history(
                 "debt_ratio": (indicator_row or {}).get("debt_ratio"),
                 "equity_parent": (balance_row or {}).get("total_equity"),
                 "operating_cash_flow": _ttm_at_period(
-                    cash,
-                    asset_id=asset_id,
+                    cash_by_asset.get(asset_id, []),
                     report_period=report_period,
                     asof=asof,
                     value_column="net_operate_cash_flow",
@@ -408,7 +434,7 @@ def load_consumer_valuation_history(
     WHERE f.asset_id = ANY(%s)
       AND f.trade_date <= %s
       AND f.trade_date >= %s::date - INTERVAL '5 years'
-      AND f.computed_at::date <= %s
+      AND f.computed_at < ((%s::date + interval '1 day') AT TIME ZONE 'Asia/Shanghai')
       AND f.factor_name IN ('pe_ttm', 'ps_ttm', 'ev_ebitda')
     ORDER BY f.asset_id, f.trade_date, f.factor_name, f.computed_at DESC, f.calc_version DESC
     """
@@ -417,21 +443,20 @@ def load_consumer_valuation_history(
     if not rows:
         return _frame([], VALUATION_COLUMNS)
     raw = pd.DataFrame(rows)
+    for column in ("computed_at", "calc_version"):
+        if column not in raw.columns or raw[column].isna().any():
+            raise ValueError(f"valuation database rows require non-null {column}")
     raw["trade_date"] = raw["trade_date"].map(_date_text)
-    if "computed_at" not in raw:
-        raw["computed_at"] = pd.NaT
-    else:
-        visible_version = raw["computed_at"].map(
-            lambda value: pd.isna(value) or _date_text(value) <= cutoff
-        )
-        raw = raw.loc[visible_version].copy()
-        if raw.empty:
-            return _frame([], VALUATION_COLUMNS)
-        raw["computed_at"] = pd.to_datetime(raw["computed_at"], errors="coerce", utc=True)
-    if "calc_version" not in raw:
-        raw["calc_version"] = ""
-    else:
-        raw["calc_version"] = raw["calc_version"].fillna("").astype(str)
+    raw["computed_at"] = pd.to_datetime(raw["computed_at"], errors="coerce", utc=True)
+    if raw["computed_at"].isna().any():
+        raise ValueError("valuation database rows contain invalid computed_at")
+    cutoff_end = (
+        pd.Timestamp(cutoff, tz="Asia/Shanghai") + pd.Timedelta(days=1)
+    ).tz_convert("UTC")
+    raw = raw.loc[raw["computed_at"].lt(cutoff_end)].copy()
+    if raw.empty:
+        return _frame([], VALUATION_COLUMNS)
+    raw["calc_version"] = raw["calc_version"].astype(str)
     for column in ("industry_system", "industry_name"):
         if column not in raw:
             raw[column] = pd.NA
