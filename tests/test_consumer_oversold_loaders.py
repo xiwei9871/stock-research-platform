@@ -39,7 +39,7 @@ def test_universe_loads_four_stable_frames_and_point_in_time_sql(monkeypatch):
         monkeypatch,
         [
             [{"asset_id": "B", "stock_code": "000002", "name": "B", "list_date": date(2020, 1, 2)}],
-            [{"asset_id": "B", "is_st": False, "is_delisting_risk": True, "is_suspended": True}],
+            [{"asset_id": "B", "is_st": False, "is_delisting_risk": False, "is_suspended": True}],
             [{"asset_id": "B", "avg_turnover_amount": 42}],
             [
                 {"asset_id": "B", "industry_system": "sw", "industry_name": "食品"},
@@ -57,9 +57,12 @@ def test_universe_loads_four_stable_frames_and_point_in_time_sql(monkeypatch):
     assert result["liquidity"].columns.tolist() == ["asset_id", "avg_turnover_amount"]
     assert result["industries"].columns.tolist() == ["asset_id", "industry_system", "industry_name"]
     assert result["assets"].iloc[0]["list_date"] == "2020-01-02"
+    assert not bool(result["statuses"].iloc[0]["is_delisting_risk"])
     assert "FROM core.asset_master" in calls[0][0]
     assert "core.asset_status_daily" in calls[1][0]
     assert "COALESCE" in calls[1][0] and "TRUE" in calls[1][0]
+    assert "NOT a.is_active" not in calls[1][0]
+    assert "a.delist_date IS NOT NULL AND a.delist_date <= %s" in calls[1][0]
     assert "LIMIT 20" in calls[2][0]
     assert "adjust_type = 'hfq'" in calls[2][0]
     assert "start_date <= %s" in calls[3][0]
@@ -194,7 +197,26 @@ def test_valuation_enforces_pit_deduplicates_versions_and_pivots(monkeypatch):
     assert "trade_date <= %s" in sql
     assert "INTERVAL '5 years'" in sql
     assert "core.industry_membership" in sql
-    assert params == [["A"], "2026-07-29", "2026-07-29"]
+    assert "computed_at::date <= %s" in sql
+    assert params == [["A"], "2026-07-29", "2026-07-29", "2026-07-29"]
+
+
+def test_valuation_ignores_factor_revision_computed_after_cutoff(monkeypatch):
+    rows = [
+        {
+            "asset_id": "A", "trade_date": "2026-07-28", "factor_name": "pe_ttm",
+            "factor_value": 99, "computed_at": "2026-07-30T00:30:00+08:00",
+            "calc_version": "future", "industry_system": "sw", "industry_name": "食品",
+        },
+        {
+            "asset_id": "A", "trade_date": "2026-07-28", "factor_name": "pe_ttm",
+            "factor_value": 12, "computed_at": "2026-07-29T09:00:00+08:00",
+            "calc_version": "visible", "industry_system": "sw", "industry_name": "食品",
+        },
+    ]
+    _install_db(monkeypatch, [rows])
+    result = loaders.load_consumer_valuation_history(["A"], "2026-07-29", service="test")
+    assert result.iloc[0]["pe_ttm"] == 12
 
 
 def test_valuation_keeps_factor_rows_when_industry_and_version_metadata_are_missing(monkeypatch):

@@ -117,7 +117,7 @@ def load_consumer_universe_frames(
     statuses_sql = """
     SELECT a.asset_id,
            COALESCE(s.is_st, latest_bar.is_st, FALSE) AS is_st,
-           (NOT a.is_active OR (a.delist_date IS NOT NULL AND a.delist_date <= %s))
+           (a.delist_date IS NOT NULL AND a.delist_date <= %s)
                AS is_delisting_risk,
            COALESCE(s.is_suspended, TRUE) AS is_suspended
     FROM core.asset_master a
@@ -408,11 +408,12 @@ def load_consumer_valuation_history(
     WHERE f.asset_id = ANY(%s)
       AND f.trade_date <= %s
       AND f.trade_date >= %s::date - INTERVAL '5 years'
+      AND f.computed_at::date <= %s
       AND f.factor_name IN ('pe_ttm', 'ps_ttm', 'ev_ebitda')
     ORDER BY f.asset_id, f.trade_date, f.factor_name, f.computed_at DESC, f.calc_version DESC
     """
     with connect(service) as conn:
-        rows = fetch_all(conn, sql, [assets, cutoff, cutoff])
+        rows = fetch_all(conn, sql, [assets, cutoff, cutoff, cutoff])
     if not rows:
         return _frame([], VALUATION_COLUMNS)
     raw = pd.DataFrame(rows)
@@ -420,6 +421,12 @@ def load_consumer_valuation_history(
     if "computed_at" not in raw:
         raw["computed_at"] = pd.NaT
     else:
+        visible_version = raw["computed_at"].map(
+            lambda value: pd.isna(value) or _date_text(value) <= cutoff
+        )
+        raw = raw.loc[visible_version].copy()
+        if raw.empty:
+            return _frame([], VALUATION_COLUMNS)
         raw["computed_at"] = pd.to_datetime(raw["computed_at"], errors="coerce", utc=True)
     if "calc_version" not in raw:
         raw["calc_version"] = ""
