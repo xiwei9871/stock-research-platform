@@ -185,6 +185,100 @@ def test_fundamentals_accept_finite_database_decimal_as_float():
     assert isinstance(result["latest_revenue_growth"], float)
 
 
+def test_fundamentals_derive_missing_period_fields_before_history_summaries():
+    missing = {
+        "revenue_growth": None,
+        "profit_growth": None,
+        "gross_margin": None,
+        "net_margin": None,
+        "roe": None,
+        "ocf_to_np": None,
+    }
+    rows = [
+        finance_row(
+            "A",
+            "2024-03-31",
+            "2024-04-20",
+            revenue_ttm=100.0,
+            np_parent_ttm=10.0,
+            operating_cash_flow=8.0,
+            equity_parent=50.0,
+            **missing,
+        ),
+        finance_row(
+            "A",
+            "2025-03-31",
+            "2025-04-20",
+            revenue_ttm=120.0,
+            np_parent_ttm=12.0,
+            operating_cash_flow=15.0,
+            equity_parent=60.0,
+            **missing,
+        ),
+    ]
+
+    result = compute_fundamental_features(
+        pd.DataFrame(rows), trade_date="2025-04-30"
+    ).iloc[0]
+
+    assert result["latest_revenue_growth"] == pytest.approx(.2)
+    assert result["latest_profit_growth"] == pytest.approx(.2)
+    assert result["latest_net_margin"] == pytest.approx(.1)
+    assert result["latest_ocf_to_np"] == pytest.approx(1.25)
+    assert result["latest_roe"] == pytest.approx(.2)
+    assert result["normal_net_margin"] == pytest.approx(.1)
+    assert result["normal_ocf_to_np"] == pytest.approx(1.025)
+    assert result["ocf_to_np_delta_to_prior"] == pytest.approx(.45)
+    assert math.isnan(result["latest_gross_margin"])
+
+
+def test_fundamental_derivations_keep_zero_denominators_and_future_comparators_missing():
+    missing = {
+        "revenue_growth": None,
+        "profit_growth": None,
+        "net_margin": None,
+        "roe": None,
+        "ocf_to_np": None,
+    }
+    rows = [
+        finance_row(
+            "A",
+            "2024-03-31",
+            "2025-05-01",
+            revenue_ttm=100.0,
+            np_parent_ttm=10.0,
+            **missing,
+        ),
+        finance_row(
+            "A",
+            "2025-03-31",
+            "2025-04-20",
+            revenue_ttm=120.0,
+            np_parent_ttm=12.0,
+            **missing,
+        ),
+        finance_row(
+            "B",
+            "2025-03-31",
+            "2025-04-20",
+            revenue_ttm=0.0,
+            np_parent_ttm=0.0,
+            operating_cash_flow=1.0,
+            equity_parent=0.0,
+            **missing,
+        ),
+    ]
+
+    result = compute_fundamental_features(
+        pd.DataFrame(rows), trade_date="2025-06-01"
+    ).set_index("asset_id")
+
+    assert math.isnan(result.loc["A", "latest_revenue_growth"])
+    assert math.isnan(result.loc["A", "latest_profit_growth"])
+    for field in ("latest_net_margin", "latest_ocf_to_np", "latest_roe"):
+        assert math.isnan(result.loc["B", field])
+
+
 @pytest.mark.parametrize("invalid", [Decimal("NaN"), Decimal("Infinity")])
 def test_fundamentals_reject_non_finite_database_decimal(invalid):
     row = finance_row("A", "2024-12-31", "2025-03-01", revenue_growth=invalid)

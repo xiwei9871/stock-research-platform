@@ -312,6 +312,41 @@ def _latest_by_period(rows: list[dict[str, Any]]) -> dict[tuple[str, str], dict[
     return latest
 
 
+def _latest_fields_by_period(
+    rows: list[dict[str, Any]],
+    fields: tuple[str, ...],
+) -> dict[tuple[str, str], dict[str, Any]]:
+    ordered = sorted(
+        rows,
+        key=lambda row: (
+            row["asset_id"],
+            row["report_period"],
+            row["announcement_date"],
+            str(row.get("source") or ""),
+            str(row.get("calc_version") or ""),
+        ),
+        reverse=True,
+    )
+    latest: dict[tuple[str, str], dict[str, Any]] = {}
+    for row in ordered:
+        key = (row["asset_id"], row["report_period"])
+        selected = latest.setdefault(key, dict(row))
+        for field in fields:
+            if pd.isna(selected.get(field)) and not pd.isna(row.get(field)):
+                selected[field] = row[field]
+    return latest
+
+
+def _finite_ratio(numerator: Any, denominator: Any) -> Any:
+    if pd.isna(numerator) or pd.isna(denominator) or denominator == 0:
+        return None
+    try:
+        ratio = numerator / denominator
+        return ratio if math.isfinite(float(ratio)) else None
+    except (ArithmeticError, TypeError, ValueError, OverflowError):
+        return None
+
+
 def _ttm_at_period(
     rows: list[dict[str, Any]],
     *,
@@ -409,7 +444,8 @@ def load_consumer_finance_history(
         ORDER BY asset_id, report_period, announcement_date DESC, source DESC, calc_version DESC
         """,
         """
-        SELECT asset_id, report_period, announcement_date, total_equity, source
+        SELECT asset_id, report_period, announcement_date, total_equity,
+               total_assets, total_liabilities, source
         FROM finance.balance_sheet
         WHERE asset_id = ANY(%s) AND announcement_date <= %s
         ORDER BY asset_id, report_period, announcement_date DESC, source DESC
@@ -444,8 +480,24 @@ def load_consumer_finance_history(
     cash_by_asset = _rows_by_asset(cash)
     shares_by_asset = _latest_share_by_asset(raw_shares, cutoff)
     latest_sources = [
-        _latest_by_period(source_rows)
-        for source_rows in (income, indicator, balance, cash)
+        _latest_by_period(income),
+        _latest_fields_by_period(
+            indicator,
+            (
+                "revenue_yoy",
+                "np_yoy",
+                "gross_margin",
+                "net_margin",
+                "roe",
+                "ocf_to_np",
+                "debt_ratio",
+            ),
+        ),
+        _latest_fields_by_period(
+            balance,
+            ("total_equity", "total_assets", "total_liabilities"),
+        ),
+        _latest_by_period(cash),
     ]
     keys = sorted(set().union(*(source.keys() for source in latest_sources)))
     output: list[dict[str, Any]] = []
@@ -455,6 +507,10 @@ def load_consumer_finance_history(
         ]
         source_rows = [row for row in (income_row, indicator_row, balance_row, cash_row) if row]
         asof = max(row["announcement_date"] for row in source_rows)
+        balance_debt_ratio = _finite_ratio(
+            (balance_row or {}).get("total_liabilities"),
+            (balance_row or {}).get("total_assets"),
+        )
         output.append(
             {
                 "asset_id": asset_id,
@@ -478,7 +534,11 @@ def load_consumer_finance_history(
                 "net_margin": (indicator_row or {}).get("net_margin"),
                 "roe": (indicator_row or {}).get("roe"),
                 "ocf_to_np": (indicator_row or {}).get("ocf_to_np"),
-                "debt_ratio": (indicator_row or {}).get("debt_ratio"),
+                "debt_ratio": (
+                    balance_debt_ratio
+                    if balance_debt_ratio is not None
+                    else (indicator_row or {}).get("debt_ratio")
+                ),
                 "equity_parent": (balance_row or {}).get("total_equity"),
                 "operating_cash_flow": _ttm_at_period(
                     cash_by_asset.get(asset_id, []),

@@ -211,6 +211,47 @@ def _reject_duplicate_assets(frame: pd.DataFrame, name: str) -> None:
         raise ValueError(f"{name} contains duplicate asset_id {asset_id}")
 
 
+def _derived_ratio(numerator: float, denominator: float) -> float:
+    if not math.isfinite(numerator) or not math.isfinite(denominator) or denominator == 0.0:
+        return math.nan
+    return numerator / denominator
+
+
+def _derive_fundamental_period_fields(frame: pd.DataFrame) -> None:
+    for _, asset_rows in frame.groupby("asset_id", sort=False):
+        period_index = {
+            frame.at[index, "report_period"]: index for index in asset_rows.index
+        }
+        for index in asset_rows.index:
+            revenue = float(frame.at[index, "revenue_ttm"])
+            profit = float(frame.at[index, "np_parent_ttm"])
+            cash_flow = float(frame.at[index, "operating_cash_flow"])
+            equity = float(frame.at[index, "equity_parent"])
+            for field, value in (
+                ("net_margin", _derived_ratio(profit, revenue)),
+                ("ocf_to_np", _derived_ratio(cash_flow, profit)),
+                ("roe", _derived_ratio(profit, equity)),
+            ):
+                if pd.isna(frame.at[index, field]):
+                    frame.at[index, field] = value
+
+            prior_period = frame.at[index, "report_period"] - pd.DateOffset(years=1)
+            prior_index = period_index.get(prior_period)
+            if prior_index is None:
+                continue
+            if frame.at[prior_index, "announcement_date"] > frame.at[index, "announcement_date"]:
+                continue
+            for field, current_value, prior_field in (
+                ("revenue_growth", revenue, "revenue_ttm"),
+                ("profit_growth", profit, "np_parent_ttm"),
+            ):
+                if pd.isna(frame.at[index, field]):
+                    prior_value = float(frame.at[prior_index, prior_field])
+                    frame.at[index, field] = _derived_ratio(
+                        current_value - prior_value, prior_value
+                    )
+
+
 def _winsorized_median(values: pd.Series) -> float:
     valid = values.loc[values.gt(0.0) & np.isfinite(values)].astype(float)
     if valid.empty:
@@ -307,6 +348,7 @@ def compute_fundamental_features(
     frame = frame.sort_values(
         ["asset_id", "report_period", "announcement_date"], kind="stable"
     ).drop_duplicates(["asset_id", "report_period"], keep="last")
+    _derive_fundamental_period_fields(frame)
     frame = frame.sort_values(["asset_id", "report_period"], ascending=[True, False], kind="stable")
     frame = frame.groupby("asset_id", sort=False, group_keys=False).head(8)
 

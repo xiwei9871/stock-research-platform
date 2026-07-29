@@ -238,6 +238,41 @@ def test_finance_queries_all_sources_with_cutoff_and_computes_pit_ttm(monkeypatc
     assert share_params == [["A"], "2025-04-01", "2025-04-01"]
 
 
+def test_finance_preserves_non_null_fields_and_derives_balance_debt_ratio(monkeypatch):
+    income = [
+        {"asset_id": "A", "report_period": "2023-03-31", "announcement_date": "2023-04-20", "revenue": 20, "np_parent": 2, "source": "s"},
+        {"asset_id": "A", "report_period": "2023-12-31", "announcement_date": "2024-03-20", "revenue": 100, "np_parent": 10, "source": "s"},
+        {"asset_id": "A", "report_period": "2024-03-31", "announcement_date": "2024-04-20", "revenue": 30, "np_parent": 3, "source": "s"},
+        {"asset_id": "A", "report_period": "2024-12-31", "announcement_date": "2025-03-20", "revenue": 140, "np_parent": 14, "source": "s"},
+        {"asset_id": "A", "report_period": "2025-03-31", "announcement_date": "2025-04-20", "revenue": 40, "np_parent": 4, "source": "s"},
+    ]
+    indicators = [
+        {"asset_id": "A", "report_period": "2025-03-31", "announcement_date": "2025-04-21", "gross_margin": .35, "debt_ratio": .9, "source": "old", "calc_version": "v1"},
+        {"asset_id": "A", "report_period": "2025-03-31", "announcement_date": "2025-04-22", "gross_margin": None, "debt_ratio": None, "source": "new", "calc_version": "v2"},
+    ]
+    balances = [
+        {"asset_id": "A", "report_period": "2025-03-31", "announcement_date": "2025-04-23", "total_equity": 100, "total_assets": 200, "total_liabilities": 80, "source": "old"},
+        {"asset_id": "A", "report_period": "2025-03-31", "announcement_date": "2025-04-24", "total_equity": None, "total_assets": None, "total_liabilities": None, "source": "new"},
+        {"asset_id": "A", "report_period": "2025-03-31", "announcement_date": "2025-08-01", "total_equity": 999, "total_assets": 999, "total_liabilities": 998, "source": "future"},
+    ]
+    cash = [
+        {"asset_id": "A", "report_period": "2023-03-31", "announcement_date": "2023-04-20", "net_operate_cash_flow": 1, "source": "s"},
+        {"asset_id": "A", "report_period": "2023-12-31", "announcement_date": "2024-03-20", "net_operate_cash_flow": 8, "source": "s"},
+        {"asset_id": "A", "report_period": "2024-03-31", "announcement_date": "2024-04-20", "net_operate_cash_flow": 2, "source": "s"},
+        {"asset_id": "A", "report_period": "2024-12-31", "announcement_date": "2025-03-20", "net_operate_cash_flow": 12, "source": "s"},
+        {"asset_id": "A", "report_period": "2025-03-31", "announcement_date": "2025-04-20", "net_operate_cash_flow": 3, "source": "s"},
+    ]
+    calls, _ = _install_db(monkeypatch, [income, indicators, balances, cash, []])
+
+    result = loaders.load_consumer_finance_history(["A"], "2025-06-30", service="test")
+    latest = result.loc[result["report_period"].eq("2025-03-31")].iloc[0]
+
+    assert latest["equity_parent"] == 100
+    assert latest["gross_margin"] == .35
+    assert latest["debt_ratio"] == .4
+    assert "total_assets, total_liabilities" in calls[2][0]
+
+
 def test_finance_does_not_use_revision_announced_after_period_asof(monkeypatch):
     income = [
         {"asset_id": "A", "report_period": "2023-03-31", "announcement_date": "2023-04-20", "revenue": 20, "np_parent": 2, "source": "s"},
