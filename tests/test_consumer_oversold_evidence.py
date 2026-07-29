@@ -145,11 +145,38 @@ def test_missing_evidence_text_marks_incomplete_instead_of_raising(field, error)
 
 @pytest.mark.parametrize(
     "url",
-    ["example.com/a", "ftp://example.com/a", "https:///missing-host", "http://", "https://:80/path"],
+    [
+        "example.com/a",
+        "ftp://example.com/a",
+        "https:///missing-host",
+        "http://",
+        "https://:80/path",
+        "https://exa mple.com/a",
+        "https://./a",
+        "https://-bad-.com/a",
+        "https://localhost/a",
+    ],
 )
 def test_non_empty_source_url_requires_http_or_https_and_a_host(url):
     with pytest.raises(ValueError, match="source_url.*a1|a1.*source_url"):
         _validate(_frame(_row(source_url=url)))
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://example.com/a",
+        "http://reports.example.com/a",
+        "https://xn--fsqu00a.xn--0zwm56d/a",
+        "https://例子.测试/a",
+        "https://192.0.2.1/a",
+        "https://[2001:db8::1]/a",
+    ],
+)
+def test_source_url_accepts_valid_dns_idna_and_ip_hosts(url):
+    result = _validate(_frame(_row(source_url=url)))
+
+    assert result.loc[0, "source_url"] == url
 
 
 def test_missing_risk_statuses_normalize_to_unknown_and_set_unknown_flag():

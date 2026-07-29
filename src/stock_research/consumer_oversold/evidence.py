@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+import ipaddress
 import math
 from numbers import Real
 from urllib.parse import urlparse
@@ -109,13 +110,42 @@ def _validated_score(value: object, *, field: str, asset_id: str) -> float | Non
     return numeric
 
 
-def _validate_source_url(value: str, *, asset_id: str) -> None:
-    parsed = urlparse(value)
+def _valid_source_url(value: str) -> bool:
     try:
+        parsed = urlparse(value)
         hostname = parsed.hostname
     except ValueError:
-        hostname = None
+        return False
     if parsed.scheme not in {"http", "https"} or not hostname:
+        return False
+
+    try:
+        ipaddress.ip_address(hostname)
+    except ValueError:
+        try:
+            ascii_hostname = hostname.encode("idna").decode("ascii")
+        except UnicodeError:
+            return False
+        if len(ascii_hostname) > 253 or "." not in ascii_hostname:
+            return False
+        labels = ascii_hostname.split(".")
+        for label in labels:
+            valid_characters = all(
+                character.isascii() and (character.isalnum() or character == "-")
+                for character in label
+            )
+            if (
+                not 1 <= len(label) <= 63
+                or label.startswith("-")
+                or label.endswith("-")
+                or not valid_characters
+            ):
+                return False
+    return True
+
+
+def _validate_source_url(value: str, *, asset_id: str) -> None:
+    if not _valid_source_url(value):
         raise ValueError(f"invalid source_url for asset {asset_id}: {value!r}")
 
 
