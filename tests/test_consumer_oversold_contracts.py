@@ -15,12 +15,16 @@ def test_default_config_matches_approved_design():
 
     assert config.lookback_6m_bars == 126
     assert config.lookback_12m_bars == 252
+    assert config.valuation_lookback_years == 5
+    assert config.min_listed_days == 365
+    assert config.min_avg_turnover_amount == 30_000_000.0
     assert config.min_6m_return == -0.20
     assert config.min_12m_drawdown == -0.30
     assert config.min_relative_return == -0.10
     assert config.min_oversold_score == 60.0
     assert config.min_base_upside == 0.25
     assert config.max_per_bucket == 20
+    assert config.max_priced_in_penalty == 20.0
 
 
 def test_repair_bucket_constants_are_stable():
@@ -43,7 +47,7 @@ def test_output_filenames_are_stable():
 def test_trade_date_must_be_real_iso_date():
     assert validate_trade_date("2026-07-29") == "2026-07-29"
 
-    for invalid in ["20260729", "2026-02-30", ""]:
+    for invalid in ["20260729", "2026-02-30", "", None, 20260729]:
         with pytest.raises(ValueError):
             validate_trade_date(invalid)
 
