@@ -24,6 +24,89 @@ def _result(*, expected=None, early=None):
     }
 
 
+def _evaluation_result():
+    return {
+        "paths": {
+            "detail": "/tmp/evaluation/detail.csv",
+            "summary": "/tmp/evaluation/summary.csv",
+            "report": "/tmp/evaluation/report.md",
+        }
+    }
+
+
+def test_consumer_oversold_evaluate_dispatches_and_prints_machine_lines(monkeypatch, capsys):
+    captured = {}
+
+    def fake_run(**kwargs):
+        captured.update(kwargs)
+        return _evaluation_result()
+
+    monkeypatch.setattr(cli, "_run_consumer_oversold_evaluation", fake_run)
+
+    cli.main_for_args(
+        [
+            "consumer-oversold-evaluate",
+            "--snapshots-root",
+            "/tmp/snapshots",
+            "--end-date",
+            "2026-07-30",
+            "--output-dir",
+            "/tmp/evaluation",
+            "--service",
+            "research_custom",
+        ]
+    )
+
+    assert captured == {
+        "snapshots_root": "/tmp/snapshots",
+        "end_date": "2026-07-30",
+        "output_dir": "/tmp/evaluation",
+        "service": "research_custom",
+    }
+    assert capsys.readouterr().out.splitlines() == [
+        "consumer_oversold_evaluation|detail|/tmp/evaluation/detail.csv",
+        "consumer_oversold_evaluation|summary|/tmp/evaluation/summary.csv",
+        "consumer_oversold_evaluation|report|/tmp/evaluation/report.md",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("option", "unsafe_value"),
+    [
+        ("--snapshots-root", "snapshots|forged"),
+        ("--snapshots-root", "snapshots\rforged"),
+        ("--output-dir", "output\nconsumer_oversold_evaluation|report|forged"),
+    ],
+)
+def test_consumer_oversold_evaluate_rejects_unsafe_paths_before_runner(
+    monkeypatch, capsys, option, unsafe_value
+):
+    called = False
+
+    def fake_run(**kwargs):
+        nonlocal called
+        called = True
+        return _evaluation_result()
+
+    monkeypatch.setattr(cli, "_run_consumer_oversold_evaluation", fake_run)
+    argv = [
+        "consumer-oversold-evaluate",
+        "--snapshots-root",
+        "snapshots",
+        "--end-date",
+        "2026-07-30",
+        "--output-dir",
+        "evaluation",
+    ]
+    argv[argv.index(option) + 1] = unsafe_value
+
+    with pytest.raises(ValueError, match="must not contain"):
+        cli.main_for_args(argv)
+
+    assert called is False
+    assert capsys.readouterr().out == ""
+
+
 def test_consumer_oversold_weekly_dispatches_and_prints_machine_lines(monkeypatch, capsys):
     captured = {}
 

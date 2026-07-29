@@ -1526,6 +1526,12 @@ def _run_consumer_oversold_weekly(**kwargs):
     return run_consumer_oversold_weekly(**kwargs)
 
 
+def _run_consumer_oversold_evaluation(**kwargs):
+    from stock_research.consumer_oversold.evaluation import run_consumer_oversold_evaluation
+
+    return run_consumer_oversold_evaluation(**kwargs)
+
+
 def _validate_consumer_oversold_machine_path(value, name: str) -> str:
     if not isinstance(value, str):
         raise ValueError(f"{name} must be a string")
@@ -1568,6 +1574,24 @@ def _consumer_oversold_machine_lines(result) -> list[str]:
         ),
         f"consumer_oversold|expected_rows|{expected_rows}",
         f"consumer_oversold|early_rows|{early_rows}",
+    ]
+
+
+def _consumer_oversold_evaluation_machine_lines(result) -> list[str]:
+    keys = ("detail", "summary", "report")
+    paths = result["paths"]
+    if not isinstance(paths, dict):
+        raise ValueError("consumer oversold evaluation paths must be a dict")
+    if set(paths) != set(keys):
+        raise ValueError("consumer oversold evaluation paths must contain detail, summary, and report")
+    validated = {
+        key: _validate_consumer_oversold_machine_path(
+            paths[key], f"consumer oversold evaluation path {key}"
+        )
+        for key in keys
+    }
+    return [
+        f"consumer_oversold_evaluation|{key}|{validated[key]}" for key in keys
     ]
 
 
@@ -3949,6 +3973,12 @@ def build_parser() -> argparse.ArgumentParser:
     consumer_oversold_weekly.add_argument("--evidence-path", required=True)
     consumer_oversold_weekly.add_argument("--output-dir", required=True)
     consumer_oversold_weekly.add_argument("--service", default=SETTINGS.research_service)
+
+    consumer_oversold_evaluate = subparsers.add_parser("consumer-oversold-evaluate")
+    consumer_oversold_evaluate.add_argument("--snapshots-root", required=True)
+    consumer_oversold_evaluate.add_argument("--end-date", required=True)
+    consumer_oversold_evaluate.add_argument("--output-dir", required=True)
+    consumer_oversold_evaluate.add_argument("--service", default=SETTINGS.research_service)
 
     mid_trend_round2 = subparsers.add_parser("mid-trend-round2-optimize")
     mid_trend_round2.add_argument("--start-date", required=True)
@@ -7676,6 +7706,21 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
         )
         lines = _consumer_oversold_machine_lines(result)
         for line in lines:
+            print(line)
+    elif args.command == "consumer-oversold-evaluate":
+        snapshots_root = _validate_consumer_oversold_machine_path(
+            args.snapshots_root, "--snapshots-root"
+        )
+        output_dir = _validate_consumer_oversold_machine_path(
+            args.output_dir, "--output-dir"
+        )
+        result = _run_consumer_oversold_evaluation(
+            snapshots_root=snapshots_root,
+            end_date=args.end_date,
+            output_dir=output_dir,
+            service=args.service,
+        )
+        for line in _consumer_oversold_evaluation_machine_lines(result):
             print(line)
     elif args.command == "mid-trend-round2-optimize":
         from stock_research.mid_trend_round2_optimization import run_mid_trend_round2_optimization
