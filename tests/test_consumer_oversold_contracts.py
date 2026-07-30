@@ -3,6 +3,9 @@ from dataclasses import FrozenInstanceError
 import pytest
 
 from stock_research.consumer_oversold import (
+    LEGACY_OUTPUT_FILENAMES as PUBLIC_LEGACY_OUTPUT_FILENAMES,
+    OUTPUT_FILENAMES as PUBLIC_OUTPUT_FILENAMES,
+    UNIFIED_OUTPUT_FILENAMES as PUBLIC_UNIFIED_OUTPUT_FILENAMES,
     ConsumerOversoldConfig as PublicConsumerOversoldConfig,
     EARLY_VALIDATION as PUBLIC_EARLY_VALIDATION,
     EXPECTED_REPAIR as PUBLIC_EXPECTED_REPAIR,
@@ -10,8 +13,10 @@ from stock_research.consumer_oversold import (
 from stock_research.consumer_oversold.contracts import (
     EARLY_VALIDATION,
     EXPECTED_REPAIR,
+    LEGACY_OUTPUT_FILENAMES,
     OUTPUT_FILENAMES,
     REPAIR_BUCKETS,
+    UNIFIED_OUTPUT_FILENAMES,
     ConsumerOversoldConfig,
     validate_trade_date,
 )
@@ -34,6 +39,21 @@ def test_default_config_matches_approved_design():
     assert config.max_priced_in_penalty == 20.0
 
 
+def test_elasticity_ranking_defaults_match_approved_design():
+    config = ConsumerOversoldConfig(trade_date="2026-07-29")
+
+    assert config.repair_rank_weight == 0.70
+    assert config.elasticity_rank_weight == 0.30
+    assert config.residual_deviation_weight == 0.35
+    assert config.stock_character_weight == 0.25
+    assert config.market_capacity_weight == 0.20
+    assert config.catalyst_liquidity_weight == 0.20
+    assert config.preaudit_size == 60
+    assert config.minimum_evidence_complete == 40
+    assert config.final_top_n == 20
+    assert config.reserve_top_n == 20
+
+
 def test_repair_bucket_constants_are_stable():
     assert EXPECTED_REPAIR == "expected_repair"
     assert EARLY_VALIDATION == "early_validation"
@@ -44,10 +64,27 @@ def test_package_exports_public_contracts():
     assert PublicConsumerOversoldConfig is ConsumerOversoldConfig
     assert PUBLIC_EXPECTED_REPAIR == EXPECTED_REPAIR
     assert PUBLIC_EARLY_VALIDATION == EARLY_VALIDATION
+    assert PUBLIC_OUTPUT_FILENAMES is OUTPUT_FILENAMES
+    assert PUBLIC_UNIFIED_OUTPUT_FILENAMES is UNIFIED_OUTPUT_FILENAMES
+    assert PUBLIC_LEGACY_OUTPUT_FILENAMES is LEGACY_OUTPUT_FILENAMES
 
 
-def test_output_filenames_are_stable():
-    assert OUTPUT_FILENAMES == {
+def test_unified_output_filenames_are_stable():
+    assert UNIFIED_OUTPUT_FILENAMES == {
+        "evidence": "consumer_oversold_repair_evidence.csv",
+        "scores": "consumer_oversold_full_scores.csv",
+        "exclusions": "consumer_oversold_exclusions.csv",
+        "coverage": "consumer_oversold_data_coverage_audit.json",
+        "report": "consumer_oversold_weekly_report.md",
+        "top20": "consumer_oversold_unified_top20.csv",
+        "reserve": "consumer_oversold_reserve_21_40.csv",
+        "preaudit": "consumer_oversold_preaudit_top60.csv",
+        "comparison": "consumer_oversold_old_new_rank_comparison.csv",
+    }
+
+
+def test_legacy_output_filenames_remain_available_for_historical_evaluation():
+    assert LEGACY_OUTPUT_FILENAMES == {
         "evidence": "consumer_oversold_repair_evidence.csv",
         "expected": "consumer_oversold_expected_repair_top20.csv",
         "early": "consumer_oversold_early_validation_top20.csv",
@@ -56,6 +93,10 @@ def test_output_filenames_are_stable():
         "coverage": "consumer_oversold_data_coverage_audit.json",
         "report": "consumer_oversold_weekly_report.md",
     }
+
+
+def test_current_output_filenames_remain_stable_during_migration():
+    assert OUTPUT_FILENAMES == LEGACY_OUTPUT_FILENAMES
 
 
 def test_trade_date_must_be_real_iso_date():
@@ -99,3 +140,80 @@ def test_config_is_frozen():
 
     with pytest.raises(FrozenInstanceError):
         config.max_per_bucket = 10
+
+
+@pytest.mark.parametrize(
+    ("overrides", "field_name"),
+    [
+        ({"repair_rank_weight": float("nan")}, "repair_rank_weight"),
+        ({"elasticity_rank_weight": float("inf")}, "elasticity_rank_weight"),
+        ({"residual_deviation_weight": "0.35"}, "residual_deviation_weight"),
+        ({"stock_character_weight": True}, "stock_character_weight"),
+        ({"market_capacity_weight": -0.01}, "market_capacity_weight"),
+        ({"catalyst_liquidity_weight": 1.01}, "catalyst_liquidity_weight"),
+    ],
+)
+def test_ranking_weights_reject_invalid_numeric_values(overrides, field_name):
+    with pytest.raises(ValueError, match=field_name):
+        ConsumerOversoldConfig(trade_date="2026-07-29", **overrides)
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"repair_rank_weight": 0.69, "elasticity_rank_weight": 0.30},
+        {
+            "residual_deviation_weight": 0.34,
+            "stock_character_weight": 0.25,
+            "market_capacity_weight": 0.20,
+            "catalyst_liquidity_weight": 0.20,
+        },
+    ],
+)
+def test_ranking_weight_groups_must_sum_to_one(overrides):
+    with pytest.raises(ValueError, match="sum to 1.0"):
+        ConsumerOversoldConfig(trade_date="2026-07-29", **overrides)
+
+
+@pytest.mark.parametrize(
+    "field_name",
+    ["preaudit_size", "minimum_evidence_complete", "final_top_n", "reserve_top_n"],
+)
+@pytest.mark.parametrize("invalid", [True, False, 1.0, "20"])
+def test_ranking_sizes_reject_non_integer_values(field_name, invalid):
+    with pytest.raises(ValueError, match=field_name):
+        ConsumerOversoldConfig(trade_date="2026-07-29", **{field_name: invalid})
+
+
+@pytest.mark.parametrize("field_name", ["final_top_n", "reserve_top_n"])
+@pytest.mark.parametrize("invalid", [0, 101])
+def test_final_and_reserve_sizes_reject_values_outside_bounds(field_name, invalid):
+    with pytest.raises(ValueError, match=field_name):
+        ConsumerOversoldConfig(trade_date="2026-07-29", **{field_name: invalid})
+
+
+@pytest.mark.parametrize("field_name", ["preaudit_size", "minimum_evidence_complete"])
+def test_candidate_pool_sizes_cover_final_and_reserve(field_name):
+    with pytest.raises(ValueError, match=field_name):
+        ConsumerOversoldConfig(trade_date="2026-07-29", **{field_name: 39})
+
+
+@pytest.mark.parametrize(
+    ("field_name", "invalid"),
+    [
+        ("lookback_6m_bars", True),
+        ("lookback_12m_bars", 0),
+        ("valuation_lookback_years", 1.0),
+        ("min_listed_days", -1),
+        ("min_avg_turnover_amount", float("nan")),
+        ("min_6m_return", float("inf")),
+        ("min_12m_drawdown", "-0.30"),
+        ("min_relative_return", False),
+        ("min_oversold_score", -0.01),
+        ("min_base_upside", float("nan")),
+        ("max_priced_in_penalty", 100.01),
+    ],
+)
+def test_existing_numeric_config_fields_are_validated(field_name, invalid):
+    with pytest.raises(ValueError, match=field_name):
+        ConsumerOversoldConfig(trade_date="2026-07-29", **{field_name: invalid})
