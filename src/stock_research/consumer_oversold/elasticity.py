@@ -130,6 +130,8 @@ ELASTICITY_ADDED_COLUMNS = (
     "automatic_elasticity_coverage",
     "automatic_elasticity_score",
 )
+SUPPORTED_ANALYSIS_TRADE_DATE_START = "2025-01-01"
+SUPPORTED_ANALYSIS_TRADE_DATE_END = "2026-12-31"
 
 
 def _require_columns(bars: pd.DataFrame) -> None:
@@ -204,6 +206,19 @@ def _normalized_stock_code(value: object) -> str:
     return code
 
 
+def _validate_supported_analysis_trade_date(value: str) -> str:
+    trade_date = validate_trade_date(value)
+    if not (
+        SUPPORTED_ANALYSIS_TRADE_DATE_START
+        <= trade_date
+        <= SUPPORTED_ANALYSIS_TRADE_DATE_END
+    ):
+        raise ValueError(
+            "trade_date must be between 2025-01-01 and 2026-12-31"
+        )
+    return trade_date
+
+
 def is_limit_up_day(
     stock_code: str,
     is_st: object,
@@ -212,19 +227,19 @@ def is_limit_up_day(
     trade_date: str,
 ) -> bool:
     """Return whether a daily percentage change reaches its current board limit."""
-    validate_trade_date(trade_date)
+    _validate_supported_analysis_trade_date(trade_date)
     code = _normalized_stock_code(stock_code)
     if not isinstance(is_st, (bool, np.bool_)):
         raise ValueError("is_st must be a boolean")
     change = _strict_float(pct_chg, field_name="pct_chg", allow_missing=True)
     if math.isnan(change):
         return False
-    if bool(is_st):
-        threshold = 4.8
-    elif code.startswith(("4", "8", "920")):
+    if code.startswith(("4", "8", "920")):
         threshold = 29.8
     elif code.startswith(("300", "301", "688", "689")):
         threshold = 19.8
+    elif bool(is_st):
+        threshold = 4.8
     else:
         threshold = 9.8
     return change >= threshold
@@ -402,7 +417,8 @@ def compute_stock_character_features(
     trade_date: str,
 ) -> pd.DataFrame:
     """Measure two-year upside behavior from point-in-time HFQ bars."""
-    cutoff = pd.Timestamp(validate_trade_date(trade_date))
+    analysis_trade_date = _validate_supported_analysis_trade_date(trade_date)
+    cutoff = pd.Timestamp(analysis_trade_date)
     _require_stock_character_columns(bars)
 
     frame = bars.loc[:, STOCK_CHARACTER_REQUIRED_COLUMNS].copy()
@@ -472,7 +488,7 @@ def compute_stock_character_features(
                 row.stock_code,
                 row.is_st,
                 row.pct_chg,
-                trade_date=row.trade_date.date().isoformat(),
+                trade_date=analysis_trade_date,
             )
             for row in history.itertuples(index=False)
         ]
@@ -759,6 +775,15 @@ def _component_score(
     return scores.where(coverage)
 
 
+def _market_capacity_score(frame: pd.DataFrame, coverage: pd.Series) -> pd.Series:
+    return _component_score(
+        frame,
+        MARKET_ELASTICITY_FIELDS,
+        coverage,
+        favorable_low=True,
+    ).clip(lower=5.0, upper=95.0)
+
+
 def score_rebound_elasticity(
     rows: pd.DataFrame,
     config: ConsumerOversoldConfig,
@@ -860,12 +885,7 @@ def score_rebound_elasticity(
         winsorize_fields=STOCK_WINSORIZE_FIELDS,
     )
     frame["market_capacity_component_coverage"] = market_coverage.astype(bool)
-    frame["market_capacity_score"] = _component_score(
-        frame,
-        MARKET_ELASTICITY_FIELDS,
-        final_universe,
-        favorable_low=True,
-    )
+    frame["market_capacity_score"] = _market_capacity_score(frame, final_universe)
     frame["catalyst_liquidity_coverage"] = catalyst_coverage.astype(bool)
     frame["catalyst_liquidity_score"] = _component_score(
         frame,
@@ -894,12 +914,7 @@ def score_rebound_elasticity(
         favorable_low=False,
         winsorize_fields=STOCK_WINSORIZE_FIELDS,
     )
-    automatic_market_score = _component_score(
-        frame,
-        MARKET_ELASTICITY_FIELDS,
-        automatic_universe,
-        favorable_low=True,
-    )
+    automatic_market_score = _market_capacity_score(frame, automatic_universe)
     frame["automatic_elasticity_coverage"] = automatic_universe.astype(bool)
     frame["automatic_elasticity_score"] = (
         0.45 * automatic_residual_score

@@ -401,6 +401,13 @@ def test_empty_input_returns_stable_schema():
         ("430001", False, 29.8),
         ("830001", False, 29.8),
         ("920422", False, 29.8),
+        ("300001", True, 19.8),
+        ("301001", True, 19.8),
+        ("688001", True, 19.8),
+        ("689001", True, 19.8),
+        ("430001", True, 29.8),
+        ("830001", True, 29.8),
+        ("920422", True, 29.8),
         ("302132", False, 9.8),
         ("000001", True, 4.8),
     ],
@@ -416,6 +423,42 @@ def test_limit_up_thresholds_match_current_market_rules(stock_code, is_st, thres
 
 def test_missing_pct_change_is_not_a_limit_up_day():
     assert not is_limit_up_day("000001", False, None, trade_date=TRADE_DATE)
+
+
+@pytest.mark.parametrize("trade_date", ["2024-12-31", "2027-01-01"])
+def test_limit_up_api_rejects_unsupported_analysis_trade_dates(trade_date):
+    with pytest.raises(
+        ValueError,
+        match="trade_date must be between 2025-01-01 and 2026-12-31",
+    ):
+        is_limit_up_day("000001", False, 9.8, trade_date=trade_date)
+
+
+@pytest.mark.parametrize("trade_date", ["2025-01-01", "2026-12-31"])
+def test_limit_up_api_accepts_supported_analysis_trade_date_boundaries(trade_date):
+    assert is_limit_up_day("000001", False, 9.8, trade_date=trade_date)
+
+
+@pytest.mark.parametrize("trade_date", ["2024-12-31", "2027-01-01"])
+def test_stock_character_rejects_unsupported_analysis_trade_dates(trade_date):
+    with pytest.raises(
+        ValueError,
+        match="trade_date must be between 2025-01-01 and 2026-12-31",
+    ):
+        compute_stock_character_features(
+            _character_bars("A", [0.0], end="2024-01-01"),
+            trade_date=trade_date,
+        )
+
+
+@pytest.mark.parametrize("trade_date", ["2025-01-01", "2026-12-31"])
+def test_stock_character_accepts_supported_analysis_trade_date_boundaries(trade_date):
+    result = compute_stock_character_features(
+        _character_bars("A", [0.0], end="2024-01-01"),
+        trade_date=trade_date,
+    )
+
+    assert result["asset_id"].tolist() == ["A"]
 
 
 def test_stock_character_counts_volatility_and_maximum_limit_up_streak_are_exact():
@@ -704,16 +747,44 @@ def test_rebound_elasticity_percentiles_directions_and_weights_are_exact():
 
     assert result.loc["A", "residual_deviation_score"] == 100.0
     assert result.loc["A", "stock_character_score"] == 0.0
-    assert result.loc["A", "market_capacity_score"] == 100.0
+    assert result.loc["A", "market_capacity_score"] == 95.0
     assert result.loc["A", "catalyst_liquidity_score"] == 0.0
-    assert result.loc["A", "elasticity_score"] == pytest.approx(55.0)
-    assert result.loc["A", "automatic_elasticity_score"] == pytest.approx(70.0)
+    assert result.loc["A", "elasticity_score"] == pytest.approx(54.0)
+    assert result.loc["A", "automatic_elasticity_score"] == pytest.approx(68.75)
     assert result.loc["B", "elasticity_score"] == 50.0
     assert result.loc["B", "automatic_elasticity_score"] == 50.0
-    assert result.loc["C", "elasticity_score"] == pytest.approx(45.0)
-    assert result.loc["C", "automatic_elasticity_score"] == pytest.approx(30.0)
+    assert result.loc["C", "market_capacity_score"] == 5.0
+    assert result.loc["C", "elasticity_score"] == pytest.approx(46.0)
+    assert result.loc["C", "automatic_elasticity_score"] == pytest.approx(31.25)
     assert result["elasticity_coverage"].all()
     assert result["automatic_elasticity_coverage"].all()
+
+
+def test_market_cap_percentiles_clip_endpoints_in_independent_cross_sections():
+    rows = []
+    for index, market_cap in enumerate([1.0, 2.0, 3.0, 4.0, 5.0]):
+        rows.append(
+            _elasticity_row(
+                asset_id=chr(ord("A") + index),
+                eligible=index < 3,
+                log_current_float_market_cap=market_cap,
+            )
+        )
+
+    result = score_rebound_elasticity(pd.DataFrame(rows), CONFIG).set_index("asset_id")
+
+    assert result.loc[["A", "B", "C"], "market_capacity_score"].tolist() == [
+        95.0,
+        50.0,
+        5.0,
+    ]
+    assert result.loc["A", "market_capacity_score"] < 100.0
+    assert result.loc["C", "market_capacity_score"] > 0.0
+    assert result.loc[["A", "B", "C"], "market_capacity_score"].is_monotonic_decreasing
+    automatic_scores = result.loc[
+        ["A", "B", "C", "D", "E"], "automatic_elasticity_score"
+    ].tolist()
+    assert automatic_scores == pytest.approx([61.25, 56.25, 50.0, 43.75, 38.75])
 
 
 def test_stock_character_inputs_are_winsorized_before_percentiles():
