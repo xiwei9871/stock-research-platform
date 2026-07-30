@@ -650,7 +650,37 @@ def _ranking_table(title: str, frame: pd.DataFrame) -> list[str]:
             f"{_escape_table(name)}（{_escape_table(code)}） | "
             f"{_score_text(row.get('repair_rank_percentile'))} | "
             f"{_score_text(row.get('elasticity_rank_percentile'))} | "
-            f"{_escape_table(row.get('final_rank_score'))} |"
+            f"{_score_text(row.get('final_rank_score'))} |"
+        )
+    return [*lines, ""]
+
+
+def _preaudit_table(frame: pd.DataFrame) -> list[str]:
+    lines = ["## 审计前 Top 60", ""]
+    if frame.empty:
+        return [*lines, "暂无候选。", ""]
+    lines.extend(
+        [
+            "| 预审排名 | 股票 | 预审分 | 修复潜力 | 自动弹性分 | 证据状态 |",
+            "|---:|---|---:|---:|---:|---|",
+        ]
+    )
+    for preaudit_rank, (_, row) in enumerate(frame.iterrows(), start=1):
+        name = _display(row.get("stock_name"))
+        code = _display(row.get("stock_code", row.get("asset_id")))
+        evidence_complete = row.get("evidence_complete")
+        evidence_status = (
+            "证据完整"
+            if isinstance(evidence_complete, (bool, np.bool_))
+            and bool(evidence_complete)
+            else "证据不完整"
+        )
+        lines.append(
+            f"| {preaudit_rank} | {_escape_table(name)}（{_escape_table(code)}） | "
+            f"{_score_text(row.get('preaudit_score'))} | "
+            f"{_score_text(row.get('repair_potential_score'))} | "
+            f"{_score_text(row.get('automatic_elasticity_score'))} | "
+            f"{evidence_status} |"
         )
     return [*lines, ""]
 
@@ -797,7 +827,7 @@ def _render_report(
         "",
         *_ranking_table("最终统一榜单 Top 20", top20),
         *_ranking_table("储备榜单 21-40", reserve),
-        *_ranking_table("审计前 Top 60", preaudit),
+        *_preaudit_table(preaudit),
         *_comparison_table(comparison),
         *_candidate_section("候选详情", candidate_details),
         *_special_stock_comparison(comparison, scores, top20, reserve, preaudit),

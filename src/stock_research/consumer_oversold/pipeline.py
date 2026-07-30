@@ -541,14 +541,19 @@ def _build_rank_comparison(
         columns=["asset_id", "bucket_rank"]
     )
     bucket_rank = bucket_rows.set_index("asset_id")["bucket_rank"]
-    new_rank = (
-        unified.set_index("asset_id")["final_rank"]
-        if not unified.empty
-        else pd.Series(dtype=float)
-    )
+    if unified.empty:
+        new_rank = pd.Series(dtype=float)
+        new_final_rank_score = pd.Series(dtype=float)
+    else:
+        unified_by_asset = unified.set_index("asset_id")
+        new_rank = unified_by_asset["final_rank"]
+        new_final_rank_score = unified_by_asset["final_rank_score"]
     comparison["old_bucket_rank"] = comparison["asset_id"].map(bucket_rank)
     comparison["old_combined_rank"] = comparison["asset_id"].map(old_combined)
     comparison["new_rank"] = comparison["asset_id"].map(new_rank)
+    comparison["final_rank_score"] = comparison["asset_id"].map(
+        new_final_rank_score
+    )
     comparison["rank_change"] = (
         comparison["old_combined_rank"] - comparison["new_rank"]
     )

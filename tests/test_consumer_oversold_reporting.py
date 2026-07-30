@@ -236,13 +236,42 @@ def test_report_renders_rank_percentiles_as_zero_to_one_hundred_scores(tmp_path)
     payload = _payload()
     payload["top20"].loc[0, "repair_rank_percentile"] = 100.0
     payload["top20"].loc[0, "elasticity_rank_percentile"] = 82.5
+    payload["top20"].loc[0, "final_rank_score"] = 42.499999999
 
     result = write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
     report = Path(result["paths"]["report"]).read_text(encoding="utf-8")
 
     assert "| 100.0 | 82.5 |" in report
+    assert "| 100.0 | 82.5 | 42.5 |" in report
+    assert "42.499999999" not in report
     assert "10000.0%" not in report
     assert "8250.0%" not in report
+
+
+def test_report_renders_real_preaudit_schema_without_fake_final_rank_fields(tmp_path):
+    payload = _payload()
+    payload["preaudit"] = payload["preaudit"].drop(
+        columns=[
+            "final_rank",
+            "repair_rank_percentile",
+            "elasticity_rank_percentile",
+            "final_rank_score",
+        ]
+    )
+    payload["preaudit"]["preaudit_score"] = [88.5, 77.5]
+    payload["preaudit"]["automatic_elasticity_score"] = [66.5, 55.5]
+    payload["preaudit"]["evidence_complete"] = [True, False]
+
+    result = write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+    section = result["report"].split("## 审计前 Top 60", 1)[1].split(
+        "## 新旧排名对照", 1
+    )[0]
+
+    assert "| 预审排名 | 股票 | 预审分 | 修复潜力 | 自动弹性分 | 证据状态 |" in section
+    assert "| 1 | 甲公司（000001.SZ） | 88.5 | 75.0 | 66.5 | 证据完整 |" in section
+    assert "| 2 | 乙公司（000002.SZ） | 77.5 | 75.0 | 55.5 | 证据不完整 |" in section
+    assert "最终排名分" not in section
+    assert "数据缺失" not in section
 
 
 def test_report_candidate_details_include_market_cap_and_elasticity_metrics(tmp_path):

@@ -715,6 +715,16 @@ def test_unified_pipeline_builds_top60_top20_reserve_and_comparison_from_65_asse
         comparable["rank_change"]
         == comparable["old_combined_rank"] - comparable["new_rank"]
     ).all()
+    unified = pd.concat([result["top20"], result["reserve"]], ignore_index=True).set_index(
+        "asset_id"
+    )
+    newly_ranked = comparison.loc[comparison["new_rank"].notna()]
+    assert newly_ranked["final_rank_score"].notna().all()
+    pd.testing.assert_series_equal(
+        newly_ranked.loc[unified.index, "final_rank_score"].sort_index(),
+        unified["final_rank_score"].sort_index(),
+        check_names=False,
+    )
     assert "base_scenario_market_cap" in result["scores"].columns
     assert "current_float_market_cap" in result["scores"].columns
 
@@ -855,6 +865,7 @@ def test_preaudit_only_publishes_top60_without_final_rankings(tmp_path):
     assert result["coverage"]["unified_funnel"]["final"] == 0
     assert result["coverage"]["unified_funnel"]["reserve"] == 0
     assert result["comparison"]["new_rank"].isna().all()
+    assert result["comparison"]["final_rank_score"].isna().all()
     assert "仅预审，不是正式Top20" in Path(result["paths"]["report"]).read_text(
         encoding="utf-8"
     )
