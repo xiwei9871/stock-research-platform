@@ -120,12 +120,49 @@ def test_resolver_uses_latest_date_when_both_adjustments_are_complete(monkeypatc
             ]
         ],
     )
-
     assert (
         loaders.resolve_latest_complete_consumer_trade_date(service="test")
         == "2026-07-30"
     )
 
+
+def test_resolver_excludes_future_open_dates_using_shanghai_database_time(monkeypatch):
+    future_calendar_date = date(2099, 1, 4)
+    historical_row = {
+        "trade_date": date(2026, 7, 30),
+        "is_open": True,
+        "raw_asset_count": 100,
+        "hfq_asset_count": 100,
+    }
+    captured = {}
+
+    @contextmanager
+    def fake_connect(service):
+        yield object()
+
+    def fake_fetch_all(conn, sql, params=None):
+        normalized = " ".join(sql.split())
+        captured["sql"] = normalized
+        captured["calendar"] = [future_calendar_date, historical_row["trade_date"]]
+        if (
+            "trade_date <= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Shanghai')::date"
+            in normalized
+        ):
+            return [historical_row]
+        return [
+            {
+                **historical_row,
+                "trade_date": future_calendar_date,
+            },
+            historical_row,
+        ]
+
+    monkeypatch.setattr(loaders, "connect", fake_connect)
+    monkeypatch.setattr(loaders, "fetch_all", fake_fetch_all)
+
+    assert loaders.resolve_latest_complete_consumer_trade_date(service="test") == "2026-07-30"
+    assert future_calendar_date in captured["calendar"]
+    assert "CURRENT_DATE" not in captured["sql"]
 
 @pytest.mark.parametrize(
     "rows",

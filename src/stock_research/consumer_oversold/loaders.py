@@ -148,6 +148,8 @@ def resolve_latest_complete_consumer_trade_date(*, service: str) -> str:
         SELECT DISTINCT trade_date
         FROM market.trading_calendar
         WHERE is_open = TRUE
+          AND trade_date <=
+              (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Shanghai')::date
         ORDER BY trade_date DESC
         LIMIT %s
     )
