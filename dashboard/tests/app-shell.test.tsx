@@ -1328,6 +1328,41 @@ describe('dashboard app shell', () => {
     expect(screen.getByRole('button', { name: 'Open User Management workspace' })).toBeVisible();
   });
 
+  it('shows the authenticated username and invokes logout once', async () => {
+    const onLogout = vi.fn().mockResolvedValue(undefined);
+
+    render(<AppShell currentUser={TEST_ADMIN_USER} onLogout={onLogout} />);
+
+    expect(screen.getByText(TEST_ADMIN_USER.username)).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: '退出登录' }));
+
+    expect(await screen.findByRole('button', { name: '退出登录' })).toBeEnabled();
+    expect(onLogout).toHaveBeenCalledTimes(1);
+  });
+
+  it('disables repeated logout and shows a retryable error when logout fails', async () => {
+    let rejectLogout: ((reason?: unknown) => void) | undefined;
+    const onLogout = vi.fn(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          rejectLogout = reject;
+        })
+    );
+
+    render(<AppShell currentUser={TEST_ADMIN_USER} onLogout={onLogout} />);
+
+    fireEvent.click(screen.getByRole('button', { name: '退出登录' }));
+    const pendingButton = screen.getByRole('button', { name: '退出中…' });
+    expect(pendingButton).toBeDisabled();
+    fireEvent.click(pendingButton);
+    expect(onLogout).toHaveBeenCalledTimes(1);
+
+    rejectLogout?.(new Error('network_failure'));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('退出失败，请重试');
+    expect(screen.getByRole('button', { name: '退出登录' })).toBeEnabled();
+  });
+
   it('renders the redesigned home cockpit sections', async () => {
     apiMocks.fetchMarketMonitorEod.mockResolvedValueOnce({
       trade_date: '2026-06-10',
