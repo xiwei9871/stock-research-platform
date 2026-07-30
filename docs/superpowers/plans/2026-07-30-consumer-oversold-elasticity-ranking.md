@@ -31,7 +31,7 @@
 - Modify: `src/stock_research/consumer_oversold/__init__.py`
 - Test: `tests/test_consumer_oversold_contracts.py`
 
-- [ ] **Step 1: Write failing contract tests**
+- [x] **Step 1: Write failing contract tests**
 
 Add assertions for the approved weights, coverage sizes, and stable filenames:
 
@@ -58,7 +58,7 @@ def test_unified_output_filenames_are_stable():
     assert OUTPUT_FILENAMES["comparison"] == "consumer_oversold_old_new_rank_comparison.csv"
 ```
 
-- [ ] **Step 2: Run the tests and verify RED**
+- [x] **Step 2: Run the tests and verify RED**
 
 Run:
 
@@ -69,7 +69,7 @@ rtk /Users/xiwei/stock_research/.venv/bin/python -m pytest \
 
 Expected: failures for missing config fields and output keys.
 
-- [ ] **Step 3: Add frozen configuration fields and output names**
+- [x] **Step 3: Add frozen configuration fields and output names**
 
 Extend `ConsumerOversoldConfig` with finite numeric validation and exact weight-sum checks:
 
@@ -88,13 +88,13 @@ reserve_top_n: int = 20
 
 Add output keys `top20`, `reserve`, `preaudit`, and `comparison`. Keep legacy `expected` and `early` names available only through a separate `LEGACY_OUTPUT_FILENAMES` mapping used by the evaluator; new releases must not publish separate Top10 lists.
 
-- [ ] **Step 4: Run contract tests and verify GREEN**
+- [x] **Step 4: Run contract tests and verify GREEN**
 
 Run the command from Step 2.
 
 Expected: all contract tests pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 rtk git add src/stock_research/consumer_oversold/contracts.py \
@@ -109,7 +109,7 @@ rtk git commit -m "feat: define unified consumer elasticity ranking contracts"
 - Modify: `src/stock_research/consumer_oversold/loaders.py:18-22,242-280,390-420`
 - Test: `tests/test_consumer_oversold_loaders.py`
 
-- [ ] **Step 1: Write failing loader tests**
+- [x] **Step 1: Write failing loader tests**
 
 Require 520 latest market dates and stable market columns:
 
@@ -152,7 +152,7 @@ def test_share_capacity_uses_latest_visible_event_and_preserves_float_fallback(m
     }]
 ```
 
-- [ ] **Step 2: Run loader tests and verify RED**
+- [x] **Step 2: Run loader tests and verify RED**
 
 ```bash
 rtk /Users/xiwei/stock_research/.venv/bin/python -m pytest \
@@ -161,7 +161,7 @@ rtk /Users/xiwei/stock_research/.venv/bin/python -m pytest \
 
 Expected: the market window remains 260, required columns are absent, and `load_consumer_share_capacity` does not exist.
 
-- [ ] **Step 3: Extend the PIT SQL and schemas**
+- [x] **Step 3: Extend the PIT SQL and schemas**
 
 Set:
 
@@ -179,13 +179,13 @@ Change the market-date limit to 520. Select the extra fields from the hfq bar wh
 
 The market loader remains keyed by `asset_id`. Before calling stock-character functions, the pipeline must merge `assets[["asset_id", "stock_code"]]` into the market frame with a validated many-to-one merge; the feature function must not infer board rules from `asset_id` text.
 
-- [ ] **Step 4: Run loader tests and verify GREEN**
+- [x] **Step 4: Run loader tests and verify GREEN**
 
 Run the command from Step 2.
 
 Expected: all loader tests pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 rtk git add src/stock_research/consumer_oversold/loaders.py \
@@ -199,7 +199,7 @@ rtk git commit -m "feat: load PIT consumer elasticity inputs"
 - Create: `src/stock_research/consumer_oversold/elasticity.py`
 - Create: `tests/test_consumer_oversold_elasticity.py`
 
-- [ ] **Step 1: Write failing residual-deviation tests**
+- [x] **Step 1: Write failing residual-deviation tests**
 
 Use deterministic synthetic price paths:
 
@@ -230,7 +230,7 @@ def test_residual_deviation_marks_large_cumulative_rebound_as_consumed():
 
 Add tests for future-bar rejection, duplicate dates, fewer than 504 valid HFQ bars, invalid HFQ prices, raw-price independence, and exact 252/504-session windows.
 
-- [ ] **Step 2: Run the new tests and verify RED**
+- [x] **Step 2: Run the new tests and verify RED**
 
 ```bash
 rtk /Users/xiwei/stock_research/.venv/bin/python -m pytest \
@@ -239,7 +239,7 @@ rtk /Users/xiwei/stock_research/.venv/bin/python -m pytest \
 
 Expected: import failure for the new module.
 
-- [ ] **Step 3: Implement the pure residual feature function**
+- [x] **Step 3: Implement the pure residual feature function**
 
 Create:
 
@@ -265,13 +265,13 @@ Return at least:
 
 Use HFQ closes for every dimensionless historical technical deviation, including returns, high/low positions, moving-average distances, and rebounds. Require 504 valid HFQ sessions for residual-deviation coverage. `raw_close` is neither required nor part of this coverage decision. All windows are trading-session windows ending at the cutoff.
 
-- [ ] **Step 4: Run the new tests and verify GREEN**
+- [x] **Step 4: Run the new tests and verify GREEN**
 
 Run the command from Step 2.
 
 Expected: all residual-deviation tests pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 rtk git add src/stock_research/consumer_oversold/elasticity.py \
@@ -285,7 +285,7 @@ rtk git commit -m "feat: compute residual consumer price deviation"
 - Modify: `src/stock_research/consumer_oversold/elasticity.py`
 - Modify: `tests/test_consumer_oversold_elasticity.py`
 
-- [ ] **Step 1: Write failing board-aware character tests**
+- [x] **Step 1: Write failing board-aware character tests**
 
 ```python
 @pytest.mark.parametrize(
@@ -316,7 +316,7 @@ def test_stock_character_counts_tail_days_and_forward_continuation_without_futur
 
 The continuation denominator must exclude a big-up event whose forward horizon extends beyond the cutoff.
 
-- [ ] **Step 2: Run focused tests and verify RED**
+- [x] **Step 2: Run focused tests and verify RED**
 
 ```bash
 rtk /Users/xiwei/stock_research/.venv/bin/python -m pytest \
@@ -325,7 +325,7 @@ rtk /Users/xiwei/stock_research/.venv/bin/python -m pytest \
 
 Expected: missing functions.
 
-- [ ] **Step 3: Implement stock-character functions**
+- [x] **Step 3: Implement stock-character functions**
 
 首版只支持 2025—2026 年分析日，涨停识别统一使用当前制度，不实现制度日期分支。
 
@@ -396,7 +396,7 @@ def compute_stock_character_features(
 
 Return counts for limit-up, >=7%, >=5%, daily absolute-return mean, daily-return standard deviation, upside-tail standard deviation, maximum limit-up streak, and positive continuation rates after >=7% days for 1/3/5 sessions. Require at least 400 valid sessions within the latest 504-session window; mark coverage false otherwise.
 
-- [ ] **Step 4: Run focused and full elasticity tests**
+- [x] **Step 4: Run focused and full elasticity tests**
 
 ```bash
 rtk /Users/xiwei/stock_research/.venv/bin/python -m pytest \
@@ -405,7 +405,7 @@ rtk /Users/xiwei/stock_research/.venv/bin/python -m pytest \
 
 Expected: all tests pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 rtk git add src/stock_research/consumer_oversold/elasticity.py \
@@ -419,7 +419,7 @@ rtk git commit -m "feat: measure two-year consumer stock character"
 - Modify: `src/stock_research/consumer_oversold/elasticity.py`
 - Modify: `tests/test_consumer_oversold_elasticity.py`
 
-- [ ] **Step 1: Write failing market-capacity tests**
+- [x] **Step 1: Write failing market-capacity tests**
 
 ```python
 def test_market_capacity_prefers_free_float_then_float_then_total_share():
@@ -448,7 +448,7 @@ def test_scenario_market_cap_is_never_used_as_current_market_cap():
     assert result["current_total_market_cap"] == pytest.approx(500.0)
 ```
 
-- [ ] **Step 2: Run focused tests and verify RED**
+- [x] **Step 2: Run focused tests and verify RED**
 
 ```bash
 rtk /Users/xiwei/stock_research/.venv/bin/python -m pytest \
@@ -457,19 +457,19 @@ rtk /Users/xiwei/stock_research/.venv/bin/python -m pytest \
 
 Expected: missing function.
 
-- [ ] **Step 3: Implement capacity and liquidity calculation**
+- [x] **Step 3: Implement capacity and liquidity calculation**
 
 Add `compute_market_capacity_features()` returning current total/float market cap, `log_current_float_market_cap`, source, 20-day average amount, amount-to-float-cap ratio, average turnover rate, and coverage. Validate positive raw close and positive shares. Normalize Tushare-derived amounts before passing them into this function; do not normalize inside the pure feature layer.
 
 `raw_close` remains required here because actual market capitalization must use the unadjusted current price; it is not reused for Task 3 historical technical deviations.
 
-- [ ] **Step 4: Run elasticity tests and verify GREEN**
+- [x] **Step 4: Run elasticity tests and verify GREEN**
 
 Run the full elasticity test command from Task 4.
 
 Expected: all tests pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 rtk git add src/stock_research/consumer_oversold/elasticity.py \
@@ -485,7 +485,7 @@ rtk git commit -m "feat: compute actual consumer market capacity"
 - Modify: `tests/test_consumer_oversold_elasticity.py`
 - Modify: `tests/test_consumer_oversold_scoring.py`
 
-- [ ] **Step 1: Write failing percentile and gate tests**
+- [x] **Step 1: Write failing percentile and gate tests**
 
 ```python
 def test_elasticity_score_uses_approved_component_weights_and_winsorized_percentiles():
@@ -520,7 +520,7 @@ def test_final_score_is_seventy_thirty_percentile_rank_with_stable_ties():
 
 Add tests proving missing coverage cannot become a zero or best value, and a recent limit-up does not receive an automatic penalty when residual deviation remains high.
 
-- [ ] **Step 2: Run focused tests and verify RED**
+- [x] **Step 2: Run focused tests and verify RED**
 
 ```bash
 rtk /Users/xiwei/stock_research/.venv/bin/python -m pytest \
@@ -530,7 +530,7 @@ rtk /Users/xiwei/stock_research/.venv/bin/python -m pytest \
 
 Expected: missing scoring functions and legacy bucket rank assertions fail after the intended API change.
 
-- [ ] **Step 3: Implement component percentiles and unified rank**
+- [x] **Step 3: Implement component percentiles and unified rank**
 
 Add:
 
@@ -636,13 +636,13 @@ Use candidate-pool percentiles with explicit direction for every component. Wins
 
 Keep `repair_bucket` as a label. Deprecate `rank_candidate_buckets()` from new pipeline calls but retain it until legacy tests and readers are migrated.
 
-- [ ] **Step 4: Run scoring tests and verify GREEN**
+- [x] **Step 4: Run scoring tests and verify GREEN**
 
 Run the command from Step 2.
 
 Expected: all elasticity and scoring tests pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 rtk git add src/stock_research/consumer_oversold/elasticity.py \
@@ -658,7 +658,7 @@ rtk git commit -m "feat: rank consumer repair and rebound elasticity"
 - Modify: `src/stock_research/consumer_oversold/pipeline.py:294-524,588-end`
 - Modify: `tests/test_consumer_oversold_pipeline.py`
 
-- [ ] **Step 1: Write failing two-stage pipeline tests**
+- [x] **Step 1: Write failing two-stage pipeline tests**
 
 ```python
 def test_pipeline_scores_full_pool_before_evidence_and_publishes_one_top20():
@@ -706,7 +706,7 @@ def test_pipeline_old_new_comparison_tracks_rank_changes_and_nonselection():
     assert comparison.loc["SERES", "new_exclusion_reasons"] != ""
 ```
 
-- [ ] **Step 2: Run pipeline tests and verify RED**
+- [x] **Step 2: Run pipeline tests and verify RED**
 
 ```bash
 rtk /Users/xiwei/stock_research/.venv/bin/python -m pytest \
@@ -715,7 +715,7 @@ rtk /Users/xiwei/stock_research/.venv/bin/python -m pytest \
 
 Expected: missing output keys and legacy two-bucket assumptions.
 
-- [ ] **Step 3: Add the two-stage data flow**
+- [x] **Step 3: Add the two-stage data flow**
 
 Refactor the pipeline in this order:
 
@@ -775,13 +775,13 @@ Build comparison columns `asset_id`, `stock_code`, `stock_name`, `repair_bucket`
 
 For comparison only, define `old_combined_rank` by sorting every legacy-gate-eligible row on `composite_score DESC, asset_id ASC`; do not concatenate the historical bucket outputs and treat their bucket ranks as directly comparable. Preserve `old_bucket_rank` separately when a row appeared in a legacy bucket.
 
-- [ ] **Step 4: Run pipeline tests and verify GREEN**
+- [x] **Step 4: Run pipeline tests and verify GREEN**
 
 Run the command from Step 2.
 
 Expected: all pipeline tests pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 rtk git add src/stock_research/consumer_oversold/pipeline.py \
@@ -796,7 +796,7 @@ rtk git commit -m "feat: build audited unified consumer top twenty"
 - Modify: `tests/test_consumer_oversold_reporting.py`
 - Modify: `tests/test_consumer_oversold_pipeline.py`
 
-- [ ] **Step 1: Write failing reporting tests**
+- [x] **Step 1: Write failing reporting tests**
 
 ```python
 def test_unified_release_contains_all_rank_and_audit_artifacts(tmp_path):
@@ -831,7 +831,7 @@ def test_report_explains_single_rank_and_jac_she_de_seres_breakdown(tmp_path):
 
 Retain existing manifest, readonly permission, lock, rollback, CSV formula-safety, and symlink-attack tests.
 
-- [ ] **Step 2: Run reporting tests and verify RED**
+- [x] **Step 2: Run reporting tests and verify RED**
 
 ```bash
 rtk /Users/xiwei/stock_research/.venv/bin/python -m pytest \
@@ -841,7 +841,7 @@ rtk /Users/xiwei/stock_research/.venv/bin/python -m pytest \
 
 Expected: writer signature and manifest expectations still use the legacy artifacts.
 
-- [ ] **Step 3: Update artifact publication and report rendering**
+- [x] **Step 3: Update artifact publication and report rendering**
 
 Publish exactly the new `OUTPUT_FILENAMES` set. The Top20 report table must include:
 
@@ -858,13 +858,13 @@ repair_thesis, leading_indicator, main_risks, invalidation_conditions
 
 The coverage section must make any Top60 evidence gap visible. Continue using a release directory, manifest verification, 0444 files, 0555 release directory, process lock, atomic `current` switch, and rollback.
 
-- [ ] **Step 4: Run reporting and pipeline tests and verify GREEN**
+- [x] **Step 4: Run reporting and pipeline tests and verify GREEN**
 
 Run the command from Step 2.
 
 Expected: all tests pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 rtk git add src/stock_research/consumer_oversold/reporting.py \
@@ -879,7 +879,7 @@ rtk git commit -m "feat: publish unified consumer elasticity artifacts"
 - Modify: `src/stock_research/consumer_oversold/evaluation.py:20-320`
 - Modify: `tests/test_consumer_oversold_evaluation.py`
 
-- [ ] **Step 1: Write failing compatibility tests**
+- [x] **Step 1: Write failing compatibility tests**
 
 ```python
 def test_snapshot_reader_accepts_new_unified_top20_release(tmp_path):
@@ -905,7 +905,7 @@ def test_default_evaluation_horizons_include_five_and_twenty_sessions():
     assert set(result["detail"]["horizon"]) == {5, 20}
 ```
 
-- [ ] **Step 2: Run evaluation tests and verify RED**
+- [x] **Step 2: Run evaluation tests and verify RED**
 
 ```bash
 rtk /Users/xiwei/stock_research/.venv/bin/python -m pytest \
@@ -914,17 +914,17 @@ rtk /Users/xiwei/stock_research/.venv/bin/python -m pytest \
 
 Expected: new unified artifact is not discovered and default horizons remain legacy values.
 
-- [ ] **Step 3: Implement dual-schema snapshot reading**
+- [x] **Step 3: Implement dual-schema snapshot reading**
 
 When `consumer_oversold_unified_top20.csv` exists and is present in the verified manifest, read it. Otherwise read the legacy expected/early pair. Never mix the two schemas in one release. Change default horizons to `(5, 20)` while retaining optional caller-provided horizons. Keep snapshot membership immutable and all existing calendar, lock, manifest, and rollback protections.
 
-- [ ] **Step 4: Run evaluation tests and verify GREEN**
+- [x] **Step 4: Run evaluation tests and verify GREEN**
 
 Run the command from Step 2.
 
 Expected: all evaluation tests pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 rtk git add src/stock_research/consumer_oversold/evaluation.py \
@@ -941,7 +941,7 @@ rtk git commit -m "feat: evaluate unified consumer ranks at five and twenty days
 - Modify: `tests/test_consumer_oversold_loaders.py`
 - Modify: `tests/test_consumer_oversold_cli.py`
 
-- [ ] **Step 1: Write failing latest-complete-date and CLI tests**
+- [x] **Step 1: Write failing latest-complete-date and CLI tests**
 
 ```python
 def test_latest_complete_trade_date_requires_broad_raw_and_hfq_coverage(monkeypatch):
@@ -991,7 +991,7 @@ def test_cli_preaudit_only_does_not_claim_final_top20(monkeypatch, capsys):
     assert "consumer_oversold|publication_status|preaudit_only" in capsys.readouterr().out
 ```
 
-- [ ] **Step 2: Run loader and CLI tests and verify RED**
+- [x] **Step 2: Run loader and CLI tests and verify RED**
 
 ```bash
 rtk /Users/xiwei/stock_research/.venv/bin/python -m pytest \
@@ -1001,7 +1001,7 @@ rtk /Users/xiwei/stock_research/.venv/bin/python -m pytest \
 
 Expected: resolver absent and `--trade-date` still required.
 
-- [ ] **Step 3: Implement the cutoff resolver and CLI behavior**
+- [x] **Step 3: Implement the cutoff resolver and CLI behavior**
 
 Add `resolve_latest_complete_consumer_trade_date()` using the latest open exchange date where both raw and hfq distinct-asset counts are at least 99% of the maximum respective counts observed over the previous 20 open trading dates. Make `--trade-date` optional; an explicit value always wins. Add `--preaudit-only`; it must publish only the pre-audit/coverage artifacts and set `publication_status=preaudit_only`, never a final Top20. Print:
 
@@ -1012,13 +1012,13 @@ consumer_oversold|date_mode|explicit_backtest
 
 or `latest_complete_daily` when resolved automatically.
 
-- [ ] **Step 4: Run loader and CLI tests and verify GREEN**
+- [x] **Step 4: Run loader and CLI tests and verify GREEN**
 
 Run the command from Step 2.
 
 Expected: all tests pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 rtk git add src/stock_research/consumer_oversold/loaders.py \
@@ -1036,7 +1036,7 @@ rtk git commit -m "feat: support daily and historical consumer ranking cutoffs"
 - Create a generated immutable release beneath `outputs/research/consumer_oversold_daily/2026-07-29/.releases/`.
 - Verify generated `current/` artifacts; do not commit operational outputs.
 
-- [ ] **Step 1: Run a quantitative pre-audit without claiming a final list**
+- [x] **Step 1: Run a quantitative pre-audit without claiming a final list**
 
 Run the pipeline in pre-audit mode:
 
@@ -1051,7 +1051,7 @@ rtk env PYTHONPATH=src /Users/xiwei/stock_research/.venv/bin/python -m stock_res
 
 Expected: Top60 pre-audit is produced, final publication status is `preaudit_only`, and no Top20 is claimed.
 
-- [ ] **Step 2: Audit the Top60 evidence buffer**
+- [x] **Step 2: Audit the Top60 evidence buffer**
 
 For the automatic Top60, populate or verify:
 
@@ -1068,7 +1068,7 @@ terminal consumer brand or OEM audit decision
 
 All source dates must be no later than 2026-07-29. Continue reviewing candidates in automatic rank order until at least 40 evidence-complete, gate-clear candidates exist. Do not use 2026-07-30 market behavior to decide whom to review or include.
 
-- [ ] **Step 3: Run the final 2026-07-29 ranking**
+- [x] **Step 3: Run the final 2026-07-29 ranking**
 
 ```bash
 rtk env PYTHONPATH=src /Users/xiwei/stock_research/.venv/bin/python -m stock_research.cli \
@@ -1087,7 +1087,7 @@ consumer_oversold|reserve_rows|20
 consumer_oversold|preaudit_rows|60
 ```
 
-- [ ] **Step 4: Verify 江淮、舍得、赛力斯 without outcome leakage**
+- [x] **Step 4: Verify 江淮、舍得、赛力斯 without outcome leakage**
 
 Inspect the comparison and full-score artifacts. Confirm that:
 
@@ -1097,7 +1097,7 @@ Inspect the comparison and full-score artifacts. Confirm that:
 - no selected or reserve row contains a source date after 2026-07-29;
 - Top20 and reserve are disjoint and ranks 1—40 are contiguous.
 
-- [ ] **Step 5: Verify manifests and immutable permissions**
+- [x] **Step 5: Verify manifests and immutable permissions**
 
 ```bash
 rtk sh -c 'cd outputs/research/consumer_oversold_daily/2026-07-29/current && sha256sum -c .manifest.sha256'
@@ -1111,7 +1111,7 @@ Expected: every hash is `OK`, artifacts are 0444, and the release directory is 0
 **Files:**
 - Verify all files from Tasks 1—11.
 
-- [ ] **Step 1: Run the complete consumer feature regression**
+- [x] **Step 1: Run the complete consumer feature regression**
 
 ```bash
 rtk /Users/xiwei/stock_research/.venv/bin/python -m pytest \
@@ -1131,7 +1131,7 @@ rtk /Users/xiwei/stock_research/.venv/bin/python -m pytest \
 
 Expected: all tests pass.
 
-- [ ] **Step 2: Run adjacent PIT, factor, and universe regressions**
+- [x] **Step 2: Run adjacent PIT, factor, and universe regressions**
 
 ```bash
 rtk /Users/xiwei/stock_research/.venv/bin/python -m pytest \
@@ -1147,7 +1147,7 @@ rtk /Users/xiwei/stock_research/.venv/bin/python -m pytest \
 
 Expected: all tests pass.
 
-- [ ] **Step 3: Run repository hygiene checks**
+- [x] **Step 3: Run repository hygiene checks**
 
 ```bash
 rtk git diff --check
@@ -1156,7 +1156,7 @@ rtk git status --short
 
 Expected: no whitespace errors and no unintended tracked changes.
 
-- [ ] **Step 4: Perform a strict 2026-07-29 PIT audit**
+- [x] **Step 4: Perform a strict 2026-07-29 PIT audit**
 
 Check the sealed artifacts programmatically:
 
@@ -1167,13 +1167,13 @@ assert evidence_source_date_max <= "2026-07-29"
 assert top20["final_rank"].tolist() == list(range(1, 21))
 assert reserve["final_rank"].tolist() == list(range(21, 41))
 assert set(top20.asset_id).isdisjoint(reserve.asset_id)
-assert preaudit.asset_id.nunique() == 60
+assert preaudit.asset_id.nunique() == min(60, automatic_eligible_pool)
 assert evidence_complete_pool >= 40
 ```
 
 Expected: every assertion passes.
 
-- [ ] **Step 5: Request independent code and artifact review**
+- [x] **Step 5: Request independent code and artifact review**
 
 Review the complete implementation against:
 
@@ -1182,3 +1182,20 @@ docs/superpowers/specs/2026-07-30-consumer-oversold-elasticity-ranking-design.md
 ```
 
 The reviewer must explicitly check for future leakage, market-cap field confusion, micro-cap bias, board-aware limit-up counting, evidence-caused omissions, unified rank arithmetic, legacy snapshot compatibility, immutable publication, and the actual 2026-07-29 Top20/reserve/Top60 artifacts. Resolve every Critical and Important finding and rerun affected tests before delivery.
+
+## Completion audit — 2026-07-30
+
+All 12 tasks and all 60 implementation steps are complete.
+
+- Implementation range: `a4ed9316` through `b7d87680`.
+- Frozen research cutoff: `2026-07-29`; market, valuation, and evidence inputs do not exceed that date.
+- Unified output: Top20 ranks 1—20 and reserve ranks 21—40, with no overlap.
+- Pre-audit output: 59 unique rows because the strict automatic-eligible pool itself contains 59 rows; the configured cap remains 60.
+- Evidence: 42 complete candidates inside the pre-audit pool, exceeding the required 40.
+- Ranking arithmetic: `70% repair percentile + 30% elasticity percentile`, verified with zero numerical error.
+- Current-rule stock character: analysis dates are restricted to 2025—2026; board/ST thresholds are board-aware; market-cap percentiles are clipped to 5—95.
+- Historical evaluation: both legacy split snapshots and unified snapshots remain supported; default horizons are 5 and 20 trading days.
+- Immutable release: nine artifacts plus manifest, artifact mode `0444`, release directory mode `0555`, relative atomic `current` symlink, and verified SHA-256 hashes.
+- Final release: `consumer-oversold-c5bab33c55864de2866c77fb5b53532f`.
+- Fresh regression: 998 tests passed; only two existing third-party deprecation warnings were emitted.
+- Independent final review: approved with no remaining Critical or Important findings.
