@@ -1,7 +1,8 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import type { ChangeEvent, Dispatch, SetStateAction } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { UserManagementView } from '../src/components/UserManagementView';
+import { buildResetPasswordChangeHandler, UserManagementView } from '../src/components/UserManagementView';
 
 const apiMocks = vi.hoisted(() => ({
   fetchAdminUsers: vi.fn(),
@@ -19,6 +20,25 @@ afterEach(() => {
 });
 
 describe('UserManagementView', () => {
+  it('captures autofilled password before a deferred state updater runs', () => {
+    let deferredUpdater: SetStateAction<Record<string, string>> | undefined;
+    const setResetPasswords = vi.fn((updater: SetStateAction<Record<string, string>>) => {
+      deferredUpdater = updater;
+    }) as unknown as Dispatch<SetStateAction<Record<string, string>>>;
+    const event = {
+      currentTarget: { value: 'autofilled-secret' }
+    } as unknown as ChangeEvent<HTMLInputElement>;
+
+    buildResetPasswordChangeHandler('user:2', setResetPasswords)(event);
+    Object.defineProperty(event, 'currentTarget', { value: null });
+
+    let nextState: Record<string, string> | undefined;
+    expect(() => {
+      nextState = typeof deferredUpdater === 'function' ? deferredUpdater({}) : undefined;
+    }).not.toThrow();
+    expect(nextState).toEqual({ 'user:2': 'autofilled-secret' });
+  });
+
   it('lists users and creates a user', async () => {
     apiMocks.fetchAdminUsers
       .mockResolvedValueOnce({

@@ -1,13 +1,26 @@
 import { useEffect, useState } from 'react';
+import type { ChangeEvent, Dispatch, SetStateAction } from 'react';
 import { createAdminUser, disableAdminUser, enableAdminUser, fetchAdminUsers, resetAdminUserPassword } from '../api/client';
 import type { AdminUser } from '../api/types';
+
+type ResetPasswords = Record<string, string>;
+
+export function buildResetPasswordChangeHandler(
+  userId: string,
+  setResetPasswords: Dispatch<SetStateAction<ResetPasswords>>
+) {
+  return (event: ChangeEvent<HTMLInputElement>) => {
+    const password = event.currentTarget.value;
+    setResetPasswords((current) => ({ ...current, [userId]: password }));
+  };
+}
 
 export function UserManagementView() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [creating, setCreating] = useState(false);
-  const [resetPasswords, setResetPasswords] = useState<Record<string, string>>({});
+  const [resetPasswords, setResetPasswords] = useState<ResetPasswords>({});
 
   function loadUsers() {
     setLoading(true);
@@ -123,9 +136,7 @@ export function UserManagementView() {
                           aria-label={`重置 ${user.username} 密码`}
                           type="password"
                           value={resetPasswords[user.user_id] ?? ''}
-                          onChange={(event) =>
-                            setResetPasswords((current) => ({ ...current, [user.user_id]: event.currentTarget.value }))
-                          }
+                          onChange={buildResetPasswordChangeHandler(user.user_id, setResetPasswords)}
                         />
                       </label>
                       <button
