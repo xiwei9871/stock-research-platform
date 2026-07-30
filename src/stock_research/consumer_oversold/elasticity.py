@@ -115,6 +115,7 @@ ELASTICITY_COVERAGE_FIELDS = (
     "stock_character_coverage",
     "market_capacity_coverage",
 )
+ELASTICITY_ELIGIBILITY_FIELDS = ("eligible", "automatic_eligible")
 ELASTICITY_ADDED_COLUMNS = (
     "residual_deviation_component_coverage",
     "residual_deviation_score",
@@ -765,6 +766,7 @@ def score_rebound_elasticity(
     """Score complete repair candidates on cross-sectional rebound elasticity."""
     required = (
         "asset_id",
+        *ELASTICITY_ELIGIBILITY_FIELDS,
         *RESIDUAL_ELASTICITY_FIELDS,
         *STOCK_ELASTICITY_FIELDS,
         *MARKET_ELASTICITY_FIELDS,
@@ -800,7 +802,7 @@ def score_rebound_elasticity(
             except ValueError as exc:
                 raise ValueError(f"rows asset {asset_id} field {field}: {exc}") from exc
         frame[field] = parsed
-    for field in ELASTICITY_COVERAGE_FIELDS:
+    for field in (*ELASTICITY_COVERAGE_FIELDS, *ELASTICITY_ELIGIBILITY_FIELDS):
         parsed_coverage: list[bool] = []
         for value, asset_id in zip(frame[field], frame["asset_id"], strict=True):
             if not isinstance(value, (bool, np.bool_)):
@@ -828,19 +830,32 @@ def score_rebound_elasticity(
         list(MARKET_ELASTICITY_FIELDS)
     ].notna().all(axis=1)
     catalyst_coverage = frame[list(CATALYST_ELASTICITY_FIELDS)].notna().all(axis=1)
+    final_universe = (
+        frame["eligible"]
+        & residual_coverage
+        & stock_coverage
+        & market_coverage
+        & catalyst_coverage
+    )
+    automatic_universe = (
+        frame["automatic_eligible"]
+        & residual_coverage
+        & stock_coverage
+        & market_coverage
+    )
 
     frame["residual_deviation_component_coverage"] = residual_coverage.astype(bool)
     frame["residual_deviation_score"] = _component_score(
         frame,
         RESIDUAL_ELASTICITY_FIELDS,
-        residual_coverage,
+        final_universe,
         favorable_low=True,
     )
     frame["stock_character_component_coverage"] = stock_coverage.astype(bool)
     frame["stock_character_score"] = _component_score(
         frame,
         STOCK_ELASTICITY_FIELDS,
-        stock_coverage,
+        final_universe,
         favorable_low=False,
         winsorize_fields=STOCK_WINSORIZE_FIELDS,
     )
@@ -848,32 +863,47 @@ def score_rebound_elasticity(
     frame["market_capacity_score"] = _component_score(
         frame,
         MARKET_ELASTICITY_FIELDS,
-        market_coverage,
+        final_universe,
         favorable_low=True,
     )
     frame["catalyst_liquidity_coverage"] = catalyst_coverage.astype(bool)
     frame["catalyst_liquidity_score"] = _component_score(
         frame,
         CATALYST_ELASTICITY_FIELDS,
-        catalyst_coverage,
+        final_universe,
         favorable_low=False,
     )
 
-    frame["elasticity_coverage"] = (
-        residual_coverage & stock_coverage & market_coverage & catalyst_coverage
-    ).astype(bool)
+    frame["elasticity_coverage"] = final_universe.astype(bool)
     frame["elasticity_score"] = (
         config.residual_deviation_weight * frame["residual_deviation_score"]
         + config.stock_character_weight * frame["stock_character_score"]
         + config.market_capacity_weight * frame["market_capacity_score"]
         + config.catalyst_liquidity_weight * frame["catalyst_liquidity_score"]
     ).where(frame["elasticity_coverage"])
-    frame["automatic_elasticity_coverage"] = (
-        residual_coverage & stock_coverage & market_coverage
-    ).astype(bool)
+    automatic_residual_score = _component_score(
+        frame,
+        RESIDUAL_ELASTICITY_FIELDS,
+        automatic_universe,
+        favorable_low=True,
+    )
+    automatic_stock_score = _component_score(
+        frame,
+        STOCK_ELASTICITY_FIELDS,
+        automatic_universe,
+        favorable_low=False,
+        winsorize_fields=STOCK_WINSORIZE_FIELDS,
+    )
+    automatic_market_score = _component_score(
+        frame,
+        MARKET_ELASTICITY_FIELDS,
+        automatic_universe,
+        favorable_low=True,
+    )
+    frame["automatic_elasticity_coverage"] = automatic_universe.astype(bool)
     frame["automatic_elasticity_score"] = (
-        0.45 * frame["residual_deviation_score"]
-        + 0.30 * frame["stock_character_score"]
-        + 0.25 * frame["market_capacity_score"]
+        0.45 * automatic_residual_score
+        + 0.30 * automatic_stock_score
+        + 0.25 * automatic_market_score
     ).where(frame["automatic_elasticity_coverage"])
     return frame.sort_values("asset_id", kind="stable").reset_index(drop=True)

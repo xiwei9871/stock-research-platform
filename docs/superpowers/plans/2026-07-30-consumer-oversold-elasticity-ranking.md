@@ -575,6 +575,8 @@ def winsorize(values: pd.Series, lower: float, upper: float) -> pd.Series:
 
 
 def score_rebound_elasticity(rows: pd.DataFrame) -> pd.DataFrame:
+    # Final components share one eligible-and-complete cross-section.
+    # Automatic components are recomputed in an independent automatic-eligible cross-section.
     frame = rows.copy()
     component_specs = {
         "residual_deviation_score": RESIDUAL_COMPONENT_DIRECTIONS,

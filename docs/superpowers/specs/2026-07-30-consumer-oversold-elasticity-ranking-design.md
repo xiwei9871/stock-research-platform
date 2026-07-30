@@ -87,6 +87,8 @@ final_rank_score = repair_rank_percentile * 70%
 
 ## 6. 反弹弹性分位
 
+最终弹性分位只在 `eligible=true` 且四个组件覆盖与字段均完整的统一截面内计算；截面外股票的四个组件分和 `elasticity_score` 均保持缺失，不能污染入选股票的分位。`automatic_elasticity_score` 使用独立的 `automatic_eligible=true` 截面，仅对剩余偏差、历史股性和市值容量重新计算分位并按 45%/30%/25% 合成，不复用最终弹性组件分。
+
 ### 6.1 剩余价格偏差率：35%
 
 该部分判断当前价格完成了多少修复，而不是机械处罚最近一个交易日的大涨。

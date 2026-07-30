@@ -143,6 +143,8 @@ def _capacity_shares(
 def _elasticity_row(**overrides):
     row = {
         "asset_id": "A",
+        "eligible": True,
+        "automatic_eligible": True,
         "drawdown_from_high_1y": -0.40,
         "drawdown_from_high_2y": -0.50,
         "price_position_1y": 0.20,
@@ -778,6 +780,72 @@ def test_component_missingness_does_not_default_to_zero_or_disable_automatic_sco
     assert result["automatic_elasticity_score"] == 50.0
 
 
+def test_final_elasticity_cross_section_ignores_rows_outside_final_universe():
+    base_rows = pd.DataFrame(
+        [_elasticity_row(asset_id="A"), _elasticity_row(asset_id="B")]
+    )
+    baseline = score_rebound_elasticity(base_rows, CONFIG).set_index("asset_id")
+    contaminated = score_rebound_elasticity(
+        pd.concat(
+            [
+                base_rows,
+                pd.DataFrame(
+                    [
+                        _elasticity_row(
+                            asset_id="X",
+                            drawdown_from_high_1y=-100.0,
+                            drawdown_from_high_2y=-100.0,
+                            catalyst_verifiability_score=np.nan,
+                        )
+                    ]
+                ),
+            ],
+            ignore_index=True,
+        ),
+        CONFIG,
+    ).set_index("asset_id")
+
+    pd.testing.assert_series_equal(
+        contaminated.loc[["A", "B"], "elasticity_score"],
+        baseline.loc[["A", "B"], "elasticity_score"],
+    )
+    assert pd.isna(contaminated.loc["X", "residual_deviation_score"])
+    assert pd.isna(contaminated.loc["X", "elasticity_score"])
+
+
+def test_automatic_elasticity_uses_an_independent_eligible_cross_section():
+    base_rows = pd.DataFrame(
+        [_elasticity_row(asset_id="A"), _elasticity_row(asset_id="B")]
+    )
+    baseline = score_rebound_elasticity(base_rows, CONFIG).set_index("asset_id")
+    contaminated = score_rebound_elasticity(
+        pd.concat(
+            [
+                base_rows,
+                pd.DataFrame(
+                    [
+                        _elasticity_row(
+                            asset_id="X",
+                            eligible=False,
+                            automatic_eligible=False,
+                            drawdown_from_high_1y=-100.0,
+                            drawdown_from_high_2y=-100.0,
+                        )
+                    ]
+                ),
+            ],
+            ignore_index=True,
+        ),
+        CONFIG,
+    ).set_index("asset_id")
+
+    pd.testing.assert_series_equal(
+        contaminated.loc[["A", "B"], "automatic_elasticity_score"],
+        baseline.loc[["A", "B"], "automatic_elasticity_score"],
+    )
+    assert pd.isna(contaminated.loc["X", "automatic_elasticity_score"])
+
+
 @pytest.mark.parametrize(
     ("field", "invalid"),
     [
@@ -788,6 +856,8 @@ def test_component_missingness_does_not_default_to_zero_or_disable_automatic_sco
         ("residual_deviation_coverage", 1),
         ("stock_character_coverage", "true"),
         ("market_capacity_coverage", None),
+        ("eligible", 1),
+        ("automatic_eligible", "true"),
     ],
 )
 def test_rebound_elasticity_rejects_non_strict_values(field, invalid):
@@ -801,6 +871,8 @@ def test_rebound_elasticity_validates_assets_columns_and_empty_schema():
     rows = pd.DataFrame([_elasticity_row()])
     with pytest.raises(ValueError, match="distance_hfq_ma250"):
         score_rebound_elasticity(rows.drop(columns="distance_hfq_ma250"), CONFIG)
+    with pytest.raises(ValueError, match="automatic_eligible"):
+        score_rebound_elasticity(rows.drop(columns="automatic_eligible"), CONFIG)
     with pytest.raises(ValueError, match="duplicate asset_id"):
         score_rebound_elasticity(pd.concat([rows, rows], ignore_index=True), CONFIG)
     with pytest.raises(ValueError, match="asset_id"):
