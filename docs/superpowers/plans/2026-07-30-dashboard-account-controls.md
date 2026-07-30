@@ -378,6 +378,7 @@ Use the latest validated strategy snapshot already present in the release root:
 STOCK_RESEARCH_RELEASE_ROOT=/Users/xiwei/stock_research_release_20260727 \
 EXPECTED_TRADE_DATE=2026-07-28 \
 BASE_URL=https://stock.manqiaotechnology.com \
+DASHBOARD_REMOTE_ENV_FILE=.env \
 rtk /Users/xiwei/stock_research_release_20260727/deploy/sync_dashboard_release.sh
 ```
 
