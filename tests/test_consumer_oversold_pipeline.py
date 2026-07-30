@@ -688,3 +688,29 @@ def test_unified_pipeline_honors_small_publication_config_and_empty_pool_schema(
     for key in ("top20", "reserve", "preaudit", "comparison"):
         assert key in empty and empty[key].empty
     assert empty["coverage"]["publication_status"] == "coverage_insufficient"
+
+
+def test_no_big_up_history_keeps_automatic_eligibility_and_enters_preaudit():
+    frames, _, config = _many_frames(5, 0)
+    pct_chg = np.resize(np.array([5.0, 1.0, -1.0, 0.0]), 504)
+    for asset_id in frames["assets"]["asset_id"]:
+        frames["bars"].loc[frames["bars"]["asset_id"].eq(asset_id), "pct_chg"] = pct_chg
+    empty_evidence = pd.DataFrame(columns=EVIDENCE_COLUMNS)
+
+    result = build_consumer_oversold_weekly_from_frames(
+        frames=frames, evidence=empty_evidence, config=config
+    )
+
+    scores = result["scores"].set_index("asset_id")
+    assert scores["stock_character_coverage"].all()
+    assert scores["up_7pct_count_2y"].eq(0).all()
+    assert scores["upside_tail_volatility_2y"].notna().all()
+    assert scores[
+        [
+            "positive_after_big_up_1d_rate",
+            "positive_after_big_up_3d_rate",
+            "positive_after_big_up_5d_rate",
+        ]
+    ].eq(0.0).all().all()
+    assert scores["automatic_eligible"].all()
+    assert len(result["preaudit"]) == 5

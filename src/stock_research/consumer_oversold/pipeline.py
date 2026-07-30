@@ -364,7 +364,20 @@ def _apply_automatic_gates(
         "positive_after_big_up_5d_rate",
         "log_current_float_market_cap",
     )
-    quantitative_complete = result.loc[:, required_numeric].notna().all(axis=1)
+    quantitative_values = result.loc[:, required_numeric].copy()
+    no_big_up = (
+        result["stock_character_coverage"].fillna(False).astype(bool)
+        & result["up_7pct_count_2y"].eq(0.0)
+    )
+    for field in (
+        "positive_after_big_up_1d_rate",
+        "positive_after_big_up_3d_rate",
+        "positive_after_big_up_5d_rate",
+    ):
+        quantitative_values.loc[
+            no_big_up & quantitative_values[field].isna(), field
+        ] = 0.0
+    quantitative_complete = quantitative_values.notna().all(axis=1)
     masks = {
         "universe_excluded": result["included"].fillna(False).astype(bool),
         "price_threshold_not_met": price_pass,
