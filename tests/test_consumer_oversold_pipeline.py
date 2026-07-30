@@ -529,6 +529,30 @@ def test_output_dir_publishes_validated_evidence_and_nine_absolute_current_paths
     assert "消费超跌修复候选周报" in result["report"]
 
 
+def test_in_memory_report_exactly_matches_published_report(tmp_path):
+    frames, evidence, config = _frames()
+    small = replace(
+        config,
+        preaudit_size=2,
+        minimum_evidence_complete=2,
+        final_top_n=1,
+        reserve_top_n=1,
+    )
+
+    in_memory = build_consumer_oversold_weekly_from_frames(
+        frames=frames, evidence=evidence, config=small
+    )
+    published = build_consumer_oversold_weekly_from_frames(
+        frames=frames,
+        evidence=evidence,
+        config=small,
+        output_dir=tmp_path,
+    )
+
+    published_text = Path(published["paths"]["report"]).read_text(encoding="utf-8")
+    assert in_memory["report"] == published_text
+
+
 def test_runner_uses_latest_close_times_shares_not_pe_or_ps(monkeypatch, tmp_path):
     from stock_research.consumer_oversold import pipeline
 

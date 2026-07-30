@@ -420,12 +420,14 @@ def _enrich_rows(primary: pd.DataFrame, supplemental: pd.DataFrame | None) -> pd
     ):
         return result
     lookup = supplemental.drop_duplicates("asset_id", keep="first").set_index("asset_id")
-    for column in lookup.columns:
+    missing_columns = [column for column in lookup.columns if column not in result.columns]
+    if missing_columns:
+        additions = lookup.reindex(result["asset_id"])[missing_columns].reset_index(drop=True)
+        additions.index = result.index
+        result = pd.concat([result, additions], axis=1)
+    for column in (column for column in lookup.columns if column in primary.columns):
         mapped = result["asset_id"].map(lookup[column])
-        if column not in result.columns:
-            result[column] = mapped
-        else:
-            result[column] = result[column].where(result[column].notna(), mapped)
+        result[column] = result[column].where(result[column].notna(), mapped)
     return result
 
 

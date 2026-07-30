@@ -693,6 +693,7 @@ def build_consumer_oversold_weekly_from_frames(
                 empty_comparison,
                 exclusions,
                 coverage,
+                empty_scores,
             ),
         }
 
@@ -1031,6 +1032,7 @@ def build_consumer_oversold_weekly_from_frames(
             comparison,
             exclusions,
             coverage,
+            elasticity_scored,
         ),
     }
 
