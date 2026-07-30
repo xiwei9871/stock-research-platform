@@ -313,6 +313,8 @@ def test_empty_input_returns_stable_schema():
         ("689001", False, 19.8),
         ("430001", False, 29.8),
         ("830001", False, 29.8),
+        ("920422", False, 29.8),
+        ("302132", False, 9.8),
         ("000001", True, 4.8),
     ],
 )
@@ -508,11 +510,9 @@ def test_stock_character_identifiers_reject_non_strings_with_value_context(
 
 @pytest.mark.parametrize(
     "invalid",
-    ["000001.SZ", "12345", "1234567", "ABCDEF", "100001", "200001", "900001"],
+    ["000001.SZ", "12345", "1234567", "ABCDEF", "０００００１"],
 )
-def test_stock_character_stock_code_must_be_a_six_digit_a_share_or_beijing_code(
-    invalid,
-):
+def test_stock_character_stock_code_must_be_six_ascii_digits(invalid):
     bars = _character_bars("A", [0.0], stock_code=invalid)
 
     with pytest.raises(ValueError, match=rf"stock_code.*{invalid}"):
@@ -529,8 +529,8 @@ def test_limit_up_api_rejects_non_string_stock_code_with_value_context(invalid):
     assert repr(invalid) in message
 
 
-@pytest.mark.parametrize("invalid", ["000001.SZ", "12345", "ABCDEF", "100001"])
-def test_limit_up_api_rejects_non_a_share_stock_code(invalid):
+@pytest.mark.parametrize("invalid", ["000001.SZ", "12345", "ABCDEF", "０００００１"])
+def test_limit_up_api_rejects_non_six_ascii_digit_stock_code(invalid):
     with pytest.raises(ValueError, match=rf"stock_code.*{invalid}"):
         is_limit_up_day(invalid, False, 9.8, trade_date=TRADE_DATE)
 

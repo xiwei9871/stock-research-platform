@@ -97,26 +97,9 @@ def _normalized_identifier(value: object, *, field_name: str) -> str:
 
 def _normalized_stock_code(value: object) -> str:
     code = _normalized_identifier(value, field_name="stock_code")
-    valid_prefix = code.startswith(
-        (
-            "000",
-            "001",
-            "002",
-            "003",
-            "300",
-            "301",
-            "600",
-            "601",
-            "603",
-            "605",
-            "688",
-            "689",
-        )
-    ) or code.startswith(("4", "8"))
-    if len(code) != 6 or not code.isascii() or not code.isdigit() or not valid_prefix:
+    if len(code) != 6 or not code.isascii() or not code.isdigit():
         raise ValueError(
-            "stock_code must be a six-digit A-share or Beijing Stock Exchange code; "
-            f"got {value!r}"
+            f"stock_code must contain six ASCII digits; got {value!r}"
         )
     return code
 
@@ -138,7 +121,7 @@ def is_limit_up_day(
         return False
     if bool(is_st):
         threshold = 4.8
-    elif code.startswith(("4", "8")):
+    elif code.startswith(("4", "8", "920")):
         threshold = 29.8
     elif code.startswith(("300", "301", "688", "689")):
         threshold = 19.8
