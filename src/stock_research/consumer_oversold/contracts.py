@@ -9,7 +9,7 @@ EXPECTED_REPAIR = "expected_repair"
 EARLY_VALIDATION = "early_validation"
 REPAIR_BUCKETS = (EXPECTED_REPAIR, EARLY_VALIDATION)
 
-OUTPUT_FILENAMES = {
+LEGACY_OUTPUT_FILENAMES = {
     "evidence": "consumer_oversold_repair_evidence.csv",
     "expected": "consumer_oversold_expected_repair_top20.csv",
     "early": "consumer_oversold_early_validation_top20.csv",
@@ -18,6 +18,8 @@ OUTPUT_FILENAMES = {
     "coverage": "consumer_oversold_data_coverage_audit.json",
     "report": "consumer_oversold_weekly_report.md",
 }
+
+OUTPUT_FILENAMES = LEGACY_OUTPUT_FILENAMES
 
 UNIFIED_OUTPUT_FILENAMES = {
     "evidence": "consumer_oversold_repair_evidence.csv",
@@ -30,17 +32,6 @@ UNIFIED_OUTPUT_FILENAMES = {
     "preaudit": "consumer_oversold_preaudit_top60.csv",
     "comparison": "consumer_oversold_old_new_rank_comparison.csv",
 }
-
-LEGACY_OUTPUT_FILENAMES = {
-    "evidence": "consumer_oversold_repair_evidence.csv",
-    "expected": "consumer_oversold_expected_repair_top20.csv",
-    "early": "consumer_oversold_early_validation_top20.csv",
-    "scores": "consumer_oversold_full_scores.csv",
-    "exclusions": "consumer_oversold_exclusions.csv",
-    "coverage": "consumer_oversold_data_coverage_audit.json",
-    "report": "consumer_oversold_weekly_report.md",
-}
-
 
 def validate_trade_date(value: str) -> str:
     try:

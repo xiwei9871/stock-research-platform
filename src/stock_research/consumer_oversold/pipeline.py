@@ -164,6 +164,24 @@ def _empty_unified_frame() -> pd.DataFrame:
     return pd.DataFrame(columns=UNIFIED_OUTPUT_COLUMNS)
 
 
+def _add_publication_thresholds(
+    coverage: dict[str, Any], config: ConsumerOversoldConfig
+) -> None:
+    coverage.update(
+        final_top_n=config.final_top_n,
+        reserve_top_n=config.reserve_top_n,
+        preaudit_size=config.preaudit_size,
+        minimum_evidence_complete=config.minimum_evidence_complete,
+    )
+    threshold_warning = (
+        "publication_thresholds: "
+        f"final_top_n={config.final_top_n}, reserve_top_n={config.reserve_top_n}, "
+        f"preaudit_size={config.preaudit_size}, "
+        f"minimum_evidence_complete={config.minimum_evidence_complete}"
+    )
+    coverage["warnings"] = sorted(set([*coverage.get("warnings", []), threshold_warning]))
+
+
 def _copy_frames(frames: dict[str, pd.DataFrame]) -> dict[str, pd.DataFrame]:
     if not isinstance(frames, dict):
         raise TypeError("frames must be a dict")
@@ -632,40 +650,47 @@ def build_consumer_oversold_weekly_from_frames(
             "reserve": 0,
         }
         coverage["publication_status"] = "coverage_insufficient"
-        coverage["warnings"] = ["evidence_complete_pool_below_40"]
+        coverage["warnings"] = [
+            f"evidence_complete_pool_below_{config.minimum_evidence_complete}"
+        ]
+        _add_publication_thresholds(coverage, config)
         payload = {
             "trade_date": config.trade_date,
             "evidence": validated_evidence,
-            "expected": empty_scores,
-            "early": empty_scores,
             "scores": empty_scores,
             "exclusions": exclusions,
             "coverage": coverage,
+            "top20": empty_unified.copy(),
+            "reserve": empty_unified.copy(),
+            "preaudit": empty_preaudit.copy(),
+            "comparison": empty_comparison.copy(),
         }
         if output_dir is not None:
             published = write_consumer_oversold_artifacts(payload, output_dir=output_dir)
             return {
                 **published,
-                "top20": empty_unified.copy(),
-                "reserve": empty_unified.copy(),
-                "preaudit": empty_preaudit.copy(),
-                "comparison": empty_comparison,
+                "expected": empty_scores.copy(),
+                "early": empty_scores.copy(),
                 "coverage": coverage,
             }
         return {
             "paths": {},
             **{
                 key: payload[key]
-                for key in ("evidence", "expected", "early", "scores", "exclusions", "coverage")
+                for key in ("evidence", "scores", "exclusions", "coverage")
             },
+            "expected": empty_scores.copy(),
+            "early": empty_scores.copy(),
             "top20": empty_unified.copy(),
             "reserve": empty_unified.copy(),
             "preaudit": empty_preaudit.copy(),
             "comparison": empty_comparison,
             "report": _render_report(
                 config.trade_date,
-                empty_scores,
-                empty_scores,
+                empty_unified,
+                empty_unified,
+                empty_preaudit,
+                empty_comparison,
                 exclusions,
                 coverage,
             ),
@@ -883,9 +908,11 @@ def build_consumer_oversold_weekly_from_frames(
     required_ranked = config.final_top_n + config.reserve_top_n
     publication_warnings: list[str] = []
     if preaudit_evidence_complete < config.minimum_evidence_complete:
-        publication_warnings.append("evidence_complete_pool_below_40")
+        publication_warnings.append(
+            f"evidence_complete_pool_below_{config.minimum_evidence_complete}"
+        )
     if len(unified) < required_ranked:
-        publication_warnings.append("ranked_pool_below_40")
+        publication_warnings.append(f"ranked_pool_below_{required_ranked}")
     publication_status = "ready" if not publication_warnings else "coverage_insufficient"
     if publication_status == "ready":
         top20 = unified.loc[unified["final_rank"].le(config.final_top_n)].copy()
@@ -964,23 +991,24 @@ def build_consumer_oversold_weekly_from_frames(
     )
     coverage["publication_status"] = publication_status
     coverage["warnings"] = sorted(set([*coverage["warnings"], *publication_warnings]))
+    _add_publication_thresholds(coverage, config)
     payload = {
         "trade_date": config.trade_date,
         "evidence": validated_evidence,
-        "expected": ranked["expected"],
-        "early": ranked["early"],
         "scores": elasticity_scored,
         "exclusions": exclusions,
         "coverage": coverage,
+        "top20": top20,
+        "reserve": reserve,
+        "preaudit": preaudit,
+        "comparison": comparison,
     }
     if output_dir is not None:
         published = write_consumer_oversold_artifacts(payload, output_dir=output_dir)
         return {
             **published,
-            "top20": top20,
-            "reserve": reserve,
-            "preaudit": preaudit,
-            "comparison": comparison,
+            "expected": ranked["expected"],
+            "early": ranked["early"],
             "coverage": coverage,
         }
     return {
@@ -997,8 +1025,10 @@ def build_consumer_oversold_weekly_from_frames(
         "comparison": comparison,
         "report": _render_report(
             config.trade_date,
-            ranked["expected"],
-            ranked["early"],
+            top20,
+            reserve,
+            preaudit,
+            comparison,
             exclusions,
             coverage,
         ),

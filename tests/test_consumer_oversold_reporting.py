@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from stock_research.consumer_oversold.contracts import OUTPUT_FILENAMES
+from stock_research.consumer_oversold.contracts import UNIFIED_OUTPUT_FILENAMES
 from stock_research.consumer_oversold.evidence import (
     EVIDENCE_COLUMNS,
     OUTPUT_COLUMNS,
@@ -80,7 +80,10 @@ def _selected(asset_id: str, bucket: str, name: str) -> pd.DataFrame:
     )
 
 
-def _payload() -> dict[str, object]:
+OUTPUT_FILENAMES = UNIFIED_OUTPUT_FILENAMES
+
+
+def _legacy_payload() -> dict[str, object]:
     expected = _selected("000001.SZ", "expected_repair", "甲公司")
     early = _selected("000002.SZ", "early_validation", "乙公司")
     scores = pd.concat([expected, early], ignore_index=True)
@@ -143,6 +146,74 @@ def _payload() -> dict[str, object]:
     }
 
 
+def _unified_payload() -> dict[str, object]:
+    payload = _legacy_payload()
+    top20 = payload.pop("expected").copy(deep=True)
+    reserve = payload.pop("early").copy(deep=True)
+    for rank, frame in enumerate((top20, reserve), start=1):
+        frame["final_rank"] = rank
+        frame["repair_rank_percentile"] = 1.0 - (rank - 1) / 2
+        frame["elasticity_rank_percentile"] = rank / 2
+        frame["final_rank_score"] = 0.7 * frame["repair_rank_percentile"] + 0.3 * frame[
+            "elasticity_rank_percentile"
+        ]
+        frame["eligible"] = True
+        frame["elasticity_coverage"] = True
+    preaudit = pd.concat([top20, reserve], ignore_index=True)
+    payload.update(
+        top20=top20,
+        reserve=reserve,
+        preaudit=preaudit,
+        comparison=pd.DataFrame(
+            [
+                {"asset_id": "000001.SZ", "old_rank": 1, "new_rank": 1},
+                {"asset_id": "000002.SZ", "old_rank": 2, "new_rank": 2},
+            ]
+        ),
+    )
+    payload["coverage"].update(
+        publication_status="ready",
+        final_top_n=1,
+        reserve_top_n=1,
+        preaudit_size=2,
+        minimum_evidence_complete=2,
+        unified_funnel={
+            "full": 2,
+            "automatic": 2,
+            "preaudit": 2,
+            "evidence_reviewed": 2,
+            "evidence_complete": 2,
+            "elasticity_complete": 2,
+            "final": 1,
+            "reserve": 1,
+        },
+    )
+    return payload
+
+
+def _payload() -> dict[str, object]:
+    return _unified_payload()
+
+
+def test_writes_exactly_nine_unified_artifacts(tmp_path):
+    result = write_consumer_oversold_artifacts(_unified_payload(), output_dir=tmp_path)
+
+    assert set(result["paths"]) == set(UNIFIED_OUTPUT_FILENAMES)
+    assert set(result) == {
+        "paths",
+        "evidence",
+        "scores",
+        "exclusions",
+        "coverage",
+        "report",
+        "top20",
+        "reserve",
+        "preaudit",
+        "comparison",
+    }
+    assert not ({"expected", "early"} & set(result["paths"]))
+
+
 def _artifact_contents(output_dir: Path) -> dict[str, bytes]:
     return {
         key: (output_dir / "current" / filename).read_bytes()
@@ -150,18 +221,20 @@ def _artifact_contents(output_dir: Path) -> dict[str, bytes]:
     }
 
 
-def test_writes_seven_stable_artifacts_and_chinese_report(tmp_path):
+def test_writes_nine_stable_artifacts_and_chinese_report(tmp_path):
     result = write_consumer_oversold_artifacts(_payload(), output_dir=tmp_path / "nested")
 
     assert set(result) == {
         "paths",
         "evidence",
-        "expected",
-        "early",
         "scores",
         "exclusions",
         "coverage",
         "report",
+        "top20",
+        "reserve",
+        "preaudit",
+        "comparison",
     }
     assert set(result["paths"]) == set(OUTPUT_FILENAMES)
     for key, filename in OUTPUT_FILENAMES.items():
@@ -173,13 +246,13 @@ def test_writes_seven_stable_artifacts_and_chinese_report(tmp_path):
     assert (tmp_path / "nested" / "current").is_symlink()
     assert os.readlink(tmp_path / "nested" / "current").startswith(".releases/")
 
-    expected_csv = pd.read_csv(result["paths"]["expected"])
-    expected_order = [column for column in REPORT_COLUMNS if column in _payload()["expected"].columns]
-    expected_extras = sorted(
-        column for column in _payload()["expected"].columns if column not in expected_order
+    top20_csv = pd.read_csv(result["paths"]["top20"])
+    top20_order = [column for column in REPORT_COLUMNS if column in _payload()["top20"].columns]
+    top20_extras = sorted(
+        column for column in _payload()["top20"].columns if column not in top20_order
     )
-    assert expected_csv.columns.tolist() == [*expected_order, *expected_extras]
-    assert expected_csv.loc[0, "stock_name"] == "甲公司"
+    assert top20_csv.columns.tolist() == [*top20_order, *top20_extras]
+    assert top20_csv.loc[0, "stock_name"] == "甲公司"
     evidence_csv = pd.read_csv(result["paths"]["evidence"])
     assert evidence_csv.columns.tolist() == OUTPUT_COLUMNS
     assert evidence_csv.loc[0, "operator_notes"] == "'=external formula"
@@ -187,15 +260,20 @@ def test_writes_seven_stable_artifacts_and_chinese_report(tmp_path):
     coverage = json.loads(Path(result["paths"]["coverage"]).read_text(encoding="utf-8"))
     assert coverage["trade_date"] == "2026-07-29"
     assert coverage["funnel"] == FUNNEL
-    assert coverage["warnings"] == ["部分财务数据滞后"]
+    assert coverage["warnings"][0] == "部分财务数据滞后"
+    assert "final_top_n=1" in coverage["warnings"][1]
 
     report = Path(result["paths"]["report"]).read_text(encoding="utf-8")
     for text in [
         "2026-07-29",
         "研究候选，不是交易指令",
         "数据覆盖",
-        "纯预期修复",
-        "初步验证但尚未充分定价",
+        "修复潜力 70% + 反弹弹性 30%",
+        "最终统一榜单 Top 20",
+        "储备榜单 21-40",
+        "审计前 Top 60",
+        "新旧排名对照",
+        "特殊股票观察",
         "剔除原因摘要",
         "警告",
         "失效条件",
@@ -250,13 +328,14 @@ def test_rejects_evidence_without_validated_output_columns(tmp_path):
 
 def test_empty_frames_still_write_asset_id_headers_and_missing_markdown_values(tmp_path):
     payload = _payload()
-    for key in ("expected", "early", "scores", "exclusions"):
+    for key in ("top20", "reserve", "preaudit", "comparison", "scores", "exclusions"):
         payload[key] = pd.DataFrame()
-    payload["coverage"]["funnel"].update(selected_expected=0, selected_early=0)
+    payload["coverage"].update(publication_status="coverage_insufficient")
+    payload["coverage"]["unified_funnel"].update(preaudit=0, final=0, reserve=0)
 
     result = write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
 
-    for key in ("expected", "early", "scores", "exclusions"):
+    for key in ("top20", "reserve", "preaudit", "comparison", "scores", "exclusions"):
         assert Path(result["paths"][key]).read_text(encoding="utf-8").splitlines()[0] == "asset_id"
     assert "暂无候选" in Path(result["paths"]["report"]).read_text(encoding="utf-8")
 
@@ -265,7 +344,7 @@ def test_empty_frames_still_write_asset_id_headers_and_missing_markdown_values(t
     ("mutation", "error", "message"),
     [
         (lambda p: p.pop("coverage"), ValueError, "missing required keys.*coverage"),
-        (lambda p: p.update(expected=[]), TypeError, "expected must be a pandas DataFrame"),
+        (lambda p: p.update(top20=[]), TypeError, "top20 must be a pandas DataFrame"),
         (lambda p: p.update(trade_date="20260729"), ValueError, "trade_date"),
         (lambda p: p["coverage"].pop("warnings"), ValueError, "coverage missing required keys.*warnings"),
     ],
@@ -277,62 +356,62 @@ def test_rejects_missing_or_wrongly_typed_payload(mutation, error, message, tmp_
         write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
 
 
-def test_rejects_bucket_overlap_limit_duplicate_empty_and_risk_contracts(tmp_path):
+def test_rejects_rank_overlap_duplicate_empty_and_gate_contracts(tmp_path):
     payload = _payload()
-    payload["early"] = payload["expected"].copy(deep=True)
-    payload["early"]["repair_bucket"] = "early_validation"
+    payload["reserve"]["asset_id"] = payload["top20"].loc[0, "asset_id"]
     with pytest.raises(ValueError, match="mutually exclusive"):
         write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
 
     payload = _payload()
-    payload["expected"] = pd.concat([payload["expected"]] * 21, ignore_index=True)
-    payload["expected"]["asset_id"] = [f"A{i}" for i in range(21)]
-    with pytest.raises(ValueError, match="at most 20"):
+    payload["coverage"]["final_top_n"] = 2
+    payload["coverage"]["preaudit_size"] = 3
+    payload["coverage"]["minimum_evidence_complete"] = 3
+    with pytest.raises(ValueError, match="top20 length"):
         write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
 
     for field, invalid in [
         ("evidence_complete", False),
-        ("hard_risk_triggered", True),
-        ("hard_risk_review_unknown", True),
+        ("eligible", False),
+        ("elasticity_coverage", False),
     ]:
         payload = _payload()
-        payload["expected"].loc[0, field] = invalid
+        payload["top20"].loc[0, field] = invalid
         with pytest.raises(ValueError, match=field):
             write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
 
     for values in (["", "X"], ["X", "X"]):
         payload = _payload()
-        payload["expected"] = pd.concat([payload["expected"]] * 2, ignore_index=True)
-        payload["expected"]["asset_id"] = values
+        payload["preaudit"] = pd.concat([payload["preaudit"].iloc[[0]]] * 2, ignore_index=True)
+        payload["preaudit"]["asset_id"] = values
         with pytest.raises(ValueError, match="asset_id"):
             write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
 
 
 @pytest.mark.parametrize(
     "missing_gate",
-    ["evidence_complete", "hard_risk_triggered", "hard_risk_review_unknown"],
+    ["evidence_complete", "eligible", "elasticity_coverage"],
 )
-def test_nonempty_selected_frame_requires_every_risk_gate(missing_gate, tmp_path):
+def test_nonempty_selected_frame_requires_every_publication_gate(missing_gate, tmp_path):
     payload = _payload()
-    payload["expected"] = payload["expected"].drop(columns=[missing_gate])
+    payload["top20"] = payload["top20"].drop(columns=[missing_gate])
 
-    with pytest.raises(ValueError, match=f"expected missing required columns.*{missing_gate}"):
+    with pytest.raises(ValueError, match=f"top20 missing required columns.*{missing_gate}"):
         write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
 
 
 @pytest.mark.parametrize(
-    ("frame_name", "bucket"),
-    [("expected", "expected_repair"), ("early", "early_validation")],
+    ("frame_name", "bad_rank"),
+    [("top20", 2), ("reserve", 1)],
 )
-def test_nonempty_selected_frame_requires_its_exact_repair_bucket(frame_name, bucket, tmp_path):
+def test_nonempty_selected_frame_requires_its_exact_rank_range(frame_name, bad_rank, tmp_path):
     payload = _payload()
-    payload[frame_name] = payload[frame_name].drop(columns=["repair_bucket"])
-    with pytest.raises(ValueError, match=f"{frame_name} missing required columns.*repair_bucket"):
+    payload[frame_name] = payload[frame_name].drop(columns=["final_rank"])
+    with pytest.raises(ValueError, match=f"{frame_name} missing required columns.*final_rank"):
         write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
 
     payload = _payload()
-    payload[frame_name].loc[0, "repair_bucket"] = "wrong_bucket"
-    with pytest.raises(ValueError, match=f"{frame_name} field repair_bucket.*{bucket}"):
+    payload[frame_name].loc[0, "final_rank"] = bad_rank
+    with pytest.raises(ValueError, match=f"{frame_name} final_rank"):
         write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
 
 
@@ -344,15 +423,15 @@ def test_funnel_counts_are_nonnegative_strict_integers(bad_count, tmp_path):
         write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
 
 
-def test_funnel_order_and_selected_counts_are_consistent(tmp_path):
+def test_funnel_order_and_unified_counts_are_consistent(tmp_path):
     payload = _payload()
     payload["coverage"]["funnel"]["consumer_universe"] = 101
     with pytest.raises(ValueError, match="funnel.*non-increasing"):
         write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
 
     payload = _payload()
-    payload["coverage"]["funnel"]["selected_expected"] = 0
-    with pytest.raises(ValueError, match="selected_expected.*expected"):
+    payload["coverage"]["unified_funnel"]["final"] = 0
+    with pytest.raises(ValueError, match="unified_funnel final.*top20"):
         write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
 
     payload = _payload()
@@ -381,7 +460,10 @@ def test_normalizes_numpy_json_scalars(tmp_path):
 
 def test_does_not_modify_input_frames(tmp_path):
     payload = _payload()
-    originals = {key: payload[key].copy(deep=True) for key in ("expected", "early", "scores", "exclusions")}
+    originals = {
+        key: payload[key].copy(deep=True)
+        for key in ("top20", "reserve", "preaudit", "comparison", "scores", "exclusions")
+    }
 
     write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
 
@@ -391,16 +473,16 @@ def test_does_not_modify_input_frames(tmp_path):
 
 def test_csv_text_formula_cells_are_escaped_without_changing_numeric_cells(tmp_path):
     payload = _payload()
-    payload["expected"].loc[0, "stock_name"] = " =2+2"
-    payload["expected"].loc[0, "a_extra"] = "@cmd"
+    payload["top20"].loc[0, "stock_name"] = " =2+2"
+    payload["top20"].loc[0, "a_extra"] = "@cmd"
 
     result = write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
 
-    written = pd.read_csv(result["paths"]["expected"])
+    written = pd.read_csv(result["paths"]["top20"])
     assert written.loc[0, "stock_name"] == "' =2+2"
     assert written.loc[0, "a_extra"] == "'@cmd"
     assert written.loc[0, "return_6m"] == pytest.approx(-0.31)
-    assert payload["expected"].loc[0, "stock_name"] == " =2+2"
+    assert payload["top20"].loc[0, "stock_name"] == " =2+2"
 
 
 @pytest.mark.parametrize(
@@ -418,7 +500,7 @@ def test_csv_text_formula_cells_are_escaped_without_changing_numeric_cells(tmp_p
 )
 def test_report_rejects_urls_that_can_break_markdown_link_boundaries(bad_url, tmp_path):
     payload = _payload()
-    payload["expected"].loc[0, "source_url"] = bad_url
+    payload["top20"].loc[0, "source_url"] = bad_url
     result = write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
 
     report = Path(result["paths"]["report"]).read_text(encoding="utf-8")
@@ -427,7 +509,7 @@ def test_report_rejects_urls_that_can_break_markdown_link_boundaries(bad_url, tm
 
 def test_report_escapes_markdown_link_label_metacharacters(tmp_path):
     payload = _payload()
-    payload["expected"].loc[0, "source_title"] = "反\\斜[左]|右]\n下一行"
+    payload["top20"].loc[0, "source_title"] = "反\\斜[左]|右]\n下一行"
     result = write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
 
     source_line = next(
@@ -444,7 +526,7 @@ def test_existing_release_switches_once_and_unrelated_file_is_preserved(tmp_path
     unrelated = tmp_path / "keep.txt"
     unrelated.write_text("untouched", encoding="utf-8")
     payload = _payload()
-    payload["expected"].loc[0, "stock_name"] = "新甲公司"
+    payload["top20"].loc[0, "stock_name"] = "新甲公司"
     real_replace = os.replace
     observations = []
 
@@ -464,8 +546,8 @@ def test_existing_release_switches_once_and_unrelated_file_is_preserved(tmp_path
     assert observations[1][0] != old_target
     assert observations[1][1] == _artifact_contents(tmp_path)
     assert (tmp_path / old_target).is_dir()
-    assert Path(first["paths"]["expected"]).read_text(encoding="utf-8") != ""
-    assert "新甲公司" in Path(second["paths"]["expected"]).read_text(encoding="utf-8")
+    assert Path(first["paths"]["top20"]).read_text(encoding="utf-8") != ""
+    assert "新甲公司" in Path(second["paths"]["top20"]).read_text(encoding="utf-8")
     assert unrelated.read_text(encoding="utf-8") == "untouched"
 
 
@@ -533,7 +615,7 @@ def test_old_sealed_release_bytes_remain_unchanged_after_next_publish(tmp_path):
     before = {path.name: path.read_bytes() for path in old_release.iterdir() if path.is_file()}
 
     payload = _payload()
-    payload["expected"].loc[0, "stock_name"] = "新版本公司"
+    payload["top20"].loc[0, "stock_name"] = "新版本公司"
     write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
 
     assert {path.name: path.read_bytes() for path in old_release.iterdir() if path.is_file()} == before
@@ -668,7 +750,7 @@ def test_incomplete_post_switch_rollback_is_explicit_and_preserves_new_release(
 def test_all_external_markdown_text_is_rendered_inert(tmp_path):
     payload = _payload()
     attack = "\\escape [link](https://evil) ![img](x) *em* _u_ `code` # head > quote <script>&"
-    for frame_name in ("expected", "early"):
+    for frame_name in ("top20", "reserve"):
         for column in (
             "stock_name",
             "consumer_subindustry",

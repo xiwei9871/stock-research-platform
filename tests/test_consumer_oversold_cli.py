@@ -8,19 +8,22 @@ import pytest
 from stock_research import cli
 
 
-def _result(*, expected=None, early=None):
+def _result(*, top20=None, reserve=None, preaudit=None):
     return {
         "paths": {
             "evidence": "/tmp/consumer/evidence.csv",
-            "expected": "/tmp/consumer/expected.csv",
-            "early": "/tmp/consumer/early.csv",
             "scores": "/tmp/consumer/scores.csv",
             "exclusions": "/tmp/consumer/exclusions.csv",
             "coverage": "/tmp/consumer/coverage.json",
             "report": "/tmp/consumer/report.md",
+            "top20": "/tmp/consumer/top20.csv",
+            "reserve": "/tmp/consumer/reserve.csv",
+            "preaudit": "/tmp/consumer/preaudit.csv",
+            "comparison": "/tmp/consumer/comparison.csv",
         },
-        "expected": [1, 2] if expected is None else expected,
-        "early": [1] if early is None else early,
+        "top20": [1, 2] if top20 is None else top20,
+        "reserve": [1] if reserve is None else reserve,
+        "preaudit": [1, 2, 3] if preaudit is None else preaudit,
     }
 
 
@@ -143,14 +146,17 @@ def test_consumer_oversold_weekly_dispatches_and_prints_machine_lines(monkeypatc
     }
     assert capsys.readouterr().out.splitlines() == [
         "consumer_oversold|evidence|/tmp/consumer/evidence.csv",
-        "consumer_oversold|expected|/tmp/consumer/expected.csv",
-        "consumer_oversold|early|/tmp/consumer/early.csv",
         "consumer_oversold|scores|/tmp/consumer/scores.csv",
         "consumer_oversold|exclusions|/tmp/consumer/exclusions.csv",
         "consumer_oversold|coverage|/tmp/consumer/coverage.json",
         "consumer_oversold|report|/tmp/consumer/report.md",
-        "consumer_oversold|expected_rows|2",
-        "consumer_oversold|early_rows|1",
+        "consumer_oversold|top20|/tmp/consumer/top20.csv",
+        "consumer_oversold|reserve|/tmp/consumer/reserve.csv",
+        "consumer_oversold|preaudit|/tmp/consumer/preaudit.csv",
+        "consumer_oversold|comparison|/tmp/consumer/comparison.csv",
+        "consumer_oversold|top20_rows|2",
+        "consumer_oversold|reserve_rows|1",
+        "consumer_oversold|preaudit_rows|3",
     ]
 
 
@@ -159,7 +165,7 @@ def test_consumer_oversold_weekly_defaults_to_configured_service(monkeypatch):
 
     def fake_run(**kwargs):
         captured.update(kwargs)
-        return _result(expected=[], early=[])
+        return _result(top20=[], reserve=[], preaudit=[])
 
     monkeypatch.setattr(cli, "_run_consumer_oversold_weekly", fake_run)
 
@@ -220,7 +226,7 @@ def test_consumer_oversold_weekly_prints_zero_for_empty_rankings(monkeypatch, ca
     monkeypatch.setattr(
         cli,
         "_run_consumer_oversold_weekly",
-        lambda **kwargs: _result(expected=[], early=[]),
+        lambda **kwargs: _result(top20=[], reserve=[], preaudit=[]),
     )
 
     cli.main_for_args(
@@ -235,9 +241,10 @@ def test_consumer_oversold_weekly_prints_zero_for_empty_rankings(monkeypatch, ca
         ]
     )
 
-    assert capsys.readouterr().out.splitlines()[-2:] == [
-        "consumer_oversold|expected_rows|0",
-        "consumer_oversold|early_rows|0",
+    assert capsys.readouterr().out.splitlines()[-3:] == [
+        "consumer_oversold|top20_rows|0",
+        "consumer_oversold|reserve_rows|0",
+        "consumer_oversold|preaudit_rows|0",
     ]
 
 
@@ -302,7 +309,7 @@ def test_consumer_oversold_weekly_rejects_unsafe_input_paths_before_runner(
     "mutate",
     [
         lambda result: result.update(paths=[]),
-        lambda result: result["paths"].update(expected=123),
+        lambda result: result["paths"].update(top20=123),
         lambda result: result["paths"].update(report="report|forged.md"),
         lambda result: result["paths"].update(coverage="coverage\rforged.json"),
         lambda result: result["paths"].update(scores="scores\nforged.csv"),
@@ -332,7 +339,7 @@ def test_consumer_oversold_weekly_validates_all_result_paths_before_printing(
     assert capsys.readouterr().out == ""
 
 
-@pytest.mark.parametrize("ranking_key", ["expected", "early"])
+@pytest.mark.parametrize("ranking_key", ["top20", "reserve", "preaudit"])
 def test_consumer_oversold_weekly_validates_row_counts_before_printing(
     monkeypatch, capsys, ranking_key
 ):

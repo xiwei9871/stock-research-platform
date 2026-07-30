@@ -1511,12 +1511,14 @@ def _parse_p9_outcome_event_maps(events: pd.DataFrame) -> pd.DataFrame:
 
 _CONSUMER_OVERSOLD_PATH_KEYS = (
     "evidence",
-    "expected",
-    "early",
     "scores",
     "exclusions",
     "coverage",
     "report",
+    "top20",
+    "reserve",
+    "preaudit",
+    "comparison",
 )
 
 
@@ -1565,15 +1567,17 @@ def _consumer_oversold_machine_lines(result) -> list[str]:
         )
         for key in _CONSUMER_OVERSOLD_PATH_KEYS
     }
-    expected_rows = len(result["expected"])
-    early_rows = len(result["early"])
+    top20_rows = len(result["top20"])
+    reserve_rows = len(result["reserve"])
+    preaudit_rows = len(result["preaudit"])
     return [
         *(
             f"consumer_oversold|{key}|{validated_paths[key]}"
             for key in _CONSUMER_OVERSOLD_PATH_KEYS
         ),
-        f"consumer_oversold|expected_rows|{expected_rows}",
-        f"consumer_oversold|early_rows|{early_rows}",
+        f"consumer_oversold|top20_rows|{top20_rows}",
+        f"consumer_oversold|reserve_rows|{reserve_rows}",
+        f"consumer_oversold|preaudit_rows|{preaudit_rows}",
     ]
 
 

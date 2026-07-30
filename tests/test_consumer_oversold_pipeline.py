@@ -8,7 +8,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from stock_research.consumer_oversold.contracts import ConsumerOversoldConfig, OUTPUT_FILENAMES
+from stock_research.consumer_oversold.contracts import (
+    ConsumerOversoldConfig,
+    UNIFIED_OUTPUT_FILENAMES,
+)
 from stock_research.consumer_oversold.evidence import EVIDENCE_COLUMNS, OUTPUT_COLUMNS
 from stock_research.consumer_oversold.pipeline import (
     build_consumer_oversold_weekly_from_frames,
@@ -508,13 +511,14 @@ def test_explicit_completed_repair_is_excluded():
     assert "repair_already_completed" in row["exclusion_reasons"]
 
 
-def test_output_dir_publishes_validated_evidence_and_seven_absolute_current_paths(tmp_path):
+def test_output_dir_publishes_validated_evidence_and_nine_absolute_current_paths(tmp_path):
     frames, evidence, config = _frames()
     result = build_consumer_oversold_weekly_from_frames(
         frames=frames, evidence=evidence, config=config, output_dir=tmp_path
     )
 
-    assert set(result["paths"]) == set(OUTPUT_FILENAMES)
+    assert set(result["paths"]) == set(UNIFIED_OUTPUT_FILENAMES)
+    assert not ({"expected", "early"} & set(result["paths"]))
     assert all(Path(path).is_absolute() and "/current/" in path for path in result["paths"].values())
     assert result["evidence"].columns.tolist() == OUTPUT_COLUMNS
     published_evidence = pd.read_csv(result["paths"]["evidence"])

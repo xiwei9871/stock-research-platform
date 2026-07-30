@@ -15,7 +15,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from .contracts import OUTPUT_FILENAMES, validate_trade_date
+from .contracts import UNIFIED_OUTPUT_FILENAMES, validate_trade_date
 from .evidence import OUTPUT_COLUMNS as EVIDENCE_OUTPUT_COLUMNS
 from .evidence import _valid_source_url
 
@@ -55,7 +55,15 @@ REPORT_COLUMNS = (
     "exclusion_reasons",
 )
 
-_FRAME_KEYS = ("evidence", "expected", "early", "scores", "exclusions")
+_FRAME_KEYS = (
+    "evidence",
+    "scores",
+    "exclusions",
+    "top20",
+    "reserve",
+    "preaudit",
+    "comparison",
+)
 _PAYLOAD_KEYS = ("trade_date", *_FRAME_KEYS, "coverage")
 _COVERAGE_KEYS = (
     "funnel",
@@ -64,6 +72,8 @@ _COVERAGE_KEYS = (
     "warnings",
     "valuation_history_coverage",
     "finance_history_coverage",
+    "unified_funnel",
+    "publication_status",
 )
 _FUNNEL_KEYS = (
     "raw_assets",
@@ -78,9 +88,20 @@ _FUNNEL_KEYS = (
 )
 _SELECTED_GATES = {
     "evidence_complete": True,
-    "hard_risk_triggered": False,
-    "hard_risk_review_unknown": False,
+    "eligible": True,
+    "elasticity_coverage": True,
 }
+_UNIFIED_FUNNEL_KEYS = (
+    "full",
+    "automatic",
+    "preaudit",
+    "evidence_reviewed",
+    "evidence_complete",
+    "elasticity_complete",
+    "final",
+    "reserve",
+)
+_PUBLICATION_STATUSES = {"ready", "coverage_insufficient"}
 _STAGING_PREFIX = ".consumer-oversold-staging-"
 _TEMP_LINK_PREFIX = ".consumer-oversold-current-tmp-"
 _RELEASE_PREFIX = "consumer-oversold-"
@@ -109,33 +130,46 @@ def _ordered_evidence_frame(frame: pd.DataFrame) -> pd.DataFrame:
     return result.loc[:, [*preferred, *extras]]
 
 
-def _validate_selected(frame: pd.DataFrame, name: str, required_bucket: str) -> set[str]:
-    if len(frame) > 20:
-        raise ValueError(f"{name} must contain at most 20 rows")
+def _validate_assets(frame: pd.DataFrame, name: str) -> tuple[list[str], set[str]]:
     if frame.empty:
-        return set()
-    required_columns = ("asset_id", "repair_bucket", *_SELECTED_GATES)
-    missing_columns = [column for column in required_columns if column not in frame.columns]
-    if missing_columns:
-        raise ValueError(f"{name} missing required columns: {', '.join(missing_columns)}")
+        return [], set()
+    if "asset_id" not in frame.columns:
+        raise ValueError(f"{name} missing required columns: asset_id")
     missing = frame["asset_id"].isna()
     normalized = frame["asset_id"].astype(str).str.strip()
     if (missing | normalized.eq("")).any():
         raise ValueError(f"{name} asset_id must be non-empty")
     if normalized.duplicated().any():
         raise ValueError(f"{name} asset_id must be unique")
-    valid_bucket = frame["repair_bucket"].map(
-        lambda value: isinstance(value, str) and value.strip() == required_bucket
-    )
-    if not valid_bucket.all():
-        raise ValueError(f"{name} field repair_bucket must be {required_bucket}")
+    return normalized.tolist(), set(normalized)
+
+
+def _validate_selected(
+    frame: pd.DataFrame,
+    name: str,
+    expected_ranks: range,
+) -> set[str]:
+    if frame.empty:
+        return set()
+    required_columns = ("asset_id", "final_rank", *_SELECTED_GATES)
+    missing_columns = [column for column in required_columns if column not in frame.columns]
+    if missing_columns:
+        raise ValueError(f"{name} missing required columns: {', '.join(missing_columns)}")
+    _, assets = _validate_assets(frame, name)
+    ranks: list[int] = []
+    for value in frame["final_rank"]:
+        if isinstance(value, (bool, np.bool_)) or not isinstance(value, (int, np.integer)):
+            raise ValueError(f"{name} field final_rank must contain strict integers")
+        ranks.append(int(value))
+    if ranks != list(expected_ranks):
+        raise ValueError(f"{name} final_rank must equal {list(expected_ranks)}")
     for field, required in _SELECTED_GATES.items():
         valid = frame[field].map(
             lambda value: isinstance(value, (bool, np.bool_)) and bool(value) is required
         )
         if not valid.all():
             raise ValueError(f"{name} field {field} must be {str(required).lower()}")
-    return set(normalized)
+    return assets
 
 
 def _json_safe(value: Any, path: str = "coverage") -> Any:
@@ -164,8 +198,22 @@ def _json_safe(value: Any, path: str = "coverage") -> Any:
     raise TypeError(f"{path} contains a value that is not JSON-safe: {type(value).__name__}")
 
 
+def _positive_size(coverage: dict[str, Any], key: str, default: int) -> int:
+    value = coverage.get(key, default)
+    if isinstance(value, (bool, np.bool_)) or not isinstance(value, (int, np.integer)):
+        raise TypeError(f"coverage {key} must be an integer")
+    if int(value) < 1:
+        raise ValueError(f"coverage {key} must be positive")
+    return int(value)
+
+
 def _normalize_coverage(
-    coverage: dict[str, Any], trade_date: str, expected_count: int, early_count: int
+    coverage: dict[str, Any],
+    trade_date: str,
+    *,
+    top20_count: int,
+    reserve_count: int,
+    preaudit_count: int,
 ) -> dict[str, Any]:
     missing = _missing_keys(coverage, _COVERAGE_KEYS)
     if missing:
@@ -186,16 +234,77 @@ def _normalize_coverage(
         raise ValueError("coverage funnel counts must be non-increasing")
     selected_expected = int(coverage["funnel"]["selected_expected"])
     selected_early = int(coverage["funnel"]["selected_early"])
-    if selected_expected != expected_count:
-        raise ValueError("coverage selected_expected must equal expected frame length")
-    if selected_early != early_count:
-        raise ValueError("coverage selected_early must equal early frame length")
     if ordered[-1] < selected_expected + selected_early:
         raise ValueError(
             "coverage valuation_eligible must be at least selected_expected + selected_early"
         )
+    if not isinstance(coverage["unified_funnel"], dict):
+        raise TypeError("coverage unified_funnel must be a dict")
+    missing_unified = _missing_keys(coverage["unified_funnel"], _UNIFIED_FUNNEL_KEYS)
+    if missing_unified:
+        raise ValueError(
+            f"coverage unified_funnel missing required keys: {', '.join(missing_unified)}"
+        )
+    for key in _UNIFIED_FUNNEL_KEYS:
+        value = coverage["unified_funnel"][key]
+        if isinstance(value, (bool, np.bool_)) or not isinstance(value, (int, np.integer)):
+            raise TypeError(f"coverage unified_funnel {key} must be an integer")
+        if int(value) < 0:
+            raise ValueError(f"coverage unified_funnel {key} must be non-negative")
+    status = coverage["publication_status"]
+    if status not in _PUBLICATION_STATUSES:
+        raise ValueError(
+            "coverage publication_status must be ready or coverage_insufficient"
+        )
+    final_top_n = _positive_size(coverage, "final_top_n", 20)
+    reserve_top_n = _positive_size(coverage, "reserve_top_n", 20)
+    preaudit_size = _positive_size(coverage, "preaudit_size", 60)
+    minimum_evidence_complete = _positive_size(
+        coverage, "minimum_evidence_complete", final_top_n + reserve_top_n
+    )
+    if preaudit_size < final_top_n + reserve_top_n:
+        raise ValueError("coverage preaudit_size must cover final_top_n plus reserve_top_n")
+    if minimum_evidence_complete < final_top_n + reserve_top_n:
+        raise ValueError(
+            "coverage minimum_evidence_complete must cover final_top_n plus reserve_top_n"
+        )
+    if minimum_evidence_complete > preaudit_size:
+        raise ValueError(
+            "coverage minimum_evidence_complete must not exceed preaudit_size"
+        )
+    if preaudit_count > preaudit_size:
+        raise ValueError("preaudit frame length must not exceed coverage preaudit_size")
+    if status == "ready":
+        if top20_count != final_top_n:
+            raise ValueError("ready publication top20 length must equal final_top_n")
+        if reserve_count != reserve_top_n:
+            raise ValueError("ready publication reserve length must equal reserve_top_n")
+    elif top20_count or reserve_count:
+        raise ValueError("coverage_insufficient publication must not publish ranked selections")
+    if int(coverage["unified_funnel"]["preaudit"]) != preaudit_count:
+        raise ValueError("coverage unified_funnel preaudit must equal preaudit frame length")
+    if int(coverage["unified_funnel"]["final"]) != top20_count:
+        raise ValueError("coverage unified_funnel final must equal top20 frame length")
+    if int(coverage["unified_funnel"]["reserve"]) != reserve_count:
+        raise ValueError("coverage unified_funnel reserve must equal reserve frame length")
     normalized = _json_safe(copy.deepcopy(coverage))
     normalized["trade_date"] = trade_date
+    normalized.update(
+        final_top_n=final_top_n,
+        reserve_top_n=reserve_top_n,
+        preaudit_size=preaudit_size,
+        minimum_evidence_complete=minimum_evidence_complete,
+    )
+    warning = (
+        "publication_thresholds: "
+        f"final_top_n={final_top_n}, reserve_top_n={reserve_top_n}, "
+        f"preaudit_size={preaudit_size}, "
+        f"minimum_evidence_complete={minimum_evidence_complete}"
+    )
+    warnings = normalized["warnings"]
+    if not isinstance(warnings, list):
+        raise TypeError("coverage warnings must be a list")
+    normalized["warnings"] = [*warnings, warning] if warning not in warnings else warnings
     return normalized
 
 
@@ -311,6 +420,20 @@ def _coverage_table(coverage: dict[str, Any]) -> list[str]:
     lines.extend(
         f"| {labels[key]} | {_escape_table(coverage['funnel'][key])} |" for key in _FUNNEL_KEYS
     )
+    unified_labels = {
+        "full": "完整评分池",
+        "automatic": "自动门槛通过",
+        "preaudit": "审计前候选",
+        "evidence_reviewed": "证据已审阅",
+        "evidence_complete": "证据完整（审计前）",
+        "elasticity_complete": "弹性数据完整",
+        "final": "最终榜单",
+        "reserve": "储备榜单",
+    }
+    lines.extend(
+        f"| {unified_labels[key]} | {_escape_table(coverage['unified_funnel'][key])} |"
+        for key in _UNIFIED_FUNNEL_KEYS
+    )
     for label, key in (
         ("估值历史覆盖", "valuation_history_coverage"),
         ("财务历史覆盖", "finance_history_coverage"),
@@ -383,10 +506,67 @@ def _exclusion_summary(frame: pd.DataFrame) -> list[str]:
     return [*lines, ""]
 
 
+def _ranking_table(title: str, frame: pd.DataFrame) -> list[str]:
+    lines = [f"## {title}", ""]
+    if frame.empty:
+        return [*lines, "暂无候选。", ""]
+    lines.extend(
+        [
+            "| 排名 | 股票 | 修复分位 | 弹性分位 | 最终排名分 |",
+            "|---:|---|---:|---:|---:|",
+        ]
+    )
+    for _, row in frame.iterrows():
+        name = _display(row.get("stock_name"))
+        code = _display(row.get("stock_code", row.get("asset_id")))
+        lines.append(
+            f"| {_escape_table(row.get('final_rank'))} | "
+            f"{_escape_table(name)}（{_escape_table(code)}） | "
+            f"{_percent_text(row.get('repair_rank_percentile'))} | "
+            f"{_percent_text(row.get('elasticity_rank_percentile'))} | "
+            f"{_escape_table(row.get('final_rank_score'))} |"
+        )
+    return [*lines, ""]
+
+
+def _comparison_table(frame: pd.DataFrame) -> list[str]:
+    lines = ["## 新旧排名对照", ""]
+    if frame.empty:
+        return [*lines, "暂无对照记录。", ""]
+    lines.extend(["| 股票 | 旧排名 | 新排名 | 变化 |", "|---|---:|---:|---:|"])
+    for _, row in frame.iterrows():
+        lines.append(
+            f"| {_escape_table(row.get('stock_name', row.get('asset_id')))} | "
+            f"{_escape_table(row.get('old_combined_rank', row.get('old_rank')))} | "
+            f"{_escape_table(row.get('new_rank'))} | "
+            f"{_escape_table(row.get('rank_change'))} |"
+        )
+    return [*lines, ""]
+
+
+def _special_stocks(frame: pd.DataFrame) -> list[str]:
+    lines = ["## 特殊股票观察", ""]
+    if frame.empty:
+        return [*lines, "暂无特殊股票。", ""]
+    special = frame.loc[
+        frame.get("exclusion_reasons", pd.Series("", index=frame.index)).fillna("").astype(str).ne("")
+    ]
+    if special.empty:
+        return [*lines, "暂无特殊股票。", ""]
+    for _, row in special.iterrows():
+        lines.append(
+            f"- {_escape_table(row.get('stock_name', row.get('asset_id')))}："
+            f"{_escape_table(row.get('exclusion_reasons'))}"
+        )
+    return [*lines, ""]
+
+
 def _render_report(
     trade_date: str,
-    expected: pd.DataFrame,
-    early: pd.DataFrame,
+    top20: pd.DataFrame,
+    reserve: pd.DataFrame,
+    preaudit: pd.DataFrame,
+    comparison: pd.DataFrame,
     exclusions: pd.DataFrame,
     coverage: dict[str, Any],
 ) -> str:
@@ -397,6 +577,10 @@ def _render_report(
         "",
         "> CSV 为审阅安全转义：疑似公式的文本单元格已加单引号前缀。",
         "",
+        "> 单一排名公式：修复潜力 70% + 反弹弹性 30%。",
+        "",
+        f"> 发布状态：{_escape_table(coverage['publication_status'])}",
+        "",
         "## 数据覆盖",
         "",
         *_coverage_table(coverage),
@@ -406,8 +590,12 @@ def _render_report(
         f"- 数据日期上限：{_escape_table(json.dumps(coverage['data_date_maxima'], ensure_ascii=False, sort_keys=True))}",
         f"- 缺失字段计数：{_escape_table(json.dumps(coverage['missing_field_counts'], ensure_ascii=False, sort_keys=True))}",
         "",
-        *_candidate_section("纯预期修复", expected),
-        *_candidate_section("初步验证但尚未充分定价", early),
+        *_ranking_table("最终统一榜单 Top 20", top20),
+        *_ranking_table("储备榜单 21-40", reserve),
+        *_ranking_table("审计前 Top 60", preaudit),
+        *_comparison_table(comparison),
+        *_candidate_section("候选详情", pd.concat([top20, reserve], ignore_index=True)),
+        *_special_stocks(preaudit),
         *_exclusion_summary(exclusions),
         "## 警告",
         "",
@@ -456,14 +644,14 @@ def _write_and_verify_manifest(release: Path) -> Path:
     manifest = release / ".manifest.sha256"
     lines = [
         f"{_artifact_digest(release / filename)}  {filename}"
-        for filename in sorted(OUTPUT_FILENAMES.values())
+        for filename in sorted(UNIFIED_OUTPUT_FILENAMES.values())
     ]
     _write_text("\n".join(lines) + "\n", manifest)
     parsed: dict[str, str] = {}
     for line in manifest.read_text(encoding="utf-8").splitlines():
         digest, filename = line.split("  ", 1)
         parsed[filename] = digest
-    expected_names = sorted(OUTPUT_FILENAMES.values())
+    expected_names = sorted(UNIFIED_OUTPUT_FILENAMES.values())
     if list(parsed) != expected_names or any(
         parsed[filename] != _artifact_digest(release / filename) for filename in expected_names
     ):
@@ -472,7 +660,7 @@ def _write_and_verify_manifest(release: Path) -> Path:
 
 
 def _seal_release(release: Path, manifest: Path) -> None:
-    for filename in (*OUTPUT_FILENAMES.values(), manifest.name):
+    for filename in (*UNIFIED_OUTPUT_FILENAMES.values(), manifest.name):
         artifact = release / filename
         artifact.chmod(0o444)
         _fsync_file(artifact)
@@ -504,13 +692,13 @@ def _publish_release(
     staging.mkdir()
     try:
         for key in _FRAME_KEYS:
-            _write_csv(frames[key], staging / OUTPUT_FILENAMES[key])
+            _write_csv(frames[key], staging / UNIFIED_OUTPUT_FILENAMES[key])
         _write_text(
             json.dumps(coverage, ensure_ascii=False, indent=2, sort_keys=True, allow_nan=False)
             + "\n",
-            staging / OUTPUT_FILENAMES["coverage"],
+            staging / UNIFIED_OUTPUT_FILENAMES["coverage"],
         )
-        _write_text(report, staging / OUTPUT_FILENAMES["report"])
+        _write_text(report, staging / UNIFIED_OUTPUT_FILENAMES["report"])
         manifest = _write_and_verify_manifest(staging)
         _seal_release(staging, manifest)
         os.replace(staging, release)
@@ -557,19 +745,37 @@ def write_consumer_oversold_artifacts(
         if not isinstance(frame, pd.DataFrame):
             raise TypeError(f"{key} must be a pandas DataFrame")
         frames[key] = _ordered_evidence_frame(frame) if key == "evidence" else _ordered_frame(frame)
-    expected_assets = _validate_selected(frames["expected"], "expected", "expected_repair")
-    early_assets = _validate_selected(frames["early"], "early", "early_validation")
-    if expected_assets & early_assets:
-        raise ValueError("expected and early asset sets must be mutually exclusive")
+    _, preaudit_assets = _validate_assets(frames["preaudit"], "preaudit")
+    _validate_assets(frames["comparison"], "comparison")
     if not isinstance(payload["coverage"], dict):
         raise TypeError("coverage must be a dict")
     coverage = _normalize_coverage(
-        payload["coverage"], trade_date, len(frames["expected"]), len(frames["early"])
+        payload["coverage"],
+        trade_date,
+        top20_count=len(frames["top20"]),
+        reserve_count=len(frames["reserve"]),
+        preaudit_count=len(frames["preaudit"]),
     )
+    final_top_n = coverage["final_top_n"]
+    reserve_top_n = coverage["reserve_top_n"]
+    top20_assets = _validate_selected(
+        frames["top20"], "top20", range(1, len(frames["top20"]) + 1)
+    )
+    reserve_assets = _validate_selected(
+        frames["reserve"],
+        "reserve",
+        range(final_top_n + 1, final_top_n + len(frames["reserve"]) + 1),
+    )
+    if top20_assets & reserve_assets:
+        raise ValueError("top20 and reserve asset sets must be mutually exclusive")
+    if not (top20_assets | reserve_assets).issubset(preaudit_assets):
+        raise ValueError("top20 and reserve assets must be present in preaudit")
     report = _render_report(
         trade_date,
-        frames["expected"],
-        frames["early"],
+        frames["top20"],
+        frames["reserve"],
+        frames["preaudit"],
+        frames["comparison"],
         frames["exclusions"],
         coverage,
     )
@@ -588,15 +794,18 @@ def write_consumer_oversold_artifacts(
             lock_handle.close()
 
     paths = {
-        key: str(destination / "current" / filename) for key, filename in OUTPUT_FILENAMES.items()
+        key: str(destination / "current" / filename)
+        for key, filename in UNIFIED_OUTPUT_FILENAMES.items()
     }
     return {
         "paths": paths,
         "evidence": frames["evidence"],
-        "expected": frames["expected"],
-        "early": frames["early"],
         "scores": frames["scores"],
         "exclusions": frames["exclusions"],
         "coverage": coverage,
         "report": report,
+        "top20": frames["top20"],
+        "reserve": frames["reserve"],
+        "preaudit": frames["preaudit"],
+        "comparison": frames["comparison"],
     }
