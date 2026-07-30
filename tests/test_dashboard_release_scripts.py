@@ -266,6 +266,23 @@ def test_release_sync_provides_frontend_dist_in_docker_build_context():
     assert '"$ROOT/.dockerignore"' in script
 
 
+def test_release_packages_theme_research_priority_support_without_canonical_artifacts():
+    script = _read("deploy/sync_dashboard_release.sh")
+    dockerignore = _read(".dockerignore")
+    api_dockerfile = _read("deploy/dashboard-api.Dockerfile")
+
+    for relative_dir in (
+        "artifacts/theme_decomposition/priority_policies",
+        "artifacts/theme_decomposition/tech_bottleneck_crosswalks",
+    ):
+        assert f"!{relative_dir}/" in dockerignore
+        assert f"!{relative_dir}/**" in dockerignore
+        assert f'"$ROOT/{relative_dir}/"' in script
+        assert f"COPY {relative_dir} ./{relative_dir}" in api_dockerfile
+
+    assert "COPY artifacts/theme_decomposition ./artifacts/theme_decomposition" not in api_dockerfile
+
+
 def test_release_builds_use_lockfiles_and_pinned_base_images():
     script = _read("deploy/sync_dashboard_release.sh")
     api_dockerfile = _read("deploy/dashboard-api.Dockerfile")

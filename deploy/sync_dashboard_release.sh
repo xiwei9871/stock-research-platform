@@ -323,7 +323,7 @@ echo "Preparing remote release directories"
 ssh "${ssh_opts[@]}" -- "$remote" \
   "bash -s -- ${compose_project_q} ${api_bind_port_q} ${frontend_bind_port_q}" < "$ROOT/deploy/check_dashboard_remote_host.sh"
 ssh "${ssh_opts[@]}" -- "$remote" \
-  "mkdir -p ${remote_dir_q}/src ${remote_dir_q}/dashboard/dist ${remote_dir_q}/deploy ${remote_dir_q}/outputs/research/strategy_daily_eod/${EXPECTED_TRADE_DATE}"
+  "mkdir -p ${remote_dir_q}/src ${remote_dir_q}/dashboard/dist ${remote_dir_q}/deploy ${remote_dir_q}/artifacts/theme_decomposition/priority_policies ${remote_dir_q}/artifacts/theme_decomposition/tech_bottleneck_crosswalks ${remote_dir_q}/outputs/research/strategy_daily_eod/${EXPECTED_TRADE_DATE}"
 
 echo "Syncing backend source"
 rsync -az --delete -e "$rsync_rsh" -- "$ROOT/src/" "$remote:$REMOTE_DIR/src/"
@@ -338,6 +338,14 @@ rsync -az -e "$rsync_rsh" -- \
   "$ROOT/deploy/check_dashboard_remote_host.sh" \
   "$ROOT/deploy/dashboard-release.compose.yml" \
   "$remote:$REMOTE_DIR/deploy/"
+
+echo "Syncing Theme Research priority support"
+rsync -az --delete -e "$rsync_rsh" -- \
+  "$ROOT/artifacts/theme_decomposition/priority_policies/" \
+  "$remote:$REMOTE_DIR/artifacts/theme_decomposition/priority_policies/"
+rsync -az --delete -e "$rsync_rsh" -- \
+  "$ROOT/artifacts/theme_decomposition/tech_bottleneck_crosswalks/" \
+  "$remote:$REMOTE_DIR/artifacts/theme_decomposition/tech_bottleneck_crosswalks/"
 
 echo "Syncing canonical frontend build"
 rsync -az --delete -e "$rsync_rsh" -- "$ROOT/dashboard/dist/" "$remote:$REMOTE_DIR/dashboard/dist/"
