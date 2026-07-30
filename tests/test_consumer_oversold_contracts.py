@@ -198,6 +198,17 @@ def test_candidate_pool_sizes_cover_final_and_reserve(field_name):
         ConsumerOversoldConfig(trade_date="2026-07-29", **{field_name: 39})
 
 
+def test_minimum_evidence_complete_cannot_exceed_preaudit_size():
+    with pytest.raises(
+        ValueError, match="minimum_evidence_complete.*preaudit_size"
+    ):
+        ConsumerOversoldConfig(
+            trade_date="2026-07-29",
+            preaudit_size=40,
+            minimum_evidence_complete=41,
+        )
+
+
 @pytest.mark.parametrize(
     ("field_name", "invalid"),
     [

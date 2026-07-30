@@ -17,6 +17,60 @@ from stock_research.consumer_oversold.pipeline import (
 
 
 TRADE_DATE = "2026-07-29"
+PUBLICATION_REQUIRED_COLUMNS = {
+    "asset_id",
+    "stock_code",
+    "stock_name",
+    "final_rank",
+    "repair_bucket",
+    "repair_rank_percentile",
+    "elasticity_rank_percentile",
+    "final_rank_score",
+    "composite_score",
+    "elasticity_score",
+    "residual_deviation_score",
+    "stock_character_score",
+    "market_capacity_score",
+    "catalyst_liquidity_score",
+    "current_total_market_cap",
+    "current_float_market_cap",
+    "market_cap_source",
+    "base_scenario_market_cap",
+    "limit_up_count_2y",
+    "up_7pct_count_2y",
+    "up_5pct_count_2y",
+    "drawdown_from_high_1y",
+    "drawdown_from_high_2y",
+    "price_position_1y",
+    "price_position_2y",
+    "distance_hfq_ma120",
+    "distance_hfq_ma250",
+    "rebound_from_low_60d",
+    "rebound_from_low_120d",
+    "return_6m",
+    "relative_return_6m",
+    "valuation_percentile",
+    "repair_thesis",
+    "unrepaired_metrics",
+    "leading_indicator",
+    "expected_validation_date",
+    "source_title",
+    "source_url",
+    "source_publish_date",
+    "main_risks",
+    "invalidation_conditions",
+    "evidence_complete",
+    "eligible",
+    "automatic_eligible",
+    "elasticity_coverage",
+    "automatic_elasticity_coverage",
+    "residual_deviation_component_coverage",
+    "stock_character_component_coverage",
+    "market_capacity_component_coverage",
+    "catalyst_liquidity_coverage",
+    "exclusion_reasons",
+    "automatic_exclusion_reasons",
+}
 
 
 def _bars(asset_id: str, ending: float) -> pd.DataFrame:
@@ -670,6 +724,11 @@ def test_unified_pipeline_honors_small_publication_config_and_empty_pool_schema(
     assert len(result["preaudit"]) == 2
     assert result["top20"]["final_rank"].tolist() == [1]
     assert result["reserve"]["final_rank"].tolist() == [2]
+    for key in ("top20", "reserve", "preaudit"):
+        assert PUBLICATION_REQUIRED_COLUMNS.issubset(result[key].columns)
+        assert result[key]["limit_up_count_2y"].notna().all()
+        assert result[key]["repair_thesis"].astype(str).str.strip().ne("").all()
+        assert result[key]["market_cap_source"].notna().all()
     stable_columns = {
         key: result[key].columns.tolist()
         for key in ("top20", "reserve", "preaudit", "comparison")
@@ -692,6 +751,8 @@ def test_unified_pipeline_honors_small_publication_config_and_empty_pool_schema(
     for key in ("top20", "reserve", "preaudit", "comparison"):
         assert key in empty and empty[key].empty
         assert empty[key].columns.tolist() == stable_columns[key]
+    for key in ("top20", "reserve", "preaudit"):
+        assert PUBLICATION_REQUIRED_COLUMNS.issubset(empty[key].columns)
     assert empty["coverage"]["publication_status"] == "coverage_insufficient"
 
 

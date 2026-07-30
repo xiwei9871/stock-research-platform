@@ -147,6 +147,10 @@ class ConsumerOversoldConfig:
             raise ValueError(
                 "minimum_evidence_complete must cover final_top_n plus reserve_top_n"
             )
+        if self.minimum_evidence_complete > self.preaudit_size:
+            raise ValueError(
+                "minimum_evidence_complete must not exceed preaudit_size"
+            )
 
 
 def _validate_integer(
