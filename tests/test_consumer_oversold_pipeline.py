@@ -670,6 +670,10 @@ def test_unified_pipeline_honors_small_publication_config_and_empty_pool_schema(
     assert len(result["preaudit"]) == 2
     assert result["top20"]["final_rank"].tolist() == [1]
     assert result["reserve"]["final_rank"].tolist() == [2]
+    stable_columns = {
+        key: result[key].columns.tolist()
+        for key in ("top20", "reserve", "preaudit", "comparison")
+    }
 
     frames["industry_rules"] = frames["industry_rules"].assign(
         action="exclude", consumer_subindustry=""
@@ -687,6 +691,7 @@ def test_unified_pipeline_honors_small_publication_config_and_empty_pool_schema(
     )
     for key in ("top20", "reserve", "preaudit", "comparison"):
         assert key in empty and empty[key].empty
+        assert empty[key].columns.tolist() == stable_columns[key]
     assert empty["coverage"]["publication_status"] == "coverage_insufficient"
 
 
@@ -714,3 +719,70 @@ def test_no_big_up_history_keeps_automatic_eligibility_and_enters_preaudit():
     ].eq(0.0).all().all()
     assert scores["automatic_eligible"].all()
     assert len(result["preaudit"]) == 5
+
+
+def test_publication_evidence_threshold_counts_only_preaudit_assets():
+    frames, _, config = _many_frames(65, 0)
+    empty_evidence = pd.DataFrame(columns=EVIDENCE_COLUMNS)
+    baseline = build_consumer_oversold_weekly_from_frames(
+        frames=frames, evidence=empty_evidence, config=config
+    )
+    preaudit_ids = baseline["preaudit"]["asset_id"].tolist()
+    outside_ids = sorted(
+        set(frames["assets"]["asset_id"].astype(str)) - set(preaudit_ids)
+    )
+    stock_codes = frames["assets"].set_index("asset_id")["stock_code"]
+
+    def evidence_for(asset_ids: list[str]) -> pd.DataFrame:
+        return pd.DataFrame(
+            [
+                _evidence(
+                    asset_id,
+                    str(stock_codes.loc[asset_id]),
+                    "expected_repair" if index % 2 == 0 else "early_validation",
+                )
+                for index, asset_id in enumerate(asset_ids)
+            ],
+            columns=EVIDENCE_COLUMNS,
+        )
+
+    thirty_nine_inside = build_consumer_oversold_weekly_from_frames(
+        frames=frames,
+        evidence=evidence_for([*preaudit_ids[:39], outside_ids[0]]),
+        config=config,
+    )
+
+    assert thirty_nine_inside["coverage"]["publication_status"] == "coverage_insufficient"
+    assert thirty_nine_inside["top20"].empty
+    assert thirty_nine_inside["reserve"].empty
+    assert thirty_nine_inside["coverage"]["unified_funnel"]["evidence_reviewed"] == 39
+    assert thirty_nine_inside["coverage"]["unified_funnel"]["evidence_complete"] == 39
+
+    forty_inside_evidence = evidence_for(preaudit_ids[:40])
+    forty_inside = build_consumer_oversold_weekly_from_frames(
+        frames=frames, evidence=forty_inside_evidence, config=config
+    )
+    forty_inside_plus_outside = build_consumer_oversold_weekly_from_frames(
+        frames=frames,
+        evidence=evidence_for([*preaudit_ids[:40], *outside_ids]),
+        config=config,
+    )
+
+    assert forty_inside["coverage"]["publication_status"] == "ready"
+    assert len(forty_inside["top20"]) == 20
+    assert len(forty_inside["reserve"]) == 20
+    for field in ("evidence_reviewed", "evidence_complete"):
+        assert forty_inside["coverage"]["unified_funnel"][field] == 40
+        assert forty_inside_plus_outside["coverage"]["unified_funnel"][field] == 40
+    assert (
+        forty_inside_plus_outside["coverage"]["publication_status"]
+        == forty_inside["coverage"]["publication_status"]
+    )
+    assert (
+        forty_inside_plus_outside["coverage"]["unified_funnel"]
+        == forty_inside["coverage"]["unified_funnel"]
+    )
+    assert (
+        forty_inside_plus_outside["coverage"]["full_pool_evidence_complete"]
+        > forty_inside["coverage"]["full_pool_evidence_complete"]
+    )

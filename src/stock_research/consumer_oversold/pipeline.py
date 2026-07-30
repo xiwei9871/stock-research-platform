@@ -86,12 +86,65 @@ COMPARISON_COLUMNS = [
     "final_rank_score",
     "exclusion_reasons",
 ]
+UNIFIED_OUTPUT_COLUMNS = [
+    "asset_id",
+    "stock_code",
+    "stock_name",
+    "consumer_subindustry",
+    "repair_bucket",
+    "final_rank",
+    "final_rank_score",
+    "repair_rank_percentile",
+    "elasticity_rank_percentile",
+    "composite_score",
+    "elasticity_score",
+    "repair_potential_score",
+    "valuation_repair_score",
+    "operating_gap_score",
+    "balance_sheet_score",
+    "oversold_score",
+    "base_upside",
+    "current_total_market_cap",
+    "current_float_market_cap",
+    "base_scenario_market_cap",
+    "residual_deviation_score",
+    "stock_character_score",
+    "market_capacity_score",
+    "catalyst_liquidity_score",
+    "evidence_complete",
+    "audit_review_status",
+    "pledge_debt_review_status",
+    "permanent_impairment_status",
+    "exclusion_reasons",
+]
+PREAUDIT_OUTPUT_COLUMNS = [
+    "asset_id",
+    "stock_code",
+    "stock_name",
+    "consumer_subindustry",
+    "preaudit_score",
+    "oversold_score",
+    "valuation_repair_score",
+    "operating_gap_score",
+    "balance_sheet_score",
+    "automatic_elasticity_score",
+    "automatic_eligible",
+    "automatic_elasticity_coverage",
+    "current_total_market_cap",
+    "current_float_market_cap",
+    "base_scenario_market_cap",
+    "evidence_complete",
+    "evidence_errors",
+    "audit_review_status",
+    "pledge_debt_review_status",
+    "permanent_impairment_status",
+    "automatic_exclusion_reasons",
+    "exclusion_reasons",
+]
 
 
 def _empty_unified_frame() -> pd.DataFrame:
-    return pd.DataFrame(
-        columns=["asset_id", "final_rank", "final_rank_score", "elasticity_score"]
-    )
+    return pd.DataFrame(columns=UNIFIED_OUTPUT_COLUMNS)
 
 
 def _copy_frames(frames: dict[str, pd.DataFrame]) -> dict[str, pd.DataFrame]:
@@ -535,6 +588,7 @@ def build_consumer_oversold_weekly_from_frames(
             warnings=[],
         )
         empty_unified = _empty_unified_frame()
+        empty_preaudit = pd.DataFrame(columns=PREAUDIT_OUTPUT_COLUMNS)
         empty_comparison = pd.DataFrame(columns=COMPARISON_COLUMNS)
         coverage["funnel"].update(
             {
@@ -574,7 +628,7 @@ def build_consumer_oversold_weekly_from_frames(
                 **published,
                 "top20": empty_unified.copy(),
                 "reserve": empty_unified.copy(),
-                "preaudit": empty_scores.copy(),
+                "preaudit": empty_preaudit.copy(),
                 "comparison": empty_comparison,
                 "coverage": coverage,
             }
@@ -586,7 +640,7 @@ def build_consumer_oversold_weekly_from_frames(
             },
             "top20": empty_unified.copy(),
             "reserve": empty_unified.copy(),
-            "preaudit": empty_scores.copy(),
+            "preaudit": empty_preaudit.copy(),
             "comparison": empty_comparison,
             "report": _render_report(
                 config.trade_date,
@@ -757,21 +811,31 @@ def build_consumer_oversold_weekly_from_frames(
         elasticity_scored["automatic_eligible"]
         & elasticity_scored["automatic_elasticity_coverage"]
     )
-    preaudit = elasticity_scored.loc[elasticity_scored["preaudit_score"].notna()].sort_values(
+    preaudit_full = elasticity_scored.loc[
+        elasticity_scored["preaudit_score"].notna()
+    ].sort_values(
         ["preaudit_score", "oversold_score", "asset_id"],
         ascending=[False, False, True],
         kind="stable",
     ).head(config.preaudit_size).reset_index(drop=True)
+    preaudit_ids = set(preaudit_full["asset_id"].astype(str))
+    preaudit = preaudit_full.reindex(columns=PREAUDIT_OUTPUT_COLUMNS)
 
-    evidence_complete_pool = int(
-        (
-            elasticity_scored["eligible"].astype(bool)
-            & elasticity_scored["evidence_complete"].astype(bool)
-        ).sum()
+    reviewed_evidence_ids = set(validated_evidence["asset_id"].astype(str))
+    complete_evidence_ids = set(
+        validated_evidence.loc[
+            validated_evidence["evidence_complete"].fillna(False).astype(bool),
+            "asset_id",
+        ].astype(str)
+    )
+    preaudit_evidence_reviewed = len(preaudit_ids & reviewed_evidence_ids)
+    preaudit_evidence_complete = len(preaudit_ids & complete_evidence_ids)
+    full_pool_evidence_complete = int(
+        elasticity_scored["evidence_complete"].fillna(False).astype(bool).sum()
     )
     required_ranked = config.final_top_n + config.reserve_top_n
     publication_warnings: list[str] = []
-    if evidence_complete_pool < config.minimum_evidence_complete:
+    if preaudit_evidence_complete < config.minimum_evidence_complete:
         publication_warnings.append("evidence_complete_pool_below_40")
     if len(unified) < required_ranked:
         publication_warnings.append("ranked_pool_below_40")
@@ -785,6 +849,8 @@ def build_consumer_oversold_weekly_from_frames(
     else:
         top20 = unified.iloc[0:0].copy()
         reserve = unified.iloc[0:0].copy()
+    top20 = top20.reindex(columns=UNIFIED_OUTPUT_COLUMNS)
+    reserve = reserve.reindex(columns=UNIFIED_OUTPUT_COLUMNS)
     comparison = _build_rank_comparison(elasticity_scored, ranked, unified)
 
     universe_exclusions = universe.loc[~universe["included"].astype(bool)].rename(
@@ -828,13 +894,20 @@ def build_consumer_oversold_weekly_from_frames(
         "full": int(len(elasticity_scored)),
         "automatic": int(elasticity_scored["automatic_eligible"].sum()),
         "preaudit": int(len(preaudit)),
-        "evidence_reviewed": int(len(validated_evidence)),
-        "evidence_complete": int(elasticity_scored["evidence_complete"].sum()),
-        "elasticity_complete": int(elasticity_scored["elasticity_coverage"].sum()),
+        "evidence_reviewed": int(preaudit_evidence_reviewed),
+        "evidence_complete": int(preaudit_evidence_complete),
+        "elasticity_complete": int(
+            elasticity_scored.loc[
+                elasticity_scored["asset_id"].isin(preaudit_ids)
+                & elasticity_scored["elasticity_coverage"].astype(bool),
+                "asset_id",
+            ].nunique()
+        ),
         "final": int(len(top20)),
         "reserve": int(len(reserve)),
     }
     coverage["unified_funnel"] = unified_funnel
+    coverage["full_pool_evidence_complete"] = full_pool_evidence_complete
     coverage["funnel"].update(
         {
             key: value
