@@ -217,6 +217,15 @@ def _sealed_unified_release(
     return release
 
 
+def _rewrite_csv(release: Path, filenames, key: str, frame: pd.DataFrame) -> None:
+    release.chmod(0o755)
+    artifact = release / filenames[key]
+    artifact.chmod(0o644)
+    (release / ".manifest.sha256").chmod(0o644)
+    frame.to_csv(artifact, index=False)
+    _manifest(release, filenames)
+
+
 def test_forward_evaluation_computes_absolute_excess_and_path_drawdown():
     result = evaluate_consumer_oversold_snapshots(_snapshots(), _bars())
 
@@ -551,6 +560,143 @@ def test_discovery_reads_unified_top20_with_fixed_membership_and_final_rank(tmp_
     assert snapshots["snapshot_rank"].tolist() == list(range(1, 21))
     assert set(snapshots["repair_bucket"]) == {"expected_repair", "early_validation"}
     assert set(membership["asset_id"]) == {*(f"U{rank:02d}" for rank in range(1, 21)), "PEER"}
+
+
+@pytest.mark.parametrize("rank", ["1.0", "1e0", "+1", "", "-1", "0"])
+def test_discovery_rejects_noncanonical_unified_final_rank(tmp_path, rank):
+    release = _sealed_unified_release(
+        tmp_path, "consumer-oversold-current", "2026-01-05", count=1
+    )
+    selected = pd.read_csv(release / UNIFIED_OUTPUT_FILENAMES["top20"], dtype=str)
+    selected.loc[0, "final_rank"] = rank
+    _rewrite_csv(release, UNIFIED_OUTPUT_FILENAMES, "top20", selected)
+
+    with pytest.raises(ValueError, match="no valid sealed"):
+        _discover_snapshots(tmp_path, "2026-07-29")
+
+
+@pytest.mark.parametrize("ranks", [[1, 1, 3], [1, 3, 4], [-1, 1, 2], [0, 1, 2]])
+def test_discovery_rejects_duplicate_gapped_or_nonpositive_unified_ranks(tmp_path, ranks):
+    release = _sealed_unified_release(
+        tmp_path, "consumer-oversold-current", "2026-01-05", count=3
+    )
+    selected = pd.read_csv(release / UNIFIED_OUTPUT_FILENAMES["top20"], dtype=str)
+    selected["final_rank"] = ranks
+    _rewrite_csv(release, UNIFIED_OUTPUT_FILENAMES, "top20", selected)
+
+    with pytest.raises(ValueError, match="no valid sealed"):
+        _discover_snapshots(tmp_path, "2026-07-29")
+
+
+def test_discovery_normalizes_unified_rows_by_final_rank(tmp_path):
+    release = _sealed_unified_release(
+        tmp_path, "consumer-oversold-current", "2026-01-05", count=3
+    )
+    selected = pd.read_csv(release / UNIFIED_OUTPUT_FILENAMES["top20"], dtype=str)
+    selected = selected.iloc[[2, 0, 1]].reset_index(drop=True)
+    _rewrite_csv(release, UNIFIED_OUTPUT_FILENAMES, "top20", selected)
+
+    snapshots, _ = _discover_snapshots(tmp_path, "2026-07-29")
+
+    assert snapshots["asset_id"].tolist() == ["U01", "U02", "U03"]
+    assert snapshots["snapshot_rank"].tolist() == [1, 2, 3]
+
+
+@pytest.mark.parametrize("ranks", [[1, 1], [1, 3], [0, 1], [-1, 1]])
+def test_discovery_rejects_invalid_legacy_bucket_rank_sequence(tmp_path, ranks):
+    release = _sealed_release(
+        tmp_path, "consumer-oversold-current", "2026-01-05", "A", "expected_repair"
+    )
+    expected = pd.read_csv(release / LEGACY_OUTPUT_FILENAMES["expected"], dtype=str)
+    duplicate = expected.iloc[[0, 0]].copy()
+    duplicate["asset_id"] = ["A", "B"]
+    duplicate["stock_code"] = ["000001", "000002"]
+    duplicate["bucket_rank"] = ranks
+    scores = pd.read_csv(release / LEGACY_OUTPUT_FILENAMES["scores"], dtype=str)
+    scores = pd.concat([scores, duplicate.iloc[[1]]], ignore_index=True)
+    evidence = duplicate.loc[:, ["asset_id", "stock_code", "repair_bucket"]]
+    _rewrite_csv(release, LEGACY_OUTPUT_FILENAMES, "expected", duplicate)
+    _rewrite_csv(release, LEGACY_OUTPUT_FILENAMES, "scores", scores)
+    _rewrite_csv(release, LEGACY_OUTPUT_FILENAMES, "evidence", evidence)
+
+    with pytest.raises(ValueError, match="no valid sealed"):
+        _discover_snapshots(tmp_path, "2026-07-29")
+
+
+def test_discovery_normalizes_legacy_rows_by_bucket_rank(tmp_path):
+    release = _sealed_release(
+        tmp_path, "consumer-oversold-current", "2026-01-05", "A", "expected_repair"
+    )
+    expected = pd.read_csv(release / LEGACY_OUTPUT_FILENAMES["expected"], dtype=str)
+    second = expected.copy()
+    second["asset_id"] = "B"
+    second["stock_code"] = "000002"
+    expected = pd.concat([second.assign(bucket_rank="2"), expected.assign(bucket_rank="1")])
+    scores = pd.read_csv(release / LEGACY_OUTPUT_FILENAMES["scores"], dtype=str)
+    scores = pd.concat([scores, second], ignore_index=True)
+    evidence = pd.read_csv(release / LEGACY_OUTPUT_FILENAMES["evidence"], dtype=str)
+    evidence = pd.concat(
+        [evidence, second.loc[:, ["asset_id", "stock_code", "repair_bucket"]]],
+        ignore_index=True,
+    )
+    _rewrite_csv(release, LEGACY_OUTPUT_FILENAMES, "expected", expected)
+    _rewrite_csv(release, LEGACY_OUTPUT_FILENAMES, "scores", scores)
+    _rewrite_csv(release, LEGACY_OUTPUT_FILENAMES, "evidence", evidence)
+
+    snapshots, _ = _discover_snapshots(tmp_path, "2026-07-29")
+
+    assert snapshots["asset_id"].tolist() == ["A", "B"]
+    assert snapshots["snapshot_rank"].tolist() == [1, 2]
+
+
+@pytest.mark.parametrize("mutation", ["duplicate", "empty_asset", "empty_subindustry"])
+def test_discovery_rejects_invalid_scores_membership(tmp_path, mutation):
+    release = _sealed_unified_release(
+        tmp_path, "consumer-oversold-current", "2026-01-05", count=2
+    )
+    scores = pd.read_csv(release / UNIFIED_OUTPUT_FILENAMES["scores"], dtype=str)
+    if mutation == "duplicate":
+        scores = pd.concat([scores, scores.iloc[[0]]], ignore_index=True)
+    elif mutation == "empty_asset":
+        scores.loc[0, "asset_id"] = ""
+    else:
+        scores.loc[0, "consumer_subindustry"] = ""
+    _rewrite_csv(release, UNIFIED_OUTPUT_FILENAMES, "scores", scores)
+
+    with pytest.raises(ValueError, match="no valid sealed"):
+        _discover_snapshots(tmp_path, "2026-07-29")
+
+
+def test_discovery_rejects_selected_scores_subindustry_mismatch(tmp_path):
+    release = _sealed_unified_release(
+        tmp_path, "consumer-oversold-current", "2026-01-05", count=2
+    )
+    scores = pd.read_csv(release / UNIFIED_OUTPUT_FILENAMES["scores"], dtype=str)
+    scores.loc[scores["asset_id"].eq("U01"), "consumer_subindustry"] = "retail"
+    _rewrite_csv(release, UNIFIED_OUTPUT_FILENAMES, "scores", scores)
+
+    with pytest.raises(ValueError, match="no valid sealed"):
+        _discover_snapshots(tmp_path, "2026-07-29")
+
+
+def test_discovery_rejects_legacy_asset_selected_in_both_buckets(tmp_path):
+    release = _sealed_release(
+        tmp_path, "consumer-oversold-current", "2026-01-05", "A", "expected_repair"
+    )
+    expected = pd.read_csv(release / LEGACY_OUTPUT_FILENAMES["expected"], dtype=str)
+    early = expected.assign(repair_bucket="early_validation")
+    evidence = pd.concat(
+        [
+            expected.loc[:, ["asset_id", "stock_code", "repair_bucket"]],
+            early.loc[:, ["asset_id", "stock_code", "repair_bucket"]],
+        ],
+        ignore_index=True,
+    )
+    _rewrite_csv(release, LEGACY_OUTPUT_FILENAMES, "early", early)
+    _rewrite_csv(release, LEGACY_OUTPUT_FILENAMES, "evidence", evidence)
+
+    with pytest.raises(ValueError, match="no valid sealed"):
+        _discover_snapshots(tmp_path, "2026-07-29")
 
 
 def test_discovery_prefers_current_unified_release_over_legacy_on_same_date(tmp_path):

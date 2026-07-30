@@ -5,6 +5,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import shutil
 import stat
 import uuid
@@ -57,6 +58,29 @@ def _required_columns(frame: pd.DataFrame, columns: Iterable[str], name: str) ->
     missing = [column for column in columns if column not in frame.columns]
     if missing:
         raise ValueError(f"{name} missing required columns: {', '.join(missing)}")
+
+
+def _strict_positive_integers(values: pd.Series) -> list[int] | None:
+    parsed: list[int] = []
+    for value in values.tolist():
+        if isinstance(value, str):
+            if re.fullmatch(r"[1-9][0-9]*", value) is None:
+                return None
+            parsed.append(int(value))
+        elif type(value) is int and value > 0:
+            parsed.append(value)
+        else:
+            return None
+    return parsed
+
+
+def _normalize_nonempty_strings(frame: pd.DataFrame, columns: Iterable[str]) -> bool:
+    for column in columns:
+        values = frame[column]
+        if not values.map(lambda value: isinstance(value, str) and bool(value.strip())).all():
+            return False
+        frame[column] = values.str.strip()
+    return True
 
 
 def _normalized_horizons(horizons: Iterable[int]) -> tuple[int, ...]:
@@ -291,11 +315,14 @@ def _release_frames(release: Path, end_date: str) -> tuple[str, pd.DataFrame, pd
                 )
                 if not frame.empty and not frame["repair_bucket"].eq(bucket).all():
                     return None
-                selected_parts.append(frame)
+                ranks = _strict_positive_integers(frame["bucket_rank"])
+                if ranks is None or sorted(ranks) != list(range(1, len(frame) + 1)):
+                    return None
+                ranked = frame.assign(snapshot_rank=ranks).sort_values(
+                    "snapshot_rank", kind="stable"
+                )
+                selected_parts.append(ranked)
             selected = pd.concat(selected_parts, ignore_index=True)
-            selected["snapshot_rank"] = pd.to_numeric(
-                selected["bucket_rank"], errors="coerce"
-            )
         else:
             if coverage.get("publication_status") != "ready":
                 return None
@@ -317,10 +344,17 @@ def _release_frames(release: Path, end_date: str) -> tuple[str, pd.DataFrame, pd
             )
             if len(selected) != final_top_n:
                 return None
-            selected["snapshot_rank"] = pd.to_numeric(
-                selected["final_rank"], errors="coerce"
+            ranks = _strict_positive_integers(selected["final_rank"])
+            if ranks is None or sorted(ranks) != list(range(1, final_top_n + 1)):
+                return None
+            selected = selected.assign(snapshot_rank=ranks).sort_values(
+                "snapshot_rank", kind="stable"
             )
-        if selected["snapshot_rank"].isna().any():
+        if not _normalize_nonempty_strings(
+            selected, ("asset_id", "consumer_subindustry")
+        ):
+            return None
+        if selected["asset_id"].duplicated().any():
             return None
         _required_columns(evidence, ("asset_id", "repair_bucket"), "evidence")
         if not selected.empty:
@@ -335,14 +369,20 @@ def _release_frames(release: Path, end_date: str) -> tuple[str, pd.DataFrame, pd
         selected = selected.assign(trade_date=trade_date, snapshot_release=str(release))
         selected = selected.loc[:, [*_SNAPSHOT_COLUMNS, "snapshot_rank", "snapshot_release"]]
         _required_columns(scores, ("asset_id", "consumer_subindustry"), "scores")
-        membership = scores.loc[:, ["asset_id", "consumer_subindustry"]].dropna().copy()
-        membership["asset_id"] = membership["asset_id"].astype(str).str.strip()
-        membership["consumer_subindustry"] = membership["consumer_subindustry"].astype(str).str.strip()
-        membership = membership.loc[
-            membership["asset_id"].ne("") & membership["consumer_subindustry"].ne("")
-        ].drop_duplicates("asset_id", keep="first")
-        selected_ids = set(selected["asset_id"].astype(str))
-        if not selected_ids.issubset(set(membership["asset_id"])):
+        membership = scores.loc[:, ["asset_id", "consumer_subindustry"]].copy()
+        if not _normalize_nonempty_strings(
+            membership, ("asset_id", "consumer_subindustry")
+        ):
+            return None
+        if membership["asset_id"].duplicated().any():
+            return None
+        selected_membership = set(
+            selected.loc[:, ["asset_id", "consumer_subindustry"]].itertuples(
+                index=False, name=None
+            )
+        )
+        score_membership = set(membership.itertuples(index=False, name=None))
+        if not selected_membership.issubset(score_membership):
             return None
         membership["snapshot_trade_date"] = trade_date
         return trade_date, selected, membership
