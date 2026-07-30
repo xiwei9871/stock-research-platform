@@ -2,224 +2,208 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Restore production Theme Research from 2 to the exact 25-theme checkpoint at `eba5cdfc` while proving that the existing two themes are unchanged.
+**Goal:** Add the minimum backward-compatible v1.6 Theme Research contract, safely migrate the known production schema, and restore the exact 25-theme checkpoint at `eba5cdfc` without changing the existing two themes.
 
-**Architecture:** Extract only the historical artifact tree into an isolated staging directory, validate it with current production code, and use a tested guard script to enforce a 23-insert/zero-update/zero-deactivate semantic diff. Back up the production research schema, execute the existing authenticated transactional import CLI with generation locking, then verify the database, API, browser, and logs.
+**Architecture:** Port only the v1.6 artifact, normalization, DB parity, and known-legacy schema-migration behaviors into the current canonical release. Deploy and migrate the schema before importing the isolated checkpoint through a tested 23-insert/zero-update/zero-deactivate gate.
 
-**Tech Stack:** Python 3.12, PostgreSQL, psycopg, Pytest, Git archive, Docker, SSH, FastAPI, React dashboard.
+**Tech Stack:** Python 3.12, PostgreSQL, psycopg, Pytest, Git archive, Docker Compose, SSH, FastAPI, React dashboard.
 
 ---
 
-### Task 1: Add a Production Import Guard
+### Task 1: Preserve the Existing Read-Only Import Guard
 
 **Files:**
-- Create: `scripts/theme_research_checkpoint_import_guard.py`
-- Create: `tests/test_theme_research_checkpoint_import_guard.py`
+- Existing: `scripts/theme_research_checkpoint_import_guard.py`
+- Existing: `tests/test_theme_research_checkpoint_import_guard.py`
 
-- [ ] **Step 1: Write failing unit tests for the semantic-diff gate**
+- [x] Write gate tests for exactly 25 desired themes, exactly two current themes, 23 theme inserts, and zero updates/deactivations.
+- [x] Verify RED before the script existed.
+- [x] Implement a read-only guard that never calls `bootstrap_package()`.
+- [x] Verify all five gate tests pass.
+- [x] Commit as `feat: guard 25-theme production restore`.
 
-Test a pure `evaluate_restore_gate()` function with:
+### Task 2: Accept and Validate the v1.6 Artifact Contract
 
-- expected 25 theme IDs;
-- current IDs containing only `ai_power_value_capture_v1` and `humanoid_robotics_head_to_toe_v1`;
-- exactly 23 theme inserts;
-- empty update and deactivate lists for every family.
+**Files:**
+- Modify: `src/stock_research/theme_decomposition.py`
+- Modify: `tests/test_theme_decomposition.py`
 
-Assert the safe case returns `allowed=True`. Add failing cases for a theme update, any deactivation, the wrong current theme set, and the wrong desired theme count.
+- [ ] **Step 1: Add failing v1.6 contract tests**
 
-- [ ] **Step 2: Run the focused tests and verify RED**
+Add tests proving:
 
-Run:
-
-```bash
-rtk /Users/xiwei/stock_research/.venv/bin/pytest -q tests/test_theme_research_checkpoint_import_guard.py
+```python
+assert "theme_decomposition_v1_6" in SUPPORTED_ARTIFACT_VERSIONS
+assert "new_energy_storage" in THEME_TYPES
+assert {"catalyst", "risk"} <= CLAIM_TYPES
 ```
 
-Expected: collection fails because the guard module does not exist.
+Add a minimal v1.6 artifact with a complete `research_profile` and assert it validates. Add negative cases for a missing research-profile field and a catalyst/risk claim reference that does not exist.
 
-- [ ] **Step 3: Implement the guard**
+- [ ] **Step 2: Run focused tests and verify RED**
 
-The script must:
+```bash
+rtk /Users/xiwei/stock_research/.venv/bin/pytest -q tests/test_theme_decomposition.py -k 'v1_6 or research_profile'
+```
 
-- accept `--artifact-dir`, `--company-mapping-dir`, `--expected-theme-ids-file`, and `--runtime-service`;
-- normalize and validate the historical package with current code;
-- load the current database package read-only;
-- call `dry_run_package()`;
-- query the current store generation and package hash;
-- record current theme versions and content hashes for the two existing themes;
-- require exactly 25 expected IDs, exactly the two known current IDs, exactly 23 theme inserts, and no updates or deactivations in any family;
-- emit one JSON document containing `allowed`, package counts, semantic-diff summaries, generation, package hashes, and original-theme fingerprints;
-- exit nonzero when the gate is not allowed.
+Expected: failure because the current validator rejects v1.6 and lacks research-profile validation.
 
-The script must never call `bootstrap_package()` and must not accept an execute flag.
+- [ ] **Step 3: Implement the minimal validator changes**
+
+Keep `ARTIFACT_VERSION = "theme_decomposition_v1_5"` and add:
+
+```python
+SUPPORTED_ARTIFACT_VERSIONS = {
+    ARTIFACT_VERSION,
+    "theme_decomposition_v1_6",
+}
+```
+
+Accept `new_energy_storage`, `catalyst`, and `risk`; expose `research_profiles` from `load_theme_package()`; validate nonempty profile strings, string-list fields, `research_kind == "industry_chain_deep_research"`, and catalyst/risk claim references.
+
+- [ ] **Step 4: Run focused and complete decomposition tests**
+
+Require the focused tests and all of `tests/test_theme_decomposition.py` to pass.
+
+- [ ] **Step 5: Commit**
+
+Commit with message `feat: support theme research artifact v1.6`.
+
+### Task 3: Preserve v1.6 Metadata Through Database Parity
+
+**Files:**
+- Modify: `src/stock_research/theme_research_import.py`
+- Modify: `src/stock_research/theme_research_store.py`
+- Modify: `src/stock_research/dashboard/theme_research_db.py`
+- Modify: `tests/test_theme_research_import.py`
+- Modify: `tests/test_theme_research_store.py`
+- Modify: `tests/test_dashboard_theme_research_db.py`
+
+- [ ] **Step 1: Add failing parity tests**
+
+Assert normalization stores:
+
+```python
+theme["artifact_metadata"]["research_profile"] == artifact["research_profile"]
+```
+
+Assert store snapshot/export and DB dashboard reconstruction retain the same value. Add source-identity tests proving URLs differing only by case, fragment, or trailing slash are treated canonically and duplicate identities fail closed.
+
+- [ ] **Step 2: Run the three focused test files and verify RED**
+
+Run the import, store, and dashboard DB test files. Expected failures must reference missing research-profile parity or source identity behavior.
+
+- [ ] **Step 3: Implement normalization and parity**
+
+Add `research_profile` to theme `artifact_metadata`; compute source content hashes without provenance; compare duplicate source rows without notes/content hash; normalize source URLs before detecting duplicate identities; preserve `research_profile` in store artifact reconstruction and dashboard DB context.
 
 - [ ] **Step 4: Run focused tests and verify GREEN**
 
-Run the focused test command again and expect all tests to pass.
+Require all import, store, and dashboard DB tests to pass.
 
-- [ ] **Step 5: Commit the guard**
+- [ ] **Step 5: Commit**
 
-Commit with message:
+Commit with message `fix: preserve v1.6 theme research parity`.
 
-```text
-feat: guard 25-theme production restore
-```
-
-### Task 2: Build and Validate the Immutable 25-Theme Package
+### Task 4: Migrate the Known Legacy Theme Research Schema
 
 **Files:**
-- Create temporarily outside Git: an isolated staging directory from `mktemp -d`.
-- Read: Git commit `eba5cdfc700a02d961e441cc1b92824ff9e35c7e`.
+- Modify: `src/stock_research/theme_research_db_schema.py`
+- Modify: `tests/test_theme_research_db_schema.py`
+- Modify: `tests/integration/test_theme_research_db_schema_postgres.py`
 
-- [ ] **Step 1: Extract only the historical artifact tree**
+- [ ] **Step 1: Add failing schema-contract tests**
 
-Use `git archive` for `artifacts/theme_decomposition` at the pinned commit and extract it into the temporary staging root. Do not check out or merge the historical branch.
+Require named constraints containing:
 
-- [ ] **Step 2: Generate the immutable 25-ID manifest**
+```text
+ck_theme_research_theme_type: new_energy_storage
+ck_theme_research_claim_type: catalyst, risk
+```
 
-Derive the root theme IDs from the extracted JSON files, sort them, and write them to a temporary JSON array. Assert the count is exactly 25 and its SHA-256 is recorded in the migration evidence output.
+Test that the exact production legacy DDL/catalog contract is accepted as a migration predecessor, while partial or unknown drift is rejected. Test that migration acquires a dedicated advisory lock and updates the migration record only after post-inspection succeeds.
 
-- [ ] **Step 3: Run current artifact and package validators locally**
-
-Use current code from this worktree to call `normalize_artifact_package()` and `validate_package_integrity()` against the extracted theme and company-mapping directories. Print object counts and package SHA-256.
-
-Expected: 25 normalized themes with no integrity error.
-
-- [ ] **Step 4: Run relevant regression tests**
-
-Run:
+- [ ] **Step 2: Run unit schema tests and verify RED**
 
 ```bash
-rtk /Users/xiwei/stock_research/.venv/bin/pytest -q \
-  tests/test_theme_research_checkpoint_import_guard.py \
-  tests/test_theme_research_import.py \
-  tests/test_theme_research_store.py \
-  tests/test_dashboard_theme_research_db.py
+rtk /Users/xiwei/stock_research/.venv/bin/pytest -q tests/test_theme_research_db_schema.py
 ```
 
-Expected: all tests pass.
+- [ ] **Step 3: Implement the schema migration**
 
-### Task 3: Stage Production Inputs and Create a Database Backup
+Widen only the two enum checks. Introduce a `LegacyThemeResearchSchemaContract` for the production digest `1acce2a856b94b6479c7e08623779e230124fc54fb78fba3358e9cfe4cc882ce` and its catalog digest. Acquire `THEME_RESEARCH_SCHEMA_MIGRATION_LOCK_KEY`, reject unknown drift, apply DDL transactionally, re-inspect, then update the migration row.
 
-**Files and remote state:**
-- Remote release root: `/home/jqz/code/stock-research-platform-main`.
-- Running API container: `stock_research_dashboard-api-1`.
-- Remote backup directory: `/home/jqz/backups/theme-research-25-restore-20260730`.
-- Container staging directory: `/tmp/theme-research-25-eba5cdfc`.
+- [ ] **Step 4: Run unit and configured PostgreSQL integration tests**
 
-- [ ] **Step 1: Verify production prerequisites read-only**
+Run the schema unit suite. If the configured integration database is available, run the dedicated PostgreSQL schema migration file and require pass; otherwise record the explicit skip reason and rely on the production dry-run/status gate before apply.
 
-Confirm the API container is healthy, the release ID is still the expected production release, both migration and runtime PostgreSQL services are reachable, and the production package still contains exactly the two known themes.
+- [ ] **Step 5: Commit**
 
-- [ ] **Step 2: Verify backup tooling before changing state**
+Commit with message `fix: migrate theme research schema for v1.6`.
 
-Check for `pg_dump` on the production host. If it is unavailable, use a pinned PostgreSQL client container on `stock-research-dashboard-release` with the existing read-only-mounted pg service file. Do not proceed until `pg_dump --version` succeeds.
-
-- [ ] **Step 3: Create and verify the backup**
-
-Create a timestamped custom-format dump covering the `research` schema through the migration service. Run `pg_restore --list` against the dump and require entries for `theme_research_theme`, `theme_research_node`, `theme_research_import_run`, and `theme_research_store_state`.
-
-- [ ] **Step 4: Copy the staged package and guard into the API container**
-
-Transfer only the extracted `artifacts/theme_decomposition` tree, the 25-ID manifest, and the guard script to the container staging directory. Confirm the container sees exactly 25 root theme JSON files.
-
-### Task 4: Run the Production Dry-Run Gate
+### Task 5: Validate the 25-Theme Release Candidate
 
 **Files:**
-- Write remote evidence: `/home/jqz/backups/theme-research-25-restore-20260730/preflight.json`.
+- Read: checkpoint `eba5cdfc700a02d961e441cc1b92824ff9e35c7e`.
+- Use temporary staging directory `/tmp/theme-research-25-eba5cdfc.*`.
 
-- [ ] **Step 1: Execute the guard inside the API container**
+- [ ] Extract only `artifacts/theme_decomposition` with `git archive`.
+- [ ] Generate and hash the exact 25-theme ID manifest.
+- [ ] Normalize and validate the isolated checkpoint with the upgraded current code.
+- [ ] Require counts of 25 themes, 270 nodes, 282 sources, 320 claims, and 248 company mappings.
+- [ ] Run all Theme Research backend tests, the complete dashboard frontend suite, and production frontend build.
+- [ ] Run `rtk git diff --check` and review the compatibility diff against the design.
 
-Run the guard with the container's current application code, runtime service, extracted artifact directory, company-mapping directory, and expected-ID manifest. Save its JSON output outside the container.
-
-- [ ] **Step 2: Verify every write gate**
-
-Require:
-
-```text
-allowed = true
-desired theme count = 25
-current theme count = 2
-theme inserts = 23
-all family updates = 0
-all family deactivations = 0
-```
-
-Also record the generation and original two theme fingerprints. Stop before production write if any value differs.
-
-- [ ] **Step 3: Re-read production generation immediately before execution**
-
-Require it to equal the generation recorded in `preflight.json`. A mismatch means another writer changed the store; rerun the complete dry-run gate.
-
-### Task 5: Execute the Transactional Import
+### Task 6: Publish the Compatibility Release
 
 **Files and state:**
-- Use the existing `theme-research-db import --execute` CLI.
-- Use idempotency key `theme-research-25-eba5cdfc-20260730`.
+- Canonical release root: `/Users/xiwei/stock_research_release_20260727`.
+- Production URL: `https://stock.manqiaotechnology.com`.
 
-- [ ] **Step 1: Confirm the admin credential environment is available without printing it**
+- [ ] Fast-forward the clean canonical release root to the verified compatibility commit.
+- [ ] Publish through `deploy/sync_dashboard_release.sh` with expected trade date `2026-07-29`.
+- [ ] Confirm external `release.json` matches the new commit.
+- [ ] Before schema changes, require the existing two-theme list and one detail to return HTTP 200.
 
-Inside the API container, require the configured admin password environment variable to be nonempty. Do not display its value.
+### Task 7: Back Up and Migrate the Production Schema
 
-- [ ] **Step 2: Execute the authenticated import**
+**Remote state:**
+- Backup directory: `/home/jqz/backups/theme-research-25-restore-20260731`.
+- API container: `stock_research_dashboard-api-1`.
 
-Run the current CLI with:
+- [ ] Verify `pg_dump` and `pg_restore` tooling without printing credentials.
+- [ ] Create a timestamped custom-format backup of the production `research` schema through the migration service.
+- [ ] Require `pg_restore --list` entries for Theme Research theme, node, import-run, and store-state tables.
+- [ ] Run the new schema status and require recognition of the known legacy contract.
+- [ ] Apply the schema through the authenticated admin CLI.
+- [ ] Require current schema status and verify the existing two-theme reads remain HTTP 200.
 
-- `--runtime-service` set to the migration-capable Theme Research service;
-- `--artifact-dir` and `--company-mapping-dir` pointing to the staged checkpoint;
-- `--expected-generation` from the preflight evidence;
-- `--admin-username admin`;
-- the deterministic idempotency key;
-- `--execute` and no `--replace-theme`.
+### Task 8: Run the Production Import Gate and Transaction
 
-Save the JSON result to the remote evidence directory. Require `status=committed`, `resulting_generation=previous+1`, and object counts containing 25 themes.
+**Remote staging:**
+- Container directory: `/tmp/theme-research-25-eba5cdfc`.
+- Evidence directory: `/home/jqz/backups/theme-research-25-restore-20260731`.
+- Idempotency key: `theme-research-25-eba5cdfc-20260731`.
 
-- [ ] **Step 3: Preserve import audit identifiers**
+- [ ] Copy only the checkpoint artifact tree, 25-ID manifest, and read-only guard into container staging.
+- [ ] Run the guard and save `preflight.json` outside the container.
+- [ ] Require 25 desired themes, two current themes, 23 theme inserts, zero updates, and zero deactivations in every family.
+- [ ] Re-read and match the generation immediately before execution.
+- [ ] Confirm the admin credential environment is nonempty without displaying it.
+- [ ] Execute the authenticated transactional import with the recorded generation and deterministic idempotency key.
+- [ ] Save import/change-set IDs, package SHA, generations, counts, and backup path in migration evidence.
 
-Record the returned change-set ID, import-run ID, package SHA-256, prior generation, resulting generation, and backup path in a migration summary JSON file.
-
-### Task 6: Verify Database and External Behavior
-
-**Files:**
-- Write remote evidence: `/home/jqz/backups/theme-research-25-restore-20260730/postflight.json`.
-
-- [ ] **Step 1: Verify the database package**
-
-Reload the database package and assert exactly the expected 25 theme IDs. Compare the original two theme versions and content hashes with `preflight.json` and require exact equality.
-
-- [ ] **Step 2: Verify server-side read models**
-
-Inside the production API container, call the Theme Research list builder and representative new-theme detail builders. Require list total 25 and nonzero node counts for at least three newly imported themes.
-
-- [ ] **Step 3: Verify the authenticated external browser**
-
-Reload `/theme-research`, require the visible total to be 25, open at least one newly imported theme, and confirm its overview and priority-node content render without a loading-failure panel or console errors.
-
-- [ ] **Step 4: Verify production logs**
-
-From the verification start timestamp onward, require Theme Research list and detail requests to return HTTP 200 and no HTTP 500 or `PRIORITY_POLICY_DIRECTORY_NOT_FOUND` entries.
-
-- [ ] **Step 5: Run final repository checks**
-
-Run `rtk git diff --check`, confirm the worktree is clean, and confirm the production application release ID was not changed by this data-only migration.
-
-### Task 7: Commit Operational Evidence Documentation
+### Task 9: Verify Production and Record Evidence
 
 **Files:**
-- Create: `docs/ops/theme-research-25-production-restore-20260730.md`
+- Create: `docs/ops/theme-research-25-production-restore-20260731.md`
 
-- [ ] **Step 1: Record non-secret migration evidence**
-
-Document the pinned checkpoint, 25-ID manifest digest, package digest, backup path, dry-run counts, import/change-set identifiers, generations, final theme count, representative detail checks, and log verification. Do not include passwords, connection strings, cookies, or tokens.
-
-- [ ] **Step 2: Commit the evidence**
-
-Commit with message:
-
-```text
-docs: record 25-theme production restore
-```
-
-- [ ] **Step 3: Review completion requirement by requirement**
-
-Re-read the design and this plan, map each requirement to fresh evidence, and only then report the migration complete.
+- [ ] Reload the DB package and require the exact 25-theme ID set.
+- [ ] Require the original two theme versions and content hashes to match preflight evidence.
+- [ ] Require server-side list total 25 and nonzero nodes on at least three new details.
+- [ ] Reload the authenticated external list, verify visible total 25, and open a newly imported detail without console errors.
+- [ ] Require Theme Research list/detail HTTP 200 and no new HTTP 500 or priority-policy-directory errors in production logs.
+- [ ] Confirm the release root and feature worktree are clean and `git diff --check` passes.
+- [ ] Record non-secret backup, release, schema, dry-run, import, count, browser, and log evidence in the operations document.
+- [ ] Commit with message `docs: record 25-theme production restore`.
+- [ ] Re-read the design and plan requirement by requirement before reporting completion.
