@@ -207,7 +207,7 @@ Use deterministic synthetic price paths:
 def test_residual_deviation_keeps_post_limit_stock_high_when_still_depressed():
     bars = price_path(
         asset_id="A",
-        raw_closes=[100.0] * 20 + list(np.linspace(100.0, 40.0, 499)) + [44.0],
+        hfq_closes=[100.0] * 20 + list(np.linspace(100.0, 40.0, 499)) + [44.0],
     )
 
     result = compute_residual_price_features(bars, trade_date="2026-07-29").iloc[0]
@@ -220,7 +220,7 @@ def test_residual_deviation_keeps_post_limit_stock_high_when_still_depressed():
 
 
 def test_residual_deviation_marks_large_cumulative_rebound_as_consumed():
-    bars = price_path(asset_id="A", raw_closes=[100.0] * 400 + [40.0] + list(np.linspace(40.0, 70.0, 119)))
+    bars = price_path(asset_id="A", hfq_closes=[100.0] * 400 + [40.0] + list(np.linspace(40.0, 70.0, 119)))
 
     result = compute_residual_price_features(bars, trade_date="2026-07-29").iloc[0]
 
@@ -228,7 +228,7 @@ def test_residual_deviation_marks_large_cumulative_rebound_as_consumed():
     assert result["price_position_1y"] > 0.45
 ```
 
-Add tests for future-bar rejection, duplicate dates, fewer than 504 valid bars, invalid raw prices, and exact 252/504-session windows.
+Add tests for future-bar rejection, duplicate dates, fewer than 504 valid HFQ bars, invalid HFQ prices, raw-price independence, and exact 252/504-session windows.
 
 - [ ] **Step 2: Run the new tests and verify RED**
 
@@ -249,21 +249,21 @@ def compute_residual_price_features(
     *,
     trade_date: str,
 ) -> pd.DataFrame:
-    """Return one PIT residual-price row per asset from raw prices."""
+    """Return one PIT residual-price row per asset from HFQ closes."""
 ```
 
 Return at least:
 
 ```python
 (
-    "asset_id", "return_1d", "drawdown_from_high_1y",
+    "asset_id", "price_series_source", "return_1d", "drawdown_from_high_1y",
     "drawdown_from_high_2y", "price_position_1y", "price_position_2y",
     "distance_raw_ma120", "distance_raw_ma250", "rebound_from_low_60d",
     "rebound_from_low_120d", "residual_deviation_coverage",
 )
 ```
 
-Use raw prices for price levels and hfq prices only for returns where corporate-action continuity is required. All windows are trading-session windows ending at the cutoff.
+Use HFQ closes for every dimensionless historical technical deviation, including returns, high/low positions, moving-average distances, and rebounds. Require 504 valid HFQ sessions for residual-deviation coverage. `raw_close` is neither required nor part of this coverage decision. All windows are trading-session windows ending at the cutoff.
 
 - [ ] **Step 4: Run the new tests and verify GREEN**
 
@@ -460,6 +460,8 @@ Expected: missing function.
 - [ ] **Step 3: Implement capacity and liquidity calculation**
 
 Add `compute_market_capacity_features()` returning current total/float market cap, `log_current_float_market_cap`, source, 20-day average amount, amount-to-float-cap ratio, average turnover rate, and coverage. Validate positive raw close and positive shares. Normalize Tushare-derived amounts before passing them into this function; do not normalize inside the pure feature layer.
+
+`raw_close` remains required here because actual market capitalization must use the unadjusted current price; it is not reused for Task 3 historical technical deviations.
 
 - [ ] **Step 4: Run elasticity tests and verify GREEN**
 

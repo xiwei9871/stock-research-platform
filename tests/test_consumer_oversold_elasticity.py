@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from decimal import Decimal
+from fractions import Fraction
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -14,6 +17,7 @@ EXPECTED_COLUMNS = [
     "asset_id",
     "latest_trade_date",
     "history_sessions",
+    "price_series_source",
     "return_1d",
     "drawdown_from_high_1y",
     "drawdown_from_high_2y",
@@ -29,31 +33,32 @@ EXPECTED_COLUMNS = [
 
 def _bars(
     asset_id: str,
-    raw_closes: list[object],
+    closes: list[object],
     *,
-    closes: list[object] | None = None,
+    raw_closes: list[object] | None = None,
     end: str = TRADE_DATE,
 ) -> pd.DataFrame:
-    dates = pd.bdate_range(end=end, periods=len(raw_closes))
-    return pd.DataFrame(
-        {
-            "asset_id": asset_id,
-            "trade_date": dates,
-            "close": raw_closes if closes is None else closes,
-            "raw_close": raw_closes,
-        }
-    )
+    dates = pd.bdate_range(end=end, periods=len(closes))
+    data: dict[str, object] = {
+        "asset_id": asset_id,
+        "trade_date": dates,
+        "close": closes,
+    }
+    if raw_closes is not None:
+        data["raw_close"] = raw_closes
+    return pd.DataFrame(data)
 
 
-def test_residual_features_capture_large_remaining_deviation_after_a_10_percent_rise():
-    raw = [40.0] * 504
-    raw[300] = 100.0
-    raw[350] = 35.0
-    raw[-1] = 44.0
+def test_hfq_features_capture_large_remaining_deviation_after_a_10_percent_rise():
+    close = [40.0] * 504
+    close[300] = 100.0
+    close[350] = 35.0
+    close[-1] = 44.0
     result = compute_residual_price_features(
-        _bars("A", raw, closes=[40.0] * 503 + [44.0]), trade_date=TRADE_DATE
+        _bars("A", close, raw_closes=[np.nan] * 504), trade_date=TRADE_DATE
     ).iloc[0]
 
+    assert result["price_series_source"] == "hfq"
     assert result["return_1d"] == pytest.approx(0.10)
     assert result["drawdown_from_high_1y"] < -0.50
     assert result["drawdown_from_high_2y"] < -0.50
@@ -62,12 +67,12 @@ def test_residual_features_capture_large_remaining_deviation_after_a_10_percent_
     assert result["residual_deviation_coverage"]
 
 
-def test_residual_features_capture_a_large_rebound_from_the_120_session_low():
-    raw = [80.0] * 504
-    raw[-120] = 40.0
-    raw[-1] = 70.0
+def test_hfq_features_capture_a_large_rebound_from_the_120_session_low():
+    close = [80.0] * 504
+    close[-120] = 40.0
+    close[-1] = 70.0
 
-    row = compute_residual_price_features(_bars("A", raw), trade_date=TRADE_DATE).iloc[0]
+    row = compute_residual_price_features(_bars("A", close), trade_date=TRADE_DATE).iloc[0]
 
     assert row["rebound_from_low_120d"] == pytest.approx(0.75)
     assert row["rebound_from_low_120d"] > 0.70
@@ -116,7 +121,7 @@ def test_future_bars_are_ignored_before_validation_and_do_not_change_results():
     assert actual.iloc[0]["history_sessions"] == 520
 
 
-def test_asset_present_only_after_cutoff_gets_an_empty_history_row():
+def test_asset_present_only_after_cutoff_is_not_in_the_output_universe():
     future_only = pd.DataFrame(
         [
             {
@@ -128,13 +133,10 @@ def test_asset_present_only_after_cutoff_gets_an_empty_history_row():
         ]
     )
 
-    row = compute_residual_price_features(future_only, trade_date=TRADE_DATE).iloc[0]
+    result = compute_residual_price_features(future_only, trade_date=TRADE_DATE)
 
-    assert row["asset_id"] == "FUTURE"
-    assert pd.isna(row["latest_trade_date"])
-    assert row["history_sessions"] == 0
-    assert pd.isna(row["return_1d"])
-    assert not row["residual_deviation_coverage"]
+    assert result.empty
+    assert result.columns.tolist() == EXPECTED_COLUMNS
 
 
 def test_input_order_does_not_change_sorted_asset_results():
@@ -175,34 +177,53 @@ def test_invalid_hfq_close_is_rejected_with_asset_and_date_context(invalid):
         compute_residual_price_features(bars, trade_date=TRADE_DATE)
 
 
-@pytest.mark.parametrize("invalid", ["10", np.inf, 0.0, -1.0, True])
-def test_invalid_nonmissing_raw_close_is_rejected_with_asset_and_date_context(invalid):
-    bars = _bars("A", [10.0, 11.0])
-    bars["raw_close"] = bars["raw_close"].astype(object)
-    bars.loc[bars.index[-1], "raw_close"] = invalid
+@pytest.mark.parametrize("invalid", [Decimal("1e10000"), Decimal("1e-10000")])
+def test_decimal_close_must_still_be_finite_and_positive_after_float_conversion(invalid):
+    bars = _bars("A", [10.0, invalid])
+    bars["close"] = bars["close"].astype(object)
 
-    with pytest.raises(ValueError, match=r"raw_close.*A.*2026-07-29"):
+    with pytest.raises(ValueError, match=r"close.*A.*2026-07-29"):
         compute_residual_price_features(bars, trade_date=TRADE_DATE)
 
 
-def test_missing_current_raw_close_remains_missing_and_disables_coverage():
-    bars = _bars("A", [10.0] * 504)
-    bars.loc[bars.index[-1], "raw_close"] = np.nan
+def test_positive_real_close_types_are_accepted():
+    row = compute_residual_price_features(
+        _bars("A", [Fraction(1, 2), Fraction(3, 4)]), trade_date=TRADE_DATE
+    ).iloc[0]
+
+    assert row["return_1d"] == pytest.approx(0.50)
+
+
+def test_complete_hfq_history_has_coverage_when_all_raw_close_values_are_missing():
+    close = [40.0] * 504
+    close[0] = 100.0
+    close[300] = 80.0
+    close[-1] = 50.0
+    bars = _bars("A", close, raw_closes=[np.nan] * 504)
 
     row = compute_residual_price_features(bars, trade_date=TRADE_DATE).iloc[0]
 
-    assert not row["residual_deviation_coverage"]
-    for column in (
-        "drawdown_from_high_1y",
-        "drawdown_from_high_2y",
-        "price_position_1y",
-        "price_position_2y",
-        "distance_raw_ma120",
-        "distance_raw_ma250",
-        "rebound_from_low_60d",
-        "rebound_from_low_120d",
-    ):
-        assert pd.isna(row[column])
+    assert row["price_series_source"] == "hfq"
+    assert row["residual_deviation_coverage"]
+    assert row["drawdown_from_high_2y"] == pytest.approx(-0.50)
+    assert row["drawdown_from_high_1y"] == pytest.approx(50.0 / 80.0 - 1.0)
+    assert row["distance_raw_ma120"] == pytest.approx(
+        50.0 / np.mean(close[-120:]) - 1.0
+    )
+
+
+def test_raw_close_values_do_not_change_hfq_residual_features():
+    close = [40.0] * 504
+    close[0] = 100.0
+    close[300] = 80.0
+    close[-1] = 50.0
+    missing_raw = _bars("A", close, raw_closes=[np.nan] * 504)
+    unrelated_raw = _bars("A", close, raw_closes=[float(value) for value in range(1, 505)])
+
+    missing_result = compute_residual_price_features(missing_raw, trade_date=TRADE_DATE)
+    unrelated_result = compute_residual_price_features(unrelated_raw, trade_date=TRADE_DATE)
+
+    pd.testing.assert_frame_equal(missing_result, unrelated_result)
 
 
 def test_flat_price_windows_have_missing_positions_and_no_coverage():
@@ -227,7 +248,7 @@ def test_asset_id_must_be_nonempty(asset_id):
         compute_residual_price_features(_bars(asset_id, [10.0]), trade_date=TRADE_DATE)
 
 
-@pytest.mark.parametrize("missing", ["asset_id", "trade_date", "close", "raw_close"])
+@pytest.mark.parametrize("missing", ["asset_id", "trade_date", "close"])
 def test_required_market_columns_are_enforced(missing):
     bars = _bars("A", [10.0]).drop(columns=missing)
 
@@ -236,7 +257,7 @@ def test_required_market_columns_are_enforced(missing):
 
 
 def test_empty_input_returns_stable_schema():
-    empty = pd.DataFrame(columns=["asset_id", "trade_date", "close", "raw_close"])
+    empty = pd.DataFrame(columns=["asset_id", "trade_date", "close"])
 
     result = compute_residual_price_features(empty, trade_date=TRADE_DATE)
 
