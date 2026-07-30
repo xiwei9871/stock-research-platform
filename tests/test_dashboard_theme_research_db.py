@@ -23,6 +23,34 @@ def test_db_context_matches_artifact_context_contract(monkeypatch) -> None:
     assert database == artifact
 
 
+def test_db_context_survives_missing_optional_priority_support(monkeypatch) -> None:
+    package = normalize_artifact_package()
+    expected_theme_package = theme_research_db._theme_package(package)
+    expected_mapping_package = theme_research_db._mapping_package(package, expected_theme_package)
+    monkeypatch.setattr(theme_research_db, "load_database_package", lambda service: package)
+    monkeypatch.setattr(
+        theme_research_db.priority,
+        "load_theme_research_priority_package",
+        lambda: (_ for _ in ()).throw(AssertionError("full artifact context must not be loaded")),
+    )
+    monkeypatch.setattr(
+        theme_research_db,
+        "_load_workflow_priority_support",
+        lambda: (_ for _ in ()).throw(FileNotFoundError("policy unavailable")),
+    )
+
+    context = theme_research_db.load_db_context()
+
+    assert context["theme_package"] == expected_theme_package
+    assert context["mapping_package"] == expected_mapping_package
+    assert context["priority_status"] == "unavailable"
+    assert context["policy"] is None
+    assert context["node_priorities"] == []
+    assert context["company_priorities"] == []
+    assert context["evidence_gap_priorities"] == []
+    assert context["review_queue"] == []
+
+
 def test_scoped_priority_support_failure_does_not_block_core_context(monkeypatch) -> None:
     monkeypatch.setattr(
         theme_research_db,

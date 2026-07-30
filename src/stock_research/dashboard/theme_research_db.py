@@ -20,35 +20,21 @@ def load_db_context(
     normalized = load_database_package(
         service=service or SETTINGS.theme_research_runtime_service
     )
-    artifact_context = priority.load_theme_research_priority_package()
     theme_package = _theme_package(normalized)
     mapping_package = _mapping_package(normalized, theme_package)
-    node_priorities = priority._build_node_priorities(  # noqa: SLF001
-        theme_package["nodes"], artifact_context["policy"]
-    )
-    integration_by_mapping = priority._integration_by_mapping(  # noqa: SLF001
-        artifact_context["crosswalk_package"]
-    )
-    company_priorities = priority._build_company_priorities(  # noqa: SLF001
+    priority_context = _build_scoped_priority_context(
+        theme_package["nodes"],
         mapping_package["company_mappings"],
-        node_priorities,
-        integration_by_mapping,
-        artifact_context["policy"],
-    )
-    evidence_gaps = priority._build_evidence_gap_priorities(  # noqa: SLF001
-        node_priorities, company_priorities
-    )
-    review_queue = priority._build_review_queue(  # noqa: SLF001
-        node_priorities, company_priorities, artifact_context["policy"]
     )
     return {
-        **artifact_context,
+        "policy": priority_context["policy"],
+        "priority_status": priority_context["priority_status"],
         "theme_package": theme_package,
         "mapping_package": mapping_package,
-        "node_priorities": node_priorities,
-        "company_priorities": company_priorities,
-        "evidence_gap_priorities": evidence_gaps,
-        "review_queue": review_queue,
+        "node_priorities": priority_context["node_priorities"],
+        "company_priorities": priority_context["company_priorities"],
+        "evidence_gap_priorities": priority_context["evidence_gap_priorities"],
+        "review_queue": priority_context["review_queue"],
     }
 
 
