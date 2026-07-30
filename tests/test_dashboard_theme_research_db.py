@@ -23,6 +23,40 @@ def test_db_context_matches_artifact_context_contract(monkeypatch) -> None:
     assert database == artifact
 
 
+def test_theme_package_preserves_research_profiles() -> None:
+    package = normalize_artifact_package()
+    theme_id = "ai_power_value_capture_v1"
+    themes = [copy.deepcopy(row) for row in package.themes]
+    profile = {
+        "research_kind": "industry_chain_deep_research",
+        "industry_stage": "commercial_scaling",
+    }
+    for row in themes:
+        if row["theme_id"] == theme_id:
+            row["artifact_metadata"]["research_profile"] = profile
+    enriched = package.__class__.build(
+        artifact_version=package.artifact_version,
+        themes=themes,
+        nodes=package.nodes,
+        sources=package.sources,
+        theme_sources=package.theme_sources,
+        claims=package.claims,
+        claim_sources=package.claim_sources,
+        claim_nodes=package.claim_nodes,
+        assessments=package.assessments,
+        assessment_evidence=package.assessment_evidence,
+        company_mappings=package.company_mappings,
+        mapping_evidence_items=package.mapping_evidence_items,
+        company_mapping_evidence=package.company_mapping_evidence,
+    )
+
+    database_package = theme_research_db._theme_package(enriched)
+
+    assert database_package["research_profiles"] == [
+        {**profile, "theme_id": theme_id}
+    ]
+
+
 def test_db_context_survives_missing_optional_priority_support(monkeypatch) -> None:
     package = normalize_artifact_package()
     expected_theme_package = theme_research_db._theme_package(package)

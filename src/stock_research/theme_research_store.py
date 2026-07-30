@@ -1517,6 +1517,7 @@ def build_theme_artifact_from_package(
         "value_capture_assessments": assessments,
         "decomposition_templates": copy.deepcopy(metadata.get("decomposition_templates", [])),
         "evidence_policy": copy.deepcopy(metadata.get("evidence_policy", {})),
+        "research_profile": copy.deepcopy(metadata.get("research_profile")),
     }
 
 

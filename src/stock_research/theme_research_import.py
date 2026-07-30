@@ -6,6 +6,7 @@ import json
 from dataclasses import dataclass, fields
 from pathlib import Path
 from typing import Any, Iterable
+from urllib.parse import urlsplit, urlunsplit
 
 from stock_research.theme_company_mapping import load_theme_company_mapping_package
 from stock_research.theme_decomposition import load_theme, load_theme_package
@@ -131,6 +132,10 @@ def normalize_artifact_package(
     for path in sorted(Path(theme_package["artifact_dir"]).glob("*.json")):
         artifact = json.loads(path.read_text(encoding="utf-8"))
         artifact_by_theme_id[artifact["theme"]["theme_id"]] = artifact
+    _validate_theme_source_identities(
+        artifact_by_theme_id=artifact_by_theme_id,
+        mapping_package=mapping_package,
+    )
     for theme in theme_package["themes"]:
         row = copy.deepcopy(theme)
         row["content_sha256"] = _content_sha256(theme)
@@ -140,6 +145,7 @@ def normalize_artifact_package(
             "decomposition_templates": copy.deepcopy(
                 artifact.get("decomposition_templates", [])
             ),
+            "research_profile": copy.deepcopy(artifact.get("research_profile")),
         }
         themes.append(row)
 
@@ -147,15 +153,19 @@ def normalize_artifact_package(
     for source in [*theme_package["sources"], *mapping_package["sources"]]:
         row = copy.deepcopy(source)
         row["publish_date"] = row.get("publish_date") or None
-        row.setdefault("content_sha256", _content_sha256(source))
+        row.pop("content_sha256", None)
         row.setdefault("provenance", {})
+        content_payload = copy.deepcopy(row)
+        content_payload.pop("provenance", None)
+        row["content_sha256"] = _content_sha256(content_payload)
         existing = sources_by_id.get(row["source_id"])
-        if existing is not None and existing != row:
+        if existing is not None and _source_comparison_row(existing) != _source_comparison_row(row):
             raise ThemeResearchDomainError(
                 f"conflicting source rows: {row['source_id']}",
                 code="THEME_RESEARCH_CONFLICTING_SOURCE",
             )
-        sources_by_id[row["source_id"]] = row
+        if existing is None:
+            sources_by_id[row["source_id"]] = row
 
     theme_sources: set[tuple[str, str, str]] = set()
     claims: list[dict[str, Any]] = []
@@ -249,6 +259,79 @@ def normalize_artifact_package(
         mapping_evidence_items=mapping_package["evidence_items"],
         company_mapping_evidence=company_mapping_evidence,
     )
+
+
+def _source_comparison_row(row: dict[str, Any]) -> dict[str, Any]:
+    comparable = copy.deepcopy(row)
+    comparable.pop("notes", None)
+    comparable.pop("content_sha256", None)
+    return comparable
+
+
+def _validate_theme_source_identities(
+    *,
+    artifact_by_theme_id: dict[str, dict[str, Any]],
+    mapping_package: dict[str, Any],
+) -> None:
+    sources_by_theme: dict[str, list[dict[str, Any]]] = {
+        theme_id: list(artifact.get("sources", []))
+        for theme_id, artifact in artifact_by_theme_id.items()
+    }
+
+    for artifact in mapping_package["artifacts"]:
+        theme_id = artifact["theme_id"]
+        sources_by_theme.setdefault(theme_id, []).extend(artifact.get("sources", []))
+
+    for theme_id in sorted(sources_by_theme):
+        source_ids_by_url: dict[str, set[str]] = {}
+        for source in sources_by_theme[theme_id]:
+            normalized_url = _normalize_source_url(source.get("url_or_ref"))
+            if not normalized_url:
+                continue
+            source_ids_by_url.setdefault(normalized_url, set()).add(source["source_id"])
+        for normalized_url in sorted(source_ids_by_url):
+            source_ids = sorted(source_ids_by_url[normalized_url])
+            if len(source_ids) > 1:
+                raise ThemeResearchDomainError(
+                    f"duplicate source identity in theme {theme_id}: {normalized_url}",
+                    code="THEME_RESEARCH_DUPLICATE_SOURCE_IDENTITY",
+                    details={
+                        "theme_id": theme_id,
+                        "url": normalized_url,
+                        "source_ids": source_ids,
+                    },
+                )
+
+
+def _normalize_source_url(value: Any) -> str:
+    if not isinstance(value, str) or not value.strip():
+        return ""
+    parsed = urlsplit(value.strip())
+    path = parsed.path.rstrip("/") or "/"
+    return urlunsplit(
+        (
+            parsed.scheme.lower(),
+            _normalize_url_netloc(parsed.netloc),
+            path,
+            parsed.query,
+            "",
+        )
+    )
+
+
+def _normalize_url_netloc(netloc: str) -> str:
+    userinfo, separator, host_port = netloc.rpartition("@")
+    prefix = f"{userinfo}@" if separator else ""
+    if host_port.startswith("["):
+        closing_bracket = host_port.find("]")
+        if closing_bracket >= 0:
+            host = host_port[1:closing_bracket].lower()
+            suffix = host_port[closing_bracket + 1 :]
+            return f"{prefix}[{host}]{suffix}"
+    host, colon, port = host_port.rpartition(":")
+    if colon and host and port.isdigit():
+        return f"{prefix}{host.lower()}:{port}"
+    return f"{prefix}{host_port.lower()}"
 
 
 def semantic_diff(
