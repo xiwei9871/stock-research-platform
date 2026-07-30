@@ -9,6 +9,8 @@ import pytest
 
 from stock_research.consumer_oversold.elasticity import (
     compute_residual_price_features,
+    compute_stock_character_features,
+    is_limit_up_day,
 )
 
 
@@ -29,6 +31,21 @@ EXPECTED_COLUMNS = [
     "rebound_from_low_120d",
     "residual_deviation_coverage",
 ]
+STOCK_CHARACTER_COLUMNS = [
+    "asset_id",
+    "history_sessions",
+    "limit_up_count_2y",
+    "up_7pct_count_2y",
+    "up_5pct_count_2y",
+    "mean_abs_return_2y",
+    "return_volatility_2y",
+    "upside_tail_volatility_2y",
+    "max_limit_up_streak_2y",
+    "positive_after_big_up_1d_rate",
+    "positive_after_big_up_3d_rate",
+    "positive_after_big_up_5d_rate",
+    "stock_character_coverage",
+]
 
 
 def _bars(
@@ -47,6 +64,28 @@ def _bars(
     if raw_closes is not None:
         data["raw_close"] = raw_closes
     return pd.DataFrame(data)
+
+
+def _character_bars(
+    asset_id: str,
+    pct_chg: list[object],
+    *,
+    stock_code: str = "000001.SZ",
+    closes: list[object] | None = None,
+    is_st: object = False,
+    end: str = TRADE_DATE,
+) -> pd.DataFrame:
+    dates = pd.bdate_range(end=end, periods=len(pct_chg))
+    return pd.DataFrame(
+        {
+            "asset_id": asset_id,
+            "stock_code": stock_code,
+            "trade_date": dates,
+            "close": closes if closes is not None else [100.0] * len(pct_chg),
+            "pct_chg": pct_chg,
+            "is_st": [is_st] * len(pct_chg),
+        }
+    )
 
 
 def test_hfq_features_capture_large_remaining_deviation_after_a_10_percent_rise():
@@ -262,3 +301,200 @@ def test_empty_input_returns_stable_schema():
 
     assert result.empty
     assert result.columns.tolist() == EXPECTED_COLUMNS
+
+
+@pytest.mark.parametrize(
+    ("stock_code", "is_st", "threshold"),
+    [
+        ("000001.SZ", False, 9.8),
+        ("300001.SZ", False, 19.8),
+        ("301001.SZ", False, 19.8),
+        ("688001.SH", False, 19.8),
+        ("689001.SH", False, 19.8),
+        ("430001.BJ", False, 29.8),
+        ("830001.BJ", False, 29.8),
+        ("000001.SZ", True, 4.8),
+    ],
+)
+def test_limit_up_thresholds_match_current_market_rules(stock_code, is_st, threshold):
+    assert is_limit_up_day(
+        stock_code, is_st, threshold, trade_date=TRADE_DATE
+    )
+    assert not is_limit_up_day(
+        stock_code, is_st, threshold - 0.01, trade_date=TRADE_DATE
+    )
+
+
+def test_missing_pct_change_is_not_a_limit_up_day():
+    assert not is_limit_up_day("000001.SZ", False, None, trade_date=TRADE_DATE)
+
+
+def test_stock_character_counts_volatility_and_maximum_limit_up_streak_are_exact():
+    pct_chg = [0.0] * 504
+    pct_chg[:8] = [9.8, 10.0, 10.1, 0.0, 7.0, 5.0, -5.0, None]
+
+    row = compute_stock_character_features(
+        _character_bars("A", pct_chg), trade_date=TRADE_DATE
+    ).iloc[0]
+
+    returns = np.array([value for value in pct_chg if value is not None]) / 100.0
+    positive_returns = returns[returns > 0.0]
+    assert row["history_sessions"] == 504
+    assert row["limit_up_count_2y"] == 3
+    assert row["up_7pct_count_2y"] == 4
+    assert row["up_5pct_count_2y"] == 5
+    assert row["max_limit_up_streak_2y"] == 3
+    assert row["mean_abs_return_2y"] == pytest.approx(np.mean(np.abs(returns)))
+    assert row["return_volatility_2y"] == pytest.approx(np.std(returns, ddof=0))
+    assert row["upside_tail_volatility_2y"] == pytest.approx(
+        np.std(positive_returns, ddof=0)
+    )
+    assert row["stock_character_coverage"]
+
+
+def test_big_up_continuation_rates_exclude_events_without_each_forward_horizon():
+    pct_chg = [0.0] * 12
+    for position in (0, 4, 8, 11):
+        pct_chg[position] = 7.0
+    closes = [100.0, 110.0, 100.0, 90.0, 100.0, 90.0, 100.0, 110.0, 100.0, 110.0, 100.0, 120.0]
+
+    row = compute_stock_character_features(
+        _character_bars("A", pct_chg, closes=closes), trade_date=TRADE_DATE
+    ).iloc[0]
+
+    assert row["positive_after_big_up_1d_rate"] == pytest.approx(2 / 3)
+    assert row["positive_after_big_up_3d_rate"] == pytest.approx(2 / 3)
+    assert row["positive_after_big_up_5d_rate"] == pytest.approx(1 / 2)
+
+
+def test_future_stock_character_bars_are_ignored_before_asset_validation():
+    history = _character_bars("A", [0.0] * 400)
+    expected = compute_stock_character_features(history, trade_date=TRADE_DATE)
+    future = pd.DataFrame(
+        [
+            {
+                "asset_id": "",
+                "stock_code": "",
+                "trade_date": "2026-07-30",
+                "close": "bad",
+                "pct_chg": Fraction(1, 2),
+                "is_st": "false",
+            }
+        ]
+    )
+
+    actual = compute_stock_character_features(
+        pd.concat([future, history], ignore_index=True), trade_date=TRADE_DATE
+    )
+
+    pd.testing.assert_frame_equal(actual, expected)
+
+
+def test_asset_present_only_after_cutoff_is_absent_from_stock_character_output():
+    future_only = _character_bars("FUTURE", [9.8], end="2026-07-30")
+
+    result = compute_stock_character_features(future_only, trade_date=TRADE_DATE)
+
+    assert result.empty
+    assert result.columns.tolist() == STOCK_CHARACTER_COLUMNS
+
+
+def test_stock_character_results_are_sorted_and_duplicate_sessions_are_rejected():
+    bars = pd.concat(
+        [_character_bars("B", [0.0] * 10), _character_bars("A", [0.0] * 10)],
+        ignore_index=True,
+    ).sample(frac=1.0, random_state=9)
+
+    result = compute_stock_character_features(bars, trade_date=TRADE_DATE)
+
+    assert result["asset_id"].tolist() == ["A", "B"]
+    duplicate = pd.concat([bars, bars.iloc[[0]]], ignore_index=True)
+    with pytest.raises(ValueError, match="duplicate"):
+        compute_stock_character_features(duplicate, trade_date=TRADE_DATE)
+
+
+@pytest.mark.parametrize(
+    ("column", "invalid"),
+    [
+        ("close", True),
+        ("close", "100"),
+        ("close", Fraction(100, 1)),
+        ("close", Decimal("1e10000")),
+        ("close", Decimal("1e-10000")),
+        ("pct_chg", False),
+        ("pct_chg", "9.8"),
+        ("pct_chg", Fraction(49, 5)),
+        ("pct_chg", Decimal("1e10000")),
+        ("pct_chg", Decimal("sNaN")),
+        ("is_st", 0),
+        ("is_st", "false"),
+    ],
+)
+def test_stock_character_inputs_reject_non_strict_or_nonfinite_values(column, invalid):
+    bars = _character_bars("A", [0.0, 0.0])
+    bars[column] = bars[column].astype(object)
+    bars.loc[bars.index[-1], column] = invalid
+
+    with pytest.raises(ValueError, match=column):
+        compute_stock_character_features(bars, trade_date=TRADE_DATE)
+
+
+def test_stock_character_accepts_numpy_numeric_decimal_and_numpy_boolean_values():
+    bars = _character_bars(
+        "A",
+        [np.float64(9.8), Decimal("7.0"), np.int64(5), None],
+        closes=[np.int64(100), Decimal("110.0"), np.float64(120.0), 121.0],
+        is_st=np.bool_(False),
+    )
+
+    row = compute_stock_character_features(bars, trade_date=TRADE_DATE).iloc[0]
+
+    assert row["limit_up_count_2y"] == 1
+    assert row["up_7pct_count_2y"] == 2
+    assert row["up_5pct_count_2y"] == 3
+
+
+def test_pct_change_coverage_requires_400_valid_sessions_but_not_big_up_events():
+    insufficient = compute_stock_character_features(
+        _character_bars("A", [0.0] * 399 + [None] * 105), trade_date=TRADE_DATE
+    ).iloc[0]
+    complete = compute_stock_character_features(
+        _character_bars("A", [0.0] * 400 + [None] * 104), trade_date=TRADE_DATE
+    ).iloc[0]
+
+    assert not insufficient["stock_character_coverage"]
+    assert complete["stock_character_coverage"]
+    assert pd.isna(complete["positive_after_big_up_1d_rate"])
+    assert pd.isna(complete["positive_after_big_up_3d_rate"])
+    assert pd.isna(complete["positive_after_big_up_5d_rate"])
+
+
+@pytest.mark.parametrize(
+    "missing",
+    ["asset_id", "stock_code", "trade_date", "close", "pct_chg", "is_st"],
+)
+def test_required_stock_character_columns_are_enforced(missing):
+    bars = _character_bars("A", [0.0]).drop(columns=missing)
+
+    with pytest.raises(ValueError, match=missing):
+        compute_stock_character_features(bars, trade_date=TRADE_DATE)
+
+
+@pytest.mark.parametrize(("column", "invalid"), [("asset_id", "  "), ("stock_code", None)])
+def test_stock_character_asset_and_code_must_be_nonempty(column, invalid):
+    bars = _character_bars("A", [0.0])
+    bars.loc[0, column] = invalid
+
+    with pytest.raises(ValueError, match=column):
+        compute_stock_character_features(bars, trade_date=TRADE_DATE)
+
+
+def test_empty_stock_character_input_returns_stable_schema():
+    empty = pd.DataFrame(
+        columns=["asset_id", "stock_code", "trade_date", "close", "pct_chg", "is_st"]
+    )
+
+    result = compute_stock_character_features(empty, trade_date=TRADE_DATE)
+
+    assert result.empty
+    assert result.columns.tolist() == STOCK_CHARACTER_COLUMNS
