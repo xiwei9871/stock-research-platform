@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import math
 from decimal import Decimal
-from numbers import Real
 
 import numpy as np
 import pandas as pd
@@ -11,6 +10,7 @@ from .contracts import validate_trade_date
 
 
 REQUIRED_COLUMNS = ("asset_id", "trade_date", "close")
+STRICT_NUMERIC_TYPES = (int, float, np.integer, np.floating, Decimal)
 RESIDUAL_PRICE_COLUMNS = [
     "asset_id",
     "latest_trade_date",
@@ -38,7 +38,7 @@ def _require_columns(bars: pd.DataFrame) -> None:
 def _validate_hfq_close(frame: pd.DataFrame) -> None:
     valid_type = frame["close"].map(
         lambda value: not isinstance(value, (bool, np.bool_))
-        and isinstance(value, (Real, Decimal))
+        and isinstance(value, STRICT_NUMERIC_TYPES)
     )
     numeric_close = frame["close"].where(valid_type, np.nan).astype(float)
     invalid = (

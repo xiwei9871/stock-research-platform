@@ -186,12 +186,11 @@ def test_decimal_close_must_still_be_finite_and_positive_after_float_conversion(
         compute_residual_price_features(bars, trade_date=TRADE_DATE)
 
 
-def test_positive_real_close_types_are_accepted():
-    row = compute_residual_price_features(
-        _bars("A", [Fraction(1, 2), Fraction(3, 4)]), trade_date=TRADE_DATE
-    ).iloc[0]
+def test_fraction_close_is_rejected_with_asset_and_date_context():
+    bars = _bars("A", [10.0, Fraction(3, 4)])
 
-    assert row["return_1d"] == pytest.approx(0.50)
+    with pytest.raises(ValueError, match=r"close.*A.*2026-07-29"):
+        compute_residual_price_features(bars, trade_date=TRADE_DATE)
 
 
 def test_complete_hfq_history_has_coverage_when_all_raw_close_values_are_missing():
