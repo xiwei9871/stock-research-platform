@@ -11,6 +11,13 @@ from stock_research.config import SETTINGS
 
 from .contracts import ConsumerOversoldConfig
 from .evidence import EVIDENCE_COLUMNS, validate_repair_evidence
+from .elasticity import (
+    MARKET_CAPACITY_SHARE_COLUMNS,
+    compute_market_capacity_features,
+    compute_residual_price_features,
+    compute_stock_character_features,
+    score_rebound_elasticity,
+)
 from .features import (
     BAR_COLUMNS,
     CURRENT_VALUATION_COLUMNS,
@@ -26,11 +33,17 @@ from .features import (
 from .loaders import (
     load_consumer_finance_history,
     load_consumer_market_history,
+    load_consumer_share_capacity,
     load_consumer_universe_frames,
     load_consumer_valuation_history,
 )
 from .reporting import _render_report, write_consumer_oversold_artifacts
-from .scoring import apply_candidate_gates, rank_candidate_buckets, score_candidates
+from .scoring import (
+    apply_candidate_gates,
+    rank_candidate_buckets,
+    rank_unified_candidates,
+    score_candidates,
+)
 from .universe import build_consumer_universe_from_frames
 
 
@@ -45,6 +58,7 @@ REQUIRED_FRAME_KEYS = (
     "industry_rules",
     "asset_overrides",
     "bars",
+    "share_capacity",
     "finance",
     "current_valuation",
     "valuation_history",
@@ -58,6 +72,26 @@ EXCLUSION_ID_COLUMNS = (
     "exclusion_stage",
     "exclusion_reasons",
 )
+COMPARISON_COLUMNS = [
+    "asset_id",
+    "stock_code",
+    "stock_name",
+    "repair_bucket",
+    "old_bucket_rank",
+    "old_combined_rank",
+    "new_rank",
+    "rank_change",
+    "composite_score",
+    "elasticity_score",
+    "final_rank_score",
+    "exclusion_reasons",
+]
+
+
+def _empty_unified_frame() -> pd.DataFrame:
+    return pd.DataFrame(
+        columns=["asset_id", "final_rank", "final_rank_score", "elasticity_score"]
+    )
 
 
 def _copy_frames(frames: dict[str, pd.DataFrame]) -> dict[str, pd.DataFrame]:
@@ -77,6 +111,7 @@ def _copy_frames(frames: dict[str, pd.DataFrame]) -> dict[str, pd.DataFrame]:
 def _require_downstream_columns(frames: dict[str, pd.DataFrame]) -> None:
     requirements = (
         ("bars", BAR_COLUMNS),
+        ("share_capacity", MARKET_CAPACITY_SHARE_COLUMNS),
         ("finance", FEATURE_FINANCE_COLUMNS),
         ("current_valuation", CURRENT_VALUATION_COLUMNS),
         ("valuation_history", VALUATION_HISTORY_COLUMNS),
@@ -291,6 +326,136 @@ def _prepare_valuation_inputs(
     return valid, history, needed_fundamentals, warnings
 
 
+def _apply_automatic_gates(
+    rows: pd.DataFrame,
+    config: ConsumerOversoldConfig,
+) -> pd.DataFrame:
+    result = rows.copy()
+    price_pass = result["return_6m"].le(config.min_6m_return) | result[
+        "max_drawdown_12m"
+    ].le(config.min_12m_drawdown)
+    repair_completed = result.get(
+        "repair_already_completed", pd.Series(False, index=result.index)
+    ).fillna(False).astype(bool) | result["exclusion_reasons"].fillna("").str.contains(
+        "repair_already_completed", regex=False
+    )
+    required_numeric = (
+        "relative_return_6m",
+        "oversold_score",
+        "base_upside",
+        "valuation_percentile",
+        "valuation_repair_score",
+        "operating_gap_score",
+        "balance_sheet_score",
+        "drawdown_from_high_1y",
+        "drawdown_from_high_2y",
+        "price_position_1y",
+        "price_position_2y",
+        "distance_hfq_ma120",
+        "distance_hfq_ma250",
+        "rebound_from_low_60d",
+        "rebound_from_low_120d",
+        "limit_up_count_2y",
+        "up_7pct_count_2y",
+        "up_5pct_count_2y",
+        "upside_tail_volatility_2y",
+        "positive_after_big_up_1d_rate",
+        "positive_after_big_up_3d_rate",
+        "positive_after_big_up_5d_rate",
+        "log_current_float_market_cap",
+    )
+    quantitative_complete = result.loc[:, required_numeric].notna().all(axis=1)
+    masks = {
+        "universe_excluded": result["included"].fillna(False).astype(bool),
+        "price_threshold_not_met": price_pass,
+        "relative_return_threshold_not_met": result["relative_return_6m"].le(
+            config.min_relative_return
+        ),
+        "oversold_score_below_threshold": result["oversold_score"].ge(
+            config.min_oversold_score
+        ),
+        "base_upside_below_threshold": result["base_upside"].ge(
+            config.min_base_upside
+        ),
+        "balance_sheet_coverage_insufficient": result[
+            "balance_sheet_coverage"
+        ].fillna(False).astype(bool),
+        "automatic_hard_risk_triggered": ~result[
+            "automatic_hard_risk_triggered"
+        ].fillna(False).astype(bool),
+        "automatic_risk_review_unknown": ~result[
+            "automated_risk_review_unknown"
+        ].fillna(True).astype(bool),
+        "repair_already_completed": ~repair_completed,
+        "quantitative_fields_incomplete": quantitative_complete,
+        "price_history_coverage_incomplete": result[
+            "price_history_complete"
+        ].fillna(False).astype(bool),
+        "relative_return_coverage_incomplete": result[
+            "relative_return_coverage"
+        ].fillna(False).astype(bool),
+        "residual_deviation_coverage_incomplete": result[
+            "residual_deviation_coverage"
+        ].fillna(False).astype(bool),
+        "stock_character_coverage_incomplete": result[
+            "stock_character_coverage"
+        ].fillna(False).astype(bool),
+        "market_capacity_coverage_incomplete": result[
+            "market_capacity_coverage"
+        ].fillna(False).astype(bool),
+    }
+    eligible = pd.Series(True, index=result.index, dtype=bool)
+    for mask in masks.values():
+        eligible &= mask
+    result["automatic_eligible"] = eligible.astype(bool)
+    result["automatic_exclusion_reasons"] = [
+        "|".join(sorted(reason for reason, mask in masks.items() if not bool(mask.loc[index])))
+        for index in result.index
+    ]
+    return result
+
+
+def _build_rank_comparison(
+    scored: pd.DataFrame,
+    legacy: dict[str, pd.DataFrame],
+    unified: pd.DataFrame,
+) -> pd.DataFrame:
+    comparison = scored.copy()
+    old_pool = comparison.loc[comparison["eligible"].astype(bool)].sort_values(
+        ["composite_score", "asset_id"],
+        ascending=[False, True],
+        kind="stable",
+    )
+    old_combined = pd.Series(
+        np.arange(1, len(old_pool) + 1, dtype=int), index=old_pool["asset_id"]
+    )
+    bucket_rows = pd.concat(
+        [
+            frame.loc[:, ["asset_id", "bucket_rank"]]
+            for frame in (legacy["expected"], legacy["early"])
+            if not frame.empty
+        ],
+        ignore_index=True,
+    ) if any(not frame.empty for frame in legacy.values()) else pd.DataFrame(
+        columns=["asset_id", "bucket_rank"]
+    )
+    bucket_rank = bucket_rows.set_index("asset_id")["bucket_rank"]
+    new_rank = (
+        unified.set_index("asset_id")["final_rank"]
+        if not unified.empty
+        else pd.Series(dtype=float)
+    )
+    comparison["old_bucket_rank"] = comparison["asset_id"].map(bucket_rank)
+    comparison["old_combined_rank"] = comparison["asset_id"].map(old_combined)
+    comparison["new_rank"] = comparison["asset_id"].map(new_rank)
+    comparison["rank_change"] = (
+        comparison["old_combined_rank"] - comparison["new_rank"]
+    )
+    return comparison.reindex(columns=COMPARISON_COLUMNS).sort_values(
+        "asset_id", kind="stable"
+    ).reset_index(drop=True)
+
+
 def build_consumer_oversold_weekly_from_frames(
     *,
     frames: dict[str, pd.DataFrame],
@@ -356,6 +521,31 @@ def build_consumer_oversold_weekly_from_frames(
             config=config,
             warnings=[],
         )
+        empty_unified = _empty_unified_frame()
+        empty_comparison = pd.DataFrame(columns=COMPARISON_COLUMNS)
+        coverage["funnel"].update(
+            {
+                "full": 0,
+                "automatic": 0,
+                "preaudit": 0,
+                "evidence_reviewed": 0,
+                "elasticity_complete": 0,
+                "final": 0,
+                "reserve": 0,
+            }
+        )
+        coverage["unified_funnel"] = {
+            "full": 0,
+            "automatic": 0,
+            "preaudit": 0,
+            "evidence_reviewed": 0,
+            "evidence_complete": 0,
+            "elasticity_complete": 0,
+            "final": 0,
+            "reserve": 0,
+        }
+        coverage["publication_status"] = "coverage_insufficient"
+        coverage["warnings"] = ["evidence_complete_pool_below_40"]
         payload = {
             "trade_date": config.trade_date,
             "evidence": validated_evidence,
@@ -366,13 +556,25 @@ def build_consumer_oversold_weekly_from_frames(
             "coverage": coverage,
         }
         if output_dir is not None:
-            return write_consumer_oversold_artifacts(payload, output_dir=output_dir)
+            published = write_consumer_oversold_artifacts(payload, output_dir=output_dir)
+            return {
+                **published,
+                "top20": empty_unified.copy(),
+                "reserve": empty_unified.copy(),
+                "preaudit": empty_scores.copy(),
+                "comparison": empty_comparison,
+                "coverage": coverage,
+            }
         return {
             "paths": {},
             **{
                 key: payload[key]
                 for key in ("evidence", "expected", "early", "scores", "exclusions", "coverage")
             },
+            "top20": empty_unified.copy(),
+            "reserve": empty_unified.copy(),
+            "preaudit": empty_scores.copy(),
+            "comparison": empty_comparison,
             "report": _render_report(
                 config.trade_date,
                 empty_scores,
@@ -386,11 +588,27 @@ def build_consumer_oversold_weekly_from_frames(
 
     included_ids = set(included["asset_id"])
     bars = copied["bars"].loc[copied["bars"]["asset_id"].astype(str).isin(included_ids)].copy()
+    share_capacity = copied["share_capacity"].loc[
+        copied["share_capacity"]["asset_id"].astype(str).isin(included_ids)
+    ].copy()
     finance = copied["finance"].loc[copied["finance"]["asset_id"].astype(str).isin(included_ids)].copy()
     finance = finance.loc[
         finance["report_period"].notna() & finance["announcement_date"].notna()
     ].copy()
     price = compute_price_features(bars, membership, trade_date=config.trade_date)
+    residual = compute_residual_price_features(bars, trade_date=config.trade_date)
+    stock_bars = bars.drop(columns=["stock_code"], errors="ignore").merge(
+        included.loc[:, ["asset_id", "stock_code"]],
+        on="asset_id",
+        how="inner",
+        validate="many_to_one",
+    )
+    stock_character = compute_stock_character_features(
+        stock_bars, trade_date=config.trade_date
+    )
+    capacity = compute_market_capacity_features(
+        bars, share_capacity, trade_date=config.trade_date
+    )
     fundamentals = compute_fundamental_features(finance, trade_date=config.trade_date)
 
     completed = None
@@ -410,15 +628,44 @@ def build_consumer_oversold_weekly_from_frames(
         ],
     ]
     risk = compute_hard_risk_features(fundamentals, manual)
+    automatic_risk = compute_hard_risk_features(fundamentals, None).rename(
+        columns={"hard_risk_triggered": "automatic_hard_risk_triggered"}
+    )
+    automatic_risk = automatic_risk.drop(
+        columns=[
+            "hard_risk_codes",
+            "hard_risk_review_unknown",
+            "automated_risk_review_unknown",
+        ],
+        errors="ignore",
+    )
 
+    current_valuation_input = _normalize_asset_ids(
+        copied["current_valuation"], "current_valuation"
+    )
+    current_valuation_input = current_valuation_input.drop(
+        columns=["current_total_market_cap"], errors="ignore"
+    ).merge(
+        capacity.loc[:, ["asset_id", "current_total_market_cap"]],
+        on="asset_id",
+        how="left",
+        validate="one_to_one",
+    )
+    current_valuation_input["current_market_cap"] = current_valuation_input[
+        "current_total_market_cap"
+    ]
     current, valuation_history, valuation_fundamentals, warnings = _prepare_valuation_inputs(
-        copied["current_valuation"],
+        current_valuation_input,
         copied["valuation_history"],
         fundamentals,
         membership,
         config.trade_date,
     )
     valuation = compute_valuation_features(current, valuation_history, valuation_fundamentals)
+    for scenario in ("pessimistic", "base", "optimistic"):
+        source = f"{scenario}_market_cap"
+        if source in valuation.columns:
+            valuation[f"{scenario}_scenario_market_cap"] = valuation[source]
 
     candidates = included.rename(columns={"name": "stock_name"})
     candidates = _merge_one_to_one(
@@ -426,8 +673,29 @@ def build_consumer_oversold_weekly_from_frames(
         price.drop(columns=["consumer_subindustry"], errors="ignore"),
         "price_features",
     )
+    candidates = _merge_one_to_one(
+        candidates,
+        residual.drop(
+            columns=["latest_trade_date", "history_sessions", "rebound_from_low_60d"],
+            errors="ignore",
+        ),
+        "residual_price_features",
+    )
+    candidates = _merge_one_to_one(
+        candidates,
+        stock_character.drop(columns=["history_sessions"], errors="ignore"),
+        "stock_character_features",
+    )
+    candidates = _merge_one_to_one(
+        candidates,
+        capacity.drop(columns=["latest_trade_date", "history_sessions"], errors="ignore"),
+        "market_capacity_features",
+    )
     candidates = _merge_one_to_one(candidates, fundamentals, "fundamental_features")
     candidates = _merge_one_to_one(candidates, risk, "hard_risk_features")
+    candidates = _merge_one_to_one(
+        candidates, automatic_risk, "automatic_hard_risk_features"
+    )
     candidates = _merge_one_to_one(candidates, valuation, "valuation_features")
     evidence_for_merge = validated_evidence.drop(
         columns=["hard_risk_review_unknown"], errors="ignore"
@@ -462,7 +730,49 @@ def build_consumer_oversold_weekly_from_frames(
     candidates["oversold_score"] = compute_oversold_score(candidates)
     scored = score_candidates(candidates, config)
     gated = apply_candidate_gates(scored, config)
-    ranked = rank_candidate_buckets(gated, config)
+    automatically_gated = _apply_automatic_gates(gated, config)
+    elasticity_scored = score_rebound_elasticity(automatically_gated, config)
+    ranked = rank_candidate_buckets(elasticity_scored, config)
+    unified = rank_unified_candidates(elasticity_scored, config)
+    elasticity_scored["preaudit_score"] = (
+        0.30 * elasticity_scored["oversold_score"]
+        + 0.25 * elasticity_scored["valuation_repair_score"]
+        + 0.20 * elasticity_scored["operating_gap_score"]
+        + 0.15 * elasticity_scored["balance_sheet_score"]
+        + 0.10 * elasticity_scored["automatic_elasticity_score"]
+    ).where(
+        elasticity_scored["automatic_eligible"]
+        & elasticity_scored["automatic_elasticity_coverage"]
+    )
+    preaudit = elasticity_scored.loc[elasticity_scored["preaudit_score"].notna()].sort_values(
+        ["preaudit_score", "oversold_score", "asset_id"],
+        ascending=[False, False, True],
+        kind="stable",
+    ).head(config.preaudit_size).reset_index(drop=True)
+
+    evidence_complete_pool = int(
+        (
+            elasticity_scored["eligible"].astype(bool)
+            & elasticity_scored["evidence_complete"].astype(bool)
+        ).sum()
+    )
+    required_ranked = config.final_top_n + config.reserve_top_n
+    publication_warnings: list[str] = []
+    if evidence_complete_pool < config.minimum_evidence_complete:
+        publication_warnings.append("evidence_complete_pool_below_40")
+    if len(unified) < required_ranked:
+        publication_warnings.append("ranked_pool_below_40")
+    publication_status = "ready" if not publication_warnings else "coverage_insufficient"
+    if publication_status == "ready":
+        top20 = unified.loc[unified["final_rank"].le(config.final_top_n)].copy()
+        reserve = unified.loc[
+            unified["final_rank"].gt(config.final_top_n)
+            & unified["final_rank"].le(required_ranked)
+        ].copy()
+    else:
+        top20 = unified.iloc[0:0].copy()
+        reserve = unified.iloc[0:0].copy()
+    comparison = _build_rank_comparison(elasticity_scored, ranked, unified)
 
     universe_exclusions = universe.loc[~universe["included"].astype(bool)].rename(
         columns={
@@ -472,9 +782,16 @@ def build_consumer_oversold_weekly_from_frames(
     )
     universe_exclusions["exclusion_stage"] = "universe"
     universe_exclusions = universe_exclusions.reindex(columns=EXCLUSION_ID_COLUMNS)
-    gate_exclusions = gated.loc[~gated["eligible"]].copy()
+    gate_exclusions = elasticity_scored.loc[~elasticity_scored["eligible"]].copy()
     gate_exclusions["exclusion_stage"] = "gate"
-    gate_columns = [*EXCLUSION_ID_COLUMNS, *[column for column in gated.columns if column not in EXCLUSION_ID_COLUMNS]]
+    gate_columns = [
+        *EXCLUSION_ID_COLUMNS,
+        *[
+            column
+            for column in elasticity_scored.columns
+            if column not in EXCLUSION_ID_COLUMNS
+        ],
+    ]
     gate_exclusions = gate_exclusions.reindex(columns=gate_columns)
     exclusions = pd.concat([universe_exclusions, gate_exclusions], ignore_index=True, sort=False)
     exclusions = exclusions.sort_values(
@@ -484,7 +801,7 @@ def build_consumer_oversold_weekly_from_frames(
     coverage = _coverage(
         raw_assets=copied["assets"],
         included=included,
-        scores=gated,
+        scores=elasticity_scored,
         evidence=validated_evidence,
         bars=bars,
         finance=finance,
@@ -492,27 +809,59 @@ def build_consumer_oversold_weekly_from_frames(
         expected=ranked["expected"],
         early=ranked["early"],
         config=config,
-        warnings=warnings,
+        warnings=[*warnings, *publication_warnings],
     )
+    unified_funnel = {
+        "full": int(len(elasticity_scored)),
+        "automatic": int(elasticity_scored["automatic_eligible"].sum()),
+        "preaudit": int(len(preaudit)),
+        "evidence_reviewed": int(len(validated_evidence)),
+        "evidence_complete": int(elasticity_scored["evidence_complete"].sum()),
+        "elasticity_complete": int(elasticity_scored["elasticity_coverage"].sum()),
+        "final": int(len(top20)),
+        "reserve": int(len(reserve)),
+    }
+    coverage["unified_funnel"] = unified_funnel
+    coverage["funnel"].update(
+        {
+            key: value
+            for key, value in unified_funnel.items()
+            if key != "evidence_complete"
+        }
+    )
+    coverage["publication_status"] = publication_status
+    coverage["warnings"] = sorted(set([*coverage["warnings"], *publication_warnings]))
     payload = {
         "trade_date": config.trade_date,
         "evidence": validated_evidence,
         "expected": ranked["expected"],
         "early": ranked["early"],
-        "scores": gated,
+        "scores": elasticity_scored,
         "exclusions": exclusions,
         "coverage": coverage,
     }
     if output_dir is not None:
-        return write_consumer_oversold_artifacts(payload, output_dir=output_dir)
+        published = write_consumer_oversold_artifacts(payload, output_dir=output_dir)
+        return {
+            **published,
+            "top20": top20,
+            "reserve": reserve,
+            "preaudit": preaudit,
+            "comparison": comparison,
+            "coverage": coverage,
+        }
     return {
         "paths": {},
         "evidence": validated_evidence,
         "expected": ranked["expected"],
         "early": ranked["early"],
-        "scores": gated,
+        "scores": elasticity_scored,
         "exclusions": exclusions,
         "coverage": coverage,
+        "top20": top20,
+        "reserve": reserve,
+        "preaudit": preaudit,
+        "comparison": comparison,
         "report": _render_report(
             config.trade_date,
             ranked["expected"],
@@ -611,15 +960,13 @@ def run_consumer_oversold_weekly(
     included = universe.loc[universe["included"].astype(bool), ["asset_id", "consumer_subindustry"]]
     asset_ids = included["asset_id"].astype(str).tolist()
     bars = load_consumer_market_history(trade_date, service=service, asset_ids=asset_ids)
+    share_capacity = load_consumer_share_capacity(
+        asset_ids, trade_date, service=service
+    )
     finance_with_shares = load_consumer_finance_history(asset_ids, trade_date, service=service)
     valuation_raw = load_consumer_valuation_history(asset_ids, trade_date, service=service)
-    if "total_share" in finance_with_shares.columns:
-        share_rows = finance_with_shares.loc[
-            finance_with_shares["total_share"].notna(), ["asset_id", "total_share"]
-        ]
-        total_share = share_rows.drop_duplicates("asset_id", keep="last").set_index(
-            "asset_id"
-        )["total_share"]
+    if "total_share" in share_capacity.columns:
+        total_share = share_capacity.set_index("asset_id")["total_share"]
     else:
         total_share = pd.Series(dtype=float)
     finance = finance_with_shares.loc[
@@ -658,6 +1005,7 @@ def run_consumer_oversold_weekly(
         "industry_rules": industry_rules,
         "asset_overrides": asset_overrides,
         "bars": bars,
+        "share_capacity": share_capacity,
         "finance": finance,
         "current_valuation": current_valuation,
         "valuation_history": valuation_history,

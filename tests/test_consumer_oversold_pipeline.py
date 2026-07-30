@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -19,12 +20,18 @@ TRADE_DATE = "2026-07-29"
 
 
 def _bars(asset_id: str, ending: float) -> pd.DataFrame:
-    closes = np.linspace(100.0, ending, 252)
+    closes = np.linspace(100.0, ending, 504)
+    pct_chg = np.resize(np.array([7.0, 1.0, -1.0, 0.0]), 504)
     return pd.DataFrame(
         {
             "asset_id": asset_id,
-            "trade_date": pd.bdate_range(end=TRADE_DATE, periods=252),
+            "trade_date": pd.bdate_range(end=TRADE_DATE, periods=504),
             "close": closes,
+            "raw_close": closes,
+            "amount": 100_000_000.0,
+            "turnover_rate": 2.0,
+            "pct_chg": pct_chg,
+            "is_st": False,
         }
     )
 
@@ -182,6 +189,14 @@ def _frames() -> tuple[dict[str, pd.DataFrame], pd.DataFrame, ConsumerOversoldCo
         "industry_rules": rules,
         "asset_overrides": overrides,
         "bars": bars,
+        "share_capacity": pd.DataFrame(
+            {
+                "asset_id": ids,
+                "total_share": [100.0, 110.0, 120.0, 130.0],
+                "float_share": [80.0, 90.0, 100.0, 110.0],
+                "free_float_share": np.nan,
+            }
+        ),
         "finance": finance,
         "current_valuation": current,
         "valuation_history": pd.DataFrame(history_rows),
@@ -190,6 +205,135 @@ def _frames() -> tuple[dict[str, pd.DataFrame], pd.DataFrame, ConsumerOversoldCo
         [
             _evidence("A", "000001", "expected_repair"),
             _evidence("B", "000002", "early_validation"),
+        ],
+        columns=EVIDENCE_COLUMNS,
+    )
+    config = ConsumerOversoldConfig(
+        trade_date=TRADE_DATE,
+        min_6m_return=0.0,
+        min_12m_drawdown=0.0,
+        min_relative_return=1.0,
+        min_oversold_score=0.0,
+        min_base_upside=-1.0,
+    )
+    return frames, evidence, config
+
+
+def _many_frames(
+    asset_count: int,
+    evidence_count: int,
+) -> tuple[dict[str, pd.DataFrame], pd.DataFrame, ConsumerOversoldConfig]:
+    ids = [f"A{index:03d}" for index in range(asset_count)]
+    codes = [f"{index + 1:06d}" for index in range(asset_count)]
+    assets = pd.DataFrame(
+        {
+            "asset_id": ids,
+            "stock_code": codes,
+            "name": [f"Consumer {index}" for index in range(asset_count)],
+            "list_date": "2020-01-01",
+        }
+    )
+    bars = pd.concat(
+        [
+            _bars(asset_id, 45.0 + index * 20.0 / max(asset_count - 1, 1))
+            for index, asset_id in enumerate(ids)
+        ],
+        ignore_index=True,
+    )
+    finance = pd.DataFrame(
+        [row for asset_id in ids for row in _finance(asset_id)]
+    )
+    current = pd.DataFrame(
+        {
+            "asset_id": ids,
+            "as_of_date": TRADE_DATE,
+            "consumer_subindustry": "external",
+            "current_market_cap": 100.0,
+            "net_debt": 5.0,
+            "pe_ttm": 10.0,
+            "ps_ttm": 1.0,
+            "ev_ebitda": 8.0,
+            "revenue_ttm": 100.0,
+            "np_parent_ttm": 8.0,
+            "ebitda_ttm": 12.0,
+        }
+    )
+    valuation_history = pd.DataFrame(
+        [
+            {
+                "asset_id": asset_id,
+                "valuation_date": date,
+                "consumer_subindustry": "external",
+                "pe_ttm": 20.0 + index / 100.0,
+                "ps_ttm": 2.0,
+                "ev_ebitda": 10.0,
+            }
+            for index, asset_id in enumerate(ids)
+            for date in pd.date_range("2024-01-31", periods=30, freq="ME")
+        ]
+    )
+    frames = {
+        "assets": assets,
+        "statuses": pd.DataFrame(
+            {
+                "asset_id": ids,
+                "is_st": False,
+                "is_delisting_risk": False,
+                "is_suspended": False,
+            }
+        ),
+        "liquidity": pd.DataFrame(
+            {"asset_id": ids, "avg_turnover_amount": 100_000_000.0}
+        ),
+        "industries": pd.DataFrame(
+            {
+                "asset_id": ids,
+                "industry_system": "sw",
+                "industry_name": "food",
+            }
+        ),
+        "industry_rules": pd.DataFrame(
+            [[1, "sw", "^food$", "food", "include", "terminal_consumer"]],
+            columns=[
+                "priority",
+                "industry_system",
+                "industry_name_pattern",
+                "consumer_subindustry",
+                "action",
+                "reason",
+            ],
+        ),
+        "asset_overrides": pd.DataFrame(
+            columns=[
+                "stock_code",
+                "action",
+                "consumer_subindustry",
+                "reason",
+                "effective_from",
+                "effective_to",
+            ]
+        ),
+        "bars": bars,
+        "share_capacity": pd.DataFrame(
+            {
+                "asset_id": ids,
+                "total_share": 100.0 + np.arange(asset_count),
+                "float_share": 80.0 + np.arange(asset_count),
+                "free_float_share": np.nan,
+            }
+        ),
+        "finance": finance,
+        "current_valuation": current,
+        "valuation_history": valuation_history,
+    }
+    evidence = pd.DataFrame(
+        [
+            _evidence(
+                asset_id,
+                codes[index],
+                "expected_repair" if index % 2 == 0 else "early_validation",
+            )
+            for index, asset_id in enumerate(ids[:evidence_count])
         ],
         columns=EVIDENCE_COLUMNS,
     )
@@ -224,7 +368,7 @@ def test_builds_two_buckets_keeps_scores_and_universe_exclusions():
     assert auto["exclusion_stage"] == "universe"
     assert auto["exclusion_reasons"] == "auto_parts_excluded"
     assert result["paths"] == {}
-    assert result["coverage"]["funnel"] == {
+    legacy_funnel = {
         "raw_assets": 5,
         "consumer_universe": 4,
         "market_eligible": 4,
@@ -235,6 +379,9 @@ def test_builds_two_buckets_keeps_scores_and_universe_exclusions():
         "selected_expected": 1,
         "selected_early": 1,
     }
+    assert {
+        key: result["coverage"]["funnel"][key] for key in legacy_funnel
+    } == legacy_funnel
     values = list(result["coverage"]["funnel"].values())[:7]
     assert values == sorted(values, reverse=True)
     assert result["coverage"]["data_date_maxima"] == {
@@ -350,6 +497,13 @@ def test_runner_uses_latest_close_times_shares_not_pe_or_ps(monkeypatch, tmp_pat
         "load_consumer_market_history",
         lambda trade_date, service, asset_ids=None: market_calls.append(asset_ids) or market,
     )
+    share_calls = []
+    monkeypatch.setattr(
+        pipeline,
+        "load_consumer_share_capacity",
+        lambda ids, trade_date, service: share_calls.append(ids)
+        or frames["share_capacity"],
+    )
     finance = frames["finance"].copy()
     finance["total_share"] = finance["asset_id"].map({"A": 10, "B": 20, "C": np.nan, "D": 40})
     monkeypatch.setattr(pipeline, "load_consumer_finance_history", lambda ids, trade_date, service: finance)
@@ -375,11 +529,15 @@ def test_runner_uses_latest_close_times_shares_not_pe_or_ps(monkeypatch, tmp_pat
 
     assert result == {"ok": True}
     assert market_calls == [["A", "B", "C", "D"]]
+    assert share_calls == [["A", "B", "C", "D"]]
+    pd.testing.assert_frame_equal(
+        captured["frames"]["share_capacity"], frames["share_capacity"]
+    )
     assert "earnings" not in captured["frames"]
     current = captured["frames"]["current_valuation"].set_index("asset_id")
-    assert current.loc["A", "current_market_cap"] == pytest.approx(20.0 * 10.0)
-    assert current.loc["B", "current_market_cap"] == pytest.approx(60.0 * 20.0)
-    assert pd.isna(current.loc["C", "current_market_cap"])
+    assert current.loc["A", "current_market_cap"] == pytest.approx(20.0 * 100.0)
+    assert current.loc["B", "current_market_cap"] == pytest.approx(60.0 * 110.0)
+    assert current.loc["C", "current_market_cap"] == pytest.approx(65.0 * 120.0)
     assert current["net_debt"].isna().all()
     assert current["ebitda_ttm"].isna().all()
     assert captured["evidence"]["stock_code"].dtype.name == "string"
@@ -426,3 +584,107 @@ def test_runner_rejects_missing_evidence_path(tmp_path):
             evidence_path=tmp_path / "missing.csv",
             output_dir=tmp_path / "out",
         )
+
+
+def test_unified_pipeline_builds_top60_top20_reserve_and_comparison_from_65_assets():
+    frames, evidence, config = _many_frames(65, 45)
+    evidence["repair_already_completed"] = False
+    evidence.loc[evidence.index[0], "repair_already_completed"] = True
+    frames["share_capacity"].loc[0, ["total_share", "float_share"]] = [1.0, 1.0]
+
+    result = build_consumer_oversold_weekly_from_frames(
+        frames=frames, evidence=evidence, config=config
+    )
+
+    assert len(result["preaudit"]) == 60
+    assert len(result["top20"]) == 20
+    assert len(result["reserve"]) == 20
+    assert result["top20"]["final_rank"].tolist() == list(range(1, 21))
+    assert result["reserve"]["final_rank"].tolist() == list(range(21, 41))
+    assert result["coverage"]["publication_status"] == "ready"
+    assert result["coverage"]["funnel"]["full"] == 65
+    assert result["coverage"]["funnel"]["preaudit"] == 60
+    assert result["coverage"]["funnel"]["final"] == 20
+    assert result["coverage"]["funnel"]["reserve"] == 20
+    assert (~result["preaudit"]["evidence_complete"]).any()
+    assert "A000" not in set(result["top20"]["asset_id"])
+    assert "A000" not in set(result["reserve"]["asset_id"])
+    comparison = result["comparison"].set_index("asset_id")
+    assert {
+        "old_bucket_rank",
+        "old_combined_rank",
+        "new_rank",
+        "rank_change",
+        "composite_score",
+        "elasticity_score",
+        "final_rank_score",
+        "exclusion_reasons",
+    }.issubset(comparison.columns)
+    comparable = comparison.dropna(subset=["old_combined_rank", "new_rank"])
+    assert (
+        comparable["rank_change"]
+        == comparable["old_combined_rank"] - comparable["new_rank"]
+    ).all()
+    assert "base_scenario_market_cap" in result["scores"].columns
+    assert "current_float_market_cap" in result["scores"].columns
+
+
+def test_unified_pipeline_does_not_publish_below_evidence_or_ranked_pool_minimum():
+    frames, evidence, config = _many_frames(45, 39)
+
+    evidence_short = build_consumer_oversold_weekly_from_frames(
+        frames=frames, evidence=evidence, config=config
+    )
+
+    assert evidence_short["top20"].empty
+    assert evidence_short["reserve"].empty
+    assert evidence_short["coverage"]["publication_status"] == "coverage_insufficient"
+    assert "evidence_complete_pool_below_40" in evidence_short["coverage"]["warnings"]
+
+    frames, evidence, config = _many_frames(45, 40)
+    frames["share_capacity"] = frames["share_capacity"].iloc[1:].reset_index(drop=True)
+    ranked_short = build_consumer_oversold_weekly_from_frames(
+        frames=frames, evidence=evidence, config=config
+    )
+
+    assert ranked_short["top20"].empty
+    assert ranked_short["reserve"].empty
+    assert "ranked_pool_below_40" in ranked_short["coverage"]["warnings"]
+
+
+def test_unified_pipeline_honors_small_publication_config_and_empty_pool_schema():
+    frames, evidence, config = _frames()
+    small = replace(
+        config,
+        preaudit_size=2,
+        minimum_evidence_complete=2,
+        final_top_n=1,
+        reserve_top_n=1,
+    )
+
+    result = build_consumer_oversold_weekly_from_frames(
+        frames=frames, evidence=evidence, config=small
+    )
+
+    assert result["coverage"]["publication_status"] == "ready"
+    assert len(result["preaudit"]) == 2
+    assert result["top20"]["final_rank"].tolist() == [1]
+    assert result["reserve"]["final_rank"].tolist() == [2]
+
+    frames["industry_rules"] = frames["industry_rules"].assign(
+        action="exclude", consumer_subindustry=""
+    )
+    for key in (
+        "bars",
+        "share_capacity",
+        "finance",
+        "current_valuation",
+        "valuation_history",
+    ):
+        frames[key] = pd.DataFrame()
+    empty = build_consumer_oversold_weekly_from_frames(
+        frames=frames, evidence=evidence.iloc[0:0], config=small
+    )
+    for key in ("top20", "reserve", "preaudit", "comparison"):
+        assert key in empty and empty[key].empty
+    assert empty["coverage"]["publication_status"] == "coverage_insufficient"
