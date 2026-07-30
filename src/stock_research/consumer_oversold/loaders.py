@@ -18,7 +18,23 @@ ASSET_COLUMNS = ("asset_id", "stock_code", "name", "list_date")
 STATUS_COLUMNS = ("asset_id", "is_st", "is_delisting_risk", "is_suspended")
 LIQUIDITY_COLUMNS = ("asset_id", "avg_turnover_amount")
 INDUSTRY_COLUMNS = ("asset_id", "industry_system", "industry_name")
-MARKET_COLUMNS = ("asset_id", "trade_date", "close", "raw_close")
+MARKET_COLUMNS = (
+    "asset_id",
+    "trade_date",
+    "close",
+    "raw_close",
+    "amount",
+    "turnover_rate",
+    "pct_chg",
+    "is_st",
+    "trade_status",
+)
+SHARE_CAPACITY_COLUMNS = (
+    "asset_id",
+    "total_share",
+    "float_share",
+    "free_float_share",
+)
 FINANCE_COLUMNS = (
     "asset_id",
     "report_period",
@@ -259,7 +275,10 @@ def load_consumer_market_history(
         ORDER BY trade_date DESC
         LIMIT %s
     )
-    SELECT b.asset_id, b.trade_date, b.close, raw.close AS raw_close
+    SELECT b.asset_id, b.trade_date, b.close, raw.close AS raw_close,
+           CASE WHEN lower(COALESCE(b.source, '')) LIKE '%%tushare%%'
+                THEN b.amount * 1000 ELSE b.amount END AS amount,
+           b.turnover_rate, b.pct_chg, b.is_st, b.trade_status
     FROM market_daily_bar b
     JOIN latest_dates d ON d.trade_date = b.trade_date
     LEFT JOIN market_daily_bar raw
@@ -270,13 +289,37 @@ def load_consumer_market_history(
     {asset_clause}
     ORDER BY b.asset_id, b.trade_date
     """
-    params: list[Any] = [cutoff, 260]
+    params: list[Any] = [cutoff, 520]
     if assets is not None:
         params.append(assets)
     with connect(service) as conn:
         rows = fetch_all(conn, sql, params)
     result = _format_dates(_frame(rows, MARKET_COLUMNS), ("trade_date",))
     return _sort(result, ["asset_id", "trade_date"])
+
+
+def load_consumer_share_capacity(
+    asset_ids: list[str],
+    trade_date: str,
+    *,
+    service: str,
+) -> pd.DataFrame:
+    assets = _asset_ids(asset_ids)
+    cutoff = validate_trade_date(trade_date)
+    if not assets:
+        return _frame([], SHARE_CAPACITY_COLUMNS)
+    sql = """
+    SELECT DISTINCT ON (asset_id)
+           asset_id, total_share, float_share, free_float_share
+    FROM finance.share_capital_event
+    WHERE asset_id = ANY(%s)
+      AND event_date <= %s
+      AND (announcement_date IS NULL OR announcement_date <= %s)
+    ORDER BY asset_id, event_date DESC, announcement_date DESC NULLS LAST, source ASC
+    """
+    with connect(service) as conn:
+        rows = fetch_all(conn, sql, [assets, cutoff, cutoff])
+    return _sort(_frame(rows, SHARE_CAPACITY_COLUMNS), ["asset_id"])
 
 
 def _disclosed_rows(rows: list[dict[str, Any]], cutoff: str) -> list[dict[str, Any]]:

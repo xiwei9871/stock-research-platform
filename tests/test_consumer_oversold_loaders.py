@@ -127,19 +127,39 @@ def test_universe_empty_database_results_have_stable_schema(monkeypatch):
     }
 
 
-def test_market_requests_260_hfq_dates_and_sorts(monkeypatch):
+def test_market_requests_520_hfq_dates_normalizes_amount_and_sorts(monkeypatch):
     calls, _ = _install_db(
         monkeypatch,
         [[
-            {"asset_id": "B", "trade_date": date(2026, 7, 29), "close": 2, "raw_close": 20},
-            {"asset_id": "A", "trade_date": date(2026, 7, 28), "close": 1, "raw_close": 10},
+            {
+                "asset_id": "B", "trade_date": date(2026, 7, 29),
+                "close": 2, "raw_close": 20, "amount": 2_000,
+                "turnover_rate": 0.2, "pct_chg": 2.0, "is_st": False,
+                "trade_status": "normal",
+            },
+            {
+                "asset_id": "A", "trade_date": date(2026, 7, 28),
+                "close": 1, "raw_close": 10, "amount": None,
+                "turnover_rate": 0.1, "pct_chg": -1.0, "is_st": True,
+                "trade_status": "suspended",
+            },
         ]],
     )
     result = loaders.load_consumer_market_history("2026-07-29", service="test")
-    assert result.to_dict("records") == [
-        {"asset_id": "A", "trade_date": "2026-07-28", "close": 1, "raw_close": 10},
-        {"asset_id": "B", "trade_date": "2026-07-29", "close": 2, "raw_close": 20},
+    assert result.drop(columns="amount").to_dict("records") == [
+        {
+            "asset_id": "A", "trade_date": "2026-07-28", "close": 1,
+            "raw_close": 10, "turnover_rate": 0.1,
+            "pct_chg": -1.0, "is_st": True, "trade_status": "suspended",
+        },
+        {
+            "asset_id": "B", "trade_date": "2026-07-29", "close": 2,
+            "raw_close": 20, "turnover_rate": 0.2,
+            "pct_chg": 2.0, "is_st": False, "trade_status": "normal",
+        },
     ]
+    assert pd.isna(result.loc[0, "amount"])
+    assert result.loc[1, "amount"] == 2_000
     sql, params = calls[0]
     assert "SELECT DISTINCT trade_date" in sql
     assert "trade_date <= %s" in sql
@@ -147,13 +167,29 @@ def test_market_requests_260_hfq_dates_and_sorts(monkeypatch):
     assert "adjust_type = 'hfq'" in sql
     assert "LEFT JOIN market_daily_bar raw" in sql
     assert "raw.adjust_type = 'raw'" in sql
-    assert params == ["2026-07-29", 260]
+    assert (
+        "CASE WHEN lower(COALESCE(b.source, '')) LIKE '%%tushare%%' "
+        "THEN b.amount * 1000 ELSE b.amount END AS amount"
+        in sql
+    )
+    assert "COALESCE(b.amount, 0)" not in sql
+    assert "b.turnover_rate" in sql
+    assert "b.pct_chg" in sql
+    assert "b.is_st" in sql
+    assert "b.trade_status" in sql
+    assert "stock_code" not in sql
+    assert params == ["2026-07-29", 520]
 
 
 def test_market_can_scope_assets_and_empty_scope_skips_database(monkeypatch):
     calls, _ = _install_db(
         monkeypatch,
-        [[{"asset_id": "A", "trade_date": date(2026, 7, 29), "close": 10, "raw_close": 5}]],
+        [[{
+            "asset_id": "A", "trade_date": date(2026, 7, 29),
+            "close": 10, "raw_close": 5, "amount": 1_000,
+            "turnover_rate": 0.1, "pct_chg": 1.0, "is_st": False,
+            "trade_status": "normal",
+        }]],
     )
 
     result = loaders.load_consumer_market_history(
@@ -163,7 +199,7 @@ def test_market_can_scope_assets_and_empty_scope_skips_database(monkeypatch):
     assert result["asset_id"].tolist() == ["A"]
     sql, params = calls[0]
     assert "b.asset_id = ANY(%s)" in sql
-    assert params == ["2026-07-29", 260, ["A"]]
+    assert params == ["2026-07-29", 520, ["A"]]
 
     def fail_connect(service):
         raise AssertionError("empty asset scope must not query the database")
@@ -175,15 +211,81 @@ def test_market_can_scope_assets_and_empty_scope_skips_database(monkeypatch):
     assert empty.columns.tolist() == list(loaders.MARKET_COLUMNS)
 
 
+def test_market_empty_database_result_has_expanded_stable_schema(monkeypatch):
+    _install_db(monkeypatch, [[]])
+
+    result = loaders.load_consumer_market_history(
+        "2026-07-29", service="test", asset_ids=["A"]
+    )
+
+    assert result.columns.tolist() == [
+        "asset_id", "trade_date", "close", "raw_close", "amount",
+        "turnover_rate", "pct_chg", "is_st", "trade_status",
+    ]
+    assert result.empty
+
+
 def test_asset_scoped_empty_lists_do_not_open_database(monkeypatch):
     def fail_connect(service):
         raise AssertionError("database must not be queried")
 
     monkeypatch.setattr(loaders, "connect", fail_connect)
     assert loaders.load_consumer_market_history("2026-07-29", service="x", asset_ids=[]).columns.tolist() == list(loaders.MARKET_COLUMNS)
+    assert loaders.load_consumer_share_capacity([], "2026-07-29", service="x").columns.tolist() == list(loaders.SHARE_CAPACITY_COLUMNS)
     assert loaders.load_consumer_finance_history([], "2026-07-29", service="x").columns.tolist() == list(loaders.FINANCE_COLUMNS)
     assert loaders.load_consumer_valuation_history([], "2026-07-29", service="x").columns.tolist() == list(loaders.VALUATION_COLUMNS)
     assert loaders.load_consumer_earnings_forecasts([], "2026-07-29", service="x").columns.tolist() == list(loaders.EARNINGS_COLUMNS)
+
+
+def test_share_capacity_loads_latest_visible_event_with_stable_fallback_columns(monkeypatch):
+    calls, services = _install_db(
+        monkeypatch,
+        [[
+            {
+                "asset_id": "B", "total_share": Decimal("200"),
+                "float_share": Decimal("180"),
+            },
+            {
+                "asset_id": "A", "total_share": Decimal("100"),
+                "float_share": Decimal("80"),
+                "free_float_share": Decimal("60"),
+            },
+        ]],
+    )
+
+    result = loaders.load_consumer_share_capacity(
+        [" B ", "A"], "2026-07-29", service="research-test"
+    )
+
+    assert services == ["research-test"]
+    assert result.columns.tolist() == [
+        "asset_id", "total_share", "float_share", "free_float_share"
+    ]
+    assert result["asset_id"].tolist() == ["A", "B"]
+    assert result.loc[0, "total_share"] == Decimal("100")
+    assert result.loc[0, "free_float_share"] == Decimal("60")
+    assert pd.isna(result.loc[1, "free_float_share"])
+    sql, params = calls[0]
+    assert "SELECT DISTINCT ON (asset_id)" in sql
+    assert "finance.share_capital_event" in sql
+    assert "event_date <= %s" in sql
+    assert "announcement_date IS NULL OR announcement_date <= %s" in sql
+    assert (
+        "ORDER BY asset_id, event_date DESC, announcement_date DESC NULLS LAST, source ASC"
+        in sql
+    )
+    assert params == [["B", "A"], "2026-07-29", "2026-07-29"]
+
+
+def test_share_capacity_empty_database_result_has_stable_schema(monkeypatch):
+    _install_db(monkeypatch, [[]])
+
+    result = loaders.load_consumer_share_capacity(
+        ["A"], "2026-07-29", service="test"
+    )
+
+    assert result.columns.tolist() == list(loaders.SHARE_CAPACITY_COLUMNS)
+    assert result.empty
 
 
 def test_finance_queries_all_sources_with_cutoff_and_computes_pit_ttm(monkeypatch):
@@ -460,5 +562,17 @@ def test_all_loaders_reject_non_real_or_non_strict_dates(value):
 
 @pytest.mark.parametrize("asset_ids", [[""], ["   "], ["A", " A "], [1], [None]])
 def test_asset_scoped_loaders_reject_invalid_or_duplicate_asset_ids(asset_ids):
-    with pytest.raises(ValueError, match="asset_ids"):
-        loaders.load_consumer_finance_history(asset_ids, "2026-07-29", service="test")
+    scoped_loaders = (
+        lambda: loaders.load_consumer_market_history(
+            "2026-07-29", service="test", asset_ids=asset_ids
+        ),
+        lambda: loaders.load_consumer_share_capacity(
+            asset_ids, "2026-07-29", service="test"
+        ),
+        lambda: loaders.load_consumer_finance_history(
+            asset_ids, "2026-07-29", service="test"
+        ),
+    )
+    for load in scoped_loaders:
+        with pytest.raises(ValueError, match="asset_ids"):
+            load()
