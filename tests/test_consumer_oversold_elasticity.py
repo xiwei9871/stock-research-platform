@@ -8,6 +8,7 @@ import pandas as pd
 import pytest
 
 from stock_research.consumer_oversold.elasticity import (
+    compute_market_capacity_features,
     compute_residual_price_features,
     compute_stock_character_features,
     is_limit_up_day,
@@ -45,6 +46,19 @@ STOCK_CHARACTER_COLUMNS = [
     "positive_after_big_up_3d_rate",
     "positive_after_big_up_5d_rate",
     "stock_character_coverage",
+]
+MARKET_CAPACITY_COLUMNS = [
+    "asset_id",
+    "latest_trade_date",
+    "history_sessions",
+    "current_total_market_cap",
+    "current_float_market_cap",
+    "log_current_float_market_cap",
+    "market_cap_source",
+    "average_amount_20d",
+    "average_turnover_rate_20d",
+    "amount_to_float_cap_20d",
+    "market_capacity_coverage",
 ]
 
 
@@ -86,6 +100,41 @@ def _character_bars(
             "is_st": [is_st] * len(pct_chg),
         }
     )
+
+
+def _capacity_bars(
+    asset_id: str,
+    *,
+    sessions: int = 20,
+    raw_close: object = 10.0,
+    amount: object = 200.0,
+    turnover_rate: object = 2.0,
+    end: str = TRADE_DATE,
+) -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "asset_id": asset_id,
+            "trade_date": pd.bdate_range(end=end, periods=sessions),
+            "raw_close": [raw_close] * sessions,
+            "amount": [amount] * sessions,
+            "turnover_rate": [turnover_rate] * sessions,
+        }
+    )
+
+
+def _capacity_shares(
+    asset_id: str,
+    *,
+    total_share: object = 100.0,
+    float_share: object = 80.0,
+    free_float_share: object = 60.0,
+) -> dict[str, object]:
+    return {
+        "asset_id": asset_id,
+        "total_share": total_share,
+        "float_share": float_share,
+        "free_float_share": free_float_share,
+    }
 
 
 def test_hfq_features_capture_large_remaining_deviation_after_a_10_percent_rise():
@@ -574,3 +623,313 @@ def test_empty_stock_character_input_returns_stable_schema():
 
     assert result.empty
     assert result.columns.tolist() == STOCK_CHARACTER_COLUMNS
+
+
+def test_market_capacity_prefers_free_float_then_float_then_total_share():
+    bars = pd.concat(
+        [_capacity_bars(asset_id) for asset_id in ("A", "B", "C")],
+        ignore_index=True,
+    )
+    shares = pd.DataFrame(
+        [
+            _capacity_shares("A"),
+            _capacity_shares("B", free_float_share=np.nan),
+            _capacity_shares("C", float_share=np.nan, free_float_share=np.nan),
+        ]
+    )
+
+    result = compute_market_capacity_features(
+        bars, shares, trade_date=TRADE_DATE
+    ).set_index("asset_id")
+
+    assert result.loc["A", "current_float_market_cap"] == pytest.approx(600.0)
+    assert result.loc["A", "market_cap_source"] == "free_float_share"
+    assert result.loc["B", "current_float_market_cap"] == pytest.approx(800.0)
+    assert result.loc["B", "market_cap_source"] == "float_share"
+    assert result.loc["C", "current_float_market_cap"] == pytest.approx(1000.0)
+    assert result.loc["C", "market_cap_source"] == "total_share_fallback"
+    assert result["market_capacity_coverage"].all()
+
+
+def test_current_total_market_cap_is_independent_of_float_share_selection():
+    row = compute_market_capacity_features(
+        _capacity_bars("A"),
+        pd.DataFrame([_capacity_shares("A")]),
+        trade_date=TRADE_DATE,
+    ).iloc[0]
+
+    assert row["current_total_market_cap"] == pytest.approx(1000.0)
+    assert row["current_float_market_cap"] == pytest.approx(600.0)
+
+
+def test_scenario_market_cap_is_neither_an_input_nor_an_output():
+    bars = _capacity_bars("A")
+    bars["base_scenario_market_cap"] = 999_999.0
+    shares = pd.DataFrame([_capacity_shares("A")])
+    shares["scenario_market_cap"] = 888_888.0
+
+    result = compute_market_capacity_features(bars, shares, trade_date=TRADE_DATE)
+
+    assert result.iloc[0]["current_total_market_cap"] == pytest.approx(1000.0)
+    assert "base_scenario_market_cap" not in result.columns
+    assert "scenario_market_cap" not in result.columns
+
+
+def test_market_capacity_actual_numeric_case_is_exact():
+    bars = _capacity_bars(
+        "A", raw_close=12.5, amount=200_000_000.0, turnover_rate=2.5
+    )
+    shares = pd.DataFrame(
+        [
+            _capacity_shares(
+                "A",
+                total_share=100_000_000.0,
+                float_share=80_000_000.0,
+                free_float_share=60_000_000.0,
+            )
+        ]
+    )
+
+    row = compute_market_capacity_features(bars, shares, trade_date=TRADE_DATE).iloc[0]
+
+    assert row["latest_trade_date"] == pd.Timestamp(TRADE_DATE)
+    assert row["history_sessions"] == 20
+    assert row["current_total_market_cap"] == pytest.approx(1_250_000_000.0)
+    assert row["current_float_market_cap"] == pytest.approx(750_000_000.0)
+    assert row["log_current_float_market_cap"] == pytest.approx(np.log(750_000_000.0))
+    assert row["average_amount_20d"] == pytest.approx(200_000_000.0)
+    assert row["average_turnover_rate_20d"] == pytest.approx(2.5)
+    assert row["amount_to_float_cap_20d"] == pytest.approx(200 / 750)
+    assert row["market_capacity_coverage"]
+
+
+def test_market_capacity_requires_exactly_20_amount_sessions_but_not_turnover():
+    bars = pd.concat(
+        [
+            _capacity_bars("A19", sessions=19),
+            _capacity_bars("A20", sessions=20, turnover_rate=None),
+        ],
+        ignore_index=True,
+    )
+    shares = pd.DataFrame([_capacity_shares("A19"), _capacity_shares("A20")])
+
+    result = compute_market_capacity_features(
+        bars, shares, trade_date=TRADE_DATE
+    ).set_index("asset_id")
+
+    assert pd.isna(result.loc["A19", "average_amount_20d"])
+    assert not result.loc["A19", "market_capacity_coverage"]
+    assert result.loc["A20", "average_amount_20d"] == pytest.approx(200.0)
+    assert pd.isna(result.loc["A20", "average_turnover_rate_20d"])
+    assert result.loc["A20", "market_capacity_coverage"]
+
+
+def test_future_market_bars_are_ignored_and_future_only_assets_are_absent():
+    history = _capacity_bars("A")
+    valid_shares = pd.DataFrame([_capacity_shares("A")])
+    expected = compute_market_capacity_features(
+        history, valid_shares, trade_date=TRADE_DATE
+    )
+    shares = pd.DataFrame(
+        [
+            _capacity_shares("A"),
+            _capacity_shares("FUTURE", free_float_share="bad"),
+            _capacity_shares("FUTURE", total_share=-1.0),
+        ]
+    )
+    future = pd.DataFrame(
+        [
+            {
+                "asset_id": "A",
+                "trade_date": "2026-07-30",
+                "raw_close": "bad",
+                "amount": -1.0,
+                "turnover_rate": Fraction(1, 2),
+            },
+            {
+                "asset_id": "FUTURE",
+                "trade_date": "2026-07-30",
+                "raw_close": 10.0,
+                "amount": 100.0,
+                "turnover_rate": 1.0,
+            },
+        ]
+    )
+
+    actual = compute_market_capacity_features(
+        pd.concat([future, history], ignore_index=True),
+        shares,
+        trade_date=TRADE_DATE,
+    )
+
+    pd.testing.assert_frame_equal(actual, expected)
+    assert actual["asset_id"].tolist() == ["A"]
+
+
+def test_missing_latest_raw_share_or_window_amount_disables_coverage():
+    raw_missing = _capacity_bars("RAW")
+    raw_missing.loc[raw_missing.index[-1], "raw_close"] = np.nan
+    amount_missing = _capacity_bars("AMOUNT")
+    amount_missing.loc[amount_missing.index[-1], "amount"] = np.nan
+    bars = pd.concat(
+        [raw_missing, amount_missing, _capacity_bars("SHARE")], ignore_index=True
+    )
+    shares = pd.DataFrame(
+        [_capacity_shares("RAW"), _capacity_shares("AMOUNT")]
+    )
+
+    result = compute_market_capacity_features(
+        bars, shares, trade_date=TRADE_DATE
+    ).set_index("asset_id")
+
+    assert pd.isna(result.loc["RAW", "current_total_market_cap"])
+    assert not result.loc["RAW", "market_capacity_coverage"]
+    assert pd.isna(result.loc["AMOUNT", "average_amount_20d"])
+    assert pd.isna(result.loc["AMOUNT", "amount_to_float_cap_20d"])
+    assert not result.loc["AMOUNT", "market_capacity_coverage"]
+    assert pd.isna(result.loc["SHARE", "current_float_market_cap"])
+    assert pd.isna(result.loc["SHARE", "market_cap_source"])
+    assert not result.loc["SHARE", "market_capacity_coverage"]
+
+
+@pytest.mark.parametrize(
+    ("field", "invalid"),
+    [
+        ("raw_close", -1.0),
+        ("raw_close", np.inf),
+        ("raw_close", "10"),
+        ("raw_close", Fraction(10, 1)),
+        ("raw_close", Decimal("1e10000")),
+        ("raw_close", Decimal("1e-10000")),
+        ("amount", -1.0),
+        ("amount", np.inf),
+        ("amount", Fraction(1, 2)),
+        ("turnover_rate", -1.0),
+        ("turnover_rate", Decimal("1e10000")),
+    ],
+)
+def test_market_bar_numbers_reject_invalid_values_with_context(field, invalid):
+    bars = _capacity_bars("A")
+    bars[field] = bars[field].astype(object)
+    bars.loc[bars.index[-1], field] = invalid
+
+    with pytest.raises(ValueError, match=rf"{field}.*A.*2026-07-29"):
+        compute_market_capacity_features(
+            bars, pd.DataFrame([_capacity_shares("A")]), trade_date=TRADE_DATE
+        )
+
+
+@pytest.mark.parametrize("field", ["total_share", "float_share", "free_float_share"])
+@pytest.mark.parametrize(
+    "invalid",
+    [0.0, -1.0, np.inf, "100", Fraction(100, 1), Decimal("1e10000"), Decimal("1e-10000")],
+)
+def test_share_numbers_reject_invalid_nonmissing_values_with_context(field, invalid):
+    shares = pd.DataFrame([_capacity_shares("A")])
+    shares[field] = shares[field].astype(object)
+    shares.loc[0, field] = invalid
+
+    with pytest.raises(ValueError, match=rf"{field}.*A"):
+        compute_market_capacity_features(
+            _capacity_bars("A"), shares, trade_date=TRADE_DATE
+        )
+
+
+def test_market_capacity_accepts_supported_numpy_and_decimal_numbers():
+    bars = _capacity_bars(
+        "A",
+        raw_close=Decimal("10"),
+        amount=np.int64(200),
+        turnover_rate=np.float64(2.0),
+    )
+    shares = pd.DataFrame(
+        [
+            _capacity_shares(
+                "A",
+                total_share=np.int64(100),
+                float_share=Decimal("80"),
+                free_float_share=np.float64(60.0),
+            )
+        ]
+    )
+
+    row = compute_market_capacity_features(bars, shares, trade_date=TRADE_DATE).iloc[0]
+
+    assert row["current_total_market_cap"] == pytest.approx(1000.0)
+    assert row["market_capacity_coverage"]
+
+
+def test_market_capacity_sorts_input_and_rejects_duplicate_bars_and_shares():
+    bars = pd.concat([_capacity_bars("B"), _capacity_bars("A")], ignore_index=True)
+    shares = pd.DataFrame([_capacity_shares("B"), _capacity_shares("A")])
+
+    result = compute_market_capacity_features(
+        bars.sample(frac=1.0, random_state=11),
+        shares.sample(frac=1.0, random_state=12),
+        trade_date=TRADE_DATE,
+    )
+
+    assert result["asset_id"].tolist() == ["A", "B"]
+    duplicate_bar = pd.concat([bars, bars.iloc[[0]]], ignore_index=True)
+    with pytest.raises(ValueError, match=r"duplicate.*B"):
+        compute_market_capacity_features(
+            duplicate_bar, shares, trade_date=TRADE_DATE
+        )
+    duplicate_shares = pd.concat([shares, shares.iloc[[0]]], ignore_index=True)
+    with pytest.raises(ValueError, match=r"duplicate.*B"):
+        compute_market_capacity_features(
+            bars, duplicate_shares, trade_date=TRADE_DATE
+        )
+
+
+@pytest.mark.parametrize("frame_name", ["bars", "shares"])
+@pytest.mark.parametrize("invalid", ["", "   ", None, 123, True])
+def test_market_capacity_asset_ids_must_be_nonempty_strings(frame_name, invalid):
+    bars = _capacity_bars("A")
+    shares = pd.DataFrame([_capacity_shares("A")])
+    frame = bars if frame_name == "bars" else shares
+    frame["asset_id"] = frame["asset_id"].astype(object)
+    frame.loc[frame.index[0], "asset_id"] = invalid
+
+    with pytest.raises(ValueError, match="asset_id"):
+        compute_market_capacity_features(bars, shares, trade_date=TRADE_DATE)
+
+
+@pytest.mark.parametrize(
+    ("frame_name", "missing"),
+    [
+        ("bars", "asset_id"),
+        ("bars", "trade_date"),
+        ("bars", "raw_close"),
+        ("bars", "amount"),
+        ("bars", "turnover_rate"),
+        ("shares", "asset_id"),
+        ("shares", "total_share"),
+        ("shares", "float_share"),
+        ("shares", "free_float_share"),
+    ],
+)
+def test_market_capacity_required_columns_are_enforced(frame_name, missing):
+    bars = _capacity_bars("A")
+    shares = pd.DataFrame([_capacity_shares("A")])
+    if frame_name == "bars":
+        bars = bars.drop(columns=missing)
+    else:
+        shares = shares.drop(columns=missing)
+
+    with pytest.raises(ValueError, match=missing):
+        compute_market_capacity_features(bars, shares, trade_date=TRADE_DATE)
+
+
+def test_empty_market_capacity_input_returns_stable_schema():
+    bars = pd.DataFrame(
+        columns=["asset_id", "trade_date", "raw_close", "amount", "turnover_rate"]
+    )
+    shares = pd.DataFrame(
+        columns=["asset_id", "total_share", "float_share", "free_float_share"]
+    )
+
+    result = compute_market_capacity_features(bars, shares, trade_date=TRADE_DATE)
+
+    assert result.empty
+    assert result.columns.tolist() == MARKET_CAPACITY_COLUMNS

@@ -18,6 +18,19 @@ STOCK_CHARACTER_REQUIRED_COLUMNS = (
     "pct_chg",
     "is_st",
 )
+MARKET_CAPACITY_BAR_COLUMNS = (
+    "asset_id",
+    "trade_date",
+    "raw_close",
+    "amount",
+    "turnover_rate",
+)
+MARKET_CAPACITY_SHARE_COLUMNS = (
+    "asset_id",
+    "total_share",
+    "float_share",
+    "free_float_share",
+)
 STRICT_NUMERIC_TYPES = (int, float, np.integer, np.floating, Decimal)
 RESIDUAL_PRICE_COLUMNS = [
     "asset_id",
@@ -50,6 +63,19 @@ STOCK_CHARACTER_COLUMNS = [
     "positive_after_big_up_5d_rate",
     "stock_character_coverage",
 ]
+MARKET_CAPACITY_COLUMNS = [
+    "asset_id",
+    "latest_trade_date",
+    "history_sessions",
+    "current_total_market_cap",
+    "current_float_market_cap",
+    "log_current_float_market_cap",
+    "market_cap_source",
+    "average_amount_20d",
+    "average_turnover_rate_20d",
+    "amount_to_float_cap_20d",
+    "market_capacity_coverage",
+]
 
 
 def _require_columns(bars: pd.DataFrame) -> None:
@@ -64,6 +90,26 @@ def _require_stock_character_columns(bars: pd.DataFrame) -> None:
     ]
     if missing:
         raise ValueError(f"bars missing required columns: {', '.join(missing)}")
+
+
+def _require_market_capacity_columns(
+    bars: pd.DataFrame,
+    shares: pd.DataFrame,
+) -> None:
+    missing_bars = [
+        column for column in MARKET_CAPACITY_BAR_COLUMNS if column not in bars.columns
+    ]
+    if missing_bars:
+        raise ValueError(f"bars missing required columns: {', '.join(missing_bars)}")
+    missing_shares = [
+        column
+        for column in MARKET_CAPACITY_SHARE_COLUMNS
+        if column not in shares.columns
+    ]
+    if missing_shares:
+        raise ValueError(
+            f"shares missing required columns: {', '.join(missing_shares)}"
+        )
 
 
 def _is_missing_scalar(value: object) -> bool:
@@ -415,3 +461,205 @@ def compute_stock_character_features(
         )
 
     return pd.DataFrame(rows, columns=STOCK_CHARACTER_COLUMNS)
+
+
+def _market_numeric_value(
+    value: object,
+    *,
+    field_name: str,
+    asset_id: str,
+    trade_date: pd.Timestamp | None = None,
+    strictly_positive: bool,
+) -> float:
+    try:
+        number = _strict_float(value, field_name=field_name, allow_missing=True)
+    except ValueError as exc:
+        context = f"{field_name} for asset {asset_id}"
+        if trade_date is not None:
+            context += f" on {trade_date.date().isoformat()}"
+        raise ValueError(f"invalid {context}") from exc
+    if math.isnan(number):
+        return number
+    invalid_range = number <= 0.0 if strictly_positive else number < 0.0
+    if invalid_range:
+        context = f"{field_name} for asset {asset_id}"
+        if trade_date is not None:
+            context += f" on {trade_date.date().isoformat()}"
+        raise ValueError(f"invalid {context}")
+    return number
+
+
+def _finite_positive_product(left: float, right: float) -> float:
+    if not math.isfinite(left) or not math.isfinite(right):
+        return math.nan
+    product = left * right
+    return product if math.isfinite(product) and product > 0.0 else math.nan
+
+
+def compute_market_capacity_features(
+    bars: pd.DataFrame,
+    shares: pd.DataFrame,
+    *,
+    trade_date: str,
+) -> pd.DataFrame:
+    """Compute actual point-in-time market capacity from raw price and shares."""
+    cutoff = pd.Timestamp(validate_trade_date(trade_date))
+    _require_market_capacity_columns(bars, shares)
+
+    frame = bars.loc[:, MARKET_CAPACITY_BAR_COLUMNS].copy()
+    if frame.empty:
+        return pd.DataFrame(columns=MARKET_CAPACITY_COLUMNS)
+    try:
+        frame["trade_date"] = pd.to_datetime(
+            frame["trade_date"], errors="raise", format="mixed"
+        ).dt.normalize()
+    except (TypeError, ValueError) as exc:
+        raise ValueError("bars trade_date contains an invalid date") from exc
+    if frame["trade_date"].isna().any():
+        raise ValueError("bars trade_date contains an invalid date")
+    frame = frame.loc[frame["trade_date"].le(cutoff)].copy()
+    if frame.empty:
+        return pd.DataFrame(columns=MARKET_CAPACITY_COLUMNS)
+
+    frame["asset_id"] = frame["asset_id"].map(
+        lambda value: _normalized_identifier(value, field_name="asset_id")
+    )
+    duplicates = frame.duplicated(["asset_id", "trade_date"], keep=False)
+    if duplicates.any():
+        row = frame.loc[duplicates, ["asset_id", "trade_date"]].sort_values(
+            ["asset_id", "trade_date"], kind="stable"
+        ).iloc[0]
+        raise ValueError(
+            f"duplicate bar for asset {row['asset_id']} "
+            f"on {row['trade_date'].date().isoformat()}"
+        )
+
+    for field_name, strictly_positive in (
+        ("raw_close", True),
+        ("amount", False),
+        ("turnover_rate", False),
+    ):
+        frame[field_name] = [
+            _market_numeric_value(
+                getattr(row, field_name),
+                field_name=field_name,
+                asset_id=row.asset_id,
+                trade_date=row.trade_date,
+                strictly_positive=strictly_positive,
+            )
+            for row in frame.itertuples(index=False)
+        ]
+    frame = frame.sort_values(["asset_id", "trade_date"], kind="stable")
+
+    share_frame = shares.loc[:, MARKET_CAPACITY_SHARE_COLUMNS].copy()
+    share_frame["asset_id"] = share_frame["asset_id"].map(
+        lambda value: _normalized_identifier(value, field_name="asset_id")
+    )
+    active_asset_ids = set(frame["asset_id"])
+    share_frame = share_frame.loc[
+        share_frame["asset_id"].isin(active_asset_ids)
+    ].copy()
+    duplicate_shares = share_frame["asset_id"].duplicated(keep=False)
+    if duplicate_shares.any():
+        asset_id = share_frame.loc[duplicate_shares, "asset_id"].sort_values(
+            kind="stable"
+        ).iloc[0]
+        raise ValueError(f"shares contains duplicate asset_id {asset_id}")
+    for field_name in MARKET_CAPACITY_SHARE_COLUMNS[1:]:
+        share_frame[field_name] = [
+            _market_numeric_value(
+                getattr(row, field_name),
+                field_name=field_name,
+                asset_id=row.asset_id,
+                strictly_positive=True,
+            )
+            for row in share_frame.itertuples(index=False)
+        ]
+    shares_by_asset = share_frame.set_index("asset_id")
+
+    rows: list[dict[str, object]] = []
+    for asset_id, full_history in frame.groupby("asset_id", sort=True):
+        history = full_history.tail(20).reset_index(drop=True)
+        latest = history.iloc[-1]
+        raw_close = float(latest["raw_close"])
+        if asset_id in shares_by_asset.index:
+            share_row = shares_by_asset.loc[asset_id]
+            total_share = float(share_row["total_share"])
+            float_share = float(share_row["float_share"])
+            free_float_share = float(share_row["free_float_share"])
+        else:
+            total_share = math.nan
+            float_share = math.nan
+            free_float_share = math.nan
+
+        current_total_market_cap = _finite_positive_product(raw_close, total_share)
+        if math.isfinite(free_float_share):
+            selected_float_share = free_float_share
+            market_cap_source: str | None = "free_float_share"
+        elif math.isfinite(float_share):
+            selected_float_share = float_share
+            market_cap_source = "float_share"
+        elif math.isfinite(total_share):
+            selected_float_share = total_share
+            market_cap_source = "total_share_fallback"
+        else:
+            selected_float_share = math.nan
+            market_cap_source = None
+        current_float_market_cap = _finite_positive_product(
+            raw_close, selected_float_share
+        )
+        log_current_float_market_cap = (
+            float(math.log(current_float_market_cap))
+            if math.isfinite(current_float_market_cap)
+            and current_float_market_cap > 0.0
+            else math.nan
+        )
+
+        amount_complete = len(history) >= 20 and history["amount"].notna().all()
+        turnover_complete = (
+            len(history) >= 20 and history["turnover_rate"].notna().all()
+        )
+        average_amount_20d = (
+            float(history["amount"].mean()) if amount_complete else math.nan
+        )
+        average_turnover_rate_20d = (
+            float(history["turnover_rate"].mean())
+            if turnover_complete
+            else math.nan
+        )
+        amount_to_float_cap_20d = (
+            float(average_amount_20d / current_float_market_cap)
+            if math.isfinite(average_amount_20d)
+            and math.isfinite(current_float_market_cap)
+            and current_float_market_cap > 0.0
+            else math.nan
+        )
+        coverage = (
+            math.isfinite(raw_close)
+            and raw_close > 0.0
+            and math.isfinite(current_total_market_cap)
+            and current_total_market_cap > 0.0
+            and math.isfinite(current_float_market_cap)
+            and current_float_market_cap > 0.0
+            and market_cap_source is not None
+            and amount_complete
+            and math.isfinite(amount_to_float_cap_20d)
+            and amount_to_float_cap_20d >= 0.0
+        )
+        rows.append(
+            {
+                "asset_id": asset_id,
+                "latest_trade_date": latest["trade_date"],
+                "history_sessions": len(history),
+                "current_total_market_cap": current_total_market_cap,
+                "current_float_market_cap": current_float_market_cap,
+                "log_current_float_market_cap": log_current_float_market_cap,
+                "market_cap_source": market_cap_source,
+                "average_amount_20d": average_amount_20d,
+                "average_turnover_rate_20d": average_turnover_rate_20d,
+                "amount_to_float_cap_20d": amount_to_float_cap_20d,
+                "market_capacity_coverage": bool(coverage),
+            }
+        )
+
+    return pd.DataFrame(rows, columns=MARKET_CAPACITY_COLUMNS)
