@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { DASHBOARD_AUTH_EXPIRED_EVENT, fetchCurrentUser, loginDashboardUser } from '../api/client';
+import { DASHBOARD_AUTH_EXPIRED_EVENT, fetchCurrentUser, loginDashboardUser, logoutDashboardUser } from '../api/client';
 import type { CurrentUser } from '../api/types';
 import { AppShell } from './AppShell';
 import { LoginView } from './LoginView';
@@ -54,5 +54,14 @@ export function DashboardAuthRoot() {
     );
   }
 
-  return <AppShell currentUser={user} />;
+  return (
+    <AppShell
+      currentUser={user}
+      onLogout={async () => {
+        await logoutDashboardUser();
+        setUser(null);
+        setError('');
+      }}
+    />
+  );
 }
