@@ -107,7 +107,9 @@ UNIFIED_OUTPUT_COLUMNS = [
     "current_total_market_cap",
     "current_float_market_cap",
     "market_cap_source",
+    "pessimistic_scenario_market_cap",
     "base_scenario_market_cap",
+    "optimistic_scenario_market_cap",
     "limit_up_count_2y",
     "up_7pct_count_2y",
     "up_5pct_count_2y",
@@ -743,11 +745,14 @@ def build_consumer_oversold_weekly_from_frames(
         membership,
         config.trade_date,
     )
-    valuation = compute_valuation_features(current, valuation_history, valuation_fundamentals)
-    for scenario in ("pessimistic", "base", "optimistic"):
-        source = f"{scenario}_market_cap"
-        if source in valuation.columns:
-            valuation[f"{scenario}_scenario_market_cap"] = valuation[source]
+    valuation = compute_valuation_features(
+        current, valuation_history, valuation_fundamentals
+    ).rename(
+        columns={
+            f"{scenario}_market_cap": f"{scenario}_scenario_market_cap"
+            for scenario in ("pessimistic", "base", "optimistic")
+        }
+    )
 
     candidates = included.rename(columns={"name": "stock_name"})
     candidates = _merge_one_to_one(

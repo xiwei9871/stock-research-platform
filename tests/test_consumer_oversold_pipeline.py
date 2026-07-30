@@ -729,6 +729,31 @@ def test_unified_pipeline_honors_small_publication_config_and_empty_pool_schema(
         assert result[key]["limit_up_count_2y"].notna().all()
         assert result[key]["repair_thesis"].astype(str).str.strip().ne("").all()
         assert result[key]["market_cap_source"].notna().all()
+    legacy_scenario_columns = {
+        "pessimistic_market_cap",
+        "base_market_cap",
+        "optimistic_market_cap",
+    }
+    public_frames = {
+        key: result[key]
+        for key in (
+            "scores",
+            "expected",
+            "early",
+            "top20",
+            "reserve",
+            "preaudit",
+            "comparison",
+        )
+    }
+    for frame in public_frames.values():
+        assert legacy_scenario_columns.isdisjoint(frame.columns)
+    for key in ("scores", "expected", "early", "top20", "reserve", "preaudit"):
+        frame = public_frames[key]
+        for scenario in ("pessimistic", "base", "optimistic"):
+            column = f"{scenario}_scenario_market_cap"
+            assert column in frame.columns
+            assert frame[column].notna().all()
     stable_columns = {
         key: result[key].columns.tolist()
         for key in ("top20", "reserve", "preaudit", "comparison")
