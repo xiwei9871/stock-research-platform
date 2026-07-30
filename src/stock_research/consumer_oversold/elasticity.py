@@ -393,11 +393,11 @@ def compute_stock_character_features(
                     float(np.mean(np.abs(returns))) if len(returns) else math.nan
                 ),
                 "return_volatility_2y": (
-                    float(np.std(returns, ddof=0)) if len(returns) else math.nan
+                    float(np.std(returns, ddof=1)) if len(returns) >= 2 else math.nan
                 ),
                 "upside_tail_volatility_2y": (
-                    float(np.std(positive_returns, ddof=0))
-                    if len(positive_returns)
+                    float(np.std(positive_returns, ddof=1))
+                    if len(positive_returns) >= 2
                     else math.nan
                 ),
                 "max_limit_up_streak_2y": _maximum_true_streak(limit_flags),

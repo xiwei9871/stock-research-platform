@@ -347,9 +347,9 @@ def test_stock_character_counts_volatility_and_maximum_limit_up_streak_are_exact
     assert row["up_5pct_count_2y"] == 5
     assert row["max_limit_up_streak_2y"] == 3
     assert row["mean_abs_return_2y"] == pytest.approx(np.mean(np.abs(returns)))
-    assert row["return_volatility_2y"] == pytest.approx(np.std(returns, ddof=0))
+    assert row["return_volatility_2y"] == pytest.approx(np.std(returns, ddof=1))
     assert row["upside_tail_volatility_2y"] == pytest.approx(
-        np.std(positive_returns, ddof=0)
+        np.std(positive_returns, ddof=1)
     )
     assert row["stock_character_coverage"]
 
@@ -456,6 +456,35 @@ def test_stock_character_accepts_numpy_numeric_decimal_and_numpy_boolean_values(
     assert row["up_5pct_count_2y"] == 3
 
 
+@pytest.mark.parametrize("pct_chg", [[0.0, -1.0], [5.0, -1.0]])
+def test_upside_tail_volatility_requires_two_positive_return_samples(pct_chg):
+    row = compute_stock_character_features(
+        _character_bars("A", pct_chg), trade_date=TRADE_DATE
+    ).iloc[0]
+
+    assert pd.isna(row["upside_tail_volatility_2y"])
+
+
+def test_return_volatility_requires_two_valid_return_samples():
+    row = compute_stock_character_features(
+        _character_bars("A", [5.0, None]), trade_date=TRADE_DATE
+    ).iloc[0]
+
+    assert pd.isna(row["return_volatility_2y"])
+    assert pd.isna(row["upside_tail_volatility_2y"])
+
+
+def test_return_volatilities_use_sample_standard_deviation():
+    returns = np.array([0.05, 0.07])
+    row = compute_stock_character_features(
+        _character_bars("A", [5.0, 7.0]), trade_date=TRADE_DATE
+    ).iloc[0]
+
+    expected = np.std(returns, ddof=1)
+    assert row["return_volatility_2y"] == pytest.approx(expected)
+    assert row["upside_tail_volatility_2y"] == pytest.approx(expected)
+
+
 def test_pct_change_coverage_requires_400_valid_sessions_but_not_big_up_events():
     insufficient = compute_stock_character_features(
         _character_bars("A", [0.0] * 399 + [None] * 105), trade_date=TRADE_DATE
@@ -466,6 +495,7 @@ def test_pct_change_coverage_requires_400_valid_sessions_but_not_big_up_events()
 
     assert not insufficient["stock_character_coverage"]
     assert complete["stock_character_coverage"]
+    assert pd.isna(complete["upside_tail_volatility_2y"])
     assert pd.isna(complete["positive_after_big_up_1d_rate"])
     assert pd.isna(complete["positive_after_big_up_3d_rate"])
     assert pd.isna(complete["positive_after_big_up_5d_rate"])

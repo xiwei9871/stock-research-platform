@@ -327,6 +327,8 @@ Expected: missing functions.
 
 - [ ] **Step 3: Implement stock-character functions**
 
+首版只支持 2025—2026 年分析日，涨停识别统一使用当前制度，不实现更早历史制度分支。
+
 Add:
 
 ```python
@@ -337,18 +339,16 @@ def is_limit_up_day(
     *,
     trade_date: str,
 ) -> bool:
-    cutoff = pd.Timestamp(trade_date).date()
-    code = str(stock_code).zfill(6)
+    validate_trade_date(trade_date)
+    code = stock_code.strip()
     if is_st:
         threshold = 4.8
-    elif code.startswith(("688", "689")):
-        threshold = 19.5
-    elif code.startswith(("300", "301")) and cutoff >= date(2020, 8, 24):
-        threshold = 19.5
-    elif code.startswith(("4", "8")):
-        threshold = 29.5
+    elif code.startswith(("4", "8", "920")):
+        threshold = 29.8
+    elif code.startswith(("300", "301", "688", "689")):
+        threshold = 19.8
     else:
-        threshold = 9.5
+        threshold = 9.8
     return math.isfinite(float(pct_chg)) and float(pct_chg) >= threshold
 
 
