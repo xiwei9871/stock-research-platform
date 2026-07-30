@@ -89,14 +89,40 @@ def _strict_float(value: object, *, field_name: str, allow_missing: bool) -> flo
     return converted
 
 
+def _normalized_identifier(value: object, *, field_name: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{field_name} must be a non-empty string; got {value!r}")
+    return value.strip()
+
+
 def _normalized_stock_code(value: object) -> str:
-    if _is_missing_scalar(value) or not str(value).strip():
-        raise ValueError("stock_code must be non-empty")
-    return str(value).strip()
+    code = _normalized_identifier(value, field_name="stock_code")
+    valid_prefix = code.startswith(
+        (
+            "000",
+            "001",
+            "002",
+            "003",
+            "300",
+            "301",
+            "600",
+            "601",
+            "603",
+            "605",
+            "688",
+            "689",
+        )
+    ) or code.startswith(("4", "8"))
+    if len(code) != 6 or not code.isascii() or not code.isdigit() or not valid_prefix:
+        raise ValueError(
+            "stock_code must be a six-digit A-share or Beijing Stock Exchange code; "
+            f"got {value!r}"
+        )
+    return code
 
 
 def is_limit_up_day(
-    stock_code: object,
+    stock_code: str,
     is_st: object,
     pct_chg: object,
     *,
@@ -313,12 +339,9 @@ def compute_stock_character_features(
     if frame.empty:
         return pd.DataFrame(columns=STOCK_CHARACTER_COLUMNS)
 
-    invalid_asset = frame["asset_id"].map(
-        lambda value: _is_missing_scalar(value) or not str(value).strip()
+    frame["asset_id"] = frame["asset_id"].map(
+        lambda value: _normalized_identifier(value, field_name="asset_id")
     )
-    if invalid_asset.any():
-        raise ValueError("asset_id must be non-empty")
-    frame["asset_id"] = frame["asset_id"].map(lambda value: str(value).strip())
     frame["stock_code"] = frame["stock_code"].map(_normalized_stock_code)
 
     duplicates = frame.duplicated(["asset_id", "trade_date"], keep=False)

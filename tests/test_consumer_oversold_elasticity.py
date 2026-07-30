@@ -70,7 +70,7 @@ def _character_bars(
     asset_id: str,
     pct_chg: list[object],
     *,
-    stock_code: str = "000001.SZ",
+    stock_code: str = "000001",
     closes: list[object] | None = None,
     is_st: object = False,
     end: str = TRADE_DATE,
@@ -306,14 +306,14 @@ def test_empty_input_returns_stable_schema():
 @pytest.mark.parametrize(
     ("stock_code", "is_st", "threshold"),
     [
-        ("000001.SZ", False, 9.8),
-        ("300001.SZ", False, 19.8),
-        ("301001.SZ", False, 19.8),
-        ("688001.SH", False, 19.8),
-        ("689001.SH", False, 19.8),
-        ("430001.BJ", False, 29.8),
-        ("830001.BJ", False, 29.8),
-        ("000001.SZ", True, 4.8),
+        ("000001", False, 9.8),
+        ("300001", False, 19.8),
+        ("301001", False, 19.8),
+        ("688001", False, 19.8),
+        ("689001", False, 19.8),
+        ("430001", False, 29.8),
+        ("830001", False, 29.8),
+        ("000001", True, 4.8),
     ],
 )
 def test_limit_up_thresholds_match_current_market_rules(stock_code, is_st, threshold):
@@ -326,7 +326,7 @@ def test_limit_up_thresholds_match_current_market_rules(stock_code, is_st, thres
 
 
 def test_missing_pct_change_is_not_a_limit_up_day():
-    assert not is_limit_up_day("000001.SZ", False, None, trade_date=TRADE_DATE)
+    assert not is_limit_up_day("000001", False, None, trade_date=TRADE_DATE)
 
 
 def test_stock_character_counts_volatility_and_maximum_limit_up_streak_are_exact():
@@ -487,6 +487,52 @@ def test_stock_character_asset_and_code_must_be_nonempty(column, invalid):
 
     with pytest.raises(ValueError, match=column):
         compute_stock_character_features(bars, trade_date=TRADE_DATE)
+
+
+@pytest.mark.parametrize("column", ["asset_id", "stock_code"])
+@pytest.mark.parametrize("invalid", [123, True, False, Decimal("1")])
+def test_stock_character_identifiers_reject_non_strings_with_value_context(
+    column, invalid
+):
+    bars = _character_bars("A", [0.0])
+    bars[column] = bars[column].astype(object)
+    bars.loc[0, column] = invalid
+
+    with pytest.raises(ValueError) as exc_info:
+        compute_stock_character_features(bars, trade_date=TRADE_DATE)
+
+    message = str(exc_info.value)
+    assert column in message
+    assert repr(invalid) in message
+
+
+@pytest.mark.parametrize(
+    "invalid",
+    ["000001.SZ", "12345", "1234567", "ABCDEF", "100001", "200001", "900001"],
+)
+def test_stock_character_stock_code_must_be_a_six_digit_a_share_or_beijing_code(
+    invalid,
+):
+    bars = _character_bars("A", [0.0], stock_code=invalid)
+
+    with pytest.raises(ValueError, match=rf"stock_code.*{invalid}"):
+        compute_stock_character_features(bars, trade_date=TRADE_DATE)
+
+
+@pytest.mark.parametrize("invalid", [123, True, Decimal("1")])
+def test_limit_up_api_rejects_non_string_stock_code_with_value_context(invalid):
+    with pytest.raises(ValueError) as exc_info:
+        is_limit_up_day(invalid, False, 9.8, trade_date=TRADE_DATE)
+
+    message = str(exc_info.value)
+    assert "stock_code" in message
+    assert repr(invalid) in message
+
+
+@pytest.mark.parametrize("invalid", ["000001.SZ", "12345", "ABCDEF", "100001"])
+def test_limit_up_api_rejects_non_a_share_stock_code(invalid):
+    with pytest.raises(ValueError, match=rf"stock_code.*{invalid}"):
+        is_limit_up_day(invalid, False, 9.8, trade_date=TRADE_DATE)
 
 
 def test_empty_stock_character_input_returns_stable_schema():
