@@ -358,6 +358,19 @@ def _artifact_contents(output_dir: Path) -> dict[str, bytes]:
     }
 
 
+def _tree_snapshot(root: Path) -> list[tuple[str, str, bytes | str]]:
+    snapshot: list[tuple[str, str, bytes | str]] = []
+    for path in sorted(root.rglob("*")):
+        relative = str(path.relative_to(root))
+        if path.is_symlink():
+            snapshot.append((relative, "symlink", os.readlink(path)))
+        elif path.is_dir():
+            snapshot.append((relative, "dir", b""))
+        else:
+            snapshot.append((relative, "file", path.read_bytes()))
+    return snapshot
+
+
 def test_writes_nine_stable_artifacts_and_chinese_report(tmp_path):
     result = write_consumer_oversold_artifacts(_payload(), output_dir=tmp_path / "nested")
 
@@ -468,7 +481,16 @@ def test_empty_frames_still_write_asset_id_headers_and_missing_markdown_values(t
     for key in ("top20", "reserve", "preaudit", "comparison", "scores", "exclusions"):
         payload[key] = pd.DataFrame()
     payload["coverage"].update(publication_status="coverage_insufficient")
-    payload["coverage"]["unified_funnel"].update(preaudit=0, final=0, reserve=0)
+    payload["coverage"]["unified_funnel"].update(
+        full=0,
+        automatic=0,
+        preaudit=0,
+        evidence_reviewed=0,
+        evidence_complete=0,
+        elasticity_complete=0,
+        final=0,
+        reserve=0,
+    )
 
     result = write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
 
@@ -574,6 +596,24 @@ def test_funnel_order_and_unified_counts_are_consistent(tmp_path):
     payload = _payload()
     payload["coverage"]["funnel"]["valuation_eligible"] = 1
     with pytest.raises(ValueError, match="selected_expected.*selected_early"):
+        write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("full", 1),
+        ("automatic", 1),
+        ("evidence_reviewed", 1),
+        ("evidence_complete", 0),
+        ("elasticity_complete", 0),
+    ],
+)
+def test_rejects_unified_funnel_invariant_violations(field, value, tmp_path):
+    payload = _payload()
+    payload["coverage"]["unified_funnel"][field] = value
+
+    with pytest.raises(ValueError, match="unified_funnel|ready publication"):
         write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
 
 
@@ -712,6 +752,71 @@ def test_stale_tool_entries_are_cleaned_without_touching_unrelated_files(tmp_pat
     assert not stale_dir.exists()
     assert not stale_link.exists() and not stale_link.is_symlink()
     assert unrelated.is_dir()
+
+
+def test_rejects_releases_symlink_without_touching_external_victim(tmp_path):
+    output = tmp_path / "output"
+    output.mkdir()
+    victim = tmp_path / "victim"
+    managed_looking = victim / "consumer-oversold-existing"
+    managed_looking.mkdir(parents=True)
+    (victim / "sentinel.txt").write_text("sentinel", encoding="utf-8")
+    (managed_looking / "artifact.txt").write_text("preserve", encoding="utf-8")
+    before = _tree_snapshot(victim)
+    (output / ".releases").symlink_to(victim, target_is_directory=True)
+
+    with pytest.raises(ValueError, match=r"\.releases"):
+        write_consumer_oversold_artifacts(_payload(), output_dir=output)
+
+    assert _tree_snapshot(victim) == before
+
+
+def test_rejects_publish_lock_symlink_without_touching_external_file(tmp_path):
+    output = tmp_path / "output"
+    output.mkdir()
+    victim = tmp_path / "external.lock"
+    victim.write_bytes(b"external-lock-sentinel")
+    (output / ".publish.lock").symlink_to(victim)
+
+    with pytest.raises((OSError, ValueError), match="publish.lock|symlink|symbolic"):
+        write_consumer_oversold_artifacts(_payload(), output_dir=output)
+
+    assert victim.read_bytes() == b"external-lock-sentinel"
+    assert not (output / ".releases").exists()
+
+
+@pytest.mark.parametrize(
+    "target_kind",
+    ["absolute", "parent", "wrong_namespace", "missing_managed", "symlinked_managed"],
+)
+def test_rejects_unsafe_current_symlink_targets(target_kind, tmp_path):
+    output = tmp_path / "output"
+    releases = output / ".releases"
+    releases.mkdir(parents=True)
+    victim = tmp_path / "victim"
+    victim.mkdir()
+    (victim / "sentinel.txt").write_text("sentinel", encoding="utf-8")
+    before = _tree_snapshot(victim)
+    if target_kind == "absolute":
+        target = str(victim)
+    elif target_kind == "parent":
+        target = ".releases/../victim"
+    elif target_kind == "wrong_namespace":
+        target = "other/consumer-oversold-existing"
+    elif target_kind == "missing_managed":
+        target = ".releases/consumer-oversold-missing"
+    else:
+        (releases / "consumer-oversold-linked").symlink_to(
+            victim, target_is_directory=True
+        )
+        target = ".releases/consumer-oversold-linked"
+    (output / "current").symlink_to(target)
+
+    with pytest.raises(ValueError, match="current"):
+        write_consumer_oversold_artifacts(_payload(), output_dir=output)
+
+    assert os.readlink(output / "current") == target
+    assert _tree_snapshot(victim) == before
 
 
 def test_first_publish_creates_complete_current_release(tmp_path):

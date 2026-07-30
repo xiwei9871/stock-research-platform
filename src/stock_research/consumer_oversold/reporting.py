@@ -7,9 +7,10 @@ import json
 import math
 import os
 import shutil
+import stat
 import uuid
 from datetime import date, datetime
-from pathlib import Path
+from pathlib import Path, PurePath
 from typing import Any
 
 import numpy as np
@@ -251,6 +252,26 @@ def _normalize_coverage(
             raise TypeError(f"coverage unified_funnel {key} must be an integer")
         if int(value) < 0:
             raise ValueError(f"coverage unified_funnel {key} must be non-negative")
+    unified = {
+        key: int(coverage["unified_funnel"][key]) for key in _UNIFIED_FUNNEL_KEYS
+    }
+    if not unified["full"] >= unified["automatic"] >= unified["preaudit"]:
+        raise ValueError(
+            "coverage unified_funnel must satisfy full >= automatic >= preaudit"
+        )
+    if not (
+        unified["preaudit"]
+        >= unified["evidence_reviewed"]
+        >= unified["evidence_complete"]
+    ):
+        raise ValueError(
+            "coverage unified_funnel must satisfy "
+            "preaudit >= evidence_reviewed >= evidence_complete"
+        )
+    if unified["preaudit"] < unified["elasticity_complete"]:
+        raise ValueError(
+            "coverage unified_funnel preaudit must be at least elasticity_complete"
+        )
     status = coverage["publication_status"]
     if status not in _PUBLICATION_STATUSES:
         raise ValueError(
@@ -279,13 +300,26 @@ def _normalize_coverage(
             raise ValueError("ready publication top20 length must equal final_top_n")
         if reserve_count != reserve_top_n:
             raise ValueError("ready publication reserve length must equal reserve_top_n")
+        selected_count = top20_count + reserve_count
+        if unified["evidence_complete"] < minimum_evidence_complete:
+            raise ValueError(
+                "ready publication evidence_complete must meet minimum_evidence_complete"
+            )
+        if unified["evidence_complete"] < selected_count:
+            raise ValueError(
+                "ready publication evidence_complete must cover final plus reserve"
+            )
+        if unified["elasticity_complete"] < selected_count:
+            raise ValueError(
+                "ready publication elasticity_complete must cover final plus reserve"
+            )
     elif top20_count or reserve_count:
         raise ValueError("coverage_insufficient publication must not publish ranked selections")
-    if int(coverage["unified_funnel"]["preaudit"]) != preaudit_count:
+    if unified["preaudit"] != preaudit_count:
         raise ValueError("coverage unified_funnel preaudit must equal preaudit frame length")
-    if int(coverage["unified_funnel"]["final"]) != top20_count:
+    if unified["final"] != top20_count:
         raise ValueError("coverage unified_funnel final must equal top20 frame length")
-    if int(coverage["unified_funnel"]["reserve"]) != reserve_count:
+    if unified["reserve"] != reserve_count:
         raise ValueError("coverage unified_funnel reserve must equal reserve frame length")
     normalized = _json_safe(copy.deepcopy(coverage))
     normalized["trade_date"] = trade_date
@@ -796,6 +830,103 @@ def _restore_current(output_dir: Path, old_target: str | None) -> None:
         recovery.unlink(missing_ok=True)
 
 
+def _open_directory_no_follow(path: Path, name: str) -> int:
+    try:
+        metadata = os.lstat(path)
+    except FileNotFoundError:
+        try:
+            path.mkdir(mode=0o755)
+        except FileExistsError:
+            pass
+        metadata = os.lstat(path)
+    if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISDIR(metadata.st_mode):
+        raise ValueError(f"{name} must be a real directory, not a symlink")
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(path, flags)
+    except OSError as exc:
+        raise ValueError(f"{name} must be a real directory, not a symlink") from exc
+    opened = os.fstat(descriptor)
+    current = os.lstat(path)
+    if (
+        not stat.S_ISDIR(opened.st_mode)
+        or stat.S_ISLNK(current.st_mode)
+        or not stat.S_ISDIR(current.st_mode)
+        or (opened.st_dev, opened.st_ino) != (current.st_dev, current.st_ino)
+    ):
+        os.close(descriptor)
+        raise ValueError(f"{name} changed during validation")
+    return descriptor
+
+
+def _verify_directory_identity(path: Path, descriptor: int, name: str) -> None:
+    opened = os.fstat(descriptor)
+    current = os.lstat(path)
+    if (
+        stat.S_ISLNK(current.st_mode)
+        or not stat.S_ISDIR(current.st_mode)
+        or (opened.st_dev, opened.st_ino) != (current.st_dev, current.st_ino)
+    ):
+        raise ValueError(f"{name} changed during publication")
+
+
+def _validated_current_target(
+    current: Path, output_dir: Path, releases_dir: Path
+) -> str | None:
+    if not current.is_symlink():
+        if current.exists():
+            raise ValueError("output_dir/current must be a symlink managed by this publisher")
+        return None
+    target = os.readlink(current)
+    pure_target = PurePath(target)
+    parts = pure_target.parts
+    if (
+        pure_target.is_absolute()
+        or len(parts) != 2
+        or parts[0] != ".releases"
+        or not parts[1].startswith(_RELEASE_PREFIX)
+        or parts[1] == _RELEASE_PREFIX
+        or ".." in parts
+    ):
+        raise ValueError("output_dir/current target is not a managed relative release")
+    release = output_dir.joinpath(*parts)
+    try:
+        metadata = os.lstat(release)
+        resolved_release = release.resolve(strict=True)
+        resolved_releases = releases_dir.resolve(strict=True)
+    except (FileNotFoundError, RuntimeError, OSError) as exc:
+        raise ValueError("output_dir/current target must be an existing managed release") from exc
+    if (
+        stat.S_ISLNK(metadata.st_mode)
+        or not stat.S_ISDIR(metadata.st_mode)
+        or resolved_release.parent != resolved_releases
+    ):
+        raise ValueError("output_dir/current target must be a real managed release directory")
+    return target
+
+
+def _open_publish_lock(path: Path):
+    flags = os.O_CREAT | os.O_RDWR | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(path, flags, 0o600)
+    except OSError as exc:
+        raise ValueError("output_dir/.publish.lock must be a regular file, not a symlink") from exc
+    try:
+        opened = os.fstat(descriptor)
+        current = os.lstat(path)
+        if (
+            not stat.S_ISREG(opened.st_mode)
+            or stat.S_ISLNK(current.st_mode)
+            or not stat.S_ISREG(current.st_mode)
+            or (opened.st_dev, opened.st_ino) != (current.st_dev, current.st_ino)
+        ):
+            raise ValueError("output_dir/.publish.lock must be a regular file, not a symlink")
+        return os.fdopen(descriptor, "a+b")
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+
 def _artifact_digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -835,58 +966,67 @@ def _publish_release(
     report: str,
 ) -> None:
     releases_dir = output_dir / ".releases"
-    releases_dir.mkdir(exist_ok=True)
-    _cleanup_stale(output_dir, releases_dir)
-    identifier = uuid.uuid4().hex
-    staging = releases_dir / f"{_STAGING_PREFIX}{identifier}"
-    release = releases_dir / f"{_RELEASE_PREFIX}{identifier}"
-    temp_link = output_dir / f"{_TEMP_LINK_PREFIX}{identifier}"
-    current = output_dir / "current"
-    old_target: str | None = None
-    if current.is_symlink():
-        old_target = os.readlink(current)
-    elif current.exists():
-        raise ValueError("output_dir/current must be a symlink managed by this publisher")
-    switched = False
-    preserve_release = False
-    staging.mkdir()
+    releases_descriptor = _open_directory_no_follow(
+        releases_dir, "output_dir/.releases"
+    )
     try:
-        for key in _FRAME_KEYS:
-            _write_csv(frames[key], staging / UNIFIED_OUTPUT_FILENAMES[key])
-        _write_text(
-            json.dumps(coverage, ensure_ascii=False, indent=2, sort_keys=True, allow_nan=False)
-            + "\n",
-            staging / UNIFIED_OUTPUT_FILENAMES["coverage"],
+        _verify_directory_identity(
+            releases_dir, releases_descriptor, "output_dir/.releases"
         )
-        _write_text(report, staging / UNIFIED_OUTPUT_FILENAMES["report"])
-        manifest = _write_and_verify_manifest(staging)
-        _seal_release(staging, manifest)
-        os.replace(staging, release)
-        _dir_fsync(releases_dir)
-        relative_target = str(Path(".releases") / release.name)
-        os.symlink(relative_target, temp_link)
-        _dir_fsync(output_dir)
-        os.replace(temp_link, current)
-        switched = True
+        current = output_dir / "current"
+        old_target = _validated_current_target(current, output_dir, releases_dir)
+        _cleanup_stale(output_dir, releases_dir)
+        identifier = uuid.uuid4().hex
+        staging = releases_dir / f"{_STAGING_PREFIX}{identifier}"
+        release = releases_dir / f"{_RELEASE_PREFIX}{identifier}"
+        temp_link = output_dir / f"{_TEMP_LINK_PREFIX}{identifier}"
+        switched = False
+        preserve_release = False
+        staging.mkdir()
         try:
-            _dir_fsync(output_dir)
-        except OSError as publication_error:
-            try:
-                _restore_current(output_dir, old_target)
-                _dir_fsync(output_dir)
-            except BaseException as rollback_error:
-                preserve_release = True
-                failure = RuntimeError(
-                    f"artifact publication failed and rollback incomplete: {rollback_error}"
+            for key in _FRAME_KEYS:
+                _write_csv(frames[key], staging / UNIFIED_OUTPUT_FILENAMES[key])
+            _write_text(
+                json.dumps(
+                    coverage, ensure_ascii=False, indent=2, sort_keys=True, allow_nan=False
                 )
-                raise failure from publication_error
-            switched = False
-            raise
+                + "\n",
+                staging / UNIFIED_OUTPUT_FILENAMES["coverage"],
+            )
+            _write_text(report, staging / UNIFIED_OUTPUT_FILENAMES["report"])
+            manifest = _write_and_verify_manifest(staging)
+            _seal_release(staging, manifest)
+            _verify_directory_identity(
+                releases_dir, releases_descriptor, "output_dir/.releases"
+            )
+            os.replace(staging, release)
+            _dir_fsync(releases_dir)
+            relative_target = str(Path(".releases") / release.name)
+            os.symlink(relative_target, temp_link)
+            _dir_fsync(output_dir)
+            os.replace(temp_link, current)
+            switched = True
+            try:
+                _dir_fsync(output_dir)
+            except OSError as publication_error:
+                try:
+                    _restore_current(output_dir, old_target)
+                    _dir_fsync(output_dir)
+                except BaseException as rollback_error:
+                    preserve_release = True
+                    failure = RuntimeError(
+                        f"artifact publication failed and rollback incomplete: {rollback_error}"
+                    )
+                    raise failure from publication_error
+                switched = False
+                raise
+        finally:
+            _remove_path(staging)
+            temp_link.unlink(missing_ok=True)
+            if not switched and not preserve_release:
+                _remove_path(release)
     finally:
-        _remove_path(staging)
-        temp_link.unlink(missing_ok=True)
-        if not switched and not preserve_release:
-            _remove_path(release)
+        os.close(releases_descriptor)
 
 
 def write_consumer_oversold_artifacts(
@@ -944,7 +1084,7 @@ def write_consumer_oversold_artifacts(
     destination = Path(output_dir).expanduser().resolve()
     destination.mkdir(parents=True, exist_ok=True)
     lock_path = destination / ".publish.lock"
-    lock_handle = lock_path.open("a+b")
+    lock_handle = _open_publish_lock(lock_path)
     try:
         fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
         _publish_release(destination, frames, coverage, report)
