@@ -142,6 +142,62 @@ def _sort(frame: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
     return frame.sort_values(columns, kind="stable", na_position="last").reset_index(drop=True)
 
 
+def resolve_latest_complete_consumer_trade_date(*, service: str) -> str:
+    sql = """
+    WITH recent_open_dates AS (
+        SELECT DISTINCT trade_date
+        FROM market.trading_calendar
+        WHERE is_open = TRUE
+        ORDER BY trade_date DESC
+        LIMIT %s
+    )
+    SELECT d.trade_date,
+           TRUE AS is_open,
+           COUNT(DISTINCT b.asset_id)
+               FILTER (WHERE b.adjust_type = 'raw') AS raw_asset_count,
+           COUNT(DISTINCT b.asset_id)
+               FILTER (WHERE b.adjust_type = 'hfq') AS hfq_asset_count
+    FROM recent_open_dates d
+    LEFT JOIN market_daily_bar b ON b.trade_date = d.trade_date
+    GROUP BY d.trade_date
+    ORDER BY d.trade_date DESC
+    """
+    with connect(service) as conn:
+        rows = fetch_all(conn, sql, [20])
+    if not rows:
+        raise ValueError("no complete consumer trade date found in database")
+    required = {"trade_date", "is_open", "raw_asset_count", "hfq_asset_count"}
+    parsed: list[tuple[str, int, int]] = []
+    seen_dates: set[str] = set()
+    for row in rows:
+        if not isinstance(row, dict) or set(row) != required:
+            raise ValueError("database returned invalid consumer trade-date row")
+        if row["is_open"] is not True:
+            raise ValueError("database returned invalid closed consumer trade-date row")
+        trade_date = _date_text(row["trade_date"])
+        if not isinstance(trade_date, str) or trade_date in seen_dates:
+            raise ValueError("database returned invalid consumer trade date")
+        counts: list[int] = []
+        for field in ("raw_asset_count", "hfq_asset_count"):
+            value = row[field]
+            if type(value) is not int or value < 0:
+                raise ValueError(f"database returned invalid {field}")
+            counts.append(value)
+        seen_dates.add(trade_date)
+        parsed.append((trade_date, counts[0], counts[1]))
+    raw_max = max(row[1] for row in parsed)
+    hfq_max = max(row[2] for row in parsed)
+    for trade_date, raw_count, hfq_count in sorted(parsed, reverse=True):
+        if (
+            raw_count > 0
+            and hfq_count > 0
+            and raw_count >= raw_max * 0.99
+            and hfq_count >= hfq_max * 0.99
+        ):
+            return trade_date
+    raise ValueError("no complete consumer trade date found in database")
+
+
 def load_consumer_universe_frames(
     trade_date: str,
     *,

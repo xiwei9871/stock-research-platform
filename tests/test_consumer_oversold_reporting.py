@@ -214,6 +214,24 @@ def test_writes_exactly_nine_unified_artifacts(tmp_path):
     assert not ({"expected", "early"} & set(result["paths"]))
 
 
+def test_preaudit_only_writes_empty_selections_and_prominent_report_notice(tmp_path):
+    payload = _payload()
+    payload["top20"] = payload["top20"].iloc[0:0].copy()
+    payload["reserve"] = payload["reserve"].iloc[0:0].copy()
+    payload["coverage"]["publication_status"] = "preaudit_only"
+    payload["coverage"]["unified_funnel"].update(final=0, reserve=0)
+
+    result = write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+
+    assert result["top20"].empty
+    assert result["reserve"].empty
+    assert result["coverage"]["publication_status"] == "preaudit_only"
+    assert "仅预审，不是正式Top20" in result["report"]
+    assert Path(result["paths"]["top20"]).read_text(encoding="utf-8").startswith(
+        "asset_id"
+    )
+
+
 def test_report_renders_rank_percentiles_as_zero_to_one_hundred_scores(tmp_path):
     payload = _payload()
     payload["top20"].loc[0, "repair_rank_percentile"] = 100.0

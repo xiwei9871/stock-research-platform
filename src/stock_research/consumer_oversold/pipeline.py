@@ -563,6 +563,7 @@ def build_consumer_oversold_weekly_from_frames(
     evidence: pd.DataFrame,
     config: ConsumerOversoldConfig,
     output_dir: str | Path | None = None,
+    preaudit_only: bool = False,
 ) -> dict[str, Any]:
     """Compose the weekly consumer oversold research pipeline from in-memory frames."""
     copied = _copy_frames(frames)
@@ -649,7 +650,9 @@ def build_consumer_oversold_weekly_from_frames(
             "final": 0,
             "reserve": 0,
         }
-        coverage["publication_status"] = "coverage_insufficient"
+        coverage["publication_status"] = (
+            "preaudit_only" if preaudit_only else "coverage_insufficient"
+        )
         coverage["warnings"] = [
             f"evidence_complete_pool_below_{config.minimum_evidence_complete}"
         ]
@@ -875,7 +878,11 @@ def build_consumer_oversold_weekly_from_frames(
         ].copy(),
         config,
     )
-    unified = rank_unified_candidates(final_scored, config)
+    unified = (
+        _empty_unified_frame()
+        if preaudit_only
+        else rank_unified_candidates(final_scored, config)
+    )
     final_score_columns = (
         "residual_deviation_component_coverage",
         "residual_deviation_score",
@@ -912,9 +919,13 @@ def build_consumer_oversold_weekly_from_frames(
         publication_warnings.append(
             f"evidence_complete_pool_below_{config.minimum_evidence_complete}"
         )
-    if len(unified) < required_ranked:
+    if not preaudit_only and len(unified) < required_ranked:
         publication_warnings.append(f"ranked_pool_below_{required_ranked}")
-    publication_status = "ready" if not publication_warnings else "coverage_insufficient"
+    publication_status = (
+        "preaudit_only"
+        if preaudit_only
+        else "ready" if not publication_warnings else "coverage_insufficient"
+    )
     if publication_status == "ready":
         top20 = unified.loc[unified["final_rank"].le(config.final_top_n)].copy()
         reserve = unified.loc[
@@ -1105,6 +1116,7 @@ def run_consumer_oversold_weekly(
     evidence_path: str | Path,
     output_dir: str | Path,
     service: str = SETTINGS.research_service,
+    preaudit_only: bool = False,
 ) -> dict[str, Any]:
     """Load point-in-time database inputs and publish the weekly pipeline."""
     config = ConsumerOversoldConfig(trade_date=trade_date)
@@ -1180,4 +1192,5 @@ def run_consumer_oversold_weekly(
         evidence=evidence,
         config=config,
         output_dir=output_dir,
+        preaudit_only=preaudit_only,
     )

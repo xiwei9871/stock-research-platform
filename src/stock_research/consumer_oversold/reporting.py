@@ -102,7 +102,7 @@ _UNIFIED_FUNNEL_KEYS = (
     "final",
     "reserve",
 )
-_PUBLICATION_STATUSES = {"ready", "coverage_insufficient"}
+_PUBLICATION_STATUSES = {"ready", "coverage_insufficient", "preaudit_only"}
 _STAGING_PREFIX = ".consumer-oversold-staging-"
 _TEMP_LINK_PREFIX = ".consumer-oversold-current-tmp-"
 _RELEASE_PREFIX = "consumer-oversold-"
@@ -280,7 +280,8 @@ def _normalize_coverage(
     status = coverage["publication_status"]
     if status not in _PUBLICATION_STATUSES:
         raise ValueError(
-            "coverage publication_status must be ready or coverage_insufficient"
+            "coverage publication_status must be ready, coverage_insufficient, "
+            "or preaudit_only"
         )
     final_top_n = _positive_size(coverage, "final_top_n", 20)
     reserve_top_n = _positive_size(coverage, "reserve_top_n", 20)
@@ -780,6 +781,11 @@ def _render_report(
         "",
         f"> 发布状态：{_escape_table(coverage['publication_status'])}",
         "",
+        *(
+            ["> **仅预审，不是正式Top20。**", ""]
+            if coverage["publication_status"] == "preaudit_only"
+            else []
+        ),
         "## 数据覆盖",
         "",
         *_coverage_table(coverage),

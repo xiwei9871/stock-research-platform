@@ -24,6 +24,10 @@ def _result(*, top20=None, reserve=None, preaudit=None):
         "top20": [1, 2] if top20 is None else top20,
         "reserve": [1] if reserve is None else reserve,
         "preaudit": [1, 2, 3] if preaudit is None else preaudit,
+        "coverage": {"publication_status": "ready"},
+        "as_of_trade_date": "2026-07-29",
+        "date_mode": "explicit_backtest",
+        "publication_status": "ready",
     }
 
 
@@ -113,12 +117,13 @@ def test_consumer_oversold_evaluate_rejects_unsafe_paths_before_runner(
 def test_consumer_oversold_weekly_dispatches_and_prints_machine_lines(monkeypatch, capsys):
     captured = {}
 
-    def fake_run(*, trade_date, evidence_path, output_dir, service):
+    def fake_run(*, trade_date, evidence_path, output_dir, service, preaudit_only):
         captured.update(
             trade_date=trade_date,
             evidence_path=evidence_path,
             output_dir=output_dir,
             service=service,
+            preaudit_only=preaudit_only,
         )
         return _result()
 
@@ -143,6 +148,7 @@ def test_consumer_oversold_weekly_dispatches_and_prints_machine_lines(monkeypatc
         "evidence_path": "/tmp/evidence.csv",
         "output_dir": "/tmp/consumer",
         "service": "research_custom",
+        "preaudit_only": False,
     }
     assert capsys.readouterr().out.splitlines() == [
         "consumer_oversold|evidence|/tmp/consumer/evidence.csv",
@@ -157,7 +163,125 @@ def test_consumer_oversold_weekly_dispatches_and_prints_machine_lines(monkeypatc
         "consumer_oversold|top20_rows|2",
         "consumer_oversold|reserve_rows|1",
         "consumer_oversold|preaudit_rows|3",
+        "consumer_oversold|as_of_trade_date|2026-07-29",
+        "consumer_oversold|date_mode|explicit_backtest",
+        "consumer_oversold|publication_status|ready",
     ]
+
+
+def test_consumer_oversold_weekly_omitted_date_uses_latest_complete_resolver(
+    monkeypatch, capsys
+):
+    captured = {}
+
+    def fake_resolver(*, service):
+        captured["resolver_service"] = service
+        return "2026-07-30"
+
+    monkeypatch.setattr(cli, "_resolve_latest_complete_consumer_trade_date", fake_resolver)
+
+    def fake_run(**kwargs):
+        captured.update(kwargs)
+        result = _result()
+        result["coverage"]["publication_status"] = "coverage_insufficient"
+        return result
+
+    monkeypatch.setattr(cli, "_run_consumer_oversold_weekly", fake_run)
+    cli.main_for_args(
+        [
+            "consumer-oversold-weekly",
+            "--evidence-path",
+            "evidence.csv",
+            "--output-dir",
+            "output",
+            "--service",
+            "research_custom",
+        ]
+    )
+
+    assert captured["resolver_service"] == "research_custom"
+    assert captured["trade_date"] == "2026-07-30"
+    assert capsys.readouterr().out.splitlines()[-3:] == [
+        "consumer_oversold|as_of_trade_date|2026-07-30",
+        "consumer_oversold|date_mode|latest_complete_daily",
+        "consumer_oversold|publication_status|coverage_insufficient",
+    ]
+
+
+def test_consumer_oversold_weekly_explicit_date_skips_resolver(monkeypatch):
+    monkeypatch.setattr(
+        cli,
+        "_resolve_latest_complete_consumer_trade_date",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError("resolver must not run")),
+    )
+    monkeypatch.setattr(cli, "_run_consumer_oversold_weekly", lambda **kwargs: _result())
+
+    cli.main_for_args(
+        [
+            "consumer-oversold-weekly",
+            "--trade-date",
+            "2026-07-29",
+            "--evidence-path",
+            "evidence.csv",
+            "--output-dir",
+            "output",
+        ]
+    )
+
+
+def test_consumer_oversold_weekly_rejects_invalid_explicit_date_before_runner(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        cli,
+        "_resolve_latest_complete_consumer_trade_date",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError("resolver must not run")),
+    )
+    monkeypatch.setattr(
+        cli,
+        "_run_consumer_oversold_weekly",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError("runner must not run")),
+    )
+
+    with pytest.raises(ValueError, match="trade_date"):
+        cli.main_for_args(
+            [
+                "consumer-oversold-weekly",
+                "--trade-date",
+                "20260729",
+                "--evidence-path",
+                "evidence.csv",
+                "--output-dir",
+                "output",
+            ]
+        )
+
+
+def test_consumer_oversold_weekly_preaudit_flag_reaches_runner(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(
+        cli,
+        "_resolve_latest_complete_consumer_trade_date",
+        lambda *, service: "2026-07-30",
+    )
+
+    def fake_run(**kwargs):
+        captured.update(kwargs)
+        return _result(top20=[], reserve=[])
+
+    monkeypatch.setattr(cli, "_run_consumer_oversold_weekly", fake_run)
+    cli.main_for_args(
+        [
+            "consumer-oversold-weekly",
+            "--evidence-path",
+            "evidence.csv",
+            "--output-dir",
+            "output",
+            "--preaudit-only",
+        ]
+    )
+
+    assert captured["preaudit_only"] is True
 
 
 def test_consumer_oversold_weekly_defaults_to_configured_service(monkeypatch):
@@ -184,7 +308,7 @@ def test_consumer_oversold_weekly_defaults_to_configured_service(monkeypatch):
     assert captured["service"] == cli.SETTINGS.research_service
 
 
-@pytest.mark.parametrize("missing_option", ["--trade-date", "--evidence-path", "--output-dir"])
+@pytest.mark.parametrize("missing_option", ["--evidence-path", "--output-dir"])
 def test_consumer_oversold_weekly_requires_inputs(missing_option):
     argv = [
         "consumer-oversold-weekly",
@@ -241,7 +365,7 @@ def test_consumer_oversold_weekly_prints_zero_for_empty_rankings(monkeypatch, ca
         ]
     )
 
-    assert capsys.readouterr().out.splitlines()[-3:] == [
+    assert capsys.readouterr().out.splitlines()[-6:-3] == [
         "consumer_oversold|top20_rows|0",
         "consumer_oversold|reserve_rows|0",
         "consumer_oversold|preaudit_rows|0",
@@ -361,6 +485,23 @@ def test_consumer_oversold_weekly_validates_row_counts_before_printing(
         )
 
     assert capsys.readouterr().out == ""
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda result: result.pop("as_of_trade_date"),
+        lambda result: result.update(as_of_trade_date="20260730"),
+        lambda result: result.update(date_mode="latest_complete_daily\nforged"),
+        lambda result: result.update(publication_status="ready|forged"),
+    ],
+)
+def test_consumer_oversold_machine_lines_reject_invalid_metadata(mutate):
+    result = _result()
+    mutate(result)
+
+    with pytest.raises((KeyError, ValueError)):
+        cli._consumer_oversold_machine_lines(result)
 
 
 def test_existing_parser_command_still_parses():

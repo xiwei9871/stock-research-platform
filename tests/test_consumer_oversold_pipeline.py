@@ -596,8 +596,14 @@ def test_runner_uses_latest_close_times_shares_not_pe_or_ps(monkeypatch, tmp_pat
 
     captured = {}
 
-    def fake_build(*, frames, evidence, config, output_dir):
-        captured.update(frames=frames, evidence=evidence, config=config, output_dir=output_dir)
+    def fake_build(*, frames, evidence, config, output_dir, preaudit_only):
+        captured.update(
+            frames=frames,
+            evidence=evidence,
+            config=config,
+            output_dir=output_dir,
+            preaudit_only=preaudit_only,
+        )
         return {"ok": True}
 
     monkeypatch.setattr(pipeline, "build_consumer_oversold_weekly_from_frames", fake_build)
@@ -607,6 +613,7 @@ def test_runner_uses_latest_close_times_shares_not_pe_or_ps(monkeypatch, tmp_pat
         evidence_path=evidence_path,
         output_dir=tmp_path / "out",
         service="test-service",
+        preaudit_only=True,
     )
 
     assert result == {"ok": True}
@@ -623,6 +630,7 @@ def test_runner_uses_latest_close_times_shares_not_pe_or_ps(monkeypatch, tmp_pat
     assert current["net_debt"].isna().all()
     assert current["ebitda_ttm"].isna().all()
     assert captured["evidence"]["stock_code"].dtype.name == "string"
+    assert captured["preaudit_only"] is True
 
 
 def test_empty_consumer_pool_allows_schema_less_downstream_frames():
@@ -820,6 +828,53 @@ def test_unified_pipeline_honors_small_publication_config_and_empty_pool_schema(
         assert new_scenario_columns.issubset(empty[key].columns)
         assert old_scenario_columns.isdisjoint(empty[key].columns)
     assert empty["coverage"]["publication_status"] == "coverage_insufficient"
+
+
+def test_preaudit_only_publishes_top60_without_final_rankings(tmp_path):
+    frames, evidence, config = _frames()
+    small = replace(
+        config,
+        preaudit_size=2,
+        minimum_evidence_complete=2,
+        final_top_n=1,
+        reserve_top_n=1,
+    )
+
+    result = build_consumer_oversold_weekly_from_frames(
+        frames=frames,
+        evidence=evidence,
+        config=small,
+        output_dir=tmp_path,
+        preaudit_only=True,
+    )
+
+    assert len(result["preaudit"]) == 2
+    assert result["top20"].empty
+    assert result["reserve"].empty
+    assert result["coverage"]["publication_status"] == "preaudit_only"
+    assert result["coverage"]["unified_funnel"]["final"] == 0
+    assert result["coverage"]["unified_funnel"]["reserve"] == 0
+    assert result["comparison"]["new_rank"].isna().all()
+    assert "仅预审，不是正式Top20" in Path(result["paths"]["report"]).read_text(
+        encoding="utf-8"
+    )
+
+
+def test_preaudit_only_can_publish_before_manual_evidence_is_complete(tmp_path):
+    frames, evidence, config = _many_frames(5, 0)
+
+    result = build_consumer_oversold_weekly_from_frames(
+        frames=frames,
+        evidence=evidence,
+        config=config,
+        output_dir=tmp_path,
+        preaudit_only=True,
+    )
+
+    assert len(result["preaudit"]) == 5
+    assert result["coverage"]["publication_status"] == "preaudit_only"
+    assert result["coverage"]["unified_funnel"]["evidence_complete"] == 0
+    assert result["coverage"]["unified_funnel"]["elasticity_complete"] == 0
 
 
 def test_no_big_up_history_keeps_automatic_eligibility_and_enters_preaudit():

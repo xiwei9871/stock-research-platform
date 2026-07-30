@@ -65,6 +65,105 @@ def test_normalize_market_amount_rejects_invalid_source(source):
         loaders.normalize_market_amount(691_266.56, source)
 
 
+def test_resolver_skips_latest_incomplete_open_date(monkeypatch):
+    calls, services = _install_db(
+        monkeypatch,
+        [
+            [
+                {
+                    "trade_date": date(2026, 7, 30),
+                    "is_open": True,
+                    "raw_asset_count": 98,
+                    "hfq_asset_count": 100,
+                },
+                {
+                    "trade_date": date(2026, 7, 29),
+                    "is_open": True,
+                    "raw_asset_count": 100,
+                    "hfq_asset_count": 100,
+                },
+            ]
+        ],
+    )
+
+    assert (
+        loaders.resolve_latest_complete_consumer_trade_date(service="research-test")
+        == "2026-07-29"
+    )
+    assert services == ["research-test"]
+    sql, params = calls[0]
+    assert "FROM market.trading_calendar" in sql
+    assert "WHERE is_open = TRUE" in sql
+    assert "LIMIT %s" in sql
+    assert "COUNT(DISTINCT b.asset_id) FILTER (WHERE b.adjust_type = 'raw')" in sql
+    assert "COUNT(DISTINCT b.asset_id) FILTER (WHERE b.adjust_type = 'hfq')" in sql
+    assert params == [20]
+
+
+def test_resolver_uses_latest_date_when_both_adjustments_are_complete(monkeypatch):
+    _install_db(
+        monkeypatch,
+        [
+            [
+                {
+                    "trade_date": date(2026, 7, 30),
+                    "is_open": True,
+                    "raw_asset_count": 99,
+                    "hfq_asset_count": 99,
+                },
+                {
+                    "trade_date": date(2026, 7, 29),
+                    "is_open": True,
+                    "raw_asset_count": 100,
+                    "hfq_asset_count": 100,
+                },
+            ]
+        ],
+    )
+
+    assert (
+        loaders.resolve_latest_complete_consumer_trade_date(service="test")
+        == "2026-07-30"
+    )
+
+
+@pytest.mark.parametrize(
+    "rows",
+    [
+        [],
+        [
+            {
+                "trade_date": date(2026, 7, 30),
+                "is_open": False,
+                "raw_asset_count": 100,
+                "hfq_asset_count": 100,
+            }
+        ],
+        [
+            {
+                "trade_date": "not-a-date",
+                "is_open": True,
+                "raw_asset_count": 100,
+                "hfq_asset_count": 100,
+            }
+        ],
+        [
+            {
+                "trade_date": date(2026, 7, 30),
+                "is_open": True,
+                "raw_asset_count": 0,
+                "hfq_asset_count": 100,
+            }
+        ],
+    ],
+)
+def test_resolver_rejects_closed_empty_invalid_or_incomplete_rows(monkeypatch, rows):
+    _install_db(monkeypatch, [rows])
+
+    with pytest.raises(ValueError, match="complete consumer trade date|invalid"):
+        loaders.resolve_latest_complete_consumer_trade_date(service="test")
+
+
 def test_universe_loads_four_stable_frames_and_point_in_time_sql(monkeypatch):
     calls, services = _install_db(
         monkeypatch,

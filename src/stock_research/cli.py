@@ -1528,6 +1528,20 @@ def _run_consumer_oversold_weekly(**kwargs):
     return run_consumer_oversold_weekly(**kwargs)
 
 
+def _resolve_latest_complete_consumer_trade_date(*, service: str) -> str:
+    from stock_research.consumer_oversold.loaders import (
+        resolve_latest_complete_consumer_trade_date,
+    )
+
+    return resolve_latest_complete_consumer_trade_date(service=service)
+
+
+def _validate_consumer_oversold_trade_date(value: str) -> str:
+    from stock_research.consumer_oversold.contracts import validate_trade_date
+
+    return validate_trade_date(value)
+
+
 def _run_consumer_oversold_evaluation(**kwargs):
     from stock_research.consumer_oversold.evaluation import run_consumer_oversold_evaluation
 
@@ -1570,6 +1584,13 @@ def _consumer_oversold_machine_lines(result) -> list[str]:
     top20_rows = len(result["top20"])
     reserve_rows = len(result["reserve"])
     preaudit_rows = len(result["preaudit"])
+    as_of_trade_date = _validate_consumer_oversold_trade_date(result["as_of_trade_date"])
+    date_mode = result["date_mode"]
+    if date_mode not in {"explicit_backtest", "latest_complete_daily"}:
+        raise ValueError("consumer oversold result date_mode is invalid")
+    publication_status = result["publication_status"]
+    if publication_status not in {"ready", "coverage_insufficient", "preaudit_only"}:
+        raise ValueError("consumer oversold result publication_status is invalid")
     return [
         *(
             f"consumer_oversold|{key}|{validated_paths[key]}"
@@ -1578,6 +1599,9 @@ def _consumer_oversold_machine_lines(result) -> list[str]:
         f"consumer_oversold|top20_rows|{top20_rows}",
         f"consumer_oversold|reserve_rows|{reserve_rows}",
         f"consumer_oversold|preaudit_rows|{preaudit_rows}",
+        f"consumer_oversold|as_of_trade_date|{as_of_trade_date}",
+        f"consumer_oversold|date_mode|{date_mode}",
+        f"consumer_oversold|publication_status|{publication_status}",
     ]
 
 
@@ -3973,9 +3997,10 @@ def build_parser() -> argparse.ArgumentParser:
     daily_review_report.add_argument("--record-run", action="store_true")
 
     consumer_oversold_weekly = subparsers.add_parser("consumer-oversold-weekly")
-    consumer_oversold_weekly.add_argument("--trade-date", required=True)
+    consumer_oversold_weekly.add_argument("--trade-date")
     consumer_oversold_weekly.add_argument("--evidence-path", required=True)
     consumer_oversold_weekly.add_argument("--output-dir", required=True)
+    consumer_oversold_weekly.add_argument("--preaudit-only", action="store_true")
     consumer_oversold_weekly.add_argument("--service", default=SETTINGS.research_service)
 
     consumer_oversold_evaluate = subparsers.add_parser("consumer-oversold-evaluate")
@@ -7702,12 +7727,29 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
         output_dir = _validate_consumer_oversold_machine_path(
             args.output_dir, "--output-dir"
         )
+        if args.trade_date is None:
+            trade_date = _resolve_latest_complete_consumer_trade_date(
+                service=args.service
+            )
+            date_mode = "latest_complete_daily"
+        else:
+            trade_date = _validate_consumer_oversold_trade_date(args.trade_date)
+            date_mode = "explicit_backtest"
         result = _run_consumer_oversold_weekly(
-            trade_date=args.trade_date,
+            trade_date=trade_date,
             evidence_path=evidence_path,
             output_dir=output_dir,
             service=args.service,
+            preaudit_only=args.preaudit_only,
         )
+        if not isinstance(result.get("coverage"), dict):
+            raise ValueError("consumer oversold result coverage must be a dict")
+        result = {
+            **result,
+            "as_of_trade_date": trade_date,
+            "date_mode": date_mode,
+            "publication_status": result["coverage"]["publication_status"],
+        }
         lines = _consumer_oversold_machine_lines(result)
         for line in lines:
             print(line)
