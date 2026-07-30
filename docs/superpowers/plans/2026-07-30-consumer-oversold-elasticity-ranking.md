@@ -327,7 +327,7 @@ Expected: missing functions.
 
 - [ ] **Step 3: Implement stock-character functions**
 
-首版只支持 2025—2026 年分析日，涨停识别统一使用当前制度，不实现更早历史制度分支。
+首版只支持 2025—2026 年分析日，涨停识别统一使用当前制度，不实现制度日期分支。
 
 Add:
 
