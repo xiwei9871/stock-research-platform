@@ -617,6 +617,30 @@ def test_rejects_unified_funnel_invariant_violations(field, value, tmp_path):
         write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
 
 
+def test_rejects_elasticity_complete_above_evidence_complete(tmp_path):
+    payload = _payload()
+    third = payload["preaudit"].iloc[[1]].copy(deep=True)
+    third.loc[:, "asset_id"] = "000003.SZ"
+    third.loc[:, "stock_code"] = "000003"
+    third.loc[:, "stock_name"] = "丙公司"
+    third.loc[:, "final_rank"] = 3
+    payload["preaudit"] = pd.concat([payload["preaudit"], third], ignore_index=True)
+    payload["coverage"].update(preaudit_size=3)
+    payload["coverage"]["unified_funnel"].update(
+        full=3,
+        automatic=3,
+        preaudit=3,
+        evidence_reviewed=2,
+        evidence_complete=2,
+        elasticity_complete=3,
+        final=1,
+        reserve=1,
+    )
+
+    with pytest.raises(ValueError, match="evidence_complete.*elasticity_complete"):
+        write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+
+
 @pytest.mark.parametrize("bad", [np.nan, np.inf, -np.inf])
 def test_rejects_non_json_safe_coverage_values(bad, tmp_path):
     payload = _payload()

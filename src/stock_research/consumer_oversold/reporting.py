@@ -272,6 +272,11 @@ def _normalize_coverage(
         raise ValueError(
             "coverage unified_funnel preaudit must be at least elasticity_complete"
         )
+    if unified["evidence_complete"] < unified["elasticity_complete"]:
+        raise ValueError(
+            "coverage unified_funnel evidence_complete must be at least "
+            "elasticity_complete"
+        )
     status = coverage["publication_status"]
     if status not in _PUBLICATION_STATUSES:
         raise ValueError(
