@@ -1,6 +1,26 @@
 /// <reference types="vite/client" />
 
-import { describe, expect, it } from 'vitest';
+import { render } from '@testing-library/react';
+import { createElement } from 'react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const { cleanupReleaseRefresh, installReleaseRefresh } = vi.hoisted(() => ({
+  cleanupReleaseRefresh: vi.fn(),
+  installReleaseRefresh: vi.fn()
+}));
+
+vi.mock('../src/releaseRefresh', () => ({ installReleaseRefresh }));
+vi.mock('../src/components/DashboardAuthRoot', () => ({
+  DashboardAuthRoot: () => null
+}));
+
+import { App } from '../src/App';
+
+beforeEach(() => {
+  cleanupReleaseRefresh.mockReset();
+  installReleaseRefresh.mockReset();
+  installReleaseRefresh.mockReturnValue(cleanupReleaseRefresh);
+});
 
 describe('canonical frontend entry', () => {
   it('does not keep legacy public snapshot frontend entrypoints', () => {
@@ -15,5 +35,16 @@ describe('canonical frontend entry', () => {
     ]);
 
     expect(Object.keys(legacyEntryModules)).toEqual([]);
+  });
+
+  it('installs and cleans up release refresh detection at the application root', () => {
+    const view = render(createElement(App));
+
+    expect(installReleaseRefresh).toHaveBeenCalledWith({
+      currentReleaseId: import.meta.env.VITE_RELEASE_ID ?? ''
+    });
+
+    view.unmount();
+    expect(cleanupReleaseRefresh).toHaveBeenCalledTimes(1);
   });
 });

@@ -240,6 +240,18 @@ def test_release_sync_versions_compose_images_and_injects_provenance():
         assert f"proxy_set_header {header}" in nginx_config
 
 
+def test_dashboard_nginx_keeps_entrypoints_fresh_and_assets_immutable():
+    nginx_config = _read("deploy/dashboard-nginx.conf")
+
+    no_store = 'add_header Cache-Control "no-store, no-cache, must-revalidate" always;'
+
+    assert "location = /index.html" in nginx_config
+    assert "location = /release.json" in nginx_config
+    assert nginx_config.count(no_store) >= 3
+    assert "location /assets/" in nginx_config
+    assert 'add_header Cache-Control "public, immutable";' in nginx_config
+
+
 def test_release_sync_provides_frontend_dist_in_docker_build_context():
     script = _read("deploy/sync_dashboard_release.sh")
 
