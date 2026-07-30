@@ -17,7 +17,12 @@ import pandas as pd
 from stock_research.config import SETTINGS
 from stock_research.db import connect, fetch_all
 
-from .contracts import OUTPUT_FILENAMES, REPAIR_BUCKETS, validate_trade_date
+from .contracts import (
+    LEGACY_OUTPUT_FILENAMES,
+    REPAIR_BUCKETS,
+    UNIFIED_OUTPUT_FILENAMES,
+    validate_trade_date,
+)
 
 
 EVALUATION_FILENAMES = {
@@ -42,6 +47,10 @@ _BAR_COLUMNS = (
     "trade_date",
     "close",
 )
+_RELEASE_SCHEMAS = {
+    "legacy": LEGACY_OUTPUT_FILENAMES,
+    "unified": UNIFIED_OUTPUT_FILENAMES,
+}
 
 
 def _required_columns(frame: pd.DataFrame, columns: Iterable[str], name: str) -> None:
@@ -56,7 +65,7 @@ def _normalized_horizons(horizons: Iterable[int]) -> tuple[int, ...]:
         raise ValueError("horizons must contain positive integers")
     if len(set(normalized)) != len(normalized):
         raise ValueError("horizons must be unique")
-    return normalized
+    return tuple(sorted(normalized))
 
 
 def _asset_horizon(
@@ -91,7 +100,7 @@ def _asset_horizon(
 def evaluate_consumer_oversold_snapshots(
     snapshots: pd.DataFrame,
     bars: pd.DataFrame,
-    horizons: Iterable[int] = (20, 60, 120),
+    horizons: Iterable[int] = (5, 20),
 ) -> dict[str, pd.DataFrame]:
     """Evaluate immutable weekly selections against subsequent hfq closes."""
     if not isinstance(snapshots, pd.DataFrame) or not isinstance(bars, pd.DataFrame):
@@ -100,7 +109,10 @@ def evaluate_consumer_oversold_snapshots(
     _required_columns(bars, _BAR_COLUMNS, "bars")
     horizon_values = _normalized_horizons(horizons)
 
-    selected = snapshots.loc[:, _SNAPSHOT_COLUMNS].copy(deep=True)
+    selected_columns = [*_SNAPSHOT_COLUMNS]
+    if "snapshot_rank" in snapshots.columns:
+        selected_columns.append("snapshot_rank")
+    selected = snapshots.loc[:, selected_columns].copy(deep=True)
     selected["trade_date"] = selected["trade_date"].map(validate_trade_date)
     selected["asset_id"] = selected["asset_id"].astype(str).str.strip()
     if selected["asset_id"].eq("").any():
@@ -207,55 +219,109 @@ def _digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _verified_release(release: Path) -> bool:
+def _verified_release(release: Path) -> str | None:
     manifest = release / ".manifest.sha256"
     try:
         release_mode = release.lstat().st_mode
         if not stat.S_ISDIR(release_mode) or release_mode & 0o222:
-            return False
+            return None
         manifest_mode = manifest.lstat().st_mode
         if not stat.S_ISREG(manifest_mode) or manifest_mode & 0o222:
-            return False
-        entries = {}
+            return None
+        entries: dict[str, str] = {}
         for line in manifest.read_text(encoding="utf-8").splitlines():
             digest, filename = line.split("  ", 1)
+            if filename in entries:
+                return None
             entries[filename] = digest
-        required = set(OUTPUT_FILENAMES.values())
-        return required.issubset(entries) and all(
+        schema = next(
+            (
+                identifier
+                for identifier, filenames in _RELEASE_SCHEMAS.items()
+                if set(entries) == set(filenames.values())
+            ),
+            None,
+        )
+        if schema is None:
+            return None
+        required = set(_RELEASE_SCHEMAS[schema].values())
+        if {path.name for path in release.iterdir()} != {EVALUATION_MANIFEST_FILENAME, *required}:
+            return None
+        valid = all(
             stat.S_ISREG((release / filename).lstat().st_mode)
             and not ((release / filename).lstat().st_mode & 0o222)
             and entries[filename] == _digest(release / filename)
             for filename in required
         )
+        return schema if valid else None
     except (OSError, ValueError):
-        return False
+        return None
 
 
 def _release_frames(release: Path, end_date: str) -> tuple[str, pd.DataFrame, pd.DataFrame] | None:
-    if not _verified_release(release):
+    schema = _verified_release(release)
+    if schema is None:
         return None
+    filenames = _RELEASE_SCHEMAS[schema]
     try:
         coverage = json.loads(
-            (release / OUTPUT_FILENAMES["coverage"]).read_text(encoding="utf-8")
+            (release / filenames["coverage"]).read_text(encoding="utf-8")
         )
         trade_date = validate_trade_date(coverage["trade_date"])
         if trade_date > end_date:
             return None
-        expected = pd.read_csv(release / OUTPUT_FILENAMES["expected"], dtype=str)
-        early = pd.read_csv(release / OUTPUT_FILENAMES["early"], dtype=str)
-        scores = pd.read_csv(release / OUTPUT_FILENAMES["scores"], dtype=str)
-        evidence = pd.read_csv(release / OUTPUT_FILENAMES["evidence"], dtype=str)
-        selected_parts = []
-        for frame, bucket in zip((expected, early), REPAIR_BUCKETS, strict=True):
-            _required_columns(
-                frame,
-                ("asset_id", "stock_code", "stock_name", "consumer_subindustry", "repair_bucket"),
-                bucket,
+        scores = pd.read_csv(release / filenames["scores"], dtype=str)
+        evidence = pd.read_csv(release / filenames["evidence"], dtype=str)
+        if schema == "legacy":
+            expected = pd.read_csv(release / filenames["expected"], dtype=str)
+            early = pd.read_csv(release / filenames["early"], dtype=str)
+            selected_parts = []
+            for frame, bucket in zip((expected, early), REPAIR_BUCKETS, strict=True):
+                _required_columns(
+                    frame,
+                    (
+                        "asset_id",
+                        "stock_code",
+                        "stock_name",
+                        "consumer_subindustry",
+                        "repair_bucket",
+                        "bucket_rank",
+                    ),
+                    bucket,
+                )
+                if not frame.empty and not frame["repair_bucket"].eq(bucket).all():
+                    return None
+                selected_parts.append(frame)
+            selected = pd.concat(selected_parts, ignore_index=True)
+            selected["snapshot_rank"] = pd.to_numeric(
+                selected["bucket_rank"], errors="coerce"
             )
-            if not frame.empty and not frame["repair_bucket"].eq(bucket).all():
+        else:
+            if coverage.get("publication_status") != "ready":
                 return None
-            selected_parts.append(frame)
-        selected = pd.concat(selected_parts, ignore_index=True)
+            final_top_n = coverage.get("final_top_n")
+            if type(final_top_n) is not int or final_top_n <= 0:
+                return None
+            selected = pd.read_csv(release / filenames["top20"], dtype=str)
+            _required_columns(
+                selected,
+                (
+                    "asset_id",
+                    "stock_code",
+                    "stock_name",
+                    "consumer_subindustry",
+                    "repair_bucket",
+                    "final_rank",
+                ),
+                "top20",
+            )
+            if len(selected) != final_top_n:
+                return None
+            selected["snapshot_rank"] = pd.to_numeric(
+                selected["final_rank"], errors="coerce"
+            )
+        if selected["snapshot_rank"].isna().any():
+            return None
         _required_columns(evidence, ("asset_id", "repair_bucket"), "evidence")
         if not selected.empty:
             matched = selected.loc[:, ["asset_id", "repair_bucket"]].merge(
@@ -267,7 +333,7 @@ def _release_frames(release: Path, end_date: str) -> tuple[str, pd.DataFrame, pd
             if not matched["_merge"].eq("both").all():
                 return None
         selected = selected.assign(trade_date=trade_date, snapshot_release=str(release))
-        selected = selected.loc[:, [*_SNAPSHOT_COLUMNS, "snapshot_release"]]
+        selected = selected.loc[:, [*_SNAPSHOT_COLUMNS, "snapshot_rank", "snapshot_release"]]
         _required_columns(scores, ("asset_id", "consumer_subindustry"), "scores")
         membership = scores.loc[:, ["asset_id", "consumer_subindustry"]].dropna().copy()
         membership["asset_id"] = membership["asset_id"].astype(str).str.strip()

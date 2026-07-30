@@ -9,9 +9,13 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from stock_research.consumer_oversold.contracts import OUTPUT_FILENAMES
+from stock_research.consumer_oversold.contracts import (
+    LEGACY_OUTPUT_FILENAMES,
+    UNIFIED_OUTPUT_FILENAMES,
+)
 from stock_research.consumer_oversold.evaluation import (
     EVALUATION_FILENAMES,
+    _discover_snapshots,
     _load_evaluation_bars,
     _publish,
     _verified_release,
@@ -72,9 +76,9 @@ def _bars(periods: int = 121) -> pd.DataFrame:
     )
 
 
-def _manifest(release: Path) -> None:
+def _manifest(release: Path, filenames=LEGACY_OUTPUT_FILENAMES) -> None:
     lines = []
-    for filename in sorted(OUTPUT_FILENAMES.values()):
+    for filename in sorted(filenames.values()):
         path = release / filename
         lines.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {filename}")
         path.chmod(0o444)
@@ -102,16 +106,17 @@ def _sealed_release(
                 "stock_name": stock_name or asset_id,
                 "consumer_subindustry": "food",
                 "repair_bucket": bucket,
+                "bucket_rank": 1,
             }
         ]
     )
     empty = selected.iloc[0:0].copy()
     selected.to_csv(
-        release / OUTPUT_FILENAMES["expected" if bucket == "expected_repair" else "early"],
+        release / LEGACY_OUTPUT_FILENAMES["expected" if bucket == "expected_repair" else "early"],
         index=False,
     )
     empty.to_csv(
-        release / OUTPUT_FILENAMES["early" if bucket == "expected_repair" else "expected"],
+        release / LEGACY_OUTPUT_FILENAMES["early" if bucket == "expected_repair" else "expected"],
         index=False,
     )
     scores = pd.concat(
@@ -131,22 +136,91 @@ def _sealed_release(
         ],
         ignore_index=True,
     )
-    scores.to_csv(release / OUTPUT_FILENAMES["scores"], index=False)
+    scores.to_csv(release / LEGACY_OUTPUT_FILENAMES["scores"], index=False)
     pd.DataFrame(columns=["asset_id", "exclusion_reasons"]).to_csv(
-        release / OUTPUT_FILENAMES["exclusions"], index=False
+        release / LEGACY_OUTPUT_FILENAMES["exclusions"], index=False
     )
     evidence = selected.loc[:, ["asset_id", "stock_code", "repair_bucket"]].copy()
-    evidence.to_csv(release / OUTPUT_FILENAMES["evidence"], index=False)
-    (release / OUTPUT_FILENAMES["coverage"]).write_text(
+    evidence.to_csv(release / LEGACY_OUTPUT_FILENAMES["evidence"], index=False)
+    (release / LEGACY_OUTPUT_FILENAMES["coverage"]).write_text(
         json.dumps({"trade_date": trade_date}), encoding="utf-8"
     )
-    (release / OUTPUT_FILENAMES["report"]).write_text("weekly report\n", encoding="utf-8")
+    (release / LEGACY_OUTPUT_FILENAMES["report"]).write_text("weekly report\n", encoding="utf-8")
     _manifest(release)
+    return release
+
+
+def _sealed_unified_release(
+    parent: Path,
+    name: str,
+    trade_date: str,
+    *,
+    count: int = 20,
+    publication_status: str = "ready",
+) -> Path:
+    release = parent / ".releases" / name
+    release.mkdir(parents=True)
+    selected = pd.DataFrame(
+        [
+            {
+                "asset_id": f"U{rank:02d}",
+                "stock_code": f"{rank:06d}",
+                "stock_name": f"Unified {rank}",
+                "consumer_subindustry": "food",
+                "repair_bucket": "expected_repair" if rank % 2 else "early_validation",
+                "final_rank": rank,
+            }
+            for rank in range(1, count + 1)
+        ]
+    )
+    selected.to_csv(release / UNIFIED_OUTPUT_FILENAMES["top20"], index=False)
+    scores = pd.concat(
+        [
+            selected.drop(columns="final_rank"),
+            pd.DataFrame(
+                [{
+                    "asset_id": "PEER",
+                    "stock_code": "999999",
+                    "stock_name": "Peer",
+                    "consumer_subindustry": "food",
+                    "repair_bucket": "",
+                }]
+            ),
+        ],
+        ignore_index=True,
+    )
+    scores.to_csv(release / UNIFIED_OUTPUT_FILENAMES["scores"], index=False)
+    selected.loc[:, ["asset_id", "stock_code", "repair_bucket"]].to_csv(
+        release / UNIFIED_OUTPUT_FILENAMES["evidence"], index=False
+    )
+    pd.DataFrame(columns=["asset_id", "exclusion_reasons"]).to_csv(
+        release / UNIFIED_OUTPUT_FILENAMES["exclusions"], index=False
+    )
+    for key in ("reserve", "preaudit", "comparison"):
+        pd.DataFrame(columns=["asset_id"]).to_csv(
+            release / UNIFIED_OUTPUT_FILENAMES[key], index=False
+        )
+    (release / UNIFIED_OUTPUT_FILENAMES["coverage"]).write_text(
+        json.dumps(
+            {
+                "trade_date": trade_date,
+                "publication_status": publication_status,
+                "final_top_n": count,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (release / UNIFIED_OUTPUT_FILENAMES["report"]).write_text(
+        "weekly report\n", encoding="utf-8"
+    )
+    _manifest(release, UNIFIED_OUTPUT_FILENAMES)
     return release
 
 
 def test_forward_evaluation_computes_absolute_excess_and_path_drawdown():
     result = evaluate_consumer_oversold_snapshots(_snapshots(), _bars())
+
+    assert set(result["detail"]["horizon"]) == {5, 20}
 
     row = result["detail"].query("asset_id == 'A' and horizon == 20").iloc[0]
     assert row["repair_bucket"] == "expected_repair"
@@ -159,8 +233,11 @@ def test_forward_evaluation_computes_absolute_excess_and_path_drawdown():
 
 
 def test_forward_evaluation_keeps_incomplete_horizons_pending_and_summarizes():
-    result = evaluate_consumer_oversold_snapshots(_snapshots(), _bars(periods=61))
+    result = evaluate_consumer_oversold_snapshots(
+        _snapshots(), _bars(periods=61), horizons=(120, 60, 20)
+    )
 
+    assert result["detail"]["horizon"].drop_duplicates().tolist() == [20, 60, 120]
     pending = result["detail"].query("asset_id == 'A' and horizon == 120").iloc[0]
     assert pending["evaluation_status"] == "pending"
     assert pd.isna(pending["forward_return"])
@@ -311,7 +388,7 @@ def test_run_prefers_current_sealed_release_and_deduplicates_trade_date(tmp_path
     old = _sealed_release(week, "consumer-oversold-old", "2026-01-05", "OLD", "expected_repair")
     current = _sealed_release(week, "consumer-oversold-current", "2026-01-05", "A", "expected_repair")
     (week / "current").symlink_to(Path(".releases") / current.name, target_is_directory=True)
-    loose = week / OUTPUT_FILENAMES["expected"]
+    loose = week / LEGACY_OUTPUT_FILENAMES["expected"]
     loose.write_text("asset_id,repair_bucket\nLOOSE,expected_repair\n", encoding="utf-8")
     raw_bars = _bars().drop(columns=["snapshot_trade_date", "consumer_subindustry"])
     monkeypatch.setattr(
@@ -359,7 +436,7 @@ def test_run_rejects_tampered_release_and_overlapping_paths(tmp_path, monkeypatc
     week = tmp_path / "snapshots" / "2026-01-05"
     release = _sealed_release(week, "consumer-oversold-current", "2026-01-05", "A", "expected_repair")
     (week / "current").symlink_to(Path(".releases") / release.name, target_is_directory=True)
-    evidence = release / OUTPUT_FILENAMES["evidence"]
+    evidence = release / LEGACY_OUTPUT_FILENAMES["evidence"]
     evidence.chmod(0o644)
     evidence.write_text(evidence.read_text(encoding="utf-8") + "tampered", encoding="utf-8")
     monkeypatch.setattr(
@@ -382,12 +459,12 @@ def test_verified_release_rejects_writable_release_directory(tmp_path):
     )
     release.chmod(0o755)
 
-    assert _verified_release(release) is False
+    assert _verified_release(release) is None
 
 
 @pytest.mark.parametrize(
     "filename",
-    [".manifest.sha256", *OUTPUT_FILENAMES.values()],
+    [".manifest.sha256", *LEGACY_OUTPUT_FILENAMES.values()],
 )
 def test_verified_release_rejects_writable_manifest_or_artifact(tmp_path, filename):
     release = _sealed_release(
@@ -395,14 +472,14 @@ def test_verified_release_rejects_writable_manifest_or_artifact(tmp_path, filena
     )
     (release / filename).chmod(0o644)
 
-    assert _verified_release(release) is False
+    assert _verified_release(release) is None
 
 
 def test_verified_release_rejects_symlink_artifact_even_when_hash_matches(tmp_path):
     release = _sealed_release(
         tmp_path, "consumer-oversold-current", "2026-01-05", "A", "expected_repair"
     )
-    artifact = release / OUTPUT_FILENAMES["evidence"]
+    artifact = release / LEGACY_OUTPUT_FILENAMES["evidence"]
     external = tmp_path / "external-evidence.csv"
     external.write_bytes(artifact.read_bytes())
     external.chmod(0o444)
@@ -411,7 +488,7 @@ def test_verified_release_rejects_symlink_artifact_even_when_hash_matches(tmp_pa
     artifact.symlink_to(external)
     release.chmod(0o555)
 
-    assert _verified_release(release) is False
+    assert _verified_release(release) is None
     with pytest.raises(ValueError, match="must not overlap"):
         run_consumer_oversold_evaluation(
             snapshots_root=tmp_path / "snapshots",
@@ -419,6 +496,124 @@ def test_verified_release_rejects_symlink_artifact_even_when_hash_matches(tmp_pa
             output_dir=tmp_path / "snapshots" / "evaluation",
             service="test",
         )
+
+
+def test_verified_release_identifies_exact_legacy_and_unified_schemas(tmp_path):
+    legacy = _sealed_release(
+        tmp_path / "legacy", "consumer-oversold-legacy", "2026-01-05", "A", "expected_repair"
+    )
+    unified = _sealed_unified_release(
+        tmp_path / "unified", "consumer-oversold-unified", "2026-01-12"
+    )
+
+    assert _verified_release(legacy) == "legacy"
+    assert _verified_release(unified) == "unified"
+
+
+@pytest.mark.parametrize("mutation", ["extra", "missing", "hybrid"])
+def test_verified_release_rejects_non_exact_manifest_file_sets(tmp_path, mutation):
+    release = _sealed_release(
+        tmp_path, "consumer-oversold-current", "2026-01-05", "A", "expected_repair"
+    )
+    release.chmod(0o755)
+    manifest = release / ".manifest.sha256"
+    manifest.chmod(0o644)
+    lines = manifest.read_text(encoding="utf-8").splitlines()
+    if mutation == "missing":
+        lines.pop()
+    else:
+        name = (
+            "unexpected.csv"
+            if mutation == "extra"
+            else UNIFIED_OUTPUT_FILENAMES["top20"]
+        )
+        artifact = release / name
+        artifact.write_text("asset_id\n", encoding="utf-8")
+        artifact.chmod(0o444)
+        lines.append(f"{hashlib.sha256(artifact.read_bytes()).hexdigest()}  {name}")
+    manifest.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    manifest.chmod(0o444)
+    release.chmod(0o555)
+
+    assert _verified_release(release) is None
+
+
+def test_discovery_reads_unified_top20_with_fixed_membership_and_final_rank(tmp_path):
+    week = tmp_path / "snapshots" / "2026-01-05"
+    release = _sealed_unified_release(
+        week, "consumer-oversold-unified", "2026-01-05"
+    )
+    (week / "current").symlink_to(Path(".releases") / release.name, target_is_directory=True)
+
+    snapshots, membership = _discover_snapshots(tmp_path / "snapshots", "2026-07-29")
+
+    assert len(snapshots) == 20
+    assert snapshots["snapshot_rank"].tolist() == list(range(1, 21))
+    assert set(snapshots["repair_bucket"]) == {"expected_repair", "early_validation"}
+    assert set(membership["asset_id"]) == {*(f"U{rank:02d}" for rank in range(1, 21)), "PEER"}
+
+
+def test_discovery_prefers_current_unified_release_over_legacy_on_same_date(tmp_path):
+    week = tmp_path / "snapshots" / "2026-01-05"
+    _sealed_release(week, "consumer-oversold-old", "2026-01-05", "OLD", "expected_repair")
+    current = _sealed_unified_release(
+        week, "consumer-oversold-current", "2026-01-05", count=2
+    )
+    (week / "current").symlink_to(Path(".releases") / current.name, target_is_directory=True)
+
+    snapshots, _ = _discover_snapshots(tmp_path / "snapshots", "2026-07-29")
+
+    assert set(snapshots["asset_id"]) == {"U01", "U02"}
+
+
+@pytest.mark.parametrize("invalid", ["status", "count"])
+def test_discovery_rejects_unready_or_mismatched_unified_release(tmp_path, invalid):
+    release = _sealed_unified_release(
+        tmp_path, "consumer-oversold-current", "2026-01-05",
+        publication_status="draft" if invalid == "status" else "ready",
+    )
+    if invalid == "count":
+        coverage = release / UNIFIED_OUTPUT_FILENAMES["coverage"]
+        release.chmod(0o755)
+        coverage.chmod(0o644)
+        payload = json.loads(coverage.read_text(encoding="utf-8"))
+        payload["final_top_n"] = 19
+        coverage.write_text(json.dumps(payload), encoding="utf-8")
+        (release / ".manifest.sha256").chmod(0o644)
+        _manifest(release, UNIFIED_OUTPUT_FILENAMES)
+
+    with pytest.raises(ValueError, match="no valid sealed"):
+        _discover_snapshots(tmp_path, "2026-07-29")
+
+
+def test_end_date_before_five_day_horizon_leaves_twenty_members_pending(tmp_path):
+    snapshots = pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-07-29",
+                "asset_id": f"U{rank:02d}",
+                "stock_code": f"{rank:06d}",
+                "stock_name": f"Unified {rank}",
+                "consumer_subindustry": "food",
+                "repair_bucket": "expected_repair" if rank % 2 else "early_validation",
+                "snapshot_rank": rank,
+            }
+            for rank in range(1, 21)
+        ]
+    )
+    bars = pd.DataFrame(
+        [
+            ["2026-07-29", row.asset_id, "food", "2026-07-29", 100.0]
+            for row in snapshots.itertuples()
+        ],
+        columns=["snapshot_trade_date", "asset_id", "consumer_subindustry", "trade_date", "close"],
+    )
+
+    detail = evaluate_consumer_oversold_snapshots(snapshots, bars)["detail"]
+
+    assert len(detail) == 40
+    assert set(detail["horizon"]) == {5, 20}
+    assert detail["evaluation_status"].eq("pending").all()
 
 
 def test_db_loader_uses_hfq_and_strict_end_date(monkeypatch):
