@@ -152,15 +152,37 @@ def resolve_latest_complete_consumer_trade_date(*, service: str) -> str:
               (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Shanghai')::date
         ORDER BY trade_date DESC
         LIMIT %s
+    ), expected_assets AS (
+        SELECT d.trade_date, a.asset_id
+        FROM recent_open_dates d
+        JOIN core.asset_master a
+          ON a.list_date <= d.trade_date
+         AND (a.delist_date IS NULL OR a.delist_date >= d.trade_date)
+        LEFT JOIN core.asset_status_daily s
+          ON s.asset_id = a.asset_id
+         AND s.trade_date = d.trade_date
+        WHERE s.is_suspended IS DISTINCT FROM TRUE
+    ), bar_presence AS (
+        SELECT e.trade_date,
+               e.asset_id,
+               BOOL_OR(b.adjust_type = 'raw') AS has_raw,
+               BOOL_OR(b.adjust_type = 'hfq') AS has_hfq
+        FROM expected_assets e
+        LEFT JOIN market_daily_bar b
+          ON b.trade_date = e.trade_date
+         AND b.asset_id = e.asset_id
+         AND b.adjust_type IN ('raw', 'hfq')
+        GROUP BY e.trade_date, e.asset_id
     )
     SELECT d.trade_date,
            TRUE AS is_open,
-           COUNT(DISTINCT b.asset_id)
-               FILTER (WHERE b.adjust_type = 'raw') AS raw_asset_count,
-           COUNT(DISTINCT b.asset_id)
-               FILTER (WHERE b.adjust_type = 'hfq') AS hfq_asset_count
+           COUNT(p.asset_id) AS expected_asset_count,
+           COUNT(p.asset_id) FILTER (WHERE p.has_raw) AS raw_asset_count,
+           COUNT(p.asset_id) FILTER (WHERE p.has_hfq) AS hfq_asset_count,
+           COUNT(p.asset_id)
+               FILTER (WHERE p.has_raw AND p.has_hfq) AS paired_asset_count
     FROM recent_open_dates d
-    LEFT JOIN market_daily_bar b ON b.trade_date = d.trade_date
+    LEFT JOIN bar_presence p ON p.trade_date = d.trade_date
     GROUP BY d.trade_date
     ORDER BY d.trade_date DESC
     """
@@ -168,8 +190,14 @@ def resolve_latest_complete_consumer_trade_date(*, service: str) -> str:
         rows = fetch_all(conn, sql, [20])
     if not rows:
         raise ValueError("no complete consumer trade date found in database")
-    required = {"trade_date", "is_open", "raw_asset_count", "hfq_asset_count"}
-    parsed: list[tuple[str, int, int]] = []
+    count_fields = (
+        "expected_asset_count",
+        "raw_asset_count",
+        "hfq_asset_count",
+        "paired_asset_count",
+    )
+    required = {"trade_date", "is_open", *count_fields}
+    parsed: list[tuple[str, int, int, int, int]] = []
     seen_dates: set[str] = set()
     for row in rows:
         if not isinstance(row, dict) or set(row) != required:
@@ -180,21 +208,31 @@ def resolve_latest_complete_consumer_trade_date(*, service: str) -> str:
         if not isinstance(trade_date, str) or trade_date in seen_dates:
             raise ValueError("database returned invalid consumer trade date")
         counts: list[int] = []
-        for field in ("raw_asset_count", "hfq_asset_count"):
+        for field in count_fields:
             value = row[field]
             if type(value) is not int or value < 0:
                 raise ValueError(f"database returned invalid {field}")
             counts.append(value)
         seen_dates.add(trade_date)
-        parsed.append((trade_date, counts[0], counts[1]))
-    raw_max = max(row[1] for row in parsed)
-    hfq_max = max(row[2] for row in parsed)
-    for trade_date, raw_count, hfq_count in sorted(parsed, reverse=True):
+        expected_count, raw_count, hfq_count, paired_count = counts
         if (
-            raw_count > 0
-            and hfq_count > 0
-            and raw_count >= raw_max * 0.99
-            and hfq_count >= hfq_max * 0.99
+            raw_count > expected_count
+            or hfq_count > expected_count
+            or paired_count > raw_count
+            or paired_count > hfq_count
+        ):
+            raise ValueError("database returned invalid consumer coverage counts")
+        parsed.append(
+            (trade_date, expected_count, raw_count, hfq_count, paired_count)
+        )
+    for trade_date, expected_count, raw_count, hfq_count, paired_count in sorted(
+        parsed, reverse=True
+    ):
+        if (
+            expected_count > 0
+            and raw_count * 100 >= expected_count * 99
+            and hfq_count * 100 >= expected_count * 99
+            and paired_count * 100 >= expected_count * 99
         ):
             return trade_date
     raise ValueError("no complete consumer trade date found in database")

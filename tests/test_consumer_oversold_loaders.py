@@ -65,138 +65,139 @@ def test_normalize_market_amount_rejects_invalid_source(source):
         loaders.normalize_market_amount(691_266.56, source)
 
 
-def test_resolver_skips_latest_incomplete_open_date(monkeypatch):
+def _resolver_row(
+    trade_date,
+    *,
+    expected,
+    raw,
+    hfq,
+    paired,
+    is_open=True,
+):
+    return {
+        "trade_date": trade_date,
+        "is_open": is_open,
+        "expected_asset_count": expected,
+        "raw_asset_count": raw,
+        "hfq_asset_count": hfq,
+        "paired_asset_count": paired,
+    }
+
+
+def test_resolver_uses_expanding_point_in_time_universe_denominator(monkeypatch):
     calls, services = _install_db(
         monkeypatch,
-        [
-            [
-                {
-                    "trade_date": date(2026, 7, 30),
-                    "is_open": True,
-                    "raw_asset_count": 98,
-                    "hfq_asset_count": 100,
-                },
-                {
-                    "trade_date": date(2026, 7, 29),
-                    "is_open": True,
-                    "raw_asset_count": 100,
-                    "hfq_asset_count": 100,
-                },
-            ]
-        ],
+        [[
+            _resolver_row(date(2026, 7, 30), expected=101, raw=99, hfq=99, paired=99),
+            _resolver_row(date(2026, 7, 29), expected=100, raw=100, hfq=100, paired=100),
+        ]],
     )
 
-    assert (
-        loaders.resolve_latest_complete_consumer_trade_date(service="research-test")
-        == "2026-07-29"
-    )
+    assert loaders.resolve_latest_complete_consumer_trade_date(
+        service="research-test"
+    ) == "2026-07-29"
     assert services == ["research-test"]
     sql, params = calls[0]
     assert "FROM market.trading_calendar" in sql
-    assert "WHERE is_open = TRUE" in sql
-    assert "LIMIT %s" in sql
-    assert "COUNT(DISTINCT b.asset_id) FILTER (WHERE b.adjust_type = 'raw')" in sql
-    assert "COUNT(DISTINCT b.asset_id) FILTER (WHERE b.adjust_type = 'hfq')" in sql
+    assert "JOIN core.asset_master" in sql
+    assert "a.list_date <= d.trade_date" in sql
+    assert "a.delist_date IS NULL OR a.delist_date >= d.trade_date" in sql
+    assert "s.is_suspended IS DISTINCT FROM TRUE" in sql
+    assert "COUNT(p.asset_id) AS expected_asset_count" in sql
+    assert "p.has_raw AND p.has_hfq" in sql
     assert params == [20]
 
 
-def test_resolver_uses_latest_date_when_both_adjustments_are_complete(monkeypatch):
+def test_resolver_accepts_smaller_expected_set_from_suspension(monkeypatch):
     _install_db(
         monkeypatch,
-        [
-            [
-                {
-                    "trade_date": date(2026, 7, 30),
-                    "is_open": True,
-                    "raw_asset_count": 99,
-                    "hfq_asset_count": 99,
-                },
-                {
-                    "trade_date": date(2026, 7, 29),
-                    "is_open": True,
-                    "raw_asset_count": 100,
-                    "hfq_asset_count": 100,
-                },
-            ]
-        ],
+        [[
+            _resolver_row(date(2026, 7, 30), expected=99, raw=99, hfq=99, paired=99),
+            _resolver_row(date(2026, 7, 29), expected=100, raw=100, hfq=100, paired=100),
+        ]],
     )
-    assert (
-        loaders.resolve_latest_complete_consumer_trade_date(service="test")
-        == "2026-07-30"
+    assert loaders.resolve_latest_complete_consumer_trade_date(service="test") == "2026-07-30"
+
+
+def test_resolver_expected_set_excludes_delisted_assets(monkeypatch):
+    calls, _ = _install_db(
+        monkeypatch,
+        [[_resolver_row(date(2026, 7, 30), expected=98, raw=98, hfq=98, paired=98)]],
     )
+    assert loaders.resolve_latest_complete_consumer_trade_date(service="test") == "2026-07-30"
+    assert "a.delist_date IS NULL OR a.delist_date >= d.trade_date" in calls[0][0]
+
+
+def test_resolver_rejects_disjoint_raw_and_hfq_asset_coverage(monkeypatch):
+    _install_db(
+        monkeypatch,
+        [[
+            _resolver_row(date(2026, 7, 30), expected=100, raw=99, hfq=99, paired=98),
+            _resolver_row(date(2026, 7, 29), expected=100, raw=100, hfq=100, paired=100),
+        ]],
+    )
+    assert loaders.resolve_latest_complete_consumer_trade_date(service="test") == "2026-07-29"
+
+
+@pytest.mark.parametrize(
+    ("expected", "covered", "selected"),
+    [(100, 99, "2026-07-30"), (101, 99, "2026-07-29")],
+)
+def test_resolver_uses_exact_integer_ninety_nine_percent_boundary(
+    monkeypatch, expected, covered, selected
+):
+    _install_db(
+        monkeypatch,
+        [[
+            _resolver_row(
+                date(2026, 7, 30),
+                expected=expected,
+                raw=covered,
+                hfq=covered,
+                paired=covered,
+            ),
+            _resolver_row(date(2026, 7, 29), expected=100, raw=100, hfq=100, paired=100),
+        ]],
+    )
+    assert loaders.resolve_latest_complete_consumer_trade_date(service="test") == selected
 
 
 def test_resolver_excludes_future_open_dates_using_shanghai_database_time(monkeypatch):
-    future_calendar_date = date(2099, 1, 4)
-    historical_row = {
-        "trade_date": date(2026, 7, 30),
-        "is_open": True,
-        "raw_asset_count": 100,
-        "hfq_asset_count": 100,
-    }
-    captured = {}
-
-    @contextmanager
-    def fake_connect(service):
-        yield object()
-
-    def fake_fetch_all(conn, sql, params=None):
-        normalized = " ".join(sql.split())
-        captured["sql"] = normalized
-        captured["calendar"] = [future_calendar_date, historical_row["trade_date"]]
-        if (
-            "trade_date <= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Shanghai')::date"
-            in normalized
-        ):
-            return [historical_row]
-        return [
-            {
-                **historical_row,
-                "trade_date": future_calendar_date,
-            },
-            historical_row,
-        ]
-
-    monkeypatch.setattr(loaders, "connect", fake_connect)
-    monkeypatch.setattr(loaders, "fetch_all", fake_fetch_all)
-
+    calls, _ = _install_db(
+        monkeypatch,
+        [[_resolver_row(date(2026, 7, 30), expected=100, raw=100, hfq=100, paired=100)]],
+    )
     assert loaders.resolve_latest_complete_consumer_trade_date(service="test") == "2026-07-30"
-    assert future_calendar_date in captured["calendar"]
-    assert "CURRENT_DATE" not in captured["sql"]
+    assert "trade_date <= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Shanghai')::date" in calls[0][0]
+    assert "CURRENT_DATE" not in calls[0][0]
+
 
 @pytest.mark.parametrize(
     "rows",
     [
         [],
+        [_resolver_row(date(2026, 7, 30), expected=100, raw=100, hfq=100, paired=100, is_open=False)],
+        [_resolver_row("not-a-date", expected=100, raw=100, hfq=100, paired=100)],
+        [_resolver_row(date(2026, 7, 30), expected=0, raw=0, hfq=0, paired=0)],
+        [_resolver_row(date(2026, 7, 30), expected=100, raw=100, hfq=100, paired=101)],
+        [_resolver_row(date(2026, 7, 30), expected=True, raw=1, hfq=1, paired=1)],
         [
             {
-                "trade_date": date(2026, 7, 30),
-                "is_open": False,
-                "raw_asset_count": 100,
-                "hfq_asset_count": 100,
+                key: value
+                for key, value in _resolver_row(
+                    date(2026, 7, 30), expected=100, raw=100, hfq=100, paired=100
+                ).items()
+                if key != "paired_asset_count"
             }
         ],
         [
-            {
-                "trade_date": "not-a-date",
-                "is_open": True,
-                "raw_asset_count": 100,
-                "hfq_asset_count": 100,
-            }
-        ],
-        [
-            {
-                "trade_date": date(2026, 7, 30),
-                "is_open": True,
-                "raw_asset_count": 0,
-                "hfq_asset_count": 100,
-            }
+            _resolver_row(date(2026, 7, 30), expected=100, raw=100, hfq=100, paired=100),
+            _resolver_row(date(2026, 7, 30), expected=100, raw=100, hfq=100, paired=100),
         ],
     ],
 )
 def test_resolver_rejects_closed_empty_invalid_or_incomplete_rows(monkeypatch, rows):
     _install_db(monkeypatch, [rows])
-
     with pytest.raises(ValueError, match="complete consumer trade date|invalid"):
         loaders.resolve_latest_complete_consumer_trade_date(service="test")
 
