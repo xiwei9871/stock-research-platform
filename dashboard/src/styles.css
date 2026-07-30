@@ -222,7 +222,9 @@ body {
   top: 0;
   z-index: 3;
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   min-width: 0;
   border-bottom: 1px solid #cfd8e3;
   background: rgba(251, 252, 254, 0.96);
@@ -231,8 +233,43 @@ body {
 
 .global-search-box {
   position: relative;
+  flex: 1 1 320px;
   width: min(480px, 100%);
   min-width: 0;
+}
+
+.platform-account-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.platform-account-username {
+  color: #263241;
+  font-weight: 600;
+}
+
+.platform-account-controls button {
+  border: 1px solid #c4cbd6;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #263241;
+  padding: 7px 10px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.platform-account-controls button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.platform-account-error {
+  color: #b42318;
+  font-size: 12px;
 }
 
 .global-search-box input {
@@ -3679,11 +3716,18 @@ table.data-table td {
 
 @media (max-width: 640px) {
   .platform-topbar {
+    align-items: stretch;
     justify-content: stretch;
+    flex-wrap: wrap;
     padding: 8px 10px;
   }
 
   .global-search-box {
+    flex-basis: 100%;
+    width: 100%;
+  }
+
+  .platform-account-controls {
     width: 100%;
   }
 
