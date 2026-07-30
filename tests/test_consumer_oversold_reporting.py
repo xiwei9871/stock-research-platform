@@ -152,8 +152,8 @@ def _unified_payload() -> dict[str, object]:
     reserve = payload.pop("early").copy(deep=True)
     for rank, frame in enumerate((top20, reserve), start=1):
         frame["final_rank"] = rank
-        frame["repair_rank_percentile"] = 1.0 - (rank - 1) / 2
-        frame["elasticity_rank_percentile"] = rank / 2
+        frame["repair_rank_percentile"] = 100.0 - (rank - 1) * 50.0
+        frame["elasticity_rank_percentile"] = rank * 50.0
         frame["final_rank_score"] = 0.7 * frame["repair_rank_percentile"] + 0.3 * frame[
             "elasticity_rank_percentile"
         ]
@@ -212,6 +212,143 @@ def test_writes_exactly_nine_unified_artifacts(tmp_path):
         "comparison",
     }
     assert not ({"expected", "early"} & set(result["paths"]))
+
+
+def test_report_renders_rank_percentiles_as_zero_to_one_hundred_scores(tmp_path):
+    payload = _payload()
+    payload["top20"].loc[0, "repair_rank_percentile"] = 100.0
+    payload["top20"].loc[0, "elasticity_rank_percentile"] = 82.5
+
+    result = write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+    report = Path(result["paths"]["report"]).read_text(encoding="utf-8")
+
+    assert "| 100.0 | 82.5 |" in report
+    assert "10000.0%" not in report
+    assert "8250.0%" not in report
+
+
+def test_report_candidate_details_include_market_cap_and_elasticity_metrics(tmp_path):
+    payload = _payload()
+    metrics = {
+        "current_total_market_cap": 12_345_000_000.0,
+        "current_float_market_cap": 9_876_000_000.0,
+        "market_cap_source": "latest_close_times_shares",
+        "limit_up_count_2y": 7,
+        "up_7pct_count_2y": 8,
+        "up_5pct_count_2y": 9,
+        "positive_after_big_up_1d_rate": 0.61,
+        "positive_after_big_up_3d_rate": 0.62,
+        "positive_after_big_up_5d_rate": 0.63,
+        "drawdown_from_high_1y": -0.41,
+        "drawdown_from_high_2y": -0.42,
+        "price_position_1y": 0.21,
+        "price_position_2y": 0.22,
+        "distance_hfq_ma120": -0.11,
+        "distance_hfq_ma250": -0.12,
+        "rebound_from_low_60d": 0.31,
+        "rebound_from_low_120d": 0.32,
+        "residual_deviation_score": 71.0,
+        "stock_character_score": 72.0,
+        "market_capacity_score": 73.0,
+        "catalyst_liquidity_score": 74.0,
+        "elasticity_score": 75.0,
+    }
+    for field, value in metrics.items():
+        payload["scores"].loc[payload["scores"]["asset_id"].eq("000001.SZ"), field] = value
+        if field not in {
+            "positive_after_big_up_1d_rate",
+            "positive_after_big_up_3d_rate",
+            "positive_after_big_up_5d_rate",
+        }:
+            payload["top20"].loc[0, field] = value
+
+    result = write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+    report = Path(result["paths"]["report"]).read_text(encoding="utf-8")
+
+    for text in (
+        "总市值 123.45 亿元",
+        "流通市值 98.76 亿元",
+        r"latest\_close\_times\_shares",
+        "涨停 7 次",
+        "上涨超过7% 8 次",
+        "上涨超过5% 9 次",
+        "1日 61.0%",
+        "3日 62.0%",
+        "5日 63.0%",
+        "1年回撤 -41.0%",
+        "2年回撤 -42.0%",
+        "1年位置 21.0%",
+        "2年位置 22.0%",
+        "MA120 -11.0%",
+        "MA250 -12.0%",
+        "60日反弹 31.0%",
+        "120日反弹 32.0%",
+        "残差偏离 71.0",
+        "股票特性 72.0",
+        "市场容量 73.0",
+        "催化流动性 74.0",
+        "反弹弹性 75.0",
+    ):
+        assert text in report
+
+
+def test_report_always_explains_fixed_three_stock_comparison_outside_preaudit(tmp_path):
+    payload = _payload()
+    payload["comparison"] = pd.concat(
+        [
+            payload["comparison"],
+            pd.DataFrame(
+                [
+                    {
+                        "asset_id": "600418.SH",
+                        "stock_code": "600418",
+                        "stock_name": "江淮汽车",
+                        "old_combined_rank": 12,
+                        "new_rank": 31,
+                        "rank_change": -19,
+                        "exclusion_reasons": "reserve_only",
+                    }
+                ]
+            ),
+        ],
+        ignore_index=True,
+    )
+    payload["scores"] = pd.concat(
+        [
+            payload["scores"],
+            pd.DataFrame(
+                [
+                    {
+                        "asset_id": "600702.SH",
+                        "stock_code": "600702",
+                        "stock_name": "舍得酒业",
+                        "exclusion_reasons": "evidence_incomplete",
+                    }
+                ]
+            ),
+        ],
+        ignore_index=True,
+    )
+
+    result = write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+    report = Path(result["paths"]["report"]).read_text(encoding="utf-8")
+
+    assert "## 江淮汽车、舍得酒业、赛力斯对照" in report
+    assert "### 江淮汽车（600418）" in report
+    assert "旧排名 12；新排名 31；排名变化 -19" in report
+    assert r"reserve\_only" in report
+    assert "### 舍得酒业（600702）" in report
+    assert "无可用排名" in report
+    assert r"evidence\_incomplete" in report
+    assert "### 赛力斯（601127）" in report
+    assert "未进入本期终端消费审计" in report
+    for heading, next_heading in (
+        ("### 江淮汽车（600418）", "### 舍得酒业（600702）"),
+        ("### 舍得酒业（600702）", "### 赛力斯（601127）"),
+        ("### 赛力斯（601127）", "## 剔除原因摘要"),
+    ):
+        section = report.split(heading, 1)[1].split(next_heading, 1)[0]
+        assert "未进入本期终端消费审计" in section
 
 
 def _artifact_contents(output_dir: Path) -> dict[str, bytes]:
@@ -273,7 +410,7 @@ def test_writes_nine_stable_artifacts_and_chinese_report(tmp_path):
         "储备榜单 21-40",
         "审计前 Top 60",
         "新旧排名对照",
-        "特殊股票观察",
+        "江淮汽车、舍得酒业、赛力斯对照",
         "剔除原因摘要",
         "警告",
         "失效条件",

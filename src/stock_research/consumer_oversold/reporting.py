@@ -379,6 +379,56 @@ def _percent_text(value: Any) -> str:
     return _escape_markdown_text(_display(value, percent=True))
 
 
+def _score_text(value: Any) -> str:
+    if isinstance(value, (int, float, np.integer, np.floating)) and not isinstance(
+        value, (bool, np.bool_)
+    ):
+        number = float(value)
+        if math.isfinite(number):
+            return f"{number:.1f}"
+    return _escape_markdown_text(value)
+
+
+def _market_cap_text(value: Any) -> str:
+    if isinstance(value, (int, float, np.integer, np.floating)) and not isinstance(
+        value, (bool, np.bool_)
+    ):
+        number = float(value)
+        if math.isfinite(number):
+            return f"{number / 100_000_000:.2f} 亿元"
+    return "数据缺失"
+
+
+def _count_text(value: Any) -> str:
+    if isinstance(value, (int, float, np.integer, np.floating)) and not isinstance(
+        value, (bool, np.bool_)
+    ):
+        number = float(value)
+        if math.isfinite(number) and number.is_integer():
+            return str(int(number))
+    return _escape_markdown_text(value)
+
+
+def _enrich_rows(primary: pd.DataFrame, supplemental: pd.DataFrame | None) -> pd.DataFrame:
+    result = primary.copy(deep=True)
+    if (
+        result.empty
+        or supplemental is None
+        or supplemental.empty
+        or "asset_id" not in result.columns
+        or "asset_id" not in supplemental.columns
+    ):
+        return result
+    lookup = supplemental.drop_duplicates("asset_id", keep="first").set_index("asset_id")
+    for column in lookup.columns:
+        mapped = result["asset_id"].map(lookup[column])
+        if column not in result.columns:
+            result[column] = mapped
+        else:
+            result[column] = result[column].where(result[column].notna(), mapped)
+    return result
+
+
 def _valid_url(value: Any) -> str | None:
     if not isinstance(value, str):
         return None
@@ -485,6 +535,40 @@ def _candidate_section(title: str, frame: pd.DataFrame) -> list[str]:
                     f"{_escape_table(row.get('priced_in_penalty'))}；综合分 "
                     f"{_escape_table(row.get('composite_score'))}"
                 ),
+                (
+                    "- 真实市值：总市值 "
+                    f"{_market_cap_text(row.get('current_total_market_cap'))}；流通市值 "
+                    f"{_market_cap_text(row.get('current_float_market_cap'))}；来源 "
+                    f"{_escape_table(row.get('market_cap_source'))}"
+                ),
+                (
+                    "- 大涨特征：涨停 "
+                    f"{_count_text(row.get('limit_up_count_2y'))} 次；上涨超过7% "
+                    f"{_count_text(row.get('up_7pct_count_2y'))} 次；上涨超过5% "
+                    f"{_count_text(row.get('up_5pct_count_2y'))} 次；大涨后正收益率 "
+                    f"1日 {_percent_text(row.get('positive_after_big_up_1d_rate'))}；"
+                    f"3日 {_percent_text(row.get('positive_after_big_up_3d_rate'))}；"
+                    f"5日 {_percent_text(row.get('positive_after_big_up_5d_rate'))}"
+                ),
+                (
+                    "- 位置与反弹：1年回撤 "
+                    f"{_percent_text(row.get('drawdown_from_high_1y'))}；2年回撤 "
+                    f"{_percent_text(row.get('drawdown_from_high_2y'))}；1年位置 "
+                    f"{_percent_text(row.get('price_position_1y'))}；2年位置 "
+                    f"{_percent_text(row.get('price_position_2y'))}；MA120 "
+                    f"{_percent_text(row.get('distance_hfq_ma120'))}；MA250 "
+                    f"{_percent_text(row.get('distance_hfq_ma250'))}；60日反弹 "
+                    f"{_percent_text(row.get('rebound_from_low_60d'))}；120日反弹 "
+                    f"{_percent_text(row.get('rebound_from_low_120d'))}"
+                ),
+                (
+                    "- 弹性评分：残差偏离 "
+                    f"{_score_text(row.get('residual_deviation_score'))}；股票特性 "
+                    f"{_score_text(row.get('stock_character_score'))}；市场容量 "
+                    f"{_score_text(row.get('market_capacity_score'))}；催化流动性 "
+                    f"{_score_text(row.get('catalyst_liquidity_score'))}；反弹弹性 "
+                    f"{_score_text(row.get('elasticity_score'))}"
+                ),
                 "",
             ]
         )
@@ -522,8 +606,8 @@ def _ranking_table(title: str, frame: pd.DataFrame) -> list[str]:
         lines.append(
             f"| {_escape_table(row.get('final_rank'))} | "
             f"{_escape_table(name)}（{_escape_table(code)}） | "
-            f"{_percent_text(row.get('repair_rank_percentile'))} | "
-            f"{_percent_text(row.get('elasticity_rank_percentile'))} | "
+            f"{_score_text(row.get('repair_rank_percentile'))} | "
+            f"{_score_text(row.get('elasticity_rank_percentile'))} | "
             f"{_escape_table(row.get('final_rank_score'))} |"
         )
     return [*lines, ""]
@@ -544,21 +628,91 @@ def _comparison_table(frame: pd.DataFrame) -> list[str]:
     return [*lines, ""]
 
 
-def _special_stocks(frame: pd.DataFrame) -> list[str]:
-    lines = ["## 特殊股票观察", ""]
+_FIXED_SPECIAL_STOCKS = (
+    ("600418", "江淮汽车"),
+    ("600702", "舍得酒业"),
+    ("601127", "赛力斯"),
+)
+
+
+def _meaningful(value: Any) -> bool:
+    if value is None or value is pd.NA:
+        return False
+    try:
+        if pd.isna(value):
+            return False
+    except (TypeError, ValueError):
+        pass
+    return not isinstance(value, str) or bool(value.strip())
+
+
+def _find_special_stock(frame: pd.DataFrame, code: str, name: str) -> pd.Series | None:
     if frame.empty:
-        return [*lines, "暂无特殊股票。", ""]
-    special = frame.loc[
-        frame.get("exclusion_reasons", pd.Series("", index=frame.index)).fillna("").astype(str).ne("")
-    ]
-    if special.empty:
-        return [*lines, "暂无特殊股票。", ""]
-    for _, row in special.iterrows():
+        return None
+    matched = pd.Series(False, index=frame.index)
+    if "stock_code" in frame.columns:
+        matched |= frame["stock_code"].astype(str).str.split(".").str[0].eq(code)
+    if "asset_id" in frame.columns:
+        matched |= frame["asset_id"].astype(str).str.split(".").str[0].eq(code)
+    if "stock_name" in frame.columns:
+        matched |= frame["stock_name"].astype(str).str.strip().eq(name)
+    if not matched.any():
+        return None
+    return frame.loc[matched].iloc[0]
+
+
+def _special_stock_comparison(
+    comparison: pd.DataFrame,
+    scores: pd.DataFrame | None,
+    top20: pd.DataFrame,
+    reserve: pd.DataFrame,
+    preaudit: pd.DataFrame,
+) -> list[str]:
+    lines = ["## 江淮汽车、舍得酒业、赛力斯对照", ""]
+    sources = (comparison, scores, top20, reserve, preaudit)
+    for code, name in _FIXED_SPECIAL_STOCKS:
+        combined: dict[str, Any] = {}
+        found = False
+        in_preaudit = _find_special_stock(preaudit, code, name) is not None
+        for source in sources:
+            if source is None:
+                continue
+            row = _find_special_stock(source, code, name)
+            if row is None:
+                continue
+            found = True
+            for field, value in row.items():
+                if field not in combined and _meaningful(value):
+                    combined[field] = value
+        lines.extend([f"### {name}（{code}）", ""])
         lines.append(
-            f"- {_escape_table(row.get('stock_name', row.get('asset_id')))}："
-            f"{_escape_table(row.get('exclusion_reasons'))}"
+            "- 审计状态：已进入本期终端消费审计。"
+            if in_preaudit
+            else "- 审计状态：未进入本期终端消费审计。"
         )
-    return [*lines, ""]
+        if not found:
+            lines.extend(["- 无可用排名。", ""])
+            continue
+        old_rank = combined.get("old_combined_rank", combined.get("old_rank"))
+        new_rank = combined.get("new_rank", combined.get("final_rank"))
+        rank_change = combined.get("rank_change")
+        rank_parts = []
+        if _meaningful(old_rank):
+            rank_parts.append(f"旧排名 {_count_text(old_rank)}")
+        if _meaningful(new_rank):
+            rank_parts.append(f"新排名 {_count_text(new_rank)}")
+        if _meaningful(rank_change):
+            rank_parts.append(f"排名变化 {_count_text(rank_change)}")
+        lines.append(f"- {'；'.join(rank_parts)}" if rank_parts else "- 无可用排名。")
+        reasons = combined.get(
+            "exclusion_reasons", combined.get("automatic_exclusion_reasons")
+        )
+        if _meaningful(reasons):
+            lines.append(f"- 状态/剔除原因：{_escape_table(reasons)}")
+        else:
+            lines.append("- 状态/剔除原因：无明确剔除原因。")
+        lines.append("")
+    return lines
 
 
 def _render_report(
@@ -569,7 +723,11 @@ def _render_report(
     comparison: pd.DataFrame,
     exclusions: pd.DataFrame,
     coverage: dict[str, Any],
+    scores: pd.DataFrame | None = None,
 ) -> str:
+    candidate_details = _enrich_rows(
+        pd.concat([top20, reserve], ignore_index=True), scores
+    )
     lines = [
         f"# 消费超跌修复候选周报（{trade_date}）",
         "",
@@ -594,8 +752,8 @@ def _render_report(
         *_ranking_table("储备榜单 21-40", reserve),
         *_ranking_table("审计前 Top 60", preaudit),
         *_comparison_table(comparison),
-        *_candidate_section("候选详情", pd.concat([top20, reserve], ignore_index=True)),
-        *_special_stocks(preaudit),
+        *_candidate_section("候选详情", candidate_details),
+        *_special_stock_comparison(comparison, scores, top20, reserve, preaudit),
         *_exclusion_summary(exclusions),
         "## 警告",
         "",
@@ -778,6 +936,7 @@ def write_consumer_oversold_artifacts(
         frames["comparison"],
         frames["exclusions"],
         coverage,
+        frames["scores"],
     )
 
     destination = Path(output_dir).expanduser().resolve()
