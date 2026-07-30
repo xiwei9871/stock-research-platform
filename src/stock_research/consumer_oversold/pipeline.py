@@ -589,6 +589,9 @@ def build_consumer_oversold_weekly_from_frames(
                 "hard_risk_review_unknown",
                 "evidence_complete",
                 "base_upside",
+                "pessimistic_scenario_market_cap",
+                "base_scenario_market_cap",
+                "optimistic_scenario_market_cap",
             ]
         )
         coverage = _coverage(

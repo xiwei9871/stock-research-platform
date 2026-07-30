@@ -778,6 +778,19 @@ def test_unified_pipeline_honors_small_publication_config_and_empty_pool_schema(
         assert empty[key].columns.tolist() == stable_columns[key]
     for key in ("top20", "reserve", "preaudit"):
         assert PUBLICATION_REQUIRED_COLUMNS.issubset(empty[key].columns)
+    new_scenario_columns = {
+        "pessimistic_scenario_market_cap",
+        "base_scenario_market_cap",
+        "optimistic_scenario_market_cap",
+    }
+    old_scenario_columns = {
+        "pessimistic_market_cap",
+        "base_market_cap",
+        "optimistic_market_cap",
+    }
+    for key in ("scores", "expected", "early"):
+        assert new_scenario_columns.issubset(empty[key].columns)
+        assert old_scenario_columns.isdisjoint(empty[key].columns)
     assert empty["coverage"]["publication_status"] == "coverage_insufficient"
 
 
