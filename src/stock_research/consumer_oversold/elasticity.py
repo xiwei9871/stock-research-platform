@@ -97,6 +97,12 @@ STOCK_ELASTICITY_FIELDS = (
     "positive_after_big_up_3d_rate",
     "positive_after_big_up_5d_rate",
 )
+STOCK_WINSORIZE_FIELDS = (
+    "limit_up_count_2y",
+    "up_7pct_count_2y",
+    "up_5pct_count_2y",
+    "upside_tail_volatility_2y",
+)
 MARKET_ELASTICITY_FIELDS = ("log_current_float_market_cap",)
 CATALYST_ELASTICITY_FIELDS = (
     "catalyst_verifiability_score",
@@ -736,12 +742,12 @@ def _component_score(
     coverage: pd.Series,
     *,
     favorable_low: bool,
-    winsorize: bool = False,
+    winsorize_fields: tuple[str, ...] = (),
 ) -> pd.Series:
     percentiles: dict[str, pd.Series] = {}
     for field in fields:
         values = frame[field].where(coverage)
-        if winsorize and values.notna().any():
+        if field in winsorize_fields and values.notna().any():
             lower = float(values.quantile(0.05))
             upper = float(values.quantile(0.95))
             values = values.clip(lower=lower, upper=upper)
@@ -836,7 +842,7 @@ def score_rebound_elasticity(
         STOCK_ELASTICITY_FIELDS,
         stock_coverage,
         favorable_low=False,
-        winsorize=True,
+        winsorize_fields=STOCK_WINSORIZE_FIELDS,
     )
     frame["market_capacity_component_coverage"] = market_coverage.astype(bool)
     frame["market_capacity_score"] = _component_score(

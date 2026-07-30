@@ -726,6 +726,26 @@ def test_stock_character_inputs_are_winsorized_before_percentiles():
     )
 
 
+def test_continuation_rate_extremes_are_not_winsorized_into_a_tie():
+    rows = []
+    rates = [0.0] * 19 + [0.9, 1.0]
+    for index, rate in enumerate(rates):
+        rows.append(
+            _elasticity_row(
+                asset_id=f"A{index:02d}",
+                positive_after_big_up_1d_rate=rate,
+                positive_after_big_up_3d_rate=rate,
+                positive_after_big_up_5d_rate=rate,
+            )
+        )
+
+    result = score_rebound_elasticity(pd.DataFrame(rows), CONFIG).set_index("asset_id")
+
+    assert result.loc["A20", "stock_character_score"] > result.loc[
+        "A19", "stock_character_score"
+    ]
+
+
 def test_no_big_up_events_can_use_zero_continuation_without_faking_tail_volatility():
     no_events = _elasticity_row(
         up_7pct_count_2y=0.0,
