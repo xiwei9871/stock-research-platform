@@ -16,19 +16,21 @@ The existing DB loader has a second defect: `load_db_context()` calls the comple
 2. Pass DB nodes and mappings to `_build_scoped_priority_context()`.
 3. Return DB-backed themes, nodes, sources, claims, and company mappings regardless of whether optional policy/crosswalk support exists.
 4. When support exists, preserve node priorities, company priorities, evidence gaps, and review queue. When absent, return empty priority collections and `priority_status="unavailable"` without raising.
-5. Change the production environment from `THEME_RESEARCH_READ_SOURCE=artifact` to `db` and restart through the canonical release workflow.
+5. Deliver only the versioned priority-policy and tech-bottleneck crosswalk directories as read-only API-image support. These files define scoring and integration metadata; they are not canonical theme content.
+6. Change the production environment from `THEME_RESEARCH_READ_SOURCE=artifact` to `db` and restart through the canonical release workflow.
 
 No database rows are created, changed, imported, or deleted.
 
 ## Rejected Alternatives
 
-- Copying the full artifact tree into the image keeps production dependent on file snapshots and conflicts with PostgreSQL authority.
+- Copying the full theme artifact tree into the image keeps production dependent on canonical file snapshots and conflicts with PostgreSQL authority. Only the two static scoring-support directories are packaged.
 - Manually copying files to the server would be lost or drift during later releases.
 
 ## Testing
 
 - Add a failing DB-context test where the full artifact loader raises `FileNotFoundError`; DB themes must still be returned with unavailable priority support.
 - Keep parity behavior covered when optional support is available.
+- Add release-contract coverage proving the two static support directories are synchronized, included in the Docker build context, and copied into the API image without packaging canonical theme artifacts.
 - Run the focused Theme Research DB/API tests and the complete backend test file covering dashboard theme research.
 - Run the complete dashboard frontend suite and production build because the release changes both API behavior and deployment state.
 - After deployment, verify the themes endpoint returns 200, the Theme Research list renders two themes, a theme detail opens, and API logs contain no new artifact-directory exception.

@@ -57,7 +57,23 @@ Expected: all tests PASS, including artifact/DB parity when optional support exi
 
 Commit the test and implementation with message `fix: make theme research DB reads artifact-independent`.
 
-### Task 3: Verify the Release Candidate
+### Task 3: Package Static Priority Support
+
+**Files:**
+- Modify: `.dockerignore`
+- Modify: `deploy/dashboard-api.Dockerfile`
+- Modify: `deploy/sync_dashboard_release.sh`
+- Modify: `tests/test_dashboard_release_scripts.py`
+
+- [ ] Add a failing release-contract test requiring priority-policy and tech-bottleneck crosswalk directories in the Docker build context, remote synchronization, and API image.
+- [ ] Run the focused test and verify RED.
+- [ ] Allow only those two artifact subdirectories through `.dockerignore`.
+- [ ] Synchronize both directories into the canonical remote release root.
+- [ ] Copy both directories into `/app/artifacts/theme_decomposition` in the API image.
+- [ ] Run the focused release-contract test and release-script test file and verify GREEN.
+- [ ] Commit with message `fix: package theme research priority support`.
+
+### Task 4: Verify the Release Candidate
 
 **Files:**
 - Verify all modified files.
@@ -68,7 +84,7 @@ Commit the test and implementation with message `fix: make theme research DB rea
 - [ ] Run the production dashboard build.
 - [ ] Review the final diff against the approved design and commit state.
 
-### Task 4: Switch Production to DB and Publish
+### Task 5: Switch Production to DB and Publish
 
 **Files and state:**
 - Update remote `/home/jqz/code/stock-research-platform-main/.env`.
@@ -80,13 +96,14 @@ Commit the test and implementation with message `fix: make theme research DB rea
 - [ ] Publish with expected trade date `2026-07-29` and production environment file `.env`.
 - [ ] Confirm the external release gate reports the new commit.
 
-### Task 5: Verify Theme Research Externally
+### Task 6: Verify Theme Research Externally
 
 **Files:**
 - No additional changes.
 
 - [ ] Confirm `/api/research/theme-decomposition/themes` returns HTTP 200 through an authenticated production session.
 - [ ] Confirm the external Theme Research list renders 2 themes.
-- [ ] Open one theme detail and confirm its overview renders.
+- [ ] Confirm node and company counts are populated from DB data plus static priority support.
+- [ ] Open one theme detail and confirm its overview and node priorities render.
 - [ ] Confirm production API logs contain no new `PRIORITY_POLICY_DIRECTORY_NOT_FOUND` or HTTP 500 for the Theme Research endpoint after verification started.
 - [ ] Keep the verified Theme Research page open for the user.
