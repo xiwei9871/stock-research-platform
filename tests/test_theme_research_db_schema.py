@@ -31,6 +31,13 @@ REQUIRED_TABLES = {
     "theme_research_import_run",
     "theme_research_snapshot",
 }
+LEGACY_DDL_SHA256 = "1acce2a856b94b6479c7e08623779e230124fc54fb78fba3358e9cfe4cc882ce"
+LEGACY_CATALOG_SHA256 = "296c75c60f86b1606306d9599c04c4e25a5f06480184ec78f3cefbbf48a409b7"
+LEGACY_MISSING = {
+    "catalog:sha256",
+    "constraint:ck_theme_research_claim_type",
+    "constraint:ck_theme_research_theme_type",
+}
 
 
 class _Cursor:
@@ -81,6 +88,11 @@ def test_schema_contains_production_constraints_and_triggers() -> None:
     sql = schema.THEME_RESEARCH_SCHEMA_SQL
 
     assert "value_capture_score BETWEEN 0 AND 5" in sql
+    assert "CONSTRAINT ck_theme_research_theme_type" in sql
+    assert "new_energy_storage" in sql
+    assert "CONSTRAINT ck_theme_research_claim_type" in sql
+    assert "catalyst" in sql
+    assert "risk" in sql
     assert "confidence BETWEEN 0 AND 1" in sql
     assert "reliability_level <> 'S4' OR review_status <> 'accepted'" in sql
     assert "node_review_status <> 'reviewed' OR evidence_strength >= 3" in sql
@@ -104,6 +116,25 @@ def test_schema_contains_production_constraints_and_triggers() -> None:
     assert "BEFORE TRUNCATE ON research.theme_research_review_event" in sql
     assert "BEFORE TRUNCATE ON research.theme_research_object_revision" in sql
     assert "WHERE idempotency_key <> ''" in sql
+
+
+def test_known_legacy_schema_contract_binds_production_hashes() -> None:
+    contracts = {
+        (
+            contract.version_label,
+            contract.ddl_sha256,
+            contract.catalog_sha256,
+            contract.allowed_missing,
+        )
+        for contract in schema.KNOWN_LEGACY_SCHEMA_CONTRACTS
+    }
+
+    assert (
+        "94e1de3",
+        LEGACY_DDL_SHA256,
+        LEGACY_CATALOG_SHA256,
+        frozenset(LEGACY_MISSING),
+    ) in contracts
 
 
 def test_schema_is_idempotent_and_non_destructive() -> None:
@@ -170,10 +201,59 @@ def test_apply_schema_executes_ddl_and_records_version(monkeypatch) -> None:
         "schema_version": schema.THEME_RESEARCH_DB_SCHEMA_VERSION,
         "ddl_sha256": schema.ddl_sha256(),
     }
-    assert connection.cursor_obj.calls[0][0] == schema.THEME_RESEARCH_SCHEMA_SQL
-    migration_sql, migration_params = connection.cursor_obj.calls[1]
+    assert "pg_advisory_xact_lock" in connection.cursor_obj.calls[0][0]
+    assert connection.cursor_obj.calls[1][0] == schema.THEME_RESEARCH_SCHEMA_SQL
+    migration_sql, migration_params = connection.cursor_obj.calls[2]
     assert "INSERT INTO research.theme_research_schema_migration" in migration_sql
     assert migration_params[0] == schema.THEME_RESEARCH_DB_SCHEMA_VERSION
+    assert migration_params[2] == schema.ddl_sha256()
+
+
+def test_apply_schema_migrates_exact_known_legacy_contract(monkeypatch) -> None:
+    connection = _Connection()
+    monkeypatch.setattr(schema, "connect", lambda service: _Context(connection))
+    monkeypatch.setattr(
+        schema,
+        "_load_applied_migration",
+        lambda cur: {
+            "schema_version": schema.THEME_RESEARCH_DB_SCHEMA_VERSION,
+            "ddl_sha256": LEGACY_DDL_SHA256,
+            "applied_at": "2026-07-11T00:00:00+00:00",
+        },
+    )
+    inspections = iter(
+        [
+            {
+                "status": "drifted",
+                "existing_count": len(REQUIRED_TABLES),
+                "missing": sorted(LEGACY_MISSING),
+                "catalog_sha256": LEGACY_CATALOG_SHA256,
+            },
+            {
+                "status": "current",
+                "existing_count": len(REQUIRED_TABLES),
+                "missing": [],
+                "catalog_sha256": schema.EXPECTED_THEME_RESEARCH_CATALOG_SHA256,
+            },
+        ]
+    )
+    monkeypatch.setattr(
+        schema,
+        "inspect_theme_research_schema",
+        lambda cur: next(inspections),
+    )
+
+    result = schema.apply_theme_research_schema(
+        service="test",
+        actor_user_id="admin-1",
+        actor_role="admin",
+    )
+
+    assert result["status"] == "ok"
+    assert "pg_advisory_xact_lock" in connection.cursor_obj.calls[0][0]
+    assert connection.cursor_obj.calls[1][0] == schema.THEME_RESEARCH_SCHEMA_SQL
+    migration_sql, migration_params = connection.cursor_obj.calls[2]
+    assert "ON CONFLICT (schema_version) DO UPDATE" in migration_sql
     assert migration_params[2] == schema.ddl_sha256()
 
 
@@ -347,7 +427,12 @@ def test_apply_schema_rejects_existing_drift_without_overwriting_migration(monke
         )
 
     assert exc_info.value.code == "THEME_RESEARCH_SCHEMA_DRIFT"
-    assert connection.cursor_obj.calls == []
+    assert connection.cursor_obj.calls == [
+        (
+            "SELECT pg_advisory_xact_lock(%s)",
+            (schema.THEME_RESEARCH_SCHEMA_MIGRATION_LOCK_KEY,),
+        )
+    ]
 
 
 def test_apply_schema_rejects_partial_unversioned_schema(monkeypatch) -> None:

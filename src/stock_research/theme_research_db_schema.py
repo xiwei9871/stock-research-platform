@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import sys
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
@@ -67,9 +68,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_theme_research_change_set_idempotency
 CREATE TABLE IF NOT EXISTS research.theme_research_theme (
     theme_id text PRIMARY KEY,
     theme_name text NOT NULL,
-    theme_type text NOT NULL CHECK (
+    theme_type text NOT NULL CONSTRAINT ck_theme_research_theme_type CHECK (
         theme_type IN ('ai_power', 'humanoid_robotics', 'ai_compute', 'semiconductor_equipment',
-                       'industrial_software', 'other')
+                       'industrial_software', 'new_energy_storage', 'other')
     ),
     summary text NOT NULL,
     status text NOT NULL CHECK (status IN ('draft', 'reviewed', 'published')),
@@ -85,6 +86,44 @@ CREATE TABLE IF NOT EXISTS research.theme_research_theme (
     created_by text NOT NULL,
     updated_by text NOT NULL
 );
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'research.theme_research_theme'::regclass
+          AND contype = 'c'
+          AND conname = 'theme_research_theme_theme_type_check'
+          AND pg_get_constraintdef(oid, true) =
+              $constraint$CHECK (theme_type = ANY (ARRAY['ai_power'::text, 'humanoid_robotics'::text, 'ai_compute'::text, 'semiconductor_equipment'::text, 'industrial_software'::text, 'other'::text]))$constraint$
+    ) THEN
+        ALTER TABLE research.theme_research_theme
+            DROP CONSTRAINT theme_research_theme_theme_type_check;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'research.theme_research_theme'::regclass
+          AND contype = 'c'
+          AND conname = 'ck_theme_research_theme_type'
+    ) THEN
+        ALTER TABLE research.theme_research_theme
+            ADD CONSTRAINT ck_theme_research_theme_type CHECK (
+                theme_type IN (
+                    'ai_power',
+                    'humanoid_robotics',
+                    'ai_compute',
+                    'semiconductor_equipment',
+                    'industrial_software',
+                    'new_energy_storage',
+                    'other'
+                )
+            );
+    END IF;
+END;
+$$;
 
 CREATE TABLE IF NOT EXISTS research.theme_research_node (
     node_id text PRIMARY KEY,
@@ -167,10 +206,10 @@ CREATE TABLE IF NOT EXISTS research.theme_research_content_claim (
     theme_id text NOT NULL REFERENCES research.theme_research_theme(theme_id),
     source_id text NOT NULL REFERENCES research.theme_research_source_item(source_id),
     claim_text text NOT NULL,
-    claim_type text NOT NULL CHECK (
+    claim_type text NOT NULL CONSTRAINT ck_theme_research_claim_type CHECK (
         claim_type IN ('demand_shock', 'bottleneck', 'value_capture', 'supply_constraint',
                        'localization', 'company_mapping', 'cost_structure', 'tech_route',
-                       'valuation_signal')
+                       'valuation_signal', 'catalyst', 'risk')
     ),
     confidence numeric NOT NULL CHECK (confidence BETWEEN 0 AND 1),
     evidence_status text NOT NULL CHECK (
@@ -186,6 +225,48 @@ CREATE TABLE IF NOT EXISTS research.theme_research_content_claim (
     created_by text NOT NULL,
     updated_by text NOT NULL
 );
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'research.theme_research_content_claim'::regclass
+          AND contype = 'c'
+          AND conname = 'theme_research_content_claim_claim_type_check'
+          AND pg_get_constraintdef(oid, true) =
+              $constraint$CHECK (claim_type = ANY (ARRAY['demand_shock'::text, 'bottleneck'::text, 'value_capture'::text, 'supply_constraint'::text, 'localization'::text, 'company_mapping'::text, 'cost_structure'::text, 'tech_route'::text, 'valuation_signal'::text]))$constraint$
+    ) THEN
+        ALTER TABLE research.theme_research_content_claim
+            DROP CONSTRAINT theme_research_content_claim_claim_type_check;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'research.theme_research_content_claim'::regclass
+          AND contype = 'c'
+          AND conname = 'ck_theme_research_claim_type'
+    ) THEN
+        ALTER TABLE research.theme_research_content_claim
+            ADD CONSTRAINT ck_theme_research_claim_type CHECK (
+                claim_type IN (
+                    'demand_shock',
+                    'bottleneck',
+                    'value_capture',
+                    'supply_constraint',
+                    'localization',
+                    'company_mapping',
+                    'cost_structure',
+                    'tech_route',
+                    'valuation_signal',
+                    'catalyst',
+                    'risk'
+                )
+            );
+    END IF;
+END;
+$$;
 
 CREATE TABLE IF NOT EXISTS research.theme_research_claim_source (
     claim_id text NOT NULL REFERENCES research.theme_research_content_claim(claim_id) ON DELETE CASCADE,
@@ -1288,7 +1369,9 @@ REQUIRED_TABLES = {
 }
 
 REQUIRED_CONSTRAINTS = {
+    "ck_theme_research_claim_type",
     "ck_theme_research_source_s4_not_accepted",
+    "ck_theme_research_theme_type",
     "ck_theme_research_node_reviewed_evidence",
     "fk_theme_research_node_parent_same_theme",
 }
@@ -1315,7 +1398,39 @@ REQUIRED_TRIGGERS = {
 }
 
 EXPECTED_THEME_RESEARCH_CATALOG_SHA256 = (
-    "296c75c60f86b1606306d9599c04c4e25a5f06480184ec78f3cefbbf48a409b7"
+    "5b21137a399c3304cb4550f7e04ce06c048fe7e37754b3cd1fc316add34b0451"
+)
+
+THEME_RESEARCH_SCHEMA_MIGRATION_LOCK_KEY = 7_171_271_448_728_574_939
+
+
+@dataclass(frozen=True)
+class LegacyThemeResearchSchemaContract:
+    version_label: str
+    ddl_sha256: str
+    catalog_sha256: str
+    allowed_missing: frozenset[str]
+
+
+KNOWN_LEGACY_SCHEMA_CONTRACTS = (
+    LegacyThemeResearchSchemaContract(
+        version_label="94e1de3",
+        ddl_sha256="1acce2a856b94b6479c7e08623779e230124fc54fb78fba3358e9cfe4cc882ce",
+        catalog_sha256="296c75c60f86b1606306d9599c04c4e25a5f06480184ec78f3cefbbf48a409b7",
+        allowed_missing=frozenset(
+            {
+                "catalog:sha256",
+                "constraint:ck_theme_research_claim_type",
+                "constraint:ck_theme_research_theme_type",
+            }
+        ),
+    ),
+    LegacyThemeResearchSchemaContract(
+        version_label="9ad6360/01fae25",
+        ddl_sha256="ae542e49fb740ffb2e54d239c487c58b25f8d47178353161bc3ef58dba3948f6",
+        catalog_sha256="5b21137a399c3304cb4550f7e04ce06c048fe7e37754b3cd1fc316add34b0451",
+        allowed_missing=frozenset(),
+    ),
 )
 
 
@@ -1659,29 +1774,58 @@ def apply_theme_research_schema(
     digest = ddl_sha256()
     with connect(service) as conn:
         with conn.cursor() as cur:
+            cur.execute(
+                "SELECT pg_advisory_xact_lock(%s)",
+                (THEME_RESEARCH_SCHEMA_MIGRATION_LOCK_KEY,),
+            )
             migration = _load_applied_migration(cur)
             inspection = inspect_theme_research_schema(cur)
-            if migration is not None:
-                if migration.get("ddl_sha256") != digest or inspection["status"] != "current":
-                    raise ThemeResearchDomainError(
-                        "applied schema differs from the expected v1 contract",
-                        code="THEME_RESEARCH_SCHEMA_DRIFT",
-                        details={
-                            "applied_ddl_sha256": str(migration.get("ddl_sha256") or ""),
-                            "expected_ddl_sha256": digest,
-                            "missing": inspection["missing"],
-                        },
-                    )
+            existing_count = int(inspection["existing_count"])
+            if 0 < existing_count < len(REQUIRED_TABLES):
+                raise ThemeResearchDomainError(
+                    "partial theme research schema exists",
+                    code="THEME_RESEARCH_PARTIAL_SCHEMA",
+                    details={"missing": inspection["missing"]},
+                )
+            if (
+                migration is not None
+                and migration.get("ddl_sha256") == digest
+                and inspection["status"] == "current"
+            ):
                 return {
                     "status": "ok",
                     "schema_version": THEME_RESEARCH_DB_SCHEMA_VERSION,
                     "ddl_sha256": digest,
                 }
-            if inspection["existing_count"] > 0:
+
+            missing = set(inspection["missing"])
+            legacy_contract = next(
+                (
+                    contract
+                    for contract in KNOWN_LEGACY_SCHEMA_CONTRACTS
+                    if migration is not None
+                    and migration.get("ddl_sha256") == contract.ddl_sha256
+                    and inspection.get("catalog_sha256") == contract.catalog_sha256
+                    and missing <= contract.allowed_missing
+                ),
+                None,
+            )
+            known_legacy = (
+                legacy_contract is not None and existing_count == len(REQUIRED_TABLES)
+            )
+            bootstrap = migration is None and existing_count == 0
+            if not bootstrap and not known_legacy:
                 raise ThemeResearchDomainError(
-                    "partial unversioned theme research schema exists",
-                    code="THEME_RESEARCH_PARTIAL_SCHEMA",
-                    details={"missing": inspection["missing"]},
+                    "applied schema differs from the expected v1 contract",
+                    code="THEME_RESEARCH_SCHEMA_DRIFT",
+                    details={
+                        "applied_ddl_sha256": str(
+                            migration.get("ddl_sha256") if migration is not None else ""
+                        ),
+                        "expected_ddl_sha256": digest,
+                        "catalog_sha256": str(inspection.get("catalog_sha256") or ""),
+                        "missing": inspection["missing"],
+                    },
                 )
             cur.execute(THEME_RESEARCH_SCHEMA_SQL)
             post_inspection = inspect_theme_research_schema(cur)
@@ -1697,7 +1841,11 @@ def apply_theme_research_schema(
                     schema_version, applied_by, ddl_sha256, metadata
                 )
                 VALUES (%s, %s, %s, %s::jsonb)
-                ON CONFLICT (schema_version) DO NOTHING
+                ON CONFLICT (schema_version) DO UPDATE
+                SET applied_at = now(),
+                    applied_by = EXCLUDED.applied_by,
+                    ddl_sha256 = EXCLUDED.ddl_sha256,
+                    metadata = EXCLUDED.metadata
                 """,
                 (THEME_RESEARCH_DB_SCHEMA_VERSION, actor_user_id, digest, "{}"),
             )
