@@ -800,7 +800,6 @@ def build_consumer_oversold_weekly_from_frames(
     automatically_gated = _apply_automatic_gates(gated, config)
     elasticity_scored = score_rebound_elasticity(automatically_gated, config)
     ranked = rank_candidate_buckets(elasticity_scored, config)
-    unified = rank_unified_candidates(elasticity_scored, config)
     elasticity_scored["preaudit_score"] = (
         0.30 * elasticity_scored["oversold_score"]
         + 0.25 * elasticity_scored["valuation_repair_score"]
@@ -820,6 +819,31 @@ def build_consumer_oversold_weekly_from_frames(
     ).head(config.preaudit_size).reset_index(drop=True)
     preaudit_ids = set(preaudit_full["asset_id"].astype(str))
     preaudit = preaudit_full.reindex(columns=PREAUDIT_OUTPUT_COLUMNS)
+
+    final_scored = score_rebound_elasticity(
+        automatically_gated.loc[
+            automatically_gated["asset_id"].isin(preaudit_ids)
+        ].copy(),
+        config,
+    )
+    unified = rank_unified_candidates(final_scored, config)
+    final_score_columns = (
+        "residual_deviation_component_coverage",
+        "residual_deviation_score",
+        "stock_character_component_coverage",
+        "stock_character_score",
+        "market_capacity_component_coverage",
+        "market_capacity_score",
+        "catalyst_liquidity_coverage",
+        "catalyst_liquidity_score",
+        "elasticity_coverage",
+        "elasticity_score",
+    )
+    final_scores_by_asset = final_scored.set_index("asset_id")
+    for field in final_score_columns:
+        elasticity_scored[field] = elasticity_scored["asset_id"].map(
+            final_scores_by_asset[field]
+        )
 
     reviewed_evidence_ids = set(validated_evidence["asset_id"].astype(str))
     complete_evidence_ids = set(

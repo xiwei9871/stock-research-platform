@@ -786,3 +786,17 @@ def test_publication_evidence_threshold_counts_only_preaudit_assets():
         forty_inside_plus_outside["coverage"]["full_pool_evidence_complete"]
         > forty_inside["coverage"]["full_pool_evidence_complete"]
     )
+    rank_columns = ["asset_id", "final_rank", "final_rank_score"]
+    pd.testing.assert_frame_equal(
+        forty_inside_plus_outside["top20"].loc[:, rank_columns],
+        forty_inside["top20"].loc[:, rank_columns],
+    )
+    pd.testing.assert_frame_equal(
+        forty_inside_plus_outside["reserve"].loc[:, rank_columns],
+        forty_inside["reserve"].loc[:, rank_columns],
+    )
+    outside_comparison = forty_inside_plus_outside["comparison"].loc[
+        forty_inside_plus_outside["comparison"]["asset_id"].isin(outside_ids)
+    ]
+    assert len(outside_comparison) >= 5
+    assert outside_comparison["new_rank"].isna().all()
