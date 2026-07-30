@@ -100,6 +100,14 @@ RANK_REQUIRED_COLUMNS = (
     "composite_score",
     "base_upside",
 )
+UNIFIED_RANK_REQUIRED_COLUMNS = (
+    "asset_id",
+    "repair_bucket",
+    "eligible",
+    "composite_score",
+    "elasticity_coverage",
+    "elasticity_score",
+)
 
 
 def _require_columns(frame: pd.DataFrame, required: tuple[str, ...], name: str) -> None:
@@ -125,6 +133,22 @@ def _prepare_assets(frame: pd.DataFrame, name: str) -> pd.DataFrame:
     if invalid.any():
         raise ValueError(f"{name} asset_id must be non-empty")
     result["asset_id"] = normalized
+    duplicate = result["asset_id"].duplicated(keep=False)
+    if duplicate.any():
+        asset_id = result.loc[duplicate, "asset_id"].sort_values(kind="stable").iloc[0]
+        raise ValueError(f"{name} contains duplicate asset_id {asset_id}")
+    return result
+
+
+def _prepare_strict_assets(frame: pd.DataFrame, name: str) -> pd.DataFrame:
+    result = frame.copy()
+    invalid = result["asset_id"].map(
+        lambda value: not isinstance(value, str) or not value.strip()
+    )
+    if invalid.any():
+        value = result.loc[invalid, "asset_id"].iloc[0]
+        raise ValueError(f"{name} asset_id must be a non-empty string; got {value!r}")
+    result["asset_id"] = result["asset_id"].str.strip()
     duplicate = result["asset_id"].duplicated(keep=False)
     if duplicate.any():
         asset_id = result.loc[duplicate, "asset_id"].sort_values(kind="stable").iloc[0]
@@ -533,3 +557,62 @@ def rank_candidate_buckets(
         ranked["bucket_rank"] = np.arange(1, len(ranked) + 1, dtype=int)
         output[output_name] = ranked.reset_index(drop=True)
     return output
+
+
+def _rank_percentile(values: pd.Series) -> pd.Series:
+    result = pd.Series(math.nan, index=values.index, dtype="float64")
+    valid = values.dropna()
+    valid_count = len(valid)
+    if valid_count == 0:
+        return result
+    if valid_count == 1 or valid.nunique(dropna=True) == 1:
+        result.loc[valid.index] = 50.0
+        return result
+    ranks = valid.rank(method="average", ascending=True)
+    result.loc[valid.index] = (ranks - 1.0) / (valid_count - 1.0) * 100.0
+    return result
+
+
+def rank_unified_candidates(
+    scored_rows: pd.DataFrame,
+    config: ConsumerOversoldConfig,
+) -> pd.DataFrame:
+    """Return the single deterministic repair-plus-elasticity candidate ranking."""
+    scored_rows = _supply_empty_schema(scored_rows, UNIFIED_RANK_REQUIRED_COLUMNS)
+    _require_columns(scored_rows, UNIFIED_RANK_REQUIRED_COLUMNS, "scored_rows")
+    frame = _prepare_strict_assets(scored_rows, "scored_rows")
+    _assign_numeric(frame, ("composite_score", "elasticity_score"), "scored_rows")
+    for field in ("eligible", "elasticity_coverage"):
+        parsed: list[bool] = []
+        for value, asset_id in zip(frame[field], frame["asset_id"], strict=True):
+            if not isinstance(value, (bool, np.bool_)):
+                raise ValueError(
+                    f"scored_rows asset {asset_id} field {field} must be a strict boolean"
+                )
+            parsed.append(bool(value))
+        frame[field] = parsed
+
+    ranked = frame.loc[frame["eligible"] & frame["elasticity_coverage"]].copy()
+    for field in ("composite_score", "elasticity_score"):
+        invalid = ranked[field].isna()
+        if invalid.any():
+            asset_id = ranked.loc[invalid, "asset_id"].sort_values(kind="stable").iloc[0]
+            raise ValueError(
+                f"scored_rows asset {asset_id} field {field} must be present for unified ranking"
+            )
+
+    ranked["repair_rank_percentile"] = _rank_percentile(ranked["composite_score"])
+    ranked["elasticity_rank_percentile"] = _rank_percentile(
+        ranked["elasticity_score"]
+    )
+    ranked["final_rank_score"] = (
+        config.repair_rank_weight * ranked["repair_rank_percentile"]
+        + config.elasticity_rank_weight * ranked["elasticity_rank_percentile"]
+    )
+    ranked = ranked.sort_values(
+        ["final_rank_score", "composite_score", "elasticity_score", "asset_id"],
+        ascending=[False, False, False, True],
+        kind="stable",
+    )
+    ranked["final_rank"] = np.arange(1, len(ranked) + 1, dtype=int)
+    return ranked.reset_index(drop=True)

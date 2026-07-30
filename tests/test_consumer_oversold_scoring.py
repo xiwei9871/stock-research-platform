@@ -1,4 +1,5 @@
 import math
+from dataclasses import replace
 from decimal import Decimal
 from fractions import Fraction
 
@@ -10,6 +11,7 @@ from stock_research.consumer_oversold.contracts import ConsumerOversoldConfig
 from stock_research.consumer_oversold.scoring import (
     apply_candidate_gates,
     rank_candidate_buckets,
+    rank_unified_candidates,
     score_candidates,
 )
 
@@ -65,6 +67,19 @@ def gate_rows(**overrides):
         "latest_net_margin": 0.05,
         "normal_net_margin": 0.10,
         "composite_score": 70.0,
+    }
+    row.update(overrides)
+    return row
+
+
+def unified_rows(**overrides):
+    row = {
+        "asset_id": "A",
+        "repair_bucket": "expected_repair",
+        "eligible": True,
+        "composite_score": 70.0,
+        "elasticity_coverage": True,
+        "elasticity_score": 60.0,
     }
     row.update(overrides)
     return row
@@ -617,6 +632,142 @@ def test_rank_allows_missing_core_values_for_ineligible_assets():
 
     assert result["expected"].empty
     assert result["early"].empty
+
+
+def test_unified_rank_uses_exact_seventy_thirty_percentile_formula():
+    rows = pd.DataFrame(
+        [
+            unified_rows(asset_id="A", composite_score=10.0, elasticity_score=100.0),
+            unified_rows(asset_id="B", composite_score=20.0, elasticity_score=50.0),
+            unified_rows(asset_id="C", composite_score=30.0, elasticity_score=0.0),
+        ]
+    )
+
+    result = rank_unified_candidates(rows, CONFIG).set_index("asset_id")
+
+    assert result.loc["A", "repair_rank_percentile"] == 0.0
+    assert result.loc["A", "elasticity_rank_percentile"] == 100.0
+    assert result.loc["A", "final_rank_score"] == pytest.approx(30.0)
+    assert result.loc["B", "final_rank_score"] == pytest.approx(50.0)
+    assert result.loc["C", "final_rank_score"] == pytest.approx(70.0)
+    assert result.sort_values("final_rank").index.tolist() == ["C", "B", "A"]
+    assert result.loc["C", "repair_bucket"] == "expected_repair"
+
+
+def test_unified_rank_single_and_all_equal_cross_sections_return_fifty():
+    single = rank_unified_candidates(pd.DataFrame([unified_rows()]), CONFIG).iloc[0]
+    assert single["repair_rank_percentile"] == 50.0
+    assert single["elasticity_rank_percentile"] == 50.0
+    assert single["final_rank_score"] == 50.0
+
+    equal = rank_unified_candidates(
+        pd.DataFrame([unified_rows(asset_id="B"), unified_rows(asset_id="A")]),
+        CONFIG,
+    )
+    assert equal["asset_id"].tolist() == ["A", "B"]
+    assert equal["final_rank_score"].tolist() == [50.0, 50.0]
+    assert equal["final_rank"].tolist() == [1, 2]
+
+
+def test_unified_rank_excludes_ineligible_and_missing_elasticity_coverage():
+    rows = pd.DataFrame(
+        [
+            unified_rows(asset_id="GOOD"),
+            unified_rows(
+                asset_id="INELIGIBLE",
+                eligible=False,
+                composite_score=100.0,
+                elasticity_score=100.0,
+            ),
+            unified_rows(
+                asset_id="UNCOVERED",
+                elasticity_coverage=False,
+                elasticity_score=np.nan,
+            ),
+        ]
+    )
+
+    result = rank_unified_candidates(rows, CONFIG)
+
+    assert result["asset_id"].tolist() == ["GOOD"]
+
+
+def test_unified_rank_stable_secondary_sorting_uses_composite_then_elasticity():
+    composite_tiebreak = rank_unified_candidates(
+        pd.DataFrame(
+            [
+                unified_rows(
+                    asset_id="LOW", composite_score=10.0, elasticity_score=50.0
+                ),
+                unified_rows(
+                    asset_id="HIGH", composite_score=20.0, elasticity_score=50.0
+                ),
+            ]
+        ),
+        replace(CONFIG, repair_rank_weight=0.0, elasticity_rank_weight=1.0),
+    )
+    assert composite_tiebreak["asset_id"].tolist() == ["HIGH", "LOW"]
+
+    elasticity_tiebreak = rank_unified_candidates(
+        pd.DataFrame(
+            [
+                unified_rows(
+                    asset_id="LOW", composite_score=50.0, elasticity_score=10.0
+                ),
+                unified_rows(
+                    asset_id="HIGH", composite_score=50.0, elasticity_score=20.0
+                ),
+            ]
+        ),
+        replace(CONFIG, repair_rank_weight=1.0, elasticity_rank_weight=0.0),
+    )
+    assert elasticity_tiebreak["asset_id"].tolist() == ["HIGH", "LOW"]
+
+
+def test_recent_limit_up_has_no_direct_unified_rank_penalty():
+    rows = pd.DataFrame(
+        [
+            unified_rows(asset_id="A", recent_limit_up=True),
+            unified_rows(asset_id="B", recent_limit_up=False),
+        ]
+    )
+
+    result = rank_unified_candidates(rows, CONFIG)
+
+    assert result["asset_id"].tolist() == ["A", "B"]
+
+
+@pytest.mark.parametrize(
+    ("field", "invalid"),
+    [
+        ("eligible", 1),
+        ("elasticity_coverage", "true"),
+        ("composite_score", True),
+        ("elasticity_score", Fraction(1, 2)),
+    ],
+)
+def test_unified_rank_rejects_non_strict_values(field, invalid):
+    with pytest.raises(ValueError, match=field):
+        rank_unified_candidates(
+            pd.DataFrame([unified_rows(**{field: invalid})]), CONFIG
+        )
+
+
+def test_unified_rank_validates_columns_assets_and_empty_schema():
+    rows = pd.DataFrame([unified_rows()])
+    with pytest.raises(ValueError, match="elasticity_score"):
+        rank_unified_candidates(rows.drop(columns="elasticity_score"), CONFIG)
+    with pytest.raises(ValueError, match="duplicate asset_id"):
+        rank_unified_candidates(pd.concat([rows, rows], ignore_index=True), CONFIG)
+    with pytest.raises(ValueError, match="asset_id"):
+        rank_unified_candidates(pd.DataFrame([unified_rows(asset_id=" ")]), CONFIG)
+    with pytest.raises(ValueError, match="asset_id"):
+        rank_unified_candidates(pd.DataFrame([unified_rows(asset_id=1)]), CONFIG)
+
+    empty = rank_unified_candidates(pd.DataFrame(columns=rows.columns), CONFIG)
+    assert empty.empty
+    assert "final_rank_score" in empty.columns
+    assert "final_rank" in empty.columns
 
 
 @pytest.mark.parametrize(

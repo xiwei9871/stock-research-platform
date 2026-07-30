@@ -6,7 +6,7 @@ from decimal import Decimal, DecimalException
 import numpy as np
 import pandas as pd
 
-from .contracts import validate_trade_date
+from .contracts import ConsumerOversoldConfig, validate_trade_date
 
 
 REQUIRED_COLUMNS = ("asset_id", "trade_date", "close")
@@ -42,8 +42,8 @@ RESIDUAL_PRICE_COLUMNS = [
     "drawdown_from_high_2y",
     "price_position_1y",
     "price_position_2y",
-    "distance_raw_ma120",
-    "distance_raw_ma250",
+    "distance_hfq_ma120",
+    "distance_hfq_ma250",
     "rebound_from_low_60d",
     "rebound_from_low_120d",
     "residual_deviation_coverage",
@@ -76,6 +76,53 @@ MARKET_CAPACITY_COLUMNS = [
     "amount_to_float_cap_20d",
     "market_capacity_coverage",
 ]
+RESIDUAL_ELASTICITY_FIELDS = (
+    "drawdown_from_high_1y",
+    "drawdown_from_high_2y",
+    "price_position_1y",
+    "price_position_2y",
+    "distance_hfq_ma120",
+    "distance_hfq_ma250",
+    "rebound_from_low_60d",
+    "rebound_from_low_120d",
+    "relative_return_6m",
+    "valuation_percentile",
+)
+STOCK_ELASTICITY_FIELDS = (
+    "limit_up_count_2y",
+    "up_7pct_count_2y",
+    "up_5pct_count_2y",
+    "upside_tail_volatility_2y",
+    "positive_after_big_up_1d_rate",
+    "positive_after_big_up_3d_rate",
+    "positive_after_big_up_5d_rate",
+)
+MARKET_ELASTICITY_FIELDS = ("log_current_float_market_cap",)
+CATALYST_ELASTICITY_FIELDS = (
+    "catalyst_verifiability_score",
+    "average_amount_20d",
+    "average_turnover_rate_20d",
+    "amount_to_float_cap_20d",
+)
+ELASTICITY_COVERAGE_FIELDS = (
+    "residual_deviation_coverage",
+    "stock_character_coverage",
+    "market_capacity_coverage",
+)
+ELASTICITY_ADDED_COLUMNS = (
+    "residual_deviation_component_coverage",
+    "residual_deviation_score",
+    "stock_character_component_coverage",
+    "stock_character_score",
+    "market_capacity_component_coverage",
+    "market_capacity_score",
+    "catalyst_liquidity_coverage",
+    "catalyst_liquidity_score",
+    "elasticity_coverage",
+    "elasticity_score",
+    "automatic_elasticity_coverage",
+    "automatic_elasticity_score",
+)
 
 
 def _require_columns(bars: pd.DataFrame) -> None:
@@ -309,8 +356,8 @@ def compute_residual_price_features(
                 "drawdown_from_high_2y": _drawdown(close, 504),
                 "price_position_1y": position_1y,
                 "price_position_2y": position_2y,
-                "distance_raw_ma120": _distance_from_mean(close, 120),
-                "distance_raw_ma250": _distance_from_mean(close, 250),
+                "distance_hfq_ma120": _distance_from_mean(close, 120),
+                "distance_hfq_ma250": _distance_from_mean(close, 250),
                 "rebound_from_low_60d": _rebound(close, 60),
                 "rebound_from_low_120d": _rebound(close, 120),
                 "residual_deviation_coverage": bool(coverage),
@@ -663,3 +710,164 @@ def compute_market_capacity_features(
         )
 
     return pd.DataFrame(rows, columns=MARKET_CAPACITY_COLUMNS)
+
+
+def _cross_sectional_percentile(
+    values: pd.Series,
+    *,
+    favorable_low: bool,
+) -> pd.Series:
+    result = pd.Series(math.nan, index=values.index, dtype="float64")
+    valid = values.dropna()
+    valid_count = len(valid)
+    if valid_count == 0:
+        return result
+    if valid_count == 1 or valid.nunique(dropna=True) == 1:
+        result.loc[valid.index] = 50.0
+        return result
+    ranks = valid.rank(method="average", ascending=not favorable_low)
+    result.loc[valid.index] = (ranks - 1.0) / (valid_count - 1.0) * 100.0
+    return result
+
+
+def _component_score(
+    frame: pd.DataFrame,
+    fields: tuple[str, ...],
+    coverage: pd.Series,
+    *,
+    favorable_low: bool,
+    winsorize: bool = False,
+) -> pd.Series:
+    percentiles: dict[str, pd.Series] = {}
+    for field in fields:
+        values = frame[field].where(coverage)
+        if winsorize and values.notna().any():
+            lower = float(values.quantile(0.05))
+            upper = float(values.quantile(0.95))
+            values = values.clip(lower=lower, upper=upper)
+        percentiles[field] = _cross_sectional_percentile(
+            values, favorable_low=favorable_low
+        )
+    scores = pd.DataFrame(percentiles, index=frame.index).mean(axis=1)
+    return scores.where(coverage)
+
+
+def score_rebound_elasticity(
+    rows: pd.DataFrame,
+    config: ConsumerOversoldConfig,
+) -> pd.DataFrame:
+    """Score complete repair candidates on cross-sectional rebound elasticity."""
+    required = (
+        "asset_id",
+        *RESIDUAL_ELASTICITY_FIELDS,
+        *STOCK_ELASTICITY_FIELDS,
+        *MARKET_ELASTICITY_FIELDS,
+        *CATALYST_ELASTICITY_FIELDS,
+        *ELASTICITY_COVERAGE_FIELDS,
+    )
+    missing = [column for column in required if column not in rows.columns]
+    if missing:
+        raise ValueError(f"rows missing required columns: {', '.join(missing)}")
+
+    frame = rows.copy()
+    frame["asset_id"] = frame["asset_id"].map(
+        lambda value: _normalized_identifier(value, field_name="asset_id")
+    )
+    duplicate = frame["asset_id"].duplicated(keep=False)
+    if duplicate.any():
+        asset_id = frame.loc[duplicate, "asset_id"].sort_values(kind="stable").iloc[0]
+        raise ValueError(f"rows contains duplicate asset_id {asset_id}")
+
+    numeric_fields = (
+        *RESIDUAL_ELASTICITY_FIELDS,
+        *STOCK_ELASTICITY_FIELDS,
+        *MARKET_ELASTICITY_FIELDS,
+        *CATALYST_ELASTICITY_FIELDS,
+    )
+    for field in numeric_fields:
+        parsed: list[float] = []
+        for value, asset_id in zip(frame[field], frame["asset_id"], strict=True):
+            try:
+                parsed.append(
+                    _strict_float(value, field_name=field, allow_missing=True)
+                )
+            except ValueError as exc:
+                raise ValueError(f"rows asset {asset_id} field {field}: {exc}") from exc
+        frame[field] = parsed
+    for field in ELASTICITY_COVERAGE_FIELDS:
+        parsed_coverage: list[bool] = []
+        for value, asset_id in zip(frame[field], frame["asset_id"], strict=True):
+            if not isinstance(value, (bool, np.bool_)):
+                raise ValueError(
+                    f"rows asset {asset_id} field {field} must be a strict boolean"
+                )
+            parsed_coverage.append(bool(value))
+        frame[field] = parsed_coverage
+
+    no_big_up = frame["stock_character_coverage"] & frame["up_7pct_count_2y"].eq(0.0)
+    for field in (
+        "positive_after_big_up_1d_rate",
+        "positive_after_big_up_3d_rate",
+        "positive_after_big_up_5d_rate",
+    ):
+        frame.loc[no_big_up & frame[field].isna(), field] = 0.0
+
+    residual_coverage = frame["residual_deviation_coverage"] & frame[
+        list(RESIDUAL_ELASTICITY_FIELDS)
+    ].notna().all(axis=1)
+    stock_coverage = frame["stock_character_coverage"] & frame[
+        list(STOCK_ELASTICITY_FIELDS)
+    ].notna().all(axis=1)
+    market_coverage = frame["market_capacity_coverage"] & frame[
+        list(MARKET_ELASTICITY_FIELDS)
+    ].notna().all(axis=1)
+    catalyst_coverage = frame[list(CATALYST_ELASTICITY_FIELDS)].notna().all(axis=1)
+
+    frame["residual_deviation_component_coverage"] = residual_coverage.astype(bool)
+    frame["residual_deviation_score"] = _component_score(
+        frame,
+        RESIDUAL_ELASTICITY_FIELDS,
+        residual_coverage,
+        favorable_low=True,
+    )
+    frame["stock_character_component_coverage"] = stock_coverage.astype(bool)
+    frame["stock_character_score"] = _component_score(
+        frame,
+        STOCK_ELASTICITY_FIELDS,
+        stock_coverage,
+        favorable_low=False,
+        winsorize=True,
+    )
+    frame["market_capacity_component_coverage"] = market_coverage.astype(bool)
+    frame["market_capacity_score"] = _component_score(
+        frame,
+        MARKET_ELASTICITY_FIELDS,
+        market_coverage,
+        favorable_low=True,
+    )
+    frame["catalyst_liquidity_coverage"] = catalyst_coverage.astype(bool)
+    frame["catalyst_liquidity_score"] = _component_score(
+        frame,
+        CATALYST_ELASTICITY_FIELDS,
+        catalyst_coverage,
+        favorable_low=False,
+    )
+
+    frame["elasticity_coverage"] = (
+        residual_coverage & stock_coverage & market_coverage & catalyst_coverage
+    ).astype(bool)
+    frame["elasticity_score"] = (
+        config.residual_deviation_weight * frame["residual_deviation_score"]
+        + config.stock_character_weight * frame["stock_character_score"]
+        + config.market_capacity_weight * frame["market_capacity_score"]
+        + config.catalyst_liquidity_weight * frame["catalyst_liquidity_score"]
+    ).where(frame["elasticity_coverage"])
+    frame["automatic_elasticity_coverage"] = (
+        residual_coverage & stock_coverage & market_coverage
+    ).astype(bool)
+    frame["automatic_elasticity_score"] = (
+        0.45 * frame["residual_deviation_score"]
+        + 0.30 * frame["stock_character_score"]
+        + 0.25 * frame["market_capacity_score"]
+    ).where(frame["automatic_elasticity_coverage"])
+    return frame.sort_values("asset_id", kind="stable").reset_index(drop=True)

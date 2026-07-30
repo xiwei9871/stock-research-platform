@@ -258,7 +258,7 @@ Return at least:
 (
     "asset_id", "price_series_source", "return_1d", "drawdown_from_high_1y",
     "drawdown_from_high_2y", "price_position_1y", "price_position_2y",
-    "distance_raw_ma120", "distance_raw_ma250", "rebound_from_low_60d",
+    "distance_hfq_ma120", "distance_hfq_ma250", "rebound_from_low_60d",
     "rebound_from_low_120d", "residual_deviation_coverage",
 )
 ```
@@ -540,8 +540,8 @@ RESIDUAL_COMPONENT_DIRECTIONS = {
     "drawdown_from_high_2y": False,
     "price_position_1y": False,
     "price_position_2y": False,
-    "distance_raw_ma120": False,
-    "distance_raw_ma250": False,
+    "distance_hfq_ma120": False,
+    "distance_hfq_ma250": False,
     "rebound_from_low_60d": False,
     "rebound_from_low_120d": False,
     "relative_return_6m": False,

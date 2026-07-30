@@ -7,15 +7,18 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from stock_research.consumer_oversold.contracts import ConsumerOversoldConfig
 from stock_research.consumer_oversold.elasticity import (
     compute_market_capacity_features,
     compute_residual_price_features,
     compute_stock_character_features,
     is_limit_up_day,
+    score_rebound_elasticity,
 )
 
 
 TRADE_DATE = "2026-07-29"
+CONFIG = ConsumerOversoldConfig(trade_date=TRADE_DATE)
 EXPECTED_COLUMNS = [
     "asset_id",
     "latest_trade_date",
@@ -26,8 +29,8 @@ EXPECTED_COLUMNS = [
     "drawdown_from_high_2y",
     "price_position_1y",
     "price_position_2y",
-    "distance_raw_ma120",
-    "distance_raw_ma250",
+    "distance_hfq_ma120",
+    "distance_hfq_ma250",
     "rebound_from_low_60d",
     "rebound_from_low_120d",
     "residual_deviation_coverage",
@@ -135,6 +138,39 @@ def _capacity_shares(
         "float_share": float_share,
         "free_float_share": free_float_share,
     }
+
+
+def _elasticity_row(**overrides):
+    row = {
+        "asset_id": "A",
+        "drawdown_from_high_1y": -0.40,
+        "drawdown_from_high_2y": -0.50,
+        "price_position_1y": 0.20,
+        "price_position_2y": 0.25,
+        "distance_hfq_ma120": -0.10,
+        "distance_hfq_ma250": -0.15,
+        "rebound_from_low_60d": 0.10,
+        "rebound_from_low_120d": 0.15,
+        "relative_return_6m": -0.20,
+        "valuation_percentile": 0.20,
+        "residual_deviation_coverage": True,
+        "limit_up_count_2y": 2.0,
+        "up_7pct_count_2y": 3.0,
+        "up_5pct_count_2y": 5.0,
+        "upside_tail_volatility_2y": 0.03,
+        "positive_after_big_up_1d_rate": 0.50,
+        "positive_after_big_up_3d_rate": 0.45,
+        "positive_after_big_up_5d_rate": 0.40,
+        "stock_character_coverage": True,
+        "log_current_float_market_cap": 20.0,
+        "market_capacity_coverage": True,
+        "catalyst_verifiability_score": 70.0,
+        "average_amount_20d": 200_000_000.0,
+        "average_turnover_rate_20d": 2.0,
+        "amount_to_float_cap_20d": 0.02,
+    }
+    row.update(overrides)
+    return row
 
 
 def test_hfq_features_capture_large_remaining_deviation_after_a_10_percent_rise():
@@ -294,7 +330,7 @@ def test_complete_hfq_history_has_coverage_when_all_raw_close_values_are_missing
     assert row["residual_deviation_coverage"]
     assert row["drawdown_from_high_2y"] == pytest.approx(-0.50)
     assert row["drawdown_from_high_1y"] == pytest.approx(50.0 / 80.0 - 1.0)
-    assert row["distance_raw_ma120"] == pytest.approx(
+    assert row["distance_hfq_ma120"] == pytest.approx(
         50.0 / np.mean(close[-120:]) - 1.0
     )
 
@@ -623,6 +659,137 @@ def test_empty_stock_character_input_returns_stable_schema():
 
     assert result.empty
     assert result.columns.tolist() == STOCK_CHARACTER_COLUMNS
+
+
+def test_rebound_elasticity_percentiles_directions_and_weights_are_exact():
+    component_fields = {
+        "residual": [
+            "drawdown_from_high_1y",
+            "drawdown_from_high_2y",
+            "price_position_1y",
+            "price_position_2y",
+            "distance_hfq_ma120",
+            "distance_hfq_ma250",
+            "rebound_from_low_60d",
+            "rebound_from_low_120d",
+            "relative_return_6m",
+            "valuation_percentile",
+        ],
+        "stock": [
+            "limit_up_count_2y",
+            "up_7pct_count_2y",
+            "up_5pct_count_2y",
+            "upside_tail_volatility_2y",
+            "positive_after_big_up_1d_rate",
+            "positive_after_big_up_3d_rate",
+            "positive_after_big_up_5d_rate",
+        ],
+        "catalyst": [
+            "catalyst_verifiability_score",
+            "average_amount_20d",
+            "average_turnover_rate_20d",
+            "amount_to_float_cap_20d",
+        ],
+    }
+    rows = []
+    for asset_id, level in (("A", 1.0), ("B", 2.0), ("C", 3.0)):
+        overrides = {"asset_id": asset_id, "log_current_float_market_cap": level}
+        for fields in component_fields.values():
+            overrides.update({field: level for field in fields})
+        rows.append(_elasticity_row(**overrides))
+
+    result = score_rebound_elasticity(pd.DataFrame(rows), CONFIG).set_index("asset_id")
+
+    assert result.loc["A", "residual_deviation_score"] == 100.0
+    assert result.loc["A", "stock_character_score"] == 0.0
+    assert result.loc["A", "market_capacity_score"] == 100.0
+    assert result.loc["A", "catalyst_liquidity_score"] == 0.0
+    assert result.loc["A", "elasticity_score"] == pytest.approx(55.0)
+    assert result.loc["A", "automatic_elasticity_score"] == pytest.approx(70.0)
+    assert result.loc["B", "elasticity_score"] == 50.0
+    assert result.loc["B", "automatic_elasticity_score"] == 50.0
+    assert result.loc["C", "elasticity_score"] == pytest.approx(45.0)
+    assert result.loc["C", "automatic_elasticity_score"] == pytest.approx(30.0)
+    assert result["elasticity_coverage"].all()
+    assert result["automatic_elasticity_coverage"].all()
+
+
+def test_stock_character_inputs_are_winsorized_before_percentiles():
+    rows = []
+    for index, count in enumerate([0.0] * 19 + [100.0, 1000.0]):
+        rows.append(_elasticity_row(asset_id=f"A{index:02d}", limit_up_count_2y=count))
+
+    result = score_rebound_elasticity(pd.DataFrame(rows), CONFIG).set_index("asset_id")
+
+    assert result.loc["A19", "stock_character_score"] == pytest.approx(
+        result.loc["A20", "stock_character_score"]
+    )
+
+
+def test_no_big_up_events_can_use_zero_continuation_without_faking_tail_volatility():
+    no_events = _elasticity_row(
+        up_7pct_count_2y=0.0,
+        positive_after_big_up_1d_rate=np.nan,
+        positive_after_big_up_3d_rate=np.nan,
+        positive_after_big_up_5d_rate=np.nan,
+    )
+    result = score_rebound_elasticity(pd.DataFrame([no_events]), CONFIG).iloc[0]
+
+    assert result["stock_character_coverage"]
+    assert result["stock_character_score"] == 50.0
+
+    missing_tail = score_rebound_elasticity(
+        pd.DataFrame([_elasticity_row(up_7pct_count_2y=0.0, upside_tail_volatility_2y=np.nan)]),
+        CONFIG,
+    ).iloc[0]
+    assert not missing_tail["stock_character_component_coverage"]
+    assert pd.isna(missing_tail["stock_character_score"])
+
+
+def test_component_missingness_does_not_default_to_zero_or_disable_automatic_score():
+    row = _elasticity_row(catalyst_verifiability_score=np.nan)
+    result = score_rebound_elasticity(pd.DataFrame([row]), CONFIG).iloc[0]
+
+    assert not result["catalyst_liquidity_coverage"]
+    assert pd.isna(result["catalyst_liquidity_score"])
+    assert not result["elasticity_coverage"]
+    assert pd.isna(result["elasticity_score"])
+    assert result["automatic_elasticity_coverage"]
+    assert result["automatic_elasticity_score"] == 50.0
+
+
+@pytest.mark.parametrize(
+    ("field", "invalid"),
+    [
+        ("drawdown_from_high_1y", True),
+        ("limit_up_count_2y", "2"),
+        ("log_current_float_market_cap", Fraction(20, 1)),
+        ("average_amount_20d", np.inf),
+        ("residual_deviation_coverage", 1),
+        ("stock_character_coverage", "true"),
+        ("market_capacity_coverage", None),
+    ],
+)
+def test_rebound_elasticity_rejects_non_strict_values(field, invalid):
+    with pytest.raises(ValueError, match=field):
+        score_rebound_elasticity(
+            pd.DataFrame([_elasticity_row(**{field: invalid})]), CONFIG
+        )
+
+
+def test_rebound_elasticity_validates_assets_columns_and_empty_schema():
+    rows = pd.DataFrame([_elasticity_row()])
+    with pytest.raises(ValueError, match="distance_hfq_ma250"):
+        score_rebound_elasticity(rows.drop(columns="distance_hfq_ma250"), CONFIG)
+    with pytest.raises(ValueError, match="duplicate asset_id"):
+        score_rebound_elasticity(pd.concat([rows, rows], ignore_index=True), CONFIG)
+    with pytest.raises(ValueError, match="asset_id"):
+        score_rebound_elasticity(pd.DataFrame([_elasticity_row(asset_id=" ")]), CONFIG)
+
+    empty = score_rebound_elasticity(pd.DataFrame(columns=rows.columns), CONFIG)
+    assert empty.empty
+    assert "elasticity_score" in empty.columns
+    assert "automatic_elasticity_score" in empty.columns
 
 
 def test_market_capacity_prefers_free_float_then_float_then_total_share():
