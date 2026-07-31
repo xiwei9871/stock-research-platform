@@ -1,3 +1,5 @@
+import type { ThemeResearchReportSummary } from '../api/types';
+
 export type ThemeResearchGuardrails = {
   research_only: boolean;
   used_for_signal: boolean;
@@ -12,6 +14,7 @@ export type ThemeResearchTheme = ThemeResearchGuardrails & {
   status: string;
   created_from: string;
   last_updated: string;
+  analysis_report: ThemeResearchReportSummary;
 };
 
 export type ThemeResearchThemeIndexItem = ThemeResearchTheme & {

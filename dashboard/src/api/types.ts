@@ -412,6 +412,124 @@ export type ThemeResearchUpdatesPayload = {
   warnings: string[];
 };
 
+export type ThemeResearchReportSummary =
+  | { status: 'researching' }
+  | {
+      status: 'published';
+      report_version_id: string;
+      version: string;
+      published_at: string;
+      has_pdf: boolean;
+    };
+
+export type ThemeResearchReportStatus = 'published' | 'archived';
+
+export type ThemeResearchReportVersion = {
+  report_version_id: string;
+  theme_id: string;
+  version: string;
+  title: string;
+  summary: string;
+  status: ThemeResearchReportStatus;
+  generated_at: string;
+  indexed_at: string;
+  published_at: string;
+  published_by_user_id: string;
+  row_version: number;
+  metadata: Record<string, never>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ThemeResearchReportDocument = {
+  report_version_id: string;
+  theme_id: string;
+  version: string;
+  title: string;
+  summary: string;
+  status: ThemeResearchReportStatus;
+  generated_at: string;
+  indexed_at: string;
+  published_at: string;
+  has_pdf: boolean;
+  html: string;
+};
+
+export type ThemeResearchReportListResponse = {
+  total: number;
+  items: ThemeResearchReportVersion[];
+};
+
+export type AdminThemeResearchReportStatus =
+  | 'pending_review'
+  | 'rejected'
+  | 'published'
+  | 'archived';
+
+export type AdminThemeResearchReport = Omit<
+  ThemeResearchReportVersion,
+  'status' | 'published_at' | 'published_by_user_id'
+> & {
+  status: AdminThemeResearchReportStatus;
+  published_at: string | null;
+  published_by_user_id: string | null;
+  rejected_at: string | null;
+  rejected_by_user_id: string | null;
+  rejection_reason: string | null;
+};
+
+export type AdminThemeResearchReportDocument = Omit<
+  ThemeResearchReportDocument,
+  'status' | 'published_at'
+> & {
+  status: AdminThemeResearchReportStatus;
+  published_at: string | null;
+  generator_name: string;
+  generator_version: string;
+};
+
+export type AdminThemeResearchReportListResponse = {
+  total: number;
+  items: AdminThemeResearchReport[];
+};
+
+export type ThemeResearchReportPublishRequest = {
+  expected_row_version: number;
+  idempotency_key: string;
+  comment?: string;
+};
+
+export type ThemeResearchReportRejectRequest = {
+  expected_row_version: number;
+  idempotency_key: string;
+  reason: string;
+};
+
+export type ThemeResearchReportIndexError = {
+  code: string;
+  manifest_path?: string;
+  theme_id?: string;
+  version?: string;
+};
+
+export type ThemeResearchReportIndexResult = {
+  discovered: number;
+  indexed: number;
+  unchanged: number;
+  invalid: number;
+  errors: ThemeResearchReportIndexError[];
+  started_at: string | null;
+  completed_at: string | null;
+};
+
+export type ThemeResearchReportIndexDiagnostics = {
+  status: 'running' | 'fatal' | 'never_run' | 'error' | 'ok';
+  running: boolean;
+  last_started_at: string | null;
+  last_completed_at: string | null;
+  last_result: ThemeResearchReportIndexResult | { error_code: string } | null;
+};
+
 export type DailyThemeResearchDigest = {
   trade_date: string;
   status: string;
