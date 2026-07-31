@@ -1233,6 +1233,76 @@ def test_v2_pipeline_is_cutoff_safe_deterministic_and_does_not_mutate_inputs():
     pd.testing.assert_frame_equal(evidence, evidence_original)
 
 
+def test_v2_pipeline_excludes_invalid_technical_history_without_aborting_valid_assets():
+    frames, evidence, config = _many_frames(4, 4)
+    invalid_asset_id = "A000"
+    valid_asset_id = "A002"
+    invalid_row = frames["bars"].index[
+        frames["bars"]["asset_id"].eq(invalid_asset_id)
+    ][-30]
+    frames["bars"].loc[invalid_row, "turnover_rate"] = np.nan
+    originals = {key: value.copy(deep=True) for key, value in frames.items()}
+    evidence_original = evidence.copy(deep=True)
+    v2_config = _v2_config(
+        replace(
+            config,
+            preaudit_size=4,
+            minimum_evidence_complete=4,
+            final_top_n=3,
+            reserve_top_n=1,
+        )
+    )
+
+    baseline = build_consumer_oversold_weekly_from_frames(
+        frames=frames,
+        evidence=evidence,
+        config=v2_config,
+    )
+    shuffled = {
+        key: frame.sample(frac=1.0, random_state=23).reset_index(drop=True)
+        for key, frame in frames.items()
+    }
+    deterministic = build_consumer_oversold_weekly_from_frames(
+        frames=shuffled,
+        evidence=evidence.sample(frac=1.0, random_state=29).reset_index(drop=True),
+        config=v2_config,
+    )
+    future = deepcopy(frames)
+    future_row = future["bars"].loc[
+        future["bars"]["asset_id"].eq(valid_asset_id)
+    ].tail(1).copy()
+    future_row["trade_date"] = pd.Timestamp("2026-07-30")
+    future_row["turnover_rate"] = np.nan
+    future["bars"] = pd.concat([future["bars"], future_row], ignore_index=True)
+    cutoff_safe = build_consumer_oversold_weekly_from_frames(
+        frames=future,
+        evidence=evidence,
+        config=v2_config,
+    )
+
+    scores = baseline["scores"].set_index("asset_id")
+    assert not bool(scores.loc[invalid_asset_id, "technical_feature_coverage"])
+    assert not bool(scores.loc[invalid_asset_id, "activation_eligible"])
+    assert "activation_coverage_incomplete" in scores.loc[
+        invalid_asset_id, "activation_exclusion_reasons"
+    ]
+    assert invalid_asset_id not in set(baseline["ranked_pool"]["asset_id"])
+    assert valid_asset_id in set(baseline["ranked_pool"]["asset_id"])
+    assert bool(scores.loc[valid_asset_id, "technical_feature_coverage"])
+    rank_columns = ["asset_id", "final_rank", "final_rank_score_v2"]
+    pd.testing.assert_frame_equal(
+        baseline["ranked_pool"].loc[:, rank_columns].reset_index(drop=True),
+        deterministic["ranked_pool"].loc[:, rank_columns].reset_index(drop=True),
+    )
+    pd.testing.assert_frame_equal(
+        baseline["ranked_pool"].loc[:, rank_columns].reset_index(drop=True),
+        cutoff_safe["ranked_pool"].loc[:, rank_columns].reset_index(drop=True),
+    )
+    for key, original in originals.items():
+        pd.testing.assert_frame_equal(frames[key], original)
+    pd.testing.assert_frame_equal(evidence, evidence_original)
+
+
 def test_v2_pipeline_empty_universe_has_stable_v2_schemas_and_no_name_branch():
     frames, evidence, config = _frames()
     named = deepcopy(frames)

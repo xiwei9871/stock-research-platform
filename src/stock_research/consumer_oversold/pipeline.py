@@ -4,6 +4,7 @@ import copy
 import fcntl
 import math
 from dataclasses import replace
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -663,6 +664,46 @@ def _merge_one_to_one(left: pd.DataFrame, right: pd.DataFrame, name: str) -> pd.
     return left.merge(normalized, on="asset_id", how="left", validate="one_to_one")
 
 
+def _drop_invalid_technical_histories(
+    bars: pd.DataFrame,
+    *,
+    trade_date: str,
+) -> pd.DataFrame:
+    """Remove whole asset histories that cannot satisfy the strict technical API."""
+    required = ("asset_id", "trade_date", "close", "amount", "turnover_rate")
+    if bars.empty or any(column not in bars.columns for column in required):
+        return bars.copy(deep=True)
+
+    frame = bars.copy(deep=True)
+    parsed_dates = pd.to_datetime(frame["trade_date"], errors="coerce")
+    historical = frame.loc[parsed_dates.le(pd.Timestamp(trade_date))]
+    invalid = pd.Series(False, index=historical.index, dtype=bool)
+    numeric_types = (int, float, np.integer, np.floating, Decimal)
+    for field in ("close", "amount", "turnover_rate"):
+        def valid(value: object) -> bool:
+            if isinstance(value, (bool, np.bool_)) or not isinstance(
+                value, numeric_types
+            ):
+                return False
+            try:
+                number = float(value)
+            except (OverflowError, TypeError, ValueError):
+                return False
+            if not math.isfinite(number):
+                return False
+            return number > 0.0 if field == "close" else number >= 0.0
+
+        invalid |= ~historical[field].map(valid)
+    invalid_asset_ids = set(
+        historical.loc[invalid, "asset_id"].astype(str)
+    )
+    if not invalid_asset_ids:
+        return frame
+    return frame.loc[
+        ~frame["asset_id"].astype(str).isin(invalid_asset_ids)
+    ].copy()
+
+
 def _empty_evidence_defaults(frame: pd.DataFrame) -> pd.DataFrame:
     result = frame.copy()
     text_defaults = {
@@ -1232,8 +1273,12 @@ def _build_v2_result(
     gated = apply_candidate_gates(scored, config)
     automatically_gated = _apply_automatic_gates(gated, config)
     elasticity_scored = score_rebound_elasticity(automatically_gated, config)
-    technical = compute_technical_readiness_features(
+    technical_bars = _drop_invalid_technical_histories(
         bars,
+        trade_date=config.trade_date,
+    )
+    technical = compute_technical_readiness_features(
+        technical_bars,
         membership,
         trade_date=config.trade_date,
     ).drop(columns=["latest_trade_date"], errors="ignore")
