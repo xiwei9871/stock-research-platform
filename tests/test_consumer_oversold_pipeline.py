@@ -636,6 +636,91 @@ def test_runner_uses_latest_close_times_shares_not_pe_or_ps(monkeypatch, tmp_pat
     assert captured["preaudit_only"] is True
 
 
+def test_runner_derives_missing_turnover_at_market_loading_boundary(
+    monkeypatch, tmp_path
+):
+    from stock_research.consumer_oversold import loaders, pipeline
+
+    frames, evidence, _ = _frames()
+    evidence_path = tmp_path / "evidence.csv"
+    evidence.to_csv(evidence_path, index=False)
+    rules_path = tmp_path / "rules.csv"
+    frames["industry_rules"].to_csv(rules_path, index=False)
+    overrides_path = tmp_path / "overrides.csv"
+    frames["asset_overrides"].to_csv(overrides_path, index=False)
+    monkeypatch.setattr(pipeline, "INDUSTRY_RULES_PATH", rules_path)
+    monkeypatch.setattr(pipeline, "ASSET_OVERRIDES_PATH", overrides_path)
+    monkeypatch.setattr(
+        pipeline,
+        "load_consumer_universe_frames",
+        lambda trade_date, service: {
+            key: frames[key]
+            for key in ("assets", "statuses", "liquidity", "industries")
+        },
+    )
+    market = frames["bars"].copy(deep=True)
+    market["raw_close"] = market["close"]
+    target = market.index[market["asset_id"].eq("A")][0]
+    market.loc[target, "turnover_rate"] = np.nan
+    market.attrs[loaders.TURNOVER_DERIVATION_INPUTS_ATTR] = [
+        {
+            "asset_id": str(row.asset_id),
+            "trade_date": pd.Timestamp(row.trade_date).date().isoformat(),
+            "volume": 20_000 if index == target else None,
+            "source": "derived:tushare" if index == target else None,
+        }
+        for index, row in market.iterrows()
+    ]
+    monkeypatch.setattr(
+        pipeline,
+        "load_consumer_market_history",
+        lambda trade_date, service, asset_ids=None: market,
+    )
+    shares = frames["share_capacity"].copy(deep=True)
+    shares.loc[shares["asset_id"].eq("A"), "float_share"] = 100_000_000
+    monkeypatch.setattr(
+        pipeline,
+        "load_consumer_share_capacity",
+        lambda ids, trade_date, service: shares,
+    )
+    monkeypatch.setattr(
+        pipeline,
+        "load_consumer_finance_history",
+        lambda ids, trade_date, service: frames["finance"],
+    )
+    monkeypatch.setattr(
+        pipeline,
+        "load_consumer_valuation_history",
+        lambda ids, trade_date, service: frames["valuation_history"].drop(
+            columns="consumer_subindustry"
+        ),
+    )
+    captured = {}
+
+    def fake_build(*, frames, evidence, config, output_dir, preaudit_only):
+        captured["bars"] = frames["bars"]
+        return {"ok": True}
+
+    monkeypatch.setattr(
+        pipeline, "build_consumer_oversold_weekly_from_frames", fake_build
+    )
+
+    result = run_consumer_oversold_weekly(
+        trade_date=TRADE_DATE,
+        evidence_path=evidence_path,
+        output_dir=tmp_path / "out",
+        service="test-service",
+        ranking_version="v2",
+    )
+
+    assert result == {"ok": True}
+    assert captured["bars"].loc[target, "turnover_rate"] == pytest.approx(2.0)
+    assert captured["bars"].attrs[
+        loaders.TURNOVER_DERIVATION_COVERAGE_ATTR
+    ]["derived_rows"] == 1
+    assert pd.isna(market.loc[target, "turnover_rate"])
+
+
 def test_empty_consumer_pool_allows_schema_less_downstream_frames():
     frames, evidence, config = _frames()
     frames["industry_rules"] = frames["industry_rules"].assign(action="exclude", consumer_subindustry="")
@@ -1365,6 +1450,71 @@ def test_v2_pipeline_excludes_invalid_technical_history_without_aborting_valid_a
     for key, original in originals.items():
         pd.testing.assert_frame_equal(frames[key], original)
     pd.testing.assert_frame_equal(evidence, evidence_original)
+
+
+def test_v2_pipeline_records_turnover_derivation_coverage_and_keeps_unresolved_strict():
+    from stock_research.consumer_oversold import loaders
+
+    frames, evidence, config = _many_frames(4, 4)
+    derived_asset = "A000"
+    unresolved_asset = "A001"
+    derived_row = frames["bars"].index[
+        frames["bars"]["asset_id"].eq(derived_asset)
+    ][-30]
+    unresolved_row = frames["bars"].index[
+        frames["bars"]["asset_id"].eq(unresolved_asset)
+    ][-30]
+    frames["bars"].loc[[derived_row, unresolved_row], "turnover_rate"] = np.nan
+    frames["bars"].attrs[loaders.TURNOVER_DERIVATION_INPUTS_ATTR] = [
+        {
+            "asset_id": str(row.asset_id),
+            "trade_date": pd.Timestamp(row.trade_date).date().isoformat(),
+            "volume": 20_000 if index == derived_row else None,
+            "source": "derived:tushare" if index == derived_row else None,
+        }
+        for index, row in frames["bars"].iterrows()
+    ]
+    frames["share_capacity"].loc[
+        frames["share_capacity"]["asset_id"].eq(derived_asset), "float_share"
+    ] = 100_000_000
+    frames["bars"] = loaders.derive_consumer_market_turnover_history(
+        frames["bars"],
+        frames["share_capacity"],
+        trade_date=TRADE_DATE,
+    )
+    v2_config = _v2_config(
+        replace(
+            config,
+            preaudit_size=4,
+            minimum_evidence_complete=4,
+            final_top_n=3,
+            reserve_top_n=1,
+        )
+    )
+
+    result = build_consumer_oversold_weekly_from_frames(
+        frames=frames,
+        evidence=evidence,
+        config=v2_config,
+    )
+
+    assert result["coverage"]["turnover_derivation"] == {
+        "method": "pit_source_aware_v1",
+        "share_capacity_cutoff": TRADE_DATE,
+        "missing_turnover_rows": 2,
+        "derived_rows": 1,
+        "unresolved_rows": 1,
+        "derived_rows_by_source": {"derived:tushare": 1},
+    }
+    assert "turnover_rate_derived_from_pit_share_capacity_1_rows" in result[
+        "coverage"
+    ]["warnings"]
+    assert "turnover_rate_unresolved_after_pit_derivation_1_rows" in result[
+        "coverage"
+    ]["warnings"]
+    scores = result["scores"].set_index("asset_id")
+    assert bool(scores.loc[derived_asset, "technical_feature_coverage"])
+    assert not bool(scores.loc[unresolved_asset, "technical_feature_coverage"])
 
 
 def test_v2_pipeline_empty_universe_has_stable_v2_schemas_and_no_name_branch():

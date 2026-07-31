@@ -362,6 +362,170 @@ def test_market_empty_database_result_has_expanded_stable_schema(monkeypatch):
     assert result.empty
 
 
+def test_market_loader_carries_private_turnover_inputs_without_expanding_public_schema(
+    monkeypatch,
+):
+    calls, _ = _install_db(
+        monkeypatch,
+        [[{
+            "asset_id": "A",
+            "trade_date": date(2026, 7, 29),
+            "close": 10,
+            "raw_close": 5,
+            "amount": 1_000,
+            "turnover_rate": None,
+            "pct_chg": 1.0,
+            "is_st": False,
+            "trade_status": "normal",
+            "turnover_volume": 250_000,
+            "turnover_source": "derived:tushare",
+        }]],
+    )
+
+    result = loaders.load_consumer_market_history(
+        "2026-07-29", service="test", asset_ids=["A"]
+    )
+
+    assert result.columns.tolist() == list(loaders.MARKET_COLUMNS)
+    assert result.attrs[loaders.TURNOVER_DERIVATION_INPUTS_ATTR] == [
+        {
+            "asset_id": "A",
+            "trade_date": "2026-07-29",
+            "volume": 250_000,
+            "source": "derived:tushare",
+        }
+    ]
+    sql, _ = calls[0]
+    assert "b.volume AS turnover_volume" in sql
+    assert "b.source AS turnover_source" in sql
+
+
+@pytest.mark.parametrize(
+    ("source", "volume", "float_share", "expected", "marker"),
+    [
+        ("baostock", 2_000_000, 100_000_000, 2.0, "baostock"),
+        (
+            "derived:tushare_raw_latest_factor",
+            20_000,
+            100_000_000,
+            2.0,
+            "derived:tushare_raw_latest_factor",
+        ),
+    ],
+)
+def test_derive_missing_turnover_is_source_aware_and_auditable(
+    source, volume, float_share, expected, marker
+):
+    bars = pd.DataFrame(
+        [{
+            "asset_id": "A",
+            "trade_date": "2026-07-27",
+            "close": 10.0,
+            "raw_close": 10.0,
+            "amount": 1_000_000.0,
+            "turnover_rate": None,
+            "pct_chg": 0.0,
+            "is_st": False,
+            "trade_status": "normal",
+        }],
+        columns=loaders.MARKET_COLUMNS,
+    )
+    bars.attrs[loaders.TURNOVER_DERIVATION_INPUTS_ATTR] = [
+        {
+            "asset_id": "A",
+            "trade_date": "2026-07-27",
+            "volume": volume,
+            "source": source,
+        }
+    ]
+    shares = pd.DataFrame(
+        [{
+            "asset_id": "A",
+            "total_share": 120_000_000,
+            "float_share": float_share,
+            "free_float_share": 80_000_000,
+        }],
+        columns=loaders.SHARE_CAPACITY_COLUMNS,
+    )
+    bars_original = bars.copy(deep=True)
+    shares_original = shares.copy(deep=True)
+
+    result = loaders.derive_consumer_market_turnover_history(
+        bars,
+        shares,
+        trade_date="2026-07-27",
+    )
+
+    assert result.loc[0, "turnover_rate"] == pytest.approx(expected)
+    assert result.columns.tolist() == list(loaders.MARKET_COLUMNS)
+    assert result.attrs[loaders.TURNOVER_DERIVATION_COVERAGE_ATTR] == {
+        "method": "pit_source_aware_v1",
+        "share_capacity_cutoff": "2026-07-27",
+        "missing_turnover_rows": 1,
+        "derived_rows": 1,
+        "unresolved_rows": 0,
+        "derived_rows_by_source": {marker: 1},
+    }
+    pd.testing.assert_frame_equal(bars, bars_original)
+    pd.testing.assert_frame_equal(shares, shares_original)
+
+
+@pytest.mark.parametrize(
+    ("float_share", "volume", "source"),
+    [
+        (None, 2_000_000, "baostock"),
+        (0, 2_000_000, "baostock"),
+        (100_000_000, None, "baostock"),
+        (100_000_000, 0, "baostock"),
+        (100_000_000, 2_000_000, "unknown"),
+    ],
+)
+def test_derive_missing_turnover_leaves_unverifiable_rows_missing(
+    float_share, volume, source
+):
+    bars = pd.DataFrame(
+        [{
+            "asset_id": "A",
+            "trade_date": "2026-07-27",
+            "close": 10.0,
+            "raw_close": 10.0,
+            "amount": 1_000_000.0,
+            "turnover_rate": None,
+            "pct_chg": 0.0,
+            "is_st": False,
+            "trade_status": "normal",
+        }],
+        columns=loaders.MARKET_COLUMNS,
+    )
+    bars.attrs[loaders.TURNOVER_DERIVATION_INPUTS_ATTR] = [
+        {
+            "asset_id": "A",
+            "trade_date": "2026-07-27",
+            "volume": volume,
+            "source": source,
+        }
+    ]
+    shares = pd.DataFrame(
+        [{
+            "asset_id": "A",
+            "total_share": 120_000_000,
+            "float_share": float_share,
+            "free_float_share": 80_000_000,
+        }],
+        columns=loaders.SHARE_CAPACITY_COLUMNS,
+    )
+
+    result = loaders.derive_consumer_market_turnover_history(
+        bars,
+        shares,
+        trade_date="2026-07-27",
+    )
+
+    assert pd.isna(result.loc[0, "turnover_rate"])
+    assert result.attrs[loaders.TURNOVER_DERIVATION_COVERAGE_ATTR]["derived_rows"] == 0
+    assert result.attrs[loaders.TURNOVER_DERIVATION_COVERAGE_ATTR]["unresolved_rows"] == 1
+
+
 def test_asset_scoped_empty_lists_do_not_open_database(monkeypatch):
     def fail_connect(service):
         raise AssertionError("database must not be queried")

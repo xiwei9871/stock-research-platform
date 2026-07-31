@@ -29,6 +29,13 @@ MARKET_COLUMNS = (
     "is_st",
     "trade_status",
 )
+TURNOVER_DERIVATION_INPUTS_ATTR = "consumer_turnover_derivation_inputs"
+TURNOVER_DERIVATION_COVERAGE_ATTR = "consumer_turnover_derivation_coverage"
+_MARKET_QUERY_COLUMNS = (
+    *MARKET_COLUMNS,
+    "turnover_volume",
+    "turnover_source",
+)
 SHARE_CAPACITY_COLUMNS = (
     "asset_id",
     "total_share",
@@ -119,6 +126,143 @@ def normalize_market_amount(amount: Any, source: Any) -> Any:
     else:
         raise ValueError("market amount source must be a string or None")
     return amount * 1000 if "tushare" in normalized_source else amount
+
+
+def _finite_positive_number(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, Decimal):
+        if not value.is_finite():
+            return None
+    elif not isinstance(value, Real):
+        return None
+    try:
+        number = float(value)
+    except (OverflowError, TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) and number > 0.0 else None
+
+
+def _missing_scalar(value: Any) -> bool:
+    try:
+        missing = pd.isna(value)
+    except (TypeError, ValueError):
+        return False
+    return isinstance(missing, bool) and missing
+
+
+def _turnover_volume_multiplier(source: Any) -> tuple[float, str] | None:
+    if not isinstance(source, str):
+        return None
+    marker = source.strip().casefold()
+    if not marker:
+        return None
+    if "tushare" in marker:
+        return 10_000.0, marker
+    if "baostock" in marker:
+        return 100.0, marker
+    return None
+
+
+def derive_consumer_market_turnover_history(
+    bars: pd.DataFrame,
+    share_capacity: pd.DataFrame,
+    *,
+    trade_date: str,
+) -> pd.DataFrame:
+    """Derive only missing PIT turnover rates from auditable loader metadata."""
+    if not isinstance(bars, pd.DataFrame):
+        raise TypeError("bars must be a pandas DataFrame")
+    if not isinstance(share_capacity, pd.DataFrame):
+        raise TypeError("share_capacity must be a pandas DataFrame")
+    cutoff = validate_trade_date(trade_date)
+    result = bars.copy(deep=True)
+    required_bar_columns = {"asset_id", "trade_date", "turnover_rate"}
+    required_share_columns = {"asset_id", "float_share"}
+    if not required_bar_columns.issubset(result.columns):
+        return result
+
+    raw_inputs = bars.attrs.get(TURNOVER_DERIVATION_INPUTS_ATTR, [])
+    metadata_rows = raw_inputs if isinstance(raw_inputs, list) else []
+    metadata_by_key: dict[tuple[str, str], dict[str, Any]] = {}
+    duplicate_metadata: set[tuple[str, str]] = set()
+    for raw in metadata_rows:
+        if not isinstance(raw, dict):
+            continue
+        asset_id = str(raw.get("asset_id") or "").strip()
+        try:
+            date_text = _date_text(raw.get("trade_date"))
+        except ValueError:
+            continue
+        if not asset_id or not isinstance(date_text, str) or date_text > cutoff:
+            continue
+        key = (asset_id, date_text)
+        if key in metadata_by_key:
+            duplicate_metadata.add(key)
+        metadata_by_key[key] = raw
+    for key in duplicate_metadata:
+        metadata_by_key.pop(key, None)
+
+    share_by_asset: dict[str, float] = {}
+    if required_share_columns.issubset(share_capacity.columns):
+        normalized_shares = share_capacity.loc[:, ["asset_id", "float_share"]].copy()
+        normalized_shares["asset_id"] = (
+            normalized_shares["asset_id"].astype(str).str.strip()
+        )
+        duplicate_shares = set(
+            normalized_shares.loc[
+                normalized_shares["asset_id"].duplicated(keep=False), "asset_id"
+            ]
+        )
+        for row in normalized_shares.itertuples(index=False):
+            if row.asset_id in duplicate_shares:
+                continue
+            shares = _finite_positive_number(row.float_share)
+            if row.asset_id and shares is not None:
+                share_by_asset[row.asset_id] = shares
+
+    missing_rows = 0
+    derived_rows = 0
+    derived_by_source: dict[str, int] = {}
+    turnover_position = result.columns.get_loc("turnover_rate")
+    for position, row in enumerate(result.itertuples(index=False)):
+        current = getattr(row, "turnover_rate")
+        if not _missing_scalar(current):
+            continue
+        try:
+            date_text = _date_text(getattr(row, "trade_date"))
+        except ValueError:
+            continue
+        if not isinstance(date_text, str) or date_text > cutoff:
+            continue
+        missing_rows += 1
+        asset_id = str(getattr(row, "asset_id") or "").strip()
+        metadata = metadata_by_key.get((asset_id, date_text))
+        shares = share_by_asset.get(asset_id)
+        if metadata is None or shares is None:
+            continue
+        volume = _finite_positive_number(metadata.get("volume"))
+        source_units = _turnover_volume_multiplier(metadata.get("source"))
+        if volume is None or source_units is None:
+            continue
+        multiplier, marker = source_units
+        derived = volume * multiplier / shares
+        if not math.isfinite(derived) or derived <= 0.0:
+            continue
+        result.iat[position, turnover_position] = derived
+        derived_rows += 1
+        derived_by_source[marker] = derived_by_source.get(marker, 0) + 1
+
+    result.attrs[TURNOVER_DERIVATION_COVERAGE_ATTR] = {
+        "method": "pit_source_aware_v1",
+        "share_capacity_cutoff": cutoff,
+        "missing_turnover_rows": missing_rows,
+        "derived_rows": derived_rows,
+        "unresolved_rows": missing_rows - derived_rows,
+        "derived_rows_by_source": dict(sorted(derived_by_source.items())),
+    }
+    result.attrs.pop(TURNOVER_DERIVATION_INPUTS_ATTR, None)
+    return result
 
 
 def _asset_ids(values: list[str]) -> list[str]:
@@ -379,7 +523,9 @@ def load_consumer_market_history(
     cutoff = validate_trade_date(trade_date)
     assets = _asset_ids(asset_ids) if asset_ids is not None else None
     if assets == []:
-        return _frame([], MARKET_COLUMNS)
+        result = _frame([], MARKET_COLUMNS)
+        result.attrs[TURNOVER_DERIVATION_INPUTS_ATTR] = []
+        return result
     asset_clause = "\n      AND b.asset_id = ANY(%s)" if assets is not None else ""
     sql = f"""
     WITH latest_dates AS (
@@ -393,7 +539,8 @@ def load_consumer_market_history(
     SELECT b.asset_id, b.trade_date, b.close, raw.close AS raw_close,
            CASE WHEN lower(COALESCE(b.source, '')) LIKE '%%tushare%%'
                 THEN b.amount * 1000 ELSE b.amount END AS amount,
-           b.turnover_rate, b.pct_chg, b.is_st, b.trade_status
+           b.turnover_rate, b.pct_chg, b.is_st, b.trade_status,
+           b.volume AS turnover_volume, b.source AS turnover_source
     FROM market_daily_bar b
     JOIN latest_dates d ON d.trade_date = b.trade_date
     LEFT JOIN market_daily_bar raw
@@ -409,8 +556,20 @@ def load_consumer_market_history(
         params.append(assets)
     with connect(service) as conn:
         rows = fetch_all(conn, sql, params)
-    result = _format_dates(_frame(rows, MARKET_COLUMNS), ("trade_date",))
-    return _sort(result, ["asset_id", "trade_date"])
+    internal = _format_dates(_frame(rows, _MARKET_QUERY_COLUMNS), ("trade_date",))
+    internal = _sort(internal, ["asset_id", "trade_date"])
+    result = internal.loc[:, MARKET_COLUMNS].copy()
+    missing_turnover = internal.loc[internal["turnover_rate"].isna()]
+    result.attrs[TURNOVER_DERIVATION_INPUTS_ATTR] = [
+        {
+            "asset_id": row["asset_id"],
+            "trade_date": row["trade_date"],
+            "volume": row["turnover_volume"],
+            "source": row["turnover_source"],
+        }
+        for row in missing_turnover.to_dict(orient="records")
+    ]
+    return result
 
 
 def _outcome_date_range(start_date: str, end_date: str) -> tuple[str, str]:

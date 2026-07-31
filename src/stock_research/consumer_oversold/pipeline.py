@@ -43,6 +43,8 @@ from .features import (
     compute_valuation_features,
 )
 from .loaders import (
+    TURNOVER_DERIVATION_COVERAGE_ATTR,
+    derive_consumer_market_turnover_history,
     load_consumer_finance_history,
     load_consumer_market_history,
     load_consumer_share_capacity,
@@ -1420,6 +1422,21 @@ def _build_v2_result(
         config=config,
         warnings=[*warnings, *publication_warnings],
     )
+    turnover_derivation = bars.attrs.get(TURNOVER_DERIVATION_COVERAGE_ATTR)
+    if isinstance(turnover_derivation, dict):
+        coverage["turnover_derivation"] = copy.deepcopy(turnover_derivation)
+        derived_rows = int(turnover_derivation.get("derived_rows", 0))
+        unresolved_rows = int(turnover_derivation.get("unresolved_rows", 0))
+        if derived_rows > 0:
+            publication_warnings.append(
+                "turnover_rate_derived_from_pit_share_capacity_"
+                f"{derived_rows}_rows"
+            )
+        if unresolved_rows > 0:
+            publication_warnings.append(
+                "turnover_rate_unresolved_after_pit_derivation_"
+                f"{unresolved_rows}_rows"
+            )
     unified_funnel = {
         "full": int(len(activation_scored)),
         "automatic": int(len(automatic_ids)),
@@ -1475,9 +1492,7 @@ def _build_v2_result(
             "reserve": int(len(reserve)),
         },
     )
-    coverage["warnings"] = sorted(
-        set([*coverage["warnings"], *publication_warnings])
-    )
+    coverage["warnings"] = sorted(set([*coverage["warnings"], *publication_warnings]))
     _add_publication_thresholds(coverage, config)
     payload = {
         "trade_date": config.trade_date,
@@ -2244,9 +2259,14 @@ def run_consumer_oversold_weekly(
     )
     included = universe.loc[universe["included"].astype(bool), ["asset_id", "consumer_subindustry"]]
     asset_ids = included["asset_id"].astype(str).tolist()
-    bars = load_consumer_market_history(trade_date, service=service, asset_ids=asset_ids)
     share_capacity = load_consumer_share_capacity(
         asset_ids, trade_date, service=service
+    )
+    bars = load_consumer_market_history(trade_date, service=service, asset_ids=asset_ids)
+    bars = derive_consumer_market_turnover_history(
+        bars,
+        share_capacity,
+        trade_date=trade_date,
     )
     finance_with_shares = load_consumer_finance_history(asset_ids, trade_date, service=service)
     valuation_raw = load_consumer_valuation_history(asset_ids, trade_date, service=service)
