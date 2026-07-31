@@ -82,6 +82,9 @@ _SUMMARY_COLUMNS = (
     "extreme_loss_count",
     "extreme_loss_ratio",
     "spearman_rank_correlation",
+    "qualified_pool_benchmark_status",
+    "qualified_pool_member_count",
+    "qualified_pool_completed_count",
     "qualified_pool_mean_return",
     "qualified_pool_excess_return",
     "breadth_quality",
@@ -320,7 +323,8 @@ def _daily_forward_detail(
             hfq_path = path["hfq_close"].astype(float)
             drawdown = hfq_path / hfq_path.cummax() - 1.0
             entry_raw = float(path.iloc[0]["raw_close"])
-            maximum_high = float(path["raw_high"].max())
+            outcome_path = path.loc[path.index > cutoff]
+            maximum_high = float(outcome_path["raw_high"].max())
             target_raw = float(path.iloc[-1]["raw_close"])
             max_high_return = maximum_high / entry_raw - 1.0
             forward_return = target_hfq / entry_hfq - 1.0
@@ -385,6 +389,8 @@ def _summary_row(
     horizon: int,
     group: pd.DataFrame,
     qualified_completed: pd.DataFrame,
+    qualified_complete: bool,
+    qualified_expected_count: int,
 ) -> dict[str, Any]:
     completed = group.loc[group["evaluation_status"].eq("completed")].copy()
     member_count = len(group)
@@ -444,7 +450,11 @@ def _summary_row(
         )
         else math.nan
     )
-    pool_mean = _safe_mean(qualified_completed["forward_return"])
+    pool_mean = (
+        _safe_mean(qualified_completed["forward_return"])
+        if qualified_complete
+        else math.nan
+    )
     horizon_dates = completed["horizon_trade_date"].drop_duplicates().tolist()
     return {
         "group": group_name,
@@ -483,6 +493,11 @@ def _summary_row(
         "extreme_loss_count": int(returns.le(-0.05).sum()),
         "extreme_loss_ratio": _ratio(int(returns.le(-0.05).sum()), completed_count),
         "spearman_rank_correlation": _spearman_rank_correlation(completed),
+        "qualified_pool_benchmark_status": "completed"
+        if qualified_complete
+        else "incomplete",
+        "qualified_pool_member_count": qualified_expected_count,
+        "qualified_pool_completed_count": len(qualified_completed),
         "qualified_pool_mean_return": pool_mean,
         "qualified_pool_excess_return": mean_return - pool_mean
         if math.isfinite(mean_return) and math.isfinite(pool_mean)
@@ -503,10 +518,14 @@ def _group_summary(
     rows: list[dict[str, Any]] = []
     for horizon in horizons:
         horizon_detail = detail.loc[detail["horizon"].eq(horizon)]
-        qualified_completed = qualified_detail.loc[
-            qualified_detail["horizon"].eq(horizon)
-            & qualified_detail["evaluation_status"].eq("completed")
+        qualified_horizon = qualified_detail.loc[qualified_detail["horizon"].eq(horizon)]
+        qualified_completed = qualified_horizon.loc[
+            qualified_horizon["evaluation_status"].eq("completed")
         ]
+        qualified_complete = bool(
+            not qualified_horizon.empty
+            and qualified_horizon["evaluation_status"].eq("completed").all()
+        )
         for group_name, predicate in GROUPS.items():
             ranks = pd.to_numeric(horizon_detail["final_rank"], errors="coerce")
             mask = ranks.map(lambda rank: bool(predicate(int(rank))) if pd.notna(rank) else False)
@@ -516,6 +535,8 @@ def _group_summary(
                     horizon,
                     horizon_detail.loc[mask],
                     qualified_completed,
+                    qualified_complete,
+                    len(qualified_horizon),
                 )
             )
     summary = pd.DataFrame(rows, columns=_SUMMARY_COLUMNS)
@@ -713,8 +734,16 @@ def evaluate_v2_snapshot(
     minute_detail, minute_complete = _minute_diagnostics(
         selected, minute_bars, market, targets
     )
-    daily_complete = bool(
+    selected_daily_complete = bool(
         not detail.empty and detail["evaluation_status"].eq("completed").all()
+    )
+    qualified_pool_daily_complete = bool(
+        not qualified_detail.empty
+        and qualified_detail["evaluation_status"].eq("completed").all()
+    )
+    daily_complete = selected_daily_complete and qualified_pool_daily_complete
+    warnings = (
+        [] if qualified_pool_daily_complete else ["qualified_pool_daily_incomplete"]
     )
     coverage: dict[str, object] = {
         "snapshot_trade_date": snapshot_trade_date,
@@ -727,8 +756,15 @@ def evaluate_v2_snapshot(
         "qualified_pool_count": len(qualified),
         "daily_completed_rows": int(detail["evaluation_status"].eq("completed").sum()),
         "daily_expected_rows": len(detail),
+        "selected_daily_complete": selected_daily_complete,
+        "qualified_pool_daily_completed_rows": int(
+            qualified_detail["evaluation_status"].eq("completed").sum()
+        ),
+        "qualified_pool_daily_expected_rows": len(qualified_detail),
+        "qualified_pool_daily_complete": qualified_pool_daily_complete,
         "daily_complete": daily_complete,
         "minute_complete": minute_complete,
+        "warnings": warnings,
         "evaluation_status": (
             "complete"
             if daily_complete and minute_complete

@@ -296,6 +296,40 @@ def test_daily_detail_reports_path_drawdown_maximum_high_and_close_fade():
     assert row["retention_ratio"] == 0.0
 
 
+def test_forward_high_metrics_exclude_the_frozen_snapshot_day_high():
+    bars = pd.DataFrame(
+        [
+            ["A01", "2026-07-27", 100.0, 100.0, 120.0, 100.0, 100.0],
+            ["A01", "2026-07-28", 100.5, 100.0, 101.0, 99.5, 100.5],
+            ["A01", "2026-07-29", 100.5, 100.5, 100.8, 100.0, 100.5],
+            ["A01", "2026-07-30", 100.5, 100.5, 100.9, 100.0, 100.5],
+        ],
+        columns=[
+            "asset_id",
+            "trade_date",
+            "hfq_close",
+            "raw_open",
+            "raw_high",
+            "raw_low",
+            "raw_close",
+        ],
+    )
+
+    result = evaluate_v2_snapshot(
+        snapshot=_ranked_snapshot(1),
+        qualified_pool=_qualified_pool_snapshot(1),
+        daily_bars=bars,
+        minute_bars=pd.DataFrame(),
+        horizons=(3,),
+    )
+
+    row = result["detail"].iloc[0]
+    assert row["max_high_return"] == pytest.approx(0.01)
+    assert row["high_to_close_fade"] == pytest.approx((101.0 - 100.5) / 101.0)
+    summary = result["summary"].set_index("group").loc["top20"]
+    assert summary["reached_3pct_not_retained_count"] == 0
+
+
 def test_missing_daily_outcome_bar_marks_incomplete_without_dropping_member():
     bars = _daily_bars(3)
     bars = bars.loc[
@@ -320,6 +354,35 @@ def test_missing_daily_outcome_bar_marks_incomplete_without_dropping_member():
     top20 = result["summary"].set_index("group").loc["top20"]
     assert top20["member_count"] == 3
     assert top20["completed_count"] == 2
+
+
+def test_missing_qualified_pool_member_invalidates_excess_benchmark_and_coverage():
+    snapshot = _ranked_snapshot(1)
+    qualified = _qualified_pool_snapshot(2)
+    bars = _daily_bars(1)
+
+    result = evaluate_v2_snapshot(
+        snapshot=snapshot,
+        qualified_pool=qualified,
+        daily_bars=bars,
+        minute_bars=pd.DataFrame(),
+        horizons=(3,),
+    )
+
+    assert result["detail"]["evaluation_status"].eq("completed").all()
+    assert result["coverage"]["selected_daily_complete"] is True
+    assert result["coverage"]["qualified_pool_daily_complete"] is False
+    assert result["coverage"]["daily_complete"] is False
+    assert result["coverage"]["evaluation_status"] == "daily_incomplete"
+    assert "qualified_pool_daily_incomplete" in result["coverage"]["warnings"]
+    assert result["coverage"]["qualified_pool_daily_expected_rows"] == 2
+    assert result["coverage"]["qualified_pool_daily_completed_rows"] == 1
+    top20 = result["summary"].set_index("group").loc["top20"]
+    assert top20["qualified_pool_benchmark_status"] == "incomplete"
+    assert top20["qualified_pool_member_count"] == 2
+    assert top20["qualified_pool_completed_count"] == 1
+    assert pd.isna(top20["qualified_pool_mean_return"])
+    assert pd.isna(top20["qualified_pool_excess_return"])
 
 
 def test_minute_diagnostics_degrade_without_blocking_daily_evaluation():
