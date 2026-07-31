@@ -52,6 +52,37 @@ _DETAIL_COLUMNS = (
     "high_to_close_fade",
     "retention_ratio",
 )
+_DAILY_DETAIL_COLUMNS = (
+    "trade_date",
+    "asset_id",
+    "final_rank",
+    "outcome_session",
+    "outcome_trade_date",
+    "evaluation_status",
+    "entry_hfq_close",
+    "previous_hfq_close",
+    "outcome_hfq_close",
+    "daily_return",
+    "cumulative_return",
+)
+_V1_V2_COMPARISON_COLUMNS = (
+    "cohort",
+    "ranking_version",
+    "selection_size",
+    "horizon",
+    "horizon_trade_date",
+    "member_count",
+    "overlap_count",
+    "unique_member_count",
+    "completed_count",
+    "rising_count",
+    "rising_ratio",
+    "mean_return",
+    "median_return",
+    "mean_return_delta_vs_v1",
+    "rising_ratio_delta_vs_v1",
+    "comparison_status",
+)
 _SUMMARY_COLUMNS = (
     "group",
     "horizon",
@@ -397,6 +428,230 @@ def _daily_forward_detail(
     ).reset_index(drop=True)
 
 
+def _daily_session_detail(
+    members: pd.DataFrame,
+    daily_bars: pd.DataFrame,
+    snapshot_trade_date: str,
+    outcome_dates: tuple[str, ...],
+) -> pd.DataFrame:
+    cutoff = pd.Timestamp(snapshot_trade_date)
+    future_dates = [pd.Timestamp(value) for value in outcome_dates]
+    rows: list[dict[str, Any]] = []
+    for member in members.to_dict(orient="records"):
+        history = daily_bars.loc[daily_bars["asset_id"].eq(member["asset_id"])].set_index(
+            "trade_date"
+        )
+        for session, target in enumerate(future_dates, start=1):
+            base = {
+                "trade_date": snapshot_trade_date,
+                "asset_id": member["asset_id"],
+                "final_rank": member.get("final_rank", pd.NA),
+                "outcome_session": session,
+                "outcome_trade_date": target.date().isoformat(),
+            }
+            expected_dates = [cutoff, *future_dates[:session]]
+            status = "completed"
+            if cutoff not in history.index:
+                status = "missing_entry_bar"
+            elif any(value not in history.index for value in expected_dates):
+                status = "missing_outcome_bar"
+            if status != "completed":
+                rows.append(
+                    {
+                        **base,
+                        "evaluation_status": status,
+                        "entry_hfq_close": math.nan,
+                        "previous_hfq_close": math.nan,
+                        "outcome_hfq_close": math.nan,
+                        "daily_return": math.nan,
+                        "cumulative_return": math.nan,
+                    }
+                )
+                continue
+            path = history.loc[expected_dates]
+            numeric = path.loc[:, _DAILY_REQUIRED_COLUMNS[2:]]
+            invalid = (
+                numeric.isna().any().any()
+                or not np.isfinite(numeric.to_numpy(dtype=float)).all()
+                or (numeric <= 0).any().any()
+                or (path["raw_low"] > path["raw_high"]).any()
+                or (path[["raw_open", "raw_close"]].max(axis=1) > path["raw_high"]).any()
+                or (path[["raw_open", "raw_close"]].min(axis=1) < path["raw_low"]).any()
+            )
+            if invalid:
+                rows.append(
+                    {
+                        **base,
+                        "evaluation_status": "invalid_daily_bar",
+                        "entry_hfq_close": math.nan,
+                        "previous_hfq_close": math.nan,
+                        "outcome_hfq_close": math.nan,
+                        "daily_return": math.nan,
+                        "cumulative_return": math.nan,
+                    }
+                )
+                continue
+            entry = float(path.iloc[0]["hfq_close"])
+            previous = float(path.iloc[-2]["hfq_close"])
+            outcome = float(path.iloc[-1]["hfq_close"])
+            rows.append(
+                {
+                    **base,
+                    "evaluation_status": "completed",
+                    "entry_hfq_close": entry,
+                    "previous_hfq_close": previous,
+                    "outcome_hfq_close": outcome,
+                    "daily_return": outcome / previous - 1.0,
+                    "cumulative_return": outcome / entry - 1.0,
+                }
+            )
+    return pd.DataFrame(rows, columns=_DAILY_DETAIL_COLUMNS).sort_values(
+        ["outcome_session", "final_rank", "asset_id"],
+        kind="stable",
+        na_position="last",
+    ).reset_index(drop=True)
+
+
+def _normalize_rank_comparison(
+    rank_comparison: pd.DataFrame | None,
+    selected: pd.DataFrame,
+) -> pd.DataFrame:
+    if rank_comparison is None:
+        return pd.DataFrame(columns=["asset_id", "v1_rank", "v2_rank"])
+    if not isinstance(rank_comparison, pd.DataFrame):
+        raise TypeError("rank_comparison must be a pandas DataFrame")
+    _required_columns(rank_comparison, ("asset_id", "v1_rank", "v2_rank"), "rank_comparison")
+    frame = _normalize_asset_ids(
+        rank_comparison.loc[:, ["asset_id", "v1_rank", "v2_rank"]],
+        "rank_comparison",
+    )
+    for column in ("v1_rank", "v2_rank"):
+        if frame[column].map(lambda value: isinstance(value, (bool, np.bool_))).any():
+            raise ValueError(f"rank_comparison {column} must contain positive integer ranks")
+        ranks = pd.to_numeric(frame[column], errors="coerce")
+        present = ranks.notna()
+        if (
+            not np.isfinite(ranks.loc[present]).all()
+            or ranks.loc[present].le(0).any()
+            or not ranks.loc[present].eq(np.floor(ranks.loc[present])).all()
+            or ranks.loc[present].duplicated().any()
+        ):
+            raise ValueError(f"rank_comparison {column} must contain unique positive integer ranks")
+        frame[column] = ranks
+    selected_ranks = selected.set_index("asset_id")["final_rank"]
+    comparison_ranks = frame.set_index("asset_id")["v2_rank"]
+    missing = sorted(set(selected_ranks.index) - set(comparison_ranks.dropna().index))
+    if missing:
+        raise ValueError("rank_comparison must contain every selected V2 asset")
+    for asset_id, rank in selected_ranks.items():
+        if int(comparison_ranks.loc[asset_id]) != int(rank):
+            raise ValueError("rank_comparison v2_rank must match selected final_rank")
+    return frame.sort_values("asset_id", kind="stable").reset_index(drop=True)
+
+
+def _v1_v2_performance_comparison(
+    rank_comparison: pd.DataFrame,
+    daily_bars: pd.DataFrame,
+    snapshot_trade_date: str,
+    horizons: tuple[int, ...],
+    calendar: list[pd.Timestamp],
+    targets: dict[int, pd.Timestamp | None],
+) -> pd.DataFrame:
+    if rank_comparison.empty:
+        return pd.DataFrame(columns=_V1_V2_COMPARISON_COLUMNS)
+    rows: list[dict[str, Any]] = []
+    for selection_size in (20, 30):
+        memberships = {
+            version: set(
+                rank_comparison.loc[
+                    rank_comparison[f"{version}_rank"].le(selection_size), "asset_id"
+                ]
+            )
+            for version in ("v1", "v2")
+        }
+        overlap_count = len(memberships["v1"] & memberships["v2"])
+        for version in ("v1", "v2"):
+            rank_column = f"{version}_rank"
+            members = rank_comparison.loc[
+                rank_comparison[rank_column].le(selection_size),
+                ["asset_id", rank_column],
+            ].rename(columns={rank_column: "final_rank"})
+            members["trade_date"] = snapshot_trade_date
+            detail = _daily_forward_detail(
+                members,
+                daily_bars,
+                snapshot_trade_date,
+                horizons,
+                calendar,
+                targets,
+            )
+            for horizon in horizons:
+                horizon_detail = detail.loc[detail["horizon"].eq(horizon)]
+                completed = horizon_detail.loc[
+                    horizon_detail["evaluation_status"].eq("completed")
+                ]
+                complete = bool(
+                    len(horizon_detail) == len(members)
+                    and horizon_detail["evaluation_status"].eq("completed").all()
+                )
+                returns = completed["forward_return"] if complete else pd.Series(dtype=float)
+                rows.append(
+                    {
+                        "cohort": f"{version}_top{selection_size}",
+                        "ranking_version": version,
+                        "selection_size": selection_size,
+                        "horizon": horizon,
+                        "horizon_trade_date": (
+                            targets[horizon].date().isoformat()
+                            if targets[horizon] is not None
+                            else ""
+                        ),
+                        "member_count": len(members),
+                        "overlap_count": overlap_count,
+                        "unique_member_count": len(memberships[version]) - overlap_count,
+                        "completed_count": len(completed),
+                        "rising_count": int(returns.gt(0.0).sum()) if complete else 0,
+                        "rising_ratio": _ratio(int(returns.gt(0.0).sum()), len(returns))
+                        if complete
+                        else math.nan,
+                        "mean_return": _safe_mean(returns) if complete else math.nan,
+                        "median_return": _safe_median(returns) if complete else math.nan,
+                        "mean_return_delta_vs_v1": math.nan,
+                        "rising_ratio_delta_vs_v1": math.nan,
+                        "comparison_status": "complete" if complete else "partial",
+                    }
+                )
+    result = pd.DataFrame(rows, columns=_V1_V2_COMPARISON_COLUMNS)
+    for selection_size in (20, 30):
+        for horizon in horizons:
+            v1_mask = (
+                result["cohort"].eq(f"v1_top{selection_size}")
+                & result["horizon"].eq(horizon)
+            )
+            v2_mask = (
+                result["cohort"].eq(f"v2_top{selection_size}")
+                & result["horizon"].eq(horizon)
+            )
+            if not v1_mask.any() or not v2_mask.any():
+                continue
+            v1_row = result.loc[v1_mask].iloc[0]
+            v2_row = result.loc[v2_mask].iloc[0]
+            if v1_row["comparison_status"] == v2_row["comparison_status"] == "complete":
+                result.loc[v2_mask, "mean_return_delta_vs_v1"] = (
+                    float(v2_row["mean_return"]) - float(v1_row["mean_return"])
+                )
+                result.loc[v2_mask, "rising_ratio_delta_vs_v1"] = (
+                    float(v2_row["rising_ratio"]) - float(v1_row["rising_ratio"])
+                )
+    order = {"v1_top20": 0, "v2_top20": 1, "v1_top30": 2, "v2_top30": 3}
+    return (
+        result.assign(_order=result["cohort"].map(order))
+        .sort_values(["horizon", "_order"], kind="stable")
+        .drop(columns="_order")
+        .reset_index(drop=True)
+    )
+
+
 def _safe_mean(values: pd.Series) -> float:
     return float(values.mean()) if not values.empty else math.nan
 
@@ -637,14 +892,18 @@ def _minute_diagnostics(
     minute_bars: pd.DataFrame,
     daily_bars: pd.DataFrame,
     targets: dict[int, pd.Timestamp | None],
-) -> tuple[pd.DataFrame, bool]:
+) -> tuple[pd.DataFrame, bool, dict[str, str]]:
+    horizon_status = {
+        str(horizon): "pending" if target is None else "degraded"
+        for horizon, target in targets.items()
+    }
     if snapshot.empty or not isinstance(minute_bars, pd.DataFrame) or minute_bars.empty:
-        return pd.DataFrame(columns=_MINUTE_DETAIL_COLUMNS), False
+        return pd.DataFrame(columns=_MINUTE_DETAIL_COLUMNS), False, horizon_status
     if any(column not in minute_bars.columns for column in _MINUTE_REQUIRED_COLUMNS):
-        return pd.DataFrame(columns=_MINUTE_DETAIL_COLUMNS), False
+        return pd.DataFrame(columns=_MINUTE_DETAIL_COLUMNS), False, horizon_status
     requested = {horizon: target for horizon, target in targets.items() if target is not None}
-    if len(requested) != len(targets):
-        return pd.DataFrame(columns=_MINUTE_DETAIL_COLUMNS), False
+    if not requested:
+        return pd.DataFrame(columns=_MINUTE_DETAIL_COLUMNS), False, horizon_status
     frame = minute_bars.copy(deep=True)
     frame["asset_id"] = frame["asset_id"].astype(str).str.strip()
     frame["trade_date"] = pd.to_datetime(frame["trade_date"], errors="coerce").dt.normalize()
@@ -680,7 +939,7 @@ def _minute_diagnostics(
         or not np.isfinite(frame["limit_up_price"].to_numpy(dtype=float)).all()
         or frame["limit_up_price"].le(0).any()
     ):
-        return pd.DataFrame(columns=_MINUTE_DETAIL_COLUMNS), False
+        return pd.DataFrame(columns=_MINUTE_DETAIL_COLUMNS), False, horizon_status
     entry_raw = (
         daily_bars.loc[
             daily_bars["trade_date"].eq(pd.Timestamp(snapshot.iloc[0]["trade_date"]))
@@ -700,9 +959,11 @@ def _minute_diagnostics(
             ].sort_values("trade_time", kind="stable")
             if len(bars) != 48 or member["asset_id"] not in entry_raw.index:
                 complete = False
+                horizon_status[str(horizon)] = "degraded"
                 continue
             if frozenset(bars["trade_time"].dt.time) != _CANONICAL_MINUTE_TIMES:
                 complete = False
+                horizon_status[str(horizon)] = "degraded"
                 continue
             entry_value = entry_raw.loc[member["asset_id"]]
             if (
@@ -711,9 +972,11 @@ def _minute_diagnostics(
                 or float(entry_value) <= 0.0
             ):
                 complete = False
+                horizon_status[str(horizon)] = "degraded"
                 continue
             if bars["limit_up_price"].nunique(dropna=False) != 1:
                 complete = False
+                horizon_status[str(horizon)] = "degraded"
                 continue
             prices = bars[["open", "high", "low", "close"]]
             if (
@@ -726,6 +989,7 @@ def _minute_diagnostics(
                 or (bars[["open", "close"]].min(axis=1) < bars["low"]).any()
             ):
                 complete = False
+                horizon_status[str(horizon)] = "degraded"
                 continue
             entry = float(entry_value)
             day_high = float(bars["high"].max())
@@ -785,8 +1049,18 @@ def _minute_diagnostics(
     detail = pd.DataFrame(rows, columns=_MINUTE_DETAIL_COLUMNS).sort_values(
         ["horizon", "final_rank", "asset_id"], kind="stable"
     ).reset_index(drop=True)
-    expected_count = len(snapshot) * len(requested)
-    return detail, bool(complete and len(detail) == expected_count)
+    for horizon in requested:
+        if len(detail.loc[detail["horizon"].eq(horizon)]) == len(snapshot):
+            horizon_status[str(horizon)] = "complete"
+        else:
+            horizon_status[str(horizon)] = "degraded"
+    expected_count = len(snapshot) * len(targets)
+    minute_complete = bool(
+        complete
+        and len(detail) == expected_count
+        and all(status == "complete" for status in horizon_status.values())
+    )
+    return detail, minute_complete, horizon_status
 
 
 def evaluate_v2_snapshot(
@@ -797,6 +1071,7 @@ def evaluate_v2_snapshot(
     minute_bars: pd.DataFrame,
     outcome_dates: Iterable[str] | None = None,
     horizons: tuple[int, ...] = (3, 5),
+    rank_comparison: pd.DataFrame | None = None,
 ) -> dict[str, pd.DataFrame | dict[str, object]]:
     """Evaluate immutable V2 members without recomputing membership or scores."""
     horizon_values = _normalized_horizons(horizons)
@@ -808,6 +1083,7 @@ def evaluate_v2_snapshot(
         daily_bars, snapshot_trade_date, outcome_dates
     )
     market = _normalize_daily_bars(daily_bars)
+    normalized_comparison = _normalize_rank_comparison(rank_comparison, selected)
     calendar, targets = _outcome_calendar(
         snapshot_trade_date,
         horizon_values,
@@ -830,7 +1106,21 @@ def evaluate_v2_snapshot(
         targets,
     )
     summary = _group_summary(detail, qualified_detail, horizon_values)
-    minute_detail, minute_complete = _minute_diagnostics(
+    daily_detail = _daily_session_detail(
+        selected,
+        market,
+        snapshot_trade_date,
+        authoritative_dates,
+    )
+    v1_v2_comparison = _v1_v2_performance_comparison(
+        normalized_comparison,
+        market,
+        snapshot_trade_date,
+        horizon_values,
+        calendar,
+        targets,
+    )
+    minute_detail, minute_complete, minute_horizon_status = _minute_diagnostics(
         selected, minute_bars, market, targets
     )
     selected_daily_complete = bool(
@@ -866,6 +1156,7 @@ def evaluate_v2_snapshot(
         "qualified_pool_daily_complete": qualified_pool_daily_complete,
         "daily_complete": daily_complete,
         "minute_complete": minute_complete,
+        "minute_horizon_status": minute_horizon_status,
         "warnings": warnings,
         "evaluation_status": (
             "complete"
@@ -877,7 +1168,9 @@ def evaluate_v2_snapshot(
     }
     return {
         "detail": detail,
+        "daily_detail": daily_detail,
         "summary": summary,
+        "v1_v2_comparison": v1_v2_comparison,
         "minute_detail": minute_detail,
         "coverage": coverage,
     }

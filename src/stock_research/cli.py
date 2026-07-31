@@ -1531,7 +1531,9 @@ _CONSUMER_OVERSOLD_V2_PATH_KEYS = (
 _CONSUMER_OVERSOLD_RETROSPECTIVE_DATE = "2026-07-27"
 _CONSUMER_OVERSOLD_V2_EVALUATION_FILENAMES = {
     "detail": "consumer_oversold_v2_evaluation_detail.csv",
+    "daily_detail": "consumer_oversold_v2_evaluation_daily_detail.csv",
     "summary": "consumer_oversold_v2_evaluation_summary.csv",
+    "v1_v2_comparison": "consumer_oversold_v2_evaluation_v1_v2_comparison.csv",
     "minute_detail": "consumer_oversold_v2_evaluation_minute_detail.csv",
     "coverage": "consumer_oversold_v2_evaluation_coverage.json",
     "report": "consumer_oversold_v2_evaluation_report.md",
@@ -1734,6 +1736,9 @@ def _load_consumer_oversold_v2_snapshot(snapshot_dir: str) -> dict[str, object]:
             )
             for key in ("top20", "top30", "ranked_pool")
         }
+        comparison = pd.read_csv(
+            release / V2_OUTPUT_FILENAMES["comparison"], dtype={"asset_id": str}
+        )
     except (OSError, UnicodeError, pd.errors.ParserError) as exc:
         raise ValueError("sealed V2 snapshot artifact content is invalid") from exc
     validate_v2_snapshot_rank_frames(
@@ -1741,11 +1746,14 @@ def _load_consumer_oversold_v2_snapshot(snapshot_dir: str) -> dict[str, object]:
         coverage=coverage,
         trade_date=trade_date,
     )
+    if not {"asset_id", "v1_rank", "v2_rank"}.issubset(comparison.columns):
+        raise ValueError("sealed V2 snapshot comparison artifact is invalid")
     return {
         "release": release,
         "trade_date": trade_date,
         "coverage": coverage,
         **frames,
+        "comparison": comparison,
         "manifest_sha256": hashlib.sha256(
             (release / ".manifest.sha256").read_bytes()
         ).hexdigest(),
@@ -1789,7 +1797,10 @@ def _evaluate_consumer_oversold_v2_snapshot(**kwargs):
 
 
 def _render_consumer_oversold_v2_evaluation_report(
-    coverage: dict[str, object], summary: pd.DataFrame
+    coverage: dict[str, object],
+    summary: pd.DataFrame,
+    daily_detail: pd.DataFrame | None = None,
+    v1_v2_comparison: pd.DataFrame | None = None,
 ) -> str:
     lines = [
         "# 消费超跌 V2 前向评估",
@@ -1803,6 +1814,28 @@ def _render_consumer_oversold_v2_evaluation_report(
     ]
     if not summary.empty:
         lines.extend(["## 分组结果", "", "```csv", summary.to_csv(index=False).rstrip(), "```", ""])
+    if isinstance(daily_detail, pd.DataFrame) and not daily_detail.empty:
+        lines.extend(
+            [
+                "## 逐日与累计收益",
+                "",
+                "```csv",
+                daily_detail.to_csv(index=False).rstrip(),
+                "```",
+                "",
+            ]
+        )
+    if isinstance(v1_v2_comparison, pd.DataFrame) and not v1_v2_comparison.empty:
+        lines.extend(
+            [
+                "## V1/V2 成员与绩效对照",
+                "",
+                "```csv",
+                v1_v2_comparison.to_csv(index=False).rstrip(),
+                "```",
+                "",
+            ]
+        )
     return "\n".join(lines)
 
 
@@ -1817,7 +1850,13 @@ def _publish_consumer_oversold_v2_evaluation(
     destination = Path(output_dir).expanduser().resolve()
     destination.mkdir(parents=True, exist_ok=True)
     frames: dict[str, pd.DataFrame] = {}
-    for key in ("detail", "summary", "minute_detail"):
+    for key in (
+        "detail",
+        "daily_detail",
+        "summary",
+        "v1_v2_comparison",
+        "minute_detail",
+    ):
         frame = evaluated[key]
         if not isinstance(frame, pd.DataFrame):
             raise TypeError(f"{key} must be a pandas DataFrame")
@@ -1880,9 +1919,22 @@ def _run_consumer_oversold_v2_evaluation(
         )
     ranked_pool = snapshot["ranked_pool"]
     top30 = snapshot["top30"]
+    rank_comparison = snapshot.get("comparison")
     if not isinstance(ranked_pool, pd.DataFrame) or not isinstance(top30, pd.DataFrame):
         raise TypeError("sealed V2 ranking artifacts must be pandas DataFrames")
-    asset_ids = sorted(set(ranked_pool["asset_id"].astype(str)))
+    if rank_comparison is None:
+        rank_comparison = pd.DataFrame(columns=["asset_id", "v1_rank", "v2_rank"])
+    if not isinstance(rank_comparison, pd.DataFrame):
+        raise TypeError("sealed V1/V2 comparison artifact must be a pandas DataFrame")
+    v1_ranks = pd.to_numeric(
+        rank_comparison.get("v1_rank", pd.Series(dtype=float)), errors="coerce"
+    )
+    v1_top30_assets = set(
+        rank_comparison.loc[v1_ranks.le(30), "asset_id"].astype(str)
+    ) if "asset_id" in rank_comparison else set()
+    asset_ids = sorted(
+        set(ranked_pool["asset_id"].astype(str)) | v1_top30_assets
+    )
     hfq = _load_consumer_v2_hfq_daily_closes(
         asset_ids=asset_ids,
         start_date=snapshot_trade_date,
@@ -1915,6 +1967,7 @@ def _run_consumer_oversold_v2_evaluation(
         daily_bars=daily,
         minute_bars=minute,
         outcome_dates=outcome_dates,
+        rank_comparison=rank_comparison.copy(deep=True),
     )
     coverage = dict(evaluated["coverage"])
     snapshot_coverage = snapshot["coverage"]
@@ -1938,7 +1991,10 @@ def _run_consumer_oversold_v2_evaluation(
     )
     evaluated = {**evaluated, "coverage": coverage}
     report = _render_consumer_oversold_v2_evaluation_report(
-        coverage, evaluated["summary"]
+        coverage,
+        evaluated["summary"],
+        evaluated.get("daily_detail"),
+        evaluated.get("v1_v2_comparison"),
     )
     paths = _publish_consumer_oversold_v2_evaluation(
         output_dir=output_dir, evaluated=evaluated, report=report

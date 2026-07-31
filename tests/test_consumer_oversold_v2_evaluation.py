@@ -155,6 +155,61 @@ def test_three_and_five_day_horizons_use_explicit_trading_outcome_dates():
     )
 
 
+def test_completed_outcome_dates_publish_per_stock_daily_and_cumulative_returns():
+    result = evaluate_v2_snapshot(
+        snapshot=_ranked_snapshot(1),
+        qualified_pool=_qualified_pool_snapshot(1),
+        daily_bars=_daily_bars(1),
+        minute_bars=pd.DataFrame(),
+        outcome_dates=OUTCOME_DATES[:3],
+    )
+
+    detail = result["daily_detail"]
+    assert detail["outcome_trade_date"].tolist() == list(OUTCOME_DATES[:3])
+    assert detail["outcome_session"].tolist() == [1, 2, 3]
+    assert detail["evaluation_status"].eq("completed").all()
+    assert detail["daily_return"].tolist() == pytest.approx(
+        [0.08 / 3.0, (1.0 + 0.08 * 2.0 / 3.0) / (1.0 + 0.08 / 3.0) - 1.0,
+         1.08 / (1.0 + 0.08 * 2.0 / 3.0) - 1.0]
+    )
+    assert detail["cumulative_return"].tolist() == pytest.approx(
+        [0.08 / 3.0, 0.08 * 2.0 / 3.0, 0.08]
+    )
+
+
+def test_v1_v2_comparison_reports_membership_overlap_and_performance_delta():
+    count = 21
+    rank_comparison = pd.DataFrame(
+        {
+            "asset_id": [f"A{rank:02d}" for rank in range(1, count + 1)],
+            "v1_rank": [21, *range(1, 21)],
+            "v2_rank": list(range(1, count + 1)),
+        }
+    )
+
+    result = evaluate_v2_snapshot(
+        snapshot=_ranked_snapshot(count),
+        qualified_pool=_qualified_pool_snapshot(count),
+        daily_bars=_daily_bars(count),
+        minute_bars=pd.DataFrame(),
+        outcome_dates=OUTCOME_DATES[:3],
+        horizons=(3,),
+        rank_comparison=rank_comparison,
+    )
+
+    comparison = result["v1_v2_comparison"].set_index(["cohort", "horizon"])
+    v1_top20 = comparison.loc[("v1_top20", 3)]
+    v2_top20 = comparison.loc[("v2_top20", 3)]
+    assert v1_top20["member_count"] == 20
+    assert v2_top20["member_count"] == 20
+    assert v1_top20["overlap_count"] == 19
+    assert v2_top20["overlap_count"] == 19
+    assert v2_top20["mean_return"] > v1_top20["mean_return"]
+    assert v2_top20["mean_return_delta_vs_v1"] == pytest.approx(
+        v2_top20["mean_return"] - v1_top20["mean_return"]
+    )
+
+
 def test_ambiguous_observed_bar_calendar_is_rejected():
     bars = _daily_bars(1)
     bars.attrs.clear()
@@ -521,6 +576,24 @@ def test_complete_forty_eight_bar_days_publish_intraday_diagnostics():
     assert detail["limit_up_reached"].all()
     assert detail["limit_up_held_to_close"].all()
     assert detail["first_limit_up_time"].str.endswith("10:35:00").all()
+
+
+def test_completed_minute_horizon_publishes_when_later_horizon_is_pending():
+    snapshot = _ranked_snapshot(2)
+    result = evaluate_v2_snapshot(
+        snapshot=snapshot,
+        qualified_pool=_qualified_pool_snapshot(2),
+        daily_bars=_daily_bars(2),
+        minute_bars=_minute_bars(snapshot["asset_id"].tolist(), ("2026-07-30",)),
+        outcome_dates=OUTCOME_DATES[:3],
+    )
+
+    assert result["minute_detail"]["horizon"].tolist() == [3, 3]
+    assert result["coverage"]["minute_complete"] is False
+    assert result["coverage"]["minute_horizon_status"] == {
+        "3": "complete",
+        "5": "pending",
+    }
 
 
 def test_forty_seven_minute_bars_degrade_while_daily_evaluation_stays_complete():

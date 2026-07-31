@@ -1019,10 +1019,12 @@ def test_consumer_oversold_v2_evaluate_dispatches_and_prints_paths(
     def fake_run(**kwargs):
         captured.update(kwargs)
         return {
-            "paths": {
-                "detail": "/tmp/evaluation/detail.csv",
-                "summary": "/tmp/evaluation/summary.csv",
-                "minute_detail": "/tmp/evaluation/minute.csv",
+                "paths": {
+                    "detail": "/tmp/evaluation/detail.csv",
+                    "daily_detail": "/tmp/evaluation/daily_detail.csv",
+                    "summary": "/tmp/evaluation/summary.csv",
+                    "v1_v2_comparison": "/tmp/evaluation/v1_v2_comparison.csv",
+                    "minute_detail": "/tmp/evaluation/minute.csv",
                 "coverage": "/tmp/evaluation/coverage.json",
                 "report": "/tmp/evaluation/report.md",
             }
@@ -1086,6 +1088,14 @@ def test_v2_evaluate_uses_explicit_outcome_window_without_recomputing_snapshot(
     ranked_pool = top30.copy(deep=True)
     frozen_top30 = top30.copy(deep=True)
     frozen_pool = ranked_pool.copy(deep=True)
+    rank_comparison = pd.DataFrame(
+        {
+            "asset_id": ["A", "B", "C"],
+            "v1_rank": [2, 3, 1],
+            "v2_rank": [1, 2, pd.NA],
+        }
+    )
+    frozen_comparison = rank_comparison.copy(deep=True)
     captured = {}
     release = tmp_path / "snapshot-release"
     release.mkdir()
@@ -1097,6 +1107,7 @@ def test_v2_evaluate_uses_explicit_outcome_window_without_recomputing_snapshot(
             "top20": top30.iloc[:1].copy(deep=True),
             "top30": top30,
             "ranked_pool": ranked_pool,
+            "comparison": rank_comparison,
             "coverage": {
                 "evidence_reconstruction_mode": "retrospective_point_in_time",
                 "evidence_information_cutoff": "2026-07-27",
@@ -1180,6 +1191,7 @@ def test_v2_evaluate_uses_explicit_outcome_window_without_recomputing_snapshot(
         "service": "research_custom",
     }
     assert captured["hfq"]["start_date"] == "2026-07-27"
+    assert captured["hfq"]["asset_ids"] == ["A", "B", "C"]
     assert captured["raw"]["end_date"] == "2026-07-30"
     assert captured["minute"]["start_date"] == "2026-07-28"
     assert captured["minute"]["end_date"] == "2026-07-30"
@@ -1188,12 +1200,16 @@ def test_v2_evaluate_uses_explicit_outcome_window_without_recomputing_snapshot(
         "2026-07-29",
         "2026-07-30",
     )
+    pdt.assert_frame_equal(
+        captured["evaluate"]["rank_comparison"], frozen_comparison
+    )
     assert result["coverage"]["evidence_reconstruction_mode"] == (
         "retrospective_point_in_time"
     )
     assert result["coverage"]["evidence_information_cutoff"] == "2026-07-27"
     pdt.assert_frame_equal(top30, frozen_top30)
     pdt.assert_frame_equal(ranked_pool, frozen_pool)
+    pdt.assert_frame_equal(rank_comparison, frozen_comparison)
 
 
 def test_v2_evaluate_cli_deduplicates_calendar_rows_without_shifting_window(
@@ -1357,7 +1373,13 @@ def test_v2_evaluate_rejects_authoritative_calendar_beyond_end_date(monkeypatch,
 def test_v2_evaluation_publication_is_manifested_deterministic_and_immutable(tmp_path):
     evaluated = {
         "detail": pd.DataFrame([{"asset_id": "A", "forward_return": 0.1}]),
+        "daily_detail": pd.DataFrame(
+            [{"asset_id": "A", "outcome_trade_date": "2026-07-30"}]
+        ),
         "summary": pd.DataFrame([{"group": "top20", "rising_ratio": 1.0}]),
+        "v1_v2_comparison": pd.DataFrame(
+            [{"cohort": "v2_top20", "mean_return_delta_vs_v1": 0.01}]
+        ),
         "minute_detail": pd.DataFrame([{"asset_id": "A", "bar_count": 48}]),
         "coverage": {"snapshot_trade_date": "2026-07-27", "end_date": "2026-07-30"},
     }
@@ -1381,6 +1403,10 @@ def test_v2_evaluation_publication_is_manifested_deterministic_and_immutable(tmp
         ".manifest.sha256",
         *cli._CONSUMER_OVERSOLD_V2_EVALUATION_FILENAMES.values(),
     }
+    assert {
+        "daily_detail",
+        "v1_v2_comparison",
+    }.issubset(cli._CONSUMER_OVERSOLD_V2_EVALUATION_FILENAMES)
     for key, expected in frozen.items():
         pdt.assert_frame_equal(evaluated[key], expected)
 
