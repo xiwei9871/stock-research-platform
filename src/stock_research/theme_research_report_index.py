@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import errno
 import json
 import logging
 import os
@@ -22,6 +23,11 @@ from stock_research.theme_research_report_manifest import (
 logger = logging.getLogger(__name__)
 
 _MAX_ERRORS = 100
+_RESOURCE_EXHAUSTION_ERRNOS = frozenset(
+    value
+    for name in ("EMFILE", "ENFILE", "ENOMEM")
+    if (value := getattr(errno, name, None)) is not None
+)
 _ERROR_FIELDS = {"code", "manifest_path", "theme_id", "version"}
 _IDENTITY_SAFE_MANIFEST_CODES = {
     "ARTIFACT_ENTRY_INVALID",
@@ -64,9 +70,30 @@ def _is_theme_research_report_error(exc: Exception) -> bool:
         from stock_research.theme_research_report_store import ThemeResearchReportError
     except MemoryError:
         raise
-    except Exception:
+    except Exception as import_error:
+        _raise_if_resource_exhausted(import_error)
         return False
     return isinstance(exc, ThemeResearchReportError)
+
+
+def _resource_exhaustion_error(exc: BaseException) -> OSError | None:
+    current: BaseException | None = exc
+    seen: set[int] = set()
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        if (
+            isinstance(current, OSError)
+            and current.errno in _RESOURCE_EXHAUSTION_ERRNOS
+        ):
+            return current
+        current = current.__cause__ or current.__context__
+    return None
+
+
+def _raise_if_resource_exhausted(exc: BaseException) -> None:
+    resource_error = _resource_exhaustion_error(exc)
+    if resource_error is not None:
+        raise resource_error
 
 
 def _freeze_error(error: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -160,6 +187,7 @@ def _open_child_directory(parent_fd: int, name: str) -> int | None:
 
 
 def _sorted_directory_names(directory_fd: int) -> list[str]:
+    # Sorting materializes only one directory level: O(max entries in one level).
     return sorted(os.listdir(directory_fd))
 
 
@@ -167,7 +195,10 @@ def _directory_entry_matches_fd(parent_fd: int, name: str, child_fd: int) -> boo
     try:
         entry_stat = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
         opened_stat = os.fstat(child_fd)
-    except (OSError, ValueError):
+    except OSError as exc:
+        _raise_if_resource_exhausted(exc)
+        return False
+    except ValueError:
         return False
     return (
         stat.S_ISDIR(entry_stat.st_mode)
@@ -181,7 +212,10 @@ def _directory_path_matches_fd(path: Path, directory_fd: int) -> bool:
     try:
         path_stat = os.stat(path, follow_symlinks=False)
         opened_stat = os.fstat(directory_fd)
-    except (OSError, ValueError):
+    except OSError as exc:
+        _raise_if_resource_exhausted(exc)
+        return False
+    except ValueError:
         return False
     return (
         stat.S_ISDIR(path_stat.st_mode)
@@ -196,7 +230,8 @@ def _safe_close(descriptor: int | None) -> None:
         return
     try:
         os.close(descriptor)
-    except OSError:
+    except OSError as exc:
+        _raise_if_resource_exhausted(exc)
         pass
 
 
@@ -245,25 +280,24 @@ def scan_theme_research_report_root(
     started_at = datetime.now(timezone.utc)
     discovered = indexed = unchanged = invalid = 0
     errors: list[dict[str, str]] = []
-    selected_service = (
-        service
-        if service is not None
-        else _load_settings().theme_research_runtime_service
-    )
+    selected_service = service
 
     try:
         report_root = Path(os.path.abspath(os.fspath(root)))
         root_fd = os.open(report_root, _directory_open_flags())
-    except FileNotFoundError:
+    except FileNotFoundError as exc:
+        _raise_if_resource_exhausted(exc)
         return ReportScanResult(0, 0, 0, 0, (), started_at, datetime.now(timezone.utc))
-    except (OSError, TypeError, ValueError):
+    except (OSError, TypeError, ValueError) as exc:
+        _raise_if_resource_exhausted(exc)
         _append_error(errors, {"code": "REPORT_ROOT_INVALID"})
         return ReportScanResult(0, 0, 0, 1, errors, started_at, datetime.now(timezone.utc))
 
     try:
         try:
             theme_names = _sorted_directory_names(root_fd)
-        except (OSError, ValueError):
+        except (OSError, ValueError) as exc:
+            _raise_if_resource_exhausted(exc)
             _append_error(errors, {"code": "REPORT_DISCOVERY_ERROR"})
             return ReportScanResult(
                 0,
@@ -284,7 +318,8 @@ def scan_theme_research_report_root(
                 if theme_fd is None:
                     continue
                 version_names = _sorted_directory_names(theme_fd)
-            except (OSError, ValueError):
+            except (OSError, ValueError) as exc:
+                _raise_if_resource_exhausted(exc)
                 _safe_close(theme_fd)
                 invalid += 1
                 _append_error(
@@ -314,7 +349,8 @@ def scan_theme_research_report_root(
                         version_fd = _open_child_directory(theme_fd, version)
                         if version_fd is None:
                             continue
-                    except (OSError, ValueError):
+                    except (OSError, ValueError) as exc:
+                        _raise_if_resource_exhausted(exc)
                         invalid += 1
                         _append_error(
                             errors,
@@ -333,9 +369,11 @@ def scan_theme_research_report_root(
                                 dir_fd=version_fd,
                                 follow_symlinks=False,
                             )
-                        except FileNotFoundError:
+                        except FileNotFoundError as exc:
+                            _raise_if_resource_exhausted(exc)
                             continue
-                        except (OSError, ValueError):
+                        except (OSError, ValueError) as exc:
+                            _raise_if_resource_exhausted(exc)
                             invalid += 1
                             _append_error(
                                 errors,
@@ -389,6 +427,7 @@ def scan_theme_research_report_root(
                             except MemoryError:
                                 raise
                             except ReportManifestError as exc:
+                                _raise_if_resource_exhausted(exc)
                                 raise ReportManifestError(
                                     "MANIFEST_DISCOVERY_CHANGED",
                                     "manifest discovery identity changed before registration",
@@ -411,6 +450,10 @@ def scan_theme_research_report_root(
                                     "MANIFEST_DISCOVERY_CHANGED",
                                     "manifest discovery identity changed before registration",
                                 )
+                            if selected_service is None:
+                                selected_service = (
+                                    _load_settings().theme_research_runtime_service
+                                )
                             store_result = register_report_manifest(
                                 manifest, service=selected_service
                             )
@@ -430,6 +473,7 @@ def scan_theme_research_report_root(
                         except MemoryError:
                             raise
                         except ReportManifestError as exc:
+                            _raise_if_resource_exhausted(exc)
                             invalid += 1
                             safe_identity = exc.code in _IDENTITY_SAFE_MANIFEST_CODES
                             _append_error(
@@ -442,6 +486,7 @@ def scan_theme_research_report_root(
                                 ),
                             )
                         except Exception as exc:
+                            _raise_if_resource_exhausted(exc)
                             invalid += 1
                             if (
                                 manifest is not None
@@ -487,22 +532,34 @@ def _build_parser(settings: Any) -> argparse.ArgumentParser:
     return parser
 
 
+def _print_cli_error(code: str) -> int:
+    print(json.dumps({"error": {"code": code}}, ensure_ascii=False))
+    return 3
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     try:
         settings = _load_settings()
         limits = limits_from_settings(settings)
-    except (ImportError, TypeError, ValueError):
-        print(
-            json.dumps(
-                {"error": {"code": "REPORT_INDEX_CONFIGURATION_ERROR"}},
-                ensure_ascii=False,
-            )
-        )
-        return 3
+    except (ImportError, TypeError, ValueError, OSError) as exc:
+        if _resource_exhaustion_error(exc) is not None:
+            return _print_cli_error("REPORT_INDEX_RESOURCE_EXHAUSTED")
+        if isinstance(exc, OSError):
+            raise
+        return _print_cli_error("REPORT_INDEX_CONFIGURATION_ERROR")
 
     args = _build_parser(settings).parse_args(argv)
 
-    result = scan_theme_research_report_root(args.root, limits=limits, service=args.service)
+    try:
+        result = scan_theme_research_report_root(
+            args.root,
+            limits=limits,
+            service=args.service,
+        )
+    except OSError as exc:
+        if _resource_exhaustion_error(exc) is None:
+            raise
+        return _print_cli_error("REPORT_INDEX_RESOURCE_EXHAUSTED")
     print(json.dumps(result.to_dict(), ensure_ascii=False, sort_keys=True))
     if result.invalid == 0:
         return 0

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import builtins
+import errno
 import hashlib
 import json
 import os
@@ -867,3 +868,193 @@ def test_manifest_disappearing_after_loader_is_discovery_changed(
 
     assert stored == []
     assert _error_codes(result) == ["MANIFEST_DISCOVERY_CHANGED"]
+
+
+def test_missing_root_does_not_resolve_default_service(tmp_path: Path, monkeypatch) -> None:
+    root = tmp_path / "missing"
+
+    def bad_settings():
+        raise ValueError("invalid settings")
+
+    monkeypatch.setattr(report_index, "_load_settings", bad_settings)
+
+    result = report_index.scan_theme_research_report_root(root, limits=LIMITS)
+
+    assert (result.discovered, result.invalid) == (0, 0)
+    assert result.errors == ()
+
+
+@pytest.mark.parametrize(
+    ("boundary", "resource_errno"),
+    [
+        ("root_open", errno.EMFILE),
+        ("root_listdir", errno.ENFILE),
+        ("theme_open", errno.ENOMEM),
+        ("version_open", errno.EMFILE),
+        ("manifest_stat", errno.ENFILE),
+        ("fingerprint_open", errno.ENOMEM),
+    ],
+)
+def test_discovery_resource_exhaustion_is_re_raised_without_logging_or_store(
+    tmp_path: Path,
+    monkeypatch,
+    caplog,
+    boundary: str,
+    resource_errno: int,
+) -> None:
+    root = tmp_path / "reports"
+    _write_report(root, "a-theme", "v1")
+    real_open = os.open
+    real_listdir = os.listdir
+    real_stat = os.stat
+    store_calls: list[str] = []
+
+    def exhausted() -> OSError:
+        return OSError(resource_errno, "resource exhausted secret")
+
+    def open_path(path, flags, mode=0o777, *, dir_fd=None):
+        matches = (
+            (boundary == "root_open" and dir_fd is None and Path(path) == root)
+            or (boundary == "theme_open" and dir_fd is not None and path == "a-theme")
+            or (boundary == "version_open" and dir_fd is not None and path == "v1")
+            or (
+                boundary == "fingerprint_open"
+                and dir_fd is not None
+                and path == "manifest.json"
+            )
+        )
+        if matches:
+            raise exhausted()
+        return real_open(path, flags, mode, dir_fd=dir_fd)
+
+    def listdir_path(path):
+        if boundary == "root_listdir" and isinstance(path, int):
+            raise exhausted()
+        return real_listdir(path)
+
+    def stat_path(path, *args, **kwargs):
+        if (
+            boundary == "manifest_stat"
+            and path == "manifest.json"
+            and kwargs.get("dir_fd") is not None
+        ):
+            raise exhausted()
+        return real_stat(path, *args, **kwargs)
+
+    def register(manifest, *, service):
+        store_calls.append(manifest.theme_id)
+        return {"result": "indexed"}
+
+    monkeypatch.setattr(os, "open", open_path)
+    monkeypatch.setattr(os, "listdir", listdir_path)
+    monkeypatch.setattr(os, "stat", stat_path)
+    monkeypatch.setattr(report_index, "register_report_manifest", register)
+
+    with pytest.raises(OSError) as exc_info:
+        report_index.scan_theme_research_report_root(
+            root, limits=LIMITS, service="runtime"
+        )
+
+    assert exc_info.value.errno == resource_errno
+    assert store_calls == []
+    assert caplog.records == []
+
+
+@pytest.mark.parametrize("resource_errno", [errno.EMFILE, errno.ENFILE, errno.ENOMEM])
+def test_store_resource_exhaustion_is_re_raised(
+    tmp_path: Path, monkeypatch, caplog, resource_errno: int
+) -> None:
+    root = tmp_path / "reports"
+    _write_report(root, "a-theme", "v1")
+
+    def register(manifest, *, service):
+        raise OSError(resource_errno, "resource exhausted secret")
+
+    monkeypatch.setattr(report_index, "register_report_manifest", register)
+
+    with pytest.raises(OSError) as exc_info:
+        report_index.scan_theme_research_report_root(
+            root, limits=LIMITS, service="runtime"
+        )
+
+    assert exc_info.value.errno == resource_errno
+    assert caplog.records == []
+
+
+def test_cli_resource_exhaustion_returns_safe_scan_level_json(monkeypatch, capsys) -> None:
+    def exhaust(*args, **kwargs):
+        raise OSError(errno.EMFILE, "absolute-secret-resource-text")
+
+    monkeypatch.setattr(report_index, "scan_theme_research_report_root", exhaust)
+
+    assert report_index.main([]) == 3
+    captured = capsys.readouterr()
+    assert json.loads(captured.out) == {
+        "error": {"code": "REPORT_INDEX_RESOURCE_EXHAUSTED"}
+    }
+    assert "absolute-secret" not in captured.out
+    assert captured.err == ""
+
+
+@pytest.mark.parametrize("boundary", ["root_open", "manifest_stat"])
+def test_file_not_found_wrapper_does_not_hide_resource_exhaustion(
+    tmp_path: Path, monkeypatch, boundary: str
+) -> None:
+    root = tmp_path / "reports"
+    _write_report(root, "a-theme", "v1")
+    real_open = os.open
+    real_stat = os.stat
+
+    def wrapped_missing() -> FileNotFoundError:
+        try:
+            raise OSError(errno.EMFILE, "resource exhausted")
+        except OSError as resource_error:
+            try:
+                raise FileNotFoundError(errno.ENOENT, "missing") from resource_error
+            except FileNotFoundError as missing_error:
+                return missing_error
+
+    def open_path(path, flags, mode=0o777, *, dir_fd=None):
+        if boundary == "root_open" and dir_fd is None and Path(path) == root:
+            raise wrapped_missing()
+        return real_open(path, flags, mode, dir_fd=dir_fd)
+
+    def stat_path(path, *args, **kwargs):
+        if (
+            boundary == "manifest_stat"
+            and path == "manifest.json"
+            and kwargs.get("dir_fd") is not None
+        ):
+            raise wrapped_missing()
+        return real_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(os, "open", open_path)
+    monkeypatch.setattr(os, "stat", stat_path)
+
+    with pytest.raises(OSError) as exc_info:
+        report_index.scan_theme_research_report_root(
+            root, limits=LIMITS, service="runtime"
+        )
+
+    assert exc_info.value.errno == errno.EMFILE
+
+
+@pytest.mark.parametrize("wrapped", [False, True])
+def test_cli_config_resource_exhaustion_uses_resource_error_json(
+    monkeypatch, capsys, wrapped: bool
+) -> None:
+    def load_settings():
+        resource_error = OSError(errno.ENFILE, "absolute-secret-resource")
+        if wrapped:
+            raise ValueError("bad config") from resource_error
+        raise resource_error
+
+    monkeypatch.setattr(report_index, "_load_settings", load_settings)
+
+    assert report_index.main([]) == 3
+    captured = capsys.readouterr()
+    assert json.loads(captured.out) == {
+        "error": {"code": "REPORT_INDEX_RESOURCE_EXHAUSTED"}
+    }
+    assert captured.err == ""
+    assert "absolute-secret" not in captured.out
