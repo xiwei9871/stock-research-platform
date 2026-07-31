@@ -147,12 +147,12 @@ Commit with message `fix: migrate theme research schema for v1.6`.
 - Read: checkpoint `eba5cdfc700a02d961e441cc1b92824ff9e35c7e`.
 - Use temporary staging directory `/tmp/theme-research-25-eba5cdfc.*`.
 
-- [ ] Extract only `artifacts/theme_decomposition` with `git archive`.
-- [ ] Generate and hash the exact 25-theme ID manifest.
-- [ ] Normalize and validate the isolated checkpoint with the upgraded current code.
-- [ ] Require counts of 25 themes, 270 nodes, 282 sources, 320 claims, and 248 company mappings.
-- [ ] Run all Theme Research backend tests, the complete dashboard frontend suite, and production frontend build.
-- [ ] Run `rtk git diff --check` and review the compatibility diff against the design.
+- [x] Extract only `artifacts/theme_decomposition` with `git archive`.
+- [x] Generate and hash the exact 25-theme ID manifest.
+- [x] Normalize and validate the isolated checkpoint with the upgraded current code.
+- [x] Require counts of 25 themes, 270 nodes, 282 sources, 320 claims, and 248 company mappings.
+- [x] Run all Theme Research backend tests, the complete dashboard frontend suite, and production frontend build.
+- [x] Run `rtk git diff --check` and review the compatibility diff against the design.
 
 ### Task 6: Publish the Compatibility Release
 
@@ -160,10 +160,10 @@ Commit with message `fix: migrate theme research schema for v1.6`.
 - Canonical release root: `/Users/xiwei/stock_research_release_20260727`.
 - Production URL: `https://stock.manqiaotechnology.com`.
 
-- [ ] Fast-forward the clean canonical release root to the verified compatibility commit.
-- [ ] Publish through `deploy/sync_dashboard_release.sh` with expected trade date `2026-07-29`.
-- [ ] Confirm external `release.json` matches the new commit.
-- [ ] Before schema changes, require the existing two-theme list and one detail to return HTTP 200.
+- [x] Fast-forward the clean canonical release root to the verified compatibility commit.
+- [x] Publish through `deploy/sync_dashboard_release.sh` with expected trade date `2026-07-29`.
+- [x] Confirm external `release.json` matches the new commit.
+- [x] Before schema changes, require the existing two-theme list and one detail to return HTTP 200.
 
 ### Task 7: Back Up and Migrate the Production Schema
 
@@ -171,38 +171,39 @@ Commit with message `fix: migrate theme research schema for v1.6`.
 - Backup directory: `/home/jqz/backups/theme-research-25-restore-20260731`.
 - API container: `stock_research_dashboard-api-1`.
 
-- [ ] Verify `pg_dump` and `pg_restore` tooling without printing credentials.
-- [ ] Create a timestamped custom-format backup of the production `research` schema through the migration service.
-- [ ] Require `pg_restore --list` entries for Theme Research theme, node, import-run, and store-state tables.
-- [ ] Run the new schema status and require recognition of the known legacy contract.
-- [ ] Apply the schema through the authenticated admin CLI.
-- [ ] Require current schema status and verify the existing two-theme reads remain HTTP 200.
+- [x] Verify `pg_dump` and `pg_restore` tooling without printing credentials.
+- [x] Create a timestamped custom-format backup of the production `research` schema through the migration service.
+- [x] Require `pg_restore --list` entries for Theme Research theme, node, import-run, and store-state tables.
+- [x] Run the new schema status and require recognition of the known legacy contract.
+- [x] Apply the schema through the authenticated admin CLI.
+- [x] Require current schema status and verify the existing two-theme reads remain HTTP 200.
 
 ### Task 8: Run the Production Import Gate and Transaction
 
 **Remote staging:**
 - Container directory: `/tmp/theme-research-25-eba5cdfc`.
 - Evidence directory: `/home/jqz/backups/theme-research-25-restore-20260731`.
-- Idempotency key: `theme-research-25-eba5cdfc-20260731`.
+- Idempotency key: `theme-research-25-eba5cdfc-additive-20260731`.
 
-- [ ] Copy only the checkpoint artifact tree, 25-ID manifest, and read-only guard into container staging.
-- [ ] Run the guard and save `preflight.json` outside the container.
-- [ ] Require 25 desired themes, two current themes, 23 theme inserts, zero updates, and zero deactivations in every family.
-- [ ] Re-read and match the generation immediately before execution.
-- [ ] Confirm the admin credential environment is nonempty without displaying it.
-- [ ] Execute the authenticated transactional import with the recorded generation and deterministic idempotency key.
-- [ ] Save import/change-set IDs, package SHA, generations, counts, and backup path in migration evidence.
+- [x] Copy only the checkpoint artifact tree, 25-ID manifest, and read-only guard into container staging.
+- [x] Run the guard and save preflight evidence outside the container.
+- [x] When the raw checkpoint updates the existing two themes, build the additive desired package from current production plus only the 23 missing themes.
+- [x] Require 25 desired themes, two current themes, 23 theme inserts, zero updates, and zero deactivations in every family.
+- [x] Re-read and match the generation immediately before execution.
+- [x] Confirm the admin credential is available without displaying it.
+- [x] Execute the authenticated transactional import with the recorded generation and deterministic idempotency key.
+- [x] Save import/change-set IDs, package SHA, generations, counts, and backup path in migration evidence.
 
 ### Task 9: Verify Production and Record Evidence
 
 **Files:**
 - Create: `docs/ops/theme-research-25-production-restore-20260731.md`
 
-- [ ] Reload the DB package and require the exact 25-theme ID set.
-- [ ] Require the original two theme versions and content hashes to match preflight evidence.
-- [ ] Require server-side list total 25 and nonzero nodes on at least three new details.
-- [ ] Reload the authenticated external list, verify visible total 25, and open a newly imported detail without console errors.
-- [ ] Require Theme Research list/detail HTTP 200 and no new HTTP 500 or priority-policy-directory errors in production logs.
+- [x] Reload the DB package and require the exact 25-theme ID set.
+- [x] Require the original two theme versions and content hashes to match preflight evidence.
+- [x] Require server-side list total 25 and nonzero nodes on at least three new details.
+- [x] Reload the authenticated external list, verify visible total 25, and open a newly imported detail without console errors.
+- [x] Require Theme Research list/detail HTTP 200 and no new HTTP 500 or priority-policy-directory errors in production logs.
 - [ ] Confirm the release root and feature worktree are clean and `git diff --check` passes.
 - [ ] Record non-secret backup, release, schema, dry-run, import, count, browser, and log evidence in the operations document.
 - [ ] Commit with message `docs: record 25-theme production restore`.
