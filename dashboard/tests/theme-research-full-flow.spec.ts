@@ -34,7 +34,27 @@ async function fixtureStatus(page: Page) {
   return response.json() as Promise<{ theme_id: string; v1_report_version_id: string }>;
 }
 
+async function resetFixture(page: Page) {
+  const response = await fixtureRequest(page, '/__test__/theme-report-fixture/reset', 'POST');
+  expect(response.status()).toBe(200);
+  expect(await response.json()).toMatchObject({
+    v1_status: 'pending_review',
+    v2_exists: false
+  });
+}
+
+function captureUnexpectedServerErrors(page: Page) {
+  const errors: string[] = [];
+  page.on('response', (response) => {
+    if (response.status() >= 500 && new URL(response.url()).pathname.startsWith('/api/')) {
+      errors.push(`${response.status()} ${new URL(response.url()).pathname}`);
+    }
+  });
+  return () => expect(errors).toEqual([]);
+}
+
 test('theme research desktop flow uses the isolated backend without route mocks', async ({ page }) => {
+  const expectNoServerErrors = captureUnexpectedServerErrors(page);
   const fixture = await fixtureStatus(page);
   await page.setViewportSize({ width: 1440, height: 900 });
   await login(page, fixtureUser);
@@ -64,9 +84,11 @@ test('theme research desktop flow uses the isolated backend without route mocks'
   await expect(page).toHaveURL(new RegExp(`/theme-research/${fixture.theme_id}/companies$`));
   await expect(page.getByText('当前主题还没有公司映射。')).toBeVisible();
   await page.screenshot({ path: 'test-results/theme-research-desktop.png', fullPage: true });
+  expectNoServerErrors();
 });
 
 test('theme research mobile layout contains wide tables without page overflow', async ({ page }) => {
+  const expectNoServerErrors = captureUnexpectedServerErrors(page);
   const fixture = await fixtureStatus(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await login(page, fixtureUser);
@@ -80,12 +102,15 @@ test('theme research mobile layout contains wide tables without page overflow', 
   );
   expect(pageHasNoHorizontalOverflow).toBe(true);
   await page.screenshot({ path: 'test-results/theme-research-mobile.png', fullPage: true });
+  expectNoServerErrors();
 });
 
 test('theme report publication keeps pending versions private and approved history immutable', async ({ page }) => {
   test.setTimeout(60_000);
+  const expectNoServerErrors = captureUnexpectedServerErrors(page);
   const untrustedFixtureRequest = await page.request.get(`${themeApiBase}/__test__/theme-report-fixture/status`);
   expect(untrustedFixtureRequest.status()).toBe(404);
+  await resetFixture(page);
   const fixture = await fixtureStatus(page);
   const fixtureThemeId = fixture.theme_id;
 
@@ -107,7 +132,7 @@ test('theme report publication keeps pending versions private and approved histo
 
     await logout(page);
     await login(page, fixtureAdmin);
-    await page.getByText('报告审核', { exact: true }).click();
+    await page.goto('/admin/theme-research/report-review');
     await expect(page).toHaveURL(/\/admin\/theme-research\/report-review$/);
     await expect(page.getByText('报告审核', { exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: '主题报告审核' })).toBeVisible();
@@ -145,7 +170,7 @@ test('theme report publication keeps pending versions private and approved histo
 
     await logout(page);
     await login(page, fixtureAdmin);
-    await page.getByText('报告审核', { exact: true }).click();
+    await page.goto('/admin/theme-research/report-review');
     await expect(page.getByText('报告审核', { exact: true })).toBeVisible();
     await expect(page.getByRole('article').getByRole('heading', { name: 'AI供电产业链分析报告（第二版）' })).toBeVisible();
     await expect(page.getByRole('heading', { name: '第二版核心结论' })).toBeVisible();
@@ -161,4 +186,5 @@ test('theme report publication keeps pending versions private and approved histo
     const history = page.getByRole('combobox', { name: '报告历史版本' });
     await expect(history.locator('option').nth(0)).toContainText('2026-08-01.1 · 当前发布');
     await expect(history.locator('option').nth(1)).toContainText('2026-07-31.1 · 历史归档');
+    expectNoServerErrors();
 });

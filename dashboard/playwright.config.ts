@@ -1,12 +1,34 @@
 import { defineConfig, devices } from '@playwright/test';
+import { execFileSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
+import { existsSync } from 'node:fs';
+import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import {
+  buildThemeReportServerCommand,
+  ensureThemeReportFixtureToken,
+  resolvePlaywrightPython
+} from './playwright.runtime';
 
 const dashboardPort = Number(process.env.PLAYWRIGHT_DASHBOARD_PORT ?? '5174');
 const apiPort = Number(process.env.PLAYWRIGHT_API_PORT ?? '8766');
 const themeReportRealE2E = process.env.PLAYWRIGHT_THEME_REPORT_REAL_E2E === 'true';
-const themeReportFixtureToken =
-  process.env.PLAYWRIGHT_THEME_REPORT_FIXTURE_TOKEN ??
-  `theme-report-${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
-if (themeReportRealE2E) process.env.PLAYWRIGHT_THEME_REPORT_FIXTURE_TOKEN = themeReportFixtureToken;
+if (themeReportRealE2E) {
+  ensureThemeReportFixtureToken(process.env, () => `theme-report-${randomBytes(32).toString('hex')}`);
+}
+const repoRoot = fileURLToPath(new URL('..', import.meta.url));
+let sharedRepoRoot: string | undefined;
+try {
+  const commonGitDir = execFileSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], {
+    cwd: repoRoot,
+    encoding: 'utf8'
+  }).trim();
+  sharedRepoRoot = dirname(commonGitDir);
+} catch {
+  sharedRepoRoot = undefined;
+}
+const playwrightPython = resolvePlaywrightPython(process.env, repoRoot, existsSync, sharedRepoRoot);
 const reuseExistingServer =
   themeReportRealE2E || process.env.PLAYWRIGHT_REUSE_EXISTING === 'false' ? false : !process.env.CI;
 const dashboardCommand =
@@ -16,6 +38,7 @@ const dashboardCommand =
 
 export default defineConfig({
   testDir: './tests',
+  workers: themeReportRealE2E ? 1 : undefined,
   use: {
     baseURL: `http://127.0.0.1:${dashboardPort}`,
     trace: 'on-first-retry'
@@ -35,7 +58,7 @@ export default defineConfig({
     },
     {
       command: themeReportRealE2E
-        ? `env PYTHONPATH=src PLAYWRIGHT_THEME_REPORT_FIXTURE_TOKEN=${themeReportFixtureToken} ../../.venv/bin/python tests/support/theme_research_report_e2e_server.py --host 127.0.0.1 --port ${apiPort}`
+        ? buildThemeReportServerCommand({ python: playwrightPython, apiPort })
         : `env STOCK_RESEARCH_DASHBOARD_AUTH_REQUIRED=false STOCK_RESEARCH_NEWS_SCHEDULER_ENABLED=false .venv/bin/uvicorn stock_research.dashboard.app:app --host 127.0.0.1 --port ${apiPort}`,
       cwd: '..',
       url: `http://127.0.0.1:${apiPort}/openapi.json`,

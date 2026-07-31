@@ -6,7 +6,11 @@ import hashlib
 import json
 import os
 import shutil
+import sys
 import tempfile
+import threading
+from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
@@ -23,6 +27,73 @@ NORMAL_PASSWORD = "theme-report-user-password"
 V1 = "2026-07-31.1"
 V2 = "2026-08-01.1"
 LOCK_KEY = 7_171_271_448_728_574_941
+
+
+@dataclass
+class FixtureLifecycleState:
+    connection: Any | None = None
+    database_verified: bool = False
+    lock_acquired: bool = False
+    fixture_seed_started: bool = False
+    fixture_seeded: bool = False
+    cleaned: bool = False
+
+
+def _verify_test_database(state: FixtureLifecycleState) -> str:
+    if state.connection is None:
+        raise RuntimeError("database connection is unavailable")
+    database_name = str(state.connection.execute("SELECT current_database()").fetchone()[0])
+    if not database_name.endswith("_test"):
+        raise RuntimeError(f"refusing to run Playwright fixture against {database_name}")
+    state.database_verified = True
+    return database_name
+
+
+def _cleanup_fixture_resources(state: FixtureLifecycleState, temp_root: Path) -> list[BaseException]:
+    if state.cleaned:
+        return []
+    state.cleaned = True
+    errors: list[BaseException] = []
+    connection = state.connection
+    try:
+        if connection is not None and state.database_verified and state.lock_acquired and state.fixture_seed_started:
+            try:
+                connection.rollback()
+                _cleanup_database(connection)
+            except BaseException as exc:  # cleanup must not mask the startup failure
+                errors.append(exc)
+        if connection is not None and state.lock_acquired:
+            try:
+                connection.execute("SELECT pg_advisory_unlock(%s)", (LOCK_KEY,))
+                connection.commit()
+            except BaseException as exc:
+                errors.append(exc)
+    finally:
+        if connection is not None:
+            try:
+                connection.close()
+            except BaseException as exc:
+                errors.append(exc)
+            state.connection = None
+        configured_service_file = os.environ.get("PGSERVICEFILE", "")
+        try:
+            shutil.rmtree(temp_root)
+        except FileNotFoundError:
+            pass
+        except BaseException as exc:
+            errors.append(exc)
+        finally:
+            try:
+                if configured_service_file and Path(configured_service_file).is_relative_to(temp_root):
+                    os.environ.pop("PGSERVICEFILE", None)
+            except (OSError, ValueError):
+                os.environ.pop("PGSERVICEFILE", None)
+    return errors
+
+
+def _report_cleanup_errors(errors: list[BaseException]) -> None:
+    for error in errors:
+        print(f"theme report E2E cleanup warning: {error}", file=sys.stderr)
 
 
 def _source_service_file() -> Path:
@@ -93,6 +164,81 @@ def _write_report_version(report_root: Path, version: str) -> Path:
         encoding="utf-8",
     )
     return version_dir
+
+
+def _reset_report_fixture(report_root: Path, mutation_service: str, scan_service: str) -> dict[str, Any]:
+    import psycopg
+    from stock_research.config import SETTINGS
+    from stock_research.theme_research_report_index import (
+        limits_from_settings,
+        scan_theme_research_report_root,
+    )
+    from stock_research.theme_research_report_store import report_version_id
+
+    report_root.mkdir(parents=True, exist_ok=True)
+    staging_root = Path(tempfile.mkdtemp(prefix=".reset-", dir=report_root))
+    target = report_root / THEME_ID
+    backup = report_root / f".backup-{THEME_ID}"
+    try:
+        _write_report_version(staging_root, V1)
+        if backup.exists():
+            shutil.rmtree(backup)
+        if target.exists():
+            os.replace(target, backup)
+        os.replace(staging_root / THEME_ID, target)
+        try:
+            with psycopg.connect(f"service={mutation_service}") as connection:
+                connection.execute(
+                    """
+                    DELETE FROM research.theme_research_report_review_event
+                    WHERE report_version_id IN (
+                        SELECT report_version_id
+                        FROM research.theme_research_report_version
+                        WHERE theme_id = %s
+                    )
+                    """,
+                    (THEME_ID,),
+                )
+                connection.execute(
+                    "DELETE FROM research.theme_research_report_version WHERE theme_id = %s",
+                    (THEME_ID,),
+                )
+            result = scan_theme_research_report_root(
+                report_root,
+                limits=limits_from_settings(SETTINGS),
+                service=scan_service,
+            )
+            if result.invalid or result.indexed != 1:
+                raise RuntimeError(f"fixture reset indexing failed: {result.to_dict()}")
+        except BaseException:
+            if target.exists():
+                shutil.rmtree(target)
+            if backup.exists():
+                os.replace(backup, target)
+            raise
+        if backup.exists():
+            shutil.rmtree(backup)
+        with psycopg.connect(f"service={mutation_service}") as connection:
+            row = connection.execute(
+                """
+                SELECT status
+                FROM research.theme_research_report_version
+                WHERE report_version_id = %s
+                """,
+                (report_version_id(THEME_ID, V1),),
+            ).fetchone()
+            v2_exists = connection.execute(
+                """
+                SELECT EXISTS (
+                    SELECT 1 FROM research.theme_research_report_version
+                    WHERE theme_id = %s AND version = %s
+                )
+                """,
+                (THEME_ID, V2),
+            ).fetchone()[0]
+        return {"v1_status": row[0] if row else None, "v2_exists": bool(v2_exists)}
+    finally:
+        shutil.rmtree(staging_root, ignore_errors=True)
 
 
 def _cleanup_database(connection: Any) -> None:
@@ -193,11 +339,13 @@ def _build_test_app(report_root: Path, token: str, cleanup: Callable[[], None]):
     from stock_research.theme_research_report_store import report_version_id
     from stock_research.config import SETTINGS
 
-    outer = FastAPI()
-
-    @outer.on_event("shutdown")
-    def cleanup_fixture() -> None:
+    @asynccontextmanager
+    async def lifespan(_app):
+        yield
         cleanup()
+
+    outer = FastAPI(lifespan=lifespan)
+    fixture_lock = threading.Lock()
 
     def require_token(value: str) -> None:
         if value != token:
@@ -214,17 +362,28 @@ def _build_test_app(report_root: Path, token: str, cleanup: Callable[[], None]):
     @outer.post("/__test__/theme-report-fixture/index-v2")
     def index_v2(x_theme_report_e2e_token: str = Header(default="")):
         require_token(x_theme_report_e2e_token)
-        version_dir = report_root / THEME_ID / V2
-        if not version_dir.exists():
-            _write_report_version(report_root, V2)
-        result = scan_theme_research_report_root(
-            report_root,
-            limits=limits_from_settings(SETTINGS),
-            service=SETTINGS.theme_research_runtime_service,
-        )
+        with fixture_lock:
+            version_dir = report_root / THEME_ID / V2
+            if not version_dir.exists():
+                _write_report_version(report_root, V2)
+            result = scan_theme_research_report_root(
+                report_root,
+                limits=limits_from_settings(SETTINGS),
+                service=SETTINGS.theme_research_runtime_service,
+            )
         if result.invalid:
             raise HTTPException(status_code=500, detail="fixture_index_failed")
         return result.to_dict()
+
+    @outer.post("/__test__/theme-report-fixture/reset")
+    def reset_fixture(x_theme_report_e2e_token: str = Header(default="")):
+        require_token(x_theme_report_e2e_token)
+        with fixture_lock:
+            return _reset_report_fixture(
+                report_root,
+                SETTINGS.theme_research_migration_service,
+                SETTINGS.theme_research_runtime_service,
+            )
 
     # AppShell fetches these unrelated market summaries on every page. The dedicated
     # report database intentionally contains only identity/theme/report schemas, so
@@ -237,6 +396,32 @@ def _build_test_app(report_root: Path, token: str, cleanup: Callable[[], None]):
     @outer.get("/api/platform/summary")
     def platform_summary_fixture():
         return {"latest_market_date": "2026-08-01"}
+
+    @outer.get("/api/market-monitor/eod")
+    def market_monitor_eod_fixture():
+        return {
+            "trade_date": "2026-08-01",
+            "freshness": {"mode": "eod", "label": "Last Completed Trading Day", "is_realtime": False},
+            "coverage": {"market_assets": 0, "score_assets": 0, "factor_count": 0},
+            "market_breadth": {"status": "pending_source"},
+            "index_snapshot": [],
+            "sector_strength": {"strongest": [], "weakest": [], "status": "pending_source"},
+            "unusual_moves": [],
+            "watchlist_alerts": [],
+            "strategy_signal_summary": {"topn_preview_count": 0, "topn_preview": [], "risk_filter_counts": {}},
+            "generated_reports": [],
+            "market_emotion": {"summary": {"status": "missing"}, "components": []},
+            "emotion_stock_lists": {"limit_up": [], "limit_down": []},
+            "warnings": [],
+        }
+
+    @outer.get("/api/public-news")
+    def public_news_fixture():
+        return {"items": [], "total": 0, "limit": 100, "offset": 0, "warnings": []}
+
+    @outer.get("/api/public-news/status")
+    def public_news_status_fixture():
+        return {"enabled": False, "running": False, "interval_seconds": 0}
 
     outer.mount("/", production_app)
     return outer
@@ -252,26 +437,10 @@ def main() -> int:
         raise RuntimeError("PLAYWRIGHT_THEME_REPORT_FIXTURE_TOKEN must be random and at least 20 characters")
 
     temp_root = Path(tempfile.mkdtemp(prefix=f"{FIXTURE_PREFIX}-"))
-    lock_connection = None
-    cleaned = False
+    state = FixtureLifecycleState()
 
     def cleanup() -> None:
-        nonlocal cleaned, lock_connection
-        if cleaned:
-            return
-        cleaned = True
-        if lock_connection is not None:
-            try:
-                lock_connection.rollback()
-                _cleanup_database(lock_connection)
-            finally:
-                try:
-                    lock_connection.execute("SELECT pg_advisory_unlock(%s)", (LOCK_KEY,))
-                    lock_connection.commit()
-                finally:
-                    lock_connection.close()
-                    lock_connection = None
-        shutil.rmtree(temp_root, ignore_errors=True)
+        _report_cleanup_errors(_cleanup_fixture_resources(state, temp_root))
 
     try:
         report_root = temp_root / "reports"
@@ -300,17 +469,17 @@ def main() -> int:
         )
         from stock_research.theme_research_report_schema import apply_theme_research_report_schema
 
-        lock_connection = psycopg.connect("service=stock_research")
-        database_name = lock_connection.execute("SELECT current_database()").fetchone()[0]
-        if not str(database_name).endswith("_test"):
-            raise RuntimeError(f"refusing to run Playwright fixture against {database_name}")
-        lock_connection.execute("SELECT pg_advisory_lock(%s)", (LOCK_KEY,))
-        lock_connection.execute(DASHBOARD_AUTH_SCHEMA_SQL)
-        lock_connection.execute(THEME_RESEARCH_SCHEMA_SQL)
-        lock_connection.commit()
+        state.connection = psycopg.connect("service=stock_research")
+        _verify_test_database(state)
+        state.connection.execute("SELECT pg_advisory_lock(%s)", (LOCK_KEY,))
+        state.lock_acquired = True
+        state.connection.execute(DASHBOARD_AUTH_SCHEMA_SQL)
+        state.connection.execute(THEME_RESEARCH_SCHEMA_SQL)
+        state.connection.commit()
         apply_theme_research_report_schema(service="stock_research")
-        _cleanup_database(lock_connection)
-        _seed_database(lock_connection)
+        state.fixture_seed_started = True
+        _cleanup_database(state.connection)
+        _seed_database(state.connection)
         _write_report_version(report_root, V1)
         scan_result = scan_theme_research_report_root(
             report_root,
@@ -319,6 +488,7 @@ def main() -> int:
         )
         if scan_result.indexed != 1 or scan_result.invalid:
             raise RuntimeError(f"v1 report fixture indexing failed: {scan_result.to_dict()}")
+        state.fixture_seeded = True
         app = _build_test_app(report_root, token, cleanup)
         uvicorn.run(app, host=args.host, port=args.port, log_level="info")
     finally:
