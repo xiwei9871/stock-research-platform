@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+import stock_research.consumer_oversold.scoring as scoring_module
 from stock_research.consumer_oversold.contracts import ConsumerOversoldConfig
 from stock_research.consumer_oversold.scoring import (
     apply_candidate_gates,
@@ -17,6 +18,7 @@ from stock_research.consumer_oversold.scoring import (
 
 
 CONFIG = ConsumerOversoldConfig(trade_date="2026-07-29")
+V2_CONFIG = replace(CONFIG, ranking_version="v2")
 
 
 def scoring_rows(**overrides):
@@ -80,6 +82,20 @@ def unified_rows(**overrides):
         "composite_score": 70.0,
         "elasticity_coverage": True,
         "elasticity_score": 60.0,
+    }
+    row.update(overrides)
+    return row
+
+
+def v2_rank_rows(**overrides):
+    row = {
+        "asset_id": "A",
+        "repair_bucket": "expected_repair",
+        "eligible": True,
+        "composite_score": 70.0,
+        "activation_coverage": True,
+        "activation_eligible": True,
+        "activation_score": 60.0,
     }
     row.update(overrides)
     return row
@@ -315,6 +331,81 @@ def test_each_candidate_gate_emits_exact_exclusion_code(change, code):
     result = apply_candidate_gates(pd.DataFrame([gate_rows(**change)]), CONFIG).iloc[0]
     assert not bool(result["eligible"])
     assert result["exclusion_reasons"] == code
+
+
+def test_v2_gate_admits_north_baic_edge_without_oversold_gate_and_v1_rejects():
+    row = gate_rows(
+        oversold_score=56.98,
+        return_6m=-0.3125,
+        max_drawdown_12m=-0.3913,
+        relative_return_6m=-0.1007,
+        base_upside=2.01,
+        composite_score=34.54,
+    )
+
+    v2 = apply_candidate_gates(pd.DataFrame([row]), V2_CONFIG).iloc[0]
+    v1 = apply_candidate_gates(pd.DataFrame([row]), CONFIG).iloc[0]
+
+    assert bool(v2["eligible"])
+    assert v2["exclusion_reasons"] == ""
+    assert not bool(v1["eligible"])
+    assert v1["exclusion_reasons"] == "oversold_score_below_threshold"
+
+
+@pytest.mark.parametrize(
+    ("composite_score", "eligible", "reason"),
+    [
+        (29.99, False, "composite_score_below_v2_threshold"),
+        (30.0, True, ""),
+        (
+            Decimal("29.999999999999999999999999999999"),
+            False,
+            "composite_score_below_v2_threshold",
+        ),
+        (Decimal("30.000000000000000000000000000001"), True, ""),
+    ],
+)
+def test_v2_gate_compares_composite_threshold_without_float_rounding(
+    composite_score, eligible, reason
+):
+    result = apply_candidate_gates(
+        pd.DataFrame([gate_rows(oversold_score=0.0, composite_score=composite_score)]),
+        V2_CONFIG,
+    ).iloc[0]
+
+    assert bool(result["eligible"]) is eligible
+    assert result["exclusion_reasons"] == reason
+
+
+def test_v2_gate_preserves_missing_composite_reason_and_sorts_all_reasons():
+    missing = apply_candidate_gates(
+        pd.DataFrame([gate_rows(oversold_score=np.nan, composite_score=np.nan)]),
+        V2_CONFIG,
+    ).iloc[0]
+    assert missing["exclusion_reasons"] == "composite_score_missing"
+
+    failing = apply_candidate_gates(
+        pd.DataFrame(
+            [
+                gate_rows(
+                    included=False,
+                    relative_return_6m=0.0,
+                    oversold_score=0.0,
+                    composite_score=29.0,
+                )
+            ]
+        ),
+        V2_CONFIG,
+    ).iloc[0]
+    assert failing["exclusion_reasons"] == "|".join(
+        sorted(
+            {
+                "universe_excluded",
+                "relative_return_threshold_not_met",
+                "composite_score_below_v2_threshold",
+            }
+        )
+    )
 
 
 def test_price_gate_uses_or_and_completed_repair_requires_positive_normals():
@@ -770,6 +861,240 @@ def test_unified_rank_validates_columns_assets_and_empty_schema():
     assert "final_rank" in empty.columns
 
 
+def test_v2_rank_uses_exact_fifty_five_forty_five_percentile_formula():
+    rows = pd.DataFrame(
+        [
+            v2_rank_rows(asset_id="A", composite_score=10.0, activation_score=100.0),
+            v2_rank_rows(asset_id="B", composite_score=20.0, activation_score=50.0),
+            v2_rank_rows(asset_id="C", composite_score=30.0, activation_score=0.0),
+        ]
+    )
+
+    result = scoring_module.rank_v2_candidates(rows, V2_CONFIG).set_index("asset_id")
+
+    assert result.loc["A", "repair_rank_percentile"] == 0.0
+    assert result.loc["A", "activation_rank_percentile"] == 100.0
+    assert result.loc["A", "final_rank_score_v2"] == pytest.approx(45.0)
+    assert result.loc["B", "final_rank_score_v2"] == pytest.approx(50.0)
+    assert result.loc["C", "final_rank_score_v2"] == pytest.approx(55.0)
+    assert result["final_rank_score"].equals(result["final_rank_score_v2"])
+    assert result.sort_values("final_rank").index.tolist() == ["C", "B", "A"]
+
+
+def test_v2_rank_uses_required_tiebreak_order():
+    activation_first = scoring_module.rank_v2_candidates(
+        pd.DataFrame(
+            [
+                v2_rank_rows(asset_id="A", composite_score=10.0, activation_score=20.0),
+                v2_rank_rows(asset_id="B", composite_score=20.0, activation_score=10.0),
+            ]
+        ),
+        replace(
+            V2_CONFIG,
+            v2_repair_rank_weight=0.5,
+            v2_activation_rank_weight=0.5,
+        ),
+    )
+    assert activation_first["asset_id"].tolist() == ["A", "B"]
+
+    repair_second = scoring_module.rank_v2_candidates(
+        pd.DataFrame(
+            [
+                v2_rank_rows(asset_id="A", composite_score=10.0, activation_score=20.0),
+                v2_rank_rows(asset_id="B", composite_score=20.0, activation_score=20.0),
+            ]
+        ),
+        replace(
+            V2_CONFIG,
+            v2_repair_rank_weight=0.0,
+            v2_activation_rank_weight=1.0,
+        ),
+    )
+    assert repair_second["asset_id"].tolist() == ["B", "A"]
+
+    asset_id_last = scoring_module.rank_v2_candidates(
+        pd.DataFrame([v2_rank_rows(asset_id="B"), v2_rank_rows(asset_id="A")]),
+        V2_CONFIG,
+    )
+    assert asset_id_last["asset_id"].tolist() == ["A", "B"]
+    assert asset_id_last["final_rank"].tolist() == [1, 2]
+
+
+def test_v2_rank_is_shuffle_deterministic_and_ignores_stock_identity_columns():
+    rows = pd.DataFrame(
+        [
+            v2_rank_rows(
+                asset_id="A", composite_score=10.0, activation_score=30.0,
+                stock_code="ZZZ", stock_name="last",
+            ),
+            v2_rank_rows(
+                asset_id="B", composite_score=20.0, activation_score=20.0,
+                stock_code="AAA", stock_name="first",
+            ),
+            v2_rank_rows(
+                asset_id="C", composite_score=30.0, activation_score=10.0,
+                stock_code="MMM", stock_name="middle",
+            ),
+        ]
+    )
+
+    expected = scoring_module.rank_v2_candidates(rows, V2_CONFIG)
+    shuffled = scoring_module.rank_v2_candidates(
+        rows.sample(frac=1.0, random_state=7), V2_CONFIG
+    )
+
+    pd.testing.assert_frame_equal(expected, shuffled)
+
+
+def test_v2_rank_candidate_universe_excludes_incomplete_rows_from_percentiles():
+    rows = pd.DataFrame(
+        [
+            v2_rank_rows(asset_id="LOW", composite_score=10.0, activation_score=10.0),
+            v2_rank_rows(
+                asset_id="HIGH",
+                repair_bucket="unrecognized_but_not_a_rank_filter",
+                composite_score=20.0,
+                activation_score=20.0,
+            ),
+            v2_rank_rows(
+                asset_id="INELIGIBLE",
+                eligible=False,
+                composite_score=1000.0,
+                activation_score=1000.0,
+            ),
+            v2_rank_rows(
+                asset_id="UNCOVERED",
+                activation_coverage=False,
+                composite_score=np.nan,
+                activation_score=np.nan,
+            ),
+            v2_rank_rows(
+                asset_id="ACTIVATION_FAIL",
+                activation_eligible=False,
+                composite_score=-1000.0,
+                activation_score=-1000.0,
+            ),
+        ]
+    )
+
+    result = scoring_module.rank_v2_candidates(rows, V2_CONFIG).set_index("asset_id")
+
+    assert result.index.tolist() == ["HIGH", "LOW"]
+    assert result.loc["LOW", "repair_rank_percentile"] == 0.0
+    assert result.loc["LOW", "activation_rank_percentile"] == 0.0
+    assert result.loc["HIGH", "repair_rank_percentile"] == 100.0
+    assert result.loc["HIGH", "activation_rank_percentile"] == 100.0
+
+
+def test_v2_rank_single_and_all_equal_cross_sections_return_fifty():
+    single = scoring_module.rank_v2_candidates(
+        pd.DataFrame([v2_rank_rows()]), V2_CONFIG
+    ).iloc[0]
+    assert single["repair_rank_percentile"] == 50.0
+    assert single["activation_rank_percentile"] == 50.0
+    assert single["final_rank_score_v2"] == 50.0
+
+    equal = scoring_module.rank_v2_candidates(
+        pd.DataFrame([v2_rank_rows(asset_id="B"), v2_rank_rows(asset_id="A")]),
+        V2_CONFIG,
+    )
+    assert equal["asset_id"].tolist() == ["A", "B"]
+    assert equal["final_rank_score_v2"].tolist() == [50.0, 50.0]
+
+
+@pytest.mark.parametrize("field", ["composite_score", "activation_score"])
+def test_v2_rank_rejects_missing_selected_values(field):
+    with pytest.raises(ValueError, match=rf"asset A.*{field}"):
+        scoring_module.rank_v2_candidates(
+            pd.DataFrame([v2_rank_rows(**{field: np.nan})]), V2_CONFIG
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "invalid"),
+    [
+        ("eligible", 1),
+        ("activation_coverage", "true"),
+        ("activation_eligible", np.nan),
+        ("composite_score", True),
+        ("activation_score", Fraction(1, 2)),
+    ],
+)
+def test_v2_rank_rejects_non_strict_values(field, invalid):
+    with pytest.raises(ValueError, match=field):
+        scoring_module.rank_v2_candidates(
+            pd.DataFrame([v2_rank_rows(**{field: invalid})]), V2_CONFIG
+        )
+
+
+def test_v2_rank_rejects_malformed_numeric_even_when_row_is_excluded():
+    with pytest.raises(ValueError, match="activation_score"):
+        scoring_module.rank_v2_candidates(
+            pd.DataFrame(
+                [v2_rank_rows(eligible=False, activation_score="not numeric")]
+            ),
+            V2_CONFIG,
+        )
+
+
+def test_v2_rank_validates_version_columns_assets_indexes_and_empty_schema():
+    rows = pd.DataFrame([v2_rank_rows()])
+    with pytest.raises(
+        ValueError, match="^rank_v2_candidates requires ranking_version v2$"
+    ):
+        scoring_module.rank_v2_candidates(rows, CONFIG)
+    with pytest.raises(ValueError, match="activation_score"):
+        scoring_module.rank_v2_candidates(
+            rows.drop(columns="activation_score"), V2_CONFIG
+        )
+    with pytest.raises(ValueError, match="duplicate asset_id A"):
+        scoring_module.rank_v2_candidates(
+            pd.DataFrame(
+                [v2_rank_rows(asset_id=" A "), v2_rank_rows(asset_id="A")]
+            ),
+            V2_CONFIG,
+        )
+    for invalid in (" ", 1):
+        with pytest.raises(ValueError, match="asset_id"):
+            scoring_module.rank_v2_candidates(
+                pd.DataFrame([v2_rank_rows(asset_id=invalid)]), V2_CONFIG
+            )
+
+    duplicate_index = pd.DataFrame(
+        [
+            v2_rank_rows(
+                asset_id=" B ", composite_score=10.0, activation_score=10.0
+            ),
+            v2_rank_rows(asset_id="A", composite_score=20.0, activation_score=20.0),
+            v2_rank_rows(asset_id="C", composite_score=30.0, activation_score=30.0),
+        ],
+        index=[7, 7, 9],
+    )
+    ranked = scoring_module.rank_v2_candidates(duplicate_index, V2_CONFIG)
+    assert ranked["asset_id"].tolist() == ["C", "A", "B"]
+
+    empty = scoring_module.rank_v2_candidates(pd.DataFrame(), V2_CONFIG)
+    assert empty.empty
+    assert list(empty.columns) == V2_RANK_COLUMNS_FOR_TEST + [
+        "repair_rank_percentile",
+        "activation_rank_percentile",
+        "final_rank_score_v2",
+        "final_rank_score",
+        "final_rank",
+    ]
+
+
+def test_v2_rank_does_not_mutate_input():
+    rows = pd.DataFrame(
+        [v2_rank_rows(asset_id=" B "), v2_rank_rows(asset_id="A")], index=[5, 3]
+    )
+    original = rows.copy(deep=True)
+
+    scoring_module.rank_v2_candidates(rows, V2_CONFIG)
+
+    pd.testing.assert_frame_equal(rows, original)
+
+
 @pytest.mark.parametrize(
     ("function", "rows"),
     [
@@ -822,4 +1147,14 @@ RANK_COLUMNS_FOR_TEST = [
     "eligible",
     "composite_score",
     "base_upside",
+]
+
+V2_RANK_COLUMNS_FOR_TEST = [
+    "asset_id",
+    "repair_bucket",
+    "eligible",
+    "composite_score",
+    "activation_coverage",
+    "activation_eligible",
+    "activation_score",
 ]

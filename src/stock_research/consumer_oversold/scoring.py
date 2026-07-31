@@ -108,6 +108,15 @@ UNIFIED_RANK_REQUIRED_COLUMNS = (
     "elasticity_coverage",
     "elasticity_score",
 )
+V2_RANK_REQUIRED_COLUMNS = (
+    "asset_id",
+    "repair_bucket",
+    "eligible",
+    "composite_score",
+    "activation_coverage",
+    "activation_eligible",
+    "activation_score",
+)
 
 
 def _require_columns(frame: pd.DataFrame, required: tuple[str, ...], name: str) -> None:
@@ -453,8 +462,13 @@ def apply_candidate_gates(rows: pd.DataFrame, config: ConsumerOversoldConfig) ->
             config.min_relative_return,
         ):
             reasons.add("relative_return_threshold_not_met")
-        if math.isnan(row.oversold_score) or not _decimal_aware_ge(
-            raw_row.oversold_score, row.oversold_score, config.min_oversold_score
+        if config.ranking_version == "v1" and (
+            math.isnan(row.oversold_score)
+            or not _decimal_aware_ge(
+                raw_row.oversold_score,
+                row.oversold_score,
+                config.min_oversold_score,
+            )
         ):
             reasons.add("oversold_score_below_threshold")
         if math.isnan(row.base_upside) or not _decimal_aware_ge(
@@ -513,6 +527,12 @@ def apply_candidate_gates(rows: pd.DataFrame, config: ConsumerOversoldConfig) ->
             reasons.add("repair_already_completed")
         if math.isnan(row.composite_score):
             reasons.add("composite_score_missing")
+        elif config.ranking_version == "v2" and not _decimal_aware_ge(
+            raw_row.composite_score,
+            row.composite_score,
+            config.v2_min_composite_score,
+        ):
+            reasons.add("composite_score_below_v2_threshold")
 
         ordered_reasons = sorted(reasons)
         eligible_values.append(not ordered_reasons)
@@ -571,6 +591,68 @@ def _rank_percentile(values: pd.Series) -> pd.Series:
     ranks = valid.rank(method="average", ascending=True)
     result.loc[valid.index] = (ranks - 1.0) / (valid_count - 1.0) * 100.0
     return result
+
+
+def rank_v2_candidates(
+    scored_rows: pd.DataFrame,
+    config: ConsumerOversoldConfig,
+) -> pd.DataFrame:
+    """Return the deterministic V2 repair-plus-activation candidate ranking."""
+    if config.ranking_version != "v2":
+        raise ValueError("rank_v2_candidates requires ranking_version v2")
+
+    scored_rows = _supply_empty_schema(scored_rows, V2_RANK_REQUIRED_COLUMNS)
+    _require_columns(scored_rows, V2_RANK_REQUIRED_COLUMNS, "scored_rows")
+    frame = (
+        scored_rows.copy()
+        if scored_rows.empty
+        else _prepare_strict_assets(scored_rows, "scored_rows")
+    ).reset_index(drop=True)
+    _assign_numeric(frame, ("composite_score", "activation_score"), "scored_rows")
+    for field in ("eligible", "activation_coverage", "activation_eligible"):
+        parsed: list[bool] = []
+        for value, asset_id in zip(frame[field], frame["asset_id"], strict=True):
+            if not isinstance(value, (bool, np.bool_)):
+                raise ValueError(
+                    f"scored_rows asset {asset_id} field {field} must be a strict boolean"
+                )
+            parsed.append(bool(value))
+        frame[field] = parsed
+
+    ranked = frame.loc[
+        frame["eligible"]
+        & frame["activation_coverage"]
+        & frame["activation_eligible"]
+    ].copy()
+    for field in ("composite_score", "activation_score"):
+        invalid = ranked[field].isna()
+        if invalid.any():
+            asset_id = ranked.loc[invalid, "asset_id"].sort_values(kind="stable").iloc[0]
+            raise ValueError(
+                f"scored_rows asset {asset_id} field {field} must be present for V2 ranking"
+            )
+
+    ranked["repair_rank_percentile"] = _rank_percentile(ranked["composite_score"])
+    ranked["activation_rank_percentile"] = _rank_percentile(
+        ranked["activation_score"]
+    )
+    ranked["final_rank_score_v2"] = (
+        config.v2_repair_rank_weight * ranked["repair_rank_percentile"]
+        + config.v2_activation_rank_weight * ranked["activation_rank_percentile"]
+    )
+    ranked["final_rank_score"] = ranked["final_rank_score_v2"]
+    ranked = ranked.sort_values(
+        [
+            "final_rank_score_v2",
+            "activation_rank_percentile",
+            "repair_rank_percentile",
+            "asset_id",
+        ],
+        ascending=[False, False, False, True],
+        kind="stable",
+    )
+    ranked["final_rank"] = np.arange(1, len(ranked) + 1, dtype=int)
+    return ranked.reset_index(drop=True)
 
 
 def rank_unified_candidates(
