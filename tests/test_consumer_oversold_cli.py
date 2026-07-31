@@ -1196,6 +1196,125 @@ def test_v2_evaluate_uses_explicit_outcome_window_without_recomputing_snapshot(
     pdt.assert_frame_equal(ranked_pool, frozen_pool)
 
 
+def test_v2_evaluate_cli_deduplicates_calendar_rows_without_shifting_window(
+    monkeypatch, tmp_path, capsys
+):
+    from contextlib import contextmanager
+    from datetime import date
+
+    from stock_research.consumer_oversold import loaders
+
+    members = pd.DataFrame(
+        {"trade_date": ["2026-07-27"], "asset_id": ["A"], "final_rank": [1]}
+    )
+    release = tmp_path / "snapshot-release"
+    release.mkdir()
+    monkeypatch.setattr(
+        cli,
+        "_load_consumer_oversold_v2_snapshot",
+        lambda snapshot_dir: {
+            "trade_date": "2026-07-27",
+            "top20": members,
+            "top30": members,
+            "ranked_pool": members,
+            "coverage": {},
+            "release": release,
+            "manifest_sha256": "a" * 64,
+        },
+    )
+    raw_calendar_rows = [
+        {"trade_date": date(2026, 7, 28)},
+        {"trade_date": date(2026, 7, 28)},
+        {"trade_date": date(2026, 7, 29)},
+        {"trade_date": date(2026, 7, 29)},
+        {"trade_date": date(2026, 7, 30)},
+        {"trade_date": date(2026, 7, 30)},
+    ]
+
+    @contextmanager
+    def fake_connect(service):
+        assert service == "research_custom"
+        yield object()
+
+    def fake_fetch_all(conn, sql, params=None):
+        normalized = " ".join(sql.split())
+        if "SELECT DISTINCT trade_date" not in normalized:
+            return raw_calendar_rows
+        return [
+            raw_calendar_rows[index]
+            for index in range(0, len(raw_calendar_rows), 2)
+        ]
+
+    monkeypatch.setattr(loaders, "connect", fake_connect)
+    monkeypatch.setattr(loaders, "fetch_all", fake_fetch_all)
+    empty_hfq = pd.DataFrame(columns=["asset_id", "trade_date", "hfq_close"])
+    empty_raw = pd.DataFrame(
+        columns=[
+            "asset_id",
+            "trade_date",
+            "raw_open",
+            "raw_high",
+            "raw_low",
+            "raw_close",
+        ]
+    )
+    monkeypatch.setattr(
+        cli, "_load_consumer_v2_hfq_daily_closes", lambda **kwargs: empty_hfq
+    )
+    monkeypatch.setattr(
+        cli, "_load_consumer_v2_raw_daily_bars", lambda **kwargs: empty_raw
+    )
+    monkeypatch.setattr(
+        cli, "_load_consumer_v2_minute_outcome_bars", lambda **kwargs: pd.DataFrame()
+    )
+    captured = {}
+
+    def fake_evaluate(**kwargs):
+        captured["outcome_dates"] = kwargs["outcome_dates"]
+        return {
+            "detail": pd.DataFrame(),
+            "summary": pd.DataFrame(),
+            "minute_detail": pd.DataFrame(),
+            "coverage": {
+                "snapshot_trade_date": "2026-07-27",
+                "evaluation_status": "daily_incomplete",
+                "selected_asset_count": 1,
+                "qualified_pool_count": 1,
+            },
+        }
+
+    monkeypatch.setattr(cli, "_evaluate_consumer_oversold_v2_snapshot", fake_evaluate)
+    monkeypatch.setattr(
+        cli,
+        "_publish_consumer_oversold_v2_evaluation",
+        lambda **kwargs: {
+            key: str(tmp_path / filename)
+            for key, filename in cli._CONSUMER_OVERSOLD_V2_EVALUATION_FILENAMES.items()
+        },
+    )
+
+    cli.main_for_args(
+        [
+            "consumer-oversold-v2-evaluate",
+            "--snapshot-dir",
+            str(tmp_path / "snapshot" / "current"),
+            "--end-date",
+            "2026-07-30",
+            "--output-dir",
+            str(tmp_path / "evaluation"),
+            "--service",
+            "research_custom",
+        ]
+    )
+
+    assert captured["outcome_dates"] == (
+        "2026-07-28",
+        "2026-07-29",
+        "2026-07-30",
+    )
+    assert "consumer_oversold_v2_evaluation|report|" in capsys.readouterr().out
+
+
 def test_v2_evaluate_rejects_authoritative_calendar_beyond_end_date(monkeypatch, tmp_path):
     members = pd.DataFrame(
         {"trade_date": ["2026-07-27"], "asset_id": ["A"], "final_rank": [1]}

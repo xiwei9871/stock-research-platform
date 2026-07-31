@@ -816,6 +816,73 @@ def test_outcome_calendar_loader_returns_authoritative_open_dates(monkeypatch):
     assert params == ["2026-07-28", "2026-07-30"]
 
 
+def test_outcome_calendar_loader_deduplicates_exchange_rows_at_sql_boundary(
+    monkeypatch,
+):
+    raw_rows = [
+        {"trade_date": date(2026, 7, 28)},
+        {"trade_date": date(2026, 7, 28)},
+        {"trade_date": date(2026, 7, 29)},
+        {"trade_date": date(2026, 7, 29)},
+        {"trade_date": date(2026, 7, 30)},
+        {"trade_date": date(2026, 7, 30)},
+    ]
+    calls: list[tuple[str, list[object]]] = []
+
+    @contextmanager
+    def fake_connect(service):
+        assert service == "test"
+        yield object()
+
+    def fake_fetch_all(conn, sql, params=None):
+        normalized = " ".join(sql.split())
+        calls.append((normalized, list(params or [])))
+        if "SELECT DISTINCT trade_date" not in normalized:
+            return raw_rows
+        return [raw_rows[index] for index in range(0, len(raw_rows), 2)]
+
+    monkeypatch.setattr(loaders, "connect", fake_connect)
+    monkeypatch.setattr(loaders, "fetch_all", fake_fetch_all)
+
+    dates = loaders.load_consumer_v2_outcome_calendar(
+        "2026-07-28", "2026-07-30", service="test"
+    )
+
+    assert dates == ["2026-07-28", "2026-07-29", "2026-07-30"]
+    sql, params = calls[0]
+    assert "SELECT DISTINCT trade_date" in sql
+    assert "trade_date BETWEEN %s AND %s" in sql
+    assert params == ["2026-07-28", "2026-07-30"]
+
+
+@pytest.mark.parametrize(
+    ("rows", "message"),
+    [
+        (
+            [
+                {"trade_date": date(2026, 7, 29)},
+                {"trade_date": date(2026, 7, 28)},
+            ],
+            "duplicate or unordered",
+        ),
+        ([{"trade_date": date(2026, 7, 31)}], "outside requested range"),
+        (
+            [{"trade_date": date(2026, 7, 28), "exchange": "SSE"}],
+            "invalid outcome calendar row",
+        ),
+    ],
+)
+def test_outcome_calendar_loader_keeps_strict_boundary_validation(
+    monkeypatch, rows, message
+):
+    _install_db(monkeypatch, [rows])
+
+    with pytest.raises(ValueError, match=message):
+        loaders.load_consumer_v2_outcome_calendar(
+            "2026-07-28", "2026-07-30", service="test"
+        )
+
+
 @pytest.mark.parametrize(
     "loader",
     [

@@ -588,7 +588,7 @@ def load_consumer_v2_outcome_calendar(
 ) -> list[str]:
     start, end = _outcome_date_range(start_date, end_date)
     sql = """
-    SELECT trade_date
+    SELECT DISTINCT trade_date
     FROM market.trading_calendar
     WHERE is_open = TRUE
       AND trade_date BETWEEN %s AND %s
