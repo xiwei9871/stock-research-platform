@@ -515,14 +515,16 @@ function adminThemeResearchReportPath(reportVersionId: string, suffix = ''): str
 export async function fetchThemeResearchReports(
   themeId: string
 ): Promise<ThemeResearchReportListResponse> {
-  return getJson(themeResearchReportPath(themeId));
+  return getJson(themeResearchReportPath(themeId), { credentials: 'include' });
 }
 
 export async function fetchThemeResearchReportDocument(
   themeId: string,
   reportVersionId: string
 ): Promise<ThemeResearchReportDocument> {
-  return getJson(themeResearchReportPath(themeId, `/${encodeURIComponent(reportVersionId)}`));
+  return getJson(themeResearchReportPath(themeId, `/${encodeURIComponent(reportVersionId)}`), {
+    credentials: 'include'
+  });
 }
 
 export function themeResearchReportPdfUrl(themeId: string, reportVersionId: string): string {
@@ -533,13 +535,13 @@ export async function fetchAdminThemeResearchReports(
   status?: 'pending_review' | 'rejected'
 ): Promise<AdminThemeResearchReportListResponse> {
   const query = status ? `?status=${encodeURIComponent(status)}` : '';
-  return getJson(`${ADMIN_THEME_RESEARCH_REPORT_BASE}${query}`);
+  return getJson(`${ADMIN_THEME_RESEARCH_REPORT_BASE}${query}`, { credentials: 'include' });
 }
 
 export async function fetchAdminThemeResearchReport(
   reportVersionId: string
 ): Promise<AdminThemeResearchReportDocument> {
-  return getJson(adminThemeResearchReportPath(reportVersionId));
+  return getJson(adminThemeResearchReportPath(reportVersionId), { credentials: 'include' });
 }
 
 export function adminThemeResearchReportPdfUrl(reportVersionId: string): string {
@@ -567,7 +569,7 @@ export async function rejectThemeResearchReport(
 }
 
 export async function fetchThemeResearchReportIndexDiagnostics(): Promise<ThemeResearchReportIndexDiagnostics> {
-  return getJson('/api/admin/theme-research/report-index/status');
+  return getJson('/api/admin/theme-research/report-index/status', { credentials: 'include' });
 }
 
 export async function fetchStrategyScoreAudit(tradeDate: string): Promise<StrategyScoreAuditSummary> {

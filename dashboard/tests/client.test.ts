@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  DASHBOARD_AUTH_EXPIRED_EVENT,
   fetchCurrentUser,
   fetchAdminUsers,
   createAdminUser,
@@ -158,11 +159,13 @@ describe('dashboard API client', () => {
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      '/api/research/theme-decomposition/themes/theme%2Fa%20b/reports'
+      '/api/research/theme-decomposition/themes/theme%2Fa%20b/reports',
+      { credentials: 'include' }
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      '/api/research/theme-decomposition/themes/theme%2Fa%20b/reports/report%2F1'
+      '/api/research/theme-decomposition/themes/theme%2Fa%20b/reports/report%2F1',
+      { credentials: 'include' }
     );
     expect(themeResearchReportPdfUrl('theme/a b', 'report/1')).toBe(
       '/api/research/theme-decomposition/themes/theme%2Fa%20b/reports/report%2F1/pdf'
@@ -178,10 +181,18 @@ describe('dashboard API client', () => {
     await fetchAdminThemeResearchReport('report/1');
     await fetchThemeResearchReportIndexDiagnostics();
 
-    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/admin/theme-research/reports');
-    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/admin/theme-research/reports?status=rejected');
-    expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/admin/theme-research/reports/report%2F1');
-    expect(fetchMock).toHaveBeenNthCalledWith(4, '/api/admin/theme-research/report-index/status');
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/admin/theme-research/reports', {
+      credentials: 'include'
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/admin/theme-research/reports?status=rejected', {
+      credentials: 'include'
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/admin/theme-research/reports/report%2F1', {
+      credentials: 'include'
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(4, '/api/admin/theme-research/report-index/status', {
+      credentials: 'include'
+    });
     expect(adminThemeResearchReportPdfUrl('report/1')).toBe(
       '/api/admin/theme-research/reports/report%2F1/pdf'
     );
@@ -271,6 +282,22 @@ describe('dashboard API client', () => {
         comment: ''
       })
     ).rejects.toThrow('POST /api/admin/theme-research/reports/report/publish failed with 409: stale');
+  });
+
+  it('dispatches auth-expired when a protected theme report GET returns 401', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 401 });
+    const listener = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    window.addEventListener(DASHBOARD_AUTH_EXPIRED_EVENT, listener);
+
+    try {
+      await expect(fetchAdminThemeResearchReports()).rejects.toThrow(
+        'GET /api/admin/theme-research/reports failed with 401'
+      );
+      expect(listener).toHaveBeenCalledTimes(1);
+    } finally {
+      window.removeEventListener(DASHBOARD_AUTH_EXPIRED_EVENT, listener);
+    }
   });
 
   it('uses cookie credentials for auth session endpoints and csrf for logout', async () => {
