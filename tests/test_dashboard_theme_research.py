@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta, tzinfo
 import json
@@ -38,8 +39,35 @@ class _StatefulTimezone(tzinfo):
         return timedelta(hours=8) if self.calls == 1 else None
 
 
+class _ExplodingString:
+    def __str__(self) -> str:
+        raise RuntimeError("must not coerce")
+
+
+class _ExplodingMapping(Mapping):
+    def __getitem__(self, key):
+        raise RuntimeError("must fail closed")
+
+    def __iter__(self):
+        return iter(())
+
+    def __len__(self) -> int:
+        return 0
+
+
 def _context() -> dict:
     return deepcopy(theme_research._load_artifact_context())
+
+
+def _valid_analysis_report(**overrides) -> dict:
+    return {
+        "report_version_id": "published-report",
+        "version": "v1",
+        "published_at": "2026-08-01T09:30:00+08:00",
+        "has_pdf": False,
+        "metadata": {"secret": "must-not-leak"},
+        **overrides,
+    }
 
 
 def test_theme_index_aggregates_validated_phase_outputs():
@@ -220,6 +248,39 @@ def test_timezone_aware_published_timestamp_is_normalized_for_list_and_detail(
 
     assert index_row["analysis_report"]["published_at"] == expected
     assert detail["theme"]["analysis_report"]["published_at"] == expected
+
+
+@pytest.mark.parametrize(
+    "reports",
+    [
+        [],
+        _ExplodingMapping(),
+        {AI_POWER_THEME_ID: []},
+        {
+            AI_POWER_THEME_ID: _valid_analysis_report(
+                report_version_id=_ExplodingString()
+            )
+        },
+        {AI_POWER_THEME_ID: _valid_analysis_report(report_version_id=123)},
+        {AI_POWER_THEME_ID: _valid_analysis_report(report_version_id=" report-id ")},
+        {AI_POWER_THEME_ID: _valid_analysis_report(version=1)},
+        {AI_POWER_THEME_ID: _valid_analysis_report(version=" v1 ")},
+        {AI_POWER_THEME_ID: _valid_analysis_report(has_pdf="false")},
+        {AI_POWER_THEME_ID: _valid_analysis_report(has_pdf=1)},
+    ],
+)
+def test_malformed_report_summary_fails_closed_for_list_and_detail(reports) -> None:
+    context = _context()
+    context["analysis_reports_by_theme"] = reports
+
+    index = theme_research._list_theme_research_themes(context)
+    detail = theme_research._get_theme_research_theme(context, AI_POWER_THEME_ID)
+    index_row = next(
+        row for row in index["items"] if row["theme_id"] == AI_POWER_THEME_ID
+    )
+
+    assert index_row["analysis_report"] == {"status": "researching"}
+    assert detail["theme"]["analysis_report"] == {"status": "researching"}
 
 
 def test_node_collection_is_scoped_joined_and_stably_sorted():

@@ -1,25 +1,22 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 import copy
-from datetime import datetime
 from functools import lru_cache
 import json
-import re
 from typing import Any
 
 from stock_research.config import SETTINGS
+from stock_research.dashboard._theme_research_safety import (
+    normalize_aware_iso8601_timestamp,
+    normalize_report_identity,
+)
 from stock_research.db import connect, fetch_all
 from stock_research.theme_research_store import (
     build_theme_artifact_from_package,
     load_database_package,
 )
 from stock_research import theme_research_priority as priority
-
-
-_STRICT_AWARE_ISO8601_RE = re.compile(
-    r"\A\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}"
-    r"(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})\Z"
-)
 
 
 def load_db_context(
@@ -64,11 +61,27 @@ def _load_published_report_summaries(service: str) -> dict[str, dict[str, Any]]:
 
     summaries: dict[str, dict[str, Any]] = {}
     for row in rows:
-        theme_id = str(row.get("theme_id") or "").strip()
-        report_version_id = str(row.get("report_version_id") or "").strip()
-        version = str(row.get("version") or "").strip()
-        published_at = _json_safe_timestamp(row.get("published_at"))
-        if not theme_id or not report_version_id or not version or not published_at:
+        if not isinstance(row, Mapping):
+            continue
+        try:
+            theme_id = normalize_report_identity(row.get("theme_id"))
+            report_version_id = normalize_report_identity(
+                row.get("report_version_id")
+            )
+            version = normalize_report_identity(row.get("version"))
+            published_at = normalize_aware_iso8601_timestamp(
+                row.get("published_at")
+            )
+            has_pdf = row.get("has_pdf")
+        except Exception:
+            continue
+        if (
+            not theme_id
+            or not report_version_id
+            or not version
+            or not published_at
+            or type(has_pdf) is not bool
+        ):
             continue
         summaries.setdefault(
             theme_id,
@@ -76,45 +89,10 @@ def _load_published_report_summaries(service: str) -> dict[str, dict[str, Any]]:
                 "report_version_id": report_version_id,
                 "version": version,
                 "published_at": published_at,
-                "has_pdf": bool(row.get("has_pdf")),
+                "has_pdf": has_pdf,
             },
         )
     return summaries
-
-
-def _json_safe_timestamp(value: Any) -> str:
-    parsed: datetime
-    if isinstance(value, datetime):
-        parsed = value
-    elif isinstance(value, str):
-        text = value.strip()
-        if not text or text != value or _STRICT_AWARE_ISO8601_RE.fullmatch(text) is None:
-            return ""
-        if text.endswith("Z"):
-            text = f"{text[:-1]}+00:00"
-        try:
-            parsed = datetime.fromisoformat(text)
-        except ValueError:
-            return ""
-    else:
-        return ""
-    try:
-        if parsed.tzinfo is None or parsed.utcoffset() is None:
-            return ""
-        serialized = parsed.isoformat()
-    except Exception:
-        return ""
-    if _STRICT_AWARE_ISO8601_RE.fullmatch(serialized) is None:
-        return ""
-    try:
-        reparsed = datetime.fromisoformat(serialized)
-        if reparsed.tzinfo is None or reparsed.utcoffset() is None:
-            return ""
-    except Exception:
-        return ""
-    return serialized
-
-
 def load_asset_db_context(
     company_code: str,
     *,

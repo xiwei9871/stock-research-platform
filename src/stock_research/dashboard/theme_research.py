@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Mapping
 import copy
-from datetime import datetime
 import hashlib
 import json
 import os
-import re
 from typing import Any
 from urllib.parse import quote
 
+from stock_research.dashboard._theme_research_safety import (
+    normalize_aware_iso8601_timestamp,
+    normalize_report_identity,
+)
 from stock_research.theme_research_priority import (
     load_theme_research_priority_package,
 )
@@ -21,10 +24,6 @@ class ThemeResearchNotFoundError(LookupError):
 
 
 READ_SOURCES = {"artifact", "compare", "db"}
-_STRICT_AWARE_ISO8601_RE = re.compile(
-    r"\A\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}"
-    r"(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})\Z"
-)
 
 
 def configured_theme_research_read_source() -> str:
@@ -324,56 +323,38 @@ def _theme_index_row(
 def _analysis_report_summary(
     context: dict[str, Any], theme_id: str
 ) -> dict[str, Any]:
-    report = context.get("analysis_reports_by_theme", {}).get(theme_id)
-    if not isinstance(report, dict):
-        return {"status": "researching"}
-    report_version_id = str(report.get("report_version_id") or "").strip()
-    version = str(report.get("version") or "").strip()
-    published_at = _json_safe_timestamp(report.get("published_at"))
-    if not report_version_id or not version or not published_at:
-        return {"status": "researching"}
+    researching = {"status": "researching"}
+    try:
+        reports = context.get("analysis_reports_by_theme", {})
+        if not isinstance(reports, Mapping):
+            return researching
+        report = reports.get(theme_id)
+        if not isinstance(report, Mapping):
+            return researching
+        report_version_id = normalize_report_identity(
+            report.get("report_version_id")
+        )
+        version = normalize_report_identity(report.get("version"))
+        published_at = normalize_aware_iso8601_timestamp(
+            report.get("published_at")
+        )
+        has_pdf = report.get("has_pdf")
+    except Exception:
+        return researching
+    if (
+        not report_version_id
+        or not version
+        or not published_at
+        or type(has_pdf) is not bool
+    ):
+        return researching
     return {
         "status": "published",
         "report_version_id": report_version_id,
         "version": version,
         "published_at": published_at,
-        "has_pdf": bool(report.get("has_pdf")),
+        "has_pdf": has_pdf,
     }
-
-
-def _json_safe_timestamp(value: Any) -> str:
-    parsed: datetime
-    if isinstance(value, datetime):
-        parsed = value
-    elif isinstance(value, str):
-        text = value.strip()
-        if not text or text != value or _STRICT_AWARE_ISO8601_RE.fullmatch(text) is None:
-            return ""
-        if text.endswith("Z"):
-            text = f"{text[:-1]}+00:00"
-        try:
-            parsed = datetime.fromisoformat(text)
-        except ValueError:
-            return ""
-    else:
-        return ""
-    try:
-        if parsed.tzinfo is None or parsed.utcoffset() is None:
-            return ""
-        serialized = parsed.isoformat()
-    except Exception:
-        return ""
-    if _STRICT_AWARE_ISO8601_RE.fullmatch(serialized) is None:
-        return ""
-    try:
-        reparsed = datetime.fromisoformat(serialized)
-        if reparsed.tzinfo is None or reparsed.utcoffset() is None:
-            return ""
-    except Exception:
-        return ""
-    return serialized
-
-
 def _theme_node_rows(
     context: dict[str, Any], theme_id: str
 ) -> list[dict[str, Any]]:
