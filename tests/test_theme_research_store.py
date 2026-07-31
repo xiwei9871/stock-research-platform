@@ -11,6 +11,7 @@ from stock_research.theme_research_import import normalize_artifact_package
 from stock_research.theme_research_store import (
     _assert_runtime_connection,
     _assert_rollback_has_no_shared_source_changes,
+    _bootstrap_request_fingerprint,
     build_theme_artifact_from_package,
     create_snapshot,
     package_for_theme,
@@ -101,6 +102,36 @@ def test_authoritative_import_diff_accepts_exact_additive_change() -> None:
         forbid_updates=True,
         forbid_deactivations=True,
     )
+
+
+def test_bootstrap_idempotency_fingerprint_includes_guard_policy() -> None:
+    strict = _bootstrap_request_fingerprint(
+        package_sha256="package",
+        replace_theme="",
+        expected_generation=4,
+        required_theme_inserts=23,
+        forbid_updates=True,
+        forbid_deactivations=True,
+    )
+    repeated = _bootstrap_request_fingerprint(
+        package_sha256="package",
+        replace_theme="",
+        expected_generation=4,
+        required_theme_inserts=23,
+        forbid_updates=True,
+        forbid_deactivations=True,
+    )
+    unguarded = _bootstrap_request_fingerprint(
+        package_sha256="package",
+        replace_theme="",
+        expected_generation=4,
+        required_theme_inserts=None,
+        forbid_updates=False,
+        forbid_deactivations=False,
+    )
+
+    assert strict == repeated
+    assert strict != unguarded
 
 
 def test_package_for_theme_keeps_only_owned_rows() -> None:

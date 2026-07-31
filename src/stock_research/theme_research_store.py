@@ -344,13 +344,13 @@ def bootstrap_package(
         idempotency_key=idempotency_key,
     )
     desired = package_for_theme(package, replace_theme) if replace_theme else package
-    request_fingerprint = _request_fingerprint(
-        {
-            "change_type": "bootstrap_import",
-            "package_sha256": desired.package_sha256,
-            "replace_theme": replace_theme or "",
-            "expected_generation": expected_generation,
-        }
+    request_fingerprint = _bootstrap_request_fingerprint(
+        package_sha256=desired.package_sha256,
+        replace_theme=replace_theme or "",
+        expected_generation=expected_generation,
+        required_theme_inserts=required_theme_inserts,
+        forbid_updates=forbid_updates,
+        forbid_deactivations=forbid_deactivations,
     )
     with connect(service) as conn:
         with conn.cursor() as cur:
@@ -1653,6 +1653,28 @@ def _empty_package(artifact_version: str) -> NormalizedThemeResearchPackage:
 
 def _request_fingerprint(payload: dict[str, Any]) -> str:
     return hashlib.sha256(_canonical_json(payload).encode("utf-8")).hexdigest()
+
+
+def _bootstrap_request_fingerprint(
+    *,
+    package_sha256: str,
+    replace_theme: str,
+    expected_generation: int,
+    required_theme_inserts: int | None,
+    forbid_updates: bool,
+    forbid_deactivations: bool,
+) -> str:
+    return _request_fingerprint(
+        {
+            "change_type": "bootstrap_import",
+            "package_sha256": package_sha256,
+            "replace_theme": replace_theme,
+            "expected_generation": expected_generation,
+            "required_theme_inserts": required_theme_inserts,
+            "forbid_updates": forbid_updates,
+            "forbid_deactivations": forbid_deactivations,
+        }
+    )
 
 
 def _load_idempotent_result(
