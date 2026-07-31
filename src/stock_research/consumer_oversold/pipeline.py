@@ -289,6 +289,29 @@ def _validate_v2_rank_frame(
     return asset_ids
 
 
+def _validate_v2_selection_values(
+    selection: pd.DataFrame,
+    ranked_slice: pd.DataFrame,
+    name: str,
+) -> None:
+    shared_columns = [
+        column for column in selection.columns if column in ranked_slice.columns
+    ]
+    if not shared_columns:
+        raise ValueError(f"{name} has no shared columns with ranked_pool")
+    try:
+        pd.testing.assert_frame_equal(
+            selection.loc[:, shared_columns].reset_index(drop=True),
+            ranked_slice.loc[:, shared_columns].reset_index(drop=True),
+            check_dtype=False,
+            check_exact=True,
+        )
+    except AssertionError as exc:
+        raise ValueError(
+            f"{name} must equal ranked_pool slice across shared columns"
+        ) from exc
+
+
 def _validate_v2_compatibility_payload(payload: dict[str, Any]) -> None:
     if not isinstance(payload, dict):
         raise TypeError("payload must be a dict")
@@ -358,6 +381,22 @@ def _validate_v2_compatibility_payload(payload: dict[str, Any]) -> None:
         "reserve",
         start_rank=final_top_n + 1,
     )
+    pool_size = len(ranked_ids)
+    expected_top20_count = min(final_top_n, pool_size)
+    expected_top30_count = min(30, pool_size)
+    expected_reserve_count = min(
+        reserve_top_n,
+        max(0, pool_size - final_top_n),
+    )
+    for name, actual_count, expected_count in (
+        ("top20", len(top20_ids), expected_top20_count),
+        ("top30", len(top30_ids), expected_top30_count),
+        ("reserve", len(reserve_ids), expected_reserve_count),
+    ):
+        if actual_count != expected_count:
+            raise ValueError(
+                f"{name} length must equal ranked_pool selection size"
+            )
     if len(top20_ids) > final_top_n:
         raise ValueError("top20 length must not exceed final_top_n")
     if len(top30_ids) > 30:
@@ -371,6 +410,23 @@ def _validate_v2_compatibility_payload(payload: dict[str, Any]) -> None:
     expected_reserve = ranked_ids[final_top_n : final_top_n + len(reserve_ids)]
     if reserve_ids != expected_reserve:
         raise ValueError("reserve must follow top20 in ranked_pool order")
+    _validate_v2_selection_values(
+        payload["top20"],
+        ranked_frame.iloc[:expected_top20_count],
+        "top20",
+    )
+    _validate_v2_selection_values(
+        payload["top30"],
+        ranked_frame.iloc[:expected_top30_count],
+        "top30",
+    )
+    _validate_v2_selection_values(
+        payload["reserve"],
+        ranked_frame.iloc[
+            final_top_n : final_top_n + expected_reserve_count
+        ],
+        "reserve",
+    )
     if set(top20_ids) & set(reserve_ids):
         raise ValueError("top20 and reserve must be disjoint")
     preaudit_ids = set(payload["preaudit"]["asset_id"].astype(str).str.strip())

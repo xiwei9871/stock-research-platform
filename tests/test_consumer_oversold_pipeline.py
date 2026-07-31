@@ -1444,6 +1444,10 @@ def _v2_compatibility_payload(result: dict[str, object]) -> dict[str, object]:
         ("duplicate_top20", "top20 contains duplicate asset_id"),
         ("rank_gap", "top20 final_rank must be continuous"),
         ("score_order", "ranked_pool order must follow V2 score ordering"),
+        ("truncated_top20", "top20 length must equal ranked_pool selection size"),
+        ("truncated_top30", "top30 length must equal ranked_pool selection size"),
+        ("truncated_reserve", "reserve length must equal ranked_pool selection size"),
+        ("altered_content", "top20 must equal ranked_pool slice across shared columns"),
         ("activation_false", "top20 activation_eligible must be true"),
         ("preaudit_missing", "selected assets must be present in preaudit"),
         ("coverage_count", "v2_top30_count must equal top30 length"),
@@ -1475,6 +1479,16 @@ def test_v2_compatibility_publication_rejects_semantically_invalid_payloads(
         payload["ranked_pool"].loc[
             first_index, "final_rank_score_v2"
         ] = payload["ranked_pool"].loc[second_index, "final_rank_score_v2"] - 1.0
+    elif corruption == "truncated_top20":
+        payload["top20"] = payload["top20"].iloc[:-1].copy()
+    elif corruption == "truncated_top30":
+        payload["top30"] = payload["top30"].iloc[:-1].copy()
+    elif corruption == "truncated_reserve":
+        payload["reserve"] = payload["reserve"].iloc[:-1].copy()
+    elif corruption == "altered_content":
+        payload["top20"].loc[
+            payload["top20"].index[0], "activation_score"
+        ] += 1.0
     elif corruption == "activation_false":
         payload["top20"].loc[
             payload["top20"].index[0], "activation_eligible"
