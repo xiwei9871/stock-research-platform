@@ -69,6 +69,79 @@ from .universe import build_consumer_universe_from_frames
 
 INDUSTRY_RULES_PATH = SETTINGS.repo_root / "config" / "consumer_oversold_industry_rules_v1.csv"
 ASSET_OVERRIDES_PATH = SETTINGS.repo_root / "config" / "consumer_oversold_asset_overrides_v1.csv"
+RETROSPECTIVE_EVIDENCE_TRADE_DATE = "2026-07-27"
+RETROSPECTIVE_EVIDENCE_PUBLICATION_FIELDS = (
+    "source_publish_date",
+    "audit_review_source_publish_date",
+    "pledge_debt_review_source_publish_date",
+    "permanent_impairment_source_publish_date",
+)
+
+
+def validate_retrospective_evidence_publications(
+    evidence: pd.DataFrame,
+    *,
+    ranking_version: str,
+    trade_date: str,
+    reconstruction_mode: str,
+    information_cutoff: str,
+) -> dict[str, str]:
+    """Validate the underlying publication dates before retrospective sealing."""
+    if ranking_version != "v2":
+        raise ValueError("retrospective evidence reconstruction requires ranking_version v2")
+    normalized_trade_date = validate_trade_date(trade_date)
+    if normalized_trade_date != RETROSPECTIVE_EVIDENCE_TRADE_DATE:
+        raise ValueError(
+            "retrospective evidence reconstruction is only supported for 2026-07-27"
+        )
+    if reconstruction_mode != "retrospective_point_in_time":
+        raise ValueError(
+            "evidence_reconstruction_mode must be retrospective_point_in_time"
+        )
+    cutoff = validate_trade_date(information_cutoff)
+    if cutoff != normalized_trade_date:
+        raise ValueError("evidence_information_cutoff must equal trade_date")
+    if not isinstance(evidence, pd.DataFrame):
+        raise TypeError("evidence must be a pandas DataFrame")
+    missing_fields = [
+        field
+        for field in RETROSPECTIVE_EVIDENCE_PUBLICATION_FIELDS
+        if field not in evidence.columns
+    ]
+    if missing_fields:
+        raise ValueError(
+            "retrospective evidence missing publication fields: "
+            + ", ".join(missing_fields)
+        )
+    for row_number, row in enumerate(evidence.to_dict(orient="records"), start=2):
+        raw_asset_id = row.get("asset_id", "")
+        asset_id = (
+            ""
+            if pd.isna(raw_asset_id)
+            else str(raw_asset_id).strip()
+        ) or f"row {row_number}"
+        for field in RETROSPECTIVE_EVIDENCE_PUBLICATION_FIELDS:
+            raw_value = row.get(field)
+            value = "" if pd.isna(raw_value) else str(raw_value).strip()
+            if not value:
+                raise ValueError(
+                    f"missing evidence publication for {asset_id}: {field}"
+                )
+            try:
+                published = validate_trade_date(value)
+            except ValueError as exc:
+                raise ValueError(
+                    f"retrospective evidence {field} must use YYYY-MM-DD for {asset_id}"
+                ) from exc
+            if published > cutoff:
+                raise ValueError(
+                    "future evidence publication "
+                    f"for {asset_id}: {field}={published} exceeds {cutoff}"
+                )
+    return {
+        "evidence_reconstruction_mode": reconstruction_mode,
+        "evidence_information_cutoff": cutoff,
+    }
 
 REQUIRED_FRAME_KEYS = (
     "assets",
@@ -2081,21 +2154,23 @@ def run_consumer_oversold_weekly(
         evidence_reconstruction_mode is not None
         or evidence_information_cutoff is not None
     )
-    if reconstruction_requested:
-        if evidence_reconstruction_mode != "retrospective_point_in_time":
-            raise ValueError(
-                "evidence_reconstruction_mode must be retrospective_point_in_time"
-            )
-        cutoff = validate_trade_date(evidence_information_cutoff)
-        if cutoff != trade_date:
-            raise ValueError("evidence_information_cutoff must equal trade_date")
     evidence_file = Path(evidence_path).expanduser()
     if not evidence_file.is_file():
         raise FileNotFoundError(f"evidence path does not exist: {evidence_file}")
     evidence = pd.read_csv(evidence_file, dtype={"stock_code": "string"})
+    reconstruction_provenance: dict[str, str] = {}
     if reconstruction_requested:
+        reconstruction_provenance = validate_retrospective_evidence_publications(
+            evidence,
+            ranking_version=ranking_version,
+            trade_date=trade_date,
+            reconstruction_mode=evidence_reconstruction_mode,
+            information_cutoff=evidence_information_cutoff,
+        )
         evidence = evidence.copy(deep=True)
-        evidence["evidence_as_of_date"] = evidence_information_cutoff
+        evidence["evidence_as_of_date"] = reconstruction_provenance[
+            "evidence_information_cutoff"
+        ]
     industry_rules = pd.read_csv(INDUSTRY_RULES_PATH)
     asset_overrides = pd.read_csv(ASSET_OVERRIDES_PATH, dtype={"stock_code": "string"})
 
@@ -2170,7 +2245,6 @@ def run_consumer_oversold_weekly(
         return payload
     payload["coverage"] = {
         **payload["coverage"],
-        "evidence_reconstruction_mode": evidence_reconstruction_mode,
-        "evidence_information_cutoff": evidence_information_cutoff,
+        **reconstruction_provenance,
     }
     return write_consumer_oversold_artifacts(payload, output_dir=output_dir)

@@ -1529,12 +1529,6 @@ _CONSUMER_OVERSOLD_V2_PATH_KEYS = (
     "ranked_pool",
 )
 _CONSUMER_OVERSOLD_RETROSPECTIVE_DATE = "2026-07-27"
-_CONSUMER_OVERSOLD_EVIDENCE_PUBLICATION_FIELDS = (
-    "source_publish_date",
-    "audit_review_source_publish_date",
-    "pledge_debt_review_source_publish_date",
-    "permanent_impairment_source_publish_date",
-)
 _CONSUMER_OVERSOLD_V2_EVALUATION_FILENAMES = {
     "detail": "consumer_oversold_v2_evaluation_detail.csv",
     "summary": "consumer_oversold_v2_evaluation_summary.csv",
@@ -1573,40 +1567,21 @@ def _run_consumer_oversold_evaluation(**kwargs):
 def _validate_consumer_oversold_retrospective_evidence(
     *, evidence_path: str, information_cutoff: str
 ) -> dict[str, str]:
-    cutoff = _validate_consumer_oversold_trade_date(information_cutoff)
+    from stock_research.consumer_oversold.pipeline import (
+        validate_retrospective_evidence_publications,
+    )
+
     path = Path(evidence_path).expanduser()
     if not path.is_file():
         raise FileNotFoundError(f"evidence path does not exist: {path}")
     evidence = pd.read_csv(path, dtype=str, keep_default_na=False)
-    missing = [
-        field
-        for field in _CONSUMER_OVERSOLD_EVIDENCE_PUBLICATION_FIELDS
-        if field not in evidence.columns
-    ]
-    if missing:
-        raise ValueError(
-            "retrospective evidence missing publication fields: "
-            + ", ".join(missing)
-        )
-    for row_number, row in enumerate(evidence.to_dict(orient="records"), start=2):
-        asset_id = str(row.get("asset_id", "")).strip() or f"row {row_number}"
-        for field in _CONSUMER_OVERSOLD_EVIDENCE_PUBLICATION_FIELDS:
-            value = str(row.get(field, "")).strip()
-            try:
-                published = _validate_consumer_oversold_trade_date(value)
-            except ValueError as exc:
-                raise ValueError(
-                    f"retrospective evidence {field} must use YYYY-MM-DD for {asset_id}"
-                ) from exc
-            if published > cutoff:
-                raise ValueError(
-                    "future evidence publication "
-                    f"for {asset_id}: {field}={published} exceeds {cutoff}"
-                )
-    return {
-        "evidence_reconstruction_mode": "retrospective_point_in_time",
-        "evidence_information_cutoff": cutoff,
-    }
+    return validate_retrospective_evidence_publications(
+        evidence,
+        ranking_version="v2",
+        trade_date=information_cutoff,
+        reconstruction_mode="retrospective_point_in_time",
+        information_cutoff=information_cutoff,
+    )
 
 
 def _consumer_oversold_output_dir(value: str, ranking_version: str) -> str:
@@ -1710,6 +1685,21 @@ def _load_consumer_oversold_v2_snapshot(snapshot_dir: str) -> dict[str, object]:
     ):
         raise ValueError(
             "sealed 2026-07-27 V2 snapshot must include retrospective evidence provenance"
+        )
+    if trade_date == _CONSUMER_OVERSOLD_RETROSPECTIVE_DATE:
+        from stock_research.consumer_oversold.pipeline import (
+            validate_retrospective_evidence_publications,
+        )
+
+        sealed_evidence = pd.read_csv(
+            release / V2_OUTPUT_FILENAMES["evidence"], dtype=str
+        )
+        validate_retrospective_evidence_publications(
+            sealed_evidence,
+            ranking_version="v2",
+            trade_date=trade_date,
+            reconstruction_mode=coverage["evidence_reconstruction_mode"],
+            information_cutoff=coverage["evidence_information_cutoff"],
         )
     frames = {
         key: pd.read_csv(release / V2_OUTPUT_FILENAMES[key], dtype={"asset_id": str})
@@ -1957,6 +1947,8 @@ def _validate_consumer_oversold_machine_path(value, name: str) -> str:
 
 
 def _consumer_oversold_machine_lines(result, *, ranking_version: str = "v1") -> list[str]:
+    if ranking_version not in {"v1", "v2"}:
+        raise ValueError("consumer oversold ranking_version must be v1 or v2")
     paths = result["paths"]
     if not isinstance(paths, dict):
         raise ValueError("consumer oversold result paths must be a dict")
@@ -1999,6 +1991,7 @@ def _consumer_oversold_machine_lines(result, *, ranking_version: str = "v1") -> 
             f"consumer_oversold|{key}|{validated_paths[key]}"
             for key in path_keys
         ),
+        f"consumer_oversold|ranking_version|{ranking_version}",
         f"consumer_oversold|top20_rows|{top20_rows}",
         f"consumer_oversold|reserve_rows|{reserve_rows}",
         f"consumer_oversold|preaudit_rows|{preaudit_rows}",

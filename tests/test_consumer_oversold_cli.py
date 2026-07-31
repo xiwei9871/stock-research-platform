@@ -180,6 +180,7 @@ def test_consumer_oversold_weekly_dispatches_and_prints_machine_lines(monkeypatc
         "consumer_oversold|reserve|/tmp/consumer/reserve.csv",
         "consumer_oversold|preaudit|/tmp/consumer/preaudit.csv",
         "consumer_oversold|comparison|/tmp/consumer/comparison.csv",
+        "consumer_oversold|ranking_version|v1",
         "consumer_oversold|top20_rows|2",
         "consumer_oversold|reserve_rows|1",
         "consumer_oversold|preaudit_rows|3",
@@ -589,7 +590,9 @@ def test_consumer_oversold_weekly_accepts_v2_and_isolates_output_dir(
     assert captured["output_dir"] == str(Path("output") / "v2")
     assert captured["evidence_reconstruction_mode"] == "retrospective_point_in_time"
     assert captured["evidence_information_cutoff"] == "2026-07-27"
-    assert "consumer_oversold|top30|/tmp/consumer/top30.csv" in capsys.readouterr().out
+    output = capsys.readouterr().out.splitlines()
+    assert "consumer_oversold|top30|/tmp/consumer/top30.csv" in output
+    assert "consumer_oversold|ranking_version|v2" in output
 
 
 def test_consumer_oversold_weekly_rejects_non_lowercase_ranking_version():
@@ -736,6 +739,48 @@ def test_v2_snapshot_requires_retrospective_provenance_for_2026_07_27(
     )
 
     with pytest.raises(ValueError, match="retrospective evidence provenance"):
+        cli._load_consumer_oversold_v2_snapshot("snapshot/current")
+
+
+def test_v2_snapshot_revalidates_underlying_evidence_not_only_provenance(
+    monkeypatch, tmp_path
+):
+    from stock_research.consumer_oversold.contracts import V2_OUTPUT_FILENAMES
+
+    release = tmp_path / "release"
+    release.mkdir()
+    (release / V2_OUTPUT_FILENAMES["coverage"]).write_text(
+        json.dumps(
+            {
+                "trade_date": "2026-07-27",
+                "ranking_version": "v2",
+                "evidence_reconstruction_mode": "retrospective_point_in_time",
+                "evidence_information_cutoff": "2026-07-27",
+            }
+        ),
+        encoding="utf-8",
+    )
+    for key in ("top20", "top30", "ranked_pool"):
+        pd.DataFrame(
+            {"trade_date": ["2026-07-27"], "asset_id": ["A"], "final_rank": [1]}
+        ).to_csv(release / V2_OUTPUT_FILENAMES[key], index=False)
+    pd.DataFrame(
+        [
+            {
+                "asset_id": "A",
+                "source_publish_date": "2026-07-20",
+                "audit_review_source_publish_date": "2026-07-20",
+                "pledge_debt_review_source_publish_date": "2026-07-28",
+                "permanent_impairment_source_publish_date": "2026-07-20",
+            }
+        ]
+    ).to_csv(release / V2_OUTPUT_FILENAMES["evidence"], index=False)
+    (release / ".manifest.sha256").write_text("manifest\n", encoding="utf-8")
+    monkeypatch.setattr(
+        cli, "_verified_consumer_oversold_v2_release", lambda snapshot_dir: release
+    )
+
+    with pytest.raises(ValueError, match="future evidence publication"):
         cli._load_consumer_oversold_v2_snapshot("snapshot/current")
 
 

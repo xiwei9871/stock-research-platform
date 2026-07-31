@@ -679,6 +679,83 @@ def test_runner_rejects_missing_evidence_path(tmp_path):
         )
 
 
+@pytest.mark.parametrize(
+    ("ranking_version", "trade_date", "match"),
+    [
+        ("v1", "2026-07-27", "requires ranking_version v2"),
+        ("v2", "2026-07-28", "only supported for 2026-07-27"),
+    ],
+)
+def test_runner_restricts_retrospective_evidence_reconstruction_scope(
+    monkeypatch, tmp_path, ranking_version, trade_date, match
+):
+    from stock_research.consumer_oversold import pipeline
+
+    monkeypatch.setattr(pipeline, "INDUSTRY_RULES_PATH", tmp_path / "must-not-read.csv")
+    evidence_path = tmp_path / "evidence.csv"
+    pd.DataFrame(
+        [
+            {
+                "asset_id": "A",
+                "stock_code": "000001",
+                "source_publish_date": "2026-07-20",
+                "audit_review_source_publish_date": "2026-07-20",
+                "pledge_debt_review_source_publish_date": "2026-07-20",
+                "permanent_impairment_source_publish_date": "2026-07-20",
+            }
+        ]
+    ).to_csv(evidence_path, index=False)
+
+    with pytest.raises(ValueError, match=match):
+        run_consumer_oversold_weekly(
+            trade_date=trade_date,
+            evidence_path=evidence_path,
+            output_dir=tmp_path / "out",
+            ranking_version=ranking_version,
+            evidence_reconstruction_mode="retrospective_point_in_time",
+            evidence_information_cutoff=trade_date,
+        )
+
+
+@pytest.mark.parametrize(
+    ("bad_value", "match"),
+    [
+        ("2026-07-28", "future evidence publication"),
+        ("", "missing evidence publication"),
+        ("20260720", "must use YYYY-MM-DD"),
+    ],
+)
+def test_runner_rejects_unsealed_retrospective_underlying_publications(
+    monkeypatch, tmp_path, bad_value, match
+):
+    from stock_research.consumer_oversold import pipeline
+
+    monkeypatch.setattr(pipeline, "INDUSTRY_RULES_PATH", tmp_path / "must-not-read.csv")
+    evidence_path = tmp_path / "evidence.csv"
+    pd.DataFrame(
+        [
+            {
+                "asset_id": "A",
+                "stock_code": "000001",
+                "source_publish_date": "2026-07-20",
+                "audit_review_source_publish_date": "2026-07-20",
+                "pledge_debt_review_source_publish_date": bad_value,
+                "permanent_impairment_source_publish_date": "2026-07-20",
+            }
+        ]
+    ).to_csv(evidence_path, index=False)
+
+    with pytest.raises(ValueError, match=match):
+        run_consumer_oversold_weekly(
+            trade_date="2026-07-27",
+            evidence_path=evidence_path,
+            output_dir=tmp_path / "out",
+            ranking_version="v2",
+            evidence_reconstruction_mode="retrospective_point_in_time",
+            evidence_information_cutoff="2026-07-27",
+        )
+
+
 def test_unified_pipeline_builds_top60_top20_reserve_and_comparison_from_65_assets():
     frames, evidence, config = _many_frames(65, 45)
     evidence["repair_already_completed"] = False
