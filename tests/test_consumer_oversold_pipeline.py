@@ -766,6 +766,70 @@ def test_runner_rejects_unsealed_retrospective_underlying_publications(
         )
 
 
+def test_retrospective_v2_runner_preserves_trade_date_through_publication(
+    monkeypatch, tmp_path
+):
+    from stock_research.consumer_oversold import pipeline
+
+    frames, evidence, _ = _frames()
+    evidence_path = tmp_path / "evidence.csv"
+    evidence.to_csv(evidence_path, index=False)
+    rules_path = tmp_path / "rules.csv"
+    frames["industry_rules"].to_csv(rules_path, index=False)
+    overrides_path = tmp_path / "overrides.csv"
+    frames["asset_overrides"].to_csv(overrides_path, index=False)
+    monkeypatch.setattr(pipeline, "INDUSTRY_RULES_PATH", rules_path)
+    monkeypatch.setattr(pipeline, "ASSET_OVERRIDES_PATH", overrides_path)
+    monkeypatch.setattr(
+        pipeline,
+        "load_consumer_universe_frames",
+        lambda trade_date, service: {
+            key: frames[key]
+            for key in ("assets", "statuses", "liquidity", "industries")
+        },
+    )
+    market = frames["bars"].copy(deep=True)
+    market["raw_close"] = market["close"]
+    monkeypatch.setattr(
+        pipeline,
+        "load_consumer_market_history",
+        lambda trade_date, service, asset_ids=None: market,
+    )
+    monkeypatch.setattr(
+        pipeline,
+        "load_consumer_share_capacity",
+        lambda ids, trade_date, service: frames["share_capacity"],
+    )
+    monkeypatch.setattr(
+        pipeline,
+        "load_consumer_finance_history",
+        lambda ids, trade_date, service: frames["finance"],
+    )
+    monkeypatch.setattr(
+        pipeline,
+        "load_consumer_valuation_history",
+        lambda ids, trade_date, service: frames["valuation_history"].drop(
+            columns="consumer_subindustry"
+        ),
+    )
+
+    result = run_consumer_oversold_weekly(
+        trade_date="2026-07-27",
+        evidence_path=evidence_path,
+        output_dir=tmp_path / "out",
+        service="test-service",
+        ranking_version="v2",
+        evidence_reconstruction_mode="retrospective_point_in_time",
+        evidence_information_cutoff="2026-07-27",
+    )
+
+    assert result["coverage"]["trade_date"] == "2026-07-27"
+    persisted = json.loads(
+        Path(result["paths"]["coverage"]).read_text(encoding="utf-8")
+    )
+    assert persisted["trade_date"] == "2026-07-27"
+
+
 def test_unified_pipeline_builds_top60_top20_reserve_and_comparison_from_65_assets():
     frames, evidence, config = _many_frames(65, 45)
     evidence["repair_already_completed"] = False
@@ -1576,6 +1640,18 @@ def test_v2_output_dir_returns_persisted_normalized_coverage(tmp_path):
 
     assert result["coverage"] == persisted
     assert result["coverage"]["trade_date"] == TRADE_DATE
+
+
+def test_v2_in_memory_result_preserves_top_level_trade_date():
+    frames, evidence, config = _many_frames(45, 45)
+
+    result = build_consumer_oversold_weekly_from_frames(
+        frames=frames,
+        evidence=evidence,
+        config=_v2_config(config),
+    )
+
+    assert result["trade_date"] == TRADE_DATE
 
 
 def test_v2_preaudit_discovers_unevidenced_candidates_without_v1_oversold_gate():

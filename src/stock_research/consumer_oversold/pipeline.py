@@ -1505,6 +1505,7 @@ def _build_v2_result(
             "ranked_pool": ranked_pool,
         }
     return {
+        "trade_date": config.trade_date,
         "paths": {},
         "evidence": validated_evidence,
         "expected": v1_reference["ranked"]["expected"],
