@@ -17,6 +17,12 @@ from stock_research.theme_research_report_manifest import (
 
 _SYSTEM_ACTOR_USER_ID = "system"
 _PENDING_REVIEW = "pending_review"
+_PUBLISHED = "published"
+_REJECTED = "rejected"
+_ARCHIVED = "archived"
+_ADMIN_LIST_STATUSES = {_PENDING_REVIEW, _REJECTED}
+_COMMENT_MAX_LENGTH = 2_000
+_REASON_MAX_LENGTH = 4_000
 
 
 class ThemeResearchReportError(Exception):
@@ -207,6 +213,596 @@ def register_report_manifest(
         status=_PENDING_REVIEW,
         result="indexed",
     )
+
+
+def publish_report_version(
+    report_version_id: str,
+    *,
+    expected_row_version: int,
+    actor_user_id: str,
+    actor_role: str,
+    comment: str,
+    request_id: str,
+    idempotency_key: str,
+    service: str = SETTINGS.theme_research_runtime_service,
+) -> dict[str, Any]:
+    normalized = _validate_review_request(
+        report_version_id=report_version_id,
+        expected_row_version=expected_row_version,
+        actor_user_id=actor_user_id,
+        actor_role=actor_role,
+        request_id=request_id,
+        idempotency_key=idempotency_key,
+        comment=comment,
+    )
+    return _mutate_review_state(
+        action="publish",
+        to_status=_PUBLISHED,
+        expected_row_version=expected_row_version,
+        service=service,
+        **normalized,
+    )
+
+
+def reject_report_version(
+    report_version_id: str,
+    *,
+    expected_row_version: int,
+    actor_user_id: str,
+    actor_role: str,
+    reason: str,
+    request_id: str,
+    idempotency_key: str,
+    service: str = SETTINGS.theme_research_runtime_service,
+) -> dict[str, Any]:
+    normalized = _validate_review_request(
+        report_version_id=report_version_id,
+        expected_row_version=expected_row_version,
+        actor_user_id=actor_user_id,
+        actor_role=actor_role,
+        request_id=request_id,
+        idempotency_key=idempotency_key,
+        reason=reason,
+    )
+    return _mutate_review_state(
+        action="reject",
+        to_status=_REJECTED,
+        expected_row_version=expected_row_version,
+        service=service,
+        **normalized,
+    )
+
+
+def list_admin_report_versions(
+    *,
+    status: str = _PENDING_REVIEW,
+    service: str = SETTINGS.theme_research_runtime_service,
+) -> dict[str, Any]:
+    if status not in _ADMIN_LIST_STATUSES:
+        raise _invalid("status", "status must be pending_review or rejected")
+    rows = _read_rows(
+        """
+        SELECT *
+        FROM research.theme_research_report_version
+        WHERE status = %s
+        ORDER BY generated_at DESC, report_version_id
+        """,
+        (status,),
+        service=service,
+    )
+    items = [_admin_safe_row(row) for row in rows]
+    return {"total": len(items), "items": items}
+
+
+def get_admin_report_version(
+    report_version_id: str,
+    *,
+    service: str = SETTINGS.theme_research_runtime_service,
+) -> dict[str, Any]:
+    normalized_id = _required_review_text(report_version_id, "report_version_id")
+    rows = _read_rows(
+        """
+        SELECT *
+        FROM research.theme_research_report_version
+        WHERE report_version_id = %s
+        """,
+        (normalized_id,),
+        service=service,
+    )
+    if not rows:
+        raise _not_found()
+    return _admin_internal_row(rows[0])
+
+
+def list_approved_report_versions(
+    theme_id: str,
+    *,
+    service: str = SETTINGS.theme_research_runtime_service,
+) -> dict[str, Any]:
+    normalized_theme_id = _required_review_text(theme_id, "theme_id")
+    try:
+        with connect(service) as conn:
+            with conn.cursor() as cur:
+                _require_theme(cur, normalized_theme_id)
+                cur.execute(
+                    """
+                    SELECT *
+                    FROM research.theme_research_report_version
+                    WHERE theme_id = %s AND status IN ('published', 'archived')
+                    ORDER BY (status = 'published') DESC,
+                             published_at DESC NULLS LAST,
+                             report_version_id
+                    """,
+                    (normalized_theme_id,),
+                )
+                items = [_approved_safe_row(row) for row in cur.fetchall()]
+                return {"total": len(items), "items": items}
+    except ThemeResearchReportError:
+        raise
+    except psycopg.Error as exc:
+        raise _store_unavailable() from exc
+
+
+def get_approved_report_version(
+    theme_id: str,
+    report_version_id: str,
+    *,
+    service: str = SETTINGS.theme_research_runtime_service,
+) -> dict[str, Any]:
+    return _get_approved_row(
+        theme_id,
+        report_version_id,
+        service=service,
+        mapper=_approved_safe_row,
+    )
+
+
+def get_approved_report_artifact_record(
+    theme_id: str,
+    report_version_id: str,
+    *,
+    service: str = SETTINGS.theme_research_runtime_service,
+) -> dict[str, Any]:
+    return _get_approved_row(
+        theme_id,
+        report_version_id,
+        service=service,
+        mapper=_artifact_record,
+    )
+
+
+def _mutate_review_state(
+    *,
+    action: str,
+    to_status: str,
+    report_version_id: str,
+    expected_row_version: int,
+    actor_user_id: str,
+    request_id: str,
+    idempotency_key: str,
+    service: str,
+    comment: str = "",
+    reason: str = "",
+) -> dict[str, Any]:
+    try:
+        with connect(service) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT theme_id
+                    FROM research.theme_research_report_version
+                    WHERE report_version_id = %s
+                    """,
+                    (report_version_id,),
+                )
+                target_identity = cur.fetchone()
+                if target_identity is None:
+                    raise _not_found()
+                cur.execute(
+                    "SELECT pg_advisory_xact_lock(%s)",
+                    (_theme_advisory_lock_key(target_identity["theme_id"]),),
+                )
+                cur.execute(
+                    """
+                    SELECT *
+                    FROM research.theme_research_report_version
+                    WHERE report_version_id = %s
+                    FOR UPDATE
+                    """,
+                    (report_version_id,),
+                )
+                target = cur.fetchone()
+                if target is None:
+                    raise _not_found()
+                cur.execute(
+                    """
+                    SELECT report_version_id, to_status, created_at
+                    FROM research.theme_research_report_review_event
+                    WHERE actor_user_id = %s AND idempotency_key = %s
+                    """,
+                    (actor_user_id, idempotency_key),
+                )
+                previous = cur.fetchone()
+                if previous is not None:
+                    if (
+                        previous["report_version_id"] != report_version_id
+                        or previous["to_status"] != to_status
+                    ):
+                        raise ThemeResearchReportError(
+                            "THEME_REPORT_IDEMPOTENCY_CONFLICT",
+                            "idempotency key was already used for another review action",
+                        )
+                    return _replayed_admin_safe_row(target, previous)
+                if target["status"] != _PENDING_REVIEW:
+                    raise ThemeResearchReportError(
+                        "THEME_REPORT_STATE_CONFLICT",
+                        "theme research report is not pending review",
+                    )
+                if target["row_version"] != expected_row_version:
+                    raise ThemeResearchReportError(
+                        "THEME_REPORT_VERSION_CONFLICT",
+                        "theme research report row version is stale",
+                    )
+
+                if action == "publish":
+                    _archive_current_report(
+                        cur,
+                        target=target,
+                        actor_user_id=actor_user_id,
+                        request_id=request_id,
+                        idempotency_key=idempotency_key,
+                    )
+                    cur.execute(
+                        """
+                        UPDATE research.theme_research_report_version
+                        SET status = 'published', published_at = now(),
+                            published_by_user_id = %s, row_version = row_version + 1,
+                            updated_at = now()
+                        WHERE report_version_id = %s
+                          AND status = 'pending_review' AND row_version = %s
+                        RETURNING *
+                        """,
+                        (actor_user_id, report_version_id, expected_row_version),
+                    )
+                    updated = cur.fetchone()
+                    event_comment = comment
+                else:
+                    cur.execute(
+                        """
+                        UPDATE research.theme_research_report_version
+                        SET status = 'rejected', rejected_at = now(),
+                            rejected_by_user_id = %s, rejection_reason = %s,
+                            row_version = row_version + 1, updated_at = now()
+                        WHERE report_version_id = %s
+                          AND status = 'pending_review' AND row_version = %s
+                        RETURNING *
+                        """,
+                        (actor_user_id, reason, report_version_id, expected_row_version),
+                    )
+                    updated = cur.fetchone()
+                    event_comment = reason
+                if updated is None:
+                    raise ThemeResearchReportError(
+                        "THEME_REPORT_VERSION_CONFLICT",
+                        "theme research report row version is stale",
+                    )
+                _insert_review_event(
+                    cur,
+                    action=action,
+                    report_version_id=report_version_id,
+                    from_status=_PENDING_REVIEW,
+                    to_status=to_status,
+                    actor_user_id=actor_user_id,
+                    comment=event_comment,
+                    request_id=request_id,
+                    idempotency_key=idempotency_key,
+                )
+                return _admin_safe_row(updated)
+    except ThemeResearchReportError:
+        raise
+    except psycopg.errors.UniqueViolation as exc:
+        if exc.diag.constraint_name == "uq_theme_research_report_review_actor_idempotency":
+            raise ThemeResearchReportError(
+                "THEME_REPORT_IDEMPOTENCY_CONFLICT",
+                "idempotency key was already used for another review action",
+            ) from exc
+        raise _store_unavailable() from exc
+    except psycopg.errors.ForeignKeyViolation as exc:
+        if exc.diag.constraint_name in {
+            "fk_theme_research_report_version_published_by",
+            "fk_theme_research_report_version_rejected_by",
+        }:
+            raise ThemeResearchReportError(
+                "THEME_REPORT_ACTOR_NOT_FOUND",
+                "review actor was not found",
+            ) from exc
+        raise _store_unavailable() from exc
+    except psycopg.Error as exc:
+        raise _store_unavailable() from exc
+
+
+def _archive_current_report(
+    cur: psycopg.Cursor,
+    *,
+    target: dict[str, Any],
+    actor_user_id: str,
+    request_id: str,
+    idempotency_key: str,
+) -> None:
+    cur.execute(
+        """
+        UPDATE research.theme_research_report_version
+        SET status = 'archived', row_version = row_version + 1, updated_at = now()
+        WHERE theme_id = %s AND status = 'published'
+          AND report_version_id <> %s
+        RETURNING report_version_id
+        """,
+        (target["theme_id"], target["report_version_id"]),
+    )
+    for archived in cur.fetchall():
+        archived_id = archived["report_version_id"]
+        archive_key = f"{idempotency_key}:archive:{archived_id}"
+        _insert_review_event(
+            cur,
+            action="archive",
+            report_version_id=archived_id,
+            from_status=_PUBLISHED,
+            to_status=_ARCHIVED,
+            actor_user_id=actor_user_id,
+            comment=f"superseded by {target['report_version_id']}",
+            request_id=request_id,
+            idempotency_key=archive_key,
+        )
+
+
+def _insert_review_event(
+    cur: psycopg.Cursor,
+    *,
+    action: str,
+    report_version_id: str,
+    from_status: str,
+    to_status: str,
+    actor_user_id: str,
+    comment: str,
+    request_id: str,
+    idempotency_key: str,
+) -> None:
+    cur.execute(
+        """
+        INSERT INTO research.theme_research_report_review_event (
+            event_id, report_version_id, from_status, to_status,
+            actor_user_id, comment, request_id, idempotency_key
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """,
+        (
+            _review_event_id(action, actor_user_id, idempotency_key),
+            report_version_id,
+            from_status,
+            to_status,
+            actor_user_id,
+            comment,
+            request_id,
+            idempotency_key,
+        ),
+    )
+
+
+def _validate_review_request(
+    *,
+    report_version_id: str,
+    expected_row_version: int,
+    actor_user_id: str,
+    actor_role: str,
+    request_id: str,
+    idempotency_key: str,
+    comment: str | None = None,
+    reason: str | None = None,
+) -> dict[str, str]:
+    if actor_role != "admin":
+        raise ThemeResearchReportError(
+            "THEME_REPORT_ADMIN_REQUIRED",
+            "administrator role is required",
+        )
+    if (
+        not isinstance(expected_row_version, int)
+        or isinstance(expected_row_version, bool)
+        or expected_row_version < 1
+    ):
+        raise _invalid("expected_row_version", "expected_row_version must be at least 1")
+    values = {
+        "report_version_id": _required_review_text(report_version_id, "report_version_id"),
+        "actor_user_id": _required_review_text(actor_user_id, "actor_user_id"),
+        "request_id": _required_review_text(request_id, "request_id"),
+        "idempotency_key": _required_review_text(idempotency_key, "idempotency_key"),
+    }
+    if comment is not None:
+        if not isinstance(comment, str):
+            raise _invalid("comment", "comment must be a string")
+        if len(comment) > _COMMENT_MAX_LENGTH:
+            raise _invalid("comment", "comment is too long")
+        values["comment"] = comment
+    if reason is not None:
+        normalized_reason = _required_review_text(reason, "reason")
+        if len(normalized_reason) > _REASON_MAX_LENGTH:
+            raise _invalid("reason", "reason is too long")
+        values["reason"] = normalized_reason
+    return values
+
+
+def _required_review_text(value: str, field_name: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise _invalid(field_name, f"{field_name} must be a non-empty string")
+    return value.strip()
+
+
+def _invalid(field_name: str, message: str) -> ThemeResearchReportError:
+    return ThemeResearchReportError(
+        "THEME_REPORT_INPUT_INVALID",
+        message,
+        {"fields": [field_name]},
+    )
+
+
+def _not_found() -> ThemeResearchReportError:
+    return ThemeResearchReportError(
+        "THEME_REPORT_NOT_FOUND",
+        "theme research report was not found",
+    )
+
+
+def _store_unavailable() -> ThemeResearchReportError:
+    return ThemeResearchReportError(
+        "THEME_REPORT_STORE_UNAVAILABLE",
+        "theme research report store is unavailable",
+    )
+
+
+def _require_theme(cur: psycopg.Cursor, theme_id: str) -> None:
+    cur.execute(
+        "SELECT 1 FROM research.theme_research_theme WHERE theme_id = %s",
+        (theme_id,),
+    )
+    if cur.fetchone() is None:
+        raise ThemeResearchReportError(
+            "THEME_REPORT_THEME_NOT_FOUND",
+            "theme research report theme was not found",
+        )
+
+
+def _read_rows(
+    sql: str,
+    params: tuple[Any, ...],
+    *,
+    service: str,
+) -> list[dict[str, Any]]:
+    try:
+        with connect(service) as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql, params)
+                return list(cur.fetchall())
+    except psycopg.Error as exc:
+        raise _store_unavailable() from exc
+
+
+def _get_approved_row(
+    theme_id: str,
+    report_version_id: str,
+    *,
+    service: str,
+    mapper: Any,
+) -> dict[str, Any]:
+    normalized_theme_id = _required_review_text(theme_id, "theme_id")
+    normalized_id = _required_review_text(report_version_id, "report_version_id")
+    rows = _read_rows(
+        """
+        SELECT *
+        FROM research.theme_research_report_version
+        WHERE theme_id = %s AND report_version_id = %s
+          AND status IN ('published', 'archived')
+        """,
+        (normalized_theme_id, normalized_id),
+        service=service,
+    )
+    if not rows:
+        raise _not_found()
+    return mapper(rows[0])
+
+
+def _base_safe_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "report_version_id": row["report_version_id"],
+        "theme_id": row["theme_id"],
+        "version": row["version"],
+        "title": row["title"],
+        "summary": row["summary"],
+        "status": row["status"],
+        "generated_at": row["generated_at"],
+        "indexed_at": row["indexed_at"],
+        "published_at": row["published_at"],
+        "published_by_user_id": row["published_by_user_id"],
+        "row_version": row["row_version"],
+        "metadata": {},
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+    }
+
+
+def _admin_safe_row(row: dict[str, Any]) -> dict[str, Any]:
+    result = _base_safe_row(row)
+    result.update(
+        {
+            "rejected_at": row["rejected_at"],
+            "rejected_by_user_id": row["rejected_by_user_id"],
+            "rejection_reason": row["rejection_reason"],
+        }
+    )
+    return result
+
+
+def _approved_safe_row(row: dict[str, Any]) -> dict[str, Any]:
+    return _base_safe_row(row)
+
+
+def _replayed_admin_safe_row(
+    row: dict[str, Any],
+    event: dict[str, Any],
+) -> dict[str, Any]:
+    result = _admin_safe_row(row)
+    result["status"] = event["to_status"]
+    if event["to_status"] == _PUBLISHED and row["status"] == _ARCHIVED:
+        result["row_version"] = row["row_version"] - 1
+        result["updated_at"] = event["created_at"]
+    return result
+
+
+def _admin_internal_row(row: dict[str, Any]) -> dict[str, Any]:
+    result = _admin_safe_row(row)
+    result.update(
+        {
+            "metadata": copy.deepcopy(row["metadata"]),
+            "markdown_relative_path": row["markdown_relative_path"],
+            "markdown_sha256": row["markdown_sha256"],
+            "pdf_relative_path": row["pdf_relative_path"],
+            "pdf_sha256": row["pdf_sha256"],
+            "manifest_relative_path": row["manifest_relative_path"],
+            "manifest_sha256": row["manifest_sha256"],
+            "generator_name": row["generator_name"],
+            "generator_version": row["generator_version"],
+            "generator_metadata": copy.deepcopy(row["generator_metadata"]),
+        }
+    )
+    return result
+
+
+def _artifact_record(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "report_version_id": row["report_version_id"],
+        "theme_id": row["theme_id"],
+        "version": row["version"],
+        "status": row["status"],
+        "markdown_relative_path": row["markdown_relative_path"],
+        "markdown_sha256": row["markdown_sha256"],
+        "pdf_relative_path": row["pdf_relative_path"],
+        "pdf_sha256": row["pdf_sha256"],
+        "manifest_relative_path": row["manifest_relative_path"],
+        "manifest_sha256": row["manifest_sha256"],
+    }
+
+
+def _review_event_id(action: str, actor_user_id: str, idempotency_key: str) -> str:
+    return _stable_digest(
+        "theme-research-report-review-event",
+        action,
+        actor_user_id,
+        idempotency_key,
+    )
+
+
+def _theme_advisory_lock_key(theme_id: str) -> int:
+    digest = hashlib.sha256(
+        ("theme-research-report-review-lock\x00" + theme_id).encode("utf-8")
+    ).digest()
+    return int.from_bytes(digest[:8], "big", signed=True)
 
 
 def _required_identity(value: str, field_name: str) -> str:

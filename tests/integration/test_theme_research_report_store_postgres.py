@@ -13,6 +13,7 @@ from pathlib import Path
 import psycopg
 import pytest
 
+from stock_research import theme_research_report_store as report_store
 from stock_research.config import Settings
 from stock_research.theme_research_report_manifest import (
     ReportManifestLimits,
@@ -624,18 +625,23 @@ def _insert_report(postgres_conn, report_id: str, theme_id: str, version: str, *
         "manifest_sha256": "b" * 64,
         "generator_name": "integration-test",
         "generator_version": "1",
+        "generated_at": "2026-07-31T00:00:00Z",
+        "metadata": {},
     }
     values.update(overrides)
+    values["metadata"] = json.dumps(values["metadata"])
     postgres_conn.execute(
         """
         INSERT INTO research.theme_research_report_version (
             report_version_id, theme_id, version, title, summary, status,
             markdown_relative_path, markdown_sha256, pdf_relative_path, pdf_sha256,
-            manifest_relative_path, manifest_sha256, generator_name, generator_version
+            manifest_relative_path, manifest_sha256, generator_name, generator_version,
+            generated_at, metadata
         ) VALUES (
             %(report_version_id)s, %(theme_id)s, %(version)s, %(title)s, %(summary)s, %(status)s,
             %(markdown_relative_path)s, %(markdown_sha256)s, %(pdf_relative_path)s, %(pdf_sha256)s,
-            %(manifest_relative_path)s, %(manifest_sha256)s, %(generator_name)s, %(generator_version)s
+            %(manifest_relative_path)s, %(manifest_sha256)s, %(generator_name)s, %(generator_version)s,
+            %(generated_at)s, %(metadata)s::jsonb
         )
         """,
         values,
@@ -2380,3 +2386,700 @@ def test_postgres_runtime_service_registers_with_minimum_permissions(
         """,
         (result["report_version_id"],),
     ).fetchone()[0] == "system"
+
+
+def test_postgres_runtime_service_can_publish_with_minimum_permissions(
+    postgres_conn,
+) -> None:
+    if not TEST_RUNTIME_SERVICE:
+        pytest.skip("dedicated runtime test service is required")
+    theme_id = "report-runtime-review-theme"
+    actor_id = "report-runtime-review-admin"
+    report_id = "report-runtime-review-version"
+    _insert_theme(postgres_conn, theme_id)
+    _insert_user(postgres_conn, actor_id)
+    _insert_report(postgres_conn, report_id, theme_id, "v1")
+    postgres_conn.commit()
+    with psycopg.connect(f"service={TEST_RUNTIME_SERVICE}") as runtime_conn:
+        assert runtime_conn.execute(
+            "SELECT has_schema_privilege(current_user, 'identity', 'USAGE')"
+        ).fetchone()[0] is False
+
+    result = report_store.publish_report_version(
+        report_id,
+        expected_row_version=1,
+        actor_user_id=actor_id,
+        actor_role="admin",
+        comment="runtime approved",
+        request_id="runtime-review-request",
+        idempotency_key="runtime-review-key",
+        service=TEST_RUNTIME_SERVICE,
+    )
+
+    assert result["status"] == "published"
+    assert postgres_conn.execute(
+        "SELECT status, row_version FROM research.theme_research_report_version WHERE report_version_id = %s",
+        (report_id,),
+    ).fetchone() == ("published", 2)
+
+
+def test_postgres_publish_archives_current_and_exposes_safe_read_models(
+    postgres_conn,
+) -> None:
+    theme_id = "report-review-publish-theme"
+    actor_id = "report-review-publish-admin"
+    old_id = "report-review-published-old"
+    new_id = "report-review-pending-new"
+    _insert_theme(postgres_conn, theme_id)
+    _insert_user(postgres_conn, actor_id)
+    _insert_report(
+        postgres_conn,
+        old_id,
+        theme_id,
+        "v1",
+        status="published",
+    )
+    postgres_conn.execute(
+        """
+        UPDATE research.theme_research_report_version
+        SET published_at = '2026-07-30T00:00:00Z',
+            published_by_user_id = %s
+        WHERE report_version_id = %s
+        """,
+        (actor_id, old_id),
+    )
+    _insert_report(postgres_conn, new_id, theme_id, "v2")
+    postgres_conn.commit()
+
+    result = report_store.publish_report_version(
+        new_id,
+        expected_row_version=1,
+        actor_user_id=actor_id,
+        actor_role="admin",
+        comment="approved",
+        request_id="publish-request-1",
+        idempotency_key="publish-key-1",
+        service=TEST_SERVICE,
+    )
+
+    assert result["status"] == "published"
+    assert result["row_version"] == 2
+    assert result["published_by_user_id"] == actor_id
+    assert not any("path" in key or "sha256" in key for key in result)
+    stored = postgres_conn.execute(
+        """
+        SELECT report_version_id, status, row_version, published_at,
+               published_by_user_id, updated_at
+        FROM research.theme_research_report_version
+        WHERE report_version_id IN (%s, %s)
+        ORDER BY report_version_id
+        """,
+        (old_id, new_id),
+    ).fetchall()
+    assert [row[1] for row in stored] == ["published", "archived"]
+    assert {row[0]: row[2] for row in stored} == {new_id: 2, old_id: 2}
+    assert all(row[3] is not None and row[4] == actor_id and row[5] is not None for row in stored)
+
+    expected_target_event = hashlib.sha256(
+        ("theme-research-report-review-event\0publish\0" + actor_id + "\0publish-key-1").encode()
+    ).hexdigest()
+    archive_key = "publish-key-1:archive:" + old_id
+    expected_archive_event = hashlib.sha256(
+        ("theme-research-report-review-event\0archive\0" + actor_id + "\0" + archive_key).encode()
+    ).hexdigest()
+    events = postgres_conn.execute(
+        """
+        SELECT event_id, report_version_id, from_status, to_status,
+               actor_user_id, comment, request_id, idempotency_key
+        FROM research.theme_research_report_review_event
+        WHERE report_version_id IN (%s, %s)
+        ORDER BY to_status
+        """,
+        (old_id, new_id),
+    ).fetchall()
+    assert events == [
+        (
+            expected_archive_event,
+            old_id,
+            "published",
+            "archived",
+            actor_id,
+            "superseded by " + new_id,
+            "publish-request-1",
+            archive_key,
+        ),
+        (
+            expected_target_event,
+            new_id,
+            "pending_review",
+            "published",
+            actor_id,
+            "approved",
+            "publish-request-1",
+            "publish-key-1",
+        ),
+    ]
+
+    approved = report_store.list_approved_report_versions(theme_id, service=TEST_SERVICE)
+    assert approved["total"] == 2
+    assert [item["report_version_id"] for item in approved["items"]] == [new_id, old_id]
+    assert all(
+        not any(
+            forbidden in key
+            for forbidden in ("path", "sha256", "rejection", "generator")
+        )
+        for item in approved["items"]
+        for key in item
+    )
+    assert report_store.get_approved_report_version(theme_id, new_id, service=TEST_SERVICE) == approved["items"][0]
+    artifact = report_store.get_approved_report_artifact_record(theme_id, new_id, service=TEST_SERVICE)
+    assert artifact["markdown_relative_path"].endswith("/report.md")
+    assert artifact["markdown_sha256"] == "a" * 64
+    admin = report_store.get_admin_report_version(new_id, service=TEST_SERVICE)
+    assert admin["manifest_relative_path"].endswith("/manifest.json")
+    assert admin["generator_name"] == "integration-test"
+
+
+def test_postgres_rejects_pending_report_without_changing_current_publish(
+    postgres_conn,
+) -> None:
+    theme_id = "report-review-reject-theme"
+    actor_id = "report-review-reject-admin"
+    current_id = "report-review-reject-current"
+    pending_id = "report-review-reject-pending"
+    _insert_theme(postgres_conn, theme_id)
+    _insert_user(postgres_conn, actor_id)
+    _insert_report(postgres_conn, current_id, theme_id, "v1", status="published")
+    _insert_report(postgres_conn, pending_id, theme_id, "v2")
+    postgres_conn.commit()
+
+    result = report_store.reject_report_version(
+        pending_id,
+        expected_row_version=1,
+        actor_user_id=actor_id,
+        actor_role="admin",
+        reason="  incomplete citations  ",
+        request_id="reject-request-1",
+        idempotency_key="reject-key-1",
+        service=TEST_SERVICE,
+    )
+
+    assert result["status"] == "rejected"
+    assert result["rejection_reason"] == "incomplete citations"
+    assert result["rejected_by_user_id"] == actor_id
+    assert postgres_conn.execute(
+        "SELECT status FROM research.theme_research_report_version WHERE report_version_id = %s",
+        (current_id,),
+    ).fetchone()[0] == "published"
+    admin = report_store.list_admin_report_versions(status="rejected", service=TEST_SERVICE)
+    assert admin["total"] == 1
+    assert admin["items"][0]["report_version_id"] == pending_id
+    with pytest.raises(ThemeResearchReportError) as exc_info:
+        report_store.get_approved_report_version(theme_id, pending_id, service=TEST_SERVICE)
+    assert exc_info.value.code == "THEME_REPORT_NOT_FOUND"
+
+
+@pytest.mark.parametrize(
+    ("call", "expected_code"),
+    [
+        (
+            lambda report_id, actor_id: report_store.publish_report_version(
+                report_id,
+                expected_row_version=1,
+                actor_user_id=actor_id,
+                actor_role="user",
+                comment="",
+                request_id="permission-request",
+                idempotency_key="permission-key",
+                service=TEST_SERVICE,
+            ),
+            "THEME_REPORT_ADMIN_REQUIRED",
+        ),
+        (
+            lambda report_id, actor_id: report_store.publish_report_version(
+                report_id,
+                expected_row_version=1,
+                actor_user_id="missing-review-actor",
+                actor_role="admin",
+                comment="",
+                request_id="missing-actor-request",
+                idempotency_key="missing-actor-key",
+                service=TEST_SERVICE,
+            ),
+            "THEME_REPORT_ACTOR_NOT_FOUND",
+        ),
+    ],
+)
+def test_postgres_review_requires_admin_and_existing_actor_without_mutation(
+    postgres_conn,
+    call,
+    expected_code,
+) -> None:
+    theme_id = "report-review-permission-theme"
+    actor_id = "report-review-permission-admin"
+    report_id = "report-review-permission-version"
+    _insert_theme(postgres_conn, theme_id)
+    _insert_user(postgres_conn, actor_id)
+    _insert_report(postgres_conn, report_id, theme_id, "v1")
+    postgres_conn.commit()
+
+    with pytest.raises(ThemeResearchReportError) as exc_info:
+        call(report_id, actor_id)
+
+    assert exc_info.value.code == expected_code
+    assert postgres_conn.execute(
+        "SELECT status, row_version FROM research.theme_research_report_version WHERE report_version_id = %s",
+        (report_id,),
+    ).fetchone() == ("pending_review", 1)
+    assert postgres_conn.execute(
+        "SELECT count(*) FROM research.theme_research_report_review_event WHERE report_version_id = %s",
+        (report_id,),
+    ).fetchone()[0] == 0
+
+
+@pytest.mark.parametrize(
+    ("field_name", "overrides"),
+    [
+        ("expected_row_version", {"expected_row_version": 0}),
+        ("actor_user_id", {"actor_user_id": " "}),
+        ("request_id", {"request_id": ""}),
+        ("idempotency_key", {"idempotency_key": ""}),
+        ("comment", {"comment": "x" * 2_001}),
+    ],
+)
+def test_publish_review_validates_inputs_before_database_access(
+    monkeypatch,
+    field_name,
+    overrides,
+) -> None:
+    kwargs = {
+        "expected_row_version": 1,
+        "actor_user_id": "admin",
+        "actor_role": "admin",
+        "comment": "",
+        "request_id": "request",
+        "idempotency_key": "key",
+        "service": "must-not-connect",
+    }
+    kwargs.update(overrides)
+    monkeypatch.setattr(
+        report_store,
+        "connect",
+        lambda service: pytest.fail("invalid input must not connect"),
+    )
+
+    with pytest.raises(ThemeResearchReportError) as exc_info:
+        report_store.publish_report_version("report", **kwargs)
+
+    assert exc_info.value.code == "THEME_REPORT_INPUT_INVALID"
+    assert exc_info.value.details == {"fields": [field_name]}
+
+
+@pytest.mark.parametrize("reason", [" ", "x" * 4_001])
+def test_reject_review_requires_bounded_trimmed_reason(monkeypatch, reason) -> None:
+    monkeypatch.setattr(
+        report_store,
+        "connect",
+        lambda service: pytest.fail("invalid input must not connect"),
+    )
+
+    with pytest.raises(ThemeResearchReportError) as exc_info:
+        report_store.reject_report_version(
+            "report",
+            expected_row_version=1,
+            actor_user_id="admin",
+            actor_role="admin",
+            reason=reason,
+            request_id="request",
+            idempotency_key="key",
+            service="must-not-connect",
+        )
+
+    assert exc_info.value.code == "THEME_REPORT_INPUT_INVALID"
+    assert exc_info.value.details == {"fields": ["reason"]}
+
+
+def test_postgres_review_enforces_state_version_and_missing_errors(postgres_conn) -> None:
+    theme_id = "report-review-conflict-theme"
+    actor_id = "report-review-conflict-admin"
+    pending_id = "report-review-conflict-pending"
+    published_id = "report-review-conflict-published"
+    _insert_theme(postgres_conn, theme_id)
+    _insert_user(postgres_conn, actor_id)
+    _insert_report(postgres_conn, pending_id, theme_id, "v1")
+    _insert_report(postgres_conn, published_id, theme_id, "v2", status="published")
+    rejected_id = "report-review-conflict-rejected"
+    archived_id = "report-review-conflict-archived"
+    _insert_report(postgres_conn, rejected_id, theme_id, "v3", status="rejected")
+    _insert_report(postgres_conn, archived_id, theme_id, "v4", status="archived")
+    postgres_conn.commit()
+
+    calls = [
+        (
+            pending_id,
+            2,
+            "stale-key",
+            "THEME_REPORT_VERSION_CONFLICT",
+        ),
+        (
+            published_id,
+            1,
+            "state-key",
+            "THEME_REPORT_STATE_CONFLICT",
+        ),
+        (
+            "missing-review-report",
+            1,
+            "missing-key",
+            "THEME_REPORT_NOT_FOUND",
+        ),
+    ]
+    for report_id, row_version, key, expected_code in calls:
+        with pytest.raises(ThemeResearchReportError) as exc_info:
+            report_store.reject_report_version(
+                report_id,
+                expected_row_version=row_version,
+                actor_user_id=actor_id,
+                actor_role="admin",
+                reason="not approved",
+                request_id=f"request-{key}",
+                idempotency_key=key,
+                service=TEST_SERVICE,
+            )
+        assert exc_info.value.code == expected_code
+
+    for report_id in (published_id, rejected_id, archived_id):
+        with pytest.raises(ThemeResearchReportError) as exc_info:
+            report_store.publish_report_version(
+                report_id,
+                expected_row_version=1,
+                actor_user_id=actor_id,
+                actor_role="admin",
+                comment="approved",
+                request_id=f"publish-state-{report_id}",
+                idempotency_key=f"publish-state-{report_id}",
+                service=TEST_SERVICE,
+            )
+        assert exc_info.value.code == "THEME_REPORT_STATE_CONFLICT"
+
+
+def test_postgres_review_idempotency_retries_and_rejects_key_reuse(postgres_conn) -> None:
+    theme_id = "report-review-idempotent-theme"
+    actor_id = "report-review-idempotent-admin"
+    first_id = "report-review-idempotent-first"
+    second_id = "report-review-idempotent-second"
+    _insert_theme(postgres_conn, theme_id)
+    _insert_user(postgres_conn, actor_id)
+    _insert_report(postgres_conn, first_id, theme_id, "v1")
+    _insert_report(postgres_conn, second_id, theme_id, "v2")
+    postgres_conn.commit()
+    kwargs = {
+        "expected_row_version": 1,
+        "actor_user_id": actor_id,
+        "actor_role": "admin",
+        "comment": "approved",
+        "request_id": "idempotent-request",
+        "idempotency_key": "idempotent-key",
+        "service": TEST_SERVICE,
+    }
+
+    first = report_store.publish_report_version(first_id, **kwargs)
+    retried = report_store.publish_report_version(first_id, **kwargs)
+
+    assert retried == first
+    assert postgres_conn.execute(
+        "SELECT row_version FROM research.theme_research_report_version WHERE report_version_id = %s",
+        (first_id,),
+    ).fetchone()[0] == 2
+    assert postgres_conn.execute(
+        "SELECT count(*) FROM research.theme_research_report_review_event WHERE actor_user_id = %s AND idempotency_key = %s",
+        (actor_id, "idempotent-key"),
+    ).fetchone()[0] == 1
+
+    with pytest.raises(ThemeResearchReportError) as target_conflict:
+        report_store.publish_report_version(second_id, **kwargs)
+    assert target_conflict.value.code == "THEME_REPORT_IDEMPOTENCY_CONFLICT"
+    with pytest.raises(ThemeResearchReportError) as action_conflict:
+        report_store.reject_report_version(
+            first_id,
+            expected_row_version=1,
+            actor_user_id=actor_id,
+            actor_role="admin",
+            reason="reject instead",
+            request_id="idempotent-request",
+            idempotency_key="idempotent-key",
+            service=TEST_SERVICE,
+        )
+    assert action_conflict.value.code == "THEME_REPORT_IDEMPOTENCY_CONFLICT"
+
+    third_id = "report-review-idempotent-third"
+    _insert_report(postgres_conn, third_id, theme_id, "v3")
+    postgres_conn.commit()
+    report_store.publish_report_version(
+        third_id,
+        expected_row_version=1,
+        actor_user_id=actor_id,
+        actor_role="admin",
+        comment="new current",
+        request_id="third-request",
+        idempotency_key="third-key",
+        service=TEST_SERVICE,
+    )
+    replayed_after_archive = report_store.publish_report_version(first_id, **kwargs)
+    assert replayed_after_archive == first
+    assert postgres_conn.execute(
+        "SELECT status, row_version FROM research.theme_research_report_version WHERE report_version_id = %s",
+        (first_id,),
+    ).fetchone() == ("archived", 3)
+
+
+def test_postgres_concurrent_review_has_one_stale_winner_and_consistent_retry(
+    postgres_conn,
+) -> None:
+    theme_id = "report-review-concurrent-theme"
+    actor_id = "report-review-concurrent-admin"
+    report_id = "report-review-concurrent-version"
+    _insert_theme(postgres_conn, theme_id)
+    _insert_user(postgres_conn, actor_id)
+    _insert_report(postgres_conn, report_id, theme_id, "v1")
+    postgres_conn.commit()
+
+    def publish(key: str):
+        try:
+            return report_store.publish_report_version(
+                report_id,
+                expected_row_version=1,
+                actor_user_id=actor_id,
+                actor_role="admin",
+                comment="approved",
+                request_id=f"request-{key}",
+                idempotency_key=key,
+                service=TEST_SERVICE,
+            )
+        except ThemeResearchReportError as exc:
+            return exc
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        outcomes = list(executor.map(publish, ("concurrent-a", "concurrent-b")))
+    assert len([outcome for outcome in outcomes if isinstance(outcome, dict)]) == 1
+    errors = [outcome for outcome in outcomes if isinstance(outcome, ThemeResearchReportError)]
+    assert len(errors) == 1
+    assert errors[0].code == "THEME_REPORT_STATE_CONFLICT"
+
+    second_id = "report-review-concurrent-idempotent"
+    _insert_report(postgres_conn, second_id, theme_id, "v2")
+    postgres_conn.commit()
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        retries = list(executor.map(lambda _: publish_same(second_id, actor_id), range(2)))
+    assert retries[0] == retries[1]
+    assert postgres_conn.execute(
+        "SELECT count(*) FROM research.theme_research_report_review_event WHERE actor_user_id = %s AND idempotency_key = 'same-concurrent-key'",
+        (actor_id,),
+    ).fetchone()[0] == 1
+
+
+def publish_same(report_id: str, actor_id: str):
+    return report_store.publish_report_version(
+        report_id,
+        expected_row_version=1,
+        actor_user_id=actor_id,
+        actor_role="admin",
+        comment="approved",
+        request_id="same-concurrent-request",
+        idempotency_key="same-concurrent-key",
+        service=TEST_SERVICE,
+    )
+
+
+@pytest.mark.parametrize(
+    ("constraint_name", "constraint_expression"),
+    [
+        ("ck_theme_report_fail_target_event", "request_id <> 'fail-target-event'"),
+        ("ck_theme_report_fail_archive_event", "to_status <> 'archived'"),
+    ],
+)
+def test_postgres_publish_event_failure_rolls_back_everything(
+    postgres_conn,
+    constraint_name,
+    constraint_expression,
+) -> None:
+    from stock_research.theme_research_report_schema import apply_theme_research_report_schema
+
+    theme_id = f"report-review-rollback-{constraint_name}"
+    actor_id = f"report-review-admin-{constraint_name}"
+    old_id = f"report-review-old-{constraint_name}"
+    new_id = f"report-review-new-{constraint_name}"
+    _insert_theme(postgres_conn, theme_id)
+    _insert_user(postgres_conn, actor_id)
+    _insert_report(postgres_conn, old_id, theme_id, "v1", status="published")
+    _insert_report(postgres_conn, new_id, theme_id, "v2")
+    postgres_conn.execute(
+        f"""
+        ALTER TABLE research.theme_research_report_review_event
+        ADD CONSTRAINT {constraint_name} CHECK ({constraint_expression})
+        """
+    )
+    postgres_conn.commit()
+
+    try:
+        with pytest.raises(ThemeResearchReportError) as exc_info:
+            report_store.publish_report_version(
+                new_id,
+                expected_row_version=1,
+                actor_user_id=actor_id,
+                actor_role="admin",
+                comment="approved",
+                request_id="fail-target-event",
+                idempotency_key=f"rollback-{constraint_name}",
+                service=TEST_SERVICE,
+            )
+        assert exc_info.value.code == "THEME_REPORT_STORE_UNAVAILABLE"
+        assert postgres_conn.execute(
+            "SELECT report_version_id, status, row_version FROM research.theme_research_report_version WHERE report_version_id IN (%s, %s) ORDER BY report_version_id",
+            (old_id, new_id),
+        ).fetchall() == sorted(
+            [(old_id, "published", 1), (new_id, "pending_review", 1)]
+        )
+        assert postgres_conn.execute(
+            "SELECT count(*) FROM research.theme_research_report_review_event WHERE report_version_id IN (%s, %s)",
+            (old_id, new_id),
+        ).fetchone()[0] == 0
+    finally:
+        postgres_conn.rollback()
+        cleanup = psycopg.connect(f"service={TEST_SERVICE}")
+        try:
+            cleanup.execute(
+                f"ALTER TABLE research.theme_research_report_review_event DROP CONSTRAINT IF EXISTS {constraint_name}"
+            )
+            cleanup.commit()
+        finally:
+            cleanup.close()
+        apply_theme_research_report_schema(service=TEST_SERVICE)
+
+
+def test_postgres_admin_and_approved_read_models_validate_scope(postgres_conn) -> None:
+    theme_id = "report-review-read-theme"
+    _insert_theme(postgres_conn, theme_id)
+    _insert_report(
+        postgres_conn,
+        "report-review-read-newer",
+        theme_id,
+        "v2",
+        generated_at="2026-07-31T10:00:00Z",
+    )
+    _insert_report(
+        postgres_conn,
+        "report-review-read-older",
+        theme_id,
+        "v1",
+        generated_at="2026-07-30T10:00:00Z",
+    )
+    postgres_conn.commit()
+
+    pending = report_store.list_admin_report_versions(service=TEST_SERVICE)
+    assert [item["report_version_id"] for item in pending["items"]] == [
+        "report-review-read-newer",
+        "report-review-read-older",
+    ]
+    with pytest.raises(ThemeResearchReportError) as status_error:
+        report_store.list_admin_report_versions(status="published", service=TEST_SERVICE)
+    assert status_error.value.code == "THEME_REPORT_INPUT_INVALID"
+    with pytest.raises(ThemeResearchReportError) as theme_error:
+        report_store.list_approved_report_versions(
+            "missing-report-read-theme",
+            service=TEST_SERVICE,
+        )
+    assert theme_error.value.code == "THEME_REPORT_THEME_NOT_FOUND"
+
+
+def test_postgres_safe_read_models_sanitize_nested_internal_metadata(
+    postgres_conn,
+) -> None:
+    theme_id = "report-review-safe-metadata-theme"
+    report_id = "report-review-safe-metadata-version"
+    pending_id = "report-review-safe-metadata-pending"
+    unsafe_metadata = {
+        "source": {"kind": "production", "tags": ["primary"]},
+        "artifact": {
+            "path": "/srv/private/report.md",
+            "checksum": "a" * 64,
+        },
+        "generator": {"diagnostics": {"trace": "private stack"}},
+        "hidden_digest": "b" * 64,
+        "hidden_location": "theme/v1/report.md",
+        "artifact_alias": {"file": "report.md"},
+        "debug": "private diagnostics",
+        "hash": "sha256:private",
+    }
+    _insert_theme(postgres_conn, theme_id)
+    _insert_report(
+        postgres_conn,
+        report_id,
+        theme_id,
+        "v1",
+        status="published",
+        metadata=unsafe_metadata,
+    )
+    _insert_report(
+        postgres_conn,
+        pending_id,
+        theme_id,
+        "v2",
+        metadata=unsafe_metadata,
+    )
+    postgres_conn.commit()
+
+    approved = report_store.get_approved_report_version(
+        theme_id,
+        report_id,
+        service=TEST_SERVICE,
+    )
+    admin_safe = report_store.list_admin_report_versions(
+        status="pending_review",
+        service=TEST_SERVICE,
+    )
+    admin_internal = report_store.get_admin_report_version(
+        report_id,
+        service=TEST_SERVICE,
+    )
+
+    assert approved["metadata"] == {}
+    pending_safe = next(
+        item
+        for item in admin_safe["items"]
+        if item["report_version_id"] == pending_id
+    )
+    assert pending_safe["metadata"] == {}
+    assert admin_internal["metadata"] == unsafe_metadata
+
+
+def test_review_read_and_mutation_map_database_errors_without_leaking(monkeypatch) -> None:
+    database_error = psycopg.OperationalError("secret review database diagnostics")
+
+    @contextmanager
+    def unavailable(service):
+        raise database_error
+        yield
+
+    monkeypatch.setattr(report_store, "connect", unavailable)
+    calls = [
+        lambda: report_store.list_admin_report_versions(service="unavailable"),
+        lambda: report_store.get_admin_report_version("report", service="unavailable"),
+        lambda: report_store.list_approved_report_versions("theme", service="unavailable"),
+        lambda: report_store.publish_report_version(
+            "report",
+            expected_row_version=1,
+            actor_user_id="admin",
+            actor_role="admin",
+            comment="",
+            request_id="request",
+            idempotency_key="key",
+            service="unavailable",
+        ),
+    ]
+    for call in calls:
+        with pytest.raises(ThemeResearchReportError) as exc_info:
+            call()
+        assert exc_info.value.code == "THEME_REPORT_STORE_UNAVAILABLE"
+        assert "secret" not in str(exc_info.value).lower()
+        assert exc_info.value.__cause__ is database_error
