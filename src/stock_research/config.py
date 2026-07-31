@@ -41,6 +41,13 @@ def _env_int(name: str, default: int) -> int:
     return int(raw)
 
 
+def _theme_research_report_root() -> Path:
+    raw = os.environ.get("THEME_RESEARCH_REPORT_ROOT", "").strip()
+    if raw:
+        return Path(raw)
+    return _path_from_env("STOCK_RESEARCH_REPORTS_ROOT", "reports") / "theme-research"
+
+
 @dataclass(frozen=True)
 class Settings:
     research_service: str = "stock_research"
@@ -64,6 +71,19 @@ class Settings:
     repo_root: Path = field(default_factory=_repo_root)
     output_root: Path = field(default_factory=lambda: _path_from_env("STOCK_RESEARCH_OUTPUT_ROOT", "outputs"))
     reports_root: Path = field(default_factory=lambda: _path_from_env("STOCK_RESEARCH_REPORTS_ROOT", "reports"))
+    theme_research_report_root: Path = field(default_factory=_theme_research_report_root)
+    theme_research_report_scan_interval_seconds: int = field(
+        default_factory=lambda: _env_int("THEME_RESEARCH_REPORT_SCAN_INTERVAL_SECONDS", 60)
+    )
+    theme_research_report_max_manifest_bytes: int = field(
+        default_factory=lambda: _env_int("THEME_RESEARCH_REPORT_MAX_MANIFEST_BYTES", 64 * 1024)
+    )
+    theme_research_report_max_markdown_bytes: int = field(
+        default_factory=lambda: _env_int("THEME_RESEARCH_REPORT_MAX_MARKDOWN_BYTES", 10 * 1024 * 1024)
+    )
+    theme_research_report_max_pdf_bytes: int = field(
+        default_factory=lambda: _env_int("THEME_RESEARCH_REPORT_MAX_PDF_BYTES", 50 * 1024 * 1024)
+    )
     dashboard_auth_required: bool = field(
         default_factory=lambda: _env_bool("STOCK_RESEARCH_DASHBOARD_AUTH_REQUIRED", False)
     )

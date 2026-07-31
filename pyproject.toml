@@ -6,6 +6,8 @@ requires-python = ">=3.11"
 dependencies = [
   "akshare",
   "baostock",
+  "markdown-it-py",
+  "nh3",
   "pandas",
   "PySocks",
   "psycopg[binary]",
