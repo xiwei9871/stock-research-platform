@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from datetime import UTC, datetime, tzinfo
 import json
 
 from fastapi.testclient import TestClient
@@ -21,6 +22,11 @@ from stock_research.dashboard.theme_research import (
 
 AI_POWER_THEME_ID = "ai_power_value_capture_v1"
 ROBOTICS_THEME_ID = "humanoid_robotics_head_to_toe_v1"
+
+
+class _BrokenTimezone(tzinfo):
+    def utcoffset(self, dt):
+        raise RuntimeError("invalid timezone")
 
 
 def _context() -> dict:
@@ -134,20 +140,75 @@ def test_theme_list_and_detail_share_safe_published_report_summary() -> None:
     assert "private" not in serialized
 
 
-def test_dirty_published_report_without_timestamp_fails_closed() -> None:
+@pytest.mark.parametrize(
+    "published_at",
+    [
+        None,
+        "",
+        "   ",
+        "not-a-date",
+        "2026-13-01T09:30:00+08:00",
+        "2026-08-01T09:30:00",
+        datetime(2026, 8, 1, 9, 30),
+        datetime(2026, 8, 1, 9, 30, tzinfo=_BrokenTimezone()),
+    ],
+)
+def test_invalid_or_naive_published_timestamp_fails_closed_for_list_and_detail(
+    published_at,
+) -> None:
     context = _context()
     context["analysis_reports_by_theme"] = {
         AI_POWER_THEME_ID: {
             "report_version_id": "dirty-report",
             "version": "v1",
-            "published_at": None,
+            "published_at": published_at,
             "has_pdf": False,
+            "metadata": {"secret": "must-not-leak"},
         }
     }
 
+    index = theme_research._list_theme_research_themes(context)
     detail = theme_research._get_theme_research_theme(context, AI_POWER_THEME_ID)
+    index_row = next(
+        row for row in index["items"] if row["theme_id"] == AI_POWER_THEME_ID
+    )
 
+    assert index_row["analysis_report"] == {"status": "researching"}
     assert detail["theme"]["analysis_report"] == {"status": "researching"}
+
+
+@pytest.mark.parametrize(
+    ("published_at", "expected"),
+    [
+        ("2026-08-01T01:30:00Z", "2026-08-01T01:30:00+00:00"),
+        (
+            datetime(2026, 8, 1, 1, 30, tzinfo=UTC),
+            "2026-08-01T01:30:00+00:00",
+        ),
+    ],
+)
+def test_timezone_aware_published_timestamp_is_normalized_for_list_and_detail(
+    published_at,
+    expected,
+) -> None:
+    context = _context()
+    context["analysis_reports_by_theme"] = {
+        AI_POWER_THEME_ID: {
+            "report_version_id": "published-report",
+            "version": "v1",
+            "published_at": published_at,
+            "has_pdf": True,
+        }
+    }
+
+    index = theme_research._list_theme_research_themes(context)
+    detail = theme_research._get_theme_research_theme(context, AI_POWER_THEME_ID)
+    index_row = next(
+        row for row in index["items"] if row["theme_id"] == AI_POWER_THEME_ID
+    )
+
+    assert index_row["analysis_report"]["published_at"] == expected
+    assert detail["theme"]["analysis_report"]["published_at"] == expected
 
 
 def test_node_collection_is_scoped_joined_and_stably_sorted():

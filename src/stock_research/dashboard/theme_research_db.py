@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+from datetime import datetime
 from functools import lru_cache
 import json
 from typing import Any
@@ -75,14 +76,27 @@ def _load_published_report_summaries(service: str) -> dict[str, dict[str, Any]]:
 
 
 def _json_safe_timestamp(value: Any) -> str:
-    if value is None:
+    parsed: datetime
+    if isinstance(value, datetime):
+        parsed = value
+    elif isinstance(value, str):
+        text = value.strip()
+        if not text or text != value:
+            return ""
+        if text.endswith("Z"):
+            text = f"{text[:-1]}+00:00"
+        try:
+            parsed = datetime.fromisoformat(text)
+        except ValueError:
+            return ""
+    else:
         return ""
-    if isinstance(value, str):
-        return value.strip()
-    isoformat = getattr(value, "isoformat", None)
-    if callable(isoformat):
-        return str(isoformat())
-    return ""
+    try:
+        if parsed.tzinfo is None or parsed.utcoffset() is None:
+            return ""
+        return parsed.isoformat()
+    except Exception:
+        return ""
 
 
 def load_asset_db_context(
