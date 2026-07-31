@@ -94,7 +94,12 @@ const apiMocks = vi.hoisted(() => ({
   fetchStrategyValidationRuns: vi.fn(),
   fetchStrategyValidationReplay: vi.fn(),
   fetchBacktestStrategies: vi.fn(),
-  runBacktest: vi.fn()
+  runBacktest: vi.fn(),
+  fetchAdminThemeResearchReports: vi.fn(),
+  fetchAdminThemeResearchReport: vi.fn(),
+  adminThemeResearchReportPdfUrl: vi.fn(),
+  publishThemeResearchReport: vi.fn(),
+  rejectThemeResearchReport: vi.fn()
 }));
 
 vi.mock('../src/api/client', () => apiMocks);
@@ -1317,15 +1322,39 @@ describe('dashboard app shell', () => {
     expect(screen.queryByText('Manual V1 TopN Rotation')).not.toBeInTheDocument();
   });
 
-  it('shows user management navigation only for admins', async () => {
+  it('shows admin navigation only for admins', async () => {
     const admin = { user_id: 'user:1', username: 'admin', display_name: 'Admin', role: 'admin' as const, is_active: true };
     const regular = { user_id: 'user:2', username: 'analyst', display_name: 'Analyst', role: 'user' as const, is_active: true };
 
     const { rerender } = render(<AppShell currentUser={regular} />);
 
     expect(screen.queryByRole('button', { name: 'Open User Management workspace' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open Theme Research report review workspace' })).not.toBeInTheDocument();
     rerender(<AppShell currentUser={admin} />);
     expect(screen.getByRole('button', { name: 'Open User Management workspace' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Open Theme Research report review workspace' })).toBeVisible();
+  });
+
+  it('guards the direct report-review route for regular users without issuing admin requests', async () => {
+    const regular = { user_id: 'user:2', username: 'analyst', display_name: 'Analyst', role: 'user' as const, is_active: true };
+    window.history.replaceState({}, '', '/admin/theme-research/report-review');
+
+    render(<AppShell currentUser={regular} />);
+
+    expect(await screen.findByRole('heading', { name: '策略指挥中心' })).toBeVisible();
+    expect(window.location.pathname).toBe('/');
+    expect(apiMocks.fetchAdminThemeResearchReports).not.toHaveBeenCalled();
+  });
+
+  it('opens the direct report-review route for admins', async () => {
+    apiMocks.fetchAdminThemeResearchReports.mockResolvedValueOnce({ total: 0, items: [] });
+    window.history.replaceState({}, '', '/admin/theme-research/report-review');
+
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
+
+    expect(await screen.findByRole('heading', { name: '主题报告审核' })).toBeVisible();
+    expect(apiMocks.fetchAdminThemeResearchReports).toHaveBeenCalledWith('pending_review');
+    window.history.replaceState({}, '', '/');
   });
 
   it('shows the authenticated username and invokes logout once', async () => {

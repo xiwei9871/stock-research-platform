@@ -6248,6 +6248,233 @@ table.data-table td {
   cursor: pointer;
 }
 
+.theme-report-review-workspace {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.theme-report-review-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.theme-report-review-header h1,
+.theme-report-review-header p,
+.theme-report-review-section-heading h2,
+.theme-report-review-preview-header h2,
+.theme-report-review-preview-header p,
+.theme-report-review-workspace .theme-research-empty h2,
+.theme-report-review-workspace .theme-research-empty p {
+  margin: 0;
+}
+
+.theme-report-review-workspace .icon-text-button,
+.theme-report-review-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+  border: 1px solid #c4cbd6;
+  border-radius: 5px;
+  background: #ffffff;
+  color: #263241;
+  padding: 5px 9px;
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.theme-report-review-workspace button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.theme-report-review-layout {
+  display: grid;
+  grid-template-columns: minmax(230px, 300px) minmax(0, 1fr);
+  min-width: 0;
+  min-height: 560px;
+  border: 1px solid #cfd8e3;
+  border-radius: 7px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.theme-report-review-queue {
+  min-width: 0;
+  border-right: 1px solid #d7dee8;
+  background: #f8fafc;
+}
+
+.theme-report-review-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid #d7dee8;
+  padding: 12px 14px;
+}
+
+.theme-report-review-section-heading h2 {
+  font-size: 16px;
+}
+
+.theme-report-review-section-heading span {
+  color: #667085;
+  font-size: 12px;
+}
+
+.theme-report-review-queue-items {
+  display: grid;
+}
+
+.theme-report-review-queue-items button {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid #e4e9f0;
+  background: transparent;
+  color: #263241;
+  padding: 12px 14px;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.theme-report-review-queue-items button.active {
+  box-shadow: inset 3px 0 #2563eb;
+  background: #eef5ff;
+}
+
+.theme-report-review-queue-items span,
+.theme-report-review-queue-items small {
+  color: #667085;
+  overflow-wrap: anywhere;
+}
+
+.theme-report-review-preview {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.theme-report-review-preview-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid #d7dee8;
+  background: #f8fafc;
+  padding: 16px;
+}
+
+.theme-report-review-preview-header h2 {
+  margin-top: 6px;
+  font-size: 21px;
+}
+
+.theme-report-review-preview-header p {
+  margin-top: 5px;
+  color: #667085;
+}
+
+.theme-report-review-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+  margin: 0;
+  border-bottom: 1px solid #e4e9f0;
+  padding: 10px 16px;
+}
+
+.theme-report-review-meta div {
+  display: flex;
+  gap: 5px;
+}
+
+.theme-report-review-meta dt,
+.theme-report-review-meta dd {
+  margin: 0;
+  font-size: 12px;
+}
+
+.theme-report-review-meta dt {
+  color: #667085;
+}
+
+.theme-report-review-article {
+  max-height: min(55vh, 620px);
+  flex: 1 1 auto;
+  overflow-y: auto;
+}
+
+.theme-report-review-preview-state {
+  display: grid;
+  min-height: 180px;
+  place-content: center;
+  justify-items: center;
+  gap: 12px;
+  color: #52606d;
+  padding: 20px;
+}
+
+.theme-report-review-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+  border-top: 1px solid #d7dee8;
+  background: #f8fafc;
+  padding: 14px 16px;
+}
+
+.theme-report-review-controls label {
+  display: grid;
+  gap: 5px;
+  color: #52606d;
+  font-size: 12px;
+}
+
+.theme-report-review-controls textarea {
+  width: 100%;
+  min-height: 66px;
+  resize: vertical;
+  border: 1px solid #c4cbd6;
+  border-radius: 5px;
+  background: #ffffff;
+  color: #263241;
+  padding: 8px;
+  font: inherit;
+}
+
+.theme-report-review-validation,
+.theme-report-review-message {
+  grid-column: 1 / -1;
+  color: #9f2d24;
+}
+
+.theme-report-review-actions {
+  display: flex;
+  grid-column: 1 / -1;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.theme-report-review-actions .theme-report-review-publish {
+  border-color: #2f855a;
+  background: #2f855a;
+  color: #ffffff;
+}
+
+.theme-report-review-actions .theme-report-review-reject {
+  border-color: #c2413b;
+  color: #a8322d;
+}
+
 .theme-report-reader {
   display: grid;
   gap: 0;
@@ -6613,6 +6840,20 @@ table.data-table td {
 }
 
 @media (max-width: 900px) {
+  .theme-report-review-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .theme-report-review-queue {
+    border-right: 0;
+    border-bottom: 1px solid #d7dee8;
+  }
+
+  .theme-report-review-queue-items {
+    max-height: 260px;
+    overflow-y: auto;
+  }
+
   .theme-research-metrics {
     grid-template-columns: repeat(3, minmax(110px, 1fr));
   }
@@ -6627,6 +6868,15 @@ table.data-table td {
 }
 
 @media (max-width: 620px) {
+  .theme-report-review-header,
+  .theme-report-review-preview-header {
+    flex-direction: column;
+  }
+
+  .theme-report-review-controls {
+    grid-template-columns: 1fr;
+  }
+
   .theme-report-card,
   .theme-report-reader-header {
     grid-template-columns: 1fr;
