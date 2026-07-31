@@ -15,6 +15,7 @@ from typing import Any
 from stock_research.theme_research_report_manifest import (
     ReportManifestError,
     ReportManifestLimits,
+    fingerprint_report_manifest,
 )
 
 
@@ -32,6 +33,7 @@ _IDENTITY_SAFE_MANIFEST_CODES = {
     "ARTIFACT_SIZE_MISMATCH",
     "ARTIFACT_TOO_LARGE",
     "MARKDOWN_REQUIRED",
+    "MANIFEST_DISCOVERY_CHANGED",
 }
 
 
@@ -172,6 +174,20 @@ def _directory_entry_matches_fd(parent_fd: int, name: str, child_fd: int) -> boo
         and not stat.S_ISLNK(entry_stat.st_mode)
         and entry_stat.st_dev == opened_stat.st_dev
         and entry_stat.st_ino == opened_stat.st_ino
+    )
+
+
+def _directory_path_matches_fd(path: Path, directory_fd: int) -> bool:
+    try:
+        path_stat = os.stat(path, follow_symlinks=False)
+        opened_stat = os.fstat(directory_fd)
+    except (OSError, ValueError):
+        return False
+    return (
+        stat.S_ISDIR(path_stat.st_mode)
+        and not stat.S_ISLNK(path_stat.st_mode)
+        and path_stat.st_dev == opened_stat.st_dev
+        and path_stat.st_ino == opened_stat.st_ino
     )
 
 
@@ -356,11 +372,45 @@ def scan_theme_research_report_root(
                         manifest_path = report_root / theme_id / version / "manifest.json"
                         manifest = None
                         try:
+                            discovery_fingerprint = fingerprint_report_manifest(
+                                version_fd,
+                                max_bytes=limits.max_manifest_bytes,
+                            )
                             manifest = load_report_manifest(
                                 manifest_path,
                                 report_root=report_root,
                                 limits=limits,
                             )
+                            try:
+                                current_fingerprint = fingerprint_report_manifest(
+                                    version_fd,
+                                    max_bytes=limits.max_manifest_bytes,
+                                )
+                            except MemoryError:
+                                raise
+                            except ReportManifestError as exc:
+                                raise ReportManifestError(
+                                    "MANIFEST_DISCOVERY_CHANGED",
+                                    "manifest discovery identity changed before registration",
+                                ) from exc
+                            if (
+                                manifest.manifest_sha256
+                                != discovery_fingerprint.sha256
+                                or current_fingerprint != discovery_fingerprint
+                                or not _directory_path_matches_fd(
+                                    report_root, root_fd
+                                )
+                                or not _directory_entry_matches_fd(
+                                    root_fd, theme_id, theme_fd
+                                )
+                                or not _directory_entry_matches_fd(
+                                    theme_fd, version, version_fd
+                                )
+                            ):
+                                raise ReportManifestError(
+                                    "MANIFEST_DISCOVERY_CHANGED",
+                                    "manifest discovery identity changed before registration",
+                                )
                             store_result = register_report_manifest(
                                 manifest, service=selected_service
                             )

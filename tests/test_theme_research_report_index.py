@@ -4,6 +4,7 @@ import builtins
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 from dataclasses import replace
@@ -746,3 +747,123 @@ def test_log_context_escapes_newlines_from_directory_names(
     assert messages
     assert all(len(message.splitlines()) == 1 for message in messages)
     assert "bad\\ninjected" in messages[0]
+
+
+@pytest.mark.parametrize("swap_level", ["root", "theme", "version"])
+@pytest.mark.parametrize("restore_before_postcheck", [False, True])
+def test_real_directory_replacement_after_discovery_never_registers_changed_manifest(
+    tmp_path: Path,
+    monkeypatch,
+    caplog,
+    swap_level: str,
+    restore_before_postcheck: bool,
+) -> None:
+    root = tmp_path / "reports"
+    _write_report(root, "safe-theme", "v1", markdown=b"# trusted\n")
+    malicious_root = tmp_path / "absolute-secret-malicious"
+    _write_report(
+        malicious_root,
+        "safe-theme",
+        "v1",
+        markdown=b"# malicious replacement\n",
+    )
+    real_load = report_index.load_report_manifest
+    stored: list[str] = []
+
+    def swapping_load(path, *, report_root, limits):
+        if swap_level == "root":
+            trusted_target = root
+            malicious_target = malicious_root
+        elif swap_level == "theme":
+            trusted_target = root / "safe-theme"
+            malicious_target = malicious_root / "safe-theme"
+        else:
+            trusted_target = root / "safe-theme" / "v1"
+            malicious_target = malicious_root / "safe-theme" / "v1"
+        original = trusted_target.with_name(f"{trusted_target.name}-original")
+        used = malicious_target.with_name(f"{malicious_target.name}-used")
+        trusted_target.rename(original)
+        malicious_target.rename(trusted_target)
+        manifest = real_load(path, report_root=report_root, limits=limits)
+        if restore_before_postcheck:
+            trusted_target.rename(used)
+            original.rename(trusted_target)
+        return manifest
+
+    def register(manifest, *, service):
+        stored.append(manifest.manifest_sha256)
+        return {"result": "indexed"}
+
+    monkeypatch.setattr(report_index, "load_report_manifest", swapping_load)
+    monkeypatch.setattr(report_index, "register_report_manifest", register)
+
+    result = report_index.scan_theme_research_report_root(
+        root, limits=LIMITS, service="runtime"
+    )
+
+    assert stored == []
+    assert (result.discovered, result.indexed, result.invalid) == (1, 0, 1)
+    assert _error_codes(result) == ["MANIFEST_DISCOVERY_CHANGED"]
+    assert str(malicious_root) not in json.dumps(result.to_dict())
+    assert str(malicious_root) not in caplog.text
+
+
+def test_byte_identical_root_aba_after_discovery_may_register(tmp_path: Path, monkeypatch) -> None:
+    root = tmp_path / "reports"
+    _write_report(root, "safe-theme", "v1", markdown=b"# identical\n")
+    replacement = tmp_path / "replacement"
+    shutil.copytree(root, replacement)
+    original = tmp_path / "reports-original"
+    used = tmp_path / "replacement-used"
+    real_load = report_index.load_report_manifest
+    stored: list[str] = []
+
+    def swapping_load(path, *, report_root, limits):
+        root.rename(original)
+        replacement.rename(root)
+        manifest = real_load(path, report_root=report_root, limits=limits)
+        root.rename(used)
+        original.rename(root)
+        return manifest
+
+    def register(manifest, *, service):
+        stored.append(manifest.manifest_sha256)
+        return {"result": "indexed"}
+
+    monkeypatch.setattr(report_index, "load_report_manifest", swapping_load)
+    monkeypatch.setattr(report_index, "register_report_manifest", register)
+
+    result = report_index.scan_theme_research_report_root(
+        root, limits=LIMITS, service="runtime"
+    )
+
+    assert len(stored) == 1
+    assert (result.indexed, result.invalid) == (1, 0)
+
+
+def test_manifest_disappearing_after_loader_is_discovery_changed(
+    tmp_path: Path, monkeypatch
+) -> None:
+    root = tmp_path / "reports"
+    manifest_path = _write_report(root, "safe-theme", "v1")
+    real_load = report_index.load_report_manifest
+    stored: list[str] = []
+
+    def disappearing_load(path, *, report_root, limits):
+        manifest = real_load(path, report_root=report_root, limits=limits)
+        manifest_path.unlink()
+        return manifest
+
+    def register(manifest, *, service):
+        stored.append(manifest.manifest_sha256)
+        return {"result": "indexed"}
+
+    monkeypatch.setattr(report_index, "load_report_manifest", disappearing_load)
+    monkeypatch.setattr(report_index, "register_report_manifest", register)
+
+    result = report_index.scan_theme_research_report_root(
+        root, limits=LIMITS, service="runtime"
+    )
+
+    assert stored == []
+    assert _error_codes(result) == ["MANIFEST_DISCOVERY_CHANGED"]

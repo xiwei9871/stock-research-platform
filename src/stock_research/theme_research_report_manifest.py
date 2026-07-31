@@ -59,6 +59,16 @@ class _FileSnapshot:
 
 
 @dataclass(frozen=True)
+class StableFileFingerprint:
+    sha256: str
+    device: int
+    inode: int
+    size_bytes: int
+    mtime_ns: int
+    ctime_ns: int
+
+
+@dataclass(frozen=True)
 class ThemeResearchReportManifest:
     theme_id: str
     version: str
@@ -104,6 +114,33 @@ class ReportManifestError(Exception):
         self.code = code
         self.message = message
         self.details = copy.deepcopy(details) if details is not None else None
+
+
+def fingerprint_report_manifest(
+    version_fd: int,
+    *,
+    max_bytes: int,
+) -> StableFileFingerprint:
+    if isinstance(max_bytes, bool) or not isinstance(max_bytes, int) or max_bytes <= 0:
+        raise ValueError("manifest fingerprint max_bytes must be a positive integer")
+    data, snapshot = _read_regular_file_snapshot_limited(
+        "manifest.json",
+        parent_fd=version_fd,
+        max_bytes=max_bytes,
+        invalid_code="MANIFEST_INVALID",
+        missing_code="MANIFEST_INVALID",
+        too_large_code="MANIFEST_TOO_LARGE",
+        changed_code="MANIFEST_FILE_CHANGED",
+        label="manifest",
+    )
+    return StableFileFingerprint(
+        sha256=hashlib.sha256(data).hexdigest(),
+        device=snapshot.device,
+        inode=snapshot.inode,
+        size_bytes=snapshot.size_bytes,
+        mtime_ns=snapshot.mtime_ns,
+        ctime_ns=snapshot.ctime_ns,
+    )
 
 
 def metadata_to_jsonable(metadata: Mapping[str, Any]) -> dict[str, Any]:
@@ -480,6 +517,30 @@ def _read_regular_file_limited(
     changed_code: str,
     label: str,
 ) -> bytes:
+    data, _ = _read_regular_file_snapshot_limited(
+        name,
+        parent_fd=parent_fd,
+        max_bytes=max_bytes,
+        invalid_code=invalid_code,
+        missing_code=missing_code,
+        too_large_code=too_large_code,
+        changed_code=changed_code,
+        label=label,
+    )
+    return data
+
+
+def _read_regular_file_snapshot_limited(
+    name: str,
+    *,
+    parent_fd: int,
+    max_bytes: int,
+    invalid_code: str,
+    missing_code: str,
+    too_large_code: str,
+    changed_code: str,
+    label: str,
+) -> tuple[bytes, _FileSnapshot]:
     try:
         expected_stat = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
     except FileNotFoundError as exc:
@@ -529,7 +590,7 @@ def _read_regular_file_limited(
         _safe_close(descriptor)
     if len(data) > max_bytes:
         raise ReportManifestError(too_large_code, f"{label} exceeds its byte limit")
-    return data
+    return data, expected_snapshot
 
 
 def _read_fd_limited(descriptor: int, max_bytes: int) -> bytes:

@@ -13,6 +13,8 @@ from stock_research import theme_research_report_manifest as manifest_module
 from stock_research.theme_research_report_manifest import (
     ReportManifestError,
     ReportManifestLimits,
+    StableFileFingerprint,
+    fingerprint_report_manifest,
     load_report_manifest,
     metadata_to_jsonable,
 )
@@ -27,6 +29,42 @@ DEFAULT_LIMITS = ReportManifestLimits(
 
 def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+def test_fingerprints_manifest_relative_to_open_version_directory(tmp_path: Path) -> None:
+    _, manifest_path, _ = _write_package(tmp_path)
+    version_fd = os.open(
+        manifest_path.parent,
+        os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
+    )
+    try:
+        fingerprint = fingerprint_report_manifest(
+            version_fd,
+            max_bytes=DEFAULT_LIMITS.max_manifest_bytes,
+        )
+    finally:
+        os.close(version_fd)
+
+    manifest_stat = manifest_path.stat()
+    assert isinstance(fingerprint, StableFileFingerprint)
+    assert fingerprint.sha256 == _sha256(manifest_path.read_bytes())
+    assert fingerprint.device == manifest_stat.st_dev
+    assert fingerprint.inode == manifest_stat.st_ino
+    assert fingerprint.size_bytes == manifest_stat.st_size
+    with pytest.raises(FrozenInstanceError):
+        fingerprint.sha256 = "0" * 64
+
+
+def test_manifest_fingerprint_enforces_byte_limit(tmp_path: Path) -> None:
+    _, manifest_path, _ = _write_package(tmp_path)
+    version_fd = os.open(manifest_path.parent, os.O_RDONLY)
+    try:
+        with pytest.raises(ReportManifestError) as exc_info:
+            fingerprint_report_manifest(version_fd, max_bytes=1)
+    finally:
+        os.close(version_fd)
+
+    assert exc_info.value.code == "MANIFEST_TOO_LARGE"
 
 
 def _write_package(
