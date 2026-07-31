@@ -32,7 +32,9 @@ _APPROVED_STATUSES = {"published", "archived"}
 _ADMIN_STATUSES = {"pending_review", "rejected", "published", "archived"}
 _SHA256_HEX_LENGTH = 64
 _OPEN_DIRECTORY_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
-_OPEN_FILE_FLAGS = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC
+_OPEN_FILE_FLAGS = (
+    os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | getattr(os, "O_NONBLOCK", 0)
+)
 _ALLOWED_TAGS = {
     "a",
     "blockquote",
@@ -163,7 +165,7 @@ def load_published_report_document(
             theme_id, report_version_id, service=service
         )
     except BaseException as exc:
-        _raise_store_error(exc, published=True)
+        _raise_store_error(exc)
     record = _merge_records(artifact, metadata)
     _require_status(record, _APPROVED_STATUSES, published=True)
     markdown = _read_artifact_bytes(
@@ -184,7 +186,7 @@ def load_admin_report_document(
     try:
         record = report_store.get_admin_report_version(report_version_id, service=service)
     except BaseException as exc:
-        _raise_store_error(exc, published=False)
+        _raise_store_error(exc)
     _require_status(record, _ADMIN_STATUSES, published=False)
     markdown = _read_artifact_bytes(
         record,
@@ -207,7 +209,7 @@ def resolve_published_report_pdf(
             theme_id, report_version_id, service=service
         )
     except BaseException as exc:
-        _raise_store_error(exc, published=True)
+        _raise_store_error(exc)
     _require_status(record, _APPROVED_STATUSES, published=True)
     return _resolve_pdf(record, report_root=report_root)
 
@@ -221,7 +223,7 @@ def resolve_admin_report_pdf(
     try:
         record = report_store.get_admin_report_version(report_version_id, service=service)
     except BaseException as exc:
-        _raise_store_error(exc, published=False)
+        _raise_store_error(exc)
     _require_status(record, _ADMIN_STATUSES, published=False)
     return _resolve_pdf(record, report_root=report_root)
 
@@ -261,7 +263,7 @@ def _render_markdown(data: bytes) -> str:
     try:
         text = data.decode("utf-8")
     except UnicodeDecodeError as exc:
-        raise _invalid("theme research report content is invalid") from exc
+        raise _artifact_unavailable() from exc
     try:
         rendered = _MARKDOWN.render(text)
         cleaned = nh3.clean(
@@ -295,7 +297,7 @@ def _resolve_pdf(
             "THEME_REPORT_PDF_NOT_FOUND", "theme research report PDF was not found"
         )
     if relative_path is None or checksum is None:
-        raise _invalid()
+        raise _artifact_unavailable()
     fd, snapshot = _open_verified_artifact(
         record,
         relative_path=relative_path,
@@ -357,8 +359,7 @@ def _open_verified_artifact(
         theme_snapshot = _snapshot_fd(theme_fd, directory=True)
         version_fd = _open_child_directory(theme_fd, version)
         version_snapshot = _snapshot_fd(version_fd, directory=True)
-        artifact_fd = _open_child_file(version_fd, relative_path)
-        before = _snapshot_fd(artifact_fd, directory=False)
+        artifact_fd, before = _open_child_file(version_fd, relative_path)
         if before.size > max_bytes:
             raise _too_large()
         if keep_open:
@@ -381,9 +382,9 @@ def _open_verified_artifact(
                 _write_all(snapshot_file.fileno(), chunk)
         after = _snapshot_fd(artifact_fd, directory=False)
         if before != after or total != before.size:
-            raise _invalid()
+            raise _artifact_unavailable()
         if digest.hexdigest() != expected_sha256:
-            raise _invalid()
+            raise _artifact_unavailable()
         _verify_path_identity(version_fd, relative_path, after)
         _verify_path_identity(theme_fd, version, version_snapshot)
         _verify_path_identity(root_fd, theme, theme_snapshot)
@@ -432,7 +433,7 @@ def _validated_record_layout(
         or len(expected_sha256) != _SHA256_HEX_LENGTH
         or any(character not in "0123456789abcdef" for character in expected_sha256)
     ):
-        raise _invalid()
+        raise _artifact_unavailable()
     return theme, version
 
 
@@ -486,16 +487,27 @@ def _open_child_directory(parent_fd: int, name: str) -> int:
     return os.open(name, _OPEN_DIRECTORY_FLAGS, dir_fd=parent_fd)
 
 
-def _open_child_file(parent_fd: int, name: str) -> int:
-    return os.open(name, _OPEN_FILE_FLAGS, dir_fd=parent_fd)
+def _open_child_file(parent_fd: int, name: str) -> tuple[int, _Snapshot]:
+    before = _snapshot(os.stat(name, dir_fd=parent_fd, follow_symlinks=False))
+    if not stat.S_ISREG(before.mode):
+        raise _artifact_unavailable()
+    fd = os.open(name, _OPEN_FILE_FLAGS, dir_fd=parent_fd)
+    try:
+        opened = _snapshot_fd(fd, directory=False)
+        if opened != before:
+            raise _artifact_unavailable()
+        return fd, opened
+    except BaseException:
+        _safe_close(fd)
+        raise
 
 
 def _snapshot_fd(fd: int, *, directory: bool) -> _Snapshot:
     info = os.fstat(fd)
     if directory and not stat.S_ISDIR(info.st_mode):
-        raise _invalid()
+        raise _artifact_unavailable()
     if not directory and not stat.S_ISREG(info.st_mode):
-        raise _invalid()
+        raise _artifact_unavailable()
     return _snapshot(info)
 
 
@@ -513,13 +525,13 @@ def _snapshot(info: os.stat_result) -> _Snapshot:
 def _verify_path_identity(parent_fd: int, name: str, expected: _Snapshot) -> None:
     current = _snapshot(os.stat(name, dir_fd=parent_fd, follow_symlinks=False))
     if current != expected:
-        raise _invalid()
+        raise _artifact_unavailable()
 
 
 def _verify_root_identity(path: Path, expected: _Snapshot) -> None:
     current = _snapshot(os.stat(path, follow_symlinks=False))
     if current != expected:
-        raise _invalid()
+        raise _artifact_unavailable()
 
 
 def _require_status(record: dict[str, Any], allowed: set[str], *, published: bool) -> None:
@@ -529,7 +541,7 @@ def _require_status(record: dict[str, Any], allowed: set[str], *, published: boo
         raise _invalid()
 
 
-def _raise_store_error(exc: BaseException, *, published: bool) -> None:
+def _raise_store_error(exc: BaseException) -> None:
     if isinstance(exc, (MemoryError, KeyboardInterrupt, SystemExit)):
         raise exc
     if isinstance(exc, OSError) and exc.errno in _RESOURCE_EXHAUSTION_ERRNOS:
@@ -540,7 +552,7 @@ def _raise_store_error(exc: BaseException, *, published: bool) -> None:
                 "THEME_REPORT_DOCUMENT_SERVICE_UNAVAILABLE",
                 "theme research report service is unavailable",
             ) from exc
-        if exc.code.endswith("NOT_FOUND") or published:
+        if exc.code.endswith("NOT_FOUND"):
             raise _not_found() from exc
         if "INVALID" in exc.code:
             raise _invalid() from exc
@@ -551,9 +563,8 @@ def _raise_store_error(exc: BaseException, *, published: bool) -> None:
 
 
 def _map_os_error(exc: OSError) -> ThemeResearchReportDocumentError:
-    if exc.errno == errno.ENOENT:
-        return _not_found()
-    return _invalid()
+    del exc
+    return _artifact_unavailable()
 
 
 def _not_found() -> ThemeResearchReportDocumentError:
@@ -570,9 +581,13 @@ def _invalid(
 
 
 def _too_large() -> ThemeResearchReportDocumentError:
+    return _artifact_unavailable()
+
+
+def _artifact_unavailable() -> ThemeResearchReportDocumentError:
     return ThemeResearchReportDocumentError(
-        "THEME_REPORT_DOCUMENT_TOO_LARGE",
-        "theme research report content exceeds the size limit",
+        "THEME_REPORT_ARTIFACT_UNAVAILABLE",
+        "theme research report artifact is unavailable",
     )
 
 

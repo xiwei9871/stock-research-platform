@@ -3,6 +3,8 @@ from __future__ import annotations
 import errno
 import hashlib
 import os
+import shutil
+import threading
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -244,6 +246,21 @@ def test_record_paths_must_be_consistent_direct_children(
     assert str(tmp_path) not in str(exc_info.value)
 
 
+@pytest.mark.parametrize("checksum", [None, "bad", "A" * 64, "0" * 63])
+def test_malformed_stored_markdown_checksum_is_artifact_unavailable(
+    monkeypatch, tmp_path, checksum
+) -> None:
+    record = _record(tmp_path)
+    record["markdown_sha256"] = checksum
+    _install_store(monkeypatch, record)
+
+    with pytest.raises(reports.ThemeResearchReportDocumentError) as exc_info:
+        reports.load_published_report_document(
+            "theme-a", "report-id", report_root=tmp_path
+        )
+    assert exc_info.value.code == "THEME_REPORT_ARTIFACT_UNAVAILABLE"
+
+
 @pytest.mark.parametrize(
     "mutation", ["missing", "directory", "symlink", "checksum", "utf8", "too_large"]
 )
@@ -274,12 +291,93 @@ def test_markdown_failures_are_stable(monkeypatch, tmp_path, mutation) -> None:
             "theme-a", "report-id", report_root=tmp_path
         )
 
-    assert exc_info.value.code in {
-        "THEME_REPORT_DOCUMENT_NOT_FOUND",
-        "THEME_REPORT_DOCUMENT_INVALID",
-        "THEME_REPORT_DOCUMENT_TOO_LARGE",
-    }
+    assert exc_info.value.code == "THEME_REPORT_ARTIFACT_UNAVAILABLE"
     assert "report.md" not in str(exc_info.value)
+
+
+def _call_in_thread(callable_) -> tuple[threading.Thread, dict[str, BaseException]]:
+    outcome: dict[str, BaseException] = {}
+
+    def run() -> None:
+        try:
+            callable_()
+        except BaseException as exc:
+            outcome["error"] = exc
+
+    thread = threading.Thread(target=run, daemon=True)
+    thread.start()
+    return thread, outcome
+
+
+def _release_fifo_reader(path: Path) -> None:
+    try:
+        fd = os.open(path, os.O_WRONLY | os.O_NONBLOCK)
+    except OSError:
+        return
+    os.close(fd)
+
+
+@pytest.mark.parametrize("artifact", ["markdown", "pdf"])
+def test_fifo_artifact_is_rejected_without_blocking(monkeypatch, tmp_path, artifact) -> None:
+    pdf = b"%PDF" if artifact == "pdf" else None
+    record = _record(tmp_path, pdf=pdf)
+    path = tmp_path / "theme-a" / "v1" / (
+        "report.md" if artifact == "markdown" else "report.pdf"
+    )
+    path.unlink()
+    os.mkfifo(path)
+    _install_store(monkeypatch, record)
+    if artifact == "markdown":
+        call = lambda: reports.load_published_report_document(
+            "theme-a", "report-id", report_root=tmp_path
+        )
+    else:
+        call = lambda: reports.resolve_published_report_pdf(
+            "theme-a", "report-id", report_root=tmp_path
+        )
+
+    thread, outcome = _call_in_thread(call)
+    thread.join(timeout=0.2)
+    blocked = thread.is_alive()
+    if blocked:
+        _release_fifo_reader(path)
+        thread.join(timeout=1)
+
+    assert not blocked
+    assert isinstance(outcome.get("error"), reports.ThemeResearchReportDocumentError)
+    assert outcome["error"].code == "THEME_REPORT_ARTIFACT_UNAVAILABLE"
+
+
+def test_stat_then_fifo_swap_is_rejected_without_blocking(monkeypatch, tmp_path) -> None:
+    record = _record(tmp_path)
+    _install_store(monkeypatch, record)
+    path = tmp_path / "theme-a" / "v1" / "report.md"
+    original_open = reports.os.open
+    swapped = False
+
+    def swap_before_open(name, flags, *args, **kwargs):
+        nonlocal swapped
+        if name == "report.md" and kwargs.get("dir_fd") is not None and not swapped:
+            swapped = True
+            path.unlink()
+            os.mkfifo(path)
+        return original_open(name, flags, *args, **kwargs)
+
+    monkeypatch.setattr(reports.os, "open", swap_before_open)
+    thread, outcome = _call_in_thread(
+        lambda: reports.load_published_report_document(
+            "theme-a", "report-id", report_root=tmp_path
+        )
+    )
+    thread.join(timeout=0.2)
+    blocked = thread.is_alive()
+    if blocked:
+        _release_fifo_reader(path)
+        thread.join(timeout=1)
+
+    assert not blocked
+    assert isinstance(outcome.get("error"), reports.ThemeResearchReportDocumentError)
+    assert outcome["error"].code == "THEME_REPORT_ARTIFACT_UNAVAILABLE"
 
 
 @pytest.mark.parametrize("component", ["root", "theme", "version"])
@@ -304,7 +402,7 @@ def test_symlinked_directories_are_rejected(monkeypatch, tmp_path, component) ->
         reports.load_published_report_document(
             "theme-a", "report-id", report_root=report_root
         )
-    assert exc_info.value.code == "THEME_REPORT_DOCUMENT_INVALID"
+    assert exc_info.value.code == "THEME_REPORT_ARTIFACT_UNAVAILABLE"
 
 
 def test_each_load_rehashes_markdown(monkeypatch, tmp_path) -> None:
@@ -315,7 +413,35 @@ def test_each_load_rehashes_markdown(monkeypatch, tmp_path) -> None:
 
     with pytest.raises(reports.ThemeResearchReportDocumentError) as exc_info:
         reports.load_published_report_document("theme-a", "report-id", report_root=tmp_path)
-    assert exc_info.value.code == "THEME_REPORT_DOCUMENT_INVALID"
+    assert exc_info.value.code == "THEME_REPORT_ARTIFACT_UNAVAILABLE"
+
+
+@pytest.mark.parametrize("admin", [False, True])
+@pytest.mark.parametrize("missing", ["root", "theme", "version", "artifact"])
+def test_missing_artifact_after_store_lookup_is_unavailable(
+    monkeypatch, tmp_path, admin, missing
+) -> None:
+    report_root = tmp_path / "reports"
+    record = _record(report_root)
+    _install_store(monkeypatch, record)
+    if missing == "root":
+        shutil.rmtree(report_root)
+    elif missing == "theme":
+        shutil.rmtree(report_root / "theme-a")
+    elif missing == "version":
+        shutil.rmtree(report_root / "theme-a" / "v1")
+    else:
+        (report_root / "theme-a" / "v1" / "report.md").unlink()
+
+    with pytest.raises(reports.ThemeResearchReportDocumentError) as exc_info:
+        if admin:
+            reports.load_admin_report_document("report-id", report_root=report_root)
+        else:
+            reports.load_published_report_document(
+                "theme-a", "report-id", report_root=report_root
+            )
+    assert exc_info.value.code == "THEME_REPORT_ARTIFACT_UNAVAILABLE"
+    assert str(report_root) not in str(exc_info.value)
 
 
 def test_store_errors_are_mapped_without_leaking(monkeypatch, tmp_path) -> None:
@@ -330,6 +456,34 @@ def test_store_errors_are_mapped_without_leaking(monkeypatch, tmp_path) -> None:
     assert exc_info.value.code == "THEME_REPORT_DOCUMENT_SERVICE_UNAVAILABLE"
     assert "secret" not in str(exc_info.value).lower()
     assert exc_info.value.details == {}
+
+
+def test_admin_store_not_found_remains_document_not_found(monkeypatch, tmp_path) -> None:
+    def missing(*args, **kwargs):
+        raise ThemeResearchReportError("THEME_REPORT_NOT_FOUND", "database secret")
+
+    monkeypatch.setattr(reports.report_store, "get_admin_report_version", missing)
+    with pytest.raises(reports.ThemeResearchReportDocumentError) as exc_info:
+        reports.load_admin_report_document("report-id", report_root=tmp_path)
+    assert exc_info.value.code == "THEME_REPORT_DOCUMENT_NOT_FOUND"
+    assert "secret" not in str(exc_info.value).lower()
+
+
+def test_published_store_read_invalid_is_not_mapped_to_not_found(
+    monkeypatch, tmp_path
+) -> None:
+    def invalid(*args, **kwargs):
+        raise ThemeResearchReportError("THEME_REPORT_READ_INVALID", "database secret")
+
+    monkeypatch.setattr(
+        reports.report_store, "get_approved_report_artifact_record", invalid
+    )
+    with pytest.raises(reports.ThemeResearchReportDocumentError) as exc_info:
+        reports.load_published_report_document(
+            "theme-a", "report-id", report_root=tmp_path
+        )
+    assert exc_info.value.code == "THEME_REPORT_DOCUMENT_INVALID"
+    assert "secret" not in str(exc_info.value).lower()
 
 
 def test_unknown_store_exception_is_safe(monkeypatch, tmp_path) -> None:
@@ -377,6 +531,23 @@ def test_pdf_absent_is_stable(monkeypatch, tmp_path) -> None:
     with pytest.raises(reports.ThemeResearchReportDocumentError) as exc_info:
         reports.resolve_published_report_pdf("theme-a", "report-id", report_root=tmp_path)
     assert exc_info.value.code == "THEME_REPORT_PDF_NOT_FOUND"
+
+
+@pytest.mark.parametrize(
+    ("relative_path", "checksum"),
+    [("report.pdf", None), (None, "0" * 64), ("report.pdf", "bad")],
+)
+def test_inconsistent_pdf_metadata_is_artifact_unavailable(
+    monkeypatch, tmp_path, relative_path, checksum
+) -> None:
+    record = _record(tmp_path, pdf=b"%PDF")
+    record["pdf_relative_path"] = relative_path
+    record["pdf_sha256"] = checksum
+    _install_store(monkeypatch, record)
+
+    with pytest.raises(reports.ThemeResearchReportDocumentError) as exc_info:
+        reports.resolve_admin_report_pdf("report-id", report_root=tmp_path)
+    assert exc_info.value.code == "THEME_REPORT_ARTIFACT_UNAVAILABLE"
 
 
 def test_pdf_streams_verified_fd_and_closes_after_completion(monkeypatch, tmp_path) -> None:
@@ -452,10 +623,7 @@ def test_pdf_validation_matches_markdown_boundaries(monkeypatch, tmp_path, mutat
 
     with pytest.raises(reports.ThemeResearchReportDocumentError) as exc_info:
         reports.resolve_admin_report_pdf("report-id", report_root=tmp_path)
-    assert exc_info.value.code in {
-        "THEME_REPORT_DOCUMENT_INVALID",
-        "THEME_REPORT_DOCUMENT_TOO_LARGE",
-    }
+    assert exc_info.value.code == "THEME_REPORT_ARTIFACT_UNAVAILABLE"
 
 
 def test_pdf_filename_is_safe_for_hostile_version(monkeypatch, tmp_path) -> None:
@@ -518,7 +686,7 @@ def test_file_changed_during_read_is_rejected(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(reports.os, "read", mutate)
     with pytest.raises(reports.ThemeResearchReportDocumentError) as exc_info:
         reports.load_published_report_document("theme-a", "report-id", report_root=tmp_path)
-    assert exc_info.value.code == "THEME_REPORT_DOCUMENT_INVALID"
+    assert exc_info.value.code == "THEME_REPORT_ARTIFACT_UNAVAILABLE"
 
 
 @pytest.mark.parametrize("component", ["root", "theme", "version"])
@@ -552,4 +720,4 @@ def test_directory_aba_during_read_is_rejected(monkeypatch, tmp_path, component)
         reports.load_published_report_document(
             "theme-a", "report-id", report_root=report_root
         )
-    assert exc_info.value.code == "THEME_REPORT_DOCUMENT_INVALID"
+    assert exc_info.value.code == "THEME_REPORT_ARTIFACT_UNAVAILABLE"
