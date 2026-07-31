@@ -111,6 +111,8 @@ _UNIFIED_FUNNEL_KEYS = (
     "reserve",
 )
 _PUBLICATION_STATUSES = {"ready", "coverage_insufficient", "preaudit_only"}
+_V2_FINAL_TOP_N = 20
+_V2_RESERVE_TOP_N = 20
 _V2_SELECTED_REQUIRED_COLUMNS = (
     "asset_id",
     "final_rank",
@@ -255,20 +257,16 @@ def _validate_v2_selection_values(
     ranked_slice: pd.DataFrame,
     name: str,
 ) -> None:
-    shared_columns = [
-        column for column in selection.columns if column in ranked_slice.columns
-    ]
-    if not shared_columns:
-        raise ValueError(f"{name} has no shared columns with ranked_pool")
+    if selection.columns.tolist() != ranked_slice.columns.tolist():
+        raise ValueError(f"{name} columns must exactly equal ranked_pool")
     try:
         pd.testing.assert_frame_equal(
-            selection.loc[:, shared_columns].reset_index(drop=True),
-            ranked_slice.loc[:, shared_columns].reset_index(drop=True),
-            check_dtype=False,
+            selection.reset_index(drop=True),
+            ranked_slice.reset_index(drop=True),
             check_exact=True,
         )
     except AssertionError as exc:
-        raise ValueError(f"{name} must equal ranked_pool slice across shared columns") from exc
+        raise ValueError(f"{name} must exactly equal ranked_pool slice") from exc
 
 
 def _validate_v2_frames(
@@ -312,8 +310,14 @@ def _validate_v2_frames(
     if ranked_ids != expected_ranked_ids:
         raise ValueError("ranked_pool order must follow V2 score ordering")
 
-    final_top_n = _positive_size(coverage, "final_top_n", 20)
-    reserve_top_n = _positive_size(coverage, "reserve_top_n", 20)
+    final_top_n = _positive_size(coverage, "final_top_n", _V2_FINAL_TOP_N)
+    reserve_top_n = _positive_size(
+        coverage, "reserve_top_n", _V2_RESERVE_TOP_N
+    )
+    if final_top_n != _V2_FINAL_TOP_N:
+        raise ValueError("coverage final_top_n must equal 20 for v2")
+    if reserve_top_n != _V2_RESERVE_TOP_N:
+        raise ValueError("coverage reserve_top_n must equal 20 for v2")
     top20_ids = _validate_v2_rank_frame(frames["top20"], "top20", start_rank=1)
     top30_ids = _validate_v2_rank_frame(frames["top30"], "top30", start_rank=1)
     reserve_ids = _validate_v2_rank_frame(
@@ -549,6 +553,49 @@ def _coverage_count(mapping: dict[str, Any], key: str, path: str) -> int:
     return int(value)
 
 
+def _validate_date_maxima(value: Any, *, cutoff: str, path: str) -> None:
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if not isinstance(key, str):
+                raise TypeError(f"{path} keys must be strings")
+            _validate_date_maxima(item, cutoff=cutoff, path=f"{path}.{key}")
+        return
+    if isinstance(value, (list, tuple)):
+        for index, item in enumerate(value):
+            _validate_date_maxima(item, cutoff=cutoff, path=f"{path}[{index}]")
+        return
+    if value is None:
+        return
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{path} must be a valid date not later than {cutoff}")
+    try:
+        parsed = pd.Timestamp(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{path} must be a valid date not later than {cutoff}") from exc
+    if pd.isna(parsed):
+        raise ValueError(f"{path} must be a valid date not later than {cutoff}")
+    if parsed.date() > date.fromisoformat(cutoff):
+        raise ValueError(f"{path} must not be later than trade_date {cutoff}")
+
+
+def _validate_coverage_date_maxima(
+    coverage: dict[str, Any],
+    *,
+    cutoff: str,
+    path: str = "coverage",
+) -> None:
+    for key, value in coverage.items():
+        child_path = f"{path}.{key}"
+        if "date_maxima" in key:
+            _validate_date_maxima(value, cutoff=cutoff, path=child_path)
+        elif isinstance(value, dict):
+            _validate_coverage_date_maxima(
+                value,
+                cutoff=cutoff,
+                path=child_path,
+            )
+
+
 def _normalize_v2_coverage(
     coverage: dict[str, Any],
     trade_date: str,
@@ -563,6 +610,7 @@ def _normalize_v2_coverage(
     coverage_trade_date = coverage.get("trade_date")
     if coverage_trade_date is not None and coverage_trade_date != trade_date:
         raise ValueError("coverage trade_date must match payload trade_date")
+    _validate_coverage_date_maxima(coverage, cutoff=trade_date)
 
     funnel = coverage["funnel"]
     if not isinstance(funnel, dict):
@@ -649,11 +697,15 @@ def _normalize_v2_coverage(
             raise ValueError(
                 f"coverage activation_funnel {key} must equal {key} frame length"
             )
-    if activation["ranked_pool"] > min(
-        activation["first_gate_eligible"], activation["activation_eligible"]
+    if not (
+        activation["first_gate_eligible"]
+        >= activation["activation_covered"]
+        >= activation["activation_eligible"]
+        >= activation["ranked_pool"]
     ):
         raise ValueError(
-            "coverage activation_funnel ranked_pool must be covered by both gates"
+            "coverage activation_funnel must satisfy first_gate_eligible >= "
+            "activation_covered >= activation_eligible >= ranked_pool"
         )
 
     for key in ("v2_thresholds", "v2_rank_weights", "v2_activation_weights"):
@@ -702,8 +754,14 @@ def _normalize_v2_coverage(
         if math.fsum(values) != 1.0:
             raise ValueError(f"coverage {mapping_name} weights must sum to 1.0")
 
-    final_top_n = _positive_size(coverage, "final_top_n", 20)
-    reserve_top_n = _positive_size(coverage, "reserve_top_n", 20)
+    final_top_n = _positive_size(coverage, "final_top_n", _V2_FINAL_TOP_N)
+    reserve_top_n = _positive_size(
+        coverage, "reserve_top_n", _V2_RESERVE_TOP_N
+    )
+    if final_top_n != _V2_FINAL_TOP_N:
+        raise ValueError("coverage final_top_n must equal 20 for v2")
+    if reserve_top_n != _V2_RESERVE_TOP_N:
+        raise ValueError("coverage reserve_top_n must equal 20 for v2")
     preaudit_size = _positive_size(coverage, "preaudit_size", 60)
     minimum_evidence_complete = _positive_size(
         coverage, "minimum_evidence_complete", final_top_n + reserve_top_n
@@ -1126,10 +1184,13 @@ def _preaudit_table(
     lines = ["## 审计前 Top 60", ""]
     if frame.empty:
         return [*lines, "暂无候选。", ""]
-    automatic_label = "自动启动分" if ranking_version == "v2" else "自动弹性分"
+    score_label = "3—5日启动分" if ranking_version == "v2" else "自动弹性分"
+    score_field = (
+        "activation_score" if ranking_version == "v2" else "automatic_elasticity_score"
+    )
     lines.extend(
         [
-            f"| 预审排名 | 股票 | 预审分 | 修复潜力 | {automatic_label} | 证据状态 |",
+            f"| 预审排名 | 股票 | 预审分 | 修复潜力 | {score_label} | 证据状态 |",
             "|---:|---|---:|---:|---:|---|",
         ]
     )
@@ -1147,7 +1208,7 @@ def _preaudit_table(
             f"| {preaudit_rank} | {_escape_table(name)}（{_escape_table(code)}） | "
             f"{_score_text(row.get('preaudit_score'))} | "
             f"{_score_text(row.get('repair_potential_score'))} | "
-            f"{_score_text(row.get('automatic_elasticity_score'))} | "
+            f"{_score_text(row.get(score_field))} | "
             f"{evidence_status} |"
         )
     return [*lines, ""]
@@ -1771,18 +1832,20 @@ def write_consumer_oversold_artifacts(
         raise ValueError(f"payload missing required keys: {', '.join(missing)}")
     trade_date = validate_trade_date(payload["trade_date"])
     frames: dict[str, pd.DataFrame] = {}
+    raw_frames: dict[str, pd.DataFrame] = {}
     for key in frame_keys:
         frame = payload[key]
         if not isinstance(frame, pd.DataFrame):
             raise TypeError(f"{key} must be a pandas DataFrame")
+        raw_frames[key] = frame.copy(deep=True)
         frames[key] = _ordered_evidence_frame(frame) if key == "evidence" else _ordered_frame(frame)
     if ranking_version == "v2":
         coverage_trade_date = payload["coverage"].get("trade_date")
         if coverage_trade_date is not None and coverage_trade_date != trade_date:
             raise ValueError("coverage trade_date must match payload trade_date")
         for key in ("evidence", "scores", "exclusions"):
-            _validate_assets(frames[key], key)
-        frame_counts = _validate_v2_frames(frames, payload["coverage"])
+            _validate_assets(raw_frames[key], key)
+        frame_counts = _validate_v2_frames(raw_frames, payload["coverage"])
         coverage = _normalize_v2_coverage(
             payload["coverage"], trade_date, frame_counts=frame_counts
         )

@@ -437,7 +437,7 @@ def _mutate_v2_top20_name(payload):
         ),
         (
             _mutate_v2_top20_name,
-            "top20 must equal ranked_pool slice",
+            "top20 must exactly equal ranked_pool slice",
         ),
         (
             lambda p: p.update(
@@ -465,6 +465,108 @@ def test_v2_rejects_invalid_cardinality_slice_containment_status_and_date(
 
     with pytest.raises(ValueError, match=message):
         write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+
+
+@pytest.mark.parametrize(
+    "updates",
+    [
+        {"first_gate_eligible": 35, "activation_covered": 36},
+        {"activation_covered": 34, "activation_eligible": 35},
+        {"activation_eligible": 34, "ranked_pool": 35},
+    ],
+)
+def test_v2_rejects_contradictory_activation_funnel_order(updates, tmp_path):
+    payload = _v2_payload()
+    payload["coverage"]["activation_funnel"].update(updates)
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "first_gate_eligible >= activation_covered >= "
+            "activation_eligible >= ranked_pool"
+        ),
+    ):
+        write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+
+
+@pytest.mark.parametrize("field", ["market", "price", "technical", "evidence"])
+def test_v2_rejects_coverage_date_maximum_after_trade_date(field, tmp_path):
+    payload = _v2_payload()
+    payload["coverage"]["data_date_maxima"][field] = "2026-07-30"
+
+    with pytest.raises(ValueError, match=rf"data_date_maxima\.{field}.*2026-07-29"):
+        write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+
+
+def test_v2_rejects_nested_coverage_date_maximum_after_trade_date(tmp_path):
+    payload = _v2_payload()
+    payload["coverage"]["diagnostics"] = {
+        "technical_date_maxima": {"daily_bar": "2026-07-30"}
+    }
+
+    with pytest.raises(
+        ValueError,
+        match=r"diagnostics\.technical_date_maxima\.daily_bar.*2026-07-29",
+    ):
+        write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+
+
+def test_v2_selection_requires_exact_ranked_pool_column_set_and_order(tmp_path):
+    payload = _v2_payload()
+    payload["top20"] = payload["top20"].drop(columns=["stock_name"])
+    with pytest.raises(ValueError, match="top20 columns must exactly equal ranked_pool"):
+        write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+
+    payload = _v2_payload()
+    payload["top30"]["unexpected"] = "extra"
+    with pytest.raises(ValueError, match="top30 columns must exactly equal ranked_pool"):
+        write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+
+    payload = _v2_payload()
+    payload["reserve"] = payload["reserve"].loc[
+        :, list(reversed(payload["reserve"].columns))
+    ]
+    with pytest.raises(ValueError, match="reserve columns must exactly equal ranked_pool"):
+        write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+
+
+@pytest.mark.parametrize(
+    ("frame_name", "rank"),
+    [("top20", 5), ("top30", 25), ("reserve", 31)],
+)
+def test_v2_rejects_top10_and_11_to_30_slice_value_corruption(
+    frame_name, rank, tmp_path
+):
+    payload = _v2_payload()
+    payload[frame_name].loc[
+        payload[frame_name]["final_rank"].eq(rank), "stock_name"
+    ] = "切片被篡改"
+
+    with pytest.raises(ValueError, match=rf"{frame_name} must exactly equal ranked_pool slice"):
+        write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("final_top_n", 10), ("final_top_n", 30), ("reserve_top_n", 10), ("reserve_top_n", 30)],
+)
+def test_v2_rejects_publication_size_overrides(field, value, tmp_path):
+    payload = _v2_payload()
+    payload["coverage"][field] = value
+
+    with pytest.raises(ValueError, match=rf"coverage {field} must equal 20 for v2"):
+        write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+
+
+def test_v2_preaudit_report_uses_real_activation_score_not_renamed_elasticity(tmp_path):
+    result = write_consumer_oversold_artifacts(_v2_payload(), output_dir=tmp_path)
+    preaudit_section = result["report"].split("## 审计前 Top 60", 1)[1].split(
+        "## V1/V2 排名变动", 1
+    )[0]
+
+    assert "| 预审排名 | 股票 | 预审分 | 修复潜力 | 3—5日启动分 | 证据状态 |" in preaudit_section
+    assert "自动启动分" not in preaudit_section
+    assert "| 1 | 候选01（000001.SZ） | 数据缺失 | 75.0 | 79.9 | 证据完整 |" in preaudit_section
 
 
 def test_v2_formula_escaping_and_input_immutability_apply_to_new_frames(tmp_path):
