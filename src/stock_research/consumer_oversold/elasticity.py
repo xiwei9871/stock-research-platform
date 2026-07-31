@@ -61,6 +61,9 @@ STOCK_CHARACTER_COLUMNS = [
     "positive_after_big_up_1d_rate",
     "positive_after_big_up_3d_rate",
     "positive_after_big_up_5d_rate",
+    "median_return_after_big_up_3d",
+    "median_return_after_big_up_5d",
+    "strong_move_retention_5d_rate",
     "stock_character_coverage",
 ]
 MARKET_CAPACITY_COLUMNS = [
@@ -404,11 +407,39 @@ def _positive_forward_rate(
     horizon: int,
 ) -> float:
     outcomes = [
-        float(close.iloc[position + horizon] / close.iloc[position] - 1.0) > 0.0
+        value > 0.0 for value in _forward_returns(close, event_positions, horizon)
+    ]
+    return float(np.mean(outcomes)) if outcomes else math.nan
+
+
+def _forward_returns(
+    close: pd.Series,
+    event_positions: list[int],
+    horizon: int,
+) -> list[float]:
+    return [
+        float(close.iloc[position + horizon] / close.iloc[position] - 1.0)
         for position in event_positions
         if position + horizon < len(close)
     ]
-    return float(np.mean(outcomes)) if outcomes else math.nan
+
+
+def _median_forward_return(
+    close: pd.Series,
+    event_positions: list[int],
+    horizon: int,
+) -> float:
+    outcomes = _forward_returns(close, event_positions, horizon)
+    return float(np.median(outcomes)) if outcomes else math.nan
+
+
+def _strong_move_retention_rate(
+    close: pd.Series,
+    event_positions: list[int],
+    horizon: int,
+) -> float:
+    outcomes = _forward_returns(close, event_positions, horizon)
+    return float(np.mean([value > 0.0 for value in outcomes])) if outcomes else math.nan
 
 
 def compute_stock_character_features(
@@ -524,6 +555,15 @@ def compute_stock_character_features(
                     close, event_positions, 3
                 ),
                 "positive_after_big_up_5d_rate": _positive_forward_rate(
+                    close, event_positions, 5
+                ),
+                "median_return_after_big_up_3d": _median_forward_return(
+                    close, event_positions, 3
+                ),
+                "median_return_after_big_up_5d": _median_forward_return(
+                    close, event_positions, 5
+                ),
+                "strong_move_retention_5d_rate": _strong_move_retention_rate(
                     close, event_positions, 5
                 ),
                 "stock_character_coverage": bool(len(returns) >= 400 and len(close) >= 2),

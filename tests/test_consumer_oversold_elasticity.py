@@ -48,6 +48,9 @@ STOCK_CHARACTER_COLUMNS = [
     "positive_after_big_up_1d_rate",
     "positive_after_big_up_3d_rate",
     "positive_after_big_up_5d_rate",
+    "median_return_after_big_up_3d",
+    "median_return_after_big_up_5d",
+    "strong_move_retention_5d_rate",
     "stock_character_coverage",
 ]
 MARKET_CAPACITY_COLUMNS = [
@@ -499,6 +502,93 @@ def test_big_up_continuation_rates_exclude_events_without_each_forward_horizon()
     assert row["positive_after_big_up_5d_rate"] == pytest.approx(1 / 2)
 
 
+def test_big_up_continuation_returns_use_only_history_available_at_cutoff():
+    history = _character_bars(
+        "A",
+        [0.0, 7.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+        closes=[90.0, 100.0, 110.0, 120.0, 125.0, 130.0, 90.0],
+    )
+    future = pd.DataFrame(
+        [
+            {
+                "asset_id": "A",
+                "stock_code": "000001",
+                "trade_date": "2026-07-30",
+                "close": 10_000.0,
+                "pct_chg": 100.0,
+                "is_st": False,
+            }
+        ]
+    )
+
+    row = compute_stock_character_features(
+        pd.concat([history, future], ignore_index=True), trade_date=TRADE_DATE
+    ).iloc[0]
+
+    assert row["history_sessions"] == 7
+    assert row["median_return_after_big_up_3d"] == pytest.approx(0.25)
+    assert row["median_return_after_big_up_5d"] == pytest.approx(-0.10)
+    assert row["strong_move_retention_5d_rate"] == 0.0
+
+
+@pytest.mark.parametrize(
+    ("pct_chg", "closes"),
+    [
+        ([0.0] * 8, [100.0] * 8),
+        ([0.0] * 7 + [7.0], [100.0] * 8),
+    ],
+)
+def test_big_up_continuation_returns_are_missing_without_eligible_forward_outcomes(
+    pct_chg, closes
+):
+    row = compute_stock_character_features(
+        _character_bars("A", pct_chg, closes=closes), trade_date=TRADE_DATE
+    ).iloc[0]
+
+    assert pd.isna(row["median_return_after_big_up_3d"])
+    assert pd.isna(row["median_return_after_big_up_5d"])
+    assert pd.isna(row["strong_move_retention_5d_rate"])
+
+
+def test_big_up_continuation_return_medians_and_retention_use_all_eligible_events():
+    pct_chg = [
+        7.0,
+        0.0,
+        0.0,
+        0.0,
+        7.0,
+        0.0,
+        0.0,
+        0.0,
+        7.0,
+        0.0,
+        0.0,
+        0.0,
+    ]
+    closes = [
+        100.0,
+        100.0,
+        100.0,
+        110.0,
+        100.0,
+        120.0,
+        100.0,
+        80.0,
+        100.0,
+        90.0,
+        100.0,
+        130.0,
+    ]
+
+    row = compute_stock_character_features(
+        _character_bars("A", pct_chg, closes=closes), trade_date=TRADE_DATE
+    ).iloc[0]
+
+    assert row["median_return_after_big_up_3d"] == pytest.approx(0.10)
+    assert row["median_return_after_big_up_5d"] == pytest.approx(0.05)
+    assert row["strong_move_retention_5d_rate"] == pytest.approx(0.5)
+
+
 def test_future_stock_character_bars_are_ignored_before_asset_validation():
     history = _character_bars("A", [0.0] * 400)
     expected = compute_stock_character_features(history, trade_date=TRADE_DATE)
@@ -758,6 +848,29 @@ def test_rebound_elasticity_percentiles_directions_and_weights_are_exact():
     assert result.loc["C", "automatic_elasticity_score"] == pytest.approx(31.25)
     assert result["elasticity_coverage"].all()
     assert result["automatic_elasticity_coverage"].all()
+
+
+def test_continuation_outputs_do_not_change_v1_elasticity_scores():
+    rows = pd.DataFrame(
+        [
+            _elasticity_row(asset_id="A", limit_up_count_2y=1.0),
+            _elasticity_row(asset_id="B", limit_up_count_2y=2.0),
+        ]
+    )
+    baseline = score_rebound_elasticity(rows, CONFIG)
+    with_continuation_outputs = rows.assign(
+        median_return_after_big_up_3d=[-0.50, 0.75],
+        median_return_after_big_up_5d=[0.25, -0.25],
+        strong_move_retention_5d_rate=[0.0, 1.0],
+    )
+    actual = score_rebound_elasticity(with_continuation_outputs, CONFIG)
+
+    pd.testing.assert_series_equal(
+        actual["elasticity_score"], baseline["elasticity_score"]
+    )
+    pd.testing.assert_series_equal(
+        actual["automatic_elasticity_score"], baseline["automatic_elasticity_score"]
+    )
 
 
 def test_market_cap_percentiles_clip_endpoints_in_independent_cross_sections():
