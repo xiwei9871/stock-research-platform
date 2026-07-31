@@ -372,6 +372,13 @@ def inspect_theme_research_report_schema(cur) -> dict[str, object]:
                 missing.append(f"column:{table_name}.{column_name}")
             elif actual != expected:
                 missing.append(f"column_definition:{table_name}.{column_name}")
+        actual_names = {
+            column_name
+            for actual_table, column_name in actual_columns
+            if actual_table == table_name
+        }
+        for column_name in sorted(actual_names - set(columns)):
+            missing.append(f"column_extra:{table_name}.{column_name}")
 
     cur.execute(
         """
@@ -404,7 +411,9 @@ def inspect_theme_research_report_schema(cur) -> dict[str, object]:
             pg_get_indexdef(index_relation.oid) AS indexdef,
             index.indisunique AS is_unique,
             index.indisexclusion AS is_exclusion,
-            constraint_record.oid IS NOT NULL AS is_constraint_backed
+            constraint_record.oid IS NOT NULL AS is_constraint_backed,
+            index.indexprs IS NOT NULL AS has_expressions,
+            index.indpred IS NOT NULL AS has_predicate
         FROM pg_index index
         JOIN pg_class index_relation ON index_relation.oid = index.indexrelid
         JOIN pg_class table_relation ON table_relation.oid = index.indrelid
@@ -433,8 +442,11 @@ def inspect_theme_research_report_schema(cur) -> dict[str, object]:
             continue
         if bool(_row_value(row, "is_constraint_backed", 4)):
             continue
-        if bool(_row_value(row, "is_unique", 2)) or bool(
-            _row_value(row, "is_exclusion", 3)
+        if (
+            bool(_row_value(row, "is_unique", 2))
+            or bool(_row_value(row, "is_exclusion", 3))
+            or bool(_row_value(row, "has_expressions", 5))
+            or bool(_row_value(row, "has_predicate", 6))
         ):
             missing.append(f"index_extra:{name}")
 

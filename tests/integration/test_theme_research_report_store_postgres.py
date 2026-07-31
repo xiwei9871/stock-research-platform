@@ -244,6 +244,8 @@ def test_report_schema_inspection_requires_owner_and_runtime_roles() -> None:
                         "is_unique": name.startswith("uq_"),
                         "is_exclusion": False,
                         "is_constraint_backed": False,
+                        "has_expressions": False,
+                        "has_predicate": False,
                     }
                     for name, definition in schema._EXPECTED_INDEX_DEFINITIONS.items()
                 ]
@@ -713,6 +715,42 @@ def test_postgres_apply_rejects_report_table_missing_columns(postgres_conn) -> N
             apply_theme_research_report_schema(service=TEST_SERVICE)
 
 
+def test_postgres_apply_rejects_extra_not_null_column(postgres_conn) -> None:
+    from stock_research.theme_research_report_schema import (
+        ThemeResearchReportSchemaDriftError,
+        apply_theme_research_report_schema,
+    )
+
+    postgres_conn.rollback()
+    connection = psycopg.connect(f"service={TEST_SERVICE}")
+    try:
+        connection.execute(
+            """
+            ALTER TABLE research.theme_research_report_version
+            ADD COLUMN ingestion_guard text NOT NULL
+            """
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    try:
+        with pytest.raises(ThemeResearchReportSchemaDriftError, match="column_extra:.*ingestion_guard"):
+            apply_theme_research_report_schema(service=TEST_SERVICE)
+    finally:
+        cleanup = psycopg.connect(f"service={TEST_SERVICE}")
+        try:
+            cleanup.execute(
+                """
+                ALTER TABLE research.theme_research_report_version
+                DROP COLUMN IF EXISTS ingestion_guard
+                """
+            )
+            cleanup.commit()
+        finally:
+            cleanup.close()
+
+
 def test_postgres_apply_rejects_wrong_same_name_index(postgres_conn) -> None:
     from stock_research.theme_research_report_schema import (
         ThemeResearchReportSchemaDriftError,
@@ -953,6 +991,54 @@ def test_postgres_allows_extra_nonunique_performance_index(postgres_conn) -> Non
             cleanup.execute(
                 "DROP INDEX IF EXISTS research.idx_theme_research_report_extra_title"
             )
+            cleanup.commit()
+        finally:
+            cleanup.close()
+
+
+@pytest.mark.parametrize(
+    ("index_name", "index_expression"),
+    [
+        (
+            "idx_theme_research_report_extra_expression",
+            "(lower(title))",
+        ),
+        (
+            "idx_theme_research_report_extra_partial",
+            "(title) WHERE status = 'pending_review'",
+        ),
+    ],
+)
+def test_postgres_rejects_extra_expression_or_partial_index(
+    postgres_conn,
+    index_name,
+    index_expression,
+) -> None:
+    from stock_research.theme_research_report_schema import (
+        ThemeResearchReportSchemaDriftError,
+        apply_theme_research_report_schema,
+    )
+
+    postgres_conn.rollback()
+    connection = psycopg.connect(f"service={TEST_SERVICE}")
+    try:
+        connection.execute(
+            f"""
+            CREATE INDEX {index_name}
+            ON research.theme_research_report_version {index_expression}
+            """
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    try:
+        with pytest.raises(ThemeResearchReportSchemaDriftError, match=rf"index_extra:.*{index_name}"):
+            apply_theme_research_report_schema(service=TEST_SERVICE)
+    finally:
+        cleanup = psycopg.connect(f"service={TEST_SERVICE}")
+        try:
+            cleanup.execute(f"DROP INDEX IF EXISTS research.{index_name}")
             cleanup.commit()
         finally:
             cleanup.close()
