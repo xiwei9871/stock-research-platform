@@ -79,6 +79,25 @@ EARNINGS_COLUMNS = (
     "source",
     "source_endpoint",
 )
+V2_HFQ_DAILY_COLUMNS = ("asset_id", "trade_date", "hfq_close")
+V2_RAW_DAILY_COLUMNS = (
+    "asset_id",
+    "trade_date",
+    "raw_open",
+    "raw_high",
+    "raw_low",
+    "raw_close",
+)
+V2_MINUTE_OUTCOME_COLUMNS = (
+    "asset_id",
+    "trade_date",
+    "trade_time",
+    "open",
+    "high",
+    "low",
+    "close",
+    "limit_up_price",
+)
 
 
 def normalize_market_amount(amount: Any, source: Any) -> Any:
@@ -392,6 +411,154 @@ def load_consumer_market_history(
         rows = fetch_all(conn, sql, params)
     result = _format_dates(_frame(rows, MARKET_COLUMNS), ("trade_date",))
     return _sort(result, ["asset_id", "trade_date"])
+
+
+def _outcome_date_range(start_date: str, end_date: str) -> tuple[str, str]:
+    start = validate_trade_date(start_date)
+    end = validate_trade_date(end_date)
+    if start > end:
+        raise ValueError("start_date must be on or before end_date")
+    return start, end
+
+
+def load_consumer_v2_hfq_daily_closes(
+    asset_ids: list[str],
+    start_date: str,
+    end_date: str,
+    *,
+    service: str,
+) -> pd.DataFrame:
+    assets = _asset_ids(asset_ids)
+    start, end = _outcome_date_range(start_date, end_date)
+    if not assets:
+        return _frame([], V2_HFQ_DAILY_COLUMNS)
+    sql = """
+    SELECT asset_id, trade_date, close AS hfq_close
+    FROM market_daily_bar
+    WHERE asset_id = ANY(%s)
+      AND trade_date BETWEEN %s AND %s
+      AND adjust_type = 'hfq'
+    ORDER BY asset_id, trade_date
+    """
+    with connect(service) as conn:
+        rows = fetch_all(conn, sql, [assets, start, end])
+    result = _format_dates(_frame(rows, V2_HFQ_DAILY_COLUMNS), ("trade_date",))
+    if not result.empty:
+        result = result.loc[
+            result["asset_id"].isin(assets)
+            & result["trade_date"].between(start, end, inclusive="both")
+        ]
+    return _sort(result, ["asset_id", "trade_date"])
+
+
+def load_consumer_v2_raw_daily_bars(
+    asset_ids: list[str],
+    start_date: str,
+    end_date: str,
+    *,
+    service: str,
+) -> pd.DataFrame:
+    assets = _asset_ids(asset_ids)
+    start, end = _outcome_date_range(start_date, end_date)
+    if not assets:
+        return _frame([], V2_RAW_DAILY_COLUMNS)
+    sql = """
+    SELECT asset_id, trade_date,
+           open AS raw_open, high AS raw_high, low AS raw_low, close AS raw_close
+    FROM market_daily_bar
+    WHERE asset_id = ANY(%s)
+      AND trade_date BETWEEN %s AND %s
+      AND adjust_type = 'raw'
+    ORDER BY asset_id, trade_date
+    """
+    with connect(service) as conn:
+        rows = fetch_all(conn, sql, [assets, start, end])
+    result = _format_dates(_frame(rows, V2_RAW_DAILY_COLUMNS), ("trade_date",))
+    if not result.empty:
+        result = result.loc[
+            result["asset_id"].isin(assets)
+            & result["trade_date"].between(start, end, inclusive="both")
+        ]
+    return _sort(result, ["asset_id", "trade_date"])
+
+
+def load_consumer_v2_minute_outcome_bars(
+    asset_ids: list[str],
+    start_date: str,
+    end_date: str,
+    *,
+    service: str,
+) -> pd.DataFrame:
+    assets = _asset_ids(asset_ids)
+    start, end = _outcome_date_range(start_date, end_date)
+    if not assets:
+        return _frame([], V2_MINUTE_OUTCOME_COLUMNS)
+    sql = """
+    WITH minute AS (
+        SELECT DISTINCT ON (asset_id, trade_date, trade_time)
+               asset_id, trade_date, trade_time, open, high, low, close
+        FROM market.stock_minute_bar
+        WHERE asset_id = ANY(%s)
+          AND trade_date BETWEEN %s AND %s
+          AND freq = '5min'
+          AND adjust_type = 'raw'
+        ORDER BY asset_id, trade_date, trade_time,
+                 CASE source
+                     WHEN 'baostock' THEN 0
+                     WHEN 'tushare' THEN 1
+                     WHEN 'akshare' THEN 2
+                     WHEN 'eastmoney' THEN 3
+                     ELSE 9
+                 END
+    )
+    SELECT minute.asset_id, minute.trade_date, minute.trade_time,
+           minute.open, minute.high, minute.low, minute.close,
+           ROUND(
+               previous.raw_close * (
+                   1 + CASE
+                       WHEN asset.symbol LIKE '4%%'
+                         OR asset.symbol LIKE '8%%'
+                         OR asset.symbol LIKE '920%%' THEN 0.30
+                       WHEN asset.symbol LIKE '300%%'
+                         OR asset.symbol LIKE '301%%'
+                         OR asset.symbol LIKE '688%%'
+                         OR asset.symbol LIKE '689%%' THEN 0.20
+                       WHEN COALESCE(daily.is_st, FALSE) THEN 0.05
+                       ELSE 0.10
+                   END
+               ),
+               2
+           ) AS limit_up_price
+    FROM minute
+    JOIN core.asset_master asset ON asset.asset_id = minute.asset_id
+    LEFT JOIN market_daily_bar daily
+      ON daily.asset_id = minute.asset_id
+     AND daily.trade_date = minute.trade_date
+     AND daily.adjust_type = 'raw'
+    LEFT JOIN LATERAL (
+        SELECT close AS raw_close
+        FROM market_daily_bar previous_bar
+        WHERE previous_bar.asset_id = minute.asset_id
+          AND previous_bar.trade_date < minute.trade_date
+          AND previous_bar.adjust_type = 'raw'
+        ORDER BY previous_bar.trade_date DESC
+        LIMIT 1
+    ) previous ON TRUE
+    ORDER BY minute.asset_id, minute.trade_date, minute.trade_time
+    """
+    with connect(service) as conn:
+        rows = fetch_all(conn, sql, [assets, start, end])
+    result = _format_dates(
+        _frame(rows, V2_MINUTE_OUTCOME_COLUMNS), ("trade_date",)
+    )
+    if not result.empty:
+        result["trade_time"] = pd.to_datetime(result["trade_time"], errors="coerce")
+        result = result.loc[
+            result["asset_id"].isin(assets)
+            & result["trade_date"].between(start, end, inclusive="both")
+            & result["trade_time"].notna()
+        ]
+    return _sort(result, ["asset_id", "trade_date", "trade_time"])
 
 
 def load_consumer_share_capacity(
