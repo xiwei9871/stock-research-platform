@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import subprocess
+import sys
 from dataclasses import replace
 from datetime import datetime, timezone, tzinfo
 from pathlib import Path
@@ -410,7 +413,9 @@ def test_cli_prints_json_and_uses_requested_root_service(monkeypatch, tmp_path: 
     assert payload["indexed"] == 1
     assert captured["root"] == tmp_path
     assert captured["service"] == "runtime-test"
-    assert captured["limits"] == report_index.limits_from_settings(report_index.SETTINGS)
+    assert captured["limits"] == report_index.limits_from_settings(
+        report_index._load_settings()
+    )
 
 
 @pytest.mark.parametrize(("code", "expected_exit"), [("MANIFEST_INVALID_JSON", 2), ("REPORT_ROOT_INVALID", 3)])
@@ -449,3 +454,66 @@ def test_cli_invalid_settings_returns_root_configuration_error(monkeypatch, caps
     payload = json.loads(capsys.readouterr().out)
     assert payload == {"error": {"code": "REPORT_INDEX_CONFIGURATION_ERROR"}}
     assert "secret" not in json.dumps(payload)
+
+
+def test_module_cli_invalid_environment_returns_safe_json_exit_three(tmp_path: Path) -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    secret_root = tmp_path / "absolute-secret-root"
+    environment = os.environ.copy()
+    environment["PYTHONPATH"] = str(repo_root / "src")
+    environment["THEME_RESEARCH_REPORT_MAX_PDF_BYTES"] = "0"
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "stock_research.theme_research_report_index",
+            "--root",
+            str(secret_root),
+        ],
+        cwd=repo_root,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode == 3
+    assert len(completed.stdout.splitlines()) == 1
+    assert json.loads(completed.stdout) == {
+        "error": {"code": "REPORT_INDEX_CONFIGURATION_ERROR"}
+    }
+    assert completed.stderr == ""
+    combined = completed.stdout + completed.stderr
+    assert "Traceback" not in combined
+    assert str(secret_root) not in combined
+
+
+def test_module_cli_missing_root_still_returns_empty_json_exit_zero(tmp_path: Path) -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    missing_root = tmp_path / "missing-root"
+    environment = os.environ.copy()
+    environment["PYTHONPATH"] = str(repo_root / "src")
+    environment.pop("THEME_RESEARCH_REPORT_MAX_PDF_BYTES", None)
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "stock_research.theme_research_report_index",
+            "--root",
+            str(missing_root),
+        ],
+        cwd=repo_root,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0
+    payload = json.loads(completed.stdout)
+    assert payload["discovered"] == 0
+    assert payload["invalid"] == 0
+    assert payload["errors"] == []
+    assert completed.stderr == ""

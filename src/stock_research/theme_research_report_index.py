@@ -12,15 +12,9 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any
 
-from stock_research.config import SETTINGS
 from stock_research.theme_research_report_manifest import (
     ReportManifestError,
     ReportManifestLimits,
-    load_report_manifest,
-)
-from stock_research.theme_research_report_store import (
-    ThemeResearchReportError,
-    register_report_manifest,
 )
 
 
@@ -39,6 +33,36 @@ _IDENTITY_SAFE_MANIFEST_CODES = {
     "ARTIFACT_TOO_LARGE",
     "MARKDOWN_REQUIRED",
 }
+
+
+def _load_settings() -> Any:
+    from stock_research.config import SETTINGS
+
+    return SETTINGS
+
+
+def load_report_manifest(*args: Any, **kwargs: Any) -> Any:
+    from stock_research.theme_research_report_manifest import (
+        load_report_manifest as load,
+    )
+
+    return load(*args, **kwargs)
+
+
+def register_report_manifest(*args: Any, **kwargs: Any) -> Any:
+    from stock_research.theme_research_report_store import (
+        register_report_manifest as register,
+    )
+
+    return register(*args, **kwargs)
+
+
+def _is_theme_research_report_error(exc: Exception) -> bool:
+    try:
+        from stock_research.theme_research_report_store import ThemeResearchReportError
+    except Exception:
+        return False
+    return isinstance(exc, ThemeResearchReportError)
 
 
 def _freeze_error(error: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -168,7 +192,7 @@ def scan_theme_research_report_root(
     root: str | os.PathLike[str],
     *,
     limits: ReportManifestLimits,
-    service: str = SETTINGS.theme_research_runtime_service,
+    service: str | None = None,
 ) -> ReportScanResult:
     started_at = datetime.now(timezone.utc)
     discovered = indexed = unchanged = invalid = 0
@@ -256,7 +280,12 @@ def scan_theme_research_report_root(
                 report_root=report_root,
                 limits=limits,
             )
-            store_result = register_report_manifest(manifest, service=service)
+            selected_service = (
+                service
+                if service is not None
+                else _load_settings().theme_research_runtime_service
+            )
+            store_result = register_report_manifest(manifest, service=selected_service)
             outcome = store_result.get("result") if isinstance(store_result, Mapping) else None
             if outcome == "indexed":
                 indexed += 1
@@ -276,26 +305,20 @@ def scan_theme_research_report_root(
                     version=directory_version if safe_identity else None,
                 ),
             )
-        except ThemeResearchReportError as exc:
+        except Exception as exc:
             invalid += 1
-            _append_error(
-                errors,
-                _manifest_error(
+            if _is_theme_research_report_error(exc):
+                error = _manifest_error(
                     exc.code,
                     relative_path,
                     theme_id=manifest.theme_id,
                     version=manifest.version,
-                ),
-            )
-        except OSError:
-            invalid += 1
-            _append_error(errors, _manifest_error("INDEX_IO_ERROR", relative_path))
-        except ValueError:
-            invalid += 1
-            _append_error(errors, _manifest_error("INDEX_UNEXPECTED_ERROR", relative_path))
-        except Exception:
-            invalid += 1
-            _append_error(errors, _manifest_error("INDEX_UNEXPECTED_ERROR", relative_path))
+                )
+            elif isinstance(exc, OSError):
+                error = _manifest_error("INDEX_IO_ERROR", relative_path)
+            else:
+                error = _manifest_error("INDEX_UNEXPECTED_ERROR", relative_path)
+            _append_error(errors, error)
 
     return ReportScanResult(
         discovered,
@@ -308,18 +331,18 @@ def scan_theme_research_report_root(
     )
 
 
-def _build_parser() -> argparse.ArgumentParser:
+def _build_parser(settings: Any) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m stock_research.theme_research_report_index")
-    parser.add_argument("--root", type=Path, default=SETTINGS.theme_research_report_root)
-    parser.add_argument("--service", default=SETTINGS.theme_research_runtime_service)
+    parser.add_argument("--root", type=Path, default=settings.theme_research_report_root)
+    parser.add_argument("--service", default=settings.theme_research_runtime_service)
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    args = _build_parser().parse_args(argv)
     try:
-        limits = limits_from_settings(SETTINGS)
-    except ValueError:
+        settings = _load_settings()
+        limits = limits_from_settings(settings)
+    except (ImportError, TypeError, ValueError):
         print(
             json.dumps(
                 {"error": {"code": "REPORT_INDEX_CONFIGURATION_ERROR"}},
@@ -327,6 +350,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         )
         return 3
+
+    args = _build_parser(settings).parse_args(argv)
 
     result = scan_theme_research_report_root(args.root, limits=limits, service=args.service)
     print(json.dumps(result.to_dict(), ensure_ascii=False, sort_keys=True))
