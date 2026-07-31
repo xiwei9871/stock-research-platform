@@ -74,20 +74,33 @@ export THEME_RESEARCH_RUNTIME_SERVICE=theme_research_runtime
 
 推荐发布顺序：
 
-1. 在报告根同一文件系统内的隐藏 staging 目录生成 Markdown/PDF。
+1. 在报告根同一文件系统内、由生成账户独占的隐藏 staging 目录生成 Markdown/PDF。
 2. 计算最终字节的 SHA-256，生成 manifest；manifest 最后写入。
-3. `fsync` 文件和目录后，将完整版本目录原子重命名到 `<theme_id>/<version>`。
-4. 定稿后不得修改该版本内任何字节。需要修订时使用新版本目录。
+3. 对该版本 staging 目录执行 `chgrp stock-research-readers`，目录设为 `0750`、文件设为 `0440`；确认 Web 运行账户可遍历并读取，但不能写入。
+4. `fsync` 文件和目录后，将完整版本目录原子重命名到 `<theme_id>/<version>`；移动后再次校验属组、权限、checksum 和非符号链接约束。
+5. 定稿后不得修改该版本内任何字节。需要修订时使用新版本目录。
 
-扫描器忽略隐藏目录和 `.tmp` 目录，但不要依靠忽略规则代替原子定稿。生产权限示例应按部署用户/组调整：
+扫描器忽略隐藏目录和 `.tmp` 目录，但不要依靠忽略规则代替原子定稿。首次建立根目录时，使用 setgid 让新建的主题、staging 和版本目录继承 readers 组；支持 POSIX ACL 的系统再设置默认 ACL，确保生成器新建或原子移动的后续文件持续具有组读取权限：
 
 ```bash
-chown -R report-generator:stock-research-readers /srv/stock-research/theme-research-reports
-find /srv/stock-research/theme-research-reports -type d -exec chmod 0750 {} \;
-find /srv/stock-research/theme-research-reports -type f -exec chmod 0440 {} \;
+install -d -o report-generator -g stock-research-readers -m 2750 /srv/stock-research/theme-research-reports
+setfacl -m g:stock-research-readers:rx,d:g:stock-research-readers:rx /srv/stock-research/theme-research-reports
 ```
 
-生成账户需在定稿前拥有 staging 写权限；Web 账户通过 `stock-research-readers` 组读取。不要给 Web 账户目录写权限。
+若部署环境不支持默认 ACL，生成器必须在每个版本原子移动前显式执行上面的逐版本 `chgrp`/`chmod`，不能只在上线时递归修复一次。生成账户需在定稿前拥有 staging 写权限；Web 账户通过 `stock-research-readers` 组读取。不要给 Web 账户目录写权限。
+
+修复已有报告树权限属于维护操作。先停止或暂停生成器，确认隐藏 staging 目录为空且没有正在写入的版本，再执行；否则递归修改可能与写入、checksum 或原子定稿竞争：
+
+```bash
+test -z "$(find /srv/stock-research/theme-research-reports -mindepth 1 -maxdepth 2 -type d -name '.*' -print -quit)"
+chown -R report-generator:stock-research-readers /srv/stock-research/theme-research-reports
+find /srv/stock-research/theme-research-reports -type d -exec chmod 2750 {} \;
+find /srv/stock-research/theme-research-reports -type f -exec chmod 0440 {} \;
+find /srv/stock-research/theme-research-reports -type d -exec setfacl -m g:stock-research-readers:rx,d:g:stock-research-readers:rx {} \;
+find /srv/stock-research/theme-research-reports -type f -exec setfacl -m g:stock-research-readers:r {} \;
+```
+
+完成后以生成账户创建一个 staging canary，并以 Web 账户验证可读不可写；删除 canary 后再恢复生成任务。若系统没有 `setfacl`，省略 ACL 命令并确认生成器的逐版本权限步骤已启用。
 
 ## Schema 与首次扫描
 
