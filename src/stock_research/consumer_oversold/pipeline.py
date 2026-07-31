@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import copy
+import fcntl
 import math
 from dataclasses import replace
 from pathlib import Path
@@ -14,7 +16,7 @@ from .activation import (
     compute_technical_readiness_features,
     score_activation_candidates,
 )
-from .contracts import ConsumerOversoldConfig
+from .contracts import UNIFIED_OUTPUT_FILENAMES, ConsumerOversoldConfig
 from .evidence import EVIDENCE_COLUMNS, validate_repair_evidence
 from .elasticity import (
     MARKET_CAPACITY_SHARE_COLUMNS,
@@ -42,7 +44,15 @@ from .loaders import (
     load_consumer_universe_frames,
     load_consumer_valuation_history,
 )
-from .reporting import _render_report, write_consumer_oversold_artifacts
+from .reporting import (
+    _json_safe,
+    _open_publish_lock,
+    _ordered_evidence_frame,
+    _ordered_frame,
+    _publish_release,
+    _render_report,
+    write_consumer_oversold_artifacts,
+)
 from .scoring import (
     apply_candidate_gates,
     rank_candidate_buckets,
@@ -203,6 +213,15 @@ V2_COMPARISON_COLUMNS = [
     "v1_exclusion_reasons",
     "v2_exclusion_reasons",
 ]
+V2_COMPATIBILITY_PUBLICATION_FRAME_KEYS = (
+    "evidence",
+    "scores",
+    "exclusions",
+    "top20",
+    "reserve",
+    "preaudit",
+    "comparison",
+)
 
 
 def _empty_unified_frame() -> pd.DataFrame:
@@ -211,6 +230,58 @@ def _empty_unified_frame() -> pd.DataFrame:
 
 def _empty_v2_frame() -> pd.DataFrame:
     return pd.DataFrame(columns=V2_OUTPUT_COLUMNS)
+
+
+def _publish_v2_compatible_artifacts(
+    payload: dict[str, Any],
+    *,
+    output_dir: str | Path,
+) -> dict[str, Any]:
+    """Publish current V2 core frames without applying V1 fixed-size validation."""
+    frames: dict[str, pd.DataFrame] = {}
+    for key in V2_COMPATIBILITY_PUBLICATION_FRAME_KEYS:
+        frame = payload[key]
+        if not isinstance(frame, pd.DataFrame):
+            raise TypeError(f"{key} must be a pandas DataFrame")
+        frames[key] = (
+            _ordered_evidence_frame(frame)
+            if key == "evidence"
+            else _ordered_frame(frame)
+        )
+    coverage = _json_safe(copy.deepcopy(payload["coverage"]))
+    coverage["trade_date"] = payload["trade_date"]
+    report = _render_report(
+        payload["trade_date"],
+        frames["top20"],
+        frames["reserve"],
+        frames["preaudit"],
+        frames["comparison"],
+        frames["exclusions"],
+        coverage,
+        frames["scores"],
+    )
+    destination = Path(output_dir).expanduser().resolve()
+    destination.mkdir(parents=True, exist_ok=True)
+    lock_path = destination / ".publish.lock"
+    lock_handle = _open_publish_lock(lock_path)
+    try:
+        fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
+        _publish_release(destination, frames, coverage, report)
+    finally:
+        try:
+            fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
+        finally:
+            lock_handle.close()
+    paths = {
+        key: str(destination / "current" / filename)
+        for key, filename in UNIFIED_OUTPUT_FILENAMES.items()
+    }
+    return {
+        "paths": paths,
+        **frames,
+        "coverage": coverage,
+        "report": report,
+    }
 
 
 def _add_publication_thresholds(
@@ -1028,7 +1099,10 @@ def _build_v2_result(
         "ranked_pool": ranked_pool,
     }
     if output_dir is not None:
-        published = write_consumer_oversold_artifacts(payload, output_dir=output_dir)
+        published = _publish_v2_compatible_artifacts(
+            payload,
+            output_dir=output_dir,
+        )
         return {
             **published,
             "expected": v1_reference["ranked"]["expected"],

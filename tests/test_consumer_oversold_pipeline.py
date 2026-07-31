@@ -1321,3 +1321,45 @@ def test_v2_preaudit_only_has_no_released_v2_ranks():
     assert result["ranked_pool"].empty
     assert result["comparison"]["v2_rank"].isna().all()
     assert result["comparison"]["v2_final_rank_score"].isna().all()
+
+
+@pytest.mark.parametrize(
+    ("asset_count", "minimum_ranked", "maximum_ranked"),
+    [
+        (25, 1, 29),
+        (45, 30, 39),
+    ],
+)
+def test_v2_output_dir_publishes_actual_core_frames_for_partial_ranked_pools(
+    tmp_path,
+    asset_count,
+    minimum_ranked,
+    maximum_ranked,
+):
+    frames, evidence, config = _many_frames(asset_count, asset_count)
+
+    result = build_consumer_oversold_weekly_from_frames(
+        frames=frames,
+        evidence=evidence,
+        config=_v2_config(config),
+        output_dir=tmp_path / f"v2-{asset_count}",
+    )
+
+    assert minimum_ranked <= len(result["ranked_pool"]) <= maximum_ranked
+    assert len(result["top30"]) == min(30, len(result["ranked_pool"]))
+    published_top20 = pd.read_csv(result["paths"]["top20"])
+    published_reserve = pd.read_csv(result["paths"]["reserve"])
+    pd.testing.assert_frame_equal(
+        published_top20.loc[:, ["asset_id", "final_rank"]].reset_index(drop=True),
+        result["top20"]
+        .loc[:, ["asset_id", "final_rank"]]
+        .reset_index(drop=True),
+        check_dtype=False,
+    )
+    pd.testing.assert_frame_equal(
+        published_reserve.loc[:, ["asset_id", "final_rank"]].reset_index(drop=True),
+        result["reserve"]
+        .loc[:, ["asset_id", "final_rank"]]
+        .reset_index(drop=True),
+        check_dtype=False,
+    )
