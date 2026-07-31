@@ -1380,7 +1380,6 @@ def _build_v2_result(
             **published,
             "expected": v1_reference["ranked"]["expected"],
             "early": v1_reference["ranked"]["early"],
-            "coverage": coverage,
             "top30": top30,
             "ranked_pool": ranked_pool,
         }

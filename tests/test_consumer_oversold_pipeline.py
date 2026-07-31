@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import replace
+import json
 from pathlib import Path
 
 import numpy as np
@@ -1401,6 +1402,23 @@ def test_v2_output_dir_publishes_sealed_v2_release_for_real_pipeline(tmp_path):
     assert "排名版本：v2" in Path(result["paths"]["report"]).read_text(
         encoding="utf-8"
     )
+
+
+def test_v2_output_dir_returns_persisted_normalized_coverage(tmp_path):
+    frames, evidence, config = _many_frames(60, 60)
+
+    result = build_consumer_oversold_weekly_from_frames(
+        frames=frames,
+        evidence=evidence,
+        config=_v2_config(config),
+        output_dir=tmp_path,
+    )
+    persisted = json.loads(
+        Path(result["paths"]["coverage"]).read_text(encoding="utf-8")
+    )
+
+    assert result["coverage"] == persisted
+    assert result["coverage"]["trade_date"] == TRADE_DATE
 
 
 def test_v2_preaudit_discovers_unevidenced_candidates_without_v1_oversold_gate():
