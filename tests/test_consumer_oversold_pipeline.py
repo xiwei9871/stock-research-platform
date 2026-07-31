@@ -14,6 +14,7 @@ from stock_research.consumer_oversold.contracts import (
 )
 from stock_research.consumer_oversold.evidence import EVIDENCE_COLUMNS, OUTPUT_COLUMNS
 from stock_research.consumer_oversold.pipeline import (
+    _publish_v2_compatible_artifacts,
     build_consumer_oversold_weekly_from_frames,
     run_consumer_oversold_weekly,
 )
@@ -1362,4 +1363,176 @@ def test_v2_output_dir_publishes_actual_core_frames_for_partial_ranked_pools(
         .loc[:, ["asset_id", "final_rank"]]
         .reset_index(drop=True),
         check_dtype=False,
+    )
+    report = Path(result["paths"]["report"]).read_text(encoding="utf-8")
+    assert "修复潜力 55% + 3—5日启动 45%" in report
+    assert "技术启动 30%" in report
+    assert "历史延续 25%" in report
+    assert "修复潜力 70% + 反弹弹性 30%" not in report
+
+
+def test_v2_preaudit_discovers_unevidenced_candidates_without_v1_oversold_gate():
+    frames, evidence, config = _many_frames(65, 0)
+    v2_config = replace(_v2_config(config), min_oversold_score=100.0)
+
+    result = build_consumer_oversold_weekly_from_frames(
+        frames=frames,
+        evidence=evidence,
+        config=v2_config,
+    )
+
+    scores = result["scores"].set_index("asset_id")
+    preaudit_ids = set(result["preaudit"]["asset_id"])
+    discovered = scores.loc[
+        scores.index.isin(preaudit_ids)
+        & ~scores["evidence_complete"]
+        & scores["composite_score"].isna()
+        & scores["oversold_score"].lt(v2_config.min_oversold_score)
+        & scores["automatic_eligible"]
+        & scores["automatic_elasticity_coverage"]
+    ]
+    assert not discovered.empty
+    assert result["preaudit"].set_index("asset_id").loc[
+        discovered.index, "preaudit_score"
+    ].notna().all()
+
+
+def test_v2_technical_peer_baseline_uses_broad_included_subindustry_membership():
+    frames, evidence, config = _many_frames(3, 2)
+    small = _v2_config(
+        replace(
+            config,
+            preaudit_size=2,
+            minimum_evidence_complete=2,
+            final_top_n=1,
+            reserve_top_n=1,
+        )
+    )
+
+    result = build_consumer_oversold_weekly_from_frames(
+        frames=frames,
+        evidence=evidence,
+        config=small,
+    )
+
+    evidenced = result["scores"]["evidence_complete"]
+    assert evidenced.sum() == 2
+    assert result["scores"].loc[evidenced, "technical_feature_coverage"].all()
+    assert result["scores"].loc[evidenced, "relative_return_5d"].notna().all()
+    assert not result["ranked_pool"].empty
+
+
+def _v2_compatibility_payload(result: dict[str, object]) -> dict[str, object]:
+    return {
+        "trade_date": TRADE_DATE,
+        "evidence": result["evidence"].copy(deep=True),
+        "scores": result["scores"].copy(deep=True),
+        "exclusions": result["exclusions"].copy(deep=True),
+        "coverage": deepcopy(result["coverage"]),
+        "top20": result["top20"].copy(deep=True),
+        "top30": result["top30"].copy(deep=True),
+        "reserve": result["reserve"].copy(deep=True),
+        "ranked_pool": result["ranked_pool"].copy(deep=True),
+        "preaudit": result["preaudit"].copy(deep=True),
+        "comparison": result["comparison"].copy(deep=True),
+    }
+
+
+@pytest.mark.parametrize(
+    ("corruption", "message"),
+    [
+        ("duplicate_top20", "top20 contains duplicate asset_id"),
+        ("rank_gap", "top20 final_rank must be continuous"),
+        ("score_order", "ranked_pool order must follow V2 score ordering"),
+        ("activation_false", "top20 activation_eligible must be true"),
+        ("preaudit_missing", "selected assets must be present in preaudit"),
+        ("coverage_count", "v2_top30_count must equal top30 length"),
+        ("trade_date", "coverage trade_date must match payload trade_date"),
+    ],
+)
+def test_v2_compatibility_publication_rejects_semantically_invalid_payloads(
+    tmp_path,
+    corruption,
+    message,
+):
+    frames, evidence, config = _many_frames(45, 45)
+    result = build_consumer_oversold_weekly_from_frames(
+        frames=frames,
+        evidence=evidence,
+        config=_v2_config(config),
+    )
+    payload = _v2_compatibility_payload(result)
+    if corruption == "duplicate_top20":
+        payload["top20"] = pd.concat(
+            [payload["top20"], payload["top20"].iloc[[0]]],
+            ignore_index=True,
+        )
+    elif corruption == "rank_gap":
+        payload["top20"].loc[payload["top20"].index[0], "final_rank"] = 2
+    elif corruption == "score_order":
+        first_index = payload["ranked_pool"].index[0]
+        second_index = payload["ranked_pool"].index[1]
+        payload["ranked_pool"].loc[
+            first_index, "final_rank_score_v2"
+        ] = payload["ranked_pool"].loc[second_index, "final_rank_score_v2"] - 1.0
+    elif corruption == "activation_false":
+        payload["top20"].loc[
+            payload["top20"].index[0], "activation_eligible"
+        ] = False
+    elif corruption == "preaudit_missing":
+        selected_id = payload["top20"].iloc[0]["asset_id"]
+        payload["preaudit"] = payload["preaudit"].loc[
+            payload["preaudit"]["asset_id"].ne(selected_id)
+        ]
+    elif corruption == "coverage_count":
+        payload["coverage"]["v2_top30_count"] += 1
+    else:
+        payload["coverage"]["trade_date"] = "2026-07-28"
+
+    with pytest.raises(ValueError, match=message):
+        _publish_v2_compatible_artifacts(
+            payload,
+            output_dir=tmp_path / corruption,
+        )
+
+
+def test_embedded_v1_reference_matches_standalone_v1_pipeline():
+    frames, evidence, config = _many_frames(45, 45)
+    v1 = build_consumer_oversold_weekly_from_frames(
+        frames=frames,
+        evidence=evidence,
+        config=replace(config, ranking_version="v1"),
+    )
+    v2 = build_consumer_oversold_weekly_from_frames(
+        frames=frames,
+        evidence=evidence,
+        config=_v2_config(config),
+    )
+
+    v1_ranked = pd.concat([v1["top20"], v1["reserve"]], ignore_index=True).set_index(
+        "asset_id"
+    )
+    comparison = v2["comparison"].set_index("asset_id")
+    embedded = comparison.loc[v1_ranked.index]
+    pd.testing.assert_series_equal(
+        embedded["v1_rank"],
+        v1_ranked["final_rank"],
+        check_names=False,
+        check_dtype=False,
+    )
+    pd.testing.assert_series_equal(
+        embedded["v1_final_rank_score"],
+        v1_ranked["final_rank_score"],
+        check_names=False,
+    )
+    standalone_scores = v1["scores"].set_index("asset_id")
+    pd.testing.assert_series_equal(
+        comparison["v1_repair_score"],
+        standalone_scores["composite_score"],
+        check_names=False,
+    )
+    pd.testing.assert_series_equal(
+        comparison["v1_elasticity_score"],
+        standalone_scores["elasticity_score"],
+        check_names=False,
     )

@@ -518,7 +518,11 @@ def _coverage_table(coverage: dict[str, Any]) -> list[str]:
         "preaudit": "审计前候选",
         "evidence_reviewed": "证据已审阅",
         "evidence_complete": "证据完整（审计前）",
-        "elasticity_complete": "弹性数据完整",
+        "elasticity_complete": (
+            "启动数据完整"
+            if coverage.get("ranking_version") == "v2"
+            else "弹性数据完整"
+        ),
         "final": "最终榜单",
         "reserve": "储备榜单",
     }
@@ -534,13 +538,38 @@ def _coverage_table(coverage: dict[str, Any]) -> list[str]:
     return lines
 
 
-def _candidate_section(title: str, frame: pd.DataFrame) -> list[str]:
+def _candidate_section(
+    title: str,
+    frame: pd.DataFrame,
+    *,
+    ranking_version: str = "v1",
+) -> list[str]:
     lines = [f"## {title}", ""]
     if frame.empty:
         return [*lines, "暂无候选。", ""]
     for _, row in frame.iterrows():
         name = _display(row.get("stock_name"))
         code = _display(row.get("stock_code", row.get("asset_id")))
+        score_detail = (
+            (
+                "- 启动评分：技术启动 "
+                f"{_score_text(row.get('technical_readiness_score'))}；历史延续 "
+                f"{_score_text(row.get('continuation_character_score'))}；剩余空间 "
+                f"{_score_text(row.get('residual_price_space_score'))}；资金效率 "
+                f"{_score_text(row.get('capital_efficiency_score'))}；催化时间 "
+                f"{_score_text(row.get('catalyst_timing_score'))}；3—5日启动 "
+                f"{_score_text(row.get('activation_score'))}"
+            )
+            if ranking_version == "v2"
+            else (
+                "- 弹性评分：残差偏离 "
+                f"{_score_text(row.get('residual_deviation_score'))}；股票特性 "
+                f"{_score_text(row.get('stock_character_score'))}；市场容量 "
+                f"{_score_text(row.get('market_capacity_score'))}；催化流动性 "
+                f"{_score_text(row.get('catalyst_liquidity_score'))}；反弹弹性 "
+                f"{_score_text(row.get('elasticity_score'))}"
+            )
+        )
         lines.extend(
             [
                 f"### {_escape_table(name)}（{_escape_table(code)}）",
@@ -603,14 +632,7 @@ def _candidate_section(title: str, frame: pd.DataFrame) -> list[str]:
                     f"{_percent_text(row.get('rebound_from_low_60d'))}；120日反弹 "
                     f"{_percent_text(row.get('rebound_from_low_120d'))}"
                 ),
-                (
-                    "- 弹性评分：残差偏离 "
-                    f"{_score_text(row.get('residual_deviation_score'))}；股票特性 "
-                    f"{_score_text(row.get('stock_character_score'))}；市场容量 "
-                    f"{_score_text(row.get('market_capacity_score'))}；催化流动性 "
-                    f"{_score_text(row.get('catalyst_liquidity_score'))}；反弹弹性 "
-                    f"{_score_text(row.get('elasticity_score'))}"
-                ),
+                score_detail,
                 "",
             ]
         )
@@ -632,13 +654,27 @@ def _exclusion_summary(frame: pd.DataFrame) -> list[str]:
     return [*lines, ""]
 
 
-def _ranking_table(title: str, frame: pd.DataFrame) -> list[str]:
+def _ranking_table(
+    title: str,
+    frame: pd.DataFrame,
+    *,
+    ranking_version: str = "v1",
+) -> list[str]:
     lines = [f"## {title}", ""]
     if frame.empty:
         return [*lines, "暂无候选。", ""]
+    score_label = "启动分位" if ranking_version == "v2" else "弹性分位"
+    score_field = (
+        "activation_rank_percentile"
+        if ranking_version == "v2"
+        else "elasticity_rank_percentile"
+    )
+    final_field = (
+        "final_rank_score_v2" if ranking_version == "v2" else "final_rank_score"
+    )
     lines.extend(
         [
-            "| 排名 | 股票 | 修复分位 | 弹性分位 | 最终排名分 |",
+            f"| 排名 | 股票 | 修复分位 | {score_label} | 最终排名分 |",
             "|---:|---|---:|---:|---:|",
         ]
     )
@@ -649,8 +685,8 @@ def _ranking_table(title: str, frame: pd.DataFrame) -> list[str]:
             f"| {_escape_table(row.get('final_rank'))} | "
             f"{_escape_table(name)}（{_escape_table(code)}） | "
             f"{_score_text(row.get('repair_rank_percentile'))} | "
-            f"{_score_text(row.get('elasticity_rank_percentile'))} | "
-            f"{_score_text(row.get('final_rank_score'))} |"
+            f"{_score_text(row.get(score_field))} | "
+            f"{_score_text(row.get(final_field))} |"
         )
     return [*lines, ""]
 
@@ -691,10 +727,13 @@ def _comparison_table(frame: pd.DataFrame) -> list[str]:
         return [*lines, "暂无对照记录。", ""]
     lines.extend(["| 股票 | 旧排名 | 新排名 | 变化 |", "|---|---:|---:|---:|"])
     for _, row in frame.iterrows():
+        old_rank = row.get(
+            "old_combined_rank", row.get("old_rank", row.get("v1_rank"))
+        )
         lines.append(
             f"| {_escape_table(row.get('stock_name', row.get('asset_id')))} | "
-            f"{_escape_table(row.get('old_combined_rank', row.get('old_rank')))} | "
-            f"{_escape_table(row.get('new_rank'))} | "
+            f"{_escape_table(old_rank)} | "
+            f"{_escape_table(row.get('new_rank', row.get('v2_rank')))} | "
             f"{_escape_table(row.get('rank_change'))} |"
         )
     return [*lines, ""]
@@ -765,8 +804,12 @@ def _special_stock_comparison(
         if not found:
             lines.extend(["- 无可用排名。", ""])
             continue
-        old_rank = combined.get("old_combined_rank", combined.get("old_rank"))
-        new_rank = combined.get("new_rank", combined.get("final_rank"))
+        old_rank = combined.get(
+            "old_combined_rank", combined.get("old_rank", combined.get("v1_rank"))
+        )
+        new_rank = combined.get(
+            "new_rank", combined.get("v2_rank", combined.get("final_rank"))
+        )
         rank_change = combined.get("rank_change")
         rank_parts = []
         if _meaningful(old_rank):
@@ -797,8 +840,21 @@ def _render_report(
     coverage: dict[str, Any],
     scores: pd.DataFrame | None = None,
 ) -> str:
+    ranking_version = str(coverage.get("ranking_version", "v1"))
     candidate_details = _enrich_rows(
         pd.concat([top20, reserve], ignore_index=True), scores
+    )
+    methodology_lines = (
+        [
+            "> 单一排名公式：修复潜力 55% + 3—5日启动 45%。",
+            "",
+            (
+                "> 3—5日启动分：技术启动 30% + 历史延续 25% + "
+                "剩余价格空间 20% + 资金推动效率 15% + 催化时间 10%。"
+            ),
+        ]
+        if ranking_version == "v2"
+        else ["> 单一排名公式：修复潜力 70% + 反弹弹性 30%。"]
     )
     lines = [
         f"# 消费超跌修复候选周报（{trade_date}）",
@@ -807,7 +863,7 @@ def _render_report(
         "",
         "> CSV 为审阅安全转义：疑似公式的文本单元格已加单引号前缀。",
         "",
-        "> 单一排名公式：修复潜力 70% + 反弹弹性 30%。",
+        *methodology_lines,
         "",
         f"> 发布状态：{_escape_table(coverage['publication_status'])}",
         "",
@@ -825,11 +881,17 @@ def _render_report(
         f"- 数据日期上限：{_escape_table(json.dumps(coverage['data_date_maxima'], ensure_ascii=False, sort_keys=True))}",
         f"- 缺失字段计数：{_escape_table(json.dumps(coverage['missing_field_counts'], ensure_ascii=False, sort_keys=True))}",
         "",
-        *_ranking_table("最终统一榜单 Top 20", top20),
-        *_ranking_table("储备榜单 21-40", reserve),
+        *_ranking_table(
+            "最终统一榜单 Top 20", top20, ranking_version=ranking_version
+        ),
+        *_ranking_table(
+            "储备榜单 21-40", reserve, ranking_version=ranking_version
+        ),
         *_preaudit_table(preaudit),
         *_comparison_table(comparison),
-        *_candidate_section("候选详情", candidate_details),
+        *_candidate_section(
+            "候选详情", candidate_details, ranking_version=ranking_version
+        ),
         *_special_stock_comparison(comparison, scores, top20, reserve, preaudit),
         *_exclusion_summary(exclusions),
         "## 警告",

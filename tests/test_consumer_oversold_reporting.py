@@ -18,6 +18,7 @@ from stock_research.consumer_oversold.evidence import (
 )
 from stock_research.consumer_oversold.reporting import (
     REPORT_COLUMNS,
+    _render_report,
     write_consumer_oversold_artifacts,
 )
 
@@ -246,6 +247,48 @@ def test_report_renders_rank_percentiles_as_zero_to_one_hundred_scores(tmp_path)
     assert "42.499999999" not in report
     assert "10000.0%" not in report
     assert "8250.0%" not in report
+
+
+def test_v2_report_uses_activation_methodology_while_v1_text_stays_unchanged():
+    payload = _payload()
+    v1_report = _render_report(
+        payload["trade_date"],
+        payload["top20"],
+        payload["reserve"],
+        payload["preaudit"],
+        payload["comparison"],
+        payload["exclusions"],
+        payload["coverage"],
+        payload["scores"],
+    )
+    payload["coverage"]["ranking_version"] = "v2"
+    for frame_name in ("top20", "reserve"):
+        frame = payload[frame_name]
+        frame["activation_rank_percentile"] = 80.0
+        frame["final_rank_score_v2"] = 75.0
+        frame["technical_readiness_score"] = 70.0
+        frame["continuation_character_score"] = 65.0
+        frame["residual_price_space_score"] = 60.0
+        frame["capital_efficiency_score"] = 55.0
+        frame["catalyst_timing_score"] = 50.0
+        frame["activation_score"] = 63.0
+    v2_report = _render_report(
+        payload["trade_date"],
+        payload["top20"],
+        payload["reserve"],
+        payload["preaudit"],
+        payload["comparison"],
+        payload["exclusions"],
+        payload["coverage"],
+        payload["scores"],
+    )
+
+    assert "修复潜力 70% + 反弹弹性 30%" in v1_report
+    assert "修复潜力 55% + 3—5日启动 45%" in v2_report
+    assert "技术启动 30%" in v2_report
+    assert "历史延续 25%" in v2_report
+    assert "启动分位" in v2_report
+    assert "修复潜力 70% + 反弹弹性 30%" not in v2_report
 
 
 def test_report_renders_real_preaudit_schema_without_fake_final_rank_fields(tmp_path):

@@ -16,7 +16,11 @@ from .activation import (
     compute_technical_readiness_features,
     score_activation_candidates,
 )
-from .contracts import UNIFIED_OUTPUT_FILENAMES, ConsumerOversoldConfig
+from .contracts import (
+    UNIFIED_OUTPUT_FILENAMES,
+    ConsumerOversoldConfig,
+    validate_trade_date,
+)
 from .evidence import EVIDENCE_COLUMNS, validate_repair_evidence
 from .elasticity import (
     MARKET_CAPACITY_SHARE_COLUMNS,
@@ -232,12 +236,189 @@ def _empty_v2_frame() -> pd.DataFrame:
     return pd.DataFrame(columns=V2_OUTPUT_COLUMNS)
 
 
+def _validated_v2_assets(frame: pd.DataFrame, name: str) -> list[str]:
+    if not isinstance(frame, pd.DataFrame):
+        raise TypeError(f"{name} must be a pandas DataFrame")
+    if "asset_id" not in frame.columns:
+        raise ValueError(f"{name} missing required columns: asset_id")
+    if frame.empty:
+        return []
+    missing = frame["asset_id"].isna()
+    normalized = frame["asset_id"].astype(str).str.strip()
+    if (missing | normalized.eq("")).any():
+        raise ValueError(f"{name} asset_id must be non-empty")
+    duplicate = normalized.duplicated(keep=False)
+    if duplicate.any():
+        asset_id = normalized.loc[duplicate].sort_values(kind="stable").iloc[0]
+        raise ValueError(f"{name} contains duplicate asset_id {asset_id}")
+    return normalized.tolist()
+
+
+def _validate_v2_rank_frame(
+    frame: pd.DataFrame,
+    name: str,
+    *,
+    start_rank: int,
+) -> list[str]:
+    asset_ids = _validated_v2_assets(frame, name)
+    required = (
+        "final_rank",
+        "eligible",
+        "activation_coverage",
+        "activation_eligible",
+    )
+    missing = [column for column in required if column not in frame.columns]
+    if missing:
+        raise ValueError(f"{name} missing required columns: {', '.join(missing)}")
+    ranks: list[int] = []
+    for value in frame["final_rank"]:
+        if isinstance(value, (bool, np.bool_)) or not isinstance(
+            value, (int, np.integer)
+        ):
+            raise ValueError(f"{name} final_rank must contain strict integers")
+        ranks.append(int(value))
+    expected = list(range(start_rank, start_rank + len(frame)))
+    if ranks != expected:
+        raise ValueError(f"{name} final_rank must be continuous from {start_rank}")
+    for field in ("eligible", "activation_coverage", "activation_eligible"):
+        valid = frame[field].map(
+            lambda value: isinstance(value, (bool, np.bool_)) and bool(value)
+        )
+        if not valid.all():
+            raise ValueError(f"{name} {field} must be true")
+    return asset_ids
+
+
+def _validate_v2_compatibility_payload(payload: dict[str, Any]) -> None:
+    if not isinstance(payload, dict):
+        raise TypeError("payload must be a dict")
+    required_keys = (
+        "trade_date",
+        "evidence",
+        "scores",
+        "exclusions",
+        "coverage",
+        "top20",
+        "top30",
+        "reserve",
+        "ranked_pool",
+        "preaudit",
+        "comparison",
+    )
+    missing_keys = [key for key in required_keys if key not in payload]
+    if missing_keys:
+        raise ValueError(f"payload missing required keys: {', '.join(missing_keys)}")
+    validate_trade_date(payload["trade_date"])
+    coverage = payload["coverage"]
+    if not isinstance(coverage, dict):
+        raise TypeError("coverage must be a dict")
+    if coverage.get("ranking_version") != "v2":
+        raise ValueError("coverage ranking_version must be v2")
+    coverage_trade_date = coverage.get("trade_date")
+    if coverage_trade_date is not None and coverage_trade_date != payload["trade_date"]:
+        raise ValueError("coverage trade_date must match payload trade_date")
+
+    for name in ("evidence", "scores", "exclusions", "preaudit", "comparison"):
+        _validated_v2_assets(payload[name], name)
+    ranked_ids = _validate_v2_rank_frame(
+        payload["ranked_pool"], "ranked_pool", start_rank=1
+    )
+    ranked_frame = payload["ranked_pool"]
+    order_fields = (
+        "final_rank_score_v2",
+        "activation_rank_percentile",
+        "repair_rank_percentile",
+    )
+    missing_order_fields = [
+        field for field in order_fields if field not in ranked_frame.columns
+    ]
+    if missing_order_fields:
+        raise ValueError(
+            "ranked_pool missing required columns: "
+            + ", ".join(missing_order_fields)
+        )
+    order_values = ranked_frame.loc[:, order_fields].apply(
+        pd.to_numeric, errors="coerce"
+    )
+    if order_values.isna().any().any() or not np.isfinite(order_values).all().all():
+        raise ValueError("ranked_pool V2 score ordering fields must be finite")
+    expected_ranked_ids = ranked_frame.sort_values(
+        [*order_fields, "asset_id"],
+        ascending=[False, False, False, True],
+        kind="stable",
+    )["asset_id"].astype(str).str.strip().tolist()
+    if ranked_ids != expected_ranked_ids:
+        raise ValueError("ranked_pool order must follow V2 score ordering")
+    top20_ids = _validate_v2_rank_frame(payload["top20"], "top20", start_rank=1)
+    top30_ids = _validate_v2_rank_frame(payload["top30"], "top30", start_rank=1)
+    final_top_n = int(coverage.get("final_top_n", 20))
+    reserve_top_n = int(coverage.get("reserve_top_n", 20))
+    reserve_ids = _validate_v2_rank_frame(
+        payload["reserve"],
+        "reserve",
+        start_rank=final_top_n + 1,
+    )
+    if len(top20_ids) > final_top_n:
+        raise ValueError("top20 length must not exceed final_top_n")
+    if len(top30_ids) > 30:
+        raise ValueError("top30 length must not exceed 30")
+    if len(reserve_ids) > reserve_top_n:
+        raise ValueError("reserve length must not exceed reserve_top_n")
+    if top20_ids != ranked_ids[: len(top20_ids)]:
+        raise ValueError("top20 must equal the ranked_pool prefix")
+    if top30_ids != ranked_ids[: len(top30_ids)]:
+        raise ValueError("top30 must equal the ranked_pool prefix")
+    expected_reserve = ranked_ids[final_top_n : final_top_n + len(reserve_ids)]
+    if reserve_ids != expected_reserve:
+        raise ValueError("reserve must follow top20 in ranked_pool order")
+    if set(top20_ids) & set(reserve_ids):
+        raise ValueError("top20 and reserve must be disjoint")
+    preaudit_ids = set(payload["preaudit"]["asset_id"].astype(str).str.strip())
+    if not (set(top20_ids) | set(reserve_ids)).issubset(preaudit_ids):
+        raise ValueError("selected assets must be present in preaudit")
+
+    status = coverage.get("publication_status")
+    if status not in {"ready", "coverage_insufficient", "preaudit_only"}:
+        raise ValueError("coverage publication_status is invalid")
+    if status == "preaudit_only":
+        if ranked_ids or top20_ids or top30_ids or reserve_ids:
+            raise ValueError("preaudit_only publication must not include ranked selections")
+    else:
+        expected_status = "ready" if len(ranked_ids) >= 30 else "coverage_insufficient"
+        if status != expected_status:
+            raise ValueError(
+                f"coverage publication_status must be {expected_status} for ranked pool size"
+            )
+    if int(coverage.get("v2_ranked_pool_count", -1)) != len(ranked_ids):
+        raise ValueError("v2_ranked_pool_count must equal ranked_pool length")
+    if int(coverage.get("v2_top30_count", -1)) != len(top30_ids):
+        raise ValueError("v2_top30_count must equal top30 length")
+    activation_funnel = coverage.get("activation_funnel", {})
+    for key, expected_count in (
+        ("ranked_pool", len(ranked_ids)),
+        ("top20", len(top20_ids)),
+        ("top30", len(top30_ids)),
+        ("reserve", len(reserve_ids)),
+    ):
+        if int(activation_funnel.get(key, -1)) != expected_count:
+            raise ValueError(f"activation_funnel {key} must equal frame length")
+    unified_funnel = coverage.get("unified_funnel", {})
+    for key, expected_count in (
+        ("preaudit", len(payload["preaudit"])),
+        ("final", len(top20_ids)),
+        ("reserve", len(reserve_ids)),
+    ):
+        if int(unified_funnel.get(key, -1)) != expected_count:
+            raise ValueError(f"unified_funnel {key} must equal frame length")
+
+
 def _publish_v2_compatible_artifacts(
     payload: dict[str, Any],
     *,
     output_dir: str | Path,
 ) -> dict[str, Any]:
     """Publish current V2 core frames without applying V1 fixed-size validation."""
+    _validate_v2_compatibility_payload(payload)
     frames: dict[str, pd.DataFrame] = {}
     for key in V2_COMPATIBILITY_PUBLICATION_FRAME_KEYS:
         frame = payload[key]
@@ -544,6 +725,13 @@ def _apply_automatic_gates(
     config: ConsumerOversoldConfig,
 ) -> pd.DataFrame:
     result = rows.copy()
+    if config.ranking_version == "v2":
+        result["v2_quantitative_repair_score"] = (
+            0.35 * result["oversold_score"]
+            + 0.30 * result["valuation_repair_score"]
+            + 0.20 * result["operating_gap_score"]
+            + 0.15 * result["balance_sheet_score"]
+        )
     price_pass = result["return_6m"].le(config.min_6m_return) | result[
         "max_drawdown_12m"
     ].le(config.min_12m_drawdown)
@@ -632,8 +820,8 @@ def _apply_automatic_gates(
             config.min_oversold_score
         )
     else:
-        masks["composite_score_below_v2_threshold"] = result[
-            "composite_score"
+        masks["quantitative_repair_score_below_v2_threshold"] = result[
+            "v2_quantitative_repair_score"
         ].ge(config.v2_min_composite_score)
     eligible = pd.Series(True, index=result.index, dtype=bool)
     for mask in masks.values():
@@ -762,6 +950,16 @@ def _build_v2_preaudit(
     config: ConsumerOversoldConfig,
 ) -> tuple[pd.DataFrame, set[str]]:
     candidates = activation_scored.copy()
+    candidates["v2_quantitative_preaudit_score"] = (
+        0.30 * candidates["oversold_score"]
+        + 0.25 * candidates["valuation_repair_score"]
+        + 0.20 * candidates["operating_gap_score"]
+        + 0.15 * candidates["balance_sheet_score"]
+        + 0.10 * candidates["automatic_elasticity_score"]
+    ).where(
+        candidates["automatic_eligible"]
+        & candidates["automatic_elasticity_coverage"]
+    )
     candidates["preaudit_score"] = (
         config.v2_repair_rank_weight * candidates["composite_score"]
         + config.v2_activation_rank_weight * candidates["activation_score"]
@@ -770,16 +968,44 @@ def _build_v2_preaudit(
         candidates["eligible"] & candidates["preaudit_score"].isna(),
         "preaudit_score",
     ] = candidates["composite_score"]
-    priority = candidates.loc[candidates["eligible"]].sort_values(
-        ["preaudit_score", "composite_score", "asset_id"],
-        ascending=[False, False, True],
+    quantitative_candidates = (
+        candidates["automatic_eligible"]
+        & candidates["automatic_elasticity_coverage"]
+    )
+    candidates.loc[
+        quantitative_candidates & candidates["preaudit_score"].isna(),
+        "preaudit_score",
+    ] = candidates["v2_quantitative_preaudit_score"]
+    quantitative_priority = candidates.loc[quantitative_candidates].sort_values(
+        [
+            "evidence_complete",
+            "preaudit_score",
+            "v2_quantitative_repair_score",
+            "oversold_score",
+            "asset_id",
+        ],
+        ascending=[True, False, False, False, True],
         kind="stable",
         na_position="last",
     )
-    selected_ids = v2_ranked["asset_id"].astype(str).head(config.preaudit_size).tolist()
+    formal_selection_size = min(
+        config.preaudit_size,
+        config.final_top_n + config.reserve_top_n,
+    )
+    selected_ids = (
+        v2_ranked["asset_id"].astype(str).head(formal_selection_size).tolist()
+    )
     selected_set = set(selected_ids)
     if len(selected_ids) < config.preaudit_size:
-        for asset_id in priority["asset_id"].astype(str):
+        for asset_id in quantitative_priority["asset_id"].astype(str):
+            if asset_id in selected_set:
+                continue
+            selected_ids.append(asset_id)
+            selected_set.add(asset_id)
+            if len(selected_ids) >= config.preaudit_size:
+                break
+    if len(selected_ids) < config.preaudit_size:
+        for asset_id in v2_ranked["asset_id"].astype(str):
             if asset_id in selected_set:
                 continue
             selected_ids.append(asset_id)
@@ -876,18 +1102,9 @@ def _build_v2_result(
     gated = apply_candidate_gates(scored, config)
     automatically_gated = _apply_automatic_gates(gated, config)
     elasticity_scored = score_rebound_elasticity(automatically_gated, config)
-    first_gate_ids = set(
-        gated.loc[gated["eligible"].astype(bool), "asset_id"].astype(str)
-    )
-    technical_membership = membership.loc[
-        membership["asset_id"].astype(str).isin(first_gate_ids)
-    ].copy()
-    technical_bars = bars.loc[
-        bars["asset_id"].astype(str).isin(first_gate_ids)
-    ].copy()
     technical = compute_technical_readiness_features(
-        technical_bars,
-        technical_membership,
+        bars,
+        membership,
         trade_date=config.trade_date,
     ).drop(columns=["latest_trade_date"], errors="ignore")
     activation_input = _merge_one_to_one(
