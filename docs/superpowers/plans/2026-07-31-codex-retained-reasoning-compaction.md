@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make retained reasoning and automatic context compaction work globally in Codex by preserving the Responses conversation path and removing stale context-window overrides.
+**Goal:** Make retained reasoning and automatic context compaction work globally in Codex by preserving the Responses conversation path and removing stale context and response-storage overrides.
 
-**Architecture:** Keep the existing global OpenAI-compatible provider, Responses wire protocol, response storage, model selection, and all unrelated Codex settings unchanged. Back up the user configuration, remove only the two manual context limits, then validate strict parsing, feature availability, and a persisted two-turn Responses conversation through the installed Codex CLI.
+**Architecture:** Keep the existing global OpenAI-compatible provider, Responses wire protocol, model selection, and all unrelated Codex settings unchanged. Preserve the verified user-configuration backup, remove the two manual context limits plus the obsolete `disable_response_storage` field, then validate full strict startup, feature availability, and a persisted two-turn Responses conversation through the installed Codex CLI.
 
 **Tech Stack:** Codex CLI 0.146.x, TOML user configuration, Responses API, zsh, `rtk`, `jq`
 
@@ -13,15 +13,15 @@
 ## File Structure
 
 - Modify: `/Users/xiwei/.codex/config.toml` — global Codex settings used across repositories.
-- Create: `/Users/xiwei/.codex/config.toml.bak.20260731-retained-reasoning-compaction` — exact pre-change rollback copy.
+- Preserve: `/Users/xiwei/.codex/config.toml.bak.20260731-retained-reasoning-compaction` — verified exact pre-change rollback copy.
 - Inspect only: `/Users/xiwei/.codex/sessions/<year>/<month>/<day>/rollout-*.jsonl` — persisted smoke-test session evidence.
 - Do not modify: `/Users/xiwei/stock_research` application code, tests, dashboard, runtime configuration, output CSV files, or `.learnings/` content.
 
-### Task 1: Capture The Global Configuration Baseline
+### Task 1: Confirm The Global Configuration Baseline And Existing Backup
 
 **Files:**
 - Inspect: `/Users/xiwei/.codex/config.toml`
-- Create: `/Users/xiwei/.codex/config.toml.bak.20260731-retained-reasoning-compaction`
+- Inspect: `/Users/xiwei/.codex/config.toml.bak.20260731-retained-reasoning-compaction`
 
 - [ ] **Step 1: Confirm the target settings have the expected pre-change values**
 
@@ -43,27 +43,17 @@ model_auto_compact_token_limit = 900000
 wire_api = "responses"
 ```
 
-- [ ] **Step 2: Confirm the deterministic backup path is unused**
+- [ ] **Step 2: Confirm the rollback copy already exists**
 
 Run:
 
 ```bash
-rtk test ! -e /Users/xiwei/.codex/config.toml.bak.20260731-retained-reasoning-compaction
+rtk proxy sh -c 'test -f /Users/xiwei/.codex/config.toml.bak.20260731-retained-reasoning-compaction'
 ```
 
-Expected: exit code 0 with no output. If the path already exists, stop and compare it with the current configuration; do not overwrite it.
+Expected: exit code 0 with no output.
 
-- [ ] **Step 3: Create a metadata-preserving rollback copy**
-
-Run:
-
-```bash
-rtk cp -p /Users/xiwei/.codex/config.toml /Users/xiwei/.codex/config.toml.bak.20260731-retained-reasoning-compaction
-```
-
-Expected: exit code 0.
-
-- [ ] **Step 4: Verify the backup is byte-identical**
+- [ ] **Step 3: Verify the rollback copy is byte-identical to the restored baseline**
 
 Run:
 
@@ -73,10 +63,10 @@ rtk cmp /Users/xiwei/.codex/config.toml /Users/xiwei/.codex/config.toml.bak.2026
 
 Expected: exit code 0 with no differences.
 
-### Task 2: Remove Only The Stale Context Overrides
+### Task 2: Remove The Stale Context And Storage Overrides
 
 **Files:**
-- Modify: `/Users/xiwei/.codex/config.toml:8-9`
+- Modify: `/Users/xiwei/.codex/config.toml:5,8-9`
 
 - [ ] **Step 1: Apply the minimal configuration edit**
 
@@ -86,13 +76,16 @@ Use `apply_patch` with this exact patch:
 *** Begin Patch
 *** Update File: /Users/xiwei/.codex/config.toml
 @@
+-disable_response_storage = false
+ network_access = "enabled"
+ windows_wsl_setup_acknowledged = true
 -model_context_window = 500000
 -model_auto_compact_token_limit = 900000
  approvals_reviewer = "user"
 *** End Patch
 ```
 
-Expected: only the two obsolete settings are removed.
+Expected: only the three obsolete settings are removed.
 
 - [ ] **Step 2: Compare the edited configuration with its backup**
 
@@ -105,18 +98,19 @@ rtk diff -u /Users/xiwei/.codex/config.toml.bak.20260731-retained-reasoning-comp
 Expected diff:
 
 ```diff
+-disable_response_storage = false
 -model_context_window = 500000
 -model_auto_compact_token_limit = 900000
 ```
 
 No provider URL, authentication, model, reasoning effort, sandbox, MCP, plugin, desktop, or notification line may change.
 
-- [ ] **Step 3: Confirm retained-reasoning prerequisites remain present**
+- [ ] **Step 3: Confirm the Responses conversation path remains present**
 
 Run:
 
 ```bash
-rtk rg -n '^(model_provider|model|disable_response_storage) =|^\[model_providers\.OpenAI\]|^wire_api =' /Users/xiwei/.codex/config.toml
+rtk rg -n '^(model_provider|model) =|^\[model_providers\.OpenAI\]|^wire_api =' /Users/xiwei/.codex/config.toml
 ```
 
 Expected output includes:
@@ -124,37 +118,26 @@ Expected output includes:
 ```text
 model_provider = "OpenAI"
 model = "gpt-5.6-sol"
-disable_response_storage = false
 [model_providers.OpenAI]
 wire_api = "responses"
 ```
 
-### Task 3: Validate Configuration And Compaction Availability
+### Task 3: Validate Static Configuration And Compaction Availability
 
 **Files:**
 - Inspect: `/Users/xiwei/.codex/config.toml`
 
-- [ ] **Step 1: Parse the full configuration in strict mode**
+- [ ] **Step 1: Confirm no stale context or response-storage fields remain**
 
 Run:
 
 ```bash
-rtk codex --strict-config --version
-```
-
-Expected: exit code 0 and a `codex-cli 0.146.x` version line. Any unknown-field or TOML parse error fails this task.
-
-- [ ] **Step 2: Confirm no manual context sizing remains**
-
-Run:
-
-```bash
-rtk rg -n '^model_context_window =|^model_auto_compact_token_limit =|^model_auto_compact_token_limit_scope =' /Users/xiwei/.codex/config.toml
+rtk rg -n '^disable_response_storage =|^model_context_window =|^model_auto_compact_token_limit =|^model_auto_compact_token_limit_scope =' /Users/xiwei/.codex/config.toml
 ```
 
 Expected: exit code 1 with no matching lines. This is the expected `rg` no-match result.
 
-- [ ] **Step 3: Confirm the installed runtime has compaction enabled**
+- [ ] **Step 2: Confirm the installed runtime has compaction enabled**
 
 Run:
 
@@ -168,7 +151,7 @@ Expected:
 remote_compaction_v2                 stable             true
 ```
 
-- [ ] **Step 4: Confirm the provider remains on the only supported wire protocol**
+- [ ] **Step 3: Confirm the provider remains on the only supported wire protocol**
 
 Run:
 
@@ -190,10 +173,10 @@ Run:
 
 ```bash
 CODEX_RETENTION_VERIFY_DIR=$(rtk mktemp -d)
-rtk test -n "$CODEX_RETENTION_VERIFY_DIR"
+rtk proxy sh -c 'test -n "$1"' sh "$CODEX_RETENTION_VERIFY_DIR"
 ```
 
-Expected: exit code 0 and a new empty temporary directory. Keep this shell session active for the remaining task steps.
+Expected: exit code 0 and a new empty temporary directory. Keep this shell session active for the remaining task steps. Invoke shell builtins through `rtk proxy sh -c`; the installed RTK wrapper cannot run `test` directly.
 
 - [ ] **Step 2: Start a persisted first turn using the global configuration**
 
@@ -206,6 +189,7 @@ rtk proxy codex exec --strict-config --skip-git-repo-check --sandbox read-only -
 Expected:
 
 - exit code 0;
+- full strict execution startup succeeds, proving that obsolete configuration fields are absent;
 - a `thread.started` event containing a thread/session ID;
 - a completed assistant response containing `FIRST_OK`;
 - no `previous response was not found`, unsupported `wire_api`, or configuration error.
@@ -216,7 +200,7 @@ Run:
 
 ```bash
 CODEX_RETENTION_THREAD_ID=$(rtk proxy jq -r 'select(.type == "thread.started") | .thread_id' "$CODEX_RETENTION_VERIFY_DIR/turn-1.jsonl" | rtk proxy head -1)
-rtk test -n "$CODEX_RETENTION_THREAD_ID"
+rtk proxy sh -c 'test -n "$1"' sh "$CODEX_RETENTION_THREAD_ID"
 ```
 
 Expected: exit code 0 and a non-empty UUID in `CODEX_RETENTION_THREAD_ID`.
@@ -241,19 +225,19 @@ Run:
 
 ```bash
 CODEX_RETENTION_ROLLOUT=$(rtk rg -l "$CODEX_RETENTION_THREAD_ID" /Users/xiwei/.codex/sessions --glob 'rollout-*.jsonl' | rtk proxy head -1)
-rtk test -n "$CODEX_RETENTION_ROLLOUT"
+rtk proxy sh -c 'test -n "$1"' sh "$CODEX_RETENTION_ROLLOUT"
 rtk proxy jq -c 'select(.type == "response_item" and (.payload.type == "reasoning" or .payload.type == "message")) | {type:.payload.type,id:.payload.id,has_encrypted_reasoning:(.payload.encrypted_content != null)}' "$CODEX_RETENTION_ROLLOUT" | rtk proxy head -20
+rtk proxy jq -c 'select(.type == "event_msg" and .payload.type == "token_count") | {model_context_window:.payload.info.model_context_window}' "$CODEX_RETENTION_ROLLOUT" | rtk proxy tail -1
 ```
 
-Expected: persisted response items have non-empty IDs; reasoning items, when emitted by the model, report encrypted reasoning content. Absence of a reasoning item in this tiny smoke test is not a failure if the two-turn marker test passes.
+Expected: persisted response items have non-empty IDs; reasoning items, when emitted by the model, report encrypted reasoning content; the reported context window is model-derived and is not the removed 500,000-token override. Absence of a reasoning item in this tiny smoke test is not a failure if the two-turn marker test passes.
 
 - [ ] **Step 6: Remove only the temporary verification directory**
 
 Run:
 
 ```bash
-rtk test -n "$CODEX_RETENTION_VERIFY_DIR"
-rtk test "$CODEX_RETENTION_VERIFY_DIR" != "/"
+rtk proxy sh -c 'test -n "$1" && test "$1" != "/"' sh "$CODEX_RETENTION_VERIFY_DIR"
 rtk rm -rf "$CODEX_RETENTION_VERIFY_DIR"
 ```
 
@@ -281,13 +265,13 @@ Report all of the following:
 
 ```text
 Removed global overrides:
+- disable_response_storage = false
 - model_context_window = 500000
 - model_auto_compact_token_limit = 900000
 
 Preserved:
 - model_provider = "OpenAI"
 - model = "gpt-5.6-sol"
-- disable_response_storage = false
 - model_providers.OpenAI.wire_api = "responses"
 
 Rollback copy:
@@ -298,7 +282,7 @@ Rollback copy:
 
 Report:
 
-- strict configuration parsing result and installed Codex version;
+- strict `codex exec` startup result and installed Codex version;
 - `remote_compaction_v2` feature status;
 - first-turn and resumed-turn outputs;
 - whether response item IDs and encrypted reasoning evidence were present;
@@ -326,7 +310,7 @@ Run:
 
 ```bash
 rtk cmp /Users/xiwei/.codex/config.toml /Users/xiwei/.codex/config.toml.bak.20260731-retained-reasoning-compaction
-rtk codex --strict-config --version
+rtk codex --version
 ```
 
-Expected: both commands exit 0. Report the original failing command and its exact error; do not attempt provider, credential, model, or endpoint changes without a new design decision.
+Expected: both commands exit 0. The restored legacy configuration is not expected to pass strict execution because it contains the original obsolete field. Report the original failing command and its exact error; do not attempt provider, credential, model, or endpoint changes without a new design decision.

@@ -26,6 +26,12 @@ The active GPT-5.6 Sol session reports an effective context window of 258,400
 tokens. The configured automatic-compaction threshold of 900,000 tokens is
 therefore above the active context window and cannot provide a useful trigger.
 
+Codex CLI 0.146.0 rejects `disable_response_storage` during a real
+`codex exec --strict-config` startup because the field is no longer part of the
+supported configuration schema. Non-strict startup ignores the stale field, so
+removing it makes the configuration truthful without disabling a working
+runtime capability.
+
 Codex already uses the Responses protocol. Its runtime supports response item
 IDs, encrypted reasoning items, `previous_response_id`, and automatic history
 compaction. Retained reasoning is consequently a runtime behavior of the
@@ -39,15 +45,15 @@ compaction thresholds.
 Remove these user overrides:
 
 ```toml
+disable_response_storage = false
 model_context_window = 500000
 model_auto_compact_token_limit = 900000
 ```
 
-Keep the existing Responses and storage configuration:
+Keep the existing Responses provider configuration:
 
 ```toml
 model_provider = "OpenAI"
-disable_response_storage = false
 
 [model_providers.OpenAI]
 wire_api = "responses"
@@ -67,6 +73,11 @@ The public Codex configuration reference defines
 `model_auto_compact_token_limit` as an optional threshold and states that an
 unset value uses model defaults. Removing both manual limits prevents a future
 model catalog update from being constrained by an outdated local assumption.
+
+The same reference does not define `disable_response_storage`, and the
+installed CLI rejects it in strict execution mode. Retained reasoning remains
+available through Codex's Responses conversation path, response item IDs, and
+encrypted reasoning state; it is not controlled by this obsolete TOML field.
 
 An explicit fixed threshold, such as 200,000 tokens, would repair the current
 misconfiguration but would need maintenance whenever the selected model or its
@@ -103,10 +114,10 @@ changed.
 
 ## Implementation Safety
 
-Before editing, create a timestamped sibling backup of
+Before editing, preserve the timestamped sibling backup of
 `/Users/xiwei/.codex/config.toml`. Apply a minimal edit that removes only the two
-obsolete overrides. Preserve all unrelated global settings and existing user
-customizations.
+obsolete context overrides and the obsolete response-storage field. Preserve
+all unrelated global settings and existing user customizations.
 
 The repository currently contains unrelated modified output CSV files and an
 untracked `.learnings/` entry. They are outside this task and must remain
@@ -116,11 +127,12 @@ untouched.
 
 After the configuration edit:
 
-1. Run Codex with strict configuration parsing to ensure the resulting TOML is
-   accepted by the installed client.
-2. Re-read the effective configuration area and confirm the two manual limits
-   are absent while `wire_api = "responses"` and
-   `disable_response_storage = false` remain.
+1. Start a small persisted `codex exec --strict-config` task to ensure the full
+   runtime accepts the resulting TOML; version-only commands are insufficient
+   because they may exit before loading execution configuration.
+2. Re-read the effective configuration area and confirm both manual limits and
+   `disable_response_storage` are absent while `wire_api = "responses"`
+   remains.
 3. Start a fresh Codex task so startup-time configuration is reloaded.
 4. Confirm the new task reports a model-derived context window rather than the
    removed 500,000-token override.
@@ -132,8 +144,8 @@ After the configuration edit:
 
 ## Failure Handling And Rollback
 
-If strict parsing fails, restore the timestamped backup and report the exact
-configuration error.
+If strict execution startup fails, restore the timestamped backup and report
+the exact configuration error.
 
 If new tasks fail to use the custom provider, restore the backup and investigate
 provider compatibility before attempting a broader configuration change.
@@ -146,4 +158,3 @@ compaction endpoint. Do not silently switch the provider or change credentials.
 
 - [Codex configuration reference](https://learn.chatgpt.com/docs/config-file/config-reference#configtoml)
 - [Responses API create reference](https://developers.openai.com/api/reference/resources/responses/methods/create)
-
