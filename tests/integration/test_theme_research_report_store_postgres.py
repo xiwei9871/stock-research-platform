@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import replace
@@ -18,7 +19,7 @@ from stock_research.theme_research_report_manifest import (
 )
 from stock_research.theme_research_report_store import (
     ThemeResearchReportError,
-    register_report_manifest,
+    register_report_manifest as _register_report_manifest,
     report_version_id,
 )
 
@@ -28,6 +29,17 @@ TEST_RUNTIME_SERVICE = os.getenv("THEME_RESEARCH_POSTGRES_TEST_RUNTIME_SERVICE",
 POSTGRES_ENABLED = (
     os.getenv("THEME_RESEARCH_POSTGRES_TEST") == "1" and bool(TEST_SERVICE)
 )
+_POSTGRES_FIXTURE_ROWS: dict[int, dict[str, set[str]]] = {}
+_ACTIVE_POSTGRES_FIXTURE_ROWS: dict[str, set[str]] | None = None
+
+
+def register_report_manifest(*args, **kwargs):
+    result = _register_report_manifest(*args, **kwargs)
+    if result["result"] == "indexed" and _ACTIVE_POSTGRES_FIXTURE_ROWS is not None:
+        _ACTIVE_POSTGRES_FIXTURE_ROWS["report_version_ids"].add(
+            result["report_version_id"]
+        )
+    return result
 
 
 def test_theme_research_report_settings_parse_environment(monkeypatch, tmp_path) -> None:
@@ -332,6 +344,8 @@ def test_report_schema_cli_requires_apply() -> None:
 
 @pytest.fixture
 def postgres_conn():
+    global _ACTIVE_POSTGRES_FIXTURE_ROWS
+
     if not POSTGRES_ENABLED:
         pytest.skip("set THEME_RESEARCH_POSTGRES_TEST=1 and a dedicated test service")
 
@@ -362,36 +376,108 @@ def postgres_conn():
     apply_theme_research_report_schema(service=TEST_SERVICE)
 
     connection = psycopg.connect(f"service={TEST_SERVICE}")
+    fixture_rows = {
+        "report_version_ids": set(),
+        "created_theme_ids": set(),
+        "created_user_ids": set(),
+    }
+    _POSTGRES_FIXTURE_ROWS[id(connection)] = fixture_rows
+    previous_active_fixture_rows = _ACTIVE_POSTGRES_FIXTURE_ROWS
+    _ACTIVE_POSTGRES_FIXTURE_ROWS = fixture_rows
     try:
         yield connection
     finally:
-        connection.rollback()
-        connection.close()
+        _ACTIVE_POSTGRES_FIXTURE_ROWS = previous_active_fixture_rows
+        try:
+            try:
+                connection.rollback()
+            finally:
+                connection.close()
+        finally:
+            _POSTGRES_FIXTURE_ROWS.pop(id(connection), None)
+            _cleanup_postgres_fixture_rows(fixture_rows)
+
+
+def _cleanup_postgres_fixture_rows(fixture_rows: dict[str, set[str]]) -> None:
+    report_version_ids = sorted(fixture_rows["report_version_ids"])
+    created_theme_ids = sorted(fixture_rows["created_theme_ids"])
+    created_user_ids = sorted(fixture_rows["created_user_ids"])
+    cleanup = psycopg.connect(f"service={TEST_SERVICE}")
+    try:
+        if report_version_ids:
+            cleanup.execute(
+                """
+                DELETE FROM research.theme_research_report_review_event
+                WHERE report_version_id = ANY(%s)
+                """,
+                (report_version_ids,),
+            )
+            cleanup.execute(
+                """
+                DELETE FROM research.theme_research_report_version
+                WHERE report_version_id = ANY(%s)
+                """,
+                (report_version_ids,),
+            )
+        if created_theme_ids:
+            cleanup.execute(
+                """
+                DELETE FROM research.theme_research_theme
+                WHERE theme_id = ANY(%s)
+                """,
+                (created_theme_ids,),
+            )
+        if created_user_ids:
+            cleanup.execute(
+                """
+                DELETE FROM identity.user_account
+                WHERE user_id = ANY(%s)
+                """,
+                (created_user_ids,),
+            )
+        cleanup.commit()
+    except Exception:
+        cleanup.rollback()
+        raise
+    finally:
+        cleanup.close()
+
+
+def _fixture_rows(postgres_conn) -> dict[str, set[str]] | None:
+    return _POSTGRES_FIXTURE_ROWS.get(id(postgres_conn))
 
 
 def _insert_theme(postgres_conn, theme_id: str) -> None:
-    postgres_conn.execute(
+    fixture_rows = _fixture_rows(postgres_conn)
+    inserted = postgres_conn.execute(
         """
         INSERT INTO research.theme_research_theme (
             theme_id, theme_name, theme_type, summary, status, created_from,
             last_updated, content_sha256, created_by, updated_by
         ) VALUES (%s, %s, 'other', 'test', 'draft', 'manual', '2026-07-31', %s, 'test', 'test')
         ON CONFLICT (theme_id) DO NOTHING
+        RETURNING theme_id
         """,
         (theme_id, theme_id, f"sha-{theme_id}"),
-    )
+    ).fetchone()
+    if inserted is not None and fixture_rows is not None:
+        fixture_rows["created_theme_ids"].add(inserted[0])
 
 
 def _insert_user(postgres_conn, user_id: str) -> None:
-    postgres_conn.execute(
+    inserted = postgres_conn.execute(
         """
         INSERT INTO identity.user_account (
             user_id, username, role, password_hash
         ) VALUES (%s, %s, 'admin', 'test')
         ON CONFLICT (user_id) DO NOTHING
+        RETURNING user_id
         """,
         (user_id, user_id),
-    )
+    ).fetchone()
+    fixture_rows = _fixture_rows(postgres_conn)
+    if inserted is not None and fixture_rows is not None:
+        fixture_rows["created_user_ids"].add(inserted[0])
 
 
 def _insert_report(postgres_conn, report_id: str, theme_id: str, version: str, **overrides) -> None:
@@ -426,6 +512,152 @@ def _insert_report(postgres_conn, report_id: str, theme_id: str, version: str, *
         """,
         values,
     )
+    fixture_rows = _fixture_rows(postgres_conn)
+    if fixture_rows is not None:
+        fixture_rows["report_version_ids"].add(report_id)
+
+
+def test_postgres_fixture_teardown_removes_only_its_committed_rows() -> None:
+    if not POSTGRES_ENABLED:
+        pytest.skip("set THEME_RESEARCH_POSTGRES_TEST=1 and a dedicated test service")
+
+    run_id = uuid.uuid4().hex
+    theme_id = f"report-fixture-cleanup-theme-{run_id}"
+    user_id = f"report-fixture-cleanup-user-{run_id}"
+    report_id = f"report-fixture-cleanup-version-{run_id}"
+    event_id = f"report-fixture-cleanup-event-{run_id}"
+    sentinel_theme_id = f"report-fixture-sentinel-theme-{run_id}"
+    sentinel_user_id = f"report-fixture-sentinel-user-{run_id}"
+    sentinel_report_id = f"report-fixture-sentinel-version-{run_id}"
+    sentinel_event_id = f"report-fixture-sentinel-event-{run_id}"
+    sentinel = psycopg.connect(f"service={TEST_SERVICE}")
+    try:
+        _insert_theme(sentinel, sentinel_theme_id)
+        _insert_user(sentinel, sentinel_user_id)
+        sentinel.commit()
+    finally:
+        sentinel.close()
+
+    fixture_iterator = postgres_conn.__wrapped__()
+    connection = next(fixture_iterator)
+    try:
+        sentinel = psycopg.connect(f"service={TEST_SERVICE}")
+        try:
+            _insert_report(
+                sentinel,
+                sentinel_report_id,
+                sentinel_theme_id,
+                "sentinel-v1",
+            )
+            sentinel.execute(
+                """
+                INSERT INTO research.theme_research_report_review_event (
+                    event_id, report_version_id, from_status, to_status,
+                    actor_user_id, idempotency_key
+                ) VALUES (%s, %s, NULL, 'pending_review', %s, %s)
+                """,
+                (
+                    sentinel_event_id,
+                    sentinel_report_id,
+                    sentinel_user_id,
+                    f"sentinel-{run_id}",
+                ),
+            )
+            sentinel.commit()
+        finally:
+            sentinel.close()
+
+        _insert_theme(connection, sentinel_theme_id)
+        _insert_theme(connection, theme_id)
+        _insert_user(connection, user_id)
+        _insert_report(connection, report_id, theme_id, "cleanup-v1")
+        connection.execute(
+            """
+            INSERT INTO research.theme_research_report_review_event (
+                event_id, report_version_id, from_status, to_status,
+                actor_user_id, idempotency_key
+            ) VALUES (%s, %s, NULL, 'pending_review', %s, %s)
+            """,
+            (event_id, report_id, user_id, f"cleanup-{run_id}"),
+        )
+        connection.commit()
+        with pytest.raises(RuntimeError, match="simulated fixture test failure"):
+            fixture_iterator.throw(RuntimeError("simulated fixture test failure"))
+    finally:
+        fixture_iterator.close()
+
+    verifier = psycopg.connect(f"service={TEST_SERVICE}")
+    try:
+        counts = verifier.execute(
+            """
+            SELECT
+                (SELECT count(*) FROM research.theme_research_report_review_event
+                 WHERE event_id = %s),
+                (SELECT count(*) FROM research.theme_research_report_version
+                 WHERE report_version_id = %s),
+                (SELECT count(*) FROM research.theme_research_theme
+                 WHERE theme_id = %s),
+                (SELECT count(*) FROM identity.user_account
+                 WHERE user_id = %s),
+                (SELECT count(*) FROM research.theme_research_report_review_event
+                 WHERE event_id = %s),
+                (SELECT count(*) FROM research.theme_research_report_version
+                 WHERE report_version_id = %s),
+                (SELECT count(*) FROM research.theme_research_theme
+                 WHERE theme_id = %s),
+                (SELECT count(*) FROM identity.user_account
+                 WHERE user_id = %s)
+            """,
+            (
+                event_id,
+                report_id,
+                theme_id,
+                user_id,
+                sentinel_event_id,
+                sentinel_report_id,
+                sentinel_theme_id,
+                sentinel_user_id,
+            ),
+        ).fetchone()
+    finally:
+        try:
+            verifier.execute(
+                "DELETE FROM research.theme_research_report_review_event WHERE event_id = %s",
+                (event_id,),
+            )
+            verifier.execute(
+                "DELETE FROM research.theme_research_report_version WHERE report_version_id = %s",
+                (report_id,),
+            )
+            verifier.execute(
+                "DELETE FROM research.theme_research_theme WHERE theme_id = %s",
+                (theme_id,),
+            )
+            verifier.execute(
+                "DELETE FROM identity.user_account WHERE user_id = %s",
+                (user_id,),
+            )
+            verifier.execute(
+                "DELETE FROM research.theme_research_report_review_event WHERE event_id = %s",
+                (sentinel_event_id,),
+            )
+            verifier.execute(
+                "DELETE FROM research.theme_research_report_version WHERE report_version_id = %s",
+                (sentinel_report_id,),
+            )
+            verifier.execute(
+                "DELETE FROM research.theme_research_theme WHERE theme_id = %s",
+                (sentinel_theme_id,),
+            )
+            verifier.execute(
+                "DELETE FROM identity.user_account WHERE user_id = %s",
+                (sentinel_user_id,),
+            )
+            verifier.commit()
+        finally:
+            verifier.close()
+
+    assert counts == (0, 0, 0, 0, 1, 1, 1, 1)
 
 
 def _validated_manifest(
@@ -1571,6 +1803,9 @@ def test_postgres_rejects_noncanonical_existing_report_version_id(
             json.dumps({"source": {"kind": "production", "tags": ["primary"]}}),
         ),
     )
+    fixture_rows = _fixture_rows(postgres_conn)
+    if fixture_rows is not None:
+        fixture_rows["report_version_ids"].add("noncanonical-report-id")
     postgres_conn.commit()
 
     with pytest.raises(ThemeResearchReportError) as exc_info:
