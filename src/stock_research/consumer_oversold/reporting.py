@@ -11,6 +11,7 @@ import stat
 import uuid
 from datetime import date, datetime
 from pathlib import Path, PurePath
+from numbers import Real
 from typing import Any
 
 import numpy as np
@@ -113,6 +114,13 @@ _UNIFIED_FUNNEL_KEYS = (
 _PUBLICATION_STATUSES = {"ready", "coverage_insufficient", "preaudit_only"}
 _V2_FINAL_TOP_N = 20
 _V2_RESERVE_TOP_N = 20
+_V2_ACTIVATION_COMPONENTS = (
+    "technical_readiness_score",
+    "continuation_character_score",
+    "residual_price_space_score",
+    "capital_efficiency_score",
+    "catalyst_timing_score",
+)
 _V2_SELECTED_REQUIRED_COLUMNS = (
     "asset_id",
     "final_rank",
@@ -217,11 +225,142 @@ def _validate_selected(
     return assets
 
 
+def _finite_score(value: Any) -> bool:
+    return (
+        not isinstance(value, (bool, np.bool_))
+        and isinstance(value, Real)
+        and math.isfinite(float(value))
+    )
+
+
+def _validate_v2_weight_maps(coverage: dict[str, Any]) -> dict[str, dict[str, float]]:
+    required = {
+        "v2_rank_weights": ("repair", "activation"),
+        "v2_activation_weights": (
+            "technical_readiness",
+            "continuation_character",
+            "residual_price_space",
+            "capital_efficiency",
+            "catalyst_timing",
+        ),
+    }
+    normalized: dict[str, dict[str, float]] = {}
+    for mapping_name, keys in required.items():
+        mapping = coverage.get(mapping_name)
+        if not isinstance(mapping, dict):
+            raise ValueError(f"coverage {mapping_name} must be a dict")
+        missing = [key for key in keys if key not in mapping]
+        if missing:
+            raise ValueError(
+                f"coverage {mapping_name} missing required keys: {', '.join(missing)}"
+            )
+        values: dict[str, float] = {}
+        for key in keys:
+            value = mapping[key]
+            if not _finite_score(value):
+                raise ValueError(f"coverage {mapping_name} {key} must be finite")
+            number = float(value)
+            if not 0.0 <= number <= 1.0:
+                raise ValueError(
+                    f"coverage {mapping_name} {key} must be between 0 and 1"
+                )
+            values[key] = number
+        if math.fsum(values.values()) != 1.0:
+            raise ValueError(f"coverage {mapping_name} weights must sum to 1.0")
+        normalized[mapping_name] = values
+    return normalized
+
+
+def _reason_text(value: Any) -> str:
+    if value is None or value is pd.NA:
+        return ""
+    try:
+        if pd.isna(value):
+            return ""
+    except (TypeError, ValueError):
+        pass
+    return str(value).strip()
+
+
+def _validate_v2_activation_truth(
+    frame: pd.DataFrame,
+    name: str,
+    coverage: dict[str, Any],
+) -> None:
+    weights = _validate_v2_weight_maps(coverage)["v2_activation_weights"]
+    weight_values = (
+        float(weights["technical_readiness"]),
+        float(weights["continuation_character"]),
+        float(weights["residual_price_space"]),
+        float(weights["capital_efficiency"]),
+        float(weights["catalyst_timing"]),
+    )
+    for _, row in frame.iterrows():
+        activation_coverage = row["activation_coverage"]
+        activation_eligible = row["activation_eligible"]
+        eligible = row["eligible"]
+        for field, value in (
+            ("activation_coverage", activation_coverage),
+            ("activation_eligible", activation_eligible),
+            ("eligible", eligible),
+            ("falling_knife", row["falling_knife"]),
+            ("overextended", row["overextended"]),
+        ):
+            if not isinstance(value, (bool, np.bool_)):
+                raise ValueError(f"{name} {field} must contain strict booleans")
+        if bool(activation_eligible) and not bool(activation_coverage):
+            raise ValueError(f"{name} activation_eligible requires activation_coverage")
+        if bool(activation_eligible) and not bool(eligible):
+            raise ValueError(f"{name} activation_eligible requires eligible")
+        if bool(activation_eligible) and bool(row["falling_knife"]):
+            raise ValueError(
+                f"{name} activation_eligible cannot be true when falling_knife"
+            )
+        if bool(activation_eligible) and bool(row["overextended"]):
+            raise ValueError(
+                f"{name} activation_eligible cannot be true when overextended"
+            )
+        reasons = _reason_text(row["activation_exclusion_reasons"])
+        if bool(row["falling_knife"]) and "falling_knife" not in reasons:
+            raise ValueError(f"{name} falling_knife requires an exclusion reason")
+        if bool(row["overextended"]) and "overextended" not in reasons:
+            raise ValueError(f"{name} overextended requires an exclusion reason")
+        if not bool(activation_eligible) and not reasons:
+            raise ValueError(f"{name} ineligible activation requires an exclusion reason")
+        if not bool(activation_coverage):
+            continue
+        component_values: list[float] = []
+        for field in _V2_ACTIVATION_COMPONENTS:
+            value = row[field]
+            if not _finite_score(value):
+                raise ValueError(f"{name} {field} must be finite")
+            number = float(value)
+            if not 0.0 <= number <= 100.0:
+                raise ValueError(
+                    f"{name} {field} must be between 0 and 100"
+                )
+            component_values.append(number)
+        activation_score = row["activation_score"]
+        if not _finite_score(activation_score):
+            raise ValueError(f"{name} activation_score must be finite")
+        expected = sum(
+            weight * component
+            for weight, component in zip(weight_values, component_values)
+        )
+        if not math.isclose(
+            float(activation_score), expected, rel_tol=0.0, abs_tol=1e-8
+        ):
+            raise ValueError(
+                f"{name} activation_score must equal weighted activation components"
+            )
+
+
 def _validate_v2_rank_frame(
     frame: pd.DataFrame,
     name: str,
     *,
     start_rank: int,
+    coverage: dict[str, Any],
 ) -> list[str]:
     missing_columns = [
         column for column in _V2_SELECTED_REQUIRED_COLUMNS if column not in frame.columns
@@ -243,6 +382,27 @@ def _validate_v2_rank_frame(
         lambda value: isinstance(value, str) and value == "v2"
     ).all():
         raise ValueError(f"{name} ranking_version must be v2")
+    _validate_v2_activation_truth(frame, name, coverage)
+    rank_weights = _validate_v2_weight_maps(coverage)["v2_rank_weights"]
+    for _, row in frame.iterrows():
+        repair_percentile = row["repair_rank_percentile"]
+        activation_percentile = row["activation_rank_percentile"]
+        final_score = row["final_rank_score_v2"]
+        if not all(
+            _finite_score(value)
+            for value in (repair_percentile, activation_percentile, final_score)
+        ):
+            raise ValueError(f"{name} rank score fields must be finite")
+        expected_score = (
+            rank_weights["repair"] * float(repair_percentile)
+            + rank_weights["activation"] * float(activation_percentile)
+        )
+        if not math.isclose(
+            float(final_score), expected_score, rel_tol=0.0, abs_tol=1e-8
+        ):
+            raise ValueError(
+                f"{name} final_rank_score_v2 must equal weighted rank components"
+            )
     for field in ("eligible", "activation_coverage", "activation_eligible"):
         valid = frame[field].map(
             lambda value: isinstance(value, (bool, np.bool_)) and bool(value)
@@ -269,10 +429,78 @@ def _validate_v2_selection_values(
         raise ValueError(f"{name} must exactly equal ranked_pool slice") from exc
 
 
+def _validate_v2_comparison_truth(
+    comparison: pd.DataFrame,
+    ranked_pool: pd.DataFrame,
+) -> None:
+    _, ranked_ids = _validate_assets(ranked_pool, "ranked_pool")
+    _, comparison_ids = _validate_assets(comparison, "comparison")
+    if not ranked_ids.issubset(comparison_ids):
+        raise ValueError("comparison must cover every ranked_pool asset")
+    ranked_by_asset = ranked_pool.assign(
+        _normalized_asset_id=ranked_pool["asset_id"].astype(str).str.strip()
+    ).set_index("_normalized_asset_id", drop=False)
+    comparison_by_asset = comparison.assign(
+        _normalized_asset_id=comparison["asset_id"].astype(str).str.strip()
+    ).set_index("_normalized_asset_id", drop=False)
+    for asset_id in ranked_ids:
+        if comparison_by_asset.loc[asset_id, "v2_rank"] is None or pd.isna(
+            comparison_by_asset.loc[asset_id, "v2_rank"]
+        ):
+            raise ValueError(
+                "comparison v2_rank must be present for every ranked_pool asset"
+            )
+    for _, row in comparison.iterrows():
+        v2_rank = row["v2_rank"]
+        if v2_rank is None or pd.isna(v2_rank):
+            continue
+        asset_id = str(row["asset_id"]).strip()
+        if asset_id not in ranked_by_asset.index:
+            raise ValueError(
+                "comparison v2_rank asset must be present in ranked_pool"
+            )
+        ranked_row = ranked_by_asset.loc[asset_id]
+        if not _finite_score(v2_rank) or not float(v2_rank).is_integer():
+            raise ValueError("comparison v2_rank must contain strict integers")
+        if int(v2_rank) != int(ranked_row["final_rank"]):
+            raise ValueError("comparison v2_rank must match ranked_pool")
+        v1_rank = row["v1_rank"]
+        rank_change = row["rank_change"]
+        if v1_rank is None or pd.isna(v1_rank):
+            if rank_change is not None and not pd.isna(rank_change):
+                raise ValueError(
+                    "comparison rank_change must equal v1_rank - v2_rank"
+                )
+        else:
+            if not _finite_score(v1_rank) or not float(v1_rank).is_integer():
+                raise ValueError("comparison v1_rank must contain strict integers")
+            expected_change = float(v1_rank) - float(v2_rank)
+            if not _finite_score(rank_change) or not math.isclose(
+                float(rank_change), expected_change, rel_tol=0.0, abs_tol=1e-8
+            ):
+                raise ValueError(
+                    "comparison rank_change must equal v1_rank - v2_rank"
+                )
+        for field, ranked_field in (
+            ("v2_repair_score", "composite_score"),
+            ("v2_activation_score", "activation_score"),
+            ("v2_final_rank_score", "final_rank_score_v2"),
+        ):
+            value = row[field]
+            expected = ranked_row[ranked_field]
+            if not _finite_score(value) or not _finite_score(expected):
+                raise ValueError(f"comparison {field} must be finite")
+            if not math.isclose(
+                float(value), float(expected), rel_tol=0.0, abs_tol=1e-8
+            ):
+                raise ValueError(f"comparison {field} must match ranked_pool")
+
+
 def _validate_v2_frames(
     frames: dict[str, pd.DataFrame],
     coverage: dict[str, Any],
 ) -> dict[str, int]:
+    _validate_v2_weight_maps(coverage)
     missing_comparison = [
         column
         for column in _V2_COMPARISON_REQUIRED_COLUMNS
@@ -284,7 +512,7 @@ def _validate_v2_frames(
         )
     _validate_assets(frames["comparison"], "comparison")
     ranked_ids = _validate_v2_rank_frame(
-        frames["ranked_pool"], "ranked_pool", start_rank=1
+        frames["ranked_pool"], "ranked_pool", start_rank=1, coverage=coverage
     )
     ranked_pool = frames["ranked_pool"]
     order_fields = (
@@ -309,7 +537,6 @@ def _validate_v2_frames(
     )
     if ranked_ids != expected_ranked_ids:
         raise ValueError("ranked_pool order must follow V2 score ordering")
-
     final_top_n = _positive_size(coverage, "final_top_n", _V2_FINAL_TOP_N)
     reserve_top_n = _positive_size(
         coverage, "reserve_top_n", _V2_RESERVE_TOP_N
@@ -318,10 +545,17 @@ def _validate_v2_frames(
         raise ValueError("coverage final_top_n must equal 20 for v2")
     if reserve_top_n != _V2_RESERVE_TOP_N:
         raise ValueError("coverage reserve_top_n must equal 20 for v2")
-    top20_ids = _validate_v2_rank_frame(frames["top20"], "top20", start_rank=1)
-    top30_ids = _validate_v2_rank_frame(frames["top30"], "top30", start_rank=1)
+    top20_ids = _validate_v2_rank_frame(
+        frames["top20"], "top20", start_rank=1, coverage=coverage
+    )
+    top30_ids = _validate_v2_rank_frame(
+        frames["top30"], "top30", start_rank=1, coverage=coverage
+    )
     reserve_ids = _validate_v2_rank_frame(
-        frames["reserve"], "reserve", start_rank=final_top_n + 1
+        frames["reserve"],
+        "reserve",
+        start_rank=final_top_n + 1,
+        coverage=coverage,
     )
     pool_size = len(ranked_ids)
     expected_top20_count = min(final_top_n, pool_size)
@@ -354,6 +588,7 @@ def _validate_v2_frames(
         ranked_pool.iloc[final_top_n : final_top_n + expected_reserve_count],
         "reserve",
     )
+    _validate_v2_comparison_truth(frames["comparison"], ranked_pool)
     preaudit_ids = _validate_assets(frames["preaudit"], "preaudit")[1]
     selected_ids = set(top20_ids) | set(top30_ids) | set(reserve_ids)
     if not selected_ids.issubset(preaudit_ids):
@@ -560,13 +795,15 @@ def _validate_date_maxima(value: Any, *, cutoff: str, path: str) -> None:
                 raise TypeError(f"{path} keys must be strings")
             _validate_date_maxima(item, cutoff=cutoff, path=f"{path}.{key}")
         return
-    if isinstance(value, (list, tuple)):
+    if isinstance(value, (list, tuple, set, frozenset)):
         for index, item in enumerate(value):
             _validate_date_maxima(item, cutoff=cutoff, path=f"{path}[{index}]")
         return
     if value is None:
         return
     if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{path} must be a valid date not later than {cutoff}")
+    if not isinstance(value, (str, date, datetime, pd.Timestamp)):
         raise ValueError(f"{path} must be a valid date not later than {cutoff}")
     try:
         parsed = pd.Timestamp(value)
@@ -578,22 +815,38 @@ def _validate_date_maxima(value: Any, *, cutoff: str, path: str) -> None:
         raise ValueError(f"{path} must not be later than trade_date {cutoff}")
 
 
+def _walk_coverage_date_maxima(
+    value: Any,
+    *,
+    cutoff: str,
+    path: str,
+) -> None:
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if not isinstance(key, str):
+                raise TypeError(f"{path} keys must be strings")
+            child_path = f"{path}.{key}"
+            if "date_maxima" in key:
+                _validate_date_maxima(item, cutoff=cutoff, path=child_path)
+            else:
+                _walk_coverage_date_maxima(item, cutoff=cutoff, path=child_path)
+        return
+    if isinstance(value, (list, tuple, set, frozenset)):
+        for index, item in enumerate(value):
+            _walk_coverage_date_maxima(
+                item,
+                cutoff=cutoff,
+                path=f"{path}[{index}]",
+            )
+
+
 def _validate_coverage_date_maxima(
     coverage: dict[str, Any],
     *,
     cutoff: str,
     path: str = "coverage",
 ) -> None:
-    for key, value in coverage.items():
-        child_path = f"{path}.{key}"
-        if "date_maxima" in key:
-            _validate_date_maxima(value, cutoff=cutoff, path=child_path)
-        elif isinstance(value, dict):
-            _validate_coverage_date_maxima(
-                value,
-                cutoff=cutoff,
-                path=child_path,
-            )
+    _walk_coverage_date_maxima(coverage, cutoff=cutoff, path=path)
 
 
 def _normalize_v2_coverage(
@@ -646,6 +899,12 @@ def _normalize_v2_coverage(
         key: _coverage_count(unified_funnel, key, "coverage unified_funnel")
         for key in _UNIFIED_FUNNEL_KEYS
     }
+    ranked_count = frame_counts["ranked_pool"]
+    for key in ("evidence_complete", "elasticity_complete"):
+        if unified[key] < ranked_count:
+            raise ValueError(
+                f"unified_funnel {key} must cover ranked_pool"
+            )
     if not unified["full"] >= unified["automatic"] >= unified["preaudit"]:
         raise ValueError(
             "coverage unified_funnel must satisfy full >= automatic >= preaudit"
@@ -776,6 +1035,12 @@ def _normalize_v2_coverage(
         raise ValueError(
             "coverage minimum_evidence_complete must not exceed preaudit_size"
         )
+    if minimum_evidence_complete < ranked_count:
+        raise ValueError("minimum_evidence_complete must cover ranked_pool")
+    if "full_pool_evidence_complete" in coverage and _coverage_count(
+        coverage, "full_pool_evidence_complete", "coverage"
+    ) < ranked_count:
+        raise ValueError("full_pool_evidence_complete must cover ranked_pool")
     if frame_counts["preaudit"] > preaudit_size:
         raise ValueError("preaudit frame length must not exceed coverage preaudit_size")
     if _coverage_count(coverage, "v2_ranked_pool_count", "coverage") != frame_counts[

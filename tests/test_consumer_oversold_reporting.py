@@ -220,7 +220,7 @@ def _v2_payload(pool_size: int = 35) -> dict[str, object]:
             final_rank_score_v2=(
                 0.55 * repair_percentile + 0.45 * activation_percentile
             ),
-            activation_score=80.0 - rank / 10.0,
+            activation_score=67.5,
             technical_readiness_score=75.0,
             continuation_character_score=70.0,
             residual_price_space_score=65.0,
@@ -511,6 +511,28 @@ def test_v2_rejects_nested_coverage_date_maximum_after_trade_date(tmp_path):
         write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
 
 
+def test_v2_rejects_list_nested_coverage_date_maximum_after_trade_date(tmp_path):
+    payload = _v2_payload()
+    payload["coverage"]["diagnostics"] = [
+        {"technical_date_maxima": {"daily_bar": "2026-07-30"}}
+    ]
+
+    with pytest.raises(
+        ValueError,
+        match=r"diagnostics\[0\]\.technical_date_maxima\.daily_bar.*2026-07-29",
+    ):
+        write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+
+
+@pytest.mark.parametrize("value", [20260730, 20260730.0])
+def test_v2_rejects_ambiguous_numeric_coverage_date_maxima(value, tmp_path):
+    payload = _v2_payload()
+    payload["coverage"]["data_date_maxima"]["market"] = value
+
+    with pytest.raises(ValueError, match="coverage.data_date_maxima.market.*valid date"):
+        write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+
+
 def test_v2_selection_requires_exact_ranked_pool_column_set_and_order(tmp_path):
     payload = _v2_payload()
     payload["top20"] = payload["top20"].drop(columns=["stock_name"])
@@ -566,7 +588,124 @@ def test_v2_preaudit_report_uses_real_activation_score_not_renamed_elasticity(tm
 
     assert "| 预审排名 | 股票 | 预审分 | 修复潜力 | 3—5日启动分 | 证据状态 |" in preaudit_section
     assert "自动启动分" not in preaudit_section
-    assert "| 1 | 候选01（000001.SZ） | 数据缺失 | 75.0 | 79.9 | 证据完整 |" in preaudit_section
+    assert "| 1 | 候选01（000001.SZ） | 数据缺失 | 75.0 | 67.5 | 证据完整 |" in preaudit_section
+
+
+def _mutate_v2_activation_field(payload, field, value):
+    for frame_name in ("ranked_pool", "top20", "top30", "reserve"):
+        if isinstance(value, str):
+            payload[frame_name][field] = payload[frame_name][field].astype(object)
+        payload[frame_name].loc[:, field] = value
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("activation_score", np.nan, "activation_score must be finite"),
+        ("technical_readiness_score", 101.0, "technical_readiness_score must be between 0 and 100"),
+        ("activation_coverage", False, "activation_eligible requires activation_coverage"),
+        ("falling_knife", "false", "falling_knife must contain strict booleans"),
+    ],
+)
+def test_v2_rejects_activation_truth_corruption(field, value, message, tmp_path):
+    payload = _v2_payload()
+    _mutate_v2_activation_field(payload, field, value)
+
+    with pytest.raises(ValueError, match=message):
+        write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+
+
+def test_v2_rejects_activation_score_that_does_not_equal_component_weights(tmp_path):
+    payload = _v2_payload()
+    _mutate_v2_activation_field(payload, "activation_score", 0.0)
+
+    with pytest.raises(ValueError, match="activation_score must equal weighted activation components"):
+        write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+
+
+def test_v2_rejects_activation_gate_semantics_with_falling_knife(tmp_path):
+    payload = _v2_payload()
+    _mutate_v2_activation_field(payload, "falling_knife", True)
+
+    with pytest.raises(ValueError, match="activation_eligible cannot be true when falling_knife"):
+        write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+
+
+def test_v2_rejects_comparison_activation_score_mismatch(tmp_path):
+    payload = _v2_payload()
+    payload["comparison"].loc[0, "v2_activation_score"] = 0.0
+
+    with pytest.raises(ValueError, match="comparison v2_activation_score must match ranked_pool"):
+        write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+
+
+def test_v2_rejects_final_rank_score_formula_corruption(tmp_path):
+    payload = _v2_payload()
+    _mutate_v2_activation_field(payload, "final_rank_score_v2", 0.0)
+
+    with pytest.raises(ValueError, match="final_rank_score_v2 must equal weighted rank components"):
+        write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+
+
+def test_v2_rejects_missing_activation_weights_before_row_validation(tmp_path):
+    payload = _v2_payload()
+    payload["coverage"].pop("v2_activation_weights")
+
+    with pytest.raises(ValueError, match="coverage v2_activation_weights must be a dict"):
+        write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+
+
+@pytest.mark.parametrize("field", ["evidence_complete", "elasticity_complete"])
+def test_v2_rejects_funnel_coverage_below_ranked_pool(field, tmp_path):
+    payload = _v2_payload()
+    payload["coverage"]["unified_funnel"][field] = 34
+
+    with pytest.raises(ValueError, match=rf"unified_funnel {field} must cover ranked_pool"):
+        write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+
+
+def test_v2_rejects_required_evidence_threshold_below_ranked_pool(tmp_path):
+    payload = _v2_payload(pool_size=45)
+    payload["coverage"]["minimum_evidence_complete"] = 40
+
+    with pytest.raises(ValueError, match="minimum_evidence_complete must cover ranked_pool"):
+        write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("rank_change", 999.0, "comparison rank_change must equal v1_rank - v2_rank"),
+        ("v2_repair_score", 0.0, "comparison v2_repair_score must match ranked_pool"),
+    ],
+)
+def test_v2_rejects_comparison_rank_and_repair_score_tampering(
+    field, value, message, tmp_path
+):
+    payload = _v2_payload()
+    payload["comparison"].loc[0, field] = value
+
+    with pytest.raises(ValueError, match=message):
+        write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+
+
+def test_v2_rejects_comparison_missing_ranked_pool_asset(tmp_path):
+    payload = _v2_payload()
+    payload["comparison"] = payload["comparison"].iloc[1:].copy()
+
+    with pytest.raises(ValueError, match="comparison must cover every ranked_pool asset"):
+        write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+
+
+def test_v2_rejects_comparison_missing_rank_for_ranked_pool_asset(tmp_path):
+    payload = _v2_payload()
+    payload["comparison"].loc[0, "v2_rank"] = np.nan
+
+    with pytest.raises(
+        ValueError,
+        match="comparison v2_rank must be present for every ranked_pool asset",
+    ):
+        write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
 
 
 def test_v2_formula_escaping_and_input_immutability_apply_to_new_frames(tmp_path):
