@@ -195,6 +195,36 @@ def test_future_rows_are_isolated_before_asset_and_numeric_validation():
     pd.testing.assert_frame_equal(actual, baseline)
 
 
+def test_features_are_independent_of_duplicate_input_index_labels():
+    activation = _activation()
+    bars = _complete_bars()
+    membership = _membership(("a", "retail"), ("b", "retail"), ("c", "retail"))
+    duplicate_index_bars = pd.concat(
+        [
+            bars.loc[bars["asset_id"].eq(asset_id)].reset_index(drop=True)
+            for asset_id in ("a", "b", "c")
+        ],
+        ignore_index=False,
+    )
+    duplicate_index_membership = pd.concat(
+        [membership.iloc[[0]], membership.iloc[[1]], membership.iloc[[2]]],
+        ignore_index=False,
+    )
+
+    expected = activation.compute_technical_readiness_features(
+        bars.reset_index(drop=True),
+        membership.reset_index(drop=True),
+        trade_date=TRADE_DATE,
+    )
+    actual = activation.compute_technical_readiness_features(
+        duplicate_index_bars,
+        duplicate_index_membership,
+        trade_date=TRADE_DATE,
+    )
+
+    pd.testing.assert_frame_equal(actual, expected)
+
+
 @pytest.mark.parametrize(
     ("frame_name", "frame", "missing"),
     [
@@ -325,6 +355,42 @@ def test_membership_requires_unique_assets_and_nonempty_subindustry():
             )
 
 
+def test_asset_ids_are_trimmed_for_matching_and_logical_duplicate_detection():
+    activation = _activation()
+    bars = _complete_bars(("A", "B", "C"))
+    bars.loc[bars["asset_id"].eq("A"), "asset_id"] = " A "
+    membership = _membership(("A", "retail"), ("B", "retail"), ("C", "retail"))
+
+    result = activation.compute_technical_readiness_features(
+        bars, membership, trade_date=TRADE_DATE
+    )
+
+    assert result["asset_id"].tolist() == ["A", "B", "C"]
+    assert result.loc[result["asset_id"].eq("A"), "technical_feature_coverage"].item()
+
+    duplicate_membership = _membership(("A", "retail"), (" A ", "retail"))
+    with pytest.raises(ValueError, match=r"duplicate.*A"):
+        activation.compute_technical_readiness_features(
+            bars, duplicate_membership, trade_date=TRADE_DATE
+        )
+
+    duplicate_bars = pd.DataFrame(
+        {
+            "asset_id": ["A", " A "],
+            "trade_date": ["2026-01-02", "2026-01-02"],
+            "close": [1.0, 2.0],
+            "amount": [1.0, 2.0],
+            "turnover_rate": [1.0, 2.0],
+        }
+    )
+    with pytest.raises(ValueError, match=r"duplicate.*A.*2026-01-02"):
+        activation.compute_technical_readiness_features(
+            duplicate_bars,
+            _membership(("A", "retail")),
+            trade_date=TRADE_DATE,
+        )
+
+
 def test_full_coverage_requires_22_sessions_and_three_covered_peers():
     activation = _activation()
     bars_21 = pd.concat(
@@ -426,6 +492,24 @@ def test_scoring_ties_singletons_and_uncovered_rows_are_deterministic_without_mu
     assert result.loc[["a", "b"], "technical_readiness_score"].tolist() == [50.0, 50.0]
     assert pd.isna(result.loc["ignored", "technical_readiness_score"])
     assert not result.loc["ignored", "falling_knife"]
+
+
+def test_scoring_is_independent_of_duplicate_feature_index_labels():
+    activation = _activation()
+    features = pd.DataFrame(
+        [
+            _score_row("low", -1.0, volatility_ratio=0.0),
+            _score_row("middle", 0.0, volatility_ratio=1.0),
+            _score_row("high", 1.0, volatility_ratio=3.0),
+        ]
+    )
+    duplicate_index_features = features.copy(deep=True)
+    duplicate_index_features.index = [0, 0, 1]
+
+    expected = activation.score_technical_readiness(features.reset_index(drop=True))
+    actual = activation.score_technical_readiness(duplicate_index_features)
+
+    pd.testing.assert_frame_equal(actual, expected)
 
 
 def test_falling_knife_requires_every_condition():

@@ -173,9 +173,9 @@ def _validate_numeric_bars(frame: pd.DataFrame) -> None:
 
 
 def _validate_membership(membership: pd.DataFrame) -> pd.DataFrame:
-    frame = membership.loc[:, MEMBERSHIP_COLUMNS].copy()
+    frame = membership.loc[:, MEMBERSHIP_COLUMNS].copy().reset_index(drop=True)
     _validate_asset_ids(frame, "membership")
-    frame["asset_id"] = frame["asset_id"].astype(str)
+    frame["asset_id"] = frame["asset_id"].astype(str).str.strip()
     duplicate = frame["asset_id"].duplicated(keep=False)
     if duplicate.any():
         asset_id = frame.loc[duplicate, "asset_id"].sort_values(kind="stable").iloc[0]
@@ -347,7 +347,7 @@ def score_technical_readiness(features: pd.DataFrame) -> pd.DataFrame:
     both contraction toward zero and expansion to 2.0 or beyond score lower.
     """
     _require_columns(features, _SCORE_INPUT_COLUMNS, "features")
-    frame = features.copy(deep=True)
+    frame = features.copy(deep=True).reset_index(drop=True)
     coverage = frame["technical_feature_coverage"].eq(True)
 
     frame["trend_turn_score"] = _component_score(
@@ -409,11 +409,11 @@ def compute_technical_readiness_features(
     _require_columns(membership, MEMBERSHIP_COLUMNS, "membership")
     cutoff = _parse_cutoff(trade_date)
 
-    frame = bars.loc[:, BAR_COLUMNS].copy()
+    frame = bars.loc[:, BAR_COLUMNS].copy().reset_index(drop=True)
     frame["trade_date"] = _parse_bar_dates(frame)
     frame = frame.loc[frame["trade_date"].le(cutoff)].copy()
     _validate_asset_ids(frame, "bars")
-    frame["asset_id"] = frame["asset_id"].astype(str)
+    frame["asset_id"] = frame["asset_id"].astype(str).str.strip()
     duplicate = frame.duplicated(["asset_id", "trade_date"], keep=False)
     if duplicate.any():
         row = frame.loc[duplicate, ["asset_id", "trade_date"]].sort_values(
