@@ -10,7 +10,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from stock_research.consumer_oversold.contracts import UNIFIED_OUTPUT_FILENAMES
+from stock_research.consumer_oversold.contracts import (
+    UNIFIED_OUTPUT_FILENAMES,
+    V2_OUTPUT_FILENAMES,
+)
 from stock_research.consumer_oversold.evidence import (
     EVIDENCE_COLUMNS,
     OUTPUT_COLUMNS,
@@ -194,6 +197,294 @@ def _unified_payload() -> dict[str, object]:
 
 def _payload() -> dict[str, object]:
     return _unified_payload()
+
+
+def _v2_payload(pool_size: int = 35) -> dict[str, object]:
+    payload = _legacy_payload()
+    payload.pop("expected")
+    payload.pop("early")
+    ranked_rows = []
+    for rank in range(1, pool_size + 1):
+        row = _selected(
+            f"{rank:06d}.SZ",
+            "expected_repair",
+            f"候选{rank:02d}",
+        ).iloc[0].to_dict()
+        repair_percentile = 101.0 - rank
+        activation_percentile = 96.0 - rank
+        row.update(
+            final_rank=rank,
+            ranking_version="v2",
+            repair_rank_percentile=repair_percentile,
+            activation_rank_percentile=activation_percentile,
+            final_rank_score_v2=(
+                0.55 * repair_percentile + 0.45 * activation_percentile
+            ),
+            activation_score=80.0 - rank / 10.0,
+            technical_readiness_score=75.0,
+            continuation_character_score=70.0,
+            residual_price_space_score=65.0,
+            capital_efficiency_score=60.0,
+            catalyst_timing_score=55.0,
+            eligible=True,
+            activation_coverage=True,
+            activation_eligible=True,
+            activation_exclusion_reasons="",
+            falling_knife=False,
+            overextended=False,
+        )
+        ranked_rows.append(row)
+    ranked_pool = pd.DataFrame(ranked_rows)
+    top20 = ranked_pool.iloc[: min(20, pool_size)].copy(deep=True)
+    top30 = ranked_pool.iloc[: min(30, pool_size)].copy(deep=True)
+    reserve = ranked_pool.iloc[20 : min(40, pool_size)].copy(deep=True)
+    preaudit = ranked_pool.copy(deep=True)
+    comparison = pd.DataFrame(
+        [
+            {
+                "asset_id": row["asset_id"],
+                "stock_code": row["stock_code"],
+                "stock_name": row["stock_name"],
+                "v1_rank": rank + 3,
+                "v2_rank": rank,
+                "rank_change": 3,
+                "v1_final_rank_score": 60.0,
+                "v1_repair_score": 65.0,
+                "v1_elasticity_score": 55.0,
+                "v2_repair_score": row["composite_score"],
+                "v2_activation_score": row["activation_score"],
+                "v2_final_rank_score": row["final_rank_score_v2"],
+                "v1_exclusion_reasons": "",
+                "v2_exclusion_reasons": "",
+            }
+            for rank, row in enumerate(ranked_rows, start=1)
+        ]
+    )
+    excluded = pd.DataFrame(
+        [
+            {
+                "asset_id": "999999.SZ",
+                "stock_code": "999999",
+                "stock_name": "第二门槛样本",
+                "exclusion_stage": "activation",
+                "exclusion_reasons": "falling_knife|overextended",
+                "activation_exclusion_reasons": "falling_knife|overextended",
+            }
+        ]
+    )
+    payload.update(
+        scores=pd.concat([ranked_pool, excluded], ignore_index=True, sort=False),
+        exclusions=excluded,
+        top20=top20,
+        top30=top30,
+        reserve=reserve,
+        ranked_pool=ranked_pool,
+        preaudit=preaudit,
+        comparison=comparison,
+    )
+    status = "ready" if pool_size >= 30 else "coverage_insufficient"
+    payload["coverage"].update(
+        trade_date=payload["trade_date"],
+        ranking_version="v2",
+        publication_status=status,
+        final_top_n=20,
+        reserve_top_n=20,
+        preaudit_size=60,
+        minimum_evidence_complete=40,
+        unified_funnel={
+            "full": pool_size + 1,
+            "automatic": pool_size + 1,
+            "preaudit": pool_size,
+            "evidence_reviewed": pool_size,
+            "evidence_complete": pool_size,
+            "elasticity_complete": pool_size,
+            "final": len(top20),
+            "reserve": len(reserve),
+        },
+        v2_ranked_pool_count=pool_size,
+        v2_top30_count=len(top30),
+        v2_thresholds={
+            "min_6m_return": -0.20,
+            "min_12m_drawdown": -0.30,
+            "min_relative_return": -0.10,
+            "min_base_upside": 0.25,
+            "min_composite_score": 30.0,
+            "min_technical_readiness_score": 35.0,
+        },
+        v2_rank_weights={"repair": 0.55, "activation": 0.45},
+        v2_activation_weights={
+            "technical_readiness": 0.30,
+            "continuation_character": 0.25,
+            "residual_price_space": 0.20,
+            "capital_efficiency": 0.15,
+            "catalyst_timing": 0.10,
+        },
+        activation_funnel={
+            "first_gate_eligible": pool_size + 1,
+            "activation_covered": pool_size + 1,
+            "activation_eligible": pool_size,
+            "ranked_pool": pool_size,
+            "top20": len(top20),
+            "top30": len(top30),
+            "reserve": len(reserve),
+        },
+    )
+    if pool_size < 30:
+        payload["coverage"]["warnings"] = ["v2_ranked_pool_below_30"]
+    return payload
+
+
+def test_v2_writes_versioned_files_and_manifest_covers_every_artifact(tmp_path):
+    result = write_consumer_oversold_artifacts(_v2_payload(), output_dir=tmp_path)
+
+    assert set(result["paths"]) == set(V2_OUTPUT_FILENAMES)
+    assert set(result) == {"paths", *V2_OUTPUT_FILENAMES, "coverage", "report"}
+    release = Path(result["paths"]["report"]).parent
+    assert set(path.name for path in release.iterdir()) == {
+        *V2_OUTPUT_FILENAMES.values(),
+        ".manifest.sha256",
+    }
+    manifest = (release / ".manifest.sha256").read_text(encoding="utf-8")
+    manifest_entries = {}
+    for line in manifest.splitlines():
+        digest, filename = line.split("  ", 1)
+        manifest_entries[filename] = digest
+    for filename in V2_OUTPUT_FILENAMES.values():
+        assert filename in manifest
+        artifact = release / filename
+        assert hashlib.sha256(artifact.read_bytes()).hexdigest() == manifest_entries[
+            filename
+        ]
+        assert stat.S_IMODE(artifact.stat().st_mode) == 0o444
+    assert stat.S_IMODE((release / ".manifest.sha256").stat().st_mode) == 0o444
+    assert stat.S_IMODE(release.stat().st_mode) == 0o555
+    assert (tmp_path / "current").is_symlink()
+    assert Path(result["paths"]["top30"]).name == "consumer_oversold_v2_top30.csv"
+    assert Path(result["paths"]["ranked_pool"]).name == (
+        "consumer_oversold_v2_ranked_pool.csv"
+    )
+    assert Path(result["paths"]["comparison"]).name == (
+        "consumer_oversold_v1_v2_comparison.csv"
+    )
+
+
+def test_v2_publication_is_byte_deterministic_for_identical_payloads(tmp_path):
+    first = write_consumer_oversold_artifacts(
+        _v2_payload(), output_dir=tmp_path / "first"
+    )
+    second = write_consumer_oversold_artifacts(
+        _v2_payload(), output_dir=tmp_path / "second"
+    )
+
+    for key in V2_OUTPUT_FILENAMES:
+        assert Path(first["paths"][key]).read_bytes() == Path(
+            second["paths"][key]
+        ).read_bytes()
+
+
+def test_v2_report_contains_gates_components_segments_and_no_manual_adjustment(tmp_path):
+    result = write_consumer_oversold_artifacts(_v2_payload(), output_dir=tmp_path)
+    report = result["report"]
+
+    for text in (
+        "排名版本：v2",
+        "第一门槛通过",
+        "第二门槛通过",
+        "修复潜力 55% + 3—5日启动 45%",
+        "技术启动 30%",
+        "历史延续 25%",
+        "剩余价格空间 20%",
+        "资金推动效率 15%",
+        "催化时间 10%",
+        "第二门槛排除原因",
+        "falling\\_knife",
+        "Top 21—30",
+        "1—10",
+        "11—20",
+        "21—30",
+        "V1/V2 排名变动",
+        "未进行任何人工调序",
+        "数据截止日：2026-07-29",
+        "发布状态：ready",
+    ):
+        assert text in report
+
+
+def test_v2_partial_pool_publishes_actual_members_without_relaxing_gates(tmp_path):
+    result = write_consumer_oversold_artifacts(
+        _v2_payload(pool_size=25), output_dir=tmp_path
+    )
+
+    assert len(result["ranked_pool"]) == 25
+    assert len(result["top20"]) == 20
+    assert len(result["top30"]) == 25
+    assert len(result["reserve"]) == 5
+    assert result["coverage"]["publication_status"] == "coverage_insufficient"
+    assert "v2_ranked_pool_below_30" in result["coverage"]["warnings"]
+    assert "实际发布 25 只" in result["report"]
+
+
+def _mutate_v2_top20_name(payload):
+    payload["top20"].loc[:, "stock_name"] = "不一致"
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        (
+            lambda p: p.update(top30=p["top30"].iloc[:-1].copy()),
+            "top30 length must equal ranked_pool selection size",
+        ),
+        (
+            _mutate_v2_top20_name,
+            "top20 must equal ranked_pool slice",
+        ),
+        (
+            lambda p: p.update(
+                preaudit=p["preaudit"].loc[
+                    ~p["preaudit"]["asset_id"].eq(p["top20"].iloc[0]["asset_id"])
+                ].copy()
+            ),
+            "selected assets must be present in preaudit",
+        ),
+        (
+            lambda p: p["coverage"].update(publication_status="coverage_insufficient"),
+            "publication_status must be ready",
+        ),
+        (
+            lambda p: p["coverage"].update(trade_date="2026-07-28"),
+            "coverage trade_date must match payload trade_date",
+        ),
+    ],
+)
+def test_v2_rejects_invalid_cardinality_slice_containment_status_and_date(
+    mutation, message, tmp_path
+):
+    payload = _v2_payload()
+    mutation(payload)
+
+    with pytest.raises(ValueError, match=message):
+        write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+
+
+def test_v2_formula_escaping_and_input_immutability_apply_to_new_frames(tmp_path):
+    payload = _v2_payload()
+    asset_id = payload["ranked_pool"].iloc[0]["asset_id"]
+    for frame_name in ("ranked_pool", "top20", "top30"):
+        payload[frame_name].loc[
+            payload[frame_name]["asset_id"].eq(asset_id), "stock_name"
+        ] = "=2+2"
+    originals = {
+        key: payload[key].copy(deep=True)
+        for key in ("top20", "top30", "reserve", "ranked_pool", "preaudit", "comparison")
+    }
+
+    result = write_consumer_oversold_artifacts(payload, output_dir=tmp_path)
+
+    for key in originals:
+        pd.testing.assert_frame_equal(payload[key], originals[key])
+    assert pd.read_csv(result["paths"]["ranked_pool"]).loc[0, "stock_name"] == "'=2+2"
+    assert pd.read_csv(result["paths"]["top30"]).loc[0, "stock_name"] == "'=2+2"
 
 
 def test_writes_exactly_nine_unified_artifacts(tmp_path):

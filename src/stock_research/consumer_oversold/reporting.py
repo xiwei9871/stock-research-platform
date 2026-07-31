@@ -16,7 +16,11 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from .contracts import UNIFIED_OUTPUT_FILENAMES, validate_trade_date
+from .contracts import (
+    UNIFIED_OUTPUT_FILENAMES,
+    V2_OUTPUT_FILENAMES,
+    validate_trade_date,
+)
 from .evidence import OUTPUT_COLUMNS as EVIDENCE_OUTPUT_COLUMNS
 from .evidence import _valid_source_url
 
@@ -66,6 +70,10 @@ _FRAME_KEYS = (
     "comparison",
 )
 _PAYLOAD_KEYS = ("trade_date", *_FRAME_KEYS, "coverage")
+_V2_FRAME_KEYS = tuple(
+    key for key in V2_OUTPUT_FILENAMES if key not in {"coverage", "report"}
+)
+_V2_PAYLOAD_KEYS = ("trade_date", *_V2_FRAME_KEYS, "coverage")
 _COVERAGE_KEYS = (
     "funnel",
     "data_date_maxima",
@@ -103,6 +111,40 @@ _UNIFIED_FUNNEL_KEYS = (
     "reserve",
 )
 _PUBLICATION_STATUSES = {"ready", "coverage_insufficient", "preaudit_only"}
+_V2_SELECTED_REQUIRED_COLUMNS = (
+    "asset_id",
+    "final_rank",
+    "ranking_version",
+    "final_rank_score_v2",
+    "repair_rank_percentile",
+    "activation_rank_percentile",
+    "activation_score",
+    "technical_readiness_score",
+    "continuation_character_score",
+    "residual_price_space_score",
+    "capital_efficiency_score",
+    "catalyst_timing_score",
+    "eligible",
+    "activation_coverage",
+    "activation_eligible",
+    "activation_exclusion_reasons",
+    "falling_knife",
+    "overextended",
+)
+_V2_COMPARISON_REQUIRED_COLUMNS = (
+    "asset_id",
+    "v1_rank",
+    "v2_rank",
+    "rank_change",
+    "v1_final_rank_score",
+    "v1_repair_score",
+    "v1_elasticity_score",
+    "v2_repair_score",
+    "v2_activation_score",
+    "v2_final_rank_score",
+    "v1_exclusion_reasons",
+    "v2_exclusion_reasons",
+)
 _STAGING_PREFIX = ".consumer-oversold-staging-"
 _TEMP_LINK_PREFIX = ".consumer-oversold-current-tmp-"
 _RELEASE_PREFIX = "consumer-oversold-"
@@ -171,6 +213,154 @@ def _validate_selected(
         if not valid.all():
             raise ValueError(f"{name} field {field} must be {str(required).lower()}")
     return assets
+
+
+def _validate_v2_rank_frame(
+    frame: pd.DataFrame,
+    name: str,
+    *,
+    start_rank: int,
+) -> list[str]:
+    missing_columns = [
+        column for column in _V2_SELECTED_REQUIRED_COLUMNS if column not in frame.columns
+    ]
+    if missing_columns:
+        raise ValueError(f"{name} missing required columns: {', '.join(missing_columns)}")
+    asset_ids, _ = _validate_assets(frame, name)
+    ranks: list[int] = []
+    for value in frame["final_rank"]:
+        if isinstance(value, (bool, np.bool_)) or not isinstance(
+            value, (int, np.integer)
+        ):
+            raise ValueError(f"{name} final_rank must contain strict integers")
+        ranks.append(int(value))
+    expected_ranks = list(range(start_rank, start_rank + len(frame)))
+    if ranks != expected_ranks:
+        raise ValueError(f"{name} final_rank must be continuous from {start_rank}")
+    if not frame["ranking_version"].map(
+        lambda value: isinstance(value, str) and value == "v2"
+    ).all():
+        raise ValueError(f"{name} ranking_version must be v2")
+    for field in ("eligible", "activation_coverage", "activation_eligible"):
+        valid = frame[field].map(
+            lambda value: isinstance(value, (bool, np.bool_)) and bool(value)
+        )
+        if not valid.all():
+            raise ValueError(f"{name} {field} must be true")
+    return asset_ids
+
+
+def _validate_v2_selection_values(
+    selection: pd.DataFrame,
+    ranked_slice: pd.DataFrame,
+    name: str,
+) -> None:
+    shared_columns = [
+        column for column in selection.columns if column in ranked_slice.columns
+    ]
+    if not shared_columns:
+        raise ValueError(f"{name} has no shared columns with ranked_pool")
+    try:
+        pd.testing.assert_frame_equal(
+            selection.loc[:, shared_columns].reset_index(drop=True),
+            ranked_slice.loc[:, shared_columns].reset_index(drop=True),
+            check_dtype=False,
+            check_exact=True,
+        )
+    except AssertionError as exc:
+        raise ValueError(f"{name} must equal ranked_pool slice across shared columns") from exc
+
+
+def _validate_v2_frames(
+    frames: dict[str, pd.DataFrame],
+    coverage: dict[str, Any],
+) -> dict[str, int]:
+    missing_comparison = [
+        column
+        for column in _V2_COMPARISON_REQUIRED_COLUMNS
+        if column not in frames["comparison"].columns
+    ]
+    if missing_comparison:
+        raise ValueError(
+            "comparison missing required columns: " + ", ".join(missing_comparison)
+        )
+    _validate_assets(frames["comparison"], "comparison")
+    ranked_ids = _validate_v2_rank_frame(
+        frames["ranked_pool"], "ranked_pool", start_rank=1
+    )
+    ranked_pool = frames["ranked_pool"]
+    order_fields = (
+        "final_rank_score_v2",
+        "activation_rank_percentile",
+        "repair_rank_percentile",
+    )
+    order_values = ranked_pool.loc[:, order_fields].apply(
+        pd.to_numeric, errors="coerce"
+    )
+    if order_values.isna().any().any() or not np.isfinite(order_values).all().all():
+        raise ValueError("ranked_pool V2 score ordering fields must be finite")
+    expected_ranked_ids = (
+        ranked_pool.sort_values(
+            [*order_fields, "asset_id"],
+            ascending=[False, False, False, True],
+            kind="stable",
+        )["asset_id"]
+        .astype(str)
+        .str.strip()
+        .tolist()
+    )
+    if ranked_ids != expected_ranked_ids:
+        raise ValueError("ranked_pool order must follow V2 score ordering")
+
+    final_top_n = _positive_size(coverage, "final_top_n", 20)
+    reserve_top_n = _positive_size(coverage, "reserve_top_n", 20)
+    top20_ids = _validate_v2_rank_frame(frames["top20"], "top20", start_rank=1)
+    top30_ids = _validate_v2_rank_frame(frames["top30"], "top30", start_rank=1)
+    reserve_ids = _validate_v2_rank_frame(
+        frames["reserve"], "reserve", start_rank=final_top_n + 1
+    )
+    pool_size = len(ranked_ids)
+    expected_top20_count = min(final_top_n, pool_size)
+    expected_top30_count = min(30, pool_size)
+    expected_reserve_count = min(reserve_top_n, max(0, pool_size - final_top_n))
+    for name, actual_count, expected_count in (
+        ("top20", len(top20_ids), expected_top20_count),
+        ("top30", len(top30_ids), expected_top30_count),
+        ("reserve", len(reserve_ids), expected_reserve_count),
+    ):
+        if actual_count != expected_count:
+            raise ValueError(f"{name} length must equal ranked_pool selection size")
+    if top20_ids != ranked_ids[:expected_top20_count]:
+        raise ValueError("top20 must equal the ranked_pool prefix")
+    if top30_ids != ranked_ids[:expected_top30_count]:
+        raise ValueError("top30 must equal the ranked_pool prefix")
+    expected_reserve_ids = ranked_ids[
+        final_top_n : final_top_n + expected_reserve_count
+    ]
+    if reserve_ids != expected_reserve_ids:
+        raise ValueError("reserve must follow top20 in ranked_pool order")
+    _validate_v2_selection_values(
+        frames["top20"], ranked_pool.iloc[:expected_top20_count], "top20"
+    )
+    _validate_v2_selection_values(
+        frames["top30"], ranked_pool.iloc[:expected_top30_count], "top30"
+    )
+    _validate_v2_selection_values(
+        frames["reserve"],
+        ranked_pool.iloc[final_top_n : final_top_n + expected_reserve_count],
+        "reserve",
+    )
+    preaudit_ids = _validate_assets(frames["preaudit"], "preaudit")[1]
+    selected_ids = set(top20_ids) | set(top30_ids) | set(reserve_ids)
+    if not selected_ids.issubset(preaudit_ids):
+        raise ValueError("selected assets must be present in preaudit")
+    return {
+        "ranked_pool": pool_size,
+        "top20": len(top20_ids),
+        "top30": len(top30_ids),
+        "reserve": len(reserve_ids),
+        "preaudit": len(preaudit_ids),
+    }
 
 
 def _json_safe(value: Any, path: str = "coverage") -> Any:
@@ -345,6 +535,243 @@ def _normalize_coverage(
     if not isinstance(warnings, list):
         raise TypeError("coverage warnings must be a list")
     normalized["warnings"] = [*warnings, warning] if warning not in warnings else warnings
+    return normalized
+
+
+def _coverage_count(mapping: dict[str, Any], key: str, path: str) -> int:
+    value = mapping.get(key)
+    if isinstance(value, (bool, np.bool_)) or not isinstance(
+        value, (int, np.integer)
+    ):
+        raise TypeError(f"{path} {key} must be an integer")
+    if int(value) < 0:
+        raise ValueError(f"{path} {key} must be non-negative")
+    return int(value)
+
+
+def _normalize_v2_coverage(
+    coverage: dict[str, Any],
+    trade_date: str,
+    *,
+    frame_counts: dict[str, int],
+) -> dict[str, Any]:
+    missing = _missing_keys(coverage, _COVERAGE_KEYS)
+    if missing:
+        raise ValueError(f"coverage missing required keys: {', '.join(missing)}")
+    if coverage.get("ranking_version") != "v2":
+        raise ValueError("coverage ranking_version must be v2")
+    coverage_trade_date = coverage.get("trade_date")
+    if coverage_trade_date is not None and coverage_trade_date != trade_date:
+        raise ValueError("coverage trade_date must match payload trade_date")
+
+    funnel = coverage["funnel"]
+    if not isinstance(funnel, dict):
+        raise TypeError("coverage funnel must be a dict")
+    missing_funnel = _missing_keys(funnel, _FUNNEL_KEYS)
+    if missing_funnel:
+        raise ValueError(
+            f"coverage funnel missing required keys: {', '.join(missing_funnel)}"
+        )
+    funnel_counts = {
+        key: _coverage_count(funnel, key, "coverage funnel") for key in _FUNNEL_KEYS
+    }
+    ordered = [funnel_counts[key] for key in _FUNNEL_KEYS[:7]]
+    if any(left < right for left, right in zip(ordered, ordered[1:])):
+        raise ValueError("coverage funnel counts must be non-increasing")
+    if ordered[-1] < (
+        funnel_counts["selected_expected"] + funnel_counts["selected_early"]
+    ):
+        raise ValueError(
+            "coverage valuation_eligible must be at least selected_expected + selected_early"
+        )
+
+    unified_funnel = coverage["unified_funnel"]
+    if not isinstance(unified_funnel, dict):
+        raise TypeError("coverage unified_funnel must be a dict")
+    missing_unified = _missing_keys(unified_funnel, _UNIFIED_FUNNEL_KEYS)
+    if missing_unified:
+        raise ValueError(
+            "coverage unified_funnel missing required keys: "
+            + ", ".join(missing_unified)
+        )
+    unified = {
+        key: _coverage_count(unified_funnel, key, "coverage unified_funnel")
+        for key in _UNIFIED_FUNNEL_KEYS
+    }
+    if not unified["full"] >= unified["automatic"] >= unified["preaudit"]:
+        raise ValueError(
+            "coverage unified_funnel must satisfy full >= automatic >= preaudit"
+        )
+    if not (
+        unified["preaudit"]
+        >= unified["evidence_reviewed"]
+        >= unified["evidence_complete"]
+        >= unified["elasticity_complete"]
+    ):
+        raise ValueError(
+            "coverage unified_funnel must satisfy preaudit >= evidence_reviewed >= "
+            "evidence_complete >= elasticity_complete"
+        )
+    for key in ("preaudit", "final", "reserve"):
+        expected = frame_counts[key if key != "final" else "top20"]
+        if unified[key] != expected:
+            frame_name = "top20" if key == "final" else key
+            raise ValueError(
+                f"coverage unified_funnel {key} must equal {frame_name} frame length"
+            )
+
+    activation_funnel = coverage.get("activation_funnel")
+    if not isinstance(activation_funnel, dict):
+        raise TypeError("coverage activation_funnel must be a dict")
+    required_activation = (
+        "first_gate_eligible",
+        "activation_covered",
+        "activation_eligible",
+        "ranked_pool",
+        "top20",
+        "top30",
+        "reserve",
+    )
+    missing_activation = _missing_keys(activation_funnel, required_activation)
+    if missing_activation:
+        raise ValueError(
+            "coverage activation_funnel missing required keys: "
+            + ", ".join(missing_activation)
+        )
+    activation = {
+        key: _coverage_count(
+            activation_funnel, key, "coverage activation_funnel"
+        )
+        for key in required_activation
+    }
+    for key in ("ranked_pool", "top20", "top30", "reserve"):
+        if activation[key] != frame_counts[key]:
+            raise ValueError(
+                f"coverage activation_funnel {key} must equal {key} frame length"
+            )
+    if activation["ranked_pool"] > min(
+        activation["first_gate_eligible"], activation["activation_eligible"]
+    ):
+        raise ValueError(
+            "coverage activation_funnel ranked_pool must be covered by both gates"
+        )
+
+    for key in ("v2_thresholds", "v2_rank_weights", "v2_activation_weights"):
+        if not isinstance(coverage.get(key), dict):
+            raise TypeError(f"coverage {key} must be a dict")
+    required_thresholds = (
+        "min_6m_return",
+        "min_12m_drawdown",
+        "min_relative_return",
+        "min_base_upside",
+        "min_composite_score",
+        "min_technical_readiness_score",
+    )
+    required_rank_weights = ("repair", "activation")
+    required_activation_weights = (
+        "technical_readiness",
+        "continuation_character",
+        "residual_price_space",
+        "capital_efficiency",
+        "catalyst_timing",
+    )
+    for mapping_name, required in (
+        ("v2_thresholds", required_thresholds),
+        ("v2_rank_weights", required_rank_weights),
+        ("v2_activation_weights", required_activation_weights),
+    ):
+        missing_values = _missing_keys(coverage[mapping_name], required)
+        if missing_values:
+            raise ValueError(
+                f"coverage {mapping_name} missing required keys: "
+                + ", ".join(missing_values)
+            )
+        for key in required:
+            value = coverage[mapping_name][key]
+            if isinstance(value, (bool, np.bool_)) or not isinstance(
+                value, (int, float, np.integer, np.floating)
+            ) or not math.isfinite(float(value)):
+                raise ValueError(f"coverage {mapping_name} {key} must be finite")
+    for mapping_name, required in (
+        ("v2_rank_weights", required_rank_weights),
+        ("v2_activation_weights", required_activation_weights),
+    ):
+        values = [float(coverage[mapping_name][key]) for key in required]
+        if any(value < 0.0 or value > 1.0 for value in values):
+            raise ValueError(f"coverage {mapping_name} weights must be between 0 and 1")
+        if math.fsum(values) != 1.0:
+            raise ValueError(f"coverage {mapping_name} weights must sum to 1.0")
+
+    final_top_n = _positive_size(coverage, "final_top_n", 20)
+    reserve_top_n = _positive_size(coverage, "reserve_top_n", 20)
+    preaudit_size = _positive_size(coverage, "preaudit_size", 60)
+    minimum_evidence_complete = _positive_size(
+        coverage, "minimum_evidence_complete", final_top_n + reserve_top_n
+    )
+    if preaudit_size < final_top_n + reserve_top_n:
+        raise ValueError("coverage preaudit_size must cover final_top_n plus reserve_top_n")
+    if minimum_evidence_complete < final_top_n + reserve_top_n:
+        raise ValueError(
+            "coverage minimum_evidence_complete must cover final_top_n plus reserve_top_n"
+        )
+    if minimum_evidence_complete > preaudit_size:
+        raise ValueError(
+            "coverage minimum_evidence_complete must not exceed preaudit_size"
+        )
+    if frame_counts["preaudit"] > preaudit_size:
+        raise ValueError("preaudit frame length must not exceed coverage preaudit_size")
+    if _coverage_count(coverage, "v2_ranked_pool_count", "coverage") != frame_counts[
+        "ranked_pool"
+    ]:
+        raise ValueError("coverage v2_ranked_pool_count must equal ranked_pool length")
+    if _coverage_count(coverage, "v2_top30_count", "coverage") != frame_counts["top30"]:
+        raise ValueError("coverage v2_top30_count must equal top30 length")
+
+    status = coverage["publication_status"]
+    if status not in _PUBLICATION_STATUSES:
+        raise ValueError(
+            "coverage publication_status must be ready, coverage_insufficient, "
+            "or preaudit_only"
+        )
+    ranked_count = frame_counts["ranked_pool"]
+    if status == "preaudit_only":
+        if any(frame_counts[key] for key in ("ranked_pool", "top20", "top30", "reserve")):
+            raise ValueError("preaudit_only publication must not include ranked selections")
+    else:
+        expected_status = "ready" if ranked_count >= 30 else "coverage_insufficient"
+        if status != expected_status:
+            raise ValueError(
+                f"coverage publication_status must be {expected_status} for ranked pool size"
+            )
+
+    normalized = _json_safe(copy.deepcopy(coverage))
+    normalized["trade_date"] = trade_date
+    normalized.update(
+        final_top_n=final_top_n,
+        reserve_top_n=reserve_top_n,
+        preaudit_size=preaudit_size,
+        minimum_evidence_complete=minimum_evidence_complete,
+    )
+    warnings = normalized["warnings"]
+    if not isinstance(warnings, list):
+        raise TypeError("coverage warnings must be a list")
+    threshold_warning = (
+        "publication_thresholds: "
+        f"final_top_n={final_top_n}, reserve_top_n={reserve_top_n}, "
+        f"preaudit_size={preaudit_size}, "
+        f"minimum_evidence_complete={minimum_evidence_complete}"
+    )
+    if threshold_warning not in warnings:
+        normalized["warnings"] = [*warnings, threshold_warning]
+    if (
+        status == "coverage_insufficient"
+        and ranked_count < 30
+        and "v2_ranked_pool_below_30" not in normalized["warnings"]
+    ):
+        normalized["warnings"] = [
+            *normalized["warnings"],
+            "v2_ranked_pool_below_30",
+        ]
     return normalized
 
 
@@ -691,13 +1118,18 @@ def _ranking_table(
     return [*lines, ""]
 
 
-def _preaudit_table(frame: pd.DataFrame) -> list[str]:
+def _preaudit_table(
+    frame: pd.DataFrame,
+    *,
+    ranking_version: str = "v1",
+) -> list[str]:
     lines = ["## 审计前 Top 60", ""]
     if frame.empty:
         return [*lines, "暂无候选。", ""]
+    automatic_label = "自动启动分" if ranking_version == "v2" else "自动弹性分"
     lines.extend(
         [
-            "| 预审排名 | 股票 | 预审分 | 修复潜力 | 自动弹性分 | 证据状态 |",
+            f"| 预审排名 | 股票 | 预审分 | 修复潜力 | {automatic_label} | 证据状态 |",
             "|---:|---|---:|---:|---:|---|",
         ]
     )
@@ -721,11 +1153,21 @@ def _preaudit_table(frame: pd.DataFrame) -> list[str]:
     return [*lines, ""]
 
 
-def _comparison_table(frame: pd.DataFrame) -> list[str]:
-    lines = ["## 新旧排名对照", ""]
+def _comparison_table(
+    frame: pd.DataFrame,
+    *,
+    ranking_version: str = "v1",
+) -> list[str]:
+    title = "V1/V2 排名变动" if ranking_version == "v2" else "新旧排名对照"
+    lines = [f"## {title}", ""]
     if frame.empty:
         return [*lines, "暂无对照记录。", ""]
-    lines.extend(["| 股票 | 旧排名 | 新排名 | 变化 |", "|---|---:|---:|---:|"])
+    rank_labels = (
+        "| 股票 | V1 排名 | V2 排名 | 变化 |"
+        if ranking_version == "v2"
+        else "| 股票 | 旧排名 | 新排名 | 变化 |"
+    )
+    lines.extend([rank_labels, "|---|---:|---:|---:|"])
     for _, row in frame.iterrows():
         old_rank = row.get(
             "old_combined_rank", row.get("old_rank", row.get("v1_rank"))
@@ -737,6 +1179,57 @@ def _comparison_table(frame: pd.DataFrame) -> list[str]:
             f"{_escape_table(row.get('rank_change'))} |"
         )
     return [*lines, ""]
+
+
+def _v2_segment_table(top30: pd.DataFrame) -> list[str]:
+    lines = ["## Top30 分段", "", "| 分段 | 实际数量 |", "|---|---:|"]
+    for label, start, end in (
+        ("1—10", 1, 10),
+        ("11—20", 11, 20),
+        ("21—30", 21, 30),
+    ):
+        if top30.empty or "final_rank" not in top30.columns:
+            count = 0
+        else:
+            ranks = pd.to_numeric(top30["final_rank"], errors="coerce")
+            count = int(ranks.between(start, end, inclusive="both").sum())
+        lines.append(f"| {label} | {count} |")
+    return [*lines, ""]
+
+
+def _v2_second_gate_exclusion_summary(frame: pd.DataFrame) -> list[str]:
+    lines = ["## 第二门槛排除原因", ""]
+    if frame.empty:
+        return [*lines, "暂无第二门槛剔除记录。", ""]
+    if "exclusion_stage" in frame.columns:
+        selected = frame.loc[frame["exclusion_stage"].astype(str).eq("activation")]
+    else:
+        selected = frame.iloc[0:0]
+    reason_field = (
+        "activation_exclusion_reasons"
+        if "activation_exclusion_reasons" in selected.columns
+        else "exclusion_reasons"
+    )
+    if selected.empty or reason_field not in selected.columns:
+        return [*lines, "暂无第二门槛剔除记录。", ""]
+    reasons: list[str] = []
+    for value in selected[reason_field].dropna():
+        reasons.extend(part.strip() for part in str(value).split("|") if part.strip())
+    if not reasons:
+        return [*lines, "暂无第二门槛剔除记录。", ""]
+    counts = pd.Series(reasons).value_counts(sort=False).sort_index()
+    lines.extend(["| 原因 | 数量 |", "|---|---:|"])
+    lines.extend(
+        f"| {_escape_table(reason)} | {int(count)} |"
+        for reason, count in counts.items()
+    )
+    return [*lines, ""]
+
+
+def _weight_percent(mapping: dict[str, Any], key: str) -> str:
+    value = float(mapping[key]) * 100.0
+    rounded = round(value)
+    return f"{rounded:.0f}%" if math.isclose(value, rounded, abs_tol=1e-12) else f"{value:.1f}%"
 
 
 _FIXED_SPECIAL_STOCKS = (
@@ -839,18 +1332,67 @@ def _render_report(
     exclusions: pd.DataFrame,
     coverage: dict[str, Any],
     scores: pd.DataFrame | None = None,
+    *,
+    top30: pd.DataFrame | None = None,
+    ranked_pool: pd.DataFrame | None = None,
 ) -> str:
     ranking_version = str(coverage.get("ranking_version", "v1"))
+    if ranking_version == "v2":
+        top30_frame = (
+            top30.copy(deep=True)
+            if top30 is not None
+            else pd.concat([top20, reserve], ignore_index=True).loc[
+                lambda frame: pd.to_numeric(
+                    frame.get(
+                        "final_rank", pd.Series(index=frame.index, dtype="float64")
+                    ),
+                    errors="coerce",
+                ).le(30)
+            ]
+        )
+        ranked_pool_count = (
+            len(ranked_pool)
+            if ranked_pool is not None
+            else int(coverage.get("v2_ranked_pool_count", len(top20) + len(reserve)))
+        )
+    else:
+        top30_frame = pd.DataFrame()
+        ranked_pool_count = 0
     candidate_details = _enrich_rows(
         pd.concat([top20, reserve], ignore_index=True), scores
     )
+    rank_weights = coverage.get(
+        "v2_rank_weights", {"repair": 0.55, "activation": 0.45}
+    )
+    activation_weights = coverage.get(
+        "v2_activation_weights",
+        {
+            "technical_readiness": 0.30,
+            "continuation_character": 0.25,
+            "residual_price_space": 0.20,
+            "capital_efficiency": 0.15,
+            "catalyst_timing": 0.10,
+        },
+    )
     methodology_lines = (
         [
-            "> 单一排名公式：修复潜力 55% + 3—5日启动 45%。",
+            (
+                "> 单一排名公式：修复潜力 "
+                f"{_weight_percent(rank_weights, 'repair')} + 3—5日启动 "
+                f"{_weight_percent(rank_weights, 'activation')}。"
+            ),
             "",
             (
-                "> 3—5日启动分：技术启动 30% + 历史延续 25% + "
-                "剩余价格空间 20% + 资金推动效率 15% + 催化时间 10%。"
+                "> 3—5日启动分：技术启动 "
+                f"{_weight_percent(activation_weights, 'technical_readiness')} + "
+                "历史延续 "
+                f"{_weight_percent(activation_weights, 'continuation_character')} + "
+                "剩余价格空间 "
+                f"{_weight_percent(activation_weights, 'residual_price_space')} + "
+                "资金推动效率 "
+                f"{_weight_percent(activation_weights, 'capital_efficiency')} + "
+                "催化时间 "
+                f"{_weight_percent(activation_weights, 'catalyst_timing')}。"
             ),
         ]
         if ranking_version == "v2"
@@ -863,10 +1405,30 @@ def _render_report(
         "",
         "> CSV 为审阅安全转义：疑似公式的文本单元格已加单引号前缀。",
         "",
+        *(
+            [
+                "> 排名版本：v2",
+                "",
+                "> 本期排名完全由冻结数据和统一规则生成，未进行任何人工调序。",
+                "",
+                f"> 数据截止日：{trade_date}",
+                "",
+            ]
+            if ranking_version == "v2"
+            else []
+        ),
         *methodology_lines,
         "",
         f"> 发布状态：{_escape_table(coverage['publication_status'])}",
         "",
+        *(
+            [
+                f"> 通过两道门槛后实际发布 {ranked_pool_count} 只，门槛未因数量不足而放宽。",
+                "",
+            ]
+            if ranking_version == "v2"
+            else []
+        ),
         *(
             ["> **仅预审，不是正式Top20。**", ""]
             if coverage["publication_status"] == "preaudit_only"
@@ -881,18 +1443,61 @@ def _render_report(
         f"- 数据日期上限：{_escape_table(json.dumps(coverage['data_date_maxima'], ensure_ascii=False, sort_keys=True))}",
         f"- 缺失字段计数：{_escape_table(json.dumps(coverage['missing_field_counts'], ensure_ascii=False, sort_keys=True))}",
         "",
+        *(
+            [
+                "### V2 双门槛",
+                "",
+                (
+                    "- 第一门槛通过："
+                    f"{_escape_table(coverage.get('activation_funnel', {}).get('first_gate_eligible'))}"
+                ),
+                (
+                    "- 启动数据完整："
+                    f"{_escape_table(coverage.get('activation_funnel', {}).get('activation_covered'))}"
+                ),
+                (
+                    "- 第二门槛通过："
+                    f"{_escape_table(coverage.get('activation_funnel', {}).get('activation_eligible'))}"
+                ),
+                f"- 最终合格池：{ranked_pool_count}",
+                "",
+            ]
+            if ranking_version == "v2"
+            else []
+        ),
         *_ranking_table(
             "最终统一榜单 Top 20", top20, ranking_version=ranking_version
         ),
+        *(
+            _ranking_table(
+                "Top 21—30",
+                top30_frame.loc[
+                    pd.to_numeric(top30_frame["final_rank"], errors="coerce").between(
+                        21, 30, inclusive="both"
+                    )
+                ]
+                if "final_rank" in top30_frame.columns
+                else top30_frame.iloc[0:0],
+                ranking_version="v2",
+            )
+            if ranking_version == "v2"
+            else []
+        ),
+        *(_v2_segment_table(top30_frame) if ranking_version == "v2" else []),
         *_ranking_table(
             "储备榜单 21-40", reserve, ranking_version=ranking_version
         ),
-        *_preaudit_table(preaudit),
-        *_comparison_table(comparison),
+        *_preaudit_table(preaudit, ranking_version=ranking_version),
+        *_comparison_table(comparison, ranking_version=ranking_version),
         *_candidate_section(
             "候选详情", candidate_details, ranking_version=ranking_version
         ),
         *_special_stock_comparison(comparison, scores, top20, reserve, preaudit),
+        *(
+            _v2_second_gate_exclusion_summary(exclusions)
+            if ranking_version == "v2"
+            else []
+        ),
         *_exclusion_summary(exclusions),
         "## 警告",
         "",
@@ -1034,18 +1639,21 @@ def _artifact_digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _write_and_verify_manifest(release: Path) -> Path:
+def _write_and_verify_manifest(
+    release: Path,
+    filenames: dict[str, str],
+) -> Path:
     manifest = release / ".manifest.sha256"
     lines = [
         f"{_artifact_digest(release / filename)}  {filename}"
-        for filename in sorted(UNIFIED_OUTPUT_FILENAMES.values())
+        for filename in sorted(filenames.values())
     ]
     _write_text("\n".join(lines) + "\n", manifest)
     parsed: dict[str, str] = {}
     for line in manifest.read_text(encoding="utf-8").splitlines():
         digest, filename = line.split("  ", 1)
         parsed[filename] = digest
-    expected_names = sorted(UNIFIED_OUTPUT_FILENAMES.values())
+    expected_names = sorted(filenames.values())
     if list(parsed) != expected_names or any(
         parsed[filename] != _artifact_digest(release / filename) for filename in expected_names
     ):
@@ -1053,8 +1661,12 @@ def _write_and_verify_manifest(release: Path) -> Path:
     return manifest
 
 
-def _seal_release(release: Path, manifest: Path) -> None:
-    for filename in (*UNIFIED_OUTPUT_FILENAMES.values(), manifest.name):
+def _seal_release(
+    release: Path,
+    manifest: Path,
+    filenames: dict[str, str],
+) -> None:
+    for filename in (*filenames.values(), manifest.name):
         artifact = release / filename
         artifact.chmod(0o444)
         _fsync_file(artifact)
@@ -1067,6 +1679,7 @@ def _publish_release(
     frames: dict[str, pd.DataFrame],
     coverage: dict[str, Any],
     report: str,
+    filenames: dict[str, str] = UNIFIED_OUTPUT_FILENAMES,
 ) -> None:
     releases_dir = output_dir / ".releases"
     releases_descriptor = _open_directory_no_follow(
@@ -1087,18 +1700,21 @@ def _publish_release(
         preserve_release = False
         staging.mkdir()
         try:
-            for key in _FRAME_KEYS:
-                _write_csv(frames[key], staging / UNIFIED_OUTPUT_FILENAMES[key])
+            frame_keys = tuple(
+                key for key in filenames if key not in {"coverage", "report"}
+            )
+            for key in frame_keys:
+                _write_csv(frames[key], staging / filenames[key])
             _write_text(
                 json.dumps(
                     coverage, ensure_ascii=False, indent=2, sort_keys=True, allow_nan=False
                 )
                 + "\n",
-                staging / UNIFIED_OUTPUT_FILENAMES["coverage"],
+                staging / filenames["coverage"],
             )
-            _write_text(report, staging / UNIFIED_OUTPUT_FILENAMES["report"])
-            manifest = _write_and_verify_manifest(staging)
-            _seal_release(staging, manifest)
+            _write_text(report, staging / filenames["report"])
+            manifest = _write_and_verify_manifest(staging, filenames)
+            _seal_release(staging, manifest, filenames)
             _verify_directory_identity(
                 releases_dir, releases_descriptor, "output_dir/.releases"
             )
@@ -1138,51 +1754,83 @@ def write_consumer_oversold_artifacts(
     """Validate, render, and atomically publish consumer oversold research artifacts."""
     if not isinstance(payload, dict):
         raise TypeError("payload must be a dict")
-    missing = _missing_keys(payload, _PAYLOAD_KEYS)
+    if not isinstance(payload.get("coverage"), dict):
+        if "coverage" not in payload:
+            raise ValueError("payload missing required keys: coverage")
+        raise TypeError("coverage must be a dict")
+    ranking_version = payload["coverage"].get("ranking_version", "v1")
+    if ranking_version not in {"v1", "v2"}:
+        raise ValueError("coverage ranking_version must be v1 or v2")
+    payload_keys = _V2_PAYLOAD_KEYS if ranking_version == "v2" else _PAYLOAD_KEYS
+    frame_keys = _V2_FRAME_KEYS if ranking_version == "v2" else _FRAME_KEYS
+    filenames = (
+        V2_OUTPUT_FILENAMES if ranking_version == "v2" else UNIFIED_OUTPUT_FILENAMES
+    )
+    missing = _missing_keys(payload, payload_keys)
     if missing:
         raise ValueError(f"payload missing required keys: {', '.join(missing)}")
     trade_date = validate_trade_date(payload["trade_date"])
     frames: dict[str, pd.DataFrame] = {}
-    for key in _FRAME_KEYS:
+    for key in frame_keys:
         frame = payload[key]
         if not isinstance(frame, pd.DataFrame):
             raise TypeError(f"{key} must be a pandas DataFrame")
         frames[key] = _ordered_evidence_frame(frame) if key == "evidence" else _ordered_frame(frame)
-    _, preaudit_assets = _validate_assets(frames["preaudit"], "preaudit")
-    _validate_assets(frames["comparison"], "comparison")
-    if not isinstance(payload["coverage"], dict):
-        raise TypeError("coverage must be a dict")
-    coverage = _normalize_coverage(
-        payload["coverage"],
-        trade_date,
-        top20_count=len(frames["top20"]),
-        reserve_count=len(frames["reserve"]),
-        preaudit_count=len(frames["preaudit"]),
-    )
-    final_top_n = coverage["final_top_n"]
-    reserve_top_n = coverage["reserve_top_n"]
-    top20_assets = _validate_selected(
-        frames["top20"], "top20", range(1, len(frames["top20"]) + 1)
-    )
-    reserve_assets = _validate_selected(
-        frames["reserve"],
-        "reserve",
-        range(final_top_n + 1, final_top_n + len(frames["reserve"]) + 1),
-    )
-    if top20_assets & reserve_assets:
-        raise ValueError("top20 and reserve asset sets must be mutually exclusive")
-    if not (top20_assets | reserve_assets).issubset(preaudit_assets):
-        raise ValueError("top20 and reserve assets must be present in preaudit")
-    report = _render_report(
-        trade_date,
-        frames["top20"],
-        frames["reserve"],
-        frames["preaudit"],
-        frames["comparison"],
-        frames["exclusions"],
-        coverage,
-        frames["scores"],
-    )
+    if ranking_version == "v2":
+        coverage_trade_date = payload["coverage"].get("trade_date")
+        if coverage_trade_date is not None and coverage_trade_date != trade_date:
+            raise ValueError("coverage trade_date must match payload trade_date")
+        for key in ("evidence", "scores", "exclusions"):
+            _validate_assets(frames[key], key)
+        frame_counts = _validate_v2_frames(frames, payload["coverage"])
+        coverage = _normalize_v2_coverage(
+            payload["coverage"], trade_date, frame_counts=frame_counts
+        )
+        report = _render_report(
+            trade_date,
+            frames["top20"],
+            frames["reserve"],
+            frames["preaudit"],
+            frames["comparison"],
+            frames["exclusions"],
+            coverage,
+            frames["scores"],
+            top30=frames["top30"],
+            ranked_pool=frames["ranked_pool"],
+        )
+    else:
+        _, preaudit_assets = _validate_assets(frames["preaudit"], "preaudit")
+        _validate_assets(frames["comparison"], "comparison")
+        coverage = _normalize_coverage(
+            payload["coverage"],
+            trade_date,
+            top20_count=len(frames["top20"]),
+            reserve_count=len(frames["reserve"]),
+            preaudit_count=len(frames["preaudit"]),
+        )
+        final_top_n = coverage["final_top_n"]
+        top20_assets = _validate_selected(
+            frames["top20"], "top20", range(1, len(frames["top20"]) + 1)
+        )
+        reserve_assets = _validate_selected(
+            frames["reserve"],
+            "reserve",
+            range(final_top_n + 1, final_top_n + len(frames["reserve"]) + 1),
+        )
+        if top20_assets & reserve_assets:
+            raise ValueError("top20 and reserve asset sets must be mutually exclusive")
+        if not (top20_assets | reserve_assets).issubset(preaudit_assets):
+            raise ValueError("top20 and reserve assets must be present in preaudit")
+        report = _render_report(
+            trade_date,
+            frames["top20"],
+            frames["reserve"],
+            frames["preaudit"],
+            frames["comparison"],
+            frames["exclusions"],
+            coverage,
+            frames["scores"],
+        )
 
     destination = Path(output_dir).expanduser().resolve()
     destination.mkdir(parents=True, exist_ok=True)
@@ -1190,7 +1838,13 @@ def write_consumer_oversold_artifacts(
     lock_handle = _open_publish_lock(lock_path)
     try:
         fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
-        _publish_release(destination, frames, coverage, report)
+        _publish_release(
+            destination,
+            frames,
+            coverage,
+            report,
+            filenames=filenames,
+        )
     finally:
         try:
             fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
@@ -1199,17 +1853,11 @@ def write_consumer_oversold_artifacts(
 
     paths = {
         key: str(destination / "current" / filename)
-        for key, filename in UNIFIED_OUTPUT_FILENAMES.items()
+        for key, filename in filenames.items()
     }
     return {
         "paths": paths,
-        "evidence": frames["evidence"],
-        "scores": frames["scores"],
-        "exclusions": frames["exclusions"],
+        **frames,
         "coverage": coverage,
         "report": report,
-        "top20": frames["top20"],
-        "reserve": frames["reserve"],
-        "preaudit": frames["preaudit"],
-        "comparison": frames["comparison"],
     }

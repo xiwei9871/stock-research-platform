@@ -17,6 +17,7 @@ from stock_research.consumer_oversold.contracts import (
     OUTPUT_FILENAMES,
     REPAIR_BUCKETS,
     UNIFIED_OUTPUT_FILENAMES,
+    V2_OUTPUT_FILENAMES,
     ConsumerOversoldConfig,
     validate_trade_date,
 )
@@ -184,6 +185,18 @@ def test_unified_output_filenames_are_stable():
         "preaudit": "consumer_oversold_preaudit_top60.csv",
         "comparison": "consumer_oversold_old_new_rank_comparison.csv",
     }
+
+
+def test_v2_output_filenames_extend_v1_without_mutating_it():
+    assert V2_OUTPUT_FILENAMES == {
+        **UNIFIED_OUTPUT_FILENAMES,
+        "top30": "consumer_oversold_v2_top30.csv",
+        "ranked_pool": "consumer_oversold_v2_ranked_pool.csv",
+        "comparison": "consumer_oversold_v1_v2_comparison.csv",
+    }
+    assert UNIFIED_OUTPUT_FILENAMES["comparison"] == (
+        "consumer_oversold_old_new_rank_comparison.csv"
+    )
 
 
 def test_legacy_output_filenames_remain_available_for_historical_evaluation():

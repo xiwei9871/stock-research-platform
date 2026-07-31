@@ -33,6 +33,13 @@ UNIFIED_OUTPUT_FILENAMES = {
     "comparison": "consumer_oversold_old_new_rank_comparison.csv",
 }
 
+V2_OUTPUT_FILENAMES = {
+    **UNIFIED_OUTPUT_FILENAMES,
+    "top30": "consumer_oversold_v2_top30.csv",
+    "ranked_pool": "consumer_oversold_v2_ranked_pool.csv",
+    "comparison": "consumer_oversold_v1_v2_comparison.csv",
+}
+
 def validate_trade_date(value: str) -> str:
     try:
         normalized = date.fromisoformat(value).isoformat()
