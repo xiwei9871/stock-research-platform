@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import copy
 from contextlib import contextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta, tzinfo
 from types import SimpleNamespace
 
 import pytest
@@ -13,6 +13,15 @@ from stock_research.dashboard import theme_research_db
 from stock_research.dashboard import app as dashboard_app
 from stock_research.theme_research_db_models import ThemeResearchDomainError
 from stock_research.theme_research_import import normalize_artifact_package
+
+
+class _StatefulTimezone(tzinfo):
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def utcoffset(self, dt):
+        self.calls += 1
+        return timedelta(hours=8) if self.calls == 1 else None
 
 
 def test_db_context_matches_artifact_context_contract(monkeypatch) -> None:
@@ -229,6 +238,40 @@ def test_db_context_loads_published_report_summaries_once_and_safely(monkeypatch
             "has_pdf": True,
         }
     }
+
+
+@pytest.mark.parametrize(
+    "published_at",
+    [
+        "2026-08-01Q09:30:00+08:00",
+        datetime(2026, 8, 1, 9, 30, tzinfo=_StatefulTimezone()),
+    ],
+)
+def test_db_report_summary_rejects_noncanonical_or_unstable_timestamps(
+    monkeypatch,
+    published_at,
+) -> None:
+    @contextmanager
+    def fake_connect(service):
+        yield object()
+
+    monkeypatch.setattr(theme_research_db, "connect", fake_connect)
+    monkeypatch.setattr(
+        theme_research_db,
+        "fetch_all",
+        lambda *args, **kwargs: [
+            {
+                "theme_id": "ai_power_value_capture_v1",
+                "report_version_id": "unsafe-report",
+                "version": "v1",
+                "published_at": published_at,
+                "has_pdf": True,
+                "metadata": {"secret": "must-not-leak"},
+            }
+        ],
+    )
+
+    assert theme_research_db._load_published_report_summaries("runtime") == {}
 
 
 def test_published_report_summary_query_failure_is_not_hidden(monkeypatch) -> None:

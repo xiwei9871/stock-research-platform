@@ -4,6 +4,7 @@ import copy
 from datetime import datetime
 from functools import lru_cache
 import json
+import re
 from typing import Any
 
 from stock_research.config import SETTINGS
@@ -13,6 +14,12 @@ from stock_research.theme_research_store import (
     load_database_package,
 )
 from stock_research import theme_research_priority as priority
+
+
+_STRICT_AWARE_ISO8601_RE = re.compile(
+    r"\A\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}"
+    r"(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})\Z"
+)
 
 
 def load_db_context(
@@ -81,7 +88,7 @@ def _json_safe_timestamp(value: Any) -> str:
         parsed = value
     elif isinstance(value, str):
         text = value.strip()
-        if not text or text != value:
+        if not text or text != value or _STRICT_AWARE_ISO8601_RE.fullmatch(text) is None:
             return ""
         if text.endswith("Z"):
             text = f"{text[:-1]}+00:00"
@@ -94,9 +101,18 @@ def _json_safe_timestamp(value: Any) -> str:
     try:
         if parsed.tzinfo is None or parsed.utcoffset() is None:
             return ""
-        return parsed.isoformat()
+        serialized = parsed.isoformat()
     except Exception:
         return ""
+    if _STRICT_AWARE_ISO8601_RE.fullmatch(serialized) is None:
+        return ""
+    try:
+        reparsed = datetime.fromisoformat(serialized)
+        if reparsed.tzinfo is None or reparsed.utcoffset() is None:
+            return ""
+    except Exception:
+        return ""
+    return serialized
 
 
 def load_asset_db_context(

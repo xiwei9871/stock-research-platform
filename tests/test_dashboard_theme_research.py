@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from datetime import UTC, datetime, tzinfo
+from datetime import UTC, datetime, timedelta, tzinfo
 import json
 
 from fastapi.testclient import TestClient
@@ -27,6 +27,15 @@ ROBOTICS_THEME_ID = "humanoid_robotics_head_to_toe_v1"
 class _BrokenTimezone(tzinfo):
     def utcoffset(self, dt):
         raise RuntimeError("invalid timezone")
+
+
+class _StatefulTimezone(tzinfo):
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def utcoffset(self, dt):
+        self.calls += 1
+        return timedelta(hours=8) if self.calls == 1 else None
 
 
 def _context() -> dict:
@@ -148,9 +157,11 @@ def test_theme_list_and_detail_share_safe_published_report_summary() -> None:
         "   ",
         "not-a-date",
         "2026-13-01T09:30:00+08:00",
+        "2026-08-01Q09:30:00+08:00",
         "2026-08-01T09:30:00",
         datetime(2026, 8, 1, 9, 30),
         datetime(2026, 8, 1, 9, 30, tzinfo=_BrokenTimezone()),
+        datetime(2026, 8, 1, 9, 30, tzinfo=_StatefulTimezone()),
     ],
 )
 def test_invalid_or_naive_published_timestamp_fails_closed_for_list_and_detail(

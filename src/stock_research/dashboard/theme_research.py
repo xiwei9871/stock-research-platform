@@ -6,6 +6,7 @@ from datetime import datetime
 import hashlib
 import json
 import os
+import re
 from typing import Any
 from urllib.parse import quote
 
@@ -20,6 +21,10 @@ class ThemeResearchNotFoundError(LookupError):
 
 
 READ_SOURCES = {"artifact", "compare", "db"}
+_STRICT_AWARE_ISO8601_RE = re.compile(
+    r"\A\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}"
+    r"(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})\Z"
+)
 
 
 def configured_theme_research_read_source() -> str:
@@ -342,7 +347,7 @@ def _json_safe_timestamp(value: Any) -> str:
         parsed = value
     elif isinstance(value, str):
         text = value.strip()
-        if not text or text != value:
+        if not text or text != value or _STRICT_AWARE_ISO8601_RE.fullmatch(text) is None:
             return ""
         if text.endswith("Z"):
             text = f"{text[:-1]}+00:00"
@@ -355,9 +360,18 @@ def _json_safe_timestamp(value: Any) -> str:
     try:
         if parsed.tzinfo is None or parsed.utcoffset() is None:
             return ""
-        return parsed.isoformat()
+        serialized = parsed.isoformat()
     except Exception:
         return ""
+    if _STRICT_AWARE_ISO8601_RE.fullmatch(serialized) is None:
+        return ""
+    try:
+        reparsed = datetime.fromisoformat(serialized)
+        if reparsed.tzinfo is None or reparsed.utcoffset() is None:
+            return ""
+    except Exception:
+        return ""
+    return serialized
 
 
 def _theme_node_rows(
