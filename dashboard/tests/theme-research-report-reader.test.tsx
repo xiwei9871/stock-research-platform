@@ -1,5 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { flushSync } from 'react-dom';
+import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ThemeResearchReportReader } from '../src/components/ThemeResearchReportReader';
 
@@ -183,5 +185,43 @@ describe('ThemeResearchReportReader', () => {
     await Promise.resolve();
     expect(screen.queryByRole('heading', { name: '不应出现的旧报告' })).not.toBeInTheDocument();
     expect(api.fetchThemeResearchReports).toHaveBeenCalledTimes(1);
+  });
+
+  it('hides the previous document immediately while the next route is loading', async () => {
+    const nextDocument = deferred<ReturnType<typeof documentFor>>();
+    api.fetchThemeResearchReportDocument
+      .mockResolvedValueOnce(documentFor('report-v2'))
+      .mockReturnValueOnce(nextDocument.promise);
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    flushSync(() => {
+      root.render(<ThemeResearchReportReader themeId="theme-a" reportVersionId="report-v2" onNavigate={vi.fn()} />);
+    });
+
+    expect(await screen.findByRole('heading', { name: 'AI 供电主题研究（第二版）' })).toBeInTheDocument();
+    expect(screen.getByText('服务器电源价值量提升。')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '下载 PDF' })).toHaveAttribute(
+      'href',
+      '/api/research/theme-decomposition/themes/theme-a/reports/report-v2/pdf'
+    );
+
+    flushSync(() => {
+      root.render(<ThemeResearchReportReader themeId="theme-a" reportVersionId="report-v1" onNavigate={vi.fn()} />);
+    });
+
+    expect(screen.getByText('正在加载分析报告...')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'AI 供电主题研究（第二版）' })).not.toBeInTheDocument();
+    expect(screen.queryByText('服务器电源价值量提升。')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '下载 PDF' })).not.toBeInTheDocument();
+
+    nextDocument.resolve(documentFor('report-v1', 'AI 供电主题研究（第一版）'));
+    expect(await screen.findByRole('heading', { name: 'AI 供电主题研究（第一版）' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '下载 PDF' })).toHaveAttribute(
+      'href',
+      '/api/research/theme-decomposition/themes/theme-a/reports/report-v1/pdf'
+    );
+    flushSync(() => root.unmount());
+    container.remove();
   });
 });
